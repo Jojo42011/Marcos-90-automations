@@ -1,0 +1,2207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Command · Marco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #050508;
+      --bg2: #0a0c10;
+      --surface: #0e1118;
+      --surface2: #141922;
+      --border: rgba(120, 200, 255, 0.08);
+      --border-bright: rgba(100, 220, 255, 0.22);
+      --text: #f1f5f9;
+      --muted: #64748b;
+      --cyan: #22d3ee;
+      --cyan-dim: rgba(34, 211, 238, 0.12);
+      --success: #4ade80;
+      --radius: 14px;
+      --font: "Plus Jakarta Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .view { display: none; min-height: 100vh; }
+    .view.active { display: block; }
+
+    /* ——— Home hub ——— */
+    .hub {
+      position: relative;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .hub-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(34, 211, 238, 0.15), transparent),
+        radial-gradient(ellipse 60% 40% at 100% 50%, rgba(99, 102, 241, 0.08), transparent),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+      pointer-events: none;
+    }
+    .hub-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(34, 211, 238, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 211, 238, 0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent);
+      pointer-events: none;
+    }
+    .hub-inner {
+      position: relative;
+      max-width: 920px;
+      margin: 0 auto;
+      padding: clamp(2.5rem, 8vw, 5rem) 1.5rem 4rem;
+    }
+    .hub-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .hub-status::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 12px var(--success);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .hub-greeting {
+      font-size: clamp(1.75rem, 4.5vw, 2.35rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hub-sub {
+      font-size: 0.9375rem;
+      color: var(--muted);
+      margin-bottom: 2.75rem;
+      max-width: 36ch;
+    }
+    .hub-section-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 1rem;
+      opacity: 0.9;
+    }
+    .module-list { display: flex; flex-direction: column; gap: 1rem; }
+    .module-card {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 1.35rem 1.5rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: linear-gradient(145deg, var(--surface) 0%, rgba(14, 17, 24, 0.6) 100%);
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+    }
+    .module-card:hover {
+      border-color: var(--border-bright);
+      box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.08), 0 20px 50px -20px rgba(0, 0, 0, 0.5);
+      transform: translateY(-1px);
+    }
+    .module-card:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+    }
+    .module-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    .module-title {
+      font-weight: 600;
+      font-size: 1.0625rem;
+      letter-spacing: -0.02em;
+    }
+    .module-badge {
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      background: var(--cyan-dim);
+      color: var(--cyan);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+    }
+    .module-desc {
+      font-size: 0.8125rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .module-arrow {
+      font-family: var(--mono);
+      color: var(--cyan);
+      font-size: 0.875rem;
+      margin-top: 0.75rem;
+    }
+
+    /* ——— Agent view ——— */
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+    .back-row {
+      margin-bottom: 1.5rem;
+    }
+    .back-btn {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .back-btn:hover {
+      color: var(--cyan);
+      border-color: var(--border-bright);
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand {
+      font-weight: 700;
+      font-size: 1.2rem;
+      letter-spacing: -0.02em;
+    }
+    .brand span { color: var(--muted); font-weight: 500; }
+    .meta { font-size: 0.8125rem; color: var(--muted); font-family: var(--mono); }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+    button.primary {
+      font-family: var(--font);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      background: var(--cyan-dim);
+      color: var(--cyan);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.primary:hover { background: rgba(34, 211, 238, 0.2); }
+    .err {
+      margin-bottom: 1rem;
+      padding: 0.875rem 1rem;
+      border-radius: var(--radius);
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: #fca5a5;
+      font-size: 0.875rem;
+      display: none;
+    }
+    .err.show { display: block; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .stats.stats-ads {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    @media (min-width: 900px) {
+      .stats.stats-ads { grid-template-columns: repeat(6, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .stats { grid-template-columns: 1fr; }
+      .stats.stats-ads { grid-template-columns: 1fr; }
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.35rem;
+    }
+    .stat label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+    .stat strong {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+    .stat sub {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .chip {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .chip b { color: var(--text); font-weight: 600; }
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: auto;
+      max-height: calc(100vh - 340px);
+      min-height: 200px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      text-align: left;
+      font-family: var(--mono);
+      font-weight: 500;
+      font-size: 0.625rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      padding: 0.875rem 1rem;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      max-width: 220px;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: rgba(34, 211, 238, 0.03); }
+    .mono { font-family: var(--mono); font-size: 0.78rem; }
+    .phone { color: var(--success); }
+    .empty {
+      text-align: center;
+      padding: 3rem 1.5rem;
+      color: var(--muted);
+      font-size: 0.9375rem;
+    }
+    .state-pill {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      text-transform: lowercase;
+    }
+    /* ——— CRM workspace (dark glass, matches command center) ——— */
+    .crm-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+      color: var(--text);
+    }
+    .crm-sidebar {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      padding: 1rem 0.75rem;
+    }
+    .crm-logo {
+      font-family: var(--mono);
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin: 0.25rem 0.5rem 1.1rem;
+      opacity: 0.95;
+    }
+    .crm-side-btn {
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.84rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .crm-side-btn:hover { background: rgba(34, 211, 238, 0.06); color: var(--text); border-color: var(--border); }
+    .crm-side-btn.active {
+      background: rgba(34, 211, 238, 0.08);
+      color: var(--cyan);
+      border-color: rgba(34, 211, 238, 0.22);
+      font-weight: 600;
+    }
+    .crm-count {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+    }
+    .crm-main {
+      min-width: 0;
+      padding: 0;
+      color: var(--text);
+    }
+    .crm-topbar {
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      padding: 0.65rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(14, 17, 24, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 4;
+    }
+    .crm-search {
+      flex: 1;
+      min-width: 180px;
+      max-width: 480px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.5rem 0.95rem;
+      font: inherit;
+      font-size: 0.82rem;
+      color: var(--text);
+      background: var(--surface2);
+    }
+    .crm-search:focus { outline: 2px solid rgba(34, 211, 238, 0.25); border-color: var(--border-bright); }
+    .crm-topbar .meta { color: var(--muted) !important; }
+    .crm-page {
+      padding: 1.15rem 1.25rem 2.5rem;
+    }
+    .crm-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .crm-title { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.02em; color: var(--text); }
+    .crm-subtitle { color: var(--muted); font-size: 0.8rem; margin-top: 0.2rem; max-width: 52ch; line-height: 1.45; }
+    .crm-light-btn {
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      background: var(--cyan-dim);
+      color: var(--cyan);
+      border-radius: 10px;
+      padding: 0.48rem 0.85rem;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .crm-light-btn:hover { background: rgba(34, 211, 238, 0.18); }
+    .crm-text-panel { max-width: 680px; }
+    .crm-text-panel .crm-field { margin-bottom: 1.05rem; }
+    .crm-text-panel label {
+      display: block;
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 0.38rem;
+    }
+    .crm-text-panel select,
+    .crm-text-panel input[type="tel"],
+    .crm-text-panel textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.62rem 0.88rem;
+      font: inherit;
+      font-size: 0.86rem;
+      color: var(--text);
+      background: var(--surface2);
+    }
+    .crm-text-panel textarea {
+      min-height: 240px;
+      resize: vertical;
+      line-height: 1.55;
+    }
+    .crm-text-panel .crm-text-hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.55rem;
+      line-height: 1.45;
+    }
+    .crm-text-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem; margin-top: 0.25rem; }
+    .crm-text-status { font-size: 0.8rem; color: var(--muted); }
+    .crm-text-status.ok { color: var(--success); }
+    .crm-metrics-block {
+      margin-bottom: 1.1rem;
+    }
+    .crm-kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 0.65rem;
+    }
+    .crm-funnel-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.65rem 0.85rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 1rem;
+    }
+    .crm-funnel-label {
+      font-family: var(--mono);
+      font-size: 0.58rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      flex: 0 0 auto;
+    }
+    .crm-funnel-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+    }
+    .crm-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.35rem;
+      padding: 0.35rem 0.55rem;
+      border-radius: 6px;
+      border: 1px solid rgba(34, 211, 238, 0.15);
+      background: rgba(34, 211, 238, 0.06);
+      font-size: 0.72rem;
+      color: var(--text);
+    }
+    .crm-chip strong {
+      color: var(--cyan);
+      font-weight: 700;
+      font-size: 0.78rem;
+    }
+    .crm-chip small {
+      color: var(--muted);
+      font-size: 0.65rem;
+      font-family: var(--mono);
+    }
+    .crm-kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.85rem 0.9rem;
+    }
+    .crm-kpi label {
+      display: block;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.58rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.35rem;
+    }
+    .crm-kpi strong {
+      color: var(--cyan);
+      font-size: 1.35rem;
+      line-height: 1;
+      font-weight: 700;
+    }
+    .crm-kpi .crm-muted { font-size: 0.72rem; margin-top: 0.25rem; color: var(--muted); }
+    .crm-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+      gap: 1rem;
+    }
+    .crm-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .crm-card-head {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 600;
+      font-size: 0.88rem;
+      color: var(--text);
+    }
+    .crm-filterbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.55rem;
+      margin-bottom: 0.75rem;
+    }
+    .crm-select, .crm-input {
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 0.45rem 0.6rem;
+      font: inherit;
+      font-size: 0.8rem;
+    }
+    .crm-table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: auto;
+      max-height: calc(100vh - 240px);
+      min-height: 280px;
+    }
+    .crm-table {
+      min-width: 1080px;
+      color: var(--text);
+      font-size: 0.78rem;
+    }
+    .crm-table thead th {
+      background: var(--surface2);
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.58rem;
+    }
+    .crm-table tbody td {
+      border-bottom: 1px solid var(--border);
+      max-width: none;
+      color: var(--text);
+    }
+    .crm-table tbody tr:hover td { background: rgba(34, 211, 238, 0.04); }
+    .crm-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 6px;
+      padding: 0.22rem 0.55rem;
+      font-size: 0.6rem;
+      font-family: var(--mono);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .crm-pill.hot, .crm-pill.high { color: #fb923c; border-color: rgba(234,88,12,0.25); background: rgba(234,88,12,0.08); }
+    .crm-pill.warm, .crm-pill.normal { color: #facc15; border-color: rgba(202,138,4,0.25); background: rgba(202,138,4,0.08); }
+    .crm-pill.cold, .crm-pill.low { color: #94a3b8; border-color: rgba(71,85,105,0.25); background: rgba(71,85,105,0.08); }
+    .crm-pill.new, .crm-pill.not_contacted { color: #22d3ee; border-color: rgba(8,145,178,0.25); background: rgba(8,145,178,0.08); }
+    .crm-pill.contacted { color: #60a5fa; border-color: rgba(37,99,235,0.25); background: rgba(37,99,235,0.08); }
+    .crm-pill.nurture { color: #a78bfa; border-color: rgba(124,58,237,0.25); background: rgba(124,58,237,0.08); }
+    .crm-pill.dead { color: #71717a; border-color: rgba(82,82,91,0.25); background: rgba(82,82,91,0.08); }
+    .crm-actions { display: inline-flex; gap: 0.25rem; }
+    .crm-action-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(34, 211, 238, 0.2);
+      color: var(--cyan);
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+    .crm-mini-list { list-style: none; padding: 0; margin: 0; }
+    .crm-mini-list li {
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr) auto;
+      gap: 0.65rem;
+      align-items: start;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+    .crm-mini-list li:last-child { border-bottom: none; }
+    .crm-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(34, 211, 238, 0.12);
+      color: var(--cyan);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.75rem;
+      border: 1px solid var(--border);
+    }
+    .crm-muted { color: var(--muted); }
+    .crm-task-check {
+      width: 15px;
+      height: 15px;
+      accent-color: var(--cyan);
+    }
+    .crm-notes, .crm-status, .crm-stage, .crm-priority {
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0.35rem 0.5rem;
+      font: inherit;
+      font-size: 0.76rem;
+    }
+    .crm-notes { width: 100%; min-width: 160px; }
+    /* Kanban pipeline — responsive grid, no horizontal scroll */
+    .crm-kanban {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.65rem;
+      padding: 0.25rem 0;
+    }
+    .crm-kcol {
+      display: flex;
+      flex-direction: column;
+      min-height: 180px;
+      max-height: 420px;
+      background: rgba(14, 17, 24, 0.45);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .crm-kcol-head {
+      font-family: var(--mono);
+      font-size: 0.56rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.55rem 0.65rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(34, 211, 238, 0.03);
+    }
+    .crm-kcol-head strong { color: var(--text); font-size: 0.68rem; letter-spacing: 0.04em; }
+    .crm-kcol-head .crm-col-count {
+      font-weight: 700;
+      color: var(--cyan);
+      font-size: 0.72rem;
+      min-width: 18px;
+      text-align: right;
+    }
+    .crm-kcol-cards {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.4rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .crm-kcol-cards::-webkit-scrollbar { width: 3px; }
+    .crm-kcol-cards::-webkit-scrollbar-thumb { background: rgba(34,211,238,0.15); border-radius: 3px; }
+    .crm-kcard {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--border-bright);
+      border-radius: 8px;
+      padding: 0.55rem 0.6rem;
+      cursor: grab;
+      transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+    }
+    .crm-kcard:hover {
+      border-color: var(--border-bright);
+      box-shadow: 0 4px 16px -4px rgba(0,0,0,0.4);
+      transform: translateY(-1px);
+    }
+    .crm-kcard.dragging { opacity: 0.45; transform: scale(0.97); }
+    .crm-kcard-title { font-weight: 600; font-size: 0.76rem; margin-bottom: 0.2rem; color: var(--text); }
+    .crm-kcard-meta { font-size: 0.65rem; color: var(--muted); line-height: 1.3; }
+    .crm-kcard-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      margin-top: 0.35rem;
+      font-size: 0.6rem;
+      font-family: var(--mono);
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    .crm-kcard-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .crm-kcard-dot.not_contacted { background: #0891b2; }
+    .crm-kcard-dot.contacted { background: #2563eb; }
+    .crm-kcard-dot.nurture { background: #7c3aed; }
+    .crm-kcard-dot.dead { background: #52525b; }
+    .crm-kcol.crm-kdrop-active {
+      outline: 2px solid rgba(34, 211, 238, 0.35);
+      outline-offset: -2px;
+      background: rgba(34, 211, 238, 0.04);
+    }
+    /* Stage accent colors on left border */
+    .crm-kcard[data-stage="hot"] { border-left-color: #ea580c; }
+    .crm-kcard[data-stage="warm"] { border-left-color: #ca8a04; }
+    .crm-kcard[data-stage="cold"] { border-left-color: #475569; }
+    .crm-kcard[data-stage="new"] { border-left-color: #0891b2; }
+    .crm-kcard[data-stage="appointment_set"] { border-left-color: #2563eb; }
+    .crm-kcard[data-stage="showing_set"] { border-left-color: #7c3aed; }
+    .crm-kcard[data-stage="under_contract"] { border-left-color: #059669; }
+    .crm-kcard[data-stage="closed"] { border-left-color: #4ade80; }
+
+    /* Reports section */
+    .crm-reports-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .crm-report-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .crm-report-card:hover {
+      border-color: var(--border-bright);
+      box-shadow: 0 8px 24px -8px rgba(0,0,0,0.4);
+    }
+    .crm-report-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      background: var(--cyan-dim);
+      border: 1px solid rgba(34,211,238,0.2);
+      margin-bottom: 0.85rem;
+    }
+    .crm-report-title { font-weight: 600; font-size: 0.92rem; margin-bottom: 0.3rem; }
+    .crm-report-desc { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin-bottom: 1rem; }
+    .crm-report-btn {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      font: inherit; font-size: 0.75rem; font-weight: 600;
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid rgba(34,211,238,0.3);
+      background: rgba(34,211,238,0.08);
+      color: var(--cyan);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .crm-report-btn:hover { background: rgba(34,211,238,0.16); }
+
+    /* Follow-up plans */
+    .crm-plans-list { display: flex; flex-direction: column; gap: 0.5rem; }
+    .crm-plan-row {
+      display: grid;
+      grid-template-columns: 44px minmax(0,1fr) 160px 120px 100px;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.75rem 0.85rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      transition: border-color 0.15s;
+    }
+    .crm-plan-row:hover { border-color: var(--border-bright); }
+    .crm-plan-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(34,211,238,0.1);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.72rem; color: var(--cyan);
+    }
+    .crm-plan-name { font-weight: 600; font-size: 0.82rem; }
+    .crm-plan-sub { font-size: 0.7rem; color: var(--muted); margin-top: 0.1rem; }
+    .crm-plan-next { font-size: 0.75rem; color: var(--text); }
+    .crm-plan-next small { display: block; font-size: 0.65rem; color: var(--muted); font-family: var(--mono); }
+    .crm-plan-due {
+      font-family: var(--mono); font-size: 0.7rem; color: var(--muted);
+    }
+    .crm-plan-due.overdue { color: #ef4444; }
+    .crm-plan-due.today { color: var(--cyan); }
+    .crm-plan-stage {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      text-align: center;
+    }
+    .crm-section-head {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+    }
+    .crm-section-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1200px) {
+      .crm-kanban { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 980px) {
+      .crm-shell { grid-template-columns: 1fr; }
+      .crm-sidebar { position: static; display: flex; overflow-x: auto; gap: 0.35rem; border-right: 0; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+      .crm-logo { display: none; }
+      .crm-side-btn { min-width: 110px; flex-shrink: 0; }
+      .crm-kpis { grid-template-columns: repeat(2, 1fr); }
+      .crm-grid { grid-template-columns: 1fr; }
+      .crm-kanban { grid-template-columns: repeat(2, 1fr); }
+      .crm-plan-row { grid-template-columns: 36px minmax(0,1fr) auto; }
+      .crm-plan-due, .crm-plan-stage { display: none; }
+    }
+    @media (max-width: 640px) {
+      .crm-kanban { grid-template-columns: 1fr; }
+      .crm-reports-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Home hub -->
+  <div id="view-home" class="view hub active">
+    <div class="hub-bg" aria-hidden="true"></div>
+    <div class="hub-grid" aria-hidden="true"></div>
+    <div class="hub-inner">
+      <div class="hub-status">Operations console</div>
+      <h1 class="hub-greeting">Hey Marco — what do you want to take a look at today?</h1>
+      <p class="hub-sub">Select a workspace. Live data syncs from your automation pipeline.</p>
+      <p class="hub-section-label">Dashboards</p>
+      <div class="module-list">
+        <button type="button" class="module-card" id="open-dm-agent" aria-label="Open DM AI agent dashboard">
+          <div class="module-card-top">
+            <span class="module-title">DM AI agent</span>
+            <span class="module-badge">Live</span>
+          </div>
+          <p class="module-desc">Instagram &amp; TikTok lead threads, captured phones and emails, funnel state, and CRM fields from the file-backed store.</p>
+          <div class="module-arrow">Open workspace →</div>
+        </button>
+        <button type="button" class="module-card" id="open-ads" aria-label="Open Ad numbers dashboard">
+          <div class="module-card-top">
+            <span class="module-title">Ad numbers</span>
+            <span class="module-badge">Meta</span>
+          </div>
+          <p class="module-desc">Spend, reach, and lead metrics from your linked ad dashboard — same totals as the internal Aethon ads workspace, without the advisor tools.</p>
+          <div class="module-arrow">Open workspace →</div>
+        </button>
+        <button type="button" class="module-card" id="open-crm" aria-label="Open CRM dashboard">
+          <div class="module-card-top">
+            <span class="module-title">CRM</span>
+            <span class="module-badge">Lite</span>
+          </div>
+          <p class="module-desc">Pipeline board, lead stages, tasks, and numbers — phone-captured leads, synced with your DM automation.</p>
+          <div class="module-arrow">Open workspace →</div>
+        </button>
+        <a href="/jarvis" class="module-card" id="open-jarvis" aria-label="Open Harvey assistant" style="text-decoration:none;color:inherit;">
+          <div class="module-card-top">
+            <span class="module-title">Harvey</span>
+            <span class="module-badge" style="background:rgba(34,211,238,0.18);border-color:rgba(34,211,238,0.45);color:#22d3ee;text-shadow:0 0 8px rgba(34,211,238,0.4);">AI</span>
+          </div>
+          <p class="module-desc">Voice and text commands, live metrics, and operational briefings from your pipeline data. Same look as the command center.</p>
+          <div class="module-arrow">Launch Harvey →</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- DM AI agent -->
+  <div id="view-agent" class="view">
+    <div class="wrap">
+      <div class="back-row">
+        <button type="button" class="back-btn" id="back-home">← Command center</button>
+      </div>
+      <header>
+        <div>
+          <div class="brand">DM AI agent <span>· pipeline</span></div>
+          <p class="meta" id="generated">Loading…</p>
+        </div>
+        <div class="toolbar">
+          <label class="meta" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+            <input type="checkbox" id="auto" />
+            Auto 30s
+          </label>
+          <button type="button" class="primary" id="refresh">Refresh</button>
+        </div>
+      </header>
+      <div class="err" id="err"></div>
+      <section class="stats" id="stats"></section>
+      <div class="chips" id="chips"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Updated</th>
+              <th>Platform</th>
+              <th>Name / @user</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Funnel</th>
+              <th>CRM</th>
+              <th>User ID</th>
+              <th>Extra</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div class="empty" id="empty" style="display:none;">No leads in the database yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CRM -->
+  <div id="view-crm" class="view">
+    <div class="crm-shell">
+      <aside class="crm-sidebar">
+        <div class="crm-logo">Marco · CRM</div>
+        <button type="button" class="crm-side-btn active" data-crm-section="dashboard">Overview <span class="crm-count" id="crm-count-dashboard">0</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="pipeline">Pipeline <span class="crm-count" id="crm-count-pipeline">0</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="leads">Leads <span class="crm-count" id="crm-count-leads">0</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="text">Text <span class="crm-count" id="crm-count-text">—</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="tasks">Tasks <span class="crm-count" id="crm-count-tasks">0</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="transactions">Deals <span class="crm-count" id="crm-count-transactions">0</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="reports">Reports <span class="crm-count" id="crm-count-reports">—</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="plans">Follow-up plans <span class="crm-count" id="crm-count-plans">0</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="activity">Activity <span class="crm-count" id="crm-count-activity">0</span></button>
+        <button type="button" class="crm-side-btn" id="back-home-crm" style="margin-top:1rem;">Command center <span>←</span></button>
+      </aside>
+      <div class="crm-main">
+        <div class="crm-topbar">
+          <input id="crm-search" class="crm-search" placeholder="Search name, phone, @handle, status, notes…" />
+          <label class="meta" style="display:flex;align-items:center;gap:0.45rem;cursor:pointer;">
+            <input type="checkbox" id="crm-auto" />
+            Auto 30s
+          </label>
+          <button type="button" class="crm-light-btn" id="crm-refresh">Refresh</button>
+          <a href="/jarvis" class="crm-light-btn" id="crm-harvey-link">Harvey</a>
+        </div>
+        <main class="crm-page">
+          <div class="crm-title-row">
+            <div>
+              <div class="crm-title" id="crm-title">Dashboard</div>
+              <p class="crm-subtitle" id="crm-generated">Loading…</p>
+            </div>
+            <div class="crm-filterbar">
+              <select id="crm-filter-status" class="crm-select">
+                <option value="">All statuses</option>
+                <option value="not_contacted">Not contacted</option>
+                <option value="contacted">Contacted</option>
+                <option value="nurture">Nurture</option>
+                <option value="dead">Dead</option>
+              </select>
+              <select id="crm-filter-stage" class="crm-select">
+                <option value="">All stages</option>
+                <option value="new">New</option>
+                <option value="hot">Hot</option>
+                <option value="warm">Warm</option>
+                <option value="cold">Cold</option>
+                <option value="appointment_set">Appt set</option>
+                <option value="showing_set">Showing set</option>
+                <option value="under_contract">Under contract</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+          </div>
+          <div class="err" id="crm-err"></div>
+          <section class="crm-metrics-block" id="crm-metrics-block">
+            <div class="crm-kpis" id="crm-stats"></div>
+            <div class="crm-funnel-row" id="crm-funnel" style="display:none;"></div>
+          </section>
+          <div id="crm-content"></div>
+          <div class="empty" id="crm-empty" style="display:none;">No phone-captured leads yet.</div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ad numbers (Meta / Flask proxy) -->
+  <div id="view-ads" class="view">
+    <div class="wrap">
+      <div class="back-row">
+        <button type="button" class="back-btn" id="back-home-ads">← Command center</button>
+      </div>
+      <header>
+        <div>
+          <div class="brand">Ad numbers <span>· Meta snapshot</span></div>
+          <p class="meta" id="ads-generated">Loading…</p>
+        </div>
+        <div class="toolbar">
+          <label class="meta" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+            <input type="checkbox" id="ads-auto" />
+            Auto 30s
+          </label>
+          <button type="button" class="primary" id="ads-refresh">Refresh</button>
+        </div>
+      </header>
+      <div class="err" id="ads-err"></div>
+      <section class="stats stats-ads" id="ads-stats"></section>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Campaign</th>
+              <th>Spend</th>
+              <th>Impressions</th>
+              <th>Clicks</th>
+              <th>Leads</th>
+              <th>CTR</th>
+              <th>CPL</th>
+            </tr>
+          </thead>
+          <tbody id="ads-tbody"></tbody>
+        </table>
+        <div class="empty" id="ads-empty" style="display:none;">No campaign rows in this snapshot.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = new URLSearchParams(window.location.search).get("token");
+    function apiUrl() {
+      const u = new URL("/api/dashboard/data", window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      return u.toString();
+    }
+    function adsApiUrl() {
+      const u = new URL("/api/ads/summary", window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      return u.toString();
+    }
+    function fmtDate(iso) {
+      if (!iso) return "—";
+      try {
+        return new Date(iso).toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch {
+        return iso;
+      }
+    }
+    function fmtCriteria(c) {
+      if (!c) return "";
+      const parts = [];
+      if (c.priceCap != null) parts.push("$" + c.priceCap.toLocaleString());
+      if (c.beds != null) parts.push(c.beds + " bd");
+      if (c.baths != null) parts.push(c.baths + " ba");
+      if (c.area) parts.push(c.area);
+      return parts.join(" · ");
+    }
+    function showErr(msg) {
+      const el = document.getElementById("err");
+      el.textContent = msg;
+      el.classList.add("show");
+    }
+    function hideErr() {
+      document.getElementById("err").classList.remove("show");
+    }
+    function showAdsErr(msg) {
+      const el = document.getElementById("ads-err");
+      el.textContent = msg;
+      el.classList.add("show");
+    }
+    function hideAdsErr() {
+      document.getElementById("ads-err").classList.remove("show");
+    }
+    function showView(id) {
+      document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+    }
+    let cache = null;
+    async function load() {
+      hideErr();
+      document.getElementById("generated").textContent = "Loading…";
+      try {
+        const res = await fetch(apiUrl());
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          let m = body.error || res.statusText || "Request failed";
+          if (body.hint) m += " — " + body.hint;
+          showErr(m);
+          return;
+        }
+        cache = body;
+        render(body);
+      } catch (e) {
+        showErr(e instanceof Error ? e.message : String(e));
+      }
+    }
+    function render(data) {
+      document.getElementById("generated").textContent =
+        "Snapshot " + fmtDate(data.generatedAt) + " · showing " + data.totals.shownLeads + " of " + data.totals.leads + " leads";
+      const t = data.totals;
+      document.getElementById("stats").innerHTML = [
+        { k: "Total leads", v: t.leads, s: "in database" },
+        { k: "Phones captured", v: t.withPhone, s: "with number on file" },
+        { k: "Emails", v: t.withEmail, s: "on file" },
+      ]
+        .map(
+          (x) =>
+            `<div class="stat"><label>${x.k}</label><strong>${x.v}</strong><sub>${x.s}</sub></div>`
+        )
+        .join("");
+      const plat = data.byPlatform || {};
+      const chips = Object.entries(plat)
+        .sort((a, b) => b[1] - a[1])
+        .map(([p, n]) => `<span class="chip"><b>${n}</b> ${escapeHtml(p)}</span>`)
+        .join("");
+      document.getElementById("chips").innerHTML = chips ? chips : "";
+      const leads = data.leads || [];
+      const tbody = document.getElementById("tbody");
+      const empty = document.getElementById("empty");
+      if (leads.length === 0) {
+        tbody.innerHTML = "";
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+      tbody.innerHTML = leads
+        .map((row) => {
+          const name = [row.name, row.username ? "@" + row.username : null].filter(Boolean).join(" · ") || "—";
+          const phone = row.phone ? `<span class="mono phone">${escapeHtml(row.phone)}</span>` : "—";
+          const email = row.email ? `<span class="mono">${escapeHtml(row.email)}</span>` : "—";
+          const crit = fmtCriteria(row.criteria);
+          const crm = [
+            row.crmStatus ? "Status: " + escapeHtml(row.crmStatus) : "",
+            row.crmStage ? "Stage: " + escapeHtml(row.crmStage) : "",
+            row.crmPriority ? "Priority: " + escapeHtml(row.crmPriority) : "",
+          ]
+            .filter(Boolean)
+            .join("<br/>");
+          const extra = [
+            row.brivityId ? "Brivity: " + escapeHtml(row.brivityId) : "",
+            row.propertyInquired ? "Property: " + escapeHtml(row.propertyInquired) : "",
+            row.source ? "Source: " + escapeHtml(row.source) : "",
+            crit ? "Criteria: " + escapeHtml(crit) : "",
+          ]
+            .filter(Boolean)
+            .join("<br/>");
+          return `<tr>
+            <td class="mono">${fmtDate(row.updatedAt)}</td>
+            <td>${escapeHtml(row.platform)}</td>
+            <td>${escapeHtml(name)}</td>
+            <td>${phone}</td>
+            <td>${email}</td>
+            <td><span class="state-pill">${escapeHtml(row.state)}</span></td>
+            <td style="max-width:220px;font-size:0.75rem;color:var(--muted);">${crm || "—"}</td>
+            <td class="mono" title="${escapeHtml(row.userId)}">${escapeHtml(row.userId.length > 14 ? row.userId.slice(0, 12) + "…" : row.userId)}</td>
+            <td style="max-width:280px;font-size:0.75rem;color:var(--muted);">${extra || "—"}</td>
+          </tr>`;
+        })
+        .join("");
+    }
+    function escapeHtml(s) {
+      if (s == null) return "";
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+    function fmtMoney(n) {
+      if (n == null || n === "") return "—";
+      const x = Number(n);
+      if (Number.isNaN(x)) return String(n);
+      return "$" + x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function fmtPct(n) {
+      if (n == null || n === "") return "—";
+      const x = Number(n);
+      if (Number.isNaN(x)) return String(n);
+      return x.toLocaleString(undefined, { maximumFractionDigits: 2 }) + "%";
+    }
+    function fmtInt(n) {
+      if (n == null || n === "") return "—";
+      const x = Number(n);
+      if (Number.isNaN(x)) return String(n);
+      return x.toLocaleString();
+    }
+    let adsCache = null;
+    async function loadAds() {
+      hideAdsErr();
+      document.getElementById("ads-generated").textContent = "Loading…";
+      try {
+        const res = await fetch(adsApiUrl());
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          let m = body.error || res.statusText || "Request failed";
+          if (body.hint) m += " — " + body.hint;
+          showAdsErr(m);
+          document.getElementById("ads-stats").innerHTML = "";
+          document.getElementById("ads-tbody").innerHTML = "";
+          document.getElementById("ads-empty").style.display = "block";
+          return;
+        }
+        adsCache = body;
+        renderAds(body);
+      } catch (e) {
+        showAdsErr(e instanceof Error ? e.message : String(e));
+      }
+    }
+    function renderAds(data) {
+      const gen = data.generatedAt ? fmtDate(data.generatedAt) : "—";
+      const preset = data.datePreset ? String(data.datePreset).replace(/_/g, " ") : "";
+      document.getElementById("ads-generated").textContent =
+        "Snapshot " + gen + (preset ? " · " + preset : "");
+      const t = data.totals || {};
+      const spend = t.spend;
+      const impr = t.impressions;
+      const clicks = t.clicks;
+      const leads = t.leads;
+      const ctr = t.ctr;
+      const cpl = t.cpl;
+      document.getElementById("ads-stats").innerHTML = [
+        { k: "Spend", v: fmtMoney(spend), s: "selected period" },
+        { k: "Impressions", v: fmtInt(impr), s: "delivery" },
+        { k: "Clicks", v: fmtInt(clicks), s: "link clicks" },
+        { k: "Ad leads", v: fmtInt(leads), s: "from ads" },
+        { k: "CTR", v: fmtPct(ctr), s: "click-through rate" },
+        { k: "CPL", v: cpl != null && cpl !== "" ? fmtMoney(cpl) : "—", s: "cost per lead" },
+      ]
+        .map(
+          (x) =>
+            `<div class="stat"><label>${x.k}</label><strong>${x.v}</strong><sub>${escapeHtml(x.s)}</sub></div>`
+        )
+        .join("");
+      const campaigns = data.campaigns || [];
+      const tbody = document.getElementById("ads-tbody");
+      const empty = document.getElementById("ads-empty");
+      if (campaigns.length === 0) {
+        tbody.innerHTML = "";
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+      tbody.innerHTML = campaigns
+        .map((row) => {
+          const r = row && typeof row === "object" ? row : {};
+          const name = r.name != null ? String(r.name) : "—";
+          return `<tr>
+            <td>${escapeHtml(name)}</td>
+            <td class="mono">${escapeHtml(fmtMoney(r.spend))}</td>
+            <td class="mono">${escapeHtml(fmtInt(r.impressions))}</td>
+            <td class="mono">${escapeHtml(fmtInt(r.clicks))}</td>
+            <td class="mono">${escapeHtml(fmtInt(r.leads))}</td>
+            <td class="mono">${escapeHtml(fmtPct(r.ctr))}</td>
+            <td class="mono">${escapeHtml(r.cpl != null && r.cpl !== "" ? fmtMoney(r.cpl) : "—")}</td>
+          </tr>`;
+        })
+        .join("");
+    }
+    // Pass token to Harvey (/jarvis) link if present
+    (function () {
+      const jarvisLink = document.getElementById("open-jarvis");
+      if (token && jarvisLink) {
+        jarvisLink.href = "/jarvis?token=" + encodeURIComponent(token);
+      }
+      const harveyCrm = document.getElementById("crm-harvey-link");
+      if (token && harveyCrm) {
+        harveyCrm.href = "/jarvis?token=" + encodeURIComponent(token);
+      }
+    })();
+
+    document.getElementById("open-dm-agent").addEventListener("click", () => {
+      showView("view-agent");
+      if (cache) render(cache);
+      else void load();
+    });
+    document.getElementById("open-crm").addEventListener("click", () => {
+      showView("view-crm");
+      void loadCrm();
+    });
+    document.getElementById("open-ads").addEventListener("click", () => {
+      showView("view-ads");
+      if (adsCache) renderAds(adsCache);
+      else void loadAds();
+    });
+    document.getElementById("back-home").addEventListener("click", () => {
+      showView("view-home");
+    });
+    document.getElementById("back-home-ads").addEventListener("click", () => {
+      showView("view-home");
+    });
+    document.getElementById("back-home-crm").addEventListener("click", () => {
+      showView("view-home");
+    });
+    document.getElementById("refresh").addEventListener("click", load);
+    document.getElementById("ads-refresh").addEventListener("click", loadAds);
+    document.getElementById("crm-refresh").addEventListener("click", loadCrm);
+    document.querySelectorAll(".crm-side-btn[data-crm-section]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        crmSection = btn.getAttribute("data-crm-section") || "dashboard";
+        if (crmCache) renderCrm(crmCache);
+      });
+    });
+    document.getElementById("crm-search").addEventListener("input", () => {
+      if (crmCache) renderCrm(crmCache);
+    });
+    document.getElementById("crm-filter-status").addEventListener("change", () => {
+      if (crmCache) renderCrm(crmCache);
+    });
+    document.getElementById("crm-filter-stage").addEventListener("change", () => {
+      if (crmCache) renderCrm(crmCache);
+    });
+    let timer = null;
+    document.getElementById("auto").addEventListener("change", function () {
+      if (timer) clearInterval(timer);
+      timer = null;
+      if (this.checked) timer = setInterval(load, 30000);
+    });
+    let adsTimer = null;
+    document.getElementById("ads-auto").addEventListener("change", function () {
+      if (adsTimer) clearInterval(adsTimer);
+      adsTimer = null;
+      if (this.checked) adsTimer = setInterval(loadAds, 30000);
+    });
+
+    function crmApiUrl() {
+      return apiUrl();
+    }
+
+    function sendblueSendApiUrl() {
+      const u = new URL("/api/sendblue/send", window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      return u.toString();
+    }
+
+    /** When set, opening the Text tab pre-selects this lead (e.g. from Leads table "Compose"). */
+    let crmTextPrefillLeadId = null;
+
+    function showCrmErr(msg) {
+      const el = document.getElementById("crm-err");
+      el.textContent = msg;
+      el.classList.add("show");
+    }
+    function hideCrmErr() {
+      document.getElementById("crm-err").classList.remove("show");
+    }
+
+    async function patchCrm(id, patch) {
+      const u = new URL("/api/crm/lead/" + encodeURIComponent(id), window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      const res = await fetch(u.toString(), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        let m = body.error || res.statusText || "Request failed";
+        if (body.hint) m += " — " + body.hint;
+        throw new Error(m);
+      }
+      return body;
+    }
+
+    let crmCache = null;
+    let crmSection = "dashboard";
+
+    function bindCrmPipelineDnD() {
+      const root = document.getElementById("crm-content");
+      if (!root) return;
+      root.querySelectorAll(".crm-kcard").forEach((card) => {
+        card.addEventListener("dragstart", (e) => {
+          card.classList.add("dragging");
+          e.dataTransfer.setData("text/plain", card.getAttribute("data-lead-id") || "");
+          e.dataTransfer.effectAllowed = "move";
+        });
+        card.addEventListener("dragend", () => card.classList.remove("dragging"));
+      });
+      root.querySelectorAll(".crm-kcol").forEach((col) => {
+        col.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          col.classList.add("crm-kdrop-active");
+        });
+        col.addEventListener("dragleave", () => col.classList.remove("crm-kdrop-active"));
+        col.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          col.classList.remove("crm-kdrop-active");
+          const id = e.dataTransfer.getData("text/plain");
+          const stage = col.getAttribute("data-stage") || "";
+          if (!id || !stage) return;
+          try {
+            const row = ((crmCache && crmCache.leads) || []).find((x) => x.id === id);
+            if (row) row.crmStage = stage;
+            await patchCrm(id, { crmStage: stage });
+            renderCrm(crmCache);
+          } catch (err) {
+            showCrmErr(err instanceof Error ? err.message : String(err));
+          }
+        });
+      });
+    }
+
+    const CRM_PIPELINE_STAGES = [
+      { key: "new", label: "New" },
+      { key: "hot", label: "Hot prospect" },
+      { key: "warm", label: "Warm" },
+      { key: "cold", label: "Cold / nurture" },
+      { key: "appointment_set", label: "Appt set" },
+      { key: "showing_set", label: "Showing / tour" },
+      { key: "under_contract", label: "Under contract" },
+      { key: "closed", label: "Closed" },
+    ];
+    async function loadCrm() {
+      hideCrmErr();
+      document.getElementById("crm-generated").textContent = "Loading…";
+      try {
+        const res = await fetch(crmApiUrl());
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          let m = body.error || res.statusText || "Request failed";
+          if (body.hint) m += " — " + body.hint;
+          showCrmErr(m);
+          return;
+        }
+        crmCache = body;
+        renderCrm(body);
+      } catch (e) {
+        showCrmErr(e instanceof Error ? e.message : String(e));
+      }
+    }
+
+    function statusLabel(s) {
+      const map = {
+        not_contacted: "Not contacted",
+        contacted: "Contacted",
+        nurture: "Nurture",
+        dead: "Dead",
+      };
+      return map[s] || s || "—";
+    }
+    function stageLabel(s) {
+      const map = {
+        new: "New",
+        hot: "Hot",
+        warm: "Warm",
+        cold: "Cold",
+        appointment_set: "Appt set",
+        showing_set: "Showing set",
+        under_contract: "Under contract",
+        closed: "Closed",
+      };
+      return map[s] || s || "—";
+    }
+    function crmInitial(row) {
+      const s = row.name || row.username || row.platform || "?";
+      return String(s).trim().charAt(0).toUpperCase() || "?";
+    }
+    function stageClass(s) {
+      return String(s || "new").replace(/_/g, "-");
+    }
+    function crmLeadText(row) {
+      return [
+        row.name,
+        row.username,
+        row.phone,
+        row.email,
+        row.platform,
+        row.crmStatus,
+        row.crmStage,
+        row.crmPriority,
+        row.crmNotes,
+        row.state,
+        fmtCriteria(row.criteria),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+    }
+    function crmFilteredLeads() {
+      const leads = ((crmCache && crmCache.leads) || []).filter((x) => x && x.phone);
+      const q = (document.getElementById("crm-search")?.value || "").trim().toLowerCase();
+      const status = document.getElementById("crm-filter-status")?.value || "";
+      const stage = document.getElementById("crm-filter-stage")?.value || "";
+      return leads
+        .filter((row) => !status || (row.crmStatus || "not_contacted") === status)
+        .filter((row) => !stage || (row.crmStage || "new") === stage)
+        .filter((row) => !q || crmLeadText(row).includes(q))
+        .sort((a, b) => {
+          const pa = a.crmPriority === "high" ? 0 : a.crmPriority === "normal" ? 1 : 2;
+          const pb = b.crmPriority === "high" ? 0 : b.crmPriority === "normal" ? 1 : 2;
+          if (pa !== pb) return pa - pb;
+          return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+        });
+    }
+    function crmTasksFromLeads(leads) {
+      const tasks = [];
+      for (const row of leads) {
+        const name = row.name || (row.username ? "@" + row.username : row.phone);
+        if ((row.crmStatus || "not_contacted") === "not_contacted") {
+          tasks.push({ row, task: "Call or text first follow-up", type: "To-Do", priority: row.crmPriority || "normal", due: "Today", owner: "Marco" });
+        }
+        if ((row.crmStage || "new") === "appointment_set") {
+          tasks.push({ row, task: "Confirm appointment details", type: "To-Do", priority: "high", due: "Today", owner: "Marco" });
+        }
+        if ((row.crmStage || "new") === "showing_set") {
+          tasks.push({ row, task: "Send calendar invite and showing prep", type: "To-Do", priority: "high", due: "Today", owner: "Marco" });
+        }
+        if ((row.crmStatus || "") === "nurture") {
+          tasks.push({ row, task: "Send check-in and updated options", type: "Nurture", priority: row.crmPriority || "normal", due: "Upcoming", owner: "Marco" });
+        }
+        if (row.phone && row.totalMessages <= 4) {
+          tasks.push({ row, task: `Log first phone touch for ${name}`, type: "Follow-up", priority: row.crmPriority || "normal", due: "Today", owner: "Marco" });
+        }
+      }
+      return tasks;
+    }
+    function crmTransactionsFromLeads(leads) {
+      return leads
+        .filter((row) => ["appointment_set", "showing_set", "under_contract", "closed"].includes(row.crmStage || ""))
+        .map((row) => ({
+          row,
+          address: row.propertyInquired || "Property from DM inquiry",
+          type: row.crmStage === "closed" ? "Closed" : row.crmStage === "under_contract" ? "Buyer" : "Showing",
+          status: row.crmStage || "new",
+          price: row.criteria?.priceCap ? "$" + row.criteria.priceCap.toLocaleString() : "Add",
+          close: row.crmStage === "closed" ? fmtDate(row.updatedAt) : "Add",
+        }));
+    }
+    function crmTableControls(row) {
+      const status = row.crmStatus || "not_contacted";
+      const stage = row.crmStage || "new";
+      const priority = row.crmPriority || "normal";
+      const notes = row.crmNotes || "";
+      return `
+        <select class="crm-status">
+          ${["not_contacted", "contacted", "nurture", "dead"].map((v) => `<option value="${v}" ${v===status?"selected":""}>${escapeHtml(statusLabel(v))}</option>`).join("")}
+        </select>
+        <select class="crm-stage">
+          ${["new","hot","warm","cold","appointment_set","showing_set","under_contract","closed"].map((v) => `<option value="${v}" ${v===stage?"selected":""}>${escapeHtml(stageLabel(v))}</option>`).join("")}
+        </select>
+        <select class="crm-priority">
+          ${["low","normal","high"].map((v) => `<option value="${v}" ${v===priority?"selected":""}>${escapeHtml(v)}</option>`).join("")}
+        </select>
+        <input class="crm-notes" value="${escapeHtml(notes)}" placeholder="Notes…" />`;
+    }
+
+    function crmFollowUpPlan(row) {
+      const stage = row.crmStage || "new";
+      const status = row.crmStatus || "not_contacted";
+      const daysSince = row.updatedAt ? Math.floor((Date.now() - new Date(row.updatedAt).getTime()) / 86400000) : 0;
+
+      if (status === "not_contacted") return { action: "First outreach — call or text introduction", urgency: "today", days: 0 };
+      if (status === "dead") return { action: "No follow-up scheduled", urgency: "none", days: -1 };
+
+      if (stage === "appointment_set") return { action: "Confirm appointment details and send prep info", urgency: "today", days: 0 };
+      if (stage === "showing_set") return { action: "Send showing prep, calendar invite, and drive route", urgency: "today", days: 0 };
+      if (stage === "under_contract") return { action: "Check in on inspection and appraisal timeline", urgency: daysSince > 3 ? "overdue" : "upcoming", days: 3 };
+      if (stage === "closed") return { action: "Send closing gift and request referral/review", urgency: daysSince > 7 ? "overdue" : "upcoming", days: 7 };
+
+      if (status === "nurture") {
+        if (daysSince > 7) return { action: "Send check-in with updated listings and market info", urgency: "overdue", days: 7 };
+        return { action: "Nurture touch — updated options or market snapshot", urgency: "upcoming", days: 7 - daysSince };
+      }
+      if (status === "contacted") {
+        if (daysSince > 3) return { action: "Follow up — re-engage on property interest", urgency: "overdue", days: 3 };
+        return { action: "Wait for response, follow up if no reply in 3 days", urgency: "upcoming", days: 3 - daysSince };
+      }
+      return { action: "Review lead and decide next step", urgency: "upcoming", days: 2 };
+    }
+
+    function renderCrm(data) {
+      const allLeads = (data.leads || []).filter((x) => x && x.phone);
+      const leads = crmFilteredLeads();
+      const tasks = crmTasksFromLeads(allLeads);
+      const transactions = crmTransactionsFromLeads(allLeads);
+      const section = crmSection || "dashboard";
+
+      document.getElementById("crm-generated").textContent =
+        "Snapshot " + fmtDate(data.generatedAt) + " · " + allLeads.length + " phone leads";
+      const titleMap = {
+        pipeline: "Pipeline", dashboard: "Overview", leads: "Leads",
+        text: "Send text",
+        tasks: "Tasks", transactions: "Deals", reports: "Reports",
+        plans: "Follow-up plans", activity: "Activity"
+      };
+      document.getElementById("crm-title").textContent = titleMap[section] || "Overview";
+
+      const platIg = allLeads.filter((l) => String(l.platform || "").toLowerCase().includes("insta")).length;
+      const platTt = allLeads.filter((l) => String(l.platform || "").toLowerCase().includes("tik")).length;
+      const needFirst = allLeads.filter((l) => (l.crmStatus || "not_contacted") === "not_contacted").length;
+      const activeTextLeads = allLeads.filter((l) => {
+        const st = l.crmStatus || "not_contacted";
+        return st === "contacted" || st === "nurture";
+      });
+      const texting = activeTextLeads.length;
+      const consultations = allLeads.filter((l) => (l.crmStage || "") === "appointment_set").length;
+      const showings = allLeads.filter((l) => (l.crmStage || "") === "showing_set").length;
+      const contracts = allLeads.filter((l) => ["under_contract", "closed"].includes(l.crmStage || "")).length;
+
+      const totals = data.totals || {};
+      const leadsAll = typeof totals.leads === "number" ? totals.leads : allLeads.length;
+      const withPhoneTotal = typeof totals.withPhone === "number" ? totals.withPhone : allLeads.length;
+
+      function pct(num, den) {
+        if (typeof den !== "number" || den <= 0) return "—";
+        return ((100 * num) / den).toFixed(1) + "%";
+      }
+      function chip(label, num, den, hint) {
+        const hasDen = typeof den === "number" && den > 0;
+        const p = hasDen ? pct(num, den) : "—";
+        const sub = hasDen ? `<small>${num}/${den}</small>` : `<small>${num}</small>`;
+        const title = hint ? escapeHtml(hint) : "";
+        return `<span class="crm-chip" title="${title}">${escapeHtml(label)} <strong>${p}</strong> ${sub}</span>`;
+      }
+
+      const pastConsultStages = ["appointment_set", "showing_set", "under_contract", "closed"];
+      const textToConsult = activeTextLeads.filter((l) => pastConsultStages.includes(l.crmStage || "")).length;
+      const reachedDeal = allLeads.filter((l) => ["under_contract", "closed"].includes(l.crmStage || "")).length;
+
+      document.getElementById("crm-stats").innerHTML = [
+        { k: "Total pipeline", v: allLeads.length, s: "with phone on file" },
+        { k: "Need first touch", v: needFirst, s: "not contacted yet" },
+        { k: "Instagram", v: platIg, s: "leads" },
+        { k: "TikTok", v: platTt, s: "leads" },
+        { k: "Text messages", v: texting, s: "contacted or nurture" },
+        { k: "Consultation calls", v: consultations, s: "appt set" },
+        { k: "Showings", v: showings, s: "tour scheduled" },
+        { k: "Contracts", v: contracts, s: "under contract + closed" },
+      ]
+        .map((x) => `<div class="crm-kpi"><label>${x.k}</label><strong>${x.v}</strong><div class="crm-muted">${escapeHtml(x.s)}</div></div>`)
+        .join("");
+
+      const funnelEl = document.getElementById("crm-funnel");
+      funnelEl.style.display = allLeads.length === 0 && leadsAll === 0 ? "none" : "flex";
+      funnelEl.innerHTML =
+        `<span class="crm-funnel-label">Conversions</span><div class="crm-funnel-chips">` +
+        [
+          chip("DM → Phone #", withPhoneTotal, leadsAll, "Share of all tracked leads that captured a mobile number."),
+          chip("Phone → Active text", texting, withPhoneTotal, "Leads marked contacted or nurture vs all phone leads."),
+          chip("Active text → Consult", textToConsult, texting, "Among contacted/nurture leads, how many reached appt or beyond."),
+          chip("Consult → Showing", showings, consultations, "Showings booked vs leads at consultation stage."),
+          chip("Showing → Contract", reachedDeal, showings, "Deals vs leads at showing stage."),
+        ].join("") +
+        `</div>`;
+
+      const empty = document.getElementById("crm-empty");
+      const content = document.getElementById("crm-content");
+      document.querySelectorAll(".crm-side-btn[data-crm-section]").forEach((b) => {
+        b.classList.toggle("active", b.getAttribute("data-crm-section") === section);
+      });
+
+      const plansLeads = allLeads.filter((l) => (l.crmStatus || "not_contacted") !== "dead");
+      document.getElementById("crm-count-pipeline").textContent = allLeads.length;
+      document.getElementById("crm-count-dashboard").textContent = allLeads.length;
+      document.getElementById("crm-count-leads").textContent = allLeads.length;
+      document.getElementById("crm-count-tasks").textContent = tasks.length;
+      document.getElementById("crm-count-transactions").textContent = transactions.length;
+      document.getElementById("crm-count-plans").textContent = plansLeads.length;
+      document.getElementById("crm-count-activity").textContent = allLeads.length;
+      const textEl = document.getElementById("crm-count-text");
+      if (textEl) textEl.textContent = String(allLeads.length);
+
+      if (allLeads.length === 0 && section !== "reports" && section !== "text") {
+        content.innerHTML = "";
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+
+      /* ——— OVERVIEW ——— */
+      if (section === "dashboard") {
+        const recent = allLeads.slice(0, 10);
+        const overdue = allLeads.filter((l) => {
+          const plan = crmFollowUpPlan(l);
+          return plan.urgency === "overdue" || plan.urgency === "today";
+        }).slice(0, 6);
+        content.innerHTML = `
+          <div class="crm-grid">
+            <section class="crm-card">
+              <div class="crm-card-head">Recent leads <span class="crm-muted">${allLeads.length} total</span></div>
+              <ul class="crm-mini-list">
+                ${recent.map((row) => {
+                  const plan = crmFollowUpPlan(row);
+                  return `<li>
+                  <span class="crm-avatar">${escapeHtml(crmInitial(row))}</span>
+                  <span>
+                    <b>${escapeHtml(row.name || row.username || row.phone)}</b>
+                    <br/><span class="crm-muted">${escapeHtml(row.platform)} · ${escapeHtml(statusLabel(row.crmStatus || "not_contacted"))} · ${fmtDate(row.updatedAt)}</span>
+                  </span>
+                  <span style="text-align:right;">
+                    <span class="crm-plan-stage">${escapeHtml(stageLabel(row.crmStage || "new"))}</span>
+                  </span>
+                </li>`;
+                }).join("")}
+              </ul>
+            </section>
+            <section class="crm-card">
+              <div class="crm-card-head">Needs attention <span class="crm-muted">${overdue.length} leads</span></div>
+              ${overdue.length ? `<ul class="crm-mini-list">
+                ${overdue.map((row) => {
+                  const plan = crmFollowUpPlan(row);
+                  return `<li>
+                    <span class="crm-avatar">${escapeHtml(crmInitial(row))}</span>
+                    <span>
+                      <b>${escapeHtml(row.name || row.username || row.phone)}</b>
+                      <br/><span class="crm-muted">${escapeHtml(plan.action)}</span>
+                    </span>
+                    <span class="crm-plan-due ${plan.urgency}">${plan.urgency === "today" ? "Today" : "Overdue"}</span>
+                  </li>`;
+                }).join("")}
+              </ul>` : `<div style="padding:1.5rem;text-align:center;color:var(--muted);font-size:0.82rem;">All leads are on track.</div>`}
+              <div class="crm-kpis" style="grid-template-columns:repeat(2,1fr);padding:0.85rem;gap:0.5rem;">
+                <div class="crm-kpi"><label>Contacted</label><strong>${allLeads.filter((l) => l.crmStatus === "contacted").length}</strong><div class="crm-muted">in progress</div></div>
+                <div class="crm-kpi"><label>Appointments</label><strong>${consultations}</strong><div class="crm-muted">set</div></div>
+                <div class="crm-kpi"><label>Showings</label><strong>${showings}</strong><div class="crm-muted">scheduled</div></div>
+                <div class="crm-kpi"><label>Deals</label><strong>${contracts}</strong><div class="crm-muted">contract+</div></div>
+              </div>
+            </section>
+          </div>`;
+        return;
+      }
+
+      /* ——— PIPELINE ——— */
+      if (section === "pipeline") {
+        const filtered = crmFilteredLeads();
+        const byStage = (k) => filtered.filter((l) => (l.crmStage || "new") === k);
+        content.innerHTML = `
+          <div class="crm-kanban">
+            ${CRM_PIPELINE_STAGES.map(({ key, label }) => {
+              const rows = byStage(key);
+              return `<div class="crm-kcol" data-stage="${escapeHtml(key)}">
+                <div class="crm-kcol-head"><strong>${escapeHtml(label)}</strong><span class="crm-col-count">${rows.length}</span></div>
+                <div class="crm-kcol-cards">
+                  ${rows.length ? rows.map((row) => {
+                    const title = row.name || (row.username ? "@" + row.username : row.phone) || "Lead";
+                    const sub = row.platform || "";
+                    const phone = row.phone || "";
+                    const st = row.crmStatus || "not_contacted";
+                    return `<div class="crm-kcard" draggable="true" data-lead-id="${escapeHtml(row.id)}" data-stage="${escapeHtml(key)}">
+                      <div class="crm-kcard-title">${escapeHtml(title)}</div>
+                      <div class="crm-kcard-meta">${escapeHtml(sub)}${phone ? ` · ${escapeHtml(phone)}` : ""}</div>
+                      <div class="crm-kcard-status"><span class="crm-kcard-dot ${escapeHtml(st)}"></span>${escapeHtml(statusLabel(st))}</div>
+                    </div>`;
+                  }).join("") : `<div class="crm-muted" style="font-size:0.72rem;padding:0.5rem 0.25rem;text-align:center;">Empty</div>`}
+                </div>
+              </div>`;
+            }).join("")}
+          </div>`;
+        bindCrmPipelineDnD();
+        return;
+      }
+
+      /* ——— TASKS ——— */
+      if (section === "tasks") {
+        content.innerHTML = `<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th></th><th>Task</th><th>Task type</th><th>Priority</th><th>Date due</th><th>Who</th><th>Contact</th></tr></thead><tbody>
+          ${tasks.length ? tasks.map((t) => `<tr>
+            <td><input type="checkbox" class="crm-task-check" /></td>
+            <td>${escapeHtml(t.task)}</td>
+            <td><span class="crm-plan-stage">${escapeHtml(t.type)}</span></td>
+            <td><span class="crm-plan-stage">${escapeHtml(t.priority)}</span></td>
+            <td>${escapeHtml(t.due)}</td>
+            <td>${escapeHtml(t.owner)}</td>
+            <td>${escapeHtml(t.row.name || t.row.username || t.row.phone)}</td>
+          </tr>`).join("") : `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted);">No tasks right now. Move leads through stages to generate tasks.</td></tr>`}
+        </tbody></table></div>`;
+        return;
+      }
+
+      /* ——— DEALS ——— */
+      if (section === "transactions") {
+        content.innerHTML = `<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>Address / Title</th><th>Type</th><th>Status</th><th>Agent</th><th>List price</th><th>Close date</th><th>Lead</th></tr></thead><tbody>
+          ${transactions.length ? transactions.map((x) => `<tr>
+            <td>${escapeHtml(x.address)}<br/><span class="crm-muted">${escapeHtml(x.row.platform || "")}</span></td>
+            <td><span class="crm-plan-stage">${escapeHtml(x.type)}</span></td>
+            <td><span class="crm-plan-stage">${escapeHtml(stageLabel(x.status))}</span></td>
+            <td>Marco Puga</td>
+            <td>${escapeHtml(x.price)}</td>
+            <td>${escapeHtml(x.close)}</td>
+            <td>${escapeHtml(x.row.name || x.row.username || x.row.phone)}</td>
+          </tr>`).join("") : `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted);">Move leads into appointment, showing, under contract, or closed to see deal rows.</td></tr>`}
+        </tbody></table></div>`;
+        return;
+      }
+
+      /* ——— REPORTS ——— */
+      if (section === "reports") {
+        const avgPrice = allLeads.reduce((s, l) => s + (l.criteria?.priceCap || 0), 0);
+        const leadsWithPrice = allLeads.filter((l) => l.criteria?.priceCap).length;
+        const avgPriceStr = leadsWithPrice > 0 ? "$" + Math.round(avgPrice / leadsWithPrice).toLocaleString() : "N/A";
+        const topAreas = {};
+        allLeads.forEach((l) => { if (l.criteria?.area) topAreas[l.criteria.area] = (topAreas[l.criteria.area] || 0) + 1; });
+        const sortedAreas = Object.entries(topAreas).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+        content.innerHTML = `
+          <div class="crm-section-head">Reports</div>
+          <div class="crm-section-sub">Generate market insights, listing reports, and client-ready documents from your pipeline data.</div>
+          <div class="crm-reports-grid">
+            <div class="crm-report-card">
+              <div class="crm-report-icon">📊</div>
+              <div class="crm-report-title">Market snapshot</div>
+              <div class="crm-report-desc">
+                Your leads are searching at an average price of <strong>${avgPriceStr}</strong> across <strong>${leadsWithPrice}</strong> leads with price criteria.
+                ${sortedAreas.length ? `<br/>Top areas: ${sortedAreas.map(([a, c]) => `<strong>${escapeHtml(a)}</strong> (${c})`).join(", ")}` : ""}
+              </div>
+              <button type="button" class="crm-report-btn" onclick="alert('Market snapshot generated — export coming soon.')">Generate snapshot</button>
+            </div>
+            <div class="crm-report-card">
+              <div class="crm-report-icon">🏠</div>
+              <div class="crm-report-title">Listing report</div>
+              <div class="crm-report-desc">
+                Create a property summary for any lead with criteria on file. Includes pricing, beds/baths, area, and comparable notes from your DM threads.
+              </div>
+              <button type="button" class="crm-report-btn" onclick="alert('Select a lead from the Leads tab to generate their listing report.')">Create listing report</button>
+            </div>
+            <div class="crm-report-card">
+              <div class="crm-report-icon">📈</div>
+              <div class="crm-report-title">Pipeline performance</div>
+              <div class="crm-report-desc">
+                <strong>${allLeads.length}</strong> phone leads in pipeline.
+                Conversion: <strong>${pct(withPhoneTotal, leadsAll)}</strong> DM→Phone,
+                <strong>${pct(texting, withPhoneTotal)}</strong> Phone→Active,
+                <strong>${pct(contracts, allLeads.length)}</strong> to contract.
+              </div>
+              <button type="button" class="crm-report-btn" onclick="alert('Pipeline performance report generated — export coming soon.')">Generate report</button>
+            </div>
+            <div class="crm-report-card">
+              <div class="crm-report-icon">📋</div>
+              <div class="crm-report-title">CMA template</div>
+              <div class="crm-report-desc">
+                Comparative Market Analysis template pre-filled with your lead's criteria. Share with clients to support pricing discussions.
+              </div>
+              <button type="button" class="crm-report-btn" onclick="alert('CMA template — coming soon with MLS integration.')">Create CMA</button>
+            </div>
+            <div class="crm-report-card">
+              <div class="crm-report-icon">🗺️</div>
+              <div class="crm-report-title">Neighborhood analysis</div>
+              <div class="crm-report-desc">
+                Area-by-area breakdown of where your leads are searching. Useful for targeting content and farming.
+                ${sortedAreas.length > 0 ? `Most interest: <strong>${escapeHtml(sortedAreas[0][0])}</strong>.` : "No area data yet."}
+              </div>
+              <button type="button" class="crm-report-btn" onclick="alert('Neighborhood analysis — coming soon.')">Analyze areas</button>
+            </div>
+            <div class="crm-report-card">
+              <div class="crm-report-icon">📤</div>
+              <div class="crm-report-title">Export leads</div>
+              <div class="crm-report-desc">
+                Download your full pipeline as a CSV for import into other tools, mailers, or for your records.
+              </div>
+              <button type="button" class="crm-report-btn" id="crm-export-csv">Export CSV</button>
+            </div>
+          </div>`;
+        const csvBtn = document.getElementById("crm-export-csv");
+        if (csvBtn) {
+          csvBtn.addEventListener("click", () => {
+            const headers = ["Name","Username","Phone","Email","Platform","Status","Stage","Priority","Notes","Property","Area","Price","Updated"];
+            const rows = allLeads.map((r) => [
+              r.name || "", r.username || "", r.phone || "", r.email || "", r.platform || "",
+              r.crmStatus || "", r.crmStage || "", r.crmPriority || "", (r.crmNotes || "").replace(/"/g, '""'),
+              r.propertyInquired || "", r.criteria?.area || "", r.criteria?.priceCap || "", r.updatedAt || ""
+            ]);
+            const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${c}"`).join(","))].join("\n");
+            const blob = new Blob([csv], { type: "text/csv" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "marco-crm-leads-" + new Date().toISOString().slice(0, 10) + ".csv";
+            a.click();
+          });
+        }
+        return;
+      }
+
+      /* ——— FOLLOW-UP PLANS ——— */
+      if (section === "plans") {
+        const sorted = [...plansLeads].sort((a, b) => {
+          const pa = crmFollowUpPlan(a);
+          const pb = crmFollowUpPlan(b);
+          const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
+          return (order[pa.urgency] ?? 9) - (order[pb.urgency] ?? 9);
+        });
+        content.innerHTML = `
+          <div class="crm-section-head">Auto follow-up plans</div>
+          <div class="crm-section-sub">Each lead gets an intelligent follow-up schedule based on their stage and last interaction. Overdue items appear first.</div>
+          <div class="crm-plans-list">
+            <div class="crm-plan-row" style="background:transparent;border:none;padding:0.35rem 0.85rem;font-family:var(--mono);font-size:0.56rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);">
+              <div></div><div>Lead</div><div>Next action</div><div>Due</div><div>Stage</div>
+            </div>
+            ${sorted.length ? sorted.map((row) => {
+              const plan = crmFollowUpPlan(row);
+              const title = row.name || (row.username ? "@" + row.username : row.phone) || "Lead";
+              const dueText = plan.urgency === "today" ? "Today"
+                : plan.urgency === "overdue" ? "Overdue"
+                : plan.days >= 0 ? `In ${plan.days}d` : "—";
+              return `<div class="crm-plan-row">
+                <div class="crm-plan-avatar">${escapeHtml(crmInitial(row))}</div>
+                <div>
+                  <div class="crm-plan-name">${escapeHtml(title)}</div>
+                  <div class="crm-plan-sub">${escapeHtml(row.platform || "")} · ${escapeHtml(row.phone || "")}</div>
+                </div>
+                <div class="crm-plan-next">${escapeHtml(plan.action)}<small>${fmtDate(row.updatedAt)}</small></div>
+                <div class="crm-plan-due ${plan.urgency}">${dueText}</div>
+                <div class="crm-plan-stage">${escapeHtml(stageLabel(row.crmStage || "new"))}</div>
+              </div>`;
+            }).join("") : `<div style="text-align:center;padding:2rem;color:var(--muted);">No active leads to schedule follow-ups for.</div>`}
+          </div>`;
+        return;
+      }
+
+      /* ——— ACTIVITY ——— */
+      if (section === "activity") {
+        content.innerHTML = `<section class="crm-card"><div class="crm-card-head">Logged activity <span class="crm-muted">${allLeads.length} leads</span></div><ul class="crm-mini-list">
+          ${allLeads.map((row) => `<li>
+            <span class="crm-avatar">${escapeHtml(crmInitial(row))}</span>
+            <span><b>${escapeHtml(row.name || row.username || row.phone)}</b><br/><span class="crm-muted">${escapeHtml(row.totalMessages || 0)} DM messages · last ${fmtDate(row.lastMessageAt || row.updatedAt)}</span></span>
+            <span class="crm-plan-stage">${escapeHtml(row.crmPriority || "normal")}</span>
+          </li>`).join("")}
+        </ul></section>`;
+        return;
+      }
+
+      /* ——— TEXT (Sendblue) ——— */
+      if (section === "text") {
+        const pickId = crmTextPrefillLeadId;
+        crmTextPrefillLeadId = null;
+        const leadOpts = [
+          `<option value="">Custom number…</option>`,
+          ...allLeads.map((row) => {
+            const label = (row.name || row.username || row.phone || "Lead").trim();
+            const sub = row.phone ? " · " + row.phone : "";
+            const sel = pickId && row.id === pickId ? " selected" : "";
+            return `<option value="${escapeHtml(row.id)}"${sel}>${escapeHtml(label + sub)}</option>`;
+          }),
+        ].join("");
+        content.innerHTML = `
+          <div class="crm-section-head">Sendblue · SMS / iMessage</div>
+          <div class="crm-section-sub">Compose the full message here — breakdowns, links, follow-ups. Pick a saved lead or enter any number.</div>
+          <section class="crm-card crm-text-panel">
+            <div class="crm-field">
+              <label for="crm-text-lead">Lead (optional)</label>
+              <select id="crm-text-lead" class="crm-select" style="width:100%;max-width:100%;">${leadOpts}</select>
+            </div>
+            <div class="crm-field">
+              <label for="crm-text-phone">Phone number</label>
+              <input type="tel" id="crm-text-phone" class="crm-input" style="width:100%;" placeholder="+1… or 3053333940" autocomplete="tel" />
+              <p class="crm-text-hint">Choosing a lead fills this from CRM. For a one-off number, choose &ldquo;Custom number…&rdquo; and type the digits here.</p>
+            </div>
+            <div class="crm-field">
+              <label for="crm-text-body">Message</label>
+              <textarea id="crm-text-body" placeholder="Write your text…"></textarea>
+            </div>
+            <div class="crm-text-actions">
+              <button type="button" class="crm-light-btn" id="crm-text-send">Send</button>
+              <span class="crm-text-status" id="crm-text-status"></span>
+            </div>
+          </section>`;
+
+        const leadSel = content.querySelector("#crm-text-lead");
+        const phoneIn = content.querySelector("#crm-text-phone");
+        const bodyTa = content.querySelector("#crm-text-body");
+        const statusEl = content.querySelector("#crm-text-status");
+
+        function syncPhoneFromLead() {
+          const id = leadSel.value;
+          if (!id) return;
+          const row = allLeads.find((x) => x.id === id);
+          if (row && row.phone) phoneIn.value = row.phone;
+        }
+        syncPhoneFromLead();
+
+        leadSel.addEventListener("change", () => {
+          if (leadSel.value) syncPhoneFromLead();
+        });
+
+        content.querySelector("#crm-text-send").addEventListener("click", async () => {
+          const msg = String(bodyTa.value || "").trim();
+          const lid = String(leadSel.value || "").trim();
+          const rawPhone = String(phoneIn.value || "").trim();
+          hideCrmErr();
+          statusEl.textContent = "";
+          statusEl.classList.remove("ok");
+          if (!msg) {
+            showCrmErr("Write a message before sending.");
+            return;
+          }
+          if (!lid && !rawPhone) {
+            showCrmErr("Choose a lead or enter a phone number.");
+            return;
+          }
+          const payload = lid ? { leadId: lid, content: msg } : { to: rawPhone, content: msg };
+          try {
+            const res = await fetch(sendblueSendApiUrl(), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              let m = body.error || res.statusText || "Send failed";
+              if (body.hint) m += " — " + body.hint;
+              throw new Error(m);
+            }
+            statusEl.textContent = body.threadAttached === false
+              ? "Sent (no matching lead thread — message not saved to CRM)."
+              : "Sent.";
+            statusEl.classList.add("ok");
+            bodyTa.value = "";
+            await loadCrm();
+          } catch (e) {
+            showCrmErr(e instanceof Error ? e.message : String(e));
+          }
+        });
+        return;
+      }
+
+      /* ——— LEADS TABLE (default) ——— */
+      content.innerHTML = `<div class="crm-table-wrap"><table class="crm-table"><thead><tr>
+        <th><input type="checkbox" /></th>
+        <th>Name</th>
+        <th>Source</th>
+        <th>Status</th>
+        <th>Stage</th>
+        <th>Phone</th>
+        <th>Text</th>
+        <th>Follow-up</th>
+        <th>Last interaction</th>
+        <th>Priority</th>
+        <th>Notes</th>
+      </tr></thead><tbody>
+        ${leads.map((row) => {
+          const display = row.name || (row.username ? "@" + row.username : null) || row.phone || "—";
+          const crit = fmtCriteria(row.criteria);
+          const plan = crmFollowUpPlan(row);
+          return `<tr data-id="${escapeHtml(row.id)}">
+            <td><input type="checkbox" /></td>
+            <td><b>${escapeHtml(display)}</b><br/><span class="crm-muted">${escapeHtml(row.username ? "@" + row.username : "")}</span></td>
+            <td>${escapeHtml(row.platform || "—")}</td>
+            <td>${crmTableControls(row).split("</select>")[0]}</select></td>
+            <td>${crmTableControls(row).split("</select>")[1]}</select></td>
+            <td><span class="mono phone">${escapeHtml(row.phone)}</span><br/><span class="crm-muted">${escapeHtml(row.email || "")}</span></td>
+            <td><button type="button" class="crm-light-btn" style="padding:0.35rem 0.55rem;font-size:0.7rem;white-space:nowrap;" data-crm-compose-text="${escapeHtml(row.id)}">Compose</button></td>
+            <td><span class="crm-plan-due ${plan.urgency}" style="font-size:0.72rem;">${escapeHtml(plan.urgency === "today" ? "Today" : plan.urgency === "overdue" ? "Overdue" : plan.days >= 0 ? "In " + plan.days + "d" : "—")}</span></td>
+            <td>${fmtDate(row.lastMessageAt || row.updatedAt)}</td>
+            <td>${crmTableControls(row).split("</select>")[2]}</select></td>
+            <td><input class="crm-notes" value="${escapeHtml(row.crmNotes || crit || "")}" placeholder="Notes…" /></td>
+          </tr>`;
+        }).join("")}
+      </tbody></table></div>`;
+
+      content.querySelectorAll("[data-crm-compose-text]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-crm-compose-text");
+          if (!id) return;
+          crmTextPrefillLeadId = id;
+          crmSection = "text";
+          if (crmCache) renderCrm(crmCache);
+        });
+      });
+
+      content.querySelectorAll("tr[data-id]").forEach((tr) => {
+        const id = tr.getAttribute("data-id");
+        if (!id) return;
+        const statusEl = tr.querySelector(".crm-status");
+        const stageEl = tr.querySelector(".crm-stage");
+        const prioEl = tr.querySelector(".crm-priority");
+        const notesEl = tr.querySelector(".crm-notes");
+
+        const push = async () => {
+          try {
+            const row = ((crmCache && crmCache.leads) || []).find((x) => x.id === id);
+            if (row) {
+              row.crmStatus = statusEl.value;
+              row.crmStage = stageEl.value;
+              row.crmPriority = prioEl.value;
+              row.crmNotes = notesEl.value || null;
+            }
+            await patchCrm(id, {
+              crmStatus: statusEl.value,
+              crmStage: stageEl.value,
+              crmPriority: prioEl.value,
+              crmNotes: notesEl.value || null,
+            });
+            renderCrm(crmCache);
+          } catch (e) {
+            showCrmErr(e instanceof Error ? e.message : String(e));
+          }
+        };
+
+        statusEl.addEventListener("change", push);
+        stageEl.addEventListener("change", push);
+        prioEl.addEventListener("change", push);
+        let notesTimer = null;
+        notesEl.addEventListener("input", () => {
+          if (notesTimer) clearTimeout(notesTimer);
+          notesTimer = setTimeout(push, 650);
+        });
+      });
+    }
+
+    let crmTimer = null;
+    document.getElementById("crm-auto").addEventListener("change", function () {
+      if (crmTimer) clearInterval(crmTimer);
+      crmTimer = null;
+      if (this.checked) crmTimer = setInterval(loadCrm, 30000);
+    });
+  </script>
+</body>
+</html>
