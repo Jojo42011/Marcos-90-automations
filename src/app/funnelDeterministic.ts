@@ -16,10 +16,44 @@ function getLastUserMessage(conversation: Conversation): Message | null {
   return reversed.find((m) => m.role === "user") ?? null;
 }
 
+/** Shown when we detect a number in-thread the same turn we leave the opening funnel (or override a bad sanitizer). */
+export const PHONE_JUST_CAPTURED_REPLY =
+  "Got it. I'll send you the full breakdown by the end of the day, pricing and specs, plus a couple similar ones. " +
+  "Once you check it out, tell me if this is the right fit or if you're trying to hit a different area or price.";
+
+const MAX_USER_MESSAGES_PHONE_SCAN = 12;
+
+/**
+ * US-ish mobile: strip non-digits; accept 10 digits, or 11 starting with country code 1.
+ * If one bubble contains extra digits (zip + phone, two numbers), prefer the last 10-digit run.
+ */
 export function extractPhone(text: string): string | null {
   const digits = text.replace(/\D/g, "");
   if (digits.length === 10) return digits;
   if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+  if (digits.length > 11) {
+    const tail = digits.slice(-10);
+    if (tail.length === 10) return tail;
+  }
+  return null;
+}
+
+/**
+ * Newest user messages first — catches numbers sent one bubble before "ok"/"thanks".
+ */
+export function extractPhoneFromConversation(
+  conversation: Conversation,
+  maxUserMessages: number = MAX_USER_MESSAGES_PHONE_SCAN,
+): string | null {
+  let seen = 0;
+  for (let i = conversation.messages.length - 1; i >= 0; i--) {
+    const m = conversation.messages[i];
+    if (m.role !== "user") continue;
+    seen++;
+    const p = extractPhone(m.text);
+    if (p) return p;
+    if (seen >= maxUserMessages) break;
+  }
   return null;
 }
 
@@ -120,12 +154,11 @@ export function advanceFunnelDeterministic(
   let l = lead;
 
   if (l.state === FunnelStage.PhoneRequested) {
-    const last = getLastUserMessage(conversation);
-    if (!last) return { lead: l, meta };
-    const phone = extractPhone(last.text);
+    const phone = l.phone ?? extractPhoneFromConversation(conversation);
     if (phone) {
+      const justCaptured = !l.phone;
       l = { ...l, phone, state: FunnelStage.PropertySent };
-      meta.phoneJustCaptured = true;
+      if (justCaptured) meta.phoneJustCaptured = true;
     }
     return { lead: l, meta };
   }

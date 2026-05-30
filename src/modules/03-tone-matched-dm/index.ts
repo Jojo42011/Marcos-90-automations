@@ -9,6 +9,11 @@ import {
   leadTextSignalsNoAgent,
   threadContainsAgentQuestion,
 } from "../../app/conversationUtils.js";
+import {
+  extractPhone,
+  extractPhoneFromConversation,
+  PHONE_JUST_CAPTURED_REPLY,
+} from "../../app/funnelDeterministic.js";
 import type { MarcoLogContext } from "../../app/marcoLog.js";
 import { generateMarcoOpeningReply } from "../../integrations/llm/index.js";
 
@@ -48,6 +53,14 @@ function getLastUserMessage(conversation: Conversation): Message | null {
   return reversed.find((m) => m.role === "user") ?? null;
 }
 
+/** Phone in thread (e.g. IG contact card echo) — must advance even when ManyChat sends the same line twice. */
+function capturablePhoneFromThread(
+  conversation: Conversation,
+  lastUserText: string,
+): string | null {
+  return extractPhone(lastUserText) ?? extractPhoneFromConversation(conversation) ?? null;
+}
+
 /**
  * After this turn's outbound, where the funnel should sit before the next inbound.
  * Repeat turns do not advance. Agent + not open stays in OpeningOfferedDetails for exclusivity ask.
@@ -58,6 +71,9 @@ function nextOpeningState(
   repeat: boolean,
   conversation: Conversation,
 ): FunnelStage {
+  if (capturablePhoneFromThread(conversation, lastUserText)) {
+    return FunnelStage.PhoneRequested;
+  }
   if (lead.state === FunnelStage.New) {
     return FunnelStage.OpeningAskedFirstTime;
   }
@@ -99,6 +115,15 @@ export async function process(
 
   const openingStage = lead.state;
   const repeat = Boolean(options?.leadRepeatedForAdvancement && lead.state !== FunnelStage.New);
+
+  const phoneDigits = lead.phone ?? capturablePhoneFromThread(conversation, last.text);
+  if (phoneDigits) {
+    const justCaptured = !lead.phone;
+    return {
+      lead: { ...lead, phone: phoneDigits, state: FunnelStage.PropertySent },
+      reply: justCaptured ? PHONE_JUST_CAPTURED_REPLY : null,
+    };
+  }
 
   const note = options?.coachingNote?.trim() ?? "";
   const preflight = {

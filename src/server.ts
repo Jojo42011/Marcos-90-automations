@@ -7,7 +7,17 @@ import cors from "cors";
 import path from "path";
 
 import { handleWebhook, handleIncomingPayload } from "./app/webhook.js";
-import { getDashboardSnapshot, resetMemoryStore, updateLeadCrmFields, getLeadById, appendMessage, findLeadByPhoneDigits } from "./core/db.js";
+import {
+  getDashboardSnapshot,
+  resetMemoryStore,
+  updateLeadCrmFields,
+  getLeadById,
+  appendMessage,
+  findLeadByPhoneDigits,
+  createLead,
+} from "./core/db.js";
+import { FunnelStage } from "./core/state.js";
+import type { CrmIntent, CrmStage, CrmStatus } from "./core/types.js";
 import type { IncomingWebhookPayload } from "./core/types.js";
 import { receiveInbound } from "./integrations/sinch/index.js";
 import {
@@ -112,8 +122,48 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
   const crmStatus = typeof body.crmStatus === "string" ? body.crmStatus : undefined;
   const crmStage = typeof body.crmStage === "string" ? body.crmStage : undefined;
   const crmPriority = typeof body.crmPriority === "string" ? body.crmPriority : undefined;
+  const crmIntent = typeof body.crmIntent === "string" ? body.crmIntent : undefined;
+  const crmCallQueueRaw = typeof body.crmCallQueue === "string" ? body.crmCallQueue : undefined;
+  const crmCallQueue =
+    crmCallQueueRaw === "urgent" || crmCallQueueRaw === "routine" || crmCallQueueRaw === "none"
+      ? crmCallQueueRaw
+      : undefined;
   const crmNotes =
     body.crmNotes === null ? null : typeof body.crmNotes === "string" ? body.crmNotes : undefined;
+  const name = body.name === null ? null : typeof body.name === "string" ? body.name : undefined;
+  const email = body.email === null ? null : typeof body.email === "string" ? body.email : undefined;
+  const phone = body.phone === null ? null : typeof body.phone === "string" ? body.phone : undefined;
+  const source = body.source === null ? null : typeof body.source === "string" ? body.source : undefined;
+  const propertyInquired =
+    body.propertyInquired === null
+      ? null
+      : typeof body.propertyInquired === "string"
+        ? body.propertyInquired
+        : undefined;
+  const brivityId =
+    body.brivityId === null ? null : typeof body.brivityId === "string" ? body.brivityId : undefined;
+
+  let criteria: Record<string, unknown> | null | undefined = undefined;
+  if (body.criteria === null) criteria = null;
+  else if (body.criteria && typeof body.criteria === "object") {
+    const c = body.criteria as Record<string, unknown>;
+    criteria = {};
+    if ("priceCap" in c) {
+      const n = c.priceCap;
+      criteria.priceCap = n === null || n === "" ? null : typeof n === "number" ? n : Number(n);
+    }
+    if ("beds" in c) {
+      const n = c.beds;
+      criteria.beds = n === null || n === "" ? null : typeof n === "number" ? n : Number(n);
+    }
+    if ("baths" in c) {
+      const n = c.baths;
+      criteria.baths = n === null || n === "" ? null : typeof n === "number" ? n : Number(n);
+    }
+    if ("area" in c) {
+      criteria.area = c.area === null ? null : typeof c.area === "string" ? c.area : String(c.area);
+    }
+  }
 
   try {
     const updated = await updateLeadCrmFields({
@@ -121,7 +171,16 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
       crmStatus: crmStatus as any,
       crmStage: crmStage as any,
       crmPriority: crmPriority as any,
+      crmIntent: crmIntent === "seller" || crmIntent === "buyer" ? crmIntent : undefined,
+      crmCallQueue,
       crmNotes,
+      name,
+      email,
+      phone,
+      source,
+      propertyInquired,
+      brivityId,
+      criteria: criteria as any,
     });
     if (!updated) {
       res.status(404).json({ error: "Lead not found" });
@@ -134,11 +193,97 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
   }
 });
 
+/** CRM: manually add a lead from the dashboard (not from ManyChat). */
+app.post("/api/crm/lead", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
+  const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
+  const name = [firstName, lastName].filter(Boolean).join(" ") || null;
+  const phoneRaw = typeof body.phone === "string" ? body.phone.trim() : "";
+  const digits = phoneRaw.replace(/\D/g, "");
+  const phone =
+    digits.length === 10
+      ? digits
+      : digits.length === 11 && digits.startsWith("1")
+        ? digits.slice(1)
+        : null;
+  if (!phone) {
+    res.status(400).json({ error: "A valid US phone number is required" });
+    return;
+  }
+  const existing = await findLeadByPhoneDigits(phone);
+  if (existing) {
+    res.status(409).json({ error: "A lead with this phone already exists", leadId: existing.id });
+    return;
+  }
+  const email = typeof body.email === "string" && body.email.trim() ? body.email.trim() : null;
+  const crmStatus = (
+    ["not_contacted", "contacted", "nurture", "dead"].includes(String(body.crmStatus || ""))
+      ? body.crmStatus
+      : "not_contacted"
+  ) as CrmStatus;
+  const crmStage = (
+    ["new", "hot", "warm", "cold", "appointment_set", "showing_set", "under_contract", "closed"].includes(
+      String(body.crmStage || ""),
+    )
+      ? body.crmStage
+      : "new"
+  ) as CrmStage;
+  const crmIntent = body.crmIntent === "seller" ? "seller" : "buyer";
+  const source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : "Manual";
+  const personType = typeof body.personType === "string" ? body.personType.trim() : "Lead";
+  const description = typeof body.description === "string" ? body.description.trim() : "";
+  const company = typeof body.company === "string" ? body.company.trim() : "";
+  const street = typeof body.street === "string" ? body.street.trim() : "";
+  const city = typeof body.city === "string" ? body.city.trim() : "";
+  const stateAddr = typeof body.state === "string" ? body.state.trim() : "";
+  const zip = typeof body.zip === "string" ? body.zip.trim() : "";
+  const areaParts = [city, stateAddr, zip].filter(Boolean);
+  const notesParts = [
+    personType !== "Lead" ? `Person type: ${personType}` : "",
+    description,
+    company ? `Company: ${company}` : "",
+    street ? `Address: ${[street, ...areaParts].filter(Boolean).join(", ")}` : areaParts.length ? `Area: ${areaParts.join(", ")}` : "",
+  ].filter(Boolean);
+  const userId = `manual-${phone}`;
+  try {
+    const lead = await createLead({
+      platform: "manual",
+      userId,
+      username: null,
+      name,
+      phone,
+      email,
+      state: FunnelStage.New,
+      source,
+      propertyInquired: null,
+      criteria: areaParts.length ? { priceCap: null, beds: null, baths: null, area: areaParts.join(", ") } : null,
+      brivityId: null,
+      crmStatus,
+      crmStage,
+      crmPriority: "normal",
+      crmIntent: crmIntent as CrmIntent,
+      crmCallQueue: "none",
+      crmNotes: notesParts.length ? notesParts.join("\n") : null,
+      adCampaign: null,
+    });
+    res.status(201).json({ ok: true, leadId: lead.id });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
 type AdsLatestRow = {
   generated_at?: string;
   date_preset?: string;
   totals?: Record<string, unknown>;
   campaigns?: unknown[];
+  adsets?: unknown[];
   error?: string;
 };
 
@@ -148,6 +293,7 @@ async function fetchAdsSummaryFromUpstream(): Promise<{
   datePreset: string | null;
   totals: Record<string, number | string | null | undefined>;
   campaigns: unknown[];
+  adsets: unknown[];
 }> {
   if (!AD_DASHBOARD_BASE_URL) {
     throw new Error("AD_DASHBOARD_BASE_URL is not set");
@@ -174,11 +320,13 @@ async function fetchAdsSummaryFromUpstream(): Promise<{
       ? (raw.totals as Record<string, number | string | null | undefined>)
       : {};
   const campaigns = Array.isArray(raw.campaigns) ? raw.campaigns : [];
+  const adsets = Array.isArray(raw.adsets) ? raw.adsets : [];
   return {
     generatedAt: raw.generated_at ?? null,
     datePreset: raw.date_preset ?? null,
     totals,
     campaigns: campaigns.slice(0, 80),
+    adsets: adsets.slice(0, 120),
   };
 }
 
@@ -253,6 +401,7 @@ app.post("/api/jarvis/chat", express.json(), async (req, res) => {
       adsSnapshot = {
         totals: raw.totals,
         campaignCount: raw.campaigns.length,
+        adsetCount: raw.adsets.length,
         datePreset: raw.datePreset,
       };
     }

@@ -1,18 +1,51 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.PHONE_JUST_CAPTURED_REPLY = void 0;
 exports.extractPhone = extractPhone;
+exports.extractPhoneFromConversation = extractPhoneFromConversation;
 exports.advanceFunnelDeterministic = advanceFunnelDeterministic;
 const state_js_1 = require("../core/state.js");
 function getLastUserMessage(conversation) {
     const reversed = [...conversation.messages].reverse();
     return reversed.find((m) => m.role === "user") ?? null;
 }
+/** Shown when we detect a number in-thread the same turn we leave the opening funnel (or override a bad sanitizer). */
+exports.PHONE_JUST_CAPTURED_REPLY = "Got it. I'll send you the full breakdown by the end of the day, pricing and specs, plus a couple similar ones. " +
+    "Once you check it out, tell me if this is the right fit or if you're trying to hit a different area or price.";
+const MAX_USER_MESSAGES_PHONE_SCAN = 12;
+/**
+ * US-ish mobile: strip non-digits; accept 10 digits, or 11 starting with country code 1.
+ * If one bubble contains extra digits (zip + phone, two numbers), prefer the last 10-digit run.
+ */
 function extractPhone(text) {
     const digits = text.replace(/\D/g, "");
     if (digits.length === 10)
         return digits;
     if (digits.length === 11 && digits.startsWith("1"))
         return digits.slice(1);
+    if (digits.length > 11) {
+        const tail = digits.slice(-10);
+        if (tail.length === 10)
+            return tail;
+    }
+    return null;
+}
+/**
+ * Newest user messages first — catches numbers sent one bubble before "ok"/"thanks".
+ */
+function extractPhoneFromConversation(conversation, maxUserMessages = MAX_USER_MESSAGES_PHONE_SCAN) {
+    let seen = 0;
+    for (let i = conversation.messages.length - 1; i >= 0; i--) {
+        const m = conversation.messages[i];
+        if (m.role !== "user")
+            continue;
+        seen++;
+        const p = extractPhone(m.text);
+        if (p)
+            return p;
+        if (seen >= maxUserMessages)
+            break;
+    }
     return null;
 }
 function extractEmail(text) {
@@ -99,13 +132,12 @@ function advanceFunnelDeterministic(lead, conversation) {
     const meta = {};
     let l = lead;
     if (l.state === state_js_1.FunnelStage.PhoneRequested) {
-        const last = getLastUserMessage(conversation);
-        if (!last)
-            return { lead: l, meta };
-        const phone = extractPhone(last.text);
+        const phone = l.phone ?? extractPhoneFromConversation(conversation);
         if (phone) {
+            const justCaptured = !l.phone;
             l = { ...l, phone, state: state_js_1.FunnelStage.PropertySent };
-            meta.phoneJustCaptured = true;
+            if (justCaptured)
+                meta.phoneJustCaptured = true;
         }
         return { lead: l, meta };
     }

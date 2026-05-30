@@ -6,6 +6,7 @@ import type { Conversation, Lead, Message } from "../../core/types.js";
 import { FunnelStage } from "../../core/state.js";
 import { messageAsksListingLocation } from "../../app/conversationUtils.js";
 import { rewriteReplyWithTone } from "../../integrations/llm/index.js";
+import { extractPhone as extractPhoneDeterministic } from "../../app/funnelDeterministic.js";
 
 export interface ModuleResult {
   lead: Lead;
@@ -17,12 +18,7 @@ function getLastUserMessage(conversation: Conversation): Message | null {
   return reversed.find((m) => m.role === "user") ?? null;
 }
 
-function extractPhone(text: string): string | null {
-  const digits = text.replace(/\D/g, "");
-  if (digits.length === 10) return digits;
-  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
-  return null;
-}
+const extractPhone = extractPhoneDeterministic;
 
 const PHONE_ASK = "Would there be a good number I could send all this info over to?";
 

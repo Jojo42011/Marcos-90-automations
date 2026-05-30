@@ -1,5 +1,25 @@
 import type { Conversation } from "../core/types.js";
 
+/**
+ * Map first inbound message phrases to internal ad campaign ids (Instagram ad attribution).
+ */
+export function detectAdCampaign(text: string): string | null {
+  const t = text.trim().toLowerCase();
+  if (!t) return null;
+  if (
+    t.includes("low intrest") ||
+    t.includes("low interest") ||
+    t.includes("how fast can i close") ||
+    t.includes("time i can tour")
+  ) {
+    return "low_interest_ad";
+  }
+  if (t.includes("rent from this property") || t.includes("available for a tour")) {
+    return "canyon_lake_ad";
+  }
+  return null;
+}
+
 /** Normalize for comparing lead messages (repeat taps, etc.). */
 export function normalizeUserMessageText(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, " ");
@@ -180,6 +200,92 @@ export function leadThreadSignalsExperiencedBuyer(conversation: Conversation): b
   return false;
 }
 
+/** Lead is asking price / cost for the listing (TikTok: never answer in DM). */
+export function messageAsksPropertyPriceOrCost(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  const pointsAtListing = /\b(it|this|that|the (house|home|place|property|listing|one)|video|that home|this home)\b/.test(
+    t,
+  );
+  if (
+    /\bhow much\b/.test(t) &&
+    !/\bhow much (can|do) (you|i) (afford|need)\b/.test(t) &&
+    !/\bhow much (room|space|time|land|acre)\b/.test(t)
+  ) {
+    return true;
+  }
+  if (/\bwhat'?s?\s+the\s+(price|cost)\b/.test(t)) return true;
+  if (/\bhow much is (it|this|that|the (house|home|place))\b/.test(t)) return true;
+  if (/\bis it (expensive|cheap|affordable)\b/.test(t)) return true;
+  if (pointsAtListing && /\b(price|cost|pricing)\b/.test(t) && /\b(what|how much|is)\b/.test(t)) return true;
+  return false;
+}
+
+/** Lead wants details or the packet kept in app DM only, not SMS (resistance to giving a number). */
+export function signalsWantsInfoInDmOnly(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  if (/\byou can send (it|them|that|everything|the info|details) here\b/.test(t)) return true;
+  if (/\bsend (it|them|that|everything) here\b/.test(t)) return true;
+  if (/\bkeep (it )?in (the )?(dm|chat)\b/.test(t)) return true;
+  if (/\b(all )?in (the )?dm\b/.test(t) && /\b(send|stay|keep|want)\b/.test(t)) return true;
+  if (/\bhere in (the )?(dm|chat)\b/.test(t)) return true;
+  if (/\bhere is fine\b/.test(t)) return true;
+  if (/\bthis is fine\b/.test(t)) return true;
+  if (/\bin here is fine\b/.test(t)) return true;
+  if (/\b(here|in the (dm|dms|chat)|in here|on here) is (fine|good|ok|okay|cool)\b/.test(t)) return true;
+  if (/\b(fine|good|ok|okay|cool|works) (here|in here|on here|in the (dm|dms|chat))\b/.test(t)) return true;
+  if (/\bjust (here|in the (dm|dms|chat)|in here)\b/.test(t)) return true;
+  if (/\b(send|put|drop) (it|that|everything|the (info|details|breakdown)) (here|in here|in the (dm|dms|chat))\b/.test(t)) {
+    return true;
+  }
+  if (/\b(i want|want) (it|that|the (info|details|breakdown)) (here|in the (dm|dms|chat))\b/.test(t)) return true;
+  if (/\b(let'?s|we can) keep it (on here|here|in the (dm|dms|chat))\b/.test(t)) return true;
+  if (/\bprefer (to get|getting|it) (here|in the (dm|dms|chat))\b/.test(t)) return true;
+  if (/\b(in the app|on the app|in this chat|in this thread) is (fine|good|ok)\b/.test(t)) return true;
+  return false;
+}
+
+/** Lead is pushing urgency after phone capture (wants breakdown immediately). */
+export function signalsWantsBreakdownImmediately(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  if (/\basap\b/.test(t)) return true;
+  if (/\bright now\b/.test(t)) return true;
+  if (/\b(need|want)\s+it\s+now\b/.test(t)) return true;
+  if (/\bsend\s+(it|that|everything|the breakdown|the packet)\s+now\b/.test(t)) return true;
+  if (/\bimmediately\b/.test(t)) return true;
+  if (/\burgent\b/.test(t)) return true;
+  if (/\b(today|this morning|this afternoon)\b/.test(t) && /\b(send|need|want|asap)\b/.test(t)) return true;
+  return false;
+}
+
+/**
+ * Lead is asking to receive the packet / details by email instead of text/DM.
+ * Narrow patterns so "my email is …" does not trigger.
+ */
+export function signalsEmailDeliveryRequest(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  if (/\bcan (you|we)\s+email\b/.test(t)) return true;
+  if (/\bcould you email\b/.test(t)) return true;
+  if (/\bare you able to email\b/.test(t)) return true;
+  if (/\bdo you mind emailing\b/.test(t)) return true;
+  if (/\bemail (me )?(the |this |it )?(info|information|details|packet|specs|materials|breakdown|list|sheet)\b/.test(t)) {
+    return true;
+  }
+  if (/\bemail (it|this|that)\b/.test(t)) return true;
+  if (/\bsend (me )?(it|this|that|everything|the (info|information|details|packet))\s+(by|through|via|over|in)\s+email\b/.test(t)) {
+    return true;
+  }
+  if (/\bsend (it|this|that)\s+to\s+(my\s+)?email\b/.test(t)) return true;
+  if (/\b(via|through|over|by)\s+email\b/.test(t) && /\b(send|get|receive|want|can you|could you)\b/.test(t)) {
+    return true;
+  }
+  if (/\b(prefer|rather)\s+(it\s+)?(by|through)\s+email\b/.test(t)) return true;
+  return false;
+}
+
 /** Lead is asking for builder / developer identity (never disclose). */
 export function messageAsksBuilderIdentity(text: string): boolean {
   const t = text.trim().toLowerCase();
@@ -266,6 +372,38 @@ export function messageAsksListingLocation(text: string): boolean {
   if (/\bwhat part of town\b/.test(t) && pointsAtListing) return true;
   if (/\bdo you know where\b/.test(t) && pointsAtListing) return true;
   if (/\blocated\b/.test(t) && pointsAtListing) return true;
+  return false;
+}
+
+/**
+ * Lead is shopping / searching for a home outside San Antonio (another Texas market or explicit "not SA").
+ * Triggers Marco's Texas-wide service line ($600k+) without claiming SA-only coverage for that buyer.
+ */
+export function signalsLookingOutsideSanAntonio(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+
+  const explicitOutsideSa =
+    /\b(outside|outside of|not in|not around|away from|other than)\s+(san antonio|\bsa\b)\b/.test(t) ||
+    /\b(not|isn't|is not)\s+(really\s+)?(in\s+)?san antonio\b/.test(t) ||
+    /\b(home|house|buy|buying|looking).{0,60}\b(outside|not in).{0,30}\bsan antonio\b/.test(t);
+
+  if (explicitOutsideSa) return true;
+
+  // Major Texas metros / markets outside SA proper (not exhaustive; catches common DMs)
+  const txMarket =
+    /\b(austin|dallas|houston|fort worth|ft\.?\s*worth|el paso|corpus christi|plano|frisco|mckinney|arlington|laredo|lubbock|amarillo|waco|midland|odessa|tyler|new braunfels|round rock|katy|spring tx|pearland|sugar land|college station|killeen|beaumont|abilene|wichita falls|brownsville|pasadena tx|mesquite|denton|carrollton|lewisville|allen|richardson|conroe|georgetown tx|cedar park|san marcos tx)\b/i.test(
+      t,
+    );
+  const housingIntent =
+    /\b(looking|search|buy|buying|home|house|move|relocat|market|area|city|live in|moving to)\b/i.test(t);
+  const sanAntonioPrimary =
+    /\b(in|around|near)\s+san antonio\b/.test(t) ||
+    /\bsan antonio\b.{0,40}\b(looking|buy|home|house)\b/.test(t) ||
+    /\b(sa|san antonio)\s+(area|market|homes)\b/.test(t);
+
+  if (txMarket && housingIntent && !sanAntonioPrimary) return true;
+
   return false;
 }
 

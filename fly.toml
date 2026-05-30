@@ -1,0 +1,26 @@
+# Marco DM + command center (Node). Ads proxy → Flask app (marco-agents).
+# Docs: https://fly.io/docs/reference/configuration/
+
+app = "marco-90-automation"
+primary_region = "dfw"
+
+[build]
+
+[[mounts]]
+  source = "data"
+  destination = "/data"
+
+[env]
+  # Public URL of the Meta ads Flask dashboard (must match your Fly app name).
+  AD_DASHBOARD_BASE_URL = "https://marco-agents.fly.dev"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

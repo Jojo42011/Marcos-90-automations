@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Harvey · Marco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #030508;
+      --bg2: #060a10;
+      --surface: rgba(8, 14, 25, 0.75);
+      --surface-solid: #0a1020;
+      --border: rgba(34, 211, 238, 0.10);
+      --border-bright: rgba(34, 211, 238, 0.30);
+      --text: #e8edf4;
+      --text-dim: #6b7fa3;
+      --cyan: #22d3ee;
+      --cyan-dim: rgba(34, 211, 238, 0.08);
+      --cyan-glow: rgba(34, 211, 238, 0.45);
+      --success: #4ade80;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --hud: "Orbitron", sans-serif;
+      --mono: "Share Tech Mono", "JetBrains Mono", monospace;
+      --font: "Plus Jakarta Sans", system-ui, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ——— Background layers ——— */
+    .j-bg {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(34, 211, 238, 0.06), transparent 70%),
+        radial-gradient(ellipse 50% 40% at 0% 50%, rgba(59, 130, 246, 0.04), transparent),
+        radial-gradient(ellipse 50% 40% at 100% 80%, rgba(34, 211, 238, 0.03), transparent),
+        var(--bg);
+    }
+    .j-grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(34, 211, 238, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 211, 238, 0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, black 20%, transparent 80%);
+    }
+    .j-scanlines {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.03;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px, rgba(34, 211, 238, 0.15) 2px, rgba(34, 211, 238, 0.15) 4px
+      );
+    }
+
+    /* ——— Layout shell ——— */
+    .j-shell {
+      position: relative; z-index: 1;
+      display: grid;
+      grid-template-rows: 52px 1fr 56px;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ——— Top bar ——— */
+    .j-topbar {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0 1.25rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      z-index: 10;
+    }
+    .j-logo {
+      font-family: var(--hud);
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      color: var(--cyan);
+      text-shadow: 0 0 20px var(--cyan-glow);
+    }
+    .j-logo span {
+      color: var(--text);
+      font-weight: 500;
+      opacity: 0.7;
+      margin-left: 0.15em;
+    }
+    .j-topbar-divider {
+      width: 1px; height: 24px;
+      background: var(--border-bright);
+    }
+    .j-status-badge {
+      font-family: var(--hud);
+      font-size: 0.55rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      padding: 0.3rem 0.65rem;
+      border-radius: 4px;
+      border: 1px solid var(--border-bright);
+      background: var(--cyan-dim);
+      color: var(--cyan);
+      text-shadow: 0 0 10px var(--cyan-glow);
+      transition: all 0.4s ease;
+    }
+    .j-status-badge.listening {
+      border-color: rgba(74, 222, 128, 0.4);
+      background: rgba(74, 222, 128, 0.08);
+      color: var(--success);
+      text-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
+      animation: statusPulse 1.2s ease-in-out infinite;
+    }
+    .j-status-badge.processing {
+      border-color: rgba(245, 158, 11, 0.4);
+      background: rgba(245, 158, 11, 0.08);
+      color: var(--warn);
+      text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+    }
+    .j-status-badge.responding {
+      border-color: var(--border-bright);
+      background: rgba(34, 211, 238, 0.12);
+      color: var(--cyan);
+      text-shadow: 0 0 12px var(--cyan-glow);
+    }
+    @keyframes statusPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .j-topbar-spacer { flex: 1; }
+    .j-client-tag {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+    }
+    .j-clock {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      color: var(--cyan);
+      min-width: 85px;
+      text-align: right;
+    }
+    .j-back-btn {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .j-back-btn:hover {
+      color: var(--cyan);
+      border-color: var(--border-bright);
+    }
+
+    /* ——— Main 3-column ——— */
+    .j-main {
+      display: grid;
+      grid-template-columns: 260px 1fr 300px;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    /* ——— Panel base ——— */
+    .j-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      overflow: hidden;
+    }
+    .j-panel-head {
+      font-family: var(--hud);
+      font-size: 0.5rem;
+      font-weight: 600;
+      letter-spacing: 0.25em;
+      color: var(--cyan);
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 0.5rem;
+      text-shadow: 0 0 8px var(--cyan-glow);
+    }
+    .j-panel-head::before {
+      content: "";
+      width: 5px; height: 5px;
+      background: var(--cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--cyan);
+    }
+
+    /* ——— Left column ——— */
+    .j-left {
+      border-right: 1px solid var(--border);
+      padding: 0.75rem;
+      display: flex; flex-direction: column; gap: 0.75rem;
+      overflow-y: auto;
+      background: rgba(4, 8, 16, 0.5);
+    }
+    .j-metric-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 0.45rem 0.65rem;
+      border-bottom: 1px solid rgba(34, 211, 238, 0.04);
+    }
+    .j-metric-row:last-child { border-bottom: none; }
+    .j-metric-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+    }
+    .j-metric-value {
+      font-family: var(--hud);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .j-metric-value.accent { color: var(--cyan); }
+    .j-module-row {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.5rem 0.65rem;
+      border-bottom: 1px solid rgba(34, 211, 238, 0.04);
+    }
+    .j-module-row:last-child { border-bottom: none; }
+    .j-module-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .j-module-dot.online {
+      background: var(--success);
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+    }
+    .j-module-dot.offline {
+      background: var(--text-dim);
+      opacity: 0.4;
+    }
+    .j-module-dot.warn {
+      background: var(--warn);
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+    }
+    .j-module-name {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text);
+      flex: 1;
+    }
+    .j-module-status {
+      font-family: var(--mono);
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+
+    /* ——— Center stage ——— */
+    .j-center {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .j-center-glow {
+      position: absolute;
+      width: 500px; height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(34, 211, 238, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+      transition: opacity 0.6s;
+    }
+    .j-center-glow.active {
+      background: radial-gradient(circle, rgba(34, 211, 238, 0.12) 0%, transparent 60%);
+    }
+
+    /* Hologram SVG */
+    .j-holo-wrap {
+      position: relative;
+      width: 340px; height: 340px;
+    }
+    .j-holo-svg {
+      width: 100%; height: 100%;
+      overflow: visible;
+    }
+    .ring-1 { animation: spinCW 30s linear infinite; transform-origin: 200px 200px; }
+    .ring-2 { animation: spinCCW 22s linear infinite; transform-origin: 200px 200px; }
+    .ring-3 { animation: spinCW 16s linear infinite; transform-origin: 200px 200px; }
+    .ring-4 { animation: spinCCW 12s linear infinite; transform-origin: 200px 200px; }
+    .ring-5 { animation: spinCW 40s linear infinite; transform-origin: 200px 200px; }
+    .ring-inner-pulse { animation: ringPulse 3s ease-in-out infinite; transform-origin: 200px 200px; }
+    @keyframes spinCW { to { transform: rotate(360deg); } }
+    @keyframes spinCCW { to { transform: rotate(-360deg); } }
+    @keyframes ringPulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+    .arc-sweep { animation: arcDash 4s linear infinite; }
+    @keyframes arcDash { to { stroke-dashoffset: -200; } }
+
+    /* Hologram states */
+    .j-holo-wrap.listening .ring-1 { animation-duration: 8s; }
+    .j-holo-wrap.listening .ring-2 { animation-duration: 6s; }
+    .j-holo-wrap.listening .ring-3 { animation-duration: 4s; }
+    .j-holo-wrap.listening .ring-4 { animation-duration: 3s; }
+    .j-holo-wrap.listening .ring-inner-pulse { animation-duration: 0.8s; }
+    .j-holo-wrap.processing .ring-1 { animation-duration: 4s; }
+    .j-holo-wrap.processing .ring-2 { animation-duration: 3s; }
+    .j-holo-wrap.processing .ring-3 { animation-duration: 2s; }
+    .j-holo-wrap.processing .ring-4 { animation-duration: 1.5s; }
+    .j-holo-wrap.processing .ring-inner-pulse { animation-duration: 0.5s; }
+    .j-holo-wrap.responding .ring-inner-pulse { animation-duration: 1.5s; }
+
+    /* Core button */
+    .j-core-btn {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      border: 2px solid rgba(34, 211, 238, 0.3);
+      background: radial-gradient(circle, rgba(34, 211, 238, 0.08) 0%, rgba(8, 14, 25, 0.9) 80%);
+      color: var(--cyan);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.3s;
+      z-index: 2;
+    }
+    .j-core-btn:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 30px var(--cyan-glow), inset 0 0 20px rgba(34, 211, 238, 0.1);
+    }
+    .j-core-btn.active {
+      border-color: var(--success);
+      box-shadow: 0 0 40px rgba(74, 222, 128, 0.3), inset 0 0 20px rgba(74, 222, 128, 0.1);
+      color: var(--success);
+      animation: corePulse 1s ease-in-out infinite;
+    }
+    @keyframes corePulse {
+      0%, 100% { box-shadow: 0 0 30px rgba(74, 222, 128, 0.2), inset 0 0 15px rgba(74, 222, 128, 0.05); }
+      50% { box-shadow: 0 0 50px rgba(74, 222, 128, 0.4), inset 0 0 25px rgba(74, 222, 128, 0.1); }
+    }
+    .j-core-btn svg { width: 28px; height: 28px; }
+
+    .j-center-label {
+      font-family: var(--hud);
+      font-size: 0.5rem;
+      letter-spacing: 0.3em;
+      color: var(--text-dim);
+      margin-top: 1.5rem;
+      text-align: center;
+      transition: color 0.3s;
+    }
+    .j-center-label.active { color: var(--cyan); }
+
+    /* ——— Right column ——— */
+    .j-right {
+      border-left: 1px solid var(--border);
+      padding: 0.75rem;
+      display: flex; flex-direction: column; gap: 0.75rem;
+      overflow: hidden;
+      background: rgba(4, 8, 16, 0.5);
+    }
+
+    /* Transcript */
+    .j-transcript-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem 0.65rem;
+      display: flex; flex-direction: column; gap: 0.5rem;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(34, 211, 238, 0.15) transparent;
+    }
+    .j-msg {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      line-height: 1.55;
+      padding: 0.5rem 0.6rem;
+      border-radius: 6px;
+      max-width: 95%;
+      word-break: break-word;
+    }
+    .j-msg.user {
+      background: rgba(34, 211, 238, 0.06);
+      border: 1px solid rgba(34, 211, 238, 0.12);
+      color: var(--cyan);
+      align-self: flex-end;
+    }
+    .j-msg.user::before {
+      content: "MARCO >";
+      display: block;
+      font-family: var(--hud);
+      font-size: 0.42rem;
+      letter-spacing: 0.15em;
+      color: rgba(34, 211, 238, 0.5);
+      margin-bottom: 0.25rem;
+    }
+    .j-msg.ai {
+      background: rgba(14, 20, 35, 0.8);
+      border: 1px solid rgba(34, 211, 238, 0.08);
+      color: var(--text);
+      align-self: flex-start;
+    }
+    .j-msg.ai::before {
+      content: "AI >";
+      display: block;
+      font-family: var(--hud);
+      font-size: 0.42rem;
+      letter-spacing: 0.15em;
+      color: rgba(34, 211, 238, 0.4);
+      margin-bottom: 0.25rem;
+    }
+    .j-msg.system {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 0.6rem;
+      align-self: center;
+      text-align: center;
+      padding: 0.3rem;
+    }
+    .j-typing-cursor {
+      display: inline-block;
+      width: 6px; height: 12px;
+      background: var(--cyan);
+      margin-left: 2px;
+      animation: blink 0.7s step-end infinite;
+      vertical-align: text-bottom;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Waveform */
+    .j-wave-wrap {
+      padding: 0.6rem 0.65rem;
+      display: flex; align-items: flex-end; justify-content: center;
+      gap: 2px;
+      height: 52px;
+    }
+    .j-wave-bar {
+      width: 3px;
+      min-height: 2px;
+      background: var(--cyan);
+      border-radius: 1px;
+      opacity: 0.35;
+      transition: height 0.12s ease, opacity 0.2s;
+    }
+    .j-wave-bar.active { opacity: 0.8; }
+
+    /* Directives */
+    .j-directives-body {
+      padding: 0.5rem 0.65rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .j-directive {
+      display: flex; align-items: flex-start; gap: 0.5rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid rgba(34, 211, 238, 0.04);
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+    .j-directive:last-child { border-bottom: none; }
+    .j-directive-icon {
+      width: 5px; height: 5px;
+      background: var(--cyan);
+      border-radius: 50%;
+      margin-top: 0.35rem;
+      flex-shrink: 0;
+      box-shadow: 0 0 4px var(--cyan-glow);
+    }
+    .j-directive-icon.warn { background: var(--warn); box-shadow: 0 0 4px rgba(245, 158, 11, 0.4); }
+    .j-directive-icon.danger { background: var(--danger); box-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+
+    /* ——— Bottom bar ——— */
+    .j-bottom {
+      display: flex; align-items: center; gap: 0.65rem;
+      padding: 0 1rem;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .j-mic-btn {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      border: 1px solid var(--border-bright);
+      background: var(--cyan-dim);
+      color: var(--cyan);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .j-mic-btn:hover {
+      background: rgba(34, 211, 238, 0.15);
+      box-shadow: 0 0 15px var(--cyan-glow);
+    }
+    .j-mic-btn.active {
+      background: rgba(74, 222, 128, 0.12);
+      border-color: rgba(74, 222, 128, 0.4);
+      color: var(--success);
+      box-shadow: 0 0 20px rgba(74, 222, 128, 0.2);
+    }
+    .j-mic-btn svg { width: 16px; height: 16px; }
+    .j-input {
+      flex: 1;
+      height: 38px;
+      padding: 0 0.85rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(6, 10, 18, 0.8);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.02em;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .j-input::placeholder { color: var(--text-dim); opacity: 0.5; }
+    .j-input:focus { border-color: var(--border-bright); }
+    .j-transmit-btn {
+      font-family: var(--hud);
+      font-size: 0.55rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      padding: 0.55rem 1.1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-bright);
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(34, 211, 238, 0.04));
+      color: var(--cyan);
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .j-transmit-btn:hover {
+      background: rgba(34, 211, 238, 0.18);
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
+    .j-transmit-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .j-tts-btn {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .j-tts-btn:hover { color: var(--cyan); border-color: var(--border-bright); }
+    .j-tts-btn.active { color: var(--cyan); border-color: var(--border-bright); }
+    .j-tts-btn svg { width: 14px; height: 14px; }
+
+    /* ——— Responsive ——— */
+    @media (max-width: 1100px) {
+      .j-main { grid-template-columns: 220px 1fr 260px; }
+    }
+    @media (max-width: 900px) {
+      .j-main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+      .j-left { display: none; }
+      .j-right { border-left: none; border-top: 1px solid var(--border); max-height: 40vh; }
+      .j-holo-wrap { width: 240px; height: 240px; }
+    }
+    @media (max-width: 600px) {
+      .j-topbar { padding: 0 0.75rem; gap: 0.5rem; }
+      .j-client-tag { display: none; }
+      .j-holo-wrap { width: 180px; height: 180px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="j-bg" aria-hidden="true"></div>
+  <div class="j-grid" aria-hidden="true"></div>
+  <div class="j-scanlines" aria-hidden="true"></div>
+
+  <div class="j-shell">
+    <!-- ——— Top bar ——— -->
+    <header class="j-topbar">
+      <a href="/dashboard" class="j-back-btn" title="Back to Command Center">&larr;</a>
+      <div class="j-topbar-divider"></div>
+      <div class="j-logo">HARVEY</div>
+      <div class="j-status-badge" id="jStatusBadge">STANDBY</div>
+      <div class="j-topbar-spacer"></div>
+      <div class="j-client-tag">PUGA REAL ESTATE &middot; SAN ANTONIO</div>
+      <div class="j-topbar-divider"></div>
+      <div class="j-clock" id="jClock">--:--:--</div>
+    </header>
+
+    <!-- ——— Main 3-column ——— -->
+    <main class="j-main">
+      <!-- Left: metrics & modules -->
+      <aside class="j-left">
+        <div class="j-panel">
+          <div class="j-panel-head">OPERATIONS</div>
+          <div id="jMetrics">
+            <div class="j-metric-row"><span class="j-metric-label">Total leads</span><span class="j-metric-value" id="mLeads">--</span></div>
+            <div class="j-metric-row"><span class="j-metric-label">Phones captured</span><span class="j-metric-value accent" id="mPhones">--</span></div>
+            <div class="j-metric-row"><span class="j-metric-label">Emails on file</span><span class="j-metric-value" id="mEmails">--</span></div>
+            <div class="j-metric-row"><span class="j-metric-label">Shown leads</span><span class="j-metric-value" id="mShown">--</span></div>
+          </div>
+        </div>
+        <div class="j-panel">
+          <div class="j-panel-head">AD METRICS</div>
+          <div id="jAdMetrics">
+            <div class="j-metric-row"><span class="j-metric-label">Spend</span><span class="j-metric-value" id="mSpend">--</span></div>
+            <div class="j-metric-row"><span class="j-metric-label">Impressions</span><span class="j-metric-value" id="mImpressions">--</span></div>
+            <div class="j-metric-row"><span class="j-metric-label">Clicks</span><span class="j-metric-value" id="mClicks">--</span></div>
+            <div class="j-metric-row"><span class="j-metric-label">Ad leads</span><span class="j-metric-value accent" id="mAdLeads">--</span></div>
+            <div class="j-metric-row"><span class="j-metric-label">CTR</span><span class="j-metric-value" id="mCTR">--</span></div>
+            <div class="j-metric-row"><span class="j-metric-label">CPL</span><span class="j-metric-value" id="mCPL">--</span></div>
+          </div>
+        </div>
+        <div class="j-panel">
+          <div class="j-panel-head">MODULES</div>
+          <div id="jModules">
+            <div class="j-module-row"><span class="j-module-dot online"></span><span class="j-module-name">DM AI Agent</span><span class="j-module-status">ACTIVE</span></div>
+            <div class="j-module-row"><span class="j-module-dot" id="modAds"></span><span class="j-module-name">Ad Analytics</span><span class="j-module-status" id="modAdsStatus">CHECKING</span></div>
+            <div class="j-module-row"><span class="j-module-dot online"></span><span class="j-module-name">CRM</span><span class="j-module-status">ACTIVE</span></div>
+            <div class="j-module-row"><span class="j-module-dot" id="modAI"></span><span class="j-module-name">Haiku LLM</span><span class="j-module-status" id="modAIStatus">CHECKING</span></div>
+            <div class="j-module-row"><span class="j-module-dot offline"></span><span class="j-module-name">Sendblue</span><span class="j-module-status">PENDING</span></div>
+            <div class="j-module-row"><span class="j-module-dot offline"></span><span class="j-module-name">Brivity Sync</span><span class="j-module-status">PENDING</span></div>
+          </div>
+        </div>
+        <div class="j-panel">
+          <div class="j-panel-head">PLATFORMS</div>
+          <div id="jPlatforms">
+            <div class="j-metric-row"><span class="j-metric-label">Loading...</span><span class="j-metric-value">--</span></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center: hologram + status -->
+      <section class="j-center">
+        <div class="j-center-glow" id="jGlow"></div>
+        <div class="j-holo-wrap" id="jHoloWrap">
+          <svg class="j-holo-svg" viewBox="0 0 400 400">
+            <defs>
+              <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="glowStrong"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <!-- Outer ring with ticks -->
+            <g class="ring-5">
+              <circle cx="200" cy="200" r="190" fill="none" stroke="rgba(34,211,238,0.06)" stroke-width="0.5"/>
+              <line x1="200" y1="8" x2="200" y2="18" stroke="rgba(34,211,238,0.15)" stroke-width="0.5"/>
+              <line x1="295" y1="32" x2="289" y2="41" stroke="rgba(34,211,238,0.12)" stroke-width="0.5"/>
+              <line x1="368" y1="105" x2="360" y2="112" stroke="rgba(34,211,238,0.12)" stroke-width="0.5"/>
+              <line x1="392" y1="200" x2="382" y2="200" stroke="rgba(34,211,238,0.15)" stroke-width="0.5"/>
+              <line x1="368" y1="295" x2="360" y2="288" stroke="rgba(34,211,238,0.12)" stroke-width="0.5"/>
+              <line x1="200" y1="392" x2="200" y2="382" stroke="rgba(34,211,238,0.15)" stroke-width="0.5"/>
+              <line x1="105" y1="368" x2="112" y2="360" stroke="rgba(34,211,238,0.12)" stroke-width="0.5"/>
+              <line x1="8" y1="200" x2="18" y2="200" stroke="rgba(34,211,238,0.15)" stroke-width="0.5"/>
+            </g>
+            <!-- Ring 1 - dashed outer -->
+            <g class="ring-1">
+              <circle cx="200" cy="200" r="170" fill="none" stroke="rgba(34,211,238,0.12)" stroke-width="1" stroke-dasharray="8 14"/>
+              <circle cx="200" cy="30" r="3" fill="#22d3ee" opacity="0.7" filter="url(#glow)"/>
+              <circle cx="370" cy="200" r="2.5" fill="#22d3ee" opacity="0.5" filter="url(#glow)"/>
+            </g>
+            <!-- Ring 2 - solid thin -->
+            <g class="ring-2">
+              <circle cx="200" cy="200" r="145" fill="none" stroke="rgba(34,211,238,0.08)" stroke-width="0.5"/>
+              <circle cx="200" cy="55" r="2" fill="#22d3ee" opacity="0.6" filter="url(#glow)"/>
+            </g>
+            <!-- Ring 3 - dashed medium -->
+            <g class="ring-3">
+              <circle cx="200" cy="200" r="120" fill="none" stroke="rgba(34,211,238,0.18)" stroke-width="1.5" stroke-dasharray="4 8"/>
+              <circle cx="80" cy="200" r="2.5" fill="#22d3ee" opacity="0.8" filter="url(#glow)"/>
+              <circle cx="320" cy="200" r="2" fill="#22d3ee" opacity="0.5" filter="url(#glow)"/>
+            </g>
+            <!-- Arc segments -->
+            <g class="ring-4">
+              <path d="M 200 105 A 95 95 0 0 1 295 200" fill="none" stroke="rgba(34,211,238,0.25)" stroke-width="2" stroke-linecap="round" filter="url(#glow)" class="arc-sweep" stroke-dasharray="40 100"/>
+              <path d="M 200 295 A 95 95 0 0 1 105 200" fill="none" stroke="rgba(34,211,238,0.2)" stroke-width="1.5" stroke-linecap="round" filter="url(#glow)" class="arc-sweep" stroke-dasharray="30 120"/>
+            </g>
+            <!-- Inner pulse ring -->
+            <g class="ring-inner-pulse">
+              <circle cx="200" cy="200" r="70" fill="none" stroke="rgba(34,211,238,0.3)" stroke-width="2" stroke-dasharray="6 10" filter="url(#glow)"/>
+            </g>
+            <!-- Core glow background -->
+            <circle cx="200" cy="200" r="55" fill="rgba(34,211,238,0.02)" stroke="rgba(34,211,238,0.12)" stroke-width="1"/>
+            <circle cx="200" cy="200" r="42" fill="rgba(34,211,238,0.01)" stroke="rgba(34,211,238,0.06)" stroke-width="0.5"/>
+          </svg>
+          <!-- Mic button overlay -->
+          <button class="j-core-btn" id="jCoreBtn" title="Click to speak">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+        </div>
+        <div class="j-center-label" id="jCenterLabel">VOICE COMMAND READY</div>
+      </section>
+
+      <!-- Right: transcript, waveform, directives -->
+      <aside class="j-right">
+        <div class="j-panel" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+          <div class="j-panel-head">TRANSCRIPT</div>
+          <div class="j-transcript-body" id="jTranscript">
+            <div class="j-msg system">System initialized. Ready for commands.</div>
+          </div>
+        </div>
+        <div class="j-panel" style="flex-shrink:0;">
+          <div class="j-panel-head">WAVEFORM</div>
+          <div class="j-wave-wrap" id="jWaveform"></div>
+        </div>
+        <div class="j-panel" style="flex:0 0 auto;max-height:180px;display:flex;flex-direction:column;">
+          <div class="j-panel-head">DIRECTIVES</div>
+          <div class="j-directives-body" id="jDirectives">
+            <div class="j-directive"><span class="j-directive-icon"></span><span>Loading system data...</span></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- ——— Bottom bar ——— -->
+    <footer class="j-bottom">
+      <button class="j-mic-btn" id="jMicBtn" title="Voice input">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </button>
+      <input class="j-input" id="jInput" type="text" placeholder="Enter command..." autocomplete="off" />
+      <button class="j-transmit-btn" id="jTransmitBtn">TRANSMIT</button>
+      <button class="j-tts-btn" id="jTtsBtn" title="Toggle voice output">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        </svg>
+      </button>
+    </footer>
+  </div>
+
+  <script>
+    const token = new URLSearchParams(window.location.search).get("token");
+    function apiUrl(path) {
+      const u = new URL(path, window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      return u.toString();
+    }
+
+    /* ——— State ——— */
+    let state = "STANDBY"; // STANDBY | LISTENING | PROCESSING | RESPONDING
+    let dashData = null;
+    let adsData = null;
+    let ttsEnabled = true;
+    let recognition = null;
+    let waveInterval = null;
+
+    /* ——— Clock ——— */
+    function tickClock() {
+      const now = new Date();
+      document.getElementById("jClock").textContent = now.toLocaleTimeString("en-US", { hour12: true, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+    tickClock();
+    setInterval(tickClock, 1000);
+
+    /* ——— Waveform bars ——— */
+    (function initWaveform() {
+      const wrap = document.getElementById("jWaveform");
+      for (let i = 0; i < 48; i++) {
+        const bar = document.createElement("div");
+        bar.className = "j-wave-bar";
+        bar.style.height = "2px";
+        wrap.appendChild(bar);
+      }
+    })();
+
+    function setWaveform(mode) {
+      const bars = document.querySelectorAll(".j-wave-bar");
+      if (waveInterval) { clearInterval(waveInterval); waveInterval = null; }
+      if (mode === "idle") {
+        bars.forEach(b => { b.style.height = "2px"; b.classList.remove("active"); });
+      } else if (mode === "listening") {
+        bars.forEach(b => b.classList.add("active"));
+        waveInterval = setInterval(() => {
+          bars.forEach(b => { b.style.height = (Math.random() * 28 + 2) + "px"; });
+        }, 100);
+      } else if (mode === "processing") {
+        bars.forEach(b => b.classList.add("active"));
+        let phase = 0;
+        waveInterval = setInterval(() => {
+          bars.forEach((b, i) => {
+            const h = Math.sin((i / bars.length) * Math.PI * 2 + phase) * 12 + 14;
+            b.style.height = h + "px";
+          });
+          phase += 0.15;
+        }, 50);
+      } else if (mode === "responding") {
+        bars.forEach(b => b.classList.add("active"));
+        waveInterval = setInterval(() => {
+          bars.forEach(b => { b.style.height = (Math.random() * 16 + 2) + "px"; });
+        }, 120);
+      }
+    }
+
+    /* ——— State transitions ——— */
+    function setState(newState) {
+      state = newState;
+      const badge = document.getElementById("jStatusBadge");
+      const holo = document.getElementById("jHoloWrap");
+      const glow = document.getElementById("jGlow");
+      const core = document.getElementById("jCoreBtn");
+      const label = document.getElementById("jCenterLabel");
+
+      badge.textContent = newState;
+      badge.className = "j-status-badge" +
+        (newState === "LISTENING" ? " listening" :
+         newState === "PROCESSING" ? " processing" :
+         newState === "RESPONDING" ? " responding" : "");
+
+      holo.className = "j-holo-wrap" +
+        (newState === "LISTENING" ? " listening" :
+         newState === "PROCESSING" ? " processing" :
+         newState === "RESPONDING" ? " responding" : "");
+
+      glow.className = "j-center-glow" + (newState !== "STANDBY" ? " active" : "");
+      core.className = "j-core-btn" + (newState === "LISTENING" ? " active" : "");
+      label.className = "j-center-label" + (newState !== "STANDBY" ? " active" : "");
+
+      const labels = {
+        STANDBY: "VOICE COMMAND READY",
+        LISTENING: "LISTENING...",
+        PROCESSING: "PROCESSING COMMAND",
+        RESPONDING: "TRANSMITTING RESPONSE",
+      };
+      label.textContent = labels[newState] || newState;
+
+      const waveMap = { STANDBY: "idle", LISTENING: "listening", PROCESSING: "processing", RESPONDING: "responding" };
+      setWaveform(waveMap[newState] || "idle");
+    }
+
+    /* ——— Transcript ——— */
+    function addMessage(role, text) {
+      const wrap = document.getElementById("jTranscript");
+      const div = document.createElement("div");
+      div.className = "j-msg " + role;
+      if (role === "ai") {
+        div.innerHTML = "";
+        wrap.appendChild(div);
+        wrap.scrollTop = wrap.scrollHeight;
+        typeText(div, text);
+      } else {
+        div.textContent = text;
+        wrap.appendChild(div);
+        wrap.scrollTop = wrap.scrollHeight;
+      }
+    }
+
+    function typeText(el, text) {
+      let i = 0;
+      const cursor = document.createElement("span");
+      cursor.className = "j-typing-cursor";
+      el.appendChild(cursor);
+      const speed = Math.max(8, Math.min(25, 1200 / text.length));
+      const iv = setInterval(() => {
+        if (i < text.length) {
+          cursor.before(document.createTextNode(text[i]));
+          i++;
+          el.parentElement.scrollTop = el.parentElement.scrollHeight;
+        } else {
+          clearInterval(iv);
+          cursor.remove();
+          setState("STANDBY");
+          if (ttsEnabled) speak(text);
+        }
+      }, speed);
+    }
+
+    /* ——— TTS ——— */
+    function speak(text) {
+      if (!window.speechSynthesis) return;
+      try { speechSynthesis.cancel(); } catch {}
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.05;
+      u.pitch = 0.95;
+      speechSynthesis.speak(u);
+    }
+
+    document.getElementById("jTtsBtn").addEventListener("click", function () {
+      ttsEnabled = !ttsEnabled;
+      this.classList.toggle("active", ttsEnabled);
+    });
+
+    /* ——— Voice input (Web Speech API) ——— */
+    function initSpeechRecognition() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) return null;
+      const r = new SR();
+      r.continuous = false;
+      r.interimResults = false;
+      r.lang = "en-US";
+      r.onresult = (e) => {
+        const t = e.results[0][0].transcript;
+        document.getElementById("jInput").value = t;
+        sendCommand(t);
+      };
+      r.onend = () => {
+        if (state === "LISTENING") setState("STANDBY");
+        document.getElementById("jMicBtn").classList.remove("active");
+      };
+      r.onerror = () => {
+        if (state === "LISTENING") setState("STANDBY");
+        document.getElementById("jMicBtn").classList.remove("active");
+      };
+      return r;
+    }
+
+    function toggleVoice() {
+      if (state === "PROCESSING" || state === "RESPONDING") return;
+      if (state === "LISTENING") {
+        if (recognition) recognition.stop();
+        setState("STANDBY");
+        document.getElementById("jMicBtn").classList.remove("active");
+        return;
+      }
+      if (!recognition) recognition = initSpeechRecognition();
+      if (!recognition) {
+        addMessage("system", "Speech recognition not supported in this browser.");
+        return;
+      }
+      setState("LISTENING");
+      document.getElementById("jMicBtn").classList.add("active");
+      recognition.start();
+    }
+
+    document.getElementById("jMicBtn").addEventListener("click", toggleVoice);
+    document.getElementById("jCoreBtn").addEventListener("click", toggleVoice);
+
+    /* ——— Send command ——— */
+    async function sendCommand(text) {
+      const trimmed = text.trim();
+      if (!trimmed || state === "PROCESSING" || state === "RESPONDING") return;
+      addMessage("user", trimmed);
+      document.getElementById("jInput").value = "";
+      setState("PROCESSING");
+
+      try {
+        const res = await fetch(apiUrl("/api/jarvis/chat"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: trimmed }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = body.error || "Request failed";
+          setState("RESPONDING");
+          addMessage("ai", "Error: " + err);
+          return;
+        }
+        setState("RESPONDING");
+        addMessage("ai", body.reply || "(No response)");
+      } catch (e) {
+        setState("RESPONDING");
+        addMessage("ai", "Connection error: " + (e.message || e));
+      }
+    }
+
+    document.getElementById("jTransmitBtn").addEventListener("click", () => {
+      sendCommand(document.getElementById("jInput").value);
+    });
+    document.getElementById("jInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendCommand(e.target.value);
+    });
+
+    /* ——— Data loading ——— */
+    function fmtMoney(n) {
+      if (n == null || n === "") return "--";
+      const x = Number(n);
+      return isNaN(x) ? String(n) : "$" + x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function fmtInt(n) {
+      if (n == null || n === "") return "--";
+      const x = Number(n);
+      return isNaN(x) ? String(n) : x.toLocaleString();
+    }
+    function fmtPct(n) {
+      if (n == null || n === "") return "--";
+      const x = Number(n);
+      return isNaN(x) ? String(n) : x.toFixed(2) + "%";
+    }
+
+    async function loadDashboard() {
+      try {
+        const res = await fetch(apiUrl("/api/dashboard/data"));
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) return;
+        dashData = body;
+        const t = body.totals || {};
+        document.getElementById("mLeads").textContent = fmtInt(t.leads);
+        document.getElementById("mPhones").textContent = fmtInt(t.withPhone);
+        document.getElementById("mEmails").textContent = fmtInt(t.withEmail);
+        document.getElementById("mShown").textContent = fmtInt(t.shownLeads);
+
+        const plat = body.byPlatform || {};
+        const platEl = document.getElementById("jPlatforms");
+        const entries = Object.entries(plat).sort((a, b) => b[1] - a[1]);
+        if (entries.length) {
+          platEl.innerHTML = entries.map(([p, n]) =>
+            `<div class="j-metric-row"><span class="j-metric-label">${esc(p)}</span><span class="j-metric-value">${n}</span></div>`
+          ).join("");
+        }
+        updateDirectives();
+      } catch {}
+    }
+
+    async function loadAds() {
+      const dot = document.getElementById("modAds");
+      const statusEl = document.getElementById("modAdsStatus");
+      try {
+        const res = await fetch(apiUrl("/api/ads/summary"));
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          dot.className = "j-module-dot offline";
+          statusEl.textContent = "OFFLINE";
+          return;
+        }
+        adsData = body;
+        dot.className = "j-module-dot online";
+        statusEl.textContent = "ACTIVE";
+        const t = body.totals || {};
+        document.getElementById("mSpend").textContent = fmtMoney(t.spend);
+        document.getElementById("mImpressions").textContent = fmtInt(t.impressions);
+        document.getElementById("mClicks").textContent = fmtInt(t.clicks);
+        document.getElementById("mAdLeads").textContent = fmtInt(t.leads);
+        document.getElementById("mCTR").textContent = fmtPct(t.ctr);
+        document.getElementById("mCPL").textContent = fmtMoney(t.cpl);
+      } catch {
+        dot.className = "j-module-dot offline";
+        statusEl.textContent = "UNREACHABLE";
+      }
+    }
+
+    async function loadHealth() {
+      const dot = document.getElementById("modAI");
+      const statusEl = document.getElementById("modAIStatus");
+      try {
+        const res = await fetch("/health");
+        const body = await res.json().catch(() => ({}));
+        if (body.anthropic && body.anthropic.api_key_configured) {
+          dot.className = "j-module-dot online";
+          statusEl.textContent = "ACTIVE";
+        } else {
+          dot.className = "j-module-dot warn";
+          statusEl.textContent = "NO KEY";
+        }
+      } catch {
+        dot.className = "j-module-dot offline";
+        statusEl.textContent = "OFFLINE";
+      }
+    }
+
+    function updateDirectives() {
+      const dir = document.getElementById("jDirectives");
+      const items = [];
+      if (dashData) {
+        const leads = dashData.leads || [];
+        const notContacted = leads.filter(l => (l.crmStatus || "not_contacted") === "not_contacted" && l.phone);
+        const hot = leads.filter(l => (l.crmStage || "new") === "hot");
+        const noPhone = leads.filter(l => !l.phone);
+        if (notContacted.length > 0) items.push({ icon: "warn", text: notContacted.length + " lead" + (notContacted.length > 1 ? "s" : "") + " awaiting first contact" });
+        if (hot.length > 0) items.push({ icon: "danger", text: hot.length + " hot lead" + (hot.length > 1 ? "s" : "") + " require attention" });
+        if (noPhone.length > 0) items.push({ icon: "", text: noPhone.length + " lead" + (noPhone.length > 1 ? "s" : "") + " without phone number" });
+        const totalLeads = (dashData.totals || {}).leads || 0;
+        const withPhone = (dashData.totals || {}).withPhone || 0;
+        if (totalLeads > 0) {
+          const captureRate = ((withPhone / totalLeads) * 100).toFixed(0);
+          items.push({ icon: "", text: "Phone capture rate: " + captureRate + "%" });
+        }
+      }
+      if (adsData && adsData.totals) {
+        const cpl = Number(adsData.totals.cpl);
+        if (!isNaN(cpl) && cpl > 0) {
+          items.push({ icon: cpl > 25 ? "warn" : "", text: "Cost per lead: " + fmtMoney(cpl) });
+        }
+      }
+      items.push({ icon: "", text: "DM AI Agent pipeline operational" });
+      items.push({ icon: "", text: "Sendblue integration pending setup" });
+
+      dir.innerHTML = items.map(d =>
+        `<div class="j-directive"><span class="j-directive-icon${d.icon ? " " + d.icon : ""}"></span><span>${esc(d.text)}</span></div>`
+      ).join("");
+    }
+
+    function esc(s) {
+      if (s == null) return "";
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    /* ——— Init ——— */
+    (async function init() {
+      // Default voice output ON (browser default voice).
+      document.getElementById("jTtsBtn").classList.toggle("active", ttsEnabled);
+      await Promise.all([loadDashboard(), loadAds(), loadHealth()]);
+      addMessage("system", "All systems loaded. " + ((dashData?.totals?.leads) || 0) + " leads in database. Awaiting your command, Marco.");
+    })();
+
+    setInterval(() => { loadDashboard(); loadAds(); }, 60000);
+  </script>
+</body>
+</html>
