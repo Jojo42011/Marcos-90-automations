@@ -15,8 +15,13 @@ import {
   sanitizePipelineReplyAgainstRecentMarco,
   type PreflightTurnResult,
 } from "../integrations/llm";
-import { advanceFunnelDeterministic } from "./funnelDeterministic.js";
 import {
+  advanceFunnelDeterministic,
+  extractPhoneFromConversation,
+  PHONE_JUST_CAPTURED_REPLY,
+} from "./funnelDeterministic.js";
+import {
+  detectAdCampaign,
   getLastUserMessageText,
   isLastUserMessageRepeated,
   isShortDuplicateUserPair,
@@ -24,6 +29,7 @@ import {
   latestAssistantEchoesEarlierInThread,
   leadThreadSignalsExperiencedBuyer,
   messageAsksBuilderIdentity,
+  signalsLookingOutsideSanAntonio,
   threadContainsFirstTimeBuyingQuestion,
 } from "./conversationUtils.js";
 import {
@@ -60,7 +66,11 @@ async function maybeSeedTiktokManualOpener(
 ): Promise<Lead> {
   const raw = payload.marcoPreviousOutbound?.trim() ?? "";
   if (!raw) return lead;
-  if (!payload.platform.toLowerCase().includes("tik")) return lead;
+  const platformLower = payload.platform.toLowerCase();
+  const allowManualOpenerSeed =
+    platformLower.includes("tik") ||
+    (platformLower.includes("insta") && payload.commentOrDm === "dm");
+  if (!allowManualOpenerSeed) return lead;
 
   const conv = await db.getConversation(lead.id);
   if (conv.messages.some((m) => m.role === "assistant")) {
@@ -115,6 +125,13 @@ export async function run(
         propertyInquired: null,
         criteria: null,
         brivityId: null,
+        crmStatus: "not_contacted",
+        crmStage: "new",
+        crmPriority: "normal",
+        crmIntent: "buyer",
+        crmCallQueue: "none",
+        crmNotes: null,
+        adCampaign: null,
       });
       createdLeadThisRequest = true;
     }
@@ -139,15 +156,32 @@ export async function run(
   }
 
   if (!lead) {
-    const interested = await classifyNewLeadBuyingIntent(payload.message, {
-      channel: payload.commentOrDm,
-    });
-    marcoLog("intent_gate", {
-      requestId,
-      correlationId,
-      interested,
-      message_preview: previewText(payload.message),
-    });
+    const skipIntentGateTiktokManualOpener =
+      Boolean(payload.marcoPreviousOutbound?.trim()) &&
+      (payload.platform.toLowerCase().includes("tik") ||
+        (payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm"));
+
+    let interested: boolean;
+    if (skipIntentGateTiktokManualOpener) {
+      interested = true;
+      marcoLog("intent_gate_skipped", {
+        requestId,
+        correlationId,
+        reason: "tiktok_marco_previous_outbound",
+        message_preview: previewText(payload.message),
+      });
+    } else {
+      interested = await classifyNewLeadBuyingIntent(payload.message, {
+        channel: payload.commentOrDm,
+        platform: payload.platform,
+      });
+      marcoLog("intent_gate", {
+        requestId,
+        correlationId,
+        interested,
+        message_preview: previewText(payload.message),
+      });
+    }
     if (!interested) {
       marcoLog("pipeline_end", {
         requestId,
@@ -166,9 +200,16 @@ export async function run(
       email: null,
       state: FunnelStage.New,
       source: payload.platform,
+      adCampaign: detectAdCampaign(payload.message),
       propertyInquired: null,
       criteria: null,
       brivityId: null,
+      crmStatus: "not_contacted",
+      crmStage: "new",
+      crmPriority: "normal",
+      crmIntent: "buyer",
+      crmCallQueue: "none",
+      crmNotes: null,
     });
   }
 
@@ -235,6 +276,8 @@ export async function run(
   });
 
   let coachingNote = preflightRaw.coachingNote.trim();
+  const igDmTurn =
+    payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm";
   if (leadLineRepeatForModel && !coachingNote) {
     coachingNote =
       "The lead may have repeated the same message; acknowledge briefly, stay on the current funnel step, and do not restart from the beginning. Do not repeat or closely mirror Marco's earlier outbound. On phone resistance, respond to their exact last message in one or two short sentences, never recycle prior resistance wording, re-ask for a number in a fresh way. Keep it casual like a real text. If the latest lead tone is resistant or negative, avoid upbeat affirmations and match their sentiment. Keep moving naturally through Marco's flow: value first, then agent context, then number ask.";
@@ -257,6 +300,14 @@ export async function run(
       .filter(Boolean)
       .join(" ");
   }
+  if (signalsLookingOutsideSanAntonio(latestLeadText)) {
+    coachingNote = [
+      coachingNote,
+      "TEXAS_SERVICE_AREA: The lead is looking outside San Antonio or named another Texas area. In Marco's first-person voice: say you help buyers all across Texas for homes above $600k, one short sentence, then continue helping with their question or the listing thread. Do not imply you only serve greater San Antonio for that buyer.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
   if (threadContainsFirstTimeBuyingQuestion(conversation) || leadThreadSignalsExperiencedBuyer(conversation)) {
     coachingNote = [
       coachingNote,
@@ -265,11 +316,61 @@ export async function run(
       .filter(Boolean)
       .join(" ");
   }
+  coachingNote = [
+    coachingNote,
+    "PHONE_ONLY_DELIVERY: Never ask phone or email, never offer email for breakdowns or listings. Text/SMS to mobile only. If they gave an email, thank briefly and still ask for number to text the packet. No hyphen or dash pauses between phrases in the reply.",
+    ...(payload.platform.toLowerCase().includes("tik") || igDmTurn
+      ? [
+          "NEUTRAL_DM_NO_LIST_PRICE: Never quote listing price, ballpark, or dollar amounts for the property in DM. If they ask how much, offer to text full breakdown with pricing after they share a mobile number. First-time buyer question drives engagement when not already in the thread.",
+        ]
+      : []),
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const preflight: PreflightTurnResult = {
     repeatedMessage: leadLineRepeatForModel,
     coachingNote: coachingNote.trim(),
   };
+
+  /** IG/ManyChat often fires twice for one phone (text + contact card). Second hit: no LLM, no duplicate ask. */
+  if (leadRepeatedForAdvancement) {
+    const phoneInThread = lead.phone ?? extractPhoneFromConversation(conversation);
+    if (phoneInThread) {
+      if (!lead.phone) {
+        lead = { ...lead, phone: phoneInThread, state: FunnelStage.PropertySent };
+        await db.updateLead(lead);
+        marcoLog("duplicate_user_phone_captured", {
+          requestId,
+          correlationId,
+          lead_id: lead.id,
+        });
+        marcoLog("pipeline_end", {
+          requestId,
+          correlationId,
+          lead_id: lead.id,
+          outcome: "duplicate_user_phone_first_capture",
+          reply_chars: PHONE_JUST_CAPTURED_REPLY.length,
+          reply_preview: previewText(PHONE_JUST_CAPTURED_REPLY),
+          funnel_state_final: lead.state,
+          phone_captured_this_turn: true,
+          email_captured_this_turn: false,
+        });
+        return { lead, reply: PHONE_JUST_CAPTURED_REPLY };
+      }
+      marcoLog("pipeline_end", {
+        requestId,
+        correlationId,
+        lead_id: lead.id,
+        outcome: "duplicate_user_phone_skipped",
+        reply_chars: 0,
+        funnel_state_final: lead.state,
+        phone_captured_this_turn: false,
+        email_captured_this_turn: false,
+      });
+      return { lead, reply: null };
+    }
+  }
 
   marcoLogDebug("merged_coaching_for_model", {
     requestId,
@@ -297,7 +398,19 @@ export async function run(
       log: ctx,
     });
     lead = result.lead;
-    const rawOpeningReply = result.reply;
+    let rawOpeningReply = result.reply;
+    if (!lead.phone) {
+      const p = extractPhoneFromConversation(conversation);
+      if (p) {
+        lead = { ...lead, phone: p, state: FunnelStage.PropertySent };
+        rawOpeningReply = PHONE_JUST_CAPTURED_REPLY;
+        marcoLog("opening_same_turn_phone_capture", {
+          requestId,
+          correlationId,
+          lead_id: lead.id,
+        });
+      }
+    }
     reply = sanitizeOpeningReplyAgainstRecentMarco(
       rawOpeningReply,
       lead,

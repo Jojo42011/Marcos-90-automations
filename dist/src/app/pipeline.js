@@ -59,7 +59,10 @@ async function maybeSeedTiktokManualOpener(lead, payload, ctx) {
     const raw = payload.marcoPreviousOutbound?.trim() ?? "";
     if (!raw)
         return lead;
-    if (!payload.platform.toLowerCase().includes("tik"))
+    const platformLower = payload.platform.toLowerCase();
+    const allowManualOpenerSeed = platformLower.includes("tik") ||
+        (platformLower.includes("insta") && payload.commentOrDm === "dm");
+    if (!allowManualOpenerSeed)
         return lead;
     const conv = await db.getConversation(lead.id);
     if (conv.messages.some((m) => m.role === "assistant")) {
@@ -104,6 +107,13 @@ async function run(payload, log) {
                 propertyInquired: null,
                 criteria: null,
                 brivityId: null,
+                crmStatus: "not_contacted",
+                crmStage: "new",
+                crmPriority: "normal",
+                crmIntent: "buyer",
+                crmCallQueue: "none",
+                crmNotes: null,
+                adCampaign: null,
             });
             createdLeadThisRequest = true;
         }
@@ -127,15 +137,31 @@ async function run(payload, log) {
         return { lead, reply: COMMENT_HANDSHAKE_REPLY };
     }
     if (!lead) {
-        const interested = await (0, llm_1.classifyNewLeadBuyingIntent)(payload.message, {
-            channel: payload.commentOrDm,
-        });
-        (0, marcoLog_js_1.marcoLog)("intent_gate", {
-            requestId,
-            correlationId,
-            interested,
-            message_preview: (0, marcoLog_js_1.previewText)(payload.message),
-        });
+        const skipIntentGateTiktokManualOpener = Boolean(payload.marcoPreviousOutbound?.trim()) &&
+            (payload.platform.toLowerCase().includes("tik") ||
+                (payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm"));
+        let interested;
+        if (skipIntentGateTiktokManualOpener) {
+            interested = true;
+            (0, marcoLog_js_1.marcoLog)("intent_gate_skipped", {
+                requestId,
+                correlationId,
+                reason: "tiktok_marco_previous_outbound",
+                message_preview: (0, marcoLog_js_1.previewText)(payload.message),
+            });
+        }
+        else {
+            interested = await (0, llm_1.classifyNewLeadBuyingIntent)(payload.message, {
+                channel: payload.commentOrDm,
+                platform: payload.platform,
+            });
+            (0, marcoLog_js_1.marcoLog)("intent_gate", {
+                requestId,
+                correlationId,
+                interested,
+                message_preview: (0, marcoLog_js_1.previewText)(payload.message),
+            });
+        }
         if (!interested) {
             (0, marcoLog_js_1.marcoLog)("pipeline_end", {
                 requestId,
@@ -154,9 +180,16 @@ async function run(payload, log) {
             email: null,
             state: state_js_1.FunnelStage.New,
             source: payload.platform,
+            adCampaign: (0, conversationUtils_js_1.detectAdCampaign)(payload.message),
             propertyInquired: null,
             criteria: null,
             brivityId: null,
+            crmStatus: "not_contacted",
+            crmStage: "new",
+            crmPriority: "normal",
+            crmIntent: "buyer",
+            crmCallQueue: "none",
+            crmNotes: null,
         });
     }
     if (!payload.message.trim()) {
@@ -212,6 +245,7 @@ async function run(payload, log) {
         coaching_note: preflightRaw.coachingNote || "(empty)",
     });
     let coachingNote = preflightRaw.coachingNote.trim();
+    const igDmTurn = payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm";
     if (leadLineRepeatForModel && !coachingNote) {
         coachingNote =
             "The lead may have repeated the same message; acknowledge briefly, stay on the current funnel step, and do not restart from the beginning. Do not repeat or closely mirror Marco's earlier outbound. On phone resistance, respond to their exact last message in one or two short sentences, never recycle prior resistance wording, re-ask for a number in a fresh way. Keep it casual like a real text. If the latest lead tone is resistant or negative, avoid upbeat affirmations and match their sentiment. Keep moving naturally through Marco's flow: value first, then agent context, then number ask.";
@@ -233,6 +267,14 @@ async function run(payload, log) {
             .filter(Boolean)
             .join(" ");
     }
+    if ((0, conversationUtils_js_1.signalsLookingOutsideSanAntonio)(latestLeadText)) {
+        coachingNote = [
+            coachingNote,
+            "TEXAS_SERVICE_AREA: The lead is looking outside San Antonio or named another Texas area. In Marco's first-person voice: say you help buyers all across Texas for homes above $600k, one short sentence, then continue helping with their question or the listing thread. Do not imply you only serve greater San Antonio for that buyer.",
+        ]
+            .filter(Boolean)
+            .join(" ");
+    }
     if ((0, conversationUtils_js_1.threadContainsFirstTimeBuyingQuestion)(conversation) || (0, conversationUtils_js_1.leadThreadSignalsExperiencedBuyer)(conversation)) {
         coachingNote = [
             coachingNote,
@@ -241,10 +283,59 @@ async function run(payload, log) {
             .filter(Boolean)
             .join(" ");
     }
+    coachingNote = [
+        coachingNote,
+        "PHONE_ONLY_DELIVERY: Never ask phone or email, never offer email for breakdowns or listings. Text/SMS to mobile only. If they gave an email, thank briefly and still ask for number to text the packet. No hyphen or dash pauses between phrases in the reply.",
+        ...(payload.platform.toLowerCase().includes("tik") || igDmTurn
+            ? [
+                "NEUTRAL_DM_NO_LIST_PRICE: Never quote listing price, ballpark, or dollar amounts for the property in DM. If they ask how much, offer to text full breakdown with pricing after they share a mobile number. First-time buyer question drives engagement when not already in the thread.",
+            ]
+            : []),
+    ]
+        .filter(Boolean)
+        .join(" ");
     const preflight = {
         repeatedMessage: leadLineRepeatForModel,
         coachingNote: coachingNote.trim(),
     };
+    /** IG/ManyChat often fires twice for one phone (text + contact card). Second hit: no LLM, no duplicate ask. */
+    if (leadRepeatedForAdvancement) {
+        const phoneInThread = lead.phone ?? (0, funnelDeterministic_js_1.extractPhoneFromConversation)(conversation);
+        if (phoneInThread) {
+            if (!lead.phone) {
+                lead = { ...lead, phone: phoneInThread, state: state_js_1.FunnelStage.PropertySent };
+                await db.updateLead(lead);
+                (0, marcoLog_js_1.marcoLog)("duplicate_user_phone_captured", {
+                    requestId,
+                    correlationId,
+                    lead_id: lead.id,
+                });
+                (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+                    requestId,
+                    correlationId,
+                    lead_id: lead.id,
+                    outcome: "duplicate_user_phone_first_capture",
+                    reply_chars: funnelDeterministic_js_1.PHONE_JUST_CAPTURED_REPLY.length,
+                    reply_preview: (0, marcoLog_js_1.previewText)(funnelDeterministic_js_1.PHONE_JUST_CAPTURED_REPLY),
+                    funnel_state_final: lead.state,
+                    phone_captured_this_turn: true,
+                    email_captured_this_turn: false,
+                });
+                return { lead, reply: funnelDeterministic_js_1.PHONE_JUST_CAPTURED_REPLY };
+            }
+            (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+                requestId,
+                correlationId,
+                lead_id: lead.id,
+                outcome: "duplicate_user_phone_skipped",
+                reply_chars: 0,
+                funnel_state_final: lead.state,
+                phone_captured_this_turn: false,
+                email_captured_this_turn: false,
+            });
+            return { lead, reply: null };
+        }
+    }
     (0, marcoLog_js_1.marcoLogDebug)("merged_coaching_for_model", {
         requestId,
         correlationId,
@@ -267,7 +358,19 @@ async function run(payload, log) {
             log: ctx,
         });
         lead = result.lead;
-        const rawOpeningReply = result.reply;
+        let rawOpeningReply = result.reply;
+        if (!lead.phone) {
+            const p = (0, funnelDeterministic_js_1.extractPhoneFromConversation)(conversation);
+            if (p) {
+                lead = { ...lead, phone: p, state: state_js_1.FunnelStage.PropertySent };
+                rawOpeningReply = funnelDeterministic_js_1.PHONE_JUST_CAPTURED_REPLY;
+                (0, marcoLog_js_1.marcoLog)("opening_same_turn_phone_capture", {
+                    requestId,
+                    correlationId,
+                    lead_id: lead.id,
+                });
+            }
+        }
         reply = (0, llm_1.sanitizeOpeningReplyAgainstRecentMarco)(rawOpeningReply, lead, conversation, openingStageBefore, ctx, payload.commentOrDm, payload.platform);
         (0, marcoLog_js_1.marcoLog)("opening_branch", {
             requestId,

@@ -8,18 +8,12 @@ const prompts_js_1 = require("../../../config/prompts.js");
 const state_js_1 = require("../../core/state.js");
 const conversationUtils_js_1 = require("../../app/conversationUtils.js");
 const index_js_1 = require("../../integrations/llm/index.js");
+const funnelDeterministic_js_1 = require("../../app/funnelDeterministic.js");
 function getLastUserMessage(conversation) {
     const reversed = [...conversation.messages].reverse();
     return reversed.find((m) => m.role === "user") ?? null;
 }
-function extractPhone(text) {
-    const digits = text.replace(/\D/g, "");
-    if (digits.length === 10)
-        return digits;
-    if (digits.length === 11 && digits.startsWith("1"))
-        return digits.slice(1);
-    return null;
-}
+const extractPhone = funnelDeterministic_js_1.extractPhone;
 const PHONE_ASK = "Would there be a good number I could send all this info over to?";
 /** Lead is pushing back on sharing a phone number (stay in PhoneRequested). */
 function isPhoneResistance(text) {

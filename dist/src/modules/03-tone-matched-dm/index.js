@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.process = process;
 const state_js_1 = require("../../core/state.js");
 const conversationUtils_js_1 = require("../../app/conversationUtils.js");
+const funnelDeterministic_js_1 = require("../../app/funnelDeterministic.js");
 const index_js_1 = require("../../integrations/llm/index.js");
 function saysHasAgent(text) {
     const t = text.toLowerCase();
@@ -18,11 +19,18 @@ function getLastUserMessage(conversation) {
     const reversed = [...conversation.messages].reverse();
     return reversed.find((m) => m.role === "user") ?? null;
 }
+/** Phone in thread (e.g. IG contact card echo) — must advance even when ManyChat sends the same line twice. */
+function capturablePhoneFromThread(conversation, lastUserText) {
+    return (0, funnelDeterministic_js_1.extractPhone)(lastUserText) ?? (0, funnelDeterministic_js_1.extractPhoneFromConversation)(conversation) ?? null;
+}
 /**
  * After this turn's outbound, where the funnel should sit before the next inbound.
  * Repeat turns do not advance. Agent + not open stays in OpeningOfferedDetails for exclusivity ask.
  */
 function nextOpeningState(lead, lastUserText, repeat, conversation) {
+    if (capturablePhoneFromThread(conversation, lastUserText)) {
+        return state_js_1.FunnelStage.PhoneRequested;
+    }
     if (lead.state === state_js_1.FunnelStage.New) {
         return state_js_1.FunnelStage.OpeningAskedFirstTime;
     }
@@ -57,6 +65,14 @@ async function process(lead, conversation, options) {
     }
     const openingStage = lead.state;
     const repeat = Boolean(options?.leadRepeatedForAdvancement && lead.state !== state_js_1.FunnelStage.New);
+    const phoneDigits = lead.phone ?? capturablePhoneFromThread(conversation, last.text);
+    if (phoneDigits) {
+        const justCaptured = !lead.phone;
+        return {
+            lead: { ...lead, phone: phoneDigits, state: state_js_1.FunnelStage.PropertySent },
+            reply: justCaptured ? funnelDeterministic_js_1.PHONE_JUST_CAPTURED_REPLY : null,
+        };
+    }
     const note = options?.coachingNote?.trim() ?? "";
     const preflight = {
         repeatedMessage: Boolean(options?.leadLineRepeatForModel),
