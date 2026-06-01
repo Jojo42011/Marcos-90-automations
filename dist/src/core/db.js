@@ -11,6 +11,7 @@ exports.getConversation = getConversation;
 exports.appendMessage = appendMessage;
 exports.getDashboardSnapshot = getDashboardSnapshot;
 exports.listCrmLeads = listCrmLeads;
+exports.listAllLeads = listAllLeads;
 exports.updateLeadCrmFields = updateLeadCrmFields;
 const fs_1 = require("fs");
 const path_1 = require("path");
@@ -278,6 +279,14 @@ async function getDashboardSnapshot() {
 async function listCrmLeads() {
     const snap = await getDashboardSnapshot();
     return snap.leads;
+}
+/** All leads in the store (including without phone) — for Harvey ops perception. */
+async function listAllLeads() {
+    const out = [];
+    for (const raw of leadsById.values()) {
+        out.push(normalizeCrmDefaults(raw));
+    }
+    return out.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
 }
 async function updateLeadCrmFields(input) {
     const existing = leadsById.get(input.leadId);
