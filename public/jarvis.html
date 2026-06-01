@@ -9,18 +9,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Share+Tech+Mono&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #030508;
-      --surface: rgba(8, 14, 25, 0.88);
-      --border: rgba(34, 211, 238, 0.14);
-      --border-bright: rgba(34, 211, 238, 0.38);
-      --text: #e8edf4;
-      --muted: #6b7fa3;
-      --cyan: #22d3ee;
-      --cyan-glow: rgba(34, 211, 238, 0.45);
-      --cyan-dim: rgba(34, 211, 238, 0.08);
-      --buyer: #38bdf8;
-      --seller: #f87171;
+      --bg: #050a0f;
+      --panel: rgba(5, 12, 20, 0.85);
+      --border: rgba(0, 212, 255, 0.15);
+      --border-bright: rgba(0, 212, 255, 0.4);
+      --text: #e2e8f0;
+      --muted: #4a5568;
+      --cyan: #00d4ff;
+      --cyan-soft: rgba(0, 212, 255, 0.55);
+      --cyan-dim: rgba(0, 212, 255, 0.08);
       --warn: #f59e0b;
+      --danger: #ef4444;
       --hud: "Orbitron", sans-serif;
       --mono: "Share Tech Mono", monospace;
       --font: "Plus Jakarta Sans", system-ui, sans-serif;
@@ -29,18 +28,21 @@
     html, body { height: 100%; overflow: hidden; }
     body { font-family: var(--font); background: var(--bg); color: var(--text); }
 
+    /* —— Background layers —— */
     .j-bg {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background:
-        radial-gradient(ellipse 70% 55% at 50% 42%, rgba(34, 211, 238, 0.09), transparent 70%),
+        radial-gradient(ellipse 60% 50% at 50% 45%, rgba(0, 212, 255, 0.06), transparent 70%),
         var(--bg);
     }
     .j-hex {
-      position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.35;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='none' stroke='%2322d3ee' stroke-opacity='0.12' d='M28 1 L54 15 L54 43 L28 57 L2 43 L2 15 Z'/%3E%3C/svg%3E");
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-opacity='1' d='M28 1 L54 15 L54 43 L28 57 L2 43 L2 15 Z'/%3E%3C/svg%3E");
       background-size: 56px 100px;
+      opacity: 0.04;
     }
 
+    /* —— Shell —— */
     .j-shell {
       position: relative; z-index: 1;
       display: grid;
@@ -53,7 +55,7 @@
       display: flex; align-items: center; gap: 0.75rem;
       padding: 0 0.85rem;
       border-bottom: 1px solid var(--border);
-      background: var(--surface);
+      background: var(--panel);
       backdrop-filter: blur(14px);
     }
     .j-logo {
@@ -71,17 +73,6 @@
       font-weight: 500;
       margin-top: 1px;
     }
-    .j-status {
-      font-family: var(--hud);
-      font-size: 0.48rem;
-      letter-spacing: 0.16em;
-      padding: 0.22rem 0.5rem;
-      border: 1px solid var(--border-bright);
-      border-radius: 3px;
-      color: var(--cyan);
-      background: var(--cyan-dim);
-    }
-    .j-status.busy { color: var(--warn); border-color: rgba(245, 158, 11, 0.45); }
     .j-spacer { flex: 1; }
     .j-back {
       font-family: var(--mono);
@@ -95,9 +86,23 @@
     .j-back:hover { color: var(--cyan); border-color: var(--border-bright); }
     .j-meta { font-family: var(--mono); font-size: 0.58rem; color: var(--muted); }
 
+    .j-panel-toggle {
+      display: none;
+      font-family: var(--hud);
+      font-size: 0.48rem;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--border);
+      padding: 0.22rem 0.45rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* —— 3-column main —— */
     .j-main {
       display: grid;
-      grid-template-columns: minmax(200px, 220px) 1fr minmax(220px, 260px);
+      grid-template-columns: 25% 50% 25%;
       min-height: 0;
       overflow: hidden;
     }
@@ -106,88 +111,109 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
+      background: var(--panel);
       border-right: 1px solid var(--border);
-      background: rgba(0, 0, 0, 0.2);
     }
     .j-col:last-child { border-right: 0; border-left: 1px solid var(--border); }
 
     .j-head {
       font-family: var(--hud);
-      font-size: 0.46rem;
-      letter-spacing: 0.24em;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.28em;
       color: var(--cyan);
-      padding: 0.5rem 0.7rem;
+      padding: 0.85rem 0.95rem;
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
+      text-shadow: 0 0 12px rgba(0, 212, 255, 0.35);
     }
 
-    .j-metrics, .j-directives {
+    /* —— Left: metrics —— */
+    .j-metrics {
       flex: 1;
       overflow-y: auto;
-      padding: 0.55rem 0.65rem;
+      padding: 0.75rem 0.85rem;
+    }
+    .j-metric-group {
+      margin-bottom: 1rem;
+    }
+    .j-metric-group-title {
+      font-family: var(--mono);
+      font-size: 0.58rem;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.45rem;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px dashed var(--border);
     }
     .j-metric {
       display: flex;
       justify-content: space-between;
-      padding: 0.32rem 0;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-      font-size: 0.74rem;
+      align-items: baseline;
+      padding: 0.4rem 0;
+      font-size: 0.78rem;
     }
-    .j-metric label { color: var(--muted); }
-    .j-metric b { font-family: var(--mono); color: var(--text); }
-    .j-metric b.accent { color: var(--cyan); }
-    .j-metric b.buyer { color: var(--buyer); }
-    .j-metric b.seller { color: var(--seller); }
-
-    .j-dir {
-      font-size: 0.74rem;
-      line-height: 1.38;
-      padding: 0.45rem 0.55rem;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: rgba(0,0,0,0.28);
-      margin-bottom: 0.4rem;
+    .j-metric label { color: var(--text); opacity: 0.7; }
+    .j-metric b {
+      font-family: var(--mono);
+      color: var(--cyan);
+      font-size: 0.88rem;
+      text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
     }
-    .j-dir.warn { border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.07); }
-    .j-dir.danger { border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); }
+    .j-metric b.warn { color: var(--warn); text-shadow: 0 0 8px rgba(245, 158, 11, 0.3); }
+    .j-metric b.danger { color: var(--danger); text-shadow: 0 0 8px rgba(239, 68, 68, 0.3); }
 
-    /* —— Center: JARVIS core stage —— */
+    /* —— Center: Harvey core —— */
     .j-center {
       display: flex;
       flex-direction: column;
       min-height: 0;
       position: relative;
       overflow: hidden;
+      background: transparent;
     }
 
     .j-stage {
-      flex: 1;
-      min-height: 0;
+      flex: 0 0 auto;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       position: relative;
-      padding: 0.5rem 1rem 0;
+      padding: 1.2rem 1rem 0.5rem;
     }
+
+    .j-status-label {
+      font-family: var(--hud);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.42em;
+      color: var(--cyan);
+      text-shadow: 0 0 16px rgba(0, 212, 255, 0.5);
+      margin-bottom: 1rem;
+      transition: color 0.25s;
+    }
+    .j-status-label.busy { color: var(--warn); text-shadow: 0 0 16px rgba(245, 158, 11, 0.5); }
 
     .j-hud-label {
       position: absolute;
       font-family: var(--mono);
-      font-size: 0.52rem;
-      letter-spacing: 0.2em;
-      color: rgba(34, 211, 238, 0.35);
+      font-size: 0.6rem;
+      letter-spacing: 0.32em;
+      color: rgba(0, 212, 255, 0.45);
       writing-mode: vertical-rl;
       text-orientation: mixed;
       user-select: none;
       pointer-events: none;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
     }
-    .j-hud-label.left { left: 0.65rem; top: 50%; transform: translateY(-50%) rotate(180deg); }
-    .j-hud-label.right { right: 0.65rem; top: 50%; transform: translateY(-50%); }
 
     .j-core-wrap {
       position: relative;
-      width: min(72vw, 320px);
+      width: min(46vh, 420px);
       aspect-ratio: 1;
       display: flex;
       align-items: center;
@@ -204,6 +230,7 @@
       cursor: pointer;
       border-radius: 50%;
       -webkit-tap-highlight-color: transparent;
+      padding: 0;
     }
     .j-core-btn:disabled { cursor: not-allowed; opacity: 0.5; }
 
@@ -211,70 +238,94 @@
       width: 100%;
       height: 100%;
       display: block;
-      filter: drop-shadow(0 0 24px rgba(34, 211, 238, 0.15));
+      filter: drop-shadow(0 0 28px rgba(0, 212, 255, 0.25));
+      transition: filter 0.3s;
+    }
+    .j-core-btn.active .j-core-svg,
+    .j-core-btn.busy .j-core-svg {
+      filter: drop-shadow(0 0 48px rgba(0, 212, 255, 0.6));
     }
 
-    .j-core-btn.active .j-core-svg { filter: drop-shadow(0 0 36px var(--cyan-glow)); }
-    .j-core-btn.listening .ring-pulse { animation: core-pulse 1.8s ease-in-out infinite; }
-    .j-core-btn.busy .ring-spin-fast { animation: spin 6s linear infinite; }
+    /* Orbital rings — different speeds + directions */
+    .ring { transform-origin: 200px 200px; }
+    .ring-1 { animation: spin 36s linear infinite; }
+    .ring-2 { animation: spin 22s linear infinite reverse; }
+    .ring-3 { animation: spin 14s linear infinite; }
+    .ring-4 { animation: spin 9s linear infinite reverse; }
+
+    .core-pulse {
+      transform-origin: 200px 200px;
+      animation: corepulse 3.4s ease-in-out infinite;
+    }
+    .j-core-btn.busy .core-pulse {
+      animation: corepulse 0.9s ease-in-out infinite;
+    }
+    .j-core-btn.busy .mic-glow {
+      animation: micflash 0.8s ease-in-out infinite;
+    }
 
     @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes core-pulse {
-      0%, 100% { opacity: 0.5; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.02); }
+    @keyframes corepulse {
+      0%, 100% { opacity: 0.55; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.06); }
+    }
+    @keyframes micflash {
+      0%, 100% { opacity: 0.85; }
+      50% { opacity: 1; }
     }
 
     .j-core-hint {
-      margin-top: 0.85rem;
+      margin-top: 1rem;
       font-family: var(--hud);
       font-size: 0.58rem;
-      letter-spacing: 0.28em;
+      letter-spacing: 0.3em;
       color: var(--muted);
       text-align: center;
       transition: color 0.2s;
     }
-    .j-core-btn.active + .j-core-hint,
-    .j-core-wrap:has(.j-core-btn.active) .j-core-hint { color: var(--cyan); }
+    .j-core-btn.active ~ .j-core-hint { color: var(--cyan); }
 
     .j-transcript {
-      width: 100%;
-      max-width: 520px;
       flex: 1;
       min-height: 0;
-      max-height: 38vh;
       overflow-y: auto;
-      margin-top: 0.5rem;
-      padding: 0.35rem 0.25rem 0.5rem;
+      margin: 0.5rem auto 0;
+      width: 100%;
+      max-width: 560px;
+      padding: 0.5rem 1rem 0.5rem;
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
-      mask-image: linear-gradient(transparent, #000 8%, #000 92%, transparent);
-      -webkit-mask-image: linear-gradient(transparent, #000 8%, #000 92%, transparent);
+      gap: 0.5rem;
+      mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
+      -webkit-mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
     }
 
     .j-msg {
-      max-width: 94%;
-      padding: 0.45rem 0.65rem;
+      max-width: 88%;
+      padding: 0.55rem 0.75rem;
       border-radius: 8px;
-      font-size: 0.8rem;
-      line-height: 1.42;
+      font-size: 0.82rem;
+      line-height: 1.45;
       backdrop-filter: blur(6px);
     }
     .j-msg.user {
       align-self: flex-end;
-      background: rgba(34, 211, 238, 0.1);
+      background: rgba(0, 212, 255, 0.1);
       border: 1px solid var(--border-bright);
+      color: var(--text);
     }
     .j-msg.ai {
       align-self: flex-start;
-      background: rgba(8, 14, 25, 0.75);
+      background: rgba(5, 12, 20, 0.85);
       border: 1px solid var(--border);
+      color: var(--text);
     }
     .j-msg.system {
       align-self: center;
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       color: var(--muted);
       font-family: var(--mono);
+      letter-spacing: 0.1em;
       text-align: center;
       border: none;
       background: transparent;
@@ -283,58 +334,89 @@
       content: "▋";
       animation: blink 0.8s step-end infinite;
       color: var(--cyan);
+      margin-left: 2px;
     }
     @keyframes blink { 50% { opacity: 0; } }
 
     .j-compose {
       flex-shrink: 0;
       display: flex;
-      gap: 0.45rem;
-      padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom));
+      gap: 0.5rem;
+      padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom));
       border-top: 1px solid var(--border);
-      background: var(--surface);
+      background: var(--panel);
       backdrop-filter: blur(12px);
     }
     .j-input {
       flex: 1;
       border: 1px solid var(--border);
       border-radius: 6px;
-      background: rgba(0,0,0,0.4);
+      background: rgba(0, 0, 0, 0.45);
       color: var(--text);
       font: inherit;
-      font-size: 0.82rem;
-      padding: 0.5rem 0.65rem;
+      font-size: 0.85rem;
+      padding: 0.55rem 0.7rem;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .j-input:focus { outline: none; border-color: var(--border-bright); box-shadow: 0 0 0 1px var(--cyan-dim); }
+    .j-input:focus {
+      outline: none;
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 1px var(--cyan-dim), 0 0 14px rgba(0, 212, 255, 0.18);
+    }
     .j-send {
       border: 1px solid var(--border-bright);
       background: transparent;
       color: var(--cyan);
       font-family: var(--hud);
-      font-size: 0.5rem;
+      font-size: 0.52rem;
       font-weight: 700;
-      letter-spacing: 0.14em;
-      padding: 0 0.85rem;
+      letter-spacing: 0.18em;
+      padding: 0 1rem;
       border-radius: 6px;
       cursor: pointer;
+      transition: background 0.15s;
     }
     .j-send:hover { background: var(--cyan-dim); }
     .j-send:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    /* Mobile: core-first, panels as drawer */
-    .j-panel-toggle {
-      display: none;
-      font-family: var(--hud);
-      font-size: 0.48rem;
-      letter-spacing: 0.14em;
-      color: var(--muted);
-      background: transparent;
+    /* —— Right: directives —— */
+    .j-directives {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+    .j-dir {
+      font-size: 0.78rem;
+      line-height: 1.45;
+      padding: 0.6rem 0.7rem;
+      border-radius: 6px;
       border: 1px solid var(--border);
-      padding: 0.22rem 0.45rem;
-      border-radius: 4px;
-      cursor: pointer;
+      border-left: 3px solid var(--cyan);
+      background: rgba(0, 212, 255, 0.04);
+      color: var(--text);
+    }
+    .j-dir.warn {
+      border-color: rgba(245, 158, 11, 0.25);
+      border-left-color: var(--warn);
+      background: rgba(245, 158, 11, 0.06);
+    }
+    .j-dir.danger {
+      border-color: rgba(239, 68, 68, 0.25);
+      border-left-color: var(--danger);
+      background: rgba(239, 68, 68, 0.06);
+    }
+    .j-dir-empty {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-align: center;
+      padding: 1rem 0;
     }
 
+    /* —— Mobile —— */
     @media (max-width: 900px) {
       .j-main { grid-template-columns: 1fr; }
       .j-col.side { display: none; }
@@ -344,86 +426,111 @@
         z-index: 20;
         top: 44px;
         bottom: 0;
-        width: min(88vw, 280px);
-        box-shadow: 0 0 40px rgba(0,0,0,0.6);
+        width: min(88vw, 300px);
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
       }
       .j-col.side.open.left { left: 0; }
       .j-col.side.open.right { right: 0; left: auto; border-left: 1px solid var(--border); }
       .j-panel-toggle { display: inline-block; }
       .j-hud-label { display: none; }
-      .j-core-wrap { width: min(78vw, 280px); }
-      .j-transcript { max-height: 28vh; }
+      .j-core-wrap { width: min(72vw, 320px); }
     }
   </style>
 </head>
 <body>
   <div class="j-bg" aria-hidden="true"></div>
   <div class="j-hex" aria-hidden="true"></div>
+
   <div class="j-shell">
     <header class="j-topbar">
       <a href="/dashboard" class="j-back">← CRM</a>
       <button type="button" class="j-panel-toggle" id="jToggleOps">OPS</button>
       <div class="j-logo">HARVEY<small>AETHON · MARCO PUGA</small></div>
-      <span class="j-status" id="jStatus">STANDBY</span>
       <div class="j-spacer"></div>
       <button type="button" class="j-panel-toggle" id="jToggleDir">TASKS</button>
       <span class="j-meta" id="jModel">—</span>
     </header>
 
     <main class="j-main">
+      <!-- LEFT: Live ops metrics -->
       <aside class="j-col side left" id="jColOps">
         <div class="j-head">LIVE OPS</div>
-        <div class="j-metrics" id="jMetrics"></div>
+        <div class="j-metrics" id="jMetrics">
+          <div class="j-metric-group"><div class="j-metric-group-title">loading…</div></div>
+        </div>
       </aside>
 
+      <!-- CENTER: Harvey core -->
       <section class="j-center">
+        <span class="j-hud-label" aria-hidden="true">NEURAL LINK · ACTIVE</span>
+
         <div class="j-stage">
-          <span class="j-hud-label left" aria-hidden="true">SIGNAL LOCK // 432.0HZ</span>
-          <span class="j-hud-label right" aria-hidden="true">NEURAL LINK · ACTIVE</span>
+          <div class="j-status-label" id="jStatus">HARVEY ONLINE</div>
 
           <div class="j-core-wrap">
-            <button type="button" class="j-core-btn" id="jMic" aria-label="Tap core to speak with Harvey" title="Tap once — talk, hear Harvey, talk again">
+            <button type="button" class="j-core-btn active" id="jMic" aria-label="Tap core to speak with Harvey">
               <svg class="j-core-svg" viewBox="0 0 400 400" aria-hidden="true">
                 <defs>
                   <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stop-color="rgba(34,211,238,0.35)"/>
-                    <stop offset="55%" stop-color="rgba(34,211,238,0.08)"/>
+                    <stop offset="0%" stop-color="rgba(0,212,255,0.35)"/>
+                    <stop offset="55%" stop-color="rgba(0,212,255,0.08)"/>
                     <stop offset="100%" stop-color="transparent"/>
                   </radialGradient>
+                  <radialGradient id="micGrad" cx="50%" cy="40%" r="60%">
+                    <stop offset="0%" stop-color="rgba(0,212,255,1)"/>
+                    <stop offset="100%" stop-color="rgba(0,212,255,0.6)"/>
+                  </radialGradient>
                 </defs>
-                <!-- crosshair -->
-                <line x1="200" y1="40" x2="200" y2="360" stroke="rgba(34,211,238,0.08)" stroke-width="1" stroke-dasharray="4 8"/>
-                <line x1="40" y1="200" x2="360" y2="200" stroke="rgba(34,211,238,0.08)" stroke-width="1" stroke-dasharray="4 8"/>
-                <!-- outer rings -->
-                <circle cx="200" cy="200" r="175" fill="none" stroke="rgba(34,211,238,0.1)" stroke-width="0.75" stroke-dasharray="2 10" class="ring-spin-fast" style="transform-origin:200px 200px"/>
-                <circle cx="200" cy="200" r="155" fill="none" stroke="rgba(34,211,238,0.18)" stroke-width="1" stroke-dasharray="120 40" class="ring-outer" style="transform-origin:200px 200px; animation: spin 48s linear infinite"/>
-                <circle cx="200" cy="200" r="128" fill="none" stroke="rgba(34,211,238,0.22)" stroke-width="1.25" class="ring-pulse"/>
-                <circle cx="200" cy="200" r="98" fill="none" stroke="rgba(34,211,238,0.15)" stroke-width="1" stroke-dasharray="6 14" style="transform-origin:200px 200px; animation: spin 32s linear infinite reverse"/>
-                <!-- wave field -->
-                <ellipse cx="200" cy="200" rx="72" ry="68" fill="url(#coreGlow)" class="ring-pulse"/>
-                <path d="M128 200 Q160 168 200 200 T272 200" fill="none" stroke="rgba(34,211,238,0.25)" stroke-width="1"/>
-                <path d="M128 200 Q160 232 200 200 T272 200" fill="none" stroke="rgba(34,211,238,0.2)" stroke-width="0.75"/>
-                <path d="M140 200 Q175 182 200 200 T260 200" fill="none" stroke="rgba(34,211,238,0.15)" stroke-width="0.75"/>
-                <!-- hex frame -->
-                <polygon points="200,118 262,154 262,246 200,282 138,246 138,154" fill="none" stroke="rgba(34,211,238,0.2)" stroke-width="1"/>
-                <!-- inner core -->
-                <circle cx="200" cy="200" r="42" fill="rgba(34,211,238,0.06)" stroke="rgba(34,211,238,0.45)" stroke-width="1.5"/>
-                <circle cx="200" cy="200" r="28" fill="rgba(34,211,238,0.12)" stroke="rgba(34,211,238,0.6)" stroke-width="1"/>
-                <!-- mic icon -->
-                <g fill="none" stroke="#030508" stroke-width="2.5" stroke-linecap="round">
-                  <rect x="188" y="178" width="24" height="36" rx="12" fill="rgba(34,211,238,0.9)" stroke="none"/>
-                  <path d="M176 208 Q176 228 200 228 Q224 228 224 208" stroke="rgba(34,211,238,0.85)" stroke-width="2"/>
-                  <line x1="200" y1="228" x2="200" y2="248" stroke="rgba(34,211,238,0.7)" stroke-width="2"/>
-                  <line x1="186" y1="248" x2="214" y2="248" stroke="rgba(34,211,238,0.7)" stroke-width="2"/>
+
+                <!-- crosshair (subtle) -->
+                <line x1="200" y1="20" x2="200" y2="380" stroke="rgba(0,212,255,0.06)" stroke-width="1" stroke-dasharray="3 9"/>
+                <line x1="20" y1="200" x2="380" y2="200" stroke="rgba(0,212,255,0.06)" stroke-width="1" stroke-dasharray="3 9"/>
+
+                <!-- Ring 1 — outermost, slow, dashed -->
+                <circle class="ring ring-1" cx="200" cy="200" r="188"
+                        fill="none" stroke="rgba(0,212,255,0.3)" stroke-width="1"
+                        stroke-dasharray="4 14"/>
+
+                <!-- Ring 2 — large, reverse, segmented arcs -->
+                <circle class="ring ring-2" cx="200" cy="200" r="160"
+                        fill="none" stroke="rgba(0,212,255,0.5)" stroke-width="1.25"
+                        stroke-dasharray="80 60 30 80 40 70"/>
+
+                <!-- Ring 3 — medium, faster -->
+                <circle class="ring ring-3" cx="200" cy="200" r="128"
+                        fill="none" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"
+                        stroke-dasharray="140 80"/>
+
+                <!-- Ring 4 — inner, fastest, thin -->
+                <circle class="ring ring-4" cx="200" cy="200" r="98"
+                        fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="0.9"
+                        stroke-dasharray="3 10"/>
+
+                <!-- Inner pulsing core (intensifies when processing) -->
+                <g class="core-pulse">
+                  <circle cx="200" cy="200" r="74" fill="url(#coreGlow)"/>
+                  <circle cx="200" cy="200" r="58" fill="rgba(0,212,255,0.06)" stroke="rgba(0,212,255,0.45)" stroke-width="1"/>
+                  <circle cx="200" cy="200" r="42" fill="rgba(0,212,255,0.1)" stroke="rgba(0,212,255,0.7)" stroke-width="1.25"/>
                 </g>
-                <!-- orbital dots -->
-                <circle cx="200" cy="55" r="3" fill="var(--cyan)" opacity="0.6"/>
-                <circle cx="345" cy="200" r="2.5" fill="#fff" opacity="0.5"/>
-                <circle cx="72" cy="210" r="2" fill="var(--cyan)" opacity="0.4"/>
+
+                <!-- Mic icon -->
+                <g class="mic-glow">
+                  <rect x="188" y="176" width="24" height="36" rx="12" fill="url(#micGrad)"/>
+                  <path d="M174 206 Q174 230 200 230 Q226 230 226 206" fill="none" stroke="rgba(0,212,255,0.9)" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="200" y1="230" x2="200" y2="250" stroke="rgba(0,212,255,0.8)" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="186" y1="250" x2="214" y2="250" stroke="rgba(0,212,255,0.8)" stroke-width="2" stroke-linecap="round"/>
+                </g>
+
+                <!-- Orbital marker dots -->
+                <circle cx="200" cy="12" r="3" fill="#00d4ff" opacity="0.7"/>
+                <circle cx="388" cy="200" r="2.5" fill="#00d4ff" opacity="0.5"/>
+                <circle cx="200" cy="388" r="2" fill="#00d4ff" opacity="0.4"/>
+                <circle cx="12" cy="200" r="2.5" fill="#00d4ff" opacity="0.5"/>
               </svg>
             </button>
-            <p class="j-core-hint" id="jCoreHint">TAP CORE TO SPEAK</p>
           </div>
+
+          <p class="j-core-hint" id="jCoreHint">TAP CORE TO SPEAK</p>
         </div>
 
         <div class="j-transcript" id="jTranscript">
@@ -431,14 +538,17 @@
         </div>
 
         <form class="j-compose" id="jForm">
-          <input class="j-input" id="jInput" type="text" placeholder="Or type a command…" autocomplete="off" />
+          <input class="j-input" id="jInput" type="text" placeholder="Type a command for Harvey…" autocomplete="off" />
           <button type="submit" class="j-send" id="jSend">SEND</button>
         </form>
       </section>
 
+      <!-- RIGHT: Active directives -->
       <aside class="j-col side right" id="jColDir">
-        <div class="j-head">DIRECTIVES</div>
-        <div class="j-directives" id="jDirectives"></div>
+        <div class="j-head">ACTIVE DIRECTIVES</div>
+        <div class="j-directives" id="jDirectives">
+          <div class="j-dir-empty">Awaiting signal…</div>
+        </div>
       </aside>
     </main>
   </div>
@@ -464,52 +574,88 @@
 
     const coreBtn = document.getElementById("jMic");
     const coreHint = document.getElementById("jCoreHint");
+    const statusEl = document.getElementById("jStatus");
 
     function setCoreVisual(mode) {
-      coreBtn.classList.remove("active", "listening", "busy");
-      if (mode === "active") coreBtn.classList.add("active");
-      if (mode === "listening") {
-        coreBtn.classList.add("active", "listening");
-        coreHint.textContent = "LISTENING…";
+      coreBtn.classList.remove("active", "busy");
+      if (mode === "active" || mode === "listening") {
+        coreBtn.classList.add("active");
+        coreHint.textContent = mode === "listening" ? "LISTENING…" : "TAP CORE TO END SESSION";
       } else if (mode === "processing" || mode === "responding") {
         coreBtn.classList.add("active", "busy");
         coreHint.textContent = mode === "processing" ? "PROCESSING…" : "RESPONDING…";
-      } else if (mode === "active") {
-        coreHint.textContent = "TAP CORE TO END SESSION";
       } else {
+        coreBtn.classList.add("active");
         coreHint.textContent = "TAP CORE TO SPEAK";
       }
     }
 
     function setStatus(t, on) {
-      const el = document.getElementById("jStatus");
-      el.textContent = t;
-      el.classList.toggle("busy", !!on);
-      const m = (t || "").toUpperCase();
-      if (m === "LISTENING") setCoreVisual("listening");
-      else if (m === "PROCESSING") setCoreVisual("processing");
-      else if (m === "RESPONDING") setCoreVisual("responding");
+      const text = (t || "").toUpperCase();
+      let label = "HARVEY ONLINE";
+      if (text === "LISTENING") label = "LISTENING";
+      else if (text === "PROCESSING") label = "PROCESSING";
+      else if (text === "RESPONDING") label = "RESPONDING";
+      else if (text === "STANDBY") label = "HARVEY ONLINE";
+      else if (text) label = text;
+      statusEl.textContent = label;
+      statusEl.classList.toggle("busy", !!on);
+
+      if (text === "LISTENING") setCoreVisual("listening");
+      else if (text === "PROCESSING") setCoreVisual("processing");
+      else if (text === "RESPONDING") setCoreVisual("responding");
       else if (window.HarveyVoice?.isConversationMode?.()) setCoreVisual("active");
       else setCoreVisual("idle");
     }
 
     function renderMetrics(m) {
       if (!m) return;
-      document.getElementById("jMetrics").innerHTML = [
-        ["Total leads", m.totalLeads, ""],
-        ["Phones captured", m.phonesCaptured, "accent"],
-        ["Emails", m.emailsCaptured, ""],
-        ["Phone capture %", m.phoneCaptureRatePct + "%", "accent"],
-        ["Phones (24h)", m.phonesLast24h, "accent"],
-        ["Instagram", m.instagram, "buyer"],
-        ["TikTok", m.tiktok, "buyer"],
-        ["Canyon Lake ad", m.canyonLakeAd, ""],
-        ["Low interest ad", m.lowInterestAd, ""],
-        ["No interaction", m.noInteraction, "seller"],
-        ["Hot (needs SMS)", m.hotNeedsSms, "seller"],
-      ]
-        .map(([lab, val, cls]) =>
-          `<div class="j-metric"><label>${esc(lab)}</label><b class="${cls}">${esc(val)}</b></div>`,
+      const groups = [
+        {
+          title: "Pipeline",
+          rows: [
+            ["Total leads", m.totalLeads, ""],
+            ["Phones captured", m.phonesCaptured, ""],
+            ["Emails captured", m.emailsCaptured, ""],
+            ["Phone capture %", (m.phoneCaptureRatePct ?? 0) + "%", ""],
+            ["Phones (24h)", m.phonesLast24h, ""],
+          ],
+        },
+        {
+          title: "Source",
+          rows: [
+            ["Instagram", m.instagram, ""],
+            ["TikTok", m.tiktok, ""],
+          ],
+        },
+        {
+          title: "Ad attribution",
+          rows: [
+            ["Canyon Lake ad", m.canyonLakeAd, ""],
+            ["Low interest ad", m.lowInterestAd, ""],
+          ],
+        },
+        {
+          title: "Action needed",
+          rows: [
+            ["Hot · needs SMS", m.hotNeedsSms, "warn"],
+            ["No interaction", m.noInteraction, "danger"],
+          ],
+        },
+      ];
+
+      document.getElementById("jMetrics").innerHTML = groups
+        .map(
+          (g) => `
+          <div class="j-metric-group">
+            <div class="j-metric-group-title">${esc(g.title)}</div>
+            ${g.rows
+              .map(
+                ([lab, val, cls]) =>
+                  `<div class="j-metric"><label>${esc(lab)}</label><b class="${cls}">${esc(val ?? "—")}</b></div>`,
+              )
+              .join("")}
+          </div>`,
         )
         .join("");
     }
@@ -517,7 +663,7 @@
     function renderDirectives(list) {
       const el = document.getElementById("jDirectives");
       if (!list || !list.length) {
-        el.innerHTML = '<div class="j-dir">No directives yet.</div>';
+        el.innerHTML = '<div class="j-dir-empty">No directives. Standing by.</div>';
         return;
       }
       el.innerHTML = list
@@ -532,6 +678,7 @@
       const wrap = document.getElementById("jTranscript");
       const div = document.createElement("div");
       div.className = "j-msg " + role + (typing ? " j-typing" : "");
+      if (text) div.textContent = text;
       wrap.appendChild(div);
       wrap.scrollTop = wrap.scrollHeight;
       return div;
@@ -560,7 +707,7 @@
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || res.statusText);
       renderMetrics(body.metrics);
-      renderDirectives(body.judgment?.directives || []);
+      renderDirectives(body.judgment?.directives || body.directives || []);
       return body;
     }
 
@@ -590,7 +737,7 @@
       try {
         const body = await postHarveyChat(text.trim());
         const speech = body.speech || body.reply || "(no response)";
-        renderDirectives(body.directives || []);
+        renderDirectives(body.directives || body.judgment?.directives || []);
         if (body.metrics) renderMetrics(body.metrics);
 
         setStatus("RESPONDING", true);
@@ -628,10 +775,7 @@
     let interimEl = null;
     function showInterim(t) {
       if (!t) {
-        if (interimEl) {
-          interimEl.remove();
-          interimEl = null;
-        }
+        if (interimEl) { interimEl.remove(); interimEl = null; }
         return;
       }
       if (!interimEl) {
@@ -677,7 +821,7 @@
             renderMetrics,
             setMicActive(on) {
               if (on) setCoreVisual("active");
-              else if (document.getElementById("jStatus").textContent === "STANDBY") setCoreVisual("idle");
+              else if (statusEl.textContent === "HARVEY ONLINE") setCoreVisual("idle");
             },
             async sendChat(text) {
               busy = true;
