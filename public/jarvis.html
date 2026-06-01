@@ -198,31 +198,77 @@
     .j-chip.idle { color: var(--muted-2); }
 
     /* ─────── LEFT metrics ─────── */
-    .j-metrics { flex: 1; overflow-y: auto; padding: 0.75rem 0.85rem; }
-    .j-metric-group { margin-bottom: 1rem; position: relative; }
+    .j-metrics { flex: 1; overflow-y: auto; padding: 0.6rem 0.7rem 1rem; }
+    .j-metric-group {
+      margin-bottom: 0.9rem; position: relative;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(0,212,255,0.025), transparent);
+      padding: 0.55rem 0.6rem 0.5rem;
+      clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    }
     .j-metric-group-title {
       display: flex; align-items: center; gap: 0.45rem;
-      font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.18em;
-      color: var(--muted); text-transform: uppercase;
-      margin-bottom: 0.45rem; padding-bottom: 0.3rem;
-      border-bottom: 1px dashed var(--border);
+      font-family: var(--hud); font-size: 0.56rem; font-weight: 700;
+      letter-spacing: 0.24em;
+      color: var(--cyan); text-transform: uppercase;
+      margin-bottom: 0.5rem; padding-bottom: 0.32rem;
+      border-bottom: 1px solid var(--border);
+      text-shadow: 0 0 8px rgba(0,212,255,0.45);
     }
     .j-metric-group-title::before {
-      content: "//"; color: var(--cyan); opacity: 0.55;
+      content: ""; display: inline-block;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
     }
+    .j-metric-group-title .tag {
+      margin-left: auto;
+      font-family: var(--mono); font-size: 0.48rem;
+      letter-spacing: 0.18em; color: var(--muted);
+      padding: 0.06rem 0.32rem; border: 1px solid var(--border);
+      font-weight: 400;
+    }
+    .j-metric-group-title .tag.live { color: var(--cyan); border-color: var(--border-bright); }
+    .j-metric-group-title .tag.off  { color: var(--muted-2); }
+
     .j-metric {
-      display: flex; justify-content: space-between; align-items: baseline;
-      padding: 0.38rem 0; font-size: 0.78rem;
-      border-bottom: 1px dotted rgba(0,212,255,0.05);
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem; align-items: baseline;
+      padding: 0.3rem 0; font-size: 0.74rem;
+      border-bottom: 1px dotted rgba(0,212,255,0.06);
     }
     .j-metric:last-child { border-bottom: none; }
-    .j-metric label { color: var(--text); opacity: 0.7; font-size: 0.74rem; }
+    .j-metric label {
+      color: var(--text); opacity: 0.72; font-size: 0.72rem;
+      letter-spacing: 0.04em;
+    }
     .j-metric b {
-      font-family: var(--mono); color: var(--cyan); font-size: 0.9rem;
+      font-family: var(--mono); color: var(--cyan); font-size: 0.86rem;
       text-shadow: 0 0 8px rgba(0, 212, 255, 0.35);
+      letter-spacing: 0.04em;
     }
     .j-metric b.warn   { color: var(--warn);   text-shadow: 0 0 8px rgba(245,158,11,0.35); }
     .j-metric b.danger { color: var(--danger); text-shadow: 0 0 8px rgba(239,68,68,0.35); }
+    .j-metric .bar {
+      grid-column: 1 / -1;
+      height: 3px; margin-top: 0.25rem; position: relative;
+      background: rgba(0,212,255,0.06);
+      overflow: hidden;
+    }
+    .j-metric .bar > i {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      background: linear-gradient(90deg, var(--cyan), var(--cyan-soft));
+      box-shadow: 0 0 6px rgba(0,212,255,0.55);
+      transition: width 0.5s ease;
+    }
+    .j-metric .bar.warn   > i { background: linear-gradient(90deg, var(--warn), #fbbf24); }
+    .j-metric .bar.danger > i { background: linear-gradient(90deg, var(--danger), #f87171); }
+
+    .j-metric-empty {
+      font-family: var(--mono); font-size: 0.6rem;
+      color: var(--muted-2); text-align: center; padding: 0.3rem 0;
+      letter-spacing: 0.2em;
+    }
 
     /* ─────── CENTER ─────── */
     .j-center {
@@ -230,20 +276,21 @@
       position: relative; overflow: hidden; background: transparent;
     }
 
-    /* Center stage */
+    /* Center stage — pushed down so core sits mid-page */
     .j-stage {
       position: relative;
-      flex: 0 0 auto;
+      flex: 1 1 auto;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      padding: 1.6rem 1rem 0.4rem;
+      padding: 0.4rem 1rem 0.6rem;
+      min-height: 0;
     }
 
     .j-stage-frame {
       position: relative;
       width: min(58vh, 540px);
       max-width: 92%;
-      padding: 0.6rem 1.4rem;
+      padding: 0.4rem 1rem;
       display: flex; flex-direction: column; align-items: center;
     }
 
@@ -252,7 +299,7 @@
       font-family: var(--hud); font-size: 0.66rem; font-weight: 700;
       letter-spacing: 0.44em; color: var(--cyan);
       text-shadow: 0 0 18px rgba(0, 212, 255, 0.6);
-      margin-bottom: 0.55rem;
+      margin-bottom: 0.85rem;
       display: flex; align-items: center; gap: 0.6rem;
       transition: color 0.3s, text-shadow 0.3s;
     }
@@ -261,18 +308,6 @@
       color: var(--warn);
       text-shadow: 0 0 18px rgba(245,158,11,0.6);
     }
-
-    /* Vertical HUD labels (left & right of core) */
-    .j-hud-label {
-      position: absolute; font-family: var(--mono); font-size: 0.55rem;
-      letter-spacing: 0.32em; color: rgba(0,212,255,0.55);
-      writing-mode: vertical-rl; text-orientation: mixed;
-      user-select: none; pointer-events: none;
-      top: 50%; transform: translateY(-50%);
-      text-shadow: 0 0 8px rgba(0,212,255,0.3);
-    }
-    .j-hud-label.left  { left: -8px;  transform: translateY(-50%) rotate(180deg); }
-    .j-hud-label.right { right: -8px; }
 
     /* radial tick mark ring around core */
     .j-tick-ring {
@@ -322,7 +357,8 @@
 
     /* ─────── Transcript ─────── */
     .j-transcript {
-      flex: 1; min-height: 0; overflow-y: auto;
+      flex: 0 1 auto; min-height: 0; overflow-y: auto;
+      max-height: 32vh;
       margin: 0.55rem auto 0; width: 100%; max-width: 620px;
       padding: 0.5rem 1.1rem 0.5rem;
       display: flex; flex-direction: column; gap: 0.5rem;
@@ -422,34 +458,50 @@
       display: flex; flex-direction: column; gap: 0.55rem;
     }
     .j-dir {
-      font-size: 0.78rem; line-height: 1.45;
-      padding: 0.6rem 0.7rem; border-radius: 2px;
+      font-size: 0.76rem; line-height: 1.45;
+      padding: 0.55rem 0.7rem 0.6rem;
       border: 1px solid var(--border);
       border-left: 3px solid var(--cyan);
-      background: rgba(0,212,255,0.04); color: var(--text);
-      position: relative;
+      background: linear-gradient(180deg, rgba(0,212,255,0.06), rgba(0,212,255,0.015));
+      color: var(--text); position: relative;
+      clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
     }
-    .j-dir::before {
-      content: "DIRECTIVE";
-      display: block;
+    .j-dir-head {
+      display: flex; align-items: center; gap: 0.4rem;
       font-family: var(--mono); font-size: 0.48rem; letter-spacing: 0.24em;
-      color: var(--cyan); opacity: 0.7; margin-bottom: 0.3rem;
+      color: var(--cyan); opacity: 0.9; margin-bottom: 0.35rem;
+    }
+    .j-dir-head .glyph {
+      display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+    }
+    .j-dir-head .id {
+      margin-left: auto; color: var(--muted); letter-spacing: 0.16em;
+      font-size: 0.46rem;
     }
     .j-dir.warn {
-      border-color: rgba(245,158,11,0.25); border-left-color: var(--warn);
-      background: rgba(245,158,11,0.06);
+      border-color: rgba(245,158,11,0.3); border-left-color: var(--warn);
+      background: linear-gradient(180deg, rgba(245,158,11,0.09), rgba(245,158,11,0.02));
     }
-    .j-dir.warn::before { content: "ALERT"; color: var(--warn); }
+    .j-dir.warn .j-dir-head { color: var(--warn); }
+    .j-dir.warn .j-dir-head .glyph {
+      background: var(--warn); box-shadow: 0 0 8px var(--warn);
+    }
     .j-dir.danger {
-      border-color: rgba(239,68,68,0.25); border-left-color: var(--danger);
-      background: rgba(239,68,68,0.06);
+      border-color: rgba(239,68,68,0.3); border-left-color: var(--danger);
+      background: linear-gradient(180deg, rgba(239,68,68,0.1), rgba(239,68,68,0.02));
     }
-    .j-dir.danger::before { content: "CRITICAL"; color: var(--danger); }
+    .j-dir.danger .j-dir-head { color: var(--danger); }
+    .j-dir.danger .j-dir-head .glyph {
+      background: var(--danger); box-shadow: 0 0 8px var(--danger);
+      animation: jPulse 1.4s ease-in-out infinite;
+    }
     .j-dir-empty {
-      font-family: var(--mono); font-size: 0.6rem;
+      font-family: var(--mono); font-size: 0.58rem;
       color: var(--muted); text-align: center; padding: 1.2rem 0.4rem;
-      letter-spacing: 0.2em; text-transform: uppercase;
-      border: 1px dashed var(--border); border-radius: 2px;
+      letter-spacing: 0.22em; text-transform: uppercase;
+      border: 1px dashed var(--border);
     }
     .j-dir-empty::before { content: "// "; opacity: 0.55; }
     .j-dir-empty::after  { content: " //"; opacity: 0.55; }
@@ -466,7 +518,6 @@
       .j-col.side.open.left  { left: 0; }
       .j-col.side.open.right { right: 0; left: auto; border-left: 1px solid var(--border); }
       .j-panel-toggle { display: inline-block; }
-      .j-hud-label { display: none; }
       .j-stage-frame { width: min(82vw, 360px); padding: 1.2rem 1rem 0.4rem; }
       .j-core-wrap { max-width: min(72vw, 320px); }
     }
@@ -512,9 +563,6 @@
       <section class="j-center">
         <div class="j-stage">
           <div class="j-stage-frame">
-            <span class="j-hud-label left"  aria-hidden="true">FREQ 432 GHZ // PHASE LOCK</span>
-            <span class="j-hud-label right" aria-hidden="true">NEURAL LINK :: ACTIVE</span>
-
             <div class="j-status-label" id="jStatus">
               <span class="bk">//</span>
               <span id="jStatusText">HARVEY ONLINE</span>
@@ -862,45 +910,208 @@
       else setCoreVisual("idle");
     }
 
-    function renderMetrics(m) {
-      if (!m) return;
-      const groups = [
-        { title: "Pipeline", rows: [
-          ["Total leads",      m.totalLeads,            ""],
-          ["Phones captured",  m.phonesCaptured,         ""],
-          ["Emails captured",  m.emailsCaptured,         ""],
-          ["Phone capture %",  (m.phoneCaptureRatePct ?? 0) + "%", ""],
-          ["Phones (24h)",     m.phonesLast24h,          ""],
-        ]},
-        { title: "Source", rows: [
-          ["Instagram", m.instagram, ""],
-          ["TikTok",    m.tiktok,    ""],
-        ]},
-        { title: "Ad attribution", rows: [
-          ["Canyon Lake ad",  m.canyonLakeAd,  ""],
-          ["Low interest ad", m.lowInterestAd, ""],
-        ]},
-        { title: "Action needed", rows: [
-          ["Hot · needs SMS",  m.hotNeedsSms,   "warn"],
-          ["No interaction",   m.noInteraction, "danger"],
-        ]},
-      ];
+    /* ──────── Metric helpers ──────── */
+    function fmtNum(n) {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      return Number(n).toLocaleString();
+    }
+    function fmtMoney(n) {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      const v = Number(n);
+      if (v >= 10000) return "$" + (v / 1000).toFixed(1) + "k";
+      return "$" + v.toFixed(2);
+    }
+    function fmtPct(n) {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      return (Math.round(Number(n) * 100) / 100) + "%";
+    }
+    function rowsHtml(rows) {
+      if (!rows.length) return '<div class="j-metric-empty">// no signal //</div>';
+      return rows.map(r => {
+        const cls = r.cls || "";
+        const bar = r.barPct != null
+          ? `<div class="bar ${cls}"><i style="width:${Math.max(0, Math.min(100, r.barPct))}%"></i></div>`
+          : "";
+        return `<div class="j-metric">
+          <label>${esc(r.label)}</label>
+          <b class="${cls}">${esc(r.value ?? "—")}</b>
+          ${bar}
+        </div>`;
+      }).join("");
+    }
+    function tagHtml(text, cls) {
+      return `<span class="tag ${cls}">${esc(text)}</span>`;
+    }
+
+    /* Pretty labels for DM/AI funnel state codes */
+    const FUNNEL_LABELS = {
+      new: "New",
+      opening_asked_first_time: "Opening · asked",
+      opening_offered_details: "Opening · offered",
+      breakdown_offered: "Breakdown sent",
+      phone_just_captured: "Phone captured",
+      criteria_collection: "Criteria collection",
+      email_captured: "Email captured",
+      handoff_human: "Handoff · human",
+      closed: "Closed",
+    };
+    function funnelLabel(k) {
+      return FUNNEL_LABELS[k] || k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function renderOps(body) {
+      const m   = body?.metrics || {};
+      const ctx = body?.context || {};
+      const sys = ctx.systems || {};
+      const ads = ctx.ads || {};
+      const cq  = ctx.callQueue || { urgent: 0, routine: 0, none: 0 };
+      const cs  = ctx.crmStatusBreakdown || {};
+      const fd  = ctx.funnelDistribution || {};
+
+      const total = Number(m.totalLeads) || 0;
+
+      const groups = [];
+
+      /* ── CRM PIPELINE ── */
+      groups.push({
+        title: "CRM Pipeline",
+        tag: tagHtml("LIVE", "live"),
+        rows: [
+          { label: "Total leads",     value: fmtNum(m.totalLeads) },
+          { label: "Phones captured", value: fmtNum(m.phonesCaptured),
+            barPct: total ? (m.phonesCaptured / total) * 100 : 0 },
+          { label: "Emails captured", value: fmtNum(m.emailsCaptured),
+            barPct: total ? (m.emailsCaptured / total) * 100 : 0 },
+          { label: "Capture rate",    value: fmtPct(m.phoneCaptureRatePct) },
+          { label: "Phones · 24h",    value: fmtNum(m.phonesLast24h) },
+        ],
+      });
+
+      /* ── CRM STATUS ── */
+      const statusRows = [
+        ["Not contacted", cs.not_contacted, "warn"],
+        ["Contacted",     cs.contacted,     ""],
+        ["Nurture",       cs.nurture,       ""],
+        ["Dead",          cs.dead,          "danger"],
+      ].filter(([, v]) => v != null).map(([l, v, c]) => ({ label: l, value: fmtNum(v), cls: c }));
+      groups.push({
+        title: "CRM Status",
+        tag: tagHtml(String(Object.values(cs).reduce((a, b) => a + (b || 0), 0)), "live"),
+        rows: statusRows,
+      });
+
+      /* ── CALL QUEUE ── */
+      groups.push({
+        title: "Call Queue",
+        tag: cq.urgent > 0 ? tagHtml("HOT", "live") : "",
+        rows: [
+          { label: "Urgent",  value: fmtNum(cq.urgent),  cls: cq.urgent > 0 ? "warn" : "" },
+          { label: "Routine", value: fmtNum(cq.routine) },
+          { label: "Cleared", value: fmtNum(cq.none) },
+        ],
+      });
+
+      /* ── DM AI AGENT ── */
+      const aiOnline = !!sys.anthropicConfigured;
+      const funnelEntries = Object.entries(fd)
+        .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+        .slice(0, 6);
+      groups.push({
+        title: "DM · AI Agent",
+        tag: tagHtml(aiOnline ? "ONLINE" : "OFFLINE", aiOnline ? "live" : "off"),
+        rows: funnelEntries.length
+          ? funnelEntries.map(([k, v]) => ({
+              label: funnelLabel(k), value: fmtNum(v),
+              barPct: total ? (v / total) * 100 : 0,
+            }))
+          : [{ label: "Funnel idle", value: "—" }],
+      });
+
+      /* ── ACTION NEEDED ── */
+      groups.push({
+        title: "Action Needed",
+        tag: (m.hotNeedsSms || 0) + (m.noInteraction || 0) > 0
+          ? tagHtml("FLAG", "live") : "",
+        rows: [
+          { label: "Hot · needs SMS", value: fmtNum(m.hotNeedsSms),
+            cls: m.hotNeedsSms > 0 ? "warn" : "",
+            barPct: total ? (m.hotNeedsSms / total) * 100 : 0 },
+          { label: "No interaction",  value: fmtNum(m.noInteraction),
+            cls: m.noInteraction > 0 ? "danger" : "",
+            barPct: total ? (m.noInteraction / total) * 100 : 0 },
+        ],
+      });
+
+      /* ── PLATFORM ── */
+      const igTt = (m.instagram || 0) + (m.tiktok || 0);
+      groups.push({
+        title: "Platform Mix",
+        tag: "",
+        rows: [
+          { label: "Instagram", value: fmtNum(m.instagram),
+            barPct: igTt ? (m.instagram / igTt) * 100 : 0 },
+          { label: "TikTok",    value: fmtNum(m.tiktok),
+            barPct: igTt ? (m.tiktok / igTt) * 100 : 0 },
+        ],
+      });
+
+      /* ── META ADS ── */
+      const adsOn = !!ads.configured;
+      const adRows = adsOn ? [
+        { label: "Spend",       value: fmtMoney(ads.spend) },
+        { label: "Impressions", value: fmtNum(ads.impressions) },
+        { label: "Clicks",      value: fmtNum(ads.clicks) },
+        { label: "CTR",         value: ads.ctr != null ? fmtPct(ads.ctr) : "—" },
+        { label: "CPL",         value: ads.cpl != null ? fmtMoney(ads.cpl) : "—" },
+        { label: "Ad leads",    value: fmtNum(ads.adLeads) },
+      ] : [{ label: "Upstream offline", value: "—" }];
+      groups.push({
+        title: "Meta Ads",
+        tag: tagHtml(adsOn ? "LINKED" : "OFFLINE", adsOn ? "live" : "off"),
+        rows: adRows,
+      });
+
+      /* ── AD ATTRIBUTION ── */
+      groups.push({
+        title: "Ad Attribution",
+        tag: "",
+        rows: [
+          { label: "Canyon Lake",  value: fmtNum(m.canyonLakeAd) },
+          { label: "Low interest", value: fmtNum(m.lowInterestAd) },
+        ],
+      });
+
+      /* ── SYSTEMS ── */
+      groups.push({
+        title: "Systems",
+        tag: "",
+        rows: [
+          { label: "AI engine",     value: sys.anthropicConfigured ? "ONLINE" : "OFFLINE",
+            cls: sys.anthropicConfigured ? "" : "danger" },
+          { label: "SMS · Sendblue", value: sys.sendblueConfigured ? "ONLINE" : "OFFLINE",
+            cls: sys.sendblueConfigured ? "" : "warn" },
+          { label: "Ads uplink",    value: sys.adsLinked ? "LINKED" : "OFFLINE",
+            cls: sys.adsLinked ? "" : "warn" },
+        ],
+      });
+
       document.getElementById("jMetrics").innerHTML = groups.map(g => `
         <div class="j-metric-group">
-          <div class="j-metric-group-title">${esc(g.title)}</div>
-          ${g.rows.map(([lab, val, cls]) =>
-            `<div class="j-metric"><label>${esc(lab)}</label><b class="${cls}">${esc(val ?? "—")}</b></div>`
-          ).join("")}
+          <div class="j-metric-group-title">${esc(g.title)}${g.tag || ""}</div>
+          ${rowsHtml(g.rows)}
         </div>`
       ).join("");
 
-      /* update node count chip */
+      /* node count chip in head */
       const nodeEl = document.getElementById("jNodeCount");
-      if (nodeEl) {
-        const total = Number(m.totalLeads) || 0;
-        nodeEl.innerHTML = `<b>${total}</b> NODES`;
-      }
+      if (nodeEl) nodeEl.innerHTML = `<b>${fmtNum(total)}</b> NODES`;
     }
+
+    /* Back-compat shim: voice/chat handlers still pass just metrics */
+    function renderMetrics(m) {
+      renderOps({ metrics: m, context: lastOpsCtx || {} });
+    }
+    let lastOpsCtx = null;
 
     function renderDirectives(list) {
       const el = document.getElementById("jDirectives");
@@ -911,9 +1122,19 @@
         return;
       }
       if (countEl) countEl.textContent = String(list.length);
-      el.innerHTML = list.map(d => {
+      el.innerHTML = list.map((d, i) => {
         const sev = d.severity === "danger" || d.severity === "warn" ? d.severity : "info";
-        return `<div class="j-dir ${sev}">${esc(d.text)}</div>`;
+        const label = sev === "danger" ? "CRITICAL"
+                    : sev === "warn"   ? "ALERT"
+                                       : "DIRECTIVE";
+        const idStr = String(i + 1).padStart(2, "0");
+        return `<div class="j-dir ${sev}">
+          <div class="j-dir-head">
+            <span class="glyph"></span><span>${label}</span>
+            <span class="id">D-${idStr}</span>
+          </div>
+          <div>${esc(d.text)}</div>
+        </div>`;
       }).join("");
     }
 
@@ -949,7 +1170,8 @@
       const res  = await fetch(apiUrl("/api/jarvis/ops"));
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || res.statusText);
-      renderMetrics(body.metrics);
+      lastOpsCtx = body.context || null;
+      renderOps(body);
       renderDirectives(body.judgment?.directives || body.directives || []);
       return body;
     }
@@ -1042,11 +1264,6 @@
         }
         await loadOps();
         document.getElementById("jTranscript").innerHTML = "";
-        addMsg("system",
-          voice?.stt !== "none"
-            ? "Harvey online — tap the core to speak, or type below"
-            : "Harvey online — type below"
-        );
 
         if (window.HarveyVoice) {
           HarveyVoice.init({
