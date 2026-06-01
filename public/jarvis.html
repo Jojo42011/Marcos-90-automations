@@ -230,75 +230,24 @@
       position: relative; overflow: hidden; background: transparent;
     }
 
-    /* HUD frame around the stage */
+    /* Center stage */
     .j-stage {
       position: relative;
       flex: 0 0 auto;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      padding: 1.4rem 1rem 0.4rem;
+      padding: 1.6rem 1rem 0.4rem;
     }
 
     .j-stage-frame {
       position: relative;
       width: min(58vh, 540px);
       max-width: 92%;
-      padding: 1.4rem 1.4rem 0.6rem;
-    }
-    /* big bracket corners around stage */
-    .j-stage-frame::before, .j-stage-frame::after,
-    .j-stage-frame > .j-corner-bl,
-    .j-stage-frame > .j-corner-br {
-      content: ""; position: absolute; width: 36px; height: 36px;
-      border: 1px solid var(--cyan); opacity: 0.85;
-      pointer-events: none;
-      box-shadow: 0 0 12px rgba(0,212,255,0.25);
-    }
-    .j-stage-frame::before { top: 0; left: 0;
-      border-right: 0; border-bottom: 0; }
-    .j-stage-frame::after  { top: 0; right: 0;
-      border-left: 0; border-bottom: 0; }
-    .j-corner-bl { bottom: 0; left: 0;
-      border-right: 0; border-top: 0; }
-    .j-corner-br { bottom: 0; right: 0;
-      border-left: 0; border-top: 0; }
-
-    /* HUD top status strip */
-    .j-stage-header {
-      position: absolute;
-      top: -10px; left: 50%; transform: translateX(-50%);
-      display: flex; align-items: center; gap: 0.6rem;
-      padding: 0.25rem 0.85rem;
-      background: var(--bg-2);
-      border: 1px solid var(--border-mid);
-      font-family: var(--hud); font-size: 0.55rem; font-weight: 700;
-      letter-spacing: 0.32em; color: var(--cyan);
-      text-shadow: 0 0 10px rgba(0,212,255,0.5);
-      white-space: nowrap;
-      z-index: 3;
-    }
-    .j-stage-header .dim { color: var(--muted); font-weight: 500; }
-    .j-stage-header .sep { color: var(--muted-2); }
-    .j-stage-header .pct {
-      font-family: var(--mono); color: var(--cyan-soft);
-      letter-spacing: 0.12em;
+      padding: 0.6rem 1.4rem;
+      display: flex; flex-direction: column; align-items: center;
     }
 
-    /* HUD bottom subline */
-    .j-stage-footer {
-      position: absolute;
-      bottom: -10px; left: 50%; transform: translateX(-50%);
-      display: flex; align-items: center; gap: 0.5rem;
-      padding: 0.2rem 0.7rem;
-      background: var(--bg-2);
-      border: 1px solid var(--border);
-      font-family: var(--mono); font-size: 0.5rem;
-      letter-spacing: 0.24em; color: var(--muted);
-      z-index: 3;
-    }
-    .j-stage-footer b { color: var(--cyan); font-weight: 400; }
-
-    /* status label inside frame */
+    /* status label above the core */
     .j-status-label {
       font-family: var(--hud); font-size: 0.66rem; font-weight: 700;
       letter-spacing: 0.44em; color: var(--cyan);
@@ -563,27 +512,6 @@
       <section class="j-center">
         <div class="j-stage">
           <div class="j-stage-frame">
-            <div class="j-stage-header" id="jStageHeader">
-              <span class="dim">CORE</span>
-              <span class="sep">::</span>
-              <span id="jCoreStability">STABLE</span>
-              <span class="sep">::</span>
-              <span class="pct" id="jCorePct">99.94%</span>
-              <span class="sep">▸</span>
-              <span>HARVEY CORE</span>
-              <span class="sep">//</span>
-              <span id="jCoreModeLabel">STANDBY</span>
-            </div>
-            <div class="j-corner-bl"></div>
-            <div class="j-corner-br"></div>
-            <div class="j-stage-footer">
-              <span>FREQ</span><b id="jFreq">432.0</b><span>GHZ</span>
-              <span class="sep">·</span>
-              <span>LATENCY</span><b id="jLatency">12</b><span>MS</span>
-              <span class="sep">·</span>
-              <span>UPLINK</span><b>NOMINAL</b>
-            </div>
-
             <span class="j-hud-label left"  aria-hidden="true">FREQ 432 GHZ // PHASE LOCK</span>
             <span class="j-hud-label right" aria-hidden="true">NEURAL LINK :: ACTIVE</span>
 
@@ -715,47 +643,33 @@
         layer:  i % 3,
       }));
 
-      /* Organic ring definitions — radius fraction, speed, dash pattern */
+      /* Perfect concentric rings — radius fraction, dash pattern (px @ R=200),
+         line width, alpha, rotation speed (px/frame via lineDashOffset),
+         glow flag. dash:null = solid circle. */
       const rings = [
-        { rf: 0.94, spd: 0.00018, dash: [4, 22],            lw: 0.7, alpha: 0.22, rev: false, wave: 0   },
-        { rf: 0.82, spd: 0.00032, dash: [60, 50, 20, 60],   lw: 1.1, alpha: 0.38, rev: true,  wave: 2   },
-        { rf: 0.70, spd: 0.00055, dash: [90, 40],           lw: 1.4, alpha: 0.55, rev: false, wave: 3   },
-        { rf: 0.56, spd: 0.00090, dash: [5, 18],            lw: 0.9, alpha: 0.40, rev: true,  wave: 2.5 },
-        { rf: 0.43, spd: 0.00140, dash: [40, 30],           lw: 1.6, alpha: 0.65, rev: false, wave: 4   },
-        { rf: 0.30, spd: 0.00220, dash: [3, 12],            lw: 1.0, alpha: 0.45, rev: true,  wave: 3   },
+        { rf: 0.96, dash: null,              lw: 0.6, alpha: 0.16, spd: 0,     glow: false },
+        { rf: 0.87, dash: [42, 16],          lw: 1.0, alpha: 0.34, spd: 0.22,  glow: false },
+        { rf: 0.76, dash: null,              lw: 0.8, alpha: 0.22, spd: 0,     glow: false },
+        { rf: 0.64, dash: [80, 28, 12, 28],  lw: 1.3, alpha: 0.48, spd: -0.30, glow: true  },
+        { rf: 0.52, dash: [130, 70],         lw: 1.7, alpha: 0.6,  spd: 0.16,  glow: true  },
+        { rf: 0.40, dash: [6, 14],           lw: 0.9, alpha: 0.4,  spd: -0.5,  glow: false },
       ];
-      const ringAngles = rings.map(() => 0);
+      const ringOffsets = rings.map(() => 0);
 
-      function noiseR(baseR, waveAmp, t, a) {
-        return baseR + Math.sin(a * 3 + t * 0.7) * waveAmp
-                     + Math.sin(a * 7 - t * 0.4) * waveAmp * 0.4;
-      }
-
-      function drawRing(ring, angleOffset, t) {
-        const baseR = ring.rf * R * 0.96;
-        const waveAmp = ring.wave * (R / 400);
-        const steps = 360;
-        const inc   = (Math.PI * 2) / steps;
-        const segments = ring.dash;
-        let drawn = 0, segIdx = 0, inSeg = true;
+      function drawRing(ring, offset) {
+        const r     = ring.rf * R * 0.97;
+        const scale = R / 200;
         ctx.beginPath();
-        for (let s = 0; s <= steps; s++) {
-          const a = s * inc + angleOffset;
-          const r = noiseR(baseR, waveAmp, t, a);
-          const x = cx + Math.cos(a) * r;
-          const y = cy + Math.sin(a) * r;
-          if (s === 0) { ctx.moveTo(x, y); drawn = 0; segIdx = 0; inSeg = true; }
-          else {
-            drawn++;
-            const segLen = segments[segIdx % segments.length];
-            if (drawn >= segLen) { drawn = 0; segIdx++; inSeg = !inSeg; }
-            if (inSeg) ctx.lineTo(x, y);
-            else       ctx.moveTo(x, y);
-          }
-        }
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        if (ring.dash) ctx.setLineDash(ring.dash.map(d => d * scale));
+        else           ctx.setLineDash([]);
+        ctx.lineDashOffset = offset;
         ctx.strokeStyle = `rgba(0,212,255,${ring.alpha})`;
-        ctx.lineWidth   = ring.lw;
+        ctx.lineWidth   = ring.lw * scale;
+        if (ring.glow) { ctx.shadowColor = "#00d4ff"; ctx.shadowBlur = 8 * scale; }
         ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.setLineDash([]);
       }
 
       function drawBloom(t, busyMode) {
@@ -846,12 +760,12 @@
         ctx.clearRect(0, 0, W, H);
 
         rings.forEach((ring, i) => {
-          ringAngles[i] += ring.spd * (ring.rev ? -1 : 1) * (busyMode ? 1.8 : 1);
+          ringOffsets[i] += ring.spd * (busyMode ? 1.8 : 1);
         });
 
         drawCrosshair();
         drawBloom(t, busyMode);
-        rings.forEach((ring, i) => drawRing(ring, ringAngles[i], t));
+        rings.forEach((ring, i) => drawRing(ring, ringOffsets[i]));
         drawParticles(t, busyMode);
 
         raf = requestAnimationFrame(draw);
@@ -881,22 +795,6 @@
     })();
 
     /* ─────────────────────────────────────────────
-       LIVE HUD JITTER — small dynamic readouts
-    ───────────────────────────────────────────── */
-    (function liveHudJitter() {
-      const pct = document.getElementById("jCorePct");
-      const freq = document.getElementById("jFreq");
-      const lat  = document.getElementById("jLatency");
-      function jitter() {
-        if (pct)  pct.textContent  = (99.5 + Math.random() * 0.49).toFixed(2) + "%";
-        if (freq) freq.textContent = (430 + Math.random() * 4).toFixed(1);
-        if (lat)  lat.textContent  = Math.round(8 + Math.random() * 12);
-      }
-      jitter();
-      setInterval(jitter, 1400);
-    })();
-
-    /* ─────────────────────────────────────────────
        APP LOGIC
     ───────────────────────────────────────────── */
     const token = new URLSearchParams(window.location.search).get("token");
@@ -920,7 +818,6 @@
     const statusTextEl = document.getElementById("jStatusText");
     const coreHint     = document.getElementById("jCoreHint");
     const micIcon      = document.getElementById("jMicIcon");
-    const coreModeEl   = document.getElementById("jCoreModeLabel");
 
     function setCoreVisual(mode) {
       window.setCoreState?.(mode === "busy" || mode === "processing" || mode === "responding" ? "busy" : "idle");
@@ -929,26 +826,21 @@
         coreHint.textContent = "LISTENING";
         coreHint.classList.add("lit");
         micIcon.style.filter = "drop-shadow(0 0 10px #00d4ff)";
-        if (coreModeEl) coreModeEl.textContent = "LISTENING";
       } else if (mode === "processing") {
         coreHint.textContent = "PROCESSING";
         coreHint.classList.add("lit");
         micIcon.style.filter = "drop-shadow(0 0 6px #00d4ff)";
-        if (coreModeEl) coreModeEl.textContent = "PROCESSING";
       } else if (mode === "responding") {
         coreHint.textContent = "RESPONDING";
         coreHint.classList.add("lit");
         micIcon.style.filter = "drop-shadow(0 0 6px #00d4ff)";
-        if (coreModeEl) coreModeEl.textContent = "RESPONDING";
       } else if (mode === "active") {
         coreHint.textContent = "TAP CORE TO END SESSION";
         coreHint.classList.add("lit");
         micIcon.style.filter = "drop-shadow(0 0 8px #00d4ff)";
-        if (coreModeEl) coreModeEl.textContent = "ENGAGED";
       } else {
         coreHint.textContent = "TAP CORE TO SPEAK";
         micIcon.style.filter = "none";
-        if (coreModeEl) coreModeEl.textContent = "STANDBY";
       }
     }
 
