@@ -10,13 +10,12 @@
   <style>
     :root {
       --bg: #050a0f;
-      --panel: rgba(5, 12, 20, 0.85);
+      --panel: rgba(5, 12, 20, 0.88);
       --border: rgba(0, 212, 255, 0.15);
       --border-bright: rgba(0, 212, 255, 0.4);
       --text: #e2e8f0;
       --muted: #4a5568;
       --cyan: #00d4ff;
-      --cyan-soft: rgba(0, 212, 255, 0.55);
       --cyan-dim: rgba(0, 212, 255, 0.08);
       --warn: #f59e0b;
       --danger: #ef4444;
@@ -28,27 +27,22 @@
     html, body { height: 100%; overflow: hidden; }
     body { font-family: var(--font); background: var(--bg); color: var(--text); }
 
-    /* —— Background layers —— */
     .j-bg {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
-      background:
-        radial-gradient(ellipse 60% 50% at 50% 45%, rgba(0, 212, 255, 0.06), transparent 70%),
-        var(--bg);
+      background: radial-gradient(ellipse 60% 50% at 50% 45%, rgba(0, 212, 255, 0.055), transparent 70%), var(--bg);
     }
     .j-hex {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-opacity='1' d='M28 1 L54 15 L54 43 L28 57 L2 43 L2 15 Z'/%3E%3C/svg%3E");
       background-size: 56px 100px;
-      opacity: 0.04;
+      opacity: 0.035;
     }
 
-    /* —— Shell —— */
     .j-shell {
       position: relative; z-index: 1;
       display: grid;
       grid-template-rows: 44px 1fr;
-      height: 100vh;
-      height: 100dvh;
+      height: 100vh; height: 100dvh;
     }
 
     .j-topbar {
@@ -59,375 +53,230 @@
       backdrop-filter: blur(14px);
     }
     .j-logo {
-      font-family: var(--hud);
-      font-size: 0.72rem;
-      font-weight: 800;
-      letter-spacing: 0.22em;
-      color: var(--cyan);
+      font-family: var(--hud); font-size: 0.72rem; font-weight: 800;
+      letter-spacing: 0.22em; color: var(--cyan);
     }
     .j-logo small {
-      display: block;
-      font-size: 0.42rem;
-      letter-spacing: 0.26em;
-      color: var(--muted);
-      font-weight: 500;
-      margin-top: 1px;
+      display: block; font-size: 0.42rem; letter-spacing: 0.26em;
+      color: var(--muted); font-weight: 500; margin-top: 1px;
     }
     .j-spacer { flex: 1; }
     .j-back {
-      font-family: var(--mono);
-      font-size: 0.62rem;
-      color: var(--muted);
-      text-decoration: none;
-      border: 1px solid var(--border);
-      padding: 0.28rem 0.5rem;
-      border-radius: 4px;
+      font-family: var(--mono); font-size: 0.62rem; color: var(--muted);
+      text-decoration: none; border: 1px solid var(--border);
+      padding: 0.28rem 0.5rem; border-radius: 4px;
     }
     .j-back:hover { color: var(--cyan); border-color: var(--border-bright); }
     .j-meta { font-family: var(--mono); font-size: 0.58rem; color: var(--muted); }
 
     .j-panel-toggle {
-      display: none;
-      font-family: var(--hud);
-      font-size: 0.48rem;
-      letter-spacing: 0.14em;
-      color: var(--muted);
-      background: transparent;
-      border: 1px solid var(--border);
-      padding: 0.22rem 0.45rem;
-      border-radius: 4px;
-      cursor: pointer;
+      display: none; font-family: var(--hud); font-size: 0.48rem;
+      letter-spacing: 0.14em; color: var(--muted); background: transparent;
+      border: 1px solid var(--border); padding: 0.22rem 0.45rem;
+      border-radius: 4px; cursor: pointer;
     }
 
-    /* —— 3-column main —— */
     .j-main {
       display: grid;
       grid-template-columns: 25% 50% 25%;
-      min-height: 0;
-      overflow: hidden;
+      min-height: 0; overflow: hidden;
     }
 
     .j-col {
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      background: var(--panel);
-      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; min-height: 0;
+      background: var(--panel); border-right: 1px solid var(--border);
     }
     .j-col:last-child { border-right: 0; border-left: 1px solid var(--border); }
 
     .j-head {
-      font-family: var(--hud);
-      font-size: 0.6rem;
-      font-weight: 700;
-      letter-spacing: 0.28em;
-      color: var(--cyan);
-      padding: 0.85rem 0.95rem;
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-      text-shadow: 0 0 12px rgba(0, 212, 255, 0.35);
+      font-family: var(--hud); font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.28em; color: var(--cyan);
+      padding: 0.85rem 0.95rem; border-bottom: 1px solid var(--border);
+      flex-shrink: 0; text-shadow: 0 0 14px rgba(0, 212, 255, 0.4);
     }
 
-    /* —— Left: metrics —— */
-    .j-metrics {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0.75rem 0.85rem;
-    }
-    .j-metric-group {
-      margin-bottom: 1rem;
-    }
+    /* LEFT metrics */
+    .j-metrics { flex: 1; overflow-y: auto; padding: 0.75rem 0.85rem; }
+    .j-metric-group { margin-bottom: 1rem; }
     .j-metric-group-title {
-      font-family: var(--mono);
-      font-size: 0.58rem;
-      letter-spacing: 0.2em;
-      color: var(--muted);
-      text-transform: uppercase;
-      margin-bottom: 0.45rem;
-      padding-bottom: 0.3rem;
+      font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.18em;
+      color: var(--muted); text-transform: uppercase;
+      margin-bottom: 0.45rem; padding-bottom: 0.3rem;
       border-bottom: 1px dashed var(--border);
     }
     .j-metric {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      padding: 0.4rem 0;
-      font-size: 0.78rem;
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 0.38rem 0; font-size: 0.78rem;
     }
     .j-metric label { color: var(--text); opacity: 0.7; }
     .j-metric b {
-      font-family: var(--mono);
-      color: var(--cyan);
-      font-size: 0.88rem;
-      text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+      font-family: var(--mono); color: var(--cyan); font-size: 0.88rem;
+      text-shadow: 0 0 8px rgba(0, 212, 255, 0.35);
     }
-    .j-metric b.warn { color: var(--warn); text-shadow: 0 0 8px rgba(245, 158, 11, 0.3); }
-    .j-metric b.danger { color: var(--danger); text-shadow: 0 0 8px rgba(239, 68, 68, 0.3); }
+    .j-metric b.warn { color: var(--warn); text-shadow: 0 0 8px rgba(245,158,11,0.35); }
+    .j-metric b.danger { color: var(--danger); text-shadow: 0 0 8px rgba(239,68,68,0.35); }
 
-    /* —— Center: Harvey core —— */
+    /* CENTER */
     .j-center {
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      position: relative;
-      overflow: hidden;
-      background: transparent;
+      display: flex; flex-direction: column; min-height: 0;
+      position: relative; overflow: hidden; background: transparent;
     }
 
     .j-stage {
       flex: 0 0 auto;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
       position: relative;
-      padding: 1.2rem 1rem 0.5rem;
+      padding: 1rem 1rem 0;
     }
 
     .j-status-label {
-      font-family: var(--hud);
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.42em;
-      color: var(--cyan);
-      text-shadow: 0 0 16px rgba(0, 212, 255, 0.5);
-      margin-bottom: 1rem;
-      transition: color 0.25s;
+      font-family: var(--hud); font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.44em; color: var(--cyan);
+      text-shadow: 0 0 18px rgba(0, 212, 255, 0.6);
+      margin-bottom: 0.85rem;
+      transition: color 0.3s, text-shadow 0.3s;
     }
-    .j-status-label.busy { color: var(--warn); text-shadow: 0 0 16px rgba(245, 158, 11, 0.5); }
+    .j-status-label.busy {
+      color: var(--warn);
+      text-shadow: 0 0 18px rgba(245,158,11,0.6);
+    }
 
     .j-hud-label {
-      position: absolute;
-      font-family: var(--mono);
-      font-size: 0.6rem;
-      letter-spacing: 0.32em;
-      color: rgba(0, 212, 255, 0.45);
-      writing-mode: vertical-rl;
-      text-orientation: mixed;
-      user-select: none;
-      pointer-events: none;
-      right: 0.75rem;
-      top: 50%;
-      transform: translateY(-50%);
+      position: absolute; font-family: var(--mono); font-size: 0.58rem;
+      letter-spacing: 0.3em; color: rgba(0,212,255,0.4);
+      writing-mode: vertical-rl; text-orientation: mixed;
+      user-select: none; pointer-events: none;
+      right: 0.75rem; top: 50%; transform: translateY(-50%);
     }
 
+    /* Canvas core */
     .j-core-wrap {
       position: relative;
-      width: min(46vh, 420px);
+      width: min(44vh, 400px);
       aspect-ratio: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
 
-    .j-core-btn {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      border: none;
-      background: transparent;
-      cursor: pointer;
+    #jCanvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
       border-radius: 50%;
-      -webkit-tap-highlight-color: transparent;
-      padding: 0;
-    }
-    .j-core-btn:disabled { cursor: not-allowed; opacity: 0.5; }
-
-    .j-core-svg {
-      width: 100%;
-      height: 100%;
-      display: block;
-      filter: drop-shadow(0 0 28px rgba(0, 212, 255, 0.25));
-      transition: filter 0.3s;
-    }
-    .j-core-btn.active .j-core-svg,
-    .j-core-btn.busy .j-core-svg {
-      filter: drop-shadow(0 0 48px rgba(0, 212, 255, 0.6));
+      cursor: pointer;
     }
 
-    /* Orbital rings — different speeds + directions */
-    .ring { transform-origin: 200px 200px; }
-    .ring-1 { animation: spin 36s linear infinite; }
-    .ring-2 { animation: spin 22s linear infinite reverse; }
-    .ring-3 { animation: spin 14s linear infinite; }
-    .ring-4 { animation: spin 9s linear infinite reverse; }
-
-    .core-pulse {
-      transform-origin: 200px 200px;
-      animation: corepulse 3.4s ease-in-out infinite;
+    /* Mic icon overlay */
+    .j-mic-icon {
+      position: absolute;
+      width: 15%; height: 15%;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none; z-index: 2;
     }
-    .j-core-btn.busy .core-pulse {
-      animation: corepulse 0.9s ease-in-out infinite;
-    }
-    .j-core-btn.busy .mic-glow {
-      animation: micflash 0.8s ease-in-out infinite;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes corepulse {
-      0%, 100% { opacity: 0.55; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.06); }
-    }
-    @keyframes micflash {
-      0%, 100% { opacity: 0.85; }
-      50% { opacity: 1; }
-    }
+    .j-mic-icon svg { width: 100%; height: 100%; overflow: visible; }
 
     .j-core-hint {
-      margin-top: 1rem;
-      font-family: var(--hud);
-      font-size: 0.58rem;
-      letter-spacing: 0.3em;
-      color: var(--muted);
-      text-align: center;
-      transition: color 0.2s;
+      margin-top: 0.9rem;
+      font-family: var(--hud); font-size: 0.55rem;
+      letter-spacing: 0.3em; color: var(--muted);
+      text-align: center; transition: color 0.25s;
     }
-    .j-core-btn.active ~ .j-core-hint { color: var(--cyan); }
+    .j-core-hint.lit { color: var(--cyan); text-shadow: 0 0 10px rgba(0,212,255,0.5); }
 
     .j-transcript {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      margin: 0.5rem auto 0;
-      width: 100%;
-      max-width: 560px;
-      padding: 0.5rem 1rem 0.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
+      flex: 1; min-height: 0; overflow-y: auto;
+      margin: 0.5rem auto 0; width: 100%; max-width: 560px;
+      padding: 0.5rem 1.1rem 0.5rem;
+      display: flex; flex-direction: column; gap: 0.5rem;
       mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
       -webkit-mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
     }
 
     .j-msg {
-      max-width: 88%;
-      padding: 0.55rem 0.75rem;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      line-height: 1.45;
-      backdrop-filter: blur(6px);
+      max-width: 88%; padding: 0.55rem 0.75rem;
+      border-radius: 8px; font-size: 0.82rem; line-height: 1.45;
     }
     .j-msg.user {
       align-self: flex-end;
-      background: rgba(0, 212, 255, 0.1);
+      background: rgba(0,212,255,0.1);
       border: 1px solid var(--border-bright);
-      color: var(--text);
     }
     .j-msg.ai {
       align-self: flex-start;
-      background: rgba(5, 12, 20, 0.85);
+      background: rgba(5,12,20,0.85);
       border: 1px solid var(--border);
-      color: var(--text);
     }
     .j-msg.system {
-      align-self: center;
-      font-size: 0.66rem;
-      color: var(--muted);
-      font-family: var(--mono);
-      letter-spacing: 0.1em;
-      text-align: center;
-      border: none;
-      background: transparent;
+      align-self: center; font-size: 0.66rem;
+      color: var(--muted); font-family: var(--mono);
+      letter-spacing: 0.1em; text-align: center;
+      border: none; background: transparent;
     }
     .j-typing::after {
-      content: "▋";
-      animation: blink 0.8s step-end infinite;
-      color: var(--cyan);
-      margin-left: 2px;
+      content: "▋"; animation: blink 0.8s step-end infinite;
+      color: var(--cyan); margin-left: 2px;
     }
     @keyframes blink { 50% { opacity: 0; } }
 
     .j-compose {
-      flex-shrink: 0;
-      display: flex;
-      gap: 0.5rem;
+      flex-shrink: 0; display: flex; gap: 0.5rem;
       padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom));
       border-top: 1px solid var(--border);
-      background: var(--panel);
-      backdrop-filter: blur(12px);
+      background: var(--panel); backdrop-filter: blur(12px);
     }
     .j-input {
-      flex: 1;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: rgba(0, 0, 0, 0.45);
-      color: var(--text);
-      font: inherit;
-      font-size: 0.85rem;
-      padding: 0.55rem 0.7rem;
+      flex: 1; border: 1px solid var(--border); border-radius: 6px;
+      background: rgba(0,0,0,0.45); color: var(--text);
+      font: inherit; font-size: 0.85rem; padding: 0.55rem 0.7rem;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
     .j-input:focus {
-      outline: none;
-      border-color: var(--cyan);
-      box-shadow: 0 0 0 1px var(--cyan-dim), 0 0 14px rgba(0, 212, 255, 0.18);
+      outline: none; border-color: var(--cyan);
+      box-shadow: 0 0 0 1px var(--cyan-dim), 0 0 14px rgba(0,212,255,0.15);
     }
     .j-send {
-      border: 1px solid var(--border-bright);
-      background: transparent;
-      color: var(--cyan);
-      font-family: var(--hud);
-      font-size: 0.52rem;
-      font-weight: 700;
-      letter-spacing: 0.18em;
-      padding: 0 1rem;
-      border-radius: 6px;
-      cursor: pointer;
+      border: 1px solid var(--border-bright); background: transparent;
+      color: var(--cyan); font-family: var(--hud); font-size: 0.52rem;
+      font-weight: 700; letter-spacing: 0.18em;
+      padding: 0 1rem; border-radius: 6px; cursor: pointer;
       transition: background 0.15s;
     }
     .j-send:hover { background: var(--cyan-dim); }
     .j-send:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    /* —— Right: directives —— */
+    /* RIGHT directives */
     .j-directives {
-      flex: 1;
-      overflow-y: auto;
+      flex: 1; overflow-y: auto;
       padding: 0.75rem 0.85rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.55rem;
+      display: flex; flex-direction: column; gap: 0.55rem;
     }
     .j-dir {
-      font-size: 0.78rem;
-      line-height: 1.45;
-      padding: 0.6rem 0.7rem;
-      border-radius: 6px;
+      font-size: 0.78rem; line-height: 1.45;
+      padding: 0.6rem 0.7rem; border-radius: 6px;
       border: 1px solid var(--border);
       border-left: 3px solid var(--cyan);
-      background: rgba(0, 212, 255, 0.04);
-      color: var(--text);
+      background: rgba(0,212,255,0.04); color: var(--text);
     }
     .j-dir.warn {
-      border-color: rgba(245, 158, 11, 0.25);
-      border-left-color: var(--warn);
-      background: rgba(245, 158, 11, 0.06);
+      border-color: rgba(245,158,11,0.25); border-left-color: var(--warn);
+      background: rgba(245,158,11,0.06);
     }
     .j-dir.danger {
-      border-color: rgba(239, 68, 68, 0.25);
-      border-left-color: var(--danger);
-      background: rgba(239, 68, 68, 0.06);
+      border-color: rgba(239,68,68,0.25); border-left-color: var(--danger);
+      background: rgba(239,68,68,0.06);
     }
     .j-dir-empty {
-      font-family: var(--mono);
-      font-size: 0.7rem;
-      color: var(--muted);
-      text-align: center;
-      padding: 1rem 0;
+      font-family: var(--mono); font-size: 0.7rem;
+      color: var(--muted); text-align: center; padding: 1rem 0;
     }
 
-    /* —— Mobile —— */
     @media (max-width: 900px) {
       .j-main { grid-template-columns: 1fr; }
       .j-col.side { display: none; }
       .j-col.side.open {
-        display: flex;
-        position: fixed;
-        z-index: 20;
-        top: 44px;
-        bottom: 0;
-        width: min(88vw, 300px);
-        box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
+        display: flex; position: fixed; z-index: 20;
+        top: 44px; bottom: 0; width: min(88vw, 300px);
+        box-shadow: 0 0 40px rgba(0,0,0,0.7);
       }
       .j-col.side.open.left { left: 0; }
       .j-col.side.open.right { right: 0; left: auto; border-left: 1px solid var(--border); }
@@ -452,7 +301,6 @@
     </header>
 
     <main class="j-main">
-      <!-- LEFT: Live ops metrics -->
       <aside class="j-col side left" id="jColOps">
         <div class="j-head">LIVE OPS</div>
         <div class="j-metrics" id="jMetrics">
@@ -460,74 +308,34 @@
         </div>
       </aside>
 
-      <!-- CENTER: Harvey core -->
       <section class="j-center">
         <span class="j-hud-label" aria-hidden="true">NEURAL LINK · ACTIVE</span>
 
         <div class="j-stage">
           <div class="j-status-label" id="jStatus">HARVEY ONLINE</div>
 
-          <div class="j-core-wrap">
-            <button type="button" class="j-core-btn active" id="jMic" aria-label="Tap core to speak with Harvey">
-              <svg class="j-core-svg" viewBox="0 0 400 400" aria-hidden="true">
+          <div class="j-core-wrap" id="jCoreWrap">
+            <canvas id="jCanvas" aria-label="Harvey core — tap to speak"></canvas>
+            <!-- Mic icon centered over canvas -->
+            <div class="j-mic-icon" id="jMicIcon">
+              <svg viewBox="0 0 48 60" fill="none" aria-hidden="true">
                 <defs>
-                  <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stop-color="rgba(0,212,255,0.35)"/>
-                    <stop offset="55%" stop-color="rgba(0,212,255,0.08)"/>
-                    <stop offset="100%" stop-color="transparent"/>
-                  </radialGradient>
-                  <radialGradient id="micGrad" cx="50%" cy="40%" r="60%">
-                    <stop offset="0%" stop-color="rgba(0,212,255,1)"/>
-                    <stop offset="100%" stop-color="rgba(0,212,255,0.6)"/>
-                  </radialGradient>
+                  <filter id="micGlow">
+                    <feGaussianBlur stdDeviation="3" result="blur"/>
+                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                  </filter>
                 </defs>
-
-                <!-- crosshair (subtle) -->
-                <line x1="200" y1="20" x2="200" y2="380" stroke="rgba(0,212,255,0.06)" stroke-width="1" stroke-dasharray="3 9"/>
-                <line x1="20" y1="200" x2="380" y2="200" stroke="rgba(0,212,255,0.06)" stroke-width="1" stroke-dasharray="3 9"/>
-
-                <!-- Ring 1 — outermost, slow, dashed -->
-                <circle class="ring ring-1" cx="200" cy="200" r="188"
-                        fill="none" stroke="rgba(0,212,255,0.3)" stroke-width="1"
-                        stroke-dasharray="4 14"/>
-
-                <!-- Ring 2 — large, reverse, segmented arcs -->
-                <circle class="ring ring-2" cx="200" cy="200" r="160"
-                        fill="none" stroke="rgba(0,212,255,0.5)" stroke-width="1.25"
-                        stroke-dasharray="80 60 30 80 40 70"/>
-
-                <!-- Ring 3 — medium, faster -->
-                <circle class="ring ring-3" cx="200" cy="200" r="128"
-                        fill="none" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"
-                        stroke-dasharray="140 80"/>
-
-                <!-- Ring 4 — inner, fastest, thin -->
-                <circle class="ring ring-4" cx="200" cy="200" r="98"
-                        fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="0.9"
-                        stroke-dasharray="3 10"/>
-
-                <!-- Inner pulsing core (intensifies when processing) -->
-                <g class="core-pulse">
-                  <circle cx="200" cy="200" r="74" fill="url(#coreGlow)"/>
-                  <circle cx="200" cy="200" r="58" fill="rgba(0,212,255,0.06)" stroke="rgba(0,212,255,0.45)" stroke-width="1"/>
-                  <circle cx="200" cy="200" r="42" fill="rgba(0,212,255,0.1)" stroke="rgba(0,212,255,0.7)" stroke-width="1.25"/>
-                </g>
-
-                <!-- Mic icon -->
-                <g class="mic-glow">
-                  <rect x="188" y="176" width="24" height="36" rx="12" fill="url(#micGrad)"/>
-                  <path d="M174 206 Q174 230 200 230 Q226 230 226 206" fill="none" stroke="rgba(0,212,255,0.9)" stroke-width="2" stroke-linecap="round"/>
-                  <line x1="200" y1="230" x2="200" y2="250" stroke="rgba(0,212,255,0.8)" stroke-width="2" stroke-linecap="round"/>
-                  <line x1="186" y1="250" x2="214" y2="250" stroke="rgba(0,212,255,0.8)" stroke-width="2" stroke-linecap="round"/>
-                </g>
-
-                <!-- Orbital marker dots -->
-                <circle cx="200" cy="12" r="3" fill="#00d4ff" opacity="0.7"/>
-                <circle cx="388" cy="200" r="2.5" fill="#00d4ff" opacity="0.5"/>
-                <circle cx="200" cy="388" r="2" fill="#00d4ff" opacity="0.4"/>
-                <circle cx="12" cy="200" r="2.5" fill="#00d4ff" opacity="0.5"/>
+                <rect x="12" y="0" width="24" height="36" rx="12"
+                  fill="rgba(0,212,255,0.95)" filter="url(#micGlow)"/>
+                <path d="M2 24 Q2 46 24 46 Q46 46 46 24"
+                  stroke="rgba(0,212,255,0.9)" stroke-width="3"
+                  stroke-linecap="round" fill="none"/>
+                <line x1="24" y1="46" x2="24" y2="58"
+                  stroke="rgba(0,212,255,0.8)" stroke-width="3" stroke-linecap="round"/>
+                <line x1="10" y1="58" x2="38" y2="58"
+                  stroke="rgba(0,212,255,0.8)" stroke-width="3" stroke-linecap="round"/>
               </svg>
-            </button>
+            </div>
           </div>
 
           <p class="j-core-hint" id="jCoreHint">TAP CORE TO SPEAK</p>
@@ -538,12 +346,12 @@
         </div>
 
         <form class="j-compose" id="jForm">
-          <input class="j-input" id="jInput" type="text" placeholder="Type a command for Harvey…" autocomplete="off" />
+          <input class="j-input" id="jInput" type="text"
+            placeholder="Type a command for Harvey…" autocomplete="off" />
           <button type="submit" class="j-send" id="jSend">SEND</button>
         </form>
       </section>
 
-      <!-- RIGHT: Active directives -->
       <aside class="j-col side right" id="jColDir">
         <div class="j-head">ACTIVE DIRECTIVES</div>
         <div class="j-directives" id="jDirectives">
@@ -555,6 +363,223 @@
 
   <script src="/harvey-voice.js"></script>
   <script>
+    /* ─────────────────────────────────────────────
+       CANVAS CORE — dynamic orbital animation
+    ───────────────────────────────────────────── */
+    (function initCanvas() {
+      const canvas = document.getElementById("jCanvas");
+      const wrap   = document.getElementById("jCoreWrap");
+      const ctx    = canvas.getContext("2d");
+
+      let W, H, cx, cy, R;
+      let busy = false;        // exposed to outer scope via window.coreSetBusy
+      let raf;
+
+      function resize() {
+        const s = wrap.offsetWidth;
+        canvas.width  = s * devicePixelRatio;
+        canvas.height = s * devicePixelRatio;
+        canvas.style.width  = s + "px";
+        canvas.style.height = s + "px";
+        W = H = canvas.width;
+        cx = cy = W / 2;
+        R = W / 2;
+      }
+
+      /* Particles orbiting at different radii */
+      const NUM_PARTICLES = 42;
+      const particles = Array.from({ length: NUM_PARTICLES }, (_, i) => ({
+        angle:  Math.random() * Math.PI * 2,
+        radius: R * (0.32 + Math.random() * 0.58),
+        speed:  (0.0003 + Math.random() * 0.0008) * (Math.random() < 0.5 ? 1 : -1),
+        size:   0.8 + Math.random() * 2.2,
+        alpha:  0.25 + Math.random() * 0.55,
+        layer:  i % 3,
+      }));
+
+      /* Organic ring definitions — radius fraction, speed, dash pattern */
+      const rings = [
+        { rf: 0.94, spd: 0.00018, dash: [4, 22],  lw: 0.7,  alpha: 0.22, rev: false, wave: 0 },
+        { rf: 0.82, spd: 0.00032, dash: [60, 50, 20, 60], lw: 1.1, alpha: 0.38, rev: true,  wave: 2 },
+        { rf: 0.70, spd: 0.00055, dash: [90, 40],  lw: 1.4,  alpha: 0.55, rev: false, wave: 3 },
+        { rf: 0.56, spd: 0.00090, dash: [5, 18],   lw: 0.9,  alpha: 0.40, rev: true,  wave: 2.5 },
+        { rf: 0.43, spd: 0.00140, dash: [40, 30],  lw: 1.6,  alpha: 0.65, rev: false, wave: 4 },
+        { rf: 0.30, spd: 0.00220, dash: [3, 12],   lw: 1.0,  alpha: 0.45, rev: true,  wave: 3 },
+      ];
+      const ringAngles = rings.map(() => 0);
+
+      /* Subtle wave noise for organic ring distortion */
+      function noiseR(baseR, waveAmp, t, a) {
+        return baseR + Math.sin(a * 3 + t * 0.7) * waveAmp
+                     + Math.sin(a * 7 - t * 0.4) * waveAmp * 0.4;
+      }
+
+      /* Draw one organic ring */
+      function drawRing(ring, angleOffset, t) {
+        const baseR = ring.rf * R * 0.96;
+        const waveAmp = ring.wave * (R / 400);
+        const steps = 360;
+        const inc   = (Math.PI * 2) / steps;
+        const segments = ring.dash;
+        let drawn = 0, segIdx = 0, inSeg = true;
+        ctx.beginPath();
+        for (let s = 0; s <= steps; s++) {
+          const a = s * inc + angleOffset;
+          const r = noiseR(baseR, waveAmp, t, a);
+          const x = cx + Math.cos(a) * r;
+          const y = cy + Math.sin(a) * r;
+          if (s === 0) { ctx.moveTo(x, y); drawn = 0; segIdx = 0; inSeg = true; }
+          else {
+            drawn++;
+            const segLen = segments[segIdx % segments.length];
+            if (drawn >= segLen) { drawn = 0; segIdx++; inSeg = !inSeg; }
+            if (inSeg) ctx.lineTo(x, y);
+            else       ctx.moveTo(x, y);
+          }
+        }
+        ctx.strokeStyle = `rgba(0,212,255,${ring.alpha})`;
+        ctx.lineWidth   = ring.lw;
+        ctx.stroke();
+      }
+
+      /* Central bloom — layered radial gradients */
+      function drawBloom(t, busyMode) {
+        const pulse = 0.88 + 0.12 * Math.sin(t * (busyMode ? 3.5 : 1.2));
+        const innerR = R * 0.22 * pulse;
+
+        // outermost atmospheric haze
+        let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.72);
+        g.addColorStop(0,   `rgba(0,212,255,${busyMode ? 0.14 : 0.09})`);
+        g.addColorStop(0.4, `rgba(0,212,255,${busyMode ? 0.06 : 0.04})`);
+        g.addColorStop(1,   "transparent");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+
+        // mid glow
+        g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.42 * pulse);
+        g.addColorStop(0,   `rgba(0,212,255,${busyMode ? 0.30 : 0.18})`);
+        g.addColorStop(0.5, `rgba(0,212,255,${busyMode ? 0.12 : 0.07})`);
+        g.addColorStop(1,   "transparent");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.42 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // hot inner core
+        g = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR);
+        g.addColorStop(0,   `rgba(180,245,255,${busyMode ? 0.9 : 0.7})`);
+        g.addColorStop(0.35,`rgba(0,212,255,${busyMode ? 0.55 : 0.38})`);
+        g.addColorStop(1,   "transparent");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // crisp inner circle border
+        ctx.beginPath();
+        ctx.arc(cx, cy, innerR * 0.72, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(0,212,255,${busyMode ? 0.95 : 0.75})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // scanning arc (always rotating)
+        const scanA = t * 1.4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.56, scanA, scanA + 0.55);
+        ctx.strokeStyle = `rgba(0,212,255,${busyMode ? 0.85 : 0.55})`;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = "#00d4ff";
+        ctx.shadowBlur  = 12;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      /* Crosshair lines */
+      function drawCrosshair() {
+        ctx.setLineDash([3, 9]);
+        ctx.strokeStyle = "rgba(0,212,255,0.07)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx, 0); ctx.lineTo(cx, H);
+        ctx.moveTo(0, cy); ctx.lineTo(W, cy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      /* Particles */
+      function drawParticles(t, busyMode) {
+        particles.forEach(p => {
+          p.angle += p.speed * (busyMode ? 2.2 : 1);
+          const pr = p.radius * (R / (W / 2));  // scale to current canvas
+          const x = cx + Math.cos(p.angle) * pr;
+          const y = cy + Math.sin(p.angle) * pr;
+          const flicker = p.alpha * (0.7 + 0.3 * Math.sin(t * 2.5 + p.angle * 3));
+
+          ctx.beginPath();
+          ctx.arc(x, y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(0,212,255,${flicker})`;
+          ctx.shadowColor = "#00d4ff";
+          ctx.shadowBlur  = p.size * 4;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        });
+      }
+
+      /* Main draw loop */
+      let t0 = null;
+      function draw(now) {
+        if (!t0) t0 = now;
+        const t = (now - t0) / 1000;
+        const busyMode = window.coreState === "busy";
+
+        ctx.clearRect(0, 0, W, H);
+
+        // update ring angles
+        rings.forEach((ring, i) => {
+          ringAngles[i] += ring.spd * (ring.rev ? -1 : 1) * (busyMode ? 1.8 : 1);
+        });
+
+        drawCrosshair();
+        drawBloom(t, busyMode);
+        rings.forEach((ring, i) => drawRing(ring, ringAngles[i], t));
+        drawParticles(t, busyMode);
+
+        raf = requestAnimationFrame(draw);
+      }
+
+      function start() {
+        resize();
+        raf = requestAnimationFrame(draw);
+      }
+
+      window.addEventListener("resize", () => {
+        cancelAnimationFrame(raf);
+        resize();
+        // re-scale particle radii proportionally
+        particles.forEach(p => {
+          p.radius = R * (0.32 + Math.random() * 0.58);
+        });
+        raf = requestAnimationFrame(draw);
+      });
+
+      window.coreState = "idle";
+      window.setCoreState = (s) => { window.coreState = s; };
+
+      start();
+
+      // Click handler for mic/voice
+      canvas.addEventListener("click", () => {
+        if (window.HarveyVoice?.toggleConversation) {
+          void HarveyVoice.toggleConversation();
+        }
+      });
+    })();
+
+    /* ─────────────────────────────────────────────
+       APP LOGIC
+    ───────────────────────────────────────────── */
     const token = new URLSearchParams(window.location.search).get("token");
     let sessionId = sessionStorage.getItem("harvey_session_id") || "";
     let busy = false;
@@ -572,38 +597,49 @@
       return d.innerHTML;
     }
 
-    const coreBtn = document.getElementById("jMic");
-    const coreHint = document.getElementById("jCoreHint");
-    const statusEl = document.getElementById("jStatus");
+    const statusEl   = document.getElementById("jStatus");
+    const coreHint   = document.getElementById("jCoreHint");
+    const micIcon    = document.getElementById("jMicIcon");
 
     function setCoreVisual(mode) {
-      coreBtn.classList.remove("active", "busy");
-      if (mode === "active" || mode === "listening") {
-        coreBtn.classList.add("active");
-        coreHint.textContent = mode === "listening" ? "LISTENING…" : "TAP CORE TO END SESSION";
-      } else if (mode === "processing" || mode === "responding") {
-        coreBtn.classList.add("active", "busy");
-        coreHint.textContent = mode === "processing" ? "PROCESSING…" : "RESPONDING…";
+      window.setCoreState?.(mode === "busy" || mode === "processing" || mode === "responding" ? "busy" : "idle");
+      coreHint.classList.remove("lit");
+      if (mode === "listening") {
+        coreHint.textContent = "LISTENING…";
+        coreHint.classList.add("lit");
+        micIcon.style.filter = "drop-shadow(0 0 10px #00d4ff)";
+      } else if (mode === "processing") {
+        coreHint.textContent = "PROCESSING…";
+        coreHint.classList.add("lit");
+        micIcon.style.filter = "drop-shadow(0 0 6px #00d4ff)";
+      } else if (mode === "responding") {
+        coreHint.textContent = "RESPONDING…";
+        coreHint.classList.add("lit");
+        micIcon.style.filter = "drop-shadow(0 0 6px #00d4ff)";
+      } else if (mode === "active") {
+        coreHint.textContent = "TAP CORE TO END SESSION";
+        coreHint.classList.add("lit");
+        micIcon.style.filter = "drop-shadow(0 0 8px #00d4ff)";
       } else {
-        coreBtn.classList.add("active");
         coreHint.textContent = "TAP CORE TO SPEAK";
+        micIcon.style.filter = "none";
       }
     }
 
     function setStatus(t, on) {
       const text = (t || "").toUpperCase();
       let label = "HARVEY ONLINE";
-      if (text === "LISTENING") label = "LISTENING";
+      if (text === "LISTENING")   label = "LISTENING";
       else if (text === "PROCESSING") label = "PROCESSING";
       else if (text === "RESPONDING") label = "RESPONDING";
-      else if (text === "STANDBY") label = "HARVEY ONLINE";
-      else if (text) label = text;
+      else if (text === "STANDBY")    label = "HARVEY ONLINE";
+      else if (text)                  label = text;
       statusEl.textContent = label;
       statusEl.classList.toggle("busy", !!on);
 
-      if (text === "LISTENING") setCoreVisual("listening");
-      else if (text === "PROCESSING") setCoreVisual("processing");
-      else if (text === "RESPONDING") setCoreVisual("responding");
+      if      (text === "LISTENING")   setCoreVisual("listening");
+      else if (text === "PROCESSING")  setCoreVisual("processing");
+      else if (text === "RESPONDING")  setCoreVisual("responding");
       else if (window.HarveyVoice?.isConversationMode?.()) setCoreVisual("active");
       else setCoreVisual("idle");
     }
@@ -611,53 +647,34 @@
     function renderMetrics(m) {
       if (!m) return;
       const groups = [
-        {
-          title: "Pipeline",
-          rows: [
-            ["Total leads", m.totalLeads, ""],
-            ["Phones captured", m.phonesCaptured, ""],
-            ["Emails captured", m.emailsCaptured, ""],
-            ["Phone capture %", (m.phoneCaptureRatePct ?? 0) + "%", ""],
-            ["Phones (24h)", m.phonesLast24h, ""],
-          ],
-        },
-        {
-          title: "Source",
-          rows: [
-            ["Instagram", m.instagram, ""],
-            ["TikTok", m.tiktok, ""],
-          ],
-        },
-        {
-          title: "Ad attribution",
-          rows: [
-            ["Canyon Lake ad", m.canyonLakeAd, ""],
-            ["Low interest ad", m.lowInterestAd, ""],
-          ],
-        },
-        {
-          title: "Action needed",
-          rows: [
-            ["Hot · needs SMS", m.hotNeedsSms, "warn"],
-            ["No interaction", m.noInteraction, "danger"],
-          ],
-        },
+        { title: "Pipeline", rows: [
+          ["Total leads",      m.totalLeads,            ""],
+          ["Phones captured",  m.phonesCaptured,         ""],
+          ["Emails captured",  m.emailsCaptured,         ""],
+          ["Phone capture %",  (m.phoneCaptureRatePct ?? 0) + "%", ""],
+          ["Phones (24h)",     m.phonesLast24h,          ""],
+        ]},
+        { title: "Source", rows: [
+          ["Instagram", m.instagram, ""],
+          ["TikTok",    m.tiktok,    ""],
+        ]},
+        { title: "Ad attribution", rows: [
+          ["Canyon Lake ad",  m.canyonLakeAd,  ""],
+          ["Low interest ad", m.lowInterestAd, ""],
+        ]},
+        { title: "Action needed", rows: [
+          ["Hot · needs SMS",  m.hotNeedsSms,   "warn"],
+          ["No interaction",   m.noInteraction, "danger"],
+        ]},
       ];
-
-      document.getElementById("jMetrics").innerHTML = groups
-        .map(
-          (g) => `
-          <div class="j-metric-group">
-            <div class="j-metric-group-title">${esc(g.title)}</div>
-            ${g.rows
-              .map(
-                ([lab, val, cls]) =>
-                  `<div class="j-metric"><label>${esc(lab)}</label><b class="${cls}">${esc(val ?? "—")}</b></div>`,
-              )
-              .join("")}
-          </div>`,
-        )
-        .join("");
+      document.getElementById("jMetrics").innerHTML = groups.map(g => `
+        <div class="j-metric-group">
+          <div class="j-metric-group-title">${esc(g.title)}</div>
+          ${g.rows.map(([lab, val, cls]) =>
+            `<div class="j-metric"><label>${esc(lab)}</label><b class="${cls}">${esc(val ?? "—")}</b></div>`
+          ).join("")}
+        </div>`
+      ).join("");
     }
 
     function renderDirectives(list) {
@@ -666,17 +683,15 @@
         el.innerHTML = '<div class="j-dir-empty">No directives. Standing by.</div>';
         return;
       }
-      el.innerHTML = list
-        .map((d) => {
-          const sev = d.severity === "danger" || d.severity === "warn" ? d.severity : "info";
-          return `<div class="j-dir ${sev}">${esc(d.text)}</div>`;
-        })
-        .join("");
+      el.innerHTML = list.map(d => {
+        const sev = d.severity === "danger" || d.severity === "warn" ? d.severity : "info";
+        return `<div class="j-dir ${sev}">${esc(d.text)}</div>`;
+      }).join("");
     }
 
     function addMsg(role, text, typing) {
       const wrap = document.getElementById("jTranscript");
-      const div = document.createElement("div");
+      const div  = document.createElement("div");
       div.className = "j-msg " + role + (typing ? " j-typing" : "");
       if (text) div.textContent = text;
       wrap.appendChild(div);
@@ -685,7 +700,7 @@
     }
 
     function typeText(el, text) {
-      return new Promise((resolve) => {
+      return new Promise(resolve => {
         let i = 0;
         const speed = Math.max(10, Math.min(22, 900 / Math.max(text.length, 1)));
         const tick = () => {
@@ -703,7 +718,7 @@
     }
 
     async function loadOps() {
-      const res = await fetch(apiUrl("/api/jarvis/ops"));
+      const res  = await fetch(apiUrl("/api/jarvis/ops"));
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || res.statusText);
       renderMetrics(body.metrics);
@@ -733,13 +748,11 @@
       setStatus("PROCESSING", true);
       document.getElementById("jSend").disabled = true;
       addMsg("user", text.trim());
-
       try {
-        const body = await postHarveyChat(text.trim());
+        const body   = await postHarveyChat(text.trim());
         const speech = body.speech || body.reply || "(no response)";
         renderDirectives(body.directives || body.judgment?.directives || []);
         if (body.metrics) renderMetrics(body.metrics);
-
         setStatus("RESPONDING", true);
         const el = addMsg("ai", "", true);
         await typeText(el, speech);
@@ -753,7 +766,7 @@
       }
     }
 
-    document.getElementById("jForm").addEventListener("submit", (e) => {
+    document.getElementById("jForm").addEventListener("submit", e => {
       e.preventDefault();
       const input = document.getElementById("jInput");
       const t = input.value;
@@ -762,9 +775,9 @@
     });
 
     function togglePanel(id) {
-      const el = document.getElementById(id);
+      const el   = document.getElementById(id);
       const open = el.classList.toggle("open");
-      document.querySelectorAll(".j-col.side.open").forEach((p) => {
+      document.querySelectorAll(".j-col.side.open").forEach(p => {
         if (p !== el) p.classList.remove("open");
       });
       if (!open) el.classList.remove("open");
@@ -774,10 +787,7 @@
 
     let interimEl = null;
     function showInterim(t) {
-      if (!t) {
-        if (interimEl) { interimEl.remove(); interimEl = null; }
-        return;
-      }
+      if (!t) { if (interimEl) { interimEl.remove(); interimEl = null; } return; }
       if (!interimEl) {
         interimEl = addMsg("user", "");
         interimEl.style.opacity = "0.55";
@@ -789,8 +799,8 @@
 
     (async function init() {
       try {
-        const health = await fetch("/health").then((r) => r.json());
-        const hm = health.harvey;
+        const health = await fetch("/health").then(r => r.json());
+        const hm    = health.harvey;
         const voice = hm?.voice;
         if (hm) {
           const bits = [hm.model || "Harvey"];
@@ -799,26 +809,21 @@
           document.getElementById("jModel").textContent = bits.join(" · ");
         }
         if (voice?.stt === "none") {
-          coreBtn.disabled = true;
+          document.getElementById("jCanvas").style.cursor = "default";
           coreHint.textContent = "VOICE OFFLINE — TYPE BELOW";
         }
         await loadOps();
         document.getElementById("jTranscript").innerHTML = "";
-        addMsg(
-          "system",
+        addMsg("system",
           voice?.stt !== "none"
             ? "Harvey online. Tap the core to speak, or type below."
-            : "Harvey online. Type below.",
+            : "Harvey online. Type below."
         );
 
         if (window.HarveyVoice) {
           HarveyVoice.init({
-            apiUrl,
-            setStatus,
-            addMsg,
-            showInterim,
-            renderDirectives,
-            renderMetrics,
+            apiUrl, setStatus, addMsg, showInterim,
+            renderDirectives, renderMetrics,
             setMicActive(on) {
               if (on) setCoreVisual("active");
               else if (statusEl.textContent === "HARVEY ONLINE") setCoreVisual("idle");
@@ -826,15 +831,10 @@
             async sendChat(text) {
               busy = true;
               document.getElementById("jSend").disabled = true;
-              try {
-                return await postHarveyChat(text);
-              } finally {
-                busy = false;
-                document.getElementById("jSend").disabled = false;
-              }
+              try { return await postHarveyChat(text); }
+              finally { busy = false; document.getElementById("jSend").disabled = false; }
             },
           });
-          coreBtn.addEventListener("click", () => void HarveyVoice.toggleConversation());
         }
       } catch (e) {
         document.getElementById("jTranscript").innerHTML =
