@@ -303,6 +303,15 @@ export async function listCrmLeads(): Promise<DashboardSnapshot["leads"]> {
   return snap.leads;
 }
 
+/** All leads in the store (including without phone) — for Harvey ops perception. */
+export async function listAllLeads(): Promise<Lead[]> {
+  const out: Lead[] = [];
+  for (const raw of leadsById.values()) {
+    out.push(normalizeCrmDefaults(raw));
+  }
+  return out.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+}
+
 export async function updateLeadCrmFields(input: {
   leadId: string;
   crmStatus?: Lead["crmStatus"];
