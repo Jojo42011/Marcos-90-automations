@@ -16,6 +16,7 @@ import {
   getTtsProvider,
   synthesizeSpeech,
 } from "./integrations/voice/synthesize.js";
+import { harveyVoiceLogEnabled, voiceLog } from "./integrations/voice/voiceLog.js";
 
 import { handleWebhook, handleIncomingPayload } from "./app/webhook.js";
 import {
@@ -381,14 +382,22 @@ app.post("/api/jarvis/chat", express.json(), async (req, res) => {
     typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
 
   try {
+    voiceLog("chat request", { chars: message.length, hasSession: Boolean(sessionId) });
+    const t0 = Date.now();
     const result = await runHarveyChat({
       message,
       sessionId,
       deps: harveyDeps(),
     });
+    voiceLog("chat ok", {
+      ms: Date.now() - t0,
+      intent: result.intent,
+      speechChars: (result.speech || "").length,
+    });
     res.status(200).json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    voiceLog("chat failed", { error: msg });
     console.error("[jarvis/chat]", msg);
     res.status(500).json({ error: msg });
   }
@@ -401,12 +410,14 @@ app.get("/api/jarvis/deepgram/token", (req, res) => {
     return;
   }
   if (!isDeepgramSttConfigured()) {
+    voiceLog("STT token denied: not configured");
     res.status(503).json({
       error: "Deepgram STT not configured",
       hint: "Set DEEPGRAM_API_KEY in .env",
     });
     return;
   }
+  voiceLog("STT token issued", { path: JARVIS_DEEPGRAM_LISTEN_PATH });
   res.status(200).json({ mode: "proxy", url: JARVIS_DEEPGRAM_LISTEN_PATH });
 });
 
@@ -421,13 +432,17 @@ app.post("/api/jarvis/voice", express.json(), async (req, res) => {
     res.status(400).json({ error: "Missing text" });
     return;
   }
+  const t0 = Date.now();
+  voiceLog("TTS request", { provider: getTtsProvider(), chars: text.trim().length });
   try {
     const audio = await synthesizeSpeech(text);
+    voiceLog("TTS ok", { provider: getTtsProvider(), bytes: audio.length, ms: Date.now() - t0 });
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
     res.status(200).send(audio);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    voiceLog("TTS failed", { error: message, ms: Date.now() - t0 });
     console.error("[jarvis/voice]", message);
     res.status(502).json({ error: message });
   }
@@ -631,6 +646,9 @@ attachDeepgramSttProxy(httpServer, {
 
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Listening on 0.0.0.0:${PORT}`);
+  if (harveyVoiceLogEnabled()) {
+    console.log("[HarveyVoice] Server voice logging ON — set HARVEY_VOICE_LOG=1 (or MARCO_LOG_LEVEL=debug)");
+  }
   if (isAnthropicApiKeyConfigured()) {
     console.log(`[Anthropic] API key present — model ${getAnthropicModel()} (set ANTHROPIC_MODEL to override).`);
   } else {
