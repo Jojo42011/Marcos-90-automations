@@ -124,3 +124,7 @@ On later messages, omit `marco_previous_outbound` (conversation already has Marc
 - **`ANTHROPIC_API_KEY`** (required for real AI replies): If unset or empty, opening DM, post-opening pipeline, preflight coaching, and intent classification **skip the API** and use **hardcoded/template fallbacks** so the webhook never returns empty. After adding credits, ensure the key is set on the host (e.g. `fly secrets set ANTHROPIC_API_KEY=sk-ant-...`).
 - **`ANTHROPIC_MODEL`** (optional): Defaults to `claude-3-5-haiku-latest`. Override if you standardize on another Haiku snapshot (e.g. `claude-haiku-4-5-20251001`).
 - **Health check:** `GET /health` returns `anthropic.api_key_configured` and `anthropic.model` so you can confirm the app sees the key **without** spending tokens. Billing errors still appear at request time; check logs for `llm_opening_error`, `llm_pipeline_error`, or `preflight_error_fallback` and `anthropic_http_status` (e.g. 401/402 when credits or auth fail).
+
+## Environment: Skip trace (Forewarn)
+
+- **`FOREWARN_API_KEY`** (optional): When set, `POST /api/leads/:id/skip-trace` calls the Forewarn lookup API. When unset, the CRM returns **mock** skip-trace data so the UI is testable without an API key. See `src/integrations/forewarn.ts` for setup notes.

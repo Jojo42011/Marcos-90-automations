@@ -1,0 +1,23 @@
+# Environment reference — copy to .env or set via fly secrets (placeholders only).
+
+PORT=3000
+# DASHBOARD_TOKEN=
+
+# DB_JSON_PATH=data/local-dashboard-db.json
+AUTO_PLANS_JSON_PATH=data/auto-plans.json
+
+ANTHROPIC_API_KEY=YOUR_ANTHROPIC_KEY
+ANTHROPIC_MODEL=claude-haiku-4-5-20251001
+# HARVEY_MODEL=claude-sonnet-4-20250514
+
+GEMINI_API_KEY=YOUR_GEMINI_KEY
+GEMINI_LIVE_MODEL=models/gemini-2.0-flash-live-001
+
+AD_DASHBOARD_BASE_URL=https://marco-agents.fly.dev
+
+BRIVITY_API_KEY=YOUR_BRIVITY_KEY
+BRIVITY_BASE_URL=https://app.brivityidx.com/api
+
+SENDBLUE_API_KEY_ID=YOUR_SENDBLUE_ID
+SENDBLUE_API_SECRET_KEY=YOUR_SENDBLUE_SECRET
+SENDBLUE_FROM_NUMBER=+1XXXXXXXXXX

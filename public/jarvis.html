@@ -327,7 +327,7 @@
       flex-shrink: 0;
     }
 
-    #jCanvas {
+    #harvey-mic-btn {
       position: absolute; inset: 0;
       width: 100%; height: 100%;
       border-radius: 50%;
@@ -573,7 +573,7 @@
               <svg class="j-tick-ring" viewBox="0 0 200 200" aria-hidden="true">
                 <g id="jTickGroup" stroke="rgba(0,212,255,0.45)" stroke-linecap="round"></g>
               </svg>
-              <canvas id="jCanvas" aria-label="Harvey core — tap to speak"></canvas>
+              <canvas id="harvey-mic-btn" data-action="toggle-voice" aria-label="Harvey core — tap to speak"></canvas>
               <!-- Mic icon centered over canvas -->
               <div class="j-mic-icon" id="jMicIcon">
                 <svg viewBox="0 0 48 60" fill="none" aria-hidden="true">
@@ -597,6 +597,8 @@
             </div>
 
             <p class="j-core-hint" id="jCoreHint">TAP CORE TO SPEAK</p>
+            <div id="harvey-voice-status" style="font-size: 11px; color: #888; margin-top: 4px; text-align: center;">Voice: Not started</div>
+            <div id="harvey-voice-error" style="color: #ff4444; font-size: 12px; margin-top: 8px; display: none; text-align: center;"></div>
           </div>
         </div>
 
@@ -628,7 +630,6 @@
     </main>
   </div>
 
-  <script src="/harvey-voice.js"></script>
   <script>
     /* ─────────────────────────────────────────────
        TICK RING — radial marks around the core
@@ -662,7 +663,7 @@
        CANVAS CORE — dynamic orbital animation
     ───────────────────────────────────────────── */
     (function initCanvas() {
-      const canvas = document.getElementById("jCanvas");
+      const canvas = document.getElementById("harvey-mic-btn");
       const wrap   = document.getElementById("jCoreWrap");
       const ctx    = canvas.getContext("2d");
 
@@ -835,11 +836,6 @@
 
       start();
 
-      canvas.addEventListener("click", () => {
-        if (window.HarveyVoice?.toggleConversation) {
-          void HarveyVoice.toggleConversation();
-        }
-      });
     })();
 
     /* ─────────────────────────────────────────────
@@ -906,7 +902,7 @@
       if      (text === "LISTENING")   setCoreVisual("listening");
       else if (text === "PROCESSING")  setCoreVisual("processing");
       else if (text === "RESPONDING")  setCoreVisual("responding");
-      else if (window.HarveyVoice?.isConversationMode?.()) setCoreVisual("active");
+      else if (window.isGeminiLiveActive?.()) setCoreVisual("active");
       else setCoreVisual("idle");
     }
 
@@ -1191,9 +1187,32 @@
       return body;
     }
 
+    async function playGeminiTts(text) {
+      if (!text || !text.trim()) return;
+      try {
+        const res = await fetch(apiUrl("/api/jarvis/gemini-tts"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: text.trim() }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.warn("[Harvey] Gemini TTS failed:", err.error || res.statusText);
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        await audio.play();
+        audio.onended = () => URL.revokeObjectURL(url);
+      } catch (e) {
+        console.warn("[Harvey] Gemini TTS playback error:", e);
+      }
+    }
+
     async function sendMessage(text) {
       if (busy || !text.trim()) return;
-      if (window.HarveyVoice?.isConversationMode?.()) return;
+      if (window.isGeminiLiveActive?.()) return;
       busy = true;
       setStatus("PROCESSING", true);
       document.getElementById("jSend").disabled = true;
@@ -1206,6 +1225,7 @@
         setStatus("RESPONDING", true);
         const el = addMsg("ai", "", true);
         await typeText(el, speech);
+        await playGeminiTts(speech);
         setStatus("STANDBY", false);
       } catch (e) {
         addMsg("system", "Error: " + (e.message || e));
@@ -1254,33 +1274,17 @@
         const voice = hm?.voice;
         if (hm) {
           const bits = [hm.model || "Harvey"];
-          if (voice?.stt && voice.stt !== "none") bits.push("STT");
+          if (voice?.engine && voice.engine !== "none") bits.push("GEMINI LIVE");
+          else if (voice?.gemini_configured) bits.push("GEMINI");
           if (voice?.tts && voice.tts !== "none") bits.push("TTS");
           document.getElementById("jModel").textContent = bits.join(" · ");
         }
-        if (voice?.stt === "none") {
-          document.getElementById("jCanvas").style.cursor = "default";
+        if (!voice?.gemini_configured) {
+          document.getElementById("harvey-mic-btn").style.cursor = "default";
           coreHint.textContent = "VOICE OFFLINE — TYPE BELOW";
         }
         await loadOps();
         document.getElementById("jTranscript").innerHTML = "";
-
-        if (window.HarveyVoice) {
-          HarveyVoice.init({
-            apiUrl, setStatus, addMsg, showInterim,
-            renderDirectives, renderMetrics,
-            setMicActive(on) {
-              if (on) setCoreVisual("active");
-              else if (statusTextEl.textContent === "HARVEY ONLINE") setCoreVisual("idle");
-            },
-            async sendChat(text) {
-              busy = true;
-              document.getElementById("jSend").disabled = true;
-              try { return await postHarveyChat(text); }
-              finally { busy = false; document.getElementById("jSend").disabled = false; }
-            },
-          });
-        }
       } catch (e) {
         document.getElementById("jTranscript").innerHTML =
           '<div class="j-msg system">Failed to load: ' + esc(e.message || e) + "</div>";
@@ -1288,8 +1292,437 @@
     })();
 
     setInterval(() => {
-      if (!busy && !window.HarveyVoice?.isConversationMode?.()) void loadOps().catch(() => {});
+      if (!busy && !window.isGeminiLiveActive?.()) void loadOps().catch(() => {});
     }, 60000);
+  </script>
+
+  <script>
+    // ============================================
+    // HARVEY GEMINI LIVE VOICE SYSTEM
+    // ============================================
+
+    let geminiLiveWs = null;
+    let audioContext = null;
+    let micStream = null;
+    let micSource = null;
+    let micProcessor = null;
+    let audioQueue = [];
+    let isPlayingAudio = false;
+    let nextPlayTime = 0;
+    let isListening = false;
+    let micLoggedOnce = false;
+    const SESSION_ID = "harvey-" + Date.now();
+
+    function getToken() {
+      return new URLSearchParams(window.location.search).get("token") || "";
+    }
+
+    function geminiApiUrl(path) {
+      const u = new URL(path, window.location.origin);
+      const t = getToken();
+      if (t) u.searchParams.set("token", t);
+      return u.toString();
+    }
+
+    function showVoiceError(msg) {
+      const text = msg instanceof Error ? msg.message : String(msg);
+      console.error("[Harvey] ERROR:", text);
+      const el = document.getElementById("harvey-voice-error");
+      if (el) {
+        el.textContent = "⚠️ " + text;
+        el.style.display = "block";
+      }
+    }
+
+    function clearVoiceError() {
+      const el = document.getElementById("harvey-voice-error");
+      if (el) {
+        el.textContent = "";
+        el.style.display = "none";
+      }
+    }
+
+    window.isGeminiLiveActive = function () {
+      return !!(geminiLiveWs && geminiLiveWs.readyState === WebSocket.OPEN);
+    };
+
+    async function startGeminiLive() {
+      try {
+        console.log("[Harvey] startGeminiLive called");
+        console.log("[Harvey] Token from URL:", getToken() ? "present" : "MISSING");
+        clearVoiceError();
+        setHarveyStatus("CONNECTING");
+
+        console.log("[Harvey] Fetching token from /api/jarvis/gemini-live/token...");
+        const res = await fetch(geminiApiUrl("/api/jarvis/gemini-live/token"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: getToken() ? `Bearer ${getToken()}` : "",
+          },
+          body: JSON.stringify({ sessionId: SESSION_ID }),
+        });
+
+        console.log("[Harvey] Token endpoint status:", res.status);
+        console.log("[Harvey] Token endpoint ok:", res.ok);
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          showVoiceError("Token error: " + (err.error || res.statusText || res.status));
+          setHarveyStatus("ERROR");
+          return;
+        }
+
+        const { wsUrl, model, systemPrompt, voiceName } = await res.json();
+        console.log("[Harvey] wsUrl received:", wsUrl ? wsUrl.substring(0, 60) + "..." : "MISSING");
+        console.log("[Harvey] model received:", model);
+        console.log("[Harvey] systemPrompt length:", systemPrompt?.length);
+
+        if (!wsUrl) {
+          showVoiceError("Token response missing wsUrl");
+          setHarveyStatus("ERROR");
+          return;
+        }
+
+        console.log("[Harvey] WebSocket creating with URL...");
+        geminiLiveWs = new WebSocket(wsUrl);
+        console.log("[Harvey] WebSocket object created");
+        console.log("[Harvey] WebSocket URL being used:", wsUrl.substring(0, 80));
+        console.log("[Harvey] WebSocket readyState after creation:", geminiLiveWs.readyState);
+
+        setTimeout(() => {
+          if (geminiLiveWs && geminiLiveWs.readyState !== WebSocket.OPEN) {
+            showVoiceError("WebSocket failed to open after 5 seconds. State: " + geminiLiveWs.readyState);
+            console.log("[Harvey] WebSocket STILL NOT OPEN after 5s, state:", geminiLiveWs.readyState);
+          }
+        }, 5000);
+
+        geminiLiveWs.onopen = () => {
+          console.log("[Harvey] WebSocket onopen fired");
+          console.log("[Harvey] Sending setup message...");
+          console.log("[Harvey] Setup message model:", model);
+          console.log("[Harvey] Setup message voice:", voiceName);
+
+          geminiLiveWs.send(JSON.stringify({
+            setup: {
+              model: `models/${model}`,
+              generationConfig: {
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: voiceName },
+                  },
+                },
+              },
+              systemInstruction: {
+                parts: [{ text: systemPrompt }],
+              },
+            },
+          }));
+
+          console.log("[Harvey] Setup message sent with model: models/" + model);
+          console.log("[Harvey] Calling startMic()...");
+          startMic();
+          setHarveyStatus("LISTENING");
+        };
+
+        geminiLiveWs.onmessage = async (event) => {
+          console.log(
+            "[Harvey] WebSocket message received, type:",
+            typeof event.data,
+            event.data instanceof Blob ? "Blob" : "string",
+          );
+
+          let text;
+          if (event.data instanceof Blob) {
+            text = await event.data.text();
+          } else {
+            text = event.data;
+          }
+
+          try {
+            const msg = JSON.parse(text);
+
+            if (msg.serverContent?.modelTurn?.parts) {
+              for (const part of msg.serverContent.modelTurn.parts) {
+                if (part.inlineData?.data) {
+                  const pcmBuffer = base64ToArrayBuffer(part.inlineData.data);
+                  console.log("[Harvey] Audio chunk received, bytes:", pcmBuffer.byteLength);
+                  queueAudioPcm(pcmBuffer);
+                  setHarveyStatus("RESPONDING");
+                }
+                if (part.text) {
+                  appendHarveyMessage(part.text);
+                }
+              }
+            }
+
+            if (msg.serverContent?.turnComplete) {
+              console.log("[Harvey] Turn complete");
+              if (!isPlayingAudio) {
+                setHarveyStatus("LISTENING");
+              }
+            }
+
+            if (msg.setupComplete) {
+              console.log("[Harvey] Gemini Live setup complete");
+            }
+          } catch {
+            try {
+              const buffer = await event.data.arrayBuffer();
+              queueAudioPcm(buffer);
+            } catch (e) {
+              showVoiceError("Audio parse error: " + (e instanceof Error ? e.message : String(e)));
+            }
+          }
+        };
+
+        geminiLiveWs.onerror = (err) => {
+          console.log("[Harvey] WebSocket error event:", JSON.stringify(err));
+          showVoiceError("WebSocket error — see console for details");
+          setHarveyStatus("ERROR");
+        };
+
+        geminiLiveWs.onclose = (event) => {
+          console.log("[Harvey] WebSocket closed — code:", event.code, "reason:", event.reason, "wasClean:", event.wasClean);
+
+          if (event.code !== 1000) {
+            showVoiceError(`WebSocket closed — code: ${event.code} reason: ${event.reason || "none"}`);
+          } else {
+            const el = document.getElementById("harvey-voice-error");
+            if (el) el.style.display = "none";
+            console.log("[Harvey] Clean close — session ended normally");
+          }
+
+          isListening = false;
+          setHarveyStatus("STANDBY");
+          stopMic();
+        };
+      } catch (err) {
+        showVoiceError("startGeminiLive error: " + (err instanceof Error ? err.message : String(err)));
+        setHarveyStatus("ERROR");
+      }
+    }
+
+    function stopGeminiLive() {
+      if (geminiLiveWs) {
+        geminiLiveWs.close();
+        geminiLiveWs = null;
+      }
+      micLoggedOnce = false;
+      stopMic();
+      setHarveyStatus("STANDBY");
+    }
+
+    async function startMic() {
+      try {
+        console.log("[Harvey] startMic called");
+        console.log("[Harvey] AudioContext state:", audioContext?.state);
+
+        if (!audioContext) {
+          audioContext = new AudioContext();
+        }
+        if (audioContext.state === "suspended") {
+          await audioContext.resume();
+        }
+
+        console.log("[Harvey] Requesting getUserMedia...");
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        console.log("[Harvey] Mic stream obtained:", !!micStream);
+        console.log("[Harvey] AudioContext sampleRate:", audioContext?.sampleRate);
+
+        micSource = audioContext.createMediaStreamSource(micStream);
+
+        const targetSampleRate = 16000;
+        const bufferSize = 4096;
+
+        micProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+        console.log("[Harvey] Mic processor created, buffer size:", bufferSize);
+
+        micProcessor.onaudioprocess = (e) => {
+          if (!micLoggedOnce) {
+            console.log("[Harvey] First audio frame captured");
+            console.log("[Harvey] WebSocket readyState:", geminiLiveWs?.readyState);
+            console.log("[Harvey] Input buffer length:", e.inputBuffer.getChannelData(0).length);
+            micLoggedOnce = true;
+          }
+
+          if (!geminiLiveWs || geminiLiveWs.readyState !== WebSocket.OPEN) return;
+
+          const inputData = e.inputBuffer.getChannelData(0);
+          const resampled = resampleTo16k(inputData, audioContext.sampleRate, targetSampleRate);
+          const pcm16 = floatTo16BitPCM(resampled);
+          const base64Audio = arrayBufferToBase64(pcm16.buffer);
+
+          geminiLiveWs.send(JSON.stringify({
+            realtimeInput: {
+              audio: {
+                data: base64Audio,
+                mimeType: "audio/pcm",
+              },
+            },
+          }));
+        };
+
+        micSource.connect(micProcessor);
+        micProcessor.connect(audioContext.destination);
+        isListening = true;
+        console.log("[Harvey] Mic started");
+      } catch (err) {
+        showVoiceError("Mic error: " + (err instanceof Error ? err.message : String(err)));
+        setHarveyStatus("ERROR");
+      }
+    }
+
+    function stopMic() {
+      if (micProcessor) { micProcessor.disconnect(); micProcessor = null; }
+      if (micSource) { micSource.disconnect(); micSource = null; }
+      if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+      isListening = false;
+    }
+
+    function queueAudioPcm(buffer) {
+      audioQueue.push(buffer);
+      console.log("[Harvey] Audio chunk queued, queue length:", audioQueue.length);
+      if (!isPlayingAudio) scheduleNextChunk();
+    }
+
+    function scheduleNextChunk() {
+      if (audioQueue.length === 0) {
+        isPlayingAudio = false;
+        return;
+      }
+      isPlayingAudio = true;
+      const buffer = audioQueue.shift();
+
+      try {
+        if (!audioContext) audioContext = new AudioContext();
+
+        const pcmData = new Int16Array(buffer);
+        const sampleRate = 24000;
+        const audioBuffer = audioContext.createBuffer(1, pcmData.length, sampleRate);
+        const channelData = audioBuffer.getChannelData(0);
+        for (let i = 0; i < pcmData.length; i++) {
+          channelData[i] = pcmData[i] / 32768.0;
+        }
+
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+
+        const startTime = Math.max(audioContext.currentTime, nextPlayTime);
+        source.start(startTime);
+
+        nextPlayTime = startTime + audioBuffer.duration;
+
+        source.onended = () => {
+          if (audioQueue.length > 0) {
+            scheduleNextChunk();
+          } else {
+            isPlayingAudio = false;
+            nextPlayTime = 0;
+            setHarveyStatus("LISTENING");
+            console.log("[Harvey] All audio chunks played");
+          }
+        };
+
+        console.log("[Harvey] Scheduled chunk — duration:", audioBuffer.duration.toFixed(3) + "s", "start:", startTime.toFixed(3));
+      } catch (err) {
+        console.error("[Harvey] Chunk playback error:", err);
+        isPlayingAudio = false;
+        nextPlayTime = 0;
+        scheduleNextChunk();
+      }
+    }
+
+    function resampleTo16k(data, fromRate, toRate) {
+      if (fromRate === toRate) return data;
+      const ratio = fromRate / toRate;
+      const newLength = Math.round(data.length / ratio);
+      const result = new Float32Array(newLength);
+      for (let i = 0; i < newLength; i++) {
+        result[i] = data[Math.round(i * ratio)] || 0;
+      }
+      return result;
+    }
+
+    function floatTo16BitPCM(float32Array) {
+      const int16Array = new Int16Array(float32Array.length);
+      for (let i = 0; i < float32Array.length; i++) {
+        const s = Math.max(-1, Math.min(1, float32Array[i]));
+        int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      return int16Array;
+    }
+
+    function base64ToArrayBuffer(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes.buffer;
+    }
+
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    }
+
+    function setHarveyStatus(status) {
+      const statusMessages = {
+        CONNECTING: "🔄 Connecting to Gemini...",
+        LISTENING: "🎤 Listening...",
+        RESPONDING: "🔊 Harvey speaking...",
+        STANDBY: "⏸ Standby",
+        ERROR: "❌ Error — check console",
+      };
+      const el = document.getElementById("harvey-voice-status");
+      if (el) el.textContent = statusMessages[status] || status;
+      console.log("[Harvey] Status changed to:", status);
+
+      if (typeof setStatus === "function") {
+        const on = status === "LISTENING" || status === "RESPONDING" || status === "CONNECTING" || status === "PROCESSING";
+        setStatus(status === "STANDBY" ? "STANDBY" : status, on);
+      }
+      if (status === "CONNECTING" || status === "LISTENING" || status === "RESPONDING") {
+        clearVoiceError();
+      }
+    }
+
+    function appendHarveyMessage(text) {
+      if (typeof addMsg === "function") addMsg("ai", text);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const micBtn = document.getElementById("harvey-mic-btn");
+
+      if (micBtn) {
+        micBtn.addEventListener("click", async () => {
+          console.log("[Harvey] Mic button clicked");
+          console.log("[Harvey] Current WebSocket state:", geminiLiveWs?.readyState);
+          console.log("[Harvey] AudioContext:", audioContext ? "exists" : "null");
+
+          if (!audioContext) {
+            audioContext = new AudioContext();
+          }
+
+          if (geminiLiveWs && geminiLiveWs.readyState === WebSocket.OPEN) {
+            stopGeminiLive();
+            micBtn.classList.remove("active");
+          } else {
+            await startGeminiLive();
+            micBtn.classList.add("active");
+          }
+        });
+      } else {
+        showVoiceError("Mic button not found — check button ID in jarvis.html");
+      }
+    });
   </script>
 </body>
 </html>
