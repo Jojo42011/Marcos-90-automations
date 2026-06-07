@@ -724,6 +724,533 @@
       background: rgba(0, 12, 22, 0.8); border: 1px solid rgba(0, 212, 255, 0.2);
       color: #d6e4f0; font-family: var(--mono); font-size: 11px; padding: 0.3rem;
     }
+
+    /* ─── HARVEY LIGHT MODE — STRONG CONTRAST ─── */
+    @keyframes scanLight {
+      0% { transform: translateY(-100vh); }
+      100% { transform: translateY(100vh); }
+    }
+
+    .harvey-scanline { display: none; }
+
+    html[data-theme="light"],
+    html[data-theme="light"] body {
+      background-color: #eef2f7 !important;
+      background-image:
+        radial-gradient(circle, rgba(0, 100, 200, 0.12) 1px, transparent 1px),
+        radial-gradient(ellipse at center, transparent 40%, rgba(180, 200, 220, 0.4) 100%) !important;
+      background-size: 32px 32px, 100% 100% !important;
+      background-position: 0 0, 0 0 !important;
+      color: #0f172a !important;
+    }
+
+    html[data-theme="light"] .j-bg {
+      background: transparent !important;
+      background-image: none !important;
+    }
+
+    html[data-theme="light"] #harvey-shell,
+    html[data-theme="light"] .harvey-main,
+    html[data-theme="light"] .j-shell {
+      background-color: #eef2f7 !important;
+      background-image:
+        radial-gradient(circle, rgba(0, 100, 200, 0.12) 1px, transparent 1px),
+        radial-gradient(ellipse at center, transparent 40%, rgba(180, 200, 220, 0.4) 100%) !important;
+      background-size: 32px 32px, 100% 100% !important;
+      background-position: 0 0, 0 0 !important;
+    }
+
+    /* Corner bracket decorations */
+    html[data-theme="light"] #harvey-shell::before,
+    html[data-theme="light"] .harvey-main::before,
+    html[data-theme="light"] .j-shell::before {
+      content: '';
+      position: fixed;
+      top: 80px;
+      left: 20px;
+      width: 60px;
+      height: 60px;
+      border-top: 2px solid rgba(0, 100, 200, 0.25);
+      border-left: 2px solid rgba(0, 100, 200, 0.25);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    html[data-theme="light"] #harvey-shell::after,
+    html[data-theme="light"] .harvey-main::after,
+    html[data-theme="light"] .j-shell::after {
+      content: '';
+      position: fixed;
+      bottom: 70px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      border-bottom: 2px solid rgba(0, 100, 200, 0.25);
+      border-right: 2px solid rgba(0, 100, 200, 0.25);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    html[data-theme="light"] .harvey-scanline {
+      display: block;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(
+        to right,
+        transparent,
+        rgba(0, 120, 200, 0.08),
+        rgba(0, 120, 200, 0.15),
+        rgba(0, 120, 200, 0.08),
+        transparent
+      );
+      animation: scanLight 8s linear infinite;
+      pointer-events: none;
+      z-index: 1;
+    }
+    html[data-theme="light"] .j-vignette { box-shadow: none !important; }
+    html[data-theme="light"] .j-scanlines { opacity: 0.06 !important; }
+
+    /* Nav bar */
+    html[data-theme="light"] .harvey-nav,
+    html[data-theme="light"] #harvey-nav,
+    html[data-theme="light"] nav,
+    html[data-theme="light"] .j-topbar {
+      background: #ffffff !important;
+      border-bottom: 2px solid #94a3b8 !important;
+    }
+
+    html[data-theme="light"] .harvey-nav button,
+    html[data-theme="light"] #harvey-nav button,
+    html[data-theme="light"] nav button,
+    html[data-theme="light"] .j-topbar button,
+    html[data-theme="light"] .j-panel-toggle {
+      color: #0f172a !important;
+      border-color: #94a3b8 !important;
+      background: #ffffff !important;
+    }
+
+    html[data-theme="light"] .harvey-nav button:hover,
+    html[data-theme="light"] #harvey-nav button:hover,
+    html[data-theme="light"] .j-panel-toggle:hover,
+    html[data-theme="light"] .j-panel-toggle.active {
+      background: #e2e8f0 !important;
+      color: #0369a1 !important;
+      border-color: #0369a1 !important;
+    }
+
+    html[data-theme="light"] .harvey-nav a,
+    html[data-theme="light"] #harvey-nav a,
+    html[data-theme="light"] .j-back {
+      color: #0f172a !important;
+      font-weight: 600 !important;
+      border-color: #94a3b8 !important;
+    }
+
+    html[data-theme="light"] .j-logo {
+      color: #0369a1 !important;
+      font-weight: 700 !important;
+      text-shadow: none !important;
+    }
+    html[data-theme="light"] .j-logo small,
+    html[data-theme="light"] .j-logo .j-logo-bracket { color: #475569 !important; }
+    html[data-theme="light"] .j-meta { color: #475569 !important; font-weight: 600 !important; }
+
+    /* Metrics strip */
+    html[data-theme="light"] #harvey-metrics-strip,
+    html[data-theme="light"] [id*="metrics-strip"],
+    html[data-theme="light"] [class*="metrics-strip"],
+    html[data-theme="light"] .metrics-strip,
+    html[data-theme="light"] #msStrip,
+    html[data-theme="light"] .ms-strip,
+    html[data-theme="light"] div[style*="background: #050a0f"],
+    html[data-theme="light"] div[style*="background:#050a0f"],
+    html[data-theme="light"] div[style*="background: rgb(5, 10, 15)"] {
+      background: #1e293b !important;
+      border-bottom: 1px solid #334155 !important;
+      color: #e2e8f0 !important;
+    }
+
+    html[data-theme="light"] #harvey-metrics-strip *,
+    html[data-theme="light"] [id*="metrics-strip"] *,
+    html[data-theme="light"] .metrics-strip *,
+    html[data-theme="light"] #msStrip *,
+    html[data-theme="light"] .ms-strip * {
+      color: #e2e8f0 !important;
+    }
+
+    html[data-theme="light"] .ms-strip .ms-label { color: #7dd3fc !important; font-weight: 600 !important; }
+    html[data-theme="light"] .ms-strip .ms-sep { color: #64748b !important; }
+    html[data-theme="light"] .ms-strip .ms-expand { color: #7dd3fc !important; }
+
+    html[data-theme="light"] #harvey-metrics-strip .live-dot,
+    html[data-theme="light"] [id*="metrics-strip"] [class*="live"],
+    html[data-theme="light"] .ms-strip .ms-live { color: #4ade80 !important; }
+    html[data-theme="light"] .ms-strip .ms-live i {
+      background: #00ff88 !important;
+      box-shadow: 0 0 8px #00ff88 !important;
+    }
+
+    /* Main content area — transparent so shell dot-grid shows through */
+    html[data-theme="light"] #main-content,
+    html[data-theme="light"] .main-content,
+    html[data-theme="light"] .j-main {
+      background: transparent !important;
+      background-image: none !important;
+    }
+
+    /* Harvey title text */
+    html[data-theme="light"] [class*="harvey-title"],
+    html[data-theme="light"] [id*="harvey-title"],
+    html[data-theme="light"] .j-logo {
+      color: #0f172a !important;
+      font-weight: 700 !important;
+    }
+
+    /* TAP CORE TO SPEAK text */
+    html[data-theme="light"] .tap-to-speak,
+    html[data-theme="light"] [class*="tap-core"],
+    html[data-theme="light"] .status-label,
+    html[data-theme="light"] .j-core-hint {
+      color: #475569 !important;
+      font-weight: 600 !important;
+    }
+
+    /* Voice status text */
+    html[data-theme="light"] #harvey-voice-status,
+    html[data-theme="light"] .harvey-status-text {
+      color: #334155 !important;
+      font-weight: 600 !important;
+    }
+
+    /* HARVEY ONLINE text */
+    html[data-theme="light"] .harvey-online-text,
+    html[data-theme="light"] [class*="online"],
+    html[data-theme="light"] .j-status-label,
+    html[data-theme="light"] #jStatusText {
+      color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+
+    html[data-theme="light"] .j-core-wrap,
+    html[data-theme="light"] #harvey-orb-container,
+    html[data-theme="light"] [id*="orb-wrapper"],
+    html[data-theme="light"] [class*="orb-container"],
+    html[data-theme="light"] .j-stage,
+    html[data-theme="light"] .j-stage-frame {
+      background: transparent !important;
+      position: relative;
+    }
+
+    /* Soft orb halo — floats without harsh blue blob */
+    html[data-theme="light"] .j-core-wrap::before,
+    html[data-theme="light"] #harvey-orb-container::before,
+    html[data-theme="light"] [id*="orb-wrapper"]::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 120%;
+      height: 120%;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(255, 255, 255, 0.9) 0%,
+        rgba(220, 235, 250, 0.4) 50%,
+        transparent 75%
+      );
+      pointer-events: none;
+      z-index: 0;
+      border-radius: 50%;
+    }
+
+    /* Hexagon background — CSS pattern on .j-hex (matches dark mode density) */
+    html[data-theme="light"] .j-hex {
+      opacity: 1 !important;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='none' stroke='rgba(0,80,160,0.14)' stroke-width='1.5' d='M28 1 L54 15 L54 43 L28 57 L2 43 L2 15 Z'/%3E%3C/svg%3E") !important;
+      background-size: 56px 100px !important;
+    }
+
+    html[data-theme="light"] .hex-bg,
+    html[data-theme="light"] .hexagon-grid {
+      opacity: 0.14 !important;
+    }
+
+    /* Orb canvas — rings visible, no center glow blob */
+    html[data-theme="light"] #harvey-mic-btn,
+    html[data-theme="light"] .harvey-orb,
+    html[data-theme="light"] canvas {
+      filter: saturate(1.8) brightness(0.72) contrast(1.2) !important;
+      opacity: 1 !important;
+      box-shadow: none !important;
+    }
+
+    /* Tick ring around orb */
+    html[data-theme="light"] .j-tick-ring {
+      opacity: 0.85 !important;
+    }
+    html[data-theme="light"] .j-tick-ring line,
+    html[data-theme="light"] #jTickGroup,
+    html[data-theme="light"] #jTickGroup line {
+      stroke: #0082c8 !important;
+    }
+    html[data-theme="light"] #jTickGroup line[stroke-width="1.2"] {
+      stroke-opacity: 0.9 !important;
+    }
+    html[data-theme="light"] #jTickGroup line[stroke-width="0.5"] {
+      stroke-opacity: 0.55 !important;
+    }
+
+    /* Mic icon overlay — keep cyan */
+    html[data-theme="light"] .j-mic-icon svg rect {
+      fill: rgba(0, 130, 200, 0.95) !important;
+    }
+    html[data-theme="light"] .j-mic-icon svg path,
+    html[data-theme="light"] .j-mic-icon svg line {
+      stroke: rgba(0, 130, 200, 0.9) !important;
+    }
+
+    /* SVG orb decorative elements */
+    html[data-theme="light"] .j-core-wrap svg circle,
+    html[data-theme="light"] .j-core-wrap svg ellipse,
+    html[data-theme="light"] .j-core-wrap svg path,
+    html[data-theme="light"] .j-core-wrap svg line,
+    html[data-theme="light"] .harvey-orb svg *,
+    html[data-theme="light"] [id*="orb"] svg * {
+      stroke: #0082c8 !important;
+      filter: none !important;
+    }
+    html[data-theme="light"] svg circle[stroke-opacity],
+    html[data-theme="light"] svg path[stroke-opacity] {
+      stroke-opacity: 0.8 !important;
+    }
+
+    /* Decorative tick/dash lines */
+    html[data-theme="light"] [class*="tick"],
+    html[data-theme="light"] [class*="dash"],
+    html[data-theme="light"] [class*="arc"] {
+      border-color: rgba(0, 130, 200, 0.5) !important;
+    }
+
+    /* Command input bar */
+    html[data-theme="light"] #harvey-input-bar,
+    html[data-theme="light"] .input-bar,
+    html[data-theme="light"] [class*="input-bar"],
+    html[data-theme="light"] .j-compose {
+      background: #ffffff !important;
+      border-top: 2px solid #94a3b8 !important;
+    }
+
+    html[data-theme="light"] #harvey-command-input,
+    html[data-theme="light"] .command-input,
+    html[data-theme="light"] input[placeholder*="COMMAND"],
+    html[data-theme="light"] input[placeholder*="command"],
+    html[data-theme="light"] .j-input {
+      background: #f8fafc !important;
+      color: #0f172a !important;
+      border: 1px solid #94a3b8 !important;
+      font-weight: 500 !important;
+    }
+
+    html[data-theme="light"] #harvey-command-input::placeholder,
+    html[data-theme="light"] .j-input::placeholder {
+      color: #64748b !important;
+      font-weight: 400 !important;
+    }
+
+    html[data-theme="light"] .j-prompt {
+      color: #0369a1 !important;
+      font-weight: 700 !important;
+      text-shadow: none !important;
+    }
+
+    /* Transmit button */
+    html[data-theme="light"] .transmit-btn,
+    html[data-theme="light"] #transmit-btn,
+    html[data-theme="light"] button[onclick*="transmit"],
+    html[data-theme="light"] button[onclick*="Transmit"],
+    html[data-theme="light"] .j-send {
+      background: #0369a1 !important;
+      color: #ffffff !important;
+      border-color: #0369a1 !important;
+      font-weight: 700 !important;
+      text-shadow: none !important;
+    }
+
+    /* Active panel */
+    html[data-theme="light"] #harvey-active-panel {
+      background: #ffffff !important;
+      border-bottom: 2px solid #0369a1 !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+    }
+
+    html[data-theme="light"] #harvey-active-panel,
+    html[data-theme="light"] #harvey-active-panel * {
+      color: #0f172a !important;
+    }
+
+    html[data-theme="light"] #harvey-active-panel [style*="color:#00d4ff"],
+    html[data-theme="light"] #harvey-active-panel [style*="color: #00d4ff"] {
+      color: #0369a1 !important;
+    }
+
+    html[data-theme="light"] #harvey-active-panel [style*="color:#555"],
+    html[data-theme="light"] #harvey-active-panel [style*="color: #555"] {
+      color: #475569 !important;
+    }
+
+    html[data-theme="light"] #harvey-active-panel [style*="color:#888"],
+    html[data-theme="light"] #harvey-active-panel [style*="color: #888"] {
+      color: #64748b !important;
+    }
+
+    html[data-theme="light"] #harvey-active-panel [style*="color:#fff"],
+    html[data-theme="light"] #harvey-active-panel [style*="color: #fff"],
+    html[data-theme="light"] #harvey-active-panel [style*="color: white"] {
+      color: #0f172a !important;
+    }
+
+    html[data-theme="light"] #harvey-active-panel [style*="border:1px solid rgba(0,212,255"],
+    html[data-theme="light"] #harvey-active-panel [style*="border: 1px solid rgba(0,212,255"] {
+      border-color: #94a3b8 !important;
+    }
+
+    html[data-theme="light"] #harvey-active-panel [style*="background:rgba(0,212,255"],
+    html[data-theme="light"] #harvey-active-panel [style*="background: rgba(0,212,255"] {
+      background: #eff6ff !important;
+    }
+
+    /* Panel close button */
+    html[data-theme="light"] #harvey-active-panel [onclick*="closeActivePanel"] {
+      color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+
+    /* OPS panel */
+    html[data-theme="light"] #ops-panel,
+    html[data-theme="light"] .ops-panel,
+    html[data-theme="light"] .j-col.left,
+    html[data-theme="light"] #jColOps {
+      background: #ffffff !important;
+      border-right: 2px solid #94a3b8 !important;
+      box-shadow: 4px 0 12px rgba(0,0,0,0.08) !important;
+    }
+
+    html[data-theme="light"] #ops-panel *,
+    html[data-theme="light"] .ops-panel *,
+    html[data-theme="light"] #jColOps * {
+      color: #0f172a !important;
+      border-color: #e2e8f0 !important;
+    }
+
+    html[data-theme="light"] #ops-panel [style*="color:#00d4ff"],
+    html[data-theme="light"] #jColOps [style*="color:#00d4ff"] {
+      color: #0369a1 !important;
+    }
+
+    html[data-theme="light"] .j-head,
+    html[data-theme="light"] .j-metric-group-title { font-weight: 700 !important; color: #0f172a !important; }
+
+    /* Directives panel */
+    html[data-theme="light"] #directives-panel,
+    html[data-theme="light"] .directives-panel,
+    html[data-theme="light"] .j-col.right,
+    html[data-theme="light"] #jColDir {
+      background: #ffffff !important;
+      border-left: 2px solid #94a3b8 !important;
+      box-shadow: -4px 0 12px rgba(0,0,0,0.08) !important;
+    }
+
+    html[data-theme="light"] #directives-panel *,
+    html[data-theme="light"] .directives-panel *,
+    html[data-theme="light"] #jColDir * {
+      color: #0f172a !important;
+    }
+
+    html[data-theme="light"] .j-dir-head { color: #0369a1 !important; font-weight: 700 !important; }
+    html[data-theme="light"] .j-dir { font-weight: 500 !important; }
+    html[data-theme="light"] .j-dir-empty { color: #475569 !important; font-weight: 600 !important; }
+
+    /* Memory panel */
+    html[data-theme="light"] #harvey-memory-panel,
+    html[data-theme="light"] .memory-panel,
+    html[data-theme="light"] .mem-panel {
+      background: #ffffff !important;
+      border: 2px solid #94a3b8 !important;
+    }
+
+    html[data-theme="light"] #harvey-memory-panel *,
+    html[data-theme="light"] .memory-panel *,
+    html[data-theme="light"] .mem-panel * {
+      color: #0f172a !important;
+    }
+
+    html[data-theme="light"] .mem-form input,
+    html[data-theme="light"] .mem-form select,
+    html[data-theme="light"] .mem-search {
+      background: #f8fafc !important;
+      color: #0f172a !important;
+      border: 1px solid #94a3b8 !important;
+      font-weight: 500 !important;
+    }
+
+    /* Chat messages */
+    html[data-theme="light"] .harvey-message,
+    html[data-theme="light"] .j-msg {
+      color: #0f172a !important;
+      font-weight: 500 !important;
+    }
+
+    html[data-theme="light"] .harvey-message.assistant,
+    html[data-theme="light"] .j-msg.ai {
+      background: #e2e8f0 !important;
+      color: #0f172a !important;
+      border-left: 3px solid #0369a1 !important;
+      border-color: #94a3b8 !important;
+    }
+
+    html[data-theme="light"] .harvey-message.user,
+    html[data-theme="light"] .j-msg.user {
+      background: #dbeafe !important;
+      color: #1e3a5f !important;
+      font-weight: 600 !important;
+      border-color: #0369a1 !important;
+    }
+
+    html[data-theme="light"] .j-msg.system { color: #475569 !important; font-weight: 600 !important; }
+
+    /* All monospace text */
+    html[data-theme="light"] [style*="font-family: monospace"],
+    html[data-theme="light"] [style*="font-family:monospace"] {
+      color: #0f172a !important;
+    }
+
+    /* Warning/error colors */
+    html[data-theme="light"] #harvey-voice-error {
+      color: #dc2626 !important;
+      font-weight: 600 !important;
+    }
+
+    html[data-theme="light"] .ms-panel-card {
+      background: #ffffff !important;
+      border: 1px solid #94a3b8 !important;
+      color: #0f172a !important;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
+    }
+    html[data-theme="light"] .ms-panel-card h4 {
+      color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+
+    /* Theme toggle button active state */
+    html[data-theme="light"] #theme-toggle-btn {
+      background: #0f172a !important;
+      color: #ffffff !important;
+      border-color: #0f172a !important;
+      font-weight: 600 !important;
+    }
   </style>
 </head>
 <body>
@@ -732,7 +1259,7 @@
   <div class="j-scanlines" aria-hidden="true"></div>
   <div class="j-vignette" aria-hidden="true"></div>
 
-  <div class="j-shell">
+  <div class="j-shell" id="harvey-shell">
     <div class="ms-strip" id="msStrip">
       <div class="ms-strip-content" id="msStripContent">
         <span class="ms-strip-item ms-live"><i></i>LIVE</span>
@@ -815,6 +1342,12 @@
       <button type="button" class="j-panel-toggle" id="jToggleNotes">NOTES</button>
       <button type="button" class="j-panel-toggle" id="jToggleResearch">RESEARCH</button>
       <button type="button" class="j-panel-toggle" id="jToggleDir">DIRECTIVES</button>
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()"
+        style="background:transparent; border:1px solid rgba(0,212,255,0.3);
+               color:#00d4ff; padding:5px 12px; font-family:monospace;
+               font-size:10px; letter-spacing:1px; cursor:pointer; border-radius:2px;">
+        Light mode
+      </button>
       <span class="j-meta" id="jSessionMeta"><span class="dot"></span>LINK STABLE</span>
       <span class="j-meta" id="jModel">—</span>
     </header>
@@ -919,6 +1452,159 @@
   </button>
 
   <script>
+    // Sync theme with dashboard preference (marco_crm_theme — same key as dashboard.html)
+    const THEME_KEY = "marco_crm_theme";
+
+    function isLightTheme() {
+      return document.documentElement.getAttribute("data-theme") === "light";
+    }
+
+    function updateOrbColors() {
+      const isDark = !isLightTheme();
+      const tickColor = isDark ? "rgba(0,212,255,0.45)" : "#0082c8";
+
+      const tickGroup = document.getElementById("jTickGroup");
+      if (tickGroup) {
+        tickGroup.setAttribute("stroke", tickColor);
+        tickGroup.querySelectorAll("line").forEach((line) => {
+          const isMajor = parseFloat(line.getAttribute("stroke-width") || "0") > 1;
+          line.setAttribute("stroke", tickColor);
+          line.setAttribute("stroke-opacity", isDark ? (isMajor ? "0.85" : "0.45") : (isMajor ? "0.9" : "0.55"));
+        });
+      }
+
+      const tickRing = document.querySelector(".j-tick-ring");
+      if (tickRing) tickRing.style.opacity = isDark ? "" : "0.85";
+
+      const orbCanvas = document.getElementById("harvey-mic-btn");
+      if (orbCanvas) {
+        orbCanvas.style.filter = isDark
+          ? ""
+          : "saturate(1.8) brightness(0.72) contrast(1.2)";
+        orbCanvas.style.opacity = isDark ? "" : "1";
+        orbCanvas.style.boxShadow = "";
+      }
+
+      const micSvg = document.querySelector(".j-mic-icon svg");
+      if (micSvg) {
+        const fillCol = isDark ? "rgba(0,212,255,0.95)" : "rgba(0,130,200,0.95)";
+        const strokeCol = isDark ? "rgba(0,212,255,0.9)" : "rgba(0,130,200,0.9)";
+        const rect = micSvg.querySelector("rect");
+        if (rect) rect.setAttribute("fill", fillCol);
+        micSvg.querySelectorAll("path, line").forEach((el) => el.setAttribute("stroke", strokeCol));
+      }
+    }
+    window.updateOrbColors = updateOrbColors;
+
+    function applyMetricsStripTheme() {
+      const strip = document.getElementById("msStrip");
+      if (!strip) return;
+      const isLight = isLightTheme();
+      if (isLight) {
+        strip.style.background = "#1e293b";
+        strip.style.borderBottom = "1px solid #334155";
+        strip.style.color = "#e2e8f0";
+      } else {
+        strip.style.background = "";
+        strip.style.borderBottom = "";
+        strip.style.color = "";
+      }
+    }
+    window.applyMetricsStripTheme = applyMetricsStripTheme;
+
+    function addScanline() {
+      const existing = document.querySelector(".harvey-scanline");
+      if (isLightTheme()) {
+        if (!existing) {
+          const scanline = document.createElement("div");
+          scanline.className = "harvey-scanline";
+          scanline.setAttribute("aria-hidden", "true");
+          const shell = document.getElementById("harvey-shell") ||
+            document.querySelector(".j-shell") ||
+            document.body;
+          shell.appendChild(scanline);
+        } else {
+          existing.style.display = "block";
+        }
+      } else if (existing) {
+        existing.style.display = "none";
+      }
+    }
+    window.addScanline = addScanline;
+
+    function refreshThemeVisuals() {
+      updateOrbColors();
+      applyMetricsStripTheme();
+      addScanline();
+      setTimeout(() => {
+        const drawFns = ["drawHexGrid", "drawBackground", "drawOrb", "renderOrb",
+          "initCanvas", "renderBackground", "drawScene", "startAnimation", "renderHex"];
+        drawFns.forEach((fn) => {
+          if (typeof window[fn] === "function") {
+            console.log("[Theme] Re-calling canvas function:", fn);
+            window[fn]();
+          }
+        });
+        updateOrbColors();
+      }, 50);
+    }
+    window.refreshThemeVisuals = refreshThemeVisuals;
+
+    function initTheme() {
+      const saved = localStorage.getItem(THEME_KEY) || "dark";
+      if (saved === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+        document.body.classList.add("light-mode");
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+        document.body.classList.remove("light-mode");
+      }
+      console.log("[Theme] Initialized as:", saved);
+      refreshThemeVisuals();
+    }
+    initTheme();
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      const next = current === "dark" ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, next);
+      if (next === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+        document.body.classList.add("light-mode");
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+        document.body.classList.remove("light-mode");
+      }
+      const btn = document.getElementById("theme-toggle-btn");
+      if (btn) btn.textContent = next === "dark" ? "Light mode" : "Dark mode";
+      console.log("[Theme] Switched to:", next);
+      refreshThemeVisuals();
+    }
+    window.toggleTheme = toggleTheme;
+
+    const themeBtn = document.getElementById("theme-toggle-btn");
+    if (themeBtn) {
+      const current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      themeBtn.textContent = current === "dark" ? "Light mode" : "Dark mode";
+    }
+
+    window.addEventListener("storage", (e) => {
+      if (e.key === THEME_KEY) {
+        const newTheme = e.newValue || "dark";
+        if (newTheme === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+          document.body.classList.add("light-mode");
+        } else {
+          document.documentElement.removeAttribute("data-theme");
+          document.body.classList.remove("light-mode");
+        }
+        const btn = document.getElementById("theme-toggle-btn");
+        if (btn) btn.textContent = newTheme === "dark" ? "Light mode" : "Dark mode";
+        console.log("[Theme] Synced from another tab:", newTheme);
+        refreshThemeVisuals();
+      }
+    });
+
     /* ─────────────────────────────────────────────
        TICK RING — radial marks around the core
     ───────────────────────────────────────────── */
@@ -945,6 +1631,7 @@
         frag.appendChild(line);
       }
       g.appendChild(frag);
+      updateOrbColors();
     })();
 
     /* ─────────────────────────────────────────────
@@ -957,6 +1644,25 @@
 
       let W, H, cx, cy, R;
       let raf;
+
+      function orbCyan(alpha) {
+        if (isLightTheme()) return `rgba(0,130,200,${Math.min(1, alpha * 1.45)})`;
+        return `rgba(0,212,255,${alpha})`;
+      }
+
+      function orbGlowColor() {
+        return isLightTheme() ? "#0082c8" : "#00d4ff";
+      }
+
+      function orbSoftCyan(alpha) {
+        if (isLightTheme()) return `rgba(75,180,230,${Math.min(1, alpha * 1.35)})`;
+        return `rgba(75,224,255,${alpha})`;
+      }
+
+      function orbCoreWhite(alpha) {
+        if (isLightTheme()) return `rgba(100,200,240,${Math.min(1, alpha * 1.15)})`;
+        return `rgba(180,245,255,${alpha})`;
+      }
 
       function resize() {
         const s = wrap.offsetWidth;
@@ -1001,9 +1707,10 @@
         if (ring.dash) ctx.setLineDash(ring.dash.map(d => d * scale));
         else           ctx.setLineDash([]);
         ctx.lineDashOffset = offset;
-        ctx.strokeStyle = `rgba(0,212,255,${ring.alpha})`;
-        ctx.lineWidth   = ring.lw * scale;
-        if (ring.glow) { ctx.shadowColor = "#00d4ff"; ctx.shadowBlur = 8 * scale; }
+        const ringAlpha = isLightTheme() ? Math.min(1, ring.alpha * 1.5) : ring.alpha;
+        ctx.strokeStyle = orbCyan(ringAlpha);
+        ctx.lineWidth   = (isLightTheme() ? ring.lw * 1.15 : ring.lw) * scale;
+        if (ring.glow && !isLightTheme()) { ctx.shadowColor = orbGlowColor(); ctx.shadowBlur = 8 * scale; }
         ctx.stroke();
         ctx.shadowBlur = 0;
         ctx.setLineDash([]);
@@ -1012,41 +1719,46 @@
       function drawBloom(t, busyMode) {
         const pulse = 0.88 + 0.12 * Math.sin(t * (busyMode ? 3.5 : 1.2));
         const innerR = R * 0.22 * pulse;
+        const light = isLightTheme();
 
-        let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.72);
-        g.addColorStop(0,   `rgba(0,212,255,${busyMode ? 0.14 : 0.09})`);
-        g.addColorStop(0.4, `rgba(0,212,255,${busyMode ? 0.06 : 0.04})`);
-        g.addColorStop(1,   "transparent");
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(cx, cy, R * 0.72, 0, Math.PI * 2); ctx.fill();
+        if (!light) {
+          let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.72);
+          g.addColorStop(0,   orbCyan(busyMode ? 0.14 : 0.09));
+          g.addColorStop(0.4, orbCyan(busyMode ? 0.06 : 0.04));
+          g.addColorStop(1,   "transparent");
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(cx, cy, R * 0.72, 0, Math.PI * 2); ctx.fill();
 
-        g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.42 * pulse);
-        g.addColorStop(0,   `rgba(0,212,255,${busyMode ? 0.30 : 0.18})`);
-        g.addColorStop(0.5, `rgba(0,212,255,${busyMode ? 0.12 : 0.07})`);
-        g.addColorStop(1,   "transparent");
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(cx, cy, R * 0.42 * pulse, 0, Math.PI * 2); ctx.fill();
+          g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.42 * pulse);
+          g.addColorStop(0,   orbCyan(busyMode ? 0.30 : 0.18));
+          g.addColorStop(0.5, orbCyan(busyMode ? 0.12 : 0.07));
+          g.addColorStop(1,   "transparent");
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(cx, cy, R * 0.42 * pulse, 0, Math.PI * 2); ctx.fill();
 
-        g = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR);
-        g.addColorStop(0,   `rgba(180,245,255,${busyMode ? 0.9 : 0.7})`);
-        g.addColorStop(0.35,`rgba(0,212,255,${busyMode ? 0.55 : 0.38})`);
-        g.addColorStop(1,   "transparent");
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(cx, cy, innerR, 0, Math.PI * 2); ctx.fill();
+          g = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR);
+          g.addColorStop(0,   orbCoreWhite(busyMode ? 0.9 : 0.7));
+          g.addColorStop(0.35, orbCyan(busyMode ? 0.55 : 0.38));
+          g.addColorStop(1,   "transparent");
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(cx, cy, innerR, 0, Math.PI * 2); ctx.fill();
+        }
 
         ctx.beginPath();
         ctx.arc(cx, cy, innerR * 0.72, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(0,212,255,${busyMode ? 0.95 : 0.75})`;
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = orbCyan(light ? (busyMode ? 0.55 : 0.4) : (busyMode ? 0.95 : 0.75));
+        ctx.lineWidth = light ? 1.5 : 1.5;
         ctx.stroke();
 
         const scanA = t * 1.4;
         ctx.beginPath();
         ctx.arc(cx, cy, R * 0.56, scanA, scanA + 0.55);
-        ctx.strokeStyle = `rgba(0,212,255,${busyMode ? 0.85 : 0.55})`;
+        ctx.strokeStyle = orbCyan(busyMode ? 0.85 : 0.55);
         ctx.lineWidth = 2.5;
-        ctx.shadowColor = "#00d4ff";
-        ctx.shadowBlur  = 12;
+        if (!light) {
+          ctx.shadowColor = orbGlowColor();
+          ctx.shadowBlur  = 12;
+        }
         ctx.stroke();
         ctx.shadowBlur = 0;
 
@@ -1054,15 +1766,15 @@
         const scanB = -t * 0.9 + Math.PI;
         ctx.beginPath();
         ctx.arc(cx, cy, R * 0.66, scanB, scanB + 0.32);
-        ctx.strokeStyle = `rgba(75,224,255,${busyMode ? 0.7 : 0.35})`;
+        ctx.strokeStyle = orbSoftCyan(busyMode ? 0.7 : 0.35);
         ctx.lineWidth = 1.4;
         ctx.stroke();
       }
 
       function drawCrosshair() {
         ctx.setLineDash([3, 9]);
-        ctx.strokeStyle = "rgba(0,212,255,0.07)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = orbCyan(isLightTheme() ? 0.18 : 0.07);
+        ctx.lineWidth = isLightTheme() ? 1.2 : 1;
         ctx.beginPath();
         ctx.moveTo(cx, 0); ctx.lineTo(cx, H);
         ctx.moveTo(0, cy); ctx.lineTo(W, cy);
@@ -1077,12 +1789,15 @@
           const x = cx + Math.cos(p.angle) * pr;
           const y = cy + Math.sin(p.angle) * pr;
           const flicker = p.alpha * (0.7 + 0.3 * Math.sin(t * 2.5 + p.angle * 3));
+          const particleAlpha = isLightTheme() ? Math.min(1, flicker * 1.4) : flicker;
 
           ctx.beginPath();
           ctx.arc(x, y, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(0,212,255,${flicker})`;
-          ctx.shadowColor = "#00d4ff";
-          ctx.shadowBlur  = p.size * 4;
+          ctx.fillStyle = orbCyan(particleAlpha);
+          if (!isLightTheme()) {
+            ctx.shadowColor = orbGlowColor();
+            ctx.shadowBlur  = p.size * 4;
+          }
           ctx.fill();
           ctx.shadowBlur = 0;
         });
@@ -1123,6 +1838,7 @@
       window.setCoreState = (s) => { window.coreState = s; };
 
       start();
+      updateOrbColors();
 
     })();
 
@@ -1643,6 +2359,7 @@
       dash("msSeller", "14 CLOSINGS NEEDED");
       dash("msPace", `1 CLOSING/${tt.weeksPerClosingCurrent || 8}WKS → NEED ${tt.videosPerWeekForMonthly || 10.3} VIDS/WK`);
       dash("msContactRate", `1 PER ${mj.callsPerContact || 32} CALLS`);
+      applyMetricsStripTheme();
     }
 
     // ============================================

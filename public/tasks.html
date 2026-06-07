@@ -221,6 +221,379 @@
     .btn-cancel { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 8px 16px; cursor: pointer; font-size: 10px; }
     .btn-save { border: 1px solid rgba(0,212,255,0.4); background: rgba(0,212,255,0.12); color: var(--cyan); padding: 8px 16px; cursor: pointer; font-size: 10px; }
 
+    /* ─── TASKS LIGHT MODE — STRONG CONTRAST ─── */
+    html[data-theme="light"],
+    html[data-theme="light"] body {
+      background: #f1f5f9 !important;
+      color: #0f172a !important;
+    }
+
+    /* Header */
+    html[data-theme="light"] .tasks-header,
+    html[data-theme="light"] #tasks-header,
+    html[data-theme="light"] header,
+    html[data-theme="light"] .topbar {
+      background: #ffffff !important;
+      border-bottom: 2px solid #94a3b8 !important;
+    }
+
+    html[data-theme="light"] .tasks-header *,
+    html[data-theme="light"] #tasks-header *,
+    html[data-theme="light"] .topbar * {
+      color: #0f172a !important;
+    }
+
+    html[data-theme="light"] .tasks-header h1,
+    html[data-theme="light"] .page-title,
+    html[data-theme="light"] .title {
+      color: #0f172a !important;
+      font-weight: 700 !important;
+    }
+
+    html[data-theme="light"] .topbar select,
+    html[data-theme="light"] .search-input {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border: 1px solid #94a3b8 !important;
+      font-weight: 500 !important;
+    }
+
+    /* Input bar */
+    html[data-theme="light"] .task-input-bar,
+    html[data-theme="light"] #task-input-bar,
+    html[data-theme="light"] .input-section {
+      background: #ffffff !important;
+      border-bottom: 2px solid #94a3b8 !important;
+    }
+
+    html[data-theme="light"] #task-input,
+    html[data-theme="light"] .task-input,
+    html[data-theme="light"] .quick-input,
+    html[data-theme="light"] input[placeholder*="task"],
+    html[data-theme="light"] input[placeholder*="Task"],
+    html[data-theme="light"] input[placeholder*="TYPE"],
+    html[data-theme="light"] input[placeholder*="Type"] {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border: 2px solid #94a3b8 !important;
+      font-weight: 500 !important;
+    }
+
+    html[data-theme="light"] #task-input::placeholder,
+    html[data-theme="light"] .quick-input::placeholder {
+      color: #64748b !important;
+    }
+
+    html[data-theme="light"] .input-prefix {
+      color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+
+    /* Prefix hints */
+    html[data-theme="light"] .prefix-hints,
+    html[data-theme="light"] [class*="hint"],
+    html[data-theme="light"] .quick-hints,
+    html[data-theme="light"] .add-confirm {
+      color: #475569 !important;
+      font-weight: 500 !important;
+    }
+
+    /* Add button */
+    html[data-theme="light"] #add-task-btn,
+    html[data-theme="light"] .add-task-btn,
+    html[data-theme="light"] #open-modal,
+    html[data-theme="light"] .add-btn,
+    html[data-theme="light"] .quick-add,
+    html[data-theme="light"] button[onclick*="addTask"],
+    html[data-theme="light"] button[onclick*="submitTask"] {
+      background: #0369a1 !important;
+      color: #ffffff !important;
+      border-color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+
+    html[data-theme="light"] .board { background: #f1f5f9 !important; }
+
+    /* Column layout — preserve colored left borders from dark mode */
+    html[data-theme="light"] .task-column,
+    html[data-theme="light"] .column {
+      background: #f8fafc !important;
+      border-right: 1px solid #e2e8f0 !important;
+    }
+
+    html[data-theme="light"] .column[data-col="urgent"],
+    html[data-theme="light"] #col-urgent {
+      border-left: 3px solid #ff2d55 !important;
+    }
+
+    html[data-theme="light"] .column[data-col="today"],
+    html[data-theme="light"] #col-today {
+      border-left: 3px solid #00d4ff !important;
+    }
+
+    html[data-theme="light"] .column[data-col="tomorrow"],
+    html[data-theme="light"] #col-tomorrow {
+      border-left: 3px solid #8b5cf6 !important;
+    }
+
+    html[data-theme="light"] .column[data-col="this_week"],
+    html[data-theme="light"] #col-this_week {
+      border-left: 3px solid #f59e0b !important;
+    }
+
+    html[data-theme="light"] .column[data-col="this_month"],
+    html[data-theme="light"] #col-this_month {
+      border-left: 3px solid #10b981 !important;
+    }
+
+    html[data-theme="light"] .task-column-body,
+    html[data-theme="light"] [id^="col-body-"] {
+      background: #f8fafc !important;
+    }
+
+    /* Column headers */
+    html[data-theme="light"] .task-column-header,
+    html[data-theme="light"] [class*="column-header"],
+    html[data-theme="light"] .col-head {
+      color: #0f172a !important;
+      font-weight: 700 !important;
+      border-bottom: 2px solid #e2e8f0 !important;
+    }
+
+    html[data-theme="light"] .col-title {
+      color: #0f172a !important;
+      font-weight: 700 !important;
+    }
+
+    html[data-theme="light"] [id^="count-"],
+    html[data-theme="light"] .col-count {
+      color: #475569 !important;
+      font-weight: 600 !important;
+    }
+
+    /* Task cards */
+    html[data-theme="light"] .task-card {
+      background: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      color: #0f172a !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+    }
+
+    html[data-theme="light"] .task-card:hover {
+      background: #f8fafc !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+    }
+
+    html[data-theme="light"] .task-title {
+      color: #0f172a !important;
+      font-weight: 600 !important;
+    }
+
+    html[data-theme="light"] .task-desc {
+      color: #475569 !important;
+      font-weight: 400 !important;
+    }
+
+    html[data-theme="light"] .task-due {
+      color: #0369a1 !important;
+      font-weight: 500 !important;
+    }
+
+    html[data-theme="light"] .task-meta {
+      color: #475569 !important;
+    }
+
+    html[data-theme="light"] .task-badge {
+      background: #e2e8f0 !important;
+      color: #334155 !important;
+      border: 1px solid #94a3b8 !important;
+      font-weight: 500 !important;
+    }
+
+    /* Recurring icon */
+    html[data-theme="light"] [title*="Repeats"],
+    html[data-theme="light"] [title*="every"] {
+      color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+
+    /* Done state */
+    html[data-theme="light"] .task-card.done {
+      background: #f0fdf4 !important;
+      border-left-color: #10b981 !important;
+      opacity: 0.7 !important;
+    }
+
+    html[data-theme="light"] .task-card.done .task-title {
+      color: #64748b !important;
+      text-decoration: line-through !important;
+    }
+
+    /* MARK DONE button */
+    html[data-theme="light"] .done-btn {
+      background: #ffffff !important;
+      border: 1px solid #94a3b8 !important;
+      color: #475569 !important;
+      font-weight: 500 !important;
+    }
+
+    html[data-theme="light"] .done-btn:hover {
+      background: #eff6ff !important;
+      border-color: #0369a1 !important;
+      color: #0369a1 !important;
+    }
+
+    /* DONE button (completed state) */
+    html[data-theme="light"] .undone-btn {
+      background: #dcfce7 !important;
+      border: 1px solid #10b981 !important;
+      color: #065f46 !important;
+      font-weight: 600 !important;
+    }
+
+    /* Trash icon */
+    html[data-theme="light"] .task-trash {
+      color: #dc2626 !important;
+    }
+
+    /* Filter buttons */
+    html[data-theme="light"] #filter-undone,
+    html[data-theme="light"] #filter-done,
+    html[data-theme="light"] #filter-both {
+      background: #ffffff !important;
+      border: 1px solid #94a3b8 !important;
+      color: #334155 !important;
+      font-weight: 500 !important;
+    }
+
+    html[data-theme="light"] #filter-undone[style*="rgba(0,212,255"],
+    html[data-theme="light"] #filter-done[style*="rgba(0,212,255"],
+    html[data-theme="light"] #filter-both[style*="rgba(0,212,255"] {
+      background: #0ea5e9 !important;
+      border-color: #0369a1 !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+    }
+
+    /* Empty state */
+    html[data-theme="light"] .col-empty-state,
+    html[data-theme="light"] .col-loading,
+    html[data-theme="light"] .col-empty {
+      color: #94a3b8 !important;
+      font-weight: 500 !important;
+    }
+
+    /* Modal */
+    html[data-theme="light"] .modal-overlay {
+      background: rgba(15, 23, 42, 0.45) !important;
+    }
+
+    html[data-theme="light"] .task-modal,
+    html[data-theme="light"] #task-modal,
+    html[data-theme="light"] .modal,
+    html[data-theme="light"] [id*="modal"] .modal {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border: 2px solid #94a3b8 !important;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15) !important;
+    }
+
+    html[data-theme="light"] .task-modal *,
+    html[data-theme="light"] #task-modal *,
+    html[data-theme="light"] .modal * {
+      color: #0f172a !important;
+    }
+
+    html[data-theme="light"] .modal-head h2 {
+      color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+
+    html[data-theme="light"] .task-modal input,
+    html[data-theme="light"] .task-modal textarea,
+    html[data-theme="light"] .task-modal select,
+    html[data-theme="light"] #task-modal input,
+    html[data-theme="light"] #task-modal textarea,
+    html[data-theme="light"] #task-modal select,
+    html[data-theme="light"] .modal input,
+    html[data-theme="light"] .modal textarea,
+    html[data-theme="light"] .modal select,
+    html[data-theme="light"] .field input,
+    html[data-theme="light"] .field textarea,
+    html[data-theme="light"] .field select {
+      background: #f8fafc !important;
+      color: #0f172a !important;
+      border: 1px solid #94a3b8 !important;
+      font-weight: 500 !important;
+    }
+
+    html[data-theme="light"] .task-modal label,
+    html[data-theme="light"] #task-modal label,
+    html[data-theme="light"] .field label {
+      color: #334155 !important;
+      font-weight: 600 !important;
+    }
+
+    /* Save/Cancel buttons in modal */
+    html[data-theme="light"] .task-modal button[onclick*="save"],
+    html[data-theme="light"] .task-modal button[onclick*="Save"],
+    html[data-theme="light"] #task-modal button[onclick*="save"],
+    html[data-theme="light"] .btn-save,
+    html[data-theme="light"] #modal-save {
+      background: #0369a1 !important;
+      color: #ffffff !important;
+      border-color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+
+    html[data-theme="light"] .btn-cancel,
+    html[data-theme="light"] #modal-cancel {
+      color: #475569 !important;
+      border-color: #94a3b8 !important;
+      font-weight: 600 !important;
+    }
+
+    /* Toast */
+    html[data-theme="light"] #task-toast {
+      background: #eff6ff !important;
+      border: 1px solid #0369a1 !important;
+      color: #0369a1 !important;
+      font-weight: 600 !important;
+    }
+
+    /* Drag over highlight */
+    html[data-theme="light"] .task-column.drag-over .task-column-body {
+      background: #dbeafe !important;
+      border: 2px dashed #0369a1 !important;
+    }
+
+    /* Back button */
+    html[data-theme="light"] .back-btn,
+    html[data-theme="light"] #back-btn,
+    html[data-theme="light"] a[href*="dashboard"] {
+      color: #0369a1 !important;
+      border-color: #0369a1 !important;
+      font-weight: 600 !important;
+      background: transparent !important;
+    }
+
+    /* Theme toggle button */
+    html[data-theme="light"] #theme-toggle-btn {
+      background: #0f172a !important;
+      color: #ffffff !important;
+      border-color: #0f172a !important;
+      font-weight: 600 !important;
+    }
+
+    /* Confirmation dialog */
+    html[data-theme="light"] .confirm-dialog {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border: 2px solid #94a3b8 !important;
+    }
+
+    html[data-theme="light"] a { color: #0369a1 !important; font-weight: 600 !important; }
+
   </style>
 </head>
 <body>
@@ -228,6 +601,12 @@
     <a id="back-link" class="back-btn" href="/dashboard">← BACK TO DASHBOARD</a>
     <div class="title">// MARCO · TASK COMMAND CENTER //</div>
     <div class="topbar-right">
+      <button id="theme-toggle-btn" type="button" onclick="toggleTheme()"
+        style="background:transparent; border:1px solid rgba(0,212,255,0.3);
+               color:#00d4ff; padding:5px 12px; font-family:monospace;
+               font-size:10px; letter-spacing:1px; cursor:pointer; border-radius:2px;">
+        Light mode
+      </button>
       <div class="filter-toggles">
         <button type="button" id="filter-undone" class="filter-toggle" onclick="setFilter('undone')"
           style="background:rgba(0,212,255,0.2); border-color:#00d4ff; color:#00d4ff;">
@@ -355,6 +734,61 @@
   </div>
 
   <script>
+    // Sync theme with dashboard preference (marco_crm_theme — same key as dashboard.html)
+    const THEME_KEY = "marco_crm_theme";
+
+    function initTheme() {
+      const saved = localStorage.getItem(THEME_KEY) || "dark";
+      if (saved === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+        document.body.classList.add("light-mode");
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+        document.body.classList.remove("light-mode");
+      }
+      console.log("[Theme] Initialized as:", saved);
+    }
+    initTheme();
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      const next = current === "dark" ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, next);
+      if (next === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+        document.body.classList.add("light-mode");
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+        document.body.classList.remove("light-mode");
+      }
+      const btn = document.getElementById("theme-toggle-btn");
+      if (btn) btn.textContent = next === "dark" ? "Light mode" : "Dark mode";
+      console.log("[Theme] Switched to:", next);
+    }
+    window.toggleTheme = toggleTheme;
+
+    const themeBtn = document.getElementById("theme-toggle-btn");
+    if (themeBtn) {
+      const current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      themeBtn.textContent = current === "dark" ? "Light mode" : "Dark mode";
+    }
+
+    window.addEventListener("storage", (e) => {
+      if (e.key === THEME_KEY) {
+        const newTheme = e.newValue || "dark";
+        if (newTheme === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+          document.body.classList.add("light-mode");
+        } else {
+          document.documentElement.removeAttribute("data-theme");
+          document.body.classList.remove("light-mode");
+        }
+        const btn = document.getElementById("theme-toggle-btn");
+        if (btn) btn.textContent = newTheme === "dark" ? "Light mode" : "Dark mode";
+        console.log("[Theme] Synced from another tab:", newTheme);
+      }
+    });
+
     const COLS = [
       { id: "urgent", label: "URGENT" },
       { id: "today", label: "TODAY" },
