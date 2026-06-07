@@ -480,6 +480,90 @@ export interface TasksSummary {
   completedToday: number;
 }
 
+/** Carlos command-center task board (stored in db.json `commandTasks`). */
+export type CommandTaskColumn = "urgent" | "today" | "tomorrow" | "this_week" | "this_month";
+
+export type CommandTaskStatus = "pending" | "done";
+
+export type CommandTaskColor = "red" | "amber" | "green" | "blue" | "purple" | "gray";
+
+export type CommandTaskRecurringInterval =
+  | "daily"
+  | "every_3_days"
+  | "every_5_days"
+  | "weekly"
+  | "monthly";
+
+export interface CommandTask {
+  id: string;
+  title: string;
+  description?: string;
+  column: CommandTaskColumn;
+  status: CommandTaskStatus;
+  color: CommandTaskColor;
+  recurring?: boolean;
+  recurringInterval?: CommandTaskRecurringInterval;
+  createdBy?: string;
+  assignedTo?: string;
+  dueDate?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  tags?: string[];
+}
+
+export interface CommandTasksSummary {
+  urgent: number;
+  today: number;
+  totalPending: number;
+}
+
+export type MarcoTaskPriority = "high" | "medium" | "low";
+
+export type MarcoTaskStatus = "pending" | "in_progress" | "done";
+
+export interface MarcoTask {
+  id: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  priority: MarcoTaskPriority;
+  status: MarcoTaskStatus;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
+export interface MarcoTasksSummary {
+  pending: number;
+  inProgress: number;
+  done: number;
+  highPriority: number;
+  overdue: number;
+}
+
+export type HarveyNoteCategory =
+  | "general"
+  | "lead"
+  | "listing"
+  | "idea"
+  | "follow_up"
+  | "meeting";
+
+export interface HarveyNote {
+  id: string;
+  content: string;
+  title?: string;
+  category: HarveyNoteCategory;
+  leadId?: string;
+  leadName?: string;
+  tags?: string[];
+  source: "voice" | "text" | "auto";
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DashboardSnapshot {
   generatedAt: string;
   totals: {
@@ -503,6 +587,8 @@ export interface DashboardSnapshot {
   /** Sum of estimatedGCI on deals with status closed. */
   totalGCI: number;
   tasksSummary: TasksSummary;
+  commandTasksSummary: CommandTasksSummary;
+  marcoTasksSummary: MarcoTasksSummary;
 }
 
 export interface IncomingWebhookPayload {

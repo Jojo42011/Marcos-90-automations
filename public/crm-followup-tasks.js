@@ -39,7 +39,7 @@
   let crmFollowupInlinePlanId = null;
 
   function tasksApiUrl(path) {
-    const u = new URL(path || "/api/tasks", window.location.origin);
+    const u = new URL(path || "/api/crm-tasks", window.location.origin);
     if (typeof token !== "undefined" && token) u.searchParams.set("token", token);
     return u.toString();
   }
@@ -150,7 +150,7 @@
   async function crmLoadTasks(force) {
     if (crmTasksLoaded && !force) return crmTasksCache;
     try {
-      const res = await fetch(tasksApiUrl("/api/tasks"));
+      const res = await fetch(tasksApiUrl("/api/crm-tasks"));
       const body = await res.json().catch(() => ({}));
       if (res.ok && Array.isArray(body.tasks)) {
         crmTasksCache = body.tasks;
@@ -253,7 +253,7 @@
 
   async function crmCompleteTask(id) {
     try {
-      const res = await fetch(tasksApiUrl("/api/tasks/" + encodeURIComponent(id) + "/complete"), {
+      const res = await fetch(tasksApiUrl("/api/crm-tasks/" + encodeURIComponent(id) + "/complete"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -383,8 +383,8 @@
     };
     try {
       const url = b.id
-        ? tasksApiUrl("/api/tasks/" + encodeURIComponent(b.id))
-        : tasksApiUrl("/api/tasks");
+        ? tasksApiUrl("/api/crm-tasks/" + encodeURIComponent(b.id))
+        : tasksApiUrl("/api/crm-tasks");
       const res = await fetch(url, {
         method: b.id ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -605,7 +605,7 @@
         const st = col.getAttribute("data-task-col");
         if (!id || !st) return;
         try {
-          await fetch(tasksApiUrl("/api/tasks/" + encodeURIComponent(id)), {
+          await fetch(tasksApiUrl("/api/crm-tasks/" + encodeURIComponent(id)), {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ status: st }),
@@ -751,7 +751,7 @@
     }
     if (!confirm("Delete this task?")) return;
     try {
-      const u = new URL(tasksApiUrl("/api/tasks/" + encodeURIComponent(id)));
+      const u = new URL(tasksApiUrl("/api/crm-tasks/" + encodeURIComponent(id)));
       if (crmCurrentUser) u.searchParams.set("userId", crmCurrentUser.id);
       const res = await fetch(u.toString(), { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
@@ -782,7 +782,7 @@
   async function crmBulkReassignTasks(userId) {
     const u = (crmUsers || []).find((x) => x.id === userId);
     for (const id of crmTasksSelected) {
-      await fetch(tasksApiUrl("/api/tasks/" + encodeURIComponent(id)), {
+      await fetch(tasksApiUrl("/api/crm-tasks/" + encodeURIComponent(id)), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assignedUserId: userId, assignedUserName: u ? u.name : "" }),
@@ -795,7 +795,7 @@
 
   async function crmBulkPriorityTasks(pri) {
     for (const id of crmTasksSelected) {
-      await fetch(tasksApiUrl("/api/tasks/" + encodeURIComponent(id)), {
+      await fetch(tasksApiUrl("/api/crm-tasks/" + encodeURIComponent(id)), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ priority: pri }),

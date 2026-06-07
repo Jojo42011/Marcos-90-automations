@@ -9,9 +9,14 @@ import cors from "cors";
 import path from "path";
 import { handleWebhook, handleIncomingPayload } from "./app/webhook.js";
 import {
+  createCommandTask,
+  deleteCommandTask,
+  getCommandTasks,
   getDashboardSnapshot,
   normalizeCrmIntent,
   resetMemoryStore,
+  seedCommandTasksIfEmpty,
+  updateCommandTask,
   updateLeadCrmFields,
   getLeadById,
   appendMessage,
@@ -67,6 +72,32 @@ import {
   updateTask,
 } from "./core/tasks.js";
 import {
+  buildMarcoTasksSummary,
+  createMarcoTask,
+  deleteMarcoTask,
+  getMarcoTasks,
+  seedMarcoTasksIfEmpty,
+  sortMarcoTasks,
+  updateMarcoTask,
+} from "./core/marcoTasks.js";
+import {
+  createNote,
+  deleteNote,
+  filterNotes,
+  getNotes,
+  searchNotes,
+  updateNote,
+} from "./core/harveyNotes.js";
+import type {
+  CommandTask,
+  CommandTaskColor,
+  CommandTaskColumn,
+  CommandTaskRecurringInterval,
+  HarveyNoteCategory,
+  MarcoTaskPriority,
+  MarcoTaskStatus,
+} from "./core/types.js";
+import {
   calculateGCI,
   createDeal,
   deleteDeal,
@@ -111,9 +142,14 @@ import {
   claimSendblueInboundHandle,
   sendblueWebhookSecretMatches,
 } from "./integrations/sendblue/index.js";
+import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicModel, isAnthropicApiKeyConfigured } from "./integrations/llm/index.js";
 import { fetchAdsSummaryFromUpstream } from "./harvey/adsUpstream.js";
+import { randomUUID } from "crypto";
 import { runHarveyChat, runHarveyOps, getHarveyModel } from "./harvey/index.js";
+import { bootstrapMemory } from "./harvey/memory/bootstrap.js";
+import { retrieveMemories } from "./harvey/memory/retrieval.js";
+import { getMemoryDb } from "./harvey/memory/store.js";
 import { newMarcoRequestId, marcoCorrelationId } from "./app/marcoLog.js";
 
 const app = express();
@@ -155,12 +191,35 @@ Rules:
 - Act and inform — don't ask for permission on routine things
 - Address Marco as "sir" occasionally`;
 
+const MARCO_WAR_ROOM_METRICS = `
+MARCO'S NUMBERS (answer from these when asked):
+$20M Goal by Nov 30 2026: $5.96M banked (29.8%), $14.04M gap, 14 deals, avg $425K/deal
+Daily targets: 7 videos + 725 calls
+TikTok (174 days, 124 videos): 738K views, 3 closings, 5,957 avg views/video, 28.7s watch time
+TikTok funnel: 246K views → 1,359 comments → 272 DMs → 136 phones → 7 consults → 1 closing
+At 5 vids/week = 1 closing/8wks. Need 10.3 vids/week for monthly closing.
+Mojo (Jan-May 2026): 26,938 calls → 846 contacts → 4 closings, 1 contact per 32 calls
+Mojo funnel: 6,734 calls → 212 contacts → 9 consults → 1 closing
+Cold calling is 36x more efficient per touch than TikTok
+`;
+
 function geminiApiKey(): string {
   return process.env.GEMINI_API_KEY?.trim() || "";
 }
 
 function geminiLiveModel(): string {
-  return process.env.GEMINI_LIVE_MODEL?.trim() || "models/gemini-2.0-flash-live-001";
+  return process.env.GEMINI_LIVE_MODEL?.trim() || "gemini-3.1-flash-live-preview";
+}
+
+const GEMINI_LIVE_SYSTEM_PROMPT_MAX = 4000;
+
+function trimGeminiSystemPrompt(prompt: string): string {
+  if (prompt.length <= GEMINI_LIVE_SYSTEM_PROMPT_MAX) return prompt;
+  const trimmed = prompt.slice(0, GEMINI_LIVE_SYSTEM_PROMPT_MAX - 32).trimEnd();
+  console.warn(
+    `[GeminiLive] System prompt truncated from ${prompt.length} to ${trimmed.length} chars (max ${GEMINI_LIVE_SYSTEM_PROMPT_MAX})`,
+  );
+  return `${trimmed}\n\n[Context truncated for Live API limit]`;
 }
 
 app.get("/health", (_req, res) => {
@@ -207,6 +266,10 @@ app.get("/chat", (_req, res) => {
 
 app.get("/jarvis", (_req, res) => {
   res.sendFile(path.join(publicDir, "jarvis.html"));
+});
+
+app.get("/tasks", (_req, res) => {
+  res.sendFile(path.join(publicDir, "tasks.html"));
 });
 
 app.get("/crm-followup-tasks.js", (_req, res) => {
@@ -520,11 +583,9 @@ app.post("/api/jarvis/chat", express.json(), async (req, res) => {
 
 /** Gemini Live — WebSocket URL + setup for browser voice session. */
 app.post("/api/jarvis/gemini-live/token", express.json({ limit: "64kb" }), (req, res) => {
-  console.log("[GeminiLive] Token request received");
+  console.log("[GeminiLive] Token endpoint hit");
   console.log("[GeminiLive] GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY);
-  console.log("[GeminiLive] GEMINI_API_KEY length:", process.env.GEMINI_API_KEY?.length || 0);
-  console.log("[GeminiLive] Auth header present:", !!req.headers.authorization);
-  console.log("[GeminiLive] Token from query:", !!req.query.token);
+  console.log("[GeminiLive] GEMINI_API_KEY length:", process.env.GEMINI_API_KEY?.length);
 
   if (!dashboardTokenOk(req)) {
     console.log("[GeminiLive] Auth failed — unauthorized");
@@ -539,11 +600,12 @@ app.post("/api/jarvis/gemini-live/token", express.json({ limit: "64kb" }), (req,
   }
   const model = "gemini-3.1-flash-live-preview";
   const voiceName = "Charon";
-  const systemPrompt = HARVEY_GEMINI_SYSTEM_PROMPT;
+  const rawPrompt = HARVEY_GEMINI_SYSTEM_PROMPT + MARCO_WAR_ROOM_METRICS;
+  const systemPrompt = trimGeminiSystemPrompt(rawPrompt);
   const wsUrl = `${GEMINI_LIVE_WS}?key=${encodeURIComponent(key)}`;
 
-  console.log("[GeminiLive] Full wsUrl:", wsUrl);
-  console.log("[GeminiLive] Returning model:", model);
+  console.log("[GeminiLive] Model being returned:", model);
+  console.log("[GeminiLive] wsUrl prefix:", wsUrl.substring(0, 80));
   console.log("[GeminiLive] System prompt length:", systemPrompt.length);
   console.log("[GeminiLive] Voice name:", voiceName);
 
@@ -553,6 +615,675 @@ app.post("/api/jarvis/gemini-live/token", express.json({ limit: "64kb" }), (req,
     systemPrompt,
     voiceName,
   });
+});
+
+/** War Room — static campaign metrics for Harvey UI strip. */
+app.get("/api/jarvis/metrics", (req, res) => {
+  const authorized = dashboardTokenOk(req);
+  console.log("[Metrics] Request received");
+  console.log("[Metrics] Auth header:", !!req.headers.authorization);
+  console.log("[Metrics] Token query:", !!req.query.token);
+  console.log("[Metrics] Authorized:", authorized);
+  if (!authorized) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  res.json({
+    goal: {
+      target: 20000000,
+      banked: 5956520,
+      gap: 14043480,
+      percentComplete: 29.8,
+      deadline: "Nov 30, 2026",
+      avgDealPrice: 425466,
+      dealsCount: 14,
+    },
+    dailyTargets: { videos: 7, calls: 725 },
+    tiktok: {
+      days: 174,
+      videos: 124,
+      views: 738682,
+      comments: 4076,
+      shares: 8322,
+      closings: 3,
+      avgViewsPerVideo: 5957,
+      avgWatchSeconds: 28.7,
+      platformAvgWatch: 17.5,
+      viewsPerClosing: 246227,
+      dmsPerClosing: 272,
+      phonesPerClosing: 136,
+      consultsPerClosing: 7,
+      videosPerWeekCurrent: 5,
+      weeksPerClosingCurrent: 8,
+      videosPerWeekForMonthly: 10.3,
+    },
+    mojo: {
+      calls: 26938,
+      contacts: 846,
+      consults: 37,
+      apptsHeld: 25,
+      agreements: 8,
+      closings: 4,
+      callsPerClosing: 6734,
+      contactsPerClosing: 212,
+      callsPerContact: 32,
+      efficiencyVsTiktok: "36x more efficient per touch",
+    },
+    insights: [
+      { priority: "critical", text: "Need 725 calls/day + 7 videos/day to hit $20M by Nov 30" },
+      { priority: "high", text: "At current pace (5 videos/week): 1 closing every 8 weeks" },
+      { priority: "high", text: "Need 10.3 videos/week for 1 closing/month from TikTok" },
+      { priority: "medium", text: "Cold calling is 36x more efficient per touch than TikTok" },
+      { priority: "medium", text: "Watch time 28.7s is above platform average — hooks are working" },
+      { priority: "medium", text: "DM to phone capture rate is the biggest TikTok leverage point" },
+    ],
+  });
+});
+
+/** Harvey daily game plan — static targets + motivation. */
+app.get("/api/jarvis/daily-plan", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const now = new Date();
+  const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
+  const dateStr = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const daysRemaining = Math.ceil(
+    (new Date("2026-11-30").getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  res.json({
+    date: dateStr,
+    dayOfWeek,
+    targets: {
+      videos: 7,
+      calls: 725,
+      description: "Non-negotiable daily minimums for $20M by Nov 30",
+    },
+    goalStatus: {
+      banked: 5956520,
+      gap: 14043480,
+      percentComplete: 29.8,
+      deadline: "Nov 30, 2026",
+      daysRemaining,
+    },
+    needleMovers: [
+      "7 videos posted today = TikTok engine stays alive",
+      "725 calls = 22 contacts at current rate = 0.1 closings in pipeline",
+      "Every video above 7 compounds — 10.3/week hits monthly closing pace",
+      "Every 6,734 calls = 1 seller closing = $425K avg deal",
+    ],
+    motivation: `${dayOfWeek}. $14M gap. ${daysRemaining} days left. The only thing that moves the needle today is reps — videos and calls. Everything else is noise.`,
+  });
+});
+
+/** Harvey market intel — Claude + web search. */
+app.post("/api/jarvis/market-intel", express.json({ limit: "64kb" }), async (req, res) => {
+  console.log("[MarketIntel] Route hit — method:", req.method, "auth:", dashboardTokenOk(req));
+  if (!dashboardTokenOk(req)) {
+    console.log("[MarketIntel] Auth failed");
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) {
+    res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
+    return;
+  }
+
+  try {
+    console.log("[MarketIntel] Fetching market data...");
+    const anthropic = new Anthropic({ apiKey });
+    const lastUpdated = new Date().toISOString();
+
+    const response = await anthropic.messages.create({
+      model: getHarveyModel(),
+      max_tokens: 1500,
+      tools: [{
+        type: "web_search_20250305" as "custom",
+        name: "web_search",
+      } as Anthropic.Messages.Tool],
+      messages: [{
+        role: "user",
+        content: `Search for and return current real estate market data as of today. Find:
+1. Current 30-year fixed mortgage rate (exact percentage)
+2. Current Fed funds rate and any recent Fed decisions
+3. Current US inflation rate (CPI)
+4. National housing market: inventory levels, median home price, pending sales trends
+5. San Antonio Texas housing market specifically if available
+6. Any major economic news affecting real estate this week
+
+Return the data in this exact JSON format with no markdown:
+{
+  "mortgageRate": "X.XX%",
+  "mortgageRateChange": "+/- X.XX% from last week",
+  "fedRate": "X.XX%",
+  "fedNote": "brief note on recent Fed action",
+  "inflation": "X.X%",
+  "inflationNote": "brief context",
+  "nationalInventory": "description",
+  "medianHomePrice": "$XXX,XXX",
+  "marketTrend": "buyer/seller/neutral market description",
+  "sanAntonioNote": "SA specific note or national if SA not found",
+  "weeklyInsight": "2-3 sentence insight connecting these numbers to real estate opportunity",
+  "lastUpdated": "${lastUpdated}"
+}`,
+      }],
+    });
+
+    const fullText = response.content
+      .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+
+    let marketData: Record<string, unknown>;
+    try {
+      const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+      marketData = jsonMatch
+        ? (JSON.parse(jsonMatch[0]) as Record<string, unknown>)
+        : { error: "Could not parse market data", raw: fullText.substring(0, 500) };
+    } catch {
+      marketData = { error: "Parse failed", raw: fullText.substring(0, 500) };
+    }
+
+    console.log("[MarketIntel] Data fetched successfully");
+    res.json({ success: true, data: marketData, fetchedAt: new Date().toISOString() });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[MarketIntel] Error:", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/** Harvey world intel — Claude + web search (business-relevant events). */
+app.post("/api/jarvis/world-intel", express.json({ limit: "64kb" }), async (req, res) => {
+  console.log("[WorldIntel] Route hit — method:", req.method, "auth:", dashboardTokenOk(req));
+  if (!dashboardTokenOk(req)) {
+    console.log("[WorldIntel] Auth failed");
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) {
+    res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
+    return;
+  }
+
+  try {
+    console.log("[WorldIntel] Fetching world events via web search...");
+    const anthropic = new Anthropic({ apiKey });
+    const lastUpdated = new Date().toISOString();
+
+    const response = await anthropic.messages.create({
+      model: getHarveyModel(),
+      max_tokens: 2000,
+      tools: [{
+        type: "web_search_20250305" as "custom",
+        name: "web_search",
+      } as Anthropic.Messages.Tool],
+      messages: [{
+        role: "user",
+        content: `Search for major world and political events from the last 7 days that could impact business, the economy, or real estate.
+
+EXCLUDE: entertainment, celebrity, sports, lifestyle news.
+INCLUDE: policy changes, legislation affecting housing or mortgages, Federal Reserve actions, inflation data, geopolitical events affecting markets, housing policy, interest rate news, major economic decisions, election results affecting economic policy.
+
+Return ONLY this JSON with no markdown:
+{
+  "events": [
+    {
+      "headline": "short headline",
+      "category": "policy|legislation|economic|geopolitical|housing|fed",
+      "summary": "2-3 sentence summary of what happened",
+      "impact": "high|medium|low",
+      "realEstateRelevance": "how this specifically affects real estate or Marco's business, or null if not relevant"
+    }
+  ],
+  "economicSummary": "2-3 sentence overall economic picture this week",
+  "realEstateImpact": "2-3 sentence summary of how current events specifically affect real estate agents and buyers in Texas",
+  "lastUpdated": "${lastUpdated}"
+}
+
+Include 4-6 events maximum. Only include events with real business relevance.`,
+      }],
+    });
+
+    const fullText = response.content
+      .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+
+    console.log("[WorldIntel] Raw response length:", fullText.length);
+
+    let worldData: Record<string, unknown>;
+    try {
+      const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+      worldData = jsonMatch
+        ? (JSON.parse(jsonMatch[0]) as Record<string, unknown>)
+        : {
+            events: [],
+            economicSummary: "Data unavailable",
+            realEstateImpact: "Data unavailable",
+            error: "Could not parse response",
+          };
+    } catch (parseErr) {
+      const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+      console.error("[WorldIntel] JSON parse failed:", msg);
+      worldData = {
+        events: [],
+        economicSummary: "Parse error",
+        realEstateImpact: "Parse error",
+        raw: fullText.substring(0, 200),
+      };
+    }
+
+    const events = worldData.events;
+    console.log("[WorldIntel] Success — events count:", Array.isArray(events) ? events.length : 0);
+    res.json({ success: true, data: worldData, fetchedAt: new Date().toISOString() });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[WorldIntel] Error:", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+const MOJO_TIKTOK_RESEARCH_QUERY = `Research these two topics for a real estate agent automation system:
+
+1. MOJO DIALER API:
+- Does Mojo Dialer have a public API or webhook system?
+- Can call stats (calls made, contacts reached, talk time) be exported automatically?
+- Is there a Zapier integration or any automation options?
+- What would be needed to pull daily call stats into a custom dashboard?
+
+2. TIKTOK ANALYTICS API:
+- Does TikTok have a business/creator API that exposes video analytics?
+- Can views, watch time, comments, shares be pulled automatically per video?
+- What are the API access requirements (business account, approval process)?
+- Is there a way to get daily performance data automatically?
+
+Return findings as JSON:
+{
+  "mojo": {
+    "hasApi": true,
+    "apiDetails": "description of what's available",
+    "exportOptions": ["list of export mechanisms"],
+    "automationOptions": ["zapier", "webhook", etc],
+    "integrationComplexity": "simple|moderate|complex",
+    "recommendation": "what to build",
+    "limitations": "what's not possible"
+  },
+  "tiktok": {
+    "hasApi": true,
+    "apiDetails": "description",
+    "analyticsAccess": "what data is accessible",
+    "accessRequirements": "what's needed to get access",
+    "integrationComplexity": "simple|moderate|complex",
+    "recommendation": "what to build",
+    "limitations": "what's not possible"
+  },
+  "summary": "2-3 sentence executive summary of what's buildable",
+  "nextSteps": ["ordered list of recommended next steps"]
+}`;
+
+async function runClaudeResearchJson(prompt: string): Promise<Record<string, unknown>> {
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+  const anthropic = new Anthropic({ apiKey });
+  const response = await anthropic.messages.create({
+    model: getHarveyModel(),
+    max_tokens: 2500,
+    tools: [{
+      type: "web_search_20250305" as "custom",
+      name: "web_search",
+    } as Anthropic.Messages.Tool],
+    messages: [{ role: "user", content: prompt }],
+  });
+  const fullText = response.content
+    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return { error: "Could not parse research response", raw: fullText.substring(0, 500) };
+  }
+  return JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+}
+
+/** Harvey research report — Claude + web search on arbitrary topic. */
+app.post("/api/jarvis/research-report", express.json({ limit: "64kb" }), async (req, res) => {
+  console.log("[Research] Route hit — method:", req.method, "auth:", dashboardTokenOk(req));
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const topic = typeof body.topic === "string" ? body.topic.trim() : "";
+  if (!topic) {
+    res.status(400).json({ error: "Missing topic" });
+    return;
+  }
+  try {
+    console.log("[Research] Fetching report for:", topic.substring(0, 80));
+    const prompt = `Research the following topic thoroughly for a real estate agent building automation tools. Use current web sources.
+
+TOPIC: ${topic}
+
+Return findings as JSON with no markdown:
+{
+  "topic": "${topic.replace(/"/g, "'")}",
+  "summary": "2-4 sentence executive summary",
+  "findings": ["bullet finding 1", "bullet finding 2"],
+  "recommendation": "what to build or do next",
+  "limitations": "what is not possible or risky",
+  "sources": ["brief source description"]
+}`;
+    const data = await runClaudeResearchJson(prompt);
+    console.log("[Research] Success — topic:", topic.substring(0, 40));
+    res.json({ success: true, data, fetchedAt: new Date().toISOString() });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[Research] Error:", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/** One-time Mojo + TikTok API integration research. */
+app.get("/api/jarvis/mojo-tiktok-research", async (req, res) => {
+  console.log("[Research] Mojo+TikTok route hit — auth:", dashboardTokenOk(req));
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    console.log("[Research] Fetching Mojo + TikTok API research...");
+    const data = await runClaudeResearchJson(MOJO_TIKTOK_RESEARCH_QUERY);
+    console.log("[Research] Mojo+TikTok success");
+    res.json({ success: true, data, fetchedAt: new Date().toISOString() });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[Research] Mojo+TikTok error:", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/** Marco operational tasks — separate from lead follow-up tasks. */
+app.get("/api/marco-tasks", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  seedMarcoTasksIfEmpty();
+  const tasks = sortMarcoTasks(getMarcoTasks());
+  res.status(200).json({ tasks, summary: buildMarcoTasksSummary(tasks) });
+});
+
+app.post("/api/marco-tasks", express.json({ limit: "64kb" }), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  if (!title) {
+    res.status(400).json({ error: "Missing title" });
+    return;
+  }
+  const priority: MarcoTaskPriority =
+    body.priority === "high" || body.priority === "medium" || body.priority === "low"
+      ? body.priority
+      : "medium";
+  const status: MarcoTaskStatus =
+    body.status === "pending" || body.status === "in_progress" || body.status === "done"
+      ? body.status
+      : "pending";
+  const task = createMarcoTask({
+    title,
+    description: typeof body.description === "string" ? body.description : undefined,
+    dueDate: typeof body.dueDate === "string" ? body.dueDate.slice(0, 10) : undefined,
+    priority,
+    status,
+    createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
+  });
+  res.status(201).json({ task });
+});
+
+app.patch("/api/marco-tasks/:id", express.json({ limit: "64kb" }), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const updates: Partial<import("./core/types.js").MarcoTask> = {};
+  if (typeof body.title === "string") updates.title = body.title.trim();
+  if (typeof body.description === "string") updates.description = body.description;
+  if (typeof body.dueDate === "string") updates.dueDate = body.dueDate.slice(0, 10);
+  if (body.priority === "high" || body.priority === "medium" || body.priority === "low") {
+    updates.priority = body.priority;
+  }
+  if (body.status === "pending" || body.status === "in_progress" || body.status === "done") {
+    updates.status = body.status;
+  }
+  if (typeof body.createdBy === "string") updates.createdBy = body.createdBy;
+  const task = updateMarcoTask(id, updates);
+  if (!task) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+  res.status(200).json({ task });
+});
+
+app.delete("/api/marco-tasks/:id", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const ok = deleteMarcoTask(id);
+  res.status(ok ? 200 : 404).json({ success: ok });
+});
+
+app.post("/api/marco-tasks/:id/complete", express.json({ limit: "16kb" }), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const task = updateMarcoTask(id, { status: "done", completedAt: new Date().toISOString() });
+  if (!task) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+  res.status(200).json({ task });
+});
+
+/** Harvey notes — standalone and lead-linked. */
+app.get("/api/notes", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const category = typeof req.query.category === "string" ? req.query.category : undefined;
+  const leadId = typeof req.query.leadId === "string" ? req.query.leadId : undefined;
+  const notes = filterNotes({ category, leadId });
+  res.status(200).json(notes);
+});
+
+app.get("/api/notes/search", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const q = typeof req.query.q === "string" ? req.query.q : "";
+  res.status(200).json(searchNotes(q));
+});
+
+app.post("/api/notes", express.json({ limit: "256kb" }), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const content = typeof body.content === "string" ? body.content.trim() : "";
+  if (!content) {
+    res.status(400).json({ error: "Missing content" });
+    return;
+  }
+  const category: HarveyNoteCategory =
+    body.category === "general" ||
+    body.category === "lead" ||
+    body.category === "listing" ||
+    body.category === "idea" ||
+    body.category === "follow_up" ||
+    body.category === "meeting"
+      ? body.category
+      : "general";
+  const source =
+    body.source === "voice" || body.source === "text" || body.source === "auto"
+      ? body.source
+      : "text";
+  const note = createNote({
+    content,
+    title: typeof body.title === "string" ? body.title : undefined,
+    category,
+    leadId: typeof body.leadId === "string" ? body.leadId : undefined,
+    leadName: typeof body.leadName === "string" ? body.leadName : undefined,
+    tags: Array.isArray(body.tags)
+      ? body.tags.filter((t): t is string => typeof t === "string")
+      : undefined,
+    source,
+  });
+  res.status(201).json(note);
+});
+
+app.patch("/api/notes/:id", express.json({ limit: "256kb" }), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const updates: Partial<import("./core/types.js").HarveyNote> = {};
+  if (typeof body.content === "string") updates.content = body.content.trim();
+  if (typeof body.title === "string") updates.title = body.title;
+  if (
+    body.category === "general" ||
+    body.category === "lead" ||
+    body.category === "listing" ||
+    body.category === "idea" ||
+    body.category === "follow_up" ||
+    body.category === "meeting"
+  ) {
+    updates.category = body.category;
+  }
+  if (typeof body.leadId === "string") updates.leadId = body.leadId;
+  if (typeof body.leadName === "string") updates.leadName = body.leadName;
+  const note = updateNote(id, updates);
+  if (!note) {
+    res.status(404).json({ error: "Note not found" });
+    return;
+  }
+  res.status(200).json(note);
+});
+
+app.delete("/api/notes/:id", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const ok = deleteNote(id);
+  res.status(ok ? 200 : 404).json({ success: ok });
+});
+
+/** Harvey memory — full state snapshot. */
+app.get("/api/jarvis/memory", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const db = getMemoryDb();
+  const semantic = db
+    .prepare("SELECT * FROM harvey_semantic WHERE superseded_by IS NULL ORDER BY weight DESC LIMIT 50")
+    .all();
+  const relational = db.prepare("SELECT * FROM harvey_relational ORDER BY weight DESC LIMIT 50").all();
+  const procedural = db.prepare("SELECT * FROM harvey_procedural ORDER BY use_count DESC").all();
+  const episodes = db.prepare("SELECT * FROM harvey_episodes ORDER BY timestamp DESC LIMIT 20").all();
+  res.json({
+    semantic,
+    relational,
+    procedural,
+    episodes,
+    stats: {
+      semanticCount: semantic.length,
+      relationalCount: relational.length,
+      proceduralCount: procedural.length,
+      episodeCount: episodes.length,
+    },
+  });
+});
+
+/** Harvey memory — semantic search. */
+app.get("/api/jarvis/memory/search", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const q = typeof req.query.q === "string" ? req.query.q : "";
+  const results = retrieveMemories(q);
+  res.json(results);
+});
+
+/** Harvey memory — add semantic fact. */
+app.post("/api/jarvis/memory/add", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const fact = typeof req.body?.fact === "string" ? req.body.fact.trim() : "";
+  const category = typeof req.body?.category === "string" ? req.body.category.trim() : "business";
+  const tags = typeof req.body?.tags === "string" ? req.body.tags.trim() : "";
+  const weight = typeof req.body?.weight === "number" ? req.body.weight : 1.0;
+  if (!fact) {
+    res.status(400).json({ error: "Missing fact" });
+    return;
+  }
+  const db = getMemoryDb();
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO harvey_semantic (id, fact, category, tags, confidence, access_count, last_accessed, created_at, weight)
+     VALUES (?, ?, ?, ?, 1.0, 0, ?, ?, ?)`,
+  ).run(id, fact, category, tags, now, now, weight);
+  res.status(201).json({ id, fact, category, tags, weight });
+});
+
+/** Harvey memory — delete any memory row by id. */
+app.delete("/api/jarvis/memory/:id", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  if (!id) {
+    res.status(400).json({ error: "Missing id" });
+    return;
+  }
+  const db = getMemoryDb();
+  const tables = ["harvey_semantic", "harvey_relational", "harvey_procedural", "harvey_episodes"] as const;
+  let deleted = false;
+  for (const table of tables) {
+    const result = db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+    if (result.changes > 0) deleted = true;
+  }
+  if (!deleted) {
+    res.status(404).json({ error: "Memory not found" });
+    return;
+  }
+  res.status(200).json({ ok: true, id });
 });
 
 /** Gemini TTS — speak Claude text responses via REST. */
@@ -1495,7 +2226,167 @@ function normalizeTaskInput(body: Record<string, unknown>): Omit<Task, "id" | "c
   };
 }
 
+const COMMAND_COLUMNS = new Set<CommandTaskColumn>([
+  "urgent",
+  "today",
+  "tomorrow",
+  "this_week",
+  "this_month",
+]);
+const COMMAND_COLORS = new Set<CommandTaskColor>([
+  "red",
+  "amber",
+  "green",
+  "blue",
+  "purple",
+  "gray",
+]);
+const COMMAND_INTERVALS = new Set<CommandTaskRecurringInterval>([
+  "daily",
+  "every_3_days",
+  "every_5_days",
+  "weekly",
+  "monthly",
+]);
+
+function parseRecurringInterval(raw: unknown): CommandTaskRecurringInterval | undefined {
+  return typeof raw === "string" && COMMAND_INTERVALS.has(raw as CommandTaskRecurringInterval)
+    ? (raw as CommandTaskRecurringInterval)
+    : undefined;
+}
+
+function commandTaskCounts() {
+  const all = getCommandTasks();
+  const pending = all.filter((t) => t.status === "pending");
+  return {
+    urgent: pending.filter((t) => t.column === "urgent").length,
+    today: pending.filter((t) => t.column === "today").length,
+    tomorrow: pending.filter((t) => t.column === "tomorrow").length,
+    this_week: pending.filter((t) => t.column === "this_week").length,
+    this_month: pending.filter((t) => t.column === "this_month").length,
+    total_pending: pending.length,
+    total_done: all.filter((t) => t.status === "done").length,
+  };
+}
+
+/** Carlos command-center task board (db.json). */
 app.get("/api/tasks", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  seedCommandTasksIfEmpty();
+  let tasks = getCommandTasks();
+  const column = typeof req.query.column === "string" ? req.query.column : undefined;
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const assignedTo = typeof req.query.assignedTo === "string" ? req.query.assignedTo : undefined;
+
+  if (column && COMMAND_COLUMNS.has(column as CommandTaskColumn)) {
+    tasks = tasks.filter((t) => t.column === column);
+  }
+  if (status && status !== "both") {
+    tasks = tasks.filter((t) => t.status === status);
+  }
+  if (assignedTo) {
+    tasks = tasks.filter((t) => t.assignedTo === assignedTo);
+  }
+
+  tasks.sort((a, b) => {
+    if (a.status === "pending" && b.status === "done") return -1;
+    if (a.status === "done" && b.status === "pending") return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  res.json({ tasks, counts: commandTaskCounts() });
+});
+
+app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const column = typeof body.column === "string" ? body.column : "";
+  if (!title || !column) {
+    res.status(400).json({ error: "title and column are required" });
+    return;
+  }
+  if (!COMMAND_COLUMNS.has(column as CommandTaskColumn)) {
+    res.status(400).json({ error: "Invalid column" });
+    return;
+  }
+  const color = COMMAND_COLORS.has(body.color as CommandTaskColor)
+    ? (body.color as CommandTaskColor)
+    : "blue";
+  const task = createCommandTask({
+    title,
+    description: typeof body.description === "string" ? body.description : undefined,
+    column: column as CommandTaskColumn,
+    status: "pending",
+    color,
+    recurring: body.recurring === true,
+    recurringInterval: parseRecurringInterval(body.recurringInterval),
+    assignedTo: typeof body.assignedTo === "string" ? body.assignedTo : "carlos",
+    dueDate: typeof body.dueDate === "string" ? body.dueDate.slice(0, 10) : undefined,
+    tags: Array.isArray(body.tags)
+      ? body.tags.filter((t): t is string => typeof t === "string")
+      : undefined,
+    createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
+  });
+  console.log("[Tasks] Created:", task.title, "column:", task.column);
+  res.json({ task });
+});
+
+app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Partial<CommandTask>;
+  const updates: Partial<CommandTask> = {};
+  if (typeof body.title === "string") updates.title = body.title.trim();
+  if (typeof body.description === "string") updates.description = body.description;
+  if (body.column && COMMAND_COLUMNS.has(body.column)) updates.column = body.column;
+  if (body.status === "pending" || body.status === "done") updates.status = body.status;
+  if (body.color && COMMAND_COLORS.has(body.color)) updates.color = body.color;
+  if (typeof body.recurring === "boolean") updates.recurring = body.recurring;
+  const recurringInterval = parseRecurringInterval(body.recurringInterval);
+  if (recurringInterval) {
+    updates.recurringInterval = recurringInterval;
+  }
+  if (typeof body.assignedTo === "string") updates.assignedTo = body.assignedTo;
+  if (typeof body.dueDate === "string") updates.dueDate = body.dueDate.slice(0, 10);
+  if (Array.isArray(body.tags)) {
+    updates.tags = body.tags.filter((t): t is string => typeof t === "string");
+  }
+  const task = updateCommandTask(id, updates);
+  if (!task) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+  console.log("[Tasks] Updated:", task.title, "status:", task.status, "column:", task.column);
+  res.json({ task });
+});
+
+app.delete("/api/tasks/:id", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const deleted = deleteCommandTask(id);
+  if (!deleted) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+  console.log("[Tasks] Deleted:", id);
+  res.json({ success: true });
+});
+
+/** CRM lead follow-up tasks (tasks.json) — separate from command-center board. */
+app.get("/api/crm-tasks", (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
@@ -1510,7 +2401,7 @@ app.get("/api/tasks", (req, res) => {
   });
 });
 
-app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
+app.post("/api/crm-tasks", express.json({ limit: "1mb" }), (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
@@ -1525,7 +2416,7 @@ app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
   res.status(201).json({ task });
 });
 
-app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
+app.patch("/api/crm-tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
@@ -1553,7 +2444,7 @@ app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
   res.status(200).json({ task });
 });
 
-app.delete("/api/tasks/:id", (req, res) => {
+app.delete("/api/crm-tasks/:id", (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
@@ -1572,7 +2463,7 @@ app.delete("/api/tasks/:id", (req, res) => {
   res.status(ok ? 200 : 404).json({ success: ok });
 });
 
-app.post("/api/tasks/:id/complete", express.json({ limit: "256kb" }), (req, res) => {
+app.post("/api/crm-tasks/:id/complete", express.json({ limit: "256kb" }), (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
@@ -2085,6 +2976,11 @@ setInterval(() => {
 
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Listening on 0.0.0.0:${PORT}`);
+  try {
+    bootstrapMemory();
+  } catch (err) {
+    console.error("[Harvey Memory] Bootstrap failed:", err);
+  }
   if (!geminiApiKey()) {
     console.warn("[Harvey] GEMINI_API_KEY not set — Gemini Live voice will not work");
   } else {
@@ -2105,6 +3001,8 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${getHarveyModel()})`);
   console.log(`Harvey voice: POST http://localhost:${PORT}/api/jarvis/gemini-live/token`);
   console.log(`Harvey TTS:   POST http://localhost:${PORT}/api/jarvis/gemini-tts`);
+  console.log(`Harvey market intel: POST http://localhost:${PORT}/api/jarvis/market-intel`);
+  console.log(`Harvey world intel: POST http://localhost:${PORT}/api/jarvis/world-intel`);
   console.log(`Simulate: POST http://localhost:${PORT}/simulate`);
   console.log(`Webhook: POST http://localhost:${PORT}/webhook`);
   console.log(`Reset:   POST http://localhost:${PORT}/reset`);

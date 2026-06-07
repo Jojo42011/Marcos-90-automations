@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marco · Task Command Center</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #020810;
+      --panel: #050a0f;
+      --border: rgba(0, 212, 255, 0.18);
+      --cyan: #00d4ff;
+      --text: #e8f4fc;
+      --muted: #5a6a7a;
+      --mono: "Share Tech Mono", monospace;
+      --header-h: 52px;
+      --input-section-h: 88px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); overflow: hidden; }
+    button, input, select, textarea { font-family: inherit; }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+      display: flex; align-items: center; gap: 12px; padding: 0 16px;
+      background: var(--panel); border-bottom: 1px solid var(--border); z-index: 100;
+    }
+    .back-btn {
+      border: 1px solid var(--border); background: transparent; color: var(--cyan);
+      padding: 6px 12px; font-size: 10px; letter-spacing: 1px; cursor: pointer; border-radius: 2px;
+    }
+    .title { flex: 1; text-align: center; font-size: 11px; letter-spacing: 3px; color: var(--cyan); }
+    .topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .topbar select, .search-input {
+      background: transparent; border: 1px solid var(--border); color: var(--text);
+      padding: 5px 8px; font-size: 10px; border-radius: 2px;
+    }
+    .search-input { width: 140px; }
+    .add-btn {
+      border: 1px solid rgba(0,212,255,0.4); background: rgba(0,212,255,0.1); color: var(--cyan);
+      padding: 6px 14px; font-size: 10px; letter-spacing: 1px; cursor: pointer; border-radius: 2px;
+    }
+
+    .input-section {
+      position: fixed; top: var(--header-h); left: 0; right: 0; z-index: 99;
+      background: rgba(5, 10, 15, 0.98); border-bottom: 1px solid var(--border);
+      padding: 10px 16px 8px;
+    }
+    .input-row {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+    }
+    .input-prefix { color: var(--cyan); font-size: 14px; flex-shrink: 0; }
+    .quick-input {
+      flex: 1; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border);
+      color: var(--text); padding: 11px 14px; font-size: 13px; border-radius: 2px;
+      outline: none; caret-color: var(--cyan);
+    }
+    .quick-input:focus { border-color: rgba(0, 212, 255, 0.45); box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.12); }
+    .quick-input::placeholder { color: #3d4f5f; font-size: 11px; }
+    .quick-add {
+      border: 1px solid rgba(0, 212, 255, 0.35); background: rgba(0, 212, 255, 0.08);
+      color: var(--cyan); padding: 10px 18px; cursor: pointer; font-size: 10px;
+      letter-spacing: 2px; border-radius: 2px; flex-shrink: 0;
+    }
+    .quick-add:hover { background: rgba(0, 212, 255, 0.14); }
+    .quick-hints {
+      font-size: 9px; color: var(--muted); letter-spacing: 0.5px;
+      margin-top: 6px; padding-left: 22px;
+    }
+    .add-confirm {
+      font-size: 10px; color: var(--cyan); letter-spacing: 1px;
+      margin-top: 5px; padding-left: 22px; opacity: 1;
+      transition: opacity 0.4s ease;
+    }
+    .add-confirm.hidden { opacity: 0; height: 0; margin: 0; overflow: hidden; }
+
+    .board {
+      position: fixed;
+      top: calc(var(--header-h) + var(--input-section-h));
+      left: 0; right: 0; bottom: 0;
+      display: flex; gap: 10px; padding: 12px; overflow-x: auto; overflow-y: hidden;
+    }
+    .column {
+      flex: 1; min-width: 220px; max-width: 320px; display: flex; flex-direction: column;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+      overflow: hidden; transition: box-shadow 0.1s ease;
+    }
+    .column[data-col="urgent"] { border-left: 3px solid #ff2d55; }
+    .column[data-col="today"] { border-left: 3px solid #00d4ff; }
+    .column[data-col="tomorrow"] { border-left: 3px solid #8b5cf6; }
+    .column[data-col="this_week"] { border-left: 3px solid #f59e0b; }
+    .column[data-col="this_month"] { border-left: 3px solid #10b981; }
+    .col-head { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .col-title { font-size: 10px; letter-spacing: 2px; color: var(--cyan); }
+    .col-count { font-size: 9px; color: var(--muted); margin-top: 4px; }
+    .task-column-body {
+      flex: 1; overflow-y: auto; padding: 8px;
+    }
+    .col-loading, .col-empty, .col-empty-state {
+      font-size: 10px; color: #444; text-align: center; padding: 24px 8px;
+      letter-spacing: 1px;
+    }
+    .filter-toggles { display: flex; gap: 4px; }
+    .filter-toggle {
+      padding: 5px 12px; font-family: monospace; font-size: 10px;
+      letter-spacing: 1px; cursor: pointer; border-radius: 2px; border: 1px solid;
+    }
+
+    .task-card {
+      background: rgba(0, 212, 255, 0.03);
+      border: 1px solid rgba(0, 212, 255, 0.12);
+      border-left: 4px solid #00d4ff;
+      border-radius: 4px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      position: relative;
+      cursor: default;
+      transition: background 0.15s ease, opacity 0.3s ease;
+      font-family: monospace;
+    }
+    .task-card[draggable="true"] {
+      cursor: grab;
+    }
+    .task-card.dragging {
+      opacity: 0.4;
+      cursor: grabbing;
+      transform: rotate(1deg);
+    }
+    .task-card:hover {
+      background: rgba(0, 212, 255, 0.06);
+      border-color: rgba(0, 212, 255, 0.2);
+    }
+    .task-card.done {
+      opacity: 0.5;
+      border-left-color: #10b981 !important;
+      background: rgba(16, 185, 129, 0.03);
+    }
+    .task-card.done .task-title {
+      text-decoration: line-through;
+      color: #666;
+    }
+    .task-card.done .task-meta {
+      opacity: 0.6;
+      color: #555;
+    }
+
+    .task-trash {
+      position: absolute; top: 10px; right: 10px;
+      opacity: 0; cursor: pointer; color: #ff2d55;
+      font-size: 14px; transition: opacity 0.15s ease; line-height: 1;
+      background: none; border: none; padding: 0;
+    }
+    .task-card:hover .task-trash { opacity: 0.6; }
+    .task-trash:hover { opacity: 1 !important; }
+
+    .task-title {
+      font-size: 13px; color: #fff; line-height: 1.4;
+      padding-right: 24px; cursor: pointer;
+    }
+    .task-desc {
+      font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.45;
+    }
+    .task-due {
+      font-size: 10px; color: rgba(0, 212, 255, 0.65); margin-top: 6px;
+    }
+    .task-meta {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin-top: 10px; font-size: 9px; color: #666;
+    }
+    .done-btn:hover {
+      background: rgba(0,212,255,0.1) !important;
+      border-color: #00d4ff !important;
+      color: #00d4ff !important;
+    }
+    .undone-btn:hover {
+      background: rgba(255,45,85,0.1) !important;
+      border-color: #ff2d55 !important;
+      color: #ff2d55 !important;
+    }
+    .task-column.drag-over .task-column-body {
+      background: rgba(0, 212, 255, 0.05);
+      border: 1px dashed rgba(0, 212, 255, 0.3);
+      border-radius: 4px;
+      transition: background 0.15s ease;
+    }
+    .task-column.drag-over .task-column-header {
+      color: #00d4ff;
+    }
+    .task-badge {
+      font-size: 8px; padding: 2px 6px; border-radius: 2px;
+      background: rgba(0, 212, 255, 0.08); color: #888; text-transform: lowercase;
+    }
+
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 200;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      width: min(480px, 100%); background: var(--panel); border: 1px solid var(--border);
+      border-radius: 4px; max-height: 90vh; overflow-y: auto;
+    }
+    .modal-head { display: flex; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .modal-head h2 { font-size: 11px; letter-spacing: 2px; color: var(--cyan); }
+    .modal-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .field label { display: block; font-size: 9px; color: var(--muted); letter-spacing: 1px; margin-bottom: 4px; }
+    .field input, .field select, .field textarea {
+      width: 100%; background: transparent; border: 1px solid var(--border); color: var(--text);
+      padding: 8px 10px; font-size: 11px; border-radius: 2px;
+    }
+    .field textarea { min-height: 72px; resize: vertical; }
+    .color-row { display: flex; gap: 10px; }
+    .color-swatch {
+      width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
+    }
+    .color-swatch.active { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.3); }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--border); }
+    .btn-cancel { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 8px 16px; cursor: pointer; font-size: 10px; }
+    .btn-save { border: 1px solid rgba(0,212,255,0.4); background: rgba(0,212,255,0.12); color: var(--cyan); padding: 8px 16px; cursor: pointer; font-size: 10px; }
+
+    .auth-gate {
+      position: fixed; inset: 0; background: var(--bg); z-index: 300;
+      display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+    }
+    .auth-gate.hidden { display: none; }
+    .auth-gate input { width: 280px; padding: 10px; background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .auth-gate button { padding: 8px 20px; border: 1px solid var(--border); background: transparent; color: var(--cyan); cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="auth-gate" class="auth-gate hidden">
+    <div style="font-size:11px;letter-spacing:2px;color:var(--cyan);">// DASHBOARD TOKEN REQUIRED //</div>
+    <input id="token-input" type="password" placeholder="Enter DASHBOARD_TOKEN" />
+    <button type="button" id="token-save">Continue</button>
+  </div>
+
+  <header class="topbar">
+    <a id="back-link" class="back-btn" href="/dashboard">← BACK TO DASHBOARD</a>
+    <div class="title">// MARCO · TASK COMMAND CENTER //</div>
+    <div class="topbar-right">
+      <div class="filter-toggles">
+        <button type="button" id="filter-undone" class="filter-toggle" onclick="setFilter('undone')"
+          style="background:rgba(0,212,255,0.2); border-color:#00d4ff; color:#00d4ff;">
+          UNDONE
+        </button>
+        <button type="button" id="filter-done" class="filter-toggle" onclick="setFilter('done')"
+          style="background:rgba(0,212,255,0.05); border-color:rgba(0,212,255,0.15); color:rgba(0,212,255,0.4);">
+          DONE
+        </button>
+        <button type="button" id="filter-both" class="filter-toggle" onclick="setFilter('both')"
+          style="background:rgba(0,212,255,0.05); border-color:rgba(0,212,255,0.15); color:rgba(0,212,255,0.4);">
+          BOTH
+        </button>
+      </div>
+      <input id="search" class="search-input" type="search" placeholder="Search tasks..." />
+      <select id="filter-show">
+        <option value="all">SHOW: ALL</option>
+        <option value="urgent">SHOW: URGENT</option>
+        <option value="today">SHOW: TODAY</option>
+        <option value="this_week">SHOW: THIS WEEK</option>
+      </select>
+      <select id="filter-assigned">
+        <option value="both">ASSIGNED: BOTH</option>
+        <option value="carlos">ASSIGNED: CARLOS</option>
+        <option value="marco">ASSIGNED: MARCO</option>
+      </select>
+      <button type="button" class="add-btn" id="open-modal">+ ADD TASK</button>
+    </div>
+  </header>
+
+  <section class="input-section">
+    <div class="input-row">
+      <span class="input-prefix">&gt;</span>
+      <input
+        id="quick-input"
+        class="quick-input"
+        type="text"
+        autocomplete="off"
+        placeholder="Type a task... (U: Urgent · T: Today · TM: Tomorrow · W: Week · M: Month)"
+      />
+      <button type="button" class="quick-add" id="quick-add">ADD</button>
+    </div>
+    <div class="quick-hints">U: Urgent · T: Today · TM: Tomorrow · W: This Week · M: This Month</div>
+    <div id="add-confirm" class="add-confirm hidden"></div>
+  </section>
+
+  <main class="board" id="board"></main>
+
+  <div id="modal" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog">
+      <div class="modal-head">
+        <h2 id="modal-title">// ADD TASK //</h2>
+        <button type="button" id="modal-close" style="background:none;border:none;color:var(--cyan);font-size:18px;cursor:pointer;">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field"><label>Title</label><input id="m-title" type="text" /></div>
+        <div class="field"><label>Description</label><textarea id="m-desc"></textarea></div>
+        <div class="field"><label>Column</label>
+          <select id="m-column">
+            <option value="urgent">Urgent</option>
+            <option value="today" selected>Today</option>
+            <option value="tomorrow">Tomorrow</option>
+            <option value="this_week">This Week</option>
+            <option value="this_month">This Month</option>
+          </select>
+        </div>
+        <div class="field"><label>Assigned to</label>
+          <select id="m-assigned"><option value="carlos">Carlos</option><option value="marco">Marco</option></select>
+        </div>
+        <div class="field"><label>Color</label>
+          <div class="color-row" id="m-colors"></div>
+        </div>
+        <div style="margin-top:12px;">
+          <label style="font-size:10px; color:#555; letter-spacing:1px; display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="modal-recurring" onchange="toggleRecurringOptions()"
+                   style="accent-color:#00d4ff; width:14px; height:14px;">
+            <span>RECURRING</span>
+          </label>
+
+          <div id="recurring-options" style="display:none; margin-top:10px; padding:10px;
+               border:1px solid rgba(0,212,255,0.15); border-radius:4px; background:rgba(0,212,255,0.03);">
+            <div style="font-size:9px; color:#555; letter-spacing:1px; margin-bottom:8px;">REPEAT EVERY</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button type="button" class="interval-btn" data-interval="daily" onclick="selectInterval('daily')"
+                      style="padding:4px 10px; font-family:monospace; font-size:10px; cursor:pointer;
+                             background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.2);
+                             color:rgba(0,212,255,0.6); border-radius:2px;">
+                DAILY
+              </button>
+              <button type="button" class="interval-btn" data-interval="every_3_days" onclick="selectInterval('every_3_days')"
+                      style="padding:4px 10px; font-family:monospace; font-size:10px; cursor:pointer;
+                             background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.2);
+                             color:rgba(0,212,255,0.6); border-radius:2px;">
+                3 DAYS
+              </button>
+              <button type="button" class="interval-btn" data-interval="every_5_days" onclick="selectInterval('every_5_days')"
+                      style="padding:4px 10px; font-family:monospace; font-size:10px; cursor:pointer;
+                             background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.2);
+                             color:rgba(0,212,255,0.6); border-radius:2px;">
+                5 DAYS
+              </button>
+              <button type="button" class="interval-btn" data-interval="weekly" onclick="selectInterval('weekly')"
+                      style="padding:4px 10px; font-family:monospace; font-size:10px; cursor:pointer;
+                             background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.2);
+                             color:rgba(0,212,255,0.6); border-radius:2px;">
+                WEEK
+              </button>
+              <button type="button" class="interval-btn" data-interval="monthly" onclick="selectInterval('monthly')"
+                      style="padding:4px 10px; font-family:monospace; font-size:10px; cursor:pointer;
+                             background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.2);
+                             color:rgba(0,212,255,0.6); border-radius:2px;">
+                MONTH
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>Due date</label><input id="m-due" type="date" /></div>
+        <div class="field"><label>Tags (comma-separated)</label><input id="m-tags" type="text" /></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn-cancel" id="modal-cancel">CANCEL</button>
+        <button type="button" class="btn-save" id="modal-save">SAVE TASK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const COLS = [
+      { id: "urgent", label: "URGENT" },
+      { id: "today", label: "TODAY" },
+      { id: "tomorrow", label: "TOMORROW" },
+      { id: "this_week", label: "THIS WEEK" },
+      { id: "this_month", label: "THIS MONTH" },
+    ];
+
+    const COLUMN_BORDER_COLORS = {
+      urgent: "#ff2d55",
+      today: "#00d4ff",
+      tomorrow: "#8b5cf6",
+      this_week: "#f59e0b",
+      this_month: "#10b981",
+    };
+
+    const TASK_DOT_COLORS = {
+      red: "#ff2d55",
+      amber: "#f59e0b",
+      green: "#10b981",
+      blue: "#00d4ff",
+      purple: "#8b5cf6",
+      gray: "#6b7280",
+    };
+
+    const COLUMN_LABELS = {
+      urgent: "Urgent",
+      today: "Today",
+      tomorrow: "Tomorrow",
+      this_week: "This Week",
+      this_month: "This Month",
+    };
+
+    let token = new URLSearchParams(location.search).get("token") || sessionStorage.getItem("dashboardToken") || "";
+    let tasks = [];
+    let editId = null;
+    let selectedColor = "blue";
+    let confirmTimer = null;
+    let currentFilter = "undone";
+    let selectedInterval = "weekly";
+    let draggedTaskId = null;
+    let draggedCard = null;
+
+    const quickInput = document.getElementById("quick-input");
+    const modalEl = document.getElementById("modal");
+
+    function getToken() {
+      return token;
+    }
+
+    function escapeHtml(str) {
+      return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return "";
+      const d = new Date(dateStr.includes("T") ? dateStr : dateStr + "T12:00:00");
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }
+
+    function apiUrl(path, params) {
+      const u = new URL(path, location.origin);
+      if (token) u.searchParams.set("token", token);
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v != null && v !== "") u.searchParams.set(k, v); });
+      return u.toString();
+    }
+
+    async function apiFetch(path, opts = {}, params) {
+      const headers = { ...(opts.headers || {}) };
+      if (token) headers.Authorization = "Bearer " + token;
+      const res = await fetch(apiUrl(path, params), { ...opts, headers });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    }
+
+    function parseTaskInput(raw) {
+      const text = raw.trim();
+      if (!text) return null;
+
+      const prefixMap = [
+        { prefixes: ["urgent:", "u:"], column: "urgent" },
+        { prefixes: ["tomorrow:", "tm:"], column: "tomorrow" },
+        { prefixes: ["today:", "t:"], column: "today" },
+        { prefixes: ["this week:", "week:", "w:"], column: "this_week" },
+        { prefixes: ["this month:", "month:", "m:"], column: "this_month" },
+      ];
+
+      const lower = text.toLowerCase();
+
+      for (const { prefixes, column } of prefixMap) {
+        for (const prefix of prefixes) {
+          if (lower.startsWith(prefix)) {
+            const title = text.slice(prefix.length).trim();
+            if (title) return { title, column };
+          }
+        }
+      }
+
+      return { title: text, column: "today" };
+    }
+
+    function passesFilters(task) {
+      const show = document.getElementById("filter-show").value;
+      const assigned = document.getElementById("filter-assigned").value;
+      const q = (document.getElementById("search").value || "").toLowerCase().trim();
+      if (show !== "all" && task.column !== show) return false;
+      if (assigned !== "both" && task.assignedTo !== assigned) return false;
+      if (q) {
+        const hay = ((task.title || "") + " " + (task.description || "")).toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    }
+
+    function applyFiltersToCards() {
+      document.querySelectorAll(".task-card").forEach(card => {
+        const id = card.getAttribute("data-id");
+        const task = tasks.find(t => t.id === id);
+        if (!task) return;
+        card.classList.toggle("filtered-out", !passesFilters(task));
+      });
+      applyFilter();
+    }
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      console.log("[Tasks] setFilter called:", filter);
+      console.log("[Tasks] Filter set to:", filter);
+
+      ["undone", "done", "both"].forEach(f => {
+        const btn = document.getElementById("filter-" + f);
+        if (!btn) return;
+        const isActive = f === filter;
+        btn.style.background = isActive
+          ? "rgba(0,212,255,0.2)"
+          : "rgba(0,212,255,0.05)";
+        btn.style.borderColor = isActive
+          ? "#00d4ff"
+          : "rgba(0,212,255,0.15)";
+        btn.style.color = isActive
+          ? "#00d4ff"
+          : "rgba(0,212,255,0.4)";
+      });
+
+      applyFilter();
+    }
+    window.setFilter = setFilter;
+
+    function applyFilter() {
+      const cards = document.querySelectorAll(".task-card");
+      console.log("[Tasks] applyFilter running, filter:", currentFilter, "cards found:", cards.length);
+      console.log("[Tasks] Applying filter:", currentFilter, "to", cards.length, "cards");
+
+      cards.forEach(card => {
+        const isDone = card.classList.contains("done");
+        let show = false;
+
+        if (currentFilter === "undone") show = !isDone;
+        else if (currentFilter === "done") show = isDone;
+        else show = true;
+
+        if (card.classList.contains("filtered-out")) show = false;
+
+        card.style.display = show ? "block" : "none";
+      });
+
+      updateEmptyStates();
+      updateColumnCounts();
+    }
+
+    function updateEmptyStates() {
+      const columns = ["urgent", "today", "tomorrow", "this_week", "this_month"];
+      columns.forEach(col => {
+        const colBody = document.getElementById("col-body-" + col);
+        if (!colBody) return;
+
+        const allCards = colBody.querySelectorAll(".task-card");
+        const visibleCards = Array.from(allCards).filter(c => c.style.display !== "none");
+
+        let emptyEl = colBody.querySelector(".col-empty-state");
+        if (!emptyEl) {
+          emptyEl = document.createElement("div");
+          emptyEl.className = "col-empty-state";
+          emptyEl.style.cssText = `
+            text-align: center;
+            color: rgba(0,212,255,0.2);
+            font-family: monospace;
+            font-size: 11px;
+            padding: 24px 0;
+            letter-spacing: 1px;
+          `;
+          emptyEl.textContent = "// empty //";
+          colBody.appendChild(emptyEl);
+        }
+
+        emptyEl.style.display = visibleCards.length === 0 ? "block" : "none";
+      });
+    }
+
+    function formatInterval(interval) {
+      const labels = {
+        daily: "every day",
+        every_3_days: "every 3 days",
+        every_5_days: "every 5 days",
+        weekly: "every week",
+        monthly: "every month",
+      };
+      return labels[interval] || interval;
+    }
+
+    function toggleRecurringOptions() {
+      const checkbox = document.getElementById("modal-recurring");
+      const options = document.getElementById("recurring-options");
+      if (!options || !checkbox) return;
+      options.style.display = checkbox.checked ? "block" : "none";
+      if (checkbox.checked && !selectedInterval) selectInterval("weekly");
+      else if (checkbox.checked) selectInterval(selectedInterval);
+    }
+    window.toggleRecurringOptions = toggleRecurringOptions;
+
+    function selectInterval(interval) {
+      selectedInterval = interval;
+      document.querySelectorAll(".interval-btn").forEach(btn => {
+        const isSelected = btn.dataset.interval === interval;
+        btn.style.background = isSelected ? "rgba(0,212,255,0.2)" : "rgba(0,212,255,0.05)";
+        btn.style.borderColor = isSelected ? "#00d4ff" : "rgba(0,212,255,0.2)";
+        btn.style.color = isSelected ? "#00d4ff" : "rgba(0,212,255,0.6)";
+      });
+    }
+    window.selectInterval = selectInterval;
+
+    function handleDragStart(event, taskId) {
+      draggedTaskId = taskId;
+      draggedCard = event.currentTarget;
+
+      setTimeout(() => {
+        if (draggedCard) draggedCard.classList.add("dragging");
+      }, 0);
+
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", taskId);
+      console.log("[Tasks] Drag started:", taskId);
+    }
+    window.handleDragStart = handleDragStart;
+
+    function handleDragEnd(event) {
+      if (draggedCard) {
+        draggedCard.classList.remove("dragging");
+      }
+      document.querySelectorAll(".task-column").forEach(col => {
+        col.classList.remove("drag-over");
+      });
+      draggedTaskId = null;
+      draggedCard = null;
+      console.log("[Tasks] Drag ended");
+    }
+    window.handleDragEnd = handleDragEnd;
+
+    function handleDragOver(event) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    }
+    window.handleDragOver = handleDragOver;
+
+    function handleDragEnter(event) {
+      event.preventDefault();
+      const colBody = event.currentTarget;
+      const col = colBody.closest(".task-column") || colBody;
+      col.classList.add("drag-over");
+    }
+    window.handleDragEnter = handleDragEnter;
+
+    function handleDragLeave(event) {
+      const colBody = event.currentTarget;
+      const col = colBody.closest(".task-column") || colBody;
+
+      const rect = col.getBoundingClientRect();
+      const x = event.clientX;
+      const y = event.clientY;
+
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        col.classList.remove("drag-over");
+      }
+    }
+    window.handleDragLeave = handleDragLeave;
+
+    async function handleDrop(event, targetColumn) {
+      event.preventDefault();
+
+      const taskId = event.dataTransfer.getData("text/plain") || draggedTaskId;
+      if (!taskId) return;
+
+      document.querySelectorAll(".task-column").forEach(col => col.classList.remove("drag-over"));
+
+      const card = document.querySelector(`[data-id="${taskId}"]`);
+      if (!card) return;
+
+      const sourceColumn = card.dataset.column;
+      if (sourceColumn === targetColumn) return;
+
+      console.log("[Tasks] Drop:", taskId, "from", sourceColumn, "to", targetColumn);
+
+      card.dataset.column = targetColumn;
+
+      const isDone = card.classList.contains("done");
+      const newBorderColor = isDone ? "#10b981" : (COLUMN_BORDER_COLORS[targetColumn] || "#00d4ff");
+      card.style.borderLeftColor = newBorderColor;
+
+      const targetColBody = document.getElementById("col-body-" + targetColumn);
+      if (targetColBody) {
+        const empty = targetColBody.querySelector(".col-empty-state");
+        if (empty) empty.remove();
+        targetColBody.insertBefore(card, targetColBody.firstChild);
+      }
+
+      const taskIdx = tasks.findIndex(t => t.id === taskId);
+      if (taskIdx >= 0) tasks[taskIdx].column = targetColumn;
+
+      card.style.transition = "box-shadow 0.2s ease";
+      card.style.boxShadow = `0 0 16px ${COLUMN_BORDER_COLORS[targetColumn] || "#00d4ff"}`;
+      setTimeout(() => {
+        card.style.boxShadow = "";
+      }, 400);
+
+      updateColumnCounts();
+      applyFilter();
+
+      try {
+        await apiFetch("/api/tasks/" + encodeURIComponent(taskId), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ column: targetColumn }),
+        });
+        console.log("[Tasks] Column updated on server:", targetColumn);
+      } catch (err) {
+        console.error("[Tasks] Failed to update column on server:", err);
+        showToast("Failed to save — try again", "error");
+
+        const sourceColBody = document.getElementById("col-body-" + sourceColumn);
+        if (sourceColBody) sourceColBody.insertBefore(card, sourceColBody.firstChild);
+        card.dataset.column = sourceColumn;
+        card.style.borderLeftColor = isDone ? "#10b981" : (COLUMN_BORDER_COLORS[sourceColumn] || "#00d4ff");
+        if (taskIdx >= 0) tasks[taskIdx].column = sourceColumn;
+        updateColumnCounts();
+        applyFilter();
+      }
+    }
+    window.handleDrop = handleDrop;
+
+    function buildDueDateHTML(dueDateStr) {
+      if (!dueDateStr) return "";
+
+      const due = new Date(dueDateStr.includes("T") ? dueDateStr : dueDateStr + "T12:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      due.setHours(0, 0, 0, 0);
+
+      const isOverdue = due < today;
+      const color = isOverdue ? "#ff2d55" : "rgba(0,212,255,0.5)";
+      const prefix = isOverdue ? "⚠ OVERDUE · " : "Due ";
+
+      return `<div class="task-due" style="font-size:10px; color:${color}; margin-top:4px; font-family:monospace;">
+        ${prefix}${escapeHtml(formatDate(dueDateStr))}
+      </div>`;
+    }
+
+    function buildTaskCard(task) {
+      const isDone = task.status === "done";
+      const columnBorder = COLUMN_BORDER_COLORS[task.column] || COLUMN_BORDER_COLORS.today;
+
+      const doneStyles = isDone
+        ? "opacity: 0.5; border-left-color: #10b981 !important;"
+        : `border-left-color: ${columnBorder};`;
+
+      const titleStyles = isDone
+        ? "text-decoration: line-through; color: #666;"
+        : "color: #ffffff;";
+
+      const metaStyles = isDone ? "opacity: 0.6; color: #555;" : "";
+
+      const colorDot = `<span style="width:7px; height:7px; border-radius:50%;
+                              background:${TASK_DOT_COLORS[task.color] || TASK_DOT_COLORS.blue};
+                              display:inline-block; margin-right:4px;"></span>`;
+
+      const dueDateStr = buildDueDateHTML(task.dueDate);
+      const recurringIcon = task.recurring
+        ? `<span style="color:rgba(0,212,255,0.5); font-size:11px;" title="Repeats ${escapeHtml(formatInterval(task.recurringInterval))}">↻</span>`
+        : "";
+      const assignedBadge = task.assignedTo
+        ? `<span class="task-badge">${escapeHtml(task.assignedTo)}</span>`
+        : "";
+
+      const toggleBtn = isDone
+        ? `<button type="button" class="task-done-btn undone-btn"
+                   onclick="toggleTaskDone('${task.id}', true, event)"
+                   style="
+                     background: rgba(16,185,129,0.15);
+                     border: 1px solid #10b981;
+                     color: #10b981;
+                     padding: 3px 10px;
+                     font-family: monospace;
+                     font-size: 9px;
+                     letter-spacing: 1px;
+                     cursor: pointer;
+                     border-radius: 2px;
+                     transition: all 0.15s ease;
+                   "
+                   title="Mark as pending">
+            ✓ DONE
+          </button>`
+        : `<button type="button" class="task-done-btn done-btn"
+                   onclick="toggleTaskDone('${task.id}', false, event)"
+                   style="
+                     background: transparent;
+                     border: 1px solid rgba(0,212,255,0.2);
+                     color: rgba(0,212,255,0.5);
+                     padding: 3px 10px;
+                     font-family: monospace;
+                     font-size: 9px;
+                     letter-spacing: 1px;
+                     cursor: pointer;
+                     border-radius: 2px;
+                     transition: all 0.15s ease;
+                   "
+                   title="Mark as done">
+            ○ MARK DONE
+          </button>`;
+
+      return `
+        <div class="task-card ${isDone ? "done" : ""}${passesFilters(task) ? "" : " filtered-out"}"
+             data-id="${escapeHtml(task.id)}"
+             data-column="${escapeHtml(task.column)}"
+             data-recurring="${task.recurring ? "true" : "false"}"
+             data-recurring-interval="${escapeHtml(task.recurringInterval || "")}"
+             draggable="true"
+             ondragstart="handleDragStart(event, '${task.id}')"
+             ondragend="handleDragEnd(event)"
+             style="${doneStyles}">
+
+          <button type="button" class="task-trash" onclick="deleteTask('${task.id}', event)" title="Delete">✕</button>
+
+          <div class="task-title" style="${titleStyles}" onclick="openEditModal('${task.id}')">${escapeHtml(task.title)}</div>
+
+          ${task.description ? `<div class="task-desc">${escapeHtml(task.description)}</div>` : ""}
+
+          ${dueDateStr}
+
+          <div class="task-meta" style="${metaStyles}">
+            ${toggleBtn}
+            ${colorDot}
+            ${assignedBadge}
+            ${recurringIcon}
+          </div>
+        </div>
+      `;
+    }
+
+    function sortTasksForColumn(colTasks) {
+      return [...colTasks].sort((a, b) => {
+        if (a.status === "pending" && b.status === "done") return -1;
+        if (a.status === "done" && b.status === "pending") return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+    }
+
+    function renderColumnBody(colId, html) {
+      const body = document.getElementById("col-body-" + colId);
+      if (body) body.innerHTML = html;
+    }
+
+    function buildBoardSkeleton() {
+      const board = document.getElementById("board");
+      board.innerHTML = COLS.map(col => `
+        <section class="column task-column" id="col-${col.id}" data-col="${col.id}">
+          <div class="col-head task-column-header">
+            <div class="col-title">${col.label}</div>
+            <div class="col-count" id="count-${col.id}">0</div>
+          </div>
+          <div class="task-column-body" id="col-body-${col.id}"
+               ondragover="handleDragOver(event)"
+               ondragenter="handleDragEnter(event)"
+               ondragleave="handleDragLeave(event)"
+               ondrop="handleDrop(event, '${col.id}')">
+            <div class="col-loading">// loading... //</div>
+          </div>
+        </section>
+      `).join("");
+    }
+
+    function renderAllColumns() {
+      COLS.forEach(col => {
+        const colTasks = sortTasksForColumn(tasks.filter(t => t.column === col.id));
+        if (colTasks.length === 0) {
+          renderColumnBody(col.id, '<div class="col-empty-state">// empty //</div>');
+        } else {
+          renderColumnBody(col.id, colTasks.map(buildTaskCard).join(""));
+        }
+      });
+      applyFilter();
+    }
+
+    function appendTaskCard(task) {
+      const body = document.getElementById("col-body-" + task.column);
+      if (!body) return;
+
+      const empty = body.querySelector(".col-empty-state");
+      if (empty) empty.remove();
+
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = buildTaskCard(task).trim();
+      const card = wrapper.firstElementChild;
+
+      const pendingCards = body.querySelectorAll(".task-card:not(.done)");
+      if (task.status === "pending" && pendingCards.length > 0) {
+        body.insertBefore(card, pendingCards[0]);
+      } else if (task.status === "done") {
+        body.appendChild(card);
+      } else {
+        body.appendChild(card);
+      }
+      applyFilter();
+    }
+
+    function updateColumnCounts() {
+      const columns = ["urgent", "today", "tomorrow", "this_week", "this_month"];
+      columns.forEach(col => {
+        const colBody = document.getElementById("col-body-" + col);
+        if (!colBody) return;
+
+        const allCards = colBody.querySelectorAll(".task-card");
+        let count = 0;
+
+        allCards.forEach(card => {
+          if (card.style.display === "none") return;
+          const isDone = card.classList.contains("done");
+          if (currentFilter === "undone" && !isDone) count++;
+          else if (currentFilter === "done" && isDone) count++;
+          else if (currentFilter === "both") count++;
+        });
+
+        const countEl = document.getElementById("count-" + col);
+        if (countEl) countEl.textContent = String(count);
+      });
+    }
+
+    function flashColumn(column) {
+      const colEl = document.getElementById("col-" + column);
+      if (!colEl) return;
+      colEl.style.boxShadow = "0 0 20px rgba(0,212,255,0.4)";
+      setTimeout(() => { colEl.style.boxShadow = ""; }, 500);
+    }
+
+    function showAddConfirm(column) {
+      const el = document.getElementById("add-confirm");
+      el.textContent = "✓ Added to " + (COLUMN_LABELS[column] || column);
+      el.classList.remove("hidden");
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => el.classList.add("hidden"), 1500);
+    }
+
+    function showToast(message, type = "success") {
+      const existing = document.getElementById("task-toast");
+      if (existing) existing.remove();
+
+      const toast = document.createElement("div");
+      toast.id = "task-toast";
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: ${type === "error" ? "rgba(255,45,85,0.9)" : "rgba(0,212,255,0.15)"};
+        border: 1px solid ${type === "error" ? "#ff2d55" : "#00d4ff"};
+        color: ${type === "error" ? "#ff2d55" : "#00d4ff"};
+        padding: 8px 20px;
+        font-family: monospace;
+        font-size: 11px;
+        letter-spacing: 1px;
+        border-radius: 4px;
+        z-index: 9999;
+        transition: opacity 0.3s ease;
+      `;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 300);
+      }, 1800);
+    }
+
+    async function loadTasks() {
+      buildBoardSkeleton();
+      const data = await apiFetch("/api/tasks");
+      tasks = data.tasks || [];
+      renderAllColumns();
+    }
+
+    async function loadColumnTasks(column) {
+      const data = await apiFetch("/api/tasks", {}, { column });
+      const colTasks = data.tasks || [];
+      colTasks.forEach(t => {
+        const idx = tasks.findIndex(x => x.id === t.id);
+        if (idx >= 0) tasks[idx] = t;
+        else tasks.push(t);
+      });
+      const body = document.getElementById("col-body-" + column);
+      if (body) {
+        const sorted = sortTasksForColumn(tasks.filter(t => t.column === column));
+        if (sorted.length === 0) {
+          body.innerHTML = '<div class="col-empty-state">// empty //</div>';
+        } else {
+          body.innerHTML = sorted.map(buildTaskCard).join("");
+        }
+      }
+      applyFiltersToCards();
+    }
+
+    async function submitQuickTask() {
+      const parsed = parseTaskInput(quickInput.value);
+      if (!parsed) return;
+
+      try {
+        const { task } = await apiFetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: parsed.title,
+            column: parsed.column,
+            color: "blue",
+            status: "pending",
+            assignedTo: "carlos",
+            createdBy: "carlos",
+          }),
+        });
+
+        tasks.push(task);
+        appendTaskCard(task);
+        flashColumn(task.column);
+        showAddConfirm(task.column);
+
+        quickInput.value = "";
+        quickInput.focus();
+      } catch (err) {
+        console.error("[Tasks] Quick add failed:", err);
+        showToast("Failed to add task", "error");
+      }
+    }
+
+    async function toggleTaskDone(id, currentlyDone, event) {
+      event.stopPropagation();
+      const newStatus = currentlyDone ? "pending" : "done";
+
+      try {
+        const { task } = await apiFetch("/api/tasks/" + encodeURIComponent(id), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus }),
+        });
+
+        const idx = tasks.findIndex(t => t.id === id);
+        if (idx >= 0) tasks[idx] = task;
+
+        const card = document.querySelector(`[data-id="${id}"]`);
+        if (!card) return;
+
+        if (newStatus === "done") {
+          card.classList.add("done");
+          card.style.opacity = "0.5";
+          card.style.borderLeftColor = "#10b981";
+
+          const titleEl = card.querySelector(".task-title");
+          if (titleEl) {
+            titleEl.style.textDecoration = "line-through";
+            titleEl.style.color = "#666";
+          }
+
+          const meta = card.querySelector(".task-meta");
+          if (meta) {
+            meta.style.opacity = "0.6";
+            meta.style.color = "#555";
+          }
+
+          const btn = card.querySelector(".task-done-btn");
+          if (btn) {
+            btn.className = "task-done-btn undone-btn";
+            btn.setAttribute("onclick", `toggleTaskDone('${id}', true, event)`);
+            btn.setAttribute("title", "Mark as pending");
+            btn.style.background = "rgba(16,185,129,0.15)";
+            btn.style.borderColor = "#10b981";
+            btn.style.color = "#10b981";
+            btn.textContent = "✓ DONE";
+          }
+
+          if (task.recurring) {
+            await createRecurringTask(task);
+          }
+
+          setTimeout(() => {
+            const col = card.closest('[id^="col-body-"]');
+            if (col) col.appendChild(card);
+            applyFilter();
+          }, 400);
+        } else {
+          card.classList.remove("done");
+          card.style.opacity = "1";
+
+          const col = card.dataset.column;
+          card.style.borderLeftColor = COLUMN_BORDER_COLORS[col] || "#00d4ff";
+
+          const titleEl = card.querySelector(".task-title");
+          if (titleEl) {
+            titleEl.style.textDecoration = "";
+            titleEl.style.color = "#ffffff";
+          }
+
+          const meta = card.querySelector(".task-meta");
+          if (meta) {
+            meta.style.opacity = "";
+            meta.style.color = "";
+          }
+
+          const btn = card.querySelector(".task-done-btn");
+          if (btn) {
+            btn.className = "task-done-btn done-btn";
+            btn.setAttribute("onclick", `toggleTaskDone('${id}', false, event)`);
+            btn.setAttribute("title", "Mark as done");
+            btn.style.background = "transparent";
+            btn.style.borderColor = "rgba(0,212,255,0.2)";
+            btn.style.color = "rgba(0,212,255,0.5)";
+            btn.textContent = "○ MARK DONE";
+          }
+        }
+
+        applyFilter();
+        updateColumnCounts();
+      } catch (err) {
+        console.error("[Tasks] Toggle failed:", err);
+        showToast("Failed to update task", "error");
+      }
+    }
+
+    async function deleteTask(id, event) {
+      event.stopPropagation();
+      if (!confirm("Delete this task?")) return;
+
+      try {
+        await apiFetch("/api/tasks/" + encodeURIComponent(id), { method: "DELETE" });
+
+        tasks = tasks.filter(t => t.id !== id);
+        const card = document.querySelector(`[data-id="${id}"]`);
+        if (card) {
+          card.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+          card.style.opacity = "0";
+          card.style.transform = "translateX(-10px)";
+          setTimeout(() => {
+            card.remove();
+            applyFilter();
+          }, 200);
+        } else {
+          applyFilter();
+        }
+      } catch (err) {
+        console.error("[Tasks] Delete failed:", err);
+        showToast("Failed to delete task", "error");
+      }
+    }
+
+    async function createRecurringTask(completedTask) {
+      const INTERVAL_DAYS = {
+        daily: 1,
+        every_3_days: 3,
+        every_5_days: 5,
+        weekly: 7,
+        monthly: 30,
+      };
+      const days = INTERVAL_DAYS[completedTask.recurringInterval] || 7;
+      const nextDue = new Date();
+      nextDue.setDate(nextDue.getDate() + days);
+
+      try {
+        const { task: newTask } = await apiFetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: completedTask.title,
+            description: completedTask.description,
+            column: completedTask.column,
+            color: completedTask.color,
+            recurring: true,
+            recurringInterval: completedTask.recurringInterval,
+            assignedTo: completedTask.assignedTo,
+            createdBy: "system",
+            dueDate: nextDue.toISOString().split("T")[0],
+            tags: completedTask.tags || [],
+          }),
+        });
+
+        tasks.push(newTask);
+        const colBody = document.getElementById("col-body-" + newTask.column);
+        if (colBody) {
+          const empty = colBody.querySelector(".col-empty-state");
+          if (empty) empty.remove();
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = buildTaskCard(newTask).trim();
+          const newCard = tempDiv.firstElementChild;
+          colBody.insertBefore(newCard, colBody.firstChild);
+          applyFilter();
+        }
+
+        showToast("↻ Recurring task rescheduled — due " + formatDate(nextDue.toISOString()), "success");
+      } catch (err) {
+        console.error("[Tasks] Recurring create failed:", err);
+        showToast("Failed to reschedule recurring task", "error");
+      }
+    }
+
+    function openEditModal(id) {
+      const task = tasks.find(t => t.id === id);
+      if (task) openModal(task);
+    }
+    window.openEditModal = openEditModal;
+    window.toggleTaskDone = toggleTaskDone;
+    window.deleteTask = deleteTask;
+
+    function buildColorSwatches() {
+      const row = document.getElementById("m-colors");
+      row.innerHTML = Object.keys(TASK_DOT_COLORS).map(c =>
+        `<button type="button" class="color-swatch${c === selectedColor ? " active" : ""}" data-color="${c}" style="background:${TASK_DOT_COLORS[c]}" aria-label="${c}"></button>`
+      ).join("");
+      row.querySelectorAll("[data-color]").forEach(btn => {
+        btn.onclick = () => {
+          selectedColor = btn.getAttribute("data-color");
+          buildColorSwatches();
+        };
+      });
+    }
+
+    function openModal(task) {
+      editId = task ? task.id : null;
+      if (!task) selectedInterval = "weekly";
+      document.getElementById("modal-title").textContent = task ? "// EDIT TASK //" : "// ADD TASK //";
+      document.getElementById("m-title").value = task ? task.title : "";
+      document.getElementById("m-desc").value = task ? (task.description || "") : "";
+      document.getElementById("m-column").value = task ? task.column : "today";
+      document.getElementById("m-assigned").value = task ? (task.assignedTo || "carlos") : "carlos";
+      selectedColor = task ? task.color : "blue";
+      const recurringCheckbox = document.getElementById("modal-recurring");
+      recurringCheckbox.checked = !!(task && task.recurring);
+      toggleRecurringOptions();
+      if (task && task.recurring && task.recurringInterval) {
+        selectInterval(task.recurringInterval);
+      } else if (recurringCheckbox.checked) {
+        selectInterval("weekly");
+      }
+      document.getElementById("m-due").value = task && task.dueDate ? task.dueDate.slice(0, 10) : "";
+      document.getElementById("m-tags").value = task && task.tags ? task.tags.join(", ") : "";
+      buildColorSwatches();
+      modalEl.classList.add("open");
+    }
+
+    function closeModal() {
+      editId = null;
+      modalEl.classList.remove("open");
+      quickInput.focus();
+    }
+
+    async function saveModal() {
+      const title = document.getElementById("m-title").value.trim();
+      if (!title) return;
+      const isRecurring = document.getElementById("modal-recurring")?.checked || false;
+      const payload = {
+        title,
+        description: document.getElementById("m-desc").value.trim() || undefined,
+        column: document.getElementById("m-column").value,
+        color: selectedColor,
+        assignedTo: document.getElementById("m-assigned").value,
+        dueDate: document.getElementById("m-due").value || undefined,
+        tags: document.getElementById("m-tags").value.split(",").map(s => s.trim()).filter(Boolean),
+        recurring: isRecurring,
+        recurringInterval: isRecurring ? selectedInterval : undefined,
+      };
+      if (!editId) {
+        payload.status = "pending";
+        payload.createdBy = "carlos";
+      }
+
+      try {
+        if (editId) {
+          const { task } = await apiFetch("/api/tasks/" + encodeURIComponent(editId), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const idx = tasks.findIndex(t => t.id === editId);
+          if (idx >= 0) tasks[idx] = task;
+        } else {
+          const { task } = await apiFetch("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          tasks.push(task);
+        }
+        closeModal();
+        renderAllColumns();
+        applyFiltersToCards();
+      } catch (err) {
+        showToast(err.message || "Save failed", "error");
+      }
+    }
+
+    function showAuthGate() {
+      document.getElementById("auth-gate").classList.remove("hidden");
+    }
+
+    function initToken() {
+      const back = document.getElementById("back-link");
+      if (token) {
+        sessionStorage.setItem("dashboardToken", token);
+        back.href = "/dashboard?token=" + encodeURIComponent(token);
+      } else {
+        showAuthGate();
+      }
+      document.getElementById("token-save").onclick = () => {
+        const v = document.getElementById("token-input").value.trim();
+        if (!v) return;
+        token = v;
+        sessionStorage.setItem("dashboardToken", token);
+        location.search = "?token=" + encodeURIComponent(token);
+      };
+    }
+
+    function isModalOpen() {
+      return modalEl.classList.contains("open");
+    }
+
+    function isTypingTarget(el) {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    }
+
+    document.getElementById("open-modal").onclick = () => openModal(null);
+    document.getElementById("modal-close").onclick = closeModal;
+    document.getElementById("modal-cancel").onclick = closeModal;
+    document.getElementById("modal-save").onclick = () => saveModal();
+
+    document.getElementById("quick-add").onclick = () => submitQuickTask();
+    quickInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submitQuickTask();
+      }
+    });
+
+    ["filter-show", "filter-assigned", "search"].forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener("input", applyFiltersToCards);
+      el.addEventListener("change", applyFiltersToCards);
+    });
+
+    document.addEventListener("keydown", e => {
+      if (!document.getElementById("auth-gate").classList.contains("hidden")) return;
+      if (isModalOpen()) return;
+
+      if (e.key === "Escape") {
+        quickInput.value = "";
+        quickInput.focus();
+        return;
+      }
+
+      if (e.key.length === 1 && /[a-zA-Z]/.test(e.key) && !isTypingTarget(document.activeElement)) {
+        quickInput.focus();
+      }
+    });
+
+    initToken();
+    buildColorSwatches();
+    buildBoardSkeleton();
+    setFilter("undone");
+
+    if (token) {
+      loadTasks()
+        .then(() => {
+          applyFilter();
+          quickInput.focus();
+        })
+        .catch(err => {
+          showToast("Failed to load tasks: " + err.message, "error");
+          quickInput.focus();
+        });
+    } else {
+      quickInput.focus();
+    }
+  </script>
+</body>
+</html>

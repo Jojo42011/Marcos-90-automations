@@ -30,8 +30,13 @@
       --font: "Plus Jakarta Sans", system-ui, sans-serif;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; overflow: hidden; }
-    body { font-family: var(--font); background: var(--bg); color: var(--text); }
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #020810;
+    }
+    body { font-family: var(--font); color: var(--text); }
 
     /* ─────── Backdrops ─────── */
     .j-bg {
@@ -60,21 +65,30 @@
       box-shadow: inset 0 0 180px 40px rgba(0,0,0,0.85);
     }
 
-    /* ─────── Shell ─────── */
+    /* ─────── Shell — full viewport ─────── */
+    :root {
+      --j-strip-h: 36px;
+      --j-nav-h: 38px;
+      --j-compose-h: 54px;
+      --j-chrome-top: calc(var(--j-strip-h) + var(--j-nav-h));
+    }
     .j-shell {
-      position: relative; z-index: 1;
-      display: grid;
-      grid-template-rows: 38px 1fr;
-      height: 100vh; height: 100dvh;
+      position: fixed; inset: 0;
+      width: 100vw; height: 100vh; height: 100dvh;
+      z-index: 1;
+      overflow: hidden;
     }
 
     .j-topbar {
+      position: fixed;
+      top: var(--j-strip-h); left: 0; right: 0;
+      height: var(--j-nav-h);
       display: flex; align-items: center; gap: 0.75rem;
       padding: 0 0.85rem;
       border-bottom: 1px solid var(--border);
       background: var(--panel);
       backdrop-filter: blur(14px);
-      position: relative;
+      z-index: 99;
     }
     .j-topbar::before, .j-topbar::after {
       content: ""; position: absolute; bottom: -1px; width: 80px; height: 1px;
@@ -121,26 +135,53 @@
     }
 
     .j-panel-toggle {
-      display: none; font-family: var(--hud); font-size: 0.48rem;
+      display: inline-block; font-family: var(--hud); font-size: 0.48rem;
       letter-spacing: 0.14em; color: var(--muted); background: transparent;
       border: 1px solid var(--border); padding: 0.22rem 0.45rem;
       border-radius: 2px; cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
     }
+    .j-panel-toggle:hover,
+    .j-panel-toggle.active {
+      color: var(--cyan); border-color: var(--border-bright);
+      background: rgba(0, 212, 255, 0.06);
+    }
+    .j-panel-close {
+      background: none; border: none; color: var(--muted);
+      font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 0.2rem;
+    }
+    .j-panel-close:hover { color: var(--cyan); }
 
-    /* ─────── Main grid ─────── */
+    /* ─────── Main — full screen Harvey ─────── */
     .j-main {
-      display: grid;
-      grid-template-columns: 240px 1fr 280px;
+      position: fixed;
+      top: var(--j-chrome-top);
+      left: 0; right: 0;
+      bottom: var(--j-compose-h);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
       min-height: 0; overflow: hidden;
+      width: 100vw;
     }
 
     .j-col {
-      display: flex; flex-direction: column; min-height: 0;
+      display: none; flex-direction: column; min-height: 0;
       background: var(--panel);
-      position: relative;
+      position: fixed; z-index: 40;
+      top: var(--j-chrome-top); bottom: 0;
+      width: min(300px, 88vw);
+      box-shadow: 0 0 48px rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(16px);
     }
-    .j-col.left  { border-right: 1px solid var(--border); }
-    .j-col.right { border-left:  1px solid var(--border); }
+    .j-col.side.open { display: flex; }
+    .j-col.left  { left: 0; border-right: 1px solid var(--border); }
+    .j-col.right { right: 0; left: auto; border-left: 1px solid var(--border); }
+
+    .j-drawer-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 35;
+      background: rgba(0, 0, 0, 0.45);
+    }
+    .j-drawer-backdrop.open { display: block; }
 
     /* corner brackets on panels */
     .j-col::before, .j-col::after {
@@ -273,24 +314,26 @@
     /* ─────── CENTER ─────── */
     .j-center {
       display: flex; flex-direction: column; min-height: 0;
+      flex: 1; width: 100%; height: 100%;
       position: relative; overflow: hidden; background: transparent;
     }
 
-    /* Center stage — pushed down so core sits mid-page */
+    /* Center stage — orb fills remaining viewport */
     .j-stage {
       position: relative;
       flex: 1 1 auto;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      padding: 0.4rem 1rem 0.6rem;
+      padding: 0;
       min-height: 0;
+      width: 100%;
     }
 
     .j-stage-frame {
       position: relative;
-      width: min(58vh, 540px);
-      max-width: 92%;
-      padding: 0.4rem 1rem;
+      width: 100%;
+      max-width: none;
+      padding: 0.5rem 1rem;
       display: flex; flex-direction: column; align-items: center;
     }
 
@@ -316,11 +359,13 @@
       opacity: 0.55;
     }
 
-    /* Canvas core */
+    /* Canvas core / orb */
     .j-core-wrap {
       position: relative;
-      width: 100%;
-      max-width: min(48vh, 420px);
+      width: 580px;
+      height: 580px;
+      max-width: 70vmin;
+      max-height: 70vmin;
       aspect-ratio: 1;
       margin: 0 auto;
       display: flex; align-items: center; justify-content: center;
@@ -358,8 +403,8 @@
     /* ─────── Transcript ─────── */
     .j-transcript {
       flex: 0 1 auto; min-height: 0; overflow-y: auto;
-      max-height: 32vh;
-      margin: 0.55rem auto 0; width: 100%; max-width: 620px;
+      max-height: 16vh;
+      margin: 0.35rem auto 0; width: 100%; max-width: 100%;
       padding: 0.5rem 1.1rem 0.5rem;
       display: flex; flex-direction: column; gap: 0.5rem;
       mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
@@ -407,11 +452,13 @@
 
     /* ─────── Composer ─────── */
     .j-compose {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 99;
       flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem;
       padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom));
       border-top: 1px solid var(--border);
       background: var(--panel); backdrop-filter: blur(12px);
-      position: relative;
     }
     .j-compose::before {
       content: ""; position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
@@ -508,18 +555,174 @@
 
     /* ─────── Responsive ─────── */
     @media (max-width: 900px) {
-      .j-main { grid-template-columns: 1fr; }
-      .j-col.side { display: none; }
-      .j-col.side.open {
-        display: flex; position: fixed; z-index: 20;
-        top: 38px; bottom: 0; width: min(88vw, 300px);
-        box-shadow: 0 0 40px rgba(0,0,0,0.7);
-      }
-      .j-col.side.open.left  { left: 0; }
-      .j-col.side.open.right { right: 0; left: auto; border-left: 1px solid var(--border); }
-      .j-panel-toggle { display: inline-block; }
-      .j-stage-frame { width: min(82vw, 360px); padding: 1.2rem 1rem 0.4rem; }
-      .j-core-wrap { max-width: min(72vw, 320px); }
+      .j-col { width: min(92vw, 300px); }
+    }
+
+    /* ─────── Metrics strip + panels ─────── */
+    #harvey-active-panel {
+      display: none;
+      position: fixed;
+      top: 72px;
+      left: 0; right: 0;
+      z-index: 300;
+      background: #050a0f;
+      border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+      padding: 0;
+      max-height: 75vh;
+      overflow-y: auto;
+      animation: panelSlideDown 0.25s ease;
+    }
+    @keyframes panelSlideDown {
+      from { transform: translateY(-10px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    #harvey-active-panel::-webkit-scrollbar { width: 4px; }
+    #harvey-active-panel::-webkit-scrollbar-track { background: #020810; }
+    #harvey-active-panel::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.3); border-radius: 2px; }
+
+    .ms-strip {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--j-strip-h);
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; z-index: 100;
+      padding: 0 0.5rem 0 0.65rem; background: #050a0f;
+      border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+      font-family: var(--mono); font-size: 10px; color: #d6e4f0;
+      overflow: hidden; white-space: nowrap; user-select: none;
+    }
+    .ms-strip-content {
+      flex: 1; min-width: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.15rem; padding-right: 0.35rem; overflow: hidden;
+    }
+    .ms-strip-item { flex-shrink: 0; white-space: nowrap; }
+    .ms-strip .ms-live {
+      display: inline-flex; align-items: center; gap: 0.3rem; color: #4ade80; flex-shrink: 0;
+    }
+    .ms-strip .ms-live i {
+      width: 6px; height: 6px; border-radius: 50%; background: #4ade80;
+      box-shadow: 0 0 8px #4ade80; animation: msBlink 1.4s ease-in-out infinite;
+    }
+    @keyframes msBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .ms-strip .ms-sep { color: rgba(0, 212, 255, 0.25); }
+    .ms-strip .ms-label { color: #00d4ff; }
+    .ms-strip .ms-goal-pulse { animation: msGoalPulse 2.5s ease-in-out infinite; }
+    @keyframes msGoalPulse {
+      0%, 100% { text-shadow: none; } 50% { text-shadow: 0 0 8px rgba(0, 212, 255, 0.6); }
+    }
+    .ms-strip .ms-expand { color: #00d4ff; flex-shrink: 0; cursor: pointer; }
+    @media (max-width: 1100px) {
+      .ms-strip-narrow-hide { display: none !important; }
+    }
+    .ms-strip-section {
+      cursor: pointer; flex-shrink: 0; border-radius: 2px; padding: 0 2px;
+      transition: background-color 0.2s ease;
+    }
+    .ms-strip-section:hover {
+      text-decoration: underline;
+      text-decoration-color: rgba(0, 212, 255, 0.55);
+      text-underline-offset: 3px;
+    }
+
+    .ms-expand-wrap { display: none; }
+    .ms-panels-all { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.6rem; }
+    @media (max-width: 900px) { .ms-panels-all { grid-template-columns: 1fr; } }
+    .ms-panel-card {
+      border: 1px solid rgba(0, 212, 255, 0.2); background: rgba(0, 12, 22, 0.6);
+      padding: 0.6rem 0.7rem; position: relative;
+      box-shadow: 0 0 10px rgba(0, 212, 255, 0.08);
+    }
+    .ms-panel-card h4 {
+      color: #00d4ff; font-size: 10px; letter-spacing: 0.14em; margin-bottom: 0.45rem;
+      font-weight: 400;
+    }
+    .ms-panel-close {
+      position: absolute; top: 4px; right: 6px; background: none; border: none;
+      color: #4a5e74; cursor: pointer; font-size: 14px; line-height: 1;
+    }
+    .ms-panel-close:hover { color: #00d4ff; }
+    .ms-bar {
+      height: 5px; background: rgba(0, 212, 255, 0.1); margin: 0.35rem 0;
+      overflow: hidden;
+    }
+    .ms-bar > span {
+      display: block; height: 100%; background: linear-gradient(90deg, #00d4ff, #4be0ff);
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
+    }
+    .ms-funnel-line { color: #4a5e74; line-height: 1.55; }
+    .ms-funnel-line b { color: #00d4ff; font-weight: 400; }
+    .ms-funnel-line .closing { color: #d6e4f0; text-shadow: 0 0 6px rgba(0, 212, 255, 0.4); }
+
+    /* ─────── Memory explorer ─────── */
+    .mem-panel[data-force-dark="true"],
+    .mem-panel[data-force-dark="true"] * { color-scheme: dark; }
+    .mem-panel {
+      display: none;
+      position: fixed;
+      top: var(--j-chrome-top); left: 0; right: 0;
+      z-index: 180;
+      max-height: 400px; overflow: hidden;
+      background: #050a0f; border-bottom: 1px solid transparent;
+      font-family: var(--mono); color: #d6e4f0;
+    }
+    .mem-panel.open {
+      display: block;
+      border-bottom-color: rgba(0, 212, 255, 0.15);
+      box-shadow: 0 0 12px rgba(0, 212, 255, 0.12);
+    }
+    .mem-head {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.45rem 0.75rem; border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+      font-size: 10px; letter-spacing: 0.12em; color: #00d4ff;
+    }
+    .mem-head .mem-close, .mem-head .mem-add {
+      margin-left: auto; background: none; border: 1px solid rgba(0, 212, 255, 0.25);
+      color: #00d4ff; font-size: 10px; padding: 0.15rem 0.4rem; cursor: pointer;
+      font-family: var(--mono);
+    }
+    .mem-add { margin-left: 0.5rem !important; }
+    .mem-search {
+      width: 100%; padding: 0.35rem 0.5rem; margin: 0.4rem 0.75rem 0;
+      width: calc(100% - 1.5rem); background: rgba(0, 12, 22, 0.8);
+      border: 1px solid rgba(0, 212, 255, 0.2); color: #d6e4f0;
+      font-family: var(--mono); font-size: 11px;
+    }
+    .mem-tabs {
+      display: flex; gap: 0.25rem; padding: 0.35rem 0.75rem 0;
+      border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+    }
+    .mem-tab {
+      background: none; border: 1px solid transparent; color: #4a5e74;
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+      padding: 0.25rem 0.5rem; cursor: pointer;
+    }
+    .mem-tab.active { color: #00d4ff; border-color: rgba(0, 212, 255, 0.25); }
+    .mem-body { max-height: 280px; overflow-y: auto; padding: 0.5rem 0.75rem; font-size: 11px; }
+    .mem-row { padding: 0.3rem 0; border-bottom: 1px solid rgba(0, 212, 255, 0.06); line-height: 1.45; }
+    .mem-badge {
+      display: inline-block; font-size: 9px; letter-spacing: 0.08em;
+      padding: 0.1rem 0.3rem; margin-right: 0.35rem; border-radius: 2px;
+    }
+    .mem-badge.business { color: #00d4ff; border: 1px solid rgba(0, 212, 255, 0.3); }
+    .mem-badge.funnel { color: #ff6b35; border: 1px solid rgba(255, 107, 53, 0.3); }
+    .mem-badge.listing { color: #a78bfa; border: 1px solid rgba(167, 139, 250, 0.3); }
+    .mem-badge.market { color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3); }
+    .mem-badge.relationship { color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.3); }
+    .mem-dot-filled { color: #00d4ff; }
+    .mem-dot-hollow { color: #4a5e74; }
+    .mem-rel { color: #d6e4f0; }
+    .mem-rel span { color: rgba(0, 212, 255, 0.5); }
+    .mem-rule-trigger { color: #ff6b35; }
+    .mem-rule-action { color: #d6e4f0; margin-left: 0.5rem; }
+    .mem-form {
+      display: none; padding: 0.5rem 0.75rem; gap: 0.35rem; flex-direction: column;
+      border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+    }
+    .mem-form.open { display: flex; }
+    .mem-form input, .mem-form select {
+      background: rgba(0, 12, 22, 0.8); border: 1px solid rgba(0, 212, 255, 0.2);
+      color: #d6e4f0; font-family: var(--mono); font-size: 11px; padding: 0.3rem;
     }
   </style>
 </head>
@@ -530,6 +733,75 @@
   <div class="j-vignette" aria-hidden="true"></div>
 
   <div class="j-shell">
+    <div class="ms-strip" id="msStrip">
+      <div class="ms-strip-content" id="msStripContent">
+        <span class="ms-strip-item ms-live"><i></i>LIVE</span>
+        <span class="ms-sep">|</span>
+        <span class="ms-strip-item ms-strip-section" id="strip-goal-section" data-panel="goal" title="Expand goal metrics">
+          <span class="ms-label ms-goal-pulse">$20M:</span> <span id="msGoalPct">—</span>
+        </span>
+        <span class="ms-sep">|</span>
+        <span class="ms-strip-item ms-strip-section" id="strip-gap-section" data-panel="goal" title="Expand goal metrics">
+          <span class="ms-label">GAP:</span> <span id="msGap">—</span>
+        </span>
+        <span class="ms-sep">|</span>
+        <span class="ms-strip-item ms-strip-section" id="strip-tiktok-section" data-panel="tiktok" title="Expand TikTok metrics">
+          <span class="ms-label">TIKTOK:</span> <span id="msTiktok">—</span>
+        </span>
+        <span class="ms-sep">|</span>
+        <span class="ms-strip-item ms-strip-section" id="strip-mojo-section" data-panel="mojo" title="Expand Mojo metrics">
+          <span class="ms-label">MOJO:</span> <span id="msMojo">—</span>
+        </span>
+        <span class="ms-sep">|</span>
+        <span class="ms-strip-item"><span class="ms-label">DAILY:</span> <span id="msDaily">—</span></span>
+        <span class="ms-sep">|</span>
+        <span class="ms-strip-item"><span class="ms-label">AVG DEAL:</span> <span id="msAvgDeal">—</span></span>
+        <span class="ms-sep">|</span>
+        <span class="ms-strip-item"><span class="ms-label">BUYER:</span> <span id="msBuyer">—</span></span>
+        <span class="ms-sep">|</span>
+        <span class="ms-strip-item"><span class="ms-label">SELLER:</span> <span id="msSeller">—</span></span>
+        <span class="ms-sep ms-strip-narrow-hide">|</span>
+        <span class="ms-strip-item ms-strip-narrow-hide"><span class="ms-label">PACE:</span> <span id="msPace">—</span></span>
+        <span class="ms-sep ms-strip-narrow-hide">|</span>
+        <span class="ms-strip-item ms-strip-narrow-hide"><span class="ms-label">CONTACT RATE:</span> <span id="msContactRate">—</span></span>
+      </div>
+      <span class="ms-expand ms-strip-section" id="strip-expand-btn" data-panel="all" title="Expand all metrics">
+        <span id="msExpandLbl">[EXPAND ↓]</span>
+      </span>
+    </div>
+
+    <div class="ms-expand-wrap" id="msExpandWrap">
+      <div class="ms-expand-inner" id="msExpandInner"></div>
+    </div>
+
+    <div class="mem-panel" id="memPanel" data-force-dark="true" aria-hidden="true">
+      <div class="mem-head">
+        <span id="memHeadTitle">// HARVEY MEMORY SYSTEM //</span>
+        <button type="button" class="mem-add" id="memAddBtn">+ ADD</button>
+        <button type="button" class="mem-close" id="memCloseBtn">×</button>
+      </div>
+      <div class="mem-form" id="memForm">
+        <input type="text" id="memFactInput" placeholder="Fact text" />
+        <select id="memCatInput">
+          <option value="business">business</option>
+          <option value="funnel">funnel</option>
+          <option value="listing">listing</option>
+          <option value="market">market</option>
+          <option value="relationship">relationship</option>
+        </select>
+        <input type="text" id="memTagsInput" placeholder="tags (comma)" />
+        <button type="button" class="mem-add" id="memSaveBtn">SAVE</button>
+      </div>
+      <input class="mem-search" id="memSearch" type="text" placeholder="🔍 Search Harvey's memory..." />
+      <div class="mem-tabs">
+        <button type="button" class="mem-tab active" data-tab="facts">FACTS</button>
+        <button type="button" class="mem-tab" data-tab="connections">CONNECTIONS</button>
+        <button type="button" class="mem-tab" data-tab="rules">RULES</button>
+        <button type="button" class="mem-tab" data-tab="sessions">SESSIONS</button>
+      </div>
+      <div class="mem-body" id="memBody"></div>
+    </div>
+
     <header class="j-topbar">
       <a href="/dashboard" class="j-back">◂ CRM</a>
       <button type="button" class="j-panel-toggle" id="jToggleOps">OPS</button>
@@ -538,28 +810,16 @@
         <small>AETHON · MARCO PUGA</small>
       </div>
       <div class="j-spacer"></div>
-      <button type="button" class="j-panel-toggle" id="jToggleDir">TASKS</button>
+      <button type="button" class="j-panel-toggle" id="jToggleMarket">MARKET</button>
+      <button type="button" class="j-panel-toggle" id="jToggleWorld">WORLD</button>
+      <button type="button" class="j-panel-toggle" id="jToggleNotes">NOTES</button>
+      <button type="button" class="j-panel-toggle" id="jToggleResearch">RESEARCH</button>
+      <button type="button" class="j-panel-toggle" id="jToggleDir">DIRECTIVES</button>
       <span class="j-meta" id="jSessionMeta"><span class="dot"></span>LINK STABLE</span>
       <span class="j-meta" id="jModel">—</span>
     </header>
 
-    <main class="j-main">
-      <aside class="j-col left side" id="jColOps">
-        <div class="j-head">
-          <span>LIVE OPS</span>
-          <span class="j-count" id="jNodeCount"><b>—</b> NODES</span>
-        </div>
-        <div class="j-chips" aria-hidden="true">
-          <span class="j-chip live">LIVE</span>
-          <span class="j-chip dev">DEV</span>
-          <span class="j-chip live">SYNC</span>
-          <span class="j-chip idle">IDLE</span>
-        </div>
-        <div class="j-metrics" id="jMetrics">
-          <div class="j-metric-group"><div class="j-metric-group-title">loading…</div></div>
-        </div>
-      </aside>
-
+    <main class="j-main" id="jMain">
       <section class="j-center">
         <div class="j-stage">
           <div class="j-stage-frame">
@@ -573,7 +833,7 @@
               <svg class="j-tick-ring" viewBox="0 0 200 200" aria-hidden="true">
                 <g id="jTickGroup" stroke="rgba(0,212,255,0.45)" stroke-linecap="round"></g>
               </svg>
-              <canvas id="harvey-mic-btn" data-action="toggle-voice" aria-label="Harvey core — tap to speak"></canvas>
+              <canvas id="harvey-mic-btn" class="harvey-orb" data-action="toggle-voice" aria-label="Harvey core — tap to speak"></canvas>
               <!-- Mic icon centered over canvas -->
               <div class="j-mic-icon" id="jMicIcon">
                 <svg viewBox="0 0 48 60" fill="none" aria-hidden="true">
@@ -613,22 +873,50 @@
           <button type="submit" class="j-send" id="jSend">TRANSMIT</button>
         </form>
       </section>
-
-      <aside class="j-col right side" id="jColDir">
-        <div class="j-head">
-          <span>ACTIVE DIRECTIVES</span>
-          <span class="j-count"><b id="jDirCount">0</b> TASKS</span>
-        </div>
-        <div class="j-chips" aria-hidden="true">
-          <span class="j-chip live">PRIORITY</span>
-          <span class="j-chip idle">QUEUED</span>
-        </div>
-        <div class="j-directives" id="jDirectives">
-          <div class="j-dir-empty">Awaiting signal…</div>
-        </div>
-      </aside>
     </main>
+
+    <aside class="j-col left side" id="jColOps">
+      <div class="j-head">
+        <span>LIVE OPS</span>
+        <span class="j-count" id="jNodeCount"><b>—</b> NODES</span>
+        <button type="button" class="j-panel-close" id="jCloseOps" aria-label="Close OPS panel">×</button>
+      </div>
+      <div class="j-chips" aria-hidden="true">
+        <span class="j-chip live">LIVE</span>
+        <span class="j-chip dev">DEV</span>
+        <span class="j-chip live">SYNC</span>
+        <span class="j-chip idle">IDLE</span>
+      </div>
+      <div class="j-metrics" id="jMetrics">
+        <div class="j-metric-group"><div class="j-metric-group-title">loading…</div></div>
+      </div>
+    </aside>
+
+    <aside class="j-col right side" id="jColDir">
+      <div class="j-head">
+        <span>ACTIVE DIRECTIVES</span>
+        <span class="j-count"><b id="jDirCount">0</b> TASKS</span>
+        <button type="button" class="j-panel-close" id="jCloseDir" aria-label="Close Directives panel">×</button>
+      </div>
+      <div class="j-chips" aria-hidden="true">
+        <span class="j-chip live">PRIORITY</span>
+        <span class="j-chip idle">QUEUED</span>
+      </div>
+      <div class="j-directives" id="jDirectives">
+        <div class="j-dir-empty">Awaiting signal…</div>
+      </div>
+    </aside>
+
+    <div class="j-drawer-backdrop" id="jDrawerBackdrop" aria-hidden="true"></div>
   </div>
+
+  <button type="button" id="harveyTestPanelsBtn"
+    onclick="(window.harveyMetricsData ? openDynamicPanel('metrics', window.harveyMetricsData) : fetchMetrics().then(d => { if(d) { window.harveyMetricsData=d; openDynamicPanel('metrics',d); }}))"
+    style="position:fixed; bottom:60px; right:20px; background:rgba(0,212,255,0.1);
+           border:1px solid #00d4ff; color:#00d4ff; padding:6px 12px;
+           font-family:monospace; font-size:11px; cursor:pointer; z-index:999;">
+    TEST PANELS
+  </button>
 
   <script>
     /* ─────────────────────────────────────────────
@@ -1219,10 +1507,16 @@
       addMsg("user", text.trim());
       try {
         const body   = await postHarveyChat(text.trim());
-        const speech = body.speech || body.reply || "(no response)";
+        const speech = body.speech || body.reply || body.text || body.message || "(no response)";
+        console.log("[Harvey] Text chat response, running trigger on:", speech.substring(0, 60));
         renderDirectives(body.directives || body.judgment?.directives || []);
         if (body.metrics) renderMetrics(body.metrics);
         setStatus("RESPONDING", true);
+        if (body.ui && body.ui.panel && body.ui.panel !== "ops") {
+          handlePanelResponse(body.ui);
+        } else {
+          detectMetricsTrigger(speech || "");
+        }
         const el = addMsg("ai", "", true);
         await typeText(el, speech);
         await playGeminiTts(speech);
@@ -1244,16 +1538,992 @@
       void sendMessage(t);
     });
 
+    function syncDrawerUi() {
+      const anyOpen = !!document.querySelector(".j-col.side.open");
+      const backdrop = document.getElementById("jDrawerBackdrop");
+      if (backdrop) {
+        backdrop.classList.toggle("open", anyOpen);
+        backdrop.setAttribute("aria-hidden", anyOpen ? "false" : "true");
+      }
+      document.getElementById("jToggleOps")?.classList.toggle("active", document.getElementById("jColOps")?.classList.contains("open"));
+      document.getElementById("jToggleDir")?.classList.toggle("active", document.getElementById("jColDir")?.classList.contains("open"));
+    }
+
+    function closeSidePanels() {
+      document.querySelectorAll(".j-col.side.open").forEach(p => p.classList.remove("open"));
+      syncDrawerUi();
+    }
+
     function togglePanel(id) {
-      const el   = document.getElementById(id);
-      const open = el.classList.toggle("open");
+      const el = document.getElementById(id);
+      if (!el) return;
+      const willOpen = !el.classList.contains("open");
       document.querySelectorAll(".j-col.side.open").forEach(p => {
         if (p !== el) p.classList.remove("open");
       });
-      if (!open) el.classList.remove("open");
+      el.classList.toggle("open", willOpen);
+      syncDrawerUi();
     }
+
     document.getElementById("jToggleOps").addEventListener("click", () => togglePanel("jColOps"));
     document.getElementById("jToggleDir").addEventListener("click", () => togglePanel("jColDir"));
+    document.getElementById("jCloseOps").addEventListener("click", () => togglePanel("jColOps"));
+    document.getElementById("jCloseDir").addEventListener("click", () => togglePanel("jColDir"));
+    document.getElementById("jDrawerBackdrop").addEventListener("click", closeSidePanels);
+
+    /* ─────── Metrics strip + memory explorer ─────── */
+    function getToken() {
+      return token || "";
+    }
+
+    let metricsCache = null;
+    let metricsExpandOpen = false;
+    let metricsExpandType = "all";
+    let memPanelOpen = false;
+    let memActiveTab = "facts";
+    let memDataCache = null;
+
+    function fmtMoneyShort(n) {
+      if (n >= 1e6) return "$" + (n / 1e6).toFixed(2).replace(/\.00$/, "") + "M";
+      if (n >= 1e3) return "$" + Math.round(n / 1e3) + "K";
+      return "$" + Math.round(n).toLocaleString();
+    }
+    function fmtMoneyFull(n) {
+      return "$" + Math.round(n).toLocaleString();
+    }
+    function fmtCompact(n) {
+      if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+      if (n >= 1e3) return Math.round(n / 1e3).toLocaleString() + "K";
+      return String(Math.round(n));
+    }
+
+    async function fetchMetrics() {
+      const tok = getToken();
+      const url = tok ? `/api/jarvis/metrics?token=${encodeURIComponent(tok)}` : "/api/jarvis/metrics";
+      console.log("[WarRoom] Fetching metrics from:", url);
+      try {
+        const res = await fetch(url);
+        console.log("[WarRoom] Metrics response status:", res.status);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        console.log("[WarRoom] Metrics loaded:", Object.keys(data));
+        return data;
+      } catch (err) {
+        console.error("[WarRoom] Metrics fetch failed:", err.message);
+        return null;
+      }
+    }
+
+    function renderMetricsStrip(data) {
+      const dash = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      if (!data) {
+        dash("msGoalPct", "— · — BANKED");
+        dash("msGap", "—");
+        dash("msTiktok", "—");
+        dash("msMojo", "—");
+        dash("msDaily", "—");
+        dash("msAvgDeal", "—");
+        dash("msBuyer", "—");
+        dash("msSeller", "—");
+        dash("msPace", "—");
+        dash("msContactRate", "—");
+        return;
+      }
+      const g = data.goal;
+      const tt = data.tiktok;
+      const mj = data.mojo;
+      const dt = data.dailyTargets || {};
+      dash("msGoalPct", `${g.percentComplete}% · ${fmtMoneyShort(g.banked)} BANKED`);
+      dash("msGap", fmtMoneyShort(g.gap));
+      dash("msTiktok", `${fmtCompact(tt.views)} VIEWS · ${tt.closings} CLOSINGS · ${tt.videosPerWeekCurrent} VIDS/WK`);
+      dash("msMojo", `${mj.calls.toLocaleString()} CALLS · ${mj.closings} CLOSINGS`);
+      dash("msDaily", `${dt.videos || 7} VIDEOS + ${dt.calls || 725} CALLS`);
+      dash("msAvgDeal", fmtMoneyShort(g.avgDealPrice || 425000));
+      dash("msBuyer", "21 CLOSINGS NEEDED");
+      dash("msSeller", "14 CLOSINGS NEEDED");
+      dash("msPace", `1 CLOSING/${tt.weeksPerClosingCurrent || 8}WKS → NEED ${tt.videosPerWeekForMonthly || 10.3} VIDS/WK`);
+      dash("msContactRate", `1 PER ${mj.callsPerContact || 32} CALLS`);
+    }
+
+    // ============================================
+    // DYNAMIC PANEL SYSTEM — server decides, client renders
+    // ============================================
+
+    let activePanelType = null;
+
+    function openDynamicPanel(panel, data) {
+      console.log("[Harvey] openDynamicPanel:", panel, "data keys:", Object.keys(data || {}));
+      closeMemoryPanel();
+
+      let title = "";
+      let body = "";
+
+      switch (panel) {
+        case "daily_plan":
+          title = "// DAILY GAME PLAN //";
+          body = renderDailyPlanPanel(data);
+          break;
+        case "market_intel":
+          title = "// MARKET INTEL //";
+          body = renderMarketIntelPanel(data);
+          break;
+        case "world_intel":
+          title = "// WORLD INTEL //";
+          body = renderWorldIntelPanel(data);
+          break;
+        case "metrics":
+          title = "// METRICS //";
+          body = renderMetricsPanelHTML("all", data);
+          break;
+        case "tiktok":
+          title = "// TIKTOK ENGINE //";
+          body = renderMetricsPanelHTML("tiktok", window.harveyMetricsData || data);
+          break;
+        case "mojo":
+          title = "// MOJO DIALER //";
+          body = renderMetricsPanelHTML("mojo", window.harveyMetricsData || data);
+          break;
+        case "goal":
+          title = "// $20M CAMPAIGN //";
+          body = renderMetricsPanelHTML("goal", window.harveyMetricsData || data);
+          break;
+        case "research":
+          title = "// API RESEARCH REPORT //";
+          body = renderResearchPanel(data);
+          break;
+        case "note_saved":
+          title = "// NOTE SAVED //";
+          body = renderNoteSavedPanel(data);
+          break;
+        case "notes_browser":
+          title = "// HARVEY NOTES //";
+          body = renderNotesBrowserPanel(data);
+          break;
+        default:
+          console.warn("[Harvey] Unknown panel type:", panel);
+          return;
+      }
+
+      activePanelType = panel;
+      metricsExpandOpen = true;
+      metricsExpandType = panel === "metrics" ? "all" : panel;
+      const expandLbl = document.getElementById("msExpandLbl");
+      if (expandLbl) expandLbl.textContent = "[COLLAPSE ↑]";
+      showPanel(title, body);
+    }
+    window.openDynamicPanel = openDynamicPanel;
+
+    function handlePanelResponse(ui) {
+      if (!ui || !ui.panel) return;
+      console.log("[Harvey] handlePanelResponse:", ui.panel, ui.action);
+      if (ui.action === "close") {
+        closeActivePanel();
+        return;
+      }
+      if (ui.panel === "market_intel" && ui.data?.fetch) {
+        void openMarketIntelPanel();
+        return;
+      }
+      if (ui.panel === "world_intel" && ui.data?.fetch) {
+        void openWorldIntelPanel();
+        return;
+      }
+      if (["tiktok", "mojo", "goal", "metrics"].includes(ui.panel) && ui.data?.fetch) {
+        const p = ui.panel;
+        if (window.harveyMetricsData) openDynamicPanel(p, window.harveyMetricsData);
+        else {
+          fetchMetrics().then(d => {
+            if (d) { window.harveyMetricsData = d; metricsCache = d; openDynamicPanel(p, d); }
+          });
+        }
+        return;
+      }
+      openDynamicPanel(ui.panel, ui.data || {});
+    }
+    window.handlePanelResponse = handlePanelResponse;
+
+    function showPanel(title, body) {
+      let panel = document.getElementById("harvey-active-panel");
+      if (!panel) {
+        panel = document.createElement("div");
+        panel.id = "harvey-active-panel";
+        document.body.appendChild(panel);
+      }
+
+      panel.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;
+                    padding:10px 24px; border-bottom:1px solid rgba(0,212,255,0.15);
+                    position:sticky; top:0; background:#050a0f; z-index:1;">
+          <div style="font-family:monospace; font-size:10px; letter-spacing:3px; color:#00d4ff;">${title}</div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <span style="font-size:9px; color:#444; font-family:monospace;" id="panel-timestamp">${new Date().toLocaleTimeString()}</span>
+            <span onclick="closeActivePanel()"
+                  style="cursor:pointer; color:#00d4ff; font-size:20px; line-height:1; padding:0 4px;">×</span>
+          </div>
+        </div>
+        <div style="padding:20px 24px;">
+          ${body}
+        </div>
+      `;
+
+      panel.style.display = "block";
+      console.log("[Harvey] Panel shown:", title);
+    }
+    window.showPanel = showPanel;
+
+    function closeActivePanel() {
+      const panel = document.getElementById("harvey-active-panel");
+      if (panel) {
+        panel.style.display = "none";
+        panel.innerHTML = "";
+      }
+      activePanelType = null;
+      metricsExpandOpen = false;
+      const expandLbl = document.getElementById("msExpandLbl");
+      if (expandLbl) expandLbl.textContent = "[EXPAND ↓]";
+    }
+    window.closeActivePanel = closeActivePanel;
+
+    function renderDailyPlanPanel(d) {
+      return `
+        <div style="display:grid; grid-template-columns:auto auto 1fr; gap:16px; font-family:monospace;">
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px; min-width:180px;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:12px;">
+              ${esc((d.dayOfWeek || "").toUpperCase())} · ${esc(d.date || "")}
+            </div>
+            <div style="font-size:9px; color:#555; letter-spacing:1px; margin-bottom:8px;">NON-NEGOTIABLES</div>
+            <div style="display:flex; gap:20px; align-items:center;">
+              <div style="text-align:center;">
+                <div style="font-size:40px; color:#00d4ff; font-weight:bold; line-height:1;">${d.videos || 7}</div>
+                <div style="font-size:9px; color:#555; margin-top:2px;">VIDEOS</div>
+              </div>
+              <div style="font-size:20px; color:rgba(0,212,255,0.2);">+</div>
+              <div style="text-align:center;">
+                <div style="font-size:40px; color:#00d4ff; font-weight:bold; line-height:1;">${d.calls || 725}</div>
+                <div style="font-size:9px; color:#555; margin-top:2px;">CALLS</div>
+              </div>
+            </div>
+          </div>
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px; min-width:180px;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:10px;">$20M STATUS</div>
+            <div style="background:rgba(0,212,255,0.08); border-radius:2px; height:3px; margin-bottom:10px;">
+              <div style="background:#00d4ff; width:${d.percentComplete || 29.8}%; height:100%; border-radius:2px;"></div>
+            </div>
+            <div style="font-size:11px; color:#fff; line-height:1.9;">
+              <div>BANKED <span style="color:#00d4ff; float:right;">$${((d.banked || 0) / 1000000).toFixed(2)}M</span></div>
+              <div>GAP <span style="color:#ff6b35; float:right;">$${((d.gap || 0) / 1000000).toFixed(2)}M</span></div>
+              <div>DEADLINE <span style="color:#888; float:right; font-size:10px;">${esc(d.deadline || "")}</span></div>
+              <div>DAYS LEFT <span style="color:#ff6b35; float:right;">${d.daysRemaining || 0}</span></div>
+            </div>
+          </div>
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:10px;">WHAT MOVES THE NEEDLE</div>
+            <div style="font-size:11px; color:#fff; line-height:2; margin-bottom:14px;">
+              ${(d.needleMovers || []).map(m => `<div style="display:flex; gap:8px;"><span style="color:rgba(0,212,255,0.4);">→</span><span>${esc(m)}</span></div>`).join("")}
+            </div>
+            <div style="border-top:1px solid rgba(0,212,255,0.1); padding-top:12px; font-size:11px; color:#666; font-style:italic; line-height:1.6;">
+              ${esc(d.motivation || "")}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderMarketIntelPanel(d) {
+      const rateColor = (d.mortgageRateChange || "").includes("+") ? "#ff6b35" : "#00ff88";
+      const fetched = d.lastUpdated ? new Date(d.lastUpdated).toLocaleTimeString() : "";
+      return `
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; font-family:monospace;">
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:14px; border-radius:4px;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:8px;">MORTGAGE RATE</div>
+            <div style="font-size:32px; color:#00d4ff; font-weight:bold; line-height:1;">${esc(d.mortgageRate || "--")}</div>
+            <div style="font-size:9px; color:#888; margin-top:4px;">30-year fixed</div>
+            <div style="font-size:10px; color:${rateColor}; margin-top:2px;">${esc(d.mortgageRateChange || "")}</div>
+          </div>
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:14px; border-radius:4px;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:8px;">FED RATE</div>
+            <div style="font-size:32px; color:#00d4ff; font-weight:bold; line-height:1;">${esc(d.fedRate || "--")}</div>
+            <div style="font-size:10px; color:#888; margin-top:4px;">${esc(d.fedNote || "")}</div>
+          </div>
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:14px; border-radius:4px;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:8px;">INFLATION (CPI)</div>
+            <div style="font-size:32px; color:#00d4ff; font-weight:bold; line-height:1;">${esc(d.inflation || "--")}</div>
+            <div style="font-size:10px; color:#888; margin-top:4px;">${esc(d.inflationNote || "")}</div>
+          </div>
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:14px; border-radius:4px;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:8px;">MEDIAN HOME PRICE</div>
+            <div style="font-size:26px; color:#00d4ff; font-weight:bold; line-height:1;">${esc(d.medianHomePrice || "--")}</div>
+            <div style="font-size:10px; color:#888; margin-top:4px;">${esc(d.marketTrend || "")}</div>
+          </div>
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:14px; border-radius:4px; grid-column:span 2;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:8px;">INVENTORY & MARKET</div>
+            <div style="font-size:11px; color:#fff; line-height:1.7;">${esc(d.nationalInventory || "--")}</div>
+            <div style="font-size:10px; color:#888; margin-top:8px; padding-top:8px; border-top:1px solid rgba(0,212,255,0.08);">
+              SAN ANTONIO: ${esc(d.sanAntonioNote || "No local data")}
+            </div>
+          </div>
+          <div style="border:1px solid rgba(0,212,255,0.25); padding:14px; border-radius:4px; grid-column:1/-1; background:rgba(0,212,255,0.03);">
+            <div style="font-size:9px; color:#00d4ff; letter-spacing:2px; margin-bottom:8px;">// WEEKLY INSIGHT //</div>
+            <div style="font-size:12px; color:#fff; line-height:1.7;">${esc(d.weeklyInsight || d.error || "")}</div>
+          </div>
+        </div>
+        <div style="text-align:center; margin-top:14px; font-family:monospace;">
+          <span style="font-size:9px; color:#444;">FETCHED ${esc(fetched)}</span>
+          <button onclick="openMarketIntelPanel()"
+                  style="margin-left:16px; background:transparent; border:1px solid rgba(0,212,255,0.3);
+                         color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px;
+                         letter-spacing:2px; cursor:pointer; border-radius:2px;">↻ REFRESH</button>
+        </div>`;
+    }
+
+    function renderWorldIntelPanel(d) {
+      const events = d.events || [];
+      const fetched = d.lastUpdated ? new Date(d.lastUpdated).toLocaleTimeString() : "";
+      const eventCards = events.length > 0 ? events.map(e => `
+        <div style="border:1px solid rgba(0,212,255,0.15); padding:12px 14px; border-radius:4px;
+                    border-left:3px solid ${e.impact === "high" ? "#ff6b35" : e.impact === "medium" ? "#f59e0b" : "rgba(0,212,255,0.4)"};">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+            <div style="font-size:9px; color:#555; letter-spacing:1px;">${esc((e.category || "").toUpperCase())}</div>
+            <div style="font-size:9px; color:${e.impact === "high" ? "#ff6b35" : e.impact === "medium" ? "#f59e0b" : "#888"};">
+              ${esc((e.impact || "").toUpperCase())} IMPACT
+            </div>
+          </div>
+          <div style="font-size:12px; color:#fff; margin-bottom:4px; font-weight:500;">${esc(e.headline || "")}</div>
+          <div style="font-size:11px; color:#888; line-height:1.5;">${esc(e.summary || "")}</div>
+          ${e.realEstateRelevance ? `
+            <div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(0,212,255,0.08);
+                        font-size:10px; color:#00d4ff;">→ RE IMPACT: ${esc(e.realEstateRelevance)}</div>
+          ` : ""}
+        </div>
+      `).join("") : '<div style="color:#555; font-family:monospace; font-size:11px; padding:20px 0;">No events found</div>';
+
+      return `
+        <div style="font-family:monospace;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px;">
+            <div style="border:1px solid rgba(0,212,255,0.2); padding:14px; border-radius:4px; background:rgba(0,212,255,0.03);">
+              <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:8px;">ECONOMIC SUMMARY</div>
+              <div style="font-size:11px; color:#fff; line-height:1.7;">${esc(d.economicSummary || "--")}</div>
+            </div>
+            <div style="border:1px solid rgba(255,107,53,0.3); padding:14px; border-radius:4px; background:rgba(255,107,53,0.03);">
+              <div style="font-size:9px; color:#ff6b35; letter-spacing:2px; margin-bottom:8px;">REAL ESTATE IMPACT</div>
+              <div style="font-size:11px; color:#fff; line-height:1.7;">${esc(d.realEstateImpact || "--")}</div>
+            </div>
+          </div>
+          <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:10px;">KEY EVENTS</div>
+          <div style="display:grid; gap:10px;">${eventCards}</div>
+          <div style="text-align:center; margin-top:14px;">
+            <span style="font-size:9px; color:#444;">FETCHED ${esc(fetched)}</span>
+            <button onclick="openWorldIntelPanel()"
+                    style="margin-left:16px; background:transparent; border:1px solid rgba(0,212,255,0.3);
+                           color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px;
+                           letter-spacing:2px; cursor:pointer; border-radius:2px;">↻ REFRESH</button>
+          </div>
+        </div>`;
+    }
+
+    function renderMetricsPanelHTML(type, data) {
+      const goal = data?.goal || {};
+      const tiktok = data?.tiktok || {};
+      const mojo = data?.mojo || {};
+      const banked = goal.banked || 0;
+      const gap = goal.gap || 0;
+
+      const goalHTML = `
+        <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">$20M CAMPAIGN · ${esc(goal.deadline || "NOV 30 2026")}</div>
+          <div style="background:rgba(0,212,255,0.1); border-radius:2px; height:6px; margin-bottom:8px;">
+            <div style="background:#00d4ff; width:${goal.percentComplete || 29.8}%; height:100%; border-radius:2px;"></div>
+          </div>
+          <div style="color:#fff; font-size:11px; line-height:1.8;">
+            <div>BANKED: <span style="color:#00d4ff;">$${(banked / 1000000).toFixed(2)}M</span> · ${goal.dealsCount || 0} deals</div>
+            <div>GAP: <span style="color:#ff6b35;">$${(gap / 1000000).toFixed(2)}M</span></div>
+            <div>AVG DEAL: $${(goal.avgDealPrice || 0).toLocaleString()}</div>
+          </div>
+        </div>`;
+
+      const tiktokHTML = `
+        <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">TIKTOK ENGINE · ${tiktok.days || 0} DAYS · ${tiktok.videos || 0} VIDEOS</div>
+          <div style="color:#fff; font-size:11px; line-height:2;">
+            <div><span style="color:#00d4ff;">${((tiktok.views || 0) / 1000).toFixed(0)}K</span> VIEWS · ${tiktok.closings || 0} CLOSINGS</div>
+            <div style="color:#ff6b35;">CURRENT: ${tiktok.videosPerWeekCurrent || 0} vids/wk</div>
+            <div style="color:#00d4ff;">NEEDED: ${tiktok.videosPerWeekForMonthly || 0} vids/wk for monthly</div>
+          </div>
+        </div>`;
+
+      const mojoHTML = `
+        <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER · JAN–MAY 2026</div>
+          <div style="color:#fff; font-size:11px; line-height:2;">
+            <div><span style="color:#00d4ff;">${(mojo.calls || 0).toLocaleString()}</span> CALLS · ${mojo.closings || 0} CLOSINGS</div>
+            <div style="color:#888;">1 contact per ${mojo.callsPerContact || 32} calls</div>
+          </div>
+        </div>`;
+
+      if (type === "goal") return `<div style="display:flex; flex-wrap:wrap; gap:24px;">${goalHTML}</div>`;
+      if (type === "tiktok") return `<div style="display:flex; flex-wrap:wrap; gap:24px;">${tiktokHTML}</div>`;
+      if (type === "mojo") return `<div style="display:flex; flex-wrap:wrap; gap:24px;">${mojoHTML}</div>`;
+      return `<div style="display:flex; flex-wrap:wrap; gap:24px;">${goalHTML}${tiktokHTML}${mojoHTML}</div>`;
+    }
+
+    function flashStripSection(type) {
+      const sectionMap = {
+        goal: "#strip-goal-section",
+        tiktok: "#strip-tiktok-section",
+        mojo: "#strip-mojo-section",
+        all: "#strip-expand-btn",
+        metrics: "#strip-expand-btn",
+      };
+      const el = document.querySelector(sectionMap[type]);
+      if (el) {
+        el.style.backgroundColor = "rgba(0, 212, 255, 0.2)";
+        setTimeout(() => { el.style.backgroundColor = ""; }, 600);
+      }
+    }
+
+    function expandMetricsPanel(type) {
+      const panelType = type || "all";
+      const dynamicType = panelType === "all" ? "metrics" : panelType;
+      flashStripSection(panelType);
+      const cached = window.harveyMetricsData || metricsCache;
+      if (!cached) {
+        fetchMetrics().then(data => {
+          if (data) {
+            window.harveyMetricsData = data;
+            metricsCache = data;
+            openDynamicPanel(dynamicType, data);
+          }
+        });
+        return;
+      }
+      openDynamicPanel(dynamicType, cached);
+    }
+    window.expandMetricsPanel = expandMetricsPanel;
+
+    function expandDailyPlanPanel() {
+      console.log("[Harvey] Daily plan panel opening instantly");
+      const now = new Date();
+      const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
+      const dateStr = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      const daysLeft = Math.ceil((new Date("2026-11-30").getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      openDynamicPanel("daily_plan", {
+        date: dateStr,
+        dayOfWeek,
+        videos: 7,
+        calls: 725,
+        description: "Non-negotiable daily minimums for $20M by Nov 30",
+        banked: 5956520,
+        gap: 14043480,
+        percentComplete: 29.8,
+        deadline: "Nov 30, 2026",
+        daysRemaining: daysLeft,
+        needleMovers: [
+          "7 videos posted today keeps the TikTok engine alive",
+          "725 calls = 22 contacts at current rate = pipeline building",
+          "Every video above 7 compounds — 10.3/week hits monthly closing pace",
+          "Every 6,734 calls = 1 seller closing = $425K avg deal",
+        ],
+        motivation: `${dayOfWeek}. $14M gap. ${daysLeft} days left. The only thing that moves the needle today is reps — videos and calls. Everything else is noise.`,
+      });
+    }
+    window.expandDailyPlanPanel = expandDailyPlanPanel;
+
+    async function openMarketIntelPanel() {
+      console.log("[Harvey] Opening Market Intel panel");
+      showPanel("// MARKET INTEL //", `
+        <div style="text-align:center; padding:40px; color:#00d4ff; font-family:monospace;">
+          <div style="font-size:11px; letter-spacing:3px; margin-bottom:6px;">// FETCHING MARKET DATA //</div>
+          <div style="font-size:9px; color:#444;">Searching live sources...</div>
+        </div>
+      `);
+      const token = getToken();
+      try {
+        const url = new URL("/api/jarvis/market-intel", window.location.origin);
+        if (token) url.searchParams.set("token", token);
+        const res = await fetch(url.toString(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const { data } = await res.json();
+        openDynamicPanel("market_intel", data);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showPanel("// MARKET INTEL //", `
+          <div style="text-align:center; padding:40px; color:#ff6b35; font-family:monospace;">
+            <div>// MARKET DATA UNAVAILABLE //</div>
+            <div style="font-size:9px; color:#555; margin-top:6px;">${esc(msg)}</div>
+            <button onclick="openMarketIntelPanel()"
+                    style="margin-top:14px; background:transparent; border:1px solid rgba(0,212,255,0.3);
+                           color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px; cursor:pointer;">
+              ↻ RETRY
+            </button>
+          </div>
+        `);
+      }
+    }
+    window.openMarketIntelPanel = openMarketIntelPanel;
+
+    async function openWorldIntelPanel() {
+      console.log("[Harvey] Opening World Intel panel");
+      showPanel("// WORLD INTEL //", `
+        <div style="text-align:center; padding:40px; color:#00d4ff; font-family:monospace;">
+          <div style="font-size:11px; letter-spacing:3px; margin-bottom:6px;">// SCANNING WORLD EVENTS //</div>
+          <div style="font-size:9px; color:#444;">Filtering for business-relevant news...</div>
+        </div>
+      `);
+      const token = getToken();
+      try {
+        const url = new URL("/api/jarvis/world-intel", window.location.origin);
+        if (token) url.searchParams.set("token", token);
+        const res = await fetch(url.toString(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const { data } = await res.json();
+        openDynamicPanel("world_intel", data);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showPanel("// WORLD INTEL //", `
+          <div style="text-align:center; padding:40px; color:#ff6b35; font-family:monospace;">
+            <div>// WORLD INTEL UNAVAILABLE //</div>
+            <div style="font-size:9px; color:#555; margin-top:6px;">${esc(msg)}</div>
+            <button onclick="openWorldIntelPanel()"
+                    style="margin-top:14px; background:transparent; border:1px solid rgba(0,212,255,0.3);
+                           color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px; cursor:pointer;">
+              ↻ RETRY
+            </button>
+          </div>
+        `);
+      }
+    }
+    window.openWorldIntelPanel = openWorldIntelPanel;
+
+    document.getElementById("jToggleMarket")?.addEventListener("click", () => openMarketIntelPanel());
+    document.getElementById("jToggleWorld")?.addEventListener("click", () => openWorldIntelPanel());
+    document.getElementById("jToggleNotes")?.addEventListener("click", () => openNotesPanel());
+    document.getElementById("jToggleResearch")?.addEventListener("click", () => openMojoTiktokResearch());
+
+    function renderResearchPanel(d) {
+      return `
+        <div style="font-family:monospace; display:grid; gap:16px;">
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER</div>
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px;">
+              <div style="font-size:11px; color:${d.mojo?.hasApi ? "#00ff88" : "#ff6b35"};">
+                ${d.mojo?.hasApi ? "● API AVAILABLE" : "○ NO PUBLIC API"}
+              </div>
+              <div style="font-size:9px; color:#555; background:rgba(0,212,255,0.1); padding:2px 8px; border-radius:2px;">
+                ${String(d.mojo?.integrationComplexity || "").toUpperCase()}
+              </div>
+            </div>
+            <div style="font-size:11px; color:#fff; line-height:1.7; margin-bottom:10px;">${esc(d.mojo?.apiDetails || "")}</div>
+            <div style="font-size:10px; color:#888; margin-bottom:6px;">EXPORT OPTIONS:</div>
+            <div style="font-size:11px; color:#aaa; line-height:1.6;">
+              ${(d.mojo?.exportOptions || []).map(o => `→ ${esc(o)}`).join("<br>")}
+            </div>
+            <div style="margin-top:10px; padding:10px; background:rgba(0,212,255,0.05); border-radius:2px; border-left:2px solid #00d4ff;">
+              <div style="font-size:9px; color:#00d4ff; margin-bottom:4px;">RECOMMENDATION</div>
+              <div style="font-size:11px; color:#fff;">${esc(d.mojo?.recommendation || "")}</div>
+            </div>
+            ${d.mojo?.limitations ? `<div style="margin-top:8px; font-size:10px; color:#555;">LIMITATIONS: ${esc(d.mojo.limitations)}</div>` : ""}
+          </div>
+          <div style="border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
+            <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:12px;">TIKTOK ANALYTICS</div>
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px;">
+              <div style="font-size:11px; color:${d.tiktok?.hasApi ? "#00ff88" : "#ff6b35"};">
+                ${d.tiktok?.hasApi ? "● API AVAILABLE" : "○ NO PUBLIC API"}
+              </div>
+              <div style="font-size:9px; color:#555; background:rgba(0,212,255,0.1); padding:2px 8px; border-radius:2px;">
+                ${String(d.tiktok?.integrationComplexity || "").toUpperCase()}
+              </div>
+            </div>
+            <div style="font-size:11px; color:#fff; line-height:1.7; margin-bottom:10px;">${esc(d.tiktok?.apiDetails || "")}</div>
+            <div style="font-size:10px; color:#888; margin-bottom:6px;">ACCESS REQUIREMENTS:</div>
+            <div style="font-size:11px; color:#aaa; line-height:1.6;">${esc(d.tiktok?.accessRequirements || "")}</div>
+            <div style="margin-top:10px; padding:10px; background:rgba(0,212,255,0.05); border-radius:2px; border-left:2px solid #00d4ff;">
+              <div style="font-size:9px; color:#00d4ff; margin-bottom:4px;">RECOMMENDATION</div>
+              <div style="font-size:11px; color:#fff;">${esc(d.tiktok?.recommendation || "")}</div>
+            </div>
+            ${d.tiktok?.limitations ? `<div style="margin-top:8px; font-size:10px; color:#555;">LIMITATIONS: ${esc(d.tiktok.limitations)}</div>` : ""}
+          </div>
+          <div style="border:1px solid rgba(0,212,255,0.3); padding:16px; border-radius:4px; background:rgba(0,212,255,0.03);">
+            <div style="font-size:9px; color:#00d4ff; letter-spacing:2px; margin-bottom:8px;">EXECUTIVE SUMMARY</div>
+            <div style="font-size:12px; color:#fff; line-height:1.7; margin-bottom:12px;">${esc(d.summary || "")}</div>
+            <div style="font-size:9px; color:#555; margin-bottom:8px;">NEXT STEPS:</div>
+            <div style="font-size:11px; color:#aaa; line-height:1.8;">
+              ${(d.nextSteps || []).map((s, i) => `<div>${i + 1}. ${esc(s)}</div>`).join("")}
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center; margin-top:14px; font-family:monospace;">
+          <button onclick="openMojoTiktokResearch()"
+                  style="background:transparent; border:1px solid rgba(0,212,255,0.3); color:#00d4ff;
+                         padding:5px 16px; font-family:monospace; font-size:9px; letter-spacing:2px; cursor:pointer; border-radius:2px;">
+            ↻ REFRESH RESEARCH
+          </button>
+        </div>
+      `;
+    }
+
+    function renderNoteSavedPanel(d) {
+      const note = d.note || d;
+      return `
+        <div style="font-family:monospace; max-width:600px; margin:0 auto;">
+          <div style="border:1px solid rgba(0,212,255,0.3); padding:20px; border-radius:4px; background:rgba(0,212,255,0.03);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+              <div style="font-size:9px; color:#00d4ff; letter-spacing:2px;">${String(note.category || "general").toUpperCase()}</div>
+              <div style="font-size:9px; color:#444;">${new Date(note.createdAt || Date.now()).toLocaleString()}</div>
+            </div>
+            <div style="font-size:13px; color:#fff; line-height:1.7; margin-bottom:12px;">${esc(note.content || "")}</div>
+            ${note.leadName ? `<div style="font-size:10px; color:#888; padding-top:10px; border-top:1px solid rgba(0,212,255,0.1);">LINKED TO: ${esc(note.leadName)}</div>` : ""}
+            <div style="font-size:9px; color:#444; margin-top:8px;">SOURCE: ${String(note.source || "text").toUpperCase()} · SAVED TO NOTES</div>
+          </div>
+          <div style="text-align:center; margin-top:12px;">
+            <button onclick="closeActivePanel()"
+                    style="background:transparent; border:1px solid rgba(0,212,255,0.3); color:#00d4ff;
+                           padding:5px 20px; font-family:monospace; font-size:9px; letter-spacing:2px; cursor:pointer; border-radius:2px;">
+              DISMISS
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderNotesBrowserPanel(d) {
+      const notes = d.notes || [];
+      const categories = ["all", "general", "lead", "listing", "idea", "follow_up", "meeting"];
+      if (notes.length === 0) {
+        return `
+          <div style="text-align:center; padding:40px; font-family:monospace; color:#555;">
+            <div style="font-size:11px; margin-bottom:8px;">// NO NOTES YET //</div>
+            <div style="font-size:10px;">Tell Harvey "note that..." to save your first note</div>
+          </div>
+        `;
+      }
+      return `
+        <div style="font-family:monospace;">
+          <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+            ${categories.map(c => `
+              <button onclick="openNotesPanel('${c === "all" ? "" : c}')"
+                      style="background:${d.filter === c || (c === "all" && !d.filter) ? "rgba(0,212,255,0.2)" : "transparent"};
+                             border:1px solid rgba(0,212,255,0.2); color:#00d4ff; padding:3px 10px;
+                             font-family:monospace; font-size:9px; letter-spacing:1px; cursor:pointer; border-radius:2px;">
+                ${c.toUpperCase().replace("_", " ")}
+              </button>
+            `).join("")}
+            <input id="notes-search" placeholder="Search notes..." onkeyup="filterNotesInPanel(this.value)"
+                   style="margin-left:auto; background:transparent; border:1px solid rgba(0,212,255,0.2);
+                          color:#fff; padding:3px 10px; font-family:monospace; font-size:10px;
+                          border-radius:2px; outline:none; width:180px;">
+          </div>
+          <div id="notes-list" style="display:grid; gap:10px;">
+            ${notes.map(n => `
+              <div class="note-card" data-content="${(n.content || "").toLowerCase().replace(/"/g, "&quot;")}"
+                   style="border:1px solid rgba(0,212,255,0.15); padding:14px; border-radius:4px;
+                          border-left:3px solid ${
+                            n.category === "lead" ? "#00d4ff" :
+                            n.category === "idea" ? "#8b5cf6" :
+                            n.category === "follow_up" ? "#f59e0b" :
+                            n.category === "meeting" ? "#10b981" :
+                            "rgba(0,212,255,0.3)"
+                          };">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                  <div style="font-size:9px; color:#555; letter-spacing:1px;">${String(n.category || "general").toUpperCase().replace("_", " ")}</div>
+                  <div style="font-size:9px; color:#444;">${new Date(n.createdAt).toLocaleDateString()}</div>
+                </div>
+                <div style="font-size:12px; color:#fff; line-height:1.6; margin-bottom:8px;">${esc(n.content || "")}</div>
+                ${n.leadName ? `<div style="font-size:10px; color:#888;">↳ ${esc(n.leadName)}</div>` : ""}
+                <div style="display:flex; gap:8px; margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,212,255,0.08);">
+                  <span style="font-size:9px; color:#444;">${String(n.source || "text").toUpperCase()}</span>
+                  <button onclick="deleteHarveyNote('${n.id}')"
+                          style="margin-left:auto; background:transparent; border:none; color:#ff2d55; font-size:10px; cursor:pointer; font-family:monospace;">
+                    DELETE
+                  </button>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function filterNotesInPanel(query) {
+      const cards = document.querySelectorAll(".note-card");
+      cards.forEach(card => {
+        const content = card.getAttribute("data-content") || "";
+        card.style.display = content.includes((query || "").toLowerCase()) ? "block" : "none";
+      });
+    }
+    window.filterNotesInPanel = filterNotesInPanel;
+
+    async function openNotesPanel(filter) {
+      showPanel("// HARVEY NOTES //", `
+        <div style="text-align:center; padding:30px; color:#00d4ff; font-family:monospace; font-size:11px; letter-spacing:2px;">
+          // LOADING NOTES...
+        </div>
+      `);
+      const token = getToken();
+      try {
+        const url = new URL("/api/notes", window.location.origin);
+        if (token) url.searchParams.set("token", token);
+        if (filter) url.searchParams.set("category", filter);
+        const res = await fetch(url.toString(), {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const notes = await res.json();
+        openDynamicPanel("notes_browser", { notes, filter: filter || "all" });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showPanel("// HARVEY NOTES //", `<div style="color:#ff6b35; font-family:monospace; padding:20px;">Failed to load notes: ${esc(msg)}</div>`);
+      }
+    }
+    window.openNotesPanel = openNotesPanel;
+
+    async function deleteHarveyNote(id) {
+      const token = getToken();
+      try {
+        const url = new URL("/api/notes/" + encodeURIComponent(id), window.location.origin);
+        if (token) url.searchParams.set("token", token);
+        await fetch(url.toString(), {
+          method: "DELETE",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        openNotesPanel();
+      } catch (err) {
+        console.error("[Harvey] Delete note failed:", err);
+      }
+    }
+    window.deleteHarveyNote = deleteHarveyNote;
+
+    async function openMojoTiktokResearch() {
+      showPanel("// API RESEARCH REPORT //", `
+        <div style="text-align:center; padding:40px; color:#00d4ff; font-family:monospace;">
+          <div style="font-size:11px; letter-spacing:3px; margin-bottom:6px;">// RESEARCHING MOJO + TIKTOK APIs //</div>
+          <div style="font-size:9px; color:#444;">Searching live sources...</div>
+        </div>
+      `);
+      const token = getToken();
+      try {
+        const url = new URL("/api/jarvis/mojo-tiktok-research", window.location.origin);
+        if (token) url.searchParams.set("token", token);
+        const res = await fetch(url.toString(), {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const { data } = await res.json();
+        openDynamicPanel("research", data);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showPanel("// API RESEARCH REPORT //", `
+          <div style="text-align:center; padding:40px; color:#ff6b35; font-family:monospace;">
+            <div>// RESEARCH UNAVAILABLE //</div>
+            <div style="font-size:9px; color:#555; margin-top:6px;">${esc(msg)}</div>
+            <button onclick="openMojoTiktokResearch()"
+                    style="margin-top:14px; background:transparent; border:1px solid rgba(0,212,255,0.3);
+                           color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px; cursor:pointer;">
+              ↻ RETRY
+            </button>
+          </div>
+        `);
+      }
+    }
+    window.openMojoTiktokResearch = openMojoTiktokResearch;
+
+    function detectMetricsTrigger(text) {
+      if (!text) return;
+      const t = text.toLowerCase();
+      console.log("[Harvey] Trigger detection:", t.substring(0, 80));
+
+      if (t.includes("note") || t.includes("write down") || t.includes("save this") || t.includes("log this") || t.includes("don't forget") || t.includes("make a note") || t.includes("remember this")) {
+        openNotesPanel();
+        return;
+      }
+      if (t.includes("memory") || t.includes("what do you know") || t.includes("pull up") || t.includes("remember")) {
+        void expandMemoryPanel();
+        return;
+      }
+      if (t.includes("daily") || t.includes("game plan") || t.includes("today") || t.includes("what should i") || t.includes("focus") || t.includes("needle") || t.includes("targets")) {
+        expandDailyPlanPanel();
+        return;
+      }
+      if (t.includes("world") || t.includes("political") || t.includes("legislation") || t.includes("geopolit") || t.includes("policy") || t.includes("global") || t.includes("news")) {
+        void openWorldIntelPanel();
+        return;
+      }
+      if (t.includes("market") || t.includes("mortgage") || t.includes("interest rate") || t.includes("housing") || t.includes("economy") || t.includes("fed") || t.includes("inflation")) {
+        void openMarketIntelPanel();
+        return;
+      }
+      if (t.includes("tiktok") || t.includes("video") || t.includes("views") || t.includes("content") || t.includes("watch time")) {
+        if (window.harveyMetricsData) openDynamicPanel("tiktok", window.harveyMetricsData);
+        else fetchMetrics().then(d => { if (d) { window.harveyMetricsData = d; metricsCache = d; openDynamicPanel("tiktok", d); }});
+        return;
+      }
+      if (t.includes("mojo") || t.includes("cold call") || t.includes("dialer") || t.includes("calls") || t.includes("prospecting")) {
+        if (window.harveyMetricsData) openDynamicPanel("mojo", window.harveyMetricsData);
+        else fetchMetrics().then(d => { if (d) { window.harveyMetricsData = d; metricsCache = d; openDynamicPanel("mojo", d); }});
+        return;
+      }
+      if (t.includes("20m") || t.includes("$20") || t.includes("goal") || t.includes("banked") || t.includes("gap") || t.includes("game plan") || t.includes("pace")) {
+        if (window.harveyMetricsData) openDynamicPanel("goal", window.harveyMetricsData);
+        else fetchMetrics().then(d => { if (d) { window.harveyMetricsData = d; metricsCache = d; openDynamicPanel("goal", d); }});
+        return;
+      }
+      if (t.includes("number") || t.includes("metric") || t.includes("stat") || t.includes("funnel") || t.includes("performance") || t.includes("show me")) {
+        if (window.harveyMetricsData) openDynamicPanel("metrics", window.harveyMetricsData);
+        else fetchMetrics().then(d => { if (d) { window.harveyMetricsData = d; metricsCache = d; openDynamicPanel("metrics", d); }});
+        return;
+      }
+    }
+    window.detectMetricsTrigger = detectMetricsTrigger;
+
+    document.querySelectorAll(".ms-strip-section[data-panel]").forEach(section => {
+      section.addEventListener("click", e => {
+        e.stopPropagation();
+        const panel = section.dataset.panel || "all";
+        if (metricsExpandOpen && metricsExpandType === panel) closeActivePanel();
+        else expandMetricsPanel(panel);
+      });
+    });
+
+    async function refreshMetrics() {
+      metricsCache = await fetchMetrics();
+      window.harveyMetricsData = metricsCache;
+      renderMetricsStrip(metricsCache);
+      if (metricsExpandOpen && activePanelType) {
+        const p = activePanelType === "metrics" ? "metrics" : activePanelType;
+        openDynamicPanel(p, metricsCache);
+      }
+    }
+
+
+    /* Memory explorer */
+    async function fetchMemoryFull() {
+      try {
+        const res = await fetch(apiUrl("/api/jarvis/memory"));
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return await res.json();
+      } catch (e) {
+        console.error("[Memory] fetch failed:", e);
+        return null;
+      }
+    }
+
+    function renderMemoryTab() {
+      const body = document.getElementById("memBody");
+      const d = memDataCache;
+      if (!d) { body.innerHTML = "—"; return; }
+      if (memActiveTab === "facts") {
+        body.innerHTML = (d.semantic || []).map(s => {
+          const cat = (s.category || "business").toLowerCase();
+          const dot = (s.weight || 1) >= 1.8 ? "●" : "○";
+          return `<div class="mem-row"><span class="${(s.weight || 1) >= 1.8 ? "mem-dot-filled" : "mem-dot-hollow"}">${dot}</span> <span class="mem-badge ${cat}">${esc(cat.toUpperCase())}</span> ${esc(s.fact)} <span style="color:#4a5e74">weight: ${s.weight || 1}</span></div>`;
+        }).join("") || "—";
+      } else if (memActiveTab === "connections") {
+        body.innerHTML = (d.relational || []).map(r =>
+          `<div class="mem-row mem-rel">${esc(r.entity_a)} <span>──[${esc(r.relationship)}]──→</span> ${esc(r.entity_b)}</div>`
+        ).join("") || "—";
+      } else if (memActiveTab === "rules") {
+        body.innerHTML = (d.procedural || []).map(p =>
+          `<div class="mem-row">⚡ <span class="mem-rule-trigger">WHEN: ${esc(p.trigger_condition)}</span><br><span class="mem-rule-action">DO: ${esc(p.action)}</span></div>`
+        ).join("") || "—";
+      } else {
+        body.innerHTML = (d.episodes || []).map(e => {
+          const w = (e.emotional_weight || "routine").toUpperCase();
+          const date = (e.timestamp || "").split("T")[0] || "—";
+          return `<div class="mem-row">[${date}] ${esc(e.summary)} — <span class="mem-badge funnel">${w}</span></div>`;
+        }).join("") || "—";
+      }
+    }
+
+    async function expandMemoryPanel() {
+      closeActivePanel();
+      memPanelOpen = true;
+      const panel = document.getElementById("memPanel");
+      panel.classList.add("open");
+      panel.setAttribute("aria-hidden", "false");
+      memDataCache = await fetchMemoryFull();
+      if (memDataCache?.stats) {
+        document.getElementById("memHeadTitle").textContent =
+          `// HARVEY MEMORY · ${memDataCache.stats.semanticCount} FACTS · ${memDataCache.stats.relationalCount} CONNECTIONS · ${memDataCache.stats.proceduralCount} RULES //`;
+      }
+      renderMemoryTab();
+    }
+
+    function closeMemoryPanel() {
+      memPanelOpen = false;
+      const panel = document.getElementById("memPanel");
+      panel.classList.remove("open");
+      panel.setAttribute("aria-hidden", "true");
+    }
+
+    document.querySelectorAll(".mem-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".mem-tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        memActiveTab = tab.dataset.tab || "facts";
+        renderMemoryTab();
+      });
+    });
+
+    document.getElementById("memCloseBtn").addEventListener("click", closeMemoryPanel);
+    document.getElementById("memAddBtn").addEventListener("click", () => {
+      document.getElementById("memForm").classList.toggle("open");
+    });
+    document.getElementById("memSaveBtn").addEventListener("click", async () => {
+      const fact = document.getElementById("memFactInput").value.trim();
+      if (!fact) return;
+      await fetch(apiUrl("/api/jarvis/memory/add"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fact,
+          category: document.getElementById("memCatInput").value,
+          tags: document.getElementById("memTagsInput").value,
+          weight: 1.0,
+        }),
+      });
+      document.getElementById("memForm").classList.remove("open");
+      memDataCache = await fetchMemoryFull();
+      renderMemoryTab();
+    });
+
+    let memSearchTimer = null;
+    document.getElementById("memSearch").addEventListener("input", e => {
+      clearTimeout(memSearchTimer);
+      memSearchTimer = setTimeout(async () => {
+        const q = e.target.value.trim();
+        if (!q) { memDataCache = await fetchMemoryFull(); renderMemoryTab(); return; }
+        try {
+          const res = await fetch(apiUrl("/api/jarvis/memory/search?q=" + encodeURIComponent(q)));
+          const results = await res.json();
+          memDataCache = {
+            semantic: results.semantic || [],
+            relational: results.relational || [],
+            procedural: results.procedural || [],
+            episodes: results.episodes || [],
+            stats: { semanticCount: (results.semantic || []).length, relationalCount: (results.relational || []).length, proceduralCount: (results.procedural || []).length, episodeCount: (results.episodes || []).length },
+          };
+          renderMemoryTab();
+        } catch (err) { console.error("[Memory] search failed:", err); }
+      }, 300);
+    });
+
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") {
+        closeActivePanel();
+        closeMemoryPanel();
+        closeSidePanels();
+      }
+    });
 
     let interimEl = null;
     function showInterim(t) {
@@ -1284,6 +2554,7 @@
           coreHint.textContent = "VOICE OFFLINE — TYPE BELOW";
         }
         await loadOps();
+        await refreshMetrics();
         document.getElementById("jTranscript").innerHTML = "";
       } catch (e) {
         document.getElementById("jTranscript").innerHTML =
@@ -1293,6 +2564,7 @@
 
     setInterval(() => {
       if (!busy && !window.isGeminiLiveActive?.()) void loadOps().catch(() => {});
+      void refreshMetrics().catch(() => {});
     }, 60000);
   </script>
 
@@ -1306,11 +2578,22 @@
     let micStream = null;
     let micSource = null;
     let micProcessor = null;
+    let vadAnalyser = null;
     let audioQueue = [];
+    let audioChunkBuffer = [];
     let isPlayingAudio = false;
+    let currentAudioSource = null;
     let nextPlayTime = 0;
     let isListening = false;
+    let vadIntervalId = null;
+    let isInterrupting = false;
+    let harveyStartedSpeakingAt = 0;
+    const ECHO_SUPPRESS_MS = 500;
     let micLoggedOnce = false;
+    let voiceTurnOutputText = "";
+    let voiceTurnInputText = "";
+    let wsOpenTimer = null;
+    let wsDidOpen = false;
     const SESSION_ID = "harvey-" + Date.now();
 
     function getToken() {
@@ -1374,9 +2657,15 @@
         }
 
         const { wsUrl, model, systemPrompt, voiceName } = await res.json();
-        console.log("[Harvey] wsUrl received:", wsUrl ? wsUrl.substring(0, 60) + "..." : "MISSING");
+        console.log("[Harvey] wsUrl received:", wsUrl ? wsUrl.substring(0, 80) : "MISSING");
         console.log("[Harvey] model received:", model);
         console.log("[Harvey] systemPrompt length:", systemPrompt?.length);
+        if (model !== "gemini-3.1-flash-live-preview") {
+          console.warn("[Harvey] Unexpected Live model — expected gemini-3.1-flash-live-preview, got:", model);
+        }
+        if ((systemPrompt?.length || 0) > 4000) {
+          console.warn("[Harvey] System prompt over 4000 chars — may be rejected by Gemini Live");
+        }
 
         if (!wsUrl) {
           showVoiceError("Token response missing wsUrl");
@@ -1385,22 +2674,26 @@
         }
 
         console.log("[Harvey] WebSocket creating with URL...");
+        wsDidOpen = false;
+        if (wsOpenTimer) clearTimeout(wsOpenTimer);
         geminiLiveWs = new WebSocket(wsUrl);
         console.log("[Harvey] WebSocket object created");
         console.log("[Harvey] WebSocket URL being used:", wsUrl.substring(0, 80));
         console.log("[Harvey] WebSocket readyState after creation:", geminiLiveWs.readyState);
 
-        setTimeout(() => {
-          if (geminiLiveWs && geminiLiveWs.readyState !== WebSocket.OPEN) {
+        wsOpenTimer = setTimeout(() => {
+          if (geminiLiveWs && geminiLiveWs.readyState !== WebSocket.OPEN && !wsDidOpen) {
             showVoiceError("WebSocket failed to open after 5 seconds. State: " + geminiLiveWs.readyState);
             console.log("[Harvey] WebSocket STILL NOT OPEN after 5s, state:", geminiLiveWs.readyState);
           }
         }, 5000);
 
         geminiLiveWs.onopen = () => {
+          wsDidOpen = true;
+          if (wsOpenTimer) clearTimeout(wsOpenTimer);
           console.log("[Harvey] WebSocket onopen fired");
           console.log("[Harvey] Sending setup message...");
-          console.log("[Harvey] Setup message model:", model);
+          console.log("[Harvey] Setup message model:", `models/${model}`);
           console.log("[Harvey] Setup message voice:", voiceName);
 
           geminiLiveWs.send(JSON.stringify({
@@ -1422,7 +2715,7 @@
 
           console.log("[Harvey] Setup message sent with model: models/" + model);
           console.log("[Harvey] Calling startMic()...");
-          startMic();
+          startMic().catch(err => console.error("[Harvey] startMic failed:", err));
           setHarveyStatus("LISTENING");
         };
 
@@ -1443,7 +2736,16 @@
           try {
             const msg = JSON.parse(text);
 
+            if (msg.serverContent?.inputTranscription?.text) {
+              voiceTurnInputText = (voiceTurnInputText + " " + msg.serverContent.inputTranscription.text).trim();
+            }
+
+            if (msg.serverContent?.outputTranscription?.text) {
+              voiceTurnOutputText = (voiceTurnOutputText + " " + msg.serverContent.outputTranscription.text).trim();
+            }
+
             if (msg.serverContent?.modelTurn?.parts) {
+              let fullText = "";
               for (const part of msg.serverContent.modelTurn.parts) {
                 if (part.inlineData?.data) {
                   const pcmBuffer = base64ToArrayBuffer(part.inlineData.data);
@@ -1452,13 +2754,26 @@
                   setHarveyStatus("RESPONDING");
                 }
                 if (part.text) {
-                  appendHarveyMessage(part.text);
+                  fullText += part.text;
+                  console.log("[Harvey] Voice text part received:", part.text.substring(0, 60));
+                  if (typeof addMsg === "function") addMsg("ai", part.text);
                 }
+              }
+              if (fullText.trim()) {
+                console.log("[Harvey] Running trigger on voice text:", fullText.substring(0, 60));
+                if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(fullText);
               }
             }
 
             if (msg.serverContent?.turnComplete) {
               console.log("[Harvey] Turn complete");
+              const harveyText = voiceTurnOutputText || voiceTurnInputText;
+              if (harveyText) {
+                console.log("[Harvey] Response text for trigger detection:", harveyText.substring(0, 100));
+                if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(harveyText);
+              }
+              voiceTurnOutputText = "";
+              voiceTurnInputText = "";
               if (!isPlayingAudio) {
                 setHarveyStatus("LISTENING");
               }
@@ -1484,7 +2799,17 @@
         };
 
         geminiLiveWs.onclose = (event) => {
-          console.log("[Harvey] WebSocket closed — code:", event.code, "reason:", event.reason, "wasClean:", event.wasClean);
+          if (wsOpenTimer) clearTimeout(wsOpenTimer);
+          console.log(
+            "[Harvey] WebSocket onclose — exact code:",
+            event.code,
+            "exact reason:",
+            event.reason || "(empty)",
+            "wasClean:",
+            event.wasClean,
+            "hadOpened:",
+            wsDidOpen,
+          );
 
           if (event.code !== 1000) {
             showVoiceError(`WebSocket closed — code: ${event.code} reason: ${event.reason || "none"}`);
@@ -1505,6 +2830,7 @@
     }
 
     function stopGeminiLive() {
+      interruptHarvey();
       if (geminiLiveWs) {
         geminiLiveWs.close();
         geminiLiveWs = null;
@@ -1512,6 +2838,197 @@
       micLoggedOnce = false;
       stopMic();
       setHarveyStatus("STANDBY");
+    }
+
+    function flashOrbInterrupt() {
+      const orb = document.querySelector(".harvey-orb") ||
+        document.getElementById("harvey-mic-btn") ||
+        document.querySelector('[class*="orb"]');
+
+      if (!orb) return;
+
+      const originalFilter = orb.style.filter || "";
+      const originalShadow = orb.style.boxShadow || "";
+
+      orb.style.filter = "hue-rotate(30deg) brightness(2)";
+      orb.style.boxShadow = "0 0 50px rgba(255, 165, 0, 0.8)";
+
+      setTimeout(() => {
+        orb.style.filter = originalFilter;
+        orb.style.boxShadow = originalShadow;
+      }, 150);
+    }
+
+    function interruptHarvey() {
+      console.log("[Harvey] interruptHarvey() called — isPlaying:", isPlayingAudio, "isInterrupting:", isInterrupting);
+      console.log("[Harvey] interruptHarvey called — guard:", isInterrupting, "playing:", isPlayingAudio,
+        "queue:", audioQueue?.length, "buffer:", audioChunkBuffer?.length);
+
+      if (isInterrupting) {
+        console.log("[Harvey] Blocked by isInterrupting guard");
+        return;
+      }
+      if (!isPlayingAudio &&
+          (!audioQueue || audioQueue.length === 0) &&
+          (!audioChunkBuffer || audioChunkBuffer.length === 0)) {
+        return;
+      }
+
+      isInterrupting = true;
+      console.log("[Harvey] Interrupting — stopping audio");
+
+      if (currentAudioSource) {
+        try {
+          currentAudioSource.onended = null;
+          currentAudioSource.stop(0);
+          currentAudioSource.disconnect();
+        } catch (e) {
+          // Already stopped
+        }
+        currentAudioSource = null;
+      }
+
+      if (audioContext && audioContext.state === "running") {
+        audioContext.suspend().then(() => {
+          audioContext.resume();
+        }).catch(() => {});
+      }
+
+      audioQueue = [];
+      audioChunkBuffer = [];
+
+      isPlayingAudio = false;
+      nextPlayTime = 0;
+
+      setHarveyStatus("LISTENING");
+      flashOrbInterrupt();
+
+      if (geminiLiveWs && geminiLiveWs.readyState === WebSocket.OPEN) {
+        try {
+          const silence = new Uint8Array(320);
+          geminiLiveWs.send(JSON.stringify({
+            realtimeInput: {
+              audio: {
+                data: arrayBufferToBase64(silence.buffer),
+                mimeType: "audio/pcm",
+              },
+            },
+          }));
+        } catch (e) {
+          console.error("[Harvey] Failed to send barge-in signal:", e);
+        }
+      }
+
+      console.log("[Harvey] Interrupt complete");
+
+      setTimeout(() => {
+        isInterrupting = false;
+        console.log("[Harvey] Interrupt guard reset");
+      }, 300);
+    }
+
+    function isHarveySpeaking() {
+      return isPlayingAudio || audioQueue.length > 0 || audioChunkBuffer.length > 0;
+    }
+
+    function measureAnalyserRms(analyser, buffer) {
+      analyser.getByteTimeDomainData(buffer);
+      let sumSquares = 0;
+      for (let i = 0; i < buffer.length; i++) {
+        const normalized = (buffer[i] - 128) / 128;
+        sumSquares += normalized * normalized;
+      }
+      return Math.sqrt(sumSquares / buffer.length) * 100;
+    }
+
+    async function calibrateVAD(analyser) {
+      return new Promise(resolve => {
+        const buffer = new Uint8Array(analyser.fftSize);
+        const rmsSamples = [];
+        let count = 0;
+
+        const measure = () => {
+          const rms = measureAnalyserRms(analyser, buffer);
+          rmsSamples.push(rms);
+          count++;
+
+          if (count < 30) {
+            setTimeout(measure, 30);
+          } else {
+            rmsSamples.sort((a, b) => a - b);
+            const p90 = rmsSamples[Math.floor(rmsSamples.length * 0.9)];
+            console.log("[Harvey] Calibration done — p90 noise:", p90.toFixed(2));
+            resolve(p90);
+          }
+        };
+
+        console.log("[Harvey] Calibrating speech detector — stay quiet for ~1 second...");
+        measure();
+      });
+    }
+
+    function startSpeechDetector(analyser, noiseFloor) {
+      if (vadIntervalId) {
+        clearInterval(vadIntervalId);
+        vadIntervalId = null;
+      }
+
+      const buffer = new Uint8Array(analyser.fftSize);
+      let consecutiveSpeechFrames = 0;
+      const FRAMES_TO_TRIGGER = 3;
+      const threshold = Math.min(noiseFloor + 3, 8);
+      let frameCount = 0;
+
+      console.log("[Harvey] VAD threshold set to:", threshold, "(noise floor was:", noiseFloor.toFixed(2) + ")");
+      console.log("[Harvey] Simple speech detector started — threshold:", threshold);
+
+      vadIntervalId = setInterval(() => {
+        if (!isListening) {
+          clearInterval(vadIntervalId);
+          vadIntervalId = null;
+          return;
+        }
+
+        const rms = measureAnalyserRms(analyser, buffer);
+
+        frameCount++;
+        if (frameCount % 10 === 0) {
+          console.log("[VAD] rms:", rms.toFixed(2),
+            "threshold:", threshold,
+            "speechFrames:", consecutiveSpeechFrames,
+            "isPlaying:", isPlayingAudio,
+            "harveySpeaking:", isHarveySpeaking());
+        }
+
+        if (rms > threshold) {
+          const timeSinceHarveySpoke = Date.now() - harveyStartedSpeakingAt;
+          const inEchoWindow = isHarveySpeaking() && timeSinceHarveySpoke < ECHO_SUPPRESS_MS;
+
+          if (inEchoWindow) {
+            if (frameCount % 10 === 0) {
+              console.log("[VAD] Echo suppression active — ignoring detection");
+            }
+            consecutiveSpeechFrames = 0;
+            return;
+          }
+
+          consecutiveSpeechFrames++;
+
+          if (consecutiveSpeechFrames >= FRAMES_TO_TRIGGER) {
+            console.log("[Harvey] SPEECH CONFIRMED — frames:", consecutiveSpeechFrames, "rms:", rms.toFixed(2));
+
+            if (isHarveySpeaking() && !isInterrupting) {
+              console.log("[Harvey] Triggering interrupt");
+              interruptHarvey();
+              consecutiveSpeechFrames = 0;
+            } else {
+              console.log("[Harvey] Speech detected but not playing or already interrupting");
+            }
+          }
+        } else {
+          consecutiveSpeechFrames = Math.max(0, consecutiveSpeechFrames - 1);
+        }
+      }, 30);
     }
 
     async function startMic() {
@@ -1541,6 +3058,7 @@
 
         micProcessor.onaudioprocess = (e) => {
           if (!micLoggedOnce) {
+            console.log("[Harvey] onaudioprocess running — sample rate:", audioContext.sampleRate);
             console.log("[Harvey] First audio frame captured");
             console.log("[Harvey] WebSocket readyState:", geminiLiveWs?.readyState);
             console.log("[Harvey] Input buffer length:", e.inputBuffer.getChannelData(0).length);
@@ -1564,25 +3082,59 @@
           }));
         };
 
+        vadAnalyser = audioContext.createAnalyser();
+        vadAnalyser.fftSize = 1024;
+        vadAnalyser.smoothingTimeConstant = 0.5;
+        vadAnalyser.minDecibels = -90;
+        vadAnalyser.maxDecibels = -10;
+        micSource.connect(vadAnalyser);
+
         micSource.connect(micProcessor);
         micProcessor.connect(audioContext.destination);
         isListening = true;
-        console.log("[Harvey] Mic started");
+
+        console.log("[Harvey] Starting VAD calibration...");
+        let noiseFloor = 20;
+        try {
+          noiseFloor = await calibrateVAD(vadAnalyser);
+        } catch (calErr) {
+          console.error("[Harvey] Calibration failed, using default:", calErr);
+        }
+
+        console.log("[Harvey] Starting speech detector with floor:", noiseFloor);
+        startSpeechDetector(vadAnalyser, noiseFloor);
+        console.log("[Harvey] Speech detector running");
+        console.log("[Harvey] Mic started, speech detector active");
       } catch (err) {
+        console.error("[Harvey] startMic error:", err);
         showVoiceError("Mic error: " + (err instanceof Error ? err.message : String(err)));
         setHarveyStatus("ERROR");
       }
     }
 
     function stopMic() {
+      isListening = false;
+
+      if (vadIntervalId) {
+        clearInterval(vadIntervalId);
+        vadIntervalId = null;
+      }
+
       if (micProcessor) { micProcessor.disconnect(); micProcessor = null; }
+      if (vadAnalyser) { vadAnalyser.disconnect(); vadAnalyser = null; }
       if (micSource) { micSource.disconnect(); micSource = null; }
       if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-      isListening = false;
+
+      console.log("[Harvey] Mic and speech detector stopped");
     }
 
     function queueAudioPcm(buffer) {
+      if (!isPlayingAudio && audioQueue.length === 0) {
+        harveyStartedSpeakingAt = Date.now();
+        console.log("[Harvey] Audio playback starting — echo suppress window open");
+      }
       audioQueue.push(buffer);
+      audioChunkBuffer.push(buffer);
       console.log("[Harvey] Audio chunk queued, queue length:", audioQueue.length);
       if (!isPlayingAudio) scheduleNextChunk();
     }
@@ -1593,7 +3145,9 @@
         return;
       }
       isPlayingAudio = true;
+      console.log("[Harvey] isPlayingAudio set to TRUE");
       const buffer = audioQueue.shift();
+      if (audioChunkBuffer.length > 0) audioChunkBuffer.shift();
 
       try {
         if (!audioContext) audioContext = new AudioContext();
@@ -1609,6 +3163,7 @@
         const source = audioContext.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(audioContext.destination);
+        currentAudioSource = source;
 
         const startTime = Math.max(audioContext.currentTime, nextPlayTime);
         source.start(startTime);
@@ -1616,12 +3171,14 @@
         nextPlayTime = startTime + audioBuffer.duration;
 
         source.onended = () => {
+          currentAudioSource = null;
           if (audioQueue.length > 0) {
             scheduleNextChunk();
-          } else {
+          } else if (audioChunkBuffer.length === 0) {
             isPlayingAudio = false;
             nextPlayTime = 0;
             setHarveyStatus("LISTENING");
+            console.log("[Harvey] isPlayingAudio set to FALSE — all audio done");
             console.log("[Harvey] All audio chunks played");
           }
         };
@@ -1696,6 +3253,8 @@
 
     function appendHarveyMessage(text) {
       if (typeof addMsg === "function") addMsg("ai", text);
+      console.log("[Harvey] Response text for trigger detection:", text?.substring(0, 100));
+      if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(text || "");
     }
 
     document.addEventListener("DOMContentLoaded", () => {

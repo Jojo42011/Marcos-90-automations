@@ -1803,6 +1803,40 @@
     .crm-alert-card.task-overdue { border-color: rgba(239,68,68,0.35); }
     .crm-alert-card.task-today { border-color: rgba(245,158,11,0.35); }
 
+    /* ===================== Marco Tasks ===================== */
+    .marco-tasks-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .marco-tasks-sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.25rem; }
+    .marco-tasks-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.75rem 0 1rem; }
+    .marco-chip { font-size: 0.68rem; letter-spacing: 0.06em; padding: 0.25rem 0.55rem; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); background: var(--surface2); }
+    .marco-chip.alert { border-color: rgba(255,45,85,0.35); color: #fda4af; }
+    .marco-filter-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+    .marco-filter-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .marco-filter-btn { border: 1px solid var(--border); background: var(--surface); color: var(--muted); font: inherit; font-size: 0.72rem; padding: 0.3rem 0.65rem; border-radius: 999px; cursor: pointer; }
+    .marco-filter-btn.active { border-color: rgba(34,211,238,0.45); color: var(--cyan); background: rgba(34,211,238,0.1); }
+    .marco-tasks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.85rem; }
+    .marco-task-card { border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.55rem; }
+    .marco-task-card.overdue { border-left: 3px solid #ff2d55; }
+    .marco-task-card.done .marco-task-title { text-decoration: line-through; color: var(--muted); }
+    .marco-task-top { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+    .marco-pri { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; padding: 0.15rem 0.45rem; border-radius: 4px; }
+    .marco-pri.high { background: rgba(255,45,85,0.18); color: #ff2d55; }
+    .marco-pri.medium { background: rgba(245,158,11,0.18); color: #f59e0b; }
+    .marco-pri.low { background: rgba(107,114,128,0.25); color: #9ca3af; }
+    .marco-status { font-size: 0.68rem; padding: 0.15rem 0.45rem; border-radius: 4px; }
+    .marco-status.pending { background: rgba(56,189,248,0.12); color: #7dd3fc; }
+    .marco-status.in_progress { background: rgba(34,211,238,0.15); color: var(--cyan); }
+    .marco-status.done { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+    .marco-task-title { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+    .marco-task-due { font-size: 0.72rem; color: var(--muted); }
+    .marco-task-desc { font-size: 0.78rem; color: var(--muted); line-height: 1.45; min-height: 1.2em; }
+    .marco-task-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; margin-top: 0.15rem; }
+    .marco-task-actions select { font-size: 0.72rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text); padding: 0.25rem 0.4rem; }
+    .marco-btn-teal { border: 1px solid rgba(34,211,238,0.45); background: rgba(34,211,238,0.12); color: var(--cyan); font: inherit; font-size: 0.78rem; font-weight: 600; padding: 0.45rem 0.9rem; border-radius: 10px; cursor: pointer; }
+    .marco-btn-teal:hover { background: rgba(34,211,238,0.2); }
+    .marco-btn-ghost { border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; font-size: 0.72rem; padding: 0.3rem 0.55rem; border-radius: 8px; cursor: pointer; }
+    .marco-btn-danger { border: none; background: none; color: #64748b; font: inherit; font-size: 0.68rem; cursor: pointer; margin-left: auto; }
+    .marco-btn-danger:hover { color: #f87171; }
+
     /* ===================== Auto Plans ===================== */
     .crm-plans-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.1rem; }
     .crm-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
@@ -3498,6 +3532,14 @@
           <p class="module-desc">Voice and text commands, live metrics, and operational briefings from your pipeline data. Same look as the command center.</p>
           <div class="module-arrow">Launch Harvey →</div>
         </a>
+        <a href="/tasks" class="module-card" id="open-tasks" aria-label="Open Task Command Center" style="text-decoration:none;color:inherit;">
+          <div class="module-card-top">
+            <span class="module-title">Task Center</span>
+            <span class="module-badge" id="hub-tasks-badge" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#fbbf24;">Ops</span>
+          </div>
+          <p class="module-desc">Carlos's operational task board — urgent, today, tomorrow, week, and month columns. Replaces the Google Doc task list.</p>
+          <div class="module-arrow">Open tasks →</div>
+        </a>
       </div>
     </div>
   </div>
@@ -3559,6 +3601,7 @@
         <button type="button" class="crm-side-btn" data-crm-section="text">Text <span class="crm-count" id="crm-count-text">—</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="reports">Reports <span class="crm-count" id="crm-count-reports">—</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="tasks">Tasks <span class="crm-count crm-count-alert" id="crm-count-tasks">0</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="marco-tasks">Marco's Tasks <span class="crm-count crm-count-alert" id="crm-count-marco-tasks">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="followup">Follow-up Plans <span class="crm-count" id="crm-count-followup">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="plans">Auto Plans <span class="crm-count" id="crm-count-plans">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="templates">Templates <span class="crm-count">—</span></button>
@@ -3711,6 +3754,27 @@
         <div class="crm-modal-foot">
           <button type="button" class="crm-light-btn" id="crm-task-modal-discard">Cancel</button>
           <button type="button" class="crm-btn-primary" id="crm-task-modal-save">Save Task</button>
+        </div>
+      </div>
+    </div>
+    <div id="marco-task-modal" class="crm-modal-overlay" aria-hidden="true">
+      <div class="crm-modal" role="dialog">
+        <div class="crm-modal-head">
+          <h2 id="marco-task-modal-title">Add Task</h2>
+          <button type="button" class="crm-drawer-close" id="marco-task-modal-close">×</button>
+        </div>
+        <div class="crm-modal-body">
+          <div class="crm-form-field"><label>Title *</label><input id="marco-task-title" type="text" class="crm-input" style="width:100%;" /></div>
+          <div class="crm-form-field"><label>Description</label><textarea id="marco-task-desc" class="crm-input" style="width:100%;min-height:80px;"></textarea></div>
+          <div class="crm-form-grid">
+            <div class="crm-form-field"><label>Due date</label><input id="marco-task-due" type="date" class="crm-input" /></div>
+            <div class="crm-form-field"><label>Priority</label><select id="marco-task-priority" class="crm-select"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></div>
+          </div>
+          <div class="crm-form-field"><label>Created by</label><select id="marco-task-created-by" class="crm-select"><option value="carlos">Carlos</option><option value="marco">Marco</option><option value="harvey">Harvey</option></select></div>
+        </div>
+        <div class="crm-modal-foot">
+          <button type="button" class="crm-light-btn" id="marco-task-modal-cancel">Cancel</button>
+          <button type="button" class="crm-btn-primary" id="marco-task-modal-save">Save</button>
         </div>
       </div>
     </div>
@@ -4431,7 +4495,7 @@
         }
       }
     }
-    // Pass token to Harvey (/jarvis) link if present
+    // Pass token to Harvey (/jarvis) and Task Center links if present
     (function () {
       const jarvisLink = document.getElementById("open-jarvis");
       if (token && jarvisLink) {
@@ -4440,6 +4504,10 @@
       const harveyCrm = document.getElementById("crm-harvey-link");
       if (token && harveyCrm) {
         harveyCrm.href = "/jarvis?token=" + encodeURIComponent(token);
+      }
+      const tasksLink = document.getElementById("open-tasks");
+      if (token && tasksLink) {
+        tasksLink.href = "/tasks?token=" + encodeURIComponent(token);
       }
     })();
 
@@ -9109,6 +9177,254 @@
       crmUserEditor = null;
     }
 
+    /* ===================== Marco Tasks (operational — not lead tasks) ===================== */
+    let marcoTasksCache = [];
+    let marcoTasksSummary = { pending: 0, inProgress: 0, done: 0, highPriority: 0, overdue: 0 };
+    let marcoTasksUi = { status: "all", priority: "all", sort: "dueDate" };
+    let marcoTaskEditId = null;
+
+    function marcoTasksApiUrl(path = "") {
+      const u = new URL("/api/marco-tasks" + path, window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      return u.toString();
+    }
+
+    async function crmLoadMarcoTasks() {
+      const res = await fetch(marcoTasksApiUrl(), {
+        headers: token ? { Authorization: "Bearer " + token } : {},
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const body = await res.json();
+      marcoTasksCache = body.tasks || [];
+      marcoTasksSummary = body.summary || marcoTasksSummary;
+      const countEl = document.getElementById("crm-count-marco-tasks");
+      if (countEl) countEl.textContent = String(marcoTasksSummary.pending + marcoTasksSummary.inProgress);
+      return marcoTasksCache;
+    }
+
+    function marcoTaskIsOverdue(task) {
+      if (!task.dueDate || task.status === "done") return false;
+      const due = new Date(task.dueDate.slice(0, 10) + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return due < today;
+    }
+
+    function marcoFilteredTasks() {
+      let list = [...marcoTasksCache];
+      if (marcoTasksUi.status !== "all") list = list.filter((t) => t.status === marcoTasksUi.status);
+      if (marcoTasksUi.priority !== "all") list = list.filter((t) => t.priority === marcoTasksUi.priority);
+      const priOrder = { high: 0, medium: 1, low: 2 };
+      list.sort((a, b) => {
+        if (marcoTasksUi.sort === "priority") {
+          const pa = priOrder[a.priority] ?? 1;
+          const pb = priOrder[b.priority] ?? 1;
+          if (pa !== pb) return pa - pb;
+        }
+        if (marcoTasksUi.sort === "created") {
+          return (b.createdAt || "").localeCompare(a.createdAt || "");
+        }
+        const da = a.dueDate || "9999-12-31";
+        const db = b.dueDate || "9999-12-31";
+        return da.localeCompare(db);
+      });
+      return list;
+    }
+
+    function marcoOpenTaskModal(task) {
+      marcoTaskEditId = task ? task.id : null;
+      document.getElementById("marco-task-modal-title").textContent = task ? "Edit Task" : "Add Task";
+      document.getElementById("marco-task-title").value = task ? task.title : "";
+      document.getElementById("marco-task-desc").value = task ? (task.description || "") : "";
+      document.getElementById("marco-task-due").value = task && task.dueDate ? task.dueDate.slice(0, 10) : "";
+      document.getElementById("marco-task-priority").value = task ? task.priority : "medium";
+      document.getElementById("marco-task-created-by").value = task && task.createdBy ? task.createdBy : "carlos";
+      const modal = document.getElementById("marco-task-modal");
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+    }
+
+    function marcoCloseTaskModal() {
+      marcoTaskEditId = null;
+      const modal = document.getElementById("marco-task-modal");
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+
+    async function marcoSaveTask() {
+      const title = document.getElementById("marco-task-title").value.trim();
+      if (!title) return;
+      const payload = {
+        title,
+        description: document.getElementById("marco-task-desc").value.trim() || undefined,
+        dueDate: document.getElementById("marco-task-due").value || undefined,
+        priority: document.getElementById("marco-task-priority").value,
+        createdBy: document.getElementById("marco-task-created-by").value,
+      };
+      const url = marcoTaskEditId ? marcoTasksApiUrl("/" + encodeURIComponent(marcoTaskEditId)) : marcoTasksApiUrl();
+      const res = await fetch(url, {
+        method: marcoTaskEditId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      marcoCloseTaskModal();
+      await crmLoadMarcoTasks();
+      if (crmCache) renderCrm(crmCache);
+    }
+
+    async function marcoCompleteTask(id) {
+      const res = await fetch(marcoTasksApiUrl("/" + encodeURIComponent(id) + "/complete"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      await crmLoadMarcoTasks();
+      if (crmCache) renderCrm(crmCache);
+    }
+
+    async function marcoDeleteTask(id) {
+      if (!confirm("Delete this task?")) return;
+      const res = await fetch(marcoTasksApiUrl("/" + encodeURIComponent(id)), {
+        method: "DELETE",
+        headers: token ? { Authorization: "Bearer " + token } : {},
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      await crmLoadMarcoTasks();
+      if (crmCache) renderCrm(crmCache);
+    }
+
+    async function marcoUpdateTaskStatus(id, status) {
+      const res = await fetch(marcoTasksApiUrl("/" + encodeURIComponent(id)), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      await crmLoadMarcoTasks();
+      if (crmCache) renderCrm(crmCache);
+    }
+
+    function crmBindMarcoTaskModalOnce() {
+      if (window._marcoTaskModalBound) return;
+      window._marcoTaskModalBound = true;
+      document.getElementById("marco-task-modal-close")?.addEventListener("click", marcoCloseTaskModal);
+      document.getElementById("marco-task-modal-cancel")?.addEventListener("click", marcoCloseTaskModal);
+      document.getElementById("marco-task-modal-save")?.addEventListener("click", () => {
+        marcoSaveTask().catch((e) => showCrmErr(e.message || String(e)));
+      });
+    }
+
+    async function crmRenderMarcoTasksSection(content) {
+      crmBindMarcoTaskModalOnce();
+      try {
+        await crmLoadMarcoTasks();
+      } catch (err) {
+        content.innerHTML = `<p class="crm-muted" style="padding:1rem;color:#f87171;">Marco Tasks failed: ${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`;
+        return;
+      }
+      const s = marcoTasksSummary;
+      const tasks = marcoFilteredTasks();
+      const statusTabs = ["all", "pending", "in_progress", "done"];
+      const priTabs = ["all", "high", "medium", "low"];
+      const sortOpts = [
+        { id: "dueDate", label: "Due Date" },
+        { id: "priority", label: "Priority" },
+        { id: "created", label: "Created" },
+      ];
+      content.innerHTML = `
+        <div class="marco-tasks-header">
+          <div>
+            <div class="crm-section-head">Marco's Tasks</div>
+            <div class="marco-tasks-sub">Operational tasks from Carlos — not linked to leads</div>
+          </div>
+          <button type="button" class="marco-btn-teal" id="marco-add-task-btn">+ Add Task</button>
+        </div>
+        <div class="marco-tasks-chips">
+          <span class="marco-chip">${s.pending} PENDING</span>
+          <span class="marco-chip${s.highPriority ? " alert" : ""}">${s.highPriority} HIGH PRIORITY</span>
+          <span class="marco-chip${s.overdue ? " alert" : ""}">${s.overdue} OVERDUE</span>
+        </div>
+        <div class="marco-filter-bar">
+          <div class="marco-filter-tabs" id="marco-status-tabs">
+            ${statusTabs.map((st) => `<button type="button" class="marco-filter-btn${marcoTasksUi.status === st ? " active" : ""}" data-marco-status="${st}">${st === "all" ? "All" : st === "in_progress" ? "In Progress" : st.charAt(0).toUpperCase() + st.slice(1)}</button>`).join("")}
+          </div>
+          <div class="marco-filter-tabs" id="marco-pri-tabs">
+            ${priTabs.map((p) => `<button type="button" class="marco-filter-btn${marcoTasksUi.priority === p ? " active" : ""}" data-marco-pri="${p}">${p === "all" ? "All priorities" : p.charAt(0).toUpperCase() + p.slice(1)}</button>`).join("")}
+          </div>
+          <div class="marco-filter-tabs" id="marco-sort-tabs">
+            ${sortOpts.map((o) => `<button type="button" class="marco-filter-btn${marcoTasksUi.sort === o.id ? " active" : ""}" data-marco-sort="${o.id}">Sort: ${o.label}</button>`).join("")}
+          </div>
+        </div>
+        <div class="marco-tasks-grid" id="marco-tasks-grid">
+          ${tasks.length ? tasks.map((task) => {
+            const overdue = marcoTaskIsOverdue(task);
+            const dueLabel = task.dueDate ? "Due: " + new Date(task.dueDate.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No due date";
+            return `<div class="marco-task-card${overdue ? " overdue" : ""}${task.status === "done" ? " done" : ""}" data-id="${escapeHtml(task.id)}">
+              <div class="marco-task-top">
+                <span class="marco-pri ${task.priority}">${task.priority.toUpperCase()}</span>
+                <span class="marco-status ${task.status}">${task.status === "in_progress" ? "In Progress" : task.status.charAt(0).toUpperCase() + task.status.slice(1)}</span>
+              </div>
+              <div class="marco-task-title">${escapeHtml(task.title)}</div>
+              <div class="marco-task-due">${escapeHtml(dueLabel)}</div>
+              <div class="marco-task-desc">${escapeHtml(task.description || "")}</div>
+              <div class="marco-task-actions">
+                <select class="marco-status-select" data-id="${escapeHtml(task.id)}">
+                  <option value="pending"${task.status === "pending" ? " selected" : ""}>Pending</option>
+                  <option value="in_progress"${task.status === "in_progress" ? " selected" : ""}>In Progress</option>
+                  <option value="done"${task.status === "done" ? " selected" : ""}>Done</option>
+                </select>
+                <button type="button" class="marco-btn-ghost marco-edit-btn" data-id="${escapeHtml(task.id)}">Edit</button>
+                ${task.status !== "done" ? `<button type="button" class="marco-btn-ghost marco-complete-btn" data-id="${escapeHtml(task.id)}">✓ Complete</button>` : ""}
+                <button type="button" class="marco-btn-danger marco-delete-btn" data-id="${escapeHtml(task.id)}">Delete</button>
+              </div>
+            </div>`;
+          }).join("") : `<p class="crm-muted">No tasks match this filter.</p>`}
+        </div>
+      `;
+      document.getElementById("marco-add-task-btn")?.addEventListener("click", () => marcoOpenTaskModal(null));
+      content.querySelectorAll("[data-marco-status]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          marcoTasksUi.status = btn.getAttribute("data-marco-status") || "all";
+          void crmRenderMarcoTasksSection(content);
+        });
+      });
+      content.querySelectorAll("[data-marco-pri]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          marcoTasksUi.priority = btn.getAttribute("data-marco-pri") || "all";
+          void crmRenderMarcoTasksSection(content);
+        });
+      });
+      content.querySelectorAll("[data-marco-sort]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          marcoTasksUi.sort = btn.getAttribute("data-marco-sort") || "dueDate";
+          void crmRenderMarcoTasksSection(content);
+        });
+      });
+      content.querySelectorAll(".marco-edit-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const task = marcoTasksCache.find((t) => t.id === id);
+          if (task) marcoOpenTaskModal(task);
+        });
+      });
+      content.querySelectorAll(".marco-complete-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          marcoCompleteTask(btn.getAttribute("data-id")).catch((e) => showCrmErr(e.message || String(e)));
+        });
+      });
+      content.querySelectorAll(".marco-delete-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          marcoDeleteTask(btn.getAttribute("data-id")).catch((e) => showCrmErr(e.message || String(e)));
+        });
+      });
+      content.querySelectorAll(".marco-status-select").forEach((sel) => {
+        sel.addEventListener("change", () => {
+          marcoUpdateTaskStatus(sel.getAttribute("data-id"), sel.value).catch((e) => showCrmErr(e.message || String(e)));
+        });
+      });
+    }
+
     function renderCrm(data) {
       crmSyncTagTemplates(data);
       crmSyncUsers(data);
@@ -9135,6 +9451,7 @@
         text: "Send text",
         reports: "Reports",
         tasks: "Tasks",
+        "marco-tasks": "Marco's Tasks",
         followup: "Follow-up Plans",
         plans: "Auto Plans",
         knowledge: "Knowledge Center",
@@ -9202,8 +9519,17 @@
       if (dealsCountEl) dealsCountEl.textContent = String(dealsMetrics.activeCount);
       if (typeof crmUpdateFollowupSidebarCount === "function") crmUpdateFollowupSidebarCount(allLeads);
       if (typeof crmUpdateTasksSidebarCount === "function") crmUpdateTasksSidebarCount();
+      if (data.marcoTasksSummary) {
+        marcoTasksSummary = data.marcoTasksSummary;
+        const marcoCountEl = document.getElementById("crm-count-marco-tasks");
+        if (marcoCountEl) {
+          marcoCountEl.textContent = String(
+            (data.marcoTasksSummary.pending || 0) + (data.marcoTasksSummary.inProgress || 0),
+          );
+        }
+      }
 
-      if (allLeads.length === 0 && section !== "reports" && section !== "text" && section !== "dashboard" && section !== "calls" && section !== "chats" && section !== "deals" && section !== "templates" && section !== "plans" && section !== "followup" && section !== "tasks" && section !== "knowledge" && section !== "users") {
+      if (allLeads.length === 0 && section !== "reports" && section !== "text" && section !== "dashboard" && section !== "calls" && section !== "chats" && section !== "deals" && section !== "templates" && section !== "plans" && section !== "followup" && section !== "tasks" && section !== "marco-tasks" && section !== "knowledge" && section !== "users") {
         content.innerHTML = "";
         empty.style.display = "block";
         return;
@@ -9739,6 +10065,18 @@
             escapeHtml(err instanceof Error ? err.message : String(err)) +
             "</p>";
         }
+        return;
+      }
+
+      /* ——— MARCO TASKS ——— */
+      if (section === "marco-tasks") {
+        void crmRenderMarcoTasksSection(content).catch((err) => {
+          console.error("[crm] Marco Tasks render failed:", err);
+          content.innerHTML =
+            '<p class="crm-muted" style="padding:1rem;color:#f87171;">Marco Tasks failed: ' +
+            escapeHtml(err instanceof Error ? err.message : String(err)) +
+            "</p>";
+        });
         return;
       }
 

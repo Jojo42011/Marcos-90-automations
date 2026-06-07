@@ -4,6 +4,13 @@ exports.normalizeCrmIntent = normalizeCrmIntent;
 exports.normalizeCrmTags = normalizeCrmTags;
 exports.normalizeCrmStatus = normalizeCrmStatus;
 exports.resetMemoryStore = resetMemoryStore;
+exports.getCommandTasks = getCommandTasks;
+exports.saveCommandTasks = saveCommandTasks;
+exports.buildCommandTasksSummary = buildCommandTasksSummary;
+exports.seedCommandTasksIfEmpty = seedCommandTasksIfEmpty;
+exports.createCommandTask = createCommandTask;
+exports.updateCommandTask = updateCommandTask;
+exports.deleteCommandTask = deleteCommandTask;
 exports.getLead = getLead;
 exports.getLeadById = getLeadById;
 exports.phoneMatchKey = phoneMatchKey;
@@ -22,6 +29,7 @@ exports.listAllLeads = listAllLeads;
 exports.isLeadInactive30Days = isLeadInactive30Days;
 exports.appendLeadActivity = appendLeadActivity;
 exports.updateLeadCrmFields = updateLeadCrmFields;
+const crypto_1 = require("crypto");
 const fs_1 = require("fs");
 const path_1 = require("path");
 const types_js_1 = require("./types.js");
@@ -29,6 +37,7 @@ const deals_js_1 = require("./deals.js");
 const tagTemplates_js_1 = require("./tagTemplates.js");
 const users_js_1 = require("./users.js");
 const tasks_js_1 = require("./tasks.js");
+const marcoTasks_js_1 = require("./marcoTasks.js");
 const CRM_STATUS_SET = new Set(types_js_1.CRM_STATUSES);
 /** Normalize CRM intent; defaults to buyer. */
 function normalizeCrmIntent(raw) {
@@ -97,7 +106,69 @@ const DB_PATH = resolveDbPath();
 const leadsById = new Map();
 const leadKeyToId = new Map(); // platform + userId -> leadId
 const conversationsByLeadId = new Map();
+let commandTasksStore = [];
 let idCounter = 1;
+function nowIso() {
+    return new Date().toISOString();
+}
+const COMMAND_COLUMNS = new Set([
+    "urgent",
+    "today",
+    "tomorrow",
+    "this_week",
+    "this_month",
+]);
+const COMMAND_COLORS = new Set([
+    "red",
+    "amber",
+    "green",
+    "blue",
+    "purple",
+    "gray",
+]);
+function normalizeCommandTask(raw) {
+    if (!raw || typeof raw !== "object")
+        return null;
+    const t = raw;
+    const title = typeof t.title === "string" ? t.title.trim() : "";
+    if (!title)
+        return null;
+    const column = COMMAND_COLUMNS.has(t.column)
+        ? t.column
+        : "today";
+    const status = t.status === "done" || t.status === "pending" ? t.status : "pending";
+    const color = COMMAND_COLORS.has(t.color)
+        ? t.color
+        : "blue";
+    return {
+        id: typeof t.id === "string" && t.id ? t.id : (0, crypto_1.randomUUID)(),
+        title,
+        description: typeof t.description === "string" ? t.description : undefined,
+        column,
+        status,
+        color,
+        recurring: t.recurring === true,
+        recurringInterval: t.recurringInterval === "daily" ||
+            t.recurringInterval === "every_3_days" ||
+            t.recurringInterval === "every_5_days" ||
+            t.recurringInterval === "weekly" ||
+            t.recurringInterval === "monthly" ||
+            t.recurringInterval === "biweekly"
+            ? t.recurringInterval === "biweekly"
+                ? "every_3_days"
+                : t.recurringInterval
+            : undefined,
+        createdBy: typeof t.createdBy === "string" ? t.createdBy : undefined,
+        assignedTo: typeof t.assignedTo === "string" ? t.assignedTo : undefined,
+        dueDate: typeof t.dueDate === "string" ? t.dueDate.slice(0, 10) : undefined,
+        completedAt: typeof t.completedAt === "string" ? t.completedAt : undefined,
+        createdAt: typeof t.createdAt === "string" ? t.createdAt : nowIso(),
+        updatedAt: typeof t.updatedAt === "string" ? t.updatedAt : nowIso(),
+        tags: Array.isArray(t.tags)
+            ? t.tags.filter((x) => typeof x === "string")
+            : undefined,
+    };
+}
 function persistToFile() {
     try {
         (0, fs_1.mkdirSync)((0, path_1.dirname)(DB_PATH), { recursive: true });
@@ -106,6 +177,7 @@ function persistToFile() {
             leadsById: Object.fromEntries(leadsById),
             leadKeyToId: Object.fromEntries(leadKeyToId),
             conversationsByLeadId: Object.fromEntries(conversationsByLeadId),
+            commandTasks: commandTasksStore,
         };
         (0, fs_1.writeFileSync)(DB_PATH, JSON.stringify(data), "utf8");
     }
@@ -129,6 +201,7 @@ function loadFromFile() {
         leadsById.clear();
         leadKeyToId.clear();
         conversationsByLeadId.clear();
+        commandTasksStore = [];
         if (data.leadsById && typeof data.leadsById === "object") {
             for (const [k, v] of Object.entries(data.leadsById)) {
                 if (v && typeof v === "object") {
@@ -151,6 +224,11 @@ function loadFromFile() {
                 }
             }
         }
+        if (Array.isArray(data.commandTasks)) {
+            commandTasksStore = data.commandTasks
+                .map(normalizeCommandTask)
+                .filter((t) => t !== null);
+        }
     }
     catch (err) {
         console.error("[db] loadFromFile failed, starting empty:", err);
@@ -162,11 +240,79 @@ function resetMemoryStore() {
     leadsById.clear();
     leadKeyToId.clear();
     conversationsByLeadId.clear();
+    commandTasksStore = [];
     idCounter = 1;
     persistToFile();
 }
-function nowIso() {
-    return new Date().toISOString();
+function getCommandTasks() {
+    return [...commandTasksStore];
+}
+function saveCommandTasks(tasks) {
+    commandTasksStore = tasks;
+    persistToFile();
+}
+function buildCommandTasksSummary(tasks) {
+    const list = tasks ?? commandTasksStore;
+    const pending = list.filter((t) => t.status === "pending");
+    return {
+        urgent: pending.filter((t) => t.column === "urgent").length,
+        today: pending.filter((t) => t.column === "today").length,
+        totalPending: pending.length,
+    };
+}
+function seedCommandTasksIfEmpty() {
+    if (commandTasksStore.length > 0)
+        return commandTasksStore;
+    const seeds = [
+        { title: "Draft weekly email to buyer leads", column: "today", color: "blue", assignedTo: "carlos", recurring: true, recurringInterval: "weekly", createdBy: "carlos" },
+        { title: "Add new TikTok leads to Brivity CRM", column: "today", color: "amber", assignedTo: "carlos", createdBy: "carlos" },
+        { title: "Confirm tomorrow's consultation appointments", column: "today", color: "green", assignedTo: "carlos", createdBy: "carlos" },
+        { title: "Send listing agreement to new seller lead", column: "urgent", color: "red", assignedTo: "carlos", createdBy: "carlos" },
+        { title: "Follow up on unsigned buyer rep — Geno Perez", column: "urgent", color: "red", assignedTo: "carlos", createdBy: "carlos" },
+        { title: "Weekly check-in on all active transactions", column: "this_week", color: "purple", assignedTo: "carlos", recurring: true, recurringInterval: "weekly", createdBy: "carlos" },
+        { title: "Post TikTok videos — 7 per day target", column: "today", color: "blue", assignedTo: "carlos", recurring: true, recurringInterval: "daily", createdBy: "carlos" },
+        { title: "Send property options to Canyon Lake inquiry", column: "tomorrow", color: "blue", assignedTo: "carlos", createdBy: "carlos" },
+        { title: "Geno Perez — every 3 week check-in re: August closing", column: "this_week", color: "green", assignedTo: "carlos", recurring: true, recurringInterval: "every_3_days", createdBy: "carlos" },
+        { title: "Send weekly update to seller leads bucket", column: "this_week", color: "amber", assignedTo: "carlos", recurring: true, recurringInterval: "weekly", createdBy: "carlos" },
+    ];
+    for (const seed of seeds) {
+        createCommandTask({ ...seed, status: "pending" });
+    }
+    return commandTasksStore;
+}
+function createCommandTask(data) {
+    const task = {
+        ...data,
+        id: (0, crypto_1.randomUUID)(),
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+    };
+    commandTasksStore.push(task);
+    persistToFile();
+    return task;
+}
+function updateCommandTask(id, updates) {
+    const idx = commandTasksStore.findIndex((t) => t.id === id);
+    if (idx === -1)
+        return null;
+    commandTasksStore[idx] = {
+        ...commandTasksStore[idx],
+        ...updates,
+        updatedAt: nowIso(),
+    };
+    if (updates.status === "done" && !commandTasksStore[idx].completedAt) {
+        commandTasksStore[idx].completedAt = nowIso();
+    }
+    persistToFile();
+    return commandTasksStore[idx];
+}
+function deleteCommandTask(id) {
+    const filtered = commandTasksStore.filter((t) => t.id !== id);
+    if (filtered.length === commandTasksStore.length)
+        return false;
+    commandTasksStore = filtered;
+    persistToFile();
+    return true;
 }
 function leadKey(platform, userId) {
     return `${platform}::${userId}`;
@@ -577,6 +723,8 @@ async function getDashboardSnapshot() {
     const deals = (0, deals_js_1.getDeals)();
     const totalGCI = (0, deals_js_1.sumClosedDealGCI)(deals);
     const tasksSummary = (0, tasks_js_1.buildTasksSummary)();
+    const commandTasksSummary = buildCommandTasksSummary();
+    const marcoTasksSummary = (0, marcoTasks_js_1.buildMarcoTasksSummary)((0, marcoTasks_js_1.getMarcoTasks)());
     return {
         generatedAt,
         totals: {
@@ -597,6 +745,8 @@ async function getDashboardSnapshot() {
         deals,
         totalGCI,
         tasksSummary,
+        commandTasksSummary,
+        marcoTasksSummary,
     };
 }
 async function listCrmLeads() {

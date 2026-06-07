@@ -1,7 +1,13 @@
+import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 
 import type {
+  CommandTask,
+  CommandTaskColor,
+  CommandTaskColumn,
+  CommandTasksSummary,
+  CommandTaskStatus,
   Conversation,
   Criteria,
   Lead,
@@ -22,6 +28,7 @@ import { getDeals, sumClosedDealGCI } from "./deals.js";
 import { getTagTemplates } from "./tagTemplates.js";
 import { getUsers } from "./users.js";
 import { buildTasksSummary } from "./tasks.js";
+import { buildMarcoTasksSummary, getMarcoTasks } from "./marcoTasks.js";
 
 const CRM_STATUS_SET = new Set<string>(CRM_STATUSES);
 
@@ -90,15 +97,81 @@ const DB_PATH = resolveDbPath();
 const leadsById = new Map<string, Lead>();
 const leadKeyToId = new Map<string, string>(); // platform + userId -> leadId
 const conversationsByLeadId = new Map<string, Conversation>();
+let commandTasksStore: CommandTask[] = [];
 
 let idCounter = 1;
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+const COMMAND_COLUMNS = new Set<CommandTaskColumn>([
+  "urgent",
+  "today",
+  "tomorrow",
+  "this_week",
+  "this_month",
+]);
+const COMMAND_COLORS = new Set<CommandTaskColor>([
+  "red",
+  "amber",
+  "green",
+  "blue",
+  "purple",
+  "gray",
+]);
 
 type PersistedShape = {
   idCounter: number;
   leadsById: Record<string, Lead>;
   leadKeyToId: Record<string, string>;
   conversationsByLeadId: Record<string, Conversation>;
+  commandTasks?: CommandTask[];
 };
+
+function normalizeCommandTask(raw: unknown): CommandTask | null {
+  if (!raw || typeof raw !== "object") return null;
+  const t = raw as Record<string, unknown>;
+  const title = typeof t.title === "string" ? t.title.trim() : "";
+  if (!title) return null;
+  const column = COMMAND_COLUMNS.has(t.column as CommandTaskColumn)
+    ? (t.column as CommandTaskColumn)
+    : "today";
+  const status: CommandTaskStatus =
+    t.status === "done" || t.status === "pending" ? t.status : "pending";
+  const color = COMMAND_COLORS.has(t.color as CommandTaskColor)
+    ? (t.color as CommandTaskColor)
+    : "blue";
+  return {
+    id: typeof t.id === "string" && t.id ? t.id : randomUUID(),
+    title,
+    description: typeof t.description === "string" ? t.description : undefined,
+    column,
+    status,
+    color,
+    recurring: t.recurring === true,
+    recurringInterval:
+      t.recurringInterval === "daily" ||
+      t.recurringInterval === "every_3_days" ||
+      t.recurringInterval === "every_5_days" ||
+      t.recurringInterval === "weekly" ||
+      t.recurringInterval === "monthly" ||
+      t.recurringInterval === "biweekly"
+        ? t.recurringInterval === "biweekly"
+          ? "every_3_days"
+          : (t.recurringInterval as CommandTask["recurringInterval"])
+        : undefined,
+    createdBy: typeof t.createdBy === "string" ? t.createdBy : undefined,
+    assignedTo: typeof t.assignedTo === "string" ? t.assignedTo : undefined,
+    dueDate: typeof t.dueDate === "string" ? t.dueDate.slice(0, 10) : undefined,
+    completedAt: typeof t.completedAt === "string" ? t.completedAt : undefined,
+    createdAt: typeof t.createdAt === "string" ? t.createdAt : nowIso(),
+    updatedAt: typeof t.updatedAt === "string" ? t.updatedAt : nowIso(),
+    tags: Array.isArray(t.tags)
+      ? t.tags.filter((x): x is string => typeof x === "string")
+      : undefined,
+  };
+}
 
 function persistToFile(): void {
   try {
@@ -108,6 +181,7 @@ function persistToFile(): void {
       leadsById: Object.fromEntries(leadsById),
       leadKeyToId: Object.fromEntries(leadKeyToId),
       conversationsByLeadId: Object.fromEntries(conversationsByLeadId),
+      commandTasks: commandTasksStore,
     };
     writeFileSync(DB_PATH, JSON.stringify(data), "utf8");
   } catch (err) {
@@ -133,6 +207,7 @@ function loadFromFile(): void {
     leadsById.clear();
     leadKeyToId.clear();
     conversationsByLeadId.clear();
+    commandTasksStore = [];
 
     if (data.leadsById && typeof data.leadsById === "object") {
       for (const [k, v] of Object.entries(data.leadsById)) {
@@ -158,6 +233,12 @@ function loadFromFile(): void {
         }
       }
     }
+
+    if (Array.isArray(data.commandTasks)) {
+      commandTasksStore = data.commandTasks
+        .map(normalizeCommandTask)
+        .filter((t): t is CommandTask => t !== null);
+    }
   } catch (err) {
     console.error("[db] loadFromFile failed, starting empty:", err);
   }
@@ -170,12 +251,87 @@ export function resetMemoryStore(): void {
   leadsById.clear();
   leadKeyToId.clear();
   conversationsByLeadId.clear();
+  commandTasksStore = [];
   idCounter = 1;
   persistToFile();
 }
 
-function nowIso(): string {
-  return new Date().toISOString();
+export function getCommandTasks(): CommandTask[] {
+  return [...commandTasksStore];
+}
+
+export function saveCommandTasks(tasks: CommandTask[]): void {
+  commandTasksStore = tasks;
+  persistToFile();
+}
+
+export function buildCommandTasksSummary(tasks?: CommandTask[]): CommandTasksSummary {
+  const list = tasks ?? commandTasksStore;
+  const pending = list.filter((t) => t.status === "pending");
+  return {
+    urgent: pending.filter((t) => t.column === "urgent").length,
+    today: pending.filter((t) => t.column === "today").length,
+    totalPending: pending.length,
+  };
+}
+
+export function seedCommandTasksIfEmpty(): CommandTask[] {
+  if (commandTasksStore.length > 0) return commandTasksStore;
+
+  const seeds: Omit<CommandTask, "id" | "createdAt" | "updatedAt" | "status">[] = [
+    { title: "Draft weekly email to buyer leads", column: "today", color: "blue", assignedTo: "carlos", recurring: true, recurringInterval: "weekly", createdBy: "carlos" },
+    { title: "Add new TikTok leads to Brivity CRM", column: "today", color: "amber", assignedTo: "carlos", createdBy: "carlos" },
+    { title: "Confirm tomorrow's consultation appointments", column: "today", color: "green", assignedTo: "carlos", createdBy: "carlos" },
+    { title: "Send listing agreement to new seller lead", column: "urgent", color: "red", assignedTo: "carlos", createdBy: "carlos" },
+    { title: "Follow up on unsigned buyer rep — Geno Perez", column: "urgent", color: "red", assignedTo: "carlos", createdBy: "carlos" },
+    { title: "Weekly check-in on all active transactions", column: "this_week", color: "purple", assignedTo: "carlos", recurring: true, recurringInterval: "weekly", createdBy: "carlos" },
+    { title: "Post TikTok videos — 7 per day target", column: "today", color: "blue", assignedTo: "carlos", recurring: true, recurringInterval: "daily", createdBy: "carlos" },
+    { title: "Send property options to Canyon Lake inquiry", column: "tomorrow", color: "blue", assignedTo: "carlos", createdBy: "carlos" },
+    { title: "Geno Perez — every 3 week check-in re: August closing", column: "this_week", color: "green", assignedTo: "carlos", recurring: true, recurringInterval: "every_3_days", createdBy: "carlos" },
+    { title: "Send weekly update to seller leads bucket", column: "this_week", color: "amber", assignedTo: "carlos", recurring: true, recurringInterval: "weekly", createdBy: "carlos" },
+  ];
+
+  for (const seed of seeds) {
+    createCommandTask({ ...seed, status: "pending" });
+  }
+  return commandTasksStore;
+}
+
+export function createCommandTask(
+  data: Omit<CommandTask, "id" | "createdAt" | "updatedAt">,
+): CommandTask {
+  const task: CommandTask = {
+    ...data,
+    id: randomUUID(),
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+  commandTasksStore.push(task);
+  persistToFile();
+  return task;
+}
+
+export function updateCommandTask(id: string, updates: Partial<CommandTask>): CommandTask | null {
+  const idx = commandTasksStore.findIndex((t) => t.id === id);
+  if (idx === -1) return null;
+  commandTasksStore[idx] = {
+    ...commandTasksStore[idx],
+    ...updates,
+    updatedAt: nowIso(),
+  };
+  if (updates.status === "done" && !commandTasksStore[idx].completedAt) {
+    commandTasksStore[idx].completedAt = nowIso();
+  }
+  persistToFile();
+  return commandTasksStore[idx];
+}
+
+export function deleteCommandTask(id: string): boolean {
+  const filtered = commandTasksStore.filter((t) => t.id !== id);
+  if (filtered.length === commandTasksStore.length) return false;
+  commandTasksStore = filtered;
+  persistToFile();
+  return true;
 }
 
 function leadKey(platform: string, userId: string): string {
@@ -591,6 +747,8 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
   const deals = getDeals();
   const totalGCI = sumClosedDealGCI(deals);
   const tasksSummary = buildTasksSummary();
+  const commandTasksSummary = buildCommandTasksSummary();
+  const marcoTasksSummary = buildMarcoTasksSummary(getMarcoTasks());
 
   return {
     generatedAt,
@@ -612,6 +770,8 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     deals,
     totalGCI,
     tasksSummary,
+    commandTasksSummary,
+    marcoTasksSummary,
   };
 }
 
