@@ -221,22 +221,9 @@
     .btn-cancel { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 8px 16px; cursor: pointer; font-size: 10px; }
     .btn-save { border: 1px solid rgba(0,212,255,0.4); background: rgba(0,212,255,0.12); color: var(--cyan); padding: 8px 16px; cursor: pointer; font-size: 10px; }
 
-    .auth-gate {
-      position: fixed; inset: 0; background: var(--bg); z-index: 300;
-      display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px;
-    }
-    .auth-gate.hidden { display: none; }
-    .auth-gate input { width: 280px; padding: 10px; background: transparent; border: 1px solid var(--border); color: var(--text); }
-    .auth-gate button { padding: 8px 20px; border: 1px solid var(--border); background: transparent; color: var(--cyan); cursor: pointer; }
   </style>
 </head>
 <body>
-  <div id="auth-gate" class="auth-gate hidden">
-    <div style="font-size:11px;letter-spacing:2px;color:var(--cyan);">// DASHBOARD TOKEN REQUIRED //</div>
-    <input id="token-input" type="password" placeholder="Enter DASHBOARD_TOKEN" />
-    <button type="button" id="token-save">Continue</button>
-  </div>
-
   <header class="topbar">
     <a id="back-link" class="back-btn" href="/dashboard">← BACK TO DASHBOARD</a>
     <div class="title">// MARCO · TASK COMMAND CENTER //</div>
@@ -401,7 +388,6 @@
       this_month: "This Month",
     };
 
-    let token = new URLSearchParams(location.search).get("token") || sessionStorage.getItem("dashboardToken") || "";
     let tasks = [];
     let editId = null;
     let selectedColor = "blue";
@@ -413,10 +399,6 @@
 
     const quickInput = document.getElementById("quick-input");
     const modalEl = document.getElementById("modal");
-
-    function getToken() {
-      return token;
-    }
 
     function escapeHtml(str) {
       return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -430,14 +412,12 @@
 
     function apiUrl(path, params) {
       const u = new URL(path, location.origin);
-      if (token) u.searchParams.set("token", token);
       if (params) Object.entries(params).forEach(([k, v]) => { if (v != null && v !== "") u.searchParams.set(k, v); });
       return u.toString();
     }
 
     async function apiFetch(path, opts = {}, params) {
       const headers = { ...(opts.headers || {}) };
-      if (token) headers.Authorization = "Bearer " + token;
       const res = await fetch(apiUrl(path, params), { ...opts, headers });
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
@@ -1280,27 +1260,6 @@
       }
     }
 
-    function showAuthGate() {
-      document.getElementById("auth-gate").classList.remove("hidden");
-    }
-
-    function initToken() {
-      const back = document.getElementById("back-link");
-      if (token) {
-        sessionStorage.setItem("dashboardToken", token);
-        back.href = "/dashboard?token=" + encodeURIComponent(token);
-      } else {
-        showAuthGate();
-      }
-      document.getElementById("token-save").onclick = () => {
-        const v = document.getElementById("token-input").value.trim();
-        if (!v) return;
-        token = v;
-        sessionStorage.setItem("dashboardToken", token);
-        location.search = "?token=" + encodeURIComponent(token);
-      };
-    }
-
     function isModalOpen() {
       return modalEl.classList.contains("open");
     }
@@ -1331,7 +1290,6 @@
     });
 
     document.addEventListener("keydown", e => {
-      if (!document.getElementById("auth-gate").classList.contains("hidden")) return;
       if (isModalOpen()) return;
 
       if (e.key === "Escape") {
@@ -1345,24 +1303,19 @@
       }
     });
 
-    initToken();
     buildColorSwatches();
     buildBoardSkeleton();
     setFilter("undone");
 
-    if (token) {
-      loadTasks()
-        .then(() => {
-          applyFilter();
-          quickInput.focus();
-        })
-        .catch(err => {
-          showToast("Failed to load tasks: " + err.message, "error");
-          quickInput.focus();
-        });
-    } else {
-      quickInput.focus();
-    }
+    loadTasks()
+      .then(() => {
+        applyFilter();
+        quickInput.focus();
+      })
+      .catch(err => {
+        showToast("Failed to load tasks: " + err.message, "error");
+        quickInput.focus();
+      });
   </script>
 </body>
 </html>

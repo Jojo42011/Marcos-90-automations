@@ -2271,10 +2271,6 @@ function commandTaskCounts() {
 
 /** Carlos command-center task board (db.json). */
 app.get("/api/tasks", (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
   seedCommandTasksIfEmpty();
   let tasks = getCommandTasks();
   const column = typeof req.query.column === "string" ? req.query.column : undefined;
@@ -2301,10 +2297,6 @@ app.get("/api/tasks", (req, res) => {
 });
 
 app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const column = typeof body.column === "string" ? body.column : "";
@@ -2339,10 +2331,6 @@ app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
 });
 
 app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
   const id = String(req.params.id || "").trim();
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Partial<CommandTask>;
   const updates: Partial<CommandTask> = {};
@@ -2371,10 +2359,6 @@ app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
 });
 
 app.delete("/api/tasks/:id", (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
   const id = String(req.params.id || "").trim();
   const deleted = deleteCommandTask(id);
   if (!deleted) {
