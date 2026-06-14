@@ -141,6 +141,16 @@ function initSchema(database: Database.Database): void {
       pull_time TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS agent_pull_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pulled_at TEXT NOT NULL,
+      pull_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      details TEXT,
+      duration_ms INTEGER
+    );
   `);
 
   migrateVideoScoresTable(database);
@@ -1006,4 +1016,97 @@ export function getLatestMorningScanFromDb(): {
     leadIntentFlags,
     fetchError: row.fetch_error ? String(row.fetch_error) : undefined,
   };
+}
+
+export type AgentPullType =
+  | "social_refresh"
+  | "evening_pull"
+  | "content_digest"
+  | "morning_scan"
+  | "content_suggestions"
+  | "escalation_check";
+
+export interface AgentPullLogEntry {
+  id?: number;
+  pulledAt: string;
+  pullType: AgentPullType;
+  status: "success" | "error";
+  summary: string;
+  details?: Record<string, unknown>;
+  durationMs?: number;
+}
+
+function mapAgentPullRow(row: Record<string, unknown>): AgentPullLogEntry {
+  let details: Record<string, unknown> | undefined;
+  if (row.details) {
+    try {
+      details = JSON.parse(String(row.details)) as Record<string, unknown>;
+    } catch {
+      details = undefined;
+    }
+  }
+  return {
+    id: row.id != null ? Number(row.id) : undefined,
+    pulledAt: String(row.pulled_at),
+    pullType: row.pull_type as AgentPullType,
+    status: row.status as AgentPullLogEntry["status"],
+    summary: String(row.summary),
+    details,
+    durationMs: row.duration_ms != null ? Number(row.duration_ms) : undefined,
+  };
+}
+
+export function logAgentPull(entry: Omit<AgentPullLogEntry, "id">): void {
+  const database = getSocialDb();
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS agent_pull_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pulled_at TEXT NOT NULL,
+      pull_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      details TEXT,
+      duration_ms INTEGER
+    )
+  `);
+
+  database
+    .prepare(
+      `INSERT INTO agent_pull_log (pulled_at, pull_type, status, summary, details, duration_ms)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      entry.pulledAt,
+      entry.pullType,
+      entry.status,
+      entry.summary,
+      entry.details ? JSON.stringify(entry.details) : null,
+      entry.durationMs ?? null,
+    );
+}
+
+export function getRecentAgentPulls(limit = 20): AgentPullLogEntry[] {
+  const database = getSocialDb();
+  try {
+    const rows = database
+      .prepare(`SELECT * FROM agent_pull_log ORDER BY pulled_at DESC LIMIT ?`)
+      .all(limit) as Array<Record<string, unknown>>;
+    return rows.map(mapAgentPullRow);
+  } catch {
+    return [];
+  }
+}
+
+export function getTodaysAgentPulls(): AgentPullLogEntry[] {
+  const database = getSocialDb();
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const rows = database
+      .prepare(`SELECT * FROM agent_pull_log WHERE pulled_at >= ? ORDER BY pulled_at DESC`)
+      .all(todayStart.toISOString()) as Array<Record<string, unknown>>;
+    return rows.map(mapAgentPullRow);
+  } catch {
+    return [];
+  }
 }

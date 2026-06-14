@@ -201,10 +201,21 @@ async function checkViralSpike() {
     }
 }
 async function runAllEscalationChecks() {
+    const startTime = Date.now();
     console.log("[Escalation] Running all checks...");
     await checkNegativeCommentTraction();
     await checkLeadIntentInDMs();
     await checkViralSpike();
+    const recent = getRecentEscalations(5);
+    const newCount = recent.filter((e) => new Date(e.detectedAt).getTime() > Date.now() - 60000).length;
+    (0, socialStore_js_1.logAgentPull)({
+        pulledAt: new Date().toISOString(),
+        pullType: "escalation_check",
+        status: "success",
+        summary: newCount > 0 ? `Found ${newCount} new escalation(s)` : "No new escalations",
+        details: { newEscalations: newCount },
+        durationMs: Date.now() - startTime,
+    });
 }
 function scheduleEscalationChecks() {
     setInterval(() => {

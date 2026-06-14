@@ -24,6 +24,8 @@ import {
   getVideoImprovements,
   setSocialRefreshTime,
   getSocialRefreshTime,
+  getRecentAgentPulls,
+  getTodaysAgentPulls,
 } from "./core/socialStore.js";
 import { runMorningScan, getLatestMorningScan } from "./agents/morningScan/index.js";
 import { generateCommentReply } from "./agents/commentReply/index.js";
@@ -41,6 +43,7 @@ import {
   getRecentEscalations,
   runAllEscalationChecks,
 } from "./agents/escalations/index.js";
+import { getLatestContentDigest } from "./agents/harveyContentDigest/index.js";
 import {
   createCommandTask,
   deleteCommandTask,
@@ -659,6 +662,58 @@ app.post("/api/content-suggestions/generate", async (req, res) => {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
   }
+});
+
+app.get("/api/agent/pull-log", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const limitRaw = req.query.limit;
+  const limit =
+    typeof limitRaw === "string" && /^\d+$/.test(limitRaw)
+      ? parseInt(limitRaw, 10)
+      : 20;
+  res.json({ pulls: getRecentAgentPulls(limit) });
+});
+
+app.get("/api/agent/pull-log/today", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  res.json({ pulls: getTodaysAgentPulls() });
+});
+
+app.get("/api/agent/status", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const digest = getLatestContentDigest();
+  const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+  let lastRunAt: string | null = null;
+  let nextRunAt: string | null = null;
+  let msUntilNext: number | null = null;
+
+  if (digest) {
+    lastRunAt = digest.generatedAt;
+    const nextRunMs = new Date(digest.generatedAt).getTime() + THREE_DAYS_MS;
+    nextRunAt = new Date(nextRunMs).toISOString();
+    msUntilNext = Math.max(0, nextRunMs - Date.now());
+  } else {
+    nextRunAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    msUntilNext = 60 * 60 * 1000;
+  }
+
+  res.json({
+    lastRunAt,
+    nextRunAt,
+    msUntilNext,
+    intervalDays: 3,
+  });
 });
 
 app.get("/api/escalations/recent", (req, res) => {

@@ -3,6 +3,7 @@ import {
   getLatestMorningScanFromDb,
   getLatestSocialDashboardData,
   saveMorningScanResult,
+  logAgentPull,
 } from "../../core/socialStore.js";
 import { fetchTikTokComments } from "../../integrations/apify/index.js";
 import { generateCommentReply } from "../commentReply/index.js";
@@ -158,11 +159,30 @@ export async function runMorningScan(): Promise<MorningScanResult> {
       "lead-intent flags",
       result.fetchError ? `(fetch error: ${result.fetchError})` : "",
     );
+
+    logAgentPull({
+      pulledAt: result.scannedAt,
+      pullType: "morning_scan",
+      status: result.fetchError ? "error" : "success",
+      summary: result.fetchError
+        ? `Failed: ${result.fetchError}`
+        : `Scanned overnight — ${result.newComments} new comments, ${result.leadIntentFlags.length} lead-intent flags`,
+      details: {
+        newComments: result.newComments,
+        flags: result.leadIntentFlags.length,
+      },
+    });
   } catch (err) {
     console.error("[MorningScan] ERROR:", err);
     result.fetchError =
       result.fetchError ?? (err instanceof Error ? err.message : String(err));
     saveMorningScanResult(result);
+    logAgentPull({
+      pulledAt: result.scannedAt,
+      pullType: "morning_scan",
+      status: "error",
+      summary: `Failed: ${result.fetchError}`,
+    });
   }
 
   return result;

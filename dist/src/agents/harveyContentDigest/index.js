@@ -58,6 +58,13 @@ function generateContentDigest() {
     };
     saveContentDigest(digest);
     console.log("[HarveyDigest] Generated:", summary);
+    (0, socialStore_js_1.logAgentPull)({
+        pulledAt: digest.generatedAt,
+        pullType: "content_digest",
+        status: "success",
+        summary: digest.summary,
+        details: digest.data,
+    });
     return digest;
 }
 function saveContentDigest(digest) {

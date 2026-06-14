@@ -1,4 +1,4 @@
-import { getLatestSocialDashboardData, getSocialDb } from "../../core/socialStore.js";
+import { getLatestSocialDashboardData, getSocialDb, logAgentPull } from "../../core/socialStore.js";
 import type { SocialDashboardVideo } from "../../core/socialStore.js";
 import { getLatestContentSuggestions } from "../contentSuggestions/index.js";
 import { getRecentEscalations } from "../escalations/index.js";
@@ -85,6 +85,14 @@ export function generateContentDigest(): ContentDigest {
 
   saveContentDigest(digest);
   console.log("[HarveyDigest] Generated:", summary);
+
+  logAgentPull({
+    pulledAt: digest.generatedAt,
+    pullType: "content_digest",
+    status: "success",
+    summary: digest.summary,
+    details: digest.data as Record<string, unknown>,
+  });
 
   return digest;
 }

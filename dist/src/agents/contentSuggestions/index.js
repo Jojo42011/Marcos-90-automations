@@ -61,6 +61,7 @@ function normalizeSuggestion(raw) {
     };
 }
 async function generateWeeklyContentSuggestions() {
+    const startTime = Date.now();
     console.log("[ContentSuggestions] Generating weekly content ideas...");
     const data = (0, socialStore_js_1.getLatestSocialDashboardData)();
     const videos = data.videos || [];
@@ -141,6 +142,14 @@ Exactly 3 suggestions.`;
     };
     saveContentSuggestions(result);
     console.log("[ContentSuggestions] Generated", result.suggestions.length, "suggestions");
+    (0, socialStore_js_1.logAgentPull)({
+        pulledAt: result.generatedAt,
+        pullType: "content_suggestions",
+        status: "success",
+        summary: `Generated ${result.suggestions.length} content ideas for week of ${result.weekOf}`,
+        details: { ideas: result.suggestions.map((s) => s.title) },
+        durationMs: Date.now() - startTime,
+    });
     return result;
 }
 function saveContentSuggestions(result) {

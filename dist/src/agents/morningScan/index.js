@@ -108,12 +108,30 @@ async function runMorningScan() {
             data: result,
         });
         console.log("[MorningScan] Complete —", result.newComments, "comments,", result.leadIntentFlags.length, "lead-intent flags", result.fetchError ? `(fetch error: ${result.fetchError})` : "");
+        (0, socialStore_js_1.logAgentPull)({
+            pulledAt: result.scannedAt,
+            pullType: "morning_scan",
+            status: result.fetchError ? "error" : "success",
+            summary: result.fetchError
+                ? `Failed: ${result.fetchError}`
+                : `Scanned overnight — ${result.newComments} new comments, ${result.leadIntentFlags.length} lead-intent flags`,
+            details: {
+                newComments: result.newComments,
+                flags: result.leadIntentFlags.length,
+            },
+        });
     }
     catch (err) {
         console.error("[MorningScan] ERROR:", err);
         result.fetchError =
             result.fetchError ?? (err instanceof Error ? err.message : String(err));
         (0, socialStore_js_1.saveMorningScanResult)(result);
+        (0, socialStore_js_1.logAgentPull)({
+            pulledAt: result.scannedAt,
+            pullType: "morning_scan",
+            status: "error",
+            summary: `Failed: ${result.fetchError}`,
+        });
     }
     return result;
 }

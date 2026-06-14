@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
-import { getLatestSocialDashboardData, getSocialDb } from "../../core/socialStore.js";
+import { getLatestSocialDashboardData, getSocialDb, logAgentPull } from "../../core/socialStore.js";
 import type { SocialDashboardVideo } from "../../core/socialStore.js";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -78,6 +78,7 @@ function normalizeSuggestion(raw: Record<string, unknown>): ContentSuggestion {
 }
 
 export async function generateWeeklyContentSuggestions(): Promise<WeeklyContentSuggestions> {
+  const startTime = Date.now();
   console.log("[ContentSuggestions] Generating weekly content ideas...");
 
   const data = getLatestSocialDashboardData();
@@ -169,6 +170,15 @@ Exactly 3 suggestions.`;
 
   saveContentSuggestions(result);
   console.log("[ContentSuggestions] Generated", result.suggestions.length, "suggestions");
+
+  logAgentPull({
+    pulledAt: result.generatedAt,
+    pullType: "content_suggestions",
+    status: "success",
+    summary: `Generated ${result.suggestions.length} content ideas for week of ${result.weekOf}`,
+    details: { ideas: result.suggestions.map((s) => s.title) },
+    durationMs: Date.now() - startTime,
+  });
 
   return result;
 }

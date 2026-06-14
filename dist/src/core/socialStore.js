@@ -23,6 +23,9 @@ exports.getPendingCommentReplies = getPendingCommentReplies;
 exports.updateCommentReplyStatus = updateCommentReplyStatus;
 exports.saveMorningScanResult = saveMorningScanResult;
 exports.getLatestMorningScanFromDb = getLatestMorningScanFromDb;
+exports.logAgentPull = logAgentPull;
+exports.getRecentAgentPulls = getRecentAgentPulls;
+exports.getTodaysAgentPulls = getTodaysAgentPulls;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
@@ -153,6 +156,16 @@ function initSchema(database) {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       pull_time TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_pull_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pulled_at TEXT NOT NULL,
+      pull_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      details TEXT,
+      duration_ms INTEGER
     );
   `);
     migrateVideoScoresTable(database);
@@ -812,4 +825,68 @@ function getLatestMorningScanFromDb() {
         leadIntentFlags,
         fetchError: row.fetch_error ? String(row.fetch_error) : undefined,
     };
+}
+function mapAgentPullRow(row) {
+    let details;
+    if (row.details) {
+        try {
+            details = JSON.parse(String(row.details));
+        }
+        catch {
+            details = undefined;
+        }
+    }
+    return {
+        id: row.id != null ? Number(row.id) : undefined,
+        pulledAt: String(row.pulled_at),
+        pullType: row.pull_type,
+        status: row.status,
+        summary: String(row.summary),
+        details,
+        durationMs: row.duration_ms != null ? Number(row.duration_ms) : undefined,
+    };
+}
+function logAgentPull(entry) {
+    const database = getSocialDb();
+    database.exec(`
+    CREATE TABLE IF NOT EXISTS agent_pull_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pulled_at TEXT NOT NULL,
+      pull_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      details TEXT,
+      duration_ms INTEGER
+    )
+  `);
+    database
+        .prepare(`INSERT INTO agent_pull_log (pulled_at, pull_type, status, summary, details, duration_ms)
+       VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(entry.pulledAt, entry.pullType, entry.status, entry.summary, entry.details ? JSON.stringify(entry.details) : null, entry.durationMs ?? null);
+}
+function getRecentAgentPulls(limit = 20) {
+    const database = getSocialDb();
+    try {
+        const rows = database
+            .prepare(`SELECT * FROM agent_pull_log ORDER BY pulled_at DESC LIMIT ?`)
+            .all(limit);
+        return rows.map(mapAgentPullRow);
+    }
+    catch {
+        return [];
+    }
+}
+function getTodaysAgentPulls() {
+    const database = getSocialDb();
+    try {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const rows = database
+            .prepare(`SELECT * FROM agent_pull_log WHERE pulled_at >= ? ORDER BY pulled_at DESC`)
+            .all(todayStart.toISOString());
+        return rows.map(mapAgentPullRow);
+    }
+    catch {
+        return [];
+    }
 }

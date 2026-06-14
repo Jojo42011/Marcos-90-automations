@@ -87,31 +87,59 @@ function seedMockSocialData() {
 }
 /** Pull TikTok via Apify, score, extract patterns, persist snapshot + videos. */
 async function runSocialMediaAgent() {
-    const token = apifyToken();
-    if (!token) {
-        console.warn("[SocialAgent] APIFY_API_TOKEN not set — skipping real pull, seeding mock data");
-        return seedMockSocialData();
+    const startTime = Date.now();
+    try {
+        const token = apifyToken();
+        let snapshot;
+        if (!token) {
+            console.warn("[SocialAgent] APIFY_API_TOKEN not set — skipping real pull, seeding mock data");
+            snapshot = seedMockSocialData();
+        }
+        else {
+            const username = getTikTokUsername();
+            const { profile, videos } = await (0, index_js_1.fetchTikTokVideos)(username);
+            const scored = (0, index_js_1.scoreVideos)(videos);
+            const contentPatterns = (0, index_js_1.extractContentPatterns)(scored.videos);
+            const pulledAt = new Date().toISOString();
+            const profileInfo = profile ?? {
+                username,
+                nickname: username,
+                followers: 0,
+                following: 0,
+                heartCount: 0,
+                videoCount: 0,
+                avatar: "",
+            };
+            snapshot = (0, socialStore_js_1.upsertSocialPull)(profileInfo, scored.videos, contentPatterns, scored.avgViews, pulledAt);
+            for (const v of scored.videos) {
+                (0, socialStore_js_1.upsertVideoScore)(v.id, v.scoreBreakdown, pulledAt);
+            }
+            console.log(`[social-agent] Pull complete — ${snapshot.totalVideos} videos, avg ${snapshot.avgViews} views, ${snapshot.hotCount} hot / ${snapshot.averageCount} warm / ${snapshot.coldCount} cold`);
+        }
+        const data = (0, socialStore_js_1.getLatestSocialDashboardData)();
+        (0, socialStore_js_1.logAgentPull)({
+            pulledAt: new Date().toISOString(),
+            pullType: "social_refresh",
+            status: "success",
+            summary: `Pulled ${data.videos?.length || 0} videos, ${data.profile?.followers || 0} followers from @${data.profile?.username || "unknown"}`,
+            details: {
+                videoCount: data.videos?.length || 0,
+                followers: data.profile?.followers || 0,
+            },
+            durationMs: Date.now() - startTime,
+        });
+        return snapshot;
     }
-    const username = getTikTokUsername();
-    const { profile, videos } = await (0, index_js_1.fetchTikTokVideos)(username);
-    const scored = (0, index_js_1.scoreVideos)(videos);
-    const contentPatterns = (0, index_js_1.extractContentPatterns)(scored.videos);
-    const pulledAt = new Date().toISOString();
-    const profileInfo = profile ?? {
-        username,
-        nickname: username,
-        followers: 0,
-        following: 0,
-        heartCount: 0,
-        videoCount: 0,
-        avatar: "",
-    };
-    const snapshot = (0, socialStore_js_1.upsertSocialPull)(profileInfo, scored.videos, contentPatterns, scored.avgViews, pulledAt);
-    for (const v of scored.videos) {
-        (0, socialStore_js_1.upsertVideoScore)(v.id, v.scoreBreakdown, pulledAt);
+    catch (err) {
+        (0, socialStore_js_1.logAgentPull)({
+            pulledAt: new Date().toISOString(),
+            pullType: "social_refresh",
+            status: "error",
+            summary: `Failed: ${err instanceof Error ? err.message : String(err)}`,
+            durationMs: Date.now() - startTime,
+        });
+        throw err;
     }
-    console.log(`[social-agent] Pull complete — ${snapshot.totalVideos} videos, avg ${snapshot.avgViews} views, ${snapshot.hotCount} hot / ${snapshot.averageCount} warm / ${snapshot.coldCount} cold`);
-    return snapshot;
 }
 let lastScheduledSocialDate = null;
 /** Run runSocialMediaAgent once per day at custom time or 6:00 PM America/Chicago. */

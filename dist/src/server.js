@@ -24,6 +24,7 @@ const index_js_5 = require("./agents/eveningPull/index.js");
 const index_js_6 = require("./agents/reporting/index.js");
 const index_js_7 = require("./agents/contentSuggestions/index.js");
 const index_js_8 = require("./agents/escalations/index.js");
+const index_js_9 = require("./agents/harveyContentDigest/index.js");
 const db_js_1 = require("./core/db.js");
 const autoPlans_js_1 = require("./core/autoPlans.js");
 const tagTemplates_js_1 = require("./core/tagTemplates.js");
@@ -39,13 +40,13 @@ const dialSession_js_1 = require("./core/dialSession.js");
 const callAssistant_js_1 = require("./core/callAssistant.js");
 const forewarn_js_1 = require("./integrations/forewarn.js");
 const db_js_2 = require("./core/db.js");
-const index_js_9 = require("./integrations/sinch/index.js");
-const index_js_10 = require("./integrations/sendblue/index.js");
+const index_js_10 = require("./integrations/sinch/index.js");
+const index_js_11 = require("./integrations/sendblue/index.js");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
-const index_js_11 = require("./integrations/llm/index.js");
+const index_js_12 = require("./integrations/llm/index.js");
 const adsUpstream_js_1 = require("./harvey/adsUpstream.js");
 const crypto_1 = require("crypto");
-const index_js_12 = require("./harvey/index.js");
+const index_js_13 = require("./harvey/index.js");
 const tools_js_1 = require("./harvey/tools.js");
 const bootstrap_js_1 = require("./harvey/memory/bootstrap.js");
 const retrieval_js_1 = require("./harvey/memory/retrieval.js");
@@ -146,25 +147,25 @@ function trimGeminiSystemPrompt(prompt) {
     return `${trimmed}\n\n[Context truncated for Live API limit]`;
 }
 app.get("/health", (_req, res) => {
-    const apiKeyConfigured = (0, index_js_11.isAnthropicApiKeyConfigured)();
+    const apiKeyConfigured = (0, index_js_12.isAnthropicApiKeyConfigured)();
     res.status(200).json({
         ok: true,
         anthropic: {
             api_key_configured: apiKeyConfigured,
-            model: (0, index_js_11.getAnthropicModel)(),
+            model: (0, index_js_12.getAnthropicModel)(),
             hint: apiKeyConfigured
                 ? "Haiku runs for preflight, opening, and pipeline when those paths call the API (billing and valid JSON still required)."
                 : "Set ANTHROPIC_API_KEY on the host. Without it, DMs use hardcoded fallbacks only.",
         },
         sendblue: {
-            configured: (0, index_js_10.isSendblueConfigured)(),
-            hint: (0, index_js_10.isSendblueConfigured)()
+            configured: (0, index_js_11.isSendblueConfigured)(),
+            hint: (0, index_js_11.isSendblueConfigured)()
                 ? "Outbound SMS/iMessage available; inbound receive webhook should point to POST /webhook/sendblue"
                 : "Set SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, SENDBLUE_FROM_NUMBER for SMS handoff from CRM.",
         },
         harvey: {
-            model: (0, index_js_12.getHarveyModel)(),
-            api_key_configured: (0, index_js_11.isAnthropicApiKeyConfigured)(),
+            model: (0, index_js_13.getHarveyModel)(),
+            api_key_configured: (0, index_js_12.isAnthropicApiKeyConfigured)(),
             voice: {
                 engine: geminiApiKey() ? "gemini-live" : "none",
                 gemini_configured: Boolean(geminiApiKey()),
@@ -482,6 +483,51 @@ app.post("/api/content-suggestions/generate", async (req, res) => {
         res.status(500).json({ error: message });
     }
 });
+app.get("/api/agent/pull-log", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const limitRaw = req.query.limit;
+    const limit = typeof limitRaw === "string" && /^\d+$/.test(limitRaw)
+        ? parseInt(limitRaw, 10)
+        : 20;
+    res.json({ pulls: (0, socialStore_js_1.getRecentAgentPulls)(limit) });
+});
+app.get("/api/agent/pull-log/today", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    res.json({ pulls: (0, socialStore_js_1.getTodaysAgentPulls)() });
+});
+app.get("/api/agent/status", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const digest = (0, index_js_9.getLatestContentDigest)();
+    const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+    let lastRunAt = null;
+    let nextRunAt = null;
+    let msUntilNext = null;
+    if (digest) {
+        lastRunAt = digest.generatedAt;
+        const nextRunMs = new Date(digest.generatedAt).getTime() + THREE_DAYS_MS;
+        nextRunAt = new Date(nextRunMs).toISOString();
+        msUntilNext = Math.max(0, nextRunMs - Date.now());
+    }
+    else {
+        nextRunAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        msUntilNext = 60 * 60 * 1000;
+    }
+    res.json({
+        lastRunAt,
+        nextRunAt,
+        msUntilNext,
+        intervalDays: 3,
+    });
+});
 app.get("/api/escalations/recent", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
@@ -785,7 +831,7 @@ app.get("/api/jarvis/ops", async (req, res) => {
         return;
     }
     try {
-        const ops = await (0, index_js_12.runHarveyOps)(harveyDeps());
+        const ops = await (0, index_js_13.runHarveyOps)(harveyDeps());
         res.status(200).json(ops);
     }
     catch (err) {
@@ -806,7 +852,7 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
     }
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
     try {
-        const result = await (0, index_js_12.runHarveyChat)({
+        const result = await (0, index_js_13.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -993,7 +1039,7 @@ app.post("/api/jarvis/market-intel", express_1.default.json({ limit: "64kb" }), 
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_12.getHarveyModel)(),
+            model: (0, index_js_13.getHarveyModel)(),
             max_tokens: 1500,
             tools: [{
                     type: "web_search_20250305",
@@ -1067,7 +1113,7 @@ app.post("/api/jarvis/world-intel", express_1.default.json({ limit: "64kb" }), a
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_12.getHarveyModel)(),
+            model: (0, index_js_13.getHarveyModel)(),
             max_tokens: 2000,
             tools: [{
                     type: "web_search_20250305",
@@ -1179,7 +1225,7 @@ async function runClaudeResearchJson(prompt) {
         throw new Error("ANTHROPIC_API_KEY not configured");
     const anthropic = new sdk_1.default({ apiKey });
     const response = await anthropic.messages.create({
-        model: (0, index_js_12.getHarveyModel)(),
+        model: (0, index_js_13.getHarveyModel)(),
         max_tokens: 2500,
         tools: [{
                 type: "web_search_20250305",
@@ -1617,7 +1663,7 @@ app.post("/reset", resetCors, (_req, res) => {
 });
 app.post("/sinch/inbound", express_1.default.json(), async (req, res) => {
     try {
-        const payload = (0, index_js_9.receiveInbound)(req.body);
+        const payload = (0, index_js_10.receiveInbound)(req.body);
         if (!payload) {
             res.status(400).json({ error: "Invalid or unparseable Sinch inbound payload" });
             return;
@@ -1638,25 +1684,25 @@ app.post("/sinch/inbound", express_1.default.json(), async (req, res) => {
 app.post("/webhook/sendblue", express_1.default.json(), async (req, res) => {
     try {
         const presented = req.get("sb-signing-secret") ?? undefined;
-        if (!(0, index_js_10.sendblueWebhookSecretMatches)(presented)) {
+        if (!(0, index_js_11.sendblueWebhookSecretMatches)(presented)) {
             res.status(401).json({ error: "Unauthorized" });
             return;
         }
-        const body = (0, index_js_10.parseSendblueWebhookBody)(req.body);
+        const body = (0, index_js_11.parseSendblueWebhookBody)(req.body);
         if (!body) {
             res.status(200).json({ ok: false });
             return;
         }
-        if (!(0, index_js_10.shouldProcessSendblueInbound)(body)) {
+        if (!(0, index_js_11.shouldProcessSendblueInbound)(body)) {
             res.status(200).json({ ok: true, ignored: true });
             return;
         }
-        const handle = (0, index_js_10.getSendblueMessageHandle)(body);
-        if (!(0, index_js_10.claimSendblueInboundHandle)(handle)) {
+        const handle = (0, index_js_11.getSendblueMessageHandle)(body);
+        if (!(0, index_js_11.claimSendblueInboundHandle)(handle)) {
             res.status(200).json({ ok: true, duplicate: true });
             return;
         }
-        const from = (0, index_js_10.getSendblueInboundFromNumber)(body);
+        const from = (0, index_js_11.getSendblueInboundFromNumber)(body);
         if (!from) {
             res.status(200).json({ ok: true, reason: "no_from" });
             return;
@@ -1680,8 +1726,8 @@ app.post("/webhook/sendblue", express_1.default.json(), async (req, res) => {
         const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
         const correlationId = (0, marcoLog_js_1.marcoCorrelationId)(payload.platform, payload.userId);
         const result = await (0, webhook_js_1.handleIncomingPayload)(payload, { requestId, correlationId });
-        if (result.reply?.trim() && (0, index_js_10.isSendblueConfigured)()) {
-            const send = await (0, index_js_10.sendSendblueMessage)({ to: lead.phone, content: result.reply.trim() });
+        if (result.reply?.trim() && (0, index_js_11.isSendblueConfigured)()) {
+            const send = await (0, index_js_11.sendSendblueMessage)({ to: lead.phone, content: result.reply.trim() });
             if (!send.ok) {
                 console.error("[sendblue] outbound after pipeline failed:", send.error);
             }
@@ -1700,7 +1746,7 @@ app.post("/api/sendblue/send", express_1.default.json(), async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    if (!(0, index_js_10.isSendblueConfigured)()) {
+    if (!(0, index_js_11.isSendblueConfigured)()) {
         res.status(503).json({
             error: "Sendblue not configured",
             hint: "Set SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, SENDBLUE_FROM_NUMBER on the server",
@@ -1731,11 +1777,11 @@ app.post("/api/sendblue/send", express_1.default.json(), async (req, res) => {
                 res.status(400).json({ error: "Lead has no phone number" });
                 return;
             }
-            to = (0, index_js_10.normalizeToUsE164)(lead.phone);
+            to = (0, index_js_11.normalizeToUsE164)(lead.phone);
             threadLeadId = lead.id;
         }
         else {
-            to = (0, index_js_10.normalizeToUsE164)(toRaw);
+            to = (0, index_js_11.normalizeToUsE164)(toRaw);
             const digits = to.replace(/\D/g, "");
             if (digits.length < 10) {
                 res.status(400).json({ error: "Invalid phone number" });
@@ -1745,7 +1791,7 @@ app.post("/api/sendblue/send", express_1.default.json(), async (req, res) => {
             if (matched)
                 threadLeadId = matched.id;
         }
-        const send = await (0, index_js_10.sendSendblueMessage)({ to, content });
+        const send = await (0, index_js_11.sendSendblueMessage)({ to, content });
         if (!send.ok) {
             res.status(502).json({ error: send.error });
             return;
@@ -1769,10 +1815,10 @@ async function sendLeadText(leadId, content) {
     const lead = await (0, db_js_1.getLeadById)(leadId);
     if (!lead?.phone?.trim())
         return { ok: false, error: "Lead has no phone number" };
-    if (!(0, index_js_10.isSendblueConfigured)())
+    if (!(0, index_js_11.isSendblueConfigured)())
         return { ok: false, error: "Sendblue not configured" };
-    const to = (0, index_js_10.normalizeToUsE164)(lead.phone);
-    const send = await (0, index_js_10.sendSendblueMessage)({ to, content });
+    const to = (0, index_js_11.normalizeToUsE164)(lead.phone);
+    const send = await (0, index_js_11.sendSendblueMessage)({ to, content });
     if (!send.ok)
         return { ok: false, error: send.error };
     await (0, db_js_1.appendMessage)(leadId, "assistant", content);
@@ -3167,8 +3213,8 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     else {
         console.log("[Harvey] GEMINI_API_KEY configured — Gemini Live voice ready");
     }
-    if ((0, index_js_11.isAnthropicApiKeyConfigured)()) {
-        console.log(`[Anthropic] API key present — model ${(0, index_js_11.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
+    if ((0, index_js_12.isAnthropicApiKeyConfigured)()) {
+        console.log(`[Anthropic] API key present — model ${(0, index_js_12.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
     }
     else {
         console.warn("[Anthropic] ANTHROPIC_API_KEY missing — preflight/opening/pipeline skip Haiku and use template fallbacks only.");
@@ -3179,7 +3225,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Chat demo: GET http://localhost:${PORT}/chat`);
     console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
     console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
-    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_12.getHarveyModel)()})`);
+    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_13.getHarveyModel)()})`);
     console.log(`Harvey voice: POST http://localhost:${PORT}/api/jarvis/gemini-live/token`);
     console.log(`Harvey TTS:   POST http://localhost:${PORT}/api/jarvis/gemini-tts`);
     console.log(`Harvey market intel: POST http://localhost:${PORT}/api/jarvis/market-intel`);

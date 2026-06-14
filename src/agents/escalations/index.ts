@@ -2,6 +2,7 @@ import {
   getSocialDb,
   getLatestSocialDashboardData,
   getPendingCommentReplies,
+  logAgentPull,
 } from "../../core/socialStore.js";
 import type { SocialDashboardVideo } from "../../core/socialStore.js";
 import { sendSendblueMessage } from "../../integrations/sendblue/index.js";
@@ -260,10 +261,26 @@ export async function checkViralSpike(): Promise<void> {
 }
 
 export async function runAllEscalationChecks(): Promise<void> {
+  const startTime = Date.now();
   console.log("[Escalation] Running all checks...");
+
   await checkNegativeCommentTraction();
   await checkLeadIntentInDMs();
   await checkViralSpike();
+
+  const recent = getRecentEscalations(5);
+  const newCount = recent.filter(
+    (e) => new Date(e.detectedAt).getTime() > Date.now() - 60000,
+  ).length;
+
+  logAgentPull({
+    pulledAt: new Date().toISOString(),
+    pullType: "escalation_check",
+    status: "success",
+    summary: newCount > 0 ? `Found ${newCount} new escalation(s)` : "No new escalations",
+    details: { newEscalations: newCount },
+    durationMs: Date.now() - startTime,
+  });
 }
 
 export function scheduleEscalationChecks(): void {
