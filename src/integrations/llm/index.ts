@@ -597,7 +597,7 @@ function openingContextAppendix(
   }
   if (signalsBrowsingOrPriceDeflection(lastUserText)) {
     lines.push(
-      "BROWSING_OR_PRICE_DEFLECTION: The lead is browsing or said price is not their focus. Acknowledge that. Do not push budget or repeat the same price pitch. Stay helpful (areas, what they like, tour when ready) and avoid sounding scripted or pushy.",
+      "BROWSING_OR_PRICE_DEFLECTION: The lead is browsing or said price is not their focus. Acknowledge briefly and steer toward a good number to text the breakdown. Do not ask preferences, timeline, bedrooms, or what matters in a home.",
     );
   }
   if (messageAsksListingLocation(lastUserText)) {
@@ -708,7 +708,7 @@ function fallbackOpeningReply(
         experiencedInLine ||
         leadThreadSignalsExperiencedBuyer(conv);
       if (signalsBrowsingOrPriceDeflection(lastUserText)) {
-        return "Got it, just looking is totally fine. Want me to send the full breakdown on that place by text when you want to peek, specs and pricing?";
+        return "Got it, just looking is totally fine. Want me to text you the full breakdown when you're ready? What's a good number?";
       }
       if (messageAsksListingLocation(lastUserText) && messageAsksPropertyPriceOrCost(lastUserText)) {
         return "Yeah of course, it's west of Stone Oak. Would it help if I just sent the entire breakdown on the home you inquired about, location and pricing included?";
@@ -722,7 +722,7 @@ function fallbackOpeningReply(
       return "Oh awesome, would it help if I sent the entire breakdown over of the home you inquired about?";
     }
     if (signalsBrowsingOrPriceDeflection(lastUserText)) {
-      return "Got it, no pressure at all. What part of town or style of home are you drawn to most right now?";
+      return "Got it, no pressure at all. Want me to text you the full breakdown on that place when you're ready? What's a good number?";
     }
     return "For sure, that helps. Are you currently working with an agent?";
   }
@@ -734,7 +734,7 @@ function fallbackOpeningReply(
     return "Got you. What's a good number I can text you the full breakdown on this place and a couple similar options?";
   }
   if (signalsBrowsingOrPriceDeflection(lastUserText)) {
-    return "Totally hear you. Want me to text a few options when you are ready, or keep it in here for now and you tell me what you want to see first?";
+    return "Totally hear you. What's a good number I can text you the full breakdown and a couple similar options?";
   }
   return "Makes sense. Would there be a good number I could send all this info over to?";
 }
@@ -1204,7 +1204,7 @@ export async function generateMarcoPipelineReply(input: {
   }
   if (signalsBrowsingOrPriceDeflection(lastUserText)) {
     postOpeningHints.push(
-      "BROWSING_OR_PRICE_DEFLECTION: Lead is browsing or de emphasized price. Do not loop back into budget or the same price script. Acknowledge and stay helpful without pushing the same asks.",
+      "BROWSING_OR_PRICE_DEFLECTION: Lead is browsing or de emphasized price. Acknowledge briefly and steer toward a mobile number. Never ask preferences, timeline, bedrooms, or needs-analysis questions.",
     );
   }
   if (signalsTourOrScheduleIntent(lastUserText)) {
@@ -1412,7 +1412,7 @@ function alternatePipelineReplyFallback(
   if (meta.phoneJustCaptured) {
     pool.push(
       PHONE_JUST_CAPTURED_REPLY,
-      "Cool. I'll get you the full packet by the end of the day plus a few backups. Does that house feel close or should we skew cheaper or a different part of town?",
+      "Cool. I'll get you the full packet by the end of the day plus a few backups. Once you skim it, text me if you want to chat.",
     );
   }
 
@@ -1424,7 +1424,7 @@ function alternatePipelineReplyFallback(
   }
 
   pool.push(
-    "Thanks for the detail. Want to lock in one thing first, area or budget, and I'll narrow from there?",
+    "Thanks for reaching out. What's a good number I can text you the full breakdown on this place?",
     "Got you. I'll keep it moving on my end, text me if anything shifts on your side.",
   );
 

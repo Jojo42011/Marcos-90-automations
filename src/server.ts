@@ -8,6 +8,39 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { handleWebhook, handleIncomingPayload } from "./app/webhook.js";
+import { getSocialTikTokData, refreshSocialTikTokData } from "./app/socialRefresh.js";
+import {
+  runSocialMediaAgent,
+} from "./agents/socialMedia/index.js";
+import { scheduleContentJobs } from "./app/jobs.js";
+import {
+  getSocialSummaryForHarvey,
+  getSocialVideos,
+  socialDataAvailable,
+  getPendingCommentReplies,
+  updateCommentReplyStatus,
+  getLatestSocialDashboardData,
+  saveVideoImprovements,
+  getVideoImprovements,
+  setSocialRefreshTime,
+  getSocialRefreshTime,
+} from "./core/socialStore.js";
+import { runMorningScan, getLatestMorningScan } from "./agents/morningScan/index.js";
+import { generateCommentReply } from "./agents/commentReply/index.js";
+import { generateVideoImprovements } from "./agents/videoFeedback/index.js";
+import { runEveningPull } from "./agents/eveningPull/index.js";
+import {
+  getLatestReportingSnapshot,
+  getRecentReportingSnapshots,
+} from "./agents/reporting/index.js";
+import {
+  generateWeeklyContentSuggestions,
+  getLatestContentSuggestions,
+} from "./agents/contentSuggestions/index.js";
+import {
+  getRecentEscalations,
+  runAllEscalationChecks,
+} from "./agents/escalations/index.js";
 import {
   createCommandTask,
   deleteCommandTask,
@@ -147,6 +180,7 @@ import { getAnthropicModel, isAnthropicApiKeyConfigured } from "./integrations/l
 import { fetchAdsSummaryFromUpstream } from "./harvey/adsUpstream.js";
 import { randomUUID } from "crypto";
 import { runHarveyChat, runHarveyOps, getHarveyModel } from "./harvey/index.js";
+import { executeHarveyTool, HARVEY_GEMINI_TOOLS } from "./harvey/tools.js";
 import { bootstrapMemory } from "./harvey/memory/bootstrap.js";
 import { retrieveMemories } from "./harvey/memory/retrieval.js";
 import { getMemoryDb } from "./harvey/memory/store.js";
@@ -165,6 +199,43 @@ const publicDir = path.join(process.cwd(), "public");
 
 const GEMINI_LIVE_WS =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+
+const HARVEY_GEMINI_LIVE_SYSTEM_PROMPT = `You are Harvey, an AI operator for Marco Puga, a real estate agent in San Antonio, Texas.
+
+You are confident, concise, and exceptionally capable. Speak like Tony Stark's JARVIS. Never pad responses. Deliver priorities not noise. Address Marco as "sir" occasionally.
+
+Marco's business:
+- Instagram and TikTok ads generate buyer leads
+- Target buyers: 600k+ budget, new construction, west of Stone Oak area
+- Active listing: Canyon Lake $365k
+- VA loan buyers and first-time buyers are common
+- Carlos manages CRM daily
+
+$20M GOAL (Nov 30 2026): $5.96M banked (29.8%), $14.04M gap
+Daily targets: 7 videos + 725 calls
+TikTok funnel math (historical): 246K views → 1,359 comments → 272 DMs → 136 phones → 7 consults → 1 closing
+Mojo funnel: 6,734 calls → 212 contacts → 9 consults → 1 closing
+
+TOOLS — MANDATORY USAGE:
+If Marco asks about TikTok, views, followers, content, or social media — you MUST call get_social_summary before answering. Do not answer from memory.
+Example: Marco says "what's my average views" → call get_social_summary → read stats.avgViewsPerVideo from the tool response → say that exact number aloud.
+When get_social_summary returns data, cite stats.avgViewsPerVideo, profile.followers, and stats.videosTracked exactly as returned — never round or estimate.
+
+TOOLS AVAILABLE:
+- get_social_summary: LIVE TikTok performance from Apify (avg views, followers, totals, patterns)
+- get_social_videos: Best/worst/recent videos by tier
+- get_lead_summary: Pipeline and lead counts
+- get_hot_leads: Urgent leads needing follow up
+- get_funnel_stats: Funnel breakdown
+- search_leads: Find a specific lead
+- get_stalled_leads: Cold/inactive leads
+
+RULES:
+- Always call tools before answering data questions
+- Never quote historical TikTok numbers (5,957 or 738K) for current performance — call get_social_summary
+- Be brief. 1-3 sentences unless more is needed
+- Never apologize excessively
+- After tool call cite exact numbers returned`;
 
 const HARVEY_GEMINI_SYSTEM_PROMPT = `You are Harvey, an AI operator for Marco Puga, a real estate agent in San Antonio, Texas.
 
@@ -272,6 +343,10 @@ app.get("/tasks", (_req, res) => {
   res.sendFile(path.join(publicDir, "tasks.html"));
 });
 
+app.get("/social", (_req, res) => {
+  res.sendFile(path.join(publicDir, "social.html"));
+});
+
 app.get("/crm-followup-tasks.js", (_req, res) => {
   res.sendFile(path.join(publicDir, "crm-followup-tasks.js"));
 });
@@ -311,6 +386,372 @@ app.get("/api/dashboard/data", async (req, res) => {
   try {
     const data = await getDashboardSnapshot();
     res.status(200).json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get("/api/social/data", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  try {
+    res.status(200).json(getSocialTikTokData());
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post("/api/social/refresh", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  try {
+    const data = await refreshSocialTikTokData();
+    res.status(200).json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[social] refresh failed:", message);
+    res.status(502).json({ error: message });
+  }
+});
+
+app.get("/api/social/test", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  try {
+    const summary = getSocialSummaryForHarvey();
+    const sampleVideos = getSocialVideos({ limit: 3 });
+    const stats = summary.stats as Record<string, unknown> | undefined;
+    res.status(200).json({
+      summary,
+      avgViewsPerVideo: stats?.avgViewsPerVideo ?? summary.avg_views,
+      dashboardAvgViews: summary.avg_views,
+      sampleVideos,
+      toolsAvailable: [
+        "get_social_summary",
+        "get_social_videos",
+        "get_morning_scan",
+        "get_pending_comment_replies",
+      ],
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get("/api/social/video-scores", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const tier = typeof req.query.tier === "string" ? req.query.tier : "all";
+    const sort = typeof req.query.sort === "string" ? req.query.sort : "score_desc";
+
+    const data = getLatestSocialDashboardData();
+    let videos = (data.videos || []).map((v) => ({
+      ...v,
+      improvements: getVideoImprovements(v.id) ?? null,
+    }));
+
+    if (tier && tier !== "all") {
+      videos = videos.filter((v) => {
+        const t = v.scoreBreakdown?.tier ?? v.tier;
+        return t === tier || (tier === "warm" && t === "average");
+      });
+    }
+
+    if (sort === "score_asc") {
+      videos.sort(
+        (a, b) =>
+          (a.scoreBreakdown?.score ?? a.score ?? 0) - (b.scoreBreakdown?.score ?? b.score ?? 0),
+      );
+    } else if (sort === "recent") {
+      videos.sort(
+        (a, b) => new Date(b.postedAt || 0).getTime() - new Date(a.postedAt || 0).getTime(),
+      );
+    } else if (sort === "views") {
+      videos.sort((a, b) => (b.views || 0) - (a.views || 0));
+    } else {
+      videos.sort(
+        (a, b) =>
+          (b.scoreBreakdown?.score ?? b.score ?? 0) - (a.scoreBreakdown?.score ?? a.score ?? 0),
+      );
+    }
+
+    res.json({ videos });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post("/api/social/video-improvements/:postId", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const postId = String(req.params.postId || "");
+    const data = getLatestSocialDashboardData();
+    const video = (data.videos || []).find((v) => v.id === postId);
+
+    if (!video) {
+      res.status(404).json({ error: "Video not found" });
+      return;
+    }
+
+    const breakdown = video.scoreBreakdown ?? {
+      score: video.score ?? 0,
+      viewsScore: 0,
+      retentionScore: 0,
+      savesScore: 0,
+      sharesScore: 0,
+      tier: video.tier ?? "cold",
+    };
+
+    const improvements = await generateVideoImprovements({
+      description: video.caption || "",
+      views: video.views || 0,
+      likes: video.likes || 0,
+      comments: video.comments || 0,
+      shares: video.shares || 0,
+      saves: video.saves || 0,
+      scoreBreakdown: breakdown,
+    });
+
+    saveVideoImprovements(postId, improvements);
+    res.json({ improvements });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post("/api/social/video-improvements/generate-all", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const data = getLatestSocialDashboardData();
+    const videos = data.videos || [];
+    let generated = 0;
+
+    for (const video of videos) {
+      const postId = video.id;
+      const existing = getVideoImprovements(postId);
+      if (existing) continue;
+
+      const breakdown = video.scoreBreakdown ?? {
+        score: video.score ?? 0,
+        viewsScore: 0,
+        retentionScore: 0,
+        savesScore: 0,
+        sharesScore: 0,
+        tier: video.tier ?? "cold",
+      };
+
+      const improvements = await generateVideoImprovements({
+        description: video.caption || "",
+        views: video.views || 0,
+        likes: video.likes || 0,
+        comments: video.comments || 0,
+        shares: video.shares || 0,
+        saves: video.saves || 0,
+        scoreBreakdown: breakdown,
+      });
+
+      saveVideoImprovements(postId, improvements);
+      generated++;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    res.json({ generated, total: videos.length });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get("/api/social/refresh-schedule", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const time = getSocialRefreshTime();
+  res.json({ time });
+});
+
+app.post("/api/social/refresh-schedule", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const time = typeof body.time === "string" ? body.time : "";
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) {
+    res.status(400).json({ error: "time must be HH:MM format" });
+    return;
+  }
+  setSocialRefreshTime(time);
+  res.json({ success: true, time });
+});
+
+app.get("/api/evening-pull/latest", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  res.json({ result: getLatestReportingSnapshot("evening") });
+});
+
+app.post("/api/evening-pull/run", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const result = await runEveningPull();
+    res.json({ result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get("/api/reporting/recent", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const limitRaw = req.query.limit;
+  const limit =
+    typeof limitRaw === "string" && /^\d+$/.test(limitRaw) ? parseInt(limitRaw, 10) : 14;
+  res.json({ snapshots: getRecentReportingSnapshots(limit) });
+});
+
+app.get("/api/content-suggestions/latest", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  res.json({ result: getLatestContentSuggestions() });
+});
+
+app.post("/api/content-suggestions/generate", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const result = await generateWeeklyContentSuggestions();
+    res.json({ result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get("/api/escalations/recent", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const limitRaw = req.query.limit;
+  const limit =
+    typeof limitRaw === "string" && /^\d+$/.test(limitRaw) ? parseInt(limitRaw, 10) : 20;
+  res.json({ escalations: getRecentEscalations(limit) });
+});
+
+app.post("/api/escalations/check-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    await runAllEscalationChecks();
+    res.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get("/api/morning-scan/latest", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const result = getLatestMorningScan();
+  res.json({ result });
+});
+
+app.post("/api/morning-scan/run", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const result = await runMorningScan();
+    res.json({ result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get("/api/comment-replies/pending", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const replies = getPendingCommentReplies();
+  res.json({ replies });
+});
+
+app.post("/api/comment-replies/:id/approve", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  updateCommentReplyStatus(parseInt(String(req.params.id), 10), "approved");
+  res.json({ success: true });
+});
+
+app.post("/api/comment-replies/:id/reject", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  updateCommentReplyStatus(parseInt(String(req.params.id), 10), "rejected");
+  res.json({ success: true });
+});
+
+app.post("/api/comment-replies/generate", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const commentText = typeof body.commentText === "string" ? body.commentText : "";
+  const authorUsername = typeof body.authorUsername === "string" ? body.authorUsername : "";
+  const postId = typeof body.postId === "string" ? body.postId : undefined;
+  if (!commentText || !authorUsername) {
+    res.status(400).json({ error: "commentText and authorUsername required" });
+    return;
+  }
+  try {
+    const reply = await generateCommentReply(commentText, authorUsername, postId);
+    res.json({ reply });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
@@ -600,21 +1041,63 @@ app.post("/api/jarvis/gemini-live/token", express.json({ limit: "64kb" }), (req,
   }
   const model = "gemini-3.1-flash-live-preview";
   const voiceName = "Charon";
-  const rawPrompt = HARVEY_GEMINI_SYSTEM_PROMPT + MARCO_WAR_ROOM_METRICS;
-  const systemPrompt = trimGeminiSystemPrompt(rawPrompt);
+  const systemPrompt = trimGeminiSystemPrompt(HARVEY_GEMINI_LIVE_SYSTEM_PROMPT);
   const wsUrl = `${GEMINI_LIVE_WS}?key=${encodeURIComponent(key)}`;
 
   console.log("[GeminiLive] Model being returned:", model);
   console.log("[GeminiLive] wsUrl prefix:", wsUrl.substring(0, 80));
   console.log("[GeminiLive] System prompt length:", systemPrompt.length);
   console.log("[GeminiLive] Voice name:", voiceName);
+  console.log(
+    "[GeminiLive] Tools:",
+    HARVEY_GEMINI_TOOLS.functionDeclarations.length,
+    "functions",
+  );
 
   res.status(200).json({
     wsUrl,
     model,
     systemPrompt,
     voiceName,
+    tools: HARVEY_GEMINI_TOOLS,
   });
+});
+
+/** Execute Harvey tools for Gemini Live voice (client relays tool calls server-side). */
+app.post("/api/jarvis/execute-tool", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const toolName = String(body.toolName ?? "").trim();
+  const toolInput =
+    body.toolInput && typeof body.toolInput === "object" && !Array.isArray(body.toolInput)
+      ? (body.toolInput as Record<string, unknown>)
+      : {};
+
+  if (!toolName) {
+    res.status(400).json({ error: "toolName required" });
+    return;
+  }
+
+  console.log("[Harvey Voice Tool] Executing:", toolName, "input:", JSON.stringify(toolInput));
+
+  try {
+    const result = await executeHarveyTool(toolName, toolInput);
+    console.log(
+      "[Harvey Voice Tool] Result for",
+      toolName,
+      ":",
+      JSON.stringify(result).substring(0, 200),
+    );
+    res.status(200).json({ success: true, result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[Harvey Voice Tool] Error:", message);
+    res.status(500).json({ error: message });
+  }
 });
 
 /** War Room — static campaign metrics for Harvey UI strip. */
@@ -2958,6 +3441,23 @@ setInterval(() => {
     .catch((err) => console.error("[autoPlans] scheduled run failed:", err));
 }, AUTO_PLAN_INTERVAL_MS);
 
+scheduleContentJobs();
+
+async function ensureSocialDataExists(): Promise<void> {
+  try {
+    if (!socialDataAvailable()) {
+      console.log("[Social] No data found on startup — running initial agent pull");
+      await runSocialMediaAgent();
+    } else {
+      const summary = getSocialSummaryForHarvey();
+      const pulledAt = summary.pulledAt ?? summary.fetchedAt;
+      console.log("[Social] Social data exists — last pull:", pulledAt);
+    }
+  } catch (err) {
+    console.error("[Social] Startup check failed:", err);
+  }
+}
+
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Listening on 0.0.0.0:${PORT}`);
   try {
@@ -2979,6 +3479,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   }
   console.log(`Health:  GET  http://localhost:${PORT}/health`);
   console.log(`Dashboard: GET http://localhost:${PORT}/ (also /dashboard)`);
+  console.log(`Social:    GET http://localhost:${PORT}/social`);
   console.log(`Chat demo: GET http://localhost:${PORT}/chat`);
   console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
   console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
@@ -2997,5 +3498,6 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   if (AD_DASHBOARD_BASE_URL) {
     console.log(`  → upstream: ${AD_DASHBOARD_BASE_URL}/api/latest`);
   }
+  void ensureSocialDataExists();
 });
 

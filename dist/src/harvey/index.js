@@ -20,6 +20,7 @@ const episodes_js_1 = require("./memory/episodes.js");
 const retrieval_js_1 = require("./memory/retrieval.js");
 const panelNormalizer_js_1 = require("./panelNormalizer.js");
 const noteCapture_js_1 = require("./noteCapture.js");
+const index_js_2 = require("../agents/harveyContentDigest/index.js");
 const HARVEY_MODEL = process.env.HARVEY_MODEL?.trim() || "claude-sonnet-4-20250514";
 const MAX_TOOL_ROUNDS = 6;
 const HARVEY_SYSTEM_PROMPT = `You are Harvey, an AI operations assistant built for Marco Puga, a real estate agent in San Antonio, Texas operating under Aethon Intelligence.
@@ -46,12 +47,35 @@ Reply in plain text only (no JSON wrappers).
 MARCO'S NUMBERS (answer from these when asked):
 $20M Goal by Nov 30 2026: $5.96M banked (29.8%), $14.04M gap, 14 deals, avg $425K/deal
 Daily targets: 7 videos + 725 calls
-TikTok (174 days, 124 videos): 738K views, 3 closings, 5,957 avg views/video, 28.7s watch time
-TikTok funnel: 246K views → 1,359 comments → 272 DMs → 136 phones → 7 consults → 1 closing
+TikTok funnel (strategic context — historical conversion math, NOT current live views): 246K views → 1,359 comments → 272 DMs → 136 phones → 7 consults → 1 closing
 At 5 vids/week = 1 closing/8wks. Need 10.3 vids/week for monthly closing.
 Mojo (Jan-May 2026): 26,938 calls → 846 contacts → 4 closings, 1 contact per 32 calls
 Mojo funnel: 6,734 calls → 212 contacts → 9 consults → 1 closing
-Cold calling is 36x more efficient per touch than TikTok`;
+Cold calling is 36x more efficient per touch than TikTok
+
+TIKTOK LIVE PERFORMANCE (always use get_social_summary — never hardcoded numbers):
+When Marco asks about TikTok performance, views, followers, content, videos, or social media stats — ALWAYS call get_social_summary first.
+If he asks about specific videos or wants a list — call get_social_videos.
+Do NOT use any hardcoded historical performance numbers (e.g. 5,957 avg views, 738K total views) — those are stale. Live data from Apify is always more accurate.
+When get_social_summary returns data, cite the exact numbers from the tool result: stats.avgViewsPerVideo, profile.followers, stats.videosTracked, stats.totalViews. Never round or estimate — report them exactly as returned.
+When discussing content performance, lead with tool numbers first, then pattern insight from contentPatterns, then a specific actionable recommendation.`;
+function buildContentDigestContext() {
+    const digest = (0, index_js_2.getLatestContentDigest)();
+    if (!digest)
+        return "";
+    const digestAge = Date.now() - new Date(digest.generatedAt).getTime();
+    const isRecent = digestAge < 6 * 60 * 60 * 1000;
+    if (!isRecent) {
+        return `[CONTENT DIGEST — use get_content_digest if Marco asks about overall content performance]\n${digest.summary}`;
+    }
+    return `[NEW CONTENT DIGEST — generated in the last 6 hours. If Marco asks how things are going or starts a casual conversation, you may briefly mention this update when relevant — do not force it every time]\n${digest.summary}`;
+}
+function buildHarveySystemPrompt() {
+    const digestContext = buildContentDigestContext();
+    if (!digestContext)
+        return HARVEY_SYSTEM_PROMPT;
+    return `${HARVEY_SYSTEM_PROMPT}\n\n${digestContext}`;
+}
 function getClient() {
     const key = process.env.ANTHROPIC_API_KEY?.trim();
     if (!key)
@@ -165,9 +189,10 @@ async function runHarveyChat(input) {
     const sessionMemory = (0, memory_js_1.historyToAnthropicMessages)(history);
     const memories = (0, retrieval_js_1.retrieveMemories)(trimmed);
     const memoryContext = (0, retrieval_js_1.formatMemoriesForPrompt)(memories);
+    const baseSystem = buildHarveySystemPrompt();
     const systemWithMemory = memoryContext
-        ? `${HARVEY_SYSTEM_PROMPT}\n\n[RECALLED MEMORY]\n${memoryContext}`
-        : HARVEY_SYSTEM_PROMPT;
+        ? `${baseSystem}\n\n[RECALLED MEMORY]\n${memoryContext}`
+        : baseSystem;
     let speech;
     let ui = { panel: "ops", action: "none", data: {} };
     const client = getClient();

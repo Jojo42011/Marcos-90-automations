@@ -3,6 +3,9 @@
 PORT=3000
 # DASHBOARD_TOKEN=
 
+APIFY_API_TOKEN=YOUR_APIFY_TOKEN
+TIKTOK_USERNAME=puga.realtor
+
 # DB_JSON_PATH=data/local-dashboard-db.json
 AUTO_PLANS_JSON_PATH=data/auto-plans.json
 

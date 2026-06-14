@@ -13,6 +13,17 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const path_1 = __importDefault(require("path"));
 const webhook_js_1 = require("./app/webhook.js");
+const socialRefresh_js_1 = require("./app/socialRefresh.js");
+const index_js_1 = require("./agents/socialMedia/index.js");
+const jobs_js_1 = require("./app/jobs.js");
+const socialStore_js_1 = require("./core/socialStore.js");
+const index_js_2 = require("./agents/morningScan/index.js");
+const index_js_3 = require("./agents/commentReply/index.js");
+const index_js_4 = require("./agents/videoFeedback/index.js");
+const index_js_5 = require("./agents/eveningPull/index.js");
+const index_js_6 = require("./agents/reporting/index.js");
+const index_js_7 = require("./agents/contentSuggestions/index.js");
+const index_js_8 = require("./agents/escalations/index.js");
 const db_js_1 = require("./core/db.js");
 const autoPlans_js_1 = require("./core/autoPlans.js");
 const tagTemplates_js_1 = require("./core/tagTemplates.js");
@@ -28,13 +39,14 @@ const dialSession_js_1 = require("./core/dialSession.js");
 const callAssistant_js_1 = require("./core/callAssistant.js");
 const forewarn_js_1 = require("./integrations/forewarn.js");
 const db_js_2 = require("./core/db.js");
-const index_js_1 = require("./integrations/sinch/index.js");
-const index_js_2 = require("./integrations/sendblue/index.js");
+const index_js_9 = require("./integrations/sinch/index.js");
+const index_js_10 = require("./integrations/sendblue/index.js");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
-const index_js_3 = require("./integrations/llm/index.js");
+const index_js_11 = require("./integrations/llm/index.js");
 const adsUpstream_js_1 = require("./harvey/adsUpstream.js");
 const crypto_1 = require("crypto");
-const index_js_4 = require("./harvey/index.js");
+const index_js_12 = require("./harvey/index.js");
+const tools_js_1 = require("./harvey/tools.js");
 const bootstrap_js_1 = require("./harvey/memory/bootstrap.js");
 const retrieval_js_1 = require("./harvey/memory/retrieval.js");
 const store_js_1 = require("./harvey/memory/store.js");
@@ -48,6 +60,42 @@ const AD_DASHBOARD_API_KEY = process.env.AD_DASHBOARD_API_KEY?.trim() || "";
 // Serve static HTML from project root ./public (run server via `npm run dev:mock` from repo root)
 const publicDir = path_1.default.join(process.cwd(), "public");
 const GEMINI_LIVE_WS = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+const HARVEY_GEMINI_LIVE_SYSTEM_PROMPT = `You are Harvey, an AI operator for Marco Puga, a real estate agent in San Antonio, Texas.
+
+You are confident, concise, and exceptionally capable. Speak like Tony Stark's JARVIS. Never pad responses. Deliver priorities not noise. Address Marco as "sir" occasionally.
+
+Marco's business:
+- Instagram and TikTok ads generate buyer leads
+- Target buyers: 600k+ budget, new construction, west of Stone Oak area
+- Active listing: Canyon Lake $365k
+- VA loan buyers and first-time buyers are common
+- Carlos manages CRM daily
+
+$20M GOAL (Nov 30 2026): $5.96M banked (29.8%), $14.04M gap
+Daily targets: 7 videos + 725 calls
+TikTok funnel math (historical): 246K views → 1,359 comments → 272 DMs → 136 phones → 7 consults → 1 closing
+Mojo funnel: 6,734 calls → 212 contacts → 9 consults → 1 closing
+
+TOOLS — MANDATORY USAGE:
+If Marco asks about TikTok, views, followers, content, or social media — you MUST call get_social_summary before answering. Do not answer from memory.
+Example: Marco says "what's my average views" → call get_social_summary → read stats.avgViewsPerVideo from the tool response → say that exact number aloud.
+When get_social_summary returns data, cite stats.avgViewsPerVideo, profile.followers, and stats.videosTracked exactly as returned — never round or estimate.
+
+TOOLS AVAILABLE:
+- get_social_summary: LIVE TikTok performance from Apify (avg views, followers, totals, patterns)
+- get_social_videos: Best/worst/recent videos by tier
+- get_lead_summary: Pipeline and lead counts
+- get_hot_leads: Urgent leads needing follow up
+- get_funnel_stats: Funnel breakdown
+- search_leads: Find a specific lead
+- get_stalled_leads: Cold/inactive leads
+
+RULES:
+- Always call tools before answering data questions
+- Never quote historical TikTok numbers (5,957 or 738K) for current performance — call get_social_summary
+- Be brief. 1-3 sentences unless more is needed
+- Never apologize excessively
+- After tool call cite exact numbers returned`;
 const HARVEY_GEMINI_SYSTEM_PROMPT = `You are Harvey, an AI operator for Marco Puga, a real estate agent in San Antonio, Texas.
 
 You are confident, concise, and exceptionally capable. Speak like Tony Stark's JARVIS — refined and precise. Never pad responses. Deliver priorities not noise.
@@ -98,25 +146,25 @@ function trimGeminiSystemPrompt(prompt) {
     return `${trimmed}\n\n[Context truncated for Live API limit]`;
 }
 app.get("/health", (_req, res) => {
-    const apiKeyConfigured = (0, index_js_3.isAnthropicApiKeyConfigured)();
+    const apiKeyConfigured = (0, index_js_11.isAnthropicApiKeyConfigured)();
     res.status(200).json({
         ok: true,
         anthropic: {
             api_key_configured: apiKeyConfigured,
-            model: (0, index_js_3.getAnthropicModel)(),
+            model: (0, index_js_11.getAnthropicModel)(),
             hint: apiKeyConfigured
                 ? "Haiku runs for preflight, opening, and pipeline when those paths call the API (billing and valid JSON still required)."
                 : "Set ANTHROPIC_API_KEY on the host. Without it, DMs use hardcoded fallbacks only.",
         },
         sendblue: {
-            configured: (0, index_js_2.isSendblueConfigured)(),
-            hint: (0, index_js_2.isSendblueConfigured)()
+            configured: (0, index_js_10.isSendblueConfigured)(),
+            hint: (0, index_js_10.isSendblueConfigured)()
                 ? "Outbound SMS/iMessage available; inbound receive webhook should point to POST /webhook/sendblue"
                 : "Set SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, SENDBLUE_FROM_NUMBER for SMS handoff from CRM.",
         },
         harvey: {
-            model: (0, index_js_4.getHarveyModel)(),
-            api_key_configured: (0, index_js_3.isAnthropicApiKeyConfigured)(),
+            model: (0, index_js_12.getHarveyModel)(),
+            api_key_configured: (0, index_js_11.isAnthropicApiKeyConfigured)(),
             voice: {
                 engine: geminiApiKey() ? "gemini-live" : "none",
                 gemini_configured: Boolean(geminiApiKey()),
@@ -140,6 +188,9 @@ app.get("/jarvis", (_req, res) => {
 });
 app.get("/tasks", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "tasks.html"));
+});
+app.get("/social", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "social.html"));
 });
 app.get("/crm-followup-tasks.js", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "crm-followup-tasks.js"));
@@ -179,6 +230,343 @@ app.get("/api/dashboard/data", async (req, res) => {
     try {
         const data = await (0, db_js_1.getDashboardSnapshot)();
         res.status(200).json(data);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.get("/api/social/data", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        return;
+    }
+    try {
+        res.status(200).json((0, socialRefresh_js_1.getSocialTikTokData)());
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.post("/api/social/refresh", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        return;
+    }
+    try {
+        const data = await (0, socialRefresh_js_1.refreshSocialTikTokData)();
+        res.status(200).json(data);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[social] refresh failed:", message);
+        res.status(502).json({ error: message });
+    }
+});
+app.get("/api/social/test", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        return;
+    }
+    try {
+        const summary = (0, socialStore_js_1.getSocialSummaryForHarvey)();
+        const sampleVideos = (0, socialStore_js_1.getSocialVideos)({ limit: 3 });
+        const stats = summary.stats;
+        res.status(200).json({
+            summary,
+            avgViewsPerVideo: stats?.avgViewsPerVideo ?? summary.avg_views,
+            dashboardAvgViews: summary.avg_views,
+            sampleVideos,
+            toolsAvailable: [
+                "get_social_summary",
+                "get_social_videos",
+                "get_morning_scan",
+                "get_pending_comment_replies",
+            ],
+        });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.get("/api/social/video-scores", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const tier = typeof req.query.tier === "string" ? req.query.tier : "all";
+        const sort = typeof req.query.sort === "string" ? req.query.sort : "score_desc";
+        const data = (0, socialStore_js_1.getLatestSocialDashboardData)();
+        let videos = (data.videos || []).map((v) => ({
+            ...v,
+            improvements: (0, socialStore_js_1.getVideoImprovements)(v.id) ?? null,
+        }));
+        if (tier && tier !== "all") {
+            videos = videos.filter((v) => {
+                const t = v.scoreBreakdown?.tier ?? v.tier;
+                return t === tier || (tier === "warm" && t === "average");
+            });
+        }
+        if (sort === "score_asc") {
+            videos.sort((a, b) => (a.scoreBreakdown?.score ?? a.score ?? 0) - (b.scoreBreakdown?.score ?? b.score ?? 0));
+        }
+        else if (sort === "recent") {
+            videos.sort((a, b) => new Date(b.postedAt || 0).getTime() - new Date(a.postedAt || 0).getTime());
+        }
+        else if (sort === "views") {
+            videos.sort((a, b) => (b.views || 0) - (a.views || 0));
+        }
+        else {
+            videos.sort((a, b) => (b.scoreBreakdown?.score ?? b.score ?? 0) - (a.scoreBreakdown?.score ?? a.score ?? 0));
+        }
+        res.json({ videos });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.post("/api/social/video-improvements/:postId", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const postId = String(req.params.postId || "");
+        const data = (0, socialStore_js_1.getLatestSocialDashboardData)();
+        const video = (data.videos || []).find((v) => v.id === postId);
+        if (!video) {
+            res.status(404).json({ error: "Video not found" });
+            return;
+        }
+        const breakdown = video.scoreBreakdown ?? {
+            score: video.score ?? 0,
+            viewsScore: 0,
+            retentionScore: 0,
+            savesScore: 0,
+            sharesScore: 0,
+            tier: video.tier ?? "cold",
+        };
+        const improvements = await (0, index_js_4.generateVideoImprovements)({
+            description: video.caption || "",
+            views: video.views || 0,
+            likes: video.likes || 0,
+            comments: video.comments || 0,
+            shares: video.shares || 0,
+            saves: video.saves || 0,
+            scoreBreakdown: breakdown,
+        });
+        (0, socialStore_js_1.saveVideoImprovements)(postId, improvements);
+        res.json({ improvements });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.post("/api/social/video-improvements/generate-all", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const data = (0, socialStore_js_1.getLatestSocialDashboardData)();
+        const videos = data.videos || [];
+        let generated = 0;
+        for (const video of videos) {
+            const postId = video.id;
+            const existing = (0, socialStore_js_1.getVideoImprovements)(postId);
+            if (existing)
+                continue;
+            const breakdown = video.scoreBreakdown ?? {
+                score: video.score ?? 0,
+                viewsScore: 0,
+                retentionScore: 0,
+                savesScore: 0,
+                sharesScore: 0,
+                tier: video.tier ?? "cold",
+            };
+            const improvements = await (0, index_js_4.generateVideoImprovements)({
+                description: video.caption || "",
+                views: video.views || 0,
+                likes: video.likes || 0,
+                comments: video.comments || 0,
+                shares: video.shares || 0,
+                saves: video.saves || 0,
+                scoreBreakdown: breakdown,
+            });
+            (0, socialStore_js_1.saveVideoImprovements)(postId, improvements);
+            generated++;
+            await new Promise((r) => setTimeout(r, 500));
+        }
+        res.json({ generated, total: videos.length });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.get("/api/social/refresh-schedule", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const time = (0, socialStore_js_1.getSocialRefreshTime)();
+    res.json({ time });
+});
+app.post("/api/social/refresh-schedule", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const time = typeof body.time === "string" ? body.time : "";
+    if (!time || !/^\d{2}:\d{2}$/.test(time)) {
+        res.status(400).json({ error: "time must be HH:MM format" });
+        return;
+    }
+    (0, socialStore_js_1.setSocialRefreshTime)(time);
+    res.json({ success: true, time });
+});
+app.get("/api/evening-pull/latest", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    res.json({ result: (0, index_js_6.getLatestReportingSnapshot)("evening") });
+});
+app.post("/api/evening-pull/run", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const result = await (0, index_js_5.runEveningPull)();
+        res.json({ result });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.get("/api/reporting/recent", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const limitRaw = req.query.limit;
+    const limit = typeof limitRaw === "string" && /^\d+$/.test(limitRaw) ? parseInt(limitRaw, 10) : 14;
+    res.json({ snapshots: (0, index_js_6.getRecentReportingSnapshots)(limit) });
+});
+app.get("/api/content-suggestions/latest", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    res.json({ result: (0, index_js_7.getLatestContentSuggestions)() });
+});
+app.post("/api/content-suggestions/generate", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const result = await (0, index_js_7.generateWeeklyContentSuggestions)();
+        res.json({ result });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.get("/api/escalations/recent", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const limitRaw = req.query.limit;
+    const limit = typeof limitRaw === "string" && /^\d+$/.test(limitRaw) ? parseInt(limitRaw, 10) : 20;
+    res.json({ escalations: (0, index_js_8.getRecentEscalations)(limit) });
+});
+app.post("/api/escalations/check-now", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        await (0, index_js_8.runAllEscalationChecks)();
+        res.json({ success: true });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.get("/api/morning-scan/latest", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const result = (0, index_js_2.getLatestMorningScan)();
+    res.json({ result });
+});
+app.post("/api/morning-scan/run", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const result = await (0, index_js_2.runMorningScan)();
+        res.json({ result });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.get("/api/comment-replies/pending", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const replies = (0, socialStore_js_1.getPendingCommentReplies)();
+    res.json({ replies });
+});
+app.post("/api/comment-replies/:id/approve", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    (0, socialStore_js_1.updateCommentReplyStatus)(parseInt(String(req.params.id), 10), "approved");
+    res.json({ success: true });
+});
+app.post("/api/comment-replies/:id/reject", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    (0, socialStore_js_1.updateCommentReplyStatus)(parseInt(String(req.params.id), 10), "rejected");
+    res.json({ success: true });
+});
+app.post("/api/comment-replies/generate", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const commentText = typeof body.commentText === "string" ? body.commentText : "";
+    const authorUsername = typeof body.authorUsername === "string" ? body.authorUsername : "";
+    const postId = typeof body.postId === "string" ? body.postId : undefined;
+    if (!commentText || !authorUsername) {
+        res.status(400).json({ error: "commentText and authorUsername required" });
+        return;
+    }
+    try {
+        const reply = await (0, index_js_3.generateCommentReply)(commentText, authorUsername, postId);
+        res.json({ reply });
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -397,7 +785,7 @@ app.get("/api/jarvis/ops", async (req, res) => {
         return;
     }
     try {
-        const ops = await (0, index_js_4.runHarveyOps)(harveyDeps());
+        const ops = await (0, index_js_12.runHarveyOps)(harveyDeps());
         res.status(200).json(ops);
     }
     catch (err) {
@@ -418,7 +806,7 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
     }
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
     try {
-        const result = await (0, index_js_4.runHarveyChat)({
+        const result = await (0, index_js_12.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -449,19 +837,47 @@ app.post("/api/jarvis/gemini-live/token", express_1.default.json({ limit: "64kb"
     }
     const model = "gemini-3.1-flash-live-preview";
     const voiceName = "Charon";
-    const rawPrompt = HARVEY_GEMINI_SYSTEM_PROMPT + MARCO_WAR_ROOM_METRICS;
-    const systemPrompt = trimGeminiSystemPrompt(rawPrompt);
+    const systemPrompt = trimGeminiSystemPrompt(HARVEY_GEMINI_LIVE_SYSTEM_PROMPT);
     const wsUrl = `${GEMINI_LIVE_WS}?key=${encodeURIComponent(key)}`;
     console.log("[GeminiLive] Model being returned:", model);
     console.log("[GeminiLive] wsUrl prefix:", wsUrl.substring(0, 80));
     console.log("[GeminiLive] System prompt length:", systemPrompt.length);
     console.log("[GeminiLive] Voice name:", voiceName);
+    console.log("[GeminiLive] Tools:", tools_js_1.HARVEY_GEMINI_TOOLS.functionDeclarations.length, "functions");
     res.status(200).json({
         wsUrl,
         model,
         systemPrompt,
         voiceName,
+        tools: tools_js_1.HARVEY_GEMINI_TOOLS,
     });
+});
+/** Execute Harvey tools for Gemini Live voice (client relays tool calls server-side). */
+app.post("/api/jarvis/execute-tool", express_1.default.json({ limit: "64kb" }), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        return;
+    }
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const toolName = String(body.toolName ?? "").trim();
+    const toolInput = body.toolInput && typeof body.toolInput === "object" && !Array.isArray(body.toolInput)
+        ? body.toolInput
+        : {};
+    if (!toolName) {
+        res.status(400).json({ error: "toolName required" });
+        return;
+    }
+    console.log("[Harvey Voice Tool] Executing:", toolName, "input:", JSON.stringify(toolInput));
+    try {
+        const result = await (0, tools_js_1.executeHarveyTool)(toolName, toolInput);
+        console.log("[Harvey Voice Tool] Result for", toolName, ":", JSON.stringify(result).substring(0, 200));
+        res.status(200).json({ success: true, result });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[Harvey Voice Tool] Error:", message);
+        res.status(500).json({ error: message });
+    }
 });
 /** War Room — static campaign metrics for Harvey UI strip. */
 app.get("/api/jarvis/metrics", (req, res) => {
@@ -577,7 +993,7 @@ app.post("/api/jarvis/market-intel", express_1.default.json({ limit: "64kb" }), 
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_4.getHarveyModel)(),
+            model: (0, index_js_12.getHarveyModel)(),
             max_tokens: 1500,
             tools: [{
                     type: "web_search_20250305",
@@ -651,7 +1067,7 @@ app.post("/api/jarvis/world-intel", express_1.default.json({ limit: "64kb" }), a
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_4.getHarveyModel)(),
+            model: (0, index_js_12.getHarveyModel)(),
             max_tokens: 2000,
             tools: [{
                     type: "web_search_20250305",
@@ -763,7 +1179,7 @@ async function runClaudeResearchJson(prompt) {
         throw new Error("ANTHROPIC_API_KEY not configured");
     const anthropic = new sdk_1.default({ apiKey });
     const response = await anthropic.messages.create({
-        model: (0, index_js_4.getHarveyModel)(),
+        model: (0, index_js_12.getHarveyModel)(),
         max_tokens: 2500,
         tools: [{
                 type: "web_search_20250305",
@@ -1201,7 +1617,7 @@ app.post("/reset", resetCors, (_req, res) => {
 });
 app.post("/sinch/inbound", express_1.default.json(), async (req, res) => {
     try {
-        const payload = (0, index_js_1.receiveInbound)(req.body);
+        const payload = (0, index_js_9.receiveInbound)(req.body);
         if (!payload) {
             res.status(400).json({ error: "Invalid or unparseable Sinch inbound payload" });
             return;
@@ -1222,25 +1638,25 @@ app.post("/sinch/inbound", express_1.default.json(), async (req, res) => {
 app.post("/webhook/sendblue", express_1.default.json(), async (req, res) => {
     try {
         const presented = req.get("sb-signing-secret") ?? undefined;
-        if (!(0, index_js_2.sendblueWebhookSecretMatches)(presented)) {
+        if (!(0, index_js_10.sendblueWebhookSecretMatches)(presented)) {
             res.status(401).json({ error: "Unauthorized" });
             return;
         }
-        const body = (0, index_js_2.parseSendblueWebhookBody)(req.body);
+        const body = (0, index_js_10.parseSendblueWebhookBody)(req.body);
         if (!body) {
             res.status(200).json({ ok: false });
             return;
         }
-        if (!(0, index_js_2.shouldProcessSendblueInbound)(body)) {
+        if (!(0, index_js_10.shouldProcessSendblueInbound)(body)) {
             res.status(200).json({ ok: true, ignored: true });
             return;
         }
-        const handle = (0, index_js_2.getSendblueMessageHandle)(body);
-        if (!(0, index_js_2.claimSendblueInboundHandle)(handle)) {
+        const handle = (0, index_js_10.getSendblueMessageHandle)(body);
+        if (!(0, index_js_10.claimSendblueInboundHandle)(handle)) {
             res.status(200).json({ ok: true, duplicate: true });
             return;
         }
-        const from = (0, index_js_2.getSendblueInboundFromNumber)(body);
+        const from = (0, index_js_10.getSendblueInboundFromNumber)(body);
         if (!from) {
             res.status(200).json({ ok: true, reason: "no_from" });
             return;
@@ -1264,8 +1680,8 @@ app.post("/webhook/sendblue", express_1.default.json(), async (req, res) => {
         const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
         const correlationId = (0, marcoLog_js_1.marcoCorrelationId)(payload.platform, payload.userId);
         const result = await (0, webhook_js_1.handleIncomingPayload)(payload, { requestId, correlationId });
-        if (result.reply?.trim() && (0, index_js_2.isSendblueConfigured)()) {
-            const send = await (0, index_js_2.sendSendblueMessage)({ to: lead.phone, content: result.reply.trim() });
+        if (result.reply?.trim() && (0, index_js_10.isSendblueConfigured)()) {
+            const send = await (0, index_js_10.sendSendblueMessage)({ to: lead.phone, content: result.reply.trim() });
             if (!send.ok) {
                 console.error("[sendblue] outbound after pipeline failed:", send.error);
             }
@@ -1284,7 +1700,7 @@ app.post("/api/sendblue/send", express_1.default.json(), async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    if (!(0, index_js_2.isSendblueConfigured)()) {
+    if (!(0, index_js_10.isSendblueConfigured)()) {
         res.status(503).json({
             error: "Sendblue not configured",
             hint: "Set SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, SENDBLUE_FROM_NUMBER on the server",
@@ -1315,11 +1731,11 @@ app.post("/api/sendblue/send", express_1.default.json(), async (req, res) => {
                 res.status(400).json({ error: "Lead has no phone number" });
                 return;
             }
-            to = (0, index_js_2.normalizeToUsE164)(lead.phone);
+            to = (0, index_js_10.normalizeToUsE164)(lead.phone);
             threadLeadId = lead.id;
         }
         else {
-            to = (0, index_js_2.normalizeToUsE164)(toRaw);
+            to = (0, index_js_10.normalizeToUsE164)(toRaw);
             const digits = to.replace(/\D/g, "");
             if (digits.length < 10) {
                 res.status(400).json({ error: "Invalid phone number" });
@@ -1329,7 +1745,7 @@ app.post("/api/sendblue/send", express_1.default.json(), async (req, res) => {
             if (matched)
                 threadLeadId = matched.id;
         }
-        const send = await (0, index_js_2.sendSendblueMessage)({ to, content });
+        const send = await (0, index_js_10.sendSendblueMessage)({ to, content });
         if (!send.ok) {
             res.status(502).json({ error: send.error });
             return;
@@ -1353,10 +1769,10 @@ async function sendLeadText(leadId, content) {
     const lead = await (0, db_js_1.getLeadById)(leadId);
     if (!lead?.phone?.trim())
         return { ok: false, error: "Lead has no phone number" };
-    if (!(0, index_js_2.isSendblueConfigured)())
+    if (!(0, index_js_10.isSendblueConfigured)())
         return { ok: false, error: "Sendblue not configured" };
-    const to = (0, index_js_2.normalizeToUsE164)(lead.phone);
-    const send = await (0, index_js_2.sendSendblueMessage)({ to, content });
+    const to = (0, index_js_10.normalizeToUsE164)(lead.phone);
+    const send = await (0, index_js_10.sendSendblueMessage)({ to, content });
     if (!send.ok)
         return { ok: false, error: send.error };
     await (0, db_js_1.appendMessage)(leadId, "assistant", content);
@@ -2036,10 +2452,6 @@ function commandTaskCounts() {
 }
 /** Carlos command-center task board (db.json). */
 app.get("/api/tasks", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     (0, db_js_1.seedCommandTasksIfEmpty)();
     let tasks = (0, db_js_1.getCommandTasks)();
     const column = typeof req.query.column === "string" ? req.query.column : undefined;
@@ -2064,10 +2476,6 @@ app.get("/api/tasks", (req, res) => {
     res.json({ tasks, counts: commandTaskCounts() });
 });
 app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     const body = (req.body && typeof req.body === "object" ? req.body : {});
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const column = typeof body.column === "string" ? body.column : "";
@@ -2101,10 +2509,6 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
     res.json({ task });
 });
 app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     const id = String(req.params.id || "").trim();
     const body = (req.body && typeof req.body === "object" ? req.body : {});
     const updates = {};
@@ -2140,10 +2544,6 @@ app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res)
     res.json({ task });
 });
 app.delete("/api/tasks/:id", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     const id = String(req.params.id || "").trim();
     const deleted = (0, db_js_1.deleteCommandTask)(id);
     if (!deleted) {
@@ -2736,6 +3136,23 @@ setInterval(() => {
     })
         .catch((err) => console.error("[autoPlans] scheduled run failed:", err));
 }, AUTO_PLAN_INTERVAL_MS);
+(0, jobs_js_1.scheduleContentJobs)();
+async function ensureSocialDataExists() {
+    try {
+        if (!(0, socialStore_js_1.socialDataAvailable)()) {
+            console.log("[Social] No data found on startup — running initial agent pull");
+            await (0, index_js_1.runSocialMediaAgent)();
+        }
+        else {
+            const summary = (0, socialStore_js_1.getSocialSummaryForHarvey)();
+            const pulledAt = summary.pulledAt ?? summary.fetchedAt;
+            console.log("[Social] Social data exists — last pull:", pulledAt);
+        }
+    }
+    catch (err) {
+        console.error("[Social] Startup check failed:", err);
+    }
+}
 httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Listening on 0.0.0.0:${PORT}`);
     try {
@@ -2750,18 +3167,19 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     else {
         console.log("[Harvey] GEMINI_API_KEY configured — Gemini Live voice ready");
     }
-    if ((0, index_js_3.isAnthropicApiKeyConfigured)()) {
-        console.log(`[Anthropic] API key present — model ${(0, index_js_3.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
+    if ((0, index_js_11.isAnthropicApiKeyConfigured)()) {
+        console.log(`[Anthropic] API key present — model ${(0, index_js_11.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
     }
     else {
         console.warn("[Anthropic] ANTHROPIC_API_KEY missing — preflight/opening/pipeline skip Haiku and use template fallbacks only.");
     }
     console.log(`Health:  GET  http://localhost:${PORT}/health`);
     console.log(`Dashboard: GET http://localhost:${PORT}/ (also /dashboard)`);
+    console.log(`Social:    GET http://localhost:${PORT}/social`);
     console.log(`Chat demo: GET http://localhost:${PORT}/chat`);
     console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
     console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
-    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_4.getHarveyModel)()})`);
+    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_12.getHarveyModel)()})`);
     console.log(`Harvey voice: POST http://localhost:${PORT}/api/jarvis/gemini-live/token`);
     console.log(`Harvey TTS:   POST http://localhost:${PORT}/api/jarvis/gemini-tts`);
     console.log(`Harvey market intel: POST http://localhost:${PORT}/api/jarvis/market-intel`);
@@ -2776,4 +3194,5 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     if (AD_DASHBOARD_BASE_URL) {
         console.log(`  → upstream: ${AD_DASHBOARD_BASE_URL}/api/latest`);
     }
+    void ensureSocialDataExists();
 });

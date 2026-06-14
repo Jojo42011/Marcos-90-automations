@@ -495,7 +495,7 @@ function openingContextAppendix(lastUserText, conversation, channel, platform, p
         lines.push("TOUR_OR_SCHEDULE_SIGNAL: The lead is asking to tour, see the home, or schedule. Confirm you can help, ask timing or next step. Pricing is secondary in this turn.");
     }
     if (signalsBrowsingOrPriceDeflection(lastUserText)) {
-        lines.push("BROWSING_OR_PRICE_DEFLECTION: The lead is browsing or said price is not their focus. Acknowledge that. Do not push budget or repeat the same price pitch. Stay helpful (areas, what they like, tour when ready) and avoid sounding scripted or pushy.");
+        lines.push("BROWSING_OR_PRICE_DEFLECTION: The lead is browsing or said price is not their focus. Acknowledge briefly and steer toward a good number to text the breakdown. Do not ask preferences, timeline, bedrooms, or what matters in a home.");
     }
     if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUserText)) {
         lines.push("LOCATION_ASK: The lead asked where this home is. Answer using only west of Stone Oak (natural phrasing). No other neighborhood, corridor, or street. Still no exact address or builder.");
@@ -576,7 +576,7 @@ function fallbackOpeningReply(lead, openingStage, lastUserText, conversation, in
                 experiencedInLine ||
                 (0, conversationUtils_js_1.leadThreadSignalsExperiencedBuyer)(conv);
             if (signalsBrowsingOrPriceDeflection(lastUserText)) {
-                return "Got it, just looking is totally fine. Want me to send the full breakdown on that place by text when you want to peek, specs and pricing?";
+                return "Got it, just looking is totally fine. Want me to text you the full breakdown when you're ready? What's a good number?";
             }
             if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUserText) && (0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(lastUserText)) {
                 return "Yeah of course, it's west of Stone Oak. Would it help if I just sent the entire breakdown on the home you inquired about, location and pricing included?";
@@ -590,7 +590,7 @@ function fallbackOpeningReply(lead, openingStage, lastUserText, conversation, in
             return "Oh awesome, would it help if I sent the entire breakdown over of the home you inquired about?";
         }
         if (signalsBrowsingOrPriceDeflection(lastUserText)) {
-            return "Got it, no pressure at all. What part of town or style of home are you drawn to most right now?";
+            return "Got it, no pressure at all. Want me to text you the full breakdown on that place when you're ready? What's a good number?";
         }
         return "For sure, that helps. Are you currently working with an agent?";
     }
@@ -600,7 +600,7 @@ function fallbackOpeningReply(lead, openingStage, lastUserText, conversation, in
         return "Got you. What's a good number I can text you the full breakdown on this place and a couple similar options?";
     }
     if (signalsBrowsingOrPriceDeflection(lastUserText)) {
-        return "Totally hear you. Want me to text a few options when you are ready, or keep it in here for now and you tell me what you want to see first?";
+        return "Totally hear you. What's a good number I can text you the full breakdown and a couple similar options?";
     }
     return "Makes sense. Would there be a good number I could send all this info over to?";
 }
@@ -914,7 +914,7 @@ async function generateMarcoPipelineReply(input) {
         postOpeningHints.push("INSTAGRAM_FLOW: Keep Marco's Instagram cadence from training threads. Direct price or location asks should get a direct practical answer first, then a soft qualifier. If they react to value (high, low, fair), validate briefly and offer full breakdown in Marco voice. Number ask usually comes after value or explicit agreement, not as first move. Keep it concise and human.");
     }
     if (signalsBrowsingOrPriceDeflection(lastUserText)) {
-        postOpeningHints.push("BROWSING_OR_PRICE_DEFLECTION: Lead is browsing or de emphasized price. Do not loop back into budget or the same price script. Acknowledge and stay helpful without pushing the same asks.");
+        postOpeningHints.push("BROWSING_OR_PRICE_DEFLECTION: Lead is browsing or de emphasized price. Acknowledge briefly and steer toward a mobile number. Never ask preferences, timeline, bedrooms, or needs-analysis questions.");
     }
     if (signalsTourOrScheduleIntent(lastUserText)) {
         postOpeningHints.push("TOUR_OR_SCHEDULE_SIGNAL: Lead is focused on seeing the home or scheduling. Address that before generic capture scripts.");
@@ -1064,12 +1064,12 @@ function alternatePipelineReplyFallback(lead, meta, lastAssistant, lastUser, rec
     }
     const pool = [];
     if (meta.phoneJustCaptured) {
-        pool.push(funnelDeterministic_js_1.PHONE_JUST_CAPTURED_REPLY, "Cool. I'll get you the full packet by the end of the day plus a few backups. Does that house feel close or should we skew cheaper or a different part of town?");
+        pool.push(funnelDeterministic_js_1.PHONE_JUST_CAPTURED_REPLY, "Cool. I'll get you the full packet by the end of the day plus a few backups. Once you skim it, text me if you want to chat.");
     }
     if (meta.listSendPromised) {
         pool.push("For sure. I'll text you a list of matching homes. Skim when you can and tell me what you want to tour first.", "I'll fire over a curated list by text. When you've had a skim, text back what you want to see first.");
     }
-    pool.push("Thanks for the detail. Want to lock in one thing first, area or budget, and I'll narrow from there?", "Got you. I'll keep it moving on my end, text me if anything shifts on your side.");
+    pool.push("Thanks for reaching out. What's a good number I can text you the full breakdown on this place?", "Got you. I'll keep it moving on my end, text me if anything shifts on your side.");
     for (const c of pool) {
         if (!(0, conversationUtils_js_1.candidateMatchesRecentMarco)(c, recentMarco)) {
             return c;

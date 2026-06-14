@@ -3346,6 +3346,124 @@
       return !!(geminiLiveWs && geminiLiveWs.readyState === WebSocket.OPEN);
     };
 
+    function normalizeGeminiToolsForLive(tools) {
+      if (!tools) return { functionDeclarations: [] };
+      if (tools.functionDeclarations?.length) return tools;
+      if (tools.function_declarations?.length) {
+        return { functionDeclarations: tools.function_declarations };
+      }
+      return tools;
+    }
+
+    function geminiToolDeclarationCount(tools) {
+      const normalized = normalizeGeminiToolsForLive(tools);
+      return normalized.functionDeclarations?.length || 0;
+    }
+
+    function buildGeminiFunctionResponsePayload(toolName, result) {
+      if (!result || typeof result !== "object") return { result };
+      if (toolName === "get_social_summary") {
+        const stats = result.stats || {};
+        const profile = result.profile || {};
+        return {
+          avgViewsPerVideo: stats.avgViewsPerVideo ?? result.avg_views ?? null,
+          followers: profile.followers ?? result.follower_count ?? null,
+          videosTracked: stats.videosTracked ?? result.total_videos ?? null,
+          totalViews: stats.totalViews ?? result.total_views ?? null,
+          humanSummary: result.humanSummary ?? result.summary ?? null,
+          dataAvailable: result.dataAvailable ?? false,
+        };
+      }
+      return result;
+    }
+
+    function extractGeminiFunctionCalls(toolCall) {
+      if (!toolCall) return [];
+      if (Array.isArray(toolCall.functionCalls)) return toolCall.functionCalls;
+      if (Array.isArray(toolCall.function_calls)) return toolCall.function_calls;
+      if (toolCall.name) return [toolCall];
+      return [];
+    }
+
+    async function handleGeminiToolCall(toolCall) {
+      const functionCalls = extractGeminiFunctionCalls(toolCall);
+
+      if (functionCalls.length === 0) {
+        console.warn("[Harvey] Tool call received but no function calls found:", JSON.stringify(toolCall));
+        return;
+      }
+
+      const toolResponses = [];
+
+      for (const call of functionCalls) {
+        const toolName = call.name;
+        const toolInput = call.args || call.arguments || {};
+        const callId = call.id;
+
+        if (!callId) {
+          console.warn("[Harvey] Function call missing id — Gemini may ignore response:", toolName);
+        }
+
+        console.log("[Harvey] Executing voice tool:", toolName, "id:", callId, "args:", JSON.stringify(toolInput));
+        setHarveyStatus("PROCESSING");
+
+        try {
+          const token = getToken();
+          const res = await fetch(geminiApiUrl("/api/jarvis/execute-tool"), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: token ? `Bearer ${token}` : "",
+            },
+            body: JSON.stringify({ toolName, toolInput }),
+          });
+
+          if (!res.ok) {
+            throw new Error("Tool execution failed: HTTP " + res.status);
+          }
+
+          const data = await res.json();
+          const result = data.result;
+          const responsePayload = buildGeminiFunctionResponsePayload(toolName, result);
+          console.log(
+            "[Harvey] Voice tool result for",
+            toolName,
+            ":",
+            JSON.stringify(responsePayload).substring(0, 200),
+          );
+
+          toolResponses.push({
+            id: callId || toolName,
+            name: toolName,
+            response: responsePayload,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("[Harvey] Voice tool error for", toolName, ":", msg);
+          toolResponses.push({
+            id: callId || toolName,
+            name: toolName,
+            response: { error: msg },
+          });
+        }
+      }
+
+      if (geminiLiveWs && geminiLiveWs.readyState === WebSocket.OPEN) {
+        const toolResponseMsg = {
+          toolResponse: {
+            functionResponses: toolResponses,
+          },
+        };
+
+        console.log(
+          "[Harvey] Sending tool responses to Gemini:",
+          JSON.stringify(toolResponseMsg).substring(0, 300),
+        );
+        geminiLiveWs.send(JSON.stringify(toolResponseMsg));
+        setHarveyStatus("LISTENING");
+      }
+    }
+
     async function startGeminiLive() {
       try {
         console.log("[Harvey] startGeminiLive called");
@@ -3373,7 +3491,9 @@
           return;
         }
 
-        const { wsUrl, model, systemPrompt, voiceName } = await res.json();
+        const { wsUrl, model, systemPrompt, voiceName, tools } = await res.json();
+        const liveTools = normalizeGeminiToolsForLive(tools);
+        console.log("[Harvey] Tools received from server:", geminiToolDeclarationCount(liveTools), "functions");
         console.log("[Harvey] wsUrl received:", wsUrl ? wsUrl.substring(0, 80) : "MISSING");
         console.log("[Harvey] model received:", model);
         console.log("[Harvey] systemPrompt length:", systemPrompt?.length);
@@ -3413,7 +3533,7 @@
           console.log("[Harvey] Setup message model:", `models/${model}`);
           console.log("[Harvey] Setup message voice:", voiceName);
 
-          geminiLiveWs.send(JSON.stringify({
+          const setupMsg = {
             setup: {
               model: `models/${model}`,
               generationConfig: {
@@ -3427,10 +3547,18 @@
               systemInstruction: {
                 parts: [{ text: systemPrompt }],
               },
+              tools: geminiToolDeclarationCount(liveTools) > 0 ? [liveTools] : [],
             },
-          }));
+          };
 
-          console.log("[Harvey] Setup message sent with model: models/" + model);
+          console.log(
+            "[Harvey] FULL SETUP MESSAGE (tools):",
+            JSON.stringify({ tools: setupMsg.setup.tools }, null, 2),
+          );
+          geminiLiveWs.send(JSON.stringify(setupMsg));
+
+          console.log("[Harvey] Setup message sent with", geminiToolDeclarationCount(liveTools), "tools");
+          console.log("[Harvey] Gemini Live session ready with tools — voice tool calls will be handled automatically");
           console.log("[Harvey] Calling startMic()...");
           startMic().catch(err => console.error("[Harvey] startMic failed:", err));
           setHarveyStatus("LISTENING");
@@ -3453,6 +3581,14 @@
           try {
             const msg = JSON.parse(text);
 
+            console.log("[Harvey RAW MSG]", JSON.stringify(msg).substring(0, 500));
+
+            if (msg.toolCall) {
+              console.log("[Harvey] Gemini requesting tool call:", JSON.stringify(msg.toolCall));
+              await handleGeminiToolCall(msg.toolCall);
+              return;
+            }
+
             if (msg.serverContent?.inputTranscription?.text) {
               voiceTurnInputText = (voiceTurnInputText + " " + msg.serverContent.inputTranscription.text).trim();
             }
@@ -3473,7 +3609,13 @@
                 if (part.text) {
                   fullText += part.text;
                   console.log("[Harvey] Voice text part received:", part.text.substring(0, 60));
-                  if (typeof addMsg === "function") addMsg("ai", part.text);
+                  appendHarveyMessage(part.text);
+                }
+                if (part.functionCall) {
+                  console.log("[Harvey] Gemini function call detected:", part.functionCall.name);
+                  await handleGeminiToolCall({
+                    functionCalls: [part.functionCall],
+                  });
                 }
               }
               if (fullText.trim()) {
@@ -3497,7 +3639,7 @@
             }
 
             if (msg.setupComplete) {
-              console.log("[Harvey] Gemini Live setup complete");
+              console.log("[Harvey] Gemini Live setup complete with tools");
             }
           } catch {
             try {
@@ -3952,6 +4094,7 @@
         CONNECTING: "🔄 Connecting to Gemini...",
         LISTENING: "🎤 Listening...",
         RESPONDING: "🔊 Harvey speaking...",
+        PROCESSING: "⚙️ Running tools...",
         STANDBY: "⏸ Standby",
         ERROR: "❌ Error — check console",
       };

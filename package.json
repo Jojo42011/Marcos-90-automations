@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "apify-client": "^2.23.4",
     "axios": "^1.13.6",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",

@@ -407,6 +407,266 @@ export function signalsLookingOutsideSanAntonio(text: string): boolean {
   return false;
 }
 
+const US_STATES_EXCEPT_TEXAS = new Set([
+  "alabama",
+  "alaska",
+  "arizona",
+  "arkansas",
+  "california",
+  "colorado",
+  "connecticut",
+  "delaware",
+  "florida",
+  "georgia",
+  "hawaii",
+  "idaho",
+  "illinois",
+  "indiana",
+  "iowa",
+  "kansas",
+  "kentucky",
+  "louisiana",
+  "maine",
+  "maryland",
+  "massachusetts",
+  "michigan",
+  "minnesota",
+  "mississippi",
+  "missouri",
+  "montana",
+  "nebraska",
+  "nevada",
+  "new hampshire",
+  "new jersey",
+  "new mexico",
+  "new york",
+  "north carolina",
+  "north dakota",
+  "ohio",
+  "oklahoma",
+  "oregon",
+  "pennsylvania",
+  "rhode island",
+  "south carolina",
+  "south dakota",
+  "tennessee",
+  "utah",
+  "vermont",
+  "virginia",
+  "washington",
+  "west virginia",
+  "wisconsin",
+  "wyoming",
+  "district of columbia",
+  "dc",
+]);
+
+const STATE_ABBREVS_EXCEPT_TX = new Set([
+  "al",
+  "ak",
+  "az",
+  "ar",
+  "ca",
+  "co",
+  "ct",
+  "de",
+  "fl",
+  "ga",
+  "hi",
+  "id",
+  "il",
+  "in",
+  "ia",
+  "ks",
+  "ky",
+  "la",
+  "me",
+  "md",
+  "ma",
+  "mi",
+  "mn",
+  "ms",
+  "mo",
+  "mt",
+  "ne",
+  "nv",
+  "nh",
+  "nj",
+  "nm",
+  "ny",
+  "nc",
+  "nd",
+  "oh",
+  "ok",
+  "or",
+  "pa",
+  "ri",
+  "sc",
+  "sd",
+  "tn",
+  "ut",
+  "vt",
+  "va",
+  "wa",
+  "wv",
+  "wi",
+  "wy",
+]);
+
+/** Five-digit zip is outside Texas (TX: 750–799, 733, 885). */
+function zipSignalsOutsideTexas(text: string): boolean {
+  const m = text.match(/\b(\d{5})(?:-\d{4})?\b/);
+  if (!m) return false;
+  const zip = m[1];
+  const prefix3 = Number(zip.slice(0, 3));
+  if (prefix3 >= 750 && prefix3 <= 799) return false;
+  if (prefix3 === 733) return false;
+  if (prefix3 === 885) return false;
+  return true;
+}
+
+function signalsResidenceInTexas(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  if (/\b(texas|san antonio|\bsa\b)\b/.test(t) && /\b(in|live|living|based|from|moving to|relocat)\b/.test(t)) {
+    return true;
+  }
+  if (/\b,\s*tx\b/.test(t) || /\btx\s*\d{5}\b/.test(t)) return true;
+  if (signalsLookingOutsideSanAntonio(text)) return true;
+  const txCity =
+    /\b(austin|dallas|houston|fort worth|el paso|corpus christi|plano|frisco|new braunfels|san marcos)\b/i.test(
+      t,
+    );
+  const locPhrase = /\b(i'?m in|im in|we'?re in|were in|currently in|based in|living in|located in|from)\b/i.test(
+    t,
+  );
+  return txCity && locPhrase;
+}
+
+export interface OutOfStateDetection {
+  detected: boolean;
+  /** Human label for referral copy, e.g. "California" or "your area". */
+  regionLabel: string | null;
+}
+
+/**
+ * True when the lead signals they are outside Texas (not another Texas market).
+ * Ambiguous → not detected (caller continues normal funnel).
+ */
+export function detectOutOfStateLead(text: string): OutOfStateDetection {
+  const t = text.trim().toLowerCase();
+  if (!t) return { detected: false, regionLabel: null };
+
+  if (signalsResidenceInTexas(text)) {
+    return { detected: false, regionLabel: null };
+  }
+
+  const locPhrase =
+    /\b(i'?m in|im in|we'?re in|were in|currently in|based in|living in|located in|moving from|relocat(?:ing)? from|from)\b/i.test(
+      t,
+    );
+
+  for (const state of US_STATES_EXCEPT_TEXAS) {
+    if (new RegExp(`\\b${state.replace(/ /g, "\\s+")}\\b`, "i").test(t)) {
+      const label = state
+        .split(" ")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+      return { detected: true, regionLabel: label };
+    }
+  }
+
+  const abbrevMatch = t.match(
+    /\b(?:in|from|based in|currently in|living in|located in)\s+([a-z]{2})\b/i,
+  );
+  if (abbrevMatch) {
+    const ab = abbrevMatch[1].toLowerCase();
+    if (STATE_ABBREVS_EXCEPT_TX.has(ab)) {
+      return { detected: true, regionLabel: ab.toUpperCase() };
+    }
+  }
+
+  const nonTxCity =
+    /\b(los angeles|san diego|san francisco|seattle|portland|phoenix|denver|chicago|miami|orlando|atlanta|boston|nashville|charlotte|las vegas|philadelphia|detroit|minneapolis)\b/i.test(
+      t,
+    );
+  if (nonTxCity && locPhrase) {
+    return { detected: true, regionLabel: "your area" };
+  }
+
+  if (zipSignalsOutsideTexas(t) && locPhrase) {
+    return { detected: true, regionLabel: "your area" };
+  }
+
+  return { detected: false, regionLabel: null };
+}
+
+/** Marco already sent the out-of-state referral offer in this thread. */
+export function threadContainsReferralOffer(conversation: Conversation): boolean {
+  return conversation.messages.some(
+    (m) =>
+      m.role === "assistant" &&
+      /\b(link you up|connects with solid agents|connect you with)\b/i.test(m.text),
+  );
+}
+
+export function signalsReferralAcceptance(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  if (/\b(no|nah|nope|not really|don'?t|dont)\b/.test(t) && !/\b(yes|yeah|sure)\b/.test(t)) {
+    return false;
+  }
+  return (
+    /^(yes|yeah|yep|yup|sure|ok|okay|please|absolutely|definitely)\b/.test(t) ||
+    /\b(that would be great|sounds good|link me up|connect me|hook me up|yes please)\b/.test(t)
+  );
+}
+
+/** Lead declined referral or clarified they want San Antonio / Texas. */
+export function signalsReferralDeclineOrWantsSanAntonio(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  if (/\b(san antonio|\bsa\b|texas|tx)\b/.test(t) && /\b(looking|buy|move|relocat|want|interested)\b/.test(t)) {
+    return true;
+  }
+  return (
+    /^(no|nah|nope|not really)\b/.test(t) ||
+    /\b(don'?t need|dont need|no thanks|not interested in a referral)\b/.test(t) ||
+    /\b(actually|but)\b.{0,30}\b(san antonio|texas)\b/.test(t)
+  );
+}
+
+export function buildOutOfStateReferralOffer(regionLabel: string | null): string {
+  const where = regionLabel && regionLabel !== "your area" ? regionLabel : "your area";
+  return (
+    `Oh got it, so you're out in ${where}. We actually work exclusively in the San Antonio area but I got connects with solid agents all over. ` +
+    `Want me to link you up with someone in your area who can help?`
+  );
+}
+
+export const REFERRAL_AREA_FOLLOW_UP =
+  "Cool, what area exactly are you looking in? I'll get you connected with the right person";
+
+/** Count assistant messages since the last user message (0 when thread ends with user). */
+export function countAssistantsSinceLastUser(conversation: Conversation): number {
+  let n = 0;
+  for (let i = conversation.messages.length - 1; i >= 0; i--) {
+    if (conversation.messages[i].role === "user") break;
+    if (conversation.messages[i].role === "assistant") n++;
+  }
+  return n;
+}
+
+/** Consecutive assistant messages at the end of the thread (no user after them). */
+export function countTrailingAssistantsAtEnd(conversation: Conversation): number {
+  let n = 0;
+  for (let i = conversation.messages.length - 1; i >= 0; i--) {
+    if (conversation.messages[i].role === "assistant") n++;
+    else break;
+  }
+  return n;
+}
+
 /** Same short line twice (e.g. double-tap "yes") — do not treat as stuck/repeat for funnel logic. */
 export function isShortDuplicateUserPair(conversation: Conversation): boolean {
   const userTexts: string[] = [];

@@ -1,0 +1,1612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Social · Content Manager · Marco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #050508;
+      --bg2: #0a0c10;
+      --surface: #0e1118;
+      --surface2: #141922;
+      --border: rgba(120, 200, 255, 0.08);
+      --border-bright: rgba(100, 220, 255, 0.22);
+      --text: #f1f5f9;
+      --muted: #64748b;
+      --cyan: #22d3ee;
+      --cyan-dim: rgba(34, 211, 238, 0.12);
+      --success: #4ade80;
+      --warn: #fbbf24;
+      --cold: #94a3b8;
+      --hot: #f472b6;
+      --tier-hot: #10b981;
+      --tier-warm: #f59e0b;
+      --tier-cold: #ff2d55;
+      --radius: 14px;
+      --font: "Plus Jakarta Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page-bg {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(34, 211, 238, 0.12), transparent),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 1.5rem clamp(1rem, 3vw, 2rem) 3rem;
+    }
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar h1 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      flex: 1 1 200px;
+    }
+    .topbar h1 span { color: var(--cyan); font-weight: 500; font-size: 0.8125rem; margin-left: 0.5rem; }
+    .meta {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.2);
+    }
+    .dot.live { background: var(--success); box-shadow: 0 0 8px rgba(74, 222, 128, 0.5); }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .refresh-block { display: flex; flex-direction: column; gap: 0.5rem; }
+    select, button {
+      font-family: var(--font);
+      font-size: 0.8125rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-bright);
+      background: var(--surface);
+      color: var(--text);
+      padding: 0.45rem 0.75rem;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--cyan-dim);
+      border-color: rgba(34, 211, 238, 0.35);
+      color: var(--cyan);
+      font-weight: 600;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    a.back {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.8125rem;
+      margin-right: 0.5rem;
+    }
+    a.back:hover { color: var(--cyan); }
+    .tab-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    .tab-btn {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+    }
+    .tab-btn:hover { color: var(--cyan); border-color: var(--border); }
+    .tab-btn.active {
+      color: var(--cyan);
+      background: var(--cyan-dim);
+      border-color: rgba(34, 211, 238, 0.35);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .profile {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+    }
+    .avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--border-bright);
+      background: var(--surface2);
+    }
+    .profile h2 { font-size: 1rem; font-weight: 600; }
+    .profile .handle { color: var(--cyan); font-family: var(--mono); font-size: 0.8125rem; }
+    .profile .followers { color: var(--muted); font-size: 0.8125rem; margin-top: 0.15rem; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.9rem 1rem;
+    }
+    .card label {
+      display: block;
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    .card strong {
+      font-family: var(--mono);
+      font-size: 1.125rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      min-width: 900px;
+    }
+    th, td {
+      padding: 0.65rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      font-weight: 600;
+      background: var(--surface2);
+      position: sticky;
+      top: 0;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(34, 211, 238, 0.03); }
+    .num { font-family: var(--mono); font-size: 0.75rem; white-space: nowrap; }
+    .caption-link {
+      color: var(--text);
+      text-decoration: none;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      max-width: 280px;
+    }
+    .caption-link:hover { color: var(--cyan); }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge.hot { background: rgba(16, 185, 129, 0.15); color: var(--tier-hot); border: 1px solid rgba(16, 185, 129, 0.35); }
+    .badge.warm, .badge.average { background: rgba(245, 158, 11, 0.12); color: var(--tier-warm); border: 1px solid rgba(245, 158, 11, 0.35); }
+    .badge.cold { background: rgba(255, 45, 85, 0.12); color: var(--tier-cold); border: 1px solid rgba(255, 45, 85, 0.35); }
+    .badge.positive { background: rgba(74, 222, 128, 0.12); color: var(--success); border: 1px solid rgba(74, 222, 128, 0.35); }
+    .badge.negative { background: rgba(248, 113, 113, 0.12); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.35); }
+    .badge.neutral { background: rgba(148, 163, 184, 0.1); color: var(--cold); border: 1px solid rgba(148, 163, 184, 0.25); }
+    .section-title {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin: 0 0 0.75rem;
+    }
+    .section-title span { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; }
+    .reply-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .reply-card p { font-size: 0.8125rem; margin-bottom: 0.35rem; }
+    .reply-card .label { color: var(--muted); font-family: var(--mono); font-size: 0.6875rem; }
+    .reply-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+    .reply-actions button { font-size: 0.75rem; padding: 0.35rem 0.65rem; }
+    .reply-actions button.approve { color: var(--success); border-color: rgba(74, 222, 128, 0.4); }
+    .reply-actions button.reject { color: #f87171; border-color: rgba(248, 113, 113, 0.4); }
+    .intent-flag {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--surface2);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      border: 1px solid var(--border);
+    }
+    .intent-flag .signals { color: var(--cyan); margin-top: 0.25rem; }
+    .viral-tag {
+      margin-left: 0.35rem;
+      font-size: 0.625rem;
+      color: var(--hot);
+      font-weight: 700;
+      vertical-align: super;
+    }
+    .empty, .error, .loading {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+    .error { color: #f87171; }
+    .score-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .score-controls select, .score-controls button {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+    }
+    .score-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: var(--radius);
+      padding: 1rem 1.15rem;
+      margin-bottom: 0.75rem;
+      font-family: var(--mono);
+    }
+    .score-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 0.65rem;
+    }
+    .score-card-title {
+      font-size: 0.8125rem;
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.4;
+    }
+    .score-card-meta { font-size: 0.625rem; color: var(--muted); margin-top: 0.25rem; }
+    .score-badge-wrap { text-align: center; flex-shrink: 0; }
+    .score-big { font-size: 1.75rem; font-weight: 700; line-height: 1; }
+    .score-tier-label { font-size: 0.5625rem; letter-spacing: 0.12em; margin-top: 0.15rem; }
+    .score-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1rem;
+      font-size: 0.6875rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .score-section-label {
+      font-size: 0.5625rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      margin-top: 0.5rem;
+    }
+    .score-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.3rem;
+    }
+    .score-bar-label { width: 4.5rem; font-size: 0.625rem; color: var(--muted); }
+    .score-bar-track {
+      flex: 1;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+    .score-bar-val { width: 2.5rem; font-size: 0.625rem; text-align: right; color: var(--text); }
+    .improvement-item { font-size: 0.6875rem; color: #ccc; margin-bottom: 0.3rem; line-height: 1.4; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      padding: 0.3rem 0.65rem;
+      border-radius: 4px;
+    }
+    .btn-set {
+      background: #0369a1;
+      color: #fff;
+      border: none;
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      padding: 0.3rem 0.65rem;
+      border-radius: 4px;
+    }
+    #custom-time-picker {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    #custom-time-picker.visible { display: flex; }
+    #custom-time-picker label { font-size: 0.625rem; color: var(--muted); font-family: var(--mono); }
+    #custom-pull-time {
+      background: #0a0f16;
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      color: var(--text);
+      padding: 0.3rem 0.5rem;
+      font-family: var(--mono);
+      border-radius: 4px;
+    }
+    #custom-time-status { font-size: 0.625rem; color: var(--tier-hot); font-family: var(--mono); }
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: var(--surface2);
+      border: 1px solid var(--border-bright);
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .score-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--surface2);
+      flex-shrink: 0;
+    }
+    .score-card-left { display: flex; gap: 0.75rem; flex: 1; min-width: 0; }
+
+    .suggestions-meta {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+    .trends-box {
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      border-radius: 8px;
+      padding: 0.9rem 1rem;
+      margin-bottom: 1.25rem;
+      background: rgba(34, 211, 238, 0.04);
+    }
+    .suggestions-section-label {
+      font-family: var(--mono);
+      font-size: 0.5625rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-bottom: 0.65rem;
+    }
+    .suggestion-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.9rem 1rem;
+      margin-bottom: 0.75rem;
+      background: var(--surface);
+    }
+    .suggestion-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+    .suggestion-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .trend-badge {
+      font-family: var(--mono);
+      font-size: 0.5625rem;
+      letter-spacing: 0.08em;
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--tier-warm);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .suggestion-detail {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+      line-height: 1.5;
+    }
+    .suggestion-detail strong {
+      color: var(--cold);
+      font-weight: 600;
+    }
+    .suggestions-actions { margin-top: 1rem; }
+
+    .scan-error {
+      border-color: rgba(248, 113, 113, 0.5) !important;
+      background: rgba(248, 113, 113, 0.06) !important;
+    }
+
+    /* ─── CONTENT MANAGER LIGHT MODE — STRONG CONTRAST ─── */
+    html[data-theme="light"],
+    html[data-theme="light"] body {
+      background: #f1f5f9 !important;
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .page-bg {
+      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+    }
+    html[data-theme="light"] .topbar {
+      background: #ffffff !important;
+      border-bottom: 2px solid #94a3b8 !important;
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .topbar h1,
+    html[data-theme="light"] .topbar h1 span {
+      color: #0f172a !important;
+      font-weight: 700 !important;
+    }
+    html[data-theme="light"] a.back {
+      color: #0369a1 !important;
+      font-weight: 600 !important;
+    }
+    html[data-theme="light"] .meta {
+      color: #475569 !important;
+    }
+    html[data-theme="light"] .dot.live {
+      background: #059669 !important;
+      box-shadow: 0 0 8px rgba(5, 150, 105, 0.4) !important;
+    }
+    html[data-theme="light"] .tab-nav {
+      border-bottom: 1px solid #e2e8f0 !important;
+    }
+    html[data-theme="light"] .tab-btn {
+      color: #475569 !important;
+      font-weight: 500 !important;
+      background: transparent !important;
+    }
+    html[data-theme="light"] .tab-btn.active {
+      color: #0369a1 !important;
+      border-bottom: 2px solid #0369a1 !important;
+      background: #eff6ff !important;
+      font-weight: 700 !important;
+    }
+    html[data-theme="light"] select,
+    html[data-theme="light"] #custom-pull-time {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border: 1px solid #94a3b8 !important;
+    }
+    html[data-theme="light"] button {
+      background: #ffffff !important;
+      color: #0369a1 !important;
+      border: 1px solid #94a3b8 !important;
+      font-weight: 500 !important;
+    }
+    html[data-theme="light"] button:hover {
+      background: #eff6ff !important;
+      border-color: #0369a1 !important;
+    }
+    html[data-theme="light"] button.primary,
+    html[data-theme="light"] button.btn-set,
+    html[data-theme="light"] #runMorningScanBtn,
+    html[data-theme="light"] #runEveningPullBtn,
+    html[data-theme="light"] #runEscalationsBtn {
+      background: #0369a1 !important;
+      color: #ffffff !important;
+      border-color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+    html[data-theme="light"] button.primary:hover,
+    html[data-theme="light"] button.btn-set:hover {
+      background: #075985 !important;
+    }
+    html[data-theme="light"] button.btn-ghost {
+      background: #ffffff !important;
+      color: #0369a1 !important;
+      border: 1px solid #0369a1 !important;
+      font-weight: 600 !important;
+    }
+    html[data-theme="light"] #theme-toggle-btn {
+      background: transparent !important;
+      color: #0369a1 !important;
+      border: 1px solid rgba(3, 105, 161, 0.4) !important;
+    }
+    html[data-theme="light"] .profile,
+    html[data-theme="light"] .card,
+    html[data-theme="light"] .table-wrap,
+    html[data-theme="light"] .reply-card,
+    html[data-theme="light"] .score-card {
+      background: #ffffff !important;
+      border: 1px solid #e2e8f0 !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .profile .handle {
+      color: #0369a1 !important;
+    }
+    html[data-theme="light"] .profile .followers,
+    html[data-theme="light"] .card label,
+    html[data-theme="light"] .reply-card .label {
+      color: #64748b !important;
+    }
+    html[data-theme="light"] .card strong {
+      color: #0f172a !important;
+      font-weight: 700 !important;
+    }
+    html[data-theme="light"] .section-title {
+      color: #0369a1 !important;
+      font-weight: 700 !important;
+    }
+    html[data-theme="light"] .section-title span {
+      color: #64748b !important;
+    }
+    html[data-theme="light"] table {
+      background: #ffffff !important;
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] th {
+      color: #475569 !important;
+      border-bottom: 2px solid #e2e8f0 !important;
+      background: #f8fafc !important;
+      font-weight: 600 !important;
+    }
+    html[data-theme="light"] td {
+      color: #0f172a !important;
+      border-bottom: 1px solid #f1f5f9 !important;
+    }
+    html[data-theme="light"] tr:hover td {
+      background: #f8fafc !important;
+    }
+    html[data-theme="light"] .caption-link {
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .caption-link:hover {
+      color: #0369a1 !important;
+    }
+    html[data-theme="light"] .score-card-title,
+    html[data-theme="light"] .score-card-meta,
+    html[data-theme="light"] .score-stats,
+    html[data-theme="light"] .score-section-label {
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .score-card-meta,
+    html[data-theme="light"] .score-stats,
+    html[data-theme="light"] .score-section-label {
+      color: #64748b !important;
+    }
+    html[data-theme="light"] .intent-flag {
+      background: #f8fafc !important;
+      border: 1px solid #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .intent-flag .signals {
+      color: #0369a1 !important;
+    }
+    html[data-theme="light"] .empty,
+    html[data-theme="light"] .loading {
+      color: #94a3b8 !important;
+    }
+    html[data-theme="light"] .error {
+      color: #dc2626 !important;
+    }
+    html[data-theme="light"] .toast {
+      background: #eff6ff !important;
+      border: 1px solid #0369a1 !important;
+      color: #0369a1 !important;
+      font-weight: 600 !important;
+    }
+    html[data-theme="light"] .badge.positive {
+      background: #dcfce7 !important;
+      color: #065f46 !important;
+      border-color: #10b981 !important;
+    }
+    html[data-theme="light"] .badge.negative {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border-color: #dc2626 !important;
+    }
+    html[data-theme="light"] .badge.neutral {
+      background: #e2e8f0 !important;
+      color: #475569 !important;
+    }
+    html[data-theme="light"] .reply-actions button.approve {
+      background: #dcfce7 !important;
+      border-color: #10b981 !important;
+      color: #065f46 !important;
+    }
+    html[data-theme="light"] .reply-actions button.reject {
+      background: #fee2e2 !important;
+      border-color: #dc2626 !important;
+      color: #991b1b !important;
+    }
+    html[data-theme="light"] .scan-error {
+      background: #fee2e2 !important;
+      border-color: #dc2626 !important;
+    }
+    html[data-theme="light"] img {
+      filter: none !important;
+    }
+    html[data-theme="light"] .trends-box {
+      background: #eff6ff !important;
+      border-color: #94a3b8 !important;
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .suggestion-card {
+      background: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .suggestion-title {
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .suggestion-detail {
+      color: #475569 !important;
+    }
+    html[data-theme="light"] .trend-badge {
+      background: #fef3c7 !important;
+      color: #d97706 !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-bg"></div>
+  <div id="toast" class="toast"></div>
+  <div class="wrap">
+    <header class="topbar">
+      <div style="flex:1 1 100%; display:flex; align-items:center; gap:0.5rem;">
+        <a class="back" href="/">← Command center</a>
+        <h1>Content Manager <span>Apify live</span></h1>
+      </div>
+      <div class="meta">
+        <span class="dot" id="statusDot"></span>
+        <span id="lastUpdated">Last updated —</span>
+      </div>
+      <div class="controls refresh-block">
+        <button id="theme-toggle-btn" type="button" onclick="toggleTheme()"
+          style="background:transparent; border:1px solid rgba(0,212,255,0.3);
+                 color:#00d4ff; padding:5px 12px; font-family:monospace;
+                 font-size:10px; letter-spacing:1px; cursor:pointer; border-radius:2px;">
+          Light mode
+        </button>
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <select id="intervalSelect" title="Auto-refresh interval" onchange="handleRefreshIntervalChange()">
+            <option value="0">Manual</option>
+            <option value="60000">1 min</option>
+            <option value="300000" selected>5 min</option>
+            <option value="900000">15 min</option>
+            <option value="3600000">1 hour</option>
+            <option value="86400000">24 hours</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <button type="button" class="primary" id="refreshBtn">Refresh now</button>
+        </div>
+        <div id="custom-time-picker">
+          <label for="custom-pull-time">Pull data at (Central):</label>
+          <input type="time" id="custom-pull-time" />
+          <button type="button" class="btn-set" onclick="saveCustomRefreshTime()">SET</button>
+          <span id="custom-time-status"></span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tab-nav" aria-label="Content Manager sections">
+      <button type="button" class="tab-btn active" data-tab="overview">Overview</button>
+      <button type="button" class="tab-btn" data-tab="video-scores">Video Scores</button>
+      <button type="button" class="tab-btn" data-tab="morning-scan">Morning Scan</button>
+      <button type="button" class="tab-btn" data-tab="evening-pull">Evening Pull</button>
+      <button type="button" class="tab-btn" data-tab="escalations">Escalations</button>
+      <button type="button" class="tab-btn" data-tab="content-suggestions">Content Suggestions</button>
+      <button type="button" class="tab-btn" data-tab="comment-replies">Comment Replies</button>
+    </nav>
+
+    <!-- Overview -->
+    <div id="tab-overview" class="tab-panel active">
+      <section class="profile" id="profileRow" hidden>
+        <img class="avatar" id="profileAvatar" alt="" />
+        <div>
+          <h2 id="profileName">—</h2>
+          <div class="handle" id="profileHandle">@—</div>
+          <div class="followers" id="profileFollowers">— followers</div>
+        </div>
+      </section>
+
+      <section class="cards" id="summaryCards">
+        <div class="card"><label>Videos tracked</label><strong id="sVideos">—</strong></div>
+        <div class="card"><label>Avg views / video</label><strong id="sAvgViews">—</strong></div>
+        <div class="card"><label>Total views</label><strong id="sTotalViews">—</strong></div>
+        <div class="card"><label>Total likes</label><strong id="sLikes">—</strong></div>
+        <div class="card"><label>Total comments</label><strong id="sComments">—</strong></div>
+        <div class="card"><label>Total shares</label><strong id="sShares">—</strong></div>
+      </section>
+
+      <h2 class="section-title">Recent videos <span>— last 30 days</span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Posted</th>
+              <th>Video</th>
+              <th>Views</th>
+              <th>Likes</th>
+              <th>Saves</th>
+              <th>Comments</th>
+              <th>Shares</th>
+              <th>Score</th>
+              <th>Tier</th>
+            </tr>
+          </thead>
+          <tbody id="videoBody">
+            <tr><td colspan="9" class="loading">Click Refresh now to pull TikTok data from Apify.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Video Scores -->
+    <div id="tab-video-scores" class="tab-panel">
+      <div class="score-controls">
+        <select id="score-tier-filter" onchange="loadVideoScoresTab()">
+          <option value="all">All Tiers</option>
+          <option value="hot">Hot Only</option>
+          <option value="warm">Warm Only</option>
+          <option value="cold">Cold Only</option>
+        </select>
+        <select id="score-sort" onchange="loadVideoScoresTab()">
+          <option value="score_desc">Score: High to Low</option>
+          <option value="score_asc">Score: Low to High</option>
+          <option value="recent">Most Recent</option>
+          <option value="views">Most Views</option>
+        </select>
+        <button type="button" class="btn-ghost" onclick="generateAllImprovements()">↻ GENERATE ALL FEEDBACK</button>
+        <button type="button" class="btn-ghost" onclick="rescoreVideosNow()">↻ RESCORE VIDEOS</button>
+      </div>
+      <div id="video-scores-container">
+        <div class="loading">// LOADING VIDEO SCORES //</div>
+      </div>
+    </div>
+
+    <!-- Morning Scan -->
+    <div id="tab-morning-scan" class="tab-panel">
+      <div id="morningScanPanel" class="reply-card">
+        <p class="loading" id="morningScanStatus">Loading morning scan…</p>
+        <div id="morningScanFlags"></div>
+        <div class="reply-actions">
+          <button type="button" class="btn-set" id="runMorningScanBtn">↻ RUN SCAN NOW</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Evening Pull -->
+    <div id="tab-evening-pull" class="tab-panel">
+      <div id="eveningPullPanel" class="reply-card">
+        <p class="loading" id="eveningPullStatus">Loading evening pull…</p>
+        <div id="eveningPullDetails"></div>
+        <div class="reply-actions">
+          <button type="button" class="btn-set" id="runEveningPullBtn">↻ RUN EVENING PULL NOW</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Escalations -->
+    <div id="tab-escalations" class="tab-panel">
+      <div id="escalationsPanel" class="reply-card">
+        <p class="loading" id="escalationsStatus">Loading escalations…</p>
+        <div id="escalationsList"></div>
+        <div class="reply-actions">
+          <button type="button" class="btn-set" id="runEscalationsBtn">↻ RUN ESCALATION CHECKS</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Suggestions -->
+    <div id="tab-content-suggestions" class="tab-panel">
+      <div id="content-suggestions-container" class="reply-card">
+        <div class="loading">// LOADING SUGGESTIONS //</div>
+      </div>
+    </div>
+
+    <!-- Comment Replies -->
+    <div id="tab-comment-replies" class="tab-panel">
+      <div id="commentRepliesPanel">
+        <p class="loading" id="commentRepliesStatus">Loading pending replies…</p>
+        <div id="commentRepliesList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function initTheme() {
+      const saved = localStorage.getItem("theme") || "dark";
+      document.documentElement.setAttribute("data-theme", saved);
+      document.body.classList.toggle("light-mode", saved === "light");
+    }
+    initTheme();
+
+    function toggleTheme() {
+      const current = localStorage.getItem("theme") || "dark";
+      const next = current === "dark" ? "light" : "dark";
+      localStorage.setItem("theme", next);
+      document.documentElement.setAttribute("data-theme", next);
+      document.body.classList.toggle("light-mode", next === "light");
+      const btn = document.getElementById("theme-toggle-btn");
+      if (btn) btn.textContent = next === "dark" ? "Light mode" : "Dark mode";
+    }
+
+    window.addEventListener("storage", (e) => {
+      if (e.key === "theme") {
+        const newTheme = e.newValue || "dark";
+        document.documentElement.setAttribute("data-theme", newTheme);
+        document.body.classList.toggle("light-mode", newTheme === "light");
+        const btn = document.getElementById("theme-toggle-btn");
+        if (btn) btn.textContent = newTheme === "dark" ? "Light mode" : "Dark mode";
+      }
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const btn = document.getElementById("theme-toggle-btn");
+      if (btn) {
+        const current = localStorage.getItem("theme") || "dark";
+        btn.textContent = current === "dark" ? "Light mode" : "Dark mode";
+      }
+    });
+
+    const token = new URLSearchParams(window.location.search).get("token");
+    let pollTimer = null;
+    let refreshing = false;
+
+    function getToken() { return token; }
+
+    function apiUrl(path) {
+      const u = new URL(path, window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      return u.toString();
+    }
+
+    function apiHeaders() {
+      const h = { "Content-Type": "application/json" };
+      if (token) h.Authorization = "Bearer " + token;
+      return h;
+    }
+
+    function fmt(n) {
+      if (n == null || Number.isNaN(n)) return "—";
+      return Number(n).toLocaleString("en-US");
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+
+    function fmtUpdated(iso) {
+      if (!iso) return "Last updated —";
+      const d = new Date(iso);
+      return "Last updated " + d.toLocaleString();
+    }
+
+    function escapeHtml(s) {
+      return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function getTierColor(tier, score) {
+      const s = score ?? 0;
+      const t = (tier || "").toLowerCase();
+      if (t === "hot" || s >= 70) return "#10b981";
+      if (t === "warm" || t === "average" || (s >= 40 && s < 70)) return "#f59e0b";
+      return "#ff2d55";
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(() => el.classList.remove("show"), 3500);
+    }
+
+    function setLive(on) {
+      document.getElementById("statusDot").classList.toggle("live", on);
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.tab === tabId);
+      });
+      document.querySelectorAll(".tab-panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === "tab-" + tabId);
+      });
+      if (tabId === "video-scores") loadVideoScoresTab();
+      if (tabId === "morning-scan") loadMorningScan();
+      if (tabId === "evening-pull") loadEveningPull();
+      if (tabId === "escalations") loadEscalations();
+      if (tabId === "content-suggestions") loadContentSuggestionsTab();
+      if (tabId === "comment-replies") loadPendingReplies();
+    }
+
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+    });
+
+    function render(data) {
+      document.getElementById("lastUpdated").textContent = fmtUpdated(data.lastUpdated);
+
+      const profile = data.profile;
+      const profileRow = document.getElementById("profileRow");
+      if (profile) {
+        profileRow.hidden = false;
+        document.getElementById("profileName").textContent = profile.nickname || profile.username;
+        document.getElementById("profileHandle").textContent = "@" + profile.username;
+        document.getElementById("profileFollowers").textContent = fmt(profile.followers) + " followers";
+        const av = document.getElementById("profileAvatar");
+        if (profile.avatar) {
+          av.src = profile.avatar;
+          av.hidden = false;
+        } else {
+          av.hidden = true;
+        }
+      } else {
+        profileRow.hidden = true;
+      }
+
+      const s = data.summary || {};
+      document.getElementById("sVideos").textContent = fmt(s.totalVideos);
+      document.getElementById("sAvgViews").textContent = fmt(s.avgViews);
+      document.getElementById("sTotalViews").textContent = fmt(s.totalViews);
+      document.getElementById("sLikes").textContent = fmt(s.totalLikes);
+      document.getElementById("sComments").textContent = fmt(s.totalComments);
+      document.getElementById("sShares").textContent = fmt(s.totalShares);
+
+      const body = document.getElementById("videoBody");
+      const videos = data.videos || [];
+      if (!videos.length) {
+        body.innerHTML = '<tr><td colspan="9" class="empty">No videos in the latest pull. Try Refresh now.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = videos.map((v) => {
+        const tier = (v.tier || "cold").toLowerCase();
+        const tierClass = tier === "average" ? "warm" : tier;
+        const viral = v.viral ? '<span class="viral-tag">3x+</span>' : "";
+        const cap = escapeHtml(v.caption || "(no caption)");
+        return `<tr>
+          <td>${fmtDate(v.postedAt)}</td>
+          <td><a class="caption-link" href="${escapeHtml(v.url || "#")}" target="_blank" rel="noopener">${cap}</a></td>
+          <td class="num">${fmt(v.views)}${viral}</td>
+          <td class="num">${fmt(v.likes)}</td>
+          <td class="num">${fmt(v.saves)}</td>
+          <td class="num">${fmt(v.comments)}</td>
+          <td class="num">${fmt(v.shares)}</td>
+          <td class="num">${v.score ?? 0}</td>
+          <td><span class="badge ${tierClass}">${tierClass}</span></td>
+        </tr>`;
+      }).join("");
+    }
+
+    function scoreBar(label, value, color) {
+      const v = Math.min(100, Math.max(0, Number(value) || 0));
+      return `<div class="score-bar-row">
+        <span class="score-bar-label">${label}</span>
+        <div class="score-bar-track"><div class="score-bar-fill" style="width:${v}%; background:${color};"></div></div>
+        <span class="score-bar-val">${v}/100</span>
+      </div>`;
+    }
+
+    function buildVideoScoreCard(video) {
+      const sb = video.scoreBreakdown || { score: video.score || 0, viewsScore: 0, retentionScore: 0, savesScore: 0, sharesScore: 0, tier: video.tier || "cold" };
+      const tier = (sb.tier || "cold").toLowerCase();
+      const tierLabel = tier === "average" ? "warm" : tier;
+      const tierColor = getTierColor(tierLabel, sb.score);
+      const postId = escapeHtml(video.id || video.postId || "");
+      const caption = escapeHtml((video.caption || video.description || "").substring(0, 100));
+      const thumb = video.coverUrl
+        ? `<img class="score-thumb" src="${escapeHtml(video.coverUrl)}" alt="" />`
+        : "";
+
+      const improvementsHtml = video.improvements && video.improvements.length
+        ? video.improvements.map((i) => `<div class="improvement-item">• ${escapeHtml(i)}</div>`).join("")
+        : `<button type="button" class="btn-ghost" onclick="generateImprovements('${postId}')">GENERATE FEEDBACK</button>`;
+
+      return `<div class="score-card" style="border-left-color:${tierColor};">
+        <div class="score-card-header">
+          <div class="score-card-left">
+            ${thumb}
+            <div>
+              <div class="score-card-title">${caption || "(no caption)"}</div>
+              <div class="score-card-meta">Posted ${fmtDate(video.postedAt)}</div>
+            </div>
+          </div>
+          <div class="score-badge-wrap">
+            <div class="score-big" style="color:${tierColor};">${sb.score}</div>
+            <div class="score-tier-label" style="color:${tierColor};">${tierLabel.toUpperCase()}</div>
+          </div>
+        </div>
+        <div class="score-stats">
+          <span>Views: ${fmt(video.views)}</span>
+          <span>Likes: ${fmt(video.likes)}</span>
+          <span>Saves: ${fmt(video.saves)}</span>
+          <span>Comments: ${fmt(video.comments)}</span>
+          <span>Shares: ${fmt(video.shares)}</span>
+        </div>
+        <div class="score-section-label">SCORE BREAKDOWN</div>
+        ${scoreBar("Views", sb.viewsScore, tierColor)}
+        ${scoreBar("Retention", sb.retentionScore, tierColor)}
+        ${scoreBar("Saves", sb.savesScore, tierColor)}
+        ${scoreBar("Shares", sb.sharesScore, tierColor)}
+        <div class="score-section-label">IMPROVEMENTS</div>
+        <div id="improvements-${postId}">${improvementsHtml}</div>
+      </div>`;
+    }
+
+    async function loadVideoScoresTab() {
+      const container = document.getElementById("video-scores-container");
+      container.innerHTML = '<div class="loading">// LOADING VIDEO SCORES //</div>';
+
+      const tier = document.getElementById("score-tier-filter")?.value || "all";
+      const sort = document.getElementById("score-sort")?.value || "score_desc";
+
+      try {
+        const res = await fetch(apiUrl(`/api/social/video-scores?tier=${tier}&sort=${sort}`), { headers: apiHeaders() });
+        if (!res.ok) throw new Error("Failed to load video scores");
+        const { videos } = await res.json();
+
+        if (!videos || !videos.length) {
+          container.innerHTML = '<div class="empty">// NO VIDEOS FOUND //</div>';
+          return;
+        }
+
+        container.innerHTML = videos.map(buildVideoScoreCard).join("");
+      } catch (e) {
+        container.innerHTML = `<div class="error">${escapeHtml(e.message || "Load failed")}</div>`;
+      }
+    }
+
+    async function generateImprovements(postId) {
+      const container = document.getElementById(`improvements-${postId}`);
+      if (!container) return;
+      container.innerHTML = '<div style="font-size:10px; color:#888;">// ANALYZING //</div>';
+
+      try {
+        const res = await fetch(apiUrl(`/api/social/video-improvements/${postId}`), { method: "POST", headers: apiHeaders() });
+        if (!res.ok) throw new Error("Generation failed");
+        const { improvements } = await res.json();
+        container.innerHTML = (improvements || []).map((i) =>
+          `<div class="improvement-item">• ${escapeHtml(i)}</div>`
+        ).join("");
+      } catch (e) {
+        container.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    async function generateAllImprovements() {
+      showToast("Generating feedback for all videos — this may take a minute…");
+      try {
+        const res = await fetch(apiUrl("/api/social/video-improvements/generate-all"), { method: "POST", headers: apiHeaders() });
+        if (!res.ok) throw new Error("Batch generation failed");
+        const { generated, total } = await res.json();
+        showToast(`Generated feedback for ${generated} of ${total} videos`);
+        loadVideoScoresTab();
+      } catch (e) {
+        showToast(e.message || "Generation failed");
+      }
+    }
+
+    async function rescoreVideosNow() {
+      showToast("Rescoring videos from Apify — this may take a minute…");
+      try {
+        await refreshData();
+        showToast("Rescore complete — reloading scores");
+        await loadVideoScoresTab();
+      } catch (e) {
+        showToast(e.message || "Rescore failed");
+      }
+    }
+
+    function renderMorningScan(data) {
+      const status = document.getElementById("morningScanStatus");
+      const flagsEl = document.getElementById("morningScanFlags");
+      const panel = document.getElementById("morningScanPanel");
+      const result = data?.result;
+      if (panel) panel.classList.remove("scan-error");
+
+      if (!result) {
+        status.className = "loading";
+        status.textContent = "No morning scan yet — run a scan to check overnight comments.";
+        flagsEl.innerHTML = "";
+        return;
+      }
+
+      if (result.fetchError) {
+        if (panel) panel.classList.add("scan-error");
+        status.className = "error";
+        status.innerHTML = `<strong>Comment fetch failed</strong><br>${escapeHtml(result.fetchError)}<br>
+          <span class="label">Scanned:</span> ${fmtUpdated(result.scannedAt).replace("Last updated ", "")}`;
+        flagsEl.innerHTML = "";
+        return;
+      }
+
+      status.className = "";
+      status.innerHTML = `<span class="label">Scanned:</span> ${fmtUpdated(result.scannedAt).replace("Last updated ", "")}<br>
+        <span class="label">New comments:</span> ${fmt(result.newComments)} ·
+        <span class="label">Lead-intent flags:</span> ${(result.leadIntentFlags || []).length}`;
+
+      const flags = result.leadIntentFlags || [];
+      if (result.newComments === 0) {
+        flagsEl.innerHTML = '<p class="empty" style="padding:1rem 0;">No new comments overnight — all quiet.</p>';
+        return;
+      }
+      if (!flags.length) {
+        flagsEl.innerHTML = '<p class="empty" style="padding:1rem 0;">Comments scanned — no lead-intent signals detected.</p>';
+        return;
+      }
+      flagsEl.innerHTML = flags.map((f) => {
+        const text = escapeHtml(f.text || "");
+        const signals = (f.intentSignals || []).join(", ");
+        return `<div class="intent-flag">
+          <strong>@${escapeHtml(f.authorUsername || "unknown")}</strong> — ${text}
+          <div class="signals">${escapeHtml(signals)}</div>
+        </div>`;
+      }).join("");
+    }
+
+    function renderEveningPull(data) {
+      const status = document.getElementById("eveningPullStatus");
+      const details = document.getElementById("eveningPullDetails");
+      const snapshot = data?.result;
+      const result = snapshot?.data ?? snapshot;
+      if (!result) {
+        status.textContent = "No evening pull yet — run one to score the last 7 days.";
+        details.innerHTML = "";
+        return;
+      }
+      const summary = result.summary || snapshot?.summary || "";
+      status.innerHTML = `<span class="label">Generated:</span> ${fmtDate(result.generatedAt || snapshot?.generatedAt)}<br>
+        <span class="label">Summary:</span> ${escapeHtml(summary)}`;
+      const top = result.topPerformer;
+      const under = result.underperformers || [];
+      let html = "";
+      if (top) {
+        html += `<div class="intent-flag"><strong>Top performer</strong> — "${escapeHtml(top.description)}" · score ${top.score}/100 · ${fmt(top.views)} views</div>`;
+      }
+      if (under.length) {
+        html += under.map((u) =>
+          `<div class="intent-flag"><strong>Underperformer</strong> — "${escapeHtml(u.description)}" · score ${u.score}/100 · ${fmt(u.views)} views</div>`
+        ).join("");
+      }
+      if (!html) {
+        html = '<p class="empty" style="padding:1rem 0;">No 7-day video details in latest pull.</p>';
+      }
+      details.innerHTML = html;
+    }
+
+    function renderEscalations(escalations) {
+      const status = document.getElementById("escalationsStatus");
+      const list = document.getElementById("escalationsList");
+      if (!escalations || !escalations.length) {
+        status.textContent = "No escalations recorded yet.";
+        list.innerHTML = "";
+        return;
+      }
+      status.textContent = `${escalations.length} recent escalation(s)`;
+      list.innerHTML = escalations.map((e) => {
+        const sms = e.smsSent ? '<span class="badge positive">SMS sent</span>' : '<span class="badge neutral">logged only</span>';
+        return `<div class="intent-flag">
+          <strong>${escapeHtml(e.type)}</strong> ${sms}<br>
+          <span style="color:#aaa;">${escapeHtml(e.message || "")}</span>
+          <div class="signals">${fmtDate(e.detectedAt)}</div>
+        </div>`;
+      }).join("");
+    }
+
+    function renderCommentReplies(replies) {
+      const status = document.getElementById("commentRepliesStatus");
+      const list = document.getElementById("commentRepliesList");
+      if (!replies || !replies.length) {
+        status.textContent = "No pending replies — all caught up.";
+        list.innerHTML = "";
+        return;
+      }
+      status.textContent = `${replies.length} reply(s) awaiting review`;
+      list.innerHTML = replies.map((r) => {
+        const comment = escapeHtml(r.commentText || "");
+        const reply = escapeHtml(r.generatedReply || "");
+        const sentiment = (r.sentiment || "neutral").toLowerCase();
+        const approval = r.requiresApproval ? '<span class="badge negative">needs approval</span>' : "";
+        return `<div class="reply-card" data-id="${r.id}">
+          <p><span class="label">@${escapeHtml(r.authorUsername)}</span> <span class="badge ${sentiment}">${sentiment}</span> ${approval}</p>
+          <p><span class="label">Comment:</span> ${comment}</p>
+          <p><span class="label">Reply:</span> ${reply}</p>
+          <div class="reply-actions">
+            <button type="button" class="approve" data-action="approve" data-id="${r.id}">Approve</button>
+            <button type="button" class="reject" data-action="reject" data-id="${r.id}">Reject</button>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    function buildSuggestionCard(s, index) {
+      const trendBadge = s.trendBased
+        ? '<span class="trend-badge">TREND-BASED</span>'
+        : "";
+      return `<div class="suggestion-card">
+        <div class="suggestion-card-header">
+          <div class="suggestion-title">${index + 1}. ${escapeHtml(s.title)}</div>
+          ${trendBadge}
+        </div>
+        <div class="suggestion-detail"><strong>Angle:</strong> ${escapeHtml(s.angle)}</div>
+        <div class="suggestion-detail"><strong>Why:</strong> ${escapeHtml(s.reasoning)}</div>
+      </div>`;
+    }
+
+    async function loadContentSuggestionsTab() {
+      const container = document.getElementById("content-suggestions-container");
+      container.innerHTML = '<div class="loading">// LOADING SUGGESTIONS //</div>';
+
+      try {
+        const res = await fetch(apiUrl("/api/content-suggestions/latest"), { headers: apiHeaders() });
+        if (!res.ok) throw new Error("Failed to load suggestions");
+        const { result } = await res.json();
+
+        if (!result) {
+          container.innerHTML = `
+            <p class="empty">No suggestions generated yet.</p>
+            <div class="suggestions-actions">
+              <button type="button" class="btn-set" onclick="generateContentSuggestions()">↻ GENERATE SUGGESTIONS</button>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = `
+          <div class="suggestions-meta">
+            Generated: ${fmtDate(result.generatedAt)} (Week of ${fmtDate(result.weekOf)})
+          </div>
+          <div class="trends-box">
+            <div class="suggestions-section-label">CURRENT TIKTOK TRENDS</div>
+            <div class="suggestion-detail" style="margin-top:0;">${escapeHtml(result.currentTrendsSummary || "No trend data")}</div>
+          </div>
+          <div class="suggestions-section-label">THIS WEEK'S IDEAS</div>
+          ${(result.suggestions || []).map((s, i) => buildSuggestionCard(s, i)).join("")}
+          <div class="suggestions-actions">
+            <button type="button" class="btn-set" onclick="generateContentSuggestions()">↻ GENERATE NEW SUGGESTIONS</button>
+          </div>`;
+      } catch (e) {
+        container.innerHTML = `<div class="error">${escapeHtml(e.message || "Failed to load suggestions")}</div>`;
+      }
+    }
+
+    async function generateContentSuggestions() {
+      showToast("Generating content ideas — searching trends and analyzing your data…");
+      try {
+        const res = await fetch(apiUrl("/api/content-suggestions/generate"), {
+          method: "POST",
+          headers: apiHeaders(),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || "Generation failed");
+        }
+        await res.json();
+        showToast("New suggestions generated");
+        await loadContentSuggestionsTab();
+      } catch (e) {
+        showToast(e.message || "Generation failed");
+      }
+    }
+
+    async function loadMorningScan() {
+      try {
+        const res = await fetch(apiUrl("/api/morning-scan/latest"), { headers: apiHeaders() });
+        if (!res.ok) throw new Error("Failed to load morning scan");
+        renderMorningScan(await res.json());
+      } catch (e) {
+        document.getElementById("morningScanStatus").textContent = e.message || "Failed to load morning scan";
+      }
+    }
+
+    async function runMorningScanNow() {
+      const btn = document.getElementById("runMorningScanBtn");
+      btn.disabled = true;
+      btn.textContent = "SCANNING…";
+      showToast("Running morning scan…");
+      try {
+        const res = await fetch(apiUrl("/api/morning-scan/run"), { method: "POST", headers: apiHeaders() });
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(err || "Scan failed");
+        }
+        const data = await res.json();
+        console.log("[MorningScan] Manual run result:", data);
+        renderMorningScan(data);
+        const r = data.result || {};
+        showToast(`Scan complete — ${r.newComments ?? 0} comments, ${(r.leadIntentFlags || []).length} lead-intent flags`);
+        await loadPendingReplies();
+      } catch (e) {
+        showToast("Scan failed: " + (e.message || "unknown"));
+        document.getElementById("morningScanStatus").textContent = e.message || "Scan failed";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "↻ RUN SCAN NOW";
+      }
+    }
+
+    async function loadEveningPull() {
+      try {
+        const res = await fetch(apiUrl("/api/evening-pull/latest"), { headers: apiHeaders() });
+        if (!res.ok) throw new Error("Failed to load evening pull");
+        renderEveningPull(await res.json());
+      } catch (e) {
+        document.getElementById("eveningPullStatus").textContent = e.message || "Failed to load evening pull";
+      }
+    }
+
+    async function runEveningPullNow() {
+      const btn = document.getElementById("runEveningPullBtn");
+      btn.disabled = true;
+      btn.textContent = "PULLING…";
+      showToast("Running evening pull — refreshing Apify data and scoring last 7 days…");
+      try {
+        const res = await fetch(apiUrl("/api/evening-pull/run"), { method: "POST", headers: apiHeaders() });
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(err || "Evening pull failed");
+        }
+        const data = await res.json();
+        console.log("[EveningPull] Manual run result:", data);
+        renderEveningPull({ result: { data: data.result, summary: data.result?.summary, generatedAt: data.result?.generatedAt } });
+        showToast(data.result?.summary || "Evening pull complete");
+        if (document.querySelector(".tab-btn.active")?.dataset?.tab === "video-scores") {
+          await loadVideoScoresTab();
+        }
+      } catch (e) {
+        showToast("Evening pull failed: " + (e.message || "unknown"));
+        document.getElementById("eveningPullStatus").textContent = e.message || "Evening pull failed";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "↻ RUN EVENING PULL NOW";
+      }
+    }
+
+    async function loadEscalations() {
+      try {
+        const res = await fetch(apiUrl("/api/escalations/recent"), { headers: apiHeaders() });
+        if (!res.ok) throw new Error("Failed to load escalations");
+        const data = await res.json();
+        renderEscalations(data.escalations || []);
+      } catch (e) {
+        document.getElementById("escalationsStatus").textContent = e.message || "Failed to load escalations";
+      }
+    }
+
+    async function runEscalationsNow() {
+      const btn = document.getElementById("runEscalationsBtn");
+      btn.disabled = true;
+      btn.textContent = "CHECKING…";
+      showToast("Running escalation checks…");
+      try {
+        const res = await fetch(apiUrl("/api/escalations/check-now"), { method: "POST", headers: apiHeaders() });
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(err || "Escalation check failed");
+        }
+        showToast("Escalation checks complete");
+        await loadEscalations();
+      } catch (e) {
+        showToast("Escalation check failed: " + (e.message || "unknown"));
+        document.getElementById("escalationsStatus").textContent = e.message || "Check failed";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "↻ RUN ESCALATION CHECKS";
+      }
+    }
+
+    async function loadPendingReplies() {
+      try {
+        const res = await fetch(apiUrl("/api/comment-replies/pending"), { headers: apiHeaders() });
+        if (!res.ok) throw new Error("Failed to load replies");
+        const data = await res.json();
+        renderCommentReplies(data.replies || []);
+      } catch (e) {
+        document.getElementById("commentRepliesStatus").textContent = e.message || "Failed to load replies";
+      }
+    }
+
+    async function reviewReply(id, action) {
+      const res = await fetch(apiUrl(`/api/comment-replies/${id}/${action}`), {
+        method: "POST",
+        headers: apiHeaders(),
+      });
+      if (!res.ok) throw new Error("Action failed");
+      await loadPendingReplies();
+    }
+
+    async function loadData() {
+      const res = await fetch(apiUrl("/api/social/data"), { headers: apiHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || res.statusText);
+      }
+      return res.json();
+    }
+
+    async function refreshData() {
+      const res = await fetch(apiUrl("/api/social/refresh"), {
+        method: "POST",
+        headers: apiHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || res.statusText);
+      }
+      return res.json();
+    }
+
+    async function loadRefreshSchedule() {
+      try {
+        const res = await fetch(apiUrl("/api/social/refresh-schedule"), { headers: apiHeaders() });
+        if (!res.ok) return;
+        const { time } = await res.json();
+        if (time) {
+          document.getElementById("custom-pull-time").value = time;
+          document.getElementById("custom-time-status").textContent = `✓ Daily pull at ${time} Central`;
+        }
+      } catch { /* ignore */ }
+    }
+
+    function handleRefreshIntervalChange() {
+      const select = document.getElementById("intervalSelect");
+      const customPicker = document.getElementById("custom-time-picker");
+
+      if (select.value === "custom") {
+        customPicker.classList.add("visible");
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = null;
+        setLive(false);
+      } else {
+        customPicker.classList.remove("visible");
+        resetPoll();
+      }
+    }
+
+    async function saveCustomRefreshTime() {
+      const time = document.getElementById("custom-pull-time").value;
+      if (!time) return;
+
+      try {
+        const res = await fetch(apiUrl("/api/social/refresh-schedule"), {
+          method: "POST",
+          headers: apiHeaders(),
+          body: JSON.stringify({ time }),
+        });
+        if (!res.ok) throw new Error("Failed to save schedule");
+        document.getElementById("custom-time-status").textContent = `✓ Set for ${time} daily (Central)`;
+        showToast(`Daily pull scheduled at ${time} Central`);
+      } catch (e) {
+        showToast(e.message || "Failed to save");
+      }
+    }
+
+    async function doLoad() {
+      try {
+        const data = await loadData();
+        render(data);
+      } catch (e) {
+        document.getElementById("videoBody").innerHTML =
+          `<tr><td colspan="9" class="error">${escapeHtml(e.message || "Failed to load data")}</td></tr>`;
+      }
+    }
+
+    async function doRefresh() {
+      if (refreshing) return;
+      refreshing = true;
+      const btn = document.getElementById("refreshBtn");
+      btn.disabled = true;
+      btn.textContent = "Refreshing…";
+      try {
+        const data = await refreshData();
+        render(data);
+        const activeTab = document.querySelector(".tab-btn.active")?.dataset?.tab;
+        if (activeTab === "video-scores") loadVideoScoresTab();
+      } catch (e) {
+        document.getElementById("videoBody").innerHTML =
+          `<tr><td colspan="9" class="error">${escapeHtml(e.message || "Refresh failed")}</td></tr>`;
+      } finally {
+        refreshing = false;
+        btn.disabled = false;
+        btn.textContent = "Refresh now";
+      }
+    }
+
+    function resetPoll() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = null;
+      const val = document.getElementById("intervalSelect").value;
+      if (val === "custom") return;
+      const ms = Number(val);
+      setLive(ms > 0);
+      if (ms > 0) {
+        pollTimer = setInterval(() => void doLoad(), ms);
+      }
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", () => void doRefresh());
+    document.getElementById("runMorningScanBtn").addEventListener("click", () => void runMorningScanNow());
+    document.getElementById("runEveningPullBtn").addEventListener("click", () => void runEveningPullNow());
+    document.getElementById("runEscalationsBtn").addEventListener("click", () => void runEscalationsNow());
+    document.getElementById("commentRepliesList").addEventListener("click", (ev) => {
+      const btn = ev.target.closest("button[data-action]");
+      if (!btn) return;
+      const id = btn.getAttribute("data-id");
+      const action = btn.getAttribute("data-action");
+      if (id && action) void reviewReply(id, action);
+    });
+
+    void doLoad();
+    void loadRefreshSchedule();
+    resetPoll();
+  </script>
+</body>
+</html>

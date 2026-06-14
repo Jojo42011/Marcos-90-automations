@@ -3508,6 +3508,14 @@
           <p class="module-desc">Instagram &amp; TikTok lead threads, captured phones and emails, funnel state, and CRM fields from the file-backed store.</p>
           <div class="module-arrow">Open workspace →</div>
         </button>
+        <a href="/social" class="module-card" id="open-social" aria-label="Open Content Manager dashboard" style="text-decoration:none;color:inherit;">
+          <div class="module-card-top">
+            <span class="module-title">Content Manager</span>
+            <span class="module-badge" style="background:rgba(34,211,238,0.15);border-color:rgba(34,211,238,0.4);color:#22d3ee;">Apify</span>
+          </div>
+          <p class="module-desc">Live TikTok performance — views, engagement, video scores, and content patterns. Same data Harvey uses for content strategy.</p>
+          <div class="module-arrow">Open workspace →</div>
+        </a>
         <button type="button" class="module-card" id="open-ads" aria-label="Open Ad numbers dashboard">
           <div class="module-card-top">
             <span class="module-title">Ad numbers</span>
@@ -4508,6 +4516,10 @@
       const tasksLink = document.getElementById("open-tasks");
       if (token && tasksLink) {
         tasksLink.href = "/tasks?token=" + encodeURIComponent(token);
+      }
+      const socialLink = document.getElementById("open-social");
+      if (token && socialLink) {
+        socialLink.href = "/social?token=" + encodeURIComponent(token);
       }
     })();
 

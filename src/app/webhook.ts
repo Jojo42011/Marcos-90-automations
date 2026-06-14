@@ -1,14 +1,13 @@
 /**
  * ManyChat (and future) webhook handler. Parse body, call pipeline, return 200 JSON { reply }.
- * No artificial delay before responding — keeps ManyChat External Request within typical timeouts.
+ *
+ * Instagram DMs arrive via POST /webhook (ManyChat External Request) with flat JSON:
+ *   { "platform": "instagram", "user_id": "...", "message": "...", "comment_or_dm": "dm" }
+ * NOT via Meta Graph API entry[0].messaging (optional fallback parser included).
  *
  * Instagram comment automation (first touch, no comment text in ManyChat):
  * omit `message` from the JSON body. Send e.g.
  *   { "platform": "instagram", "user_id": "<IG username>", "username": "<full name>", "comment_or_dm": "comment" }
- * The pipeline creates the lead and returns a fixed handshake line; the first DM supplies `message` and runs the AI flow.
- *
- * TikTok (Marco DMs first manually): on the subscriber’s first reply webhook, include the exact opener Marco
- * sent in-app as `marco_previous_outbound` so the server seeds that assistant line before `message`.
  */
 import { run as runPipeline } from "./pipeline.js";
 import type { IncomingWebhookPayload } from "../core/types.js";
@@ -21,13 +20,254 @@ import {
   type MarcoLogContext,
 } from "./marcoLog.js";
 
+const IG_DEBOUNCE_MS = 4000;
+
+interface IgWaiter {
+  resolve: (result: { status: number; reply?: string }) => void;
+  reject: (err: unknown) => void;
+}
+
+interface IgQueueEntry {
+  timer: ReturnType<typeof setTimeout> | null;
+  messages: string[];
+  payloadTemplate: IncomingWebhookPayload;
+  log: MarcoLogContext;
+  waiters: IgWaiter[];
+}
+
+/** Instagram-only burst queue — module level so it persists across requests. */
+const igMessageQueue: Record<string, IgQueueEntry> = {};
+
+/** Prevent overlapping batch processing for the same sender. */
+const igProcessingSenders = new Set<string>();
+
+function isInstagramPlatform(platform: string): boolean {
+  return platform.toLowerCase().includes("insta");
+}
+
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return Boolean(v) && typeof v === "object" && !Array.isArray(v);
 }
 
 /**
+ * Meta Graph API Instagram DM shape (if ever wired directly):
+ * entry[0].messaging[0].sender.id / .message.text / .message.is_echo
+ */
+function tryParseMetaInstagramDm(
+  body: Record<string, unknown>,
+): { senderId: string; text: string; isEcho: boolean } | null {
+  const entry = body.entry;
+  if (!Array.isArray(entry) || !isPlainObject(entry[0])) return null;
+  const messaging = (entry[0] as Record<string, unknown>).messaging;
+  if (!Array.isArray(messaging) || !isPlainObject(messaging[0])) return null;
+  const m = messaging[0] as Record<string, unknown>;
+  const sender = m.sender;
+  const message = m.message;
+  if (!isPlainObject(sender) || !isPlainObject(message)) return null;
+  const senderId = sender.id;
+  if (senderId === undefined || senderId === null) return null;
+  const text = typeof message.text === "string" ? message.text.trim() : "";
+  return {
+    senderId: String(senderId),
+    text,
+    isEcho: message.is_echo === true,
+  };
+}
+
+/**
+ * Stable Instagram sender key for the queue.
+ * Prefer ManyChat subscriber_id (numeric) over username so every tap hits the same queue.
+ */
+function extractInstagramSenderId(
+  rawBody: unknown,
+  parsed: IncomingWebhookPayload,
+): string {
+  if (rawBody && typeof rawBody === "object") {
+    const meta = tryParseMetaInstagramDm(rawBody as Record<string, unknown>);
+    if (meta?.senderId) return meta.senderId;
+  }
+
+  const b = normalizeWebhookRecord(
+    rawBody && typeof rawBody === "object" ? (rawBody as Record<string, unknown>) : {},
+  );
+
+  const stableKeys = [
+    "subscriber_id",
+    "subscriberId",
+    "contact_id",
+    "contactId",
+  ];
+  for (const k of stableKeys) {
+    const v = b[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  }
+
+  if (isPlainObject(b.subscriber)) {
+    const sid = b.subscriber.id ?? b.subscriber.subscriber_id ?? b.subscriber.subscriberId;
+    if (typeof sid === "string" && sid.trim()) return sid.trim();
+    if (typeof sid === "number" && Number.isFinite(sid)) return String(sid);
+  }
+  if (isPlainObject(b.contact)) {
+    const cid = b.contact.id ?? b.contact.contact_id;
+    if (typeof cid === "string" && cid.trim()) return cid.trim();
+    if (typeof cid === "number" && Number.isFinite(cid)) return String(cid);
+  }
+
+  return parsed.userId;
+}
+
+function extractInstagramMessageText(
+  rawBody: unknown,
+  parsed: IncomingWebhookPayload,
+): string {
+  if (rawBody && typeof rawBody === "object") {
+    const meta = tryParseMetaInstagramDm(rawBody as Record<string, unknown>);
+    if (meta) return meta.text;
+  }
+  return parsed.message.trim();
+}
+
+function isInstagramEcho(rawBody: unknown): boolean {
+  if (!rawBody || typeof rawBody !== "object") return false;
+  const body = rawBody as Record<string, unknown>;
+  const meta = tryParseMetaInstagramDm(body);
+  if (meta?.isEcho) return true;
+  if (body.is_echo === true || body.isEcho === true) return true;
+  if (body.message_echo === true || body.messageEcho === true) return true;
+  return false;
+}
+
+/**
+ * Flush Instagram DM batch: one pipeline run; last waiter gets reply, earlier waiters get none.
+ */
+async function flushInstagramDm(senderId: string): Promise<void> {
+  const entry = igMessageQueue[senderId];
+  if (!entry) return;
+
+  if (entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+
+  delete igMessageQueue[senderId];
+
+  const combinedInput = entry.messages.join(" ");
+  const payloadTemplate = entry.payloadTemplate;
+  const batchLog = entry.log;
+  const waiters = entry.waiters;
+  const lastWaiter = waiters[waiters.length - 1];
+
+  if (waiters.length > 1) {
+    console.log(`[ig] Batching ${waiters.length} webhooks for ${senderId}`);
+  }
+
+  console.log(`Processing for ${senderId}: "${combinedInput}"`);
+
+  if (igProcessingSenders.has(senderId)) {
+    console.log(`[ig] Skipping duplicate batch for ${senderId} — already processing`);
+    for (const w of waiters) {
+      w.resolve({ status: 200, reply: undefined });
+    }
+    return;
+  }
+
+  igProcessingSenders.add(senderId);
+  try {
+    const payload: IncomingWebhookPayload = {
+      ...payloadTemplate,
+      message: combinedInput,
+    };
+    const start = Date.now();
+    const { reply } = await runPipeline(payload, batchLog);
+    const elapsed = Date.now() - start;
+    marcoLog("request_complete", {
+      requestId: batchLog.requestId,
+      correlationId: batchLog.correlationId,
+      pipeline_ms: elapsed,
+      total_ms: elapsed,
+      debounced: true,
+      ig_sender_id: senderId,
+      reply_chars: reply?.length ?? 0,
+      reply_preview: previewText(reply),
+    });
+    if (reply) {
+      console.log(
+        `[ig] One reply for ${senderId} (${reply.length} chars): ${previewText(reply, 120)}`,
+      );
+    }
+
+    const result: { status: number; reply?: string } = {
+      status: 200,
+      reply: reply ?? undefined,
+    };
+    for (const w of waiters) {
+      if (w === lastWaiter) {
+        w.resolve(result);
+      } else {
+        w.resolve({ status: 200, reply: undefined });
+      }
+    }
+  } catch (err) {
+    console.error(`[ig] Batch processing failed for ${senderId}:`, err);
+    for (const w of waiters) {
+      w.reject(err);
+    }
+  } finally {
+    igProcessingSenders.delete(senderId);
+  }
+}
+
+/**
+ * Instagram DM hybrid debounce: holds HTTP open until timer + pipeline complete.
+ * Only the last webhook in a burst receives `reply`; earlier ones get reply undefined.
+ */
+function enqueueInstagramDm(
+  senderId: string,
+  messageText: string,
+  payload: IncomingWebhookPayload,
+  log: MarcoLogContext,
+): Promise<{ status: number; reply?: string }> {
+  return new Promise((resolve, reject) => {
+    if (!igMessageQueue[senderId]) {
+      igMessageQueue[senderId] = {
+        timer: null,
+        messages: [],
+        payloadTemplate: payload,
+        log,
+        waiters: [],
+      };
+    }
+
+    const userQueue = igMessageQueue[senderId];
+    userQueue.payloadTemplate = payload;
+    userQueue.log = log;
+    userQueue.waiters.push({ resolve, reject });
+
+    if (messageText) {
+      if (!userQueue.messages.includes(messageText)) {
+        userQueue.messages.push(messageText);
+        console.log(
+          `Queued for ${senderId}: "${messageText}" - queue size: ${userQueue.messages.length}`,
+        );
+      } else {
+        console.log(`Duplicate ignored for ${senderId}: "${messageText}"`);
+      }
+    }
+
+    if (userQueue.timer) {
+      clearTimeout(userQueue.timer);
+      console.log(`Timer reset for ${senderId}`);
+    }
+
+    userQueue.timer = setTimeout(() => {
+      void flushInstagramDm(senderId);
+    }, IG_DEBOUNCE_MS);
+  });
+}
+
+/**
  * ManyChat / Make / custom proxies often nest fields or use different names than our web demo.
- * Merge known keys from nested objects so Instagram traffic matches what /simulate sends.
  */
 function normalizeWebhookRecord(body: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...body };
@@ -148,7 +388,6 @@ function pickUsername(b: Record<string, unknown>): string | null {
   return null;
 }
 
-/** Explicit full name fields (ManyChat / Make). */
 function pickExplicitDisplayName(b: Record<string, unknown>): string | null {
   const keys = ["full_name", "fullName", "display_name", "displayName", "name"];
   for (const k of keys) {
@@ -163,10 +402,6 @@ function looksLikePersonFullName(s: string): boolean {
   return t.length > 1 && /\s/.test(t) && /[a-zA-Z]/.test(t);
 }
 
-/**
- * ManyChat often maps Instagram Username → user_id and Full Name → username.
- * Store handle on Lead.username and full name on Lead.name when we can tell them apart.
- */
 function resolveHandleAndDisplayName(
   b: Record<string, unknown>,
   userId: string,
@@ -191,6 +426,20 @@ function resolveHandleAndDisplayName(
 
 function parseBody(body: unknown): IncomingWebhookPayload | null {
   if (!body || typeof body !== "object") return null;
+
+  const meta = tryParseMetaInstagramDm(body as Record<string, unknown>);
+  if (meta && !meta.isEcho) {
+    return {
+      platform: "instagram",
+      userId: meta.senderId,
+      username: null,
+      displayName: null,
+      message: meta.text,
+      commentOrDm: "dm",
+      marcoPreviousOutbound: null,
+    };
+  }
+
   const b = normalizeWebhookRecord(body as Record<string, unknown>);
   const platform = typeof b.platform === "string" ? b.platform : "instagram";
   const userId = pickUserId(b);
@@ -218,6 +467,9 @@ function parseBody(body: unknown): IncomingWebhookPayload | null {
   };
 }
 
+/**
+ * Direct pipeline entry — used by Sendblue/Sinch, TikTok, and Instagram comment handshakes.
+ */
 export async function handleIncomingPayload(
   payload: IncomingWebhookPayload,
   log?: MarcoLogContext,
@@ -234,13 +486,24 @@ export async function handleIncomingPayload(
     correlationId,
     pipeline_ms: elapsed,
     total_ms: elapsed,
+    debounced: false,
     reply_chars: reply?.length ?? 0,
     reply_preview: previewText(reply),
   });
   return { status: 200, reply: reply ?? undefined };
 }
 
+/**
+ * POST /webhook and POST /simulate entry.
+ * Instagram DMs: hybrid debounce — hold HTTP until 4s silence + pipeline; last waiter gets reply.
+ * TikTok / other: synchronous pipeline (unchanged).
+ */
 export async function handleWebhook(body: unknown): Promise<{ status: number; reply?: string }> {
+  if (isInstagramEcho(body)) {
+    console.log("[ig] Echo message ignored");
+    return { status: 200 };
+  }
+
   const payload = parseBody(body);
   if (!payload) {
     marcoLog("inbound_rejected", { reason: "parse_body_failed_or_missing_user_id" });
@@ -249,6 +512,7 @@ export async function handleWebhook(body: unknown): Promise<{ status: number; re
 
   const requestId = newMarcoRequestId();
   const correlationId = marcoCorrelationId(payload.platform, payload.userId);
+  const log: MarcoLogContext = { requestId, correlationId };
 
   marcoLog("inbound_accepted", {
     requestId,
@@ -262,35 +526,28 @@ export async function handleWebhook(body: unknown): Promise<{ status: number; re
     marco_previous_outbound_set: Boolean(payload.marcoPreviousOutbound?.trim()),
   });
 
-  try {
-    const keys =
-      body && typeof body === "object" && !Array.isArray(body)
-        ? Object.keys(body as Record<string, unknown>).slice(0, 60)
-        : [];
-    marcoLogDebug("inbound_raw_top_keys", { requestId, correlationId, keys });
-  } catch {
-    /* ignore */
+  const isIg = isInstagramPlatform(payload.platform) && payload.commentOrDm === "dm";
+
+  if (isIg) {
+    if (!payload.message.trim()) {
+      return handleIncomingPayload(payload, log);
+    }
+
+    const senderId = extractInstagramSenderId(body, payload);
+    const messageText = extractInstagramMessageText(body, payload);
+
+    console.log(`[ig] Inbound from sender ${senderId} (lead key ${payload.userId})`);
+
+    return await enqueueInstagramDm(senderId, messageText, payload, log);
   }
 
-  marcoLogDebug("inbound_raw_json", {
-    requestId,
-    correlationId,
-    body_preview: previewText(
-      (() => {
-        try {
-          return JSON.stringify(body);
-        } catch {
-          return "";
-        }
-      })(),
-      500,
-    ),
-  });
+  if (!payload.message.trim()) {
+    return handleIncomingPayload(payload, log);
+  }
 
-  return handleIncomingPayload(payload, { requestId, correlationId });
+  return handleIncomingPayload(payload, log);
 }
 
-// Allow running as script for local test
 if (process.argv[1]?.endsWith("webhook.ts")) {
   handleWebhook({
     platform: "instagram",
@@ -301,4 +558,3 @@ if (process.argv[1]?.endsWith("webhook.ts")) {
     .then((r) => console.log(r))
     .catch((e) => console.error(e));
 }
-

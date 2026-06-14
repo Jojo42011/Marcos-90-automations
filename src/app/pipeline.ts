@@ -21,6 +21,10 @@ import {
   PHONE_JUST_CAPTURED_REPLY,
 } from "./funnelDeterministic.js";
 import {
+  buildOutOfStateReferralOffer,
+  countAssistantsSinceLastUser,
+  countTrailingAssistantsAtEnd,
+  detectOutOfStateLead,
   detectAdCampaign,
   getLastUserMessageText,
   isLastUserMessageRepeated,
@@ -29,8 +33,12 @@ import {
   latestAssistantEchoesEarlierInThread,
   leadThreadSignalsExperiencedBuyer,
   messageAsksBuilderIdentity,
+  REFERRAL_AREA_FOLLOW_UP,
   signalsLookingOutsideSanAntonio,
+  signalsReferralAcceptance,
+  signalsReferralDeclineOrWantsSanAntonio,
   threadContainsFirstTimeBuyingQuestion,
+  threadContainsReferralOffer,
 } from "./conversationUtils.js";
 import {
   marcoCorrelationId,
@@ -45,6 +53,99 @@ export interface PipelineResult {
   reply: string | null;
   /** Null when a brand-new contact failed the buyer-intent gate (no lead created). */
   lead: Lead | null;
+}
+
+type ReferralFlowResult =
+  | { handled: true; lead: Lead; reply: string | null }
+  | { handled: false; lead: Lead };
+
+/**
+ * Out-of-state referral handling. `handled: false` continues the normal funnel.
+ */
+function resolveReferralFlow(
+  lead: Lead,
+  conversation: Conversation,
+  latestText: string,
+  ctx: MarcoLogContext,
+): ReferralFlowResult {
+  const offeredInThread = threadContainsReferralOffer(conversation);
+  const status = lead.referralStatus ?? null;
+
+  if (status === "referral_needed") {
+    const areaNote = latestText.trim();
+    const notes = lead.crmNotes?.trim()
+      ? `${lead.crmNotes.trim()}\nReferral area: ${areaNote}`
+      : `Referral area: ${areaNote}`;
+    marcoLog("referral_area_captured", {
+      requestId: ctx.requestId,
+      correlationId: ctx.correlationId,
+      lead_id: lead.id,
+      area_preview: previewText(areaNote, 120),
+    });
+    return {
+      handled: true,
+      lead: { ...lead, crmNotes: notes },
+      reply: "Got it, I'll get you connected with the right person out there.",
+    };
+  }
+
+  if (status === "offered" || offeredInThread) {
+    if (signalsReferralAcceptance(latestText)) {
+      marcoLog("referral_accepted", {
+        requestId: ctx.requestId,
+        correlationId: ctx.correlationId,
+        lead_id: lead.id,
+      });
+      const tags = lead.tags?.includes("referral_needed")
+        ? lead.tags
+        : [...(lead.tags ?? []), "referral_needed"];
+      return {
+        handled: true,
+        lead: {
+          ...lead,
+          referralStatus: "referral_needed",
+          tags,
+          crmPriority: "high",
+        },
+        reply: REFERRAL_AREA_FOLLOW_UP,
+      };
+    }
+    if (signalsReferralDeclineOrWantsSanAntonio(latestText)) {
+      marcoLog("referral_declined_resume_funnel", {
+        requestId: ctx.requestId,
+        correlationId: ctx.correlationId,
+        lead_id: lead.id,
+      });
+      return {
+        handled: false,
+        lead: {
+          ...lead,
+          referralStatus: null,
+          state: FunnelStage.New,
+        },
+      };
+    }
+    return { handled: false, lead };
+  }
+
+  const oos = detectOutOfStateLead(latestText);
+  if (!oos.detected) {
+    return { handled: false, lead };
+  }
+
+  marcoLog("out_of_state_detected", {
+    requestId: ctx.requestId,
+    correlationId: ctx.correlationId,
+    lead_id: lead.id,
+    region_label: oos.regionLabel,
+    message_preview: previewText(latestText),
+  });
+
+  return {
+    handled: true,
+    lead: { ...lead, referralStatus: "offered" },
+    reply: buildOutOfStateReferralOffer(oos.regionLabel),
+  };
 }
 
 /** First touch from Instagram comment automation: no comment text, no LLM — DM carries the real opener. */
@@ -234,6 +335,31 @@ export async function run(
   const hadPhone = Boolean(lead.phone);
   const hadEmail = Boolean(lead.email);
 
+  const latestLeadText = getLastUserMessageText(conversation);
+
+  /** Out-of-state referral branch (non-Texas only; Texas metros keep the normal funnel). */
+  const referralResult = resolveReferralFlow(lead, conversation, latestLeadText, ctx);
+  lead = referralResult.lead;
+  if (referralResult.handled) {
+    if (referralResult.reply) {
+      await db.appendMessage(lead.id, "assistant", referralResult.reply);
+    }
+    await db.updateLead(lead);
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: referralResult.reply ? "referral_flow" : "referral_flow_no_reply",
+      reply_chars: referralResult.reply?.length ?? 0,
+      reply_preview: previewText(referralResult.reply),
+      funnel_state_final: lead.state,
+      referral_status: lead.referralStatus ?? null,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: referralResult.reply };
+  }
+
   const userTurnCount = conversation.messages.filter((m) => m.role === "user").length;
   const assistantTurnCount = conversation.messages.filter((m) => m.role === "assistant").length;
 
@@ -291,7 +417,6 @@ export async function run(
       .join(" ");
   }
 
-  const latestLeadText = getLastUserMessageText(conversation);
   if (messageAsksBuilderIdentity(latestLeadText)) {
     coachingNote = [
       coachingNote,
@@ -318,6 +443,7 @@ export async function run(
   }
   coachingNote = [
     coachingNote,
+    "NO_NEEDS_ANALYSIS: Never ask about preferences, what is important in a home, timeline, bedrooms, bathrooms, or home features. Acknowledge, brief answer if they asked something specific, then steer to a mobile number only.",
     "PHONE_ONLY_DELIVERY: Never ask phone or email, never offer email for breakdowns or listings. Text/SMS to mobile only. If they gave an email, thank briefly and still ask for number to text the packet. No hyphen or dash pauses between phrases in the reply.",
     ...(payload.platform.toLowerCase().includes("tik") || igDmTurn
       ? [
@@ -503,6 +629,25 @@ export async function run(
       correlationId,
       funnel_state: lead.state,
     });
+  }
+
+  if (reply) {
+    const freshConv = await db.getConversation(lead.id);
+    const trailingAssistants = countTrailingAssistantsAtEnd(freshConv);
+    const alreadyReplied = countAssistantsSinceLastUser(freshConv) >= 1;
+    const lastRole = freshConv.messages[freshConv.messages.length - 1]?.role;
+    if (lastRole !== "user" || alreadyReplied || trailingAssistants >= 2) {
+      marcoLog("consecutive_assistant_guard", {
+        requestId,
+        correlationId,
+        lead_id: lead.id,
+        trailing_assistant_count: trailingAssistants,
+        already_replied_to_last_user: alreadyReplied,
+        last_message_role: lastRole ?? null,
+        action: "suppress_reply",
+      });
+      reply = null;
+    }
   }
 
   if (reply) {

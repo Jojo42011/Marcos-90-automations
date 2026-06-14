@@ -3,9 +3,15 @@
  * Harvey chat tools — Anthropic tool definitions + DB-backed executors.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.HARVEY_TOOL_DEFINITIONS = void 0;
+exports.HARVEY_GEMINI_TOOLS = exports.HARVEY_TOOL_DEFINITIONS = void 0;
 exports.executeHarveyTool = executeHarveyTool;
 const db_js_1 = require("../core/db.js");
+const socialStore_js_1 = require("../core/socialStore.js");
+const index_js_1 = require("../agents/morningScan/index.js");
+const index_js_2 = require("../agents/reporting/index.js");
+const index_js_3 = require("../agents/contentSuggestions/index.js");
+const index_js_4 = require("../agents/escalations/index.js");
+const index_js_5 = require("../agents/harveyContentDigest/index.js");
 const MS_48H = 48 * 60 * 60 * 1000;
 const POST_PHONE_STAGES = new Set([
     "phone_captured",
@@ -137,8 +143,226 @@ exports.HARVEY_TOOL_DEFINITIONS = [
         description: "Leads stuck in new or opening_asked_first_time with no activity in 48+ hours.",
         input_schema: { type: "object", properties: {}, required: [] },
     },
+    {
+        name: "get_social_summary",
+        description: "Get Marco's TikTok social media performance summary including views, engagement, content patterns, and week-over-week trends. Use when Marco asks about his content, TikTok performance, social media stats, or how his videos are doing.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_social_videos",
+        description: "Get a list of Marco's TikTok videos filtered by performance tier and time period. Use when Marco asks about his best videos, worst videos, recent videos, or wants to see specific video performance.",
+        input_schema: {
+            type: "object",
+            properties: {
+                tier: {
+                    type: "string",
+                    enum: ["hot", "average", "warm", "cold"],
+                    description: "Performance tier — hot=top performers, average/warm=mid tier, cold=underperformers",
+                },
+                limit: { type: "number", description: "Number of videos to return (default 10)" },
+                days: { type: "number", description: "Only return videos from the last N days" },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "get_morning_scan",
+        description: "Get the latest overnight scan results — new comments, mentions, and flagged lead-intent messages from TikTok/Instagram that need attention.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_pending_comment_replies",
+        description: "Get comment replies that are pending review, especially negative comments that need human approval before being sent.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_evening_pull",
+        description: "Get the latest evening performance report — last 7 days video scores, top performer, and underperformers.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_content_suggestions",
+        description: "Get this week's AI-generated content ideas for TikTok based on recent performance data and current trends.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_content_digest",
+        description: "Get the latest content performance digest — a summary of TikTok stats, top/underperforming videos, escalations, and content ideas, updated every 3 days.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_recent_escalations",
+        description: "Get recent escalation alerts — negative comments needing review, strong lead intent in DMs, or videos going viral.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
 ];
+exports.HARVEY_GEMINI_TOOLS = {
+    functionDeclarations: [
+        {
+            name: "get_lead_summary",
+            description: "Get a summary of all leads in the CRM pipeline including counts by stage and funnel position.",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+        {
+            name: "get_hot_leads",
+            description: "Get the list of hot leads — leads with phone captured who need immediate follow up.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    limit: {
+                        type: "NUMBER",
+                        description: "Maximum number of leads to return, default 10",
+                    },
+                },
+                required: [],
+            },
+        },
+        {
+            name: "get_funnel_stats",
+            description: "Get funnel statistics showing how many leads are at each stage of the pipeline.",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+        {
+            name: "search_leads",
+            description: "Search for a specific lead by name, username, or phone number.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    query: {
+                        type: "STRING",
+                        description: "The name, username, or phone number to search for",
+                    },
+                },
+                required: ["query"],
+            },
+        },
+        {
+            name: "get_conversation",
+            description: "Get the full conversation history for a specific lead.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    lead_id: {
+                        type: "STRING",
+                        description: "The lead ID to get conversation for",
+                    },
+                },
+                required: ["lead_id"],
+            },
+        },
+        {
+            name: "get_stalled_leads",
+            description: "Get leads that have gone cold or stalled in the pipeline with no recent activity.",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+        {
+            name: "get_social_summary",
+            description: "Get live TikTok social media performance data from Apify including current avg views per video, total views, followers, top performing videos, and content patterns. Always call this for TikTok performance questions.",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+        {
+            name: "get_social_videos",
+            description: "Get a list of TikTok videos filtered by performance tier. Use for questions about best videos, worst videos, or recent video performance.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    tier: {
+                        type: "STRING",
+                        description: "Performance tier: hot, warm, or cold",
+                    },
+                    limit: {
+                        type: "NUMBER",
+                        description: "Number of videos to return",
+                    },
+                    days: {
+                        type: "NUMBER",
+                        description: "Only return videos from the last N days",
+                    },
+                },
+                required: [],
+            },
+        },
+        {
+            name: "get_morning_scan",
+            description: "Get the latest overnight scan — new comments, mentions, and lead-intent flags from social platforms.",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+        {
+            name: "get_pending_comment_replies",
+            description: "Get comment replies pending review, especially negative comments needing human approval.",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+        {
+            name: "get_evening_pull",
+            description: "Get the latest evening performance report — last 7 days scores, top performer, underperformers.",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+        {
+            name: "get_content_suggestions",
+            description: "Get this week's AI-generated TikTok content ideas based on recent performance and trends.",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+        {
+            name: "get_content_digest",
+            description: "Get the latest content performance digest — TikTok stats, top/underperforming videos, escalations, and content ideas (updated every 3 days).",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+        {
+            name: "get_recent_escalations",
+            description: "Get recent escalation alerts for negative comments, lead intent, or viral spikes.",
+            parameters: {
+                type: "OBJECT",
+                properties: {},
+                required: [],
+            },
+        },
+    ],
+};
+function normalizeHarveyToolInput(input) {
+    const out = { ...input };
+    if (out.lead_id != null && out.leadId == null) {
+        out.leadId = out.lead_id;
+    }
+    return out;
+}
 async function executeHarveyTool(name, input) {
+    const normalized = normalizeHarveyToolInput(input);
     switch (name) {
         case "get_lead_summary":
             return getLeadSummary();
@@ -147,11 +371,44 @@ async function executeHarveyTool(name, input) {
         case "get_funnel_stats":
             return getFunnelStats();
         case "search_leads":
-            return searchLeads(String(input.query ?? ""));
+            return searchLeads(String(normalized.query ?? ""));
         case "get_conversation":
-            return getConversationForLead(String(input.leadId ?? ""));
+            return getConversationForLead(String(normalized.leadId ?? ""));
         case "get_stalled_leads":
             return getStalledLeads();
+        case "get_social_summary": {
+            const summary = (0, socialStore_js_1.getSocialSummaryForHarvey)();
+            const stats = summary.stats;
+            const profile = summary.profile;
+            console.log("[Harvey Tools] get_social_summary result:");
+            console.log("  dataAvailable:", summary.dataAvailable);
+            console.log("  avgViews:", stats?.avgViewsPerVideo ?? summary.avg_views);
+            console.log("  followers:", profile?.followers ?? summary.follower_count);
+            console.log("  videosTracked:", stats?.videosTracked ?? summary.total_videos);
+            console.log("  pulledAt:", summary.pulledAt ?? summary.fetchedAt);
+            return summary;
+        }
+        case "get_social_videos":
+            return getSocialVideosForHarvey(normalized);
+        case "get_morning_scan": {
+            const scan = (0, index_js_1.getLatestMorningScan)();
+            return { result: scan };
+        }
+        case "get_pending_comment_replies": {
+            return { replies: (0, socialStore_js_1.getPendingCommentReplies)() };
+        }
+        case "get_evening_pull": {
+            return (0, index_js_2.getLatestReportingSnapshot)("evening");
+        }
+        case "get_content_suggestions": {
+            return (0, index_js_3.getLatestContentSuggestions)();
+        }
+        case "get_content_digest": {
+            return (0, index_js_5.getLatestContentDigest)();
+        }
+        case "get_recent_escalations": {
+            return { escalations: (0, index_js_4.getRecentEscalations)(10) };
+        }
         default:
             return { error: `Unknown tool: ${name}` };
     }
@@ -300,4 +557,36 @@ async function getStalledLeads() {
     }));
     rows.sort((a, b) => b.hoursSinceActivity - a.hoursSinceActivity);
     return { count: rows.length, leads: rows };
+}
+function getSocialVideosForHarvey(input) {
+    const tierRaw = input.tier;
+    let tier;
+    if (tierRaw === "hot" || tierRaw === "average" || tierRaw === "cold" || tierRaw === "warm") {
+        tier = tierRaw === "average" ? "warm" : String(tierRaw);
+    }
+    const limit = typeof input.limit === "number" && Number.isFinite(input.limit)
+        ? Math.min(100, Math.max(1, Math.floor(input.limit)))
+        : 10;
+    const days = typeof input.days === "number" && Number.isFinite(input.days)
+        ? Math.max(1, Math.floor(input.days))
+        : undefined;
+    const videos = (0, socialStore_js_1.getSocialVideos)({ tier, limit, days });
+    console.log("[Harvey] get_social_videos called, returned:", videos.length, "videos");
+    return {
+        count: videos.length,
+        videos: videos.map((v) => ({
+            url: v.url,
+            caption: v.caption,
+            postedAt: v.postedAt,
+            views: v.views,
+            likes: v.likes,
+            comments: v.comments,
+            shares: v.shares,
+            saves: v.saves,
+            score: v.score,
+            tier: v.tier,
+            viral: v.viral,
+            scoreBreakdown: v.scoreBreakdown,
+        })),
+    };
 }

@@ -187,6 +187,11 @@ export interface Lead {
   /** CRM user assigned to this lead. */
   assignedUserId?: string | null;
   assignedUserName?: string | null;
+  /**
+   * Out-of-state referral flow: `offered` = referral pitch sent;
+   * `referral_needed` = lead accepted, Marco should connect them with a local agent.
+   */
+  referralStatus?: "offered" | "referral_needed" | null;
   createdAt: string;
   updatedAt: string;
 }
