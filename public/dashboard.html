@@ -303,6 +303,18 @@
       color: var(--muted);
     }
     .chip b { color: var(--text); font-weight: 600; }
+    .chip.dm-source-chip {
+      transition: all 0.15s ease;
+    }
+    .chip.dm-source-chip:hover {
+      background: rgba(0, 212, 255, 0.1) !important;
+      border-color: rgba(0, 212, 255, 0.4) !important;
+      transform: scale(1.03);
+    }
+    html[data-theme="light"] .chip.dm-source-chip:hover {
+      background: rgba(14, 116, 144, 0.08) !important;
+      border-color: rgba(14, 116, 144, 0.35) !important;
+    }
     .table-wrap {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -2142,6 +2154,34 @@
       transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
     .crm-smart-filter:hover { color: var(--text); border-color: var(--border-bright); }
+
+    @keyframes unseen-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .unseen-phone-dot {
+      animation: unseen-pulse 2s ease-in-out infinite;
+    }
+    #unseen-phone-badge {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: #0a84ff;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: var(--mono);
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    #leads-pagination button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
     .crm-smart-filter.active {
       background: var(--cyan-dim);
       color: var(--cyan);
@@ -2290,6 +2330,15 @@
     .crm-mass-btn:disabled { opacity: 0.55; cursor: progress; }
     .crm-mass-btn.crm-mass-clear { color: #fca5a5; border-color: rgba(248, 113, 113, 0.3); }
     .crm-mass-btn.crm-mass-clear:hover { border-color: #f87171; background: rgba(248, 113, 113, 0.12); }
+    .crm-mass-btn.crm-mass-delete {
+      background: rgba(255, 45, 85, 0.1);
+      color: #ff2d55;
+      border-color: #ff2d55;
+    }
+    .crm-mass-btn.crm-mass-delete:hover {
+      background: rgba(255, 45, 85, 0.18);
+      border-color: #ff2d55;
+    }
     /* Toast notifications */
     .crm-toast-wrap {
       position: fixed;
@@ -3169,6 +3218,163 @@
     html[data-theme="light"] #view-agent .state-pill { color: #475569; background: var(--surface2); }
     html[data-theme="light"] #view-agent .phone { color: #15803d; }
     html[data-theme="light"] #view-agent tbody tr:hover td { background: rgba(14, 116, 144, 0.05); }
+    .dm-agent-phone-breakdown {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 1rem;
+    }
+    .dm-agent-source-card {
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      border-radius: 4px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    #view-agent .dm-stat-card,
+    #view-agent .dm-platform-card {
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    #view-agent .dm-stat-card:hover,
+    #view-agent .dm-platform-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 212, 255, 0.12);
+      border-color: rgba(0, 212, 255, 0.35) !important;
+    }
+    @keyframes fade-slide-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    #view-agent .dm-stat-card {
+      animation: fade-slide-in 0.4s ease-out backwards;
+    }
+    #view-agent .dm-stat-card:nth-child(1) { animation-delay: 0s; }
+    #view-agent .dm-stat-card:nth-child(2) { animation-delay: 0.05s; }
+    #view-agent .dm-platform-card {
+      animation: fade-slide-in 0.4s ease-out backwards;
+    }
+    #view-agent .dm-platform-card:nth-child(1) { animation-delay: 0.1s; }
+    #view-agent .dm-platform-card:nth-child(2) { animation-delay: 0.15s; }
+    @keyframes platform-glow {
+      0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.08); }
+    }
+    .dm-platform-icon-glow {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dm-platform-icon-glow::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 28px;
+      height: 28px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 212, 255, 0.4), transparent 70%);
+      animation: platform-glow 3s ease-in-out infinite;
+      z-index: -1;
+    }
+    html[data-theme="light"] .dm-platform-icon-glow::before {
+      background: radial-gradient(circle, rgba(14, 116, 144, 0.25), transparent 70%);
+    }
+    @keyframes new-entry-flash {
+      0% { background: rgba(0, 212, 255, 0.15); }
+      100% { background: transparent; }
+    }
+    .dm-new-entry {
+      animation: new-entry-flash 2s ease-out;
+    }
+    html[data-theme="light"] .dm-new-entry {
+      animation-name: new-entry-flash-light;
+    }
+    @keyframes new-entry-flash-light {
+      0% { background: rgba(14, 116, 144, 0.12); }
+      100% { background: transparent; }
+    }
+    .dm-auto-pulse {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #00ff88;
+      animation: platform-glow 1.5s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes refresh-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .dm-refresh-icon.refreshing {
+      animation: refresh-spin 0.6s ease-in-out;
+      display: inline-block;
+    }
+    .dm-agent-source-card .dm-agent-source-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 11px;
+      color: #888;
+      letter-spacing: 2px;
+      font-weight: 600;
+    }
+    .dm-agent-source-card .dm-agent-source-count {
+      font-size: 28px;
+      font-weight: bold;
+      color: #fff;
+      line-height: 1.1;
+    }
+    .dm-agent-source-card .dm-agent-source-sub {
+      font-size: 11px;
+      color: #888;
+      margin-top: 4px;
+    }
+    .dm-agent-recent-captures {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 1rem;
+    }
+    .dm-agent-recent-col .dm-agent-recent-heading {
+      font-size: 10px;
+      color: #888;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .dm-agent-recent-list {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid rgba(0, 212, 255, 0.15);
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .dm-agent-recent-item {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+    }
+    .dm-agent-recent-item:last-child { border-bottom: none; }
+    .dm-agent-recent-item .dm-agent-recent-name { color: #fff; }
+    .dm-agent-recent-item .dm-agent-recent-meta { color: #888; font-size: 10px; margin-top: 2px; }
+    .dm-agent-recent-empty { color: #555; font-size: 11px; padding: 8px; }
+    html[data-theme="light"] .dm-agent-source-card,
+    html[data-theme="light"] .dm-agent-recent-list {
+      border-color: var(--border);
+      background: var(--surface);
+    }
+    html[data-theme="light"] .dm-agent-source-card .dm-agent-source-count,
+    html[data-theme="light"] .dm-agent-recent-item .dm-agent-recent-name {
+      color: var(--text);
+    }
+    html[data-theme="light"] .dm-agent-source-card .dm-agent-source-label,
+    html[data-theme="light"] .dm-agent-source-card .dm-agent-source-sub,
+    html[data-theme="light"] .dm-agent-recent-col .dm-agent-recent-heading,
+    html[data-theme="light"] .dm-agent-recent-item .dm-agent-recent-meta {
+      color: var(--muted);
+    }
 
     /* Light theme — CRM overview: Today & Overdue + Volume & GCI */
     html[data-theme="light"] .crm-ov-card { background: #fff; border-color: var(--border); }
@@ -3564,15 +3770,18 @@
           <p class="meta" id="generated">Loading…</p>
         </div>
         <div class="toolbar">
-          <label class="meta" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+          <label class="meta dm-auto-label" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
             <input type="checkbox" id="auto" />
             Auto 30s
+            <span id="auto-refresh-pulse" class="dm-auto-pulse" style="display:none;"></span>
           </label>
-          <button type="button" class="primary" id="refresh">Refresh</button>
+          <button type="button" class="primary" id="refresh"><span class="dm-refresh-icon" aria-hidden="true">↻</span> Refresh</button>
         </div>
       </header>
       <div class="err" id="err"></div>
       <section class="stats" id="stats"></section>
+      <div id="dm-agent-phone-breakdown" class="dm-agent-phone-breakdown"></div>
+      <div id="dm-agent-recent-captures" class="dm-agent-recent-captures"></div>
       <div class="chips" id="chips"></div>
       <div class="table-wrap">
         <table>
@@ -3602,7 +3811,7 @@
       <aside class="crm-sidebar">
         <div class="crm-logo">Marco · CRM</div>
         <button type="button" class="crm-side-btn active" data-crm-section="dashboard">Overview <span class="crm-count" id="crm-count-dashboard">0</span></button>
-        <button type="button" class="crm-side-btn" data-crm-section="leads">Leads <span class="crm-count" id="crm-count-leads">0</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="leads">Leads <span class="crm-count" id="crm-count-leads">0</span><span id="unseen-phone-badge"></span></button>
         <button type="button" class="crm-side-btn" data-crm-section="calls">Calls <span class="crm-count" id="crm-count-calls" title="Urgent / follow-up in queue">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="chats">Chats <span class="crm-count" id="crm-count-chats">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="deals">Deals <span class="crm-count" id="crm-count-deals">0</span></button>
@@ -3931,6 +4140,7 @@
         </span>
         <button type="button" class="crm-mass-btn" data-mass="status">⚑ Change Status</button>
         <button type="button" class="crm-mass-btn" data-mass="export">⬇ Export CSV</button>
+        <button type="button" class="crm-mass-btn crm-mass-delete" id="crm-mass-delete-btn">🗑 Delete</button>
         <button type="button" class="crm-mass-btn crm-mass-clear" data-mass="clear">✕ Clear</button>
       </div>
     </div>
@@ -4242,6 +4452,54 @@
       document.getElementById(id).classList.add("active");
     }
     let cache = null;
+    let dmPreviousIgIds = new Set();
+    let dmPreviousTtIds = new Set();
+    let dmAutoTimer = null;
+
+    function animateCountUp(element, targetValue, duration = 800) {
+      if (!element) return;
+      const target = Number(targetValue);
+      if (!Number.isFinite(target)) return;
+      const startValue = 0;
+      const startTime = performance.now();
+      function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = Math.round(startValue + (target - startValue) * eased);
+        element.textContent = current.toLocaleString();
+        if (progress < 1) requestAnimationFrame(update);
+        else element.textContent = target.toLocaleString();
+      }
+      requestAnimationFrame(update);
+    }
+
+    function dmAnimateStatCounts() {
+      document.querySelectorAll("#stats [data-dm-count]").forEach((el) => {
+        animateCountUp(el, Number(el.getAttribute("data-dm-count")));
+      });
+      const igEl = document.getElementById("dm-agent-ig-count");
+      const ttEl = document.getElementById("dm-agent-tt-count");
+      if (igEl) animateCountUp(igEl, Number(igEl.getAttribute("data-dm-count") || 0));
+      if (ttEl) animateCountUp(ttEl, Number(ttEl.getAttribute("data-dm-count") || 0));
+    }
+
+    function updateDmAutoRefreshPulse() {
+      const checkbox = document.getElementById("auto");
+      const pulse = document.getElementById("auto-refresh-pulse");
+      if (pulse) pulse.style.display = checkbox?.checked ? "inline-block" : "none";
+    }
+
+    async function handleDmAgentRefresh() {
+      const icon = document.querySelector("#refresh .dm-refresh-icon");
+      if (icon) icon.classList.add("refreshing");
+      try {
+        await load();
+      } finally {
+        setTimeout(() => icon?.classList.remove("refreshing"), 600);
+      }
+    }
+
     async function load() {
       hideErr();
       document.getElementById("generated").textContent = "Loading…";
@@ -4266,21 +4524,23 @@
       const t = data.totals;
       document.getElementById("stats").innerHTML = [
         { k: "Total leads", v: t.leads, s: "in database" },
-        { k: "Phones captured", v: t.withPhone, s: "with number on file" },
         { k: "Emails", v: t.withEmail, s: "on file" },
       ]
         .map(
           (x) =>
-            `<div class="stat"><label>${x.k}</label><strong>${x.v}</strong><sub>${x.s}</sub></div>`
+            `<div class="stat dm-stat-card"><label>${x.k}</label><strong data-dm-count="${x.v}">0</strong><sub>${x.s}</sub></div>`
         )
         .join("");
+      const leads = data.leads || [];
+      renderDmAgentSourceBreakdown(leads);
+      renderDmAgentRecentLists(leads);
+      dmAnimateStatCounts();
       const plat = data.byPlatform || {};
       const chips = Object.entries(plat)
         .sort((a, b) => b[1] - a[1])
-        .map(([p, n]) => `<span class="chip"><b>${n}</b> ${escapeHtml(p)}</span>`)
+        .map(([p, n]) => `<span class="chip dm-source-chip"><b>${n}</b> ${escapeHtml(p)}</span>`)
         .join("");
       document.getElementById("chips").innerHTML = chips ? chips : "";
-      const leads = data.leads || [];
       const tbody = document.getElementById("tbody");
       const empty = document.getElementById("empty");
       if (leads.length === 0) {
@@ -4323,6 +4583,60 @@
           </tr>`;
         })
         .join("");
+    }
+    function dmAgentLeadChannel(lead) {
+      const s = String(lead.source || "").trim().toLowerCase();
+      const p = String(lead.platform || "").trim().toLowerCase();
+      if (s === "instagram" || p.includes("insta")) return "instagram";
+      if (s === "tiktok" || p.includes("tik")) return "tiktok";
+      return null;
+    }
+    function renderDmAgentSourceBreakdown(leads) {
+      const igCount = leads.filter((l) => l.phone && dmAgentLeadChannel(l) === "instagram").length;
+      const ttCount = leads.filter((l) => l.phone && dmAgentLeadChannel(l) === "tiktok").length;
+      const el = document.getElementById("dm-agent-phone-breakdown");
+      if (!el) return;
+      el.innerHTML = `
+        <div class="dm-agent-source-card dm-platform-card">
+          <div class="dm-agent-source-label"><span class="dm-platform-icon-glow">📷</span><span>INSTAGRAM</span></div>
+          <div class="dm-agent-source-count" id="dm-agent-ig-count" data-dm-count="${igCount}">0</div>
+          <div class="dm-agent-source-sub">phone numbers captured</div>
+        </div>
+        <div class="dm-agent-source-card dm-platform-card">
+          <div class="dm-agent-source-label"><span class="dm-platform-icon-glow">🎵</span><span>TIKTOK</span></div>
+          <div class="dm-agent-source-count" id="dm-agent-tt-count" data-dm-count="${ttCount}">0</div>
+          <div class="dm-agent-source-sub">phone numbers captured</div>
+        </div>`;
+    }
+    function renderDmAgentRecentLists(leads) {
+      const sortByPhoneCapture = (a, b) =>
+        new Date(b.phoneCapturedAt || b.updatedAt || 0).getTime() - new Date(a.phoneCapturedAt || a.updatedAt || 0).getTime();
+      const igLeads = leads.filter((l) => l.phone && dmAgentLeadChannel(l) === "instagram").sort(sortByPhoneCapture).slice(0, 20);
+      const ttLeads = leads.filter((l) => l.phone && dmAgentLeadChannel(l) === "tiktok").sort(sortByPhoneCapture).slice(0, 20);
+      const buildLeadItem = (lead, isNew) => {
+        const when = lead.phoneCapturedAt || lead.updatedAt;
+        return `<div class="dm-agent-recent-item${isNew ? " dm-new-entry" : ""}">
+          <div class="dm-agent-recent-name">${escapeHtml(lead.name || lead.username || "--")}</div>
+          <div class="dm-agent-recent-meta">${escapeHtml(lead.phone || "")}${when ? " · " + escapeHtml(fmtDate(when)) : ""}</div>
+        </div>`;
+      };
+      const wrap = document.getElementById("dm-agent-recent-captures");
+      if (!wrap) return;
+      wrap.innerHTML = `
+        <div class="dm-agent-recent-col">
+          <div class="dm-agent-recent-heading">RECENT — INSTAGRAM</div>
+          <div class="dm-agent-recent-list" id="dm-agent-ig-list">
+            ${igLeads.length > 0 ? igLeads.map((l) => buildLeadItem(l, !dmPreviousIgIds.has(l.id) && dmPreviousIgIds.size > 0)).join("") : '<div class="dm-agent-recent-empty">No captures yet</div>'}
+          </div>
+        </div>
+        <div class="dm-agent-recent-col">
+          <div class="dm-agent-recent-heading">RECENT — TIKTOK</div>
+          <div class="dm-agent-recent-list" id="dm-agent-tt-list">
+            ${ttLeads.length > 0 ? ttLeads.map((l) => buildLeadItem(l, !dmPreviousTtIds.has(l.id) && dmPreviousTtIds.size > 0)).join("") : '<div class="dm-agent-recent-empty">No captures yet</div>'}
+          </div>
+        </div>`;
+      dmPreviousIgIds = new Set(igLeads.map((l) => l.id));
+      dmPreviousTtIds = new Set(ttLeads.map((l) => l.id));
     }
     function escapeHtml(s) {
       if (s == null) return "";
@@ -4546,7 +4860,7 @@
     document.getElementById("back-home-crm").addEventListener("click", () => {
       showView("view-home");
     });
-    document.getElementById("refresh").addEventListener("click", load);
+    document.getElementById("refresh").addEventListener("click", () => void handleDmAgentRefresh());
     document.getElementById("ads-refresh").addEventListener("click", loadAds);
     document.getElementById("crm-refresh").addEventListener("click", loadCrm);
     document.querySelectorAll(".crm-side-btn[data-crm-section]").forEach((btn) => {
@@ -4561,23 +4875,34 @@
       });
     });
     document.getElementById("crm-search").addEventListener("input", () => {
+      crmResetLeadsPage();
       if (crmCache) renderCrm(crmCache);
     });
     document.getElementById("crm-filter-status").addEventListener("change", () => {
+      crmResetLeadsPage();
       if (crmCache) renderCrm(crmCache);
     });
     document.getElementById("crm-filter-stage").addEventListener("change", () => {
+      crmResetLeadsPage();
       if (crmCache) renderCrm(crmCache);
     });
     document.getElementById("crm-filter-intent").addEventListener("change", () => {
+      crmResetLeadsPage();
       if (crmCache) renderCrm(crmCache);
     });
     let timer = null;
     document.getElementById("auto").addEventListener("change", function () {
+      if (dmAutoTimer) clearInterval(dmAutoTimer);
+      dmAutoTimer = null;
       if (timer) clearInterval(timer);
       timer = null;
-      if (this.checked) timer = setInterval(load, 30000);
+      if (this.checked) {
+        timer = setInterval(load, 30000);
+        dmAutoTimer = timer;
+      }
+      updateDmAutoRefreshPulse();
     });
+    updateDmAutoRefreshPulse();
     let adsTimer = null;
     document.getElementById("ads-auto").addEventListener("change", function () {
       if (adsTimer) clearInterval(adsTimer);
@@ -5885,6 +6210,102 @@
 
     let crmDrawerLeadId = null;
     let crmLeadsSmartFilter = "";
+    let leadsCurrentPage = 1;
+    const LEADS_PER_PAGE = 50;
+
+    function crmResetLeadsPage() {
+      leadsCurrentPage = 1;
+    }
+
+    function crmUnseenPhoneCount(leads) {
+      return (leads || []).filter((l) => l.phone && l.phoneNumberSeen === false).length;
+    }
+
+    function crmRenderUnseenPhoneBadge(count) {
+      const badge = document.getElementById("unseen-phone-badge");
+      if (!badge) return;
+      if (count > 0) {
+        badge.style.display = "inline-flex";
+        badge.textContent = String(count);
+      } else {
+        badge.style.display = "none";
+      }
+    }
+
+    function getLeadsPageNumbersToShow(current, total) {
+      const pages = [];
+      const range = 1;
+      for (let i = 1; i <= total; i++) {
+        if (i === 1 || i === total || (i >= current - range && i <= current + range)) {
+          pages.push(i);
+        } else if (pages[pages.length - 1] !== "...") {
+          pages.push("...");
+        }
+      }
+      return pages;
+    }
+
+    function renderLeadsPagination(totalItems, totalPages) {
+      const container = document.getElementById("leads-pagination");
+      if (!container) return;
+
+      if (totalPages <= 1) {
+        container.innerHTML = "";
+        return;
+      }
+
+      const startItem = (leadsCurrentPage - 1) * LEADS_PER_PAGE + 1;
+      const endItem = Math.min(leadsCurrentPage * LEADS_PER_PAGE, totalItems);
+      const pageNumbers = getLeadsPageNumbersToShow(leadsCurrentPage, totalPages);
+
+      let pagesHtml = "";
+      pageNumbers.forEach((p) => {
+        if (p === "...") {
+          pagesHtml += `<span style="padding:0 6px; color:#555;">...</span>`;
+        } else {
+          const isActive = p === leadsCurrentPage;
+          pagesHtml += `<button type="button" onclick="goToLeadsPage(${p})"
+            style="min-width:32px; padding:6px 10px; margin:0 2px; font-family:monospace;
+                   font-size:11px; border-radius:2px; cursor:pointer;
+                   background:${isActive ? "#0369a1" : "transparent"};
+                   color:${isActive ? "#fff" : "#00d4ff"};
+                   border:1px solid ${isActive ? "#0369a1" : "rgba(0,212,255,0.2)"};
+                   font-weight:${isActive ? "700" : "500"};">${p}</button>`;
+        }
+      });
+
+      container.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;
+                    margin-top:12px; font-family:monospace; flex-wrap:wrap; gap:8px;">
+          <div style="font-size:11px; color:#888;">
+            Showing ${startItem}-${endItem} of ${totalItems} leads
+          </div>
+          <div style="display:flex; align-items:center;">
+            <button type="button" onclick="goToLeadsPage(${leadsCurrentPage - 1})"
+              ${leadsCurrentPage === 1 ? "disabled" : ""}
+              style="padding:6px 10px; margin-right:6px; font-family:monospace; font-size:11px;
+                     border-radius:2px; cursor:pointer; background:transparent; color:#00d4ff;
+                     border:1px solid rgba(0,212,255,0.2);">
+              ← Prev
+            </button>
+            ${pagesHtml}
+            <button type="button" onclick="goToLeadsPage(${leadsCurrentPage + 1})"
+              ${leadsCurrentPage === totalPages ? "disabled" : ""}
+              style="padding:6px 10px; margin-left:6px; font-family:monospace; font-size:11px;
+                     border-radius:2px; cursor:pointer; background:transparent; color:#00d4ff;
+                     border:1px solid rgba(0,212,255,0.2);">
+              Next →
+            </button>
+          </div>
+        </div>`;
+    }
+
+    function goToLeadsPage(page) {
+      if (page < 1) return;
+      leadsCurrentPage = page;
+      if (crmCache) renderCrm(crmCache);
+      document.getElementById("leads-table-container")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
     let crmSelectedLeadIds = new Set();
 
     const CRM_STATUSES = ["new", "hot", "nurture", "watch", "dead", "unresponsive"];
@@ -6995,6 +7416,44 @@
       crmToast("Exported " + leads.length + " lead" + (leads.length === 1 ? "" : "s") + " to CSV.", "success");
     }
 
+    function crmMassDeleteLeads() {
+      const selectedIds = [...crmSelectedLeadIds];
+      if (selectedIds.length === 0) return;
+      const n = selectedIds.length;
+      const confirmed = confirm(
+        `Delete ${n} lead${n > 1 ? "s" : ""}? ` +
+          `This cannot be undone — all conversation history, notes, and CRM data for ${n > 1 ? "these leads" : "this lead"} will be permanently removed.`,
+      );
+      if (!confirmed) return;
+      void crmPerformMassDelete(selectedIds);
+    }
+
+    async function crmPerformMassDelete(leadIds) {
+      const u = new URL("/api/crm/leads/mass-delete", window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      const btn = document.getElementById("crm-mass-delete-btn");
+      const orig = btn ? btn.textContent : "";
+      if (btn) { btn.disabled = true; btn.textContent = "Deleting…"; }
+      try {
+        const res = await fetch(u.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leadIds }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Delete failed: " + res.status);
+        const deleted = typeof body.deleted === "number" ? body.deleted : leadIds.length;
+        crmToast("Deleted " + deleted + " lead" + (deleted !== 1 ? "s" : ""), "success");
+        crmClearSelection();
+        await loadCrm();
+      } catch (err) {
+        console.error("[MassDelete] Error:", err);
+        crmToast("Delete failed: " + (err instanceof Error ? err.message : String(err)), "error");
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = orig; }
+      }
+    }
+
     function crmMassAction(action) {
       if (action === "clear") { crmClearSelection(); return; }
       const leads = crmSelectedLeads();
@@ -7054,6 +7513,11 @@
             crmMassAction(btn.getAttribute("data-mass"));
           });
         });
+        const delBtn = document.getElementById("crm-mass-delete-btn");
+        if (delBtn && !delBtn.dataset.bound) {
+          delBtn.dataset.bound = "1";
+          delBtn.addEventListener("click", () => crmMassDeleteLeads());
+        }
       }
       document.querySelectorAll("[data-mass-close]").forEach((btn) => {
         if (btn.dataset.bound) return;
@@ -7091,6 +7555,7 @@
         btn.addEventListener("click", () => {
           const f = btn.getAttribute("data-smart-filter") || "";
           crmLeadsSmartFilter = crmLeadsSmartFilter === f ? "" : f;
+          crmResetLeadsPage();
           if (crmCache) renderCrm(crmCache);
         });
       });
@@ -7980,6 +8445,19 @@
       d.classList.add("open");
       d.setAttribute("aria-hidden", "false");
       document.body.style.overflow = "hidden";
+
+      if (row.phone && row.phoneNumberSeen === false) {
+        const u = new URL("/api/crm/lead/" + encodeURIComponent(leadId) + "/mark-phone-seen", window.location.origin);
+        if (token) u.searchParams.set("token", token);
+        fetch(u.toString(), { method: "POST" })
+          .then(() => {
+            row.phoneNumberSeen = true;
+            const dot = document.querySelector(`tr[data-lead-id="${leadId}"] .unseen-phone-dot`);
+            if (dot) dot.remove();
+            crmRenderUnseenPhoneBadge(crmUnseenPhoneCount((crmCache && crmCache.leads) || []));
+          })
+          .catch((err) => console.warn("[CRM] mark-phone-seen failed:", err));
+      }
     }
     async function crmSaveLeadDrawer() {
       if (!crmDrawerLeadId) return;
@@ -8288,6 +8766,7 @@
         crmAdvancedFilterLeads = body.leads || [];
         crmUpdateFilterBadge();
         crmCloseFilterPanel();
+        crmResetLeadsPage();
         if (crmCache) renderCrm(crmCache);
       } catch (e) {
         crmToast(e instanceof Error ? e.message : String(e), "error");
@@ -8299,6 +8778,7 @@
       crmAdvancedFilterLeads = null;
       crmUpdateFilterBadge();
       crmCloseFilterPanel();
+      crmResetLeadsPage();
       if (crmCache) renderCrm(crmCache);
     }
 
@@ -9510,6 +9990,7 @@
       const plansLeads = allLeads.filter((l) => crmNormalizeStatus(l.crmStatus) !== "dead");
       document.getElementById("crm-count-dashboard").textContent = allLeads.length;
       document.getElementById("crm-count-leads").textContent = allLeads.length;
+      crmRenderUnseenPhoneBadge(crmUnseenPhoneCount(allLeads));
       document.getElementById("crm-count-plans").textContent = crmAutoPlans.length;
       const usersCountEl = document.getElementById("crm-count-users");
       if (usersCountEl) usersCountEl.textContent = String(crmUsers.filter((u) => u.active).length);
@@ -10250,6 +10731,13 @@
 
       /* ——— LEADS ——— */
       if (section === "leads") {
+        const filteredLeads = leads;
+        const totalPages = Math.max(1, Math.ceil(filteredLeads.length / LEADS_PER_PAGE));
+        if (leadsCurrentPage > totalPages) leadsCurrentPage = totalPages;
+        if (leadsCurrentPage < 1) leadsCurrentPage = 1;
+        const startIdx = (leadsCurrentPage - 1) * LEADS_PER_PAGE;
+        const pageLeads = filteredLeads.slice(startIdx, startIdx + LEADS_PER_PAGE);
+
         const sfActive = crmLeadsSmartFilter === "active_transactions";
         const sfNew = crmLeadsSmartFilter === "new_leads";
         const sfNo = crmLeadsSmartFilter === "no_interaction";
@@ -10273,15 +10761,21 @@
               <button type="button" class="crm-smart-filter${sfUnattr ? " active" : ""}" data-smart-filter="campaign_unattributed">No ad tag</button>
               <span class="crm-select-hint">
                 <label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer;"><input type="checkbox" id="crm-leads-check-all" /> All</label>
-                <button type="button" id="crm-leads-check-none">None</button> · ${leads.length} shown
+                <button type="button" id="crm-leads-check-none">None</button> · ${filteredLeads.length} match · page ${leadsCurrentPage}/${totalPages}
               </span>
             </div>
           </div>
-          <div class="crm-table-wrap"><table class="crm-table"><thead><tr>
+          <div class="crm-table-wrap" id="leads-table-container"><table class="crm-table"><thead><tr>
             <th onclick="event.stopPropagation()"><input type="checkbox" id="crm-leads-check-all-th" aria-label="Select all visible leads" /></th><th>Name</th><th>Deals</th><th>Tags</th><th>Intent</th><th>Assigned</th><th>Ad campaign</th><th>Alerts</th><th>Source</th><th>Status</th><th>Stage</th><th>Calls</th><th>Phone</th><th>Text</th><th>Follow-up</th><th>Last</th><th></th>
           </tr></thead><tbody>
-          ${leads.length ? leads.map((row) => {
+          ${pageLeads.length ? pageLeads.map((row) => {
             const display = row.name || (row.username ? "@" + row.username : null) || row.phone || "—";
+            const hasUnseenPhone = row.phone && row.phoneNumberSeen === false;
+            const unseenDot = hasUnseenPhone
+              ? `<span class="unseen-phone-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%;
+                  background:#0a84ff; margin-right:6px; box-shadow:0 0 4px rgba(10,132,255,0.6);"
+                  title="New phone number — not yet viewed"></span>`
+              : "";
             const plan = crmFollowUpPlan(row);
             const intent = crmEffectiveIntent(row);
             const intentCls = crmIntentClass(intent);
@@ -10298,9 +10792,9 @@
             const dealCell = dealN > 0
               ? `<span class="crm-lead-deals-badge" data-lead-deals="${escapeHtml(row.id)}">${dealN}</span>`
               : "—";
-            return `<tr class="crm-lead-row ${intentCls}${isSel ? " selected" : ""}" data-lead-profile="${escapeHtml(row.id)}">
+            return `<tr class="crm-lead-row ${intentCls}${isSel ? " selected" : ""}" data-lead-profile="${escapeHtml(row.id)}" data-lead-id="${escapeHtml(row.id)}">
               <td onclick="event.stopPropagation()"><input type="checkbox" class="crm-lead-check" data-lead-check="${escapeHtml(row.id)}"${checked} /></td>
-              <td><b>${escapeHtml(display)}</b>${planIco}${skipIco}<br/><span class="crm-muted">${escapeHtml(row.username ? "@" + row.username : "")}</span></td>
+              <td>${unseenDot}<b>${escapeHtml(display)}</b>${planIco}${skipIco}<br/><span class="crm-muted">${escapeHtml(row.username ? "@" + row.username : "")}</span></td>
               <td onclick="event.stopPropagation()">${dealCell}</td>
               <td onclick="event.stopPropagation()" class="crm-tags-cell" data-crm-tags-cell="${escapeHtml(row.id)}">${crmTagCellHtml(row)}</td>
               <td onclick="event.stopPropagation()">${crmIntentSelectHtml(row.id, intent)}</td>
@@ -10318,11 +10812,14 @@
               <td><button type="button" class="crm-light-btn" style="padding:0.35rem 0.55rem;font-size:0.7rem;" data-crm-profile="${escapeHtml(row.id)}" onclick="event.stopPropagation()">Profile</button></td>
             </tr>`;
           }).join("") : `<tr><td colspan="17" style="text-align:center;padding:2rem;color:var(--muted);">No leads match this filter.</td></tr>`}
-          </tbody></table></div>`;
+          </tbody></table></div>
+          <div id="leads-pagination"></div>`;
         content.querySelector("#crm-clear-enroll-filter")?.addEventListener("click", () => {
           crmEnrollFilterPlanId = null;
+          crmResetLeadsPage();
           renderCrm(crmCache);
         });
+        renderLeadsPagination(filteredLeads.length, totalPages);
         content.querySelectorAll(".crm-lead-row[data-lead-profile]").forEach((tr) => {
           tr.addEventListener("click", () => { const id = tr.getAttribute("data-lead-profile"); if (id) crmOpenLeadDrawer(id); });
         });

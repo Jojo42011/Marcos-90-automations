@@ -61,6 +61,7 @@ import {
   appendLeadActivity,
   isLeadInactive30Days,
   listAllLeads,
+  deleteLeads,
 } from "./core/db.js";
 import {
   getAutoPlans,
@@ -864,6 +865,7 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
   const deal = body.deal !== undefined ? body.deal : undefined;
   const activity = body.activity !== undefined ? body.activity : undefined;
   const skipTraceResults = body.skipTraceResults !== undefined ? body.skipTraceResults : undefined;
+  const phoneNumberSeen = body.phoneNumberSeen === true ? true : body.phoneNumberSeen === false ? false : undefined;
 
   let criteria: Record<string, unknown> | null | undefined = undefined;
   if (body.criteria === null) criteria = null;
@@ -909,12 +911,69 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
       deal,
       activity,
       skipTraceResults,
+      phoneNumberSeen,
     });
     if (!updated) {
       res.status(404).json({ error: "Lead not found" });
       return;
     }
     res.status(200).json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+async function handleMassDeleteLeads(
+  req: express.Request,
+  res: express.Response,
+): Promise<void> {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const leadIds = req.body?.leadIds;
+  if (!Array.isArray(leadIds) || leadIds.length === 0) {
+    res.status(400).json({ error: "leadIds array required" });
+    return;
+  }
+  const ids = leadIds.map((id: unknown) => String(id || "").trim()).filter(Boolean);
+  if (!ids.length) {
+    res.status(400).json({ error: "leadIds array required" });
+    return;
+  }
+  try {
+    const deleted = await deleteLeads(ids);
+    console.log("[MassDelete] Deleted", deleted, "of", ids.length, "requested leads");
+    res.json({ deleted, requested: ids.length });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+}
+
+app.post("/api/leads/mass-delete", express.json(), handleMassDeleteLeads);
+console.log("[Routes] POST /api/leads/mass-delete registered");
+app.post("/api/crm/leads/mass-delete", express.json(), handleMassDeleteLeads);
+console.log("[Routes] POST /api/crm/leads/mass-delete registered");
+
+app.post("/api/crm/lead/:id/mark-phone-seen", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  if (!id) {
+    res.status(400).json({ error: "Missing lead id" });
+    return;
+  }
+  try {
+    const updated = await updateLeadCrmFields({ leadId: id, phoneNumberSeen: true });
+    if (!updated) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    res.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });

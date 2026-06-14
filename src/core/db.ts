@@ -29,6 +29,7 @@ import { getTagTemplates } from "./tagTemplates.js";
 import { getUsers } from "./users.js";
 import { buildTasksSummary } from "./tasks.js";
 import { buildMarcoTasksSummary, getMarcoTasks } from "./marcoTasks.js";
+import { sendSendblueMessage } from "../integrations/sendblue/index.js";
 
 const CRM_STATUS_SET = new Set<string>(CRM_STATUSES);
 
@@ -351,6 +352,28 @@ export async function getLeadById(leadId: string): Promise<Lead | null> {
   return leadsById.get(id) ?? null;
 }
 
+/** Permanently remove a lead, its conversation, and platform key mapping. */
+export function deleteLead(id: string): boolean {
+  const leadId = String(id || "").trim();
+  if (!leadId) return false;
+  const lead = leadsById.get(leadId);
+  if (!lead) return false;
+  leadsById.delete(leadId);
+  leadKeyToId.delete(leadKey(lead.platform, lead.userId));
+  conversationsByLeadId.delete(leadId);
+  return true;
+}
+
+/** Delete multiple leads; persists once if any were removed. */
+export async function deleteLeads(ids: string[]): Promise<number> {
+  let deleted = 0;
+  for (const id of ids) {
+    if (deleteLead(id)) deleted++;
+  }
+  if (deleted > 0) persistToFile();
+  return deleted;
+}
+
 /** Last 10 digits — matches US numbers with or without +1. */
 export function phoneMatchKey(phone: string | null | undefined): string | null {
   if (!phone?.trim()) return null;
@@ -371,10 +394,83 @@ export async function findLeadByPhoneDigits(phone: string): Promise<Lead | null>
   return null;
 }
 
+function leadHasPhone(phone: string | null | undefined): boolean {
+  return Boolean(phone?.trim());
+}
+
+async function notifyNewPhoneCapture(lead: Lead): Promise<void> {
+  const marcoNumber = process.env.MARCO_PHONE_NUMBER?.trim();
+  const carlosNumber = process.env.CARLOS_PHONE_NUMBER?.trim();
+  const message =
+    `📱 New phone captured: ${lead.name || lead.username || "Unknown lead"} ` +
+    `(${lead.source || "unknown source"}) — ${lead.phone}. Check CRM Leads tab.`;
+  const recipients = [marcoNumber, carlosNumber].filter(Boolean) as string[];
+
+  if (recipients.length === 0) {
+    console.warn(
+      "[PhoneCapture] MARCO_PHONE_NUMBER / CARLOS_PHONE_NUMBER not set — skipping SMS notification",
+    );
+    return;
+  }
+
+  for (const number of recipients) {
+    try {
+      const result = await sendSendblueMessage({ to: number, content: message });
+      if (!result.ok) {
+        console.error("[PhoneCapture] Notification failed for", number, ":", result.error);
+      } else {
+        console.log("[PhoneCapture] Notified", number);
+      }
+    } catch (err) {
+      console.error("[PhoneCapture] Notification failed for", number, ":", err);
+    }
+  }
+}
+
+function applyPhoneCaptureTransition(existing: Lead | null, lead: Lead): Lead {
+  const hadBefore = existing ? leadHasPhone(existing.phone) : false;
+  const hasNow = leadHasPhone(lead.phone);
+
+  if (!hadBefore && hasNow) {
+    const enriched: Lead = {
+      ...lead,
+      phoneCapturedAt: nowIso(),
+      phoneNumberSeen: false,
+    };
+    notifyNewPhoneCapture(enriched).catch((err) =>
+      console.error("[PhoneCapture] Notification error:", err),
+    );
+    return enriched;
+  }
+
+  if (!existing) {
+    return lead;
+  }
+
+  return {
+    ...lead,
+    phoneCapturedAt: lead.phoneCapturedAt ?? existing.phoneCapturedAt,
+    phoneNumberSeen:
+      lead.phoneNumberSeen !== undefined
+        ? lead.phoneNumberSeen
+        : existing.phoneNumberSeen ?? (existing.phoneCapturedAt ? false : true),
+  };
+}
+
 export async function createLead(lead: Omit<Lead, "id" | "createdAt" | "updatedAt">): Promise<Lead> {
   const id = String(idCounter++);
   const createdAt = nowIso();
-  const next: Lead = normalizeCrmDefaults({ ...lead, id, createdAt, updatedAt: createdAt });
+  let next = normalizeCrmDefaults({ ...lead, id, createdAt, updatedAt: createdAt });
+  if (leadHasPhone(next.phone)) {
+    next = {
+      ...next,
+      phoneCapturedAt: createdAt,
+      phoneNumberSeen: false,
+    };
+    notifyNewPhoneCapture(next).catch((err) =>
+      console.error("[PhoneCapture] Notification error:", err),
+    );
+  }
   leadsById.set(id, next);
   leadKeyToId.set(leadKey(lead.platform, lead.userId), id);
   conversationsByLeadId.set(id, { messages: [] });
@@ -385,11 +481,14 @@ export async function createLead(lead: Omit<Lead, "id" | "createdAt" | "updatedA
 export async function updateLead(lead: Lead): Promise<Lead | undefined> {
   const existing = leadsById.get(lead.id);
   if (!existing) {
-    leadsById.set(lead.id, normalizeCrmDefaults({ ...lead, createdAt: nowIso(), updatedAt: nowIso() }));
+    let normalized = normalizeCrmDefaults({ ...lead, createdAt: nowIso(), updatedAt: nowIso() });
+    normalized = applyPhoneCaptureTransition(null, normalized);
+    leadsById.set(lead.id, normalized);
     persistToFile();
     return leadsById.get(lead.id);
   }
-  const updated: Lead = normalizeCrmDefaults({ ...lead, updatedAt: nowIso() });
+  const normalized = normalizeCrmDefaults({ ...lead, updatedAt: nowIso() });
+  const updated = applyPhoneCaptureTransition(existing, normalized);
   leadsById.set(lead.id, updated);
   persistToFile();
   return updated;
@@ -628,6 +727,12 @@ function normalizeCrmDefaults(lead: Lead): Lead {
   ) {
     return lead;
   }
+  const phoneCapturedAt =
+    typeof (lead as Partial<Lead>).phoneCapturedAt === "string"
+      ? (lead as Partial<Lead>).phoneCapturedAt
+      : undefined;
+  const rawSeen = (lead as Partial<Lead>).phoneNumberSeen;
+  const phoneNumberSeen = rawSeen === false ? false : rawSeen === true ? true : undefined;
   return {
     ...lead,
     crmStatus,
@@ -649,6 +754,8 @@ function normalizeCrmDefaults(lead: Lead): Lead {
     skipTraceResults,
     assignedUserId,
     assignedUserName,
+    phoneCapturedAt,
+    phoneNumberSeen,
   };
 }
 
@@ -739,6 +846,8 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
       assignedUserId: lead.assignedUserId ?? null,
       assignedUserName: lead.assignedUserName ?? null,
       skipTraceResults: normalizeSkipTraceResults(lead.skipTraceResults),
+      phoneCapturedAt: lead.phoneCapturedAt ?? undefined,
+      phoneNumberSeen: lead.phoneNumberSeen ?? (lead.phoneCapturedAt ? false : true),
     });
   }
 
@@ -852,6 +961,7 @@ export async function updateLeadCrmFields(input: {
   skipTraceResults?: unknown;
   assignedUserId?: string | null;
   assignedUserName?: string | null;
+  phoneNumberSeen?: boolean;
 }): Promise<Lead | null> {
   const existing = leadsById.get(input.leadId);
   if (!existing) return null;
@@ -920,6 +1030,8 @@ export async function updateLeadCrmFields(input: {
           ? null
           : String(input.assignedUserName).trim()
         : lead.assignedUserName ?? null,
+    phoneNumberSeen:
+      input.phoneNumberSeen !== undefined ? input.phoneNumberSeen : lead.phoneNumberSeen,
   };
   await updateLead(next);
   return next;

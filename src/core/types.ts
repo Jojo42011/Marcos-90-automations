@@ -187,6 +187,10 @@ export interface Lead {
   /** CRM user assigned to this lead. */
   assignedUserId?: string | null;
   assignedUserName?: string | null;
+  /** ISO timestamp when phone was first captured. */
+  phoneCapturedAt?: string;
+  /** False until Marco/Carlos opens the lead in CRM after phone capture. */
+  phoneNumberSeen?: boolean;
   /**
    * Out-of-state referral flow: `offered` = referral pitch sent;
    * `referral_needed` = lead accepted, Marco should connect them with a local agent.
@@ -447,6 +451,8 @@ export interface DashboardLeadRow {
   assignedUserId: string | null;
   assignedUserName: string | null;
   skipTraceResults: SkipTraceResult[];
+  phoneCapturedAt?: string;
+  phoneNumberSeen?: boolean;
 }
 
 export type TaskPriority = "low" | "normal" | "high" | "urgent";

@@ -13,6 +13,8 @@ exports.updateCommandTask = updateCommandTask;
 exports.deleteCommandTask = deleteCommandTask;
 exports.getLead = getLead;
 exports.getLeadById = getLeadById;
+exports.deleteLead = deleteLead;
+exports.deleteLeads = deleteLeads;
 exports.phoneMatchKey = phoneMatchKey;
 exports.findLeadByPhoneDigits = findLeadByPhoneDigits;
 exports.createLead = createLead;
@@ -38,6 +40,7 @@ const tagTemplates_js_1 = require("./tagTemplates.js");
 const users_js_1 = require("./users.js");
 const tasks_js_1 = require("./tasks.js");
 const marcoTasks_js_1 = require("./marcoTasks.js");
+const index_js_1 = require("../integrations/sendblue/index.js");
 const CRM_STATUS_SET = new Set(types_js_1.CRM_STATUSES);
 /** Normalize CRM intent; defaults to buyer. */
 function normalizeCrmIntent(raw) {
@@ -330,6 +333,30 @@ async function getLeadById(leadId) {
         return null;
     return leadsById.get(id) ?? null;
 }
+/** Permanently remove a lead, its conversation, and platform key mapping. */
+function deleteLead(id) {
+    const leadId = String(id || "").trim();
+    if (!leadId)
+        return false;
+    const lead = leadsById.get(leadId);
+    if (!lead)
+        return false;
+    leadsById.delete(leadId);
+    leadKeyToId.delete(leadKey(lead.platform, lead.userId));
+    conversationsByLeadId.delete(leadId);
+    return true;
+}
+/** Delete multiple leads; persists once if any were removed. */
+async function deleteLeads(ids) {
+    let deleted = 0;
+    for (const id of ids) {
+        if (deleteLead(id))
+            deleted++;
+    }
+    if (deleted > 0)
+        persistToFile();
+    return deleted;
+}
 /** Last 10 digits — matches US numbers with or without +1. */
 function phoneMatchKey(phone) {
     if (!phone?.trim())
@@ -351,10 +378,69 @@ async function findLeadByPhoneDigits(phone) {
     }
     return null;
 }
+function leadHasPhone(phone) {
+    return Boolean(phone?.trim());
+}
+async function notifyNewPhoneCapture(lead) {
+    const marcoNumber = process.env.MARCO_PHONE_NUMBER?.trim();
+    const carlosNumber = process.env.CARLOS_PHONE_NUMBER?.trim();
+    const message = `📱 New phone captured: ${lead.name || lead.username || "Unknown lead"} ` +
+        `(${lead.source || "unknown source"}) — ${lead.phone}. Check CRM Leads tab.`;
+    const recipients = [marcoNumber, carlosNumber].filter(Boolean);
+    if (recipients.length === 0) {
+        console.warn("[PhoneCapture] MARCO_PHONE_NUMBER / CARLOS_PHONE_NUMBER not set — skipping SMS notification");
+        return;
+    }
+    for (const number of recipients) {
+        try {
+            const result = await (0, index_js_1.sendSendblueMessage)({ to: number, content: message });
+            if (!result.ok) {
+                console.error("[PhoneCapture] Notification failed for", number, ":", result.error);
+            }
+            else {
+                console.log("[PhoneCapture] Notified", number);
+            }
+        }
+        catch (err) {
+            console.error("[PhoneCapture] Notification failed for", number, ":", err);
+        }
+    }
+}
+function applyPhoneCaptureTransition(existing, lead) {
+    const hadBefore = existing ? leadHasPhone(existing.phone) : false;
+    const hasNow = leadHasPhone(lead.phone);
+    if (!hadBefore && hasNow) {
+        const enriched = {
+            ...lead,
+            phoneCapturedAt: nowIso(),
+            phoneNumberSeen: false,
+        };
+        notifyNewPhoneCapture(enriched).catch((err) => console.error("[PhoneCapture] Notification error:", err));
+        return enriched;
+    }
+    if (!existing) {
+        return lead;
+    }
+    return {
+        ...lead,
+        phoneCapturedAt: lead.phoneCapturedAt ?? existing.phoneCapturedAt,
+        phoneNumberSeen: lead.phoneNumberSeen !== undefined
+            ? lead.phoneNumberSeen
+            : existing.phoneNumberSeen ?? (existing.phoneCapturedAt ? false : true),
+    };
+}
 async function createLead(lead) {
     const id = String(idCounter++);
     const createdAt = nowIso();
-    const next = normalizeCrmDefaults({ ...lead, id, createdAt, updatedAt: createdAt });
+    let next = normalizeCrmDefaults({ ...lead, id, createdAt, updatedAt: createdAt });
+    if (leadHasPhone(next.phone)) {
+        next = {
+            ...next,
+            phoneCapturedAt: createdAt,
+            phoneNumberSeen: false,
+        };
+        notifyNewPhoneCapture(next).catch((err) => console.error("[PhoneCapture] Notification error:", err));
+    }
     leadsById.set(id, next);
     leadKeyToId.set(leadKey(lead.platform, lead.userId), id);
     conversationsByLeadId.set(id, { messages: [] });
@@ -364,11 +450,14 @@ async function createLead(lead) {
 async function updateLead(lead) {
     const existing = leadsById.get(lead.id);
     if (!existing) {
-        leadsById.set(lead.id, normalizeCrmDefaults({ ...lead, createdAt: nowIso(), updatedAt: nowIso() }));
+        let normalized = normalizeCrmDefaults({ ...lead, createdAt: nowIso(), updatedAt: nowIso() });
+        normalized = applyPhoneCaptureTransition(null, normalized);
+        leadsById.set(lead.id, normalized);
         persistToFile();
         return leadsById.get(lead.id);
     }
-    const updated = normalizeCrmDefaults({ ...lead, updatedAt: nowIso() });
+    const normalized = normalizeCrmDefaults({ ...lead, updatedAt: nowIso() });
+    const updated = applyPhoneCaptureTransition(existing, normalized);
     leadsById.set(lead.id, updated);
     persistToFile();
     return updated;
@@ -608,6 +697,11 @@ function normalizeCrmDefaults(lead) {
         (lead.assignedUserName ?? null) === assignedUserName) {
         return lead;
     }
+    const phoneCapturedAt = typeof lead.phoneCapturedAt === "string"
+        ? lead.phoneCapturedAt
+        : undefined;
+    const rawSeen = lead.phoneNumberSeen;
+    const phoneNumberSeen = rawSeen === false ? false : rawSeen === true ? true : undefined;
     return {
         ...lead,
         crmStatus,
@@ -629,6 +723,8 @@ function normalizeCrmDefaults(lead) {
         skipTraceResults,
         assignedUserId,
         assignedUserName,
+        phoneCapturedAt,
+        phoneNumberSeen,
     };
 }
 /**
@@ -717,6 +813,8 @@ async function getDashboardSnapshot() {
             assignedUserId: lead.assignedUserId ?? null,
             assignedUserName: lead.assignedUserName ?? null,
             skipTraceResults: normalizeSkipTraceResults(lead.skipTraceResults),
+            phoneCapturedAt: lead.phoneCapturedAt ?? undefined,
+            phoneNumberSeen: lead.phoneNumberSeen ?? (lead.phoneCapturedAt ? false : true),
         });
     }
     leads.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
@@ -860,6 +958,7 @@ async function updateLeadCrmFields(input) {
                 ? null
                 : String(input.assignedUserName).trim()
             : lead.assignedUserName ?? null,
+        phoneNumberSeen: input.phoneNumberSeen !== undefined ? input.phoneNumberSeen : lead.phoneNumberSeen,
     };
     await updateLead(next);
     return next;
