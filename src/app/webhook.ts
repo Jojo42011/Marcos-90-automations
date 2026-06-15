@@ -468,7 +468,7 @@ function parseBody(body: unknown): IncomingWebhookPayload | null {
 }
 
 /**
- * Direct pipeline entry — used by Sendblue/Sinch, TikTok, and Instagram comment handshakes.
+ * Direct pipeline entry — used by Twilio/Sinch SMS, TikTok, and Instagram comment handshakes.
  */
 export async function handleIncomingPayload(
   payload: IncomingWebhookPayload,

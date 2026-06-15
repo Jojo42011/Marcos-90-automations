@@ -7,7 +7,7 @@ exports.buildHarveyContext = buildHarveyContext;
 exports.contextToMetricsPanel = contextToMetricsPanel;
 const db_js_1 = require("../core/db.js");
 const index_js_1 = require("../integrations/llm/index.js");
-const index_js_2 = require("../integrations/sendblue/index.js");
+const index_js_2 = require("../integrations/twilio/index.js");
 const adsUpstream_js_1 = require("./adsUpstream.js");
 const MS_24H = 24 * 60 * 60 * 1000;
 function hoursSince(iso) {
@@ -165,7 +165,8 @@ async function buildHarveyContext(deps) {
         ads: (0, adsUpstream_js_1.adsTotalsToHarveySnapshot)(adsRaw, adsLinked),
         systems: {
             anthropicConfigured: (0, index_js_1.isAnthropicApiKeyConfigured)(),
-            sendblueConfigured: (0, index_js_2.isSendblueConfigured)(),
+            twilioConfigured: (0, index_js_2.isTwilioConfigured)(),
+            sendblueConfigured: (0, index_js_2.isTwilioConfigured)(),
             adsLinked,
         },
     };

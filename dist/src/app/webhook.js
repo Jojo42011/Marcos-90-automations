@@ -411,7 +411,7 @@ function parseBody(body) {
     };
 }
 /**
- * Direct pipeline entry — used by Sendblue/Sinch, TikTok, and Instagram comment handshakes.
+ * Direct pipeline entry — used by Twilio/Sinch SMS, TikTok, and Instagram comment handshakes.
  */
 async function handleIncomingPayload(payload, log) {
     const requestId = log?.requestId ?? (0, marcoLog_js_1.newMarcoRequestId)();

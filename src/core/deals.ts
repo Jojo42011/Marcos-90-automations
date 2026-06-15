@@ -1,46 +1,23 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 
 import type { Deal, DealActivityLogEntry, DealStatus, DealType, SigningDocument } from "./types.js";
+import {
+  createTransaction,
+  deleteTransaction as deleteTransactionRow,
+  getAllTransactions,
+  getDocumentsForDeal,
+  getTransaction,
+  updateTransaction as updateTransactionRow,
+  type Transaction,
+  type TransactionParties,
+} from "./transactionsStore.js";
 
 function nowIso(): string {
   return new Date().toISOString();
 }
 
-function genDealId(): string {
-  return `deal_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function genDocId(): string {
-  return `doc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function normalizeDealDocuments(raw: unknown): SigningDocument[] {
-  if (!Array.isArray(raw)) return [];
-  const out: SigningDocument[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-    const d = item as Record<string, unknown>;
-    const id = typeof d.id === "string" && d.id ? d.id : genDocId();
-    const status =
-      d.status === "pending" || d.status === "sent" || d.status === "signed" || d.status === "declined"
-        ? d.status
-        : "pending";
-    out.push({
-      id,
-      name: typeof d.name === "string" ? d.name : "Document",
-      fileData: typeof d.fileData === "string" ? d.fileData : "",
-      status,
-      sentAt: typeof d.sentAt === "string" ? d.sentAt : undefined,
-      signedAt: typeof d.signedAt === "string" ? d.signedAt : undefined,
-      signerEmail: typeof d.signerEmail === "string" ? d.signerEmail : undefined,
-      signerName: typeof d.signerName === "string" ? d.signerName : undefined,
-    });
-  }
-  return out;
-}
-
-function resolveDealsPath(): string {
+export function resolveDealsJsonPath(): string {
   const explicit = process.env.DEALS_JSON_PATH?.trim();
   if (explicit) return explicit;
   const flyDb = "/data/db.json";
@@ -49,106 +26,159 @@ function resolveDealsPath(): string {
   return join(dirname(dbPath), "deals.json");
 }
 
-const DEALS_PATH = resolveDealsPath();
-
-const DEAL_STATUSES = new Set<DealStatus>([
-  "prospect",
-  "active",
-  "under_contract",
-  "closed",
-  "fallen_through",
-]);
-
-const DEAL_TYPES = new Set<DealType>(["buyer", "seller", "referral", "investor"]);
-
 export function calculateGCI(salePrice: number, commissionPercent: number): number {
   if (!Number.isFinite(salePrice) || !Number.isFinite(commissionPercent)) return 0;
   return Math.round((salePrice * commissionPercent) / 100);
 }
 
-function normalizeDeal(raw: unknown): Deal | null {
-  if (!raw || typeof raw !== "object") return null;
-  const d = raw as Record<string, unknown>;
-  const status = typeof d.status === "string" && DEAL_STATUSES.has(d.status as DealStatus) ? (d.status as DealStatus) : "prospect";
-  const dealType =
-    typeof d.dealType === "string" && DEAL_TYPES.has(d.dealType as DealType) ? (d.dealType as DealType) : "buyer";
-  const leadName = typeof d.leadName === "string" ? d.leadName.trim() : "";
-  const propertyAddress = typeof d.propertyAddress === "string" ? d.propertyAddress.trim() : "";
-  if (!leadName || !propertyAddress) return null;
-  const salePrice = typeof d.salePrice === "number" && d.salePrice >= 0 ? d.salePrice : undefined;
-  const commissionPercent =
-    typeof d.commissionPercent === "number" && d.commissionPercent >= 0 ? d.commissionPercent : 3;
-  const estimatedGCI =
-    typeof d.estimatedGCI === "number" && d.estimatedGCI >= 0
-      ? d.estimatedGCI
-      : salePrice !== undefined
-        ? calculateGCI(salePrice, commissionPercent)
-        : undefined;
-  const activityLog: DealActivityLogEntry[] = [];
-  if (Array.isArray(d.activityLog)) {
-    for (const item of d.activityLog) {
-      if (!item || typeof item !== "object") continue;
-      const a = item as Record<string, unknown>;
-      activityLog.push({
-        type: typeof a.type === "string" ? a.type : "note",
-        description: typeof a.description === "string" ? a.description : "",
-        timestamp: typeof a.timestamp === "string" && a.timestamp ? a.timestamp : nowIso(),
-      });
-    }
-  }
+function signingDocToDealDocument(doc: {
+  id?: string;
+  documentType: string;
+  status: string;
+  signedAt?: string;
+  sentAt?: string;
+  documentUrl?: string;
+  notes?: string;
+}): SigningDocument {
+  const status =
+    doc.status === "pending" || doc.status === "sent" || doc.status === "signed" || doc.status === "declined"
+      ? doc.status
+      : "pending";
   return {
-    id: typeof d.id === "string" && d.id ? d.id : genDealId(),
-    leadId: typeof d.leadId === "string" && d.leadId.trim() ? d.leadId.trim() : undefined,
-    leadName,
-    phone: typeof d.phone === "string" ? d.phone : undefined,
-    email: typeof d.email === "string" ? d.email : undefined,
-    propertyAddress,
-    dealType,
+    id: doc.id || `doc_${Date.now()}`,
+    name: doc.notes || doc.documentType || "Document",
+    fileData: doc.documentUrl || "",
     status,
-    salePrice,
-    commissionPercent,
-    estimatedGCI,
-    closeDate: typeof d.closeDate === "string" ? d.closeDate : undefined,
-    openedDate: typeof d.openedDate === "string" ? d.openedDate : nowIso(),
-    closedDate: typeof d.closedDate === "string" ? d.closedDate : undefined,
-    assignedTo: typeof d.assignedTo === "string" ? d.assignedTo : undefined,
-    notes: typeof d.notes === "string" ? d.notes : undefined,
-    documents: normalizeDealDocuments(d.documents),
-    activityLog,
-    createdAt: typeof d.createdAt === "string" ? d.createdAt : nowIso(),
-    updatedAt: typeof d.updatedAt === "string" ? d.updatedAt : nowIso(),
+    sentAt: doc.sentAt,
+    signedAt: doc.signedAt,
   };
 }
 
-function writeDealsFile(deals: Deal[]): void {
-  mkdirSync(dirname(DEALS_PATH), { recursive: true });
-  writeFileSync(DEALS_PATH, JSON.stringify(deals, null, 2), "utf8");
+function dealStatusToTransaction(status: DealStatus): Transaction["status"] {
+  if (status === "under_contract") return "under_contract";
+  if (status === "closed") return "closed";
+  if (status === "fallen_through") return "fell_through";
+  return "active";
+}
+
+function transactionStatusToDeal(tx: Transaction): DealStatus {
+  const legacy = tx.parties?.legacyStatus;
+  if (tx.status === "under_contract") return "under_contract";
+  if (tx.status === "closed") return "closed";
+  if (tx.status === "fell_through") return "fallen_through";
+  if (tx.status === "active" && legacy === "prospect") return "prospect";
+  return "active";
+}
+
+function dealTypeToTransaction(dealType: DealType): Transaction["dealType"] {
+  return dealType === "seller" ? "seller" : "buyer";
+}
+
+function transactionToDealType(tx: Transaction): DealType {
+  const subtype = tx.parties?.dealSubtype;
+  if (subtype === "referral" || subtype === "investor") return subtype;
+  return tx.dealType === "seller" ? "seller" : "buyer";
+}
+
+function dealToParties(deal: Partial<Deal>, base?: TransactionParties): TransactionParties {
+  const parties: TransactionParties = { ...(base || {}) };
+  if (deal.leadName) parties.leadName = deal.leadName;
+  if (deal.phone !== undefined) parties.phone = deal.phone;
+  if (deal.email !== undefined) parties.email = deal.email;
+  if (deal.assignedTo !== undefined) parties.assignedTo = deal.assignedTo;
+  if (deal.commissionPercent !== undefined) parties.commissionPercent = deal.commissionPercent;
+  if (deal.estimatedGCI !== undefined) parties.estimatedGCI = deal.estimatedGCI;
+  if (deal.openedDate) parties.openedDate = deal.openedDate;
+  if (deal.closedDate !== undefined) parties.closedDate = deal.closedDate;
+  if (deal.activityLog) parties.activityLog = deal.activityLog;
+  if (deal.status === "prospect") parties.legacyStatus = "prospect";
+  else if (deal.status) delete parties.legacyStatus;
+  if (deal.dealType === "referral" || deal.dealType === "investor") {
+    parties.dealSubtype = deal.dealType;
+  } else if (deal.dealType) {
+    parties.dealSubtype = undefined;
+  }
+  return parties;
+}
+
+export function transactionToDeal(tx: Transaction): Deal {
+  const parties = tx.parties || {};
+  const commissionPercent = parties.commissionPercent ?? 3;
+  const salePrice = tx.price;
+  const estimatedGCI =
+    parties.estimatedGCI ??
+    (salePrice !== undefined ? calculateGCI(salePrice, commissionPercent) : undefined);
+  const docs = getDocumentsForDeal(tx.id!).map(signingDocToDealDocument);
+
+  return {
+    id: tx.id!,
+    leadId: tx.leadId,
+    leadName: parties.leadName || parties.buyerName || "Unknown",
+    phone: parties.phone,
+    email: parties.email,
+    propertyAddress: tx.address,
+    dealType: transactionToDealType(tx),
+    status: transactionStatusToDeal(tx),
+    salePrice,
+    commissionPercent,
+    estimatedGCI,
+    closeDate: tx.closingDate,
+    openedDate: parties.openedDate || tx.createdAt!,
+    closedDate: parties.closedDate,
+    assignedTo: parties.assignedTo,
+    notes: tx.notes,
+    documents: docs,
+    activityLog: parties.activityLog || [],
+    createdAt: tx.createdAt!,
+    updatedAt: tx.updatedAt!,
+  };
+}
+
+function partialDealToTransactionUpdates(updates: Partial<Deal>, existing: Transaction): Partial<Transaction> {
+  const out: Partial<Transaction> = {};
+  if (updates.propertyAddress) out.address = updates.propertyAddress;
+  if (updates.dealType) out.dealType = dealTypeToTransaction(updates.dealType);
+  if (updates.status) out.status = dealStatusToTransaction(updates.status);
+  if (updates.salePrice !== undefined) out.price = updates.salePrice;
+  if (updates.closeDate !== undefined) out.closingDate = updates.closeDate;
+  if (updates.leadId !== undefined) out.leadId = updates.leadId;
+  if (updates.notes !== undefined) out.notes = updates.notes;
+
+  const partyFields: Partial<Deal> = {
+    leadName: updates.leadName,
+    phone: updates.phone,
+    email: updates.email,
+    assignedTo: updates.assignedTo,
+    commissionPercent: updates.commissionPercent,
+    estimatedGCI: updates.estimatedGCI,
+    openedDate: updates.openedDate,
+    closedDate: updates.closedDate,
+    activityLog: updates.activityLog,
+    status: updates.status,
+    dealType: updates.dealType,
+  };
+  const hasPartyUpdate = Object.values(partyFields).some((v) => v !== undefined);
+  if (hasPartyUpdate) {
+    out.parties = dealToParties({ ...transactionToDeal(existing), ...updates }, existing.parties);
+  }
+
+  return out;
 }
 
 export function getDeals(): Deal[] {
   try {
-    if (!existsSync(DEALS_PATH)) return [];
-    const raw = readFileSync(DEALS_PATH, "utf8");
-    if (!raw.trim()) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map(normalizeDeal).filter((d): d is Deal => d !== null).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return getAllTransactions()
+      .map(transactionToDeal)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   } catch (err) {
     console.error("[deals] getDeals failed:", err);
     return [];
   }
 }
 
-export function saveDeals(deals: Deal[]): void {
-  try {
-    writeDealsFile(deals);
-  } catch (err) {
-    console.error("[deals] saveDeals failed:", err);
-  }
-}
-
 export function getDealById(id: string): Deal | null {
-  return getDeals().find((d) => d.id === id) ?? null;
+  const tx = getTransaction(id);
+  return tx ? transactionToDeal(tx) : null;
 }
 
 export function getDealsByLeadId(leadId: string): Deal[] {
@@ -160,66 +190,77 @@ export function createDeal(data: Omit<Deal, "id" | "createdAt" | "updatedAt">): 
   const commissionPercent = data.commissionPercent ?? 3;
   const salePrice = data.salePrice;
   const estimatedGCI =
-    data.estimatedGCI ??
-    (salePrice !== undefined ? calculateGCI(salePrice, commissionPercent) : undefined);
-  const deal: Deal = {
+    data.estimatedGCI ?? (salePrice !== undefined ? calculateGCI(salePrice, commissionPercent) : undefined);
+
+  const parties = dealToParties({
     ...data,
-    id: genDealId(),
     commissionPercent,
     estimatedGCI,
-    documents: data.documents ?? [],
-    activityLog: data.activityLog ?? [
-      { type: "created", description: "Deal created", timestamp: now },
-    ],
-    createdAt: now,
-    updatedAt: now,
-  };
-  const deals = getDeals();
-  deals.unshift(deal);
-  saveDeals(deals);
-  return deal;
+    openedDate: data.openedDate || now,
+    activityLog:
+      data.activityLog ??
+      [{ type: "created", description: "Deal created", timestamp: now } as DealActivityLogEntry],
+  });
+
+  const tx = createTransaction({
+    address: data.propertyAddress,
+    dealType: dealTypeToTransaction(data.dealType),
+    parties,
+    price: salePrice,
+    status: dealStatusToTransaction(data.status),
+    closingDate: data.closeDate,
+    leadId: data.leadId,
+    notes: data.notes,
+  });
+
+  return transactionToDeal(tx);
 }
 
 export function updateDeal(id: string, updates: Partial<Deal>): Deal | null {
-  const deals = getDeals();
-  const idx = deals.findIndex((d) => d.id === id);
-  if (idx < 0) return null;
-  const prev = deals[idx];
+  const existing = getTransaction(id);
+  if (!existing) return null;
+
+  const prev = transactionToDeal(existing);
   const commissionPercent = updates.commissionPercent ?? prev.commissionPercent ?? 3;
   const salePrice = updates.salePrice !== undefined ? updates.salePrice : prev.salePrice;
   let estimatedGCI = updates.estimatedGCI;
   if (updates.salePrice !== undefined || updates.commissionPercent !== undefined) {
-    if (salePrice !== undefined) {
-      estimatedGCI = calculateGCI(salePrice, commissionPercent);
-    }
+    if (salePrice !== undefined) estimatedGCI = calculateGCI(salePrice, commissionPercent);
   } else if (estimatedGCI === undefined) {
     estimatedGCI = prev.estimatedGCI;
   }
-  const next: Deal = {
-    ...prev,
+
+  const mergedUpdates: Partial<Deal> = {
     ...updates,
-    id: prev.id,
     commissionPercent,
     salePrice,
     estimatedGCI,
-    documents: updates.documents !== undefined ? normalizeDealDocuments(updates.documents) : prev.documents,
-    updatedAt: nowIso(),
   };
-  deals[idx] = next;
-  saveDeals(deals);
-  return next;
+
+  const txUpdates = partialDealToTransactionUpdates(mergedUpdates, existing);
+  const updated = updateTransactionRow(id, txUpdates);
+  return updated ? transactionToDeal(updated) : null;
 }
 
 export function deleteDeal(id: string): boolean {
-  const deals = getDeals();
-  const filtered = deals.filter((d) => d.id !== id);
-  if (filtered.length === deals.length) return false;
-  saveDeals(filtered);
-  return true;
+  return deleteTransactionRow(id);
 }
 
 export function sumClosedDealGCI(deals: Deal[]): number {
-  return deals
-    .filter((d) => d.status === "closed")
-    .reduce((s, d) => s + (d.estimatedGCI || 0), 0);
+  return deals.filter((d) => d.status === "closed").reduce((s, d) => s + (d.estimatedGCI || 0), 0);
+}
+
+/** Read legacy deals.json for one-time migration. */
+export function readLegacyDealsJson(): unknown[] {
+  const path = resolveDealsJsonPath();
+  if (!existsSync(path)) return [];
+  try {
+    const raw = readFileSync(path, "utf8");
+    if (!raw.trim()) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error("[deals] readLegacyDealsJson failed:", err);
+    return [];
+  }
 }

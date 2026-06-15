@@ -2,13 +2,24 @@
  * Harvey chat tools — Anthropic tool definitions + DB-backed executors.
  */
 
+import { getThreadForLead } from "../core/smsStore.js";
 import { getConversation, listAllLeads } from "../core/db.js";
 import { getSocialSummaryForHarvey, getSocialVideos, getPendingCommentReplies } from "../core/socialStore.js";
 import { getLatestMorningScan } from "../agents/morningScan/index.js";
 import { getLatestReportingSnapshot } from "../agents/reporting/index.js";
 import { getLatestContentSuggestions } from "../agents/contentSuggestions/index.js";
 import { getRecentEscalations } from "../agents/escalations/index.js";
+import { getUpcomingShowings } from "../agents/showingReminders/index.js";
+import { getMojoOutreachStatus } from "../agents/mojoOutreach/index.js";
+import {
+  getAllTransactions,
+  getOverdueDeadlines,
+  getTransaction,
+  getUnsignedDocuments,
+  getUpcomingDeadlines,
+} from "../core/transactionsStore.js";
 import { getLatestContentDigest } from "../agents/harveyContentDigest/index.js";
+import { getLeadsByTier } from "../core/leadScoreStore.js";
 import type { Lead } from "../core/types.js";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 
@@ -47,15 +58,14 @@ function leadDisplayName(lead: Lead): string | null {
   return lead.name || lead.username || null;
 }
 
-function sendblueThreadId(lead: Lead): string | null {
-  const raw = lead as Lead & { sendblueThreadId?: string | null };
-  const v = raw.sendblueThreadId;
-  return typeof v === "string" && v.trim() ? v.trim() : null;
+function leadHasSmsOutbound(lead: Lead): boolean {
+  const thread = getThreadForLead(lead.id, 50);
+  return thread.some((m) => m.direction === "outbound");
 }
 
 function isHotLead(lead: Lead): boolean {
   if (!lead.phone?.trim()) return false;
-  if (sendblueThreadId(lead)) return false;
+  if (leadHasSmsOutbound(lead)) return false;
   if (lead.crmStatus === "dead") return false;
   return lead.crmStatus === "not_contacted";
 }
@@ -109,7 +119,7 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_hot_leads",
     description:
-      "Leads with phone on file who have not been texted on Sendblue yet (no SMS thread).",
+      "Leads with phone on file who have not been texted via SMS yet (no outbound SMS thread).",
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
@@ -204,6 +214,60 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
     name: "get_recent_escalations",
     description:
       "Get recent escalation alerts — negative comments needing review, strong lead intent in DMs, or videos going viral.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_upcoming_showings",
+    description:
+      "Get all upcoming property showings with confirmation status — which leads have confirmed, which are pending, which need follow-up.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_mojo_outreach_status",
+    description:
+      "Get status of Mojo cold lead outreach sequences — how many leads are in sequence, paused, replied, or completed.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_paused_conversations",
+    description:
+      "Get leads where automation has been paused due to escalation — ready to make an offer, angry client, or legal question. These need Marco's personal attention.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_transactions_overview",
+    description:
+      "Get an overview of all active transactions — addresses, status, closing dates, and how many deadlines are upcoming or overdue.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_upcoming_deadlines",
+    description:
+      "Get transaction deadlines coming up in the next N days across all deals — inspections, appraisals, closings, etc.",
+    input_schema: {
+      type: "object",
+      properties: {
+        days: { type: "number", description: "Number of days ahead to look (default 7)" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_overdue_items",
+    description:
+      "Get all overdue transaction deadlines and unsigned documents that need immediate attention.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_transaction_flow_status",
+    description:
+      "Get the status of in-progress transaction workflows — inspection periods, final week prep, and post-close follow-ups across all active deals.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_lead_nurture_overview",
+    description:
+      "Get an overview of lead scoring and nurture status — how many hot/warm/cold leads, recent tier distribution, and nurture activity.",
     input_schema: { type: "object", properties: {}, required: [] },
   },
 ];
@@ -375,6 +439,86 @@ export const HARVEY_GEMINI_TOOLS = {
         required: [],
       },
     },
+    {
+      name: "get_upcoming_showings",
+      description:
+        "Get all upcoming property showings with confirmation status — confirmed, pending, or needing follow-up.",
+      parameters: {
+        type: "OBJECT",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "get_mojo_outreach_status",
+      description:
+        "Get status of Mojo cold lead outreach sequences — active, paused, replied, or completed.",
+      parameters: {
+        type: "OBJECT",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "get_paused_conversations",
+      description:
+        "Get leads where SMS automation is paused due to escalation — offer intent, angry client, or legal question.",
+      parameters: {
+        type: "OBJECT",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "get_transactions_overview",
+      description:
+        "Overview of active transactions — status, closing dates, upcoming and overdue deadline counts.",
+      parameters: {
+        type: "OBJECT",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "get_upcoming_deadlines",
+      description: "Transaction deadlines in the next N days (inspection, appraisal, closing, etc.).",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          days: { type: "NUMBER", description: "Days ahead to look (default 7)" },
+        },
+        required: [],
+      },
+    },
+    {
+      name: "get_overdue_items",
+      description: "Overdue transaction deadlines and unsigned documents needing attention.",
+      parameters: {
+        type: "OBJECT",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "get_transaction_flow_status",
+      description:
+        "Get the status of in-progress transaction workflows — inspection periods, final week prep, and post-close follow-ups across all active deals.",
+      parameters: {
+        type: "OBJECT",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "get_lead_nurture_overview",
+      description:
+        "Overview of lead scoring and nurture — hot/warm/cold counts and recent hot lead scores.",
+      parameters: {
+        type: "OBJECT",
+        properties: {},
+        required: [],
+      },
+    },
   ],
 };
 
@@ -436,6 +580,103 @@ export async function executeHarveyTool(
     }
     case "get_recent_escalations": {
       return { escalations: getRecentEscalations(10) };
+    }
+    case "get_upcoming_showings": {
+      const upcoming = await getUpcomingShowings();
+      return { upcoming };
+    }
+    case "get_mojo_outreach_status": {
+      return await getMojoOutreachStatus();
+    }
+    case "get_paused_conversations": {
+      const leads = (await listAllLeads()).filter((l) => l.automationPaused);
+      return {
+        paused: leads.map((l) => ({
+          leadId: l.id,
+          name: l.name || l.username,
+          reason: l.automationPausedReason,
+          pausedAt: l.automationPausedAt,
+        })),
+      };
+    }
+    case "get_transactions_overview": {
+      const transactions = getAllTransactions();
+      const upcoming = getUpcomingDeadlines(7);
+      const overdue = getOverdueDeadlines();
+      return {
+        activeCount: transactions.filter((t) =>
+          ["active", "under_contract", "pending"].includes(t.status),
+        ).length,
+        closedCount: transactions.filter((t) => t.status === "closed").length,
+        upcomingDeadlines: upcoming.length,
+        overdueDeadlines: overdue.length,
+        transactions: transactions.map((t) => ({
+          address: t.address,
+          status: t.status,
+          closingDate: t.closingDate,
+          price: t.price,
+        })),
+      };
+    }
+    case "get_upcoming_deadlines": {
+      const days = typeof normalized.days === "number" ? normalized.days : 7;
+      const deadlines = getUpcomingDeadlines(days);
+      return {
+        deadlines: deadlines.map((d) => {
+          const tx = getTransaction(d.dealId);
+          return { ...d, address: tx?.address };
+        }),
+      };
+    }
+    case "get_overdue_items": {
+      const deadlines = getOverdueDeadlines();
+      const documents = getUnsignedDocuments();
+      return {
+        overdueDeadlines: deadlines.map((d) => {
+          const tx = getTransaction(d.dealId);
+          return { ...d, address: tx?.address };
+        }),
+        unsignedDocuments: documents.map((doc) => {
+          const tx = getTransaction(doc.dealId);
+          return { ...doc, address: tx?.address };
+        }),
+      };
+    }
+    case "get_transaction_flow_status": {
+      const transactions = getAllTransactions();
+      return {
+        inInspectionPeriod: transactions
+          .filter(
+            (t) => t.inspectionFlow?.scheduledAt && !t.inspectionFlow?.sellerResponseReceivedAt,
+          )
+          .map((t) => ({
+            address: t.address,
+            status: t.inspectionFlow?.sellerResponseStatus,
+            confirmedParties: t.inspectionFlow?.scheduleConfirmedParties,
+          })),
+        inFinalWeek: transactions
+          .filter(
+            (t) => t.finalWeekFlow?.closingDisclosureReminderSentAt && !t.postCloseFlow?.congratulationsSentAt,
+          )
+          .map((t) => ({ address: t.address, closingDate: t.closingDate })),
+        recentlyClosed: transactions
+          .filter((t) => t.postCloseFlow?.congratulationsSentAt)
+          .map((t) => ({
+            address: t.address,
+            congratsAt: t.postCloseFlow?.congratulationsSentAt,
+          })),
+      };
+    }
+    case "get_lead_nurture_overview": {
+      const hot = getLeadsByTier("hot");
+      const warm = getLeadsByTier("warm");
+      const cold = getLeadsByTier("cold");
+      return {
+        hotCount: hot.length,
+        warmCount: warm.length,
+        coldCount: cold.length,
+        hotLeads: hot.map((s) => ({ leadId: s.leadId, score: s.score })),
+      };
     }
     default:
       return { error: `Unknown tool: ${name}` };

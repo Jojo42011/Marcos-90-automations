@@ -17,7 +17,7 @@ Never suggest anything that would mislead the lead.
 Format: bullet points only, no preamble, no explanations.`;
 
 const MARCO_REAL_ESTATE_CONTEXT = `Marco Puga — San Antonio, Texas real estate agent (Aethon Intelligence).
-Instagram/TikTok DM automation qualifies leads and captures phones; Sendblue SMS follow-up.
+Instagram/TikTok DM automation qualifies leads and captures phones; Twilio SMS follow-up.
 Active campaigns: Canyon Lake ($365k 3/2) and low-interest-rate creative.
 Funnel: DM → phone capture → property breakdown → criteria → email listings → Brivity CRM.
 Hot leads = phone captured, needs timely human follow-up.`;

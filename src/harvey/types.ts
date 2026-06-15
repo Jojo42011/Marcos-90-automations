@@ -70,7 +70,9 @@ export interface HarveyContext {
   ads: HarveyAdsSnapshot;
   systems: {
     anthropicConfigured: boolean;
-    sendblueConfigured: boolean;
+    twilioConfigured: boolean;
+    /** @deprecated Jarvis UI reads this — mirrors twilioConfigured */
+    sendblueConfigured?: boolean;
     adsLinked: boolean;
   };
 }

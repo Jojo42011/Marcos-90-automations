@@ -22,6 +22,10 @@ import type {
   ListingStatus,
   LeadAutoPlanEnrollment,
   SigningDocument,
+  ShowingAppointment,
+  MojoOutreach,
+  ConversationEscalationTrigger,
+  PreApprovalStatus,
 } from "./types.js";
 import { CRM_STATUSES } from "./types.js";
 import { getDeals, sumClosedDealGCI } from "./deals.js";
@@ -29,7 +33,7 @@ import { getTagTemplates } from "./tagTemplates.js";
 import { getUsers } from "./users.js";
 import { buildTasksSummary } from "./tasks.js";
 import { buildMarcoTasksSummary, getMarcoTasks } from "./marcoTasks.js";
-import { sendSendblueMessage } from "../integrations/sendblue/index.js";
+import { sendTwilioMessage } from "../integrations/twilio/index.js";
 
 const CRM_STATUS_SET = new Set<string>(CRM_STATUSES);
 
@@ -345,12 +349,15 @@ export async function getLead(platform: string, userId: string): Promise<Lead | 
   return leadsById.get(id) ?? null;
 }
 
-/** Lookup by internal lead id (CRM / Sendblue). */
+/** Lookup by internal lead id (CRM / SMS). */
 export async function getLeadById(leadId: string): Promise<Lead | null> {
   const id = String(leadId || "").trim();
   if (!id) return null;
   return leadsById.get(id) ?? null;
 }
+
+/** Alias for nurture/scoring modules. */
+export const findLeadById = getLeadById;
 
 /** Permanently remove a lead, its conversation, and platform key mapping. */
 export function deleteLead(id: string): boolean {
@@ -415,8 +422,8 @@ async function notifyNewPhoneCapture(lead: Lead): Promise<void> {
 
   for (const number of recipients) {
     try {
-      const result = await sendSendblueMessage({ to: number, content: message });
-      if (!result.ok) {
+      const result = await sendTwilioMessage({ to: number, content: message });
+      if (!result.success) {
         console.error("[PhoneCapture] Notification failed for", number, ":", result.error);
       } else {
         console.log("[PhoneCapture] Notified", number);
@@ -457,6 +464,27 @@ function applyPhoneCaptureTransition(existing: Lead | null, lead: Lead): Lead {
   };
 }
 
+function normalizePreApprovalStatus(raw: unknown): PreApprovalStatus | null {
+  const s = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (s === "approved" || s === "in_progress" || s === "cash" || s === "not_approved") return s;
+  return null;
+}
+
+async function triggerSourceRoutingIfNeeded(lead: Lead): Promise<Lead> {
+  if (lead.sourceRoutingCompletedAt) return lead;
+
+  const routedAt = nowIso();
+  const marked: Lead = { ...lead, sourceRoutingCompletedAt: routedAt };
+  leadsById.set(lead.id, marked);
+  persistToFile();
+
+  const { routeNewLead } = await import("../agents/leadNurture/sourceRouting.js");
+  routeNewLead(marked).catch((err) => console.error("[SourceRouting]", err));
+  return marked;
+}
+
 export async function createLead(lead: Omit<Lead, "id" | "createdAt" | "updatedAt">): Promise<Lead> {
   const id = String(idCounter++);
   const createdAt = nowIso();
@@ -475,7 +503,7 @@ export async function createLead(lead: Omit<Lead, "id" | "createdAt" | "updatedA
   leadKeyToId.set(leadKey(lead.platform, lead.userId), id);
   conversationsByLeadId.set(id, { messages: [] });
   persistToFile();
-  return next;
+  return await triggerSourceRoutingIfNeeded(next);
 }
 
 export async function updateLead(lead: Lead): Promise<Lead | undefined> {
@@ -491,6 +519,13 @@ export async function updateLead(lead: Lead): Promise<Lead | undefined> {
   const updated = applyPhoneCaptureTransition(existing, normalized);
   leadsById.set(lead.id, updated);
   persistToFile();
+
+  const phoneNewlyCaptured =
+    existing && !leadHasPhone(existing.phone) && leadHasPhone(updated.phone);
+  if (phoneNewlyCaptured && !updated.sourceRoutingCompletedAt) {
+    return await triggerSourceRoutingIfNeeded(updated);
+  }
+
   return updated;
 }
 
@@ -669,6 +704,68 @@ export function normalizeDocuments(raw: unknown): SigningDocument[] {
   return out;
 }
 
+function normalizeShowingAppointment(raw: unknown): ShowingAppointment | null {
+  if (!raw || typeof raw !== "object") return null;
+  const a = raw as Record<string, unknown>;
+  const address = typeof a.address === "string" ? a.address.trim() : "";
+  const scheduledAt = typeof a.scheduledAt === "string" ? a.scheduledAt.trim() : "";
+  if (!address || !scheduledAt) return null;
+  const statusRaw = typeof a.confirmationStatus === "string" ? a.confirmationStatus.trim().toLowerCase() : "pending";
+  const confirmationStatus: ShowingAppointment["confirmationStatus"] =
+    statusRaw === "confirmed" ||
+    statusRaw === "no_response" ||
+    statusRaw === "cancelled" ||
+    statusRaw === "pending"
+      ? statusRaw
+      : "pending";
+  const out: ShowingAppointment = {
+    address,
+    scheduledAt,
+    confirmationStatus,
+  };
+  if (typeof a.reminderSentAt === "string" && a.reminderSentAt) out.reminderSentAt = a.reminderSentAt;
+  if (typeof a.confirmationReceivedAt === "string" && a.confirmationReceivedAt) {
+    out.confirmationReceivedAt = a.confirmationReceivedAt;
+  }
+  if (typeof a.followUpSentAt === "string" && a.followUpSentAt) out.followUpSentAt = a.followUpSentAt;
+  if (typeof a.followUpResponse === "string" && a.followUpResponse) out.followUpResponse = a.followUpResponse;
+  const sentimentRaw = typeof a.followUpSentiment === "string" ? a.followUpSentiment.trim().toLowerCase() : "";
+  if (sentimentRaw === "positive" || sentimentRaw === "negative" || sentimentRaw === "neutral") {
+    out.followUpSentiment = sentimentRaw;
+  }
+  return out;
+}
+
+function normalizeMojoOutreach(raw: unknown): MojoOutreach | null {
+  if (!raw || typeof raw !== "object") return null;
+  const m = raw as Record<string, unknown>;
+  const statusRaw = typeof m.status === "string" ? m.status.trim().toLowerCase() : "active";
+  const status: MojoOutreach["status"] =
+    statusRaw === "paused" || statusRaw === "replied" || statusRaw === "completed" || statusRaw === "active"
+      ? statusRaw
+      : "active";
+  const textsSent =
+    typeof m.textsSent === "number" && Number.isFinite(m.textsSent)
+      ? Math.max(0, Math.min(2, Math.floor(m.textsSent)))
+      : 0;
+  const out: MojoOutreach = {
+    sequenceStarted: m.sequenceStarted === true,
+    textsSent,
+    status,
+  };
+  if (typeof m.lastTextSentAt === "string" && m.lastTextSentAt) out.lastTextSentAt = m.lastTextSentAt;
+  if (typeof m.pausedUntil === "string" && m.pausedUntil) out.pausedUntil = m.pausedUntil;
+  return out;
+}
+
+function normalizeAutomationPausedReason(raw: unknown): ConversationEscalationTrigger | null {
+  const s = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (s === "ready_to_offer" || s === "angry_client" || s === "legal_question") return s;
+  return null;
+}
+
 function normalizeCrmDefaults(lead: Lead): Lead {
   const crmStatus = normalizeCrmStatus((lead as Partial<Lead>).crmStatus);
   const crmStage = (lead as Partial<Lead>).crmStage ?? "new";
@@ -704,6 +801,23 @@ function normalizeCrmDefaults(lead: Lead): Lead {
   const enrollmentsSame = JSON.stringify(lead.autoPlanEnrollments ?? []) === JSON.stringify(autoPlanEnrollments);
   const documentsSame = JSON.stringify(lead.documents ?? []) === JSON.stringify(documents);
   const skipSame = JSON.stringify(lead.skipTraceResults ?? []) === JSON.stringify(skipTraceResults);
+  const showingAppointment = normalizeShowingAppointment((lead as Partial<Lead>).showingAppointment);
+  const prevShowing = normalizeShowingAppointment(lead.showingAppointment);
+  const showingSame = JSON.stringify(prevShowing) === JSON.stringify(showingAppointment);
+  const mojoOutreach = normalizeMojoOutreach((lead as Partial<Lead>).mojoOutreach);
+  const prevMojo = normalizeMojoOutreach(lead.mojoOutreach);
+  const mojoSame = JSON.stringify(prevMojo) === JSON.stringify(mojoOutreach);
+  const automationPaused = (lead as Partial<Lead>).automationPaused === true;
+  const automationPausedReason = normalizeAutomationPausedReason((lead as Partial<Lead>).automationPausedReason);
+  const rawPausedAt = (lead as Partial<Lead>).automationPausedAt;
+  const automationPausedAt = typeof rawPausedAt === "string" && rawPausedAt ? rawPausedAt : null;
+  const preApprovalStatus = normalizePreApprovalStatus((lead as Partial<Lead>).preApprovalStatus);
+  const rawViews = (lead as Partial<Lead>).propertyViewsCount;
+  const propertyViewsCount =
+    typeof rawViews === "number" && Number.isFinite(rawViews) && rawViews > 0 ? Math.floor(rawViews) : 0;
+  const rawRoutingAt = (lead as Partial<Lead>).sourceRoutingCompletedAt;
+  const sourceRoutingCompletedAt =
+    typeof rawRoutingAt === "string" && rawRoutingAt ? rawRoutingAt : null;
   if (
     lead.crmStatus === crmStatus &&
     lead.crmStage === crmStage &&
@@ -722,8 +836,16 @@ function normalizeCrmDefaults(lead: Lead): Lead {
     enrollmentsSame &&
     documentsSame &&
     skipSame &&
+    showingSame &&
+    mojoSame &&
+    lead.automationPaused === automationPaused &&
+    (lead.automationPausedReason ?? null) === automationPausedReason &&
+    (lead.automationPausedAt ?? null) === automationPausedAt &&
     (lead.assignedUserId ?? null) === assignedUserId &&
-    (lead.assignedUserName ?? null) === assignedUserName
+    (lead.assignedUserName ?? null) === assignedUserName &&
+    (lead.preApprovalStatus ?? null) === preApprovalStatus &&
+    (lead.propertyViewsCount ?? 0) === propertyViewsCount &&
+    (lead.sourceRoutingCompletedAt ?? null) === sourceRoutingCompletedAt
   ) {
     return lead;
   }
@@ -756,6 +878,14 @@ function normalizeCrmDefaults(lead: Lead): Lead {
     assignedUserName,
     phoneCapturedAt,
     phoneNumberSeen,
+    showingAppointment,
+    mojoOutreach,
+    automationPaused,
+    automationPausedReason,
+    automationPausedAt,
+    preApprovalStatus,
+    propertyViewsCount,
+    sourceRoutingCompletedAt,
   };
 }
 
@@ -962,6 +1092,16 @@ export async function updateLeadCrmFields(input: {
   assignedUserId?: string | null;
   assignedUserName?: string | null;
   phoneNumberSeen?: boolean;
+  showingAppointment?: ShowingAppointment | null;
+  mojoOutreach?: MojoOutreach | null;
+  automationPaused?: boolean;
+  automationPausedReason?: ConversationEscalationTrigger | null;
+  automationPausedAt?: string | null;
+  isPastClient?: boolean;
+  pastClientSince?: string | null;
+  preApprovalStatus?: PreApprovalStatus | null;
+  propertyViewsCount?: number;
+  sourceRoutingCompletedAt?: string | null;
 }): Promise<Lead | null> {
   const existing = leadsById.get(input.leadId);
   if (!existing) return null;
@@ -971,12 +1111,18 @@ export async function updateLeadCrmFields(input: {
     if (input.criteria === null) {
       criteria = null;
     } else {
-      const base = criteria ?? { priceCap: null, beds: null, baths: null, area: null };
+      const base = criteria ?? { priceCap: null, beds: null, baths: null, area: null, timeline: null };
       criteria = {
         priceCap: input.criteria.priceCap !== undefined ? input.criteria.priceCap : base.priceCap,
         beds: input.criteria.beds !== undefined ? input.criteria.beds : base.beds,
         baths: input.criteria.baths !== undefined ? input.criteria.baths : base.baths,
         area: input.criteria.area !== undefined ? input.criteria.area : base.area,
+        timeline:
+          input.criteria.timeline !== undefined
+            ? input.criteria.timeline === null
+              ? null
+              : String(input.criteria.timeline)
+            : base.timeline ?? null,
       };
     }
   }
@@ -1032,6 +1178,48 @@ export async function updateLeadCrmFields(input: {
         : lead.assignedUserName ?? null,
     phoneNumberSeen:
       input.phoneNumberSeen !== undefined ? input.phoneNumberSeen : lead.phoneNumberSeen,
+    showingAppointment:
+      input.showingAppointment !== undefined
+        ? normalizeShowingAppointment(input.showingAppointment)
+        : normalizeShowingAppointment(lead.showingAppointment),
+    mojoOutreach:
+      input.mojoOutreach !== undefined
+        ? normalizeMojoOutreach(input.mojoOutreach)
+        : normalizeMojoOutreach(lead.mojoOutreach),
+    automationPaused: input.automationPaused !== undefined ? input.automationPaused : lead.automationPaused ?? false,
+    automationPausedReason:
+      input.automationPausedReason !== undefined
+        ? normalizeAutomationPausedReason(input.automationPausedReason)
+        : normalizeAutomationPausedReason(lead.automationPausedReason),
+    automationPausedAt:
+      input.automationPausedAt !== undefined
+        ? input.automationPausedAt === null || input.automationPausedAt === ""
+          ? null
+          : String(input.automationPausedAt)
+        : lead.automationPausedAt ?? null,
+    isPastClient: input.isPastClient !== undefined ? input.isPastClient : lead.isPastClient ?? false,
+    pastClientSince:
+      input.pastClientSince !== undefined
+        ? input.pastClientSince === null || input.pastClientSince === ""
+          ? null
+          : String(input.pastClientSince)
+        : lead.pastClientSince ?? null,
+    preApprovalStatus:
+      input.preApprovalStatus !== undefined
+        ? normalizePreApprovalStatus(input.preApprovalStatus)
+        : lead.preApprovalStatus ?? null,
+    propertyViewsCount:
+      input.propertyViewsCount !== undefined
+        ? typeof input.propertyViewsCount === "number" && input.propertyViewsCount > 0
+          ? Math.floor(input.propertyViewsCount)
+          : 0
+        : lead.propertyViewsCount ?? 0,
+    sourceRoutingCompletedAt:
+      input.sourceRoutingCompletedAt !== undefined
+        ? input.sourceRoutingCompletedAt === null || input.sourceRoutingCompletedAt === ""
+          ? null
+          : String(input.sourceRoutingCompletedAt)
+        : lead.sourceRoutingCompletedAt ?? null,
   };
   await updateLead(next);
   return next;

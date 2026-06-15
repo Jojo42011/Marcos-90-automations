@@ -11,6 +11,12 @@ import { scheduleEveningPullDaily6pm } from "../agents/eveningPull/index.js";
 import { scheduleWeeklyContentSuggestionsMonday8am } from "../agents/contentSuggestions/index.js";
 import { scheduleEscalationChecks } from "../agents/escalations/index.js";
 import { scheduleContentDigestEvery3Days } from "../agents/harveyContentDigest/index.js";
+import { scheduleShowingReminders } from "../agents/showingReminders/index.js";
+import { scheduleMojoOutreach } from "../agents/mojoOutreach/index.js";
+import { scheduleTransactionDeadlineChecks, scheduleDailyDeadlineCheck } from "../agents/transactionDeadlines/index.js";
+import { scheduleWarmLeadWeeklyTouch } from "../agents/leadNurture/warmLeadFlow.js";
+import { scheduleColdLeadMonthlyTouch } from "../agents/leadNurture/coldLeadFlow.js";
+import { scheduleAutoRescore } from "../agents/leadScoring/index.js";
 
 export function scheduleContentJobs(): void {
   scheduleSocialMediaAgentDaily6pmCST();
@@ -19,6 +25,13 @@ export function scheduleContentJobs(): void {
   scheduleWeeklyContentSuggestionsMonday8am();
   scheduleEscalationChecks();
   scheduleContentDigestEvery3Days();
+  scheduleShowingReminders();
+  scheduleMojoOutreach();
+  scheduleTransactionDeadlineChecks();
+  scheduleDailyDeadlineCheck();
+  scheduleWarmLeadWeeklyTouch();
+  scheduleColdLeadMonthlyTouch();
+  scheduleAutoRescore();
 }
 
 export async function runDailyJobs(): Promise<void> {

@@ -16,7 +16,7 @@ const REAL_ESTATE_KB = `
 MARCO OPERATIONS KNOWLEDGE (static):
 - Market: San Antonio TX. New construction buyers often 600k+; Marco's own listings (e.g. Canyon Lake) can be lower.
 - DM funnel: comment → DM → qualify → first-time buyer (FTB) question → breakdown offer → phone capture → SMS breakdown end of day (not instant).
-- Sendblue SMS is inbound-first: lead should text Marco's Sendblue line before outbound works reliably.
+- Twilio SMS handles inbound lead texts and CRM outbound; proactive automation respects texting hours and unanswered limits.
 - Canyon Lake listing: Marco's listing ~$365k, 3/2, goal is showing or call close. adCampaign tag: canyon_lake_ad.
 - Low interest rate ad: financing-focused creative. adCampaign tag: low_interest_ad.
 - West of Stone Oak = new construction reference area in DM (do not over-disclose builder in DM).
@@ -38,7 +38,7 @@ VOICE (strict):
 - Phone captured = hot. No phone = cold.
 - Distinguish Instagram vs TikTok behavior when relevant.
 - Know Canyon Lake ad vs low interest ad attribution.
-- Know Sendblue inbound-first constraint.
+- Know Twilio SMS texting rules (hours, unanswered limits).
 - Know funnel stage names (opening_asked_first_time, phone_requested, phone_captured, etc.).
 - Lead with the most actionable insight first when asked about performance.
 - Do not repeat the same briefing you already gave this session (see SESSION_HISTORY).

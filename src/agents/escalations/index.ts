@@ -5,7 +5,7 @@ import {
   logAgentPull,
 } from "../../core/socialStore.js";
 import type { SocialDashboardVideo } from "../../core/socialStore.js";
-import { sendSendblueMessage } from "../../integrations/sendblue/index.js";
+import { sendTwilioMessage } from "../../integrations/twilio/index.js";
 import { getLatestMorningScan } from "../morningScan/index.js";
 
 export type EscalationType =
@@ -84,7 +84,7 @@ function wasRecentlyEscalated(type: string, identifier: string, withinMinutes = 
   }
 }
 
-async function sendEscalationSms(message: string): Promise<boolean> {
+export async function sendMarcoAlertSms(message: string): Promise<boolean> {
   const marcoNumber = process.env.MARCO_PHONE_NUMBER?.trim();
   if (!marcoNumber) {
     console.warn("[Escalation] MARCO_PHONE_NUMBER not set — cannot send SMS alert");
@@ -92,8 +92,8 @@ async function sendEscalationSms(message: string): Promise<boolean> {
   }
 
   try {
-    const result = await sendSendblueMessage({ to: marcoNumber, content: message });
-    return result.ok;
+    const result = await sendTwilioMessage({ to: marcoNumber, content: message });
+    return result.success;
   } catch (err) {
     console.error("[Escalation] SMS send failed:", err);
     return false;
@@ -112,7 +112,7 @@ export async function checkNegativeCommentTraction(): Promise<void> {
       if (ageHours >= 2 && !wasRecentlyEscalated("negative_comment_traction", String(reply.id), 240)) {
         const message = `⚠️ Negative comment needs review: "@${reply.authorUsername}: ${reply.commentText.substring(0, 80)}" — pending ${Math.round(ageHours)}h. Check Content Manager.`;
 
-        const smsSent = await sendEscalationSms(message);
+        const smsSent = await sendMarcoAlertSms(message);
 
         saveEscalation({
           type: "negative_comment_traction",
@@ -170,7 +170,7 @@ export async function checkLeadIntentInDMs(): Promise<void> {
 
       const message = `🔥 Strong lead intent: @${flag.authorUsername} on ${flag.platform} — "${flag.text.substring(0, 80)}" Signals: ${flag.intentSignals.join(", ")}`;
 
-      const smsSent = await sendEscalationSms(message);
+      const smsSent = await sendMarcoAlertSms(message);
 
       saveEscalation({
         type: "lead_intent_dm",
@@ -236,7 +236,7 @@ export async function checkViralSpike(): Promise<void> {
       const multiplier = Math.round(viewsGained / expectedGain);
       const message = `🚀 Viral spike! "${videoCaption(video).substring(0, 60)}" gained ${viewsGained.toLocaleString()} views in 4h (${multiplier}x normal). Consider boosting engagement now.`;
 
-      const smsSent = await sendEscalationSms(message);
+      const smsSent = await sendMarcoAlertSms(message);
 
       saveEscalation({
         type: "video_viral_spike",

@@ -5,7 +5,7 @@
 import { getDashboardSnapshot, listAllLeads, getConversation } from "../core/db.js";
 import type { Lead } from "../core/types.js";
 import { isAnthropicApiKeyConfigured } from "../integrations/llm/index.js";
-import { isSendblueConfigured } from "../integrations/sendblue/index.js";
+import { isTwilioConfigured } from "../integrations/twilio/index.js";
 import {
   fetchAdsSummaryFromUpstream,
   adsTotalsToHarveySnapshot,
@@ -178,7 +178,8 @@ export async function buildHarveyContext(deps: PerceptionDeps): Promise<HarveyCo
     ads: adsTotalsToHarveySnapshot(adsRaw, adsLinked),
     systems: {
       anthropicConfigured: isAnthropicApiKeyConfigured(),
-      sendblueConfigured: isSendblueConfigured(),
+      twilioConfigured: isTwilioConfigured(),
+      sendblueConfigured: isTwilioConfigured(),
       adsLinked,
     },
   };

@@ -23,7 +23,7 @@ function runJudgment(ctx, operatorMessage) {
         focus.push("new_phone_captures");
         directives.push({
             severity: "warn",
-            text: `${phones24} phone${phones24 === 1 ? "" : "s"} captured in the last 24h — confirm SMS breakdown queued (Sendblue inbound-first).`,
+            text: `${phones24} phone${phones24 === 1 ? "" : "s"} captured in the last 24h — confirm SMS breakdown queued (Twilio inbound-first).`,
         });
     }
     if (hotSms.length > 0) {
@@ -93,10 +93,10 @@ function runJudgment(ctx, operatorMessage) {
             text: `Low interest ad: ${ctx.byAdCampaign.low_interest_ad} tagged (${ctx.byAdCampaign.lowInterestWithPhone} with phone) — financing-angle buyers.`,
         });
     }
-    if (!ctx.systems.sendblueConfigured) {
+    if (!ctx.systems.twilioConfigured) {
         directives.push({
             severity: "danger",
-            text: "Sendblue not configured — SMS handoff from CRM will fail until SENDBLUE_* env is set.",
+            text: "Twilio not configured — SMS handoff from CRM will fail until TWILIO_* env is set.",
         });
     }
     if (!ctx.systems.anthropicConfigured) {

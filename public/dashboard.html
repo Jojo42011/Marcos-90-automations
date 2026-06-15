@@ -4914,8 +4914,8 @@
       return apiUrl();
     }
 
-    function sendblueSendApiUrl() {
-      const u = new URL("/api/sendblue/send", window.location.origin);
+    function smsSendApiUrl() {
+      const u = new URL("/api/sms/send", window.location.origin);
       if (token) u.searchParams.set("token", token);
       return u.toString();
     }
@@ -6725,7 +6725,7 @@
       if (row.phone) {
         items.push({
           type: "sms",
-          title: "SMS / iMessage (Sendblue)",
+          title: "SMS (Twilio)",
           meta: row.phone,
           body: "Outbound texts sent from the Text tab appear here once threaded to this lead.",
           when: row.updatedAt,
@@ -7060,7 +7060,7 @@
           sendBtn.disabled = true;
           hideCrmErr();
           try {
-            const res = await fetch(sendblueSendApiUrl(), {
+            const res = await fetch(smsSendApiUrl(), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ leadId: crmChatLeadId, content: text }),
@@ -7123,7 +7123,7 @@
         </div>
         <div class="crm-chat-thread-body">${body}</div>
         <div class="crm-chat-compose">
-          <textarea id="crm-chat-input" placeholder="${canSend ? "Send a text via Sendblue…" : "No phone number on file"}" ${canSend ? "" : "disabled"}></textarea>
+          <textarea id="crm-chat-input" placeholder="${canSend ? "Send a text via SMS…" : "No phone number on file"}" ${canSend ? "" : "disabled"}></textarea>
           <button type="button" class="crm-btn-primary" id="crm-chat-send" ${canSend ? "" : "disabled"}>Send</button>
         </div>`;
     }
@@ -7306,7 +7306,7 @@
       let ok = 0, fail = 0;
       for (const r of withPhone) {
         try {
-          const res = await fetch(sendblueSendApiUrl(), {
+          const res = await fetch(smsSendApiUrl(), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ leadId: r.id, content }),
@@ -8270,7 +8270,7 @@
           const msg = document.getElementById("cmp-text").value.trim();
           if (!msg) return;
           try {
-            const r = await fetch(sendblueSendApiUrl(), {
+            const r = await fetch(smsSendApiUrl(), {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ leadId: row.id, content: msg }),
             });
@@ -10610,7 +10610,7 @@
         return;
       }
 
-      /* ——— TEXT (Sendblue) ——— */
+      /* ——— TEXT (SMS) ——— */
       if (section === "text") {
         const pickId = crmTextPrefillLeadId;
         crmTextPrefillLeadId = null;
@@ -10626,7 +10626,7 @@
           }),
         ].join("");
         content.innerHTML = `
-          <div class="crm-section-head">Sendblue · SMS / iMessage</div>
+          <div class="crm-section-head">SMS · Twilio</div>
           <div class="crm-section-sub">Compose the full message here — breakdowns, links, follow-ups. Pick a saved lead or enter any number.</div>
           <section class="crm-card crm-text-panel">
             <div class="crm-field">
@@ -10683,7 +10683,7 @@
           }
           const payload = lid ? { leadId: lid, content: msg } : { to: rawPhone, content: msg };
           try {
-            const res = await fetch(sendblueSendApiUrl(), {
+            const res = await fetch(smsSendApiUrl(), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),

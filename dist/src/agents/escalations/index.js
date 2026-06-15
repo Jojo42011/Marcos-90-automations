@@ -1,13 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getRecentEscalations = getRecentEscalations;
+exports.sendMarcoAlertSms = sendMarcoAlertSms;
 exports.checkNegativeCommentTraction = checkNegativeCommentTraction;
 exports.checkLeadIntentInDMs = checkLeadIntentInDMs;
 exports.checkViralSpike = checkViralSpike;
 exports.runAllEscalationChecks = runAllEscalationChecks;
 exports.scheduleEscalationChecks = scheduleEscalationChecks;
 const socialStore_js_1 = require("../../core/socialStore.js");
-const index_js_1 = require("../../integrations/sendblue/index.js");
+const index_js_1 = require("../../integrations/twilio/index.js");
 const index_js_2 = require("../morningScan/index.js");
 function saveEscalation(esc) {
     const db = (0, socialStore_js_1.getSocialDb)();
@@ -58,15 +59,15 @@ function wasRecentlyEscalated(type, identifier, withinMinutes = 60) {
         return false;
     }
 }
-async function sendEscalationSms(message) {
+async function sendMarcoAlertSms(message) {
     const marcoNumber = process.env.MARCO_PHONE_NUMBER?.trim();
     if (!marcoNumber) {
         console.warn("[Escalation] MARCO_PHONE_NUMBER not set — cannot send SMS alert");
         return false;
     }
     try {
-        const result = await (0, index_js_1.sendSendblueMessage)({ to: marcoNumber, content: message });
-        return result.ok;
+        const result = await (0, index_js_1.sendTwilioMessage)({ to: marcoNumber, content: message });
+        return result.success;
     }
     catch (err) {
         console.error("[Escalation] SMS send failed:", err);
@@ -82,7 +83,7 @@ async function checkNegativeCommentTraction() {
             const ageHours = ageMs / (1000 * 60 * 60);
             if (ageHours >= 2 && !wasRecentlyEscalated("negative_comment_traction", String(reply.id), 240)) {
                 const message = `⚠️ Negative comment needs review: "@${reply.authorUsername}: ${reply.commentText.substring(0, 80)}" — pending ${Math.round(ageHours)}h. Check Content Manager.`;
-                const smsSent = await sendEscalationSms(message);
+                const smsSent = await sendMarcoAlertSms(message);
                 saveEscalation({
                     type: "negative_comment_traction",
                     detectedAt: new Date().toISOString(),
@@ -124,7 +125,7 @@ async function checkLeadIntentInDMs() {
             if (wasRecentlyEscalated("lead_intent_dm", identifier, 1440))
                 continue;
             const message = `🔥 Strong lead intent: @${flag.authorUsername} on ${flag.platform} — "${flag.text.substring(0, 80)}" Signals: ${flag.intentSignals.join(", ")}`;
-            const smsSent = await sendEscalationSms(message);
+            const smsSent = await sendMarcoAlertSms(message);
             saveEscalation({
                 type: "lead_intent_dm",
                 detectedAt: new Date().toISOString(),
@@ -178,7 +179,7 @@ async function checkViralSpike() {
                     continue;
                 const multiplier = Math.round(viewsGained / expectedGain);
                 const message = `🚀 Viral spike! "${videoCaption(video).substring(0, 60)}" gained ${viewsGained.toLocaleString()} views in 4h (${multiplier}x normal). Consider boosting engagement now.`;
-                const smsSent = await sendEscalationSms(message);
+                const smsSent = await sendMarcoAlertSms(message);
                 saveEscalation({
                     type: "video_viral_spike",
                     detectedAt: new Date().toISOString(),

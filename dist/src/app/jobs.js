@@ -17,6 +17,12 @@ const index_js_7 = require("../agents/eveningPull/index.js");
 const index_js_8 = require("../agents/contentSuggestions/index.js");
 const index_js_9 = require("../agents/escalations/index.js");
 const index_js_10 = require("../agents/harveyContentDigest/index.js");
+const index_js_11 = require("../agents/showingReminders/index.js");
+const index_js_12 = require("../agents/mojoOutreach/index.js");
+const index_js_13 = require("../agents/transactionDeadlines/index.js");
+const warmLeadFlow_js_1 = require("../agents/leadNurture/warmLeadFlow.js");
+const coldLeadFlow_js_1 = require("../agents/leadNurture/coldLeadFlow.js");
+const index_js_14 = require("../agents/leadScoring/index.js");
 function scheduleContentJobs() {
     (0, index_js_5.scheduleSocialMediaAgentDaily6pmCST)();
     (0, index_js_6.scheduleMorningScanDaily8am)();
@@ -24,6 +30,13 @@ function scheduleContentJobs() {
     (0, index_js_8.scheduleWeeklyContentSuggestionsMonday8am)();
     (0, index_js_9.scheduleEscalationChecks)();
     (0, index_js_10.scheduleContentDigestEvery3Days)();
+    (0, index_js_11.scheduleShowingReminders)();
+    (0, index_js_12.scheduleMojoOutreach)();
+    (0, index_js_13.scheduleTransactionDeadlineChecks)();
+    (0, index_js_13.scheduleDailyDeadlineCheck)();
+    (0, warmLeadFlow_js_1.scheduleWarmLeadWeeklyTouch)();
+    (0, coldLeadFlow_js_1.scheduleColdLeadMonthlyTouch)();
+    (0, index_js_14.scheduleAutoRescore)();
 }
 async function runDailyJobs() {
     await (0, index_js_1.run)();

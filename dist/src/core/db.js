@@ -1,5 +1,39 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.findLeadById = void 0;
 exports.normalizeCrmIntent = normalizeCrmIntent;
 exports.normalizeCrmTags = normalizeCrmTags;
 exports.normalizeCrmStatus = normalizeCrmStatus;
@@ -40,7 +74,7 @@ const tagTemplates_js_1 = require("./tagTemplates.js");
 const users_js_1 = require("./users.js");
 const tasks_js_1 = require("./tasks.js");
 const marcoTasks_js_1 = require("./marcoTasks.js");
-const index_js_1 = require("../integrations/sendblue/index.js");
+const index_js_1 = require("../integrations/twilio/index.js");
 const CRM_STATUS_SET = new Set(types_js_1.CRM_STATUSES);
 /** Normalize CRM intent; defaults to buyer. */
 function normalizeCrmIntent(raw) {
@@ -326,13 +360,15 @@ async function getLead(platform, userId) {
         return null;
     return leadsById.get(id) ?? null;
 }
-/** Lookup by internal lead id (CRM / Sendblue). */
+/** Lookup by internal lead id (CRM / SMS). */
 async function getLeadById(leadId) {
     const id = String(leadId || "").trim();
     if (!id)
         return null;
     return leadsById.get(id) ?? null;
 }
+/** Alias for nurture/scoring modules. */
+exports.findLeadById = getLeadById;
 /** Permanently remove a lead, its conversation, and platform key mapping. */
 function deleteLead(id) {
     const leadId = String(id || "").trim();
@@ -393,8 +429,8 @@ async function notifyNewPhoneCapture(lead) {
     }
     for (const number of recipients) {
         try {
-            const result = await (0, index_js_1.sendSendblueMessage)({ to: number, content: message });
-            if (!result.ok) {
+            const result = await (0, index_js_1.sendTwilioMessage)({ to: number, content: message });
+            if (!result.success) {
                 console.error("[PhoneCapture] Notification failed for", number, ":", result.error);
             }
             else {
@@ -429,6 +465,25 @@ function applyPhoneCaptureTransition(existing, lead) {
             : existing.phoneNumberSeen ?? (existing.phoneCapturedAt ? false : true),
     };
 }
+function normalizePreApprovalStatus(raw) {
+    const s = String(raw ?? "")
+        .trim()
+        .toLowerCase();
+    if (s === "approved" || s === "in_progress" || s === "cash" || s === "not_approved")
+        return s;
+    return null;
+}
+async function triggerSourceRoutingIfNeeded(lead) {
+    if (lead.sourceRoutingCompletedAt)
+        return lead;
+    const routedAt = nowIso();
+    const marked = { ...lead, sourceRoutingCompletedAt: routedAt };
+    leadsById.set(lead.id, marked);
+    persistToFile();
+    const { routeNewLead } = await Promise.resolve().then(() => __importStar(require("../agents/leadNurture/sourceRouting.js")));
+    routeNewLead(marked).catch((err) => console.error("[SourceRouting]", err));
+    return marked;
+}
 async function createLead(lead) {
     const id = String(idCounter++);
     const createdAt = nowIso();
@@ -445,7 +500,7 @@ async function createLead(lead) {
     leadKeyToId.set(leadKey(lead.platform, lead.userId), id);
     conversationsByLeadId.set(id, { messages: [] });
     persistToFile();
-    return next;
+    return await triggerSourceRoutingIfNeeded(next);
 }
 async function updateLead(lead) {
     const existing = leadsById.get(lead.id);
@@ -460,6 +515,10 @@ async function updateLead(lead) {
     const updated = applyPhoneCaptureTransition(existing, normalized);
     leadsById.set(lead.id, updated);
     persistToFile();
+    const phoneNewlyCaptured = existing && !leadHasPhone(existing.phone) && leadHasPhone(updated.phone);
+    if (phoneNewlyCaptured && !updated.sourceRoutingCompletedAt) {
+        return await triggerSourceRoutingIfNeeded(updated);
+    }
     return updated;
 }
 async function getConversation(leadId) {
@@ -642,6 +701,71 @@ function normalizeDocuments(raw) {
     }
     return out;
 }
+function normalizeShowingAppointment(raw) {
+    if (!raw || typeof raw !== "object")
+        return null;
+    const a = raw;
+    const address = typeof a.address === "string" ? a.address.trim() : "";
+    const scheduledAt = typeof a.scheduledAt === "string" ? a.scheduledAt.trim() : "";
+    if (!address || !scheduledAt)
+        return null;
+    const statusRaw = typeof a.confirmationStatus === "string" ? a.confirmationStatus.trim().toLowerCase() : "pending";
+    const confirmationStatus = statusRaw === "confirmed" ||
+        statusRaw === "no_response" ||
+        statusRaw === "cancelled" ||
+        statusRaw === "pending"
+        ? statusRaw
+        : "pending";
+    const out = {
+        address,
+        scheduledAt,
+        confirmationStatus,
+    };
+    if (typeof a.reminderSentAt === "string" && a.reminderSentAt)
+        out.reminderSentAt = a.reminderSentAt;
+    if (typeof a.confirmationReceivedAt === "string" && a.confirmationReceivedAt) {
+        out.confirmationReceivedAt = a.confirmationReceivedAt;
+    }
+    if (typeof a.followUpSentAt === "string" && a.followUpSentAt)
+        out.followUpSentAt = a.followUpSentAt;
+    if (typeof a.followUpResponse === "string" && a.followUpResponse)
+        out.followUpResponse = a.followUpResponse;
+    const sentimentRaw = typeof a.followUpSentiment === "string" ? a.followUpSentiment.trim().toLowerCase() : "";
+    if (sentimentRaw === "positive" || sentimentRaw === "negative" || sentimentRaw === "neutral") {
+        out.followUpSentiment = sentimentRaw;
+    }
+    return out;
+}
+function normalizeMojoOutreach(raw) {
+    if (!raw || typeof raw !== "object")
+        return null;
+    const m = raw;
+    const statusRaw = typeof m.status === "string" ? m.status.trim().toLowerCase() : "active";
+    const status = statusRaw === "paused" || statusRaw === "replied" || statusRaw === "completed" || statusRaw === "active"
+        ? statusRaw
+        : "active";
+    const textsSent = typeof m.textsSent === "number" && Number.isFinite(m.textsSent)
+        ? Math.max(0, Math.min(2, Math.floor(m.textsSent)))
+        : 0;
+    const out = {
+        sequenceStarted: m.sequenceStarted === true,
+        textsSent,
+        status,
+    };
+    if (typeof m.lastTextSentAt === "string" && m.lastTextSentAt)
+        out.lastTextSentAt = m.lastTextSentAt;
+    if (typeof m.pausedUntil === "string" && m.pausedUntil)
+        out.pausedUntil = m.pausedUntil;
+    return out;
+}
+function normalizeAutomationPausedReason(raw) {
+    const s = String(raw ?? "")
+        .trim()
+        .toLowerCase();
+    if (s === "ready_to_offer" || s === "angry_client" || s === "legal_question")
+        return s;
+    return null;
+}
 function normalizeCrmDefaults(lead) {
     const crmStatus = normalizeCrmStatus(lead.crmStatus);
     const crmStage = lead.crmStage ?? "new";
@@ -676,6 +800,21 @@ function normalizeCrmDefaults(lead) {
     const enrollmentsSame = JSON.stringify(lead.autoPlanEnrollments ?? []) === JSON.stringify(autoPlanEnrollments);
     const documentsSame = JSON.stringify(lead.documents ?? []) === JSON.stringify(documents);
     const skipSame = JSON.stringify(lead.skipTraceResults ?? []) === JSON.stringify(skipTraceResults);
+    const showingAppointment = normalizeShowingAppointment(lead.showingAppointment);
+    const prevShowing = normalizeShowingAppointment(lead.showingAppointment);
+    const showingSame = JSON.stringify(prevShowing) === JSON.stringify(showingAppointment);
+    const mojoOutreach = normalizeMojoOutreach(lead.mojoOutreach);
+    const prevMojo = normalizeMojoOutreach(lead.mojoOutreach);
+    const mojoSame = JSON.stringify(prevMojo) === JSON.stringify(mojoOutreach);
+    const automationPaused = lead.automationPaused === true;
+    const automationPausedReason = normalizeAutomationPausedReason(lead.automationPausedReason);
+    const rawPausedAt = lead.automationPausedAt;
+    const automationPausedAt = typeof rawPausedAt === "string" && rawPausedAt ? rawPausedAt : null;
+    const preApprovalStatus = normalizePreApprovalStatus(lead.preApprovalStatus);
+    const rawViews = lead.propertyViewsCount;
+    const propertyViewsCount = typeof rawViews === "number" && Number.isFinite(rawViews) && rawViews > 0 ? Math.floor(rawViews) : 0;
+    const rawRoutingAt = lead.sourceRoutingCompletedAt;
+    const sourceRoutingCompletedAt = typeof rawRoutingAt === "string" && rawRoutingAt ? rawRoutingAt : null;
     if (lead.crmStatus === crmStatus &&
         lead.crmStage === crmStage &&
         lead.crmPriority === crmPriority &&
@@ -693,8 +832,16 @@ function normalizeCrmDefaults(lead) {
         enrollmentsSame &&
         documentsSame &&
         skipSame &&
+        showingSame &&
+        mojoSame &&
+        lead.automationPaused === automationPaused &&
+        (lead.automationPausedReason ?? null) === automationPausedReason &&
+        (lead.automationPausedAt ?? null) === automationPausedAt &&
         (lead.assignedUserId ?? null) === assignedUserId &&
-        (lead.assignedUserName ?? null) === assignedUserName) {
+        (lead.assignedUserName ?? null) === assignedUserName &&
+        (lead.preApprovalStatus ?? null) === preApprovalStatus &&
+        (lead.propertyViewsCount ?? 0) === propertyViewsCount &&
+        (lead.sourceRoutingCompletedAt ?? null) === sourceRoutingCompletedAt) {
         return lead;
     }
     const phoneCapturedAt = typeof lead.phoneCapturedAt === "string"
@@ -725,6 +872,14 @@ function normalizeCrmDefaults(lead) {
         assignedUserName,
         phoneCapturedAt,
         phoneNumberSeen,
+        showingAppointment,
+        mojoOutreach,
+        automationPaused,
+        automationPausedReason,
+        automationPausedAt,
+        preApprovalStatus,
+        propertyViewsCount,
+        sourceRoutingCompletedAt,
     };
 }
 /**
@@ -905,12 +1060,17 @@ async function updateLeadCrmFields(input) {
             criteria = null;
         }
         else {
-            const base = criteria ?? { priceCap: null, beds: null, baths: null, area: null };
+            const base = criteria ?? { priceCap: null, beds: null, baths: null, area: null, timeline: null };
             criteria = {
                 priceCap: input.criteria.priceCap !== undefined ? input.criteria.priceCap : base.priceCap,
                 beds: input.criteria.beds !== undefined ? input.criteria.beds : base.beds,
                 baths: input.criteria.baths !== undefined ? input.criteria.baths : base.baths,
                 area: input.criteria.area !== undefined ? input.criteria.area : base.area,
+                timeline: input.criteria.timeline !== undefined
+                    ? input.criteria.timeline === null
+                        ? null
+                        : String(input.criteria.timeline)
+                    : base.timeline ?? null,
             };
         }
     }
@@ -959,6 +1119,40 @@ async function updateLeadCrmFields(input) {
                 : String(input.assignedUserName).trim()
             : lead.assignedUserName ?? null,
         phoneNumberSeen: input.phoneNumberSeen !== undefined ? input.phoneNumberSeen : lead.phoneNumberSeen,
+        showingAppointment: input.showingAppointment !== undefined
+            ? normalizeShowingAppointment(input.showingAppointment)
+            : normalizeShowingAppointment(lead.showingAppointment),
+        mojoOutreach: input.mojoOutreach !== undefined
+            ? normalizeMojoOutreach(input.mojoOutreach)
+            : normalizeMojoOutreach(lead.mojoOutreach),
+        automationPaused: input.automationPaused !== undefined ? input.automationPaused : lead.automationPaused ?? false,
+        automationPausedReason: input.automationPausedReason !== undefined
+            ? normalizeAutomationPausedReason(input.automationPausedReason)
+            : normalizeAutomationPausedReason(lead.automationPausedReason),
+        automationPausedAt: input.automationPausedAt !== undefined
+            ? input.automationPausedAt === null || input.automationPausedAt === ""
+                ? null
+                : String(input.automationPausedAt)
+            : lead.automationPausedAt ?? null,
+        isPastClient: input.isPastClient !== undefined ? input.isPastClient : lead.isPastClient ?? false,
+        pastClientSince: input.pastClientSince !== undefined
+            ? input.pastClientSince === null || input.pastClientSince === ""
+                ? null
+                : String(input.pastClientSince)
+            : lead.pastClientSince ?? null,
+        preApprovalStatus: input.preApprovalStatus !== undefined
+            ? normalizePreApprovalStatus(input.preApprovalStatus)
+            : lead.preApprovalStatus ?? null,
+        propertyViewsCount: input.propertyViewsCount !== undefined
+            ? typeof input.propertyViewsCount === "number" && input.propertyViewsCount > 0
+                ? Math.floor(input.propertyViewsCount)
+                : 0
+            : lead.propertyViewsCount ?? 0,
+        sourceRoutingCompletedAt: input.sourceRoutingCompletedAt !== undefined
+            ? input.sourceRoutingCompletedAt === null || input.sourceRoutingCompletedAt === ""
+                ? null
+                : String(input.sourceRoutingCompletedAt)
+            : lead.sourceRoutingCompletedAt ?? null,
     };
     await updateLead(next);
     return next;

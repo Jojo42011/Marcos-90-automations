@@ -196,8 +196,46 @@ export interface Lead {
    * `referral_needed` = lead accepted, Marco should connect them with a local agent.
    */
   referralStatus?: "offered" | "referral_needed" | null;
+  /** Property showing appointment + reminder/confirmation state. */
+  showingAppointment?: ShowingAppointment | null;
+  /** Mojo cold-call text outreach sequence state. */
+  mojoOutreach?: MojoOutreach | null;
+  /** Conversation escalation paused automation until manually resumed. */
+  automationPaused?: boolean;
+  automationPausedReason?: ConversationEscalationTrigger | null;
+  automationPausedAt?: string | null;
+  /** Set when a transaction closes — triggers past client nurture eligibility. */
+  isPastClient?: boolean;
+  pastClientSince?: string | null;
+  /** Manual CRM field — buyer pre-approval status for lead scoring. */
+  preApprovalStatus?: PreApprovalStatus | null;
+  /** Manual CRM override for property view count (also derived from activity when unset). */
+  propertyViewsCount?: number;
+  /** Set after source-based nurture routing runs once for this lead. */
+  sourceRoutingCompletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ShowingAppointment {
+  address: string;
+  scheduledAt: string;
+  reminderSentAt?: string;
+  confirmationStatus: "pending" | "confirmed" | "no_response" | "cancelled";
+  confirmationReceivedAt?: string;
+  followUpSentAt?: string;
+  followUpResponse?: string;
+  followUpSentiment?: "positive" | "negative" | "neutral";
+}
+
+export type ConversationEscalationTrigger = "ready_to_offer" | "angry_client" | "legal_question";
+
+export interface MojoOutreach {
+  sequenceStarted: boolean;
+  textsSent: number;
+  lastTextSentAt?: string;
+  pausedUntil?: string;
+  status: "active" | "paused" | "replied" | "completed";
 }
 
 /** A single step in an Auto Plan drip campaign. */
@@ -392,7 +430,11 @@ export interface Criteria {
   beds: number | null;
   baths: number | null;
   area: string | null;
+  /** Buyer's timeline urgency — manual CRM entry (e.g. "ASAP", "3-6 months"). */
+  timeline?: string | null;
 }
+
+export type PreApprovalStatus = "approved" | "in_progress" | "cash" | "not_approved";
 
 export interface Message {
   role: "user" | "assistant";

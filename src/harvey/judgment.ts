@@ -32,7 +32,7 @@ export function runJudgment(ctx: HarveyContext, operatorMessage: string): Judgme
     focus.push("new_phone_captures");
     directives.push({
       severity: "warn",
-      text: `${phones24} phone${phones24 === 1 ? "" : "s"} captured in the last 24h — confirm SMS breakdown queued (Sendblue inbound-first).`,
+      text: `${phones24} phone${phones24 === 1 ? "" : "s"} captured in the last 24h — confirm SMS breakdown queued (Twilio inbound-first).`,
     });
   }
 
@@ -114,10 +114,10 @@ export function runJudgment(ctx: HarveyContext, operatorMessage: string): Judgme
     });
   }
 
-  if (!ctx.systems.sendblueConfigured) {
+  if (!ctx.systems.twilioConfigured) {
     directives.push({
       severity: "danger",
-      text: "Sendblue not configured — SMS handoff from CRM will fail until SENDBLUE_* env is set.",
+      text: "Twilio not configured — SMS handoff from CRM will fail until TWILIO_* env is set.",
     });
   }
 

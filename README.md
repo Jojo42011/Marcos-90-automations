@@ -125,6 +125,18 @@ On later messages, omit `marco_previous_outbound` (conversation already has Marc
 - **`ANTHROPIC_MODEL`** (optional): Defaults to `claude-3-5-haiku-latest`. Override if you standardize on another Haiku snapshot (e.g. `claude-haiku-4-5-20251001`).
 - **Health check:** `GET /health` returns `anthropic.api_key_configured` and `anthropic.model` so you can confirm the app sees the key **without** spending tokens. Billing errors still appear at request time; check logs for `llm_opening_error`, `llm_pipeline_error`, or `preflight_error_fallback` and `anthropic_http_status` (e.g. 401/402 when credits or auth fail).
 
+## Environment: Twilio SMS
+
+CRM text tab, inbound lead SMS, showing reminders, Mojo outreach, and escalation alerts all use **Twilio** (not Sendblue).
+
+- **`TWILIO_ACCOUNT_SID`** — Twilio account SID
+- **`TWILIO_AUTH_TOKEN`** — Twilio auth token
+- **`TWILIO_FROM_NUMBER`** — E.164 sender number (e.g. `+12145551234`)
+- **`TWILIO_WEBHOOK_AUTH_TOKEN`** (optional) — Used to validate inbound webhook signatures; defaults to `TWILIO_AUTH_TOKEN` if unset
+- **Inbound webhook:** Twilio Console → your phone number → Messaging → configure webhook URL to `https://marco-90-automation.fly.dev/webhook/twilio`, HTTP POST
+- **CRM manual send:** `POST /api/sms/send` with `DASHBOARD_TOKEN`; body `{ leadId, content }` or `{ to, content }`
+- **Health:** `GET /health` returns `twilio.configured`
+
 ## Environment: Skip trace (Forewarn)
 
 - **`FOREWARN_API_KEY`** (optional): When set, `POST /api/leads/:id/skip-trace` calls the Forewarn lookup API. When unset, the CRM returns **mock** skip-trace data so the UI is testable without an API key. See `src/integrations/forewarn.ts` for setup notes.
