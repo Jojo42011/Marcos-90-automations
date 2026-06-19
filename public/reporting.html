@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reporting · Marco</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface-2: #161616;
+      --border: rgba(0, 212, 255, 0.15);
+      --border-bright: rgba(0, 212, 255, 0.2);
+      --text: #f1f5f9;
+      --muted: #888;
+      --accent: #00d4ff;
+      --accent-glow: rgba(0, 212, 255, 0.15);
+      --green: #10b981;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --font: "Plus Jakarta Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      background-image: radial-gradient(ellipse 70% 45% at 50% -15%, var(--accent-glow), transparent);
+    }
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border-bright);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      animation: fadeSlideDown 0.45s ease-out;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .rpt-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border-bright);
+      background: var(--surface);
+      padding: 0 20px;
+      overflow-x: auto;
+      animation: fadeSlideDown 0.5s ease-out 0.05s backwards;
+    }
+    .tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      padding: 12px 16px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .rpt-main { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; animation: tabFade 0.38s ease-out; }
+    .rpt-section-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .rpt-section-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+      animation: cardIn 0.45s ease-out backwards;
+    }
+    .rpt-section-card:nth-child(1) { animation-delay: 0.04s; }
+    .rpt-section-card:nth-child(2) { animation-delay: 0.08s; }
+    .rpt-section-card:nth-child(3) { animation-delay: 0.12s; }
+    .rpt-section-card:nth-child(4) { animation-delay: 0.16s; }
+    .rpt-section-card:nth-child(5) { animation-delay: 0.2s; }
+    .rpt-section-card:nth-child(6) { animation-delay: 0.24s; }
+    .rpt-section-card:hover {
+      border-color: var(--border-bright);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(0, 212, 255, 0.08);
+    }
+    .rpt-stat { font-size: 22px; font-weight: 800; color: #fff; }
+    .rpt-stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .rpt-mini-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 8px; background: rgba(255,255,255,0.06); }
+    .rpt-bar-seg { height: 100%; width: 0; transition: width 0.85s cubic-bezier(0.22, 1, 0.36, 1); }
+    .rpt-live {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .rpt-live-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green);
+      animation: pulse 2.5s ease-in-out infinite;
+    }
+    .rpt-live-dot.offline { background: #555; box-shadow: none; animation: none; }
+    .rpt-kpi-row { animation: fadeSlideUp 0.4s ease-out backwards; }
+    .rpt-kpi-row:nth-child(1) { animation-delay: 0.04s; }
+    .rpt-kpi-row:nth-child(2) { animation-delay: 0.08s; }
+    .rpt-kpi-row:nth-child(3) { animation-delay: 0.12s; }
+    .rpt-kpi-row:nth-child(4) { animation-delay: 0.16s; }
+    .rpt-kpi-row:nth-child(5) { animation-delay: 0.2s; }
+    .rpt-kpi-row:nth-child(6) { animation-delay: 0.24s; }
+    .rpt-kpi-row:nth-child(7) { animation-delay: 0.28s; }
+    .rpt-anomaly-card { animation: fadeSlideUp 0.42s ease-out backwards; }
+    .rpt-detail-card { animation: fadeSlideUp 0.4s ease-out; }
+    .rpt-history-row { animation: fadeIn 0.35s ease-out backwards; }
+    .rpt-banner { animation: fadeSlideUp 0.4s ease-out; }
+    #rpt-refresh-btn.refreshing { opacity: 0.65; pointer-events: none; }
+    #rpt-refresh-btn.refreshing::after { content: " …"; }
+    .rpt-subtabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .rpt-subtab {
+      background: transparent;
+      border: 1px solid var(--border-bright);
+      color: var(--accent);
+      padding: 6px 12px;
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .rpt-subtab.active { background: var(--accent-glow); border-color: var(--accent); }
+    .rpt-detail-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .rpt-detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 12px;
+    }
+    .rpt-detail-row:last-child { border-bottom: none; }
+    .rpt-detail-label { color: var(--muted); }
+    .rpt-detail-value { color: #fff; font-weight: 600; text-align: right; max-width: 60%; }
+    table.rpt-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--mono); }
+    .rpt-table th, .rpt-table td { text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .rpt-table th { color: #555; font-weight: 500; }
+    .rpt-table tr { cursor: pointer; }
+    .rpt-table tr:hover { background: rgba(0,212,255,0.04); }
+    .rpt-expand { background: var(--surface-2); padding: 12px; margin: 0 0 8px; border-radius: 4px; font-size: 11px; color: #ccc; }
+    .rpt-empty { text-align: center; padding: 2.5rem 1rem; color: var(--muted); font-size: 13px; }
+    .rpt-toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: var(--surface); border: 1px solid var(--border-bright);
+      color: var(--text); padding: 12px 16px; border-radius: 6px;
+      font-size: 12px; z-index: 200; opacity: 0; transform: translateY(10px);
+      transition: opacity 0.25s, transform 0.25s; pointer-events: none; max-width: 320px;
+    }
+    .rpt-toast.show { opacity: 1; transform: translateY(0); }
+    #rpt-pulse.on { display: inline-block !important; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.92); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeSlideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes cardIn { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes tabFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    html[data-theme="light"],
+    html[data-theme="light"] body {
+      background: #f1f5f9 !important;
+      color: #0f172a !important;
+      background-image: none !important;
+    }
+    html[data-theme="light"] .header,
+    html[data-theme="light"] .rpt-tabs {
+      background: #ffffff !important;
+      border-bottom: 2px solid #94a3b8 !important;
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .tab { color: #64748b !important; }
+    html[data-theme="light"] .tab.active {
+      color: #0369a1 !important;
+      border-bottom: 2px solid #0369a1 !important;
+      font-weight: 700 !important;
+    }
+    html[data-theme="light"] .rpt-section-card,
+    html[data-theme="light"] .rpt-detail-card,
+    html[data-theme="light"] [class*="card"] {
+      background: #ffffff !important;
+      border-color: #e2e8f0 !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+    }
+    html[data-theme="light"] .rpt-stat { color: #0f172a !important; }
+    html[data-theme="light"] .rpt-detail-value { color: #0f172a !important; }
+    html[data-theme="light"] .rpt-detail-label,
+    html[data-theme="light"] .rpt-stat-sub { color: #64748b !important; }
+    html[data-theme="light"] a[href="/dashboard"] { color: #0369a1 !important; }
+    html[data-theme="light"] #rpt-refresh-btn,
+    html[data-theme="light"] #theme-toggle-btn,
+    html[data-theme="light"] .rpt-subtab {
+      border-color: #94a3b8 !important;
+      color: #0369a1 !important;
+    }
+    html[data-theme="light"] .rpt-subtab.active {
+      background: rgba(3,105,161,0.1) !important;
+      border-color: #0369a1 !important;
+    }
+    html[data-theme="light"] button[onclick*="generate"],
+    html[data-theme="light"] button[onclick*="Generate"],
+    html[data-theme="light"] #rpt-refresh-btn:hover {
+      background: #0369a1 !important;
+      color: #ffffff !important;
+    }
+    html[data-theme="light"] table.rpt-table { background: #ffffff !important; color: #0f172a !important; }
+    html[data-theme="light"] .rpt-table th { color: #475569 !important; border-bottom: 2px solid #e2e8f0 !important; }
+    html[data-theme="light"] .rpt-table td { color: #0f172a !important; border-bottom: 1px solid #f1f5f9 !important; }
+    html[data-theme="light"] .rpt-table tr:hover { background: #f8fafc !important; }
+    html[data-theme="light"] .rpt-expand { background: #f8fafc !important; color: #334155 !important; }
+    html[data-theme="light"] #rpt-last-updated,
+    html[data-theme="light"] label[for="rpt-auto-refresh"] { color: #64748b !important; }
+    html[data-theme="light"] .rpt-empty { color: #64748b !important; }
+    html[data-theme="light"] [style*="color:#ef4444"] { color: #dc2626 !important; }
+    html[data-theme="light"] [style*="color:#f59e0b"] { color: #d97706 !important; }
+    html[data-theme="light"] [style*="color:#10b981"] { color: #059669 !important; }
+    html[data-theme="light"] [style*="color:#00d4ff"] { color: #0369a1 !important; }
+    html[data-theme="light"] [style*="color:#fff"] { color: #0f172a !important; }
+    html[data-theme="light"] [style*="color:#ccc"] { color: #334155 !important; }
+    html[data-theme="light"] [style*="color:#888"] { color: #64748b !important; }
+    html[data-theme="light"] [style*="color:#555"] { color: #64748b !important; }
+    html[data-theme="light"] [style*="background:#111"] { background: #ffffff !important; }
+    html[data-theme="light"] [style*="border:1px solid rgba(0,212,255"] { border-color: #e2e8f0 !important; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <a href="/dashboard" style="color:#00d4ff; font-size:11px; letter-spacing:1px; text-decoration:none; font-family:var(--mono);">← COMMAND CENTER</a>
+      <span style="color:#888;">|</span>
+      <span style="color:#fff; font-size:14px; font-weight:700;">Reporting</span>
+      <span class="rpt-live" id="rpt-live-wrap"><span class="rpt-live-dot" id="rpt-live-dot"></span><span id="rpt-live-label">connecting</span></span>
+      <span id="rpt-digest-status" style="font-size:11px; color:#00d4ff; letter-spacing:1px; font-family:var(--mono);"></span>
+    </div>
+    <div class="header-right">
+      <span id="rpt-last-updated" style="font-size:10px; color:#555; font-family:var(--mono);"></span>
+      <label style="display:flex; align-items:center; gap:6px; font-size:10px; color:#888; cursor:pointer; font-family:var(--mono);">
+        <input type="checkbox" id="rpt-auto-refresh" onchange="toggleAutoRefresh()">
+        Auto 30s
+        <span id="rpt-pulse" style="display:none; width:6px; height:6px; border-radius:50%; background:#00d4ff;"></span>
+      </label>
+      <button onclick="refreshAll()" id="rpt-refresh-btn" style="background:transparent; border:1px solid rgba(0,212,255,0.2); color:#00d4ff; padding:5px 12px; font-family:monospace; font-size:10px; letter-spacing:1px; cursor:pointer; border-radius:2px;">Refresh</button>
+      <button id="theme-toggle-btn" onclick="toggleTheme()" style="background:transparent; border:1px solid rgba(0,212,255,0.2); color:#00d4ff; padding:5px 12px; font-family:monospace; font-size:10px; letter-spacing:1px; cursor:pointer; border-radius:2px;">Light mode</button>
+    </div>
+  </div>
+
+  <nav class="rpt-tabs" aria-label="Reporting sections">
+    <button type="button" class="tab active" data-tab="today">Today's Digest</button>
+    <button type="button" class="tab" data-tab="sections">Sections</button>
+    <button type="button" class="tab" data-tab="weekly-kpi">Weekly KPI</button>
+    <button type="button" class="tab" data-tab="anomalies">Anomalies</button>
+    <button type="button" class="tab" data-tab="history">History</button>
+  </nav>
+
+  <main class="rpt-main">
+    <div id="tab-today" class="tab-panel active" data-tab="today">
+      <div id="rpt-today-empty" class="rpt-empty" style="display:none;">No digest yet — runs daily at 7am Central, or generate manually below.</div>
+      <div id="rpt-today-content" style="display:none;">
+        <div class="rpt-banner" style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border:1px solid rgba(0,212,255,0.2); border-radius:4px; margin-bottom:16px; background:#111;">
+          <div>
+            <div style="font-size:11px; color:#888;">Generated <span id="rpt-generated-at">—</span> · snapshot <span id="rpt-snapshot-date">—</span> · <span id="rpt-sms-status"></span> · <span id="rpt-harvey-status"></span></div>
+            <div id="rpt-data-line" style="font-size:9px; color:#555; margin-top:5px; font-family:var(--mono); letter-spacing:0.04em;">Live sources: TikTok/social · Gmail · SMS · CRM pipeline · transactions</div>
+          </div>
+          <button onclick="generateDigestNow()" style="background:#00d4ff; color:#000; border:none; padding:6px 14px; font-family:monospace; font-size:10px; font-weight:700; border-radius:2px; cursor:pointer;">↻ GENERATE NOW</button>
+        </div>
+        <div class="rpt-section-grid" id="rpt-section-cards"></div>
+      </div>
+      <div id="rpt-today-no-snap" style="margin-top:16px;">
+        <button onclick="generateDigestNow()" style="background:#00d4ff; color:#000; border:none; padding:8px 16px; font-family:monospace; font-size:10px; font-weight:700; border-radius:2px; cursor:pointer;">↻ GENERATE DIGEST NOW</button>
+      </div>
+    </div>
+
+    <div id="tab-sections" class="tab-panel" data-tab="sections">
+      <div class="rpt-subtabs" id="rpt-section-subtabs"></div>
+      <div id="rpt-section-detail"></div>
+    </div>
+
+    <div id="tab-weekly-kpi" class="tab-panel" data-tab="weekly-kpi">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+        <button onclick="generateWeeklyKPINow()" style="background:#00d4ff; color:#000; border:none; padding:6px 14px; font-family:monospace; font-size:10px; font-weight:700; border-radius:2px; cursor:pointer;">↻ GENERATE WEEKLY KPI NOW</button>
+      </div>
+      <div id="rpt-kpi-empty" class="rpt-empty">No weekly KPI yet — runs every Friday at 5pm Central, or generate manually above.</div>
+      <div id="rpt-kpi-content" style="display:none; background:#111; border:1px solid rgba(0,212,255,0.15); border-radius:4px; overflow:hidden;">
+        <div style="padding:10px 16px; font-size:10px; color:#555; font-family:var(--mono); border-bottom:1px solid rgba(255,255,255,0.05);">Week of <span id="rpt-kpi-week"></span></div>
+        <div id="rpt-kpi-rows"></div>
+      </div>
+    </div>
+
+    <div id="tab-anomalies" class="tab-panel" data-tab="anomalies">
+      <div id="rpt-anomalies-list"></div>
+    </div>
+
+    <div id="tab-history" class="tab-panel" data-tab="history">
+      <table class="rpt-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Followers</th>
+            <th>Texts Sent</th>
+            <th>Hot Leads</th>
+            <th>Pipeline GCI</th>
+            <th>Anomalies</th>
+          </tr>
+        </thead>
+        <tbody id="rpt-history-rows"></tbody>
+      </table>
+      <div id="rpt-history-expand"></div>
+    </div>
+  </main>
+
+  <div class="rpt-toast" id="rpt-toast" role="status"></div>
+
+  <script>
+    let autoRefreshTimer = null;
+    let digestCache = null;
+    let anomaliesCache = [];
+    let activeSection = "social";
+    const SECTION_KEYS = ["social", "email", "texts", "transactions", "pipeline", "business health"];
+
+    function getToken() {
+      const p = new URLSearchParams(location.search);
+      return p.get("token") || localStorage.getItem("dashboardToken") || "";
+    }
+    function apiUrl(path) {
+      const u = new URL(path, location.origin);
+      const t = getToken();
+      if (t) u.searchParams.set("token", t);
+      return u.toString();
+    }
+    function authHeaders() {
+      const h = { "Content-Type": "application/json" };
+      const t = getToken();
+      if (t) h["Authorization"] = "Bearer " + t;
+      return h;
+    }
+    function escapeHtml(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+    function showToast(msg) {
+      const el = document.getElementById("rpt-toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(() => el.classList.remove("show"), 3500);
+    }
+    function fmtUsd(n) {
+      return "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
+    }
+    function fmtPctDecimal(v) {
+      if (v === null || v === undefined) return "—";
+      return Math.round(Number(v) * 100) + "%";
+    }
+    function fmtDate(iso) {
+      if (!iso) return "—";
+      try {
+        return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      } catch { return iso; }
+    }
+    function centralToday() {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
+    }
+
+    function animateCountUp(el, target, duration = 700, formatter) {
+      if (!el) return;
+      const num = Number(target) || 0;
+      const fmt = formatter || ((n) => Math.round(n).toLocaleString());
+      const start = performance.now();
+      const update = (now) => {
+        const progress = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = fmt(eased * num);
+        if (progress < 1) requestAnimationFrame(update);
+        else el.textContent = fmt(num);
+      };
+      requestAnimationFrame(update);
+    }
+
+    function updateLiveIndicator(ok, snap) {
+      const dot = document.getElementById("rpt-live-dot");
+      const label = document.getElementById("rpt-live-label");
+      if (!dot || !label) return;
+      dot.classList.toggle("offline", !ok);
+      if (!ok) {
+        label.textContent = "offline";
+        label.style.color = "#888";
+        return;
+      }
+      label.style.color = "";
+      if (snap && snap.snapshotDate) {
+        label.textContent = "live · " + snap.snapshotDate;
+      } else {
+        label.textContent = "live data";
+      }
+    }
+
+    function sectionHasAnomaly(prefix) {
+      return anomaliesCache.some((a) => a.field && a.field.startsWith(prefix));
+    }
+
+    function buildSectionCard(title, icon, data) {
+      return `
+        <div class="rpt-section-card" onclick="goToSection('${title.toLowerCase()}')">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div style="font-size:11px; color:#888; letter-spacing:2px; font-family:var(--mono);">${icon} ${title.toUpperCase()}</div>
+            ${data.hasAnomaly ? '<span style="font-size:9px; background:rgba(239,68,68,0.15); color:#ef4444; padding:2px 6px; border-radius:2px;">⚠ ANOMALY</span>' : ""}
+          </div>
+          ${data.html}
+        </div>`;
+    }
+
+    function buildKpiRow(label, metric, formatValue) {
+      const wow = metric.weekOverWeek;
+      const trendColor = wow === null ? "#555" : wow >= 0 ? "#10b981" : "#ef4444";
+      const trendArrow = wow === null ? "—" : wow >= 0 ? "▲" : "▼";
+      const trendText = wow === null ? "no prior data" : `${Math.abs(wow)}% ${wow >= 0 ? "up" : "down"}`;
+      const val = formatValue ? formatValue(metric.value) : metric.value.toLocaleString();
+      return `
+        <div class="rpt-kpi-row" style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05);">
+          <div style="font-size:12px; color:#ccc;">${label}</div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="font-size:16px; color:#fff; font-weight:700;">${val}</div>
+            <div style="font-size:11px; color:${trendColor};">${trendArrow} ${trendText}</div>
+          </div>
+        </div>`;
+    }
+
+    function buildAnomalyCard(anomaly) {
+      const color = anomaly.severity === "critical" ? "#ef4444" : "#f59e0b";
+      const icon = anomaly.severity === "critical" ? "🚨" : "⚠️";
+      return `
+        <div class="rpt-anomaly-card" style="border-left:3px solid ${color}; background:#111; border-radius:4px; padding:12px 16px; margin-bottom:8px;">
+          <div style="display:flex; justify-content:space-between;">
+            <div style="font-size:12px; color:#fff; font-weight:600;">${icon} ${escapeHtml(anomaly.field)}</div>
+            <div style="font-size:10px; color:${color}; text-transform:uppercase;">${anomaly.severity}</div>
+          </div>
+          <div style="font-size:11px; color:#ccc; margin-top:6px;">${escapeHtml(anomaly.message)}</div>
+          <div style="font-size:10px; color:#555; margin-top:4px;">Current: ${anomaly.currentValue} · 4-week avg: ${anomaly.averageValue} · ${anomaly.direction === "up" ? "+" : "-"}${Math.abs(anomaly.deviation)}%</div>
+        </div>`;
+    }
+
+    function pipelineBar(hot, warm, cold) {
+      const total = hot + warm + cold || 1;
+      const hp = Math.round((hot / total) * 100);
+      const wp = Math.round((warm / total) * 100);
+      const cp = Math.max(0, 100 - hp - wp);
+      return `<div class="rpt-mini-bar" data-hot="${hp}" data-warm="${wp}" data-cold="${cp}">
+        <div class="rpt-bar-seg" data-w="${hp}" style="background:#ef4444;" title="Hot ${hot}"></div>
+        <div class="rpt-bar-seg" data-w="${wp}" style="background:#f59e0b;" title="Warm ${warm}"></div>
+        <div class="rpt-bar-seg" data-w="${cp}" style="background:#64748b;" title="Cold ${cold}"></div>
+      </div>
+        <div style="font-size:9px; color:#555; margin-top:4px;">H ${hot} · W ${warm} · C ${cold}</div>`;
+    }
+
+    function animatePipelineBars() {
+      requestAnimationFrame(() => {
+        document.querySelectorAll(".rpt-bar-seg").forEach((seg) => {
+          const w = seg.getAttribute("data-w");
+          seg.style.width = w + "%";
+        });
+      });
+    }
+
+    function renderTodayCards(data) {
+      const s = data.social;
+      const e = data.email;
+      const t = data.texts;
+      const tx = data.transactions;
+      const p = data.pipeline;
+      const bh = data.businessHealth;
+
+      const deadlineNote = tx.deadlinesIn48Hours.length <= 3 && tx.deadlinesIn48Hours.length > 0
+        ? tx.deadlinesIn48Hours.map((d) => escapeHtml(d.address)).join(", ")
+        : tx.deadlinesIn48Hours.length + " upcoming";
+
+      const topPost = s.topPost
+        ? escapeHtml(String(s.topPost.description).slice(0, 48)) + (s.topPost.description.length > 48 ? "…" : "") + ` · ${s.topPost.views.toLocaleString()} views`
+        : "No top post";
+
+      const emailGap = e.gap ? `<div style="font-size:10px; color:#555; margin-top:6px;">${escapeHtml(e.gap)}</div>` : "";
+
+      const cards = [
+        buildSectionCard("Social", "📱", {
+          hasAnomaly: sectionHasAnomaly("social."),
+          html: `
+            <div class="rpt-stat" data-count="${s.followers}">0</div><div class="rpt-stat-sub">followers (${s.followersChangeWeek >= 0 ? "+" : ""}${s.followersChangeWeek} wk)</div>
+            <div style="margin-top:8px; font-size:11px; color:#ccc;">Avg views 7d: <span data-count="${Math.round(s.avgViewsLast7Days)}">0</span></div>
+            <div style="font-size:10px; color:#888; margin-top:4px;">${topPost}</div>
+            <div style="font-size:10px; color:#888; margin-top:4px;">DM leads: <span data-count="${s.newDmLeads}">0</span> · intent flags: <span data-count="${s.leadIntentFlags}">0</span></div>`
+        }),
+        buildSectionCard("Email", "✉️", {
+          hasAnomaly: sectionHasAnomaly("email."),
+          html: `
+            <div class="rpt-stat" data-count="${e.sent}">0</div><div class="rpt-stat-sub">sent today</div>
+            <div style="margin-top:8px; font-size:11px; color:#ccc;">Open: ${fmtPctDecimal(e.openRate)} · Replies: <span data-count="${e.replies}">0</span></div>
+            <div style="font-size:10px; color:#888;">Sequences: <span data-count="${e.sequences}">0</span></div>${emailGap}`
+        }),
+        buildSectionCard("Texts", "💬", {
+          hasAnomaly: sectionHasAnomaly("texts."),
+          html: `
+            <div class="rpt-stat" data-count="${t.sentToday}">0</div><div class="rpt-stat-sub">sent today · <span data-count="${t.receivedToday}">0</span> received</div>
+            <div style="margin-top:8px; font-size:11px; color:#ccc;">Reply rate: ${fmtPctDecimal(t.replyRate)}</div>
+            <div style="font-size:10px; color:#888;">Appts: <span data-count="${t.appointmentsBooked}">0</span> · threads: <span data-count="${t.activeThreads}">0</span></div>`
+        }),
+        buildSectionCard("Transactions", "🏠", {
+          hasAnomaly: sectionHasAnomaly("transactions."),
+          html: `
+            <div class="rpt-stat" data-count="${tx.dealsInEscrow}">0</div><div class="rpt-stat-sub">in escrow · <span data-count="${tx.closingsThisWeek}">0</span> closing this week</div>
+            <div style="margin-top:8px; font-size:11px; color:#ccc;">48h deadlines: ${escapeHtml(deadlineNote)}</div>
+            <div style="font-size:10px; color:${tx.missedDeadlines > 0 ? "#ef4444" : "#888"};">Missed: <span data-count="${tx.missedDeadlines}">0</span></div>`
+        }),
+        buildSectionCard("Pipeline", "🔥", {
+          hasAnomaly: sectionHasAnomaly("pipeline."),
+          html: `
+            <div class="rpt-stat" data-count="${p.newLeadsToday}">0</div><div class="rpt-stat-sub">new leads today</div>
+            ${pipelineBar(p.hotLeads, p.warmLeads, p.coldLeads)}
+            <div style="font-size:10px; color:#888; margin-top:6px;">↑ hot: <span data-count="${p.promotedToHotToday}">0</span> · ↓ cold: <span data-count="${p.goneColdToday}">0</span></div>`
+        }),
+        buildSectionCard("Business Health", "💰", {
+          hasAnomaly: bh.anomalyFlag || sectionHasAnomaly("businessHealth."),
+          html: `
+            <div class="rpt-stat" data-usd="${bh.pipelineGCI}">$0</div><div class="rpt-stat-sub">pipeline GCI</div>
+            <div style="margin-top:8px; font-size:11px; color:#ccc;">MTD vol: <span data-usd="${bh.mtdClosedVolume}">$0</span></div>
+            <div style="font-size:10px; color:#888;">MTD GCI: <span data-usd="${bh.mtdClosedGCI}">$0</span> · YTD: <span data-usd="${bh.ytdClosedGCI}">$0</span></div>
+            ${bh.anomalyFlag ? '<div style="font-size:9px; color:#f59e0b; margin-top:6px;">⚠ Health flag active</div>' : ""}`
+        }),
+      ];
+      document.getElementById("rpt-section-cards").innerHTML = cards.join("");
+      document.querySelectorAll("[data-count]").forEach((el) => {
+        animateCountUp(el, el.getAttribute("data-count"));
+      });
+      document.querySelectorAll("[data-usd]").forEach((el) => {
+        animateCountUp(el, el.getAttribute("data-usd"), 700, (n) => fmtUsd(n));
+      });
+      animatePipelineBars();
+    }
+
+    function detailRow(label, value) {
+      return `<div class="rpt-detail-row"><span class="rpt-detail-label">${escapeHtml(label)}</span><span class="rpt-detail-value">${value}</span></div>`;
+    }
+
+    function renderSectionDetail(key, data) {
+      if (!data) return '<div class="rpt-empty">No digest data — generate a digest first.</div>';
+      let html = '<div class="rpt-detail-card">';
+      if (key === "social") {
+        const s = data.social;
+        html += detailRow("Followers", s.followers.toLocaleString());
+        html += detailRow("Followers change (week)", (s.followersChangeWeek >= 0 ? "+" : "") + s.followersChangeWeek);
+        html += detailRow("Avg views (last 7 days)", s.avgViewsLast7Days.toLocaleString());
+        if (s.topPost) {
+          html += detailRow("Top post description", escapeHtml(s.topPost.description));
+          html += detailRow("Top post views", s.topPost.views.toLocaleString());
+          html += detailRow("Top post score", String(s.topPost.score));
+        } else {
+          html += detailRow("Top post", "—");
+        }
+        html += detailRow("New DM leads", String(s.newDmLeads));
+        html += detailRow("Lead intent flags", String(s.leadIntentFlags));
+      } else if (key === "email") {
+        const e = data.email;
+        html += detailRow("Sent today", String(e.sent));
+        html += detailRow("Open rate", fmtPctDecimal(e.openRate));
+        html += detailRow("Replies", String(e.replies));
+        html += detailRow("Active sequences", String(e.sequences));
+        if (e.gap) html += detailRow("Note", escapeHtml(e.gap));
+      } else if (key === "texts") {
+        const t = data.texts;
+        html += detailRow("Sent today", String(t.sentToday));
+        html += detailRow("Received today", String(t.receivedToday));
+        html += detailRow("Reply rate", fmtPctDecimal(t.replyRate));
+        html += detailRow("Appointments booked", String(t.appointmentsBooked));
+        html += detailRow("Active threads (7d)", String(t.activeThreads));
+      } else if (key === "transactions") {
+        const tx = data.transactions;
+        html += detailRow("Deals in escrow", String(tx.dealsInEscrow));
+        html += detailRow("Closings this week", String(tx.closingsThisWeek));
+        html += detailRow("Missed deadlines", `<span style="color:${tx.missedDeadlines > 0 ? "#ef4444" : "inherit"}">${tx.missedDeadlines}</span>`);
+        html += "</div>";
+        html += '<div class="rpt-detail-card" style="margin-top:12px;"><div style="font-size:11px; color:#888; margin-bottom:8px; letter-spacing:1px;">DEADLINES IN 48 HOURS</div>';
+        if (tx.deadlinesIn48Hours.length === 0) {
+          html += '<div class="rpt-empty" style="padding:1rem;">None upcoming</div>';
+        } else {
+          html += '<table class="rpt-table"><thead><tr><th>Address</th><th>Label</th><th>Due</th></tr></thead><tbody>';
+          tx.deadlinesIn48Hours.forEach((d) => {
+            html += `<tr><td>${escapeHtml(d.address)}</td><td>${escapeHtml(d.label)}</td><td>${escapeHtml(fmtDate(d.dueDate))}</td></tr>`;
+          });
+          html += "</tbody></table>";
+        }
+        document.getElementById("rpt-section-detail").innerHTML = html + "</div>";
+        return;
+      } else if (key === "pipeline") {
+        const p = data.pipeline;
+        html += detailRow("New leads today", String(p.newLeadsToday));
+        html += detailRow("Total leads", String(p.totalLeads));
+        html += detailRow("Hot leads", String(p.hotLeads));
+        html += detailRow("Warm leads", String(p.warmLeads));
+        html += detailRow("Cold leads", String(p.coldLeads));
+        html += detailRow("Promoted to hot today", String(p.promotedToHotToday));
+        html += detailRow("Gone cold today", String(p.goneColdToday));
+        html += "</div>";
+        html += `<div class="rpt-detail-card" style="margin-top:12px;"><div style="font-size:11px; color:#888; margin-bottom:8px;">TIER BREAKDOWN</div>${pipelineBar(p.hotLeads, p.warmLeads, p.coldLeads)}</div>`;
+        document.getElementById("rpt-section-detail").innerHTML = html;
+        return;
+      } else if (key === "business health") {
+        const bh = data.businessHealth;
+        html += detailRow("Pipeline GCI", fmtUsd(bh.pipelineGCI));
+        html += detailRow("MTD closed volume", fmtUsd(bh.mtdClosedVolume));
+        html += detailRow("MTD closed GCI", fmtUsd(bh.mtdClosedGCI));
+        html += detailRow("YTD closed GCI", fmtUsd(bh.ytdClosedGCI));
+        html += detailRow("Anomaly flag", bh.anomalyFlag ? '<span style="color:#f59e0b">Yes</span>' : "No");
+      }
+      html += "</div>";
+      document.getElementById("rpt-section-detail").innerHTML = html;
+    }
+
+    function initSectionSubtabs() {
+      const labels = { social: "Social", email: "Email", texts: "Texts", transactions: "Transactions", pipeline: "Pipeline", "business health": "Business Health" };
+      document.getElementById("rpt-section-subtabs").innerHTML = SECTION_KEYS.map((k) =>
+        `<button type="button" class="rpt-subtab${k === activeSection ? " active" : ""}" data-section="${k}" onclick="selectSection('${k}')">${labels[k]}</button>`
+      ).join("");
+    }
+
+    function selectSection(key) {
+      activeSection = key;
+      document.querySelectorAll(".rpt-subtab").forEach((b) => b.classList.toggle("active", b.dataset.section === key));
+      renderSectionDetail(key, digestCache);
+    }
+
+    function goToSection(title) {
+      const map = { social: "social", email: "email", texts: "texts", transactions: "transactions", pipeline: "pipeline", "business health": "business health" };
+      activeSection = map[title] || "social";
+      switchTab("sections");
+      initSectionSubtabs();
+      renderSectionDetail(activeSection, digestCache);
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+      document.querySelectorAll(".tab-panel").forEach((p) => {
+        const on = p.dataset.tab === name;
+        p.classList.toggle("active", on);
+        if (on) {
+          p.style.animation = "none";
+          void p.offsetWidth;
+          p.style.animation = "";
+        }
+      });
+      if (name === "sections" && digestCache) {
+        renderSectionDetail(activeSection, digestCache);
+      }
+    }
+
+    document.querySelectorAll(".tab").forEach((btn) => {
+      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+    });
+
+    function updateDigestStatus(snapshot) {
+      const el = document.getElementById("rpt-digest-status");
+      if (!snapshot) {
+        el.textContent = "Generating at 7am…";
+        el.style.color = "#888";
+        return;
+      }
+      const today = centralToday();
+      if (snapshot.snapshotDate === today) {
+        el.textContent = "Today's digest ready";
+        el.style.color = "#10b981";
+      } else {
+        el.textContent = "Generating at 7am…";
+        el.style.color = "#888";
+      }
+    }
+
+    let latestSnapshotMeta = null;
+
+    async function loadDigest() {
+      const r = await fetch(apiUrl("/api/reporting/latest-digest"));
+      if (!r.ok) throw new Error("Failed to load digest (" + r.status + ")");
+      const body = await r.json();
+      const snap = body.snapshot;
+      latestSnapshotMeta = snap;
+      digestCache = snap ? snap.data : null;
+      anomaliesCache = snap?.anomalies || [];
+      updateDigestStatus(snap);
+      updateLiveIndicator(true, snap);
+
+      const hasSnap = !!snap;
+      document.getElementById("rpt-today-empty").style.display = hasSnap ? "none" : "block";
+      document.getElementById("rpt-today-content").style.display = hasSnap ? "block" : "none";
+      document.getElementById("rpt-today-no-snap").style.display = hasSnap ? "none" : "block";
+
+      if (snap) {
+        document.getElementById("rpt-generated-at").textContent = fmtDate(snap.generatedAt);
+        document.getElementById("rpt-snapshot-date").textContent = snap.snapshotDate || "—";
+        const smsEl = document.getElementById("rpt-sms-status");
+        smsEl.textContent = snap.deliveredSms ? "✓ SMS delivered" : "SMS pending";
+        smsEl.style.color = snap.deliveredSms ? "#10b981" : "#888";
+        const hvEl = document.getElementById("rpt-harvey-status");
+        hvEl.textContent = snap.deliveredHarvey ? "✓ Harvey-ready" : "Harvey pending";
+        hvEl.style.color = snap.deliveredHarvey ? "#10b981" : "#888";
+        renderTodayCards(snap.data);
+      }
+      initSectionSubtabs();
+      renderSectionDetail(activeSection, digestCache);
+      return snap;
+    }
+
+    async function loadKPI() {
+      const r = await fetch(apiUrl("/api/reporting/latest-kpi"));
+      if (!r.ok) throw new Error("Failed to load KPI");
+      const body = await r.json();
+      const snap = body.snapshot;
+      const empty = document.getElementById("rpt-kpi-empty");
+      const content = document.getElementById("rpt-kpi-content");
+      if (!snap || !snap.data) {
+        empty.style.display = "block";
+        content.style.display = "none";
+        return;
+      }
+      empty.style.display = "none";
+      content.style.display = "block";
+      document.getElementById("rpt-kpi-week").textContent = snap.data.weekOf || snap.snapshotDate || "—";
+      const m = snap.data.metrics;
+      document.getElementById("rpt-kpi-rows").innerHTML = [
+        buildKpiRow("New leads", m.newLeads),
+        buildKpiRow("Hot leads", m.hotLeads),
+        buildKpiRow("Appointments booked", m.appointmentsBooked),
+        buildKpiRow("Closings this week", m.closingsThisWeek),
+        buildKpiRow("Text reply rate", m.textReplyRate, (v) => Math.round(v * 100) + "%"),
+        buildKpiRow("Social followers", m.socialFollowers),
+        buildKpiRow("Pipeline GCI", m.pipelineGCI, (v) => fmtUsd(v)),
+      ].join("");
+    }
+
+    async function loadAnomalies() {
+      const r = await fetch(apiUrl("/api/reporting/anomalies"));
+      if (!r.ok) throw new Error("Failed to load anomalies (" + r.status + ")");
+      const body = await r.json();
+      anomaliesCache = body.anomalies || [];
+      if (digestCache) renderTodayCards(digestCache);
+      const list = document.getElementById("rpt-anomalies-list");
+      if (anomaliesCache.length === 0) {
+        list.innerHTML = '<div class="rpt-empty">No anomalies in the latest digest. Note: anomaly detection needs ~4 days of digest history to establish a baseline.</div>';
+        return;
+      }
+      const critical = anomaliesCache.filter((a) => a.severity === "critical");
+      const warning = anomaliesCache.filter((a) => a.severity === "warning");
+      let html = "";
+      if (critical.length) {
+        html += '<div style="font-size:10px; color:#ef4444; letter-spacing:1px; margin-bottom:8px; font-family:var(--mono);">CRITICAL</div>';
+        html += critical.map(buildAnomalyCard).join("");
+      }
+      if (warning.length) {
+        html += '<div style="font-size:10px; color:#f59e0b; letter-spacing:1px; margin:12px 0 8px; font-family:var(--mono);">WARNING</div>';
+        html += warning.map(buildAnomalyCard).join("");
+      }
+      list.innerHTML = html;
+    }
+
+    async function loadHistory() {
+      const r = await fetch(apiUrl("/api/reporting/digest-history?limit=14"));
+      if (!r.ok) throw new Error("Failed to load history");
+      const body = await r.json();
+      const rows = body.snapshots || [];
+      const tbody = document.getElementById("rpt-history-rows");
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="rpt-empty">No history yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map((s, i) => {
+        const d = s.data;
+        const badge = s.anomalyCount > 0
+          ? `<span style="background:rgba(239,68,68,0.15); color:#ef4444; padding:2px 6px; border-radius:2px;">${s.anomalyCount}</span>`
+          : '<span style="color:#10b981;">0</span>';
+        return `<tr class="rpt-history-row" style="animation-delay:${(i * 0.04).toFixed(2)}s" data-idx="${i}" onclick="expandHistory(${i})">
+          <td>${escapeHtml(s.snapshotDate)}</td>
+          <td>${(d.social?.followers ?? 0).toLocaleString()}</td>
+          <td>${d.texts?.sentToday ?? 0}</td>
+          <td>${d.pipeline?.hotLeads ?? 0}</td>
+          <td>${fmtUsd(d.businessHealth?.pipelineGCI ?? 0)}</td>
+          <td>${badge}</td>
+        </tr>`;
+      }).join("");
+      window._historyRows = rows;
+    }
+
+    function expandHistory(idx) {
+      const s = (window._historyRows || [])[idx];
+      const el = document.getElementById("rpt-history-expand");
+      if (!s) { el.innerHTML = ""; return; }
+      const d = s.data;
+      el.innerHTML = `<div class="rpt-expand" style="animation:fadeSlideUp 0.35s ease-out;">
+        <strong>${escapeHtml(s.snapshotDate)}</strong> · generated ${fmtDate(s.generatedAt)}<br/>
+        Social followers: ${d.social?.followers ?? 0} · Email sent: ${d.email?.sent ?? 0} · Texts reply rate: ${fmtPctDecimal(d.texts?.replyRate ?? null)}<br/>
+        Pipeline: ${d.pipeline?.hotLeads ?? 0} hot / ${d.pipeline?.warmLeads ?? 0} warm / ${d.pipeline?.coldLeads ?? 0} cold · Escrow: ${d.transactions?.dealsInEscrow ?? 0}<br/>
+        Anomalies: ${s.anomalyCount} · SMS: ${s.deliveredSms ? "delivered" : "pending"} · Harvey: ${s.deliveredHarvey ? "ready" : "pending"}
+      </div>`;
+    }
+
+    async function generateDigestNow() {
+      showToast("Generating digest…");
+      const r = await fetch(apiUrl("/api/reporting/digest-now"), { method: "POST", headers: authHeaders() });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) { showToast(body.error || "Digest failed"); return; }
+      showToast("Digest generated (" + (body.anomalyCount ?? 0) + " anomalies)");
+      await refreshAll();
+    }
+
+    async function generateWeeklyKPINow() {
+      showToast("Generating weekly KPI…");
+      const r = await fetch(apiUrl("/api/reporting/weekly-kpi-now"), { method: "POST", headers: authHeaders() });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) { showToast(body.error || "KPI failed"); return; }
+      showToast("Weekly KPI generated");
+      await loadKPI();
+    }
+
+    async function refreshAll() {
+      const btn = document.getElementById("rpt-refresh-btn");
+      btn.classList.add("refreshing");
+      document.getElementById("rpt-last-updated").textContent = "Updating…";
+      try {
+        await loadDigest();
+        await loadAnomalies();
+        await loadKPI();
+        await loadHistory();
+        document.getElementById("rpt-last-updated").textContent = "Live · " + new Date().toLocaleTimeString();
+      } catch (e) {
+        updateLiveIndicator(false);
+        document.getElementById("rpt-last-updated").textContent = "Error";
+        showToast(e instanceof Error ? e.message : String(e));
+      } finally {
+        btn.classList.remove("refreshing");
+      }
+    }
+
+    function toggleAutoRefresh() {
+      const on = document.getElementById("rpt-auto-refresh").checked;
+      document.getElementById("rpt-pulse").classList.toggle("on", on);
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      if (on) autoRefreshTimer = setInterval(refreshAll, 30000);
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      document.getElementById("theme-toggle-btn").textContent = theme === "light" ? "Dark mode" : "Light mode";
+    }
+    function toggleTheme() {
+      const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+      localStorage.setItem("dashboardTheme", next);
+      applyTheme(next);
+    }
+    (function initTheme() {
+      const saved = localStorage.getItem("dashboardTheme") || "dark";
+      applyTheme(saved);
+      window.addEventListener("storage", (e) => {
+        if (e.key === "dashboardTheme" && e.newValue) applyTheme(e.newValue);
+      });
+    })();
+
+    refreshAll();
+  </script>
+</body>
+</html>

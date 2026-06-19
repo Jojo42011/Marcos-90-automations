@@ -1,0 +1,76 @@
+[
+  {
+    "id": "dial_mpzwki7x_bvezvh",
+    "completedAt": "2026-06-04T19:43:23.816Z",
+    "totalCalled": 0,
+    "totalAnswered": 0,
+    "totalSkipped": 0,
+    "leads": [
+      {
+        "leadId": "467",
+        "name": "Anthony Jimenez",
+        "phone": "7262505798",
+        "status": "calling",
+        "callStarted": "2026-06-04T19:43:09.117Z"
+      }
+    ],
+    "durationSec": 0
+  },
+  {
+    "id": "dial_mpzwjyrb_prn1qi",
+    "completedAt": "2026-06-04T19:42:59.533Z",
+    "totalCalled": 0,
+    "totalAnswered": 0,
+    "totalSkipped": 0,
+    "leads": [
+      {
+        "leadId": "480",
+        "name": ".",
+        "phone": "8188181818",
+        "status": "calling",
+        "callStarted": "2026-06-04T19:42:43.895Z"
+      },
+      {
+        "leadId": "460",
+        "name": "steve",
+        "phone": "5869180588",
+        "status": "pending"
+      }
+    ],
+    "durationSec": 0
+  },
+  {
+    "id": "dial_mpzwiaqo_jce27t",
+    "completedAt": "2026-06-04T19:41:42.731Z",
+    "totalCalled": 0,
+    "totalAnswered": 0,
+    "totalSkipped": 0,
+    "leads": [
+      {
+        "leadId": "481",
+        "name": "row test",
+        "phone": "9804430453",
+        "status": "calling",
+        "callStarted": "2026-06-04T19:41:26.112Z"
+      }
+    ],
+    "durationSec": 0
+  },
+  {
+    "id": "dial_mpzwdv76_eqca1r",
+    "completedAt": "2026-06-04T19:40:13.339Z",
+    "totalCalled": 0,
+    "totalAnswered": 0,
+    "totalSkipped": 0,
+    "leads": [
+      {
+        "leadId": "481",
+        "name": "row test",
+        "phone": "9804430453",
+        "status": "calling",
+        "callStarted": "2026-06-04T19:37:59.346Z"
+      }
+    ],
+    "durationSec": 0
+  }
+]

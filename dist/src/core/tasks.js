@@ -13,6 +13,7 @@ exports.deleteTask = deleteTask;
 exports.filterTasks = filterTasks;
 const fs_1 = require("fs");
 const path_1 = require("path");
+const types_js_1 = require("./types.js");
 function resolveTasksPath() {
     const explicit = process.env.TASKS_JSON_PATH?.trim();
     if (explicit)
@@ -24,7 +25,7 @@ function resolveTasksPath() {
 }
 const TASKS_PATH = resolveTasksPath();
 const PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
-const STATUSES = new Set(["pending", "in_progress", "completed", "cancelled"]);
+const STATUSES = new Set(types_js_1.CRM_TASK_STATUSES);
 const TYPES = new Set(["call", "text", "email", "appointment", "follow_up", "other"]);
 const SOURCES = new Set(["manual", "auto_plan", "dial_session", "automation"]);
 function nowIso() {
@@ -61,6 +62,9 @@ function normalizeTask(raw) {
         type,
         priority,
         status,
+        previousStatus: STATUSES.has(t.previousStatus)
+            ? t.previousStatus
+            : undefined,
         dueDate,
         dueTime: typeof t.dueTime === "string" ? t.dueTime : undefined,
         leadId: typeof t.leadId === "string" && t.leadId.trim() ? t.leadId.trim() : undefined,
@@ -110,13 +114,26 @@ function getTaskById(id) {
 function getTasksByLead(leadId) {
     return getTasks().filter((t) => t.leadId === leadId);
 }
+function isCrmActiveStatus(status) {
+    return (status === "pending" ||
+        status === "in_progress" ||
+        status === "due_soon" ||
+        status === "overdue");
+}
+function isCrmTerminal(status) {
+    return status === "completed" || status === "cancelled";
+}
 function getTasksDueToday() {
     const today = todayKey();
-    return getTasks().filter((t) => t.status !== "completed" && t.status !== "cancelled" && dateKey(t.dueDate) === today);
+    return getTasks().filter((t) => !isCrmTerminal(t.status) &&
+        t.status !== "on_hold" &&
+        (t.status === "due_soon" || dateKey(t.dueDate) === today));
 }
 function getOverdueTasks() {
     const today = todayKey();
-    return getTasks().filter((t) => t.status !== "completed" && t.status !== "cancelled" && dateKey(t.dueDate) < today);
+    return getTasks().filter((t) => !isCrmTerminal(t.status) &&
+        t.status !== "on_hold" &&
+        (t.status === "overdue" || dateKey(t.dueDate) < today));
 }
 function buildTasksSummary() {
     const tasks = getTasks();
@@ -127,11 +144,13 @@ function buildTasksSummary() {
     let completedToday = 0;
     for (const t of tasks) {
         const dk = dateKey(t.dueDate);
-        if (t.status === "pending" || t.status === "in_progress") {
+        if (isCrmActiveStatus(t.status)) {
             pending += 1;
-            if (dk === today)
+            if (t.status === "due_soon" && dk === today)
                 dueToday += 1;
-            else if (dk < today)
+            else if (dk === today && t.status !== "overdue")
+                dueToday += 1;
+            if (t.status === "overdue" || dk < today)
                 overdue += 1;
         }
         if (t.status === "completed" && t.completedAt && dateKey(t.completedAt) === today) {

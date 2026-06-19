@@ -5,13 +5,13 @@ exports.extractPhone = extractPhone;
 exports.extractPhoneFromConversation = extractPhoneFromConversation;
 exports.advanceFunnelDeterministic = advanceFunnelDeterministic;
 const state_js_1 = require("../core/state.js");
+const prompts_js_1 = require("../../config/prompts.js");
 function getLastUserMessage(conversation) {
     const reversed = [...conversation.messages].reverse();
     return reversed.find((m) => m.role === "user") ?? null;
 }
 /** Shown when we detect a number in-thread the same turn we leave the opening funnel (or override a bad sanitizer). */
-exports.PHONE_JUST_CAPTURED_REPLY = "Got it. I'll send you the full breakdown by the end of the day, pricing and specs, plus a couple similar ones. " +
-    "Once you check it out, tell me if this is the right fit or if you're trying to hit a different area or price.";
+exports.PHONE_JUST_CAPTURED_REPLY = prompts_js_1.MARCO_PHONE_CAPTURED_REPLY;
 const MAX_USER_MESSAGES_PHONE_SCAN = 12;
 /**
  * US-ish mobile: strip non-digits; accept 10 digits, or 11 starting with country code 1.

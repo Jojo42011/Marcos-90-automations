@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 
 import type { Task, TaskPriority, TaskSource, TaskStatus, TaskType } from "./types.js";
+import { CRM_TASK_STATUSES } from "./types.js";
 
 function resolveTasksPath(): string {
   const explicit = process.env.TASKS_JSON_PATH?.trim();
@@ -15,7 +16,7 @@ function resolveTasksPath(): string {
 const TASKS_PATH = resolveTasksPath();
 
 const PRIORITIES = new Set<TaskPriority>(["low", "normal", "high", "urgent"]);
-const STATUSES = new Set<TaskStatus>(["pending", "in_progress", "completed", "cancelled"]);
+const STATUSES = new Set<TaskStatus>(CRM_TASK_STATUSES);
 const TYPES = new Set<TaskType>(["call", "text", "email", "appointment", "follow_up", "other"]);
 const SOURCES = new Set<TaskSource>(["manual", "auto_plan", "dial_session", "automation"]);
 
@@ -54,6 +55,9 @@ function normalizeTask(raw: unknown): Task | null {
     type,
     priority,
     status,
+    previousStatus: STATUSES.has(t.previousStatus as TaskStatus)
+      ? (t.previousStatus as TaskStatus)
+      : undefined,
     dueDate,
     dueTime: typeof t.dueTime === "string" ? t.dueTime : undefined,
     leadId: typeof t.leadId === "string" && t.leadId.trim() ? t.leadId.trim() : undefined,
@@ -104,17 +108,36 @@ export function getTasksByLead(leadId: string): Task[] {
   return getTasks().filter((t) => t.leadId === leadId);
 }
 
+function isCrmActiveStatus(status: TaskStatus): boolean {
+  return (
+    status === "pending" ||
+    status === "in_progress" ||
+    status === "due_soon" ||
+    status === "overdue"
+  );
+}
+
+function isCrmTerminal(status: TaskStatus): boolean {
+  return status === "completed" || status === "cancelled";
+}
+
 export function getTasksDueToday(): Task[] {
   const today = todayKey();
   return getTasks().filter(
-    (t) => t.status !== "completed" && t.status !== "cancelled" && dateKey(t.dueDate) === today,
+    (t) =>
+      !isCrmTerminal(t.status) &&
+      t.status !== "on_hold" &&
+      (t.status === "due_soon" || dateKey(t.dueDate) === today),
   );
 }
 
 export function getOverdueTasks(): Task[] {
   const today = todayKey();
   return getTasks().filter(
-    (t) => t.status !== "completed" && t.status !== "cancelled" && dateKey(t.dueDate) < today,
+    (t) =>
+      !isCrmTerminal(t.status) &&
+      t.status !== "on_hold" &&
+      (t.status === "overdue" || dateKey(t.dueDate) < today),
   );
 }
 
@@ -127,10 +150,11 @@ export function buildTasksSummary(): import("./types.js").TasksSummary {
   let completedToday = 0;
   for (const t of tasks) {
     const dk = dateKey(t.dueDate);
-    if (t.status === "pending" || t.status === "in_progress") {
+    if (isCrmActiveStatus(t.status)) {
       pending += 1;
-      if (dk === today) dueToday += 1;
-      else if (dk < today) overdue += 1;
+      if (t.status === "due_soon" && dk === today) dueToday += 1;
+      else if (dk === today && t.status !== "overdue") dueToday += 1;
+      if (t.status === "overdue" || dk < today) overdue += 1;
     }
     if (t.status === "completed" && t.completedAt && dateKey(t.completedAt) === today) {
       completedToday += 1;

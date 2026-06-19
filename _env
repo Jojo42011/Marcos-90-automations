@@ -21,8 +21,23 @@ AD_DASHBOARD_BASE_URL=https://marco-agents.fly.dev
 BRIVITY_API_KEY=YOUR_BRIVITY_KEY
 BRIVITY_BASE_URL=https://app.brivityidx.com/api
 
+# Gmail (Harvey gmail_send tool + module 07) — OAuth account: pmarcopuga@gmail.com
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
+GMAIL_REFRESH_TOKEN=
+# GMAIL_FROM=optional — defaults to OAuth account profile email
+MARCO_EMAIL=pmarcopuga@gmail.com
+
+# Harvey WhatsApp owner (must match Marco's WhatsApp for owner tools on OpenClaw)
+# HARVEY_OWNER_NUMBER=+19804430453
+
 # Twilio SMS
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_FROM_NUMBER=
 TWILIO_WEBHOOK_AUTH_TOKEN=
+
+# Finance — pace ring & net commission split (set real values in .env)
+# MONTHLY_GCI_GOAL=50000
+# BROKERAGE_SPLIT_PCT=0.5
+# MARCO_PHONE_NUMBER=+1...

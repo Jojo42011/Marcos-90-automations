@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AETHON // NEURAL MAP</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+  <style>
+    :root {
+      --bg-0: #000000;
+      --bg-1: #050505;
+      --bg-2: #0a0a0a;
+      --line: rgba(255,107,0,0.12);
+      --line-strong: rgba(255,107,0,0.35);
+      --orange: #ff6b00;
+      --orange-bright: #ffa040;
+      --white: #ffffff;
+      --dim: rgba(255,255,255,0.4);
+      --ok: #00ff88;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg-0);
+      color: var(--white);
+      font-family: 'JetBrains Mono', monospace;
+      min-height: 100vh;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+      pointer-events: none;
+      z-index: 9999;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line-strong);
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 2px;
+      font-size: 12px;
+    }
+    header a { color: var(--orange); text-decoration: none; }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      height: calc(100vh - 90px);
+    }
+    #graph { background: var(--bg-1); }
+    #panel {
+      background: var(--bg-2);
+      border-left: 1px solid var(--line);
+      padding: 16px;
+      overflow-y: auto;
+    }
+    #panel h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      color: var(--dim);
+      letter-spacing: 1px;
+      margin: 0 0 12px;
+    }
+    .bar-row { margin-bottom: 10px; }
+    .bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: var(--dim);
+      font-family: 'Orbitron', sans-serif;
+      margin-bottom: 4px;
+    }
+    .bar-track { height: 2px; background: var(--line); border-radius: 1px; }
+    .bar-fill { height: 100%; background: var(--orange); width: 0%; transition: width 0.8s ease; }
+    footer {
+      padding: 8px 20px;
+      border-top: 1px solid var(--line-strong);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      color: var(--dim);
+    }
+    .fact { font-size: 11px; margin-bottom: 8px; color: rgba(255,255,255,0.75); }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/jarvis">← BACK TO CORE</a>
+    <span>AETHON // NEURAL MAP</span>
+    <span id="hdr-stats"></span>
+  </header>
+  <div class="layout">
+    <svg id="graph"></svg>
+    <div id="panel">
+      <h3>IDENTITY PROFILE</h3>
+      <div id="identityDimensions"></div>
+      <h3 style="margin-top:20px">TOP FACTS</h3>
+      <div id="topFacts"></div>
+      <h3 style="margin-top:20px">LATEST EPISODE</h3>
+      <div id="latestEpisode" style="font-size:11px;color:var(--dim)"></div>
+    </div>
+  </div>
+  <footer id="bottombar">LOADING...</footer>
+  <script>
+    const NODE_COLORS = {
+      client: "#ff6b00", person: "#ffa040", company: "#ff8c00",
+      project: "#00ff88", tool: "#40a0ff", concept: "#c080ff", unknown: "rgba(255,255,255,0.4)"
+    };
+    function getToken() {
+      return new URLSearchParams(location.search).get("token") || "";
+    }
+    function api(path) {
+      const u = new URL(path, location.origin);
+      const t = getToken();
+      if (t) u.searchParams.set("token", t);
+      return u.toString();
+    }
+    let nodes = [], edges = [], allFacts = [];
+
+    async function loadMemoryData() {
+      const res = await fetch(api("/api/memory/all"));
+      if (!res.ok) return;
+      const data = await res.json();
+      allFacts = data.facts || [];
+      nodes = (data.nodes || []).map(n => ({ ...n, id: n.id }));
+      edges = (data.edges || []).map(e => ({
+        id: e.id,
+        source: e.source_id,
+        target: e.target_id,
+        relationship: e.relationship,
+        strength: e.strength || 0.5
+      }));
+      renderIdentityProfile(data.identityProfile || []);
+      renderFacts(allFacts.slice(0, 5));
+      const ep = (data.episodes || [])[0];
+      document.getElementById("latestEpisode").textContent = ep?.summary || "No episodes yet.";
+      const s = data.stats || {};
+      document.getElementById("hdr-stats").textContent =
+        `NODES ${s.nodes || 0} · FACTS ${s.facts || 0}`;
+      document.getElementById("bottombar").textContent =
+        `NODES: ${s.nodes || 0} │ EDGES: ${s.edges || 0} │ FACTS: ${s.facts || 0} │ RULES: ${s.rules || 0} │ EPISODES: ${s.episodes || 0} │ LAST SYNC: ${data.lastSync || ""}`;
+      drawGraph();
+    }
+
+    function renderIdentityProfile(profile) {
+      const el = document.getElementById("identityDimensions");
+      if (!profile.length) {
+        el.innerHTML = "<div style='font-size:11px;color:var(--dim)'>No identity data yet.</div>";
+        return;
+      }
+      el.innerHTML = profile.map(p => `
+        <div class="bar-row">
+          <div class="bar-label"><span>${p.dimension}</span><span>${Math.round(p.confidence * 100)}%</span></div>
+          <div class="bar-track"><div class="bar-fill" data-target="${p.confidence * 100}"></div></div>
+        </div>`).join("");
+      requestAnimationFrame(() => {
+        el.querySelectorAll("[data-target]").forEach(bar => {
+          bar.style.width = bar.dataset.target + "%";
+        });
+      });
+    }
+
+    function renderFacts(facts) {
+      document.getElementById("topFacts").innerHTML = facts.map(f =>
+        `<div class="fact">${(f.content || "").slice(0, 80)}</div>`).join("") || "<div class='fact'>Empty</div>";
+    }
+
+    function nodeRadius(id) {
+      const c = edges.filter(e => e.source === id || e.target === id).length;
+      return Math.min(8 + c * 2, 30);
+    }
+
+    function drawGraph() {
+      const svg = d3.select("#graph");
+      const width = document.querySelector(".layout").clientWidth - 320;
+      const height = document.querySelector(".layout").clientHeight;
+      svg.attr("width", width).attr("height", height);
+      svg.selectAll("*").remove();
+
+      if (!nodes.length) {
+        svg.append("text").attr("x", width/2).attr("y", height/2)
+          .attr("text-anchor", "middle").attr("fill", "rgba(255,107,0,0.4)")
+          .style("font-family", "Orbitron").text("NEURAL MAP // EMPTY");
+        return;
+      }
+
+      const g = svg.append("g");
+      const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(edges).id(d => d.id).distance(80).strength(0.3))
+        .force("charge", d3.forceManyBody().strength(-300).distanceMax(400))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collide", d3.forceCollide().radius(d => nodeRadius(d.id) + 12));
+
+      const link = g.append("g").selectAll("line").data(edges).join("line")
+        .attr("stroke", "rgba(255,107,0,0.15)").attr("stroke-width", d => Math.max(0.5, d.strength * 3));
+
+      const node = g.append("g").selectAll("circle").data(nodes).join("circle")
+        .attr("r", d => nodeRadius(d.id))
+        .attr("fill", d => NODE_COLORS[d.type] || NODE_COLORS.unknown)
+        .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended));
+
+      const label = g.append("g").selectAll("text").data(nodes).join("text")
+        .text(d => d.name.length > 20 ? d.name.slice(0, 17) + "..." : d.name)
+        .attr("text-anchor", "middle").attr("dy", d => nodeRadius(d.id) + 14)
+        .style("font-family", "Orbitron").style("font-size", "9px")
+        .style("fill", d => NODE_COLORS[d.type] || NODE_COLORS.unknown).style("opacity", 0.7);
+
+      simulation.on("tick", () => {
+        link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+            .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+        node.attr("cx", d => d.x).attr("cy", d => d.y);
+        label.attr("x", d => d.x).attr("y", d => d.y);
+      });
+
+      function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      }
+      function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+      function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      }
+    }
+
+    const wsUrl = location.origin.replace(/^http/, "ws") + "/ws" + (getToken() ? "?token=" + encodeURIComponent(getToken()) : "");
+    try {
+      const memWs = new WebSocket(wsUrl);
+      memWs.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "memory_updated") loadMemoryData();
+      };
+    } catch (_) {}
+
+    loadMemoryData();
+    setInterval(loadMemoryData, 30000);
+  </script>
+</body>
+</html>

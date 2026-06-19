@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ROLE_PERMISSIONS = exports.CRM_STAGES = exports.CRM_STATUSES = void 0;
+exports.MARCO_TASK_STATUSES = exports.COMMAND_TASK_STATUSES = exports.CRM_TASK_STATUSES = exports.ROLE_PERMISSIONS = exports.CRM_STAGES = exports.CRM_STATUSES = void 0;
 /** Valid CRM status values (dashboard + API). */
 exports.CRM_STATUSES = ["new", "hot", "nurture", "watch", "dead", "unresponsive"];
 exports.CRM_STAGES = [
@@ -64,3 +64,27 @@ exports.ROLE_PERMISSIONS = {
         canViewReports: false,
     },
 };
+exports.CRM_TASK_STATUSES = [
+    "pending",
+    "in_progress",
+    "on_hold",
+    "due_soon",
+    "overdue",
+    "completed",
+    "cancelled",
+];
+exports.COMMAND_TASK_STATUSES = [
+    "pending",
+    "on_hold",
+    "due_soon",
+    "overdue",
+    "done",
+];
+exports.MARCO_TASK_STATUSES = [
+    "pending",
+    "in_progress",
+    "on_hold",
+    "due_soon",
+    "overdue",
+    "done",
+];

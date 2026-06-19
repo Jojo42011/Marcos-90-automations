@@ -3,7 +3,7 @@
  */
 
 import { getThreadForLead } from "../core/smsStore.js";
-import { getConversation, listAllLeads } from "../core/db.js";
+import { getConversation, listAllLeads, getLeadById } from "../core/db.js";
 import { getSocialSummaryForHarvey, getSocialVideos, getPendingCommentReplies } from "../core/socialStore.js";
 import { getLatestMorningScan } from "../agents/morningScan/index.js";
 import { getLatestReportingSnapshot } from "../agents/reporting/index.js";
@@ -19,7 +19,18 @@ import {
   getUpcomingDeadlines,
 } from "../core/transactionsStore.js";
 import { getLatestContentDigest } from "../agents/harveyContentDigest/index.js";
-import { getLeadsByTier } from "../core/leadScoreStore.js";
+import { getLeadsByTier, getLatestScore, getScoreHistory, type LeadScoreEntry } from "../core/leadScoreStore.js";
+import { getInboundMessageCount } from "../core/smsStore.js";
+import { scoreAllLeads, scoreAndRecordLead, scoreColdLeads } from "../agents/leadScoring/index.js";
+import { routeNewLead } from "../agents/leadNurture/sourceRouting.js";
+import { runWarmLeadWeeklyTouch } from "../agents/leadNurture/warmLeadFlow.js";
+import { runColdLeadMonthlyTouch } from "../agents/leadNurture/coldLeadFlow.js";
+import {
+  getLatestSnapshot,
+  type DailyDigestData,
+} from "../core/reportingStore.js";
+import { getGCISummary, getExpenseSummary, generatePipelineProjection } from "../core/financeStore.js";
+import { getCurrentPaceStatus } from "../agents/finance/paceAlert.js";
 import type { Lead } from "../core/types.js";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 
@@ -267,8 +278,169 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_lead_nurture_overview",
     description:
-      "Get an overview of lead scoring and nurture status — how many hot/warm/cold leads, recent tier distribution, and nurture activity.",
+      "Lead nurture dashboard summary — hot/warm/cold/unscored counts, top hot lead with scoring factors and real CRM numbers (timeline, pre-approval, replies, views, showings).",
     input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_lead_nurture_tier",
+    description:
+      "Get enriched leads in a nurture tier (hot, warm, or cold) with scores, factor breakdown, names, phones, and real CRM values.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tier: { type: "string", description: "hot, warm, or cold" },
+        limit: { type: "number", description: "Max leads to return, default 15" },
+      },
+      required: ["tier"],
+    },
+  },
+  {
+    name: "get_lead_score_detail",
+    description:
+      "Get full score history and factor breakdown for one lead by lead_id — includes real timeline, pre-approval, inbound SMS count, property views, showing status.",
+    input_schema: {
+      type: "object",
+      properties: { lead_id: { type: "string", description: "CRM lead id" } },
+      required: ["lead_id"],
+    },
+  },
+  {
+    name: "lead_nurture_score_all",
+    description: "Re-score every lead in the CRM and update hot/warm/cold tiers. Use when Marco asks to refresh lead scores.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "lead_nurture_rescore_cold",
+    description: "Re-score only cold-tier leads and promote any that moved up. Use when Marco asks to refresh cold leads.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "lead_nurture_route_lead",
+    description:
+      "Run source-based nurture routing for one lead (mojo instant text, social DM, web form, referral priority).",
+    input_schema: {
+      type: "object",
+      properties: { lead_id: { type: "string", description: "CRM lead id" } },
+      required: ["lead_id"],
+    },
+  },
+  {
+    name: "get_lead_nurture_routing",
+    description: "Recently source-routed leads and which routing rules (mojo, social, web form, referral) have activity.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_daily_digest",
+    description:
+      "Get the latest daily digest — all 6 sections (social, email, texts, transactions, pipeline, business health) plus anomalies flagged this morning.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_digest_section",
+    description:
+      "Drill into a specific section of the daily digest — social, email, texts, transactions, pipeline, or business_health.",
+    input_schema: {
+      type: "object",
+      properties: {
+        section: {
+          type: "string",
+          description: "Section key: social, email, texts, transactions, pipeline, business_health",
+        },
+      },
+      required: ["section"],
+    },
+  },
+  {
+    name: "get_weekly_kpi",
+    description:
+      "Get the latest weekly KPI scorecard with week-over-week trends.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_anomalies",
+    description:
+      "Get anomalies from the latest daily digest — unusual metrics vs the prior 4-week average.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_finance_overview",
+    description:
+      "Finance overview — GCI summary, expense summary, pipeline projection, and pace-to-goal status.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_gci_summary",
+    description: "GCI tracker — MTD/YTD gross and net, by deal, by lead source, monthly trend.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_expense_summary",
+    description: "Expense tracker — MTD/week totals, by category, cost per lead/close by source.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_pipeline_projection",
+    description: "Weighted pipeline GCI projection from active transactions.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_pace_status",
+    description: "Monthly GCI pace vs MONTHLY_GCI_GOAL — on track or behind.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_email_marketing_overview",
+    description:
+      "Get email marketing stats — emails sent, open rate, reply rate, active drip sequences, recent activity, and cached Gmail inbox.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "gmail_list_inbox",
+    description:
+      "List recent Gmail messages from Marco's inbox (inbound and sent). Syncs from Gmail API when cache is empty unless live=true.",
+    input_schema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Max messages, default 15" },
+        query: { type: "string", description: "Gmail search query, e.g. newer_than:7d" },
+        live: { type: "boolean", description: "Force live pull from Gmail" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "gmail_get_message",
+    description: "Get full Gmail message by Gmail message id (subject, body, from, to).",
+    input_schema: {
+      type: "object",
+      properties: {
+        message_id: { type: "string", description: "Gmail message id" },
+      },
+      required: ["message_id"],
+    },
+  },
+  {
+    name: "gmail_sync_inbox",
+    description:
+      "Pull recent Gmail messages and match inbound replies to CRM leads (updates reply tracking).",
+    input_schema: {
+      type: "object",
+      properties: {
+        max_results: { type: "number", description: "Max messages to sync, default 30" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_sent_email_detail",
+    description: "Get full body and metadata for a logged marketing email by local email id.",
+    input_schema: {
+      type: "object",
+      properties: {
+        email_id: { type: "string", description: "Local email id from email marketing log" },
+      },
+      required: ["email_id"],
+    },
   },
 ];
 
@@ -512,11 +684,168 @@ export const HARVEY_GEMINI_TOOLS = {
     {
       name: "get_lead_nurture_overview",
       description:
-        "Overview of lead scoring and nurture — hot/warm/cold counts and recent hot lead scores.",
+        "Lead nurture summary — hot/warm/cold counts, top hot lead with scoring factors and real CRM numbers.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_lead_nurture_tier",
+      description: "Enriched leads in a nurture tier with scores and real CRM values.",
       parameters: {
         type: "OBJECT",
-        properties: {},
+        properties: {
+          tier: { type: "STRING", description: "hot, warm, or cold" },
+          limit: { type: "NUMBER", description: "Max leads" },
+        },
+        required: ["tier"],
+      },
+    },
+    {
+      name: "get_lead_score_detail",
+      description: "Full score history and factors for one lead.",
+      parameters: {
+        type: "OBJECT",
+        properties: { lead_id: { type: "STRING" } },
+        required: ["lead_id"],
+      },
+    },
+    {
+      name: "lead_nurture_score_all",
+      description: "Re-score all CRM leads.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "lead_nurture_rescore_cold",
+      description: "Re-score cold-tier leads only.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "lead_nurture_route_lead",
+      description: "Run source routing for one lead.",
+      parameters: {
+        type: "OBJECT",
+        properties: { lead_id: { type: "STRING" } },
+        required: ["lead_id"],
+      },
+    },
+    {
+      name: "get_lead_nurture_routing",
+      description: "Recently routed leads and routing rule activity.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_daily_digest",
+      description:
+        "Latest daily digest — social, email, texts, transactions, pipeline, business health, and anomalies.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_digest_section",
+      description: "Drill into one daily digest section.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          section: {
+            type: "STRING",
+            description: "social, email, texts, transactions, pipeline, or business_health",
+          },
+        },
+        required: ["section"],
+      },
+    },
+    {
+      name: "get_weekly_kpi",
+      description: "Latest weekly KPI scorecard with week-over-week trends.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_anomalies",
+      description: "Anomalies from the latest daily digest.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_finance_overview",
+      description: "Finance overview — GCI, expenses, projection, pace.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_gci_summary",
+      description: "GCI tracker summary.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_expense_summary",
+      description: "Expense tracker summary.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_pipeline_projection",
+      description: "Weighted pipeline GCI projection.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_pace_status",
+      description: "Monthly GCI pace vs goal.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "get_email_marketing_overview",
+      description:
+        "Get email marketing stats — emails sent, open rate, reply rate, active drip sequences, recent activity, and cached Gmail inbox.",
+      parameters: { type: "OBJECT", properties: {}, required: [] },
+    },
+    {
+      name: "gmail_list_inbox",
+      description: "List recent Gmail messages from Marco's inbox.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          limit: { type: "NUMBER", description: "Max messages" },
+          query: { type: "STRING", description: "Gmail search query" },
+          live: { type: "BOOLEAN", description: "Force live pull" },
+        },
         required: [],
+      },
+    },
+    {
+      name: "gmail_get_message",
+      description: "Get full Gmail message by id.",
+      parameters: {
+        type: "OBJECT",
+        properties: { message_id: { type: "STRING", description: "Gmail message id" } },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_sync_inbox",
+      description: "Sync Gmail inbox and match inbound replies to leads.",
+      parameters: {
+        type: "OBJECT",
+        properties: { max_results: { type: "NUMBER" } },
+        required: [],
+      },
+    },
+    {
+      name: "get_sent_email_detail",
+      description: "Get full logged marketing email by local id.",
+      parameters: {
+        type: "OBJECT",
+        properties: { email_id: { type: "STRING" } },
+        required: ["email_id"],
+      },
+    },
+    {
+      name: "gmail_send",
+      description:
+        "Send an email from Marco's Gmail when Marco explicitly asks. Requires to, subject, and body.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          to: { type: "STRING", description: "Recipient email" },
+          subject: { type: "STRING", description: "Subject line" },
+          body: { type: "STRING", description: "Email body" },
+          html: { type: "BOOLEAN", description: "True if body is HTML" },
+        },
+        required: ["to", "subject", "body"],
       },
     },
   ],
@@ -527,7 +856,77 @@ function normalizeHarveyToolInput(input: Record<string, unknown>): Record<string
   if (out.lead_id != null && out.leadId == null) {
     out.leadId = out.lead_id;
   }
+  if (out.message_id != null && out.messageId == null) {
+    out.messageId = out.message_id;
+  }
+  if (out.email_id != null && out.emailId == null) {
+    out.emailId = out.email_id;
+  }
+  if (out.max_results != null && out.maxResults == null) {
+    out.maxResults = out.max_results;
+  }
   return out;
+}
+
+const NURTURE_WEIGHTS = {
+  timeline: 25,
+  preApproval: 25,
+  responseCount: 20,
+  propertyViews: 15,
+  showingRequests: 15,
+};
+
+function formatPreApproval(status: string | null | undefined): string {
+  if (!status) return "Not set";
+  if (status === "approved") return "Approved";
+  if (status === "cash") return "Cash buyer";
+  if (status === "in_progress") return "In progress";
+  return "Not approved";
+}
+
+function formatShowing(appt: { confirmationStatus?: string; address?: string } | null | undefined): string {
+  if (!appt) return "No showing";
+  const st = appt.confirmationStatus || "pending";
+  const addr = appt.address ? ` · ${appt.address.slice(0, 24)}` : "";
+  return `${st}${addr}`;
+}
+
+async function enrichNurtureLeadScore(
+  scoreEntry: LeadScoreEntry,
+  leadMap: Map<string, Awaited<ReturnType<typeof listAllLeads>>[number]>,
+) {
+  const lead = leadMap.get(scoreEntry.leadId);
+  const inboundReplyCount = getInboundMessageCount(scoreEntry.leadId);
+  const propertyViewsCount =
+    typeof lead?.propertyViewsCount === "number" && lead.propertyViewsCount > 0
+      ? lead.propertyViewsCount
+      : (lead?.activity ?? []).filter((a) =>
+          ["home_clicked", "home_hearted", "web_visit"].includes(a.type),
+        ).length;
+
+  return {
+    leadId: scoreEntry.leadId,
+    score: scoreEntry.score,
+    previousScore: scoreEntry.previousScore,
+    scoreDate: scoreEntry.scoreDate,
+    tier: scoreEntry.tier,
+    scoringFactors: scoreEntry.scoringFactors,
+    factorMax: NURTURE_WEIGHTS,
+    realNumbers: {
+      timeline: lead?.criteria?.timeline || null,
+      preApprovalStatus: lead?.preApprovalStatus || null,
+      inboundReplyCount,
+      propertyViewsCount,
+      showingStatus: lead?.showingAppointment?.confirmationStatus || null,
+      showingAddress: lead?.showingAppointment?.address || null,
+    },
+    name: lead?.name || lead?.username || "Unknown",
+    phone: lead?.phone || null,
+    email: lead?.email || null,
+    source: lead?.source || null,
+    crmIntent: lead?.crmIntent || null,
+    automationPaused: lead?.automationPaused || false,
+  };
 }
 
 export async function executeHarveyTool(
@@ -668,15 +1067,236 @@ export async function executeHarveyTool(
       };
     }
     case "get_lead_nurture_overview": {
-      const hot = getLeadsByTier("hot");
+      const hot = getLeadsByTier("hot").sort((a, b) => b.score - a.score);
       const warm = getLeadsByTier("warm");
       const cold = getLeadsByTier("cold");
+      const all = await listAllLeads();
+      const leadMap = new Map(all.map((l) => [l.id, l]));
+      const scoredIds = new Set([...hot, ...warm, ...cold].map((s) => s.leadId));
+      const topHot = hot[0] ? await enrichNurtureLeadScore(hot[0], leadMap) : null;
       return {
         hotCount: hot.length,
         warmCount: warm.length,
         coldCount: cold.length,
-        hotLeads: hot.map((s) => ({ leadId: s.leadId, score: s.score })),
+        unscoredCount: Math.max(0, all.length - scoredIds.size),
+        totalLeads: all.length,
+        topHotLead: topHot,
+        hotLeads: await Promise.all(hot.slice(0, 5).map((s) => enrichNurtureLeadScore(s, leadMap))),
       };
+    }
+    case "get_lead_nurture_tier": {
+      const tier = String(normalized.tier || "").trim().toLowerCase() as "hot" | "warm" | "cold";
+      if (!["hot", "warm", "cold"].includes(tier)) {
+        return { error: "tier must be hot, warm, or cold" };
+      }
+      const limit = Number(normalized.limit) || 15;
+      const entries = getLeadsByTier(tier).sort((a, b) => b.score - a.score).slice(0, limit);
+      const all = await listAllLeads();
+      const leadMap = new Map(all.map((l) => [l.id, l]));
+      return {
+        tier,
+        count: entries.length,
+        leads: await Promise.all(entries.map((s) => enrichNurtureLeadScore(s, leadMap))),
+      };
+    }
+    case "get_lead_score_detail": {
+      const leadId = String(normalized.leadId || "").trim();
+      if (!leadId) return { error: "lead_id required" };
+      const latest = getLatestScore(leadId);
+      const history = getScoreHistory(leadId, 10);
+      const lead = await getLeadById(leadId);
+      if (!latest && !lead) return { error: "Lead not found", leadId };
+      const leadMap = new Map(lead ? [[lead.id, lead]] : []);
+      return {
+        lead: lead
+          ? {
+              id: lead.id,
+              name: lead.name || lead.username,
+              phone: lead.phone,
+              source: lead.source,
+            }
+          : null,
+        latest: latest ? await enrichNurtureLeadScore(latest, leadMap) : null,
+        history: history.map((h) => ({
+          score: h.score,
+          tier: h.tier,
+          scoreDate: h.scoreDate,
+          scoringFactors: h.scoringFactors,
+        })),
+      };
+    }
+    case "lead_nurture_score_all": {
+      return scoreAllLeads();
+    }
+    case "lead_nurture_rescore_cold": {
+      return scoreColdLeads();
+    }
+    case "lead_nurture_route_lead": {
+      const leadId = String(normalized.leadId || "").trim();
+      if (!leadId) return { error: "lead_id required" };
+      const lead = await getLeadById(leadId);
+      if (!lead) return { error: "Lead not found", leadId };
+      await routeNewLead(lead);
+      return { success: true, leadId, source: lead.source };
+    }
+    case "get_lead_nurture_routing": {
+      const leads = await listAllLeads();
+      const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+      const sourceActivity = {
+        mojo: leads.some((l) => norm(l.source) === "mojo"),
+        social: leads.some((l) => ["instagram", "tiktok"].includes(norm(l.source))),
+        web_form: leads.some((l) => norm(l.source) === "web_form"),
+        referral: leads.some((l) => norm(l.source) === "referral"),
+      };
+      const routed = leads
+        .filter((l) => l.sourceRoutingCompletedAt)
+        .sort(
+          (a, b) =>
+            new Date(b.sourceRoutingCompletedAt!).getTime() -
+            new Date(a.sourceRoutingCompletedAt!).getTime(),
+        )
+        .slice(0, 15)
+        .map((l) => ({
+          leadId: l.id,
+          name: l.name || l.username,
+          source: l.source,
+          phone: l.phone,
+          routedAt: l.sourceRoutingCompletedAt,
+        }));
+      return { sourceActivity, routed };
+    }
+    case "get_daily_digest": {
+      const snapshot = getLatestSnapshot("daily_digest");
+      if (!snapshot) return { message: "No daily digest generated yet — will be available after 7am Central." };
+      return {
+        data: snapshot.data,
+        anomalies: snapshot.anomalies,
+        generatedAt: snapshot.generatedAt,
+      };
+    }
+    case "get_digest_section": {
+      const snapshot = getLatestSnapshot("daily_digest");
+      if (!snapshot) return { message: "No daily digest available yet." };
+      const sectionRaw = String(normalized.section || "").trim().toLowerCase();
+      const sectionKey =
+        sectionRaw === "business_health" ? "businessHealth" : sectionRaw;
+      const data = snapshot.data as DailyDigestData;
+      const sectionData = (data as unknown as Record<string, unknown>)[sectionKey];
+      if (!sectionData) {
+        return {
+          message:
+            "Unknown section. Valid: social, email, texts, transactions, pipeline, business_health",
+        };
+      }
+      return {
+        section: sectionRaw,
+        data: sectionData,
+        anomaliesForSection: (snapshot.anomalies || []).filter((a) =>
+          a.field.startsWith(sectionKey) || a.field.startsWith(sectionRaw),
+        ),
+      };
+    }
+    case "get_weekly_kpi": {
+      const snapshot = getLatestSnapshot("weekly_kpi");
+      if (!snapshot) return { message: "No weekly KPI available yet — runs every Friday at 5pm Central." };
+      return snapshot.data;
+    }
+    case "get_anomalies": {
+      const snapshot = getLatestSnapshot("daily_digest");
+      if (!snapshot) return { anomalies: [] };
+      const anomalies = snapshot.anomalies || [];
+      return {
+        total: anomalies.length,
+        critical: anomalies.filter((a) => a.severity === "critical"),
+        warnings: anomalies.filter((a) => a.severity === "warning"),
+      };
+    }
+    case "get_finance_overview": {
+      return {
+        gci: getGCISummary(),
+        expenses: await getExpenseSummary(),
+        projection: generatePipelineProjection(),
+        pace: getCurrentPaceStatus(),
+      };
+    }
+    case "get_gci_summary": {
+      return getGCISummary();
+    }
+    case "get_expense_summary": {
+      return await getExpenseSummary();
+    }
+    case "get_pipeline_projection": {
+      return generatePipelineProjection();
+    }
+    case "get_pace_status": {
+      return getCurrentPaceStatus();
+    }
+    case "get_email_marketing_overview": {
+      const { getEmailStats, getRecentEmails, countActiveDripSequences } = await import(
+        "../core/emailStore.js"
+      );
+      const { getGmailInboxForHarvey } = await import("../agents/emailMarketing/gmailSync.js");
+      const stats = getEmailStats(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+      const recent = getRecentEmails(10);
+      const inbox = getGmailInboxForHarvey(10);
+      return {
+        last30Days: stats,
+        activeDrips: countActiveDripSequences(),
+        recentEmails: recent.map((e) => ({
+          id: e.id,
+          subject: e.subject,
+          type: e.emailType,
+          status: e.sendStatus,
+          sentAt: e.sentAt,
+          repliedAt: e.repliedAt,
+        })),
+        gmailInbox: inbox,
+      };
+    }
+    case "gmail_list_inbox": {
+      const limit = Number(normalized.limit) || 15;
+      const query = normalized.query ? String(normalized.query) : undefined;
+      const live = normalized.live === true;
+      const { getCachedGmailMessages } = await import("../core/emailStore.js");
+      const { listGmailMessages } = await import("../integrations/gmail/inbox.js");
+      const { isGmailConfigured } = await import("../integrations/gmail/index.js");
+      if (!isGmailConfigured()) return { error: "Gmail not configured" };
+      let messages = getCachedGmailMessages(limit);
+      if (live || messages.length === 0) {
+        const liveMsgs = await listGmailMessages({ maxResults: limit, query });
+        return { live: true, messages: liveMsgs };
+      }
+      return { cached: true, messages };
+    }
+    case "gmail_get_message": {
+      const messageId = String(normalized.messageId || "").trim();
+      if (!messageId) return { error: "message_id required" };
+      const { getGmailMessage } = await import("../integrations/gmail/inbox.js");
+      const { isGmailConfigured } = await import("../integrations/gmail/index.js");
+      if (!isGmailConfigured()) return { error: "Gmail not configured" };
+      const msg = await getGmailMessage(messageId);
+      return {
+        id: msg.id,
+        subject: msg.subject,
+        from: msg.from,
+        to: msg.to,
+        date: msg.date,
+        direction: msg.direction,
+        body: msg.bodyText,
+      };
+    }
+    case "gmail_sync_inbox": {
+      const { syncGmailInbox } = await import("../agents/emailMarketing/gmailSync.js");
+      const maxResults = Number(normalized.maxResults) || 30;
+      return syncGmailInbox({ maxResults });
+    }
+    case "get_sent_email_detail": {
+      const emailId = String(normalized.emailId || "").trim();
+      if (!emailId) return { error: "email_id required" };
+      const { getEmailById } = await import("../core/emailStore.js");
+      const email = getEmailById(emailId);
+      if (!email) return { error: "Email not found", emailId };
+      return email;
     }
     default:
       return { error: `Unknown tool: ${name}` };

@@ -13,6 +13,9 @@ primary_region = "dfw"
 [env]
   # Public URL of the Meta ads Flask dashboard (must match your Fly app name).
   AD_DASHBOARD_BASE_URL = "https://marco-agents.fly.dev"
+  OPENCLAW_GATEWAY_URL = "https://harvey-claw.fly.dev"
+  HARVEY_OWNER_NUMBER = "+19804430453"
+  WHATSAPP_ALLOWED_TARGETS = "+17373461943"
 
 [http_service]
   internal_port = 3000

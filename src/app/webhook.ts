@@ -50,6 +50,25 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 /**
+ * TEMP DIAGNOSTIC — remove after ManyChat image-URL capture test.
+ * Set DEBUG_RAW_WEBHOOK=true to log the full inbound JSON for Instagram DMs only.
+ * TODO(cleanup): delete logRawWebhookPayloadForDiagnostic + call site once payload is captured.
+ */
+function logRawWebhookPayloadForDiagnostic(body: unknown): void {
+  if (process.env.DEBUG_RAW_WEBHOOK?.trim().toLowerCase() !== "true") return;
+  if (!isPlainObject(body)) return;
+
+  const platform = String(body.platform ?? "").toLowerCase();
+  const commentOrDm = body.comment_or_dm ?? body.commentOrDm;
+  const isInstagramDm =
+    platform.includes("insta") && commentOrDm !== "comment" && commentOrDm !== "Comment";
+
+  if (!isInstagramDm) return;
+
+  console.log("[DIAGNOSTIC-RAW-PAYLOAD]", JSON.stringify(body));
+}
+
+/**
  * Meta Graph API Instagram DM shape (if ever wired directly):
  * entry[0].messaging[0].sender.id / .message.text / .message.is_echo
  */
@@ -499,6 +518,8 @@ export async function handleIncomingPayload(
  * TikTok / other: synchronous pipeline (unchanged).
  */
 export async function handleWebhook(body: unknown): Promise<{ status: number; reply?: string }> {
+  logRawWebhookPayloadForDiagnostic(body);
+
   if (isInstagramEcho(body)) {
     console.log("[ig] Echo message ignored");
     return { status: 200 };

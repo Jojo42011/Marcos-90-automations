@@ -1,4 +1,6 @@
 node_modules/
+/brivity-migration-scratch/
+brivity-migration-report.json
 /data/db.json
 data/local-dashboard-db.json
 data/sms.db

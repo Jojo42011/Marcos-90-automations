@@ -12,7 +12,7 @@ require("dotenv/config");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const perception_js_1 = require("./perception.js");
 const memory_js_1 = require("./memory.js");
-const HARVEY_MODEL = process.env.HARVEY_MODEL?.trim() || "claude-sonnet-4-20250514";
+const HARVEY_MODEL = process.env.HARVEY_MODEL?.trim() || "claude-sonnet-4-6";
 const REAL_ESTATE_KB = `
 MARCO OPERATIONS KNOWLEDGE (static):
 - Market: San Antonio TX. New construction buyers often 600k+; Marco's own listings (e.g. Canyon Lake) can be lower.

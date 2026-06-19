@@ -1,0 +1,43 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.resetOpenClawSession = exports.getOpenClawSession = exports.handleOpenClawChatCompletions = exports.broadcastHullEvent = exports.registerHullWs = exports.getHullDb = exports.generateTTS = exports.getAethonModel = exports.buildMemoryPacketForQuery = exports.getTimeAwareGreeting = exports.handleActivation = exports.runPostConversationExtraction = exports.extractSentences = exports.runAgentLoop = void 0;
+exports.initHull = initHull;
+const bootstrap_js_1 = require("./memory/bootstrap.js");
+const embeddings_js_1 = require("./memory/embeddings.js");
+const decay_js_1 = require("./memory/decay.js");
+const synthesis_js_1 = require("./memory/synthesis.js");
+const briefing_js_1 = require("./briefing.js");
+const ws_js_1 = require("./ws.js");
+function initHull() {
+    (0, bootstrap_js_1.bootstrapHullMemory)();
+    void (0, embeddings_js_1.backfillEmbeddings)(100);
+    (0, decay_js_1.scheduleDailyDecay)();
+    (0, synthesis_js_1.scheduleWeeklySynthesis)();
+    (0, briefing_js_1.scheduleMorningBriefing)((brief) => {
+        (0, ws_js_1.broadcastHullEvent)({ type: "morning_briefing", text: brief });
+    });
+    console.log("[hull] Aethon Intelligence hull initialized");
+}
+var agentLoop_js_1 = require("./agentLoop.js");
+Object.defineProperty(exports, "runAgentLoop", { enumerable: true, get: function () { return agentLoop_js_1.runAgentLoop; } });
+Object.defineProperty(exports, "extractSentences", { enumerable: true, get: function () { return agentLoop_js_1.extractSentences; } });
+var extraction_js_1 = require("./memory/extraction.js");
+Object.defineProperty(exports, "runPostConversationExtraction", { enumerable: true, get: function () { return extraction_js_1.runPostConversationExtraction; } });
+var briefing_js_2 = require("./briefing.js");
+Object.defineProperty(exports, "handleActivation", { enumerable: true, get: function () { return briefing_js_2.handleActivation; } });
+Object.defineProperty(exports, "getTimeAwareGreeting", { enumerable: true, get: function () { return briefing_js_2.getTimeAwareGreeting; } });
+var tools_js_1 = require("./tools.js");
+Object.defineProperty(exports, "buildMemoryPacketForQuery", { enumerable: true, get: function () { return tools_js_1.buildMemoryPacketForQuery; } });
+var modelRouting_js_1 = require("./modelRouting.js");
+Object.defineProperty(exports, "getAethonModel", { enumerable: true, get: function () { return modelRouting_js_1.getAethonModel; } });
+var tts_js_1 = require("./voice/tts.js");
+Object.defineProperty(exports, "generateTTS", { enumerable: true, get: function () { return tts_js_1.generateTTS; } });
+var store_js_1 = require("./memory/store.js");
+Object.defineProperty(exports, "getHullDb", { enumerable: true, get: function () { return store_js_1.getHullDb; } });
+var ws_js_2 = require("./ws.js");
+Object.defineProperty(exports, "registerHullWs", { enumerable: true, get: function () { return ws_js_2.registerHullWs; } });
+Object.defineProperty(exports, "broadcastHullEvent", { enumerable: true, get: function () { return ws_js_2.broadcastHullEvent; } });
+var openclaw_js_1 = require("./openclaw.js");
+Object.defineProperty(exports, "handleOpenClawChatCompletions", { enumerable: true, get: function () { return openclaw_js_1.handleOpenClawChatCompletions; } });
+Object.defineProperty(exports, "getOpenClawSession", { enumerable: true, get: function () { return openclaw_js_1.getOpenClawSession; } });
+Object.defineProperty(exports, "resetOpenClawSession", { enumerable: true, get: function () { return openclaw_js_1.resetOpenClawSession; } });

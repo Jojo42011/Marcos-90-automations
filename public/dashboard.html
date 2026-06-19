@@ -117,6 +117,46 @@
       margin-bottom: 1rem;
       opacity: 0.9;
     }
+    .hub-search-wrap {
+      margin-bottom: 1.25rem;
+      position: relative;
+    }
+    .hub-search {
+      width: 100%;
+      padding: 0.85rem 1rem 0.85rem 2.65rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 0.9375rem;
+      font-weight: 500;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .hub-search::placeholder { color: var(--muted); font-weight: 400; }
+    .hub-search:focus {
+      outline: none;
+      border-color: var(--border-bright);
+      box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.1);
+    }
+    .hub-search-icon {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 0.9rem;
+      pointer-events: none;
+    }
+    .hub-search-empty {
+      display: none;
+      text-align: center;
+      padding: 2rem 1rem;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+    .hub-search-empty.visible { display: block; }
+    .module-card.hub-hidden { display: none !important; }
     .module-list { display: flex; flex-direction: column; gap: 1rem; }
     .module-card {
       display: block;
@@ -1436,7 +1476,7 @@
     .crm-table {
       min-width: 1080px;
       color: #f8fafc;
-      font-size: 0.78rem;
+      font-size: 0.85rem;
     }
     .crm-table thead th {
       background: var(--surface2);
@@ -1782,17 +1822,20 @@
     .crm-task-status { font-size: 0.65rem; padding: 0.15rem 0.45rem; border-radius: 6px; }
     .crm-task-status-pending { background: rgba(148,163,184,0.15); color: var(--muted); }
     .crm-task-status-in_progress { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .crm-task-status-on_hold { background: rgba(148,163,184,0.2); color: #cbd5e1; }
+    .crm-task-status-due_soon { background: rgba(245,158,11,0.18); color: #fcd34d; }
+    .crm-task-status-overdue { background: rgba(239,68,68,0.18); color: #fda4af; }
     .crm-task-status-completed { background: rgba(34,197,94,0.15); color: #86efac; }
     .crm-task-status-cancelled { background: rgba(100,116,139,0.2); color: var(--muted); }
-    .crm-task-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+    .crm-task-board { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 0.75rem; overflow-x: auto; }
     .crm-task-col { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); min-height: 200px; display: flex; flex-direction: column; }
     .crm-task-col.drag-over { border-color: var(--cyan); background: rgba(34,211,238,0.06); }
     .crm-task-col-head { padding: 0.5rem 0.65rem; font-size: 0.72rem; font-weight: 600; text-transform: capitalize; border-bottom: 1px solid var(--border); }
     .crm-task-col-body { flex: 1; padding: 0.5rem; display: flex; flex-direction: column; gap: 0.45rem; min-height: 120px; }
     .crm-task-card { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; background: var(--surface2); cursor: grab; }
     .crm-task-card.dragging { opacity: 0.55; border-style: dashed; }
-    .crm-task-card-title { font-size: 0.78rem; font-weight: 600; }
-    .crm-task-card-meta { font-size: 0.68rem; margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+    .crm-task-card-title { font-size: 0.9rem; font-weight: 600; line-height: 1.45; }
+    .crm-task-card-meta { font-size: 0.75rem; margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
     .crm-cal-wrap { display: grid; grid-template-columns: 1fr 220px; gap: 1rem; }
     .crm-cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; grid-column: 1 / -1; }
     .crm-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
@@ -1827,7 +1870,10 @@
     .marco-filter-btn.active { border-color: rgba(34,211,238,0.45); color: var(--cyan); background: rgba(34,211,238,0.1); }
     .marco-tasks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.85rem; }
     .marco-task-card { border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem 1rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.55rem; }
-    .marco-task-card.overdue { border-left: 3px solid #ff2d55; }
+    .marco-task-card.overdue,
+    .marco-task-card.due_soon { border-left: 3px solid #ff2d55; }
+    .marco-task-card.due_soon { border-left-color: #f59e0b; }
+    .marco-task-card.on_hold { border-left: 3px solid #94a3b8; }
     .marco-task-card.done .marco-task-title { text-decoration: line-through; color: var(--muted); }
     .marco-task-top { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
     .marco-pri { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; padding: 0.15rem 0.45rem; border-radius: 4px; }
@@ -1837,10 +1883,13 @@
     .marco-status { font-size: 0.68rem; padding: 0.15rem 0.45rem; border-radius: 4px; }
     .marco-status.pending { background: rgba(56,189,248,0.12); color: #7dd3fc; }
     .marco-status.in_progress { background: rgba(34,211,238,0.15); color: var(--cyan); }
+    .marco-status.on_hold { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+    .marco-status.due_soon { background: rgba(245,158,11,0.15); color: #fcd34d; }
+    .marco-status.overdue { background: rgba(239,68,68,0.15); color: #fda4af; }
     .marco-status.done { background: rgba(16,185,129,0.15); color: #6ee7b7; }
-    .marco-task-title { font-size: 0.92rem; font-weight: 700; color: var(--text); }
-    .marco-task-due { font-size: 0.72rem; color: var(--muted); }
-    .marco-task-desc { font-size: 0.78rem; color: var(--muted); line-height: 1.45; min-height: 1.2em; }
+    .marco-task-title { font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.45; }
+    .marco-task-due { font-size: 0.78rem; color: var(--muted); }
+    .marco-task-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.5; min-height: 1.2em; }
     .marco-task-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; margin-top: 0.15rem; }
     .marco-task-actions select { font-size: 0.72rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text); padding: 0.25rem 0.4rem; }
     .marco-btn-teal { border: 1px solid rgba(34,211,238,0.45); background: rgba(34,211,238,0.12); color: var(--cyan); font: inherit; font-size: 0.78rem; font-weight: 600; padding: 0.45rem 0.9rem; border-radius: 10px; cursor: pointer; }
@@ -3096,6 +3145,11 @@
     }
     html[data-theme="light"] .hub-sub { color: #334155; }
     html[data-theme="light"] .hub-status { color: #64748b; }
+    html[data-theme="light"] .hub-search {
+      background: #fff;
+      border-color: #e2e8f0;
+      color: #0f172a;
+    }
     html[data-theme="light"] .module-card { color: #111; background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%); }
     html[data-theme="light"] .module-title { color: #111; }
     html[data-theme="light"] .module-desc { color: #334155; }
@@ -3705,8 +3759,19 @@
       <h1 class="hub-greeting">Hey Marco — what do you want to take a look at today?</h1>
       <p class="hub-sub">Select a workspace. Live data syncs from your automation pipeline.</p>
       <p class="hub-section-label">Dashboards</p>
-      <div class="module-list">
-        <button type="button" class="module-card" id="open-dm-agent" aria-label="Open DM AI agent dashboard">
+      <div class="hub-search-wrap">
+        <span class="hub-search-icon" aria-hidden="true">⌕</span>
+        <input
+          type="search"
+          id="hub-dashboard-search"
+          class="hub-search"
+          placeholder="Search dashboards — DM, CRM, email, nurture, tasks, Harvey…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      <div class="module-list" id="hub-module-list">
+        <button type="button" class="module-card" id="open-dm-agent" data-hub-search="dm ai agent instagram tiktok leads funnel pipeline" aria-label="Open DM AI agent dashboard">
           <div class="module-card-top">
             <span class="module-title">DM AI agent</span>
             <span class="module-badge">Live</span>
@@ -3714,7 +3779,7 @@
           <p class="module-desc">Instagram &amp; TikTok lead threads, captured phones and emails, funnel state, and CRM fields from the file-backed store.</p>
           <div class="module-arrow">Open workspace →</div>
         </button>
-        <a href="/social" class="module-card" id="open-social" aria-label="Open Content Manager dashboard" style="text-decoration:none;color:inherit;">
+        <a href="/social" class="module-card" id="open-social" data-hub-search="content manager social tiktok apify videos performance" aria-label="Open Content Manager dashboard" style="text-decoration:none;color:inherit;">
           <div class="module-card-top">
             <span class="module-title">Content Manager</span>
             <span class="module-badge" style="background:rgba(34,211,238,0.15);border-color:rgba(34,211,238,0.4);color:#22d3ee;">Apify</span>
@@ -3722,7 +3787,41 @@
           <p class="module-desc">Live TikTok performance — views, engagement, video scores, and content patterns. Same data Harvey uses for content strategy.</p>
           <div class="module-arrow">Open workspace →</div>
         </a>
-        <button type="button" class="module-card" id="open-ads" aria-label="Open Ad numbers dashboard">
+        <a href="/email-marketing" class="module-card" id="open-email-marketing" data-hub-search="email marketing gmail drip auto reply sequences" aria-label="Open Email Marketing dashboard" style="text-decoration:none;color:inherit;">
+          <div class="module-card-top">
+            <span class="module-title">Email Marketing</span>
+            <span class="module-badge" style="background:rgba(167,139,250,0.15);border-color:rgba(167,139,250,0.4);color:#a78bfa;">Gmail</span>
+          </div>
+          <p class="module-desc">Drip sequences, auto-replies, past-client quarterly touches, and send tracking — powered by Marco's Gmail OAuth.</p>
+          <div class="module-arrow">Open workspace →</div>
+        </a>
+        <a href="/lead-nurture" class="module-card" id="open-lead-nurture" data-hub-search="lead nurture scoring hot warm cold drip routing" aria-label="Open Lead Nurture dashboard" style="text-decoration:none;color:inherit;">
+          <div class="module-card-top">
+            <span class="module-title">Lead Nurture</span>
+            <span class="module-badge" id="hub-nurture-badge" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.4);color:#ef4444;">Live</span>
+          </div>
+          <p class="module-desc">Lead scoring, hot/warm/cold nurture flows, source routing, and auto re-score — powered by the nurture sub-agent.</p>
+          <div class="module-arrow">Open workspace →</div>
+        </a>
+        <a href="/reporting" class="module-card" id="open-reporting" data-hub-search="reporting daily digest weekly kpi anomalies harvey scorecard" aria-label="Open Reporting dashboard" style="text-decoration:none;color:inherit;border-color:rgba(0,212,255,0.25);">
+          <div class="module-card-top">
+            <span class="module-title">Reporting</span>
+            <span class="module-badge" style="background:rgba(0,212,255,0.15);border-color:rgba(0,212,255,0.4);color:#00d4ff;">Digest</span>
+          </div>
+          <p class="module-desc">Daily digest, weekly KPI scorecard, anomaly detection, and Harvey delivery status.</p>
+          <div id="hub-anomaly-count" style="margin-top:8px;font-size:11px;color:#00d4ff;font-family:var(--mono);">-- today</div>
+          <div class="module-arrow">Open workspace →</div>
+        </a>
+        <a href="/finance" class="module-card" id="open-finance" data-hub-search="finance gci commissions expenses pace projection money" aria-label="Open Finance dashboard" style="text-decoration:none;color:inherit;border-color:rgba(16,185,129,0.3);">
+          <div class="module-card-top">
+            <span class="module-title">Finance</span>
+            <span class="module-badge" style="background:rgba(16,185,129,0.15);border-color:rgba(16,185,129,0.4);color:#10b981;">GCI</span>
+          </div>
+          <p class="module-desc">GCI tracker, expenses, pipeline projection, pace alerts, and weekly/monthly finance reports.</p>
+          <div id="hub-pace-pct" style="margin-top:8px;font-size:11px;color:#10b981;font-family:var(--mono);">-- of goal</div>
+          <div class="module-arrow">Open workspace →</div>
+        </a>
+        <button type="button" class="module-card" id="open-ads" data-hub-search="ad numbers meta spend reach ads advertising" aria-label="Open Ad numbers dashboard">
           <div class="module-card-top">
             <span class="module-title">Ad numbers</span>
             <span class="module-badge">Meta</span>
@@ -3730,7 +3829,7 @@
           <p class="module-desc">Spend, reach, and lead metrics from your linked ad dashboard — same totals as the internal Aethon ads workspace, without the advisor tools.</p>
           <div class="module-arrow">Open workspace →</div>
         </button>
-        <button type="button" class="module-card" id="open-crm" aria-label="Open CRM dashboard">
+        <button type="button" class="module-card" id="open-crm" data-hub-search="crm pipeline leads board stages lite" aria-label="Open CRM dashboard">
           <div class="module-card-top">
             <span class="module-title">CRM</span>
             <span class="module-badge">Lite</span>
@@ -3738,7 +3837,7 @@
           <p class="module-desc">Pipeline board, lead stages, and live numbers — phone-captured leads, synced with your DM automation.</p>
           <div class="module-arrow">Open workspace →</div>
         </button>
-        <a href="/jarvis" class="module-card" id="open-jarvis" aria-label="Open Harvey assistant" style="text-decoration:none;color:inherit;">
+        <a href="/jarvis" class="module-card" id="open-jarvis" data-hub-search="harvey jarvis ai assistant voice operator" aria-label="Open Harvey assistant" style="text-decoration:none;color:inherit;">
           <div class="module-card-top">
             <span class="module-title">Harvey</span>
             <span class="module-badge" style="background:rgba(34,211,238,0.18);border-color:rgba(34,211,238,0.45);color:#22d3ee;text-shadow:0 0 8px rgba(34,211,238,0.4);">AI</span>
@@ -3746,7 +3845,7 @@
           <p class="module-desc">Voice and text commands, live metrics, and operational briefings from your pipeline data. Same look as the command center.</p>
           <div class="module-arrow">Launch Harvey →</div>
         </a>
-        <a href="/tasks" class="module-card" id="open-tasks" aria-label="Open Task Command Center" style="text-decoration:none;color:inherit;">
+        <a href="/tasks" class="module-card" id="open-tasks" data-hub-search="task center tasks carlos ops todo" aria-label="Open Task Command Center" style="text-decoration:none;color:inherit;">
           <div class="module-card-top">
             <span class="module-title">Task Center</span>
             <span class="module-badge" id="hub-tasks-badge" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#fbbf24;">Ops</span>
@@ -3755,6 +3854,7 @@
           <div class="module-arrow">Open tasks →</div>
         </a>
       </div>
+      <p class="hub-search-empty" id="hub-search-empty">No dashboards match your search.</p>
     </div>
   </div>
 
@@ -4835,6 +4935,93 @@
       if (token && socialLink) {
         socialLink.href = "/social?token=" + encodeURIComponent(token);
       }
+      const emailLink = document.getElementById("open-email-marketing");
+      if (token && emailLink) {
+        emailLink.href = "/email-marketing?token=" + encodeURIComponent(token);
+      }
+      const nurtureLink = document.getElementById("open-lead-nurture");
+      if (token && nurtureLink) {
+        nurtureLink.href = "/lead-nurture?token=" + encodeURIComponent(token);
+      }
+      const reportingLink = document.getElementById("open-reporting");
+      if (token && reportingLink) {
+        reportingLink.href = "/reporting?token=" + encodeURIComponent(token);
+      }
+      const financeLink = document.getElementById("open-finance");
+      if (token && financeLink) {
+        financeLink.href = "/finance?token=" + encodeURIComponent(token);
+      }
+    })();
+
+    (function loadHubFinancePace() {
+      const el = document.getElementById("hub-pace-pct");
+      if (!el) return;
+      const u = new URL("/api/finance/pace-status", location.origin);
+      if (token) u.searchParams.set("token", token);
+      fetch(u)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((pace) => {
+          if (!pace) { el.textContent = "-- of goal"; return; }
+          if (!pace.configured) {
+            el.textContent = "goal not set";
+            el.style.color = "#f59e0b";
+            return;
+          }
+          el.textContent = pace.pctOfGoal + "% of goal";
+          el.style.color = pace.onTrack ? "#10b981" : "#ef4444";
+        })
+        .catch(() => { el.textContent = "-- of goal"; });
+    })();
+
+    (function loadHubReportingAnomalies() {
+      const el = document.getElementById("hub-anomaly-count");
+      if (!el) return;
+      const u = new URL("/api/reporting/anomalies", location.origin);
+      if (token) u.searchParams.set("token", token);
+      fetch(u)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!d) { el.textContent = "-- today"; return; }
+          const n = (d.anomalies || []).length;
+          if (n === 0) {
+            el.textContent = "all clear today";
+            el.style.color = "#10b981";
+          } else {
+            el.textContent = n + " anomal" + (n === 1 ? "y" : "ies") + " today";
+            el.style.color = "#00d4ff";
+          }
+        })
+        .catch(() => { el.textContent = "-- today"; });
+    })();
+
+    (function initHubDashboardSearch() {
+      const input = document.getElementById("hub-dashboard-search");
+      const list = document.getElementById("hub-module-list");
+      const empty = document.getElementById("hub-search-empty");
+      if (!input || !list) return;
+      const cards = () => Array.from(list.querySelectorAll(".module-card"));
+      function filterHub() {
+        const q = input.value.trim().toLowerCase();
+        let visible = 0;
+        cards().forEach((card) => {
+          const title = (card.querySelector(".module-title")?.textContent || "").toLowerCase();
+          const desc = (card.querySelector(".module-desc")?.textContent || "").toLowerCase();
+          const tags = (card.getAttribute("data-hub-search") || "").toLowerCase();
+          const haystack = title + " " + desc + " " + tags;
+          const match = !q || haystack.includes(q);
+          card.classList.toggle("hub-hidden", !match);
+          if (match) visible++;
+        });
+        if (empty) empty.classList.toggle("visible", q.length > 0 && visible === 0);
+      }
+      input.addEventListener("input", filterHub);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          input.value = "";
+          filterHub();
+          input.blur();
+        }
+      });
     })();
 
     document.getElementById("open-dm-agent").addEventListener("click", () => {
@@ -9694,8 +9881,14 @@
       return marcoTasksCache;
     }
 
+    function marcoStatusLabel(st) {
+      const map = { in_progress: "In Progress", on_hold: "On Hold", due_soon: "Due Soon", overdue: "Overdue" };
+      return map[st] || st.charAt(0).toUpperCase() + st.slice(1);
+    }
+
     function marcoTaskIsOverdue(task) {
-      if (!task.dueDate || task.status === "done") return false;
+      if (task.status === "overdue") return true;
+      if (!task.dueDate || task.status === "done" || task.status === "on_hold") return false;
       const due = new Date(task.dueDate.slice(0, 10) + "T00:00:00");
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -9817,7 +10010,7 @@
       }
       const s = marcoTasksSummary;
       const tasks = marcoFilteredTasks();
-      const statusTabs = ["all", "pending", "in_progress", "done"];
+      const statusTabs = ["all", "pending", "in_progress", "on_hold", "due_soon", "overdue", "done"];
       const priTabs = ["all", "high", "medium", "low"];
       const sortOpts = [
         { id: "dueDate", label: "Due Date" },
@@ -9839,7 +10032,7 @@
         </div>
         <div class="marco-filter-bar">
           <div class="marco-filter-tabs" id="marco-status-tabs">
-            ${statusTabs.map((st) => `<button type="button" class="marco-filter-btn${marcoTasksUi.status === st ? " active" : ""}" data-marco-status="${st}">${st === "all" ? "All" : st === "in_progress" ? "In Progress" : st.charAt(0).toUpperCase() + st.slice(1)}</button>`).join("")}
+            ${statusTabs.map((st) => `<button type="button" class="marco-filter-btn${marcoTasksUi.status === st ? " active" : ""}" data-marco-status="${st}">${st === "all" ? "All" : marcoStatusLabel(st)}</button>`).join("")}
           </div>
           <div class="marco-filter-tabs" id="marco-pri-tabs">
             ${priTabs.map((p) => `<button type="button" class="marco-filter-btn${marcoTasksUi.priority === p ? " active" : ""}" data-marco-pri="${p}">${p === "all" ? "All priorities" : p.charAt(0).toUpperCase() + p.slice(1)}</button>`).join("")}
@@ -9851,20 +10044,22 @@
         <div class="marco-tasks-grid" id="marco-tasks-grid">
           ${tasks.length ? tasks.map((task) => {
             const overdue = marcoTaskIsOverdue(task);
+            const statusClass = task.status === "done"
+              ? " done"
+              : (["overdue", "due_soon", "on_hold"].includes(task.status) ? " " + task.status : (overdue ? " overdue" : ""));
             const dueLabel = task.dueDate ? "Due: " + new Date(task.dueDate.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No due date";
-            return `<div class="marco-task-card${overdue ? " overdue" : ""}${task.status === "done" ? " done" : ""}" data-id="${escapeHtml(task.id)}">
+            const statusOpts = ["pending", "in_progress", "on_hold", "due_soon", "overdue", "done"];
+            return `<div class="marco-task-card${statusClass}" data-id="${escapeHtml(task.id)}">
               <div class="marco-task-top">
                 <span class="marco-pri ${task.priority}">${task.priority.toUpperCase()}</span>
-                <span class="marco-status ${task.status}">${task.status === "in_progress" ? "In Progress" : task.status.charAt(0).toUpperCase() + task.status.slice(1)}</span>
+                <span class="marco-status ${task.status}">${marcoStatusLabel(task.status)}</span>
               </div>
               <div class="marco-task-title">${escapeHtml(task.title)}</div>
               <div class="marco-task-due">${escapeHtml(dueLabel)}</div>
               <div class="marco-task-desc">${escapeHtml(task.description || "")}</div>
               <div class="marco-task-actions">
                 <select class="marco-status-select" data-id="${escapeHtml(task.id)}">
-                  <option value="pending"${task.status === "pending" ? " selected" : ""}>Pending</option>
-                  <option value="in_progress"${task.status === "in_progress" ? " selected" : ""}>In Progress</option>
-                  <option value="done"${task.status === "done" ? " selected" : ""}>Done</option>
+                  ${statusOpts.map((st) => `<option value="${st}"${task.status === st ? " selected" : ""}>${marcoStatusLabel(st)}</option>`).join("")}
                 </select>
                 <button type="button" class="marco-btn-ghost marco-edit-btn" data-id="${escapeHtml(task.id)}">Edit</button>
                 ${task.status !== "done" ? `<button type="button" class="marco-btn-ghost marco-complete-btn" data-id="${escapeHtml(task.id)}">✓ Complete</button>` : ""}

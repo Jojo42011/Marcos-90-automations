@@ -173,7 +173,9 @@ function normalizeCommandTask(raw) {
     const column = COMMAND_COLUMNS.has(t.column)
         ? t.column
         : "today";
-    const status = t.status === "done" || t.status === "pending" ? t.status : "pending";
+    const status = types_js_1.COMMAND_TASK_STATUSES.includes(t.status)
+        ? t.status
+        : "pending";
     const color = COMMAND_COLORS.has(t.color)
         ? t.color
         : "blue";
@@ -183,6 +185,9 @@ function normalizeCommandTask(raw) {
         description: typeof t.description === "string" ? t.description : undefined,
         column,
         status,
+        previousStatus: types_js_1.COMMAND_TASK_STATUSES.includes(t.previousStatus)
+            ? t.previousStatus
+            : undefined,
         color,
         recurring: t.recurring === true,
         recurringInterval: t.recurringInterval === "daily" ||
@@ -290,11 +295,11 @@ function saveCommandTasks(tasks) {
 }
 function buildCommandTasksSummary(tasks) {
     const list = tasks ?? commandTasksStore;
-    const pending = list.filter((t) => t.status === "pending");
+    const active = list.filter((t) => t.status !== "done");
     return {
-        urgent: pending.filter((t) => t.column === "urgent").length,
-        today: pending.filter((t) => t.column === "today").length,
-        totalPending: pending.length,
+        urgent: active.filter((t) => t.column === "urgent").length,
+        today: active.filter((t) => t.column === "today").length,
+        totalPending: active.length,
     };
 }
 function seedCommandTasksIfEmpty() {
@@ -417,6 +422,15 @@ async function findLeadByPhoneDigits(phone) {
 function leadHasPhone(phone) {
     return Boolean(phone?.trim());
 }
+function leadHasEmail(email) {
+    return Boolean(email?.trim());
+}
+async function triggerEmailMarketingIfNeeded(lead) {
+    if (!leadHasEmail(lead.email))
+        return;
+    const { onLeadEmailCaptured } = await Promise.resolve().then(() => __importStar(require("../agents/emailMarketing/hooks.js")));
+    onLeadEmailCaptured(lead);
+}
 async function notifyNewPhoneCapture(lead) {
     const marcoNumber = process.env.MARCO_PHONE_NUMBER?.trim();
     const carlosNumber = process.env.CARLOS_PHONE_NUMBER?.trim();
@@ -500,7 +514,11 @@ async function createLead(lead) {
     leadKeyToId.set(leadKey(lead.platform, lead.userId), id);
     conversationsByLeadId.set(id, { messages: [] });
     persistToFile();
-    return await triggerSourceRoutingIfNeeded(next);
+    const routed = await triggerSourceRoutingIfNeeded(next);
+    if (leadHasEmail(routed.email) && !routed.autoReplyEmailSentAt) {
+        void triggerEmailMarketingIfNeeded(routed);
+    }
+    return routed;
 }
 async function updateLead(lead) {
     const existing = leadsById.get(lead.id);
@@ -518,6 +536,10 @@ async function updateLead(lead) {
     const phoneNewlyCaptured = existing && !leadHasPhone(existing.phone) && leadHasPhone(updated.phone);
     if (phoneNewlyCaptured && !updated.sourceRoutingCompletedAt) {
         return await triggerSourceRoutingIfNeeded(updated);
+    }
+    const emailNewlyCaptured = existing && !leadHasEmail(existing.email) && leadHasEmail(updated.email);
+    if (emailNewlyCaptured && !updated.autoReplyEmailSentAt) {
+        void triggerEmailMarketingIfNeeded(updated);
     }
     return updated;
 }
@@ -1153,6 +1175,16 @@ async function updateLeadCrmFields(input) {
                 ? null
                 : String(input.sourceRoutingCompletedAt)
             : lead.sourceRoutingCompletedAt ?? null,
+        autoReplyEmailSentAt: input.autoReplyEmailSentAt !== undefined
+            ? input.autoReplyEmailSentAt === null || input.autoReplyEmailSentAt === ""
+                ? null
+                : String(input.autoReplyEmailSentAt)
+            : lead.autoReplyEmailSentAt ?? null,
+        movedToColdNurtureAt: input.movedToColdNurtureAt !== undefined
+            ? input.movedToColdNurtureAt === null || input.movedToColdNurtureAt === ""
+                ? null
+                : String(input.movedToColdNurtureAt)
+            : lead.movedToColdNurtureAt ?? null,
     };
     await updateLead(next);
     return next;

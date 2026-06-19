@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -33,6 +66,7 @@ const tagTemplates_js_1 = require("./core/tagTemplates.js");
 const leadFilter_js_1 = require("./core/leadFilter.js");
 const users_js_1 = require("./core/users.js");
 const types_js_1 = require("./core/types.js");
+const types_js_2 = require("./core/types.js");
 const tasks_js_1 = require("./core/tasks.js");
 const marcoTasks_js_1 = require("./core/marcoTasks.js");
 const harveyNotes_js_1 = require("./core/harveyNotes.js");
@@ -47,28 +81,32 @@ const warmLeadFlow_js_1 = require("./agents/leadNurture/warmLeadFlow.js");
 const coldLeadFlow_js_1 = require("./agents/leadNurture/coldLeadFlow.js");
 const sourceRouting_js_1 = require("./agents/leadNurture/sourceRouting.js");
 const leadScoreStore_js_1 = require("./core/leadScoreStore.js");
+const dailyDigest_js_1 = require("./agents/reporting/dailyDigest.js");
+const weeklyKPI_js_1 = require("./agents/reporting/weeklyKPI.js");
+const reportingStore_js_1 = require("./core/reportingStore.js");
+const financeStore_js_1 = require("./core/financeStore.js");
+const index_js_12 = require("./agents/finance/index.js");
 const state_js_1 = require("./core/state.js");
 const dialSession_js_1 = require("./core/dialSession.js");
 const callAssistant_js_1 = require("./core/callAssistant.js");
 const forewarn_js_1 = require("./integrations/forewarn.js");
 const db_js_2 = require("./core/db.js");
-const index_js_12 = require("./integrations/sinch/index.js");
-const index_js_13 = require("./integrations/twilio/index.js");
+const index_js_13 = require("./integrations/sinch/index.js");
+const index_js_14 = require("./integrations/twilio/index.js");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
-const index_js_14 = require("./integrations/llm/index.js");
+const index_js_15 = require("./integrations/llm/index.js");
 const adsUpstream_js_1 = require("./harvey/adsUpstream.js");
 const crypto_1 = require("crypto");
-const index_js_15 = require("./harvey/index.js");
-const tools_js_1 = require("./harvey/tools.js");
+const index_js_16 = require("./harvey/index.js");
+const index_js_17 = require("./hull/index.js");
+const deepgramProxy_js_1 = require("./hull/voice/deepgramProxy.js");
+const ws_1 = require("ws");
 const smsStore_js_1 = require("./core/smsStore.js");
 const inboundReplyHelper_js_1 = require("./app/inboundReplyHelper.js");
-const index_js_16 = require("./agents/showingReminders/index.js");
-const index_js_17 = require("./agents/mojoOutreach/index.js");
-const index_js_18 = require("./agents/conversationEscalations/index.js");
+const index_js_18 = require("./agents/showingReminders/index.js");
+const index_js_19 = require("./agents/mojoOutreach/index.js");
+const index_js_20 = require("./agents/conversationEscalations/index.js");
 const textingRules_js_1 = require("./core/textingRules.js");
-const bootstrap_js_1 = require("./harvey/memory/bootstrap.js");
-const retrieval_js_1 = require("./harvey/memory/retrieval.js");
-const store_js_1 = require("./harvey/memory/store.js");
 const marcoLog_js_1 = require("./app/marcoLog.js");
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || 3000;
@@ -165,32 +203,66 @@ function trimGeminiSystemPrompt(prompt) {
     return `${trimmed}\n\n[Context truncated for Live API limit]`;
 }
 app.get("/health", (_req, res) => {
-    const apiKeyConfigured = (0, index_js_14.isAnthropicApiKeyConfigured)();
+    const apiKeyConfigured = (0, index_js_15.isAnthropicApiKeyConfigured)();
     res.status(200).json({
         ok: true,
         anthropic: {
             api_key_configured: apiKeyConfigured,
-            model: (0, index_js_14.getAnthropicModel)(),
+            model: (0, index_js_15.getAnthropicModel)(),
             hint: apiKeyConfigured
                 ? "Haiku runs for preflight, opening, and pipeline when those paths call the API (billing and valid JSON still required)."
                 : "Set ANTHROPIC_API_KEY on the host. Without it, DMs use hardcoded fallbacks only.",
         },
         twilio: {
-            configured: (0, index_js_13.isTwilioConfigured)(),
-            hint: (0, index_js_13.isTwilioConfigured)()
+            configured: (0, index_js_14.isTwilioConfigured)(),
+            hint: (0, index_js_14.isTwilioConfigured)()
                 ? "Outbound SMS available; inbound webhook should point to POST /webhook/twilio"
                 : "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER for SMS handoff from CRM.",
         },
         harvey: {
-            model: (0, index_js_15.getHarveyModel)(),
-            api_key_configured: (0, index_js_14.isAnthropicApiKeyConfigured)(),
+            model: (0, index_js_16.getHarveyModel)(),
+            api_key_configured: (0, index_js_15.isAnthropicApiKeyConfigured)(),
+            hull: "aethon-intelligence",
             voice: {
-                engine: geminiApiKey() ? "gemini-live" : "none",
-                gemini_configured: Boolean(geminiApiKey()),
+                engine: process.env.DEEPGRAM_API_KEY ? "deepgram-flux" : "none",
+                deepgram_configured: Boolean(process.env.DEEPGRAM_API_KEY?.trim()),
+                brain: "claude",
                 tts: geminiApiKey() ? "gemini" : "none",
+                gemini_configured: Boolean(geminiApiKey()),
             },
         },
     });
+});
+/** OpenClaw — OpenAI-compatible brain endpoint (WhatsApp / messaging gateway). */
+app.post("/v1/chat/completions", express_1.default.json({ limit: "256kb" }), async (req, res) => {
+    if (!(0, index_js_15.isAnthropicApiKeyConfigured)()) {
+        res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
+        return;
+    }
+    try {
+        const { handleOpenClawChatCompletions } = await Promise.resolve().then(() => __importStar(require("./hull/openclaw.js")));
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        const { status, json } = await handleOpenClawChatCompletions(body);
+        res.status(status).json(json);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[openclaw] /v1/chat/completions", msg);
+        res.status(500).json({ error: msg });
+    }
+});
+app.post("/v1/sessions/reset", express_1.default.json(), async (req, res) => {
+    const sessionId = typeof req.body?.sessionId === "string" && req.body.sessionId.trim()
+        ? req.body.sessionId.trim()
+        : "harvey";
+    const { resetOpenClawSession } = await Promise.resolve().then(() => __importStar(require("./hull/openclaw.js")));
+    resetOpenClawSession(sessionId);
+    res.json({ ok: true, message: "Thread cleared. Memory saved. Fresh start.", sessionId });
+});
+app.get("/v1/sessions/:sessionId", async (req, res) => {
+    const sessionId = String(req.params.sessionId || "harvey").trim();
+    const { getOpenClawSession } = await Promise.resolve().then(() => __importStar(require("./hull/openclaw.js")));
+    res.json(getOpenClawSession(sessionId));
 });
 app.get("/", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "dashboard.html"));
@@ -205,11 +277,26 @@ app.get("/chat", (_req, res) => {
 app.get("/jarvis", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "jarvis.html"));
 });
+app.get("/memory", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "memory.html"));
+});
 app.get("/tasks", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "tasks.html"));
 });
 app.get("/social", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "social.html"));
+});
+app.get("/email-marketing", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "email-marketing.html"));
+});
+app.get("/lead-nurture", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "lead-nurture.html"));
+});
+app.get("/reporting", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "reporting.html"));
+});
+app.get("/finance", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "finance.html"));
 });
 app.get("/crm-followup-tasks.js", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "crm-followup-tasks.js"));
@@ -860,7 +947,7 @@ app.get("/api/showings/upcoming", async (req, res) => {
         return;
     }
     try {
-        const upcoming = await (0, index_js_16.getUpcomingShowings)();
+        const upcoming = await (0, index_js_18.getUpcomingShowings)();
         res.json({ upcoming });
     }
     catch (err) {
@@ -874,7 +961,7 @@ app.post("/api/showings/check-reminders", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_16.checkAndSendShowingReminders)();
+        const result = await (0, index_js_18.checkAndSendShowingReminders)();
         res.json(result);
     }
     catch (err) {
@@ -888,7 +975,7 @@ app.post("/api/mojo-outreach/run", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_17.runMojoOutreachSequence)();
+        const result = await (0, index_js_19.runMojoOutreachSequence)();
         res.json(result);
     }
     catch (err) {
@@ -1068,7 +1155,7 @@ app.get("/api/jarvis/ops", async (req, res) => {
         return;
     }
     try {
-        const ops = await (0, index_js_15.runHarveyOps)(harveyDeps());
+        const ops = await (0, index_js_16.runHarveyOps)(harveyDeps());
         res.status(200).json(ops);
     }
     catch (err) {
@@ -1089,7 +1176,7 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
     }
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
     try {
-        const result = await (0, index_js_15.runHarveyChat)({
+        const result = await (0, index_js_16.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -1102,40 +1189,60 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
         res.status(500).json({ error: msg });
     }
 });
-/** Gemini Live — WebSocket URL + setup for browser voice session. */
-app.post("/api/jarvis/gemini-live/token", express_1.default.json({ limit: "64kb" }), (req, res) => {
-    console.log("[GeminiLive] Token endpoint hit");
-    console.log("[GeminiLive] GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY);
-    console.log("[GeminiLive] GEMINI_API_KEY length:", process.env.GEMINI_API_KEY?.length);
+/** Aethon voice command — Claude brain (not Gemini Live). */
+app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
-        console.log("[GeminiLive] Auth failed — unauthorized");
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const key = geminiApiKey();
-    if (!key) {
-        console.log("[GeminiLive] GEMINI_API_KEY not configured — returning 500");
-        res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+    if (!message) {
+        res.status(400).json({ error: "Missing message" });
         return;
     }
-    const model = "gemini-3.1-flash-live-preview";
-    const voiceName = "Charon";
-    const systemPrompt = trimGeminiSystemPrompt(HARVEY_GEMINI_LIVE_SYSTEM_PROMPT);
-    const wsUrl = `${GEMINI_LIVE_WS}?key=${encodeURIComponent(key)}`;
-    console.log("[GeminiLive] Model being returned:", model);
-    console.log("[GeminiLive] wsUrl prefix:", wsUrl.substring(0, 80));
-    console.log("[GeminiLive] System prompt length:", systemPrompt.length);
-    console.log("[GeminiLive] Voice name:", voiceName);
-    console.log("[GeminiLive] Tools:", tools_js_1.HARVEY_GEMINI_TOOLS.functionDeclarations.length, "functions");
-    res.status(200).json({
-        wsUrl,
-        model,
-        systemPrompt,
-        voiceName,
-        tools: tools_js_1.HARVEY_GEMINI_TOOLS,
+    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
+    try {
+        const result = await (0, index_js_16.runHarveyChat)({
+            message,
+            sessionId,
+            deps: harveyDeps(),
+            voiceMode: true,
+        });
+        res.status(200).json({ speech: result.speech, sessionId: result.sessionId });
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: msg });
+    }
+});
+/** First-open-of-day activation brief. */
+app.get("/api/jarvis/activation", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const packet = await (0, index_js_17.buildMemoryPacketForQuery)("morning activation brief");
+        const text = await (0, index_js_17.handleActivation)(packet);
+        res.status(200).json({ text });
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: msg });
+    }
+});
+/** Gemini Live removed — Aethon hull uses Deepgram Flux + Claude + Gemini TTS. */
+app.post("/api/jarvis/gemini-live/token", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    res.status(410).json({
+        error: "Gemini Live removed",
+        hint: "Use Aethon voice pipeline: Deepgram Flux STT + Claude + Gemini TTS via /jarvis",
     });
 });
-/** Execute Harvey tools for Gemini Live voice (client relays tool calls server-side). */
+/** Execute Harvey / hull tools (legacy voice tool relay). */
 app.post("/api/jarvis/execute-tool", express_1.default.json({ limit: "64kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
@@ -1152,7 +1259,7 @@ app.post("/api/jarvis/execute-tool", express_1.default.json({ limit: "64kb" }), 
     }
     console.log("[Harvey Voice Tool] Executing:", toolName, "input:", JSON.stringify(toolInput));
     try {
-        const result = await (0, tools_js_1.executeHarveyTool)(toolName, toolInput);
+        const result = await (0, index_js_16.runHarveyTool)(toolName, toolInput);
         console.log("[Harvey Voice Tool] Result for", toolName, ":", JSON.stringify(result).substring(0, 200));
         res.status(200).json({ success: true, result });
     }
@@ -1276,7 +1383,7 @@ app.post("/api/jarvis/market-intel", express_1.default.json({ limit: "64kb" }), 
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_15.getHarveyModel)(),
+            model: (0, index_js_16.getHarveyModel)(),
             max_tokens: 1500,
             tools: [{
                     type: "web_search_20250305",
@@ -1350,7 +1457,7 @@ app.post("/api/jarvis/world-intel", express_1.default.json({ limit: "64kb" }), a
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_15.getHarveyModel)(),
+            model: (0, index_js_16.getHarveyModel)(),
             max_tokens: 2000,
             tools: [{
                     type: "web_search_20250305",
@@ -1462,7 +1569,7 @@ async function runClaudeResearchJson(prompt) {
         throw new Error("ANTHROPIC_API_KEY not configured");
     const anthropic = new sdk_1.default({ apiKey });
     const response = await anthropic.messages.create({
-        model: (0, index_js_15.getHarveyModel)(),
+        model: (0, index_js_16.getHarveyModel)(),
         max_tokens: 2500,
         tools: [{
                 type: "web_search_20250305",
@@ -1561,7 +1668,7 @@ app.post("/api/marco-tasks", express_1.default.json({ limit: "64kb" }), (req, re
     const priority = body.priority === "high" || body.priority === "medium" || body.priority === "low"
         ? body.priority
         : "medium";
-    const status = body.status === "pending" || body.status === "in_progress" || body.status === "done"
+    const status = types_js_2.MARCO_TASK_STATUSES.includes(body.status)
         ? body.status
         : "pending";
     const task = (0, marcoTasks_js_1.createMarcoTask)({
@@ -1591,8 +1698,9 @@ app.patch("/api/marco-tasks/:id", express_1.default.json({ limit: "64kb" }), (re
     if (body.priority === "high" || body.priority === "medium" || body.priority === "low") {
         updates.priority = body.priority;
     }
-    if (body.status === "pending" || body.status === "in_progress" || body.status === "done") {
+    if (types_js_2.MARCO_TASK_STATUSES.includes(body.status)) {
         updates.status = body.status;
+        updates.previousStatus = undefined;
     }
     if (typeof body.createdBy === "string")
         updates.createdBy = body.createdBy;
@@ -1618,7 +1726,7 @@ app.post("/api/marco-tasks/:id/complete", express_1.default.json({ limit: "16kb"
         return;
     }
     const id = String(req.params.id || "").trim();
-    const task = (0, marcoTasks_js_1.updateMarcoTask)(id, { status: "done", completedAt: new Date().toISOString() });
+    const task = (0, marcoTasks_js_1.updateMarcoTask)(id, { status: "done", completedAt: new Date().toISOString(), previousStatus: undefined });
     if (!task) {
         res.status(404).json({ error: "Task not found" });
         return;
@@ -1719,67 +1827,351 @@ app.delete("/api/notes/:id", (req, res) => {
     const ok = (0, harveyNotes_js_1.deleteNote)(id);
     res.status(ok ? 200 : 404).json({ success: ok });
 });
-/** Harvey memory — full state snapshot. */
+function hullMemoryStats(db) {
+    const facts = db.prepare("SELECT COUNT(*) as c FROM facts WHERE superseded_by IS NULL").get().c;
+    const nodes = db.prepare("SELECT COUNT(*) as c FROM nodes").get().c;
+    const edges = db.prepare("SELECT COUNT(*) as c FROM edges").get().c;
+    const rules = db.prepare("SELECT COUNT(*) as c FROM rules").get().c;
+    const episodes = db.prepare("SELECT COUNT(*) as c FROM episodes").get().c;
+    const syntheses = db.prepare("SELECT COUNT(*) as c FROM syntheses").get().c;
+    return { facts, nodes, edges, rules, episodes, syntheses };
+}
+/** Hull memory — full snapshot (legacy /api/jarvis/memory). */
 app.get("/api/jarvis/memory", (req, res) => {
     if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const db = (0, store_js_1.getMemoryDb)();
-    const semantic = db
-        .prepare("SELECT * FROM harvey_semantic WHERE superseded_by IS NULL ORDER BY weight DESC LIMIT 50")
-        .all();
-    const relational = db.prepare("SELECT * FROM harvey_relational ORDER BY weight DESC LIMIT 50").all();
-    const procedural = db.prepare("SELECT * FROM harvey_procedural ORDER BY use_count DESC").all();
-    const episodes = db.prepare("SELECT * FROM harvey_episodes ORDER BY timestamp DESC LIMIT 20").all();
+    const db = (0, index_js_17.getHullDb)();
     res.json({
-        semantic,
-        relational,
-        procedural,
-        episodes,
-        stats: {
-            semanticCount: semantic.length,
-            relationalCount: relational.length,
-            proceduralCount: procedural.length,
-            episodeCount: episodes.length,
-        },
+        facts: db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC LIMIT 50").all(),
+        nodes: db.prepare("SELECT * FROM nodes ORDER BY created_at DESC LIMIT 50").all(),
+        edges: db.prepare("SELECT * FROM edges ORDER BY created_at DESC LIMIT 50").all(),
+        rules: db.prepare("SELECT * FROM rules ORDER BY confidence DESC LIMIT 50").all(),
+        episodes: db.prepare("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 20").all(),
+        stats: hullMemoryStats(db),
     });
 });
-/** Harvey memory — semantic search. */
-app.get("/api/jarvis/memory/search", (req, res) => {
+/** Neural Map API — full combined payload. */
+app.get("/api/memory/all", (req, res) => {
     if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const db = (0, index_js_17.getHullDb)();
+    const facts = db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC").all();
+    const nodes = db.prepare("SELECT * FROM nodes").all();
+    const edges = db
+        .prepare(`SELECT e.id, e.source_id, e.target_id, e.relationship, e.strength, e.created_at,
+              s.name as source_name, t.name as target_name
+       FROM edges e JOIN nodes s ON e.source_id = s.id JOIN nodes t ON e.target_id = t.id`)
+        .all();
+    const rules = db.prepare("SELECT * FROM rules ORDER BY confidence DESC").all();
+    const episodes = db.prepare("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 20").all();
+    const identityProfile = db.prepare("SELECT dimension, confidence FROM identity_dimensions ORDER BY dimension").all();
+    res.json({
+        facts,
+        nodes,
+        edges,
+        rules,
+        episodes,
+        stats: hullMemoryStats(db),
+        identityProfile,
+        lastSync: new Date().toISOString(),
+    });
+});
+app.get("/api/memory/graph", (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const db = (0, index_js_17.getHullDb)();
+    res.json({
+        nodes: db.prepare("SELECT * FROM nodes").all(),
+        edges: db.prepare("SELECT * FROM edges").all(),
+    });
+});
+app.get("/api/memory/episodes", (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const db = (0, index_js_17.getHullDb)();
+    res.json(db.prepare("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 20").all());
+});
+app.get("/api/memory/rules", (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const db = (0, index_js_17.getHullDb)();
+    res.json(db.prepare("SELECT * FROM rules ORDER BY confidence DESC").all());
+});
+app.get("/api/memory/identity", (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const db = (0, index_js_17.getHullDb)();
+    const profile = db.prepare("SELECT dimension, confidence FROM identity_dimensions ORDER BY dimension").all();
+    const recentQuestions = db
+        .prepare("SELECT dimension, question, asked_at, answered FROM identity_questions ORDER BY asked_at DESC LIMIT 10")
+        .all();
+    res.json({ profile, recentQuestions });
+});
+/** Email marketing API */
+app.get("/api/email/recent", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { getRecentEmails } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    res.json({ emails: getRecentEmails(parseInt(String(req.query.limit || "50"), 10) || 50) });
+});
+app.get("/api/email/lead/:leadId", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { getEmailsForLead } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    res.json({ emails: getEmailsForLead(req.params.leadId) });
+});
+app.get("/api/email/stats", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { getEmailStats, countActiveDripSequences } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    const since = req.query.since ||
+        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    res.json({ ...getEmailStats(since), activeSequences: countActiveDripSequences() });
+});
+app.get("/api/email/sequences", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { getActiveDripSequences } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    const { listAllLeads } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+    const sequences = getActiveDripSequences(100);
+    const leads = await listAllLeads();
+    const byId = new Map(leads.map((l) => [l.id, l]));
+    res.json({
+        sequences: sequences.map((s) => ({
+            ...s,
+            leadName: byId.get(s.leadId)?.name || byId.get(s.leadId)?.username || s.leadId,
+        })),
+    });
+});
+app.post("/api/email/send-existing-client", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { sendContextAwareEmail } = await Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/existingClientFlow.js")));
+    const leadId = String(req.body?.leadId || "");
+    const subject = String(req.body?.subject || "");
+    const body = String(req.body?.body || "");
+    const result = await sendContextAwareEmail(leadId, subject, () => body);
+    res.json(result);
+});
+app.get("/api/email/client-context/:leadId", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { buildClientContext } = await Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/existingClientFlow.js")));
+    res.json(await buildClientContext(req.params.leadId));
+});
+app.post("/api/email/start-drip", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { leadId, sequenceType } = req.body || {};
+    if (sequenceType === "buyer_drip") {
+        void Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/buyerDrip.js"))).then((m) => m.startBuyerDrip(String(leadId)));
+    }
+    else if (sequenceType === "seller_drip") {
+        void Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/sellerDrip.js"))).then((m) => m.startSellerDrip(String(leadId)));
+    }
+    else {
+        res.status(400).json({ error: "Invalid sequenceType" });
+        return;
+    }
+    res.json({ success: true });
+});
+app.post("/api/email/sequence/:id/pause", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { pauseSequence } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    pauseSequence(req.params.id);
+    res.json({ ok: true });
+});
+app.get("/api/email/connection-status", async (_req, res) => {
+    const { isEmailConfigured, verifyEmailConnection } = await Promise.resolve().then(() => __importStar(require("./integrations/email/index.js")));
+    const configured = isEmailConfigured();
+    const verified = configured ? await verifyEmailConnection() : false;
+    res.json({ configured, verified });
+});
+app.post("/api/email/process-buyer-drips-now", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { processDueBuyerDrips } = await Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/buyerDrip.js")));
+    res.json(await processDueBuyerDrips());
+});
+app.post("/api/email/process-seller-drips-now", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { processDueSellerDrips } = await Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/sellerDrip.js")));
+    res.json(await processDueSellerDrips());
+});
+app.post("/api/email/quarterly-touch-now", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { runPastClientQuarterlyTouch } = await Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/pastClientQuarterly.js")));
+    res.json(await runPastClientQuarterlyTouch());
+});
+app.post("/api/email/no-reply-check-now", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { checkNoReplyFollowups } = await Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/noReplyFollowup.js")));
+    res.json(await checkNoReplyFollowups());
+});
+app.get("/api/email/detail/:id", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { getEmailById } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    const email = getEmailById(req.params.id);
+    if (!email)
+        return res.status(404).json({ error: "Email not found" });
+    const { listAllLeads } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+    const leads = await listAllLeads();
+    const lead = leads.find((l) => l.id === email.leadId);
+    res.json({
+        email,
+        leadName: lead?.name || lead?.username || email.leadId,
+        leadEmail: lead?.email,
+    });
+});
+app.get("/api/email/replies", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { getRepliedEmails, getInboundCachedReplies } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    const { listAllLeads } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+    const leads = await listAllLeads();
+    const byId = new Map(leads.map((l) => [l.id, l]));
+    const limit = parseInt(String(req.query.limit || "50"), 10) || 50;
+    const replied = getRepliedEmails(limit).map((e) => ({
+        ...e,
+        leadName: byId.get(e.leadId)?.name || byId.get(e.leadId)?.username || e.leadId,
+    }));
+    const inbound = getInboundCachedReplies(limit).map((m) => ({
+        ...m,
+        leadName: m.leadId ? byId.get(m.leadId)?.name || m.leadId : undefined,
+    }));
+    res.json({ replied, inbound });
+});
+app.get("/api/email/active-drips-detail", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { getActiveDripSequences, getEmailsForDripType } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    const { listAllLeads } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+    const sequences = getActiveDripSequences(100);
+    const leads = await listAllLeads();
+    const byId = new Map(leads.map((l) => [l.id, l]));
+    const dripTypeMap = {
+        buyer_drip: "buyer_drip",
+        seller_drip: "seller_drip",
+    };
+    res.json({
+        sequences: sequences.map((s) => {
+            const emailType = dripTypeMap[s.sequenceType];
+            const emails = emailType ? getEmailsForDripType(s.leadId, emailType) : [];
+            return {
+                ...s,
+                leadName: byId.get(s.leadId)?.name || byId.get(s.leadId)?.username || s.leadId,
+                leadEmail: byId.get(s.leadId)?.email,
+                emailsSent: emails,
+            };
+        }),
+    });
+});
+app.get("/api/email/inbox", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { getCachedGmailMessages } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    const limit = parseInt(String(req.query.limit || "30"), 10) || 30;
+    res.json({ messages: getCachedGmailMessages(limit) });
+});
+app.post("/api/email/sync-gmail", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    try {
+        const { syncGmailInbox } = await Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/gmailSync.js")));
+        const result = await syncGmailInbox();
+        res.json({ success: true, ...result });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ success: false, error: message });
+    }
+});
+app.get("/api/email/gmail/:messageId", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    try {
+        const { getGmailMessage } = await Promise.resolve().then(() => __importStar(require("./integrations/gmail/inbox.js")));
+        const { getCachedGmailMessage, cacheGmailMessage } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+        const msg = await getGmailMessage(req.params.messageId);
+        const now = new Date().toISOString();
+        cacheGmailMessage({
+            id: msg.id,
+            threadId: msg.threadId,
+            direction: msg.direction,
+            fromAddr: msg.from,
+            toAddr: msg.to,
+            subject: msg.subject,
+            snippet: msg.snippet,
+            body: msg.bodyText,
+            receivedAt: msg.date,
+            syncedAt: now,
+        });
+        const cached = getCachedGmailMessage(msg.id);
+        res.json({ message: msg, cached });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+    }
+});
+app.post("/api/memory/extract-voice", express_1.default.json({ limit: "512kb" }), async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const transcript = Array.isArray(req.body?.transcript) ? req.body.transcript : [];
+    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId : "voice";
+    await (0, index_js_17.runPostConversationExtraction)(sessionId, transcript.map((t) => ({
+        role: String(t.role || "user"),
+        text: String(t.text || ""),
+    })));
+    (0, index_js_17.broadcastHullEvent)({ type: "memory_updated" });
+    res.json({ ok: true });
+});
+/** Harvey memory search — hybrid retrieval. */
+app.get("/api/jarvis/memory/search", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
         return;
     }
     const q = typeof req.query.q === "string" ? req.query.q : "";
-    const results = (0, retrieval_js_1.retrieveMemories)(q);
+    const { searchFacts } = await Promise.resolve().then(() => __importStar(require("./hull/memory/retrieval.js")));
+    const results = await searchFacts(q, 10);
     res.json(results);
 });
-/** Harvey memory — add semantic fact. */
-app.post("/api/jarvis/memory/add", express_1.default.json(), (req, res) => {
+/** Harvey memory — add fact. */
+app.post("/api/jarvis/memory/add", express_1.default.json(), async (req, res) => {
     if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const fact = typeof req.body?.fact === "string" ? req.body.fact.trim() : "";
+    const content = typeof req.body?.fact === "string" ? req.body.fact.trim() : "";
     const category = typeof req.body?.category === "string" ? req.body.category.trim() : "business";
-    const tags = typeof req.body?.tags === "string" ? req.body.tags.trim() : "";
-    const weight = typeof req.body?.weight === "number" ? req.body.weight : 1.0;
-    if (!fact) {
+    const keywords = typeof req.body?.tags === "string" ? req.body.tags.trim() : "";
+    const strength = typeof req.body?.weight === "number" ? req.body.weight : 1.0;
+    if (!content) {
         res.status(400).json({ error: "Missing fact" });
         return;
     }
-    const db = (0, store_js_1.getMemoryDb)();
+    const db = (0, index_js_17.getHullDb)();
     const id = (0, crypto_1.randomUUID)();
     const now = new Date().toISOString();
-    db.prepare(`INSERT INTO harvey_semantic (id, fact, category, tags, confidence, access_count, last_accessed, created_at, weight)
-     VALUES (?, ?, ?, ?, 1.0, 0, ?, ?, ?)`).run(id, fact, category, tags, now, now, weight);
-    res.status(201).json({ id, fact, category, tags, weight });
+    db.prepare(`INSERT INTO facts (id, content, category, keywords, strength, access_count, last_accessed, created_at)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?)`).run(id, content, category, keywords, strength, now, now);
+    (0, index_js_17.broadcastHullEvent)({ type: "memory_updated" });
+    res.status(201).json({ id, content, category, keywords, strength });
 });
-/** Harvey memory — delete any memory row by id. */
+/** Delete memory row by id across hull tables. */
 app.delete("/api/jarvis/memory/:id", (req, res) => {
     if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        res.status(401).json({ error: "Unauthorized" });
         return;
     }
     const id = String(req.params.id || "").trim();
@@ -1787,8 +2179,8 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
         res.status(400).json({ error: "Missing id" });
         return;
     }
-    const db = (0, store_js_1.getMemoryDb)();
-    const tables = ["harvey_semantic", "harvey_relational", "harvey_procedural", "harvey_episodes"];
+    const db = (0, index_js_17.getHullDb)();
+    const tables = ["facts", "nodes", "edges", "rules", "episodes", "syntheses", "identity_questions"];
     let deleted = false;
     for (const table of tables) {
         const result = db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
@@ -1799,64 +2191,60 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
         res.status(404).json({ error: "Memory not found" });
         return;
     }
+    (0, index_js_17.broadcastHullEvent)({ type: "memory_updated" });
     res.status(200).json({ ok: true, id });
 });
-/** Gemini TTS — speak Claude text responses via REST. */
-app.post("/api/jarvis/gemini-tts", express_1.default.json({ limit: "256kb" }), async (req, res) => {
-    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
-    console.log("[GeminiTTS] Request received, text length:", text.length);
-    console.log("[GeminiTTS] GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY);
+/** Gemini TTS — Aethon mouth (director's notes + Charon). */
+app.post("/api/jarvis/voice", express_1.default.json({ limit: "256kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        res.status(401).json({ error: "Unauthorized" });
         return;
     }
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
     if (!text) {
         res.status(400).json({ error: "Missing text" });
         return;
     }
-    const key = geminiApiKey();
-    if (!key) {
-        res.status(500).json({ error: "GEMINI_API_KEY not configured" });
-        return;
-    }
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=${key}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text }] }],
-                generationConfig: {
-                    responseModalities: ["AUDIO"],
-                    speechConfig: {
-                        voiceConfig: {
-                            prebuiltVoiceConfig: { voiceName: "Charon" },
-                        },
-                    },
-                },
-            }),
-        });
-        const data = (await response.json());
-        console.log("[GeminiTTS] Gemini response status:", response.status);
-        if (!response.ok) {
-            const msg = data.error?.message || response.statusText || "Gemini TTS failed";
-            console.log("[GeminiTTS] Response has audio:", false);
-            res.status(502).json({ error: msg });
+        const audio = await (0, index_js_17.generateTTS)(text);
+        if (!audio) {
+            res.status(502).json({ error: "TTS failed" });
             return;
         }
-        const audioBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        console.log("[GeminiTTS] Response has audio:", !!audioBase64);
-        if (!audioBase64) {
-            res.status(500).json({ error: "No audio returned" });
-            return;
-        }
-        const audioBuffer = Buffer.from(audioBase64, "base64");
-        res.setHeader("Content-Type", "audio/wav");
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("X-Sample-Rate", String(audio.sampleRate));
         res.setHeader("Cache-Control", "no-store");
-        res.status(200).send(audioBuffer);
+        res.status(200).send(audio.pcm);
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error("[jarvis/gemini-tts]", message);
+        res.status(502).json({ error: message });
+    }
+});
+/** Legacy alias — gemini-tts → hull TTS. */
+app.post("/api/jarvis/gemini-tts", express_1.default.json({ limit: "256kb" }), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    if (!text) {
+        res.status(400).json({ error: "Missing text" });
+        return;
+    }
+    try {
+        const audio = await (0, index_js_17.generateTTS)(text);
+        if (!audio) {
+            res.status(502).json({ error: "TTS failed" });
+            return;
+        }
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("X-Sample-Rate", String(audio.sampleRate));
+        res.setHeader("Cache-Control", "no-store");
+        res.status(200).send(audio.pcm);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         res.status(502).json({ error: message });
     }
 });
@@ -1900,7 +2288,7 @@ app.post("/reset", resetCors, (_req, res) => {
 });
 app.post("/sinch/inbound", express_1.default.json(), async (req, res) => {
     try {
-        const payload = (0, index_js_12.receiveInbound)(req.body);
+        const payload = (0, index_js_13.receiveInbound)(req.body);
         if (!payload) {
             res.status(400).json({ error: "Invalid or unparseable Sinch inbound payload" });
             return;
@@ -1924,7 +2312,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const signature = req.get("x-twilio-signature") ?? "";
         const protocol = req.get("x-forwarded-proto") || req.protocol;
         const url = `${protocol}://${req.get("host")}${req.originalUrl}`;
-        if (signature && !(0, index_js_13.validateTwilioSignature)(signature, url, req.body)) {
+        if (signature && !(0, index_js_14.validateTwilioSignature)(signature, url, req.body)) {
             console.warn("[Twilio Webhook] Invalid signature — rejecting");
             res.status(403).send("Invalid signature");
             return;
@@ -1933,7 +2321,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const from = typeof req.body?.From === "string" ? req.body.From.trim() : "";
         const message = typeof req.body?.Body === "string" ? req.body.Body.trim() : "";
         console.log("[Twilio Webhook] Inbound from", from, "- body:", message.substring(0, 100));
-        if (messageSid && ((0, smsStore_js_1.isMessageHandleSeen)(messageSid) || !(0, index_js_13.claimTwilioInboundSid)(messageSid))) {
+        if (messageSid && ((0, smsStore_js_1.isMessageHandleSeen)(messageSid) || !(0, index_js_14.claimTwilioInboundSid)(messageSid))) {
             console.log("[Twilio Webhook] Duplicate message, ignoring:", messageSid);
             res.status(200).send("");
             return;
@@ -1945,8 +2333,8 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const inspectionConfirmation = (0, inspectionFlow_js_1.checkInspectionConfirmation)(from, message);
         if (inspectionConfirmation.handled && inspectionConfirmation.replyMessage?.trim()) {
             const replyText = inspectionConfirmation.replyMessage.trim();
-            if ((0, index_js_13.isTwilioConfigured)()) {
-                const send = await (0, index_js_13.sendTwilioMessage)({ to: from, content: replyText });
+            if ((0, index_js_14.isTwilioConfigured)()) {
+                const send = await (0, index_js_14.sendTwilioMessage)({ to: from, content: replyText });
                 if (!send.success) {
                     console.error("[Twilio] inspection confirmation reply failed:", send.error);
                 }
@@ -1978,14 +2366,14 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         if (firstName) {
             console.log("[InboundSMS] Lead", lead.id, "first name available for greeting:", firstName);
         }
-        const confirmationResult = await (0, index_js_16.checkShowingConfirmation)(lead, message);
+        const confirmationResult = await (0, index_js_18.checkShowingConfirmation)(lead, message);
         if (confirmationResult.handled && confirmationResult.replyMessage.trim()) {
             const replyText = confirmationResult.replyMessage.trim();
             if (message) {
                 await (0, db_js_1.appendMessage)(lead.id, "user", message);
             }
-            if ((0, index_js_13.isTwilioConfigured)() && lead.phone) {
-                const send = await (0, index_js_13.sendTwilioMessage)({ to: lead.phone, content: replyText });
+            if ((0, index_js_14.isTwilioConfigured)() && lead.phone) {
+                const send = await (0, index_js_14.sendTwilioMessage)({ to: lead.phone, content: replyText });
                 if (!send.success) {
                     console.error("[Twilio] showing confirmation reply failed:", send.error);
                 }
@@ -2012,9 +2400,9 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
             res.status(200).send("");
             return;
         }
-        await (0, index_js_16.checkPostShowingFeedback)(lead, message);
+        await (0, index_js_18.checkPostShowingFeedback)(lead, message);
         let activeLead = (await (0, db_js_1.getLeadById)(lead.id)) ?? lead;
-        if ((0, index_js_17.isMojoLead)(activeLead) &&
+        if ((0, index_js_19.isMojoLead)(activeLead) &&
             activeLead.mojoOutreach &&
             (activeLead.mojoOutreach.status === "active" || activeLead.mojoOutreach.status === "paused")) {
             await (0, db_js_1.updateLeadCrmFields)({
@@ -2023,7 +2411,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
             });
             activeLead = (await (0, db_js_1.getLeadById)(activeLead.id)) ?? activeLead;
         }
-        const escalation = (0, index_js_18.detectConversationEscalation)(message);
+        const escalation = (0, index_js_20.detectConversationEscalation)(message);
         if (escalation.triggered && escalation.type) {
             await (0, db_js_1.updateLeadCrmFields)({
                 leadId: activeLead.id,
@@ -2031,13 +2419,13 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
                 automationPausedReason: escalation.type,
                 automationPausedAt: new Date().toISOString(),
             });
-            await (0, index_js_18.notifyMarcoOfConversationEscalation)(activeLead, escalation.type, message);
+            await (0, index_js_20.notifyMarcoOfConversationEscalation)(activeLead, escalation.type, message);
             if (escalation.type === "angry_client" &&
                 escalation.holdMessage &&
-                (0, index_js_13.isTwilioConfigured)() &&
+                (0, index_js_14.isTwilioConfigured)() &&
                 activeLead.phone) {
                 const holdText = escalation.holdMessage;
-                const send = await (0, index_js_13.sendTwilioMessage)({ to: activeLead.phone, content: holdText });
+                const send = await (0, index_js_14.sendTwilioMessage)({ to: activeLead.phone, content: holdText });
                 if (!send.success) {
                     console.error("[ConvEscalation] empathy hold send failed:", send.error);
                 }
@@ -2075,9 +2463,9 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
         const correlationId = (0, marcoLog_js_1.marcoCorrelationId)(payload.platform, payload.userId);
         const result = await (0, webhook_js_1.handleIncomingPayload)(payload, { requestId, correlationId });
-        if (result.reply?.trim() && (0, index_js_13.isTwilioConfigured)()) {
+        if (result.reply?.trim() && (0, index_js_14.isTwilioConfigured)()) {
             const replyText = result.reply.trim();
-            const send = await (0, index_js_13.sendTwilioMessage)({ to: activeLead.phone, content: replyText });
+            const send = await (0, index_js_14.sendTwilioMessage)({ to: activeLead.phone, content: replyText });
             if (!send.success) {
                 console.error("[Twilio] outbound after pipeline failed:", send.error);
             }
@@ -2114,7 +2502,7 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    if (!(0, index_js_13.isTwilioConfigured)()) {
+    if (!(0, index_js_14.isTwilioConfigured)()) {
         res.status(503).json({
             error: "Twilio not configured",
             hint: "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER on the server",
@@ -2145,11 +2533,11 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
                 res.status(400).json({ error: "Lead has no phone number" });
                 return;
             }
-            to = (0, index_js_13.normalizeToUsE164)(lead.phone);
+            to = (0, index_js_14.normalizeToUsE164)(lead.phone);
             threadLeadId = lead.id;
         }
         else {
-            to = (0, index_js_13.normalizeToUsE164)(toRaw);
+            to = (0, index_js_14.normalizeToUsE164)(toRaw);
             const digits = to.replace(/\D/g, "");
             if (digits.length < 10) {
                 res.status(400).json({ error: "Invalid phone number" });
@@ -2159,7 +2547,7 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
             if (matched)
                 threadLeadId = matched.id;
         }
-        const send = await (0, index_js_13.sendTwilioMessage)({ to, content });
+        const send = await (0, index_js_14.sendTwilioMessage)({ to, content });
         if (!send.success) {
             res.status(502).json({ error: send.error });
             return;
@@ -2191,10 +2579,10 @@ async function sendLeadText(leadId, content, threadType = "general") {
     const lead = await (0, db_js_1.getLeadById)(leadId);
     if (!lead?.phone?.trim())
         return { ok: false, error: "Lead has no phone number" };
-    if (!(0, index_js_13.isTwilioConfigured)())
+    if (!(0, index_js_14.isTwilioConfigured)())
         return { ok: false, error: "Twilio not configured" };
-    const to = (0, index_js_13.normalizeToUsE164)(lead.phone);
-    const send = await (0, index_js_13.sendTwilioMessage)({ to, content });
+    const to = (0, index_js_14.normalizeToUsE164)(lead.phone);
+    const send = await (0, index_js_14.sendTwilioMessage)({ to, content });
     if (!send.success)
         return { ok: false, error: send.error };
     await (0, db_js_1.appendMessage)(leadId, "assistant", content);
@@ -2803,7 +3191,8 @@ app.post("/api/auto-plans/execute-due-steps", async (req, res) => {
 });
 /* ===================== Tasks ===================== */
 const TASK_PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
-const TASK_STATUSES = new Set(["pending", "in_progress", "completed", "cancelled"]);
+const TASK_STATUSES = new Set(types_js_2.CRM_TASK_STATUSES);
+const COMMAND_STATUS_SET = new Set(types_js_2.COMMAND_TASK_STATUSES);
 const TASK_TYPES = new Set(["call", "text", "email", "appointment", "follow_up", "other"]);
 const TASK_SOURCES = new Set(["manual", "auto_plan", "dial_session", "automation"]);
 function taskUserCanDelete(req) {
@@ -2869,17 +3258,24 @@ function parseRecurringInterval(raw) {
 }
 function commandTaskCounts() {
     const all = (0, db_js_1.getCommandTasks)();
-    const pending = all.filter((t) => t.status === "pending");
+    const active = all.filter((t) => t.status !== "done");
     return {
-        urgent: pending.filter((t) => t.column === "urgent").length,
-        today: pending.filter((t) => t.column === "today").length,
-        tomorrow: pending.filter((t) => t.column === "tomorrow").length,
-        this_week: pending.filter((t) => t.column === "this_week").length,
-        this_month: pending.filter((t) => t.column === "this_month").length,
-        total_pending: pending.length,
+        urgent: active.filter((t) => t.column === "urgent").length,
+        today: active.filter((t) => t.column === "today").length,
+        tomorrow: active.filter((t) => t.column === "tomorrow").length,
+        this_week: active.filter((t) => t.column === "this_week").length,
+        this_month: active.filter((t) => t.column === "this_month").length,
+        total_pending: active.length,
         total_done: all.filter((t) => t.status === "done").length,
     };
 }
+const COMMAND_STATUS_SORT = {
+    overdue: 0,
+    due_soon: 1,
+    pending: 2,
+    on_hold: 3,
+    done: 4,
+};
 /** Carlos command-center task board (db.json). */
 app.get("/api/tasks", (req, res) => {
     (0, db_js_1.seedCommandTasksIfEmpty)();
@@ -2897,10 +3293,10 @@ app.get("/api/tasks", (req, res) => {
         tasks = tasks.filter((t) => t.assignedTo === assignedTo);
     }
     tasks.sort((a, b) => {
-        if (a.status === "pending" && b.status === "done")
-            return -1;
-        if (a.status === "done" && b.status === "pending")
-            return 1;
+        const sa = COMMAND_STATUS_SORT[a.status] ?? 2;
+        const sb = COMMAND_STATUS_SORT[b.status] ?? 2;
+        if (sa !== sb)
+            return sa - sb;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
     res.json({ tasks, counts: commandTaskCounts() });
@@ -2948,8 +3344,10 @@ app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res)
         updates.description = body.description;
     if (body.column && COMMAND_COLUMNS.has(body.column))
         updates.column = body.column;
-    if (body.status === "pending" || body.status === "done")
+    if (body.status && COMMAND_STATUS_SET.has(body.status)) {
         updates.status = body.status;
+        updates.previousStatus = undefined;
+    }
     if (body.color && COMMAND_COLORS.has(body.color))
         updates.color = body.color;
     if (typeof body.recurring === "boolean")
@@ -3030,8 +3428,10 @@ app.patch("/api/crm-tasks/:id", express_1.default.json({ limit: "1mb" }), (req, 
         updates.dueTime = body.dueTime;
     if (TASK_PRIORITIES.has(body.priority))
         updates.priority = body.priority;
-    if (TASK_STATUSES.has(body.status))
+    if (TASK_STATUSES.has(body.status)) {
         updates.status = body.status;
+        updates.previousStatus = undefined;
+    }
     if (TASK_TYPES.has(body.type))
         updates.type = body.type;
     if (typeof body.leadId === "string")
@@ -3328,6 +3728,9 @@ app.patch("/api/transactions/:id", express_1.default.json(), (req, res) => {
         res.status(404).json({ error: "Not found" });
         return;
     }
+    if (body.status === "closed" || tx.status === "closed") {
+        void (0, index_js_12.tryRecordCommissionForClosedDeal)(tx);
+    }
     res.json({ transaction: tx });
 });
 app.delete("/api/transactions/:id", (req, res) => {
@@ -3432,7 +3835,7 @@ app.post("/api/transactions/:id/inspection/schedule", express_1.default.json(), 
         if (!contact.phone?.trim())
             continue;
         const message = `Inspection scheduled for ${tx.address} on ${scheduledTimeStr}. Reply YES to confirm.`;
-        const result = await (0, index_js_13.sendTwilioMessage)(contact.phone, message);
+        const result = await (0, index_js_14.sendTwilioMessage)(contact.phone, message);
         if (result.success)
             notified++;
     }
@@ -3530,7 +3933,7 @@ app.post("/api/transactions/:id/final-week/walkthrough", express_1.default.json(
         timeZone: "America/Chicago",
     });
     if (tx.parties.buyerPhone) {
-        await (0, index_js_13.sendTwilioMessage)(tx.parties.buyerPhone, `Final walkthrough for ${tx.address} scheduled for ${timeStr}. Reply YES to confirm.`);
+        await (0, index_js_14.sendTwilioMessage)(tx.parties.buyerPhone, `Final walkthrough for ${tx.address} scheduled for ${timeStr}. Reply YES to confirm.`);
     }
     res.json({ transaction: (0, transactionsStore_js_1.getTransaction)(id) });
 });
@@ -3791,6 +4194,385 @@ app.post("/api/lead-nurture/route/:leadId", async (req, res) => {
     }
     await (0, sourceRouting_js_1.routeNewLead)(lead);
     res.json({ success: true });
+});
+app.get("/api/lead-nurture/summary", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const hot = (0, leadScoreStore_js_1.getLeadsByTier)("hot").sort((a, b) => b.score - a.score);
+    const warm = (0, leadScoreStore_js_1.getLeadsByTier)("warm");
+    const cold = (0, leadScoreStore_js_1.getLeadsByTier)("cold");
+    const all = await (0, db_js_1.listAllLeads)();
+    const leadMap = new Map(all.map((l) => [l.id, l]));
+    const scoredIds = new Set([...hot, ...warm, ...cold].map((s) => s.leadId));
+    const unscored = all.length - scoredIds.size;
+    const sinceIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const recentScoreChanges = (0, leadScoreStore_js_1.getScoreEntriesSince)(sinceIso)
+        .filter((s) => s.previousScore != null && s.score !== s.previousScore)
+        .sort((a, b) => new Date(b.scoreDate).getTime() - new Date(a.scoreDate).getTime())
+        .slice(0, 12)
+        .map((s) => {
+        const lead = leadMap.get(s.leadId);
+        return {
+            leadId: s.leadId,
+            name: lead?.name || lead?.username || "Unknown",
+            score: s.score,
+            previousScore: s.previousScore,
+            delta: s.score - (s.previousScore ?? 0),
+            tier: s.tier,
+            scoreDate: s.scoreDate,
+        };
+    });
+    const top = hot[0];
+    const topLead = top ? leadMap.get(top.leadId) : undefined;
+    const topHotLead = top
+        ? {
+            ...top,
+            name: topLead?.name || topLead?.username || "Unknown",
+            phone: topLead?.phone || null,
+        }
+        : null;
+    res.json({
+        hotCount: hot.length,
+        warmCount: warm.length,
+        coldCount: cold.length,
+        unscoredCount: Math.max(0, unscored),
+        totalLeads: all.length,
+        topHotLead,
+        recentScoreChanges,
+    });
+});
+app.get("/api/lead-nurture/tier-detail/:tier", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tier = req.params.tier;
+    if (!["hot", "warm", "cold"].includes(tier)) {
+        res.status(400).json({ error: "Invalid tier — must be hot, warm, or cold" });
+        return;
+    }
+    const scoreEntries = (0, leadScoreStore_js_1.getLeadsByTier)(tier);
+    const leads = await (0, db_js_1.listAllLeads)();
+    const leadMap = new Map(leads.map((l) => [l.id, l]));
+    const enriched = scoreEntries
+        .map((s) => {
+        const lead = leadMap.get(s.leadId);
+        const inboundReplyCount = (0, smsStore_js_1.getInboundMessageCount)(s.leadId);
+        const propertyViewsCount = typeof lead?.propertyViewsCount === "number" && lead.propertyViewsCount > 0
+            ? lead.propertyViewsCount
+            : (lead?.activity ?? []).filter((a) => ["home_clicked", "home_hearted", "web_visit"].includes(a.type)).length;
+        return {
+            leadId: s.leadId,
+            score: s.score,
+            previousScore: s.previousScore,
+            scoreDate: s.scoreDate,
+            scoringFactors: s.scoringFactors,
+            factorMax: { timeline: 25, preApproval: 25, responseCount: 20, propertyViews: 15, showingRequests: 15 },
+            tier: s.tier,
+            name: lead?.name || lead?.username || "Unknown",
+            phone: lead?.phone || null,
+            email: lead?.email || null,
+            source: lead?.source || null,
+            crmIntent: lead?.crmIntent || null,
+            preApprovalStatus: lead?.preApprovalStatus || null,
+            timeline: lead?.criteria?.timeline || null,
+            inboundReplyCount,
+            propertyViewsCount,
+            automationPaused: lead?.automationPaused || false,
+            sourceRoutingCompletedAt: lead?.sourceRoutingCompletedAt || null,
+            showingAppointment: lead?.showingAppointment || null,
+        };
+    })
+        .sort((a, b) => b.score - a.score);
+    res.json({ tier, count: enriched.length, leads: enriched });
+});
+app.get("/api/lead-nurture/recently-routed", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const leads = await (0, db_js_1.listAllLeads)();
+    const norm = (s) => (s ?? "").trim().toLowerCase();
+    const sourceActivity = {
+        mojo: leads.some((l) => norm(l.source) === "mojo"),
+        social: leads.some((l) => ["instagram", "tiktok"].includes(norm(l.source))),
+        web_form: leads.some((l) => norm(l.source) === "web_form"),
+        referral: leads.some((l) => norm(l.source) === "referral"),
+    };
+    const routed = leads
+        .filter((l) => l.sourceRoutingCompletedAt)
+        .sort((a, b) => new Date(b.sourceRoutingCompletedAt).getTime() -
+        new Date(a.sourceRoutingCompletedAt).getTime())
+        .slice(0, 20)
+        .map((l) => ({
+        leadId: l.id,
+        name: l.name || l.username || "Unknown",
+        source: l.source,
+        phone: l.phone,
+        routedAt: l.sourceRoutingCompletedAt,
+    }));
+    res.json({ routed, sourceActivity });
+});
+/* ===================== Reporting (Harvey digest / KPI) ===================== */
+app.post("/api/reporting/digest-now", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const result = await (0, dailyDigest_js_1.runDailyDigest)();
+    await (0, dailyDigest_js_1.deliverDigest)(result.snapshotId);
+    res.json(result);
+});
+app.post("/api/reporting/weekly-kpi-now", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const result = await (0, weeklyKPI_js_1.runWeeklyKPI)();
+    res.json(result);
+});
+app.get("/api/reporting/latest-digest", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json({ snapshot: (0, reportingStore_js_1.getLatestSnapshot)("daily_digest") });
+});
+app.get("/api/reporting/latest-kpi", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json({ snapshot: (0, reportingStore_js_1.getLatestSnapshot)("weekly_kpi") });
+});
+app.get("/api/reporting/anomalies", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const snapshot = (0, reportingStore_js_1.getLatestSnapshot)("daily_digest");
+    res.json({ anomalies: snapshot?.anomalies || [], generatedAt: snapshot?.generatedAt || null });
+});
+app.get("/api/reporting/digest-history", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const limit = parseInt(String(req.query.limit || "14"), 10) || 14;
+    const snapshots = (0, reportingStore_js_1.getSnapshotsByType)("daily_digest", limit);
+    res.json({
+        snapshots: snapshots.map((s) => ({
+            snapshotDate: s.snapshotDate,
+            generatedAt: s.generatedAt,
+            data: s.data,
+            anomalyCount: (s.anomalies || []).length,
+            deliveredSms: s.deliveredSms,
+            deliveredHarvey: s.deliveredHarvey,
+        })),
+    });
+});
+app.get("/api/reporting/kpi-history", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const limit = parseInt(String(req.query.limit || "8"), 10) || 8;
+    const snapshots = (0, reportingStore_js_1.getSnapshotsByType)("weekly_kpi", limit);
+    res.json({
+        snapshots: snapshots.map((s) => ({
+            snapshotDate: s.snapshotDate,
+            generatedAt: s.generatedAt,
+            data: s.data,
+        })),
+    });
+});
+/* ===================== Finance (GCI / expenses / pace) ===================== */
+app.get("/api/finance/commissions", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    res.json({ commissions: (0, financeStore_js_1.getAllCommissions)(since) });
+});
+app.post("/api/finance/commissions", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const salePrice = Number(body.salePrice);
+    const address = typeof body.address === "string" ? body.address.trim() : "";
+    if (!address || !Number.isFinite(salePrice) || salePrice <= 0) {
+        res.status(400).json({ error: "address and salePrice are required" });
+        return;
+    }
+    const commission = (0, financeStore_js_1.createCommission)({
+        dealId: typeof body.dealId === "string" ? body.dealId : undefined,
+        address,
+        salePrice,
+        grossCommissionPct: body.grossCommissionPct != null ? Number(body.grossCommissionPct) : undefined,
+        dealType: (body.dealType === "seller" ? "seller" : "buyer"),
+        leadSource: typeof body.leadSource === "string" ? body.leadSource : undefined,
+        leadId: typeof body.leadId === "string" ? body.leadId : undefined,
+        closedAt: typeof body.closedAt === "string"
+            ? body.closedAt
+            : new Date().toISOString().split("T")[0],
+        brokerageSplitPct: body.brokerageSplitPct != null ? Number(body.brokerageSplitPct) : undefined,
+    });
+    res.json({ commission });
+});
+app.get("/api/finance/expenses", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const since = typeof req.query.since === "string" ? req.query.since : undefined;
+    res.json({ expenses: (0, financeStore_js_1.getAllExpenses)(since) });
+});
+app.post("/api/finance/expenses", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const amount = Number(body.amount);
+    const category = typeof body.category === "string" ? body.category : "";
+    const validCategories = [
+        "marketing",
+        "lead_gen",
+        "tools_subscriptions",
+        "transaction_costs",
+        "other",
+    ];
+    if (!validCategories.includes(category) || !Number.isFinite(amount) || amount <= 0) {
+        res.status(400).json({ error: "category and positive amount are required" });
+        return;
+    }
+    const expense = (0, financeStore_js_1.createExpense)({
+        category: category,
+        subcategory: typeof body.subcategory === "string" ? body.subcategory : undefined,
+        vendor: typeof body.vendor === "string" ? body.vendor : undefined,
+        description: typeof body.description === "string" ? body.description : undefined,
+        amount,
+        dealId: typeof body.dealId === "string" ? body.dealId : undefined,
+        leadSource: typeof body.leadSource === "string" ? body.leadSource : undefined,
+        expenseDate: typeof body.expenseDate === "string"
+            ? body.expenseDate
+            : new Date().toISOString().split("T")[0],
+    });
+    res.json({ expense });
+});
+app.get("/api/finance/gci", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json((0, financeStore_js_1.getGCISummary)());
+});
+app.get("/api/finance/expense-summary", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json(await (0, financeStore_js_1.getExpenseSummary)());
+});
+app.get("/api/finance/projection", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json((0, financeStore_js_1.generatePipelineProjection)());
+});
+app.get("/api/finance/pace-status", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json((0, index_js_12.getCurrentPaceStatus)());
+});
+app.post("/api/finance/sync", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const commissions = await (0, index_js_12.syncCommissionsFromClosedTransactions)();
+    const projection = (0, financeStore_js_1.generatePipelineProjection)();
+    res.json({
+        commissions,
+        pipelineDeals: projection.dealCount,
+        projectionWeightedGCI: projection.totalWeightedGCI,
+        syncedAt: new Date().toISOString(),
+    });
+});
+app.get("/api/finance/alerts", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const limit = parseInt(String(req.query.limit || "30"), 10) || 30;
+    res.json({ alerts: (0, financeStore_js_1.getFinanceAlerts)(limit) });
+});
+app.post("/api/finance/alerts/:id/acknowledge", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const id = parseInt(String(req.params.id), 10);
+    if (!id) {
+        res.status(400).json({ error: "Invalid alert id" });
+        return;
+    }
+    (0, financeStore_js_1.acknowledgeFinanceAlert)(id);
+    res.json({ success: true });
+});
+app.get("/api/finance/weekly-summary-preview", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json(await (0, index_js_12.buildWeeklyFinanceSummaryData)());
+});
+app.get("/api/finance/monthly-report-preview", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json(await (0, index_js_12.buildMonthlyCloseReportData)());
+});
+app.post("/api/finance/weekly-summary-now", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const result = await (0, index_js_12.runWeeklyFinanceSummary)();
+    res.json(result);
+});
+app.post("/api/finance/monthly-report-now", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const result = await (0, index_js_12.runMonthlyCloseReport)();
+    res.json(result);
+});
+app.post("/api/finance/pace-check-now", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const result = await (0, index_js_12.runPaceCheck)();
+    res.json(result);
+});
+app.post("/api/finance/expense-spike-check-now", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const result = await (0, index_js_12.runExpenseSpikeCheck)();
+    res.json(result);
 });
 app.post("/api/transactions/:id/documents", express_1.default.json(), (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -4211,6 +4993,27 @@ app.post("/api/leads/:id/documents/:docId/sign", async (req, res) => {
 /** Serve other public assets (CRM modules, etc.) after explicit routes. */
 app.use(express_1.default.static(publicDir, { index: false }));
 const httpServer = http_1.default.createServer(app);
+const hullWss = new ws_1.WebSocketServer({ noServer: true });
+hullWss.on("connection", (ws) => {
+    (0, index_js_17.registerHullWs)(ws);
+});
+httpServer.on("upgrade", (request, socket, head) => {
+    if ((0, deepgramProxy_js_1.handleDeepgramUpgrade)(request, socket, head, dashboardTokenOkIncoming))
+        return;
+    const url = request.url || "";
+    if (url.startsWith("/ws")) {
+        if (!dashboardTokenOkIncoming(request)) {
+            socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+            socket.destroy();
+            return;
+        }
+        hullWss.handleUpgrade(request, socket, head, (ws) => {
+            hullWss.emit("connection", ws, request);
+        });
+        return;
+    }
+    socket.destroy();
+});
 // Scheduled Auto Plan execution — every 24 hours.
 const AUTO_PLAN_INTERVAL_MS = 24 * 60 * 60 * 1000;
 setInterval(() => {
@@ -4242,32 +5045,50 @@ async function ensureSocialDataExists() {
 httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Listening on 0.0.0.0:${PORT}`);
     try {
-        (0, bootstrap_js_1.bootstrapMemory)();
+        (0, index_js_17.initHull)();
     }
     catch (err) {
-        console.error("[Harvey Memory] Bootstrap failed:", err);
+        console.error("[hull] init failed:", err);
     }
-    if (!geminiApiKey()) {
-        console.warn("[Harvey] GEMINI_API_KEY not set — Gemini Live voice will not work");
+    if (!process.env.DEEPGRAM_API_KEY?.trim()) {
+        console.warn("[Harvey] DEEPGRAM_API_KEY not set — Flux voice STT will not work");
     }
     else {
-        console.log("[Harvey] GEMINI_API_KEY configured — Gemini Live voice ready");
+        console.log("[Harvey] DEEPGRAM_API_KEY configured — Flux STT ready");
     }
-    if ((0, index_js_14.isAnthropicApiKeyConfigured)()) {
-        console.log(`[Anthropic] API key present — model ${(0, index_js_14.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
+    if (!geminiApiKey()) {
+        console.warn("[Harvey] GEMINI_API_KEY not set — Gemini TTS will not work");
+    }
+    else {
+        console.log("[Harvey] GEMINI_API_KEY configured — Gemini TTS ready");
+    }
+    if ((0, index_js_15.isAnthropicApiKeyConfigured)()) {
+        console.log(`[Anthropic] API key present — model ${(0, index_js_15.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
     }
     else {
         console.warn("[Anthropic] ANTHROPIC_API_KEY missing — preflight/opening/pipeline skip Haiku and use template fallbacks only.");
     }
+    void Promise.resolve().then(() => __importStar(require("./integrations/email/index.js"))).then(async (m) => {
+        const ok = await m.verifyEmailConnection();
+        if (ok) {
+            void Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/gmailSync.js"))).then((g) => g.syncGmailInbox({ maxResults: 25 }).catch((err) => console.warn("[GmailSync] startup sync failed:", err instanceof Error ? err.message : err)));
+        }
+    });
+    void Promise.resolve().then(() => __importStar(require("./agents/finance/index.js"))).then((m) => m.syncCommissionsFromClosedTransactions().catch((err) => console.warn("[Finance] startup commission sync failed:", err instanceof Error ? err.message : err)));
     console.log(`Health:  GET  http://localhost:${PORT}/health`);
     console.log(`Dashboard: GET http://localhost:${PORT}/ (also /dashboard)`);
     console.log(`Social:    GET http://localhost:${PORT}/social`);
+    console.log(`Email Mkt: GET http://localhost:${PORT}/email-marketing`);
+    console.log(`Lead Nurture: GET http://localhost:${PORT}/lead-nurture`);
+    console.log(`Reporting:  GET http://localhost:${PORT}/reporting`);
+    console.log(`Finance:    GET http://localhost:${PORT}/finance`);
     console.log(`Chat demo: GET http://localhost:${PORT}/chat`);
     console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
     console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
-    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_15.getHarveyModel)()})`);
-    console.log(`Harvey voice: POST http://localhost:${PORT}/api/jarvis/gemini-live/token`);
-    console.log(`Harvey TTS:   POST http://localhost:${PORT}/api/jarvis/gemini-tts`);
+    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_16.getHarveyModel)()})`);
+    console.log(`Harvey voice STT: WS   http://localhost:${PORT}/api/jarvis/deepgram/listen`);
+    console.log(`Harvey voice TTS: POST http://localhost:${PORT}/api/jarvis/voice`);
+    console.log(`Neural Map: GET http://localhost:${PORT}/memory`);
     console.log(`Harvey market intel: POST http://localhost:${PORT}/api/jarvis/market-intel`);
     console.log(`Harvey world intel: POST http://localhost:${PORT}/api/jarvis/world-intel`);
     console.log(`Simulate: POST http://localhost:${PORT}/simulate`);

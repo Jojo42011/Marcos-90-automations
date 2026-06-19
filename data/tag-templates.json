@@ -1,0 +1,26 @@
+[
+  {
+    "id": "tag_mpyxh8oy_2y0qvw",
+    "name": "Open House",
+    "color": "#f59e0b",
+    "createdAt": "2026-06-04T03:20:50.241Z"
+  },
+  {
+    "id": "tag_mpyxh8oy_vn4tzr",
+    "name": "DNC",
+    "color": "#ef4444",
+    "createdAt": "2026-06-04T03:20:50.241Z"
+  },
+  {
+    "id": "tag_mpyxh8oy_z1r059",
+    "name": "Investor",
+    "color": "#8b5cf6",
+    "createdAt": "2026-06-04T03:20:50.241Z"
+  },
+  {
+    "id": "tag_mpyxh8oy_zpw7t4",
+    "name": "Referral",
+    "color": "#10b981",
+    "createdAt": "2026-06-04T03:20:50.241Z"
+  }
+]

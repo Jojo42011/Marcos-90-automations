@@ -1,5 +1,9 @@
 import { getSocialDb } from "../../core/socialStore.js";
 
+/**
+ * Legacy morning/evening snapshots stored in social.db (used by morningScan / eveningPull).
+ * Daily digest + weekly KPI use src/core/reportingStore.ts (reporting.db).
+ */
 export interface ReportingSnapshot {
   id?: number;
   type: "morning" | "evening";

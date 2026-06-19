@@ -94,6 +94,14 @@ export function getScoreHistory(leadId: string, limit = 20): LeadScoreEntry[] {
   return rows.map(rowToScore);
 }
 
+export function getScoreEntriesSince(sinceIso: string): LeadScoreEntry[] {
+  const database = getLeadScoreDb();
+  const rows = database
+    .prepare(`SELECT * FROM lead_scores WHERE score_date >= ? ORDER BY score_date ASC`)
+    .all(sinceIso) as Record<string, unknown>[];
+  return rows.map(rowToScore);
+}
+
 export function getLatestScoresForAllLeads(): Map<string, LeadScoreEntry> {
   const database = getLeadScoreDb();
   const rows = database

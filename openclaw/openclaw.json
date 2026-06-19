@@ -1,0 +1,56 @@
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "bind": "lan",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "allowFrom": ["+19804430453", "+17373461943"],
+      "selfChatMode": true
+    }
+  },
+  "plugins": {
+    "entries": {
+      "whatsapp": {
+        "enabled": true
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/data/workspace",
+      "memorySearch": {
+        "enabled": false
+      },
+      "model": {
+        "primary": "harvey-brain/harvey"
+      },
+      "models": {
+        "harvey-brain/harvey": {}
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "harvey-brain": {
+        "baseUrl": "https://marco-90-automation.fly.dev/v1",
+        "apiKey": "harvey",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "harvey",
+            "name": "Harvey Brain"
+          }
+        ]
+      }
+    }
+  }
+}

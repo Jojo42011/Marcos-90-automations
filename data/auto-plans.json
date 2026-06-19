@@ -1,0 +1,162 @@
+[
+  {
+    "name": "Watch plan",
+    "tag": "Watch",
+    "active": true,
+    "steps": [
+      {
+        "id": "step_mpygm62y_vdpvzw",
+        "type": "email",
+        "dayOffset": 1,
+        "content": "Hi [name], just wanted to reach out and introduce myself...",
+        "subject": "Intro email"
+      },
+      {
+        "id": "step_mpygm62y_rc48dq",
+        "type": "text",
+        "dayOffset": 3,
+        "content": "Hey [name], just checking in — any questions about the market?"
+      },
+      {
+        "id": "step_mpygm62y_3h9gay",
+        "type": "email",
+        "dayOffset": 30,
+        "content": "Hi [name], here's what's been happening in your area...",
+        "subject": "Market update"
+      },
+      {
+        "id": "step_mpygm62y_lqhwnd",
+        "type": "task",
+        "dayOffset": 90,
+        "content": "Follow up call with [name] — check if ready to move forward",
+        "assignedTo": "Marco Puga"
+      }
+    ],
+    "id": "plan_mpygm62y_ogfw1u",
+    "createdAt": "2026-06-03T19:28:46.666Z",
+    "updatedAt": "2026-06-03T19:56:01.738Z"
+  },
+  {
+    "name": "Nurture plan",
+    "tag": "Nurture",
+    "active": true,
+    "steps": [
+      {
+        "id": "step_mpygm62y_vwpy6y",
+        "type": "email",
+        "dayOffset": 1,
+        "content": "Hi [name], excited to help you on your real estate journey...",
+        "subject": "Welcome email"
+      },
+      {
+        "id": "step_mpygm62y_iw2evd",
+        "type": "text",
+        "dayOffset": 7,
+        "content": "Hey [name], have you had a chance to look at any properties lately?"
+      },
+      {
+        "id": "step_mpygm62y_21s6qe",
+        "type": "email",
+        "dayOffset": 14,
+        "content": "Hi [name], here are some tips for first-time buyers...",
+        "subject": "Educational content"
+      },
+      {
+        "id": "step_mpygm62y_xip5cg",
+        "type": "task",
+        "dayOffset": 30,
+        "content": "Schedule consultation call with [name]",
+        "assignedTo": "Marco Puga"
+      },
+      {
+        "id": "step_mpygm62y_1r9r9p",
+        "type": "text",
+        "dayOffset": 60,
+        "content": "Hey [name], just thinking of you — still looking to buy?"
+      }
+    ],
+    "id": "plan_mpygm62y_w8aq6e",
+    "createdAt": "2026-06-03T19:28:46.666Z",
+    "updatedAt": "2026-06-03T19:28:46.666Z"
+  },
+  {
+    "name": "Active Buyer plan",
+    "tag": "Active Buyer",
+    "active": true,
+    "steps": [
+      {
+        "id": "step_mpygm62y_ji5mn6",
+        "type": "text",
+        "dayOffset": 0,
+        "content": "Hey [name], let's get you set up with some properties that match what you're looking for"
+      },
+      {
+        "id": "step_mpygm62y_oo8as8",
+        "type": "email",
+        "dayOffset": 1,
+        "content": "Hi [name], here are some homes I think you'll love...",
+        "subject": "Property matches"
+      },
+      {
+        "id": "step_mpygm62y_0zv61x",
+        "type": "task",
+        "dayOffset": 3,
+        "content": "Call [name] to discuss properties sent",
+        "assignedTo": "Marco Puga"
+      },
+      {
+        "id": "step_mpygm62y_phxyem",
+        "type": "text",
+        "dayOffset": 7,
+        "content": "Hey [name], did you get a chance to check out those properties?"
+      },
+      {
+        "id": "step_mpygm62y_ajdijd",
+        "type": "task",
+        "dayOffset": 14,
+        "content": "Schedule showing for [name]",
+        "assignedTo": "Marco Puga"
+      }
+    ],
+    "id": "plan_mpygm62y_l9vs35",
+    "createdAt": "2026-06-03T19:28:46.666Z",
+    "updatedAt": "2026-06-03T19:28:46.666Z"
+  },
+  {
+    "name": "Long-Term plan",
+    "tag": "Long-Term",
+    "active": true,
+    "steps": [
+      {
+        "id": "step_mpygm62y_vennje",
+        "type": "email",
+        "dayOffset": 1,
+        "content": "Hi [name], just wanted to keep you in the loop on what's happening...",
+        "subject": "Stay in touch"
+      },
+      {
+        "id": "step_mpygm62y_m7o6ic",
+        "type": "email",
+        "dayOffset": 30,
+        "content": "Hi [name], here's your monthly real estate update...",
+        "subject": "Monthly market update"
+      },
+      {
+        "id": "step_mpygm62y_5crunt",
+        "type": "text",
+        "dayOffset": 90,
+        "content": "Hey [name], hope all is well — still thinking about making a move?"
+      },
+      {
+        "id": "step_mpygm62y_wjd4ot",
+        "type": "task",
+        "dayOffset": 180,
+        "content": "Quarterly check-in call with [name]",
+        "assignedTo": "Marco Puga"
+      }
+    ],
+    "id": "plan_mpygm62y_yebpst",
+    "createdAt": "2026-06-03T19:28:46.666Z",
+    "updatedAt": "2026-06-03T19:28:46.666Z"
+  }
+]

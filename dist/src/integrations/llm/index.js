@@ -944,7 +944,7 @@ async function generateMarcoPipelineReply(input) {
         postOpeningHints.push("TEXAS_SERVICE_AREA: Lead is searching outside San Antonio or named another Texas area. In Marco's first-person voice: you help buyers across Texas for homes above $600k. One short beat, then continue the thread.");
     }
     if (meta.phoneJustCaptured) {
-        postOpeningHints.push("END_OF_DAY_DELIVERY_ONLY: They just shared their number this turn. Confirm you will text the full breakdown (pricing, specs, similar options if relevant) by END OF DAY today. Never say immediately, right now, right away, sending it now, or any phrase that promises instant delivery.");
+        postOpeningHints.push("PHONE_JUST_CAPTURED: They just shared their number this turn. One short confirm you will get the breakdown over to them. Do not add a fit check, budget question, or needs analysis.");
     }
     const postOpeningPrefix = inboundChannelBlock(inboundChannel) +
         "PHONE_ONLY_DELIVERY: Send breakdowns and listing options by text/SMS to their phone number only. Never ask phone or email, never offer email, never ask for email. If they sent an email, thank them briefly and still get a mobile number to text the packet.\n\n" +
@@ -1064,7 +1064,7 @@ function alternatePipelineReplyFallback(lead, meta, lastAssistant, lastUser, rec
     }
     const pool = [];
     if (meta.phoneJustCaptured) {
-        pool.push(funnelDeterministic_js_1.PHONE_JUST_CAPTURED_REPLY, "Cool. I'll get you the full packet by the end of the day plus a few backups. Once you skim it, text me if you want to chat.");
+        pool.push(funnelDeterministic_js_1.PHONE_JUST_CAPTURED_REPLY);
     }
     if (meta.listSendPromised) {
         pool.push("For sure. I'll text you a list of matching homes. Skim when you can and tell me what you want to tour first.", "I'll fire over a curated list by text. When you've had a skim, text back what you want to see first.");

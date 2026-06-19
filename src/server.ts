@@ -100,6 +100,12 @@ import type {
   TaskSource,
   TaskStatus,
   TaskType,
+  CommandTaskStatus,
+} from "./core/types.js";
+import {
+  CRM_TASK_STATUSES,
+  COMMAND_TASK_STATUSES,
+  MARCO_TASK_STATUSES,
 } from "./core/types.js";
 import {
   buildTasksSummary,
@@ -195,7 +201,35 @@ import {
   getLatestScore,
   getScoreHistory,
   getLeadsByTier,
+  getScoreEntriesSince,
 } from "./core/leadScoreStore.js";
+import { runDailyDigest, deliverDigest } from "./agents/reporting/dailyDigest.js";
+import { runWeeklyKPI } from "./agents/reporting/weeklyKPI.js";
+import { getLatestSnapshot, getSnapshotsByType } from "./core/reportingStore.js";
+import {
+  createCommission,
+  createExpense,
+  getAllCommissions,
+  getAllExpenses,
+  getGCISummary,
+  getExpenseSummary,
+  generatePipelineProjection,
+  getFinanceAlerts,
+  acknowledgeFinanceAlert,
+  type ExpenseCategory,
+  type FinanceDealType,
+} from "./core/financeStore.js";
+import {
+  buildWeeklyFinanceSummaryData,
+  buildMonthlyCloseReportData,
+  getCurrentPaceStatus,
+  runWeeklyFinanceSummary,
+  runMonthlyCloseReport,
+  runPaceCheck,
+  runExpenseSpikeCheck,
+  tryRecordCommissionForClosedDeal,
+  syncCommissionsFromClosedTransactions,
+} from "./agents/finance/index.js";
 import type {
   InspectionFlow,
   FinalWeekFlow,
@@ -236,14 +270,27 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicModel, isAnthropicApiKeyConfigured } from "./integrations/llm/index.js";
 import { fetchAdsSummaryFromUpstream } from "./harvey/adsUpstream.js";
 import { randomUUID } from "crypto";
-import { runHarveyChat, runHarveyOps, getHarveyModel } from "./harvey/index.js";
-import { executeHarveyTool, HARVEY_GEMINI_TOOLS } from "./harvey/tools.js";
+import { runHarveyChat, runHarveyOps, getHarveyModel, runHarveyTool } from "./harvey/index.js";
+import { HARVEY_GEMINI_TOOLS } from "./harvey/tools.js";
+import {
+  initHull,
+  registerHullWs,
+  getHullDb,
+  generateTTS,
+  handleActivation,
+  runPostConversationExtraction,
+  buildMemoryPacketForQuery,
+  broadcastHullEvent,
+} from "./hull/index.js";
+import { handleDeepgramUpgrade } from "./hull/voice/deepgramProxy.js";
+import { WebSocketServer } from "ws";
 import {
   logSmsIfNew,
   logSmsMessage,
   markRepliedAt,
   getThreadForLead,
   isMessageHandleSeen,
+  getInboundMessageCount,
 } from "./core/smsStore.js";
 import { getLeadFirstName } from "./app/inboundReplyHelper.js";
 import {
@@ -259,9 +306,6 @@ import {
   notifyMarcoOfConversationEscalation,
 } from "./agents/conversationEscalations/index.js";
 import { checkTextingAllowed, isWithinTextingHours } from "./core/textingRules.js";
-import { bootstrapMemory } from "./harvey/memory/bootstrap.js";
-import { retrieveMemories } from "./harvey/memory/retrieval.js";
-import { getMemoryDb } from "./harvey/memory/store.js";
 import { newMarcoRequestId, marcoCorrelationId } from "./app/marcoLog.js";
 
 const app = express();
@@ -391,13 +435,50 @@ app.get("/health", (_req, res) => {
     harvey: {
       model: getHarveyModel(),
       api_key_configured: isAnthropicApiKeyConfigured(),
+      hull: "aethon-intelligence",
       voice: {
-        engine: geminiApiKey() ? "gemini-live" : "none",
-        gemini_configured: Boolean(geminiApiKey()),
+        engine: process.env.DEEPGRAM_API_KEY ? "deepgram-flux" : "none",
+        deepgram_configured: Boolean(process.env.DEEPGRAM_API_KEY?.trim()),
+        brain: "claude",
         tts: geminiApiKey() ? "gemini" : "none",
+        gemini_configured: Boolean(geminiApiKey()),
       },
     },
   });
+});
+
+/** OpenClaw — OpenAI-compatible brain endpoint (WhatsApp / messaging gateway). */
+app.post("/v1/chat/completions", express.json({ limit: "256kb" }), async (req, res) => {
+  if (!isAnthropicApiKeyConfigured()) {
+    res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
+    return;
+  }
+  try {
+    const { handleOpenClawChatCompletions } = await import("./hull/openclaw.js");
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const { status, json } = await handleOpenClawChatCompletions(body as Record<string, unknown>);
+    res.status(status).json(json);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[openclaw] /v1/chat/completions", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.post("/v1/sessions/reset", express.json(), async (req, res) => {
+  const sessionId =
+    typeof req.body?.sessionId === "string" && req.body.sessionId.trim()
+      ? req.body.sessionId.trim()
+      : "harvey";
+  const { resetOpenClawSession } = await import("./hull/openclaw.js");
+  resetOpenClawSession(sessionId);
+  res.json({ ok: true, message: "Thread cleared. Memory saved. Fresh start.", sessionId });
+});
+
+app.get("/v1/sessions/:sessionId", async (req, res) => {
+  const sessionId = String(req.params.sessionId || "harvey").trim();
+  const { getOpenClawSession } = await import("./hull/openclaw.js");
+  res.json(getOpenClawSession(sessionId));
 });
 
 app.get("/", (_req, res) => {
@@ -417,12 +498,32 @@ app.get("/jarvis", (_req, res) => {
   res.sendFile(path.join(publicDir, "jarvis.html"));
 });
 
+app.get("/memory", (_req, res) => {
+  res.sendFile(path.join(publicDir, "memory.html"));
+});
+
 app.get("/tasks", (_req, res) => {
   res.sendFile(path.join(publicDir, "tasks.html"));
 });
 
 app.get("/social", (_req, res) => {
   res.sendFile(path.join(publicDir, "social.html"));
+});
+
+app.get("/email-marketing", (_req, res) => {
+  res.sendFile(path.join(publicDir, "email-marketing.html"));
+});
+
+app.get("/lead-nurture", (_req, res) => {
+  res.sendFile(path.join(publicDir, "lead-nurture.html"));
+});
+
+app.get("/reporting", (_req, res) => {
+  res.sendFile(path.join(publicDir, "reporting.html"));
+});
+
+app.get("/finance", (_req, res) => {
+  res.sendFile(path.join(publicDir, "finance.html"));
 });
 
 app.get("/crm-followup-tasks.js", (_req, res) => {
@@ -1379,48 +1480,62 @@ app.post("/api/jarvis/chat", express.json(), async (req, res) => {
   }
 });
 
-/** Gemini Live — WebSocket URL + setup for browser voice session. */
-app.post("/api/jarvis/gemini-live/token", express.json({ limit: "64kb" }), (req, res) => {
-  console.log("[GeminiLive] Token endpoint hit");
-  console.log("[GeminiLive] GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY);
-  console.log("[GeminiLive] GEMINI_API_KEY length:", process.env.GEMINI_API_KEY?.length);
-
+/** Aethon voice command — Claude brain (not Gemini Live). */
+app.post("/api/jarvis/voice/command", express.json({ limit: "64kb" }), async (req, res) => {
   if (!dashboardTokenOk(req)) {
-    console.log("[GeminiLive] Auth failed — unauthorized");
-    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const key = geminiApiKey();
-  if (!key) {
-    console.log("[GeminiLive] GEMINI_API_KEY not configured — returning 500");
-    res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  if (!message) {
+    res.status(400).json({ error: "Missing message" });
     return;
   }
-  const model = "gemini-3.1-flash-live-preview";
-  const voiceName = "Charon";
-  const systemPrompt = trimGeminiSystemPrompt(HARVEY_GEMINI_LIVE_SYSTEM_PROMPT);
-  const wsUrl = `${GEMINI_LIVE_WS}?key=${encodeURIComponent(key)}`;
+  const sessionId =
+    typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
+  try {
+    const result = await runHarveyChat({
+      message,
+      sessionId,
+      deps: harveyDeps(),
+      voiceMode: true,
+    });
+    res.status(200).json({ speech: result.speech, sessionId: result.sessionId });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
+});
 
-  console.log("[GeminiLive] Model being returned:", model);
-  console.log("[GeminiLive] wsUrl prefix:", wsUrl.substring(0, 80));
-  console.log("[GeminiLive] System prompt length:", systemPrompt.length);
-  console.log("[GeminiLive] Voice name:", voiceName);
-  console.log(
-    "[GeminiLive] Tools:",
-    HARVEY_GEMINI_TOOLS.functionDeclarations.length,
-    "functions",
-  );
+/** First-open-of-day activation brief. */
+app.get("/api/jarvis/activation", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const packet = await buildMemoryPacketForQuery("morning activation brief");
+    const text = await handleActivation(packet);
+    res.status(200).json({ text });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
+});
 
-  res.status(200).json({
-    wsUrl,
-    model,
-    systemPrompt,
-    voiceName,
-    tools: HARVEY_GEMINI_TOOLS,
+/** Gemini Live removed — Aethon hull uses Deepgram Flux + Claude + Gemini TTS. */
+app.post("/api/jarvis/gemini-live/token", express.json({ limit: "64kb" }), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  res.status(410).json({
+    error: "Gemini Live removed",
+    hint: "Use Aethon voice pipeline: Deepgram Flux STT + Claude + Gemini TTS via /jarvis",
   });
 });
 
-/** Execute Harvey tools for Gemini Live voice (client relays tool calls server-side). */
+/** Execute Harvey / hull tools (legacy voice tool relay). */
 app.post("/api/jarvis/execute-tool", express.json({ limit: "64kb" }), async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
@@ -1442,7 +1557,7 @@ app.post("/api/jarvis/execute-tool", express.json({ limit: "64kb" }), async (req
   console.log("[Harvey Voice Tool] Executing:", toolName, "input:", JSON.stringify(toolInput));
 
   try {
-    const result = await executeHarveyTool(toolName, toolInput);
+    const result = await runHarveyTool(toolName, toolInput);
     console.log(
       "[Harvey Voice Tool] Result for",
       toolName,
@@ -1875,10 +1990,9 @@ app.post("/api/marco-tasks", express.json({ limit: "64kb" }), (req, res) => {
     body.priority === "high" || body.priority === "medium" || body.priority === "low"
       ? body.priority
       : "medium";
-  const status: MarcoTaskStatus =
-    body.status === "pending" || body.status === "in_progress" || body.status === "done"
-      ? body.status
-      : "pending";
+  const status: MarcoTaskStatus = MARCO_TASK_STATUSES.includes(body.status as MarcoTaskStatus)
+    ? (body.status as MarcoTaskStatus)
+    : "pending";
   const task = createMarcoTask({
     title,
     description: typeof body.description === "string" ? body.description : undefined,
@@ -1904,8 +2018,9 @@ app.patch("/api/marco-tasks/:id", express.json({ limit: "64kb" }), (req, res) =>
   if (body.priority === "high" || body.priority === "medium" || body.priority === "low") {
     updates.priority = body.priority;
   }
-  if (body.status === "pending" || body.status === "in_progress" || body.status === "done") {
-    updates.status = body.status;
+  if (MARCO_TASK_STATUSES.includes(body.status as MarcoTaskStatus)) {
+    updates.status = body.status as MarcoTaskStatus;
+    updates.previousStatus = undefined;
   }
   if (typeof body.createdBy === "string") updates.createdBy = body.createdBy;
   const task = updateMarcoTask(id, updates);
@@ -1932,7 +2047,7 @@ app.post("/api/marco-tasks/:id/complete", express.json({ limit: "16kb" }), (req,
     return;
   }
   const id = String(req.params.id || "").trim();
-  const task = updateMarcoTask(id, { status: "done", completedAt: new Date().toISOString() });
+  const task = updateMarcoTask(id, { status: "done", completedAt: new Date().toISOString(), previousStatus: undefined });
   if (!task) {
     res.status(404).json({ error: "Task not found" });
     return;
@@ -2039,72 +2154,360 @@ app.delete("/api/notes/:id", (req, res) => {
   res.status(ok ? 200 : 404).json({ success: ok });
 });
 
-/** Harvey memory — full state snapshot. */
+function hullMemoryStats(db: ReturnType<typeof getHullDb>) {
+  const facts = (db.prepare("SELECT COUNT(*) as c FROM facts WHERE superseded_by IS NULL").get() as { c: number }).c;
+  const nodes = (db.prepare("SELECT COUNT(*) as c FROM nodes").get() as { c: number }).c;
+  const edges = (db.prepare("SELECT COUNT(*) as c FROM edges").get() as { c: number }).c;
+  const rules = (db.prepare("SELECT COUNT(*) as c FROM rules").get() as { c: number }).c;
+  const episodes = (db.prepare("SELECT COUNT(*) as c FROM episodes").get() as { c: number }).c;
+  const syntheses = (db.prepare("SELECT COUNT(*) as c FROM syntheses").get() as { c: number }).c;
+  return { facts, nodes, edges, rules, episodes, syntheses };
+}
+
+/** Hull memory — full snapshot (legacy /api/jarvis/memory). */
 app.get("/api/jarvis/memory", (req, res) => {
   if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const db = getMemoryDb();
-  const semantic = db
-    .prepare("SELECT * FROM harvey_semantic WHERE superseded_by IS NULL ORDER BY weight DESC LIMIT 50")
-    .all();
-  const relational = db.prepare("SELECT * FROM harvey_relational ORDER BY weight DESC LIMIT 50").all();
-  const procedural = db.prepare("SELECT * FROM harvey_procedural ORDER BY use_count DESC").all();
-  const episodes = db.prepare("SELECT * FROM harvey_episodes ORDER BY timestamp DESC LIMIT 20").all();
+  const db = getHullDb();
   res.json({
-    semantic,
-    relational,
-    procedural,
-    episodes,
-    stats: {
-      semanticCount: semantic.length,
-      relationalCount: relational.length,
-      proceduralCount: procedural.length,
-      episodeCount: episodes.length,
-    },
+    facts: db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC LIMIT 50").all(),
+    nodes: db.prepare("SELECT * FROM nodes ORDER BY created_at DESC LIMIT 50").all(),
+    edges: db.prepare("SELECT * FROM edges ORDER BY created_at DESC LIMIT 50").all(),
+    rules: db.prepare("SELECT * FROM rules ORDER BY confidence DESC LIMIT 50").all(),
+    episodes: db.prepare("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 20").all(),
+    stats: hullMemoryStats(db),
   });
 });
 
-/** Harvey memory — semantic search. */
-app.get("/api/jarvis/memory/search", (req, res) => {
+/** Neural Map API — full combined payload. */
+app.get("/api/memory/all", (req, res) => {
   if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const db = getHullDb();
+  const facts = db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC").all();
+  const nodes = db.prepare("SELECT * FROM nodes").all();
+  const edges = db
+    .prepare(
+      `SELECT e.id, e.source_id, e.target_id, e.relationship, e.strength, e.created_at,
+              s.name as source_name, t.name as target_name
+       FROM edges e JOIN nodes s ON e.source_id = s.id JOIN nodes t ON e.target_id = t.id`,
+    )
+    .all();
+  const rules = db.prepare("SELECT * FROM rules ORDER BY confidence DESC").all();
+  const episodes = db.prepare("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 20").all();
+  const identityProfile = db.prepare("SELECT dimension, confidence FROM identity_dimensions ORDER BY dimension").all();
+  res.json({
+    facts,
+    nodes,
+    edges,
+    rules,
+    episodes,
+    stats: hullMemoryStats(db),
+    identityProfile,
+    lastSync: new Date().toISOString(),
+  });
+});
+
+app.get("/api/memory/graph", (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getHullDb();
+  res.json({
+    nodes: db.prepare("SELECT * FROM nodes").all(),
+    edges: db.prepare("SELECT * FROM edges").all(),
+  });
+});
+
+app.get("/api/memory/episodes", (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getHullDb();
+  res.json(db.prepare("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 20").all());
+});
+
+app.get("/api/memory/rules", (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getHullDb();
+  res.json(db.prepare("SELECT * FROM rules ORDER BY confidence DESC").all());
+});
+
+app.get("/api/memory/identity", (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getHullDb();
+  const profile = db.prepare("SELECT dimension, confidence FROM identity_dimensions ORDER BY dimension").all();
+  const recentQuestions = db
+    .prepare("SELECT dimension, question, asked_at, answered FROM identity_questions ORDER BY asked_at DESC LIMIT 10")
+    .all();
+  res.json({ profile, recentQuestions });
+});
+
+/** Email marketing API */
+app.get("/api/email/recent", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { getRecentEmails } = await import("./core/emailStore.js");
+  res.json({ emails: getRecentEmails(parseInt(String(req.query.limit || "50"), 10) || 50) });
+});
+
+app.get("/api/email/lead/:leadId", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { getEmailsForLead } = await import("./core/emailStore.js");
+  res.json({ emails: getEmailsForLead(req.params.leadId) });
+});
+
+app.get("/api/email/stats", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { getEmailStats, countActiveDripSequences } = await import("./core/emailStore.js");
+  const since =
+    (req.query.since as string) ||
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  res.json({ ...getEmailStats(since), activeSequences: countActiveDripSequences() });
+});
+
+app.get("/api/email/sequences", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { getActiveDripSequences } = await import("./core/emailStore.js");
+  const { listAllLeads } = await import("./core/db.js");
+  const sequences = getActiveDripSequences(100);
+  const leads = await listAllLeads();
+  const byId = new Map(leads.map((l) => [l.id, l]));
+  res.json({
+    sequences: sequences.map((s) => ({
+      ...s,
+      leadName: byId.get(s.leadId)?.name || byId.get(s.leadId)?.username || s.leadId,
+    })),
+  });
+});
+
+app.post("/api/email/send-existing-client", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { sendContextAwareEmail } = await import("./agents/emailMarketing/existingClientFlow.js");
+  const leadId = String(req.body?.leadId || "");
+  const subject = String(req.body?.subject || "");
+  const body = String(req.body?.body || "");
+  const result = await sendContextAwareEmail(leadId, subject, () => body);
+  res.json(result);
+});
+
+app.get("/api/email/client-context/:leadId", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { buildClientContext } = await import("./agents/emailMarketing/existingClientFlow.js");
+  res.json(await buildClientContext(req.params.leadId));
+});
+
+app.post("/api/email/start-drip", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { leadId, sequenceType } = req.body || {};
+  if (sequenceType === "buyer_drip") {
+    void import("./agents/emailMarketing/buyerDrip.js").then((m) => m.startBuyerDrip(String(leadId)));
+  } else if (sequenceType === "seller_drip") {
+    void import("./agents/emailMarketing/sellerDrip.js").then((m) => m.startSellerDrip(String(leadId)));
+  } else {
+    res.status(400).json({ error: "Invalid sequenceType" });
+    return;
+  }
+  res.json({ success: true });
+});
+
+app.post("/api/email/sequence/:id/pause", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { pauseSequence } = await import("./core/emailStore.js");
+  pauseSequence(req.params.id);
+  res.json({ ok: true });
+});
+
+app.get("/api/email/connection-status", async (_req, res) => {
+  const { isEmailConfigured, verifyEmailConnection } = await import("./integrations/email/index.js");
+  const configured = isEmailConfigured();
+  const verified = configured ? await verifyEmailConnection() : false;
+  res.json({ configured, verified });
+});
+
+app.post("/api/email/process-buyer-drips-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { processDueBuyerDrips } = await import("./agents/emailMarketing/buyerDrip.js");
+  res.json(await processDueBuyerDrips());
+});
+
+app.post("/api/email/process-seller-drips-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { processDueSellerDrips } = await import("./agents/emailMarketing/sellerDrip.js");
+  res.json(await processDueSellerDrips());
+});
+
+app.post("/api/email/quarterly-touch-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { runPastClientQuarterlyTouch } = await import("./agents/emailMarketing/pastClientQuarterly.js");
+  res.json(await runPastClientQuarterlyTouch());
+});
+
+app.post("/api/email/no-reply-check-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { checkNoReplyFollowups } = await import("./agents/emailMarketing/noReplyFollowup.js");
+  res.json(await checkNoReplyFollowups());
+});
+
+app.get("/api/email/detail/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { getEmailById } = await import("./core/emailStore.js");
+  const email = getEmailById(req.params.id);
+  if (!email) return res.status(404).json({ error: "Email not found" });
+  const { listAllLeads } = await import("./core/db.js");
+  const leads = await listAllLeads();
+  const lead = leads.find((l) => l.id === email.leadId);
+  res.json({
+    email,
+    leadName: lead?.name || lead?.username || email.leadId,
+    leadEmail: lead?.email,
+  });
+});
+
+app.get("/api/email/replies", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { getRepliedEmails, getInboundCachedReplies } = await import("./core/emailStore.js");
+  const { listAllLeads } = await import("./core/db.js");
+  const leads = await listAllLeads();
+  const byId = new Map(leads.map((l) => [l.id, l]));
+  const limit = parseInt(String(req.query.limit || "50"), 10) || 50;
+  const replied = getRepliedEmails(limit).map((e) => ({
+    ...e,
+    leadName: byId.get(e.leadId)?.name || byId.get(e.leadId)?.username || e.leadId,
+  }));
+  const inbound = getInboundCachedReplies(limit).map((m) => ({
+    ...m,
+    leadName: m.leadId ? byId.get(m.leadId)?.name || m.leadId : undefined,
+  }));
+  res.json({ replied, inbound });
+});
+
+app.get("/api/email/active-drips-detail", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { getActiveDripSequences, getEmailsForDripType } = await import("./core/emailStore.js");
+  const { listAllLeads } = await import("./core/db.js");
+  const sequences = getActiveDripSequences(100);
+  const leads = await listAllLeads();
+  const byId = new Map(leads.map((l) => [l.id, l]));
+  const dripTypeMap: Record<string, "buyer_drip" | "seller_drip"> = {
+    buyer_drip: "buyer_drip",
+    seller_drip: "seller_drip",
+  };
+  res.json({
+    sequences: sequences.map((s) => {
+      const emailType = dripTypeMap[s.sequenceType];
+      const emails = emailType ? getEmailsForDripType(s.leadId, emailType) : [];
+      return {
+        ...s,
+        leadName: byId.get(s.leadId)?.name || byId.get(s.leadId)?.username || s.leadId,
+        leadEmail: byId.get(s.leadId)?.email,
+        emailsSent: emails,
+      };
+    }),
+  });
+});
+
+app.get("/api/email/inbox", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const { getCachedGmailMessages } = await import("./core/emailStore.js");
+  const limit = parseInt(String(req.query.limit || "30"), 10) || 30;
+  res.json({ messages: getCachedGmailMessages(limit) });
+});
+
+app.post("/api/email/sync-gmail", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    const { syncGmailInbox } = await import("./agents/emailMarketing/gmailSync.js");
+    const result = await syncGmailInbox();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+app.get("/api/email/gmail/:messageId", async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    const { getGmailMessage } = await import("./integrations/gmail/inbox.js");
+    const { getCachedGmailMessage, cacheGmailMessage } = await import("./core/emailStore.js");
+    const msg = await getGmailMessage(req.params.messageId);
+    const now = new Date().toISOString();
+    cacheGmailMessage({
+      id: msg.id,
+      threadId: msg.threadId,
+      direction: msg.direction,
+      fromAddr: msg.from,
+      toAddr: msg.to,
+      subject: msg.subject,
+      snippet: msg.snippet,
+      body: msg.bodyText,
+      receivedAt: msg.date,
+      syncedAt: now,
+    });
+    const cached = getCachedGmailMessage(msg.id);
+    res.json({ message: msg, cached });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post("/api/memory/extract-voice", express.json({ limit: "512kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) return res.status(401).json({ error: "Unauthorized" });
+  const transcript = Array.isArray(req.body?.transcript) ? req.body.transcript : [];
+  const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId : "voice";
+  await runPostConversationExtraction(
+    sessionId,
+    transcript.map((t: { role?: string; text?: string }) => ({
+      role: String(t.role || "user"),
+      text: String(t.text || ""),
+    })),
+  );
+  broadcastHullEvent({ type: "memory_updated" });
+  res.json({ ok: true });
+});
+
+/** Harvey memory search — hybrid retrieval. */
+app.get("/api/jarvis/memory/search", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
   const q = typeof req.query.q === "string" ? req.query.q : "";
-  const results = retrieveMemories(q);
+  const { searchFacts } = await import("./hull/memory/retrieval.js");
+  const results = await searchFacts(q, 10);
   res.json(results);
 });
 
-/** Harvey memory — add semantic fact. */
-app.post("/api/jarvis/memory/add", express.json(), (req, res) => {
+/** Harvey memory — add fact. */
+app.post("/api/jarvis/memory/add", express.json(), async (req, res) => {
   if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const fact = typeof req.body?.fact === "string" ? req.body.fact.trim() : "";
+  const content = typeof req.body?.fact === "string" ? req.body.fact.trim() : "";
   const category = typeof req.body?.category === "string" ? req.body.category.trim() : "business";
-  const tags = typeof req.body?.tags === "string" ? req.body.tags.trim() : "";
-  const weight = typeof req.body?.weight === "number" ? req.body.weight : 1.0;
-  if (!fact) {
+  const keywords = typeof req.body?.tags === "string" ? req.body.tags.trim() : "";
+  const strength = typeof req.body?.weight === "number" ? req.body.weight : 1.0;
+  if (!content) {
     res.status(400).json({ error: "Missing fact" });
     return;
   }
-  const db = getMemoryDb();
+  const db = getHullDb();
   const id = randomUUID();
   const now = new Date().toISOString();
   db.prepare(
-    `INSERT INTO harvey_semantic (id, fact, category, tags, confidence, access_count, last_accessed, created_at, weight)
-     VALUES (?, ?, ?, ?, 1.0, 0, ?, ?, ?)`,
-  ).run(id, fact, category, tags, now, now, weight);
-  res.status(201).json({ id, fact, category, tags, weight });
+    `INSERT INTO facts (id, content, category, keywords, strength, access_count, last_accessed, created_at)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+  ).run(id, content, category, keywords, strength, now, now);
+  broadcastHullEvent({ type: "memory_updated" });
+  res.status(201).json({ id, content, category, keywords, strength });
 });
 
-/** Harvey memory — delete any memory row by id. */
+/** Delete memory row by id across hull tables. */
 app.delete("/api/jarvis/memory/:id", (req, res) => {
   if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
   const id = String(req.params.id || "").trim();
@@ -2112,8 +2515,8 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
     res.status(400).json({ error: "Missing id" });
     return;
   }
-  const db = getMemoryDb();
-  const tables = ["harvey_semantic", "harvey_relational", "harvey_procedural", "harvey_episodes"] as const;
+  const db = getHullDb();
+  const tables = ["facts", "nodes", "edges", "rules", "episodes", "syntheses", "identity_questions"] as const;
   let deleted = false;
   for (const table of tables) {
     const result = db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
@@ -2123,71 +2526,60 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
     res.status(404).json({ error: "Memory not found" });
     return;
   }
+  broadcastHullEvent({ type: "memory_updated" });
   res.status(200).json({ ok: true, id });
 });
 
-/** Gemini TTS — speak Claude text responses via REST. */
-app.post("/api/jarvis/gemini-tts", express.json({ limit: "256kb" }), async (req, res) => {
-  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
-  console.log("[GeminiTTS] Request received, text length:", text.length);
-  console.log("[GeminiTTS] GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY);
-
+/** Gemini TTS — Aethon mouth (director's notes + Charon). */
+app.post("/api/jarvis/voice", express.json({ limit: "256kb" }), async (req, res) => {
   if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
+  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
   if (!text) {
     res.status(400).json({ error: "Missing text" });
     return;
   }
-  const key = geminiApiKey();
-  if (!key) {
-    res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+  try {
+    const audio = await generateTTS(text);
+    if (!audio) {
+      res.status(502).json({ error: "TTS failed" });
+      return;
+    }
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("X-Sample-Rate", String(audio.sampleRate));
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).send(audio.pcm);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(502).json({ error: message });
+  }
+});
+
+/** Legacy alias — gemini-tts → hull TTS. */
+app.post("/api/jarvis/gemini-tts", express.json({ limit: "256kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+  if (!text) {
+    res.status(400).json({ error: "Missing text" });
     return;
   }
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=${key}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text }] }],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: "Charon" },
-              },
-            },
-          },
-        }),
-      },
-    );
-    const data = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string } }> } }>;
-      error?: { message?: string };
-    };
-    console.log("[GeminiTTS] Gemini response status:", response.status);
-    if (!response.ok) {
-      const msg = data.error?.message || response.statusText || "Gemini TTS failed";
-      console.log("[GeminiTTS] Response has audio:", false);
-      res.status(502).json({ error: msg });
+    const audio = await generateTTS(text);
+    if (!audio) {
+      res.status(502).json({ error: "TTS failed" });
       return;
     }
-    const audioBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    console.log("[GeminiTTS] Response has audio:", !!audioBase64);
-    if (!audioBase64) {
-      res.status(500).json({ error: "No audio returned" });
-      return;
-    }
-    const audioBuffer = Buffer.from(audioBase64, "base64");
-    res.setHeader("Content-Type", "audio/wav");
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("X-Sample-Rate", String(audio.sampleRate));
     res.setHeader("Cache-Control", "no-store");
-    res.status(200).send(audioBuffer);
+    res.status(200).send(audio.pcm);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[jarvis/gemini-tts]", message);
     res.status(502).json({ error: message });
   }
 });
@@ -3208,7 +3600,8 @@ app.post("/api/auto-plans/execute-due-steps", async (req, res) => {
 /* ===================== Tasks ===================== */
 
 const TASK_PRIORITIES = new Set<TaskPriority>(["low", "normal", "high", "urgent"]);
-const TASK_STATUSES = new Set<TaskStatus>(["pending", "in_progress", "completed", "cancelled"]);
+const TASK_STATUSES = new Set<TaskStatus>(CRM_TASK_STATUSES);
+const COMMAND_STATUS_SET = new Set<CommandTaskStatus>(COMMAND_TASK_STATUSES);
 const TASK_TYPES = new Set<TaskType>(["call", "text", "email", "appointment", "follow_up", "other"]);
 const TASK_SOURCES = new Set<TaskSource>(["manual", "auto_plan", "dial_session", "automation"]);
 
@@ -3277,17 +3670,25 @@ function parseRecurringInterval(raw: unknown): CommandTaskRecurringInterval | un
 
 function commandTaskCounts() {
   const all = getCommandTasks();
-  const pending = all.filter((t) => t.status === "pending");
+  const active = all.filter((t) => t.status !== "done");
   return {
-    urgent: pending.filter((t) => t.column === "urgent").length,
-    today: pending.filter((t) => t.column === "today").length,
-    tomorrow: pending.filter((t) => t.column === "tomorrow").length,
-    this_week: pending.filter((t) => t.column === "this_week").length,
-    this_month: pending.filter((t) => t.column === "this_month").length,
-    total_pending: pending.length,
+    urgent: active.filter((t) => t.column === "urgent").length,
+    today: active.filter((t) => t.column === "today").length,
+    tomorrow: active.filter((t) => t.column === "tomorrow").length,
+    this_week: active.filter((t) => t.column === "this_week").length,
+    this_month: active.filter((t) => t.column === "this_month").length,
+    total_pending: active.length,
     total_done: all.filter((t) => t.status === "done").length,
   };
 }
+
+const COMMAND_STATUS_SORT: Record<CommandTaskStatus, number> = {
+  overdue: 0,
+  due_soon: 1,
+  pending: 2,
+  on_hold: 3,
+  done: 4,
+};
 
 /** Carlos command-center task board (db.json). */
 app.get("/api/tasks", (req, res) => {
@@ -3308,8 +3709,9 @@ app.get("/api/tasks", (req, res) => {
   }
 
   tasks.sort((a, b) => {
-    if (a.status === "pending" && b.status === "done") return -1;
-    if (a.status === "done" && b.status === "pending") return 1;
+    const sa = COMMAND_STATUS_SORT[a.status] ?? 2;
+    const sb = COMMAND_STATUS_SORT[b.status] ?? 2;
+    if (sa !== sb) return sa - sb;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
@@ -3357,7 +3759,10 @@ app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
   if (typeof body.title === "string") updates.title = body.title.trim();
   if (typeof body.description === "string") updates.description = body.description;
   if (body.column && COMMAND_COLUMNS.has(body.column)) updates.column = body.column;
-  if (body.status === "pending" || body.status === "done") updates.status = body.status;
+  if (body.status && COMMAND_STATUS_SET.has(body.status as CommandTaskStatus)) {
+    updates.status = body.status as CommandTaskStatus;
+    updates.previousStatus = undefined;
+  }
   if (body.color && COMMAND_COLORS.has(body.color)) updates.color = body.color;
   if (typeof body.recurring === "boolean") updates.recurring = body.recurring;
   const recurringInterval = parseRecurringInterval(body.recurringInterval);
@@ -3433,7 +3838,10 @@ app.patch("/api/crm-tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
   if (typeof body.dueDate === "string") updates.dueDate = body.dueDate.slice(0, 10);
   if (typeof body.dueTime === "string") updates.dueTime = body.dueTime;
   if (TASK_PRIORITIES.has(body.priority as TaskPriority)) updates.priority = body.priority as TaskPriority;
-  if (TASK_STATUSES.has(body.status as TaskStatus)) updates.status = body.status as TaskStatus;
+  if (TASK_STATUSES.has(body.status as TaskStatus)) {
+    updates.status = body.status as TaskStatus;
+    updates.previousStatus = undefined;
+  }
   if (TASK_TYPES.has(body.type as TaskType)) updates.type = body.type as TaskType;
   if (typeof body.leadId === "string") updates.leadId = body.leadId.trim() || undefined;
   if (typeof body.leadName === "string") updates.leadName = body.leadName;
@@ -3710,6 +4118,9 @@ app.patch("/api/transactions/:id", express.json(), (req, res) => {
   if (!tx) {
     res.status(404).json({ error: "Not found" });
     return;
+  }
+  if (body.status === "closed" || tx.status === "closed") {
+    void tryRecordCommissionForClosedDeal(tx);
   }
   res.json({ transaction: tx });
 });
@@ -4256,6 +4667,428 @@ app.post("/api/lead-nurture/route/:leadId", async (req, res) => {
   res.json({ success: true });
 });
 
+app.get("/api/lead-nurture/summary", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const hot = getLeadsByTier("hot").sort((a, b) => b.score - a.score);
+  const warm = getLeadsByTier("warm");
+  const cold = getLeadsByTier("cold");
+  const all = await listAllLeads();
+  const leadMap = new Map(all.map((l) => [l.id, l]));
+  const scoredIds = new Set([...hot, ...warm, ...cold].map((s) => s.leadId));
+  const unscored = all.length - scoredIds.size;
+
+  const sinceIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const recentScoreChanges = getScoreEntriesSince(sinceIso)
+    .filter((s) => s.previousScore != null && s.score !== s.previousScore)
+    .sort((a, b) => new Date(b.scoreDate).getTime() - new Date(a.scoreDate).getTime())
+    .slice(0, 12)
+    .map((s) => {
+      const lead = leadMap.get(s.leadId);
+      return {
+        leadId: s.leadId,
+        name: lead?.name || lead?.username || "Unknown",
+        score: s.score,
+        previousScore: s.previousScore,
+        delta: s.score - (s.previousScore ?? 0),
+        tier: s.tier,
+        scoreDate: s.scoreDate,
+      };
+    });
+
+  const top = hot[0];
+  const topLead = top ? leadMap.get(top.leadId) : undefined;
+  const topHotLead = top
+    ? {
+        ...top,
+        name: topLead?.name || topLead?.username || "Unknown",
+        phone: topLead?.phone || null,
+      }
+    : null;
+
+  res.json({
+    hotCount: hot.length,
+    warmCount: warm.length,
+    coldCount: cold.length,
+    unscoredCount: Math.max(0, unscored),
+    totalLeads: all.length,
+    topHotLead,
+    recentScoreChanges,
+  });
+});
+
+app.get("/api/lead-nurture/tier-detail/:tier", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const tier = req.params.tier as "hot" | "warm" | "cold";
+  if (!["hot", "warm", "cold"].includes(tier)) {
+    res.status(400).json({ error: "Invalid tier — must be hot, warm, or cold" });
+    return;
+  }
+
+  const scoreEntries = getLeadsByTier(tier);
+  const leads = await listAllLeads();
+  const leadMap = new Map(leads.map((l) => [l.id, l]));
+
+  const enriched = scoreEntries
+    .map((s) => {
+      const lead = leadMap.get(s.leadId);
+      const inboundReplyCount = getInboundMessageCount(s.leadId);
+      const propertyViewsCount =
+        typeof lead?.propertyViewsCount === "number" && lead.propertyViewsCount > 0
+          ? lead.propertyViewsCount
+          : (lead?.activity ?? []).filter((a) =>
+              ["home_clicked", "home_hearted", "web_visit"].includes(a.type),
+            ).length;
+      return {
+        leadId: s.leadId,
+        score: s.score,
+        previousScore: s.previousScore,
+        scoreDate: s.scoreDate,
+        scoringFactors: s.scoringFactors,
+        factorMax: { timeline: 25, preApproval: 25, responseCount: 20, propertyViews: 15, showingRequests: 15 },
+        tier: s.tier,
+        name: lead?.name || lead?.username || "Unknown",
+        phone: lead?.phone || null,
+        email: lead?.email || null,
+        source: lead?.source || null,
+        crmIntent: lead?.crmIntent || null,
+        preApprovalStatus: lead?.preApprovalStatus || null,
+        timeline: lead?.criteria?.timeline || null,
+        inboundReplyCount,
+        propertyViewsCount,
+        automationPaused: lead?.automationPaused || false,
+        sourceRoutingCompletedAt: lead?.sourceRoutingCompletedAt || null,
+        showingAppointment: lead?.showingAppointment || null,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  res.json({ tier, count: enriched.length, leads: enriched });
+});
+
+app.get("/api/lead-nurture/recently-routed", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const leads = await listAllLeads();
+  const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+  const sourceActivity = {
+    mojo: leads.some((l) => norm(l.source) === "mojo"),
+    social: leads.some((l) => ["instagram", "tiktok"].includes(norm(l.source))),
+    web_form: leads.some((l) => norm(l.source) === "web_form"),
+    referral: leads.some((l) => norm(l.source) === "referral"),
+  };
+  const routed = leads
+    .filter((l) => l.sourceRoutingCompletedAt)
+    .sort(
+      (a, b) =>
+        new Date(b.sourceRoutingCompletedAt!).getTime() -
+        new Date(a.sourceRoutingCompletedAt!).getTime(),
+    )
+    .slice(0, 20)
+    .map((l) => ({
+      leadId: l.id,
+      name: l.name || l.username || "Unknown",
+      source: l.source,
+      phone: l.phone,
+      routedAt: l.sourceRoutingCompletedAt,
+    }));
+  res.json({ routed, sourceActivity });
+});
+
+/* ===================== Reporting (Harvey digest / KPI) ===================== */
+
+app.post("/api/reporting/digest-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const result = await runDailyDigest();
+  await deliverDigest(result.snapshotId);
+  res.json(result);
+});
+
+app.post("/api/reporting/weekly-kpi-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const result = await runWeeklyKPI();
+  res.json(result);
+});
+
+app.get("/api/reporting/latest-digest", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({ snapshot: getLatestSnapshot("daily_digest") });
+});
+
+app.get("/api/reporting/latest-kpi", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({ snapshot: getLatestSnapshot("weekly_kpi") });
+});
+
+app.get("/api/reporting/anomalies", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const snapshot = getLatestSnapshot("daily_digest");
+  res.json({ anomalies: snapshot?.anomalies || [], generatedAt: snapshot?.generatedAt || null });
+});
+
+app.get("/api/reporting/digest-history", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const limit = parseInt(String(req.query.limit || "14"), 10) || 14;
+  const snapshots = getSnapshotsByType("daily_digest", limit);
+  res.json({
+    snapshots: snapshots.map((s) => ({
+      snapshotDate: s.snapshotDate,
+      generatedAt: s.generatedAt,
+      data: s.data,
+      anomalyCount: (s.anomalies || []).length,
+      deliveredSms: s.deliveredSms,
+      deliveredHarvey: s.deliveredHarvey,
+    })),
+  });
+});
+
+app.get("/api/reporting/kpi-history", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const limit = parseInt(String(req.query.limit || "8"), 10) || 8;
+  const snapshots = getSnapshotsByType("weekly_kpi", limit);
+  res.json({
+    snapshots: snapshots.map((s) => ({
+      snapshotDate: s.snapshotDate,
+      generatedAt: s.generatedAt,
+      data: s.data,
+    })),
+  });
+});
+
+/* ===================== Finance (GCI / expenses / pace) ===================== */
+
+app.get("/api/finance/commissions", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const since = typeof req.query.since === "string" ? req.query.since : undefined;
+  res.json({ commissions: getAllCommissions(since) });
+});
+
+app.post("/api/finance/commissions", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const salePrice = Number(body.salePrice);
+  const address = typeof body.address === "string" ? body.address.trim() : "";
+  if (!address || !Number.isFinite(salePrice) || salePrice <= 0) {
+    res.status(400).json({ error: "address and salePrice are required" });
+    return;
+  }
+  const commission = createCommission({
+    dealId: typeof body.dealId === "string" ? body.dealId : undefined,
+    address,
+    salePrice,
+    grossCommissionPct: body.grossCommissionPct != null ? Number(body.grossCommissionPct) : undefined,
+    dealType: (body.dealType === "seller" ? "seller" : "buyer") as FinanceDealType,
+    leadSource: typeof body.leadSource === "string" ? body.leadSource : undefined,
+    leadId: typeof body.leadId === "string" ? body.leadId : undefined,
+    closedAt:
+      typeof body.closedAt === "string"
+        ? body.closedAt
+        : new Date().toISOString().split("T")[0],
+    brokerageSplitPct: body.brokerageSplitPct != null ? Number(body.brokerageSplitPct) : undefined,
+  });
+  res.json({ commission });
+});
+
+app.get("/api/finance/expenses", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const since = typeof req.query.since === "string" ? req.query.since : undefined;
+  res.json({ expenses: getAllExpenses(since) });
+});
+
+app.post("/api/finance/expenses", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const amount = Number(body.amount);
+  const category = typeof body.category === "string" ? body.category : "";
+  const validCategories = [
+    "marketing",
+    "lead_gen",
+    "tools_subscriptions",
+    "transaction_costs",
+    "other",
+  ];
+  if (!validCategories.includes(category) || !Number.isFinite(amount) || amount <= 0) {
+    res.status(400).json({ error: "category and positive amount are required" });
+    return;
+  }
+  const expense = createExpense({
+    category: category as ExpenseCategory,
+    subcategory: typeof body.subcategory === "string" ? body.subcategory : undefined,
+    vendor: typeof body.vendor === "string" ? body.vendor : undefined,
+    description: typeof body.description === "string" ? body.description : undefined,
+    amount,
+    dealId: typeof body.dealId === "string" ? body.dealId : undefined,
+    leadSource: typeof body.leadSource === "string" ? body.leadSource : undefined,
+    expenseDate:
+      typeof body.expenseDate === "string"
+        ? body.expenseDate
+        : new Date().toISOString().split("T")[0],
+  });
+  res.json({ expense });
+});
+
+app.get("/api/finance/gci", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(getGCISummary());
+});
+
+app.get("/api/finance/expense-summary", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(await getExpenseSummary());
+});
+
+app.get("/api/finance/projection", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(generatePipelineProjection());
+});
+
+app.get("/api/finance/pace-status", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(getCurrentPaceStatus());
+});
+
+app.post("/api/finance/sync", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const commissions = await syncCommissionsFromClosedTransactions();
+  const projection = generatePipelineProjection();
+  res.json({
+    commissions,
+    pipelineDeals: projection.dealCount,
+    projectionWeightedGCI: projection.totalWeightedGCI,
+    syncedAt: new Date().toISOString(),
+  });
+});
+
+app.get("/api/finance/alerts", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const limit = parseInt(String(req.query.limit || "30"), 10) || 30;
+  res.json({ alerts: getFinanceAlerts(limit) });
+});
+
+app.post("/api/finance/alerts/:id/acknowledge", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const id = parseInt(String(req.params.id), 10);
+  if (!id) {
+    res.status(400).json({ error: "Invalid alert id" });
+    return;
+  }
+  acknowledgeFinanceAlert(id);
+  res.json({ success: true });
+});
+
+app.get("/api/finance/weekly-summary-preview", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(await buildWeeklyFinanceSummaryData());
+});
+
+app.get("/api/finance/monthly-report-preview", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(await buildMonthlyCloseReportData());
+});
+
+app.post("/api/finance/weekly-summary-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const result = await runWeeklyFinanceSummary();
+  res.json(result);
+});
+
+app.post("/api/finance/monthly-report-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const result = await runMonthlyCloseReport();
+  res.json(result);
+});
+
+app.post("/api/finance/pace-check-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const result = await runPaceCheck();
+  res.json(result);
+});
+
+app.post("/api/finance/expense-spike-check-now", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const result = await runExpenseSpikeCheck();
+  res.json(result);
+});
+
 app.post("/api/transactions/:id/documents", express.json(), (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -4707,6 +5540,30 @@ app.use(express.static(publicDir, { index: false }));
 
 const httpServer = http.createServer(app);
 
+const hullWss = new WebSocketServer({ noServer: true });
+hullWss.on("connection", (ws) => {
+  registerHullWs(ws);
+});
+
+httpServer.on("upgrade", (request, socket, head) => {
+  if (handleDeepgramUpgrade(request, socket, head, dashboardTokenOkIncoming)) return;
+
+  const url = request.url || "";
+  if (url.startsWith("/ws")) {
+    if (!dashboardTokenOkIncoming(request)) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    hullWss.handleUpgrade(request, socket, head, (ws) => {
+      hullWss.emit("connection", ws, request);
+    });
+    return;
+  }
+
+  socket.destroy();
+});
+
 // Scheduled Auto Plan execution — every 24 hours.
 const AUTO_PLAN_INTERVAL_MS = 24 * 60 * 60 * 1000;
 setInterval(() => {
@@ -4739,14 +5596,19 @@ async function ensureSocialDataExists(): Promise<void> {
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Listening on 0.0.0.0:${PORT}`);
   try {
-    bootstrapMemory();
+    initHull();
   } catch (err) {
-    console.error("[Harvey Memory] Bootstrap failed:", err);
+    console.error("[hull] init failed:", err);
+  }
+  if (!process.env.DEEPGRAM_API_KEY?.trim()) {
+    console.warn("[Harvey] DEEPGRAM_API_KEY not set — Flux voice STT will not work");
+  } else {
+    console.log("[Harvey] DEEPGRAM_API_KEY configured — Flux STT ready");
   }
   if (!geminiApiKey()) {
-    console.warn("[Harvey] GEMINI_API_KEY not set — Gemini Live voice will not work");
+    console.warn("[Harvey] GEMINI_API_KEY not set — Gemini TTS will not work");
   } else {
-    console.log("[Harvey] GEMINI_API_KEY configured — Gemini Live voice ready");
+    console.log("[Harvey] GEMINI_API_KEY configured — Gemini TTS ready");
   }
   if (isAnthropicApiKeyConfigured()) {
     console.log(`[Anthropic] API key present — model ${getAnthropicModel()} (set ANTHROPIC_MODEL to override).`);
@@ -4755,15 +5617,35 @@ httpServer.listen(PORT, "0.0.0.0", () => {
       "[Anthropic] ANTHROPIC_API_KEY missing — preflight/opening/pipeline skip Haiku and use template fallbacks only.",
     );
   }
+  void import("./integrations/email/index.js").then(async (m) => {
+    const ok = await m.verifyEmailConnection();
+    if (ok) {
+      void import("./agents/emailMarketing/gmailSync.js").then((g) =>
+        g.syncGmailInbox({ maxResults: 25 }).catch((err) =>
+          console.warn("[GmailSync] startup sync failed:", err instanceof Error ? err.message : err),
+        ),
+      );
+    }
+  });
+  void import("./agents/finance/index.js").then((m) =>
+    m.syncCommissionsFromClosedTransactions().catch((err) =>
+      console.warn("[Finance] startup commission sync failed:", err instanceof Error ? err.message : err),
+    ),
+  );
   console.log(`Health:  GET  http://localhost:${PORT}/health`);
   console.log(`Dashboard: GET http://localhost:${PORT}/ (also /dashboard)`);
   console.log(`Social:    GET http://localhost:${PORT}/social`);
+  console.log(`Email Mkt: GET http://localhost:${PORT}/email-marketing`);
+  console.log(`Lead Nurture: GET http://localhost:${PORT}/lead-nurture`);
+  console.log(`Reporting:  GET http://localhost:${PORT}/reporting`);
+  console.log(`Finance:    GET http://localhost:${PORT}/finance`);
   console.log(`Chat demo: GET http://localhost:${PORT}/chat`);
   console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
   console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
   console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${getHarveyModel()})`);
-  console.log(`Harvey voice: POST http://localhost:${PORT}/api/jarvis/gemini-live/token`);
-  console.log(`Harvey TTS:   POST http://localhost:${PORT}/api/jarvis/gemini-tts`);
+  console.log(`Harvey voice STT: WS   http://localhost:${PORT}/api/jarvis/deepgram/listen`);
+  console.log(`Harvey voice TTS: POST http://localhost:${PORT}/api/jarvis/voice`);
+  console.log(`Neural Map: GET http://localhost:${PORT}/memory`);
   console.log(`Harvey market intel: POST http://localhost:${PORT}/api/jarvis/market-intel`);
   console.log(`Harvey world intel: POST http://localhost:${PORT}/api/jarvis/world-intel`);
   console.log(`Simulate: POST http://localhost:${PORT}/simulate`);

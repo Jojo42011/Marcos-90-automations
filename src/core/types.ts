@@ -213,6 +213,10 @@ export interface Lead {
   propertyViewsCount?: number;
   /** Set after source-based nurture routing runs once for this lead. */
   sourceRoutingCompletedAt?: string | null;
+  /** Set after 3-minute auto-reply email is sent. */
+  autoReplyEmailSentAt?: string | null;
+  /** Set when no-reply follow-up moves lead to cold nurture (day 14). */
+  movedToColdNurtureAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -499,7 +503,24 @@ export interface DashboardLeadRow {
 
 export type TaskPriority = "low" | "normal" | "high" | "urgent";
 
-export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
+export type TaskStatus =
+  | "pending"
+  | "in_progress"
+  | "on_hold"
+  | "due_soon"
+  | "overdue"
+  | "completed"
+  | "cancelled";
+
+export const CRM_TASK_STATUSES: TaskStatus[] = [
+  "pending",
+  "in_progress",
+  "on_hold",
+  "due_soon",
+  "overdue",
+  "completed",
+  "cancelled",
+];
 
 export type TaskType = "call" | "text" | "email" | "appointment" | "follow_up" | "other";
 
@@ -512,6 +533,8 @@ export interface Task {
   type: TaskType;
   priority: TaskPriority;
   status: TaskStatus;
+  /** Status before automatic due_soon/overdue move (for reversal). */
+  previousStatus?: TaskStatus;
   dueDate: string;
   dueTime?: string;
   leadId?: string;
@@ -536,7 +559,15 @@ export interface TasksSummary {
 /** Carlos command-center task board (stored in db.json `commandTasks`). */
 export type CommandTaskColumn = "urgent" | "today" | "tomorrow" | "this_week" | "this_month";
 
-export type CommandTaskStatus = "pending" | "done";
+export type CommandTaskStatus = "pending" | "on_hold" | "due_soon" | "overdue" | "done";
+
+export const COMMAND_TASK_STATUSES: CommandTaskStatus[] = [
+  "pending",
+  "on_hold",
+  "due_soon",
+  "overdue",
+  "done",
+];
 
 export type CommandTaskColor = "red" | "amber" | "green" | "blue" | "purple" | "gray";
 
@@ -553,6 +584,8 @@ export interface CommandTask {
   description?: string;
   column: CommandTaskColumn;
   status: CommandTaskStatus;
+  /** Status before automatic due_soon/overdue move (for reversal). */
+  previousStatus?: CommandTaskStatus;
   color: CommandTaskColor;
   recurring?: boolean;
   recurringInterval?: CommandTaskRecurringInterval;
@@ -573,7 +606,22 @@ export interface CommandTasksSummary {
 
 export type MarcoTaskPriority = "high" | "medium" | "low";
 
-export type MarcoTaskStatus = "pending" | "in_progress" | "done";
+export type MarcoTaskStatus =
+  | "pending"
+  | "in_progress"
+  | "on_hold"
+  | "due_soon"
+  | "overdue"
+  | "done";
+
+export const MARCO_TASK_STATUSES: MarcoTaskStatus[] = [
+  "pending",
+  "in_progress",
+  "on_hold",
+  "due_soon",
+  "overdue",
+  "done",
+];
 
 export interface MarcoTask {
   id: string;
@@ -582,6 +630,8 @@ export interface MarcoTask {
   dueDate?: string;
   priority: MarcoTaskPriority;
   status: MarcoTaskStatus;
+  /** Status before automatic due_soon/overdue move (for reversal). */
+  previousStatus?: MarcoTaskStatus;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;

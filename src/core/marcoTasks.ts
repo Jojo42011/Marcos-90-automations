@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 
 import type { MarcoTask, MarcoTaskPriority, MarcoTasksSummary, MarcoTaskStatus } from "./types.js";
+import { MARCO_TASK_STATUSES } from "./types.js";
 
 function resolveMarcoTasksPath(): string {
   const base = existsSync("/data") ? "/data" : join(process.cwd(), "data");
@@ -24,10 +25,9 @@ function normalizeTask(raw: unknown): MarcoTask | null {
     t.priority === "high" || t.priority === "medium" || t.priority === "low"
       ? t.priority
       : "medium";
-  const status =
-    t.status === "pending" || t.status === "in_progress" || t.status === "done"
-      ? t.status
-      : "pending";
+  const status = MARCO_TASK_STATUSES.includes(t.status as MarcoTaskStatus)
+    ? (t.status as MarcoTaskStatus)
+    : "pending";
   return {
     id: typeof t.id === "string" && t.id ? t.id : randomUUID(),
     title,
@@ -35,6 +35,9 @@ function normalizeTask(raw: unknown): MarcoTask | null {
     dueDate: typeof t.dueDate === "string" ? t.dueDate.slice(0, 10) : undefined,
     priority,
     status,
+    previousStatus: MARCO_TASK_STATUSES.includes(t.previousStatus as MarcoTaskStatus)
+      ? (t.previousStatus as MarcoTaskStatus)
+      : undefined,
     createdBy: typeof t.createdBy === "string" ? t.createdBy : undefined,
     createdAt: typeof t.createdAt === "string" ? t.createdAt : nowIso(),
     updatedAt: typeof t.updatedAt === "string" ? t.updatedAt : nowIso(),
@@ -75,12 +78,16 @@ export function buildMarcoTasksSummary(tasks: MarcoTask[]): MarcoTasksSummary {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   return {
-    pending: tasks.filter((t) => t.status === "pending").length,
+    pending: tasks.filter((t) => t.status === "pending" || t.status === "due_soon").length,
     inProgress: tasks.filter((t) => t.status === "in_progress").length,
     done: tasks.filter((t) => t.status === "done").length,
-    highPriority: tasks.filter((t) => t.priority === "high" && t.status !== "done").length,
+    highPriority: tasks.filter(
+      (t) => t.priority === "high" && t.status !== "done" && t.status !== "on_hold",
+    ).length,
     overdue: tasks.filter((t) => {
-      if (!t.dueDate || t.status === "done") return false;
+      if (t.status === "done" || t.status === "on_hold") return false;
+      if (t.status === "overdue") return true;
+      if (!t.dueDate) return false;
       const due = new Date(t.dueDate.slice(0, 10) + "T00:00:00");
       return due < now;
     }).length,

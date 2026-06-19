@@ -18,8 +18,13 @@ import {
 import {
   advanceFunnelDeterministic,
   extractPhoneFromConversation,
-  PHONE_JUST_CAPTURED_REPLY,
 } from "./funnelDeterministic.js";
+import {
+  MARCO_CLOSEOUT_REPLY,
+  MARCO_PHONE_ASK_REPLY,
+  MARCO_PRICE_REPLY,
+  MARCO_WAVE_REPLY,
+} from "../../config/prompts.js";
 import {
   buildOutOfStateReferralOffer,
   countAssistantsSinceLastUser,
@@ -29,16 +34,24 @@ import {
   getLastUserMessageText,
   isLastUserMessageRepeated,
   isShortDuplicateUserPair,
+  isWaveOnlyMessage,
   lastTwoAssistantMessagesAreDuplicate,
   latestAssistantEchoesEarlierInThread,
   leadThreadSignalsExperiencedBuyer,
   messageAsksBuilderIdentity,
+  messageAsksPropertyPriceOrCost,
   REFERRAL_AREA_FOLLOW_UP,
+  resolveAcknowledgmentCloseoutTurn,
+  resolveCallAskBucketF,
+  resolvePhoneCapturedReply,
+  signalsAffirmativeBreakdownAgreement,
   signalsLookingOutsideSanAntonio,
   signalsReferralAcceptance,
   signalsReferralDeclineOrWantsSanAntonio,
+  threadContainsBreakdownOffer,
   threadContainsFirstTimeBuyingQuestion,
   threadContainsReferralOffer,
+  threadHadCallAskPath,
 } from "./conversationUtils.js";
 import {
   marcoCorrelationId,
@@ -271,6 +284,15 @@ export async function run(
         reason: "tiktok_marco_previous_outbound",
         message_preview: previewText(payload.message),
       });
+    } else if (isWaveOnlyMessage(payload.message.trim())) {
+      interested = true;
+      marcoLog("intent_gate", {
+        requestId,
+        correlationId,
+        interested: true,
+        reason: "wave_only",
+        message_preview: previewText(payload.message),
+      });
     } else {
       interested = await classifyNewLeadBuyingIntent(payload.message, {
         channel: payload.commentOrDm,
@@ -360,6 +382,187 @@ export async function run(
     return { lead, reply: referralResult.reply };
   }
 
+  const assistantTurnCountInThread = conversation.messages.filter((m) => m.role === "assistant").length;
+
+  if (
+    !hadPhone &&
+    assistantTurnCountInThread === 0 &&
+    isWaveOnlyMessage(latestLeadText)
+  ) {
+    if (lead.state === FunnelStage.New) {
+      lead = { ...lead, state: FunnelStage.OpeningAskedFirstTime };
+    }
+    await db.appendMessage(lead.id, "assistant", MARCO_WAVE_REPLY);
+    await db.updateLead(lead);
+    marcoLog("wave_reply_pinned", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      message_preview: previewText(latestLeadText),
+      funnel_state_final: lead.state,
+    });
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: "wave_pinned",
+      reply_chars: MARCO_WAVE_REPLY.length,
+      reply_preview: previewText(MARCO_WAVE_REPLY),
+      funnel_state_final: lead.state,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: MARCO_WAVE_REPLY };
+  }
+
+  const phoneInThreadEarly = lead.phone ?? extractPhoneFromConversation(conversation);
+  const phoneCapturedThisTurn = !hadPhone && Boolean(phoneInThreadEarly);
+
+  if (
+    !hadPhone &&
+    !phoneCapturedThisTurn &&
+    messageAsksPropertyPriceOrCost(latestLeadText)
+  ) {
+    if (lead.state === FunnelStage.New) {
+      lead = { ...lead, state: FunnelStage.OpeningAskedFirstTime };
+    }
+    await db.appendMessage(lead.id, "assistant", MARCO_PRICE_REPLY);
+    await db.updateLead(lead);
+    marcoLog("price_reply_pinned", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      message_preview: previewText(latestLeadText),
+      funnel_state_final: lead.state,
+    });
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: "price_pinned",
+      reply_chars: MARCO_PRICE_REPLY.length,
+      reply_preview: previewText(MARCO_PRICE_REPLY),
+      funnel_state_final: lead.state,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: MARCO_PRICE_REPLY };
+  }
+
+  /** Bucket F: call-ask escalation (pre-phone only; suppressed after graceful exit). */
+  if (!hadPhone && !phoneCapturedThisTurn) {
+    const bucketF = resolveCallAskBucketF(conversation, latestLeadText);
+    if (bucketF) {
+      if (bucketF.kind === "number_ask") {
+        lead = { ...lead, state: FunnelStage.PhoneRequested };
+      }
+      await db.appendMessage(lead.id, "assistant", bucketF.reply);
+      await db.updateLead(lead);
+      marcoLog("call_ask_bucket_f", {
+        requestId,
+        correlationId,
+        lead_id: lead.id,
+        bucket_f_kind: bucketF.kind,
+        message_preview: previewText(latestLeadText),
+        funnel_state_final: lead.state,
+      });
+      marcoLog("pipeline_end", {
+        requestId,
+        correlationId,
+        lead_id: lead.id,
+        outcome: `call_ask_${bucketF.kind}`,
+        reply_chars: bucketF.reply.length,
+        reply_preview: previewText(bucketF.reply),
+        funnel_state_final: lead.state,
+        phone_captured_this_turn: false,
+        email_captured_this_turn: false,
+      });
+      return { lead, reply: bucketF.reply };
+    }
+  }
+
+  /** Pre-phone: lead agreed to breakdown offer — pinned phone ask (replaces LLM "perfect"). */
+  if (
+    !hadPhone &&
+    !phoneCapturedThisTurn &&
+    threadContainsBreakdownOffer(conversation) &&
+    signalsAffirmativeBreakdownAgreement(latestLeadText)
+  ) {
+    lead = { ...lead, state: FunnelStage.PhoneRequested };
+    await db.appendMessage(lead.id, "assistant", MARCO_PHONE_ASK_REPLY);
+    await db.updateLead(lead);
+    marcoLog("phone_ask_reply_pinned", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      message_preview: previewText(latestLeadText),
+      funnel_state_final: lead.state,
+    });
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: "phone_ask_pinned",
+      reply_chars: MARCO_PHONE_ASK_REPLY.length,
+      reply_preview: previewText(MARCO_PHONE_ASK_REPLY),
+      funnel_state_final: lead.state,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: MARCO_PHONE_ASK_REPLY };
+  }
+
+  const ackCloseout = resolveAcknowledgmentCloseoutTurn(
+    conversation,
+    latestLeadText,
+    MARCO_CLOSEOUT_REPLY,
+    { skipIfPhoneCapturedThisTurn: phoneCapturedThisTurn },
+  );
+  if (ackCloseout === "silence") {
+    marcoLog("ack_closeout_silence", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      had_phone: hadPhone,
+      message_preview: previewText(latestLeadText),
+    });
+    await db.updateLead(lead);
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: "no_reply_ack_after_closeout",
+      reply_chars: 0,
+      funnel_state_final: lead.state,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: null };
+  }
+  if (ackCloseout === "closeout") {
+    await db.appendMessage(lead.id, "assistant", MARCO_CLOSEOUT_REPLY);
+    await db.updateLead(lead);
+    marcoLog("ack_closeout_sent", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      had_phone: hadPhone,
+      message_preview: previewText(latestLeadText),
+    });
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: "ack_closeout",
+      reply_chars: MARCO_CLOSEOUT_REPLY.length,
+      reply_preview: previewText(MARCO_CLOSEOUT_REPLY),
+      funnel_state_final: lead.state,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: MARCO_CLOSEOUT_REPLY };
+  }
+
   const userTurnCount = conversation.messages.filter((m) => m.role === "user").length;
   const assistantTurnCount = conversation.messages.filter((m) => m.role === "assistant").length;
 
@@ -441,6 +644,14 @@ export async function run(
       .filter(Boolean)
       .join(" ");
   }
+  if (hadPhone) {
+    coachingNote = [
+      coachingNote,
+      "POST_PHONE_CAPTURE: Mobile number is already on file. Never ask price range, budget, suitability, preferences, timeline, or bedrooms. Answer specific property questions only; do not run needs analysis or re-offer the full breakdown unless they explicitly ask for it again.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
   coachingNote = [
     coachingNote,
     "NO_NEEDS_ANALYSIS: Never ask about preferences, what is important in a home, timeline, bedrooms, bathrooms, or home features. Acknowledge, brief answer if they asked something specific, then steer to a mobile number only.",
@@ -465,6 +676,8 @@ export async function run(
     if (phoneInThread) {
       if (!lead.phone) {
         lead = { ...lead, phone: phoneInThread, state: FunnelStage.PropertySent };
+        const capturedReply = resolvePhoneCapturedReply(conversation);
+        await db.appendMessage(lead.id, "assistant", capturedReply);
         await db.updateLead(lead);
         marcoLog("duplicate_user_phone_captured", {
           requestId,
@@ -476,13 +689,13 @@ export async function run(
           correlationId,
           lead_id: lead.id,
           outcome: "duplicate_user_phone_first_capture",
-          reply_chars: PHONE_JUST_CAPTURED_REPLY.length,
-          reply_preview: previewText(PHONE_JUST_CAPTURED_REPLY),
+          reply_chars: capturedReply.length,
+          reply_preview: previewText(capturedReply),
           funnel_state_final: lead.state,
           phone_captured_this_turn: true,
           email_captured_this_turn: false,
         });
-        return { lead, reply: PHONE_JUST_CAPTURED_REPLY };
+        return { lead, reply: capturedReply };
       }
       marcoLog("pipeline_end", {
         requestId,
@@ -529,7 +742,7 @@ export async function run(
       const p = extractPhoneFromConversation(conversation);
       if (p) {
         lead = { ...lead, phone: p, state: FunnelStage.PropertySent };
-        rawOpeningReply = PHONE_JUST_CAPTURED_REPLY;
+        rawOpeningReply = resolvePhoneCapturedReply(conversation);
         marcoLog("opening_same_turn_phone_capture", {
           requestId,
           correlationId,
@@ -584,7 +797,16 @@ export async function run(
       meta_list_send_promised: Boolean(meta.listSendPromised),
     });
 
-    if (!skipLlm) {
+    if (meta.phoneJustCaptured) {
+      reply = resolvePhoneCapturedReply(conversation);
+      marcoLog("phone_captured_reply_pinned", {
+        requestId,
+        correlationId,
+        lead_id: lead.id,
+        call_ask_path: threadHadCallAskPath(conversation),
+        reply_preview: previewText(reply),
+      });
+    } else if (!skipLlm) {
       const tPipe = Date.now();
       const rawPipelineReply = await generateMarcoPipelineReply({
         lead,

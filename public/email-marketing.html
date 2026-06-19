@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Email Marketing · Marco</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #030308;
+      --surface: #0c1018;
+      --surface-2: #121826;
+      --border: rgba(120, 200, 255, 0.12);
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #a78bfa;
+      --success: #4ade80;
+      --danger: #f87171;
+      --warn: #fbbf24;
+      --font: "Plus Jakarta Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", monospace;
+      --buyer: #22c55e;
+      --seller: #ef4444;
+      --manual: #f97316;
+      --auto: #38bdf8;
+      --noreply: #eab308;
+      --quarterly: #c084fc;
+      --existing: #2dd4bf;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(167,139,250,0.12), transparent),
+        radial-gradient(ellipse 60% 40% at 100% 50%, rgba(56,189,248,0.06), transparent);
+    }
+    .wrap { max-width: 1240px; margin: 0 auto; padding: 1.5rem; }
+    .topbar {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem;
+      margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);
+      animation: fadeSlideDown 0.5s ease-out;
+    }
+    .topbar h1 { font-size: 1.35rem; font-weight: 800; flex: 1; letter-spacing: -0.02em; }
+    .topbar h1 span { color: var(--accent); font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem; opacity: 0.9; }
+    a.back { color: var(--muted); text-decoration: none; font-size: 0.875rem; transition: color 0.2s; }
+    a.back:hover { color: var(--accent); }
+    .conn { font-size: 0.75rem; padding: 0.3rem 0.7rem; border-radius: 999px; border: 1px solid var(--border); font-weight: 600; }
+    .conn.ok { color: var(--success); border-color: rgba(74,222,128,0.45); background: rgba(74,222,128,0.08); }
+    .conn.bad { color: var(--danger); border-color: rgba(248,113,113,0.45); background: rgba(248,113,113,0.08); }
+    .conn.syncing { color: var(--auto); border-color: rgba(56,189,248,0.45); animation: pulse 1.2s infinite; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.1rem 1.15rem;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+      animation: fadeSlideUp 0.5s ease-out backwards;
+    }
+    .stat:nth-child(1) { animation-delay: 0.05s; }
+    .stat:nth-child(2) { animation-delay: 0.1s; }
+    .stat:nth-child(3) { animation-delay: 0.15s; }
+    .stat:nth-child(4) { animation-delay: 0.2s; }
+    .stat.clickable { cursor: pointer; }
+    .stat.clickable:hover {
+      transform: translateY(-3px);
+      border-color: rgba(167,139,250,0.35);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    }
+    .stat label {
+      display: block;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      font-weight: 600;
+    }
+    .stat strong {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      display: block;
+    }
+    .stat.replies strong { color: var(--auto); }
+    .stat.drips strong { color: var(--buyer); }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.15rem;
+      margin-bottom: 1rem;
+      animation: fadeSlideUp 0.55s ease-out backwards;
+      animation-delay: 0.25s;
+    }
+    .panel h2 {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--accent);
+      margin-bottom: 0.85rem;
+      font-weight: 700;
+    }
+
+    .email-row {
+      display: flex;
+      gap: 0.65rem;
+      align-items: flex-start;
+      padding: 0.75rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .email-row:last-child { border-bottom: none; }
+    .email-row:hover {
+      background: rgba(167,139,250,0.06);
+      transform: translateX(4px);
+    }
+    .email-row .status-icon { font-size: 0.9rem; width: 1.2rem; flex-shrink: 0; margin-top: 0.1rem; }
+    .email-row .subject { flex: 1; font-weight: 600; line-height: 1.35; }
+    .email-row .meta { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+
+    .badge {
+      font-size: 0.62rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .badge.buyer_drip { background: rgba(34,197,94,0.18); color: #86efac; border-color: rgba(34,197,94,0.35); }
+    .badge.seller_drip { background: rgba(239,68,68,0.18); color: #fca5a5; border-color: rgba(239,68,68,0.35); }
+    .badge.manual { background: rgba(249,115,22,0.18); color: #fdba74; border-color: rgba(249,115,22,0.35); }
+    .badge.auto_reply { background: rgba(56,189,248,0.18); color: #7dd3fc; border-color: rgba(56,189,248,0.35); }
+    .badge.no_reply_followup { background: rgba(234,179,8,0.18); color: #fde047; border-color: rgba(234,179,8,0.35); }
+    .badge.past_client_quarterly { background: rgba(192,132,252,0.18); color: #d8b4fe; border-color: rgba(192,132,252,0.35); }
+    .badge.existing_client { background: rgba(45,212,191,0.18); color: #5eead4; border-color: rgba(45,212,191,0.35); }
+    .badge.failed { background: rgba(248,113,113,0.18); color: #fca5a5; border-color: rgba(248,113,113,0.35); }
+    .badge.pending { background: rgba(251,191,36,0.15); color: var(--warn); border-color: rgba(251,191,36,0.35); }
+    .badge.inbound { background: rgba(56,189,248,0.15); color: #7dd3fc; border-color: rgba(56,189,248,0.3); }
+    .badge.outbound { background: rgba(148,163,184,0.12); color: #cbd5e1; border-color: rgba(148,163,184,0.25); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th, td { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  tr.drip-row { cursor: pointer; transition: background 0.15s; }
+  tr.drip-row:hover { background: rgba(34,197,94,0.06); }
+
+    button, select, input, textarea {
+      font-family: var(--font);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0.5rem 0.85rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    }
+    button { cursor: pointer; }
+    button:hover { border-color: rgba(167,139,250,0.4); }
+    button:active { transform: scale(0.98); }
+    button.primary { background: rgba(167,139,250,0.22); border-color: rgba(167,139,250,0.5); color: #e9d5ff; }
+    button.sync-btn { background: rgba(56,189,248,0.15); border-color: rgba(56,189,248,0.4); color: #bae6fd; }
+    textarea { width: 100%; min-height: 100px; resize: vertical; font-weight: 400; }
+    .compose-grid { display: grid; gap: 0.75rem; }
+    .context-box { font-size: 0.8rem; color: var(--muted); background: #080a10; padding: 0.85rem; border-radius: 10px; line-height: 1.5; }
+    .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.72);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      max-width: 720px;
+      width: 100%;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transform: scale(0.94) translateY(12px);
+      transition: transform 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    }
+    .modal-backdrop.open .modal { transform: scale(1) translateY(0); }
+    .modal-header {
+      padding: 1.15rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: flex-start; gap: 0.75rem;
+    }
+    .modal-header h3 { font-size: 1.1rem; font-weight: 800; flex: 1; line-height: 1.35; letter-spacing: -0.02em; }
+    .modal-close {
+      background: transparent; border: none; color: var(--muted);
+      font-size: 1.4rem; line-height: 1; padding: 0.2rem 0.4rem; cursor: pointer;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 1.25rem; overflow-y: auto; flex: 1; }
+    .modal-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; font-size: 0.78rem; color: var(--muted); }
+    .modal-meta span { background: var(--surface-2); padding: 0.25rem 0.55rem; border-radius: 6px; }
+    .modal-body pre {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #080a10;
+      padding: 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .modal-list .item {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .modal-list .item:hover { background: rgba(167,139,250,0.06); }
+    .modal-list .item:last-child { border-bottom: none; }
+    .drip-block {
+      margin-bottom: 1.25rem;
+      padding: 1rem;
+      background: var(--surface-2);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .drip-block h4 { font-size: 0.95rem; font-weight: 800; margin-bottom: 0.35rem; }
+    .drip-block .sub { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem; }
+    .drip-email-mini {
+      font-size: 0.78rem;
+      padding: 0.5rem 0;
+      border-top: 1px dashed var(--border);
+      display: flex; gap: 0.5rem; align-items: center;
+    }
+
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeSlideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.55; }
+    }
+
+    html[data-theme="light"] body { background: #f1f5f9 !important; color: #0f172a !important; background-image: none !important; }
+    html[data-theme="light"] .stat, html[data-theme="light"] .panel, html[data-theme="light"] .modal {
+      background: #fff !important; border-color: #e2e8f0 !important; color: #0f172a !important;
+    }
+    html[data-theme="light"] .stat label, html[data-theme="light"] th { color: #64748b !important; }
+    html[data-theme="light"] button, html[data-theme="light"] select, html[data-theme="light"] input, html[data-theme="light"] textarea {
+      background: #fff !important; border-color: #cbd5e1 !important; color: #0f172a !important;
+    }
+    html[data-theme="light"] .context-box, html[data-theme="light"] .modal-body pre, html[data-theme="light"] .drip-block {
+      background: #f8fafc !important; color: #334155 !important;
+    }
+    html[data-theme="light"] .email-row:hover { background: rgba(99,102,241,0.06) !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="back" href="/dashboard">← Command Center</a>
+      <h1>Email Marketing <span>Harvey sub-agent · Live Gmail</span></h1>
+      <span id="conn-badge" class="conn bad">Gmail checking…</span>
+      <button type="button" class="sync-btn" id="sync-gmail-btn" title="Pull from real Gmail inbox">Sync Gmail</button>
+      <button type="button" id="theme-toggle-btn" title="Toggle light/dark">Theme</button>
+      <label class="toolbar"><input type="checkbox" id="auto-refresh" checked /> Auto 30s</label>
+      <button type="button" id="refresh-btn">Refresh</button>
+    </div>
+
+    <div class="stats" id="stats-row">
+      <div class="stat"><label>Sent today</label><strong id="stat-sent">—</strong></div>
+      <div class="stat"><label>Open rate</label><strong id="stat-open">—</strong></div>
+      <div class="stat clickable replies" id="stat-replies-card" title="Click to view replies"><label>Replies</label><strong id="stat-replies">—</strong></div>
+      <div class="stat clickable drips" id="stat-drips-card" title="Click to view active drips"><label>Active drips</label><strong id="stat-drips">—</strong></div>
+    </div>
+
+    <div class="panel">
+      <h2>Sent emails <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— click to open</span></h2>
+      <div id="sent-emails"><p style="color:var(--muted)">Loading…</p></div>
+    </div>
+
+    <div class="panel">
+      <h2>Gmail inbox <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— live pull</span></h2>
+      <div id="gmail-inbox"><p style="color:var(--muted)">Sync Gmail to load inbox…</p></div>
+    </div>
+
+    <div class="panel">
+      <h2>Active drip sequences</h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Lead</th><th>Type</th><th>Step</th><th>Next send</th><th></th></tr></thead>
+          <tbody id="drip-tbody"><tr><td colspan="5" style="color:var(--muted)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Manual send (existing client flow)</h2>
+      <div class="compose-grid">
+        <select id="lead-select"><option value="">Select lead…</option></select>
+        <div id="client-context" class="context-box">Select a lead to load CRM context.</div>
+        <input id="email-subject" type="text" placeholder="Subject" />
+        <textarea id="email-body" placeholder="Email body"></textarea>
+        <button type="button" class="primary" id="send-btn">Send email</button>
+        <p id="send-status" style="font-size:0.75rem;color:var(--muted)"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 id="modal-title">Email</h3>
+        <button type="button" class="modal-close" id="modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <script>
+    const TYPE_LABELS = {
+      buyer_drip: "Buyer drip",
+      seller_drip: "Seller drip",
+      manual: "Manual",
+      auto_reply: "Auto reply",
+      no_reply_followup: "No-reply follow-up",
+      past_client_quarterly: "Quarterly",
+      existing_client: "Existing client",
+    };
+
+    function badgeClass(type) {
+      const t = (type || "").replace(/\s/g, "_").toLowerCase();
+      return ["buyer_drip","seller_drip","manual","auto_reply","no_reply_followup","past_client_quarterly","existing_client","failed","pending","inbound","outbound"].includes(t) ? t : "manual";
+    }
+
+    function badgeHtml(type, text) {
+      const cls = badgeClass(type);
+      const label = text || TYPE_LABELS[type] || type || "email";
+      return `<span class="badge ${cls}">${label}</span>`;
+    }
+
+    function getToken() {
+      const p = new URLSearchParams(location.search);
+      return p.get("token") || localStorage.getItem("dashboardToken") || "";
+    }
+    function apiUrl(path) {
+      const t = getToken();
+      const u = new URL(path, location.origin);
+      if (t) u.searchParams.set("token", t);
+      return u.toString();
+    }
+    function authHeaders() {
+      const h = { "Content-Type": "application/json" };
+      const t = getToken();
+      if (t) h["Authorization"] = "Bearer " + t;
+      return h;
+    }
+
+    const modal = document.getElementById("modal-backdrop");
+    const modalTitle = document.getElementById("modal-title");
+    const modalBody = document.getElementById("modal-body");
+
+    function openModal(title, html) {
+      modalTitle.textContent = title;
+      modalBody.innerHTML = html;
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+    }
+    function closeModal() {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+    document.getElementById("modal-close").addEventListener("click", closeModal);
+    modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+    async function openEmailDetail(id) {
+      openModal("Loading…", "<p style='color:var(--muted)'>Fetching full email…</p>");
+      try {
+        const r = await fetch(apiUrl("/api/email/detail/" + id));
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Not found");
+        const e = d.email;
+        openModal(e.subject, `
+          <div class="modal-meta">
+            ${badgeHtml(e.emailType)}
+            <span>${e.sendStatus}</span>
+            <span>To: ${d.leadName}${d.leadEmail ? " &lt;" + d.leadEmail + "&gt;" : ""}</span>
+            <span>${e.sentAt ? new Date(e.sentAt).toLocaleString() : "pending"}</span>
+            ${e.repliedAt ? "<span>Replied " + new Date(e.repliedAt).toLocaleString() + "</span>" : ""}
+          </div>
+          <pre>${escapeHtml(e.body)}</pre>
+        `);
+      } catch (err) {
+        openModal("Error", "<p style='color:var(--danger)'>" + escapeHtml(err.message) + "</p>");
+      }
+    }
+
+    async function openGmailDetail(messageId) {
+      openModal("Loading…", "<p style='color:var(--muted)'>Pulling from Gmail…</p>");
+      try {
+        const r = await fetch(apiUrl("/api/email/gmail/" + messageId));
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Failed");
+        const m = d.message;
+        openModal(m.subject, `
+          <div class="modal-meta">
+            ${badgeHtml(m.direction, m.direction)}
+            <span>From: ${escapeHtml(m.from)}</span>
+            <span>To: ${escapeHtml(m.to)}</span>
+            <span>${new Date(m.date).toLocaleString()}</span>
+          </div>
+          <pre>${escapeHtml(m.bodyText || m.snippet || "")}</pre>
+        `);
+      } catch (err) {
+        openModal("Error", "<p style='color:var(--danger)'>" + escapeHtml(err.message) + "</p>");
+      }
+    }
+
+    async function openRepliesModal() {
+      openModal("Replies", "<p style='color:var(--muted)'>Loading…</p>");
+      const r = await fetch(apiUrl("/api/email/replies"));
+      const d = await r.json();
+      let html = "";
+
+      if (d.inbound?.length) {
+        html += "<p style='font-weight:700;margin-bottom:0.5rem'>Inbound from Gmail</p><div class='modal-list'>";
+        html += d.inbound.map(m => `
+          <div class="item" data-gmail="${m.id}">
+            ${badgeHtml("inbound")}
+            <strong style="display:block;margin:0.35rem 0">${escapeHtml(m.subject)}</strong>
+            <span style="font-size:0.75rem;color:var(--muted)">${escapeHtml(m.fromAddr)} · ${new Date(m.receivedAt).toLocaleString()}</span>
+            <p style="font-size:0.8rem;margin-top:0.35rem;color:var(--muted)">${escapeHtml(m.snippet)}</p>
+          </div>
+        `).join("");
+        html += "</div>";
+      }
+
+      if (d.replied?.length) {
+        html += "<p style='font-weight:700;margin:1rem 0 0.5rem'>Tracked marketing replies</p><div class='modal-list'>";
+        html += d.replied.map(e => `
+          <div class="item" data-email="${e.id}">
+            ${badgeHtml(e.emailType)}
+            <strong style="display:block;margin:0.35rem 0">${escapeHtml(e.subject)}</strong>
+            <span style="font-size:0.75rem;color:var(--muted)">${escapeHtml(e.leadName)} · replied ${e.repliedAt ? new Date(e.repliedAt).toLocaleString() : ""}</span>
+          </div>
+        `).join("");
+        html += "</div>";
+      }
+
+      if (!html) html = "<p style='color:var(--muted)'>No replies yet. Click Sync Gmail to pull inbound messages.</p>";
+      openModal("Replies", html);
+      modalBody.querySelectorAll("[data-email]").forEach(el => {
+        el.addEventListener("click", () => openEmailDetail(el.dataset.email));
+      });
+      modalBody.querySelectorAll("[data-gmail]").forEach(el => {
+        el.addEventListener("click", () => openGmailDetail(el.dataset.gmail));
+      });
+    }
+
+    async function openDripsModal() {
+      openModal("Active drips", "<p style='color:var(--muted)'>Loading…</p>");
+      const r = await fetch(apiUrl("/api/email/active-drips-detail"));
+      const d = await r.json();
+      const totals = { buyer_drip: 6, seller_drip: 5 };
+      if (!d.sequences?.length) {
+        openModal("Active drips", "<p style='color:var(--muted)'>No active drip sequences.</p>");
+        return;
+      }
+      const html = d.sequences.map(s => {
+        const total = totals[s.sequenceType] || "?";
+        const emails = (s.emailsSent || []).map(em => `
+          <div class="drip-email-mini">
+            ${badgeHtml(em.emailType)}
+            <span>Step ${em.sequenceStep ?? "—"}</span>
+            <span style="flex:1">${escapeHtml(em.subject)}</span>
+            <span style="color:var(--muted)">${em.sentAt ? new Date(em.sentAt).toLocaleDateString() : ""}</span>
+          </div>
+        `).join("") || "<p style='font-size:0.78rem;color:var(--muted)'>No emails sent yet in this sequence.</p>";
+        return `
+          <div class="drip-block">
+            <h4>${escapeHtml(s.leadName)}</h4>
+            <div class="sub">${badgeHtml(s.sequenceType)} · Step ${s.currentStep} / ${total} · Next: ${s.nextSendDate ? new Date(s.nextSendDate).toLocaleString() : "—"}</div>
+            ${emails}
+          </div>
+        `;
+      }).join("");
+      openModal("Active drips & sent emails", html);
+    }
+
+    function escapeHtml(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+
+    (function initTheme() {
+      const saved = localStorage.getItem("dashboardTheme") || "dark";
+      document.documentElement.setAttribute("data-theme", saved);
+      document.getElementById("theme-toggle-btn").addEventListener("click", () => {
+        const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", next);
+        localStorage.setItem("dashboardTheme", next);
+      });
+    })();
+
+    document.getElementById("stat-replies-card").addEventListener("click", openRepliesModal);
+    document.getElementById("stat-drips-card").addEventListener("click", openDripsModal);
+
+    async function loadConnection() {
+      const el = document.getElementById("conn-badge");
+      try {
+        const r = await fetch(apiUrl("/api/email/connection-status"));
+        const d = await r.json();
+        if (d.configured && d.verified) {
+          el.textContent = "Gmail connected ✓";
+          el.className = "conn ok";
+        } else if (d.configured) {
+          el.textContent = "Gmail configured (verify failed)";
+          el.className = "conn bad";
+        } else {
+          el.textContent = "Gmail not configured";
+          el.className = "conn bad";
+        }
+      } catch {
+        el.textContent = "Connection unknown";
+        el.className = "conn bad";
+      }
+    }
+
+    function todayStartIso() {
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+      const y = parts.find(p => p.type === "year").value;
+      const m = parts.find(p => p.type === "month").value;
+      const d = parts.find(p => p.type === "day").value;
+      return new Date(`${y}-${m}-${d}T00:00:00-06:00`).toISOString();
+    }
+
+    async function loadStats() {
+      const since = todayStartIso();
+      const r = await fetch(apiUrl("/api/email/stats?since=" + encodeURIComponent(since)));
+      const d = await r.json();
+      document.getElementById("stat-sent").textContent = d.sent ?? 0;
+      document.getElementById("stat-open").textContent = d.sent > 0 ? Math.round((d.opened / d.sent) * 100) + "%" : "—";
+      document.getElementById("stat-replies").textContent = d.replied ?? 0;
+      document.getElementById("stat-drips").textContent = d.activeSequences ?? 0;
+    }
+
+    async function loadSent() {
+      const r = await fetch(apiUrl("/api/email/recent?limit=30"));
+      const d = await r.json();
+      const box = document.getElementById("sent-emails");
+      if (!d.emails?.length) {
+        box.innerHTML = '<p style="color:var(--muted)">No emails logged yet.</p>';
+        return;
+      }
+      box.innerHTML = d.emails.map(e => {
+        const st = e.sendStatus === "sent" ? "✓" : e.sendStatus === "failed" ? "✕" : "⏱";
+        return `<div class="email-row" data-email-id="${e.id}" role="button" tabindex="0">
+          <span class="status-icon">${st}</span>
+          ${badgeHtml(e.emailType)}
+          <span class="subject">${escapeHtml(e.subject)}</span>
+          <span class="meta">${e.sentAt ? new Date(e.sentAt).toLocaleString() : "pending"}</span>
+        </div>`;
+      }).join("");
+      box.querySelectorAll(".email-row").forEach(row => {
+        const open = () => openEmailDetail(row.dataset.emailId);
+        row.addEventListener("click", open);
+        row.addEventListener("keydown", (ev) => { if (ev.key === "Enter") open(); });
+      });
+    }
+
+    async function loadGmailInbox() {
+      const box = document.getElementById("gmail-inbox");
+      try {
+        const r = await fetch(apiUrl("/api/email/inbox?limit=20"));
+        const d = await r.json();
+        if (!d.messages?.length) {
+          box.innerHTML = '<p style="color:var(--muted)">No cached inbox — click <strong>Sync Gmail</strong> to pull real emails.</p>';
+          return;
+        }
+        box.innerHTML = d.messages.map(m => `
+          <div class="email-row" data-gmail-id="${m.id}" role="button" tabindex="0">
+            <span class="status-icon">${m.direction === "inbound" ? "↓" : "↑"}</span>
+            ${badgeHtml(m.direction, m.direction)}
+            <span class="subject">${escapeHtml(m.subject)}</span>
+            <span class="meta">${new Date(m.receivedAt).toLocaleString()}</span>
+          </div>
+        `).join("");
+        box.querySelectorAll(".email-row").forEach(row => {
+          const open = () => openGmailDetail(row.dataset.gmailId);
+          row.addEventListener("click", open);
+          row.addEventListener("keydown", (ev) => { if (ev.key === "Enter") open(); });
+        });
+      } catch {
+        box.innerHTML = '<p style="color:var(--muted)">Could not load inbox cache.</p>';
+      }
+    }
+
+    async function syncGmail() {
+      const el = document.getElementById("conn-badge");
+      const btn = document.getElementById("sync-gmail-btn");
+      el.textContent = "Syncing Gmail…";
+      el.className = "conn syncing";
+      btn.disabled = true;
+      try {
+        const r = await fetch(apiUrl("/api/email/sync-gmail"), { method: "POST", headers: authHeaders() });
+        const d = await r.json();
+        if (!r.ok || !d.success) throw new Error(d.error || "Sync failed");
+        el.textContent = `Synced ${d.synced} · ${d.repliesMatched} replies`;
+        el.className = "conn ok";
+        await Promise.all([loadGmailInbox(), loadStats(), loadSent()]);
+      } catch (err) {
+        el.textContent = "Sync failed";
+        el.className = "conn bad";
+        alert(err.message || "Gmail sync failed — check OAuth scopes include gmail.readonly");
+      } finally {
+        btn.disabled = false;
+        setTimeout(loadConnection, 3000);
+      }
+    }
+
+    document.getElementById("sync-gmail-btn").addEventListener("click", syncGmail);
+
+    async function loadDrips() {
+      const r = await fetch(apiUrl("/api/email/sequences"));
+      const d = await r.json();
+      const tbody = document.getElementById("drip-tbody");
+      if (!d.sequences?.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">No active sequences.</td></tr>';
+        return;
+      }
+      const totals = { buyer_drip: 6, seller_drip: 5 };
+      tbody.innerHTML = d.sequences.map(s => {
+        const total = totals[s.sequenceType] || "—";
+        const typeBadge = s.sequenceType === "buyer_drip" ? "buyer_drip" : s.sequenceType === "seller_drip" ? "seller_drip" : "manual";
+        return `<tr class="drip-row" data-open-drips="1">
+          <td><strong>${escapeHtml(s.leadName || s.leadId)}</strong></td>
+          <td>${badgeHtml(typeBadge, s.sequenceType)}</td>
+          <td>${s.currentStep} / ${total}</td>
+          <td>${s.nextSendDate ? new Date(s.nextSendDate).toLocaleString() : "—"}</td>
+          <td><button type="button" data-pause="${s.id}" onclick="event.stopPropagation()">Pause</button></td>
+        </tr>`;
+      }).join("");
+      tbody.querySelectorAll("[data-pause]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          await fetch(apiUrl("/api/email/sequence/" + btn.dataset.pause + "/pause"), { method: "POST", headers: authHeaders() });
+          loadDrips();
+          loadStats();
+        });
+      });
+      tbody.querySelectorAll(".drip-row").forEach(row => {
+        row.addEventListener("click", openDripsModal);
+      });
+    }
+
+    async function loadLeads() {
+      const r = await fetch(apiUrl("/api/leads/filter"), {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({}),
+      });
+      const d = await r.json();
+      const sel = document.getElementById("lead-select");
+      const withEmail = (d.leads || []).filter(l => l.email);
+      sel.innerHTML = '<option value="">Select lead…</option>' + withEmail.map(l =>
+        `<option value="${l.id}">${l.name || l.username || l.id} — ${l.email}</option>`
+      ).join("");
+    }
+
+    document.getElementById("lead-select").addEventListener("change", async (ev) => {
+      const id = ev.target.value;
+      const ctx = document.getElementById("client-context");
+      if (!id) { ctx.textContent = "Select a lead to load CRM context."; return; }
+      const r = await fetch(apiUrl("/api/email/client-context/" + id));
+      const c = await r.json();
+      ctx.innerHTML = `<strong>${escapeHtml(c.leadName)}</strong><br/>
+        Active deal: ${c.activeDeal ? escapeHtml(c.activeDeal.address) + " (" + escapeHtml(c.activeDeal.status) + ")" : "none"}<br/>
+        Last SMS: ${escapeHtml(c.lastConversationSnippet || "none")}<br/>
+        Last email subject: ${escapeHtml(c.lastEmailSubject || "none")}`;
+    });
+
+    document.getElementById("send-btn").addEventListener("click", async () => {
+      const leadId = document.getElementById("lead-select").value;
+      const subject = document.getElementById("email-subject").value.trim();
+      const body = document.getElementById("email-body").value.trim();
+      const status = document.getElementById("send-status");
+      if (!leadId || !subject || !body) { status.textContent = "Lead, subject, and body required."; return; }
+      status.textContent = "Sending…";
+      const r = await fetch(apiUrl("/api/email/send-existing-client"), {
+        method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ leadId, subject, body })
+      });
+      const d = await r.json();
+      status.textContent = d.success ? "Sent." : ("Failed: " + (d.error || "unknown"));
+      if (d.success) { loadSent(); loadStats(); }
+    });
+
+    async function refreshAll() {
+      await Promise.all([loadConnection(), loadStats(), loadSent(), loadDrips(), loadGmailInbox()]);
+    }
+
+    document.getElementById("refresh-btn").addEventListener("click", refreshAll);
+    loadLeads();
+    refreshAll();
+    setInterval(() => {
+      if (document.getElementById("auto-refresh").checked) refreshAll();
+    }, 30000);
+  </script>
+</body>
+</html>

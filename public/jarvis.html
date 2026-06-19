@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Harvey · Aethon · Marco Puga</title>
+  <title>Harvey Â· Aethon Â· Marco Puga</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Share+Tech+Mono&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -38,7 +38,7 @@
     }
     body { font-family: var(--font); color: var(--text); }
 
-    /* ─────── Backdrops ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ Backdrops â”€â”€â”€â”€â”€â”€â”€ */
     .j-bg {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background:
@@ -65,7 +65,7 @@
       box-shadow: inset 0 0 180px 40px rgba(0,0,0,0.85);
     }
 
-    /* ─────── Shell — full viewport ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ Shell â€” full viewport â”€â”€â”€â”€â”€â”€â”€ */
     :root {
       --j-strip-h: 36px;
       --j-nav-h: 38px;
@@ -152,7 +152,7 @@
     }
     .j-panel-close:hover { color: var(--cyan); }
 
-    /* ─────── Main — full screen Harvey ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ Main â€” full screen Harvey â”€â”€â”€â”€â”€â”€â”€ */
     .j-main {
       position: fixed;
       top: var(--j-chrome-top);
@@ -238,7 +238,7 @@
     }
     .j-chip.idle { color: var(--muted-2); }
 
-    /* ─────── LEFT metrics ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ LEFT metrics â”€â”€â”€â”€â”€â”€â”€ */
     .j-metrics { flex: 1; overflow-y: auto; padding: 0.6rem 0.7rem 1rem; }
     .j-metric-group {
       margin-bottom: 0.9rem; position: relative;
@@ -311,14 +311,14 @@
       letter-spacing: 0.2em;
     }
 
-    /* ─────── CENTER ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ CENTER â”€â”€â”€â”€â”€â”€â”€ */
     .j-center {
       display: flex; flex-direction: column; min-height: 0;
       flex: 1; width: 100%; height: 100%;
       position: relative; overflow: hidden; background: transparent;
     }
 
-    /* Center stage — orb fills remaining viewport */
+    /* Center stage â€” orb fills remaining viewport */
     .j-stage {
       position: relative;
       flex: 1 1 auto;
@@ -400,7 +400,7 @@
     .j-core-hint::before { content: "// "; opacity: 0.55; }
     .j-core-hint::after  { content: " //"; opacity: 0.55; }
 
-    /* ─────── Transcript ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ Transcript â”€â”€â”€â”€â”€â”€â”€ */
     .j-transcript {
       flex: 0 1 auto; min-height: 0; overflow-y: auto;
       max-height: 16vh;
@@ -430,7 +430,7 @@
       clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
     }
     .j-msg.ai::before {
-      content: "▸ HARVEY";
+      content: "â–¸ HARVEY";
       display: block;
       font-family: var(--mono); font-size: 0.5rem; letter-spacing: 0.24em;
       color: var(--cyan); opacity: 0.75; margin-bottom: 0.25rem;
@@ -445,12 +445,12 @@
     .j-msg.system::before { content: "// "; opacity: 0.55; }
     .j-msg.system::after  { content: " //"; opacity: 0.55; }
     .j-typing::after {
-      content: "▋"; animation: blink 0.8s step-end infinite;
+      content: "â–‹"; animation: blink 0.8s step-end infinite;
       color: var(--cyan); margin-left: 2px;
     }
     @keyframes blink { 50% { opacity: 0; } }
 
-    /* ─────── Composer ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ Composer â”€â”€â”€â”€â”€â”€â”€ */
     .j-compose {
       position: fixed;
       bottom: 0; left: 0; right: 0;
@@ -496,9 +496,9 @@
       box-shadow: 0 0 18px rgba(0,212,255,0.25);
     }
     .j-send:disabled { opacity: 0.35; cursor: not-allowed; }
-    .j-send::before { content: "▸ "; opacity: 0.8; }
+    .j-send::before { content: "â–¸ "; opacity: 0.8; }
 
-    /* ─────── RIGHT directives ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ RIGHT directives â”€â”€â”€â”€â”€â”€â”€ */
     .j-directives {
       flex: 1; overflow-y: auto;
       padding: 0.75rem 0.85rem;
@@ -553,12 +553,12 @@
     .j-dir-empty::before { content: "// "; opacity: 0.55; }
     .j-dir-empty::after  { content: " //"; opacity: 0.55; }
 
-    /* ─────── Responsive ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€ */
     @media (max-width: 900px) {
       .j-col { width: min(92vw, 300px); }
     }
 
-    /* ─────── Metrics strip + panels ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ Metrics strip + panels â”€â”€â”€â”€â”€â”€â”€ */
     #harvey-active-panel {
       display: none;
       position: fixed;
@@ -654,7 +654,7 @@
     .ms-funnel-line b { color: #00d4ff; font-weight: 400; }
     .ms-funnel-line .closing { color: #d6e4f0; text-shadow: 0 0 6px rgba(0, 212, 255, 0.4); }
 
-    /* ─────── Memory explorer ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ Memory explorer â”€â”€â”€â”€â”€â”€â”€ */
     .mem-panel[data-force-dark="true"],
     .mem-panel[data-force-dark="true"] * { color-scheme: dark; }
     .mem-panel {
@@ -725,7 +725,7 @@
       color: #d6e4f0; font-family: var(--mono); font-size: 11px; padding: 0.3rem;
     }
 
-    /* ─── HARVEY LIGHT MODE — STRONG CONTRAST ─── */
+    /* â”€â”€â”€ HARVEY LIGHT MODE â€” STRONG CONTRAST â”€â”€â”€ */
     @keyframes scanLight {
       0% { transform: translateY(-100vh); }
       100% { transform: translateY(100vh); }
@@ -893,7 +893,7 @@
       box-shadow: 0 0 8px #00ff88 !important;
     }
 
-    /* Main content area — transparent so shell dot-grid shows through */
+    /* Main content area â€” transparent so shell dot-grid shows through */
     html[data-theme="light"] #main-content,
     html[data-theme="light"] .main-content,
     html[data-theme="light"] .j-main {
@@ -944,7 +944,7 @@
       position: relative;
     }
 
-    /* Soft orb halo — floats without harsh blue blob */
+    /* Soft orb halo â€” floats without harsh blue blob */
     html[data-theme="light"] .j-core-wrap::before,
     html[data-theme="light"] #harvey-orb-container::before,
     html[data-theme="light"] [id*="orb-wrapper"]::before {
@@ -966,7 +966,7 @@
       border-radius: 50%;
     }
 
-    /* Hexagon background — CSS pattern on .j-hex (matches dark mode density) */
+    /* Hexagon background â€” CSS pattern on .j-hex (matches dark mode density) */
     html[data-theme="light"] .j-hex {
       opacity: 1 !important;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='none' stroke='rgba(0,80,160,0.14)' stroke-width='1.5' d='M28 1 L54 15 L54 43 L28 57 L2 43 L2 15 Z'/%3E%3C/svg%3E") !important;
@@ -978,7 +978,7 @@
       opacity: 0.14 !important;
     }
 
-    /* Orb canvas — rings visible, no center glow blob */
+    /* Orb canvas â€” rings visible, no center glow blob */
     html[data-theme="light"] #harvey-mic-btn,
     html[data-theme="light"] .harvey-orb,
     html[data-theme="light"] canvas {
@@ -1003,7 +1003,7 @@
       stroke-opacity: 0.55 !important;
     }
 
-    /* Mic icon overlay — keep cyan */
+    /* Mic icon overlay â€” keep cyan */
     html[data-theme="light"] .j-mic-icon svg rect {
       fill: rgba(0, 130, 200, 0.95) !important;
     }
@@ -1265,35 +1265,35 @@
         <span class="ms-strip-item ms-live"><i></i>LIVE</span>
         <span class="ms-sep">|</span>
         <span class="ms-strip-item ms-strip-section" id="strip-goal-section" data-panel="goal" title="Expand goal metrics">
-          <span class="ms-label ms-goal-pulse">$20M:</span> <span id="msGoalPct">—</span>
+          <span class="ms-label ms-goal-pulse">$20M:</span> <span id="msGoalPct">â€”</span>
         </span>
         <span class="ms-sep">|</span>
         <span class="ms-strip-item ms-strip-section" id="strip-gap-section" data-panel="goal" title="Expand goal metrics">
-          <span class="ms-label">GAP:</span> <span id="msGap">—</span>
+          <span class="ms-label">GAP:</span> <span id="msGap">â€”</span>
         </span>
         <span class="ms-sep">|</span>
         <span class="ms-strip-item ms-strip-section" id="strip-tiktok-section" data-panel="tiktok" title="Expand TikTok metrics">
-          <span class="ms-label">TIKTOK:</span> <span id="msTiktok">—</span>
+          <span class="ms-label">TIKTOK:</span> <span id="msTiktok">â€”</span>
         </span>
         <span class="ms-sep">|</span>
         <span class="ms-strip-item ms-strip-section" id="strip-mojo-section" data-panel="mojo" title="Expand Mojo metrics">
-          <span class="ms-label">MOJO:</span> <span id="msMojo">—</span>
+          <span class="ms-label">MOJO:</span> <span id="msMojo">â€”</span>
         </span>
         <span class="ms-sep">|</span>
-        <span class="ms-strip-item"><span class="ms-label">DAILY:</span> <span id="msDaily">—</span></span>
+        <span class="ms-strip-item"><span class="ms-label">DAILY:</span> <span id="msDaily">â€”</span></span>
         <span class="ms-sep">|</span>
-        <span class="ms-strip-item"><span class="ms-label">AVG DEAL:</span> <span id="msAvgDeal">—</span></span>
+        <span class="ms-strip-item"><span class="ms-label">AVG DEAL:</span> <span id="msAvgDeal">â€”</span></span>
         <span class="ms-sep">|</span>
-        <span class="ms-strip-item"><span class="ms-label">BUYER:</span> <span id="msBuyer">—</span></span>
+        <span class="ms-strip-item"><span class="ms-label">BUYER:</span> <span id="msBuyer">â€”</span></span>
         <span class="ms-sep">|</span>
-        <span class="ms-strip-item"><span class="ms-label">SELLER:</span> <span id="msSeller">—</span></span>
+        <span class="ms-strip-item"><span class="ms-label">SELLER:</span> <span id="msSeller">â€”</span></span>
         <span class="ms-sep ms-strip-narrow-hide">|</span>
-        <span class="ms-strip-item ms-strip-narrow-hide"><span class="ms-label">PACE:</span> <span id="msPace">—</span></span>
+        <span class="ms-strip-item ms-strip-narrow-hide"><span class="ms-label">PACE:</span> <span id="msPace">â€”</span></span>
         <span class="ms-sep ms-strip-narrow-hide">|</span>
-        <span class="ms-strip-item ms-strip-narrow-hide"><span class="ms-label">CONTACT RATE:</span> <span id="msContactRate">—</span></span>
+        <span class="ms-strip-item ms-strip-narrow-hide"><span class="ms-label">CONTACT RATE:</span> <span id="msContactRate">â€”</span></span>
       </div>
       <span class="ms-expand ms-strip-section" id="strip-expand-btn" data-panel="all" title="Expand all metrics">
-        <span id="msExpandLbl">[EXPAND ↓]</span>
+        <span id="msExpandLbl">[EXPAND â†“]</span>
       </span>
     </div>
 
@@ -1305,7 +1305,7 @@
       <div class="mem-head">
         <span id="memHeadTitle">// HARVEY MEMORY SYSTEM //</span>
         <button type="button" class="mem-add" id="memAddBtn">+ ADD</button>
-        <button type="button" class="mem-close" id="memCloseBtn">×</button>
+        <button type="button" class="mem-close" id="memCloseBtn">Ã—</button>
       </div>
       <div class="mem-form" id="memForm">
         <input type="text" id="memFactInput" placeholder="Fact text" />
@@ -1319,7 +1319,7 @@
         <input type="text" id="memTagsInput" placeholder="tags (comma)" />
         <button type="button" class="mem-add" id="memSaveBtn">SAVE</button>
       </div>
-      <input class="mem-search" id="memSearch" type="text" placeholder="🔍 Search Harvey's memory..." />
+      <input class="mem-search" id="memSearch" type="text" placeholder="ðŸ” Search Harvey's memory..." />
       <div class="mem-tabs">
         <button type="button" class="mem-tab active" data-tab="facts">FACTS</button>
         <button type="button" class="mem-tab" data-tab="connections">CONNECTIONS</button>
@@ -1330,11 +1330,11 @@
     </div>
 
     <header class="j-topbar">
-      <a href="/dashboard" class="j-back">◂ CRM</a>
+      <a href="/dashboard" class="j-back">â—‚ CRM</a>
       <button type="button" class="j-panel-toggle" id="jToggleOps">OPS</button>
       <div class="j-logo">
         <span class="j-logo-bracket">[</span>HARVEY<span class="j-logo-bracket">]</span>
-        <small>AETHON · MARCO PUGA</small>
+        <small>AETHON Â· MARCO PUGA</small>
       </div>
       <div class="j-spacer"></div>
       <button type="button" class="j-panel-toggle" id="jToggleMarket">MARKET</button>
@@ -1349,7 +1349,7 @@
         Light mode
       </button>
       <span class="j-meta" id="jSessionMeta"><span class="dot"></span>LINK STABLE</span>
-      <span class="j-meta" id="jModel">—</span>
+      <span class="j-meta" id="jModel">â€”</span>
     </header>
 
     <main class="j-main" id="jMain">
@@ -1366,7 +1366,7 @@
               <svg class="j-tick-ring" viewBox="0 0 200 200" aria-hidden="true">
                 <g id="jTickGroup" stroke="rgba(0,212,255,0.45)" stroke-linecap="round"></g>
               </svg>
-              <canvas id="harvey-mic-btn" class="harvey-orb" data-action="toggle-voice" aria-label="Harvey core — tap to speak"></canvas>
+              <canvas id="harvey-mic-btn" class="harvey-orb" data-action="toggle-voice" aria-label="Harvey core â€” tap to speak"></canvas>
               <!-- Mic icon centered over canvas -->
               <div class="j-mic-icon" id="jMicIcon">
                 <svg viewBox="0 0 48 60" fill="none" aria-hidden="true">
@@ -1396,13 +1396,13 @@
         </div>
 
         <div class="j-transcript" id="jTranscript">
-          <div class="j-msg system">Loading operator context…</div>
+          <div class="j-msg system">Loading operator contextâ€¦</div>
         </div>
 
         <form class="j-compose" id="jForm">
-          <span class="j-prompt" aria-hidden="true">▸</span>
+          <span class="j-prompt" aria-hidden="true">â–¸</span>
           <input class="j-input" id="jInput" type="text"
-            placeholder="ENTER COMMAND…" autocomplete="off" />
+            placeholder="ENTER COMMANDâ€¦" autocomplete="off" />
           <button type="submit" class="j-send" id="jSend">TRANSMIT</button>
         </form>
       </section>
@@ -1411,8 +1411,8 @@
     <aside class="j-col left side" id="jColOps">
       <div class="j-head">
         <span>LIVE OPS</span>
-        <span class="j-count" id="jNodeCount"><b>—</b> NODES</span>
-        <button type="button" class="j-panel-close" id="jCloseOps" aria-label="Close OPS panel">×</button>
+        <span class="j-count" id="jNodeCount"><b>â€”</b> NODES</span>
+        <button type="button" class="j-panel-close" id="jCloseOps" aria-label="Close OPS panel">Ã—</button>
       </div>
       <div class="j-chips" aria-hidden="true">
         <span class="j-chip live">LIVE</span>
@@ -1421,7 +1421,7 @@
         <span class="j-chip idle">IDLE</span>
       </div>
       <div class="j-metrics" id="jMetrics">
-        <div class="j-metric-group"><div class="j-metric-group-title">loading…</div></div>
+        <div class="j-metric-group"><div class="j-metric-group-title">loadingâ€¦</div></div>
       </div>
     </aside>
 
@@ -1429,14 +1429,14 @@
       <div class="j-head">
         <span>ACTIVE DIRECTIVES</span>
         <span class="j-count"><b id="jDirCount">0</b> TASKS</span>
-        <button type="button" class="j-panel-close" id="jCloseDir" aria-label="Close Directives panel">×</button>
+        <button type="button" class="j-panel-close" id="jCloseDir" aria-label="Close Directives panel">Ã—</button>
       </div>
       <div class="j-chips" aria-hidden="true">
         <span class="j-chip live">PRIORITY</span>
         <span class="j-chip idle">QUEUED</span>
       </div>
       <div class="j-directives" id="jDirectives">
-        <div class="j-dir-empty">Awaiting signal…</div>
+        <div class="j-dir-empty">Awaiting signalâ€¦</div>
       </div>
     </aside>
 
@@ -1452,7 +1452,7 @@
   </button>
 
   <script>
-    // Sync theme with dashboard preference (marco_crm_theme — same key as dashboard.html)
+    // Sync theme with dashboard preference (marco_crm_theme â€” same key as dashboard.html)
     const THEME_KEY = "marco_crm_theme";
 
     function isLightTheme() {
@@ -1605,9 +1605,9 @@
       }
     });
 
-    /* ─────────────────────────────────────────────
-       TICK RING — radial marks around the core
-    ───────────────────────────────────────────── */
+    /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+       TICK RING â€” radial marks around the core
+    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     (function buildTicks() {
       const g = document.getElementById("jTickGroup");
       if (!g) return;
@@ -1634,9 +1634,9 @@
       updateOrbColors();
     })();
 
-    /* ─────────────────────────────────────────────
-       CANVAS CORE — dynamic orbital animation
-    ───────────────────────────────────────────── */
+    /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+       CANVAS CORE â€” dynamic orbital animation
+    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     (function initCanvas() {
       const canvas = document.getElementById("harvey-mic-btn");
       const wrap   = document.getElementById("jCoreWrap");
@@ -1686,7 +1686,7 @@
         layer:  i % 3,
       }));
 
-      /* Perfect concentric rings — radius fraction, dash pattern (px @ R=200),
+      /* Perfect concentric rings â€” radius fraction, dash pattern (px @ R=200),
          line width, alpha, rotation speed (px/frame via lineDashOffset),
          glow flag. dash:null = solid circle. */
       const rings = [
@@ -1842,9 +1842,9 @@
 
     })();
 
-    /* ─────────────────────────────────────────────
+    /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
        APP LOGIC
-    ───────────────────────────────────────────── */
+    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     const token = new URLSearchParams(window.location.search).get("token");
     let sessionId = sessionStorage.getItem("harvey_session_id") || "";
     let busy = false;
@@ -1910,19 +1910,19 @@
       else setCoreVisual("idle");
     }
 
-    /* ──────── Metric helpers ──────── */
+    /* â”€â”€â”€â”€â”€â”€â”€â”€ Metric helpers â”€â”€â”€â”€â”€â”€â”€â”€ */
     function fmtNum(n) {
-      if (n == null || Number.isNaN(Number(n))) return "—";
+      if (n == null || Number.isNaN(Number(n))) return "â€”";
       return Number(n).toLocaleString();
     }
     function fmtMoney(n) {
-      if (n == null || Number.isNaN(Number(n))) return "—";
+      if (n == null || Number.isNaN(Number(n))) return "â€”";
       const v = Number(n);
       if (v >= 10000) return "$" + (v / 1000).toFixed(1) + "k";
       return "$" + v.toFixed(2);
     }
     function fmtPct(n) {
-      if (n == null || Number.isNaN(Number(n))) return "—";
+      if (n == null || Number.isNaN(Number(n))) return "â€”";
       return (Math.round(Number(n) * 100) / 100) + "%";
     }
     function rowsHtml(rows) {
@@ -1934,7 +1934,7 @@
           : "";
         return `<div class="j-metric">
           <label>${esc(r.label)}</label>
-          <b class="${cls}">${esc(r.value ?? "—")}</b>
+          <b class="${cls}">${esc(r.value ?? "â€”")}</b>
           ${bar}
         </div>`;
       }).join("");
@@ -1946,13 +1946,13 @@
     /* Pretty labels for DM/AI funnel state codes */
     const FUNNEL_LABELS = {
       new: "New",
-      opening_asked_first_time: "Opening · asked",
-      opening_offered_details: "Opening · offered",
+      opening_asked_first_time: "Opening Â· asked",
+      opening_offered_details: "Opening Â· offered",
       breakdown_offered: "Breakdown sent",
       phone_just_captured: "Phone captured",
       criteria_collection: "Criteria collection",
       email_captured: "Email captured",
-      handoff_human: "Handoff · human",
+      handoff_human: "Handoff Â· human",
       closed: "Closed",
     };
     function funnelLabel(k) {
@@ -1972,7 +1972,7 @@
 
       const groups = [];
 
-      /* ── CRM PIPELINE ── */
+      /* â”€â”€ CRM PIPELINE â”€â”€ */
       groups.push({
         title: "CRM Pipeline",
         tag: tagHtml("LIVE", "live"),
@@ -1983,11 +1983,11 @@
           { label: "Emails captured", value: fmtNum(m.emailsCaptured),
             barPct: total ? (m.emailsCaptured / total) * 100 : 0 },
           { label: "Capture rate",    value: fmtPct(m.phoneCaptureRatePct) },
-          { label: "Phones · 24h",    value: fmtNum(m.phonesLast24h) },
+          { label: "Phones Â· 24h",    value: fmtNum(m.phonesLast24h) },
         ],
       });
 
-      /* ── CRM STATUS ── */
+      /* â”€â”€ CRM STATUS â”€â”€ */
       const statusRows = [
         ["Not contacted", cs.not_contacted, "warn"],
         ["Contacted",     cs.contacted,     ""],
@@ -2000,7 +2000,7 @@
         rows: statusRows,
       });
 
-      /* ── CALL QUEUE ── */
+      /* â”€â”€ CALL QUEUE â”€â”€ */
       groups.push({
         title: "Call Queue",
         tag: cq.urgent > 0 ? tagHtml("HOT", "live") : "",
@@ -2011,29 +2011,29 @@
         ],
       });
 
-      /* ── DM AI AGENT ── */
+      /* â”€â”€ DM AI AGENT â”€â”€ */
       const aiOnline = !!sys.anthropicConfigured;
       const funnelEntries = Object.entries(fd)
         .sort((a, b) => (b[1] || 0) - (a[1] || 0))
         .slice(0, 6);
       groups.push({
-        title: "DM · AI Agent",
+        title: "DM Â· AI Agent",
         tag: tagHtml(aiOnline ? "ONLINE" : "OFFLINE", aiOnline ? "live" : "off"),
         rows: funnelEntries.length
           ? funnelEntries.map(([k, v]) => ({
               label: funnelLabel(k), value: fmtNum(v),
               barPct: total ? (v / total) * 100 : 0,
             }))
-          : [{ label: "Funnel idle", value: "—" }],
+          : [{ label: "Funnel idle", value: "â€”" }],
       });
 
-      /* ── ACTION NEEDED ── */
+      /* â”€â”€ ACTION NEEDED â”€â”€ */
       groups.push({
         title: "Action Needed",
         tag: (m.hotNeedsSms || 0) + (m.noInteraction || 0) > 0
           ? tagHtml("FLAG", "live") : "",
         rows: [
-          { label: "Hot · needs SMS", value: fmtNum(m.hotNeedsSms),
+          { label: "Hot Â· needs SMS", value: fmtNum(m.hotNeedsSms),
             cls: m.hotNeedsSms > 0 ? "warn" : "",
             barPct: total ? (m.hotNeedsSms / total) * 100 : 0 },
           { label: "No interaction",  value: fmtNum(m.noInteraction),
@@ -2042,7 +2042,7 @@
         ],
       });
 
-      /* ── PLATFORM ── */
+      /* â”€â”€ PLATFORM â”€â”€ */
       const igTt = (m.instagram || 0) + (m.tiktok || 0);
       groups.push({
         title: "Platform Mix",
@@ -2055,23 +2055,23 @@
         ],
       });
 
-      /* ── META ADS ── */
+      /* â”€â”€ META ADS â”€â”€ */
       const adsOn = !!ads.configured;
       const adRows = adsOn ? [
         { label: "Spend",       value: fmtMoney(ads.spend) },
         { label: "Impressions", value: fmtNum(ads.impressions) },
         { label: "Clicks",      value: fmtNum(ads.clicks) },
-        { label: "CTR",         value: ads.ctr != null ? fmtPct(ads.ctr) : "—" },
-        { label: "CPL",         value: ads.cpl != null ? fmtMoney(ads.cpl) : "—" },
+        { label: "CTR",         value: ads.ctr != null ? fmtPct(ads.ctr) : "â€”" },
+        { label: "CPL",         value: ads.cpl != null ? fmtMoney(ads.cpl) : "â€”" },
         { label: "Ad leads",    value: fmtNum(ads.adLeads) },
-      ] : [{ label: "Upstream offline", value: "—" }];
+      ] : [{ label: "Upstream offline", value: "â€”" }];
       groups.push({
         title: "Meta Ads",
         tag: tagHtml(adsOn ? "LINKED" : "OFFLINE", adsOn ? "live" : "off"),
         rows: adRows,
       });
 
-      /* ── AD ATTRIBUTION ── */
+      /* â”€â”€ AD ATTRIBUTION â”€â”€ */
       groups.push({
         title: "Ad Attribution",
         tag: "",
@@ -2081,14 +2081,14 @@
         ],
       });
 
-      /* ── SYSTEMS ── */
+      /* â”€â”€ SYSTEMS â”€â”€ */
       groups.push({
         title: "Systems",
         tag: "",
         rows: [
           { label: "AI engine",     value: sys.anthropicConfigured ? "ONLINE" : "OFFLINE",
             cls: sys.anthropicConfigured ? "" : "danger" },
-          { label: "SMS · Sendblue", value: sys.sendblueConfigured ? "ONLINE" : "OFFLINE",
+          { label: "SMS Â· Sendblue", value: sys.sendblueConfigured ? "ONLINE" : "OFFLINE",
             cls: sys.sendblueConfigured ? "" : "warn" },
           { label: "Ads uplink",    value: sys.adsLinked ? "LINKED" : "OFFLINE",
             cls: sys.adsLinked ? "" : "warn" },
@@ -2117,7 +2117,7 @@
       const el = document.getElementById("jDirectives");
       const countEl = document.getElementById("jDirCount");
       if (!list || !list.length) {
-        el.innerHTML = '<div class="j-dir-empty">No directives — standing by</div>';
+        el.innerHTML = '<div class="j-dir-empty">No directives â€” standing by</div>';
         if (countEl) countEl.textContent = "0";
         return;
       }
@@ -2287,7 +2287,7 @@
     document.getElementById("jCloseDir").addEventListener("click", () => togglePanel("jColDir"));
     document.getElementById("jDrawerBackdrop").addEventListener("click", closeSidePanels);
 
-    /* ─────── Metrics strip + memory explorer ─────── */
+    /* â”€â”€â”€â”€â”€â”€â”€ Metrics strip + memory explorer â”€â”€â”€â”€â”€â”€â”€ */
     function getToken() {
       return token || "";
     }
@@ -2333,37 +2333,37 @@
     function renderMetricsStrip(data) {
       const dash = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
       if (!data) {
-        dash("msGoalPct", "— · — BANKED");
-        dash("msGap", "—");
-        dash("msTiktok", "—");
-        dash("msMojo", "—");
-        dash("msDaily", "—");
-        dash("msAvgDeal", "—");
-        dash("msBuyer", "—");
-        dash("msSeller", "—");
-        dash("msPace", "—");
-        dash("msContactRate", "—");
+        dash("msGoalPct", "â€” Â· â€” BANKED");
+        dash("msGap", "â€”");
+        dash("msTiktok", "â€”");
+        dash("msMojo", "â€”");
+        dash("msDaily", "â€”");
+        dash("msAvgDeal", "â€”");
+        dash("msBuyer", "â€”");
+        dash("msSeller", "â€”");
+        dash("msPace", "â€”");
+        dash("msContactRate", "â€”");
         return;
       }
       const g = data.goal;
       const tt = data.tiktok;
       const mj = data.mojo;
       const dt = data.dailyTargets || {};
-      dash("msGoalPct", `${g.percentComplete}% · ${fmtMoneyShort(g.banked)} BANKED`);
+      dash("msGoalPct", `${g.percentComplete}% Â· ${fmtMoneyShort(g.banked)} BANKED`);
       dash("msGap", fmtMoneyShort(g.gap));
-      dash("msTiktok", `${fmtCompact(tt.views)} VIEWS · ${tt.closings} CLOSINGS · ${tt.videosPerWeekCurrent} VIDS/WK`);
-      dash("msMojo", `${mj.calls.toLocaleString()} CALLS · ${mj.closings} CLOSINGS`);
+      dash("msTiktok", `${fmtCompact(tt.views)} VIEWS Â· ${tt.closings} CLOSINGS Â· ${tt.videosPerWeekCurrent} VIDS/WK`);
+      dash("msMojo", `${mj.calls.toLocaleString()} CALLS Â· ${mj.closings} CLOSINGS`);
       dash("msDaily", `${dt.videos || 7} VIDEOS + ${dt.calls || 725} CALLS`);
       dash("msAvgDeal", fmtMoneyShort(g.avgDealPrice || 425000));
       dash("msBuyer", "21 CLOSINGS NEEDED");
       dash("msSeller", "14 CLOSINGS NEEDED");
-      dash("msPace", `1 CLOSING/${tt.weeksPerClosingCurrent || 8}WKS → NEED ${tt.videosPerWeekForMonthly || 10.3} VIDS/WK`);
+      dash("msPace", `1 CLOSING/${tt.weeksPerClosingCurrent || 8}WKS â†’ NEED ${tt.videosPerWeekForMonthly || 10.3} VIDS/WK`);
       dash("msContactRate", `1 PER ${mj.callsPerContact || 32} CALLS`);
       applyMetricsStripTheme();
     }
 
     // ============================================
-    // DYNAMIC PANEL SYSTEM — server decides, client renders
+    // DYNAMIC PANEL SYSTEM â€” server decides, client renders
     // ============================================
 
     let activePanelType = null;
@@ -2425,7 +2425,7 @@
       metricsExpandOpen = true;
       metricsExpandType = panel === "metrics" ? "all" : panel;
       const expandLbl = document.getElementById("msExpandLbl");
-      if (expandLbl) expandLbl.textContent = "[COLLAPSE ↑]";
+      if (expandLbl) expandLbl.textContent = "[COLLAPSE â†‘]";
       showPanel(title, body);
     }
     window.openDynamicPanel = openDynamicPanel;
@@ -2475,7 +2475,7 @@
           <div style="display:flex; gap:12px; align-items:center;">
             <span style="font-size:9px; color:#444; font-family:monospace;" id="panel-timestamp">${new Date().toLocaleTimeString()}</span>
             <span onclick="closeActivePanel()"
-                  style="cursor:pointer; color:#00d4ff; font-size:20px; line-height:1; padding:0 4px;">×</span>
+                  style="cursor:pointer; color:#00d4ff; font-size:20px; line-height:1; padding:0 4px;">Ã—</span>
           </div>
         </div>
         <div style="padding:20px 24px;">
@@ -2497,7 +2497,7 @@
       activePanelType = null;
       metricsExpandOpen = false;
       const expandLbl = document.getElementById("msExpandLbl");
-      if (expandLbl) expandLbl.textContent = "[EXPAND ↓]";
+      if (expandLbl) expandLbl.textContent = "[EXPAND â†“]";
     }
     window.closeActivePanel = closeActivePanel;
 
@@ -2506,7 +2506,7 @@
         <div style="display:grid; grid-template-columns:auto auto 1fr; gap:16px; font-family:monospace;">
           <div style="border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px; min-width:180px;">
             <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:12px;">
-              ${esc((d.dayOfWeek || "").toUpperCase())} · ${esc(d.date || "")}
+              ${esc((d.dayOfWeek || "").toUpperCase())} Â· ${esc(d.date || "")}
             </div>
             <div style="font-size:9px; color:#555; letter-spacing:1px; margin-bottom:8px;">NON-NEGOTIABLES</div>
             <div style="display:flex; gap:20px; align-items:center;">
@@ -2536,7 +2536,7 @@
           <div style="border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
             <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:10px;">WHAT MOVES THE NEEDLE</div>
             <div style="font-size:11px; color:#fff; line-height:2; margin-bottom:14px;">
-              ${(d.needleMovers || []).map(m => `<div style="display:flex; gap:8px;"><span style="color:rgba(0,212,255,0.4);">→</span><span>${esc(m)}</span></div>`).join("")}
+              ${(d.needleMovers || []).map(m => `<div style="display:flex; gap:8px;"><span style="color:rgba(0,212,255,0.4);">â†’</span><span>${esc(m)}</span></div>`).join("")}
             </div>
             <div style="border-top:1px solid rgba(0,212,255,0.1); padding-top:12px; font-size:11px; color:#666; font-style:italic; line-height:1.6;">
               ${esc(d.motivation || "")}
@@ -2588,7 +2588,7 @@
           <button onclick="openMarketIntelPanel()"
                   style="margin-left:16px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                          color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px;
-                         letter-spacing:2px; cursor:pointer; border-radius:2px;">↻ REFRESH</button>
+                         letter-spacing:2px; cursor:pointer; border-radius:2px;">â†» REFRESH</button>
         </div>`;
     }
 
@@ -2608,7 +2608,7 @@
           <div style="font-size:11px; color:#888; line-height:1.5;">${esc(e.summary || "")}</div>
           ${e.realEstateRelevance ? `
             <div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(0,212,255,0.08);
-                        font-size:10px; color:#00d4ff;">→ RE IMPACT: ${esc(e.realEstateRelevance)}</div>
+                        font-size:10px; color:#00d4ff;">â†’ RE IMPACT: ${esc(e.realEstateRelevance)}</div>
           ` : ""}
         </div>
       `).join("") : '<div style="color:#555; font-family:monospace; font-size:11px; padding:20px 0;">No events found</div>';
@@ -2632,7 +2632,7 @@
             <button onclick="openWorldIntelPanel()"
                     style="margin-left:16px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                            color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px;
-                           letter-spacing:2px; cursor:pointer; border-radius:2px;">↻ REFRESH</button>
+                           letter-spacing:2px; cursor:pointer; border-radius:2px;">â†» REFRESH</button>
           </div>
         </div>`;
     }
@@ -2646,12 +2646,12 @@
 
       const goalHTML = `
         <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
-          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">$20M CAMPAIGN · ${esc(goal.deadline || "NOV 30 2026")}</div>
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">$20M CAMPAIGN Â· ${esc(goal.deadline || "NOV 30 2026")}</div>
           <div style="background:rgba(0,212,255,0.1); border-radius:2px; height:6px; margin-bottom:8px;">
             <div style="background:#00d4ff; width:${goal.percentComplete || 29.8}%; height:100%; border-radius:2px;"></div>
           </div>
           <div style="color:#fff; font-size:11px; line-height:1.8;">
-            <div>BANKED: <span style="color:#00d4ff;">$${(banked / 1000000).toFixed(2)}M</span> · ${goal.dealsCount || 0} deals</div>
+            <div>BANKED: <span style="color:#00d4ff;">$${(banked / 1000000).toFixed(2)}M</span> Â· ${goal.dealsCount || 0} deals</div>
             <div>GAP: <span style="color:#ff6b35;">$${(gap / 1000000).toFixed(2)}M</span></div>
             <div>AVG DEAL: $${(goal.avgDealPrice || 0).toLocaleString()}</div>
           </div>
@@ -2659,9 +2659,9 @@
 
       const tiktokHTML = `
         <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
-          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">TIKTOK ENGINE · ${tiktok.days || 0} DAYS · ${tiktok.videos || 0} VIDEOS</div>
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">TIKTOK ENGINE Â· ${tiktok.days || 0} DAYS Â· ${tiktok.videos || 0} VIDEOS</div>
           <div style="color:#fff; font-size:11px; line-height:2;">
-            <div><span style="color:#00d4ff;">${((tiktok.views || 0) / 1000).toFixed(0)}K</span> VIEWS · ${tiktok.closings || 0} CLOSINGS</div>
+            <div><span style="color:#00d4ff;">${((tiktok.views || 0) / 1000).toFixed(0)}K</span> VIEWS Â· ${tiktok.closings || 0} CLOSINGS</div>
             <div style="color:#ff6b35;">CURRENT: ${tiktok.videosPerWeekCurrent || 0} vids/wk</div>
             <div style="color:#00d4ff;">NEEDED: ${tiktok.videosPerWeekForMonthly || 0} vids/wk for monthly</div>
           </div>
@@ -2669,9 +2669,9 @@
 
       const mojoHTML = `
         <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
-          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER · JAN–MAY 2026</div>
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER Â· JANâ€“MAY 2026</div>
           <div style="color:#fff; font-size:11px; line-height:2;">
-            <div><span style="color:#00d4ff;">${(mojo.calls || 0).toLocaleString()}</span> CALLS · ${mojo.closings || 0} CLOSINGS</div>
+            <div><span style="color:#00d4ff;">${(mojo.calls || 0).toLocaleString()}</span> CALLS Â· ${mojo.closings || 0} CLOSINGS</div>
             <div style="color:#888;">1 contact per ${mojo.callsPerContact || 32} calls</div>
           </div>
         </div>`;
@@ -2736,10 +2736,10 @@
         needleMovers: [
           "7 videos posted today keeps the TikTok engine alive",
           "725 calls = 22 contacts at current rate = pipeline building",
-          "Every video above 7 compounds — 10.3/week hits monthly closing pace",
+          "Every video above 7 compounds â€” 10.3/week hits monthly closing pace",
           "Every 6,734 calls = 1 seller closing = $425K avg deal",
         ],
-        motivation: `${dayOfWeek}. $14M gap. ${daysLeft} days left. The only thing that moves the needle today is reps — videos and calls. Everything else is noise.`,
+        motivation: `${dayOfWeek}. $14M gap. ${daysLeft} days left. The only thing that moves the needle today is reps â€” videos and calls. Everything else is noise.`,
       });
     }
     window.expandDailyPlanPanel = expandDailyPlanPanel;
@@ -2775,7 +2775,7 @@
             <button onclick="openMarketIntelPanel()"
                     style="margin-top:14px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                            color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px; cursor:pointer;">
-              ↻ RETRY
+              â†» RETRY
             </button>
           </div>
         `);
@@ -2814,7 +2814,7 @@
             <button onclick="openWorldIntelPanel()"
                     style="margin-top:14px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                            color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px; cursor:pointer;">
-              ↻ RETRY
+              â†» RETRY
             </button>
           </div>
         `);
@@ -2834,7 +2834,7 @@
             <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER</div>
             <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px;">
               <div style="font-size:11px; color:${d.mojo?.hasApi ? "#00ff88" : "#ff6b35"};">
-                ${d.mojo?.hasApi ? "● API AVAILABLE" : "○ NO PUBLIC API"}
+                ${d.mojo?.hasApi ? "â— API AVAILABLE" : "â—‹ NO PUBLIC API"}
               </div>
               <div style="font-size:9px; color:#555; background:rgba(0,212,255,0.1); padding:2px 8px; border-radius:2px;">
                 ${String(d.mojo?.integrationComplexity || "").toUpperCase()}
@@ -2843,7 +2843,7 @@
             <div style="font-size:11px; color:#fff; line-height:1.7; margin-bottom:10px;">${esc(d.mojo?.apiDetails || "")}</div>
             <div style="font-size:10px; color:#888; margin-bottom:6px;">EXPORT OPTIONS:</div>
             <div style="font-size:11px; color:#aaa; line-height:1.6;">
-              ${(d.mojo?.exportOptions || []).map(o => `→ ${esc(o)}`).join("<br>")}
+              ${(d.mojo?.exportOptions || []).map(o => `â†’ ${esc(o)}`).join("<br>")}
             </div>
             <div style="margin-top:10px; padding:10px; background:rgba(0,212,255,0.05); border-radius:2px; border-left:2px solid #00d4ff;">
               <div style="font-size:9px; color:#00d4ff; margin-bottom:4px;">RECOMMENDATION</div>
@@ -2855,7 +2855,7 @@
             <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:12px;">TIKTOK ANALYTICS</div>
             <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px;">
               <div style="font-size:11px; color:${d.tiktok?.hasApi ? "#00ff88" : "#ff6b35"};">
-                ${d.tiktok?.hasApi ? "● API AVAILABLE" : "○ NO PUBLIC API"}
+                ${d.tiktok?.hasApi ? "â— API AVAILABLE" : "â—‹ NO PUBLIC API"}
               </div>
               <div style="font-size:9px; color:#555; background:rgba(0,212,255,0.1); padding:2px 8px; border-radius:2px;">
                 ${String(d.tiktok?.integrationComplexity || "").toUpperCase()}
@@ -2883,7 +2883,7 @@
           <button onclick="openMojoTiktokResearch()"
                   style="background:transparent; border:1px solid rgba(0,212,255,0.3); color:#00d4ff;
                          padding:5px 16px; font-family:monospace; font-size:9px; letter-spacing:2px; cursor:pointer; border-radius:2px;">
-            ↻ REFRESH RESEARCH
+            â†» REFRESH RESEARCH
           </button>
         </div>
       `;
@@ -2900,7 +2900,7 @@
             </div>
             <div style="font-size:13px; color:#fff; line-height:1.7; margin-bottom:12px;">${esc(note.content || "")}</div>
             ${note.leadName ? `<div style="font-size:10px; color:#888; padding-top:10px; border-top:1px solid rgba(0,212,255,0.1);">LINKED TO: ${esc(note.leadName)}</div>` : ""}
-            <div style="font-size:9px; color:#444; margin-top:8px;">SOURCE: ${String(note.source || "text").toUpperCase()} · SAVED TO NOTES</div>
+            <div style="font-size:9px; color:#444; margin-top:8px;">SOURCE: ${String(note.source || "text").toUpperCase()} Â· SAVED TO NOTES</div>
           </div>
           <div style="text-align:center; margin-top:12px;">
             <button onclick="closeActivePanel()"
@@ -2956,7 +2956,7 @@
                   <div style="font-size:9px; color:#444;">${new Date(n.createdAt).toLocaleDateString()}</div>
                 </div>
                 <div style="font-size:12px; color:#fff; line-height:1.6; margin-bottom:8px;">${esc(n.content || "")}</div>
-                ${n.leadName ? `<div style="font-size:10px; color:#888;">↳ ${esc(n.leadName)}</div>` : ""}
+                ${n.leadName ? `<div style="font-size:10px; color:#888;">â†³ ${esc(n.leadName)}</div>` : ""}
                 <div style="display:flex; gap:8px; margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,212,255,0.08);">
                   <span style="font-size:9px; color:#444;">${String(n.source || "text").toUpperCase()}</span>
                   <button onclick="deleteHarveyNote('${n.id}')"
@@ -3046,7 +3046,7 @@
             <button onclick="openMojoTiktokResearch()"
                     style="margin-top:14px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                            color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px; cursor:pointer;">
-              ↻ RETRY
+              â†» RETRY
             </button>
           </div>
         `);
@@ -3137,27 +3137,27 @@
     function renderMemoryTab() {
       const body = document.getElementById("memBody");
       const d = memDataCache;
-      if (!d) { body.innerHTML = "—"; return; }
+      if (!d) { body.innerHTML = "â€”"; return; }
       if (memActiveTab === "facts") {
         body.innerHTML = (d.semantic || []).map(s => {
           const cat = (s.category || "business").toLowerCase();
-          const dot = (s.weight || 1) >= 1.8 ? "●" : "○";
+          const dot = (s.weight || 1) >= 1.8 ? "â—" : "â—‹";
           return `<div class="mem-row"><span class="${(s.weight || 1) >= 1.8 ? "mem-dot-filled" : "mem-dot-hollow"}">${dot}</span> <span class="mem-badge ${cat}">${esc(cat.toUpperCase())}</span> ${esc(s.fact)} <span style="color:#4a5e74">weight: ${s.weight || 1}</span></div>`;
-        }).join("") || "—";
+        }).join("") || "â€”";
       } else if (memActiveTab === "connections") {
         body.innerHTML = (d.relational || []).map(r =>
-          `<div class="mem-row mem-rel">${esc(r.entity_a)} <span>──[${esc(r.relationship)}]──→</span> ${esc(r.entity_b)}</div>`
-        ).join("") || "—";
+          `<div class="mem-row mem-rel">${esc(r.entity_a)} <span>â”€â”€[${esc(r.relationship)}]â”€â”€â†’</span> ${esc(r.entity_b)}</div>`
+        ).join("") || "â€”";
       } else if (memActiveTab === "rules") {
         body.innerHTML = (d.procedural || []).map(p =>
-          `<div class="mem-row">⚡ <span class="mem-rule-trigger">WHEN: ${esc(p.trigger_condition)}</span><br><span class="mem-rule-action">DO: ${esc(p.action)}</span></div>`
-        ).join("") || "—";
+          `<div class="mem-row">âš¡ <span class="mem-rule-trigger">WHEN: ${esc(p.trigger_condition)}</span><br><span class="mem-rule-action">DO: ${esc(p.action)}</span></div>`
+        ).join("") || "â€”";
       } else {
         body.innerHTML = (d.episodes || []).map(e => {
           const w = (e.emotional_weight || "routine").toUpperCase();
-          const date = (e.timestamp || "").split("T")[0] || "—";
-          return `<div class="mem-row">[${date}] ${esc(e.summary)} — <span class="mem-badge funnel">${w}</span></div>`;
-        }).join("") || "—";
+          const date = (e.timestamp || "").split("T")[0] || "â€”";
+          return `<div class="mem-row">[${date}] ${esc(e.summary)} â€” <span class="mem-badge funnel">${w}</span></div>`;
+        }).join("") || "â€”";
       }
     }
 
@@ -3170,7 +3170,7 @@
       memDataCache = await fetchMemoryFull();
       if (memDataCache?.stats) {
         document.getElementById("memHeadTitle").textContent =
-          `// HARVEY MEMORY · ${memDataCache.stats.semanticCount} FACTS · ${memDataCache.stats.relationalCount} CONNECTIONS · ${memDataCache.stats.proceduralCount} RULES //`;
+          `// HARVEY MEMORY Â· ${memDataCache.stats.semanticCount} FACTS Â· ${memDataCache.stats.relationalCount} CONNECTIONS Â· ${memDataCache.stats.proceduralCount} RULES //`;
       }
       renderMemoryTab();
     }
@@ -3261,14 +3261,14 @@
         const voice = hm?.voice;
         if (hm) {
           const bits = [hm.model || "Harvey"];
-          if (voice?.engine && voice.engine !== "none") bits.push("GEMINI LIVE");
+          if (voice?.engine && voice.engine !== "none") bits.push("FLUX STT");
           else if (voice?.gemini_configured) bits.push("GEMINI");
           if (voice?.tts && voice.tts !== "none") bits.push("TTS");
-          document.getElementById("jModel").textContent = bits.join(" · ");
+          document.getElementById("jModel").textContent = bits.join(" Â· ");
         }
         if (!voice?.gemini_configured) {
           document.getElementById("harvey-mic-btn").style.cursor = "default";
-          coreHint.textContent = "VOICE OFFLINE — TYPE BELOW";
+          coreHint.textContent = "VOICE OFFLINE â€” TYPE BELOW";
         }
         await loadOps();
         await refreshMetrics();
@@ -3285,863 +3285,6 @@
     }, 60000);
   </script>
 
-  <script>
-    // ============================================
-    // HARVEY GEMINI LIVE VOICE SYSTEM
-    // ============================================
-
-    let geminiLiveWs = null;
-    let audioContext = null;
-    let micStream = null;
-    let micSource = null;
-    let micProcessor = null;
-    let vadAnalyser = null;
-    let audioQueue = [];
-    let audioChunkBuffer = [];
-    let isPlayingAudio = false;
-    let currentAudioSource = null;
-    let nextPlayTime = 0;
-    let isListening = false;
-    let vadIntervalId = null;
-    let isInterrupting = false;
-    let harveyStartedSpeakingAt = 0;
-    const ECHO_SUPPRESS_MS = 500;
-    let micLoggedOnce = false;
-    let voiceTurnOutputText = "";
-    let voiceTurnInputText = "";
-    let wsOpenTimer = null;
-    let wsDidOpen = false;
-    const SESSION_ID = "harvey-" + Date.now();
-
-    function getToken() {
-      return new URLSearchParams(window.location.search).get("token") || "";
-    }
-
-    function geminiApiUrl(path) {
-      const u = new URL(path, window.location.origin);
-      const t = getToken();
-      if (t) u.searchParams.set("token", t);
-      return u.toString();
-    }
-
-    function showVoiceError(msg) {
-      const text = msg instanceof Error ? msg.message : String(msg);
-      console.error("[Harvey] ERROR:", text);
-      const el = document.getElementById("harvey-voice-error");
-      if (el) {
-        el.textContent = "⚠️ " + text;
-        el.style.display = "block";
-      }
-    }
-
-    function clearVoiceError() {
-      const el = document.getElementById("harvey-voice-error");
-      if (el) {
-        el.textContent = "";
-        el.style.display = "none";
-      }
-    }
-
-    window.isGeminiLiveActive = function () {
-      return !!(geminiLiveWs && geminiLiveWs.readyState === WebSocket.OPEN);
-    };
-
-    function normalizeGeminiToolsForLive(tools) {
-      if (!tools) return { functionDeclarations: [] };
-      if (tools.functionDeclarations?.length) return tools;
-      if (tools.function_declarations?.length) {
-        return { functionDeclarations: tools.function_declarations };
-      }
-      return tools;
-    }
-
-    function geminiToolDeclarationCount(tools) {
-      const normalized = normalizeGeminiToolsForLive(tools);
-      return normalized.functionDeclarations?.length || 0;
-    }
-
-    function buildGeminiFunctionResponsePayload(toolName, result) {
-      if (!result || typeof result !== "object") return { result };
-      if (toolName === "get_social_summary") {
-        const stats = result.stats || {};
-        const profile = result.profile || {};
-        return {
-          avgViewsPerVideo: stats.avgViewsPerVideo ?? result.avg_views ?? null,
-          followers: profile.followers ?? result.follower_count ?? null,
-          videosTracked: stats.videosTracked ?? result.total_videos ?? null,
-          totalViews: stats.totalViews ?? result.total_views ?? null,
-          humanSummary: result.humanSummary ?? result.summary ?? null,
-          dataAvailable: result.dataAvailable ?? false,
-        };
-      }
-      return result;
-    }
-
-    function extractGeminiFunctionCalls(toolCall) {
-      if (!toolCall) return [];
-      if (Array.isArray(toolCall.functionCalls)) return toolCall.functionCalls;
-      if (Array.isArray(toolCall.function_calls)) return toolCall.function_calls;
-      if (toolCall.name) return [toolCall];
-      return [];
-    }
-
-    async function handleGeminiToolCall(toolCall) {
-      const functionCalls = extractGeminiFunctionCalls(toolCall);
-
-      if (functionCalls.length === 0) {
-        console.warn("[Harvey] Tool call received but no function calls found:", JSON.stringify(toolCall));
-        return;
-      }
-
-      const toolResponses = [];
-
-      for (const call of functionCalls) {
-        const toolName = call.name;
-        const toolInput = call.args || call.arguments || {};
-        const callId = call.id;
-
-        if (!callId) {
-          console.warn("[Harvey] Function call missing id — Gemini may ignore response:", toolName);
-        }
-
-        console.log("[Harvey] Executing voice tool:", toolName, "id:", callId, "args:", JSON.stringify(toolInput));
-        setHarveyStatus("PROCESSING");
-
-        try {
-          const token = getToken();
-          const res = await fetch(geminiApiUrl("/api/jarvis/execute-tool"), {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: token ? `Bearer ${token}` : "",
-            },
-            body: JSON.stringify({ toolName, toolInput }),
-          });
-
-          if (!res.ok) {
-            throw new Error("Tool execution failed: HTTP " + res.status);
-          }
-
-          const data = await res.json();
-          const result = data.result;
-          const responsePayload = buildGeminiFunctionResponsePayload(toolName, result);
-          console.log(
-            "[Harvey] Voice tool result for",
-            toolName,
-            ":",
-            JSON.stringify(responsePayload).substring(0, 200),
-          );
-
-          toolResponses.push({
-            id: callId || toolName,
-            name: toolName,
-            response: responsePayload,
-          });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error("[Harvey] Voice tool error for", toolName, ":", msg);
-          toolResponses.push({
-            id: callId || toolName,
-            name: toolName,
-            response: { error: msg },
-          });
-        }
-      }
-
-      if (geminiLiveWs && geminiLiveWs.readyState === WebSocket.OPEN) {
-        const toolResponseMsg = {
-          toolResponse: {
-            functionResponses: toolResponses,
-          },
-        };
-
-        console.log(
-          "[Harvey] Sending tool responses to Gemini:",
-          JSON.stringify(toolResponseMsg).substring(0, 300),
-        );
-        geminiLiveWs.send(JSON.stringify(toolResponseMsg));
-        setHarveyStatus("LISTENING");
-      }
-    }
-
-    async function startGeminiLive() {
-      try {
-        console.log("[Harvey] startGeminiLive called");
-        console.log("[Harvey] Token from URL:", getToken() ? "present" : "MISSING");
-        clearVoiceError();
-        setHarveyStatus("CONNECTING");
-
-        console.log("[Harvey] Fetching token from /api/jarvis/gemini-live/token...");
-        const res = await fetch(geminiApiUrl("/api/jarvis/gemini-live/token"), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: getToken() ? `Bearer ${getToken()}` : "",
-          },
-          body: JSON.stringify({ sessionId: SESSION_ID }),
-        });
-
-        console.log("[Harvey] Token endpoint status:", res.status);
-        console.log("[Harvey] Token endpoint ok:", res.ok);
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          showVoiceError("Token error: " + (err.error || res.statusText || res.status));
-          setHarveyStatus("ERROR");
-          return;
-        }
-
-        const { wsUrl, model, systemPrompt, voiceName, tools } = await res.json();
-        const liveTools = normalizeGeminiToolsForLive(tools);
-        console.log("[Harvey] Tools received from server:", geminiToolDeclarationCount(liveTools), "functions");
-        console.log("[Harvey] wsUrl received:", wsUrl ? wsUrl.substring(0, 80) : "MISSING");
-        console.log("[Harvey] model received:", model);
-        console.log("[Harvey] systemPrompt length:", systemPrompt?.length);
-        if (model !== "gemini-3.1-flash-live-preview") {
-          console.warn("[Harvey] Unexpected Live model — expected gemini-3.1-flash-live-preview, got:", model);
-        }
-        if ((systemPrompt?.length || 0) > 4000) {
-          console.warn("[Harvey] System prompt over 4000 chars — may be rejected by Gemini Live");
-        }
-
-        if (!wsUrl) {
-          showVoiceError("Token response missing wsUrl");
-          setHarveyStatus("ERROR");
-          return;
-        }
-
-        console.log("[Harvey] WebSocket creating with URL...");
-        wsDidOpen = false;
-        if (wsOpenTimer) clearTimeout(wsOpenTimer);
-        geminiLiveWs = new WebSocket(wsUrl);
-        console.log("[Harvey] WebSocket object created");
-        console.log("[Harvey] WebSocket URL being used:", wsUrl.substring(0, 80));
-        console.log("[Harvey] WebSocket readyState after creation:", geminiLiveWs.readyState);
-
-        wsOpenTimer = setTimeout(() => {
-          if (geminiLiveWs && geminiLiveWs.readyState !== WebSocket.OPEN && !wsDidOpen) {
-            showVoiceError("WebSocket failed to open after 5 seconds. State: " + geminiLiveWs.readyState);
-            console.log("[Harvey] WebSocket STILL NOT OPEN after 5s, state:", geminiLiveWs.readyState);
-          }
-        }, 5000);
-
-        geminiLiveWs.onopen = () => {
-          wsDidOpen = true;
-          if (wsOpenTimer) clearTimeout(wsOpenTimer);
-          console.log("[Harvey] WebSocket onopen fired");
-          console.log("[Harvey] Sending setup message...");
-          console.log("[Harvey] Setup message model:", `models/${model}`);
-          console.log("[Harvey] Setup message voice:", voiceName);
-
-          const setupMsg = {
-            setup: {
-              model: `models/${model}`,
-              generationConfig: {
-                responseModalities: ["AUDIO"],
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: { voiceName: voiceName },
-                  },
-                },
-              },
-              systemInstruction: {
-                parts: [{ text: systemPrompt }],
-              },
-              tools: geminiToolDeclarationCount(liveTools) > 0 ? [liveTools] : [],
-            },
-          };
-
-          console.log(
-            "[Harvey] FULL SETUP MESSAGE (tools):",
-            JSON.stringify({ tools: setupMsg.setup.tools }, null, 2),
-          );
-          geminiLiveWs.send(JSON.stringify(setupMsg));
-
-          console.log("[Harvey] Setup message sent with", geminiToolDeclarationCount(liveTools), "tools");
-          console.log("[Harvey] Gemini Live session ready with tools — voice tool calls will be handled automatically");
-          console.log("[Harvey] Calling startMic()...");
-          startMic().catch(err => console.error("[Harvey] startMic failed:", err));
-          setHarveyStatus("LISTENING");
-        };
-
-        geminiLiveWs.onmessage = async (event) => {
-          console.log(
-            "[Harvey] WebSocket message received, type:",
-            typeof event.data,
-            event.data instanceof Blob ? "Blob" : "string",
-          );
-
-          let text;
-          if (event.data instanceof Blob) {
-            text = await event.data.text();
-          } else {
-            text = event.data;
-          }
-
-          try {
-            const msg = JSON.parse(text);
-
-            console.log("[Harvey RAW MSG]", JSON.stringify(msg).substring(0, 500));
-
-            if (msg.toolCall) {
-              console.log("[Harvey] Gemini requesting tool call:", JSON.stringify(msg.toolCall));
-              await handleGeminiToolCall(msg.toolCall);
-              return;
-            }
-
-            if (msg.serverContent?.inputTranscription?.text) {
-              voiceTurnInputText = (voiceTurnInputText + " " + msg.serverContent.inputTranscription.text).trim();
-            }
-
-            if (msg.serverContent?.outputTranscription?.text) {
-              voiceTurnOutputText = (voiceTurnOutputText + " " + msg.serverContent.outputTranscription.text).trim();
-            }
-
-            if (msg.serverContent?.modelTurn?.parts) {
-              let fullText = "";
-              for (const part of msg.serverContent.modelTurn.parts) {
-                if (part.inlineData?.data) {
-                  const pcmBuffer = base64ToArrayBuffer(part.inlineData.data);
-                  console.log("[Harvey] Audio chunk received, bytes:", pcmBuffer.byteLength);
-                  queueAudioPcm(pcmBuffer);
-                  setHarveyStatus("RESPONDING");
-                }
-                if (part.text) {
-                  fullText += part.text;
-                  console.log("[Harvey] Voice text part received:", part.text.substring(0, 60));
-                  appendHarveyMessage(part.text);
-                }
-                if (part.functionCall) {
-                  console.log("[Harvey] Gemini function call detected:", part.functionCall.name);
-                  await handleGeminiToolCall({
-                    functionCalls: [part.functionCall],
-                  });
-                }
-              }
-              if (fullText.trim()) {
-                console.log("[Harvey] Running trigger on voice text:", fullText.substring(0, 60));
-                if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(fullText);
-              }
-            }
-
-            if (msg.serverContent?.turnComplete) {
-              console.log("[Harvey] Turn complete");
-              const harveyText = voiceTurnOutputText || voiceTurnInputText;
-              if (harveyText) {
-                console.log("[Harvey] Response text for trigger detection:", harveyText.substring(0, 100));
-                if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(harveyText);
-              }
-              voiceTurnOutputText = "";
-              voiceTurnInputText = "";
-              if (!isPlayingAudio) {
-                setHarveyStatus("LISTENING");
-              }
-            }
-
-            if (msg.setupComplete) {
-              console.log("[Harvey] Gemini Live setup complete with tools");
-            }
-          } catch {
-            try {
-              const buffer = await event.data.arrayBuffer();
-              queueAudioPcm(buffer);
-            } catch (e) {
-              showVoiceError("Audio parse error: " + (e instanceof Error ? e.message : String(e)));
-            }
-          }
-        };
-
-        geminiLiveWs.onerror = (err) => {
-          console.log("[Harvey] WebSocket error event:", JSON.stringify(err));
-          showVoiceError("WebSocket error — see console for details");
-          setHarveyStatus("ERROR");
-        };
-
-        geminiLiveWs.onclose = (event) => {
-          if (wsOpenTimer) clearTimeout(wsOpenTimer);
-          console.log(
-            "[Harvey] WebSocket onclose — exact code:",
-            event.code,
-            "exact reason:",
-            event.reason || "(empty)",
-            "wasClean:",
-            event.wasClean,
-            "hadOpened:",
-            wsDidOpen,
-          );
-
-          if (event.code !== 1000) {
-            showVoiceError(`WebSocket closed — code: ${event.code} reason: ${event.reason || "none"}`);
-          } else {
-            const el = document.getElementById("harvey-voice-error");
-            if (el) el.style.display = "none";
-            console.log("[Harvey] Clean close — session ended normally");
-          }
-
-          isListening = false;
-          setHarveyStatus("STANDBY");
-          stopMic();
-        };
-      } catch (err) {
-        showVoiceError("startGeminiLive error: " + (err instanceof Error ? err.message : String(err)));
-        setHarveyStatus("ERROR");
-      }
-    }
-
-    function stopGeminiLive() {
-      interruptHarvey();
-      if (geminiLiveWs) {
-        geminiLiveWs.close();
-        geminiLiveWs = null;
-      }
-      micLoggedOnce = false;
-      stopMic();
-      setHarveyStatus("STANDBY");
-    }
-
-    function flashOrbInterrupt() {
-      const orb = document.querySelector(".harvey-orb") ||
-        document.getElementById("harvey-mic-btn") ||
-        document.querySelector('[class*="orb"]');
-
-      if (!orb) return;
-
-      const originalFilter = orb.style.filter || "";
-      const originalShadow = orb.style.boxShadow || "";
-
-      orb.style.filter = "hue-rotate(30deg) brightness(2)";
-      orb.style.boxShadow = "0 0 50px rgba(255, 165, 0, 0.8)";
-
-      setTimeout(() => {
-        orb.style.filter = originalFilter;
-        orb.style.boxShadow = originalShadow;
-      }, 150);
-    }
-
-    function interruptHarvey() {
-      console.log("[Harvey] interruptHarvey() called — isPlaying:", isPlayingAudio, "isInterrupting:", isInterrupting);
-      console.log("[Harvey] interruptHarvey called — guard:", isInterrupting, "playing:", isPlayingAudio,
-        "queue:", audioQueue?.length, "buffer:", audioChunkBuffer?.length);
-
-      if (isInterrupting) {
-        console.log("[Harvey] Blocked by isInterrupting guard");
-        return;
-      }
-      if (!isPlayingAudio &&
-          (!audioQueue || audioQueue.length === 0) &&
-          (!audioChunkBuffer || audioChunkBuffer.length === 0)) {
-        return;
-      }
-
-      isInterrupting = true;
-      console.log("[Harvey] Interrupting — stopping audio");
-
-      if (currentAudioSource) {
-        try {
-          currentAudioSource.onended = null;
-          currentAudioSource.stop(0);
-          currentAudioSource.disconnect();
-        } catch (e) {
-          // Already stopped
-        }
-        currentAudioSource = null;
-      }
-
-      if (audioContext && audioContext.state === "running") {
-        audioContext.suspend().then(() => {
-          audioContext.resume();
-        }).catch(() => {});
-      }
-
-      audioQueue = [];
-      audioChunkBuffer = [];
-
-      isPlayingAudio = false;
-      nextPlayTime = 0;
-
-      setHarveyStatus("LISTENING");
-      flashOrbInterrupt();
-
-      if (geminiLiveWs && geminiLiveWs.readyState === WebSocket.OPEN) {
-        try {
-          const silence = new Uint8Array(320);
-          geminiLiveWs.send(JSON.stringify({
-            realtimeInput: {
-              audio: {
-                data: arrayBufferToBase64(silence.buffer),
-                mimeType: "audio/pcm",
-              },
-            },
-          }));
-        } catch (e) {
-          console.error("[Harvey] Failed to send barge-in signal:", e);
-        }
-      }
-
-      console.log("[Harvey] Interrupt complete");
-
-      setTimeout(() => {
-        isInterrupting = false;
-        console.log("[Harvey] Interrupt guard reset");
-      }, 300);
-    }
-
-    function isHarveySpeaking() {
-      return isPlayingAudio || audioQueue.length > 0 || audioChunkBuffer.length > 0;
-    }
-
-    function measureAnalyserRms(analyser, buffer) {
-      analyser.getByteTimeDomainData(buffer);
-      let sumSquares = 0;
-      for (let i = 0; i < buffer.length; i++) {
-        const normalized = (buffer[i] - 128) / 128;
-        sumSquares += normalized * normalized;
-      }
-      return Math.sqrt(sumSquares / buffer.length) * 100;
-    }
-
-    async function calibrateVAD(analyser) {
-      return new Promise(resolve => {
-        const buffer = new Uint8Array(analyser.fftSize);
-        const rmsSamples = [];
-        let count = 0;
-
-        const measure = () => {
-          const rms = measureAnalyserRms(analyser, buffer);
-          rmsSamples.push(rms);
-          count++;
-
-          if (count < 30) {
-            setTimeout(measure, 30);
-          } else {
-            rmsSamples.sort((a, b) => a - b);
-            const p90 = rmsSamples[Math.floor(rmsSamples.length * 0.9)];
-            console.log("[Harvey] Calibration done — p90 noise:", p90.toFixed(2));
-            resolve(p90);
-          }
-        };
-
-        console.log("[Harvey] Calibrating speech detector — stay quiet for ~1 second...");
-        measure();
-      });
-    }
-
-    function startSpeechDetector(analyser, noiseFloor) {
-      if (vadIntervalId) {
-        clearInterval(vadIntervalId);
-        vadIntervalId = null;
-      }
-
-      const buffer = new Uint8Array(analyser.fftSize);
-      let consecutiveSpeechFrames = 0;
-      const FRAMES_TO_TRIGGER = 3;
-      const threshold = Math.min(noiseFloor + 3, 8);
-      let frameCount = 0;
-
-      console.log("[Harvey] VAD threshold set to:", threshold, "(noise floor was:", noiseFloor.toFixed(2) + ")");
-      console.log("[Harvey] Simple speech detector started — threshold:", threshold);
-
-      vadIntervalId = setInterval(() => {
-        if (!isListening) {
-          clearInterval(vadIntervalId);
-          vadIntervalId = null;
-          return;
-        }
-
-        const rms = measureAnalyserRms(analyser, buffer);
-
-        frameCount++;
-        if (frameCount % 10 === 0) {
-          console.log("[VAD] rms:", rms.toFixed(2),
-            "threshold:", threshold,
-            "speechFrames:", consecutiveSpeechFrames,
-            "isPlaying:", isPlayingAudio,
-            "harveySpeaking:", isHarveySpeaking());
-        }
-
-        if (rms > threshold) {
-          const timeSinceHarveySpoke = Date.now() - harveyStartedSpeakingAt;
-          const inEchoWindow = isHarveySpeaking() && timeSinceHarveySpoke < ECHO_SUPPRESS_MS;
-
-          if (inEchoWindow) {
-            if (frameCount % 10 === 0) {
-              console.log("[VAD] Echo suppression active — ignoring detection");
-            }
-            consecutiveSpeechFrames = 0;
-            return;
-          }
-
-          consecutiveSpeechFrames++;
-
-          if (consecutiveSpeechFrames >= FRAMES_TO_TRIGGER) {
-            console.log("[Harvey] SPEECH CONFIRMED — frames:", consecutiveSpeechFrames, "rms:", rms.toFixed(2));
-
-            if (isHarveySpeaking() && !isInterrupting) {
-              console.log("[Harvey] Triggering interrupt");
-              interruptHarvey();
-              consecutiveSpeechFrames = 0;
-            } else {
-              console.log("[Harvey] Speech detected but not playing or already interrupting");
-            }
-          }
-        } else {
-          consecutiveSpeechFrames = Math.max(0, consecutiveSpeechFrames - 1);
-        }
-      }, 30);
-    }
-
-    async function startMic() {
-      try {
-        console.log("[Harvey] startMic called");
-        console.log("[Harvey] AudioContext state:", audioContext?.state);
-
-        if (!audioContext) {
-          audioContext = new AudioContext();
-        }
-        if (audioContext.state === "suspended") {
-          await audioContext.resume();
-        }
-
-        console.log("[Harvey] Requesting getUserMedia...");
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        console.log("[Harvey] Mic stream obtained:", !!micStream);
-        console.log("[Harvey] AudioContext sampleRate:", audioContext?.sampleRate);
-
-        micSource = audioContext.createMediaStreamSource(micStream);
-
-        const targetSampleRate = 16000;
-        const bufferSize = 4096;
-
-        micProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
-        console.log("[Harvey] Mic processor created, buffer size:", bufferSize);
-
-        micProcessor.onaudioprocess = (e) => {
-          if (!micLoggedOnce) {
-            console.log("[Harvey] onaudioprocess running — sample rate:", audioContext.sampleRate);
-            console.log("[Harvey] First audio frame captured");
-            console.log("[Harvey] WebSocket readyState:", geminiLiveWs?.readyState);
-            console.log("[Harvey] Input buffer length:", e.inputBuffer.getChannelData(0).length);
-            micLoggedOnce = true;
-          }
-
-          if (!geminiLiveWs || geminiLiveWs.readyState !== WebSocket.OPEN) return;
-
-          const inputData = e.inputBuffer.getChannelData(0);
-          const resampled = resampleTo16k(inputData, audioContext.sampleRate, targetSampleRate);
-          const pcm16 = floatTo16BitPCM(resampled);
-          const base64Audio = arrayBufferToBase64(pcm16.buffer);
-
-          geminiLiveWs.send(JSON.stringify({
-            realtimeInput: {
-              audio: {
-                data: base64Audio,
-                mimeType: "audio/pcm",
-              },
-            },
-          }));
-        };
-
-        vadAnalyser = audioContext.createAnalyser();
-        vadAnalyser.fftSize = 1024;
-        vadAnalyser.smoothingTimeConstant = 0.5;
-        vadAnalyser.minDecibels = -90;
-        vadAnalyser.maxDecibels = -10;
-        micSource.connect(vadAnalyser);
-
-        micSource.connect(micProcessor);
-        micProcessor.connect(audioContext.destination);
-        isListening = true;
-
-        console.log("[Harvey] Starting VAD calibration...");
-        let noiseFloor = 20;
-        try {
-          noiseFloor = await calibrateVAD(vadAnalyser);
-        } catch (calErr) {
-          console.error("[Harvey] Calibration failed, using default:", calErr);
-        }
-
-        console.log("[Harvey] Starting speech detector with floor:", noiseFloor);
-        startSpeechDetector(vadAnalyser, noiseFloor);
-        console.log("[Harvey] Speech detector running");
-        console.log("[Harvey] Mic started, speech detector active");
-      } catch (err) {
-        console.error("[Harvey] startMic error:", err);
-        showVoiceError("Mic error: " + (err instanceof Error ? err.message : String(err)));
-        setHarveyStatus("ERROR");
-      }
-    }
-
-    function stopMic() {
-      isListening = false;
-
-      if (vadIntervalId) {
-        clearInterval(vadIntervalId);
-        vadIntervalId = null;
-      }
-
-      if (micProcessor) { micProcessor.disconnect(); micProcessor = null; }
-      if (vadAnalyser) { vadAnalyser.disconnect(); vadAnalyser = null; }
-      if (micSource) { micSource.disconnect(); micSource = null; }
-      if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-
-      console.log("[Harvey] Mic and speech detector stopped");
-    }
-
-    function queueAudioPcm(buffer) {
-      if (!isPlayingAudio && audioQueue.length === 0) {
-        harveyStartedSpeakingAt = Date.now();
-        console.log("[Harvey] Audio playback starting — echo suppress window open");
-      }
-      audioQueue.push(buffer);
-      audioChunkBuffer.push(buffer);
-      console.log("[Harvey] Audio chunk queued, queue length:", audioQueue.length);
-      if (!isPlayingAudio) scheduleNextChunk();
-    }
-
-    function scheduleNextChunk() {
-      if (audioQueue.length === 0) {
-        isPlayingAudio = false;
-        return;
-      }
-      isPlayingAudio = true;
-      console.log("[Harvey] isPlayingAudio set to TRUE");
-      const buffer = audioQueue.shift();
-      if (audioChunkBuffer.length > 0) audioChunkBuffer.shift();
-
-      try {
-        if (!audioContext) audioContext = new AudioContext();
-
-        const pcmData = new Int16Array(buffer);
-        const sampleRate = 24000;
-        const audioBuffer = audioContext.createBuffer(1, pcmData.length, sampleRate);
-        const channelData = audioBuffer.getChannelData(0);
-        for (let i = 0; i < pcmData.length; i++) {
-          channelData[i] = pcmData[i] / 32768.0;
-        }
-
-        const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContext.destination);
-        currentAudioSource = source;
-
-        const startTime = Math.max(audioContext.currentTime, nextPlayTime);
-        source.start(startTime);
-
-        nextPlayTime = startTime + audioBuffer.duration;
-
-        source.onended = () => {
-          currentAudioSource = null;
-          if (audioQueue.length > 0) {
-            scheduleNextChunk();
-          } else if (audioChunkBuffer.length === 0) {
-            isPlayingAudio = false;
-            nextPlayTime = 0;
-            setHarveyStatus("LISTENING");
-            console.log("[Harvey] isPlayingAudio set to FALSE — all audio done");
-            console.log("[Harvey] All audio chunks played");
-          }
-        };
-
-        console.log("[Harvey] Scheduled chunk — duration:", audioBuffer.duration.toFixed(3) + "s", "start:", startTime.toFixed(3));
-      } catch (err) {
-        console.error("[Harvey] Chunk playback error:", err);
-        isPlayingAudio = false;
-        nextPlayTime = 0;
-        scheduleNextChunk();
-      }
-    }
-
-    function resampleTo16k(data, fromRate, toRate) {
-      if (fromRate === toRate) return data;
-      const ratio = fromRate / toRate;
-      const newLength = Math.round(data.length / ratio);
-      const result = new Float32Array(newLength);
-      for (let i = 0; i < newLength; i++) {
-        result[i] = data[Math.round(i * ratio)] || 0;
-      }
-      return result;
-    }
-
-    function floatTo16BitPCM(float32Array) {
-      const int16Array = new Int16Array(float32Array.length);
-      for (let i = 0; i < float32Array.length; i++) {
-        const s = Math.max(-1, Math.min(1, float32Array[i]));
-        int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
-      return int16Array;
-    }
-
-    function base64ToArrayBuffer(base64) {
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      return bytes.buffer;
-    }
-
-    function arrayBufferToBase64(buffer) {
-      const bytes = new Uint8Array(buffer);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      return btoa(binary);
-    }
-
-    function setHarveyStatus(status) {
-      const statusMessages = {
-        CONNECTING: "🔄 Connecting to Gemini...",
-        LISTENING: "🎤 Listening...",
-        RESPONDING: "🔊 Harvey speaking...",
-        PROCESSING: "⚙️ Running tools...",
-        STANDBY: "⏸ Standby",
-        ERROR: "❌ Error — check console",
-      };
-      const el = document.getElementById("harvey-voice-status");
-      if (el) el.textContent = statusMessages[status] || status;
-      console.log("[Harvey] Status changed to:", status);
-
-      if (typeof setStatus === "function") {
-        const on = status === "LISTENING" || status === "RESPONDING" || status === "CONNECTING" || status === "PROCESSING";
-        setStatus(status === "STANDBY" ? "STANDBY" : status, on);
-      }
-      if (status === "CONNECTING" || status === "LISTENING" || status === "RESPONDING") {
-        clearVoiceError();
-      }
-    }
-
-    function appendHarveyMessage(text) {
-      if (typeof addMsg === "function") addMsg("ai", text);
-      console.log("[Harvey] Response text for trigger detection:", text?.substring(0, 100));
-      if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(text || "");
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-      const micBtn = document.getElementById("harvey-mic-btn");
-
-      if (micBtn) {
-        micBtn.addEventListener("click", async () => {
-          console.log("[Harvey] Mic button clicked");
-          console.log("[Harvey] Current WebSocket state:", geminiLiveWs?.readyState);
-          console.log("[Harvey] AudioContext:", audioContext ? "exists" : "null");
-
-          if (!audioContext) {
-            audioContext = new AudioContext();
-          }
-
-          if (geminiLiveWs && geminiLiveWs.readyState === WebSocket.OPEN) {
-            stopGeminiLive();
-            micBtn.classList.remove("active");
-          } else {
-            await startGeminiLive();
-            micBtn.classList.add("active");
-          }
-        });
-      } else {
-        showVoiceError("Mic button not found — check button ID in jarvis.html");
-      }
-    });
-  </script>
+  <script src="/aethon-voice.js"></script>
 </body>
 </html>

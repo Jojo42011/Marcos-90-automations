@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lead Nurture · Marco</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface-2: #161616;
+      --border: rgba(239, 68, 68, 0.15);
+      --border-bright: rgba(239, 68, 68, 0.35);
+      --text: #f1f5f9;
+      --muted: #888;
+      --accent: #ef4444;
+      --accent-soft: #fca5a5;
+      --accent-glow: rgba(239, 68, 68, 0.15);
+      --warm: #f97316;
+      --cold: #64748b;
+      --font: "Plus Jakarta Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 70% 45% at 50% -15%, var(--accent-glow), transparent);
+    }
+    .ln-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border-bright);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      animation: fadeSlideDown 0.45s ease-out;
+    }
+    .ln-header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .ln-back {
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-decoration: none;
+    }
+    .ln-back:hover { opacity: 0.85; }
+    .ln-title { font-size: 15px; font-weight: 800; }
+    .ln-live {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ln-live-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulse 2.5s ease-in-out infinite;
+    }
+    .ln-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ln-meta { font-family: var(--mono); font-size: 10px; color: #555; }
+    .ln-btn {
+      background: transparent;
+      border: 1px solid var(--border-bright);
+      color: var(--accent);
+      padding: 6px 12px;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .ln-btn:hover { background: var(--accent-glow); }
+    .ln-btn:active { transform: scale(0.98); }
+    .ln-btn.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      box-shadow: 0 2px 12px rgba(239, 68, 68, 0.3);
+    }
+    .ln-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ln-auto-label {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: 10px; color: var(--muted); cursor: pointer;
+    }
+    .ln-pulse { display: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s infinite; }
+    .ln-pulse.on { display: inline-block; }
+
+    .ln-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      background: var(--surface);
+      overflow-x: auto;
+      animation: fadeSlideDown 0.5s ease-out 0.05s backwards;
+    }
+    .ln-tab {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 14px 18px;
+      border: none;
+      background: transparent;
+      color: #555;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      transition: color 0.2s, border-color 0.2s, transform 0.15s;
+    }
+    .ln-tab:hover { color: #aaa; transform: translateY(-1px); }
+    .ln-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+
+    .ln-main { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1.25rem 3rem; }
+    .ln-panel { display: none; }
+    .ln-panel.active { display: block; animation: fadeSlideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+
+    .ln-stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 1.25rem;
+    }
+    .ln-stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 18px;
+      transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+      animation: fadeSlideUp 0.5s ease-out backwards;
+    }
+    .ln-stat-card:nth-child(1) { animation-delay: 0.06s; }
+    .ln-stat-card:nth-child(2) { animation-delay: 0.12s; }
+    .ln-stat-card:nth-child(3) { animation-delay: 0.18s; }
+    .ln-stat-card:nth-child(4) { animation-delay: 0.24s; }
+    .ln-stat-card.clickable { cursor: pointer; }
+    .ln-stat-card.clickable:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.3);
+      border-color: var(--border-bright);
+    }
+    .ln-stat-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: #555;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .ln-stat-value { font-size: 32px; font-weight: 800; line-height: 1; }
+    .ln-stat-sub { font-size: 10px; color: var(--muted); margin-top: 6px; }
+    .ln-stat-hot .ln-stat-value { color: var(--accent); }
+    .ln-stat-warm .ln-stat-value { color: var(--warm); }
+    .ln-stat-cold .ln-stat-value { color: var(--cold); }
+    .ln-stat-unscored .ln-stat-value { color: #94a3b8; }
+
+    .ln-funnel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 1.25rem;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      animation: fadeSlideUp 0.55s ease-out 0.2s backwards;
+    }
+    .ln-funnel-step {
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      transition: transform 0.2s;
+    }
+    .ln-funnel-step:hover { transform: scale(1.03); }
+    .ln-funnel-step.hot { color: var(--accent); border-color: rgba(239,68,68,0.4); background: var(--accent-glow); }
+    .ln-funnel-step.warm { color: var(--warm); border-color: rgba(251,146,60,0.3); background: rgba(251,146,60,0.08); }
+    .ln-funnel-step.cold { color: var(--cold); border-color: rgba(148,163,184,0.3); background: rgba(148,163,184,0.08); }
+    .ln-funnel-arrow { color: #444; font-size: 18px; }
+
+    .ln-section-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 1.25rem 0 0.75rem;
+      font-weight: 700;
+    }
+
+    .ln-panel-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .ln-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 1rem 0; }
+
+    .ln-lead-card {
+      border: 1px solid var(--border-bright);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      background: var(--surface);
+      animation: cardIn 0.4s ease-out backwards;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .ln-lead-card:hover {
+      transform: translateX(4px);
+      box-shadow: -4px 0 0 rgba(239, 68, 68, 0.4);
+    }
+    .ln-lead-card.warm { border-left-color: var(--warm); border-color: rgba(251,146,60,0.28); }
+    .ln-lead-card.warm:hover { box-shadow: -4px 0 0 rgba(251, 146, 60, 0.35); }
+    .ln-lead-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .ln-lead-name { font-size: 14px; font-weight: 700; }
+    .ln-lead-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .ln-score-big { font-size: 24px; font-weight: 800; color: var(--accent); text-align: right; }
+    .ln-lead-card.warm .ln-score-big { color: var(--warm); }
+    .ln-score-denom { font-size: 9px; color: #555; letter-spacing: 1px; text-align: right; }
+
+    .ln-badges { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .ln-badge {
+      font-size: 9px;
+      font-family: var(--mono);
+      letter-spacing: 0.05em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      text-transform: uppercase;
+    }
+    .ln-badge.ok { background: rgba(74,222,128,0.12); color: #86efac; border-color: rgba(74,222,128,0.3); }
+    .ln-badge.warn { background: rgba(251,191,36,0.12); color: #fde047; border-color: rgba(251,191,36,0.3); }
+    .ln-badge.muted { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .ln-badge.paused { background: rgba(239,68,68,0.15); color: #fca5a5; border-color: rgba(239,68,68,0.35); }
+
+    .ln-suggest { margin-top: 10px; font-size: 11px; color: #ccc; }
+    .ln-scored-at { font-size: 10px; color: #555; margin-top: 6px; }
+
+    .ln-table-wrap { overflow-x: auto; }
+    table.ln-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ln-table th, .ln-table td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+    .ln-table th {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #555;
+    }
+    .ln-table tr:hover { background: rgba(239,68,68,0.04); }
+
+    .ln-footer-bar {
+      margin-top: 1rem;
+      padding: 12px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .ln-routing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-bottom: 1.25rem;
+    }
+    .ln-rule-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      position: relative;
+      animation: fadeSlideUp 0.45s ease-out backwards;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .ln-rule-card:nth-child(1) { animation-delay: 0.05s; }
+    .ln-rule-card:nth-child(2) { animation-delay: 0.1s; }
+    .ln-rule-card:nth-child(3) { animation-delay: 0.15s; }
+    .ln-rule-card:nth-child(4) { animation-delay: 0.2s; }
+    .ln-rule-card:hover { transform: translateY(-2px); border-color: var(--border-bright); }
+    .ln-rule-dot {
+      position: absolute;
+      top: 12px; right: 12px;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #444;
+    }
+    .ln-rule-dot.active { background: #4ade80; box-shadow: 0 0 8px rgba(74,222,128,0.5); }
+    .ln-rule-title { font-weight: 800; font-size: 13px; margin-bottom: 6px; }
+    .ln-rule-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+    .ln-rule-src { font-family: var(--mono); font-size: 9px; color: #555; margin-top: 8px; }
+    .ln-rule-warn { font-size: 10px; color: var(--warm); margin-top: 6px; }
+
+    .ln-feed-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .ln-feed-item:last-child { border-bottom: none; }
+
+    .ln-change-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px dashed var(--border);
+      font-size: 12px;
+    }
+    .ln-change-row:last-child { border-bottom: none; }
+    .ln-delta-up { color: #4ade80; font-weight: 700; }
+    .ln-delta-down { color: #f87171; font-weight: 700; }
+
+    .ln-hot-mini {
+      margin-bottom: 12px;
+      padding: 12px;
+      background: var(--surface-2);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .ln-hot-mini h4 { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+
+    .ln-factor-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .ln-factor { text-align: center; animation: fadeSlideUp 0.45s ease-out backwards; }
+    .ln-factor:nth-child(1) { animation-delay: 0.04s; }
+    .ln-factor:nth-child(2) { animation-delay: 0.08s; }
+    .ln-factor:nth-child(3) { animation-delay: 0.12s; }
+    .ln-factor:nth-child(4) { animation-delay: 0.16s; }
+    .ln-factor:nth-child(5) { animation-delay: 0.2s; }
+    .ln-factor-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .ln-factor-track {
+      height: 72px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      overflow: hidden;
+    }
+    .ln-factor-fill {
+      width: 100%;
+      min-height: 22px;
+      background: linear-gradient(180deg, #f87171 0%, var(--accent) 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 3px;
+      transition: height 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .ln-factor-fill.mid { background: linear-gradient(180deg, #fdba74 0%, var(--warm) 100%); }
+    .ln-factor-fill.low { background: linear-gradient(180deg, #94a3b8 0%, var(--cold) 100%); }
+    .ln-factor-pts {
+      font-size: 12px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.55);
+    }
+    .ln-factor-word {
+      font-size: 8px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.92);
+      margin-top: 2px;
+      line-height: 1.15;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ln-factor-real {
+      font-size: 9px;
+      color: var(--accent-soft);
+      margin-top: 5px;
+      line-height: 1.3;
+      min-height: 2.5em;
+    }
+    .ln-factor-max { font-size: 8px; color: #555; margin-top: 2px; font-family: var(--mono); }
+
+    .ln-toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border-bright);
+      color: var(--text);
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      z-index: 200;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+      max-width: 320px;
+    }
+    .ln-toast.show { opacity: 1; transform: translateY(0); }
+
+    .ln-empty { text-align: center; padding: 2.5rem 1rem; color: var(--muted); font-size: 13px; }
+    .ln-pagination { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 1rem; }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(0.92); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeSlideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes cardIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* Light mode — red theme */
+    html[data-theme="light"],
+    html[data-theme="light"] body {
+      background: #fef2f2 !important;
+      color: #0f172a !important;
+      background-image: none !important;
+    }
+    html[data-theme="light"] .ln-header,
+    html[data-theme="light"] .ln-tabs {
+      background: #ffffff !important;
+      border-bottom-color: #fca5a5 !important;
+      color: #0f172a !important;
+    }
+    html[data-theme="light"] .ln-tab.active {
+      color: #b91c1c !important;
+      border-bottom-color: #b91c1c !important;
+      font-weight: 700 !important;
+    }
+    html[data-theme="light"] .ln-stat-card,
+    html[data-theme="light"] .ln-lead-card,
+    html[data-theme="light"] .ln-panel-card,
+    html[data-theme="light"] .ln-rule-card,
+    html[data-theme="light"] .ln-funnel {
+      background: #ffffff !important;
+      border-color: #fca5a5 !important;
+      box-shadow: 0 1px 3px rgba(239,68,68,0.08) !important;
+    }
+    html[data-theme="light"] .ln-btn.primary,
+    html[data-theme="light"] .ln-btn.ln-action-primary {
+      background: #b91c1c !important;
+      color: #ffffff !important;
+      border-color: #b91c1c !important;
+    }
+    html[data-theme="light"] .ln-stat-hot .ln-stat-value,
+    html[data-theme="light"] .ln-score-big,
+    html[data-theme="light"] .ln-back,
+    html[data-theme="light"] .ln-live,
+    html[data-theme="light"] .ln-section-title { color: #b91c1c !important; }
+    html[data-theme="light"] .ln-stat-warm .ln-stat-value,
+    html[data-theme="light"] .ln-lead-card.warm .ln-score-big { color: #c2410c !important; }
+    html[data-theme="light"] .ln-table { background: #ffffff !important; color: #0f172a !important; }
+    html[data-theme="light"] .ln-table th { color: #475569 !important; border-bottom: 2px solid #fca5a5 !important; }
+    html[data-theme="light"] .ln-table td { color: #0f172a !important; border-bottom: 1px solid #fef2f2 !important; }
+    html[data-theme="light"] .ln-table tr:hover { background: #fff5f5 !important; }
+    html[data-theme="light"] .ln-btn { color: #b91c1c !important; border-color: #fca5a5 !important; }
+    html[data-theme="light"] .ln-footer-bar,
+    html[data-theme="light"] .ln-hot-mini { background: #fff5f5 !important; }
+    html[data-theme="light"] .ln-title { color: #0f172a !important; }
+    html[data-theme="light"] .ln-tab { color: #64748b !important; }
+    html[data-theme="light"] .ln-tab.active { color: #b91c1c !important; }
+    html[data-theme="light"] .ln-meta,
+    html[data-theme="light"] .ln-auto-label { color: #64748b !important; }
+    html[data-theme="light"] .ln-lead-name { color: #0f172a !important; }
+    html[data-theme="light"] .ln-lead-meta,
+    html[data-theme="light"] .ln-scored-at,
+    html[data-theme="light"] .ln-rule-src { color: #64748b !important; }
+    html[data-theme="light"] .ln-suggest,
+    html[data-theme="light"] .ln-rule-desc,
+    html[data-theme="light"] .ln-change-row,
+    html[data-theme="light"] .ln-feed-item { color: #334155 !important; }
+    html[data-theme="light"] .ln-empty { color: #64748b !important; }
+    html[data-theme="light"] .ln-stat label,
+    html[data-theme="light"] .ln-factor-label,
+    html[data-theme="light"] .ln-factor-max { color: #475569 !important; }
+    html[data-theme="light"] .ln-stat strong,
+    html[data-theme="light"] .ln-stat-value { color: #0f172a !important; }
+    html[data-theme="light"] .ln-stat-cold .ln-stat-value { color: #475569 !important; }
+    html[data-theme="light"] .ln-factor-real { color: #b91c1c !important; }
+    html[data-theme="light"] .ln-badge.muted { color: #475569 !important; background: #f1f5f9 !important; }
+    html[data-theme="light"] .ln-toast { background: #ffffff !important; color: #0f172a !important; border-color: #fca5a5 !important; }
+    html[data-theme="light"] [style*="color:#888"] { color: #64748b !important; }
+    html[data-theme="light"] [style*="color:#555"] { color: #64748b !important; }
+    html[data-theme="light"] [style*="color:#444"] { color: #64748b !important; }
+    html[data-theme="light"] [style*="color:#ccc"] { color: #334155 !important; }
+    html[data-theme="light"] [style*="color:#fff"] { color: #0f172a !important; }
+  </style>
+</head>
+<body>
+  <header class="ln-header">
+    <div class="ln-header-left">
+      <a href="/dashboard" class="ln-back">← COMMAND CENTER</a>
+      <span style="color:#444;">|</span>
+      <span class="ln-title">Lead Nurture</span>
+      <span class="ln-live"><span class="ln-live-dot"></span> scoring live</span>
+    </div>
+    <div class="ln-header-right">
+      <span class="ln-meta" id="ln-last-updated"></span>
+      <label class="ln-auto-label">
+        <input type="checkbox" id="ln-auto-refresh" />
+        Auto 30s
+        <span class="ln-pulse" id="ln-pulse"></span>
+      </label>
+      <button type="button" class="ln-btn" id="ln-refresh-btn">Refresh</button>
+      <button type="button" class="ln-btn" id="theme-toggle-btn">Light mode</button>
+    </div>
+  </header>
+
+  <nav class="ln-tabs" role="tablist">
+    <button type="button" class="ln-tab active" data-tab="overview">Overview</button>
+    <button type="button" class="ln-tab" data-tab="hot">Hot Leads</button>
+    <button type="button" class="ln-tab" data-tab="warm">Warm Leads</button>
+    <button type="button" class="ln-tab" data-tab="cold">Cold Leads</button>
+    <button type="button" class="ln-tab" data-tab="source-routing">Source Routing</button>
+  </nav>
+
+  <main class="ln-main">
+    <section class="ln-panel active" id="panel-overview" data-panel="overview">
+      <div class="ln-stat-row" id="overview-stats"></div>
+      <div class="ln-funnel" id="overview-funnel"></div>
+      <div class="ln-section-title">Recent score changes</div>
+      <div class="ln-panel-card" id="overview-changes"></div>
+      <div class="ln-section-title">Top hot lead factors</div>
+      <div id="overview-hot-factors"></div>
+      <div class="ln-actions">
+        <button type="button" class="ln-btn primary ln-action-primary" id="btn-score-all">↻ SCORE ALL LEADS NOW</button>
+        <button type="button" class="ln-btn" id="btn-rescore-cold">↻ RE-SCORE COLD LEADS</button>
+      </div>
+    </section>
+
+    <section class="ln-panel" id="panel-hot" data-panel="hot">
+      <div id="hot-list"></div>
+    </section>
+
+    <section class="ln-panel" id="panel-warm" data-panel="warm">
+      <div id="warm-list"></div>
+      <div class="ln-footer-bar">
+        <span>Next weekly touch: <strong id="warm-next-monday">—</strong> (Mondays 10am Central)</span>
+        <button type="button" class="ln-btn primary ln-action-primary" id="btn-warm-touch">⚡ SEND WARM TOUCH NOW</button>
+      </div>
+    </section>
+
+    <section class="ln-panel" id="panel-cold" data-panel="cold">
+      <div class="ln-panel-card" style="margin-bottom:12px;">
+        <strong id="cold-total-count">—</strong> cold leads
+      </div>
+      <div class="ln-table-wrap">
+        <table class="ln-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Source</th><th>Score</th><th>Last Scored</th><th>Timeline</th><th>Pre-Approval</th>
+            </tr>
+          </thead>
+          <tbody id="cold-tbody"></tbody>
+        </table>
+      </div>
+      <div class="ln-pagination" id="cold-pagination"></div>
+      <div class="ln-footer-bar">
+        <span>Monthly value touch: first Monday of each month · Next: <strong id="cold-next-monday">—</strong></span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="ln-btn primary ln-action-primary" id="btn-cold-touch">⚡ SEND COLD TOUCH NOW</button>
+          <button type="button" class="ln-btn" id="btn-rescore-cold-tab">↻ RE-SCORE ALL COLD</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="ln-panel" id="panel-source-routing" data-panel="source-routing">
+      <div class="ln-routing-grid" id="routing-rules"></div>
+      <div class="ln-section-title">Recently routed</div>
+      <div class="ln-panel-card" id="routing-feed"></div>
+    </section>
+  </main>
+
+  <div class="ln-toast" id="ln-toast" role="status"></div>
+
+  <script>
+    const WEIGHTS = { timeline: 25, preApproval: 25, responseCount: 20, propertyViews: 15, showingRequests: 15 };
+    let autoRefreshTimer = null;
+    let coldLeadsCache = [];
+    let coldPage = 0;
+    const COLD_PAGE_SIZE = 50;
+
+    function getToken() {
+      const p = new URLSearchParams(location.search);
+      return p.get("token") || localStorage.getItem("dashboardToken") || "";
+    }
+    function apiUrl(path) {
+      const u = new URL(path, location.origin);
+      const t = getToken();
+      if (t) u.searchParams.set("token", t);
+      return u.toString();
+    }
+    function authHeaders() {
+      const h = { "Content-Type": "application/json" };
+      const t = getToken();
+      if (t) h["Authorization"] = "Bearer " + t;
+      return h;
+    }
+
+    function escapeHtml(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById("ln-toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(() => el.classList.remove("show"), 3500);
+    }
+
+    function animateCountUp(el, target, duration = 700) {
+      const start = performance.now();
+      const update = (now) => {
+        const progress = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = Math.round(eased * target).toLocaleString();
+        if (progress < 1) requestAnimationFrame(update);
+        else el.textContent = target.toLocaleString();
+      };
+      requestAnimationFrame(update);
+    }
+
+    const FACTOR_ORDER = ["timeline", "preApproval", "responseCount", "propertyViews", "showingRequests"];
+
+    function formatPreApprovalShort(status) {
+      if (!status) return "Not set";
+      if (status === "approved") return "Approved";
+      if (status === "cash") return "Cash";
+      if (status === "in_progress") return "In progress";
+      return "Not approved";
+    }
+
+    function factorRealLabel(key, lead) {
+      if (!lead) return "—";
+      if (key === "timeline") {
+        const t = lead.timeline || lead.criteria?.timeline;
+        return t ? String(t).slice(0, 32) : "Timeline not set";
+      }
+      if (key === "preApproval") return formatPreApprovalShort(lead.preApprovalStatus);
+      if (key === "responseCount") {
+        const n = lead.inboundReplyCount ?? 0;
+        return n === 1 ? "1 inbound reply" : `${n} inbound replies`;
+      }
+      if (key === "propertyViews") {
+        const n = lead.propertyViewsCount ?? 0;
+        return n === 1 ? "1 property view" : `${n} property views`;
+      }
+      if (key === "showingRequests") {
+        const ap = lead.showingAppointment;
+        if (!ap) return "No showing booked";
+        const st = ap.confirmationStatus || "pending";
+        return st === "confirmed" ? "Showing confirmed" : `${st} showing`;
+      }
+      return "—";
+    }
+
+    function factorShortWord(key, val, maxVal) {
+      const pct = maxVal ? Number(val) / maxVal : 0;
+      if (key === "timeline") return pct >= 0.9 ? "ASAP" : pct >= 0.5 ? "Soon" : "Later";
+      if (key === "preApproval") return pct >= 1 ? "Ready" : pct >= 0.5 ? "Partial" : "Gap";
+      if (key === "responseCount") return pct >= 0.9 ? "Active" : pct >= 0.4 ? "Some" : "Quiet";
+      if (key === "propertyViews") return pct >= 0.9 ? "High" : pct >= 0.5 ? "Some" : "Low";
+      if (key === "showingRequests") return pct >= 0.9 ? "Booked" : pct >= 0.5 ? "Pending" : "None";
+      return "";
+    }
+
+    function buildScoreFactorBars(factors, lead) {
+      if (!factors) return "";
+      const labels = {
+        timeline: "Timeline",
+        preApproval: "Pre-Apprvl",
+        responseCount: "Replies",
+        propertyViews: "Views",
+        showingRequests: "Showings",
+      };
+      return `<div class="ln-factor-grid">${FACTOR_ORDER.map((key) => {
+        const val = Number(factors[key] ?? 0);
+        const maxVal = WEIGHTS[key] || 25;
+        const pct = Math.max(22, Math.min(100, Math.round((val / maxVal) * 100)));
+        const fillCls = pct >= 70 ? "" : pct >= 40 ? " mid" : " low";
+        const real = escapeHtml(factorRealLabel(key, lead));
+        const word = escapeHtml(factorShortWord(key, val, maxVal));
+        return `<div class="ln-factor">
+          <div class="ln-factor-label">${labels[key]}</div>
+          <div class="ln-factor-track">
+            <div class="ln-factor-fill${fillCls}" style="height:${pct}%">
+              <span class="ln-factor-pts">${val}</span>
+              <span class="ln-factor-word">${word}</span>
+            </div>
+          </div>
+          <div class="ln-factor-real" title="${real}">${real}</div>
+          <div class="ln-factor-max">${val} / ${maxVal} pts</div>
+        </div>`;
+      }).join("")}</div>`;
+    }
+
+    function preApprovalBadge(status) {
+      if (!status) return '<span class="ln-badge muted">Pre-approval unknown</span>';
+      if (status === "approved" || status === "cash") return '<span class="ln-badge ok">Pre-approved</span>';
+      if (status === "in_progress") return '<span class="ln-badge warn">Pre-approval in progress</span>';
+      return '<span class="ln-badge muted">Not pre-approved</span>';
+    }
+
+    function suggestNextStep(lead) {
+      const factors = lead.scoringFactors || {};
+      if (!lead.showingAppointment) return "Schedule a showing — high intent, no showing booked yet.";
+      if (lead.showingAppointment.confirmationStatus === "pending") return "Follow up on showing confirmation.";
+      if ((factors.preApproval ?? 0) < 25) return "Confirm pre-approval status — could be the missing piece.";
+      return "Personal call recommended — this lead is ready to move.";
+    }
+
+    function getNextMondayTouch() {
+      const now = new Date();
+      const day = now.getDay();
+      const daysUntilMonday = day === 1 ? 7 : (8 - day) % 7 || 7;
+      const next = new Date(now.getTime() + daysUntilMonday * 86400000);
+      next.setHours(10, 0, 0, 0);
+      return next.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    }
+
+    function calculateNextFirstMonday() {
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth() + (now.getDate() > 7 ? 1 : 0), 1);
+      while (next.getDay() !== 1) next.setDate(next.getDate() + 1);
+      if (next <= now) {
+        next.setMonth(next.getMonth() + 1, 1);
+        while (next.getDay() !== 1) next.setDate(next.getDate() + 1);
+      }
+      return next.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    }
+
+    function renderLeadCard(lead, tier, index = 0) {
+      const warm = tier === "warm";
+      const delay = (index * 0.06).toFixed(2);
+      const badges = [
+        preApprovalBadge(lead.preApprovalStatus),
+        lead.timeline ? `<span class="ln-badge muted">${escapeHtml(lead.timeline)}</span>` : "",
+        lead.automationPaused ? '<span class="ln-badge paused">Paused</span>' : "",
+      ].filter(Boolean).join("");
+      return `<div class="ln-lead-card${warm ? " warm" : ""}" style="animation-delay:${delay}s">
+        <div class="ln-lead-top">
+          <div>
+            <div class="ln-lead-name">${escapeHtml(lead.name)}</div>
+            <div class="ln-lead-meta">${escapeHtml(lead.source || "unknown")} · ${escapeHtml(lead.crmIntent || "—")} · ${escapeHtml(lead.phone || "no phone")}</div>
+          </div>
+          <div>
+            <div class="ln-score-big">${lead.score}</div>
+            <div class="ln-score-denom">/ 100</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;">${buildScoreFactorBars(lead.scoringFactors, lead)}</div>
+        <div class="ln-badges">${badges}</div>
+        <div class="ln-suggest"><span style="color:#555;">Suggested:</span> ${escapeHtml(suggestNextStep(lead))}</div>
+        <div class="ln-scored-at">Scored: ${lead.scoreDate ? new Date(lead.scoreDate).toLocaleString() : "—"}</div>
+      </div>`;
+    }
+
+    async function loadSummary() {
+      const r = await fetch(apiUrl("/api/lead-nurture/summary"));
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Failed to load summary");
+
+      document.getElementById("overview-stats").innerHTML = `
+        <div class="ln-stat-card ln-stat-hot clickable" data-goto="hot">
+          <div class="ln-stat-label">🔥 HOT LEADS</div>
+          <div class="ln-stat-value" id="stat-hot">0</div>
+          <div class="ln-stat-sub">score ≥ 80</div>
+        </div>
+        <div class="ln-stat-card ln-stat-warm clickable" data-goto="warm">
+          <div class="ln-stat-label">🌡️ WARM LEADS</div>
+          <div class="ln-stat-value" id="stat-warm">0</div>
+          <div class="ln-stat-sub">score 40–79</div>
+        </div>
+        <div class="ln-stat-card ln-stat-cold clickable" data-goto="cold">
+          <div class="ln-stat-label">❄️ COLD LEADS</div>
+          <div class="ln-stat-value" id="stat-cold">0</div>
+          <div class="ln-stat-sub">score &lt; 40</div>
+        </div>
+        <div class="ln-stat-card ln-stat-unscored">
+          <div class="ln-stat-label">⬜ UNSCORED</div>
+          <div class="ln-stat-value" id="stat-unscored">0</div>
+          <div class="ln-stat-sub">of ${d.totalLeads} total</div>
+        </div>`;
+
+      animateCountUp(document.getElementById("stat-hot"), d.hotCount || 0);
+      animateCountUp(document.getElementById("stat-warm"), d.warmCount || 0);
+      animateCountUp(document.getElementById("stat-cold"), d.coldCount || 0);
+      animateCountUp(document.getElementById("stat-unscored"), d.unscoredCount || 0);
+
+      document.querySelectorAll("[data-goto]").forEach(el => {
+        el.addEventListener("click", () => switchTab(el.dataset.goto));
+      });
+
+      document.getElementById("overview-funnel").innerHTML = `
+        <div class="ln-funnel-step hot">🔥 HOT — ${d.hotCount || 0}</div>
+        <span class="ln-funnel-arrow">››</span>
+        <div class="ln-funnel-step warm">🌡️ WARM — ${d.warmCount || 0}</div>
+        <span class="ln-funnel-arrow">››</span>
+        <div class="ln-funnel-step cold">❄️ COLD — ${d.coldCount || 0}</div>`;
+
+      const changes = d.recentScoreChanges || [];
+      document.getElementById("overview-changes").innerHTML = changes.length
+        ? changes.map(c => `<div class="ln-change-row">
+            <span><strong>${escapeHtml(c.name)}</strong> · ${c.previousScore} → ${c.score}</span>
+            <span class="${c.delta >= 0 ? "ln-delta-up" : "ln-delta-down"}">${c.delta >= 0 ? "+" : ""}${c.delta}</span>
+          </div>`).join("")
+        : '<p class="ln-empty" style="padding:1rem;">No score changes in the last 14 days.</p>';
+
+      return d;
+    }
+
+    async function loadHotFactors() {
+      const r = await fetch(apiUrl("/api/lead-nurture/tier-detail/hot"));
+      const d = await r.json();
+      const top = (d.leads || []).slice(0, 3);
+      const box = document.getElementById("overview-hot-factors");
+      if (!top.length) {
+        box.innerHTML = '<p class="ln-empty">No hot leads yet — run Score All or wait for the daily score job.</p>';
+        return;
+      }
+      box.innerHTML = top.map(l => `<div class="ln-hot-mini">
+        <h4>${escapeHtml(l.name)} — ${l.score}/100</h4>
+        ${buildScoreFactorBars(l.scoringFactors, l)}
+      </div>`).join("");
+    }
+
+    async function loadTier(tier, containerId, emptyMsg) {
+      const r = await fetch(apiUrl("/api/lead-nurture/tier-detail/" + tier));
+      const d = await r.json();
+      const box = document.getElementById(containerId);
+      if (!d.leads?.length) {
+        box.innerHTML = `<p class="ln-empty">${emptyMsg}</p>`;
+        return d.leads || [];
+      }
+      box.innerHTML = d.leads.map((l, i) => renderLeadCard(l, tier, i)).join("");
+      return d.leads;
+    }
+
+    function renderColdPage() {
+      const start = coldPage * COLD_PAGE_SIZE;
+      const slice = coldLeadsCache.slice(start, start + COLD_PAGE_SIZE);
+      const tbody = document.getElementById("cold-tbody");
+      tbody.innerHTML = slice.map(l => `<tr>
+        <td><strong>${escapeHtml(l.name)}</strong></td>
+        <td>${escapeHtml(l.source || "—")}</td>
+        <td style="color:var(--cold);font-weight:700;">${l.score}</td>
+        <td>${l.scoreDate ? new Date(l.scoreDate).toLocaleDateString() : "—"}</td>
+        <td>${escapeHtml(l.timeline || "—")}</td>
+        <td>${escapeHtml(l.preApprovalStatus || "—")}</td>
+      </tr>`).join("") || '<tr><td colspan="6" class="ln-empty">No cold leads.</td></tr>';
+
+      document.getElementById("cold-total-count").textContent = coldLeadsCache.length;
+      const pages = Math.max(1, Math.ceil(coldLeadsCache.length / COLD_PAGE_SIZE));
+      document.getElementById("cold-pagination").innerHTML = coldLeadsCache.length > COLD_PAGE_SIZE
+        ? `<button type="button" class="ln-btn" ${coldPage <= 0 ? "disabled" : ""} id="cold-prev">Prev</button>
+           <span style="font-size:11px;color:#888;">Page ${coldPage + 1} / ${pages}</span>
+           <button type="button" class="ln-btn" ${coldPage >= pages - 1 ? "disabled" : ""} id="cold-next">Next</button>`
+        : "";
+      const prev = document.getElementById("cold-prev");
+      const next = document.getElementById("cold-next");
+      if (prev) prev.onclick = () => { coldPage--; renderColdPage(); };
+      if (next) next.onclick = () => { coldPage++; renderColdPage(); };
+    }
+
+    async function loadCold() {
+      const r = await fetch(apiUrl("/api/lead-nurture/tier-detail/cold"));
+      const d = await r.json();
+      coldLeadsCache = d.leads || [];
+      coldPage = 0;
+      renderColdPage();
+    }
+
+    async function loadRouting() {
+      const r = await fetch(apiUrl("/api/lead-nurture/recently-routed"));
+      const d = await r.json();
+      const act = d.sourceActivity || {};
+      document.getElementById("routing-rules").innerHTML = `
+        <div class="ln-rule-card">
+          <span class="ln-rule-dot ${act.mojo ? "active" : ""}"></span>
+          <div class="ln-rule-title">🎯 MOJO LEADS</div>
+          <div class="ln-rule-desc">Instant text + email (&lt;60s)</div>
+          <div class="ln-rule-src">[Source: mojo]</div>
+        </div>
+        <div class="ln-rule-card">
+          <span class="ln-rule-dot ${act.social ? "active" : ""}"></span>
+          <div class="ln-rule-title">📱 SOCIAL DMs</div>
+          <div class="ln-rule-desc">Routes through SMS agent first</div>
+          <div class="ln-rule-src">[Source: instagram / tiktok]</div>
+        </div>
+        <div class="ln-rule-card">
+          <span class="ln-rule-dot ${act.web_form ? "active" : ""}"></span>
+          <div class="ln-rule-title">🌐 WEB FORM</div>
+          <div class="ln-rule-desc">2-minute auto-response</div>
+          <div class="ln-rule-src">[Source: web_form]</div>
+          <div class="ln-rule-warn">⚠️ No web form intake yet</div>
+        </div>
+        <div class="ln-rule-card">
+          <span class="ln-rule-dot ${act.referral ? "active" : ""}"></span>
+          <div class="ln-rule-title">⭐ REFERRALS</div>
+          <div class="ln-rule-desc">High priority · Marco call</div>
+          <div class="ln-rule-src">[Source: referral]</div>
+        </div>`;
+
+      const feed = document.getElementById("routing-feed");
+      if (!d.routed?.length) {
+        feed.innerHTML = '<p class="ln-empty">No routed leads yet.</p>';
+        return;
+      }
+      feed.innerHTML = d.routed.map(item => `<div class="ln-feed-item">
+        <div>
+          <strong>${escapeHtml(item.name)}</strong>
+          <span style="color:#888;margin-left:8px;font-size:11px;">${escapeHtml(item.source || "—")} · ${escapeHtml(item.phone || "no phone")}</span>
+          <div style="font-size:10px;color:#555;margin-top:2px;">${item.routedAt ? new Date(item.routedAt).toLocaleString() : ""}</div>
+        </div>
+        <button type="button" class="ln-btn" data-reroute="${item.leadId}">Re-route</button>
+      </div>`).join("");
+      feed.querySelectorAll("[data-reroute]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          const res = await fetch(apiUrl("/api/lead-nurture/route/" + btn.dataset.reroute), { method: "POST", headers: authHeaders() });
+          const j = await res.json();
+          showToast(res.ok ? "Re-routed " + btn.dataset.reroute : (j.error || "Failed"));
+          btn.disabled = false;
+          if (res.ok) loadRouting();
+        });
+      });
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll(".ln-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
+      document.querySelectorAll(".ln-panel").forEach(p => p.classList.toggle("active", p.dataset.panel === name));
+      if (name === "hot") loadTier("hot", "hot-list", "No hot leads yet — run Score All or wait for the daily score job.");
+      if (name === "warm") {
+        loadTier("warm", "warm-list", "No warm leads in nurture queue.");
+        document.getElementById("warm-next-monday").textContent = getNextMondayTouch();
+      }
+      if (name === "cold") {
+        loadCold();
+        document.getElementById("cold-next-monday").textContent = calculateNextFirstMonday();
+      }
+      if (name === "source-routing") loadRouting();
+    }
+
+    document.querySelectorAll(".ln-tab").forEach(tab => {
+      tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+    });
+
+    async function refreshAll() {
+      document.getElementById("ln-last-updated").textContent = "Updated " + new Date().toLocaleTimeString();
+      await loadSummary();
+      await loadHotFactors();
+      const active = document.querySelector(".ln-tab.active")?.dataset.tab;
+      if (active === "hot") await loadTier("hot", "hot-list", "No hot leads yet.");
+      if (active === "warm") {
+        await loadTier("warm", "warm-list", "No warm leads.");
+        document.getElementById("warm-next-monday").textContent = getNextMondayTouch();
+      }
+      if (active === "cold") {
+        await loadCold();
+        document.getElementById("cold-next-monday").textContent = calculateNextFirstMonday();
+      }
+      if (active === "source-routing") await loadRouting();
+    }
+
+    async function postAction(url, label, btn) {
+      if (btn) btn.disabled = true;
+      try {
+        const r = await fetch(apiUrl(url), { method: "POST", headers: authHeaders() });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Request failed");
+        const detail = d.sent != null ? ` — ${d.sent} sent, ${d.skipped || 0} skipped` :
+          d.scored != null ? ` — ${d.scored} scored (${d.hot} hot, ${d.warm} warm, ${d.cold} cold)` :
+          d.rescored != null ? ` — ${d.rescored} re-scored, ${d.promoted} promoted` : "";
+        showToast(label + detail);
+        await refreshAll();
+      } catch (err) {
+        showToast(err.message || "Action failed");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    document.getElementById("btn-score-all").addEventListener("click", (e) => postAction("/api/lead-scoring/score-all", "Score all complete", e.currentTarget));
+    document.getElementById("btn-rescore-cold").addEventListener("click", (e) => postAction("/api/lead-scoring/rescore-cold-now", "Cold re-score complete", e.currentTarget));
+    document.getElementById("btn-rescore-cold-tab").addEventListener("click", (e) => postAction("/api/lead-scoring/rescore-cold-now", "Cold re-score complete", e.currentTarget));
+    document.getElementById("btn-warm-touch").addEventListener("click", (e) => postAction("/api/lead-nurture/warm-touch-now", "Warm touch sent", e.currentTarget));
+    document.getElementById("btn-cold-touch").addEventListener("click", (e) => postAction("/api/lead-nurture/cold-touch-now", "Cold touch sent", e.currentTarget));
+    document.getElementById("ln-refresh-btn").addEventListener("click", refreshAll);
+
+    function toggleAutoRefresh() {
+      const on = document.getElementById("ln-auto-refresh").checked;
+      document.getElementById("ln-pulse").classList.toggle("on", on);
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      if (on) autoRefreshTimer = setInterval(refreshAll, 30000);
+    }
+    document.getElementById("ln-auto-refresh").addEventListener("change", toggleAutoRefresh);
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      document.getElementById("theme-toggle-btn").textContent = theme === "light" ? "Dark mode" : "Light mode";
+    }
+    function toggleTheme() {
+      const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+      localStorage.setItem("dashboardTheme", next);
+      applyTheme(next);
+    }
+    (function initTheme() {
+      const saved = localStorage.getItem("dashboardTheme") || "dark";
+      applyTheme(saved);
+      document.getElementById("theme-toggle-btn").addEventListener("click", toggleTheme);
+      window.addEventListener("storage", (e) => {
+        if (e.key === "dashboardTheme" && e.newValue) applyTheme(e.newValue);
+      });
+    })();
+
+    refreshAll();
+  </script>
+</body>
+</html>

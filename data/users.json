@@ -1,0 +1,47 @@
+[
+  {
+    "id": "user_mpyy74ql_xyc5c5",
+    "name": "Marco Puga",
+    "email": "marco@example.com",
+    "role": "admin",
+    "permissions": {
+      "canDeleteTasks": true,
+      "canViewAllLeads": true,
+      "canAccessSettings": true,
+      "canAccessAutomations": true,
+      "canExportCSV": true,
+      "canMassText": true,
+      "canMassEmail": true,
+      "canManageTags": true,
+      "canManageAutoPlans": true,
+      "canViewReports": true
+    },
+    "active": true,
+    "createdAt": "2026-06-04T03:40:58.171Z",
+    "avatarInitials": "MP",
+    "avatarColor": "#0ea5e9"
+  },
+  {
+    "id": "user_mpyy74ql_clkiij",
+    "name": "Carlos",
+    "email": "carlos@example.com",
+    "role": "agent",
+    "permissions": {
+      "canDeleteTasks": false,
+      "canViewAllLeads": false,
+      "canAccessSettings": false,
+      "canAccessAutomations": false,
+      "canExportCSV": true,
+      "canMassText": true,
+      "canMassEmail": true,
+      "canManageTags": false,
+      "canManageAutoPlans": false,
+      "canViewReports": true
+    },
+    "assignedLeadIds": [],
+    "active": true,
+    "createdAt": "2026-06-04T03:40:58.171Z",
+    "avatarInitials": "CA",
+    "avatarColor": "#10b981"
+  }
+]

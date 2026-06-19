@@ -12,6 +12,7 @@ exports.getMarcoTaskById = getMarcoTaskById;
 const crypto_1 = require("crypto");
 const fs_1 = require("fs");
 const path_1 = require("path");
+const types_js_1 = require("./types.js");
 function resolveMarcoTasksPath() {
     const base = (0, fs_1.existsSync)("/data") ? "/data" : (0, path_1.join)(process.cwd(), "data");
     return (0, path_1.join)(base, "marco-tasks.json");
@@ -30,7 +31,7 @@ function normalizeTask(raw) {
     const priority = t.priority === "high" || t.priority === "medium" || t.priority === "low"
         ? t.priority
         : "medium";
-    const status = t.status === "pending" || t.status === "in_progress" || t.status === "done"
+    const status = types_js_1.MARCO_TASK_STATUSES.includes(t.status)
         ? t.status
         : "pending";
     return {
@@ -40,6 +41,9 @@ function normalizeTask(raw) {
         dueDate: typeof t.dueDate === "string" ? t.dueDate.slice(0, 10) : undefined,
         priority,
         status,
+        previousStatus: types_js_1.MARCO_TASK_STATUSES.includes(t.previousStatus)
+            ? t.previousStatus
+            : undefined,
         createdBy: typeof t.createdBy === "string" ? t.createdBy : undefined,
         createdAt: typeof t.createdAt === "string" ? t.createdAt : nowIso(),
         updatedAt: typeof t.updatedAt === "string" ? t.updatedAt : nowIso(),
@@ -80,12 +84,16 @@ function buildMarcoTasksSummary(tasks) {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     return {
-        pending: tasks.filter((t) => t.status === "pending").length,
+        pending: tasks.filter((t) => t.status === "pending" || t.status === "due_soon").length,
         inProgress: tasks.filter((t) => t.status === "in_progress").length,
         done: tasks.filter((t) => t.status === "done").length,
-        highPriority: tasks.filter((t) => t.priority === "high" && t.status !== "done").length,
+        highPriority: tasks.filter((t) => t.priority === "high" && t.status !== "done" && t.status !== "on_hold").length,
         overdue: tasks.filter((t) => {
-            if (!t.dueDate || t.status === "done")
+            if (t.status === "done" || t.status === "on_hold")
+                return false;
+            if (t.status === "overdue")
+                return true;
+            if (!t.dueDate)
                 return false;
             const due = new Date(t.dueDate.slice(0, 10) + "T00:00:00");
             return due < now;

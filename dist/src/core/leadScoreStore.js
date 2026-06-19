@@ -7,6 +7,7 @@ exports.getLeadScoreDb = getLeadScoreDb;
 exports.recordLeadScore = recordLeadScore;
 exports.getLatestScore = getLatestScore;
 exports.getScoreHistory = getScoreHistory;
+exports.getScoreEntriesSince = getScoreEntriesSince;
 exports.getLatestScoresForAllLeads = getLatestScoresForAllLeads;
 exports.getLeadsByTier = getLeadsByTier;
 exports.getLastRescoreRunAt = getLastRescoreRunAt;
@@ -72,6 +73,13 @@ function getScoreHistory(leadId, limit = 20) {
     const rows = database
         .prepare(`SELECT * FROM lead_scores WHERE lead_id = ? ORDER BY score_date DESC LIMIT ?`)
         .all(leadId, limit);
+    return rows.map(rowToScore);
+}
+function getScoreEntriesSince(sinceIso) {
+    const database = getLeadScoreDb();
+    const rows = database
+        .prepare(`SELECT * FROM lead_scores WHERE score_date >= ? ORDER BY score_date ASC`)
+        .all(sinceIso);
     return rows.map(rowToScore);
 }
 function getLatestScoresForAllLeads() {

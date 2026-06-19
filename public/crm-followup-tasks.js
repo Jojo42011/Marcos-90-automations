@@ -170,12 +170,14 @@
     let overdue = 0;
     let pending = 0;
     let completedToday = 0;
+    const active = new Set(["pending", "in_progress", "due_soon", "overdue"]);
     for (const t of crmTasksCache) {
       const dk = dateKey(t.dueDate);
-      if (t.status === "pending" || t.status === "in_progress") {
+      if (active.has(t.status)) {
         pending++;
-        if (dk === today) dueToday++;
-        else if (dk < today) overdue++;
+        if (t.status === "due_soon" && dk === today) dueToday++;
+        else if (dk === today && t.status !== "overdue") dueToday++;
+        if (t.status === "overdue" || dk < today) overdue++;
       }
       if (t.status === "completed" && t.completedAt && dateKey(t.completedAt) === today) completedToday++;
     }
@@ -201,7 +203,7 @@
     const out = [];
     const today = todayKey();
     for (const t of crmTasksCache) {
-      if (t.status === "completed" || t.status === "cancelled") continue;
+      if (t.status === "completed" || t.status === "cancelled" || t.status === "on_hold") continue;
       const dk = dateKey(t.dueDate);
       if (dk > today) continue;
       const key = "task:" + t.id;
@@ -282,7 +284,15 @@
   }
 
   function crmTaskStatusBadge(s) {
-    const lab = { pending: "Pending", in_progress: "In Progress", completed: "Completed", cancelled: "Cancelled" }[s] || s;
+    const lab = {
+      pending: "Pending",
+      in_progress: "In Progress",
+      on_hold: "On Hold",
+      due_soon: "Due Soon",
+      overdue: "Overdue",
+      completed: "Completed",
+      cancelled: "Cancelled",
+    }[s] || s;
     return `<span class="crm-task-status crm-task-status-${s}">${lab}</span>`;
   }
 
@@ -405,9 +415,9 @@
     let list = [...crmTasksCache];
     const today = todayKey();
     const f = crmTasksFilters;
-    if (crmTasksFilterStat === "dueToday") list = list.filter((t) => dateKey(t.dueDate) === today && t.status !== "completed" && t.status !== "cancelled");
-    else if (crmTasksFilterStat === "overdue") list = list.filter((t) => dateKey(t.dueDate) < today && t.status !== "completed" && t.status !== "cancelled");
-    else if (crmTasksFilterStat === "pending") list = list.filter((t) => t.status === "pending" || t.status === "in_progress");
+    if (crmTasksFilterStat === "dueToday") list = list.filter((t) => (dateKey(t.dueDate) === today || t.status === "due_soon") && t.status !== "completed" && t.status !== "cancelled" && t.status !== "on_hold");
+    else if (crmTasksFilterStat === "overdue") list = list.filter((t) => (dateKey(t.dueDate) < today || t.status === "overdue") && t.status !== "completed" && t.status !== "cancelled" && t.status !== "on_hold");
+    else if (crmTasksFilterStat === "pending") list = list.filter((t) => ["pending", "in_progress", "due_soon", "overdue"].includes(t.status));
     else if (crmTasksFilterStat === "completedToday") {
       list = list.filter((t) => t.status === "completed" && t.completedAt && dateKey(t.completedAt) === today);
     }
@@ -432,7 +442,7 @@
     } else if (f.due === "month") {
       const m = today.slice(0, 7);
       list = list.filter((t) => dateKey(t.dueDate).startsWith(m));
-    } else if (f.due === "overdue") list = list.filter((t) => dateKey(t.dueDate) < today && t.status !== "completed" && t.status !== "cancelled");
+    } else if (f.due === "overdue") list = list.filter((t) => (dateKey(t.dueDate) < today || t.status === "overdue") && t.status !== "completed" && t.status !== "cancelled" && t.status !== "on_hold");
     return list.sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
   }
 
@@ -461,7 +471,7 @@
         <input type="search" class="crm-input crm-tasks-search" id="crm-tasks-search" placeholder="Search title or lead…" value="${escapeHtml(crmTasksFilters.q)}" />
         <select class="crm-select" id="crm-tasks-f-type"><option value="">All types</option>${["call","text","email","appointment","follow_up","other"].map((t) => `<option value="${t}" ${crmTasksFilters.type === t ? "selected" : ""}>${t}</option>`).join("")}</select>
         <select class="crm-select" id="crm-tasks-f-pri"><option value="">All priorities</option>${["urgent","high","normal","low"].map((p) => `<option value="${p}" ${crmTasksFilters.priority === p ? "selected" : ""}>${p}</option>`).join("")}</select>
-        <select class="crm-select" id="crm-tasks-f-status"><option value="">All statuses</option>${["pending","in_progress","completed","cancelled"].map((st) => `<option value="${st}" ${crmTasksFilters.status === st ? "selected" : ""}>${st}</option>`).join("")}</select>
+        <select class="crm-select" id="crm-tasks-f-status"><option value="">All statuses</option>${["pending","in_progress","on_hold","due_soon","overdue","completed","cancelled"].map((st) => `<option value="${st}" ${crmTasksFilters.status === st ? "selected" : ""}>${st.replace(/_/g, " ")}</option>`).join("")}</select>
         <select class="crm-select" id="crm-tasks-f-assigned"><option value="">All assigned</option>${(crmUsers || []).filter((u) => u.active).map((u) => `<option value="${escapeHtml(u.id)}" ${crmTasksFilters.assignedUserId === u.id ? "selected" : ""}>${escapeHtml(u.name)}</option>`).join("")}</select>
         <select class="crm-select" id="crm-tasks-f-due"><option value="">Any due</option><option value="today" ${crmTasksFilters.due === "today" ? "selected" : ""}>Today</option><option value="week" ${crmTasksFilters.due === "week" ? "selected" : ""}>This week</option><option value="month" ${crmTasksFilters.due === "month" ? "selected" : ""}>This month</option><option value="overdue" ${crmTasksFilters.due === "overdue" ? "selected" : ""}>Overdue</option></select>
         <select class="crm-select" id="crm-tasks-f-source"><option value="">All sources</option><option value="manual" ${crmTasksFilters.source === "manual" ? "selected" : ""}>Manual</option><option value="auto_plan" ${crmTasksFilters.source === "auto_plan" ? "selected" : ""}>Auto Plan</option><option value="dial_session" ${crmTasksFilters.source === "dial_session" ? "selected" : ""}>Dial Session</option><option value="automation" ${crmTasksFilters.source === "automation" ? "selected" : ""}>Automation</option></select>
@@ -557,7 +567,7 @@
   }
 
   function crmRenderTasksBoard(body, list) {
-    const cols = ["pending", "in_progress", "completed", "cancelled"];
+    const cols = ["pending", "in_progress", "on_hold", "due_soon", "overdue", "completed", "cancelled"];
     const html = cols
       .map((st) => {
         const cards = list
@@ -571,7 +581,7 @@
           )
           .join("");
         return `<div class="crm-task-col" data-task-col="${st}">
-          <div class="crm-task-col-head">${st.replace("_", " ")} <span>${list.filter((t) => t.status === st).length}</span></div>
+          <div class="crm-task-col-head">${st.replace(/_/g, " ")} <span>${list.filter((t) => t.status === st).length}</span></div>
           <div class="crm-task-col-body">${cards}</div>
           <button type="button" class="crm-light-btn crm-task-col-add" data-task-add-col="${st}">+ Add Task</button>
         </div>`;
@@ -1206,7 +1216,7 @@
   function crmCheckTaskReminders() {
     const now = Date.now();
     for (const t of crmTasksCache) {
-      if (!t.reminderMinutes || t.status === "completed" || t.status === "cancelled") continue;
+      if (!t.reminderMinutes || t.status === "completed" || t.status === "cancelled" || t.status === "on_hold") continue;
       const due = new Date((t.dueDate || "") + (t.dueTime ? "T" + t.dueTime : "T09:00:00")).getTime();
       const remindAt = due - t.reminderMinutes * 60000;
       if (remindAt > now || due < now - 3600000) continue;

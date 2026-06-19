@@ -4,6 +4,7 @@
  */
 import type { Conversation, Lead, Message } from "../core/types.js";
 import { FunnelStage } from "../core/state.js";
+import { MARCO_PHONE_CAPTURED_REPLY } from "../../config/prompts.js";
 
 export interface FunnelDeterministicMeta {
   phoneJustCaptured?: boolean;
@@ -17,9 +18,7 @@ function getLastUserMessage(conversation: Conversation): Message | null {
 }
 
 /** Shown when we detect a number in-thread the same turn we leave the opening funnel (or override a bad sanitizer). */
-export const PHONE_JUST_CAPTURED_REPLY =
-  "Got it. I'll send you the full breakdown by the end of the day, pricing and specs, plus a couple similar ones. " +
-  "Once you check it out, tell me if this is the right fit or if you're trying to hit a different area or price.";
+export const PHONE_JUST_CAPTURED_REPLY = MARCO_PHONE_CAPTURED_REPLY;
 
 const MAX_USER_MESSAGES_PHONE_SCAN = 12;
 

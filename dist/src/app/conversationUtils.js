@@ -1,13 +1,30 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.REFERRAL_AREA_FOLLOW_UP = void 0;
+exports.REFERRAL_AREA_FOLLOW_UP = exports.MAX_CALL_ASK_ATTEMPTS = exports.MARCO_CALL_ASK_ATTEMPT_LINES = void 0;
 exports.detectAdCampaign = detectAdCampaign;
 exports.normalizeUserMessageText = normalizeUserMessageText;
 exports.normalizeForMarcoDuplicateCompare = normalizeForMarcoDuplicateCompare;
 exports.messagesAreSubstantiallyDuplicate = messagesAreSubstantiallyDuplicate;
 exports.getRecentAssistantTexts = getRecentAssistantTexts;
 exports.getLastUserMessageText = getLastUserMessageText;
+exports.isWaveOnlyMessage = isWaveOnlyMessage;
 exports.getLastAssistantMessageText = getLastAssistantMessageText;
+exports.lastAssistantMessageMatches = lastAssistantMessageMatches;
+exports.countAssistantMessagesMatchingAny = countAssistantMessagesMatchingAny;
+exports.countCallAskAttempts = countCallAskAttempts;
+exports.threadContainsGracefulCallAskExit = threadContainsGracefulCallAskExit;
+exports.threadHadCallAskPath = threadHadCallAskPath;
+exports.lastAssistantWasCallAsk = lastAssistantWasCallAsk;
+exports.resolvePhoneCapturedReply = resolvePhoneCapturedReply;
+exports.threadContainsBreakdownOffer = threadContainsBreakdownOffer;
+exports.signalsAffirmativeBreakdownAgreement = signalsAffirmativeBreakdownAgreement;
+exports.signalsCallAskAgreement = signalsCallAskAgreement;
+exports.isInStateConfirmation = isInStateConfirmation;
+exports.isEmailDeflection = isEmailDeflection;
+exports.asksAboutCommissionRebate = asksAboutCommissionRebate;
+exports.resolveCallAskBucketF = resolveCallAskBucketF;
+exports.isAcknowledgmentOnly = isAcknowledgmentOnly;
+exports.resolveAcknowledgmentCloseoutTurn = resolveAcknowledgmentCloseoutTurn;
 exports.lastTwoAssistantMessagesAreDuplicate = lastTwoAssistantMessagesAreDuplicate;
 exports.latestAssistantEchoesEarlierInThread = latestAssistantEchoesEarlierInThread;
 exports.threadContainsAgentQuestion = threadContainsAgentQuestion;
@@ -32,6 +49,7 @@ exports.buildOutOfStateReferralOffer = buildOutOfStateReferralOffer;
 exports.countAssistantsSinceLastUser = countAssistantsSinceLastUser;
 exports.countTrailingAssistantsAtEnd = countTrailingAssistantsAtEnd;
 exports.isShortDuplicateUserPair = isShortDuplicateUserPair;
+const prompts_js_1 = require("../../config/prompts.js");
 /**
  * Map first inbound message phrases to internal ad campaign ids (Instagram ad attribution).
  */
@@ -160,11 +178,307 @@ function getLastUserMessageText(conversation) {
     const m = reversed.find((x) => x.role === "user");
     return m?.text?.trim() ?? "";
 }
+/** Wave / raised-hand emoji (👋 🤚 🖐 🏻-🏿 optional skin tones on some platforms). */
+const WAVE_EMOJI_RE = /(?:\u{1F44B}|\u{1F91A}|\u{1F590}|\u{270B})(?:\u{1F3FB}|\u{1F3FC}|\u{1F3FD}|\u{1F3FE}|\u{1F3FF})?/gu;
+/**
+ * Message is only a wave or bare hi/hello — emoji-only, "wave", or short greeting with no other content.
+ * Bare "hey" alone is excluded (stays on buyer-intent gate).
+ */
+function isWaveOnlyMessage(text) {
+    const raw = text.trim();
+    if (!raw)
+        return false;
+    const withoutWaves = raw.replace(WAVE_EMOJI_RE, "").trim();
+    if (withoutWaves === "" && WAVE_EMOJI_RE.test(raw))
+        return true;
+    const textOnly = withoutWaves.toLowerCase().replace(/[!.,…]+/g, "").trim();
+    if (!textOnly)
+        return false;
+    return /^(wave|waving|hey wave|hi wave|hi|hello|hi there|hello there)$/.test(textOnly);
+}
 /** Last Marco outbound before the reply we are about to generate (most recent assistant message). */
 function getLastAssistantMessageText(conversation) {
     const reversed = [...conversation.messages].reverse();
     const m = reversed.find((x) => x.role === "assistant");
     return m?.text?.trim() ? m.text.trim() : null;
+}
+/** True if Marco's most recent outbound substantially matches a target line (e.g. close-out). */
+function lastAssistantMessageMatches(conversation, target) {
+    const last = getLastAssistantMessageText(conversation);
+    if (!last?.trim() || !target.trim())
+        return false;
+    return messagesAreSubstantiallyDuplicate(last, target);
+}
+/** Canonical Bucket F call-ask lines (shared retry counter across all three). */
+exports.MARCO_CALL_ASK_ATTEMPT_LINES = [
+    prompts_js_1.MARCO_CALL_ASK_INSTATE,
+    prompts_js_1.MARCO_CALL_ASK_EMAIL_DEFLECT,
+    prompts_js_1.MARCO_REBATE_REPLY,
+];
+/** Allow up to this many call-ask attempts before graceful exit on the next trigger. */
+exports.MAX_CALL_ASK_ATTEMPTS = 2;
+/** Count Marco outbounds that substantially match any target in the list. */
+function countAssistantMessagesMatchingAny(conversation, targets) {
+    let count = 0;
+    for (const m of conversation.messages) {
+        if (m.role !== "assistant" || !m.text?.trim())
+            continue;
+        for (const target of targets) {
+            if (messagesAreSubstantiallyDuplicate(m.text, target)) {
+                count++;
+                break;
+            }
+        }
+    }
+    return count;
+}
+function countCallAskAttempts(conversation) {
+    return countAssistantMessagesMatchingAny(conversation, exports.MARCO_CALL_ASK_ATTEMPT_LINES);
+}
+function threadContainsGracefulCallAskExit(conversation) {
+    return conversation.messages.some((m) => m.role === "assistant" &&
+        m.text?.trim() &&
+        messagesAreSubstantiallyDuplicate(m.text, prompts_js_1.MARCO_CALL_ASK_GRACEFUL_EXIT));
+}
+function threadHadCallAskPath(conversation) {
+    return countCallAskAttempts(conversation) > 0;
+}
+function lastAssistantWasCallAsk(conversation) {
+    const last = getLastAssistantMessageText(conversation);
+    if (!last?.trim())
+        return false;
+    return exports.MARCO_CALL_ASK_ATTEMPT_LINES.some((line) => messagesAreSubstantiallyDuplicate(last, line));
+}
+/** Phone-captured confirm: call-ask path uses call-specific wording (Option B). */
+function resolvePhoneCapturedReply(conversation) {
+    if (threadHadCallAskPath(conversation)) {
+        return prompts_js_1.MARCO_PHONE_CAPTURED_CALL_REPLY;
+    }
+    return prompts_js_1.MARCO_PHONE_CAPTURED_REPLY;
+}
+/** Marco already offered the breakdown packet by text in this thread. */
+function threadContainsBreakdownOffer(conversation) {
+    for (const m of conversation.messages) {
+        if (m.role !== "assistant" || !m.text?.trim())
+            continue;
+        if (messagesAreSubstantiallyDuplicate(m.text, prompts_js_1.MARCO_PRICE_REPLY))
+            return true;
+        const t = m.text.toLowerCase();
+        if (/\bwould it help if i sent\b/.test(t) && /\bbreakdown\b/.test(t))
+            return true;
+        if (/\bsent over the entire breakdown\b/.test(t))
+            return true;
+        if (/\bfull breakdown\b/.test(t) && /\b(text|send|sent|by text)\b/.test(t))
+            return true;
+    }
+    return false;
+}
+/**
+ * Lead affirmatively agreed to receive the breakdown (pre-phone).
+ * Narrow: short yes/send-it beats only — not location, rebate, or email deflection.
+ */
+function signalsAffirmativeBreakdownAgreement(text) {
+    const t = text.trim().toLowerCase();
+    if (!t)
+        return false;
+    const digits = t.replace(/\D/g, "");
+    if (digits.length >= 10)
+        return false;
+    if (isInStateConfirmation(text))
+        return false;
+    if (isEmailDeflection(text))
+        return false;
+    if (asksAboutCommissionRebate(text))
+        return false;
+    if (/^(yes|yeah|yep|yup|sure|ok|okay|please|absolutely|definitely)\b/.test(t))
+        return true;
+    if (/^(yes|yeah|sure)[!.]*$/.test(t))
+        return true;
+    if (/\b(yes please|please send|send it|send that|send the|sounds good|that would be (great|helpful|awesome)|go ahead|go for it)\b/.test(t)) {
+        return true;
+    }
+    if (/\b(i'?d like|i would like).{0,24}\b(send|sent|breakdown)\b/.test(t))
+        return true;
+    return false;
+}
+/** Lead agreed to Marco's call-ask (any of the three Bucket F lines). */
+function signalsCallAskAgreement(text) {
+    const t = text.trim().toLowerCase();
+    if (!t)
+        return false;
+    if (/^(no|nah|nope|not really)\b/.test(t) && !/\b(yes|yeah|sure|open)\b/.test(t))
+        return false;
+    if (/\b(no thanks|not interested|don'?t want|dont want|can'?t|cant)\b/.test(t) && !/\b(open|yes|sure)\b/.test(t)) {
+        return false;
+    }
+    return (/^(yes|yeah|yep|yup|sure|ok|okay|absolutely|definitely)\b/.test(t) ||
+        /\b(i'?m open|open to (a |that|it)|that works|sounds good|works for me|five minutes|5 minutes|happy to|would be open)\b/.test(t) ||
+        /\b(let'?s do|lets do|call me|give me a call)\b/.test(t));
+}
+/**
+ * Clear, unambiguous in-state confirmation (Texas / San Antonio area).
+ * Ambiguous location mentions → false (normal funnel).
+ */
+function isInStateConfirmation(text) {
+    const t = text.trim().toLowerCase();
+    if (!t)
+        return false;
+    if (/^(yes,?\s*)?(i'?m|im|i am|we'?re|were)\s+(in|based in|located in|living in)\s+(san antonio|\bsa\b|texas)\b/.test(t)) {
+        return true;
+    }
+    if (/^(yes|yeah|yep|yup)[,!.]?\s*(i'?m|im|i am)\s+(in\s+)?(san antonio|\bsa\b|texas)\b/.test(t))
+        return true;
+    if (/^in\s+(texas|san antonio|\bsa\b)\s*[!.]*$/.test(t))
+        return true;
+    if (/^(san antonio|\bsa\b|texas)\s*[!.]*$/.test(t))
+        return true;
+    if (/^(yes|yeah)[,!.]?\s*(san antonio|\bsa\b|texas)\s*[!.]*$/.test(t))
+        return true;
+    if (t.length < 72 &&
+        /\b(i'?m|im|i am|we'?re|were)\s+(in|based in|located in|living in)\s+(san antonio|\bsa\b)\b/.test(t)) {
+        return true;
+    }
+    if (t.length < 72 &&
+        /\b(i'?m|im|i am|we'?re|were)\s+(in|based in|located in|living in)\s+texas\b/.test(t)) {
+        return true;
+    }
+    return false;
+}
+/** Lead offers or pushes email as contact method mid-funnel (not unrelated email mention). */
+function isEmailDeflection(text) {
+    if (signalsEmailDeliveryRequest(text))
+        return true;
+    const t = text.trim().toLowerCase();
+    if (!t)
+        return false;
+    if (/\byou can email me\b/.test(t))
+        return true;
+    if (/\bemail me\b/.test(t) && /\b(at|@|instead|rather|prefer)\b/.test(t))
+        return true;
+    if (/\b(i prefer|i'd prefer|id prefer|rather use)\s+email\b/.test(t))
+        return true;
+    if (/\b(send|reach).{0,20}\bemail\b/.test(t) && /\b(instead|rather|prefer)\b/.test(t))
+        return true;
+    return false;
+}
+/** Commission rebate question tied to new construction purchase (pre-phone Bucket F). */
+function asksAboutCommissionRebate(text) {
+    const t = text.trim().toLowerCase();
+    if (!t)
+        return false;
+    const rebateIntent = /\b(rebate|commission rebate|buyer agent commission|agent commission|commission back)\b/.test(t);
+    if (!rebateIntent)
+        return false;
+    const newConstruction = /\b(new construction|new build|new home|new house|builder|build from scratch|custom build|preconstruction|pre-construction|new development)\b/.test(t);
+    if (newConstruction)
+        return true;
+    if (/\b(rebate|commission).{0,48}\b(purchase|buy|build|construction|new)\b/.test(t))
+        return true;
+    if (/\b(purchase|buy|build|construction|new).{0,48}\b(rebate|commission)\b/.test(t))
+        return true;
+    return false;
+}
+/**
+ * Bucket F: call-ask escalation, retry counting, graceful exit, call-agreement → number ask.
+ * Returns null when graceful exit already sent or no trigger matches.
+ */
+function resolveCallAskBucketF(conversation, latestText) {
+    if (threadContainsGracefulCallAskExit(conversation))
+        return null;
+    if (lastAssistantWasCallAsk(conversation) && signalsCallAskAgreement(latestText)) {
+        return { kind: "number_ask", reply: prompts_js_1.MARCO_CALL_NUMBER_ASK_REPLY };
+    }
+    let triggerReply = null;
+    if (isInStateConfirmation(latestText)) {
+        triggerReply = prompts_js_1.MARCO_CALL_ASK_INSTATE;
+    }
+    else if (isEmailDeflection(latestText)) {
+        triggerReply = prompts_js_1.MARCO_CALL_ASK_EMAIL_DEFLECT;
+    }
+    else if (asksAboutCommissionRebate(latestText)) {
+        triggerReply = prompts_js_1.MARCO_REBATE_REPLY;
+    }
+    if (!triggerReply)
+        return null;
+    if (countCallAskAttempts(conversation) >= exports.MAX_CALL_ASK_ATTEMPTS) {
+        return { kind: "graceful_exit", reply: prompts_js_1.MARCO_CALL_ASK_GRACEFUL_EXIT };
+    }
+    return { kind: "call_ask", reply: triggerReply };
+}
+const ACK_PHRASE_TOKENS = new Set([
+    "thanks",
+    "thank",
+    "you",
+    "so",
+    "much",
+    "very",
+    "ok",
+    "okay",
+    "got",
+    "it",
+    "sounds",
+    "good",
+    "perfect",
+    "awesome",
+    "alright",
+    "cool",
+    "great",
+    "nice",
+    "thx",
+    "ty",
+    "again",
+    "appreciate",
+    "wonderful",
+    "sweet",
+    "lovely",
+    "a",
+    "lot",
+]);
+const ACK_ONLY_PATTERNS = [
+    /^thanks?( so much| very much| a lot| again)?$/,
+    /^thank you( so much| very much| again)?$/,
+    /^ok(ay)?( thanks?| thank you| thx)?$/,
+    /^(got it|sounds good|perfect|awesome|alright|cool|great|nice|sweet|lovely|wonderful)( thank you| thanks?| so much)?$/,
+    /^(perfect|awesome|alright|cool|great)\s+(thank you|thanks)( so much)?$/,
+    /^appreciate it$/,
+];
+/**
+ * Short closing phrase with no question — thanks, ok thanks, got it, etc.
+ * Question marks, question words, or non-ack content → false (treat as a real message).
+ */
+function isAcknowledgmentOnly(text) {
+    const raw = text.trim();
+    if (!raw)
+        return false;
+    if (raw.includes("?"))
+        return false;
+    const lower = raw.toLowerCase();
+    if (/\b(what|when|where|how|why|who|does|is|can|could|would|will|are|have|did|was|were)\b/.test(lower)) {
+        return false;
+    }
+    const normalized = lower.replace(/[!.,…]+/g, " ").replace(/\s+/g, " ").trim();
+    if (ACK_ONLY_PATTERNS.some((p) => p.test(normalized)))
+        return true;
+    const tokens = normalized.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0 || tokens.length > 6)
+        return false;
+    return tokens.every((tok) => ACK_PHRASE_TOKENS.has(tok));
+}
+/**
+ * Shared pre- and post-phone path: ack-only lead line after Marco has spoken.
+ * Skip when the number was captured on this same inbound turn (phone confirm handles that).
+ */
+function resolveAcknowledgmentCloseoutTurn(conversation, latestText, closeoutLine, options) {
+    if (options.skipIfPhoneCapturedThisTurn)
+        return null;
+    if (!isAcknowledgmentOnly(latestText))
+        return null;
+    const hasMarcoOutbound = conversation.messages.some((m) => m.role === "assistant" && m.text?.trim());
+    if (!hasMarcoOutbound)
+        return null;
+    if (lastAssistantMessageMatches(conversation, closeoutLine))
+        return "silence";
+    return "closeout";
 }
 /**
  * True if Marco's last two outbound messages are the same or nearly the same (stuck loop).
@@ -261,6 +575,10 @@ function messageAsksPropertyPriceOrCost(text) {
     if (/\bis it (expensive|cheap|affordable)\b/.test(t))
         return true;
     if (pointsAtListing && /\b(price|cost|pricing)\b/.test(t) && /\b(what|how much|is)\b/.test(t))
+        return true;
+    if (/^\s*(price|pricing|cost)\s*[!.?]*\s*$/i.test(t))
+        return true;
+    if (/\bashing\s+price\b/.test(t))
         return true;
     return false;
 }

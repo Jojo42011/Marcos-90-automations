@@ -14,9 +14,22 @@ import { scheduleContentDigestEvery3Days } from "../agents/harveyContentDigest/i
 import { scheduleShowingReminders } from "../agents/showingReminders/index.js";
 import { scheduleMojoOutreach } from "../agents/mojoOutreach/index.js";
 import { scheduleTransactionDeadlineChecks, scheduleDailyDeadlineCheck } from "../agents/transactionDeadlines/index.js";
+import { scheduleTaskDeadlineAutomation } from "../core/taskDeadlineAutomation.js";
 import { scheduleWarmLeadWeeklyTouch } from "../agents/leadNurture/warmLeadFlow.js";
 import { scheduleColdLeadMonthlyTouch } from "../agents/leadNurture/coldLeadFlow.js";
 import { scheduleAutoRescore } from "../agents/leadScoring/index.js";
+import { scheduleDailyDigest } from "../agents/reporting/dailyDigest.js";
+import { scheduleWeeklyKPI } from "../agents/reporting/weeklyKPI.js";
+import {
+  scheduleWeeklyFinanceSummary,
+  scheduleMonthlyCloseReport,
+  schedulePaceCheckDaily,
+  scheduleExpenseSpikeCheckWeekly,
+} from "../agents/finance/index.js";
+import { scheduleBuyerDripProcessor } from "../agents/emailMarketing/buyerDrip.js";
+import { scheduleSellerDripProcessor } from "../agents/emailMarketing/sellerDrip.js";
+import { schedulePastClientQuarterly } from "../agents/emailMarketing/pastClientQuarterly.js";
+import { scheduleNoReplyFollowupCheck } from "../agents/emailMarketing/noReplyFollowup.js";
 
 export function scheduleContentJobs(): void {
   scheduleSocialMediaAgentDaily6pmCST();
@@ -26,12 +39,23 @@ export function scheduleContentJobs(): void {
   scheduleEscalationChecks();
   scheduleContentDigestEvery3Days();
   scheduleShowingReminders();
+  scheduleTaskDeadlineAutomation();
   scheduleMojoOutreach();
   scheduleTransactionDeadlineChecks();
   scheduleDailyDeadlineCheck();
   scheduleWarmLeadWeeklyTouch();
   scheduleColdLeadMonthlyTouch();
   scheduleAutoRescore();
+  scheduleDailyDigest();
+  scheduleWeeklyKPI();
+  scheduleWeeklyFinanceSummary();
+  scheduleMonthlyCloseReport();
+  schedulePaceCheckDaily();
+  scheduleExpenseSpikeCheckWeekly();
+  scheduleBuyerDripProcessor();
+  scheduleSellerDripProcessor();
+  schedulePastClientQuarterly();
+  scheduleNoReplyFollowupCheck();
 }
 
 export async function runDailyJobs(): Promise<void> {

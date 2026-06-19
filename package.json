@@ -8,7 +8,10 @@
     "start": "node dist/src/server.js",
     "dev": "ts-node src/app/webhook.ts",
     "dev:mock": "npm run build && node dist/src/server.js",
-    "jobs": "ts-node src/app/jobs.ts"
+    "jobs": "ts-node src/app/jobs.ts",
+    "brivity-migration:inspect": "ts-node scripts/brivity-migration-dry-run.ts --inspect",
+    "brivity-migration:dry-run": "ts-node scripts/brivity-migration-dry-run.ts",
+    "brivity-migration:apply": "node scripts/brivity-migration-apply.mjs"
   },
   "keywords": [
     "automation",

@@ -10,7 +10,7 @@ import type { HarveyMemoryTurn } from "./types.js";
 import { historyToAnthropicMessages } from "./memory.js";
 
 const HARVEY_MODEL =
-  process.env.HARVEY_MODEL?.trim() || "claude-sonnet-4-20250514";
+  process.env.HARVEY_MODEL?.trim() || "claude-sonnet-4-6";
 
 const REAL_ESTATE_KB = `
 MARCO OPERATIONS KNOWLEDGE (static):

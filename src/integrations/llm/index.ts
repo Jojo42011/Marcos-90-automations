@@ -1254,7 +1254,7 @@ export async function generateMarcoPipelineReply(input: {
   }
   if (meta.phoneJustCaptured) {
     postOpeningHints.push(
-      "END_OF_DAY_DELIVERY_ONLY: They just shared their number this turn. Confirm you will text the full breakdown (pricing, specs, similar options if relevant) by END OF DAY today. Never say immediately, right now, right away, sending it now, or any phrase that promises instant delivery.",
+      "PHONE_JUST_CAPTURED: They just shared their number this turn. One short confirm you will get the breakdown over to them. Do not add a fit check, budget question, or needs analysis.",
     );
   }
   const postOpeningPrefix =
@@ -1410,10 +1410,7 @@ function alternatePipelineReplyFallback(
   const pool: string[] = [];
 
   if (meta.phoneJustCaptured) {
-    pool.push(
-      PHONE_JUST_CAPTURED_REPLY,
-      "Cool. I'll get you the full packet by the end of the day plus a few backups. Once you skim it, text me if you want to chat.",
-    );
+    pool.push(PHONE_JUST_CAPTURED_REPLY);
   }
 
   if (meta.listSendPromised) {

@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Finance · Marco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #0f1410;
+      --border: rgba(16, 185, 129, 0.25);
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.15);
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --font: "Plus Jakarta Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: #f1f5f9;
+      min-height: 100vh;
+      background-image: radial-gradient(ellipse 70% 45% at 50% -15%, var(--accent-glow), transparent);
+    }
+    .fin-dollar-figure {
+      font-family: "Space Grotesk", monospace;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      animation: fin-fade-slide-in 0.45s ease-out;
+    }
+    .fin-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0 20px;
+      overflow-x: auto;
+      animation: fin-fade-slide-in 0.5s ease-out 0.05s backwards;
+    }
+    .tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #888;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      padding: 12px 16px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .fin-main { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; animation: fin-fade-slide-in 0.38s ease-out; }
+    .fin-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      animation: fin-fade-slide-in 0.4s ease-out backwards;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .fin-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.35) !important;
+    }
+    .fin-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+    .fin-stat-label { font-family: var(--mono); font-size: 10px; color: #888; letter-spacing: 1px; }
+    .fin-stat-value { font-size: 26px; font-weight: 700; margin-top: 6px; color: #fff; }
+    .fin-title { color: #fff; font-size: 14px; font-weight: 700; }
+    .fin-muted { color: #888; }
+    .fin-meta { font-size: 10px; color: #555; font-family: var(--mono); }
+    .fin-body-text { font-size: 11px; color: #ccc; line-height: 1.6; }
+    .fin-preview-text { margin-top: 10px; font-size: 12px; color: #cbd5e1; line-height: 1.65; }
+    .fin-pace-sub { font-size: 10px; fill: #888; font-family: monospace; }
+    .fin-back { color: #10b981; font-size: 11px; letter-spacing: 1px; text-decoration: none; font-family: var(--mono); }
+    .fin-hdr-sep { color: #888; }
+    .fin-legend { font-size: 11px; color: #888; line-height: 1.6; }
+    .fin-legend strong { color: #10b981; }
+    .fin-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--mono); }
+    .fin-table th, .fin-table td { text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .fin-table th { color: #555; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .fin-bar-row { margin: 8px 0; }
+    .fin-bar-track { height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+    .fin-bar-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.85s cubic-bezier(0.22, 1, 0.36, 1); }
+    .fin-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+    .fin-form-grid input, .fin-form-grid select {
+      background: #0a0a0a;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 8px 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      border-radius: 2px;
+    }
+    .fin-btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 8px 14px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 2px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+    }
+    .fin-btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .fin-comm-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 12px;
+    }
+    .fin-fresh { animation: fin-fresh-commission 2.5s ease-out; }
+    @keyframes fin-fresh-commission {
+      0% { box-shadow: 0 0 0 rgba(16,185,129,0); background: rgba(16,185,129,0.08); }
+      50% { box-shadow: 0 0 20px rgba(16,185,129,0.3); }
+      100% { box-shadow: 0 0 0 rgba(16,185,129,0); background: transparent; }
+    }
+    @keyframes fin-fade-slide-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fin-draw-line { to { stroke-dashoffset: 0; } }
+    @keyframes fin-alert-pulse-border {
+      0%, 100% { border-left-width: 3px; }
+      50% { border-left-width: 6px; }
+    }
+    .fin-alert-pulse { animation: fin-alert-pulse-border 2s ease-in-out infinite; }
+    .fin-toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 12px 16px; border-radius: 6px; font-size: 12px;
+      opacity: 0; transform: translateY(10px); transition: 0.25s; z-index: 200;
+    }
+    .fin-toast.show { opacity: 1; transform: translateY(0); }
+    .fin-empty { text-align: center; padding: 2rem; color: #888; font-size: 13px; }
+    #fin-pulse.on { display: inline-block !important; animation: pulse 2s infinite; }
+    @keyframes pulse { 50% { opacity: 0.4; } }
+    html[data-theme="light"], html[data-theme="light"] body {
+      background: #f0fdf4 !important;
+      color: #0f172a !important;
+      background-image: none !important;
+    }
+    html[data-theme="light"] .header,
+    html[data-theme="light"] .fin-tabs {
+      background: #ffffff !important;
+      border-bottom: 2px solid #86efac !important;
+    }
+    html[data-theme="light"] .fin-title { color: #0f172a !important; }
+    html[data-theme="light"] .fin-muted,
+    html[data-theme="light"] .fin-hdr-sep { color: #64748b !important; }
+    html[data-theme="light"] .fin-meta { color: #64748b !important; }
+    html[data-theme="light"] .fin-back { color: #047857 !important; font-weight: 600 !important; }
+    html[data-theme="light"] .tab { color: #64748b !important; }
+    html[data-theme="light"] .tab.active {
+      color: #047857 !important;
+      border-bottom-color: #047857 !important;
+      font-weight: 700 !important;
+    }
+    html[data-theme="light"] .fin-card {
+      background: #ffffff !important;
+      border-color: #bbf7d0 !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+    }
+    html[data-theme="light"] .fin-stat-label { color: #475569 !important; font-weight: 600 !important; }
+    html[data-theme="light"] .fin-stat-value,
+    html[data-theme="light"] .fin-dollar-figure { color: #0f172a !important; }
+    html[data-theme="light"] .fin-body-text,
+    html[data-theme="light"] .fin-preview-text { color: #334155 !important; }
+    html[data-theme="light"] .fin-empty { color: #64748b !important; }
+    html[data-theme="light"] .fin-comm-row {
+      color: #0f172a !important;
+      border-bottom-color: #e2e8f0 !important;
+    }
+    html[data-theme="light"] .fin-legend { color: #475569 !important; }
+    html[data-theme="light"] .fin-legend strong { color: #047857 !important; }
+    html[data-theme="light"] .fin-bar-track { background: #e2e8f0 !important; }
+    html[data-theme="light"] .fin-bar-fill { background: #059669 !important; }
+    html[data-theme="light"] button.fin-btn,
+    html[data-theme="light"] button[onclick*="submit"],
+    html[data-theme="light"] button[onclick*="send"],
+    html[data-theme="light"] button[onclick*="Send"] {
+      background: #047857 !important;
+      color: #ffffff !important;
+    }
+    html[data-theme="light"] .fin-btn-ghost {
+      color: #047857 !important;
+      border-color: #86efac !important;
+      background: #ffffff !important;
+    }
+    html[data-theme="light"] .fin-table { background: #ffffff !important; color: #0f172a !important; }
+    html[data-theme="light"] .fin-table th {
+      color: #475569 !important;
+      font-weight: 700 !important;
+      border-bottom: 2px solid #bbf7d0 !important;
+    }
+    html[data-theme="light"] .fin-table td {
+      color: #0f172a !important;
+      border-bottom: 1px solid #e2e8f0 !important;
+    }
+    html[data-theme="light"] .fin-table tr:hover { background: #f0fdf4 !important; }
+    html[data-theme="light"] .fin-toast {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #86efac !important;
+    }
+    html[data-theme="light"] #fin-pace-pct { fill: #0f172a !important; }
+    html[data-theme="light"] .fin-pace-sub { fill: #64748b !important; }
+    html[data-theme="light"] #fin-pace-ring { stroke: #059669 !important; }
+    html[data-theme="light"] [style*="color:#ef4444"] { color: #dc2626 !important; }
+    html[data-theme="light"] [style*="color:#f59e0b"] { color: #d97706 !important; }
+    html[data-theme="light"] [style*="color:#10b981"] { color: #047857 !important; }
+    html[data-theme="light"] [style*="color:#ccc"] { color: #334155 !important; }
+    html[data-theme="light"] [style*="color:#888"] { color: #64748b !important; }
+    html[data-theme="light"] [style*="color:#555"] { color: #64748b !important; }
+    html[data-theme="light"] [style*="color:#fff"] { color: #0f172a !important; }
+    html[data-theme="light"] [style*="background:#0f1410"] { background: #ffffff !important; }
+    html[data-theme="light"] label { color: #475569 !important; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <a href="/dashboard" class="fin-back">← COMMAND CENTER</a>
+      <span class="fin-hdr-sep">|</span>
+      <span class="fin-title">Finance</span>
+      <span id="fin-live-label" class="fin-muted" style="font-family:var(--mono);font-size:10px;letter-spacing:1px;">live data</span>
+      <span id="fin-config-status" style="font-size:11px;letter-spacing:1px;"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span id="fin-last-updated" class="fin-meta"></span>
+      <label class="fin-muted" style="display:flex;align-items:center;gap:6px;font-size:10px;cursor:pointer;font-family:var(--mono);">
+        <input type="checkbox" id="fin-auto-refresh" onchange="toggleAutoRefresh()" />
+        Auto 30s <span id="fin-pulse" style="display:none;width:6px;height:6px;border-radius:50%;background:#10b981;"></span>
+      </label>
+      <button onclick="refreshAll()" class="fin-btn-ghost" style="padding:5px 12px;font-size:10px;cursor:pointer;border-radius:2px;">Refresh</button>
+      <button id="theme-toggle-btn" onclick="toggleTheme()" class="fin-btn-ghost" style="padding:5px 12px;font-size:10px;cursor:pointer;border-radius:2px;">Light mode</button>
+    </div>
+  </div>
+
+  <nav class="fin-tabs">
+    <button type="button" class="tab active" data-tab="overview">Overview</button>
+    <button type="button" class="tab" data-tab="gci">GCI Tracker</button>
+    <button type="button" class="tab" data-tab="expenses">Expenses</button>
+    <button type="button" class="tab" data-tab="pipeline">Pipeline Projection</button>
+    <button type="button" class="tab" data-tab="reports">Reports</button>
+    <button type="button" class="tab" data-tab="alerts">Alerts</button>
+  </nav>
+
+  <main class="fin-main">
+    <section id="tab-overview" class="tab-panel active" data-tab="overview">
+      <div style="display:flex;justify-content:center;padding:24px 0;">
+        <svg width="180" height="180" viewBox="0 0 180 180">
+          <circle cx="90" cy="90" r="78" fill="none" stroke="rgba(16,185,129,0.1)" stroke-width="12"/>
+          <circle id="fin-pace-ring" cx="90" cy="90" r="78" fill="none" stroke="#10b981" stroke-width="12"
+            stroke-linecap="round" stroke-dasharray="490" stroke-dashoffset="490"
+            transform="rotate(-90 90 90)" style="transition:stroke-dashoffset 1.2s ease-out,stroke 0.3s ease;"/>
+          <text x="90" y="85" text-anchor="middle" class="fin-dollar-figure fin-pace-pct" style="font-size:28px;font-weight:700;fill:#fff;" id="fin-pace-pct">--%</text>
+          <text x="90" y="105" text-anchor="middle" class="fin-pace-sub">of monthly goal</text>
+        </svg>
+      </div>
+      <p id="fin-pace-muted" class="fin-empty" style="display:none;padding:0 0 16px;">Set MONTHLY_GCI_GOAL to track pace</p>
+      <div class="fin-stat-grid" id="fin-overview-stats"></div>
+      <div class="fin-card" style="margin-top:16px;">
+        <div class="fin-stat-label">RECENT COMMISSIONS</div>
+        <div id="fin-recent-commissions"></div>
+      </div>
+      <div class="fin-stat-grid" style="margin-top:12px;" id="fin-expense-minis"></div>
+      <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+        <button class="fin-btn" onclick="showExpenseForm()">+ LOG EXPENSE</button>
+        <button class="fin-btn fin-btn-ghost" onclick="showCommissionForm()">+ LOG COMMISSION</button>
+      </div>
+      <div id="fin-quick-form" style="display:none;margin-top:16px;" class="fin-card"></div>
+    </section>
+
+    <section id="tab-gci" class="tab-panel" data-tab="gci">
+      <div class="fin-card" id="fin-gci-trend"></div>
+      <div class="fin-card" style="margin-top:16px;overflow-x:auto;">
+        <table class="fin-table" id="fin-gci-table"><thead><tr>
+          <th data-sort="address">Address</th><th data-sort="gross">Gross</th><th data-sort="net">Net</th><th data-sort="source">Source</th><th data-sort="closed">Closed</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+      <div class="fin-card" style="margin-top:16px;" id="fin-gci-sources"></div>
+    </section>
+
+    <section id="tab-expenses" class="tab-panel" data-tab="expenses">
+      <div class="fin-card" id="fin-expense-form-card"></div>
+      <div class="fin-card" style="margin-top:16px;" id="fin-expense-bars"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;" id="fin-cost-tables"></div>
+      <div class="fin-card" style="margin-top:16px;overflow-x:auto;">
+        <table class="fin-table"><thead><tr><th>Date</th><th>Category</th><th>Vendor</th><th>Amount</th><th>Source</th></tr></thead>
+        <tbody id="fin-expense-rows"></tbody></table>
+        <div style="display:flex;justify-content:center;gap:8px;margin-top:12px;" id="fin-expense-pager"></div>
+      </div>
+    </section>
+
+    <section id="tab-pipeline" class="tab-panel" data-tab="pipeline">
+      <div class="fin-stat-grid" id="fin-proj-summary"></div>
+      <div class="fin-card" style="margin-top:16px;overflow-x:auto;">
+        <table class="fin-table"><thead><tr>
+          <th>Address</th><th>Status</th><th>Price</th><th>Weighted GCI</th><th>Close</th>
+        </tr></thead><tbody id="fin-proj-rows"></tbody></table>
+      </div>
+      <div class="fin-card fin-legend" style="margin-top:16px;">
+        <strong>Stage weights:</strong> active 20% · under_contract 75% · pending 90% · closed 100%<br/>
+        Confirm these match your actual close-rate experience.
+      </div>
+    </section>
+
+    <section id="tab-reports" class="tab-panel" data-tab="reports">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="fin-card">
+          <div class="fin-stat-label">WEEKLY SUMMARY (Fri 5pm)</div>
+          <div id="fin-weekly-preview" class="fin-preview-text"></div>
+          <button class="fin-btn" style="margin-top:12px;" onclick="sendWeeklyNow()">📤 SEND TO MARCO NOW</button>
+        </div>
+        <div class="fin-card">
+          <div class="fin-stat-label">MONTHLY CLOSE REPORT (1st of month)</div>
+          <div id="fin-monthly-preview" class="fin-preview-text"></div>
+          <button class="fin-btn" style="margin-top:12px;" onclick="sendMonthlyNow()">📤 SEND TO MARCO NOW</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-alerts" class="tab-panel" data-tab="alerts">
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="fin-btn fin-btn-ghost" onclick="runPaceCheck()">↻ CHECK PACE NOW</button>
+        <button class="fin-btn fin-btn-ghost" onclick="runSpikeCheck()">↻ CHECK EXPENSE SPIKES NOW</button>
+      </div>
+      <div id="fin-alerts-list"></div>
+    </section>
+  </main>
+
+  <div class="fin-toast" id="fin-toast"></div>
+
+  <script>
+    let autoRefreshTimer = null;
+    let gciCache = null;
+    let expensePage = 0;
+    const EXP_PAGE = 50;
+
+    function getToken() {
+      return new URLSearchParams(location.search).get("token") || localStorage.getItem("dashboardToken") || "";
+    }
+    function apiUrl(path) {
+      const u = new URL(path, location.origin);
+      const t = getToken();
+      if (t) u.searchParams.set("token", t);
+      return u.toString();
+    }
+    function authHeaders() {
+      const h = { "Content-Type": "application/json" };
+      const t = getToken();
+      if (t) h.Authorization = "Bearer " + t;
+      return h;
+    }
+    function fmtUsd(n) { return "$" + Math.round(Number(n) || 0).toLocaleString("en-US"); }
+    function fmtDate(iso) {
+      if (!iso) return "—";
+      try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+      catch { return iso; }
+    }
+    function escapeHtml(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    function showToast(msg) {
+      const el = document.getElementById("fin-toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(() => el.classList.remove("show"), 3500);
+    }
+
+    function animateCountUp(el, target, duration = 700, suffix = "") {
+      if (!el) return;
+      const num = Number(target) || 0;
+      const start = performance.now();
+      const update = (now) => {
+        const p = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - p, 3);
+        const v = suffix === "%" ? Math.round(eased * num) : Math.round(eased * num);
+        el.textContent = suffix === "$" ? fmtUsd(v) : v + suffix;
+        if (p < 1) requestAnimationFrame(update);
+        else el.textContent = suffix === "$" ? fmtUsd(num) : num + suffix;
+      };
+      requestAnimationFrame(update);
+    }
+
+    function animatePaceRing(pct, onTrack, configured) {
+      const ring = document.getElementById("fin-pace-ring");
+      const pctEl = document.getElementById("fin-pace-pct");
+      const muted = document.getElementById("fin-pace-muted");
+      if (!configured) {
+        ring.style.stroke = "#555";
+        ring.style.strokeDashoffset = "490";
+        pctEl.textContent = "—";
+        muted.style.display = "block";
+        return;
+      }
+      muted.style.display = "none";
+      const circumference = 490;
+      const offset = circumference - (Math.min(pct, 100) / 100) * circumference;
+      ring.style.stroke = onTrack ? "#10b981" : "#ef4444";
+      requestAnimationFrame(() => { ring.style.strokeDashoffset = offset; });
+      animateCountUp(pctEl, pct, 1000, "%");
+    }
+
+    function buildSparkline(values, color = "#10b981") {
+      if (values.length < 2) return '<p class="fin-empty">Not enough data yet for a trend line.</p>';
+      const w = 200, h = 40;
+      const max = Math.max(...values), min = Math.min(...values);
+      const range = max - min || 1;
+      const points = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - ((v - min) / range) * h}`).join(" ");
+      return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="500" stroke-dashoffset="500" style="animation:fin-draw-line 1.2s ease-out forwards;"/></svg>`;
+    }
+
+    function expenseFormHtml() {
+      const today = new Date().toISOString().split("T")[0];
+      return `<div class="fin-stat-label" style="margin-bottom:12px;">LOG NEW EXPENSE</div>
+        <div class="fin-form-grid">
+          <select id="exp-category"><option value="marketing">Marketing</option><option value="lead_gen">Lead Gen</option><option value="tools_subscriptions">Tools / Subscriptions</option><option value="transaction_costs">Transaction Costs</option><option value="other">Other</option></select>
+          <input id="exp-vendor" placeholder="Vendor (optional)" />
+          <input id="exp-amount" type="number" step="0.01" placeholder="Amount ($)" />
+          <input id="exp-source" placeholder="Lead source (optional)" />
+          <input id="exp-date" type="date" value="${today}" />
+          <input id="exp-description" placeholder="Description (optional)" />
+        </div>
+        <button class="fin-btn" style="margin-top:10px;" onclick="submitExpense()">+ ADD EXPENSE</button>`;
+    }
+
+    function commissionFormHtml() {
+      const today = new Date().toISOString().split("T")[0];
+      return `<div class="fin-stat-label" style="margin-bottom:12px;">LOG COMMISSION</div>
+        <div class="fin-form-grid">
+          <input id="comm-address" placeholder="Property address *" />
+          <input id="comm-price" type="number" step="1" placeholder="Sale price *" />
+          <select id="comm-type"><option value="buyer">Buyer</option><option value="seller">Seller</option></select>
+          <input id="comm-source" placeholder="Lead source" />
+          <input id="comm-closed" type="date" value="${today}" />
+        </div>
+        <button class="fin-btn" style="margin-top:10px;" onclick="submitCommission()">+ ADD COMMISSION</button>`;
+    }
+
+    function showExpenseForm() {
+      const el = document.getElementById("fin-quick-form");
+      el.style.display = "block";
+      el.innerHTML = expenseFormHtml();
+      switchTab("overview");
+    }
+    function showCommissionForm() {
+      const el = document.getElementById("fin-quick-form");
+      el.style.display = "block";
+      el.innerHTML = commissionFormHtml();
+      switchTab("overview");
+    }
+
+    async function submitExpense() {
+      const amount = parseFloat(document.getElementById("exp-amount").value);
+      if (!amount || amount <= 0) { showToast("Enter a valid amount"); return; }
+      const body = {
+        category: document.getElementById("exp-category").value,
+        vendor: document.getElementById("exp-vendor").value || undefined,
+        amount,
+        leadSource: document.getElementById("exp-source").value || undefined,
+        expenseDate: document.getElementById("exp-date").value,
+        description: document.getElementById("exp-description").value || undefined,
+      };
+      const r = await fetch(apiUrl("/api/finance/expenses"), { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+      if (!r.ok) { showToast("Failed to log expense"); return; }
+      showToast("Expense logged");
+      await refreshAll();
+    }
+
+    async function submitCommission() {
+      const address = document.getElementById("comm-address").value.trim();
+      const salePrice = parseFloat(document.getElementById("comm-price").value);
+      if (!address || !salePrice) { showToast("Address and sale price required"); return; }
+      const body = {
+        address,
+        salePrice,
+        dealType: document.getElementById("comm-type").value,
+        leadSource: document.getElementById("comm-source").value || undefined,
+        closedAt: document.getElementById("comm-closed").value,
+      };
+      const r = await fetch(apiUrl("/api/finance/commissions"), { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+      if (!r.ok) { showToast("Failed to log commission"); return; }
+      showToast("Commission logged");
+      document.getElementById("fin-quick-form").style.display = "none";
+      await refreshAll();
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.dataset.tab === name));
+    }
+    document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+    async function loadPace() {
+      const r = await fetch(apiUrl("/api/finance/pace-status"));
+      const pace = await r.json();
+      const cfg = document.getElementById("fin-config-status");
+      if (!pace.configured) {
+        cfg.textContent = "⚠ Goal not set";
+        cfg.style.color = "#f59e0b";
+        animatePaceRing(0, true, false);
+      } else {
+        cfg.textContent = "";
+        animatePaceRing(pace.pctOfGoal, pace.onTrack, true);
+      }
+      return pace;
+    }
+
+    async function loadOverview(pace, gci, expenses, projection) {
+      document.getElementById("fin-overview-stats").innerHTML = [
+        { label: "MTD GCI (gross)", val: gci.mtdGross, $: true },
+        { label: "MTD Net", val: gci.mtdNet, $: true },
+        { label: "Pipeline (weighted)", val: projection.totalWeightedGCI, $: true },
+        { label: "YTD GCI", val: gci.ytdGross, $: true },
+      ].map((s, i) => `<div class="fin-card" style="animation-delay:${i*0.05}s"><div class="fin-stat-label">${s.label}</div><div class="fin-stat-value fin-dollar-figure" data-val="${s.val}" data-usd="1">$0</div></div>`).join("");
+      document.querySelectorAll("#fin-overview-stats [data-usd]").forEach((el) => animateCountUp(el, el.dataset.val, 700, "$"));
+
+      const commR = await fetch(apiUrl("/api/finance/commissions"));
+      const commBody = await commR.json();
+      const recent = (commBody.commissions || []).slice(0, 5);
+      const dayMs = 24 * 60 * 60 * 1000;
+      document.getElementById("fin-recent-commissions").innerHTML = recent.length
+        ? recent.map((c) => {
+            const closedMs = new Date(c.closedAt).getTime();
+            const fresh = Date.now() - closedMs < dayMs && Date.now() - closedMs >= 0 ? " fin-fresh" : "";
+            return `<div class="fin-comm-row${fresh}"><span>${escapeHtml(c.address)}</span><span><span class="fin-dollar-figure">${fmtUsd(c.netCommission)}</span> · ${fmtDate(c.closedAt)}</span></div>`;
+          }).join("")
+        : '<p class="fin-empty">No commissions logged yet</p>';
+
+      const big = expenses.biggestThisWeek;
+      document.getElementById("fin-expense-minis").innerHTML = `
+        <div class="fin-card"><div class="fin-stat-label">BIGGEST THIS WEEK</div><div class="fin-stat-value fin-dollar-figure">${big ? fmtUsd(big.amount) : "—"}</div><div style="font-size:10px;color:#888;margin-top:4px;">${big ? escapeHtml(big.vendor || big.category) : "No expenses"}</div></div>
+        <div class="fin-card"><div class="fin-stat-label">MTD EXPENSES</div><div class="fin-stat-value fin-dollar-figure" id="fin-mtd-exp">$0</div></div>`;
+      animateCountUp(document.getElementById("fin-mtd-exp"), expenses.mtdTotal, 700, "$");
+    }
+
+    function renderGci(gci) {
+      gciCache = gci;
+      const trendVals = (gci.monthlyTrend || []).map((m) => m.gross);
+      const yoy = gci.priorYearYtdGross != null ? ` · Prior year YTD: ${fmtUsd(gci.priorYearYtdGross)}` : "";
+      document.getElementById("fin-gci-trend").innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;">
+          <div><div class="fin-stat-label">YTD GROSS</div><div class="fin-dollar-figure" style="font-size:32px;font-weight:700;">${fmtUsd(gci.ytdGross)}</div><div style="font-size:10px;color:#888;margin-top:4px;">${yoy}</div></div>
+          ${buildSparkline(trendVals)}
+        </div>`;
+      renderGciTable(gci.byDeal || []);
+      const sources = Object.entries(gci.bySource || {}).sort((a, b) => b[1].gross - a[1].gross);
+      const maxG = sources[0]?.[1].gross || 1;
+      document.getElementById("fin-gci-sources").innerHTML = sources.length
+        ? sources.map(([src, v]) => `<div class="fin-bar-row"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span>${escapeHtml(src)}</span><span class="fin-dollar-figure">${fmtUsd(v.gross)}</span></div><div class="fin-bar-track"><div class="fin-bar-fill" data-w="${Math.round((v.gross/maxG)*100)}"></div></div></div>`).join("")
+        : '<p class="fin-empty">No source data yet</p>';
+      requestAnimationFrame(() => document.querySelectorAll(".fin-bar-fill").forEach((b) => { b.style.width = b.dataset.w + "%"; }));
+    }
+
+    let gciSort = { key: "closed", asc: false };
+    function renderGciTable(deals) {
+      const sorted = [...deals].sort((a, b) => {
+        const k = gciSort.key;
+        let av = k === "gross" ? a.grossCommissionAmount : k === "net" ? a.netCommission : k === "source" ? (a.leadSource||"") : k === "closed" ? a.closedAt : a.address;
+        let bv = k === "gross" ? b.grossCommissionAmount : k === "net" ? b.netCommission : k === "source" ? (b.leadSource||"") : k === "closed" ? b.closedAt : b.address;
+        if (typeof av === "number") return gciSort.asc ? av - bv : bv - av;
+        return gciSort.asc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+      });
+      document.querySelector("#fin-gci-table tbody").innerHTML = sorted.map((c) =>
+        `<tr><td>${escapeHtml(c.address)}</td><td>${fmtUsd(c.grossCommissionAmount)}</td><td class="fin-dollar-figure">${fmtUsd(c.netCommission)}</td><td>${escapeHtml(c.leadSource || "—")}</td><td>${fmtDate(c.closedAt)}</td></tr>`
+      ).join("") || '<tr><td colspan="5" class="fin-empty">No commissions</td></tr>';
+    }
+    document.querySelectorAll("#fin-gci-table th[data-sort]").forEach((th) => {
+      th.style.cursor = "pointer";
+      th.addEventListener("click", () => {
+        const key = th.dataset.sort;
+        if (gciSort.key === key) gciSort.asc = !gciSort.asc;
+        else { gciSort.key = key; gciSort.asc = false; }
+        if (gciCache) renderGciTable(gciCache.byDeal || []);
+      });
+    });
+
+    function renderExpenses(summary) {
+      document.getElementById("fin-expense-form-card").innerHTML = expenseFormHtml();
+      const cats = Object.entries(summary.byCategory || {}).sort((a, b) => b[1] - a[1]);
+      const maxC = cats[0]?.[1] || 1;
+      document.getElementById("fin-expense-bars").innerHTML = cats.length
+        ? `<div class="fin-stat-label" style="margin-bottom:10px;">MTD BY CATEGORY</div>` + cats.map(([c, v]) =>
+          `<div class="fin-bar-row"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span>${escapeHtml(c)}</span><span>${fmtUsd(v)}</span></div><div class="fin-bar-track"><div class="fin-bar-fill" data-w="${Math.round((v/maxC)*100)}"></div></div></div>`
+        ).join("")
+        : '<p class="fin-empty">No expenses this month</p>';
+      const cpl = Object.entries(summary.costPerLeadBySource || {});
+      const cpc = Object.entries(summary.costPerClosedBySource || {});
+      document.getElementById("fin-cost-tables").innerHTML = `
+        <div class="fin-card"><div class="fin-stat-label">COST PER LEAD</div><table class="fin-table"><tr><th>Source</th><th>Spend</th><th>Leads</th><th>CPL</th></tr>
+        ${cpl.map(([s, v]) => `<tr><td>${escapeHtml(s)}</td><td>${fmtUsd(v.spend)}</td><td>${v.leads}</td><td>${v.costPerLead != null ? fmtUsd(v.costPerLead) : "—"}</td></tr>`).join("") || '<tr><td colspan="4">—</td></tr>'}</table></div>
+        <div class="fin-card"><div class="fin-stat-label">COST PER CLOSED</div><table class="fin-table"><tr><th>Source</th><th>Spend</th><th>Closed</th><th>CPD</th></tr>
+        ${cpc.map(([s, v]) => `<tr><td>${escapeHtml(s)}</td><td>${fmtUsd(v.spend)}</td><td>${v.closings}</td><td>${v.costPerClose != null ? fmtUsd(v.costPerClose) : "—"}</td></tr>`).join("") || '<tr><td colspan="4">—</td></tr>'}</table></div>`;
+      const all = summary.recent || [];
+      const slice = all.slice(expensePage * EXP_PAGE, (expensePage + 1) * EXP_PAGE);
+      document.getElementById("fin-expense-rows").innerHTML = slice.map((e) =>
+        `<tr><td>${escapeHtml(e.expenseDate)}</td><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.vendor || "—")}</td><td>${fmtUsd(e.amount)}</td><td>${escapeHtml(e.leadSource || "—")}</td></tr>`
+      ).join("") || '<tr><td colspan="5" class="fin-empty">No expenses</td></tr>';
+      const pages = Math.ceil(all.length / EXP_PAGE) || 1;
+      document.getElementById("fin-expense-pager").innerHTML = expensePage > 0
+        ? `<button class="fin-btn-ghost" onclick="expensePage--; refreshAll()">Prev</button><span style="font-size:10px;color:#888;">Page ${expensePage+1}/${pages}</span>${expensePage < pages-1 ? `<button class="fin-btn-ghost" onclick="expensePage++; refreshAll()">Next</button>` : ""}`
+        : (pages > 1 ? `<span style="font-size:10px;color:#888;">Page 1/${pages}</span><button class="fin-btn-ghost" onclick="expensePage++; refreshAll()">Next</button>` : "");
+      requestAnimationFrame(() => document.querySelectorAll("#fin-expense-bars .fin-bar-fill").forEach((b) => { b.style.width = b.dataset.w + "%"; }));
+    }
+
+    function renderProjection(proj) {
+      const confColor = proj.confidence === "high" ? "#10b981" : proj.confidence === "medium" ? "#f59e0b" : "#888";
+      document.getElementById("fin-proj-summary").innerHTML = `
+        <div class="fin-card"><div class="fin-stat-label">WEIGHTED GCI</div><div class="fin-stat-value fin-dollar-figure" id="fin-proj-total">$0</div></div>
+        <div class="fin-card"><div class="fin-stat-label">DEALS</div><div class="fin-stat-value">${proj.dealCount}</div></div>
+        <div class="fin-card"><div class="fin-stat-label">CONFIDENCE</div><div class="fin-stat-value" style="color:${confColor};text-transform:uppercase;font-size:18px;">${proj.confidence}</div></div>`;
+      animateCountUp(document.getElementById("fin-proj-total"), proj.totalWeightedGCI, 700, "$");
+      document.getElementById("fin-proj-rows").innerHTML = (proj.deals || []).map((d) =>
+        `<tr><td>${escapeHtml(d.address)}</td><td><span style="color:#10b981;">${escapeHtml(d.status)} · ${d.stageWeightPct}%</span></td><td>${fmtUsd(d.price)}</td><td class="fin-dollar-figure">${fmtUsd(d.weightedGCI)}</td><td>${fmtDate(d.projectedCloseDate)}</td></tr>`
+      ).join("") || '<tr><td colspan="5" class="fin-empty">No active pipeline deals</td></tr>';
+    }
+
+    async function loadReports() {
+      const [w, m] = await Promise.all([
+        fetch(apiUrl("/api/finance/weekly-summary-preview")).then((r) => r.json()),
+        fetch(apiUrl("/api/finance/monthly-report-preview")).then((r) => r.json()),
+      ]);
+      document.getElementById("fin-weekly-preview").innerHTML = `
+        MTD GCI: <span class="fin-dollar-figure">${fmtUsd(w.gci.mtdGross)}</span> gross · ${fmtUsd(w.gci.mtdNet)} net<br/>
+        YTD: ${fmtUsd(w.gci.ytdGross)} · Expenses MTD: ${fmtUsd(w.expenses.mtdTotal)}<br/>
+        Pipeline: ${fmtUsd(w.projection.totalWeightedGCI)} (${w.projection.dealCount} deals)<br/>
+        <span style="color:#555;">Preview · ${fmtDate(w.generatedAt)}</span>`;
+      const goalLine = m.pace.configured ? `Goal ${m.pace.pctOfGoal}% · ${fmtUsd(m.pace.goal)}` : "Goal not configured";
+      document.getElementById("fin-monthly-preview").innerHTML = `
+        Gross: <span class="fin-dollar-figure">${fmtUsd(m.gci.mtdGross)}</span> · Net: ${fmtUsd(m.gci.mtdNet)}<br/>
+        Expenses: ${fmtUsd(m.expenses.mtdTotal)} · Net after: ${fmtUsd(m.netAfterExpenses)}<br/>
+        ${m.roi != null ? `ROI: ${m.roi}x · ` : ""}${goalLine}<br/>
+        <span style="color:#555;">Preview · ${fmtDate(m.generatedAt)}</span>`;
+    }
+
+    function buildAlertCard(alert) {
+      const color = alert.alertType === "expense_spike" ? "#f59e0b" : "#ef4444";
+      const icon = alert.alertType === "expense_spike" ? "📈" : "⚠️";
+      const pulse = !alert.acknowledged ? "fin-alert-pulse" : "";
+      return `<div class="${pulse}" style="border-left:3px solid ${color};background:#0f1410;border-radius:4px;padding:14px 16px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;"><div style="font-size:11px;color:${color};letter-spacing:1px;">${icon} ${alert.alertType.toUpperCase().replace("_"," ")}</div><div style="font-size:10px;color:#555;">${fmtDate(alert.sentAt)}</div></div>
+        <div style="font-size:11px;color:#ccc;white-space:pre-line;margin-top:8px;">${escapeHtml(alert.message)}</div>
+        ${!alert.acknowledged ? `<button onclick="acknowledgeAlert(${alert.id})" class="fin-btn-ghost" style="margin-top:8px;font-size:10px;padding:4px 10px;">Mark Reviewed</button>` : '<span style="font-size:10px;color:#555;">✓ Reviewed</span>'}
+      </div>`;
+    }
+
+    async function loadAlerts() {
+      const r = await fetch(apiUrl("/api/finance/alerts?limit=30"));
+      const body = await r.json();
+      const alerts = body.alerts || [];
+      const pace = alerts.filter((a) => a.alertType === "pace_behind");
+      const spike = alerts.filter((a) => a.alertType === "expense_spike");
+      let html = "";
+      if (!alerts.length) html = '<p class="fin-empty">No finance alerts yet</p>';
+      else {
+        if (pace.length) { html += '<div class="fin-stat-label" style="margin-bottom:8px;">PACE ALERTS</div>' + pace.map(buildAlertCard).join(""); }
+        if (spike.length) { html += '<div class="fin-stat-label" style="margin:12px 0 8px;">EXPENSE SPIKES</div>' + spike.map(buildAlertCard).join(""); }
+      }
+      document.getElementById("fin-alerts-list").innerHTML = html;
+    }
+
+    async function acknowledgeAlert(id) {
+      await fetch(apiUrl("/api/finance/alerts/" + id + "/acknowledge"), { method: "POST", headers: authHeaders() });
+      await loadAlerts();
+    }
+
+    async function sendWeeklyNow() {
+      if (!confirm("This will text Marco right now — continue?")) return;
+      const r = await fetch(apiUrl("/api/finance/weekly-summary-now"), { method: "POST", headers: authHeaders() });
+      const body = await r.json();
+      showToast(body.sent ? "Weekly summary sent" : "Summary generated (no SMS number)");
+    }
+    async function sendMonthlyNow() {
+      if (!confirm("This will text Marco right now — continue?")) return;
+      const r = await fetch(apiUrl("/api/finance/monthly-report-now"), { method: "POST", headers: authHeaders() });
+      const body = await r.json();
+      showToast(body.sent ? "Monthly report sent" : "Report generated (no SMS number)");
+    }
+    async function runPaceCheck() {
+      const r = await fetch(apiUrl("/api/finance/pace-check-now"), { method: "POST", headers: authHeaders() });
+      const body = await r.json();
+      showToast(body.alerted ? "Pace alert sent" : "On track — no alert");
+      await loadAlerts();
+    }
+    async function runSpikeCheck() {
+      const r = await fetch(apiUrl("/api/finance/expense-spike-check-now"), { method: "POST", headers: authHeaders() });
+      const body = await r.json();
+      showToast(body.alerted ? "Spike alert sent" : "No spike detected");
+      await loadAlerts();
+    }
+
+    async function refreshAll() {
+      document.getElementById("fin-last-updated").textContent = "Updating…";
+      try {
+        const syncR = await fetch(apiUrl("/api/finance/sync"), { method: "POST", headers: authHeaders() });
+        if (syncR.ok) {
+          const sync = await syncR.json();
+          const live = document.getElementById("fin-live-label");
+          if (live) {
+            live.textContent = `live · ${sync.pipelineDeals} pipeline deal(s)`;
+            live.style.color = "#10b981";
+          }
+        }
+        const [pace, gciR, expR, projR] = await Promise.all([
+          loadPace(),
+          fetch(apiUrl("/api/finance/gci")).then((r) => r.json()),
+          fetch(apiUrl("/api/finance/expense-summary")).then((r) => r.json()),
+          fetch(apiUrl("/api/finance/projection")).then((r) => r.json()),
+        ]);
+        await loadOverview(pace, gciR, expR, projR);
+        renderGci(gciR);
+        renderExpenses(expR);
+        renderProjection(projR);
+        await loadReports();
+        await loadAlerts();
+        document.getElementById("fin-last-updated").textContent = "Live · " + new Date().toLocaleTimeString();
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : String(e));
+        document.getElementById("fin-last-updated").textContent = "Error";
+      }
+    }
+
+    function toggleAutoRefresh() {
+      const on = document.getElementById("fin-auto-refresh").checked;
+      document.getElementById("fin-pulse").classList.toggle("on", on);
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      if (on) autoRefreshTimer = setInterval(refreshAll, 30000);
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      document.getElementById("theme-toggle-btn").textContent = theme === "light" ? "Dark mode" : "Light mode";
+      const pct = document.getElementById("fin-pace-pct");
+      if (pct) pct.style.fill = theme === "light" ? "#0f172a" : "#ffffff";
+    }
+    function toggleTheme() {
+      const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+      localStorage.setItem("dashboardTheme", next);
+      applyTheme(next);
+    }
+    (function initTheme() {
+      applyTheme(localStorage.getItem("dashboardTheme") || "dark");
+      window.addEventListener("storage", (e) => { if (e.key === "dashboardTheme" && e.newValue) applyTheme(e.newValue); });
+    })();
+
+    refreshAll();
+  </script>
+</body>
+</html>

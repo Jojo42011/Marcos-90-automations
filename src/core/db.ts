@@ -27,7 +27,7 @@ import type {
   ConversationEscalationTrigger,
   PreApprovalStatus,
 } from "./types.js";
-import { CRM_STATUSES } from "./types.js";
+import { CRM_STATUSES, COMMAND_TASK_STATUSES } from "./types.js";
 import { getDeals, sumClosedDealGCI } from "./deals.js";
 import { getTagTemplates } from "./tagTemplates.js";
 import { getUsers } from "./users.js";
@@ -142,8 +142,9 @@ function normalizeCommandTask(raw: unknown): CommandTask | null {
   const column = COMMAND_COLUMNS.has(t.column as CommandTaskColumn)
     ? (t.column as CommandTaskColumn)
     : "today";
-  const status: CommandTaskStatus =
-    t.status === "done" || t.status === "pending" ? t.status : "pending";
+  const status: CommandTaskStatus = COMMAND_TASK_STATUSES.includes(t.status as CommandTaskStatus)
+    ? (t.status as CommandTaskStatus)
+    : "pending";
   const color = COMMAND_COLORS.has(t.color as CommandTaskColor)
     ? (t.color as CommandTaskColor)
     : "blue";
@@ -153,6 +154,9 @@ function normalizeCommandTask(raw: unknown): CommandTask | null {
     description: typeof t.description === "string" ? t.description : undefined,
     column,
     status,
+    previousStatus: COMMAND_TASK_STATUSES.includes(t.previousStatus as CommandTaskStatus)
+      ? (t.previousStatus as CommandTaskStatus)
+      : undefined,
     color,
     recurring: t.recurring === true,
     recurringInterval:
@@ -272,11 +276,11 @@ export function saveCommandTasks(tasks: CommandTask[]): void {
 
 export function buildCommandTasksSummary(tasks?: CommandTask[]): CommandTasksSummary {
   const list = tasks ?? commandTasksStore;
-  const pending = list.filter((t) => t.status === "pending");
+  const active = list.filter((t) => t.status !== "done");
   return {
-    urgent: pending.filter((t) => t.column === "urgent").length,
-    today: pending.filter((t) => t.column === "today").length,
-    totalPending: pending.length,
+    urgent: active.filter((t) => t.column === "urgent").length,
+    today: active.filter((t) => t.column === "today").length,
+    totalPending: active.length,
   };
 }
 
@@ -405,6 +409,16 @@ function leadHasPhone(phone: string | null | undefined): boolean {
   return Boolean(phone?.trim());
 }
 
+function leadHasEmail(email: string | null | undefined): boolean {
+  return Boolean(email?.trim());
+}
+
+async function triggerEmailMarketingIfNeeded(lead: Lead): Promise<void> {
+  if (!leadHasEmail(lead.email)) return;
+  const { onLeadEmailCaptured } = await import("../agents/emailMarketing/hooks.js");
+  onLeadEmailCaptured(lead);
+}
+
 async function notifyNewPhoneCapture(lead: Lead): Promise<void> {
   const marcoNumber = process.env.MARCO_PHONE_NUMBER?.trim();
   const carlosNumber = process.env.CARLOS_PHONE_NUMBER?.trim();
@@ -503,7 +517,11 @@ export async function createLead(lead: Omit<Lead, "id" | "createdAt" | "updatedA
   leadKeyToId.set(leadKey(lead.platform, lead.userId), id);
   conversationsByLeadId.set(id, { messages: [] });
   persistToFile();
-  return await triggerSourceRoutingIfNeeded(next);
+  const routed = await triggerSourceRoutingIfNeeded(next);
+  if (leadHasEmail(routed.email) && !routed.autoReplyEmailSentAt) {
+    void triggerEmailMarketingIfNeeded(routed);
+  }
+  return routed;
 }
 
 export async function updateLead(lead: Lead): Promise<Lead | undefined> {
@@ -524,6 +542,12 @@ export async function updateLead(lead: Lead): Promise<Lead | undefined> {
     existing && !leadHasPhone(existing.phone) && leadHasPhone(updated.phone);
   if (phoneNewlyCaptured && !updated.sourceRoutingCompletedAt) {
     return await triggerSourceRoutingIfNeeded(updated);
+  }
+
+  const emailNewlyCaptured =
+    existing && !leadHasEmail(existing.email) && leadHasEmail(updated.email);
+  if (emailNewlyCaptured && !updated.autoReplyEmailSentAt) {
+    void triggerEmailMarketingIfNeeded(updated);
   }
 
   return updated;
@@ -1102,6 +1126,8 @@ export async function updateLeadCrmFields(input: {
   preApprovalStatus?: PreApprovalStatus | null;
   propertyViewsCount?: number;
   sourceRoutingCompletedAt?: string | null;
+  autoReplyEmailSentAt?: string | null;
+  movedToColdNurtureAt?: string | null;
 }): Promise<Lead | null> {
   const existing = leadsById.get(input.leadId);
   if (!existing) return null;
@@ -1220,6 +1246,18 @@ export async function updateLeadCrmFields(input: {
           ? null
           : String(input.sourceRoutingCompletedAt)
         : lead.sourceRoutingCompletedAt ?? null,
+    autoReplyEmailSentAt:
+      input.autoReplyEmailSentAt !== undefined
+        ? input.autoReplyEmailSentAt === null || input.autoReplyEmailSentAt === ""
+          ? null
+          : String(input.autoReplyEmailSentAt)
+        : lead.autoReplyEmailSentAt ?? null,
+    movedToColdNurtureAt:
+      input.movedToColdNurtureAt !== undefined
+        ? input.movedToColdNurtureAt === null || input.movedToColdNurtureAt === ""
+          ? null
+          : String(input.movedToColdNurtureAt)
+        : lead.movedToColdNurtureAt ?? null,
   };
   await updateLead(next);
   return next;
