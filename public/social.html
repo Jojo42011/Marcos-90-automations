@@ -571,7 +571,6 @@
       box-shadow: var(--shadow-sm);
     }
     .score-card-left { display: flex; gap: 0.85rem; flex: 1; min-width: 0; }
-    .score-thumb { width: 50px; height: 50px; border-radius: var(--radius-xs); object-fit: cover; background: var(--surface2); flex-shrink: 0; }
     .score-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.7rem; }
     .score-card-title { font-size: 0.82rem; color: var(--text); font-weight: 600; line-height: 1.4; font-family: var(--font); }
     .score-card-meta { font-size: 0.62rem; color: var(--muted); margin-top: 0.25rem; }
@@ -609,7 +608,7 @@
     .pull-log-meta { font-size: 0.62rem; color: var(--muted); white-space: nowrap; }
     .pull-log-summary { font-size: 0.7rem; color: var(--text-dim); line-height: 1.5; }
 
-    /* ──────────────────── BRAIN ──────────────────── */
+    /* ──────────────────── CHANCE (content AI) ──────────────────── */
     .cm-brain-chat { display: flex; flex-direction: column; height: 440px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
     .cm-brain-messages { flex: 1; overflow-y: auto; padding: 1.1rem; display: flex; flex-direction: column; gap: 0.75rem; }
     .cm-brain-msg { max-width: 85%; padding: 0.7rem 0.9rem; border-radius: 14px; font-size: 0.8rem; line-height: 1.5; }
@@ -712,7 +711,7 @@
       <button type="button" class="crm-side-btn" data-cm-section="publishing">Publishing <span class="crm-count" id="cm-count-publishing">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="community">Community <span class="crm-count" id="cm-count-community">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">—</span></button>
-      <button type="button" class="crm-side-btn" data-cm-section="brain">Brain <span class="crm-count" id="cm-count-brain">—</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="brain">Chance <span class="crm-count" id="cm-count-brain">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="suggestions">Content Suggestions <span class="crm-count">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="activity">Activity Log <span class="crm-count" id="cm-count-activity">0</span></button>
       <a href="/" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;">Command center <span>←</span></a>
@@ -879,21 +878,21 @@
           </div>
         </section>
 
-        <!-- BRAIN -->
+        <!-- CHANCE -->
         <section id="cm-section-brain" class="cm-section">
-          <h2 class="section-title">Today's Strategy <span>Content Manager Brain</span></h2>
+          <h2 class="section-title">Today's Strategy <span>Chance · Content AI</span></h2>
           <div id="cm-brain-strategy" class="cm-panel" style="margin-bottom:1.25rem;">
             <p class="loading">Loading strategy…</p>
           </div>
-          <h2 class="section-title">Ask the Brain <span>specialist AI · not Harvey</span></h2>
+          <h2 class="section-title">Ask Chance <span>specialist AI · not Harvey</span></h2>
           <div id="cm-brain-suggestions" style="margin-bottom:0.75rem;"></div>
           <div class="cm-brain-chat">
             <p class="cm-brain-meta" id="cm-brain-session-id"></p>
             <div class="cm-brain-messages" id="cm-brain-messages">
-              <p class="cm-muted" style="font-size:0.75rem;">Ask the content manager anything — performance, hooks, what to film next.</p>
+              <p class="cm-muted" style="font-size:0.75rem;">Ask Chance anything — performance, hooks, what to film next.</p>
             </div>
             <div class="cm-brain-input-row">
-              <input type="text" id="cm-brain-input" placeholder="Ask the content manager anything…" />
+              <input type="text" id="cm-brain-input" placeholder="Ask Chance anything…" />
               <button type="button" class="primary" id="cm-brain-send">Send</button>
             </div>
           </div>
@@ -1424,7 +1423,7 @@
       input.value = "";
       const box = document.getElementById("cm-brain-messages");
       box.innerHTML += `<div class="cm-brain-msg user">${escapeHtml(q)}</div>`;
-      box.innerHTML += `<div class="cm-brain-msg brain" id="cm-brain-thinking"><span class="cm-brain-badge">CM</span> Thinking…</div>`;
+      box.innerHTML += `<div class="cm-brain-msg brain" id="cm-brain-thinking"><span class="cm-brain-badge">Chance</span> Thinking…</div>`;
       box.scrollTop = box.scrollHeight;
       try {
         const res = await cmFetch("/api/content-brain/ask", {
@@ -1440,7 +1439,7 @@
         const thinking = document.getElementById("cm-brain-thinking");
         if (thinking) {
           thinking.id = "";
-          thinking.innerHTML = `<span class="cm-brain-badge">CM</span>${escapeHtml(res.response || res.answer || "No response")}`;
+          thinking.innerHTML = `<span class="cm-brain-badge">Chance</span>${escapeHtml(res.response || res.answer || "No response")}`;
         }
       } catch (e) {
         const thinking = document.getElementById("cm-brain-thinking");
@@ -1656,9 +1655,6 @@
       const tierColor = getTierColor(tierLabel, sb.score);
       const postId = escapeHtml(video.id || video.postId || "");
       const caption = escapeHtml((video.caption || video.description || "").substring(0, 100));
-      const thumb = video.coverUrl
-        ? `<img class="score-thumb" src="${escapeHtml(video.coverUrl)}" alt="" />`
-        : "";
 
       const improvementsHtml = video.improvements && video.improvements.length
         ? video.improvements.map((i) => `<div class="improvement-item">• ${escapeHtml(i)}</div>`).join("")
@@ -1667,7 +1663,6 @@
       return `<div class="score-card" style="border-left-color:${tierColor};">
         <div class="score-card-header">
           <div class="score-card-left">
-            ${thumb}
             <div>
               <div class="score-card-title">${caption || "(no caption)"}</div>
               <div class="score-card-meta">Posted ${fmtDate(video.postedAt)}</div>
