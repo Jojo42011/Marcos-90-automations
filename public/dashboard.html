@@ -2594,6 +2594,23 @@
     .crm-listing-menu button:hover { background: rgba(34,211,238,0.1); }
     .crm-alerts-panel { margin-bottom: 1rem; grid-column: 1 / -1; }
     .crm-alerts-list { display: flex; flex-direction: column; gap: 0.55rem; }
+    .crm-notif-bell-wrap { position: relative; display: inline-flex; align-items: center; }
+    .crm-notif-bell-btn {
+      background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+      padding: 0.35rem 0.55rem; cursor: pointer; font-size: 1rem; line-height: 1;
+    }
+    .crm-notif-badge {
+      display: none; position: absolute; top: -6px; right: -8px; background: #ef4444; color: #fff;
+      font-size: 9px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px;
+      align-items: center; justify-content: center; padding: 0 4px;
+    }
+    .crm-notif-panel {
+      display: none; position: absolute; top: calc(100% + 6px); right: 0; width: min(360px, 92vw);
+      background: #111; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; z-index: 120;
+      max-height: 320px; overflow: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    }
+    html[data-theme="light"] .crm-notif-panel { background: #fff; border-color: #e2e8f0; }
+    html[data-theme="light"] .crm-notif-bell-btn { border-color: #cbd5e1; }
     .crm-alert-card {
       display: grid; grid-template-columns: auto 1fr auto; gap: 0.65rem; align-items: start;
       padding: 0.7rem 0.85rem; border-radius: 12px; border: 1px solid var(--border);
@@ -3779,12 +3796,12 @@
           <p class="module-desc">Instagram &amp; TikTok lead threads, captured phones and emails, funnel state, and CRM fields from the file-backed store.</p>
           <div class="module-arrow">Open workspace →</div>
         </button>
-        <a href="/social" class="module-card" id="open-social" data-hub-search="content manager social tiktok apify videos performance" aria-label="Open Content Manager dashboard" style="text-decoration:none;color:inherit;">
+        <a href="/social" class="module-card" id="open-social" data-hub-search="content manager social tiktok opusclip upload pipeline publish" aria-label="Open Content Manager dashboard" style="text-decoration:none;color:inherit;border-color:rgba(34,211,238,0.35);">
           <div class="module-card-top">
             <span class="module-title">Content Manager</span>
-            <span class="module-badge" style="background:rgba(34,211,238,0.15);border-color:rgba(34,211,238,0.4);color:#22d3ee;">Apify</span>
+            <span class="module-badge" style="background:rgba(34,211,238,0.15);border-color:rgba(34,211,238,0.4);color:#22d3ee;">Pipeline</span>
           </div>
-          <p class="module-desc">Live TikTok performance — views, engagement, video scores, and content patterns. Same data Harvey uses for content strategy.</p>
+          <p class="module-desc">Upload sessions → 7 clips via OpusClip, compliance review, publish to TikTok/IG, DM phone capture, and Harvey performance briefings.</p>
           <div class="module-arrow">Open workspace →</div>
         </a>
         <a href="/email-marketing" class="module-card" id="open-email-marketing" data-hub-search="email marketing gmail drip auto reply sequences" aria-label="Open Email Marketing dashboard" style="text-decoration:none;color:inherit;">
@@ -3941,6 +3958,11 @@
             Auto 30s
           </label>
           <button type="button" class="crm-theme-toggle" id="crm-theme-toggle" title="Toggle light/dark theme">Theme</button>
+          <div class="crm-notif-bell-wrap" id="crm-notif-bell-wrap">
+            <button type="button" class="crm-notif-bell-btn" id="crm-notifications-bell" title="Automation notifications" onclick="toggleNotificationsPanel()">🔔</button>
+            <span class="crm-notif-badge" id="crm-notif-badge"></span>
+            <div class="crm-notif-panel" id="crm-notifications-panel"></div>
+          </div>
           <button type="button" class="crm-light-btn" id="crm-refresh">Refresh</button>
           <a href="/jarvis" class="crm-light-btn" id="crm-harvey-link">Harvey</a>
         </div>
@@ -7116,6 +7138,117 @@
       return u.toString();
     }
 
+    function getToken() {
+      return token || "";
+    }
+
+    async function loadNotifications() {
+      try {
+        const res = await fetch(activityApiUrl("/api/crm/notifications?unreadOnly=true"));
+        if (!res.ok) return;
+        const { notifications } = await res.json();
+        const list = Array.isArray(notifications) ? notifications : [];
+        const badge = document.getElementById("crm-notif-badge");
+        if (badge) {
+          if (list.length > 0) {
+            badge.style.display = "flex";
+            badge.textContent = String(list.length);
+          } else {
+            badge.style.display = "none";
+            badge.textContent = "";
+          }
+        }
+        const panel = document.getElementById("crm-notifications-panel");
+        if (!panel) return;
+        panel.innerHTML =
+          list.length > 0
+            ? list
+                .map(
+                  (n) => `<div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:11px;">
+          <div style="color:#ccc;">${escapeHtml(n.message || "")}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <span style="color:#555;font-size:10px;">${escapeHtml(fmtDate(n.createdAt))}</span>
+            <button type="button" onclick="dismissNotification('${escapeHtml(n.id)}')" style="font-size:9px;background:transparent;border:1px solid #555;color:#888;padding:2px 8px;border-radius:2px;cursor:pointer;">Dismiss</button>
+          </div>
+        </div>`,
+                )
+                .join("")
+            : '<div style="padding:16px;color:#555;font-size:11px;text-align:center;">No new notifications</div>';
+      } catch (e) {
+        console.warn("[CRM] loadNotifications failed", e);
+      }
+    }
+
+    async function dismissNotification(id) {
+      if (!id) return;
+      await fetch(activityApiUrl(`/api/crm/notifications/${encodeURIComponent(id)}/read`), { method: "POST" });
+      await loadNotifications();
+    }
+
+    function toggleNotificationsPanel() {
+      const panel = document.getElementById("crm-notifications-panel");
+      if (!panel) return;
+      const open = panel.style.display !== "block";
+      panel.style.display = open ? "block" : "none";
+      if (open) void loadNotifications();
+    }
+
+    async function simulateWebsiteVisit(leadId) {
+      if (!leadId) {
+        crmToast("Open a lead first", "error");
+        return;
+      }
+      hideCrmErr();
+      try {
+        const res = await fetch(activityApiUrl(`/api/leads/${encodeURIComponent(leadId)}/website-visit`), {
+          method: "POST",
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(result.error || res.statusText);
+        crmToast(
+          result.triggered ? "Re-engagement triggered" : `Not triggered: ${result.reason || "—"}`,
+          result.triggered ? "success" : "error",
+        );
+        await loadCrm();
+        await loadNotifications();
+      } catch (e) {
+        crmToast(e instanceof Error ? e.message : String(e), "error");
+      }
+    }
+
+    async function updateListingStatus(leadId) {
+      if (!leadId) {
+        crmToast("Open a lead first", "error");
+        return;
+      }
+      const addressEl = document.getElementById("pf-listing-address");
+      const statusEl = document.getElementById("pf-listing-status");
+      const address = addressEl ? addressEl.value.trim() : "";
+      const status = statusEl ? statusEl.value : "";
+      if (!address) {
+        crmToast("Enter an address", "error");
+        return;
+      }
+      hideCrmErr();
+      try {
+        const res = await fetch(activityApiUrl(`/api/leads/${encodeURIComponent(leadId)}/listing-status`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address, status, source: "manual" }),
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(result.error || res.statusText);
+        crmToast(
+          result.triggered ? `Triggered: ${result.action}` : `No action: ${result.action || "—"}`,
+          result.triggered ? "success" : "error",
+        );
+        await loadCrm();
+        await loadNotifications();
+      } catch (e) {
+        crmToast(e instanceof Error ? e.message : String(e), "error");
+      }
+    }
+
     /** Build placeholder activity from a lead's conversation history (newest-first). */
     function crmDerivePlaceholderActivity(row) {
       const out = [];
@@ -8022,6 +8155,22 @@
         <div class="crm-drawer-section">
           <h4>Tasks</h4>
           <div id="pf-tasks">${typeof crmDrawerTasksHtml === "function" ? crmDrawerTasksHtml(row) : '<span class="crm-muted">Loading…</span>'}</div>
+        </div>
+        <div class="crm-drawer-section">
+          <h4>Automation tests</h4>
+          <p class="crm-muted" style="font-size:0.72rem;margin-bottom:0.5rem;">Simulate future website/MLS feeds until tracking is wired.</p>
+          <button type="button" class="crm-light-btn" style="font-size:0.72rem;" onclick="simulateWebsiteVisit(crmDrawerLeadId)">🔁 Simulate website revisit</button>
+          <div style="margin-top:0.65rem;display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;">
+            <select id="pf-listing-status" class="crm-select" style="font-size:0.72rem;max-width:120px;">
+              <option value="active">Active</option>
+              <option value="pending">Pending</option>
+              <option value="off_market">Off Market</option>
+              <option value="expired">Expired</option>
+              <option value="sold">Sold</option>
+            </select>
+            <input id="pf-listing-address" class="crm-search" placeholder="Property address" style="width:160px;font-size:0.72rem;" value="${escapeHtml(row.propertyInquired || "")}" />
+            <button type="button" class="crm-light-btn" style="font-size:0.72rem;" onclick="updateListingStatus(crmDrawerLeadId)">Update listing status</button>
+          </div>
         </div>
         <div class="crm-drawer-section">
           <h4>Notes</h4>
@@ -9578,6 +9727,7 @@
         if (!crmAutoPlansLoaded) await loadAutoPlans();
         if (typeof crmLoadTasks === "function") await crmLoadTasks(true);
         renderCrm(body);
+        await loadNotifications();
       } catch (e) {
         showCrmErr(e instanceof Error ? e.message : String(e));
       }

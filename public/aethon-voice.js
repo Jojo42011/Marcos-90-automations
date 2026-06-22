@@ -436,6 +436,9 @@
   }
 
   async function startAethonVoice() {
+    if (typeof window.onHarveyVoiceSessionStart === "function") {
+      window.onHarveyVoiceSessionStart();
+    }
     clearVoiceError();
     setHarveyStatus("CONNECTING");
     voiceActive = true;
@@ -515,6 +518,9 @@
     stopMicStream();
     void flushTranscriptToMemory();
     setHarveyStatus("STANDBY");
+    if (typeof window.onHarveyVoiceSessionEnd === "function") {
+      window.onHarveyVoiceSessionEnd();
+    }
   }
 
   function interruptHarvey() {
@@ -530,6 +536,14 @@
   }
 
   window.interruptHarvey = interruptHarvey;
+  window.unlockHarveyVoiceAudio = unlockAudioFromUserGesture;
+
+  window.startHarveyVoiceSession = async function () {
+    unlockAudioFromUserGesture();
+    if (voiceActive) return;
+    await startAethonVoice();
+    document.getElementById("harvey-mic-btn")?.classList.add("active");
+  };
 
   document.addEventListener("DOMContentLoaded", () => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);

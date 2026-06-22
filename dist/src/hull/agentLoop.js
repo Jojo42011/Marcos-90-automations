@@ -8,10 +8,11 @@ exports.runAgentLoop = runAgentLoop;
 exports.extractSentences = extractSentences;
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const founderPrompt_js_1 = require("./founderPrompt.js");
+const index_js_1 = require("../harvey/index.js");
 const modelRouting_js_1 = require("./modelRouting.js");
 const retrieval_js_1 = require("./memory/retrieval.js");
 const tools_js_1 = require("./tools.js");
-const index_js_1 = require("../integrations/gmail/index.js");
+const index_js_2 = require("../integrations/gmail/index.js");
 const curiosity_js_1 = require("./curiosity.js");
 const MAX_AGENT_STEPS = 8;
 const MAX_TOOL_CHARS = 12000;
@@ -82,10 +83,11 @@ async function runAgentLoop(opts) {
         return { speech: q, toolRounds: 0, model: (0, modelRouting_js_1.getHaikuModel)(), clarification: true };
     }
     let system = (0, founderPrompt_js_1.buildFounderSystemPrompt)(memoryPacket);
+    system += `\n\n${index_js_1.HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT}`;
     if (opts.voiceMode) {
         system +=
             "\n\nVOICE MODE: Spoken replies only. Max 2-3 short sentences. Lead with the number or answer. No markdown, bullets, or asterisks — plain spoken English. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
-        if ((0, index_js_1.isGmailConfigured)()) {
+        if ((0, index_js_2.isGmailConfigured)()) {
             system +=
                 "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send first. Use to=\"marco\" for his inbox. NEVER confirm sent unless gmail_send returned ok:true with messageId.";
         }
@@ -113,11 +115,11 @@ async function runAgentLoop(opts) {
     const sonnetTools = !opts.fastMode && model === (0, modelRouting_js_1.getAethonModel)();
     const ownerWhatsAppTools = opts.fastMode && opts.ownerMode;
     const voiceTools = Boolean(opts.voiceMode) && !opts.fastMode;
-    const emailIntent = (0, index_js_1.isGmailConfigured)() &&
+    const emailIntent = (0, index_js_2.isGmailConfigured)() &&
         /\b(send|email|e-mail|mail)\b/i.test(opts.message) &&
         /\b(email|e-mail|mail|inbox|gmail|me|marco)\b/i.test(opts.message);
     const nurtureIntent = /\b(nurture|scoring|score|hot lead|warm lead|cold lead|lead nurture|re-score|rescore)\b/i.test(opts.message);
-    const gmailTools = (0, index_js_1.isGmailConfigured)() &&
+    const gmailTools = (0, index_js_2.isGmailConfigured)() &&
         (sonnetTools || ownerWhatsAppTools || voiceTools || emailIntent || opts.ownerMode);
     const nurtureTools = sonnetTools || ownerWhatsAppTools || voiceTools || nurtureIntent || opts.ownerMode;
     const toolsEnabled = sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools;

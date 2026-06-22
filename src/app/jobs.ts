@@ -30,6 +30,8 @@ import { scheduleBuyerDripProcessor } from "../agents/emailMarketing/buyerDrip.j
 import { scheduleSellerDripProcessor } from "../agents/emailMarketing/sellerDrip.js";
 import { schedulePastClientQuarterly } from "../agents/emailMarketing/pastClientQuarterly.js";
 import { scheduleNoReplyFollowupCheck } from "../agents/emailMarketing/noReplyFollowup.js";
+import { scheduleContentManagerDaily7pmCST } from "../agents/contentManager/index.js";
+import { scheduleContentBrainCycles } from "../agents/contentManager/brain/index.js";
 
 export function scheduleContentJobs(): void {
   scheduleSocialMediaAgentDaily6pmCST();
@@ -56,6 +58,8 @@ export function scheduleContentJobs(): void {
   scheduleSellerDripProcessor();
   schedulePastClientQuarterly();
   scheduleNoReplyFollowupCheck();
+  scheduleContentManagerDaily7pmCST();
+  scheduleContentBrainCycles();
 }
 
 export async function runDailyJobs(): Promise<void> {

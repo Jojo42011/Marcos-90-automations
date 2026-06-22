@@ -15,7 +15,7 @@ async function summarizeWithGemini(turns: unknown[]): Promise<string> {
   const prompt = `Summarize this Harvey conversation in 1-2 sentences. Focus on what was discussed and any decisions made. Conversation: ${JSON.stringify(turns.slice(-6))}`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

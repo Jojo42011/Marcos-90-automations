@@ -31,6 +31,8 @@ const buyerDrip_js_1 = require("../agents/emailMarketing/buyerDrip.js");
 const sellerDrip_js_1 = require("../agents/emailMarketing/sellerDrip.js");
 const pastClientQuarterly_js_1 = require("../agents/emailMarketing/pastClientQuarterly.js");
 const noReplyFollowup_js_1 = require("../agents/emailMarketing/noReplyFollowup.js");
+const index_js_16 = require("../agents/contentManager/index.js");
+const index_js_17 = require("../agents/contentManager/brain/index.js");
 function scheduleContentJobs() {
     (0, index_js_5.scheduleSocialMediaAgentDaily6pmCST)();
     (0, index_js_6.scheduleMorningScanDaily8am)();
@@ -56,6 +58,8 @@ function scheduleContentJobs() {
     (0, sellerDrip_js_1.scheduleSellerDripProcessor)();
     (0, pastClientQuarterly_js_1.schedulePastClientQuarterly)();
     (0, noReplyFollowup_js_1.scheduleNoReplyFollowupCheck)();
+    (0, index_js_16.scheduleContentManagerDaily7pmCST)();
+    (0, index_js_17.scheduleContentBrainCycles)();
 }
 async function runDailyJobs() {
     await (0, index_js_1.run)();

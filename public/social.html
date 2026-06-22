@@ -788,193 +788,409 @@
     html[data-theme="light"] .pull-log-meta {
       color: #64748b !important;
     }
+
+    /* ——— Content Manager shell (matches CRM dashboard.html) ——— */
+    .crm-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+      color: #f8fafc;
+      position: relative;
+      z-index: 1;
+    }
+    .crm-sidebar {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      padding: 1rem 0.75rem;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .crm-logo {
+      font-family: var(--mono);
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin: 0.25rem 0.5rem 1.1rem;
+      opacity: 0.95;
+    }
+    .crm-side-btn {
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.84rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .crm-side-btn:hover { background: rgba(34, 211, 238, 0.06); color: var(--text); border-color: var(--border); }
+    .crm-side-btn.active {
+      background: rgba(34, 211, 238, 0.08);
+      color: var(--cyan);
+      border-color: rgba(34, 211, 238, 0.22);
+      font-weight: 600;
+    }
+    .cm-section { display: none; }
+    .cm-section.active { display: block; }
+    .crm-count {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+    }
+    .crm-count.crm-count-danger { color: #ef4444; font-weight: 700; }
+    .crm-main { min-width: 0; padding: 0; }
+    .crm-topbar {
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      padding: 0.65rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(14, 17, 24, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 4;
+    }
+    .cm-content { padding: 1.25rem 1.2rem 2.5rem; max-height: calc(100vh - 56px); overflow-y: auto; }
+    .cm-brain-chat { display:flex; flex-direction:column; height:420px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+    .cm-brain-messages { flex:1; overflow-y:auto; padding:1rem; display:flex; flex-direction:column; gap:0.75rem; }
+    .cm-brain-msg { max-width:85%; padding:0.65rem 0.85rem; border-radius:12px; font-size:0.8125rem; line-height:1.45; }
+    .cm-brain-msg.user { align-self:flex-end; background:rgba(34,211,238,0.12); border:1px solid rgba(34,211,238,0.2); }
+    .cm-brain-msg.brain { align-self:flex-start; background:var(--card); border:1px solid var(--border); }
+    .cm-brain-badge { display:inline-block; font-size:0.6rem; font-weight:700; padding:0.15rem 0.4rem; border-radius:4px; background:rgba(34,211,238,0.2); color:var(--cyan); margin-bottom:0.35rem; }
+    .cm-brain-input-row { display:flex; gap:0.5rem; padding:0.75rem; border-top:1px solid var(--border); }
+    .cm-brain-input-row input { flex:1; padding:0.5rem 0.75rem; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.8125rem; }
+    .cm-brain-meta { font-size:0.6rem; color:var(--muted); padding:0.35rem 0.75rem 0; }
+    .cm-brain-status-row { display:flex; flex-wrap:wrap; gap:0.5rem; margin:0.5rem 0 0.75rem; }
+    .cm-streak-badge { font-size:0.7rem; font-weight:600; padding:0.25rem 0.55rem; border-radius:6px; }
+    .cm-streak-badge.hot { background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); }
+    .cm-streak-badge.cold { background:rgba(239,68,68,0.12); color:#ef4444; border:1px solid rgba(239,68,68,0.25); }
+    .cm-streak-badge.neutral { background:rgba(148,163,184,0.12); color:var(--muted); border:1px solid var(--border); }
+    .cm-season-tag { font-size:0.65rem; padding:0.2rem 0.5rem; border-radius:4px; background:rgba(59,130,246,0.12); color:#60a5fa; }
+    .cm-grade-badge { font-size:0.75rem; font-weight:700; width:1.75rem; height:1.75rem; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; }
+    .cm-grade-A { background:rgba(34,197,94,0.2); color:#22c55e; }
+    .cm-grade-B { background:rgba(20,184,166,0.2); color:#14b8a6; }
+    .cm-grade-C { background:rgba(234,179,8,0.2); color:#eab308; }
+    .cm-grade-D { background:rgba(249,115,22,0.2); color:#f97316; }
+    .cm-grade-F { background:rgba(239,68,68,0.2); color:#ef4444; }
+    .cm-brain-expand { font-size:0.7rem; color:var(--cyan); cursor:pointer; margin-top:0.5rem; display:inline-block; }
+    .cm-brain-expand-card { margin-top:0.5rem; padding:0.75rem; border:1px solid var(--border); border-radius:8px; font-size:0.75rem; background:var(--card); }
+    .cm-confidence-ring { width:72px; height:72px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-direction:column; border:3px solid var(--cyan); font-weight:700; font-size:1.1rem; color:var(--cyan); }
+    .cm-suggested-q { font-size:0.75rem; color:var(--muted); cursor:pointer; padding:0.35rem 0.5rem; border-radius:6px; border:1px dashed var(--border); margin:0.25rem 0; }
+    .cm-suggested-q:hover { border-color:var(--cyan); color:var(--cyan); }
+    .cm-pillar-tag.brand { background:rgba(251,146,60,0.15); color:#fb923c; }
+    .cm-pillar-tag.education { background:rgba(96,165,250,0.15); color:#60a5fa; }
+    .cm-pillar-tag.listings { background:rgba(74,222,128,0.15); color:#4ade80; }
+    .cm-avoid-pill { border:1px solid rgba(248,113,113,0.5); color:#f87171; padding:0.2rem 0.5rem; border-radius:999px; font-size:0.7rem; }
+    .cm-stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .cm-stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .cm-stat-card label { display: block; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.25rem; }
+    .cm-stat-val { font-family: var(--mono); font-size: 1.25rem; font-weight: 600; }
+    .cm-ring { width: 48px; height: 48px; flex-shrink: 0; }
+    .cm-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    .cm-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+    }
+    .cm-panel h3 { font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--cyan); letter-spacing: 0.04em; text-transform: uppercase; }
+    .cm-alert-ok { border-color: rgba(34,197,94,0.35); background: rgba(34,197,94,0.08); color: #86efac; padding: 0.75rem; border-radius: 10px; }
+    .cm-alert-warn { border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); }
+    .cm-week-bars { display: flex; align-items: flex-end; gap: 0.5rem; height: 120px; margin-top: 0.5rem; }
+    .cm-week-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+    .cm-week-bar .bar { width: 100%; background: rgba(34,211,238,0.35); border-radius: 4px 4px 0 0; min-height: 4px; }
+    .cm-week-bar .lbl { font-size: 0.6rem; color: var(--muted); font-family: var(--mono); }
+    .upload-zone {
+      border: 2px dashed rgba(34,211,238,0.35);
+      border-radius: var(--radius);
+      background: var(--surface2);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--cyan); background: rgba(34,211,238,0.06); }
+    .upload-zone .icon { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.7; }
+    .upload-meta { margin-top: 1rem; text-align: left; display: none; }
+    .upload-meta.show { display: block; }
+    .pipeline-row {
+      display: grid;
+      grid-template-columns: 64px 1fr auto;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .pipeline-thumb { width: 64px; height: 64px; background: var(--surface2); border-radius: 8px; }
+    .pipeline-stages { display: flex; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.35rem; }
+    .stage-dot { font-size: 0.55rem; font-family: var(--mono); padding: 0.15rem 0.35rem; border-radius: 4px; color: var(--muted); border: 1px solid var(--border); }
+    .stage-dot.on { color: var(--cyan); border-color: rgba(34,211,238,0.4); background: rgba(34,211,238,0.1); }
+    .pillar-edu { color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); background: rgba(56,189,248,0.12); }
+    .pillar-list { color: #4ade80; border: 1px solid rgba(34,197,94,0.4); background: rgba(34,197,94,0.12); }
+    .pillar-brand { color: #fb923c; border: 1px solid rgba(251,146,60,0.4); background: rgba(251,146,60,0.12); }
+    .cm-pill { font-size: 0.65rem; padding: 0.15rem 0.45rem; border-radius: 999px; display: inline-block; }
+    .cm-subtabs { display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .cm-subtab { font-size: 0.75rem; padding: 0.4rem 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; }
+    .cm-subtab.active { color: var(--cyan); background: var(--cyan-dim); border-color: rgba(34,211,238,0.35); }
+    .cm-btn { font-size: 0.72rem; padding: 0.35rem 0.65rem; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; background: var(--surface2); color: var(--text); }
+    .cm-btn.green { border-color: rgba(34,197,94,0.45); color: #86efac; }
+    .cm-btn.red { border-color: rgba(239,68,68,0.45); color: #fca5a5; }
+    .cm-btn.amber { border-color: rgba(245,158,11,0.45); color: #fcd34d; }
+    .cm-review-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 0.75rem; }
+    .cm-filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .cm-muted { color: var(--muted); font-size: 0.75rem; }
+    .cm-rejected { opacity: 0.55; text-decoration: line-through; }
+    @media (max-width: 900px) {
+      .crm-shell { grid-template-columns: 1fr; }
+      .crm-sidebar { height: auto; position: relative; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+      .crm-side-btn { width: auto; flex: 1 1 auto; min-width: 140px; }
+      .cm-stat-row, .cm-two-col { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>
   <div class="page-bg"></div>
   <div id="toast" class="toast"></div>
-  <div class="wrap">
-    <header class="topbar">
-      <div style="flex:1 1 100%; display:flex; align-items:center; gap:0.5rem;">
-        <a class="back" href="/">← Command center</a>
-        <h1>Content Manager <span>Apify live</span></h1>
-      </div>
-      <div class="meta">
-        <span class="dot" id="statusDot"></span>
-        <span id="lastUpdated">Last updated —</span>
-      </div>
-      <div class="controls refresh-block">
-        <button id="theme-toggle-btn" type="button" onclick="toggleTheme()"
-          style="background:transparent; border:1px solid rgba(0,212,255,0.3);
-                 color:#00d4ff; padding:5px 12px; font-family:monospace;
-                 font-size:10px; letter-spacing:1px; cursor:pointer; border-radius:2px;">
-          Light mode
-        </button>
-        <div style="display:flex; gap:0.5rem; align-items:center;">
-          <select id="intervalSelect" title="Auto-refresh interval" onchange="handleRefreshIntervalChange()">
-            <option value="0">Manual</option>
-            <option value="60000">1 min</option>
-            <option value="300000" selected>5 min</option>
-            <option value="900000">15 min</option>
-            <option value="3600000">1 hour</option>
-            <option value="86400000">24 hours</option>
-            <option value="custom">Custom…</option>
-          </select>
-          <button type="button" class="primary" id="refreshBtn">Refresh now</button>
+  <div class="crm-shell">
+    <aside class="crm-sidebar" aria-label="Content Manager navigation">
+      <div class="crm-logo">Content Manager</div>
+      <button type="button" class="crm-side-btn active" data-cm-section="overview">Overview <span class="crm-count" id="cm-count-overview">0/7</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="upload">Upload &amp; Clip <span class="crm-count" id="cm-count-upload">0</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="review">Review Queue <span class="crm-count crm-count-danger" id="cm-count-review">0</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="publishing">Publishing <span class="crm-count" id="cm-count-publishing">0</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="community">Community <span class="crm-count" id="cm-count-community">0</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">—</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="brain">Brain <span class="crm-count" id="cm-count-brain">—</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="suggestions">Content Suggestions <span class="crm-count">—</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="activity">Activity Log <span class="crm-count" id="cm-count-activity">0</span></button>
+      <a href="/" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;">Command center <span>←</span></a>
+    </aside>
+
+    <main class="crm-main">
+      <header class="crm-topbar">
+        <h1 style="font-size:1rem;font-weight:700;flex:1;">Content Manager <span style="color:var(--cyan);font-size:0.75rem;font-weight:500;">7 videos/day · 6,006 view benchmark</span></h1>
+        <div class="meta" style="display:flex;align-items:center;gap:0.5rem;">
+          <span class="dot" id="statusDot"></span>
+          <span id="lastUpdated" style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);">Last updated —</span>
         </div>
-        <div id="custom-time-picker">
-          <label for="custom-pull-time">Pull data at (Central):</label>
-          <input type="time" id="custom-pull-time" />
-          <button type="button" class="btn-set" onclick="saveCustomRefreshTime()">SET</button>
-          <span id="custom-time-status"></span>
-        </div>
-      </div>
-    </header>
-
-    <nav class="tab-nav" aria-label="Content Manager sections">
-      <button type="button" class="tab-btn active" data-tab="overview">Overview</button>
-      <button type="button" class="tab-btn" data-tab="video-scores">Video Scores</button>
-      <button type="button" class="tab-btn" data-tab="morning-scan">Morning Scan</button>
-      <button type="button" class="tab-btn" data-tab="evening-pull">Evening Pull</button>
-      <button type="button" class="tab-btn" data-tab="escalations">Escalations</button>
-      <button type="button" class="tab-btn" data-tab="content-suggestions">Content Suggestions</button>
-      <button type="button" class="tab-btn" data-tab="activity-log">Activity Log</button>
-      <button type="button" class="tab-btn" data-tab="comment-replies">Comment Replies</button>
-    </nav>
-
-    <div id="agent-status-bar">
-      <div>
-        <div class="agent-status-label">AUTONOMOUS AGENT</div>
-        <div class="agent-last-run">
-          Last full update: <span id="agent-last-run">--</span>
-        </div>
-      </div>
-      <div style="text-align:right;">
-        <div class="agent-status-label">NEXT UPDATE IN</div>
-        <div id="agent-countdown">--:--:--</div>
-      </div>
-    </div>
-
-    <!-- Overview -->
-    <div id="tab-overview" class="tab-panel active">
-      <section class="profile" id="profileRow" hidden>
-        <img class="avatar" id="profileAvatar" alt="" />
-        <div>
-          <h2 id="profileName">—</h2>
-          <div class="handle" id="profileHandle">@—</div>
-          <div class="followers" id="profileFollowers">— followers</div>
-        </div>
-      </section>
-
-      <section class="cards" id="summaryCards">
-        <div class="card"><label>Videos tracked</label><strong id="sVideos">—</strong></div>
-        <div class="card"><label>Avg views / video</label><strong id="sAvgViews">—</strong></div>
-        <div class="card"><label>Total views</label><strong id="sTotalViews">—</strong></div>
-        <div class="card"><label>Total likes</label><strong id="sLikes">—</strong></div>
-        <div class="card"><label>Total comments</label><strong id="sComments">—</strong></div>
-        <div class="card"><label>Total shares</label><strong id="sShares">—</strong></div>
-      </section>
-
-      <h2 class="section-title">Recent videos <span>— last 30 days</span></h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Posted</th>
-              <th>Video</th>
-              <th>Views</th>
-              <th>Likes</th>
-              <th>Saves</th>
-              <th>Comments</th>
-              <th>Shares</th>
-              <th>Score</th>
-              <th>Tier</th>
-            </tr>
-          </thead>
-          <tbody id="videoBody">
-            <tr><td colspan="9" class="loading">Click Refresh now to pull TikTok data from Apify.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Video Scores -->
-    <div id="tab-video-scores" class="tab-panel">
-      <div class="score-controls">
-        <select id="score-tier-filter" onchange="loadVideoScoresTab()">
-          <option value="all">All Tiers</option>
-          <option value="hot">Hot Only</option>
-          <option value="warm">Warm Only</option>
-          <option value="cold">Cold Only</option>
+        <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="cm-btn">Light mode</button>
+        <select id="intervalSelect" title="Auto-refresh" onchange="handleRefreshIntervalChange()" style="font-size:0.75rem;">
+          <option value="0">Manual</option>
+          <option value="60000">1 min</option>
+          <option value="300000" selected>5 min</option>
+          <option value="900000">15 min</option>
         </select>
-        <select id="score-sort" onchange="loadVideoScoresTab()">
-          <option value="score_desc">Score: High to Low</option>
-          <option value="score_asc">Score: Low to High</option>
-          <option value="recent">Most Recent</option>
-          <option value="views">Most Views</option>
-        </select>
-        <button type="button" class="btn-ghost" onclick="generateAllImprovements()">↻ GENERATE ALL FEEDBACK</button>
-        <button type="button" class="btn-ghost" onclick="rescoreVideosNow()">↻ RESCORE VIDEOS</button>
-      </div>
-      <div id="video-scores-container">
-        <div class="loading">// LOADING VIDEO SCORES //</div>
-      </div>
-    </div>
+        <button type="button" class="primary" id="refreshBtn" style="font-size:0.75rem;">Refresh Apify</button>
+        <span id="pipeline-updated" class="cm-muted"></span>
+      </header>
 
-    <!-- Morning Scan -->
-    <div id="tab-morning-scan" class="tab-panel">
-      <div id="morningScanPanel" class="reply-card">
-        <p class="loading" id="morningScanStatus">Loading morning scan…</p>
-        <div id="morningScanFlags"></div>
-        <div class="reply-actions">
-          <button type="button" class="btn-set" id="runMorningScanBtn">↻ RUN SCAN NOW</button>
+      <div class="cm-content">
+        <!-- OVERVIEW -->
+        <section id="cm-section-overview" class="cm-section active">
+          <div class="cm-stat-row" id="cm-overview-stats"></div>
+          <div class="cm-two-col">
+            <div class="cm-panel" id="cm-pipeline-status"></div>
+            <div class="cm-panel" id="cm-review-alert"></div>
+          </div>
+          <div class="cm-panel">
+            <h3>Weekly Progress</h3>
+            <div id="cm-weekly-chart"></div>
+          </div>
+          <div id="agent-status-bar" style="margin-top:1rem;">
+            <div>
+              <div class="agent-status-label">AUTONOMOUS AGENT</div>
+              <div class="agent-last-run">Last full update: <span id="agent-last-run">--</span></div>
+            </div>
+            <div style="text-align:right;">
+              <div class="agent-status-label">NEXT UPDATE IN</div>
+              <div id="agent-countdown">--:--:--</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- UPLOAD & CLIP -->
+        <section id="cm-section-upload" class="cm-section">
+          <div class="cm-panel" style="margin-bottom:1rem;">
+            <h3>Video Upload</h3>
+            <div class="upload-zone" id="upload-zone">
+              <div class="icon">⬆</div>
+              <div><strong>Drop your video here or click to browse</strong></div>
+              <div class="cm-muted" style="margin-top:0.35rem;">MP4, MOV, AVI · Max 2GB · Marco or Wesley footage</div>
+              <input type="file" id="video-file-input" accept=".mp4,.mov,.avi,video/mp4,video/quicktime" hidden />
+            </div>
+            <div class="upload-meta" id="upload-meta">
+              <p id="upload-file-info" class="cm-muted"></p>
+              <label style="display:block;margin:0.75rem 0 0.35rem;font-size:0.75rem;">Content pillar (required)</label>
+              <select id="upload-pillar" style="width:100%;padding:0.5rem;">
+                <option value="">Select pillar…</option>
+                <option value="education">Education</option>
+                <option value="listings">Listings</option>
+                <option value="brand">Brand</option>
+              </select>
+              <label style="display:block;margin:0.75rem 0 0.35rem;font-size:0.75rem;">Notes (optional)</label>
+              <input type="text" id="upload-notes" placeholder="Add context for this session" style="width:100%;padding:0.5rem;" />
+              <button type="button" class="primary" id="upload-submit-btn" style="margin-top:1rem;width:100%;padding:0.65rem;" disabled>Send to OpusClip</button>
+              <p id="upload-status" class="cm-muted" style="margin-top:0.5rem;"></p>
+            </div>
+          </div>
+          <div class="cm-panel">
+            <h3>Clip Pipeline <span id="pipeline-refresh-label" class="cm-muted" style="font-weight:400;text-transform:none;"></span></h3>
+            <div id="clip-pipeline-list"><p class="cm-muted">No clips yet. Upload a video above to get started. One session becomes 7+ publish-ready clips automatically.</p></div>
+          </div>
+        </section>
+
+        <!-- REVIEW QUEUE -->
+        <section id="cm-section-review" class="cm-section">
+          <div class="cm-filter-bar">
+            <button type="button" class="cm-subtab active" data-review-filter="all">All</button>
+            <button type="button" class="cm-subtab" data-review-filter="flagged">Flagged</button>
+            <button type="button" class="cm-subtab" data-review-filter="clean">Clean</button>
+          </div>
+          <div id="review-queue-list"></div>
+        </section>
+
+        <!-- PUBLISHING -->
+        <section id="cm-section-publishing" class="cm-section">
+          <div id="publishing-list"></div>
+        </section>
+
+        <!-- COMMUNITY -->
+        <section id="cm-section-community" class="cm-section">
+          <div class="cm-subtabs">
+            <button type="button" class="cm-subtab active" data-community-tab="dms">DMs</button>
+            <button type="button" class="cm-subtab" data-community-tab="comments">Comments</button>
+            <button type="button" class="cm-subtab" data-community-tab="phones">Phone Captures</button>
+            <button type="button" class="cm-subtab" data-community-tab="escalations">Escalations</button>
+            <button type="button" class="cm-subtab" data-community-tab="replies">Comment Replies</button>
+          </div>
+          <div id="community-dms" class="community-panel"></div>
+          <div id="community-comments" class="community-panel" style="display:none;"></div>
+          <div id="community-phones" class="community-panel" style="display:none;"></div>
+          <div id="community-escalations" class="community-panel" style="display:none;">
+            <div id="escalationsPanel" class="reply-card">
+              <p class="loading" id="escalationsStatus">Loading escalations…</p>
+              <div id="escalationsList"></div>
+              <div class="reply-actions"><button type="button" class="btn-set" id="runEscalationsBtn">↻ RUN ESCALATION CHECKS</button></div>
+            </div>
+          </div>
+          <div id="community-replies" class="community-panel" style="display:none;">
+            <div id="commentRepliesPanel">
+              <p class="loading" id="commentRepliesStatus">Loading pending replies…</p>
+              <div id="commentRepliesList"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ANALYTICS -->
+        <section id="cm-section-analytics" class="cm-section">
+          <div class="cm-subtabs">
+            <button type="button" class="cm-subtab active" data-analytics-tab="performance">Performance</button>
+            <button type="button" class="cm-subtab" data-analytics-tab="benchmark">Benchmark</button>
+            <button type="button" class="cm-subtab" data-analytics-tab="trends">Trends</button>
+          </div>
+          <div id="analytics-performance" class="analytics-panel">
+            <div class="score-controls" style="margin-bottom:1rem;">
+              <select id="score-tier-filter" onchange="loadVideoScoresTab()">
+                <option value="all">All Tiers</option>
+                <option value="hot">Hot Only</option>
+                <option value="warm">Warm Only</option>
+                <option value="cold">Cold Only</option>
+              </select>
+              <select id="score-sort" onchange="loadVideoScoresTab()">
+                <option value="score_desc">Score: High to Low</option>
+                <option value="score_asc">Score: Low to High</option>
+                <option value="recent">Most Recent</option>
+                <option value="views">Most Views</option>
+              </select>
+              <button type="button" class="btn-ghost" onclick="generateAllImprovements()">↻ GENERATE ALL FEEDBACK</button>
+              <button type="button" class="btn-ghost" onclick="rescoreVideosNow()">↻ RESCORE VIDEOS</button>
+            </div>
+            <div id="video-scores-container"><div class="loading">// LOADING VIDEO SCORES //</div></div>
+            <h2 class="section-title" style="margin-top:1.5rem;">Content Manager performance <span>SQLite + Apify</span></h2>
+            <div class="table-wrap"><table><thead><tr>
+              <th>Date</th><th>Caption</th><th>Platform</th><th>Views</th><th>Likes</th><th>Comments</th><th>Shares</th><th>Score</th><th>Tier</th><th>Bench</th>
+            </tr></thead><tbody id="cm-analytics-tbody"></tbody></table></div>
+          </div>
+          <div id="analytics-benchmark" class="analytics-panel" style="display:none;"></div>
+          <div id="analytics-trends" class="analytics-panel" style="display:none;">
+            <div id="morningScanPanel" class="reply-card" style="margin-bottom:1rem;">
+              <p class="loading" id="morningScanStatus">Loading morning scan…</p>
+              <div id="morningScanFlags"></div>
+              <div class="reply-actions"><button type="button" class="btn-set" id="runMorningScanBtn">↻ RUN SCAN NOW</button></div>
+            </div>
+            <div id="eveningPullPanel" class="reply-card">
+              <p class="loading" id="eveningPullStatus">Loading evening pull…</p>
+              <div id="eveningPullDetails"></div>
+              <div class="reply-actions"><button type="button" class="btn-set" id="runEveningPullBtn">↻ RUN EVENING PULL NOW</button></div>
+            </div>
+            <div id="cm-pillar-trends" style="margin-top:1rem;"></div>
+          </div>
+        </section>
+
+        <!-- BRAIN -->
+        <section id="cm-section-brain" class="cm-section">
+          <h2 class="section-title">Today's Strategy <span>Content Manager Brain</span></h2>
+          <div id="cm-brain-strategy" class="cm-panel" style="margin-bottom:1.25rem;">
+            <p class="loading">Loading strategy…</p>
+          </div>
+          <h2 class="section-title">Ask the Brain <span>specialist AI · not Harvey</span></h2>
+          <div id="cm-brain-suggestions" style="margin-bottom:0.75rem;"></div>
+          <div class="cm-brain-chat">
+            <p class="cm-brain-meta" id="cm-brain-session-id"></p>
+            <div class="cm-brain-messages" id="cm-brain-messages">
+              <p class="cm-muted" style="font-size:0.75rem;">Ask the content manager anything — performance, hooks, what to film next.</p>
+            </div>
+            <div class="cm-brain-input-row">
+              <input type="text" id="cm-brain-input" placeholder="Ask the content manager anything…" />
+              <button type="button" class="primary" id="cm-brain-send">Send</button>
+            </div>
+          </div>
+          <a class="cm-brain-expand" id="cm-brain-toggle-eval">View self-evaluation</a>
+          <div id="cm-brain-eval-card" class="cm-brain-expand-card" style="display:none;"></div>
+          <a class="cm-brain-expand" id="cm-brain-toggle-experiments">Experiments</a>
+          <div id="cm-brain-experiments-card" class="cm-brain-expand-card" style="display:none;"></div>
+        </section>
+
+        <!-- CONTENT SUGGESTIONS -->
+        <section id="cm-section-suggestions" class="cm-section">
+          <div id="content-suggestions-container" class="reply-card"><div class="loading">// LOADING SUGGESTIONS //</div></div>
+        </section>
+
+        <!-- ACTIVITY LOG -->
+        <section id="cm-section-activity" class="cm-section">
+          <div id="activity-log-container" class="reply-card"><div class="loading">// LOADING ACTIVITY //</div></div>
+        </section>
+
+        <!-- Legacy Apify table (hidden, used by refresh) -->
+        <div style="display:none;">
+          <tbody id="videoBody"></tbody>
+          <section class="profile" id="profileRow" hidden></section>
         </div>
       </div>
-    </div>
-
-    <!-- Evening Pull -->
-    <div id="tab-evening-pull" class="tab-panel">
-      <div id="eveningPullPanel" class="reply-card">
-        <p class="loading" id="eveningPullStatus">Loading evening pull…</p>
-        <div id="eveningPullDetails"></div>
-        <div class="reply-actions">
-          <button type="button" class="btn-set" id="runEveningPullBtn">↻ RUN EVENING PULL NOW</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Escalations -->
-    <div id="tab-escalations" class="tab-panel">
-      <div id="escalationsPanel" class="reply-card">
-        <p class="loading" id="escalationsStatus">Loading escalations…</p>
-        <div id="escalationsList"></div>
-        <div class="reply-actions">
-          <button type="button" class="btn-set" id="runEscalationsBtn">↻ RUN ESCALATION CHECKS</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Content Suggestions -->
-    <div id="tab-content-suggestions" class="tab-panel">
-      <div id="content-suggestions-container" class="reply-card">
-        <div class="loading">// LOADING SUGGESTIONS //</div>
-      </div>
-    </div>
-
-    <!-- Activity Log -->
-    <div id="tab-activity-log" class="tab-panel">
-      <div id="activity-log-container" class="reply-card">
-        <div class="loading">// LOADING ACTIVITY //</div>
-      </div>
-    </div>
-
-    <!-- Comment Replies -->
-    <div id="tab-comment-replies" class="tab-panel">
-      <div id="commentRepliesPanel">
-        <p class="loading" id="commentRepliesStatus">Loading pending replies…</p>
-        <div id="commentRepliesList"></div>
-      </div>
-    </div>
+    </main>
   </div>
 
   <script>
@@ -1139,13 +1355,535 @@
       document.getElementById("statusDot").classList.toggle("live", on);
     }
 
+    let cmSection = "overview";
+    let reviewFilter = "all";
+    let pipelineRefreshAt = 0;
+    let cmStatsCache = null;
+
+    function progressRing(pct, color) {
+      const p = Math.min(100, Math.max(0, pct));
+      const c = 2 * Math.PI * 20;
+      const off = c * (1 - p / 100);
+      return `<svg class="cm-ring" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5"/><circle cx="24" cy="24" r="20" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>`;
+    }
+
+    function pillarClass(p) {
+      if (p === "education") return "pillar-edu";
+      if (p === "listings") return "pillar-list";
+      return "pillar-brand";
+    }
+
+    function pipelineStage(video) {
+      if (video.status === "rejected") return 2;
+      if (video.status === "published") return 5;
+      if (video.status === "scheduled" || video.status === "approved") return 4;
+      if (video.compliance_flagged) return 3;
+      if (video.status === "pending_review") return 3;
+      return 2;
+    }
+
+    function stageHtml(video) {
+      const stages = ["UPLOADED", "CLIPPED", "REVIEW", "APPROVED", "PUBLISHED"];
+      const on = pipelineStage(video);
+      return `<div class="pipeline-stages">${stages.map((s, i) => `<span class="stage-dot${i < on ? " on" : ""}">${s}</span>`).join("")}</div>`;
+    }
+
+    async function cmFetch(path, opts) {
+      const res = await fetch(apiUrl(path), { ...opts, headers: { ...apiHeaders(), ...(opts?.headers || {}) } });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+      return res.json();
+    }
+
+    async function loadCmStats() {
+      try {
+        cmStatsCache = await cmFetch("/api/content/stats");
+        updateSidebarBadges();
+      } catch (e) { console.warn("[CM] stats", e); }
+    }
+
+    function updateSidebarBadges() {
+      const s = cmStatsCache;
+      if (!s) return;
+      const t = s.targets || {};
+      const el = (id, val) => { const n = document.getElementById(id); if (n) n.textContent = val; };
+      el("cm-count-overview", `${t.videosPublished || 0}/7`);
+      el("cm-count-upload", String(s.pipelineClips || 0));
+      const rev = document.getElementById("cm-count-review");
+      if (rev) {
+        rev.textContent = String(s.reviewFlagged || 0);
+        rev.classList.toggle("crm-count-danger", (s.reviewFlagged || 0) > 0);
+      }
+      el("cm-count-publishing", String(s.scheduled || 0));
+      const dmGap = Math.max(0, (s.dmsTarget || 44) - (t.dmsTriaged || 0));
+      el("cm-count-community", String(dmGap));
+    }
+
+    async function loadCmOverview() {
+      try {
+        const [daily, weekly, compliance] = await Promise.all([
+          cmFetch("/api/content/report/daily"),
+          cmFetch("/api/content/report/weekly"),
+          cmFetch("/api/content/compliance-queue"),
+        ]);
+        const t = daily.targets || {};
+        const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+        document.getElementById("cm-overview-stats").innerHTML = `
+          <div class="cm-stat-card">${progressRing(pct(t.videosPublished, 7), "var(--cyan)")}<div><label>Videos Today</label><div class="cm-stat-val">${t.videosPublished || 0} / 7</div></div></div>
+          <div class="cm-stat-card">${progressRing(pct(t.phoneNumbersCaptured, 22), "#4ade80")}<div><label>Phone Numbers</label><div class="cm-stat-val">${t.phoneNumbersCaptured || 0} / 22</div></div></div>
+          <div class="cm-stat-card"><div><label>Comments Managed</label><div class="cm-stat-val">${t.commentsManaged || 0}</div></div></div>
+          <div class="cm-stat-card">${progressRing(pct(t.dmsTriaged, 44), "#f59e0b")}<div><label>DMs Triaged</label><div class="cm-stat-val">${t.dmsTriaged || 0} / 44</div></div></div>`;
+
+        const sc = cmStatsCache?.statusCounts || {};
+        document.getElementById("cm-pipeline-status").innerHTML = `<h3>Pipeline Status</h3>
+          <p class="cm-muted" style="margin-bottom:0.5rem;">Click a status to jump to the queue</p>
+          ${["pending_review","approved","scheduled","published","rejected"].map((k) =>
+            `<button type="button" class="cm-btn" style="margin:0.2rem;" onclick="jumpPipelineStatus('${k}')">${k.replace("_"," ")}: <strong>${sc[k] || 0}</strong></button>`
+          ).join("")}`;
+
+        const pending = compliance.pending || [];
+        document.getElementById("cm-review-alert").innerHTML = pending.length
+          ? `<h3>Review Queue Alert</h3>${pending.map((p) => `<div class="cm-alert-warn" style="padding:0.5rem;margin-bottom:0.35rem;border-radius:8px;"><strong>${escapeHtml((p.caption || "").slice(0, 60))}</strong><br><span class="cm-muted">${escapeHtml(p.flaggedReason || "")}</span></div>`).join("")}`
+          : `<h3>Review Queue Alert</h3><div class="cm-alert-ok">All clear — nothing waiting for review.</div>`;
+
+        const days = weekly.days || [];
+        const max = Math.max(7, ...days.map((d) => d.videosPublished || 0));
+        const labels = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+        document.getElementById("cm-weekly-chart").innerHTML = `<div class="cm-week-bars">${days.map((d, i) => {
+          const h = Math.round(((d.videosPublished || 0) / max) * 100);
+          return `<div class="cm-week-bar"><div class="bar" style="height:${h}px" title="${d.videosPublished || 0} videos"></div><div class="lbl">${labels[i] || d.date?.slice(5) || ""}</div></div>`;
+        }).join("")}<div class="cm-muted" style="margin-top:0.5rem;">Target: 7/day · Week total: ${weekly.totalVideosPublished || 0} / 49</div></div>`;
+      } catch (e) {
+        showToast(e.message || "Failed to load overview");
+      }
+    }
+
+    function jumpPipelineStatus(status) {
+      switchCmSection(status === "pending_review" ? "review" : status === "published" || status === "scheduled" ? "publishing" : "upload");
+    }
+
+    async function loadClipPipeline() {
+      try {
+        const { videos } = await cmFetch("/api/content/queue?limit=200");
+        const list = document.getElementById("clip-pipeline-list");
+        if (!videos?.length) {
+          list.innerHTML = '<p class="cm-muted">No clips yet. Upload a video above to get started. One session becomes 7+ publish-ready clips automatically.</p>';
+          return;
+        }
+        list.innerHTML = videos.map((v) => {
+          const cap = escapeHtml((v.caption || v.title || "").slice(0, 60));
+          const rej = v.status === "rejected" ? " cm-rejected" : "";
+          let actions = "";
+          if (v.status === "pending_review" && !v.complianceFlagged) {
+            actions = `<button class="cm-btn green" onclick="cmDecision('${v.id}','approved')">Approve</button> <button class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>`;
+          } else if (v.status === "pending_review" && v.complianceFlagged) {
+            actions = `<span class="cm-pill amber">Needs Review</span> <button class="cm-btn amber" onclick="cmDecision('${v.id}','approved')">Approve anyway</button> <button class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>`;
+          } else if (v.status === "approved") {
+            actions = `<button class="cm-btn" onclick="cmSchedule('${v.id}')">Schedule</button>`;
+          } else if (v.status === "published") {
+            actions = `<span class="cm-muted">Published ${fmtDateTime(v.publishedAt)} · ${escapeHtml(v.platformTarget || "")}</span>`;
+          }
+          return `<div class="pipeline-row${rej}"><div class="pipeline-thumb"></div><div><div>${cap}</div>
+            <span class="cm-pill ${pillarClass(v.pillar)}">${escapeHtml(v.pillar)}</span>
+            <span class="cm-pill">${escapeHtml(v.platformTarget || "tiktok")}</span>${stageHtml({ status: v.status, compliance_flagged: v.complianceFlagged })}</div>
+            <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">${actions}</div></div>`;
+        }).join("");
+        pipelineRefreshAt = Date.now();
+        const lbl = document.getElementById("pipeline-refresh-label");
+        if (lbl) lbl.textContent = "· updated just now";
+      } catch (e) { showToast(e.message); }
+    }
+
+    async function cmDecision(id, decision, reason) {
+      await cmFetch(`/api/content/compliance/${id}/decision`, { method: "POST", body: JSON.stringify({ decision, reason }) });
+      await loadClipPipeline(); await loadReviewQueue(); await loadCmStats(); showToast(decision === "approved" ? "Approved" : "Rejected");
+    }
+    function cmReject(id) {
+      const reason = prompt("Rejection reason:");
+      if (reason === null) return;
+      void cmDecision(id, "rejected", reason);
+    }
+    async function cmSchedule(id) {
+      const platform = prompt("Platform (tiktok or instagram):", "tiktok");
+      if (!platform) return;
+      const scheduled_for = prompt("Schedule ISO datetime (blank = publish now):", "") || undefined;
+      await cmFetch(`/api/content/publish/${id}`, { method: "POST", body: JSON.stringify({ platform, scheduled_for }) });
+      await loadClipPipeline(); await loadPublishing(); await loadCmStats();
+      showToast("Publish queued");
+    }
+
+    async function loadReviewQueue() {
+      const { videos } = await cmFetch("/api/content/queue?status=pending_review&limit=100");
+      const compliance = await cmFetch("/api/content/compliance-queue");
+      const cmap = new Map((compliance.pending || []).map((p) => [p.videoId, p]));
+      const filtered = (videos || []).filter((v) => {
+        if (reviewFilter === "flagged") return v.complianceFlagged;
+        if (reviewFilter === "clean") return !v.complianceFlagged;
+        return true;
+      });
+      document.getElementById("review-queue-list").innerHTML = filtered.length ? filtered.map((v) => {
+        const cq = cmap.get(v.id);
+        const comp = v.complianceFlagged
+          ? `<div class="cm-alert-warn" style="padding:0.5rem;border-radius:8px;margin:0.5rem 0;">${escapeHtml(v.complianceNotes || cq?.flaggedReason || "")}</div>`
+          : `<div class="cm-alert-ok" style="display:inline-block;padding:0.25rem 0.5rem;">Passed brand check ✓</div>`;
+        return `<div class="cm-review-card"><div class="cm-pill ${pillarClass(v.pillar)}">${v.pillar}</div> · ${escapeHtml(v.platformTarget)}
+          <p style="margin:0.5rem 0;">${escapeHtml(v.caption)}</p><p class="cm-muted"><em>${escapeHtml(v.hook)}</em></p>
+          <div>${(v.hashtags || []).map((h) => `<span class="cm-pill">${escapeHtml(h)}</span>`).join(" ")}</div>${comp}
+          <div style="margin-top:0.75rem;display:flex;gap:0.35rem;flex-wrap:wrap;">
+            <button class="cm-btn green" onclick="cmDecision('${v.id}','approved')">Approve</button>
+            <button class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>
+            <button class="cm-btn" onclick="cmRunCompliance('${v.id}')">Run compliance check</button>
+          </div></div>`;
+      }).join("") : '<p class="cm-muted">No items in review queue.</p>';
+    }
+
+    async function cmRunCompliance(id) {
+      await cmFetch(`/api/content/compliance/${id}`, { method: "POST" });
+      await loadReviewQueue(); await loadClipPipeline(); await loadCmStats();
+    }
+
+    async function loadPublishing() {
+      const { videos } = await cmFetch("/api/content/queue?limit=200");
+      const pub = (videos || []).filter((v) => v.status === "scheduled" || v.status === "published");
+      document.getElementById("publishing-list").innerHTML = pub.length ? pub.map((v) =>
+        `<div class="cm-review-card ${v.status === "published" ? "" : ""}"><strong>${escapeHtml((v.caption || "").slice(0, 80))}</strong>
+        <div class="cm-muted">${v.status} · ${escapeHtml(v.platformTarget)} · ${v.scheduledFor ? "Scheduled " + fmtDateTime(v.scheduledFor) : ""} ${v.publishedAt ? "Published " + fmtDateTime(v.publishedAt) : ""}</div></div>`
+      ).join("") : '<p class="cm-muted">No scheduled or recently published clips.</p>';
+    }
+
+    async function loadCommunityPanel(tab) {
+      document.querySelectorAll(".community-panel").forEach((p) => { p.style.display = "none"; });
+      const map = { dms: "community-dms", comments: "community-comments", phones: "community-phones", escalations: "community-escalations", replies: "community-replies" };
+      const el = document.getElementById(map[tab]);
+      if (el) el.style.display = "block";
+      if (tab === "dms") {
+        const { captures } = await cmFetch("/api/content/lead-captures?captured_from=dm&limit=50");
+        const today = cmStatsCache?.targets?.phoneNumbersCaptured || 0;
+        document.getElementById("community-dms").innerHTML = `<p><strong>${today}</strong> phone numbers captured today.</p><div class="table-wrap"><table><thead><tr><th>Platform</th><th>User</th><th>Message</th><th>Phone</th><th>CRM</th><th>When</th></tr></thead><tbody>${
+          (captures || []).map((c) => `<tr><td>${escapeHtml(c.platform)}</td><td>${escapeHtml(c.platformUserId)}</td><td>${escapeHtml((c.rawMessage || "").slice(0, 80))}</td><td>${escapeHtml(c.phoneNumber)}</td><td>${c.routedToCrm ? "✓" : "✗"}</td><td>${fmtDateTime(c.capturedAt)}</td></tr>`).join("") || '<tr><td colspan="6">No DMs logged yet</td></tr>'
+        }</tbody></table></div>`;
+      } else if (tab === "comments") {
+        const t = cmStatsCache?.targets?.commentsManaged || 0;
+        document.getElementById("community-comments").innerHTML = `<p><strong>${t}</strong> comments managed today.</p>
+          <button type="button" class="cm-btn green" onclick="logCommentManaged()">Log comment managed</button>`;
+      } else if (tab === "phones") {
+        const { captures } = await cmFetch("/api/content/lead-captures?limit=100");
+        document.getElementById("community-phones").innerHTML = `<button class="cm-btn" onclick="exportCapturesCsv()">Export CSV</button>
+          <div class="table-wrap" style="margin-top:0.75rem;"><table><thead><tr><th>Platform</th><th>Phone</th><th>Message</th><th>CRM</th><th>When</th></tr></thead><tbody>${
+          (captures || []).map((c) => `<tr><td>${escapeHtml(c.platform)}</td><td>${escapeHtml(c.phoneNumber)}</td><td>${escapeHtml((c.rawMessage || "").slice(0, 60))}</td><td>${c.routedToCrm ? "✓" : "✗"}</td><td>${fmtDateTime(c.capturedAt)}</td></tr>`).join("")
+        }</tbody></table></div>`;
+        window._capturesExport = captures || [];
+      } else if (tab === "escalations") loadEscalations();
+      else if (tab === "replies") loadPendingReplies();
+    }
+
+    async function logCommentManaged() {
+      await cmFetch("/api/content/comments/log", { method: "POST" });
+      await loadCmStats();
+      showToast("Comment logged");
+      loadCommunityPanel("comments");
+    }
+
+    function exportCapturesCsv() {
+      const rows = window._capturesExport || [];
+      const csv = ["platform,phone,message,routed,captured_at", ...rows.map((c) =>
+        `"${c.platform}","${c.phoneNumber}","${(c.rawMessage || "").replace(/"/g, '""')}",${c.routedToCrm},"${c.capturedAt}"`
+      )].join("\n");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+      a.download = "lead-captures.csv";
+      a.click();
+    }
+
+    let cmBrainSessionId = null;
+
+    async function initBrainSession() {
+      try {
+        const res = await cmFetch("/api/content-brain/sessions/new", { method: "POST", headers: apiHeaders() });
+        cmBrainSessionId = res.sessionId;
+        const sidEl = document.getElementById("cm-brain-session-id");
+        if (sidEl && cmBrainSessionId) sidEl.textContent = `Session: ${cmBrainSessionId}`;
+      } catch (_) { /* session optional */ }
+    }
+
+    function gradeBadgeClass(g) {
+      const letter = (g || "—").charAt(0).toUpperCase();
+      return `cm-grade-badge cm-grade-${letter}`;
+    }
+
+    async function loadBrainSection() {
+      void initBrainSession();
+      let momentum = null;
+      try {
+        momentum = await cmFetch("/api/content-brain/momentum").catch(() => null);
+      } catch (_) {}
+      try {
+        const strategy = await cmFetch("/api/content-brain/strategy").catch(() => null);
+        const el = document.getElementById("cm-brain-strategy");
+        const streakType = momentum?.current_streak_type || "neutral";
+        const streakCount = streakType === "hot" ? (momentum?.hot_streak_count || 0) : streakType === "cold" ? (momentum?.cold_streak_count || 0) : 0;
+        const streakLabel = streakType === "hot" ? `🔥 Hot streak ${streakCount} days` : streakType === "cold" ? `❄️ Cold streak ${streakCount} days` : "Neutral";
+        const seasonLabel = (momentum?.season_label || "season").replace(/_/g, " ");
+        const seasonMult = momentum?.season_multiplier ?? 1;
+        const grade = momentum?.self_grade_last_week;
+        const statusRow = `<div class="cm-brain-status-row">
+          <span class="cm-streak-badge ${escapeHtml(streakType)}">${escapeHtml(streakLabel)}</span>
+          <span class="cm-season-tag">📅 ${escapeHtml(seasonLabel)} · ${seasonMult}x</span>
+          ${grade ? `<span title="Yesterday's strategy grade"><span class="${gradeBadgeClass(grade)}">${escapeHtml(grade)}</span> <span class="cm-muted" style="font-size:0.65rem;">Yesterday's strategy grade</span></span>` : ""}
+        </div>`;
+        if (!strategy || strategy.error) {
+          el.innerHTML = `${statusRow}<p class="cm-muted">${escapeHtml(strategy?.error || "No strategy yet — morning cycle runs at 6am CST, or click Refresh strategy.")}</p>
+            <button type="button" class="cm-btn" id="cm-brain-refresh-strategy" style="margin-top:0.75rem;">Refresh strategy</button>`;
+        } else {
+          const conf = strategy.confidenceScore ?? 0;
+          const pillars = (strategy.pillarPriority || []).map((p, i) =>
+            `<span class="cm-pillar-tag ${escapeHtml(p)}">${i + 1}. ${escapeHtml(p)}</span>`).join(" ");
+          const hooks = (strategy.recommendedHooks || []).map((h, i) =>
+            `<li style="cursor:pointer;margin:0.35rem 0;" onclick="navigator.clipboard.writeText(${JSON.stringify(h)});showToast('Copied')">${i + 1}. ${escapeHtml(h)}</li>`).join("");
+          const tags = (strategy.hashtagSet || []).map((t) =>
+            `<span class="cm-pillar-tag education">#${escapeHtml(t.replace(/^#/, ""))}</span>`).join(" ");
+          const avoid = (strategy.avoidAngles || []).map((a) =>
+            `<span class="cm-avoid-pill">${escapeHtml(a)}</span>`).join(" ") || '<span class="cm-muted">None flagged</span>';
+          const dist = strategy.platformDistribution || {};
+          const distMax = Math.max(...Object.values(dist).map(Number), 1);
+          const bars = Object.entries(dist).map(([plat, n]) =>
+            `<div style="margin:0.25rem 0;"><span style="display:inline-block;width:80px;font-size:0.7rem;">${escapeHtml(plat)}</span>
+            <span style="display:inline-block;height:8px;background:var(--cyan);width:${(Number(n) / distMax) * 120}px;border-radius:4px;"></span> ${n}</div>`).join("");
+          el.innerHTML = `
+            <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start;">
+              <div class="cm-confidence-ring"><span>${conf}%</span><span style="font-size:0.55rem;font-weight:500;">confident</span></div>
+              <div style="flex:1;min-width:200px;">
+                ${statusRow}
+                <label style="font-size:0.65rem;color:var(--muted);">Pillar priority</label><div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin:0.35rem 0;">${pillars}</div>
+                <label style="font-size:0.65rem;color:var(--muted);">Recommended hooks</label><ol style="margin:0.35rem 0;padding-left:1.2rem;">${hooks}</ol>
+                <label style="font-size:0.65rem;color:var(--muted);">Hashtag set</label><div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin:0.35rem 0;">${tags}</div>
+                <label style="font-size:0.65rem;color:var(--muted);">Avoid today</label><div style="margin:0.35rem 0;">${avoid}</div>
+              </div>
+            </div>
+            <label style="font-size:0.65rem;color:var(--muted);">Platform distribution</label>${bars}
+            <blockquote style="margin:1rem 0 0;padding:0.75rem 1rem;border-left:3px solid var(--cyan);background:rgba(255,255,255,0.03);font-size:0.8125rem;color:var(--muted);">${escapeHtml(strategy.reasoning || "")}</blockquote>
+            <p class="cm-muted" style="font-size:0.65rem;margin-top:0.5rem;">Generated ${escapeHtml(strategy.generatedAt || strategy.lastUpdated || "—")}</p>
+            <button type="button" class="cm-btn" id="cm-brain-refresh-strategy" style="margin-top:0.75rem;">Refresh strategy</button>`;
+        }
+        document.getElementById("cm-brain-refresh-strategy")?.addEventListener("click", async () => {
+          showToast("Running morning cycle…");
+          await cmFetch("/api/content-brain/run-cycle", { method: "POST", headers: { ...apiHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ cycle: "morning" }) });
+          void loadBrainSection();
+        });
+      } catch (e) {
+        document.getElementById("cm-brain-strategy").innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+      }
+      const suggestions = [
+        "How's my content performing this week?",
+        "What should I focus on filming next?",
+        "What's holding back my numbers?",
+        "Am I going to hit 7 videos today?",
+      ];
+      document.getElementById("cm-brain-suggestions").innerHTML = suggestions.map((q) =>
+        `<div class="cm-suggested-q" data-brain-q="${escapeHtml(q)}">${escapeHtml(q)}</div>`).join("");
+      document.querySelectorAll("[data-brain-q]").forEach((el) => {
+        el.addEventListener("click", () => {
+          document.getElementById("cm-brain-input").value = el.getAttribute("data-brain-q");
+        });
+      });
+    }
+
+    const brainThread = [];
+    async function sendBrainMessage() {
+      const input = document.getElementById("cm-brain-input");
+      const q = input?.value?.trim();
+      if (!q) return;
+      input.value = "";
+      const box = document.getElementById("cm-brain-messages");
+      box.innerHTML += `<div class="cm-brain-msg user">${escapeHtml(q)}</div>`;
+      box.innerHTML += `<div class="cm-brain-msg brain" id="cm-brain-thinking"><span class="cm-brain-badge">CM</span> Thinking…</div>`;
+      box.scrollTop = box.scrollHeight;
+      try {
+        const res = await cmFetch("/api/content-brain/ask", {
+          method: "POST",
+          headers: { ...apiHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q, sessionId: cmBrainSessionId }),
+        });
+        if (res.sessionId) {
+          cmBrainSessionId = res.sessionId;
+          const sidEl = document.getElementById("cm-brain-session-id");
+          if (sidEl) sidEl.textContent = `Session: ${cmBrainSessionId}`;
+        }
+        const thinking = document.getElementById("cm-brain-thinking");
+        if (thinking) {
+          thinking.id = "";
+          thinking.innerHTML = `<span class="cm-brain-badge">CM</span>${escapeHtml(res.response || res.answer || "No response")}`;
+        }
+      } catch (e) {
+        const thinking = document.getElementById("cm-brain-thinking");
+        if (thinking) thinking.textContent = e.message || "Request failed";
+      }
+      box.scrollTop = box.scrollHeight;
+    }
+    document.getElementById("cm-brain-toggle-eval")?.addEventListener("click", async () => {
+      const card = document.getElementById("cm-brain-eval-card");
+      if (!card) return;
+      if (card.style.display !== "none") { card.style.display = "none"; return; }
+      const data = await cmFetch("/api/content-brain/self-evaluation").catch(() => ({ evaluations: [] }));
+      const ev = (data.evaluations || [])[0];
+      if (!ev) { card.innerHTML = "<p class='cm-muted'>No self-evaluation yet — runs Sunday night.</p>"; }
+      else {
+        card.innerHTML = `<p><strong>What worked:</strong> ${escapeHtml(ev.whatWorked || "")}</p>
+          <p><strong>What failed:</strong> ${escapeHtml(ev.whatFailed || "")}</p>
+          <p><strong>One change:</strong> ${escapeHtml(ev.oneChange || "")}</p>
+          <p><strong>Benchmark:</strong> ${escapeHtml(ev.benchmarkAssessment || "—")}</p>`;
+      }
+      card.style.display = "block";
+    });
+    document.getElementById("cm-brain-toggle-experiments")?.addEventListener("click", async () => {
+      const card = document.getElementById("cm-brain-experiments-card");
+      if (!card) return;
+      if (card.style.display !== "none") { card.style.display = "none"; return; }
+      const data = await cmFetch("/api/content-brain/experiments").catch(() => ({ experiments: [] }));
+      const exps = data.experiments || [];
+      const current = exps.find((e) => e.status === "running" || e.status === "proposed");
+      const completed = exps.find((e) => e.status === "complete");
+      card.innerHTML = `<p><strong>Current:</strong> ${current ? `${escapeHtml(current.status)} — ${escapeHtml(current.hypothesis || "")}` : "None active"}</p>
+        <p><strong>Last completed:</strong> ${completed ? `${escapeHtml(completed.result || "")} — ${escapeHtml(completed.conclusion || "")}` : "None yet"}</p>`;
+      card.style.display = "block";
+    });
+    document.getElementById("cm-brain-send")?.addEventListener("click", () => void sendBrainMessage());
+    document.getElementById("cm-brain-input")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") void sendBrainMessage();
+    });
+
+    async function loadCmAnalytics(tab) {
+      document.querySelectorAll(".analytics-panel").forEach((p) => { p.style.display = "none"; });
+      const id = tab === "performance" ? "analytics-performance" : tab === "benchmark" ? "analytics-benchmark" : "analytics-trends";
+      document.getElementById(id).style.display = "block";
+      if (tab === "performance") {
+        loadVideoScoresTab();
+        const data = await cmFetch("/api/content/analytics");
+        const tbody = document.getElementById("cm-analytics-tbody");
+        tbody.innerHTML = (data.rows || []).map((r) => `<tr>
+          <td>${fmtDate(r.pulledAt || r.publishedAt)}</td><td>${escapeHtml((r.caption || "").slice(0, 40))}</td><td>${escapeHtml(r.platformTarget)}</td>
+          <td class="num">${fmt(r.views)}</td><td class="num">${fmt(r.likes)}</td><td class="num">${fmt(r.comments)}</td><td class="num">${fmt(r.shares)}</td>
+          <td class="num">${r.score}</td><td><span class="badge ${r.tier}">${r.tier}</span></td><td>${r.benchmarkMet ? "✓" : "✗"}</td></tr>`).join("") || '<tr><td colspan="10">No performance data yet</td></tr>';
+      } else if (tab === "benchmark") {
+        const data = await cmFetch("/api/content/analytics");
+        const rows = data.rows || [];
+        const published = rows.filter((r) => r.views > 0);
+        const avg = published.length ? Math.round(published.reduce((s, r) => s + r.views, 0) / published.length) : 0;
+        const pct = avg ? Math.round(((avg - 6006) / 6006) * 100) : 0;
+        const below = (data.weekly?.consistentlyBelowBenchmark || []);
+        document.getElementById("analytics-benchmark").innerHTML = `
+          <div class="cm-two-col"><div class="cm-stat-card"><div><label>Avg views (published)</label><div class="cm-stat-val">${fmt(avg)}</div></div></div>
+          <div class="cm-stat-card"><div><label>vs 6,006 benchmark</label><div class="cm-stat-val" style="color:${pct >= 0 ? "#4ade80" : "#f87171"}">${pct >= 0 ? "+" : ""}${pct}%</div></div></div></div>
+          <h3 class="section-title">Flagged for cutting</h3>${below.length ? below.map((v) =>
+            `<div class="cm-review-card"><strong>${escapeHtml(v.title)}</strong> — ${fmt(v.latestViews)} views · ${v.consecutiveColdPulls} cold pulls
+            <button class="cm-btn amber" style="margin-top:0.35rem;">Flag for review</button></div>`).join("") : '<p class="cm-muted">No consistently underperforming videos.</p>'}`;
+      } else {
+        loadMorningScan(); loadEveningPull();
+        const data = await cmFetch("/api/content/analytics");
+        document.getElementById("cm-pillar-trends").innerHTML = `<h3>Performance by pillar</h3><div class="table-wrap"><table><thead><tr><th>Pillar</th><th>Videos</th><th>Avg views</th><th>Avg score</th></tr></thead><tbody>${
+          (data.pillarSummary || []).map((p) => `<tr><td>${escapeHtml(p.pillar)}</td><td>${p.videoCount}</td><td>${fmt(p.avgViews)}</td><td>${p.avgScore}</td></tr>`).join("")
+        }</tbody></table></div>`;
+      }
+    }
+
+    function switchCmSection(section) {
+      cmSection = section;
+      document.querySelectorAll(".crm-side-btn[data-cm-section]").forEach((b) => {
+        b.classList.toggle("active", b.getAttribute("data-cm-section") === section);
+      });
+      document.querySelectorAll(".cm-section").forEach((p) => {
+        p.classList.toggle("active", p.id === "cm-section-" + section);
+      });
+      if (section === "overview") void loadCmOverview();
+      if (section === "upload") void loadClipPipeline();
+      if (section === "review") void loadReviewQueue();
+      if (section === "publishing") void loadPublishing();
+      if (section === "community") void loadCommunityPanel("dms");
+      if (section === "analytics") void loadCmAnalytics("performance");
+      if (section === "brain") void loadBrainSection();
+      if (section === "suggestions") loadContentSuggestionsTab();
+      if (section === "activity") loadActivityLogTab();
+    }
+
+    document.querySelectorAll(".crm-side-btn[data-cm-section]").forEach((btn) => {
+      btn.addEventListener("click", () => switchCmSection(btn.getAttribute("data-cm-section")));
+    });
+    document.querySelectorAll("[data-review-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        reviewFilter = btn.getAttribute("data-review-filter");
+        document.querySelectorAll("[data-review-filter]").forEach((b) => b.classList.toggle("active", b === btn));
+        loadReviewQueue();
+      });
+    });
+    document.querySelectorAll("[data-community-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("[data-community-tab]").forEach((b) => b.classList.toggle("active", b === btn));
+        loadCommunityPanel(btn.getAttribute("data-community-tab"));
+      });
+    });
+    document.querySelectorAll("[data-analytics-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("[data-analytics-tab]").forEach((b) => b.classList.toggle("active", b === btn));
+        loadCmAnalytics(btn.getAttribute("data-analytics-tab"));
+      });
+    });
+
+    /* Upload zone */
+    const uploadZone = document.getElementById("upload-zone");
+    const fileInput = document.getElementById("video-file-input");
+    let selectedFile = null;
+    uploadZone?.addEventListener("click", () => fileInput?.click());
+    uploadZone?.addEventListener("dragover", (e) => { e.preventDefault(); uploadZone.classList.add("dragover"); });
+    uploadZone?.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
+    uploadZone?.addEventListener("drop", (e) => {
+      e.preventDefault(); uploadZone.classList.remove("dragover");
+      if (e.dataTransfer?.files?.[0]) setUploadFile(e.dataTransfer.files[0]);
+    });
+    fileInput?.addEventListener("change", () => { if (fileInput.files?.[0]) setUploadFile(fileInput.files[0]); });
+    function setUploadFile(file) {
+      selectedFile = file;
+      document.getElementById("upload-meta").classList.add("show");
+      document.getElementById("upload-file-info").textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
+      document.getElementById("upload-submit-btn").disabled = false;
+    }
+    document.getElementById("upload-submit-btn")?.addEventListener("click", async () => {
+      const pillar = document.getElementById("upload-pillar").value;
+      if (!selectedFile || !pillar) { showToast("Select file and pillar"); return; }
+      const status = document.getElementById("upload-status");
+      status.textContent = "Uploading…";
+      const fd = new FormData();
+      fd.append("video", selectedFile);
+      fd.append("pillar", pillar);
+      fd.append("notes", document.getElementById("upload-notes").value || "");
+      try {
+        const headers = {};
+        if (token) headers.Authorization = "Bearer " + token;
+        const res = await fetch(apiUrl("/api/content/upload"), { method: "POST", headers, body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Upload failed");
+        status.textContent = "Session created — OpusClip is processing your footage. Check the pipeline below.";
+        selectedFile = null;
+        document.getElementById("upload-meta").classList.remove("show");
+        await loadClipPipeline(); await loadCmStats(); await loadCmOverview();
+        showToast(`Created ${data.clips?.length || 0} clips`);
+      } catch (e) {
+        status.textContent = e.message || "Upload failed";
+        showToast(e.message);
+      }
+    });
+
+    setInterval(() => {
+      if (cmSection === "upload" && pipelineRefreshAt) {
+        const sec = Math.round((Date.now() - pipelineRefreshAt) / 1000);
+        const lbl = document.getElementById("pipeline-refresh-label");
+        if (lbl && sec >= 30) { void loadClipPipeline(); }
+        else if (lbl) lbl.textContent = sec ? `· last updated ${sec}s ago` : "";
+      }
+    }, 5000);
+    setInterval(() => { if (cmSection === "overview") void loadCmOverview(); }, 60000);
+
     function switchTab(tabId) {
-      document.querySelectorAll(".tab-btn").forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset.tab === tabId);
-      });
-      document.querySelectorAll(".tab-panel").forEach((panel) => {
-        panel.classList.toggle("active", panel.id === "tab-" + tabId);
-      });
+      const map = { overview: "overview", "video-scores": "analytics", "morning-scan": "analytics", "evening-pull": "analytics", escalations: "community", "content-suggestions": "suggestions", "activity-log": "activity", "comment-replies": "community" };
+      switchCmSection(map[tabId] || "overview");
       if (tabId === "video-scores") loadVideoScoresTab();
       if (tabId === "morning-scan") loadMorningScan();
       if (tabId === "evening-pull") loadEveningPull();
@@ -1155,62 +1893,21 @@
       if (tabId === "comment-replies") loadPendingReplies();
     }
 
-    document.querySelectorAll(".tab-btn").forEach((btn) => {
-      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
-    });
-
     function render(data) {
-      document.getElementById("lastUpdated").textContent = fmtUpdated(data.lastUpdated);
-
-      const profile = data.profile;
-      const profileRow = document.getElementById("profileRow");
-      if (profile) {
-        profileRow.hidden = false;
-        document.getElementById("profileName").textContent = profile.nickname || profile.username;
-        document.getElementById("profileHandle").textContent = "@" + profile.username;
-        document.getElementById("profileFollowers").textContent = fmt(profile.followers) + " followers";
-        const av = document.getElementById("profileAvatar");
-        if (profile.avatar) {
-          av.src = profile.avatar;
-          av.hidden = false;
-        } else {
-          av.hidden = true;
-        }
-      } else {
-        profileRow.hidden = true;
-      }
-
-      const s = data.summary || {};
-      document.getElementById("sVideos").textContent = fmt(s.totalVideos);
-      document.getElementById("sAvgViews").textContent = fmt(s.avgViews);
-      document.getElementById("sTotalViews").textContent = fmt(s.totalViews);
-      document.getElementById("sLikes").textContent = fmt(s.totalLikes);
-      document.getElementById("sComments").textContent = fmt(s.totalComments);
-      document.getElementById("sShares").textContent = fmt(s.totalShares);
-
+      const lu = document.getElementById("lastUpdated");
+      if (lu) lu.textContent = fmtUpdated(data.lastUpdated);
       const body = document.getElementById("videoBody");
+      if (!body) return;
       const videos = data.videos || [];
       if (!videos.length) {
-        body.innerHTML = '<tr><td colspan="9" class="empty">No videos in the latest pull. Try Refresh now.</td></tr>';
+        body.innerHTML = '<tr><td colspan="9" class="empty">No videos in the latest pull. Try Refresh Apify.</td></tr>';
         return;
       }
-
       body.innerHTML = videos.map((v) => {
         const tier = (v.tier || "cold").toLowerCase();
         const tierClass = tier === "average" ? "warm" : tier;
-        const viral = v.viral ? '<span class="viral-tag">3x+</span>' : "";
         const cap = escapeHtml(v.caption || "(no caption)");
-        return `<tr>
-          <td>${fmtDate(v.postedAt)}</td>
-          <td><a class="caption-link" href="${escapeHtml(v.url || "#")}" target="_blank" rel="noopener">${cap}</a></td>
-          <td class="num">${fmt(v.views)}${viral}</td>
-          <td class="num">${fmt(v.likes)}</td>
-          <td class="num">${fmt(v.saves)}</td>
-          <td class="num">${fmt(v.comments)}</td>
-          <td class="num">${fmt(v.shares)}</td>
-          <td class="num">${v.score ?? 0}</td>
-          <td><span class="badge ${tierClass}">${tierClass}</span></td>
-        </tr>`;
+        return `<tr><td>${fmtDate(v.postedAt)}</td><td>${cap}</td><td class="num">${fmt(v.views)}</td><td class="num">${fmt(v.likes)}</td><td class="num">${fmt(v.saves)}</td><td class="num">${fmt(v.comments)}</td><td class="num">${fmt(v.shares)}</td><td class="num">${v.score ?? 0}</td><td><span class="badge ${tierClass}">${tierClass}</span></td></tr>`;
       }).join("");
     }
 
@@ -1564,6 +2261,8 @@
         if (!todayRes.ok || !recentRes.ok) throw new Error("Failed to load activity log");
 
         const { pulls: todayPulls } = await todayRes.json();
+        const el = document.getElementById("cm-count-activity");
+        if (el) el.textContent = String((todayPulls || []).length);
         const { pulls: recentPulls } = await recentRes.json();
         const todayIds = new Set((todayPulls || []).map((p) => p.id));
         const olderPulls = (recentPulls || []).filter((p) => !todayIds.has(p.id));
@@ -1736,24 +2435,24 @@
         const res = await fetch(apiUrl("/api/social/refresh-schedule"), { headers: apiHeaders() });
         if (!res.ok) return;
         const { time } = await res.json();
-        if (time) {
-          document.getElementById("custom-pull-time").value = time;
-          document.getElementById("custom-time-status").textContent = `✓ Daily pull at ${time} Central`;
-        }
+        if (!time) return;
+        const pullTimeEl = document.getElementById("custom-pull-time");
+        const statusEl = document.getElementById("custom-time-status");
+        if (pullTimeEl) pullTimeEl.value = time;
+        if (statusEl) statusEl.textContent = `✓ Daily pull at ${time} Central`;
       } catch { /* ignore */ }
     }
 
     function handleRefreshIntervalChange() {
       const select = document.getElementById("intervalSelect");
       const customPicker = document.getElementById("custom-time-picker");
-
-      if (select.value === "custom") {
+      if (select.value === "custom" && customPicker) {
         customPicker.classList.add("visible");
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = null;
         setLive(false);
       } else {
-        customPicker.classList.remove("visible");
+        if (customPicker) customPicker.classList.remove("visible");
         resetPoll();
       }
     }
@@ -1795,15 +2494,15 @@
       try {
         const data = await refreshData();
         render(data);
-        const activeTab = document.querySelector(".tab-btn.active")?.dataset?.tab;
-        if (activeTab === "video-scores") loadVideoScoresTab();
+        const activeTab = cmSection;
+        if (activeTab === "analytics") loadVideoScoresTab();
       } catch (e) {
         document.getElementById("videoBody").innerHTML =
           `<tr><td colspan="9" class="error">${escapeHtml(e.message || "Refresh failed")}</td></tr>`;
       } finally {
         refreshing = false;
         btn.disabled = false;
-        btn.textContent = "Refresh now";
+        btn.textContent = "Refresh Apify";
       }
     }
 
@@ -1831,10 +2530,15 @@
       if (id && action) void reviewReply(id, action);
     });
 
+    void loadCmStats().then(() => {
+      switchCmSection("overview");
+      loadCmOverview();
+    });
     void doLoad();
     void loadRefreshSchedule();
     void loadAgentStatus();
     resetPoll();
+    setInterval(() => void loadCmStats(), 30000);
   </script>
 </body>
 </html>

@@ -66,6 +66,54 @@ import {
   deleteLeads,
 } from "./core/db.js";
 import {
+  getAllNotifications,
+  getUnreadNotifications,
+  markNotificationRead,
+} from "./core/crmNotificationStore.js";
+import { handleWebsiteVisit } from "./agents/reEngagement/index.js";
+import { handleListingStatusUpdate } from "./agents/listingStatusAutomation/index.js";
+import {
+  ingestContent,
+  repurposeSession,
+  runComplianceCheck,
+  applyComplianceDecision,
+  publishVideo,
+  triageDm,
+  trackCommentManaged,
+  runPerformanceSync,
+  getDailyReport,
+  getWeeklyReport,
+} from "./agents/contentManager/index.js";
+import { contentManagerBrain, getOrCreateSession } from "./agents/contentManager/brain/index.js";
+import { getCurrentWeekNumber } from "./agents/contentManager/brain/stats.js";
+import { computeBenchmarkTrajectory } from "./agents/contentManager/brain/tools.js";
+import {
+  getContentDb,
+  listContentVideos,
+  listPendingComplianceQueue,
+  listLeadCaptures,
+  getContentManagerStats,
+  getAnalyticsDataset,
+  getPillarPerformanceSummary,
+  updateContentVideo,
+  getLatestBriefing,
+  getDailyStrategy,
+  ensureDailyTargets,
+  getPerformanceModel,
+  listLearningLogs,
+  listBriefings,
+  listCutList,
+  listHookLibrary,
+  todayDateCst,
+  listActiveChatSessions,
+  listChatMessages,
+  listSelfEvaluations,
+  listStrategyAccuracy,
+  listExperiments,
+  listCombinationPatterns,
+  getSeasonalWeek,
+} from "./core/contentDb.js";
+import {
   getAutoPlans,
   getAutoPlanById,
   createAutoPlan,
@@ -2971,7 +3019,27 @@ async function sendLeadText(
   return { ok: true };
 }
 
-/** Website visit — re-engagement automation when lead inactive 30+ days. */
+/** Website visit — re-engagement when lead is ghosted (30+ days no inbound SMS). */
+app.post("/api/leads/:id/website-visit", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const leadId = String(req.params.id || "").trim();
+  if (!leadId) {
+    res.status(400).json({ error: "Missing lead id" });
+    return;
+  }
+  try {
+    const result = await handleWebsiteVisit(leadId);
+    res.status(200).json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message, triggered: false });
+  }
+});
+
+/** Legacy website visit intake (body: leadId or phone) — delegates to re-engagement agent. */
 app.post("/api/activity/website-visit", express.json(), async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -2979,67 +3047,561 @@ app.post("/api/activity/website-visit", express.json(), async (req, res) => {
   }
   const leadIdRaw = typeof req.body?.leadId === "string" ? req.body.leadId.trim() : "";
   const phoneRaw = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
-  const page = typeof req.body?.page === "string" ? req.body.page.trim() : "";
   let lead = leadIdRaw ? await getLeadById(leadIdRaw) : null;
   if (!lead && phoneRaw) lead = await findLeadByPhoneDigits(phoneRaw);
   if (!lead) {
     res.status(404).json({ error: "Lead not found", triggered: false });
     return;
   }
-  const stamp = new Date().toISOString();
   try {
-    const inactive = await isLeadInactive30Days(lead.id);
-    if (!inactive) {
-      await appendLeadActivity(
-        lead.id,
-        [
-          {
-            type: "web_visit",
-            description: page ? `Visited page: ${page}` : "Website visit",
-            timestamp: stamp,
-          },
-        ],
-        { lastActivity: stamp },
-      );
-      res.status(200).json({ triggered: false, leadId: lead.id });
-      return;
-    }
-    const reDesc =
-      "Returned to your website after 30+ days — reach out to see if they are open to buying or selling";
-    await appendLeadActivity(
-      lead.id,
-      [{ type: "re_engagement", description: reDesc, timestamp: stamp }],
-      { lastActivity: stamp },
-    );
-    const first = leadFirstName(lead);
-    const text = `Hey ${first}, just saw you were checking out some properties — are you still thinking about buying or selling?`;
-    const sendResult = await sendLeadText(lead.id, text);
-    await appendLeadActivity(
-      lead.id,
-      [
-        {
-          type: "text_sent",
-          description: sendResult.ok
-            ? "Auto re-engagement text sent"
-            : `Re-engagement text queued (send failed: ${sendResult.error || "unknown"})`,
-          timestamp: new Date().toISOString(),
-        },
-      ],
-      { lastActivity: stamp },
-    );
-    const updated = await getLeadById(lead.id);
-    if (updated) {
-      const alerts = (typeof updated.alerts === "number" ? updated.alerts : 0) + 1;
-      await updateLeadCrmFields({ leadId: lead.id, alerts });
-    }
-    res.status(200).json({ triggered: true, leadId: lead.id, textSent: sendResult.ok });
+    const result = await handleWebsiteVisit(lead.id);
+    res.status(200).json({ ...result, leadId: lead.id });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message, triggered: false });
   }
 });
 
-/** Seller listing status change — off-market outreach or active notification. */
+/** Listing status intake — transition detection; manual today, MLS feed later. */
+app.post("/api/leads/:id/listing-status", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const leadId = String(req.params.id || "").trim();
+  const address = typeof req.body?.address === "string" ? req.body.address.trim() : "";
+  const status = typeof req.body?.status === "string" ? req.body.status.trim() : "";
+  const sourceRaw = req.body?.source;
+  const source = sourceRaw === "mls_feed" ? "mls_feed" : "manual";
+  if (!address || !status) {
+    res.status(400).json({ error: "address and status required" });
+    return;
+  }
+  const allowed = new Set(["active", "pending", "off_market", "expired", "sold"]);
+  if (!allowed.has(status)) {
+    res.status(400).json({ error: "Invalid status" });
+    return;
+  }
+  try {
+    const result = await handleListingStatusUpdate(
+      leadId,
+      address,
+      status as "active" | "pending" | "off_market" | "expired" | "sold",
+      source,
+    );
+    res.status(200).json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message, triggered: false });
+  }
+});
+
+/** CRM automation notifications (re-engagement, listing status). */
+app.get("/api/crm/notifications", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const unreadOnly = req.query.unreadOnly === "true";
+  res.json({ notifications: unreadOnly ? getUnreadNotifications() : getAllNotifications() });
+});
+
+app.post("/api/crm/notifications/:id/read", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  markNotificationRead(String(req.params.id || ""));
+  res.json({ success: true });
+});
+
+/** Content Manager — ingest, repurpose, compliance, publish, analytics. */
+app.post("/api/content/ingest", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const type = req.body?.type;
+  if (!["video", "listing_url", "market_stat", "calendar"].includes(type)) {
+    res.status(400).json({ error: "type must be video, listing_url, market_stat, or calendar" });
+    return;
+  }
+  try {
+    const session = await ingestContent({
+      type,
+      path: typeof req.body?.path === "string" ? req.body.path : undefined,
+      url: typeof req.body?.url === "string" ? req.body.url : undefined,
+      meta: req.body?.meta && typeof req.body.meta === "object" ? req.body.meta : undefined,
+    });
+    res.json(session);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/content/repurpose/:sessionId", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  try {
+    const clips = await repurposeSession(String(req.params.sessionId || ""));
+    res.json({ clips });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/content/compliance/:videoId", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  try {
+    const result = await runComplianceCheck(String(req.params.videoId || ""));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/content/publish/:videoId", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const platform = typeof req.body?.platform === "string" ? req.body.platform.trim() : "";
+  if (!platform) {
+    res.status(400).json({ error: "platform required" });
+    return;
+  }
+  const scheduledFor =
+    typeof req.body?.scheduled_for === "string" ? req.body.scheduled_for.trim() : null;
+  try {
+    if (scheduledFor) {
+      updateContentVideo(String(req.params.videoId || ""), {
+        status: "scheduled",
+        scheduledFor,
+      });
+    }
+    const log = await publishVideo(String(req.params.videoId || ""), platform, { scheduledFor });
+    res.json(log);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/content/triage-dm", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const platform = typeof req.body?.platform === "string" ? req.body.platform.trim() : "";
+  const userId = typeof req.body?.userId === "string" ? req.body.userId.trim() : "";
+  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  if (!platform || !userId || !message) {
+    res.status(400).json({ error: "platform, userId, and message required" });
+    return;
+  }
+  try {
+    const result = await triageDm({
+      platform,
+      userId,
+      message,
+      username: typeof req.body?.username === "string" ? req.body.username : undefined,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/api/content/queue", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const status = typeof req.query.status === "string" ? req.query.status.trim() : "";
+  const limit = Number(req.query.limit) || 200;
+  const validStatuses = new Set([
+    "pending_review",
+    "approved",
+    "scheduled",
+    "published",
+    "rejected",
+  ]);
+  const videos = validStatuses.has(status)
+    ? listContentVideos({ status: status as import("./core/contentDb.js").ContentVideoStatus, limit })
+    : listContentVideos({ limit });
+  res.json({ videos });
+});
+
+app.get("/api/content/stats", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(getContentManagerStats());
+});
+
+app.get("/api/content/lead-captures", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const capturedFrom =
+    req.query.captured_from === "dm" || req.query.captured_from === "comment"
+      ? req.query.captured_from
+      : undefined;
+  const limit = Number(req.query.limit) || 100;
+  res.json({ captures: listLeadCaptures({ capturedFrom, limit }) });
+});
+
+app.post("/api/content/comments/log", (_req, res) => {
+  if (!dashboardTokenOk(_req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  trackCommentManaged();
+  res.json({ ok: true });
+});
+
+app.post("/api/content/compliance/:videoId/decision", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const decision = req.body?.decision;
+  if (decision !== "approved" && decision !== "rejected") {
+    res.status(400).json({ error: "decision must be approved or rejected" });
+    return;
+  }
+  try {
+    const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
+    const result = applyComplianceDecision(String(req.params.videoId || ""), decision, reason);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/api/content/analytics", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({
+    rows: getAnalyticsDataset(),
+    pillarSummary: getPillarPerformanceSummary(),
+    weekly: getWeeklyReport(),
+  });
+});
+
+function resolveContentVideoUploadDir(): string {
+  const base = fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const dir = path.join(base, "uploads", "videos");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+const contentVideoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
+    filename: (_req, file, cb) => {
+      const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+      cb(null, `${Date.now()}-${safe}`);
+    },
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(mp4|mov|avi)$/i.test(file.originalname);
+    cb(null, ok);
+  },
+});
+
+app.post("/api/content/upload", contentVideoUpload.single("video"), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  if (!req.file) {
+    res.status(400).json({ error: "No video file uploaded (field name: video)" });
+    return;
+  }
+  const pillar = typeof req.body?.pillar === "string" ? req.body.pillar.trim() : "";
+  if (!["education", "listings", "brand"].includes(pillar)) {
+    res.status(400).json({ error: "pillar required: education, listings, or brand" });
+    return;
+  }
+  const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
+  const savedPath = req.file.path;
+  try {
+    const session = await ingestContent({
+      type: "video",
+      path: savedPath,
+      meta: { pillar, notes, originalName: req.file.originalname },
+    });
+    const clips = await repurposeSession(session.id);
+    res.json({ session, clips, savedPath });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/api/content/compliance-queue", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({ pending: listPendingComplianceQueue() });
+});
+
+app.get("/api/content/report/daily", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const date = typeof req.query.date === "string" ? req.query.date : undefined;
+  res.json(getDailyReport(date));
+});
+
+app.get("/api/content/report/weekly", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(getWeeklyReport());
+});
+
+app.post("/api/content/sync", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  try {
+    const summary = await runPerformanceSync();
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/api/content-brain/status", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const today = todayDateCst();
+  res.json({
+    latestBriefing: getLatestBriefing(),
+    todayStrategy: getDailyStrategy(today),
+    dailyTargets: ensureDailyTargets(today),
+    performanceModel: getPerformanceModel(),
+  });
+});
+
+app.get("/api/content-brain/strategy", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const strategy = getDailyStrategy(todayDateCst());
+  if (!strategy) {
+    res.status(404).json({ error: "Morning cycle has not run yet today." });
+    return;
+  }
+  res.json(strategy);
+});
+
+app.get("/api/content-brain/learning", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const days = Number(req.query.days) || 7;
+  res.json({ entries: listLearningLogs({ limit: days * 4, days }) });
+});
+
+app.get("/api/content-brain/performance-model", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const model = getPerformanceModel();
+  if (!model) {
+    res.json({ model: null, message: "Performance model not yet built — evening cycle will populate." });
+    return;
+  }
+  res.json(model);
+});
+
+app.get("/api/content-brain/briefings", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const type = typeof req.query.type === "string" ? req.query.type : undefined;
+  const limit = Number(req.query.limit) || 10;
+  res.json({ briefings: listBriefings({ briefingType: type, limit }) });
+});
+
+app.get("/api/content-brain/benchmark-trajectory", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(computeBenchmarkTrajectory());
+});
+
+app.post("/api/content-brain/ask", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const question = typeof req.body?.question === "string" ? req.body.question.trim() : "";
+  if (!question) {
+    res.status(400).json({ error: "question required" });
+    return;
+  }
+  const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
+  try {
+    const { response, sessionId: sid } = await contentManagerBrain.chatWithSession(question, sessionId);
+    res.json({ response, sessionId: sid, answer: response, timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/api/content-brain/sessions", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({ sessions: listActiveChatSessions(10) });
+});
+
+app.get("/api/content-brain/sessions/:sessionId/messages", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const sessionId = String(req.params.sessionId || "");
+  res.json({ messages: listChatMessages(sessionId) });
+});
+
+app.post("/api/content-brain/sessions/new", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({ sessionId: getOrCreateSession() });
+});
+
+app.get("/api/content-brain/self-evaluation", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({ evaluations: listSelfEvaluations(4) });
+});
+
+app.get("/api/content-brain/accuracy", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const rows = listStrategyAccuracy(14).map((r) => ({
+    strategy_date: r.strategyDate,
+    confidence_score_given: r.confidenceScoreGiven,
+    outcome_score: r.outcomeScore,
+    overall_grade: r.overallGrade,
+    pillar_prediction_correct: r.pillarPredictionCorrect,
+    hooks_hit_rate: r.hooksHitRate,
+  }));
+  res.json({ accuracy: rows });
+});
+
+app.get("/api/content-brain/experiments", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({ experiments: listExperiments(50) });
+});
+
+app.get("/api/content-brain/combination-patterns", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const pillar = typeof req.query.pillar === "string" ? req.query.pillar : undefined;
+  const minSamples = Number(req.query.min_samples) || 2;
+  const limit = Number(req.query.limit) || 20;
+  res.json({
+    patterns: listCombinationPatterns({ pillar, minSamples, limit, order: "desc" }),
+  });
+});
+
+app.get("/api/content-brain/momentum", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const model = getPerformanceModel();
+  const seasonal = getSeasonalWeek(getCurrentWeekNumber());
+  res.json({
+    current_streak_type: model.currentStreakType,
+    hot_streak_count: model.hotStreakCount,
+    cold_streak_count: model.coldStreakCount,
+    streak_started_at: model.streakStartedAt,
+    decay_weighted_avg_views: model.decayWeightedAvgViews,
+    season_multiplier: model.seasonMultiplier,
+    season_label: seasonal?.seasonLabel ?? null,
+    self_grade_last_week: model.selfGradeLastWeek,
+  });
+});
+
+app.post("/api/content-brain/run-cycle", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const cycle = req.body?.cycle;
+  const valid = new Set(["morning", "midday", "evening", "night"]);
+  if (!valid.has(cycle)) {
+    res.status(400).json({ error: "cycle must be morning|midday|evening|night" });
+    return;
+  }
+  try {
+    if (cycle === "morning") await contentManagerBrain.runMorningCycle();
+    else if (cycle === "midday") await contentManagerBrain.runMiddayCycle();
+    else if (cycle === "evening") await contentManagerBrain.runEveningCycle();
+    else await contentManagerBrain.runNightCycle();
+    res.json({ ok: true, log: `[cm-brain] ${cycle} cycle completed manually` });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/api/content-brain/cut-list", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({ items: listCutList(true) });
+});
+
+app.get("/api/content-brain/hook-library", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const minUses = Number(req.query.min_uses) || 3;
+  const limit = Number(req.query.limit) || 20;
+  res.json({ hooks: listHookLibrary({ minUses, limit, order: "desc" }) });
+});
+
+/** Legacy listing status change — maps active/off_market to new intake (uses propertyInquired as address). */
 app.post("/api/activity/listing-status-change", express.json(), async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -3060,50 +3622,14 @@ app.post("/api/activity/listing-status-change", express.json(), async (req, res)
     res.status(404).json({ error: "Lead not found" });
     return;
   }
-  const stamp = new Date().toISOString();
-  const displayName = lead.name || lead.username || lead.phone || "Lead";
+  const address =
+    (typeof req.body?.address === "string" && req.body.address.trim()) ||
+    lead.propertyInquired?.trim() ||
+    "Unknown address";
   try {
-    if (statusRaw === "off_market") {
-      const first = leadFirstName(lead);
-      const text =
-        `Hey ${first}, I noticed your home is no longer active on the market. If you're open to interviewing a qualified realtor who works specifically in your area, I'd love to connect — no pressure at all.`;
-      const emailNote = `[Pending email ${stamp.slice(0, 10)}] Off-market outreach — follow up by email`;
-      const mergedNotes = lead.crmNotes ? `${lead.crmNotes}\n${emailNote}` : emailNote;
-      await updateLeadCrmFields({
-        leadId: lead.id,
-        listingStatus: "off_market",
-        crmNotes: mergedNotes,
-      });
-      const sendResult = await sendLeadText(lead.id, text);
-      const activityEntries: LeadActivity[] = [
-        { type: "listing_off_market", description: "Home went off market — auto outreach sent", timestamp: stamp },
-        { type: "email_sent", description: "Pending email: off-market realtor outreach", timestamp: stamp },
-      ];
-      if (sendResult.ok) {
-        activityEntries.push({ type: "text_sent", description: "Auto off-market text sent", timestamp: stamp });
-      }
-      await appendLeadActivity(lead.id, activityEntries, { lastActivity: stamp });
-      res.status(200).json({ success: true, action: "off_market_outreach", textSent: sendResult.ok });
-      return;
-    }
-    await updateLeadCrmFields({ leadId: lead.id, listingStatus: "active" });
-    await appendLeadActivity(
-      lead.id,
-      [
-        {
-          type: "listing_active",
-          description: `${displayName}'s home just went active on the market — Marco notified`,
-          timestamp: stamp,
-        },
-      ],
-      { lastActivity: stamp },
-    );
-    const refreshed = await getLeadById(lead.id);
-    if (refreshed) {
-      const alerts = (typeof refreshed.alerts === "number" ? refreshed.alerts : 0) + 1;
-      await updateLeadCrmFields({ leadId: lead.id, alerts });
-    }
-    res.status(200).json({ success: true, action: "active_notification" });
+    const mapped = statusRaw === "off_market" ? "off_market" : "active";
+    const result = await handleListingStatusUpdate(leadId, address, mapped, "manual");
+    res.status(200).json({ success: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
@@ -5576,6 +6102,7 @@ setInterval(() => {
     .catch((err) => console.error("[autoPlans] scheduled run failed:", err));
 }, AUTO_PLAN_INTERVAL_MS);
 
+getContentDb();
 scheduleContentJobs();
 
 async function ensureSocialDataExists(): Promise<void> {

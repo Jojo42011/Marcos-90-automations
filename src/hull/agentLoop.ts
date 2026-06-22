@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildFounderSystemPrompt } from "./founderPrompt.js";
+import { HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT } from "../harvey/index.js";
 import { getAethonModel, getHaikuModel, getMaxTokens, needsSonnet } from "./modelRouting.js";
 import { searchFacts, getMemoryPacket, getRetrievalConfidence } from "./memory/retrieval.js";
 import { getHullToolDefinitions, executeHullTool } from "./tools.js";
@@ -103,6 +104,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   }
 
   let system = buildFounderSystemPrompt(memoryPacket);
+  system += `\n\n${HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT}`;
   if (opts.voiceMode) {
     system +=
       "\n\nVOICE MODE: Spoken replies only. Max 2-3 short sentences. Lead with the number or answer. No markdown, bullets, or asterisks — plain spoken English. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";

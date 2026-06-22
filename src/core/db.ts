@@ -1128,6 +1128,8 @@ export async function updateLeadCrmFields(input: {
   sourceRoutingCompletedAt?: string | null;
   autoReplyEmailSentAt?: string | null;
   movedToColdNurtureAt?: string | null;
+  lastWebsiteVisitAt?: string | null;
+  lastReEngagementTriggeredAt?: string | null;
 }): Promise<Lead | null> {
   const existing = leadsById.get(input.leadId);
   if (!existing) return null;
@@ -1258,6 +1260,18 @@ export async function updateLeadCrmFields(input: {
           ? null
           : String(input.movedToColdNurtureAt)
         : lead.movedToColdNurtureAt ?? null,
+    lastWebsiteVisitAt:
+      input.lastWebsiteVisitAt !== undefined
+        ? input.lastWebsiteVisitAt === null || input.lastWebsiteVisitAt === ""
+          ? null
+          : String(input.lastWebsiteVisitAt)
+        : lead.lastWebsiteVisitAt ?? null,
+    lastReEngagementTriggeredAt:
+      input.lastReEngagementTriggeredAt !== undefined
+        ? input.lastReEngagementTriggeredAt === null || input.lastReEngagementTriggeredAt === ""
+          ? null
+          : String(input.lastReEngagementTriggeredAt)
+        : lead.lastReEngagementTriggeredAt ?? null,
   };
   await updateLead(next);
   return next;

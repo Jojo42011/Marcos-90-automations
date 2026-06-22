@@ -53,6 +53,12 @@ const leadScoreStore_js_1 = require("../core/leadScoreStore.js");
 const smsStore_js_2 = require("../core/smsStore.js");
 const index_js_8 = require("../agents/leadScoring/index.js");
 const sourceRouting_js_1 = require("../agents/leadNurture/sourceRouting.js");
+const index_js_9 = require("../agents/reEngagement/index.js");
+const analytics_js_1 = require("../agents/contentManager/analytics.js");
+const contentDb_js_1 = require("../core/contentDb.js");
+const index_js_10 = require("../agents/contentManager/brain/index.js");
+const index_js_11 = require("../agents/listingStatusAutomation/index.js");
+const crmNotificationStore_js_1 = require("../core/crmNotificationStore.js");
 const reportingStore_js_1 = require("../core/reportingStore.js");
 const financeStore_js_1 = require("../core/financeStore.js");
 const paceAlert_js_1 = require("../agents/finance/paceAlert.js");
@@ -330,6 +336,44 @@ exports.HARVEY_TOOL_DEFINITIONS = [
         input_schema: { type: "object", properties: {}, required: [] },
     },
     {
+        name: "get_crm_automation_notifications",
+        description: "Unread CRM automation alerts — ghosted lead website revisits (re-engagement) and seller listing status changes (off-market outreach, active on market).",
+        input_schema: {
+            type: "object",
+            properties: {
+                unread_only: { type: "boolean", description: "Default true — only unread notifications" },
+                limit: { type: "number", description: "Max rows, default 20" },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "trigger_website_revisit",
+        description: "Fire the website-visit / re-engagement intake for a lead (same as CRM manual test). Only when Marco asks to simulate a revisit or record a website visit for a ghosted lead.",
+        input_schema: {
+            type: "object",
+            properties: { lead_id: { type: "string", description: "CRM lead id" } },
+            required: ["lead_id"],
+        },
+    },
+    {
+        name: "update_seller_listing_status",
+        description: "Record a seller lead's home listing status change (active, off_market, expired, pending, sold). Fires off-market outreach or Marco active alert on transitions.",
+        input_schema: {
+            type: "object",
+            properties: {
+                lead_id: { type: "string", description: "CRM lead id" },
+                address: { type: "string", description: "Property address" },
+                status: {
+                    type: "string",
+                    description: "active | pending | off_market | expired | sold",
+                },
+                source: { type: "string", description: "manual or mls_feed, default manual" },
+            },
+            required: ["lead_id", "address", "status"],
+        },
+    },
+    {
         name: "get_daily_digest",
         description: "Get the latest daily digest — all 6 sections (social, email, texts, transactions, pipeline, business health) plus anomalies flagged this morning.",
         input_schema: { type: "object", properties: {}, required: [] },
@@ -432,6 +476,48 @@ exports.HARVEY_TOOL_DEFINITIONS = [
                 email_id: { type: "string", description: "Local email id from email marketing log" },
             },
             required: ["email_id"],
+        },
+    },
+    {
+        name: "get_content_summary",
+        description: "Content Manager daily and weekly performance — videos published vs 7/day target, phone numbers captured vs 22/day, top/bottom videos, below-benchmark flags. Use when Marco asks how content is doing, if he's on track, or phone numbers today.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_content_pipeline",
+        description: "Content Manager video queue — pending review, approved, scheduled, published, or rejected clips with captions, hooks, pillars, compliance flags.",
+        input_schema: {
+            type: "object",
+            properties: {
+                status: {
+                    type: "string",
+                    enum: ["pending_review", "approved", "scheduled", "published", "rejected"],
+                    description: "Filter by video status",
+                },
+                limit: { type: "number", description: "Max videos to return, default 20" },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "get_content_compliance_queue",
+        description: "Content awaiting compliance review before publish — caption, hook, platform, flagged reasons. Check proactively during daily game plan discussions.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_content_manager_status",
+        description: "Latest Content Manager briefing, today's strategy, and daily targets. Use for quick content status checks.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "ask_content_manager",
+        description: "Ask the Content Manager Brain a content-strategy question. Use for analysis, recommendations, what to film, hooks, hashtags, performance.",
+        input_schema: {
+            type: "object",
+            properties: {
+                question: { type: "string", description: "Content question for the specialist" },
+            },
+            required: ["question"],
         },
     },
 ];
@@ -1255,6 +1341,115 @@ async function executeHarveyTool(name, input) {
             if (!email)
                 return { error: "Email not found", emailId };
             return email;
+        }
+        case "get_crm_automation_notifications": {
+            const unreadOnly = normalized.unread_only === false || normalized.unreadOnly === false ? false : true;
+            const limit = Number(normalized.limit) || 20;
+            const list = unreadOnly ? (0, crmNotificationStore_js_1.getUnreadNotifications)(limit) : (0, crmNotificationStore_js_1.getAllNotifications)(limit);
+            return {
+                count: list.length,
+                unreadOnly,
+                notifications: list.map((n) => ({
+                    id: n.id,
+                    leadId: n.leadId,
+                    type: n.notificationType,
+                    message: n.message,
+                    read: n.read,
+                    createdAt: n.createdAt,
+                })),
+            };
+        }
+        case "trigger_website_revisit": {
+            const leadId = String(normalized.leadId || normalized.lead_id || "").trim();
+            if (!leadId)
+                return { error: "lead_id required" };
+            const lead = await (0, db_js_1.getLeadById)(leadId);
+            if (!lead)
+                return { error: "Lead not found", leadId };
+            return (0, index_js_9.handleWebsiteVisit)(leadId);
+        }
+        case "update_seller_listing_status": {
+            const leadId = String(normalized.leadId || normalized.lead_id || "").trim();
+            const address = String(normalized.address || "").trim();
+            const status = String(normalized.status || "").trim();
+            const allowed = new Set(["active", "pending", "off_market", "expired", "sold"]);
+            if (!leadId)
+                return { error: "lead_id required" };
+            if (!address)
+                return { error: "address required" };
+            if (!allowed.has(status))
+                return { error: "Invalid status" };
+            const lead = await (0, db_js_1.getLeadById)(leadId);
+            if (!lead)
+                return { error: "Lead not found", leadId };
+            const source = normalized.source === "mls_feed" ? "mls_feed" : "manual";
+            return (0, index_js_11.handleListingStatusUpdate)(leadId, address, status, source);
+        }
+        case "get_content_summary": {
+            const daily = (0, analytics_js_1.getDailyReport)();
+            const weekly = (0, analytics_js_1.getWeeklyReport)();
+            return {
+                today: daily,
+                weekly,
+                summary: {
+                    videosPublished: daily.targets.videosPublished,
+                    videosTarget: daily.targets.videosTarget,
+                    phoneNumbersCaptured: daily.targets.phoneNumbersCaptured,
+                    phoneNumbersTarget: daily.targets.phoneNumbersTarget,
+                    commentsManaged: daily.targets.commentsManaged,
+                    dmsTriaged: daily.targets.dmsTriaged,
+                    topVideos: daily.topVideos,
+                    bottomVideos: daily.bottomVideos,
+                    weeklyVideosPublished: weekly.totalVideosPublished,
+                    weeklyVideoTarget: weekly.weeklyVideoTarget,
+                    weeklyPhonesCaptured: weekly.totalPhoneNumbersCaptured,
+                    weeklyPhoneTarget: weekly.weeklyPhoneTarget,
+                    belowBenchmarkFlags: weekly.consistentlyBelowBenchmark,
+                },
+            };
+        }
+        case "get_content_pipeline": {
+            const status = normalized.status;
+            const limit = Number(normalized.limit) || 20;
+            const videos = (0, contentDb_js_1.listContentVideos)(status ? { status, limit } : { limit });
+            return {
+                count: videos.length,
+                videos: videos.map((v) => ({
+                    id: v.id,
+                    title: v.title,
+                    caption: v.caption,
+                    hook: v.hook,
+                    pillar: v.pillar,
+                    platform_target: v.platformTarget,
+                    status: v.status,
+                    compliance_flagged: v.complianceFlagged,
+                    scheduled_for: v.scheduledFor,
+                    published_at: v.publishedAt,
+                })),
+            };
+        }
+        case "get_content_compliance_queue": {
+            const pending = (0, contentDb_js_1.listPendingComplianceQueue)();
+            return {
+                count: pending.length,
+                pending,
+            };
+        }
+        case "get_content_manager_status": {
+            const today = (0, contentDb_js_1.todayDateCst)();
+            return {
+                latestBriefing: (0, contentDb_js_1.getLatestBriefing)(),
+                todayStrategy: (0, contentDb_js_1.getDailyStrategy)(today),
+                dailyTargets: (0, contentDb_js_1.ensureDailyTargets)(today),
+                performanceModel: (0, contentDb_js_1.getPerformanceModel)(),
+            };
+        }
+        case "ask_content_manager": {
+            const question = String(normalized.question ?? "").trim();
+            if (!question)
+                return { error: "question required" };
+            const answer = await index_js_10.contentManagerBrain.chat(question);
+            return { answer };
         }
         default:
             return { error: `Unknown tool: ${name}` };

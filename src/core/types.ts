@@ -217,6 +217,10 @@ export interface Lead {
   autoReplyEmailSentAt?: string | null;
   /** Set when no-reply follow-up moves lead to cold nurture (day 14). */
   movedToColdNurtureAt?: string | null;
+  /** Last known website visit (future tracking pixel intake). */
+  lastWebsiteVisitAt?: string | null;
+  /** Cooldown guard — last time re-engagement automation fired. */
+  lastReEngagementTriggeredAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

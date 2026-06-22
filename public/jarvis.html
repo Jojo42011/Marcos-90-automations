@@ -611,6 +611,15 @@
     @keyframes msGoalPulse {
       0%, 100% { text-shadow: none; } 50% { text-shadow: 0 0 8px rgba(0, 212, 255, 0.6); }
     }
+    @keyframes wake-word-pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 rgba(16,185,129,0.4); }
+      50% { opacity: 0.5; box-shadow: 0 0 8px rgba(16,185,129,0.6); }
+    }
+    @keyframes wake-word-flash {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.8); }
+      100% { transform: scale(1); }
+    }
     .ms-strip .ms-expand { color: #00d4ff; flex-shrink: 0; cursor: pointer; }
     @media (max-width: 1100px) {
       .ms-strip-narrow-hide { display: none !important; }
@@ -1392,6 +1401,12 @@
             <p class="j-core-hint" id="jCoreHint">TAP CORE TO SPEAK</p>
             <div id="harvey-voice-status" style="font-size: 11px; color: #888; margin-top: 4px; text-align: center;">Voice: Not started</div>
             <div id="harvey-voice-error" style="color: #ff4444; font-size: 12px; margin-top: 8px; display: none; text-align: center;"></div>
+            <label style="display:flex; align-items:center; justify-content:center; gap:8px; font-size:11px; color:#888; cursor:pointer; font-family:monospace; margin-top:8px;">
+              <input type="checkbox" id="wake-word-toggle" onchange="toggleWakeWordListening()">
+              <span>Listen for "Harvey"</span>
+              <span id="wake-word-indicator" style="width:8px; height:8px; border-radius:50%; background:#555; transition:background 0.2s ease;"></span>
+            </label>
+            <div id="wake-word-message" style="display:none; font-size:10px; color:#f59e0b; margin-top:4px; text-align:center;"></div>
           </div>
         </div>
 
@@ -3283,6 +3298,186 @@
       if (!busy && !window.isGeminiLiveActive?.()) void loadOps().catch(() => {});
       void refreshMetrics().catch(() => {});
     }, 60000);
+  </script>
+
+  <script>
+    // ─── WAKE WORD DETECTION ────────────────────────────────────────────────
+    const WAKE_WORD = 'harvey';
+    const WAKE_WORD_DEBOUNCE_MS = 3000;
+
+    let wakeWordRecognizer = null;
+    let wakeWordEnabled = false;
+    let lastWakeWordTriggerAt = 0;
+    let conversationActive = false;
+
+    function isWakeWordSupported() {
+      return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    }
+
+    function matchesWakeWord(transcript) {
+      const normalized = transcript.toLowerCase().trim();
+      return /\bharvey\b/.test(normalized) || /\bharv(e|ey|y)\b/.test(normalized);
+    }
+
+    function setWakeWordIndicator(state) {
+      const dot = document.getElementById('wake-word-indicator');
+      if (!dot) return;
+
+      switch (state) {
+        case 'listening':
+          dot.style.background = '#10b981';
+          dot.style.animation = 'wake-word-pulse 2s ease-in-out infinite';
+          break;
+        case 'triggered':
+          dot.style.background = '#00d4ff';
+          dot.style.animation = 'wake-word-flash 0.4s ease-out';
+          break;
+        case 'idle':
+        default:
+          dot.style.background = '#555';
+          dot.style.animation = 'none';
+      }
+    }
+
+    function updateWakeWordToggleUI(enabled) {
+      const toggle = document.getElementById('wake-word-toggle');
+      if (toggle) toggle.checked = enabled;
+      if (!enabled) setWakeWordIndicator('idle');
+    }
+
+    function showWakeWordMessage(text) {
+      const el = document.getElementById('wake-word-message');
+      if (!el) return;
+      el.textContent = text;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+
+    function startWakeWordListening() {
+      if (!isWakeWordSupported()) {
+        console.warn('[WakeWord] Speech recognition not supported in this browser');
+        return;
+      }
+      if (conversationActive) {
+        console.log('[WakeWord] Conversation active — not starting wake word listener');
+        return;
+      }
+
+      const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+      wakeWordRecognizer = new SpeechRecognitionImpl();
+      wakeWordRecognizer.continuous = true;
+      wakeWordRecognizer.interimResults = true;
+      wakeWordRecognizer.lang = 'en-US';
+
+      wakeWordRecognizer.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (matchesWakeWord(transcript)) {
+            handleWakeWordDetected();
+            return;
+          }
+        }
+      };
+
+      wakeWordRecognizer.onerror = (event) => {
+        console.warn('[WakeWord] Recognition error:', event.error);
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          wakeWordEnabled = false;
+          updateWakeWordToggleUI(false);
+          showWakeWordMessage('Microphone permission denied — wake word listening disabled.');
+        }
+      };
+
+      wakeWordRecognizer.onend = () => {
+        if (wakeWordEnabled && !conversationActive) {
+          try { wakeWordRecognizer.start(); } catch (e) { /* already started, ignore */ }
+        } else {
+          setWakeWordIndicator('idle');
+        }
+      };
+
+      try {
+        wakeWordRecognizer.start();
+        setWakeWordIndicator('listening');
+        console.log('[WakeWord] Listening for "Harvey"...');
+      } catch (e) {
+        console.warn('[WakeWord] Start failed:', e);
+      }
+    }
+
+    function stopWakeWordListening() {
+      if (wakeWordRecognizer) {
+        try { wakeWordRecognizer.onend = null; wakeWordRecognizer.stop(); } catch (e) { /* ignore */ }
+        wakeWordRecognizer = null;
+      }
+      setWakeWordIndicator('idle');
+    }
+
+    function handleWakeWordDetected() {
+      const now = Date.now();
+      if (now - lastWakeWordTriggerAt < WAKE_WORD_DEBOUNCE_MS) return;
+      lastWakeWordTriggerAt = now;
+
+      console.log('[WakeWord] "Harvey" detected — starting conversation');
+      setWakeWordIndicator('triggered');
+
+      stopWakeWordListening();
+
+      setTimeout(() => {
+        if (typeof window.startHarveyVoiceSession === 'function') {
+          window.startHarveyVoiceSession().catch((e) => {
+            console.warn('[WakeWord] Voice session start failed:', e);
+            conversationActive = false;
+            if (wakeWordEnabled) startWakeWordListening();
+          });
+        } else {
+          console.warn('[WakeWord] startHarveyVoiceSession not available');
+        }
+      }, 300);
+    }
+
+    function toggleWakeWordListening() {
+      wakeWordEnabled = !wakeWordEnabled;
+      localStorage.setItem('wakeWordEnabled', wakeWordEnabled ? 'true' : 'false');
+      updateWakeWordToggleUI(wakeWordEnabled);
+
+      if (wakeWordEnabled) {
+        window.unlockHarveyVoiceAudio?.();
+        startWakeWordListening();
+      } else {
+        stopWakeWordListening();
+      }
+    }
+
+    function initWakeWordFeature() {
+      if (!isWakeWordSupported()) {
+        const toggle = document.getElementById('wake-word-toggle');
+        if (toggle) {
+          toggle.disabled = true;
+          toggle.title = 'Wake word detection requires Chrome or Edge';
+        }
+        return;
+      }
+
+      const saved = localStorage.getItem('wakeWordEnabled') === 'true';
+      wakeWordEnabled = saved;
+      updateWakeWordToggleUI(saved);
+      if (saved) startWakeWordListening();
+    }
+
+    window.onHarveyVoiceSessionStart = function () {
+      conversationActive = true;
+      stopWakeWordListening();
+    };
+
+    window.onHarveyVoiceSessionEnd = function () {
+      conversationActive = false;
+      setTimeout(() => {
+        if (wakeWordEnabled) startWakeWordListening();
+      }, 1000);
+    };
+
+    document.addEventListener('DOMContentLoaded', initWakeWordFeature);
   </script>
 
   <script src="/aethon-voice.js"></script>

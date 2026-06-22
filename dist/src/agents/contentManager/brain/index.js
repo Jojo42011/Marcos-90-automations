@@ -1,0 +1,172 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.contentManagerBrain = exports.ContentManagerBrain = void 0;
+exports.getOrCreateSession = getOrCreateSession;
+exports.scheduleContentBrainCycles = scheduleContentBrainCycles;
+/**
+ * Content Manager Brain — autonomous content intelligence agent (Google Gemini).
+ */
+const prompts_js_1 = require("./prompts.js");
+const tools_js_1 = require("./tools.js");
+const cycles_js_1 = require("./cycles.js");
+const contentDb_js_1 = require("../../../core/contentDb.js");
+const gemini_js_1 = require("./gemini.js");
+class ContentManagerBrain {
+    apiKey;
+    constructor() {
+        this.apiKey = (0, gemini_js_1.getGeminiApiKey)();
+    }
+    buildContextSnapshot() {
+        const model = (0, contentDb_js_1.getPerformanceModel)();
+        const strategy = (0, contentDb_js_1.getDailyStrategy)((0, contentDb_js_1.todayDateCst)());
+        const targets = (0, contentDb_js_1.ensureDailyTargets)((0, contentDb_js_1.todayDateCst)());
+        const logs = (0, contentDb_js_1.listLearningLogs)({ limit: 2 });
+        return {
+            avg_views: model.decayWeightedAvgViews || model.overallAvgViews,
+            videos_today: targets.videosPublished,
+            phone_numbers_today: targets.phoneNumbersCaptured,
+            top_pillar: model.topPerformingPillar,
+            trending_direction: model.trendingDirection,
+            current_streak_type: model.currentStreakType,
+            hot_streak_count: model.hotStreakCount,
+            cold_streak_count: model.coldStreakCount,
+            season_multiplier: model.seasonMultiplier,
+            today_strategy: strategy,
+            recent_learning: logs,
+        };
+    }
+    async runToolRound(userMessage, extraContext = "", history) {
+        if (!this.apiKey) {
+            return "Content Manager Brain is offline — set GEMINI_API_KEY in .env.";
+        }
+        const system = prompts_js_1.CONTENT_MANAGER_BRAIN_PROMPT + extraContext;
+        return (0, gemini_js_1.geminiChatWithTools)({
+            system,
+            userMessage,
+            history,
+            tools: tools_js_1.CM_BRAIN_TOOL_DEFINITIONS,
+            model: (0, gemini_js_1.getCmBrainModel)(),
+            maxRounds: 8,
+            onToolCall: tools_js_1.executeContentBrainTool,
+        });
+    }
+    /** Cycle-internal chat (no session persistence). */
+    async chat(message, context) {
+        const model = (0, contentDb_js_1.getPerformanceModel)();
+        const strategy = (0, contentDb_js_1.getDailyStrategy)((0, contentDb_js_1.todayDateCst)());
+        const logs = (0, contentDb_js_1.listLearningLogs)({ limit: 3 });
+        let extra = `\n\nCURRENT PERFORMANCE MODEL:\n${JSON.stringify(model, null, 2)}`;
+        extra += `\n\nTODAY'S STRATEGY:\n${JSON.stringify(strategy, null, 2)}`;
+        extra += `\n\nRECENT LEARNING (last 3):\n${JSON.stringify(logs, null, 2)}`;
+        if (context)
+            extra += `\n\nADDITIONAL CONTEXT:\n${JSON.stringify(context, null, 2)}`;
+        return this.runToolRound(message, extra);
+    }
+    /** Persistent session chat for the dashboard Ask the Brain UI. */
+    async chatWithSession(message, sessionId) {
+        if (!this.apiKey) {
+            return {
+                response: "Content Manager Brain is offline — set GEMINI_API_KEY in .env.",
+                sessionId: sessionId ?? "",
+            };
+        }
+        const now = new Date().toISOString();
+        let session = sessionId ? (0, contentDb_js_1.getChatSession)(sessionId) : null;
+        if (session && session.expiresAt <= now)
+            session = null;
+        if (!session)
+            session = (0, contentDb_js_1.createChatSession)();
+        const priorMessages = (0, contentDb_js_1.listChatMessages)(session.id);
+        const history = priorMessages.slice(-20).map((m) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+        }));
+        const contextSnapshot = this.buildContextSnapshot();
+        const system = prompts_js_1.CONTENT_MANAGER_BRAIN_PROMPT +
+            "\n\nCurrent context: " +
+            JSON.stringify(contextSnapshot);
+        (0, contentDb_js_1.insertChatMessage)({
+            sessionId: session.id,
+            role: "user",
+            content: message,
+            performanceContext: contextSnapshot,
+        });
+        const response = await (0, gemini_js_1.geminiChatWithTools)({
+            system,
+            userMessage: message,
+            history,
+            tools: tools_js_1.CM_BRAIN_TOOL_DEFINITIONS,
+            model: (0, gemini_js_1.getCmBrainModel)(),
+            maxRounds: 8,
+            onToolCall: tools_js_1.executeContentBrainTool,
+        });
+        (0, contentDb_js_1.insertChatMessage)({
+            sessionId: session.id,
+            role: "assistant",
+            content: response,
+            performanceContext: null,
+        });
+        const updated = (0, contentDb_js_1.getChatSession)(session.id);
+        if (updated && updated.messageCount >= 6 && !updated.sessionSummary) {
+            const recent = (0, contentDb_js_1.listChatMessages)(session.id).slice(-6);
+            const summaryText = recent.map((m) => `${m.role}: ${m.content}`).join("\n");
+            const summary = await (0, gemini_js_1.geminiSimpleChat)(`Summarize this conversation in one sentence:\n${summaryText}`);
+            if (summary)
+                (0, contentDb_js_1.updateChatSessionSummary)(session.id, summary);
+        }
+        return { response, sessionId: session.id };
+    }
+    async runMorningCycle() {
+        await (0, cycles_js_1.runMorningCycle)(this);
+    }
+    async runMiddayCycle() {
+        await (0, cycles_js_1.runMiddayCycle)(this);
+    }
+    async runEveningCycle() {
+        await (0, cycles_js_1.runEveningCycle)(this);
+    }
+    async runNightCycle() {
+        await (0, cycles_js_1.runNightCycle)(this);
+    }
+}
+exports.ContentManagerBrain = ContentManagerBrain;
+exports.contentManagerBrain = new ContentManagerBrain();
+function getOrCreateSession() {
+    return (0, contentDb_js_1.createChatSession)().id;
+}
+const lastBrainRuns = {};
+/** Schedule 6am, 12pm, 6pm, 10pm CST intelligence cycles. */
+function scheduleContentBrainCycles() {
+    const provider = (0, gemini_js_1.getGeminiApiKey)()
+        ? `Gemini (${(0, gemini_js_1.getCmBrainModel)()})`
+        : "offline — set GEMINI_API_KEY";
+    console.log(`[cm-brain] intelligence cycles scheduled: 6am, 12pm, 6pm, 10pm America/Chicago — ${provider}`);
+    const cycles = [
+        { hour: 6, key: "morning", run: () => exports.contentManagerBrain.runMorningCycle() },
+        { hour: 12, key: "midday", run: () => exports.contentManagerBrain.runMiddayCycle() },
+        { hour: 18, key: "evening", run: () => exports.contentManagerBrain.runEveningCycle() },
+        { hour: 22, key: "night", run: () => exports.contentManagerBrain.runNightCycle() },
+    ];
+    setInterval(() => {
+        const now = new Date();
+        const dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(now);
+        const parts = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/Chicago",
+            hour: "numeric",
+            minute: "numeric",
+            hour12: false,
+        }).formatToParts(now);
+        const hour = Number(parts.find((p) => p.type === "hour")?.value ?? -1);
+        const minute = Number(parts.find((p) => p.type === "minute")?.value ?? -1);
+        for (const cycle of cycles) {
+            const runKey = `${cycle.key}-${dateStr}`;
+            if (hour === cycle.hour && minute >= 0 && minute < 2 && lastBrainRuns[runKey] !== dateStr) {
+                lastBrainRuns[runKey] = dateStr;
+                cycle.run().catch((err) => {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    console.error(`[cm-brain] ${cycle.key} cycle failed: ${msg}`);
+                });
+            }
+        }
+    }, 60_000);
+}
