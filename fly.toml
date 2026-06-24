@@ -16,6 +16,7 @@ primary_region = "dfw"
   OPENCLAW_GATEWAY_URL = "https://harvey-claw.fly.dev"
   HARVEY_OWNER_NUMBER = "+19804430453"
   WHATSAPP_ALLOWED_TARGETS = "+17373461943"
+  OPENSHORTS_URL = "http://localhost:8000"
 
 [http_service]
   internal_port = 3000
@@ -25,5 +26,5 @@ primary_region = "dfw"
   min_machines_running = 1
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = "performance-cpu-2x"
+  memory = "4gb"

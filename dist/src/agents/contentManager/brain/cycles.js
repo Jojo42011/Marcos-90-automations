@@ -14,6 +14,9 @@ const hookClassifier_js_1 = require("./hookClassifier.js");
 const patterns_js_1 = require("./patterns.js");
 const experiments_js_1 = require("./experiments.js");
 const momentum_js_1 = require("./momentum.js");
+const calendar_js_1 = require("../calendar.js");
+const competitiveAnalysis_js_1 = require("../competitiveAnalysis.js");
+const contentDb_js_2 = require("../../../core/contentDb.js");
 const prompts_js_1 = require("./prompts.js");
 const stats_js_1 = require("./stats.js");
 function parseJsonFromText(text) {
@@ -193,11 +196,32 @@ Generate pillar_priority, recommended_hooks (3), hashtag_set, platform_distribut
     const experimentNote = (0, stats_js_1.isMonday)() ? " Experiment proposed for this week — see cm_experiments." : "";
     const briefingRaw = await brain.chat(`Write a morning briefing for Harvey. Strategy: ${JSON.stringify(strategy)}. Pipeline pending review: ${pendingReview}. Momentum: ${momentum.streakType} (${momentum.streakCount}).${experimentNote} Return JSON: { "body": string (3-4 sentences), "action_items": string[] }`);
     const briefingParsed = parseJsonFromText(briefingRaw);
+    let recordingPlanNote = "";
+    if ((0, stats_js_1.isMonday)()) {
+        try {
+            const weekStart = (0, stats_js_1.getWeekStart)();
+            const tasks = await (0, calendar_js_1.generateWeeklyRecordingPlan)(weekStart, brain);
+            const first = tasks[0];
+            recordingPlanNote = `Recording plan for the week: ${tasks.length} sessions planned, ${tasks.length * 2} clips targeted. First session due: ${first?.dueDate ?? "n/a"} — ${first?.topic ?? "see calendar"}.`;
+        }
+        catch (err) {
+            console.error("[cm-brain] Weekly recording plan failed:", err);
+        }
+    }
+    const overdueCount = (0, contentDb_js_2.countOverdueRecordingTasks)(date);
+    let overdueNote = "";
+    if (overdueCount > 0) {
+        const overdueTasks = (0, contentDb_js_2.countPendingRecordingTasksDueBefore)(date);
+        overdueNote = `OVERDUE RECORDING TASKS: ${overdueCount} tasks are past due. Pipeline will be short ${overdueCount} videos if not filmed today.`;
+    }
+    const briefingBody = (briefingParsed?.body ??
+        `Yesterday: ${yesterdayTargets.videosPublished}/${yesterdayTargets.videosTarget} videos, ${yesterdayTargets.phoneNumbersCaptured}/${yesterdayTargets.phoneNumbersTarget} phone numbers. Today prioritize ${strategy.pillarPriority[0] ?? "brand"}. ${pendingReview} clips awaiting review.`) +
+        (recordingPlanNote ? ` ${recordingPlanNote}` : "") +
+        (overdueNote ? ` ${overdueNote}` : "");
     (0, contentDb_js_1.insertBriefing)({
         briefingType: "morning",
         title: `Content Manager — Morning Briefing ${date}`,
-        body: briefingParsed?.body ??
-            `Yesterday: ${yesterdayTargets.videosPublished}/${yesterdayTargets.videosTarget} videos, ${yesterdayTargets.phoneNumbersCaptured}/${yesterdayTargets.phoneNumbersTarget} phone numbers. Today prioritize ${strategy.pillarPriority[0] ?? "brand"}. ${pendingReview} clips awaiting review.`,
+        body: briefingBody,
         keyMetrics: {
             yesterday_videos: yesterdayTargets.videosPublished,
             yesterday_phones: yesterdayTargets.phoneNumbersCaptured,
@@ -368,6 +392,27 @@ Learning logs: ${JSON.stringify(logs.slice(0, 7))}. Performance model: ${JSON.st
     });
     let weeklyEvalNote = "";
     if ((0, stats_js_1.isSunday)()) {
+        try {
+            const compAnalysis = await (0, competitiveAnalysis_js_1.runFullCompetitiveAnalysis)(brain);
+            const aboveBelow = compAnalysis.marcoVsFieldPct >= 0 ? "above" : "below";
+            const recCount = compAnalysis.marcoGaps.length;
+            console.log(`[cm-brain] Competitive analysis complete — Marco ${aboveBelow} field by ${compAnalysis.marcoVsFieldPct.toFixed(1)}%, strategy recommendations generated, recording tasks created`);
+            const compNote = `Competitive analysis: Marco is ${Math.abs(compAnalysis.marcoVsFieldPct).toFixed(0)}% ${aboveBelow} competitor average. Top gap: ${compAnalysis.marcoGaps[0] ?? "n/a"}. Top recommendation: ${(0, contentDb_js_1.getActiveStrategyRecommendations)()[0]?.recommendation ?? "see strategy panel"}.`;
+            (0, contentDb_js_1.insertBriefing)({
+                briefingType: "weekly",
+                title: `Content Manager — Competitive Analysis ${today}`,
+                body: compNote,
+                keyMetrics: {
+                    marco_vs_field_pct: compAnalysis.marcoVsFieldPct,
+                    top_competitor: compAnalysis.topCompetitorHandle,
+                },
+                actionItems: compAnalysis.marcoGaps.slice(0, 2),
+                sentToHarvey: true,
+            });
+        }
+        catch (err) {
+            console.error("[cm-brain] Sunday competitive analysis failed:", err);
+        }
         await (0, experiments_js_1.evaluateCurrentExperiment)(brain);
         const weekStart = (0, stats_js_1.getWeekStart)();
         const weekAccuracy = (0, contentDb_js_1.listStrategyAccuracy)(7);

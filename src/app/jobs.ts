@@ -32,6 +32,7 @@ import { schedulePastClientQuarterly } from "../agents/emailMarketing/pastClient
 import { scheduleNoReplyFollowupCheck } from "../agents/emailMarketing/noReplyFollowup.js";
 import { scheduleContentManagerDaily7pmCST } from "../agents/contentManager/index.js";
 import { scheduleContentBrainCycles } from "../agents/contentManager/brain/index.js";
+import { scheduleVoiceoverProcessor } from "../agents/voiceClone/generator.js";
 
 export function scheduleContentJobs(): void {
   scheduleSocialMediaAgentDaily6pmCST();
@@ -60,6 +61,7 @@ export function scheduleContentJobs(): void {
   scheduleNoReplyFollowupCheck();
   scheduleContentManagerDaily7pmCST();
   scheduleContentBrainCycles();
+  scheduleVoiceoverProcessor();
 }
 
 export async function runDailyJobs(): Promise<void> {

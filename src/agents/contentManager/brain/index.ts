@@ -14,12 +14,16 @@ import {
   ensureDailyTargets,
   getChatSession,
   getDailyStrategy,
+  getLatestCompetitiveAnalysis,
+  getActiveStrategyRecommendations,
   getPerformanceModel,
   insertChatMessage,
   listChatMessages,
   listLearningLogs,
+  listRecordingTasks,
   todayDateCst,
   updateChatSessionSummary,
+  getSprintProgressData,
 } from "../../../core/contentDb.js";
 import {
   geminiChatWithTools,
@@ -41,6 +45,21 @@ export class ContentManagerBrain {
     const strategy = getDailyStrategy(todayDateCst());
     const targets = ensureDailyTargets(todayDateCst());
     const logs = listLearningLogs({ limit: 2 });
+    const analysis = getLatestCompetitiveAnalysis();
+    const activeRecs = getActiveStrategyRecommendations().slice(0, 3);
+    const today = todayDateCst();
+    const weekEnd = new Date(`${today}T12:00:00`);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekEndStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(
+      weekEnd,
+    );
+    const pendingTasks = listRecordingTasks({
+      status: "pending",
+      dueAfter: today,
+      dueBefore: weekEndStr,
+      limit: 20,
+    });
+    const sprint = getSprintProgressData();
     return {
       avg_views: model.decayWeightedAvgViews || model.overallAvgViews,
       videos_today: targets.videosPublished,
@@ -53,7 +72,28 @@ export class ContentManagerBrain {
       season_multiplier: model.seasonMultiplier,
       today_strategy: strategy,
       recent_learning: logs,
+      competitive: analysis
+        ? {
+            marco_vs_field_pct: analysis.marcoVsFieldPct,
+            top_competitor: analysis.topCompetitorHandle,
+            strengths: analysis.marcoStrengths.slice(0, 3),
+            gaps: analysis.marcoGaps.slice(0, 3),
+            top_recommendation: activeRecs[0]?.recommendation ?? null,
+          }
+        : null,
+      strategy_recommendations: activeRecs.map((r) => ({
+        priority: r.priority,
+        recommendation: r.recommendation,
+        pillar: r.pillar,
+      })),
+      recording_tasks_pending_7d: pendingTasks.length,
+      top_recording_task: pendingTasks[0] ?? null,
+      sprint_progress: sprint,
     };
+  }
+
+  private buildContextBlock(): string {
+    return "\n\nCurrent context: " + JSON.stringify(this.buildContextSnapshot());
   }
 
   async runToolRound(
@@ -85,6 +125,7 @@ export class ContentManagerBrain {
     let extra = `\n\nCURRENT PERFORMANCE MODEL:\n${JSON.stringify(model, null, 2)}`;
     extra += `\n\nTODAY'S STRATEGY:\n${JSON.stringify(strategy, null, 2)}`;
     extra += `\n\nRECENT LEARNING (last 3):\n${JSON.stringify(logs, null, 2)}`;
+    extra += this.buildContextBlock();
     if (context) extra += `\n\nADDITIONAL CONTEXT:\n${JSON.stringify(context, null, 2)}`;
     return this.runToolRound(message, extra);
   }
@@ -113,10 +154,7 @@ export class ContentManagerBrain {
     }));
 
     const contextSnapshot = this.buildContextSnapshot();
-    const system =
-      CONTENT_MANAGER_BRAIN_PROMPT +
-      "\n\nCurrent context: " +
-      JSON.stringify(contextSnapshot);
+    const system = CONTENT_MANAGER_BRAIN_PROMPT + this.buildContextBlock();
 
     insertChatMessage({
       sessionId: session.id,

@@ -29,8 +29,23 @@ import {
   upsertDailyStrategy,
   upsertPerformanceModel,
   updateContentVideo,
+  getLatestCompetitiveAnalysis,
+  getActiveStrategyRecommendations,
+  listStrategyRecommendations,
+  listRecordingTasks,
+  insertRecordingTask,
+  insertCalendarEvent,
   type CmPerformanceModel,
 } from "../../../core/contentDb.js";
+import {
+  getCalendarDayData,
+  getCalendarMonthData,
+} from "../calendar.js";
+import {
+  runFullCompetitiveAnalysis,
+} from "../competitiveAnalysis.js";
+import { getWeekStart } from "./stats.js";
+import { getSprintProgressData } from "../../../core/contentDb.js";
 
 export const CM_BRAIN_TOOL_DEFINITIONS: CmBrainToolDefinition[] = [
   {
@@ -202,6 +217,71 @@ export const CM_BRAIN_TOOL_DEFINITIONS: CmBrainToolDefinition[] = [
   {
     name: "get_benchmark_trajectory",
     description: "30-day benchmark trajectory and weekly view trends.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_competitive_analysis",
+    description: "Latest competitive analysis with strategy recommendations.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_strategy_recommendations",
+    description: "Strategy recommendations filtered by status.",
+    input_schema: {
+      type: "object",
+      properties: {
+        status: { type: "string" },
+        limit: { type: "number" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_recording_tasks",
+    description: "Recording tasks for upcoming days.",
+    input_schema: {
+      type: "object",
+      properties: {
+        status: { type: "string" },
+        days: { type: "number" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_calendar_week",
+    description: "7-day calendar view with publishing and recording tasks.",
+    input_schema: {
+      type: "object",
+      properties: { week_start: { type: "string" } },
+      required: [],
+    },
+  },
+  {
+    name: "create_recording_task",
+    description: "Add a recording task to Marco's production queue.",
+    input_schema: {
+      type: "object",
+      properties: {
+        due_date: { type: "string" },
+        pillar: { type: "string" },
+        topic: { type: "string" },
+        suggested_hooks: { type: "array", items: { type: "string" } },
+        filming_notes: { type: "string" },
+        reason: { type: "string" },
+        priority: { type: "string" },
+      },
+      required: ["due_date", "pillar", "topic"],
+    },
+  },
+  {
+    name: "get_sprint_progress",
+    description: "861-video sprint progress and pace.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "run_competitive_analysis",
+    description: "Trigger full competitive analysis (Apify + Gemini, 30-60 seconds).",
     input_schema: { type: "object", properties: {}, required: [] },
   },
 ];
@@ -451,6 +531,88 @@ export async function executeContentBrainTool(
       });
     case "get_benchmark_trajectory":
       return computeBenchmarkTrajectory();
+    case "get_competitive_analysis": {
+      const analysis = getLatestCompetitiveAnalysis();
+      const recommendations = analysis
+        ? listStrategyRecommendations({ analysisId: analysis.id, limit: 10 })
+        : [];
+      return { analysis, recommendations };
+    }
+    case "get_strategy_recommendations": {
+      const status = input.status ? String(input.status) : undefined;
+      const limit = Number(input.limit) || 10;
+      if (status) {
+        return { recommendations: listStrategyRecommendations({ status, limit }) };
+      }
+      return { recommendations: getActiveStrategyRecommendations().slice(0, limit) };
+    }
+    case "get_recording_tasks": {
+      const days = Number(input.days) || 14;
+      const status = input.status ? String(input.status) : "pending";
+      const today = todayDateCst();
+      const end = new Date(`${today}T12:00:00`);
+      end.setDate(end.getDate() + days);
+      const endStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(end);
+      return {
+        tasks: listRecordingTasks({
+          status,
+          dueAfter: today,
+          dueBefore: endStr,
+          limit: 50,
+        }),
+      };
+    }
+    case "get_calendar_week": {
+      const weekStart = input.week_start ? String(input.week_start) : getWeekStart();
+      const days: unknown[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(`${weekStart}T12:00:00`);
+        d.setDate(d.getDate() + i);
+        const dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(d);
+        days.push(getCalendarDayData(dateStr));
+      }
+      return { week_start: weekStart, days };
+    }
+    case "create_recording_task": {
+      const dueDate = String(input.due_date || todayDateCst());
+      const hooks = Array.isArray(input.suggested_hooks)
+        ? input.suggested_hooks.map(String)
+        : [String(input.topic || "")];
+      const task = insertRecordingTask({
+        dueDate,
+        pillar: String(input.pillar || "brand"),
+        hookType: null,
+        topic: String(input.topic || ""),
+        suggestedHooks: hooks,
+        suggestedDurationMin: 35,
+        suggestedDurationMax: 55,
+        filmingNotes: input.filming_notes ? String(input.filming_notes) : null,
+        reason: input.reason ? String(input.reason) : null,
+        source: "brain",
+        priority: input.priority ? String(input.priority) : "normal",
+        strategyRecommendationId: null,
+      });
+      insertCalendarEvent({
+        eventDate: dueDate,
+        eventType: "recording_needed",
+        title: `Film: ${task.topic.slice(0, 60)}`,
+        description: task.filmingNotes,
+        pillar: task.pillar,
+        platform: null,
+        videoId: null,
+        recordingTaskId: task.id,
+      });
+      return { task };
+    }
+    case "get_sprint_progress":
+      return getSprintProgressData();
+    case "run_competitive_analysis": {
+      const { contentManagerBrain } = await import("./index.js");
+      return {
+        message: "Competitive analysis running — this calls Apify and may take 30-60 seconds.",
+        analysis: await runFullCompetitiveAnalysis(contentManagerBrain),
+      };
+    }
     default:
       return { error: `Unknown tool: ${toolName}` };
   }

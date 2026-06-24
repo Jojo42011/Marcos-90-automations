@@ -3838,6 +3838,15 @@
           <div id="hub-pace-pct" style="margin-top:8px;font-size:11px;color:#10b981;font-family:var(--mono);">-- of goal</div>
           <div class="module-arrow">Open workspace →</div>
         </a>
+        <a href="/voice-clone" class="module-card" id="open-voice-clone" data-hub-search="voice clone voxcpm voiceover capcut script approval" aria-label="Open Voice Clone dashboard" style="text-decoration:none;color:inherit;border-color:rgba(168,85,247,0.25);">
+          <div class="module-card-top">
+            <span class="module-title">Voice Clone</span>
+            <span class="module-badge" style="background:rgba(168,85,247,0.15);border-color:rgba(168,85,247,0.4);color:#a855f7;">VoxCPM2</span>
+          </div>
+          <p class="module-desc">VoxCPM2 · Script approval · CapCut handoff</p>
+          <div id="hub-vc-pending" style="margin-top:8px;font-size:11px;color:#a855f7;font-family:var(--mono);">-- pending approval</div>
+          <div class="module-arrow">Open workspace →</div>
+        </a>
         <button type="button" class="module-card" id="open-ads" data-hub-search="ad numbers meta spend reach ads advertising" aria-label="Open Ad numbers dashboard">
           <div class="module-card-top">
             <span class="module-title">Ad numbers</span>
@@ -4973,6 +4982,10 @@
       if (token && financeLink) {
         financeLink.href = "/finance?token=" + encodeURIComponent(token);
       }
+      const voiceCloneLink = document.getElementById("open-voice-clone");
+      if (token && voiceCloneLink) {
+        voiceCloneLink.href = "/voice-clone?token=" + encodeURIComponent(token);
+      }
     })();
 
     (function loadHubFinancePace() {
@@ -4993,6 +5006,22 @@
           el.style.color = pace.onTrack ? "#10b981" : "#ef4444";
         })
         .catch(() => { el.textContent = "-- of goal"; });
+    })();
+
+    (function loadHubVoiceClonePending() {
+      const el = document.getElementById("hub-vc-pending");
+      if (!el) return;
+      const u = new URL("/api/voice-clone/stats", location.origin);
+      if (token) u.searchParams.set("token", token);
+      fetch(u)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!d) { el.textContent = "-- pending approval"; return; }
+          const n = d.pendingApproval || 0;
+          el.textContent = n === 0 ? "none pending" : n + " pending approval";
+          el.style.color = n > 0 ? "#a855f7" : "#888";
+        })
+        .catch(() => { el.textContent = "-- pending approval"; });
     })();
 
     (function loadHubReportingAnomalies() {

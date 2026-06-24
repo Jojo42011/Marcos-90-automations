@@ -39,9 +39,9 @@
       --danger: #fb7185;
       --cold: #94a3b8;
       --hot: #f472b6;
-      --tier-hot: #10b981;
-      --tier-warm: #f59e0b;
-      --tier-cold: #fb4d6b;
+      --tier-hot: #2dd4ee;
+      --tier-warm: #f5c451;
+      --tier-cold: #8a919c;
       /* chrome */
       --topbar-bg: rgba(13, 16, 23, 0.78);
       --sidebar-bg: #11141c;
@@ -80,9 +80,9 @@
       --danger: #e11d48;
       --cold: #64748b;
       --hot: #db2777;
-      --tier-hot: #059669;
-      --tier-warm: #d97706;
-      --tier-cold: #e11d48;
+      --tier-hot: #0891b2;
+      --tier-warm: #f5c451;
+      --tier-cold: #8a919c;
       --topbar-bg: rgba(255, 255, 255, 0.82);
       --sidebar-bg: #ffffff;
       --glow: rgba(8, 145, 178, 0.07);
@@ -405,6 +405,96 @@
     .upload-meta { margin-top: 1.1rem; text-align: left; display: none; }
     .upload-meta.show { display: block; }
 
+    .batch-header-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .trend-badge { font-size: 0.72rem; padding: 0.35rem 0.75rem; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; background: var(--surface2); }
+    .trend-badge.fresh { border-color: var(--success); color: var(--success); }
+    .trend-badge.expired { border-color: var(--danger); color: var(--danger); }
+    .trend-brief-card { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--cyan); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
+    .trend-brief-card h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
+    .hashtag-pill { font-size: 0.65rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); margin: 0.15rem; display: inline-block; }
+    .batch-config-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: flex-end; }
+    .batch-config-row label { font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 0.25rem; }
+    .batch-file-table { width: 100%; font-size: 0.78rem; margin-top: 0.75rem; border-collapse: collapse; }
+    .batch-file-table th, .batch-file-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); text-align: left; }
+    .batch-progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 1rem; overflow: hidden; }
+    .batch-progress-bar .fill { height: 100%; background: var(--cyan); width: 30%; animation: batchPulse 1.5s ease-in-out infinite; }
+    @keyframes batchPulse { 0%,100% { opacity: 0.5; width: 20%; } 50% { opacity: 1; width: 80%; } }
+    .batch-success-banner { background: color-mix(in srgb, var(--success) 15%, transparent); border: 1px solid var(--success); padding: 0.75rem 1rem; border-radius: var(--radius); margin-top: 1rem; }
+
+    .processing-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-top: 16px;
+    }
+    .processing-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+    .processing-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .processing-stage { font-size: 12px; color: var(--cyan); font-family: var(--mono); animation: pulse-text 1.5s ease-in-out infinite; }
+    @keyframes pulse-text { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .progress-bar-track { background: #1b1f26; border-radius: 999px; height: 8px; overflow: hidden; margin-bottom: 6px; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), #0099ff); border-radius: 999px; transition: width 0.6s ease; }
+    .progress-bar-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: var(--mono); margin-bottom: 18px; }
+    .stage-indicators { display: flex; align-items: center; gap: 0; margin-bottom: 18px; overflow-x: auto; padding-bottom: 4px; }
+    .stage-item { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+    .stage-dot { width: 12px; height: 12px; border-radius: 50%; background: #262b33; border: 2px solid #3a4049; transition: all 0.3s ease; }
+    .stage-item.active .stage-dot { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 8px rgba(37, 244, 238, 0.5); animation: pulse-dot 1.5s ease-in-out infinite; }
+    @keyframes pulse-dot { 0%, 100% { box-shadow: 0 0 8px rgba(37, 244, 238, 0.5); } 50% { box-shadow: 0 0 16px rgba(37, 244, 238, 0.8); } }
+    .stage-item.complete .stage-dot { background: var(--success); border-color: var(--success); }
+    .stage-item.failed .stage-dot { background: var(--danger); border-color: var(--danger); }
+    .stage-label { font-size: 10px; color: var(--muted); text-align: center; white-space: nowrap; }
+    .stage-item.active .stage-label { color: var(--cyan); font-weight: 600; }
+    .stage-item.complete .stage-label { color: var(--success); }
+    .stage-connector { flex: 1; height: 2px; background: #262b33; min-width: 20px; max-width: 60px; }
+    .file-progress-rows { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .file-progress-row { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 8px 12px; font-size: 12px; }
+    .file-progress-row .fname { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-progress-row .fstatus { font-family: var(--mono); padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .fstatus.queued { background: rgba(138,145,156,0.15); color: #8a919c; }
+    .fstatus.submitted, .fstatus.processing { background: rgba(37,244,238,0.12); color: var(--cyan); animation: pulse-text 1.5s infinite; }
+    .fstatus.complete { background: rgba(61,220,132,0.12); color: var(--success); }
+    .fstatus.failed { background: rgba(255,90,95,0.12); color: var(--danger); }
+    .file-progress-row .fclips { color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .processing-success { display: flex; align-items: center; gap: 12px; background: rgba(61,220,132,0.08); border: 1px solid rgba(61,220,132,0.2); border-radius: 8px; padding: 12px 16px; margin-top: 12px; }
+    .success-icon { color: var(--success); font-size: 18px; }
+    .processing-success span { color: var(--success); font-size: 13px; flex: 1; }
+    .btn-view-clips { background: var(--success); color: #0b0d10; border: none; border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .processing-error { display: flex; align-items: center; gap: 12px; background: rgba(255,90,95,0.08); border: 1px solid rgba(255,90,95,0.2); border-radius: 8px; padding: 12px 16px; margin-top: 12px; }
+    .error-icon { color: var(--danger); font-size: 18px; }
+    .processing-error span { color: var(--danger); font-size: 13px; flex: 1; }
+    .btn-retry { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; font-size: 12px; cursor: pointer; }
+    .batch-session-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem; margin-bottom: 0.5rem; cursor: pointer; }
+    .clip-review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 1rem; }
+  @media (max-width: 640px) { .clip-review-grid { grid-template-columns: 1fr; } }
+    .clip-review-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+    .clip-review-body { display: grid; grid-template-columns: 140px 1fr; gap: 0.75rem; padding: 0.75rem; }
+    .clip-thumb { position: relative; background: var(--surface2); border-radius: var(--radius-xs); min-height: 120px; display: flex; align-items: center; justify-content: center; }
+    .clip-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-xs); }
+    .thumb-placeholder {
+      width: 100%;
+      height: 100%;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #1b1f26;
+      border-radius: 6px;
+      gap: 8px;
+    }
+    .thumb-placeholder svg { opacity: 0.6; }
+    .clip-trend-badge { position: absolute; bottom: 6px; left: 6px; font-size: 0.6rem; padding: 0.15rem 0.35rem; border-radius: 999px; font-weight: 700; }
+    .clip-trend-badge.high { background: var(--success); color: #000; }
+    .clip-trend-badge.mid { background: var(--warn); color: #000; }
+    .clip-trend-badge.low { background: var(--danger); color: #fff; }
+    .clip-duration-badge { position: absolute; bottom: 6px; right: 6px; font-size: 0.6rem; background: rgba(0,0,0,0.7); color: #fff; padding: 0.1rem 0.35rem; border-radius: 4px; }
+    .clip-review-footer { display: flex; gap: 0.5rem; padding: 0.75rem; border-top: 1px solid var(--border); justify-content: space-between; align-items: center; flex-wrap: wrap; }
+    .hook-alt-list { font-size: 0.75rem; margin-top: 0.35rem; }
+    .hook-alt-list button { display: block; text-align: left; background: none; border: none; color: var(--cyan); cursor: pointer; padding: 0.2rem 0; font-size: 0.75rem; }
+    .review-filter-center { flex: 1; display: flex; justify-content: center; }
+    .competitor-table { width: 100%; font-size: 0.78rem; border-collapse: collapse; margin-top: 0.75rem; }
+    .competitor-table th, .competitor-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+
     /* ──────────────────── PIPELINE ──────────────────── */
     .pipeline-row {
       display: grid;
@@ -518,6 +608,18 @@
     .badge.hot { background: color-mix(in srgb, var(--tier-hot) 14%, transparent); color: var(--tier-hot); border-color: color-mix(in srgb, var(--tier-hot) 38%, transparent); }
     .badge.warm, .badge.average { background: color-mix(in srgb, var(--tier-warm) 14%, transparent); color: var(--tier-warm); border-color: color-mix(in srgb, var(--tier-warm) 38%, transparent); }
     .badge.cold { background: color-mix(in srgb, var(--tier-cold) 14%, transparent); color: var(--tier-cold); border-color: color-mix(in srgb, var(--tier-cold) 38%, transparent); }
+    .tier-hot, [class*="tier-hot"], [data-tier="hot"] {
+      background: rgba(45, 212, 238, 0.12);
+      color: var(--cyan);
+    }
+    .tier-cold, [class*="tier-cold"], [data-tier="cold"] {
+      background: rgba(138, 145, 156, 0.15);
+      color: #8a919c;
+    }
+    .tier-average, .tier-warm, [class*="tier-average"], [class*="tier-warm"], [data-tier="average"] {
+      background: rgba(245, 196, 81, 0.12);
+      color: #f5c451;
+    }
     .badge.positive { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); border-color: color-mix(in srgb, var(--success) 38%, transparent); }
     .badge.negative { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 38%, transparent); }
     .badge.neutral { background: var(--surface2); color: var(--cold); border-color: var(--border-strong); }
@@ -581,7 +683,7 @@
     .score-section-label { font-size: 0.55rem; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 0.45rem; margin-top: 0.6rem; font-weight: 600; }
     .score-bar-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.32rem; }
     .score-bar-label { width: 4.5rem; font-size: 0.62rem; color: var(--muted); }
-    .score-bar-track { flex: 1; height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
+    .score-bar-track { flex: 1; height: 8px; background: #262b33; border-radius: 4px; overflow: hidden; }
     .score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
     .score-bar-val { width: 2.5rem; font-size: 0.62rem; text-align: right; color: var(--text); }
     .improvement-item { font-size: 0.7rem; color: var(--text-dim); margin-bottom: 0.32rem; line-height: 1.45; }
@@ -641,6 +743,41 @@
     .cm-pillar-tag.education { background: color-mix(in srgb, var(--accent-2) 16%, transparent); color: var(--accent-2); }
     .cm-pillar-tag.listings { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
     .cm-avoid-pill { border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent); color: var(--danger); padding: 0.22rem 0.55rem; border-radius: 999px; font-size: 0.7rem; display: inline-block; }
+
+    /* Strategy / Chat / Calendar */
+    .strategy-compare-card { flex:1; min-width:160px; padding:1rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); }
+    .strategy-compare-card.marco { border-color:var(--cyan); }
+    .strategy-compare-card.vs { text-align:center; font-size:1.5rem; font-weight:700; }
+    .strategy-compare-card.vs.positive { color:var(--success); }
+    .strategy-compare-card.vs.negative { color:var(--warn); }
+    .strategy-rec-card { border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem; margin-bottom:0.75rem; background:var(--surface); }
+    .cm-chat-shell { display:flex; flex-direction:column; height:calc(100vh - 140px); min-height:480px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); overflow:hidden; }
+    .cm-chat-header { display:flex; justify-content:space-between; align-items:center; padding:0.85rem 1rem; border-bottom:1px solid var(--border); }
+    .cm-chat-body { flex:1; overflow-y:auto; padding:1rem; }
+    .cm-chat-empty { text-align:center; max-width:520px; margin:2rem auto; }
+    .cm-chat-suggestions { display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-top:1rem; }
+    .cm-chat-suggestions button { font-size:0.72rem; padding:0.5rem; border:1px dashed var(--border-strong); background:transparent; color:var(--text-dim); border-radius:var(--radius-xs); cursor:pointer; }
+    .cm-chat-suggestions button:hover { border-color:var(--cyan); color:var(--cyan); }
+    .cm-chat-quick { display:flex; flex-wrap:wrap; gap:0.35rem; padding:0.5rem 1rem; border-top:1px solid var(--border); }
+    .cm-chat-quick button { font-size:0.68rem; padding:0.3rem 0.55rem; border-radius:999px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); cursor:pointer; }
+    .cm-chat-input-row { display:flex; gap:0.5rem; padding:0.85rem; border-top:1px solid var(--border); }
+    .cm-chat-input-row input { flex:1; padding:0.55rem 0.8rem; border-radius:var(--radius-xs); border:1px solid var(--border-strong); background:var(--bg); color:var(--text); }
+    .cm-chat-msg { max-width:85%; padding:0.7rem 0.9rem; border-radius:14px; font-size:0.8rem; line-height:1.5; margin-bottom:0.65rem; }
+    .cm-chat-msg.user { margin-left:auto; background:var(--surface2); border:1px solid var(--border); }
+    .cm-chat-msg.brain { background:var(--surface2); border:1px solid var(--border); }
+    .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+    .calendar-cell { min-height:120px; border:1px solid var(--border); border-radius:var(--radius-xs); padding:0.35rem; background:var(--surface); cursor:pointer; font-size:0.68rem; }
+    .calendar-cell:hover { border-color:var(--cyan); }
+    .calendar-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin:1px; }
+    .calendar-dot.brand { background:var(--warn); }
+    .calendar-dot.education { background:var(--accent-2); }
+    .calendar-dot.listings { background:var(--success); }
+    .calendar-dot.empty { border:1px solid var(--border); background:transparent; }
+    .calendar-sprint-bar { height:10px; background:var(--surface2); border-radius:999px; overflow:hidden; }
+    .calendar-sprint-bar div { height:100%; background:var(--cyan); transition:width 0.3s; }
+    .analysis-md h3 { color:var(--cyan); margin:1rem 0 0.5rem; font-size:0.9rem; }
+    .analysis-md p { margin:0.5rem 0; line-height:1.55; }
+    .analysis-md ol, .analysis-md ul { margin:0.5rem 0; padding-left:1.2rem; }
 
     /* ──────────────────── LEGACY (hidden / fallback) ──────────────────── */
     .profile { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 1rem; }
@@ -711,7 +848,9 @@
       <button type="button" class="crm-side-btn" data-cm-section="publishing">Publishing <span class="crm-count" id="cm-count-publishing">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="community">Community <span class="crm-count" id="cm-count-community">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">—</span></button>
-      <button type="button" class="crm-side-btn" data-cm-section="brain">Chance <span class="crm-count" id="cm-count-brain">—</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="strategy">Strategy <span class="crm-count" id="cm-count-strategy">0</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="calendar">Calendar <span class="crm-count" id="cm-count-calendar">0</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="brain">Content Manager <span class="crm-count" id="cm-count-brain">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="suggestions">Content Suggestions <span class="crm-count">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="activity">Activity Log <span class="crm-count" id="cm-count-activity">0</span></button>
       <a href="/" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;">Command center <span>←</span></a>
@@ -761,32 +900,100 @@
 
         <!-- UPLOAD & CLIP -->
         <section id="cm-section-upload" class="cm-section">
-          <div class="cm-panel" style="margin-bottom:1rem;">
-            <h3>Video Upload</h3>
+          <div class="cm-panel" id="batch-upload-panel">
+            <div class="batch-header-row">
+              <h3 style="margin:0;">Upload & Clip</h3>
+              <button type="button" class="trend-badge" id="trend-intel-badge">Trend Intelligence</button>
+            </div>
+            <div id="openShortsStatusIndicator" class="cm-muted" style="font-size:12px;margin-bottom:12px;"></div>
+            <div class="trend-brief-card" id="trend-brief-card">
+              <h4>Current Trends in Real Estate TikTok</h4>
+              <p id="trend-brief-text" class="cm-muted">Loading trend intelligence…</p>
+              <div id="trend-hashtag-pills" style="margin-top:0.5rem;"></div>
+              <p id="trend-meta-text" class="cm-muted" style="font-size:0.72rem;margin-top:0.5rem;text-align:right;"></p>
+            </div>
+            <div class="batch-config-row">
+              <div style="flex:1;min-width:180px;">
+                <label>Session name</label>
+                <input type="text" id="batch-session-name" placeholder="Canyon Lake batch · Jun 22" style="width:100%;padding:0.5rem;" />
+              </div>
+              <div>
+                <label>Filmed by</label>
+                <div style="display:flex;gap:0.5rem;align-items:center;padding-top:0.25rem;">
+                  <label><input type="radio" name="filmed-by" value="marco" checked /> Marco</label>
+                  <label><input type="radio" name="filmed-by" value="wesley" /> Wesley</label>
+                  <label><input type="radio" name="filmed-by" value="other" /> Other</label>
+                </div>
+              </div>
+              <div style="min-width:140px;">
+                <label>Content pillar</label>
+                <select id="batch-pillar" style="width:100%;padding:0.5rem;">
+                  <option value="">Select pillar…</option>
+                  <option value="education">Education</option>
+                  <option value="listings">Listings</option>
+                  <option value="brand">Brand</option>
+                  <option value="mixed">Mixed</option>
+                </select>
+              </div>
+            </div>
             <div class="upload-zone" id="upload-zone">
               <div class="icon">⬆</div>
-              <div><strong>Drop your video here or click to browse</strong></div>
-              <div class="cm-muted" style="margin-top:0.35rem;">MP4, MOV, AVI · Max 2GB · Marco or Wesley footage</div>
-              <input type="file" id="video-file-input" accept=".mp4,.mov,.avi,video/mp4,video/quicktime" hidden />
+              <div><strong>Drop multiple video files here or click to browse</strong></div>
+              <div class="cm-muted" style="margin-top:0.35rem;">MP4, MOV, AVI up to 2GB each · Max 20 files per batch</div>
+              <div class="cm-muted" style="margin-top:0.5rem;font-size:0.75rem;">OpenShorts uses Gemini AI to find the most viral moments, then automatically reframes to 9:16 vertical. Your footage never leaves your server.</div>
+              <input type="file" id="video-file-input" accept=".mp4,.mov,.avi,.mkv,.webm,video/*" multiple hidden />
             </div>
-            <div class="upload-meta" id="upload-meta">
-              <p id="upload-file-info" class="cm-muted"></p>
-              <label style="display:block;margin:0.75rem 0 0.35rem;font-size:0.75rem;">Content pillar (required)</label>
-              <select id="upload-pillar" style="width:100%;padding:0.5rem;">
-                <option value="">Select pillar…</option>
-                <option value="education">Education</option>
-                <option value="listings">Listings</option>
-                <option value="brand">Brand</option>
-              </select>
-              <label style="display:block;margin:0.75rem 0 0.35rem;font-size:0.75rem;">Notes (optional)</label>
-              <input type="text" id="upload-notes" placeholder="Add context for this session" style="width:100%;padding:0.5rem;" />
-              <button type="button" class="primary" id="upload-submit-btn" style="margin-top:1rem;width:100%;padding:0.65rem;" disabled>Send to OpusClip</button>
-              <p id="upload-status" class="cm-muted" style="margin-top:0.5rem;"></p>
+            <table class="batch-file-table" id="batch-file-table" style="display:none;">
+              <thead><tr><th>Filename</th><th>Size</th><th>Duration</th><th>Status</th><th></th></tr></thead>
+              <tbody id="batch-file-tbody"></tbody>
+            </table>
+            <button type="button" class="primary" id="batch-process-btn" style="margin-top:1rem;width:100%;padding:0.75rem;" disabled>Process Batch</button>
+            <div id="batch-status-area"></div>
+            <div class="batch-progress-bar" id="batch-progress-bar" style="display:none;"><div class="fill"></div></div>
+
+            <div id="processingPanel" style="display:none" class="processing-panel">
+              <div class="processing-header">
+                <span class="processing-title">Processing your footage</span>
+                <span id="processingStageLabel" class="processing-stage">Uploading files...</span>
+              </div>
+              <div class="progress-bar-track">
+                <div id="mainProgressBar" class="progress-bar-fill" style="width:0%"></div>
+              </div>
+              <div class="progress-bar-labels">
+                <span id="progressPct">0%</span>
+                <span id="clipsReadyCount">0 clips ready</span>
+              </div>
+              <div class="stage-indicators">
+                <div class="stage-item" id="stage-upload"><span class="stage-dot"></span><span class="stage-label">Upload</span></div>
+                <div class="stage-connector"></div>
+                <div class="stage-item" id="stage-trends"><span class="stage-dot"></span><span class="stage-label">Trends</span></div>
+                <div class="stage-connector"></div>
+                <div class="stage-item" id="stage-transcribe"><span class="stage-dot"></span><span class="stage-label">Transcribe</span></div>
+                <div class="stage-connector"></div>
+                <div class="stage-item" id="stage-analyze"><span class="stage-dot"></span><span class="stage-label">AI Analysis</span></div>
+                <div class="stage-connector"></div>
+                <div class="stage-item" id="stage-reframe"><span class="stage-dot"></span><span class="stage-label">Reframe</span></div>
+                <div class="stage-connector"></div>
+                <div class="stage-item" id="stage-enhance"><span class="stage-dot"></span><span class="stage-label">Enhance</span></div>
+                <div class="stage-connector"></div>
+                <div class="stage-item" id="stage-complete"><span class="stage-dot"></span><span class="stage-label">Done</span></div>
+              </div>
+              <div id="fileProgressRows" class="file-progress-rows"></div>
+              <div id="processingSuccess" style="display:none" class="processing-success">
+                <span class="success-icon">✓</span>
+                <span id="successMessage">Clips ready for review</span>
+                <button type="button" class="btn-view-clips" onclick="switchCmSection('review');loadReviewQueue();">View in Review Queue →</button>
+              </div>
+              <div id="processingError" style="display:none" class="processing-error">
+                <span class="error-icon">⚠</span>
+                <span id="errorMessage">Processing failed</span>
+                <button type="button" class="btn-retry" onclick="resetUploadPanel()">Try again</button>
+              </div>
             </div>
           </div>
-          <div class="cm-panel">
-            <h3>Clip Pipeline <span id="pipeline-refresh-label" class="cm-muted" style="font-weight:400;text-transform:none;"></span></h3>
-            <div id="clip-pipeline-list"><p class="cm-muted">No clips yet. Upload a video above to get started. One session becomes 7+ publish-ready clips automatically.</p></div>
+          <div class="cm-panel" style="margin-top:1rem;">
+            <h3>Processing Pipeline</h3>
+            <div id="active-pipeline-list"><p class="cm-muted">No recent batches.</p></div>
           </div>
         </section>
 
@@ -794,10 +1001,22 @@
         <section id="cm-section-review" class="cm-section">
           <div class="cm-filter-bar">
             <button type="button" class="cm-subtab active" data-review-filter="all">All</button>
+            <button type="button" class="cm-subtab" data-review-filter="pending_review">Pending Review</button>
             <button type="button" class="cm-subtab" data-review-filter="flagged">Flagged</button>
-            <button type="button" class="cm-subtab" data-review-filter="clean">Clean</button>
+            <button type="button" class="cm-subtab" data-review-filter="approved">Approved</button>
+            <div class="review-filter-center">
+              <select id="review-batch-filter" style="padding:0.4rem 0.6rem;font-size:0.75rem;">
+                <option value="">All batches</option>
+              </select>
+            </div>
+            <select id="review-sort" style="padding:0.4rem 0.6rem;font-size:0.75rem;">
+              <option value="trend">Trend Score ↓</option>
+              <option value="date">Date ↓</option>
+              <option value="compliance">Compliance first</option>
+            </select>
           </div>
-          <div id="review-queue-list"></div>
+          <p id="review-poll-indicator" class="cm-muted" style="font-size:0.72rem;display:none;">Checking for new clips…</p>
+          <div id="review-queue-list" class="clip-review-grid"></div>
         </section>
 
         <!-- PUBLISHING -->
@@ -878,22 +1097,94 @@
           </div>
         </section>
 
-        <!-- CHANCE -->
+        <!-- STRATEGY -->
+        <section id="cm-section-strategy" class="cm-section">
+          <div class="cm-subtabs">
+            <button type="button" class="cm-subtab active" data-strategy-tab="overview">Overview</button>
+            <button type="button" class="cm-subtab" data-strategy-tab="competitor">Competitor Analysis</button>
+            <button type="button" class="cm-subtab" data-strategy-tab="recommendations">Recommendations</button>
+            <button type="button" class="cm-subtab" data-strategy-tab="recording">Recording Plan</button>
+          </div>
+          <div id="strategy-overview" class="strategy-panel">
+            <div class="cm-stat-row" id="strategy-comparison-cards"></div>
+            <div class="cm-panel" id="strategy-situation-summary"></div>
+            <div class="cm-two-col">
+              <div class="cm-panel" id="strategy-strengths"></div>
+              <div class="cm-panel" id="strategy-gaps"></div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:0.75rem;align-items:center;margin-top:1rem;">
+              <span class="cm-muted" id="strategy-last-analyzed"></span>
+              <button type="button" class="primary" id="strategy-run-analysis-btn">Run New Analysis</button>
+            </div>
+          </div>
+          <div id="strategy-competitor" class="strategy-panel" style="display:none;">
+            <div id="strategy-full-analysis" class="cm-panel"></div>
+          </div>
+          <div id="strategy-recommendations" class="strategy-panel" style="display:none;">
+            <div id="strategy-rec-list"></div>
+          </div>
+          <div id="strategy-recording" class="strategy-panel" style="display:none;">
+            <div style="margin-bottom:1rem;">
+              <button type="button" class="cm-btn" id="strategy-generate-week-btn">Generate Week Plan</button>
+            </div>
+            <div id="strategy-recording-list"></div>
+          </div>
+        </section>
+
+        <!-- CALENDAR -->
+        <section id="cm-section-calendar" class="cm-section">
+          <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-bottom:1rem;">
+            <button type="button" class="cm-subtab active" data-calendar-view="month" id="cal-view-month">Month</button>
+            <button type="button" class="cm-subtab" data-calendar-view="day" id="cal-view-day">Day</button>
+          </div>
+          <div id="calendar-month-view">
+            <div id="calendar-grid" class="calendar-grid"></div>
+            <div class="cm-panel" style="margin-top:1rem;">
+              <div id="calendar-sprint-label" class="cm-muted" style="margin-bottom:0.5rem;"></div>
+              <div class="calendar-sprint-bar"><div id="calendar-sprint-fill"></div></div>
+              <div id="calendar-sprint-sub" class="cm-muted" style="font-size:0.72rem;margin-top:0.35rem;"></div>
+            </div>
+          </div>
+          <div id="calendar-day-view" style="display:none;">
+            <div style="margin-bottom:1rem;">
+              <a href="#" id="calendar-back-month" class="cm-muted">← Back to month</a>
+              <h3 id="calendar-day-title" style="margin:0.5rem 0;"></h3>
+            </div>
+            <div class="cm-two-col">
+              <div class="cm-panel" id="calendar-publish-column"></div>
+              <div class="cm-panel" id="calendar-recording-column"></div>
+            </div>
+            <div class="cm-panel" id="calendar-events-extra" style="margin-top:1rem;"></div>
+            <button type="button" class="cm-btn" id="calendar-add-task-btn" style="margin-top:1rem;">+ Add Recording Task</button>
+          </div>
+        </section>
+
+        <!-- CONTENT MANAGER (strategy + chat) -->
         <section id="cm-section-brain" class="cm-section">
-          <h2 class="section-title">Today's Strategy <span>Chance · Content AI</span></h2>
-          <div id="cm-brain-strategy" class="cm-panel" style="margin-bottom:1.25rem;">
+          <h2 class="section-title">Today's Strategy <span>Content Manager · CM</span></h2>
+          <div id="cm-brain-strategy" class="cm-panel" style="margin-bottom:1rem;">
             <p class="loading">Loading strategy…</p>
           </div>
-          <h2 class="section-title">Ask Chance <span>specialist AI · not Harvey</span></h2>
-          <div id="cm-brain-suggestions" style="margin-bottom:0.75rem;"></div>
-          <div class="cm-brain-chat">
-            <p class="cm-brain-meta" id="cm-brain-session-id"></p>
-            <div class="cm-brain-messages" id="cm-brain-messages">
-              <p class="cm-muted" style="font-size:0.75rem;">Ask Chance anything — performance, hooks, what to film next.</p>
+          <div class="cm-chat-shell" style="height:calc(100vh - 320px);min-height:420px;">
+            <div class="cm-chat-header">
+              <div><strong>Ask the Content Manager</strong> <span class="cm-brain-badge">CM</span></div>
+              <div style="display:flex;gap:0.5rem;align-items:center;">
+                <button type="button" class="cm-btn" id="cm-chat-new-session">New Chat</button>
+                <select id="cm-chat-session-select" style="font-size:0.75rem;padding:0.35rem;"></select>
+              </div>
             </div>
-            <div class="cm-brain-input-row">
-              <input type="text" id="cm-brain-input" placeholder="Ask Chance anything…" />
-              <button type="button" class="primary" id="cm-brain-send">Send</button>
+            <div class="cm-chat-body" id="cm-chat-messages">
+              <div class="cm-chat-empty" id="cm-chat-empty">
+                <div style="font-size:2rem;color:var(--cyan);">🎬</div>
+                <h3>Your content strategist.</h3>
+                <p class="cm-muted">Ask about performance, competitors, hooks, what to film, or sprint status. Not Harvey — the dedicated content brain.</p>
+                <div class="cm-chat-suggestions" id="cm-chat-suggestions"></div>
+              </div>
+            </div>
+            <div class="cm-chat-quick" id="cm-chat-quick"></div>
+            <div class="cm-chat-input-row">
+              <input type="text" id="cm-chat-input" placeholder="Ask the content manager anything…" />
+              <button type="button" class="primary" id="cm-chat-send">Send</button>
             </div>
           </div>
           <a class="cm-brain-expand" id="cm-brain-toggle-eval">View self-evaluation</a>
@@ -905,6 +1196,30 @@
         <!-- CONTENT SUGGESTIONS -->
         <section id="cm-section-suggestions" class="cm-section">
           <div id="content-suggestions-container" class="reply-card"><div class="loading">// LOADING SUGGESTIONS //</div></div>
+          <div class="cm-panel" style="margin-top:1rem;" id="competitor-intel-panel">
+            <h3>Competitor Intelligence</h3>
+            <p class="cm-muted" style="font-size:0.78rem;">Profiles tracked for trend scraping via Apify.</p>
+            <table class="competitor-table" id="competitor-profiles-table">
+              <thead><tr><th>Handle</th><th>Type</th><th>Active</th></tr></thead>
+              <tbody id="competitor-profiles-tbody"></tbody>
+            </table>
+            <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;">
+              <input type="text" id="new-comp-handle" placeholder="tiktok_handle" style="padding:0.4rem;" />
+              <input type="text" id="new-comp-name" placeholder="Display name" style="padding:0.4rem;" />
+              <select id="new-comp-type" style="padding:0.4rem;">
+                <option value="national_influencer">National influencer</option>
+                <option value="education_account">Education account</option>
+                <option value="texas_state">Texas state</option>
+                <option value="san_antonio_local">San Antonio local</option>
+              </select>
+              <button type="button" class="cm-btn" id="add-competitor-btn">Add</button>
+            </div>
+            <div style="margin-top:1.5rem;border-top:1px solid var(--border);padding-top:1rem;">
+              <strong>Trend Intelligence Cache</strong>
+              <p id="trend-cache-expiry" class="cm-muted" style="font-size:0.78rem;margin:0.35rem 0;"></p>
+              <button type="button" class="cm-btn" id="refresh-trends-btn">Refresh Now</button>
+            </div>
+          </div>
         </section>
 
         <!-- ACTIVITY LOG -->
@@ -999,11 +1314,35 @@
     }
 
     function getTierColor(tier, score) {
-      const s = score ?? 0;
       const t = (tier || "").toLowerCase();
-      if (t === "hot" || s >= 70) return "#10b981";
-      if (t === "warm" || t === "average" || (s >= 40 && s < 70)) return "#f59e0b";
-      return "#ff2d55";
+      if (t === "hot" || score >= 70) return "var(--cyan)";
+      if (t === "warm" || t === "average" || (score >= 40 && score < 70)) return "#f5c451";
+      return "#8a919c";
+    }
+
+    const thumbPlaceholderSvg = `
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#5b6573" stroke-width="1.5">
+        <polygon points="23 7 16 12 23 17 23 7"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </svg>
+      <span style="font-size:10px;color:#5b6573;font-family:ui-monospace,monospace">clip</span>`;
+
+    function resolveClipThumbUrl(v) {
+      const candidates = [v.thumbnailUrl, v.thumbnail, v.filePath, v.clipUrl].filter(Boolean);
+      for (let url of candidates) {
+        if (typeof url !== "string" || url.startsWith("mock://")) continue;
+        if (url.startsWith("/clips/")) url = "/openshorts" + url;
+        if (url.startsWith("http://localhost:8000/clips/")) url = url.replace("http://localhost:8000", "/openshorts");
+        return url;
+      }
+      return null;
+    }
+
+    function buildClipThumbHtml(thumbSrc) {
+      if (thumbSrc) {
+        return `<img src="${escapeHtml(thumbSrc)}" alt="clip thumbnail" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="thumb-placeholder" style="display:none">${thumbPlaceholderSvg}</div>`;
+      }
+      return `<div class="thumb-placeholder">${thumbPlaceholderSvg}</div>`;
     }
 
     function showToast(msg) {
@@ -1126,6 +1465,7 @@
       try {
         cmStatsCache = await cmFetch("/api/content/stats");
         updateSidebarBadges();
+        void updateStrategyBadges();
       } catch (e) { console.warn("[CM] stats", e); }
     }
 
@@ -1189,36 +1529,464 @@
       switchCmSection(status === "pending_review" ? "review" : status === "published" || status === "scheduled" ? "publishing" : "upload");
     }
 
-    async function loadClipPipeline() {
+    let batchFiles = [];
+    let batchFileStatuses = {};
+    let activeBatchId = null;
+    let batchPollTimer = null;
+    let reviewBatchFilter = "";
+    let reviewSort = "trend";
+
+    function formatFileSize(bytes) {
+      return (bytes / 1024 / 1024).toFixed(1) + " MB";
+    }
+
+    function trendBadgeClass(expiresAt) {
+      if (!expiresAt) return "expired";
+      return new Date(expiresAt) > new Date() ? "fresh" : "expired";
+    }
+
+    function formatMinutesAgo(iso) {
+      if (!iso) return "unknown";
+      const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      if (m < 60) return `${m} minutes ago`;
+      const h = Math.round(m / 60);
+      return `${h} hours ago`;
+    }
+
+    async function loadTrendIntel() {
       try {
-        const { videos } = await cmFetch("/api/content/queue?limit=200");
-        const list = document.getElementById("clip-pipeline-list");
-        if (!videos?.length) {
-          list.innerHTML = '<p class="cm-muted">No clips yet. Upload a video above to get started. One session becomes 7+ publish-ready clips automatically.</p>';
+        const { trends } = await cmFetch("/api/content/competitor-trends/latest");
+        const badge = document.getElementById("trend-intel-badge");
+        const text = document.getElementById("trend-brief-text");
+        const pills = document.getElementById("trend-hashtag-pills");
+        const meta = document.getElementById("trend-meta-text");
+        const cacheExpiry = document.getElementById("trend-cache-expiry");
+        if (!trends) {
+          if (badge) badge.textContent = "🔴 Trends expired · Refresh";
+          badge?.classList.add("expired");
+          if (text) text.textContent = "No trend data yet. Click Refresh to scrape competitor accounts.";
           return;
         }
-        list.innerHTML = videos.map((v) => {
-          const cap = escapeHtml((v.caption || v.title || "").slice(0, 60));
-          const rej = v.status === "rejected" ? " cm-rejected" : "";
-          let actions = "";
-          if (v.status === "pending_review" && !v.complianceFlagged) {
-            actions = `<button class="cm-btn green" onclick="cmDecision('${v.id}','approved')">Approve</button> <button class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>`;
-          } else if (v.status === "pending_review" && v.complianceFlagged) {
-            actions = `<span class="cm-pill amber">Needs Review</span> <button class="cm-btn amber" onclick="cmDecision('${v.id}','approved')">Approve anyway</button> <button class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>`;
-          } else if (v.status === "approved") {
-            actions = `<button class="cm-btn" onclick="cmSchedule('${v.id}')">Schedule</button>`;
-          } else if (v.status === "published") {
-            actions = `<span class="cm-muted">Published ${fmtDateTime(v.publishedAt)} · ${escapeHtml(v.platformTarget || "")}</span>`;
-          }
-          return `<div class="pipeline-row${rej}"><div class="pipeline-thumb"></div><div><div>${cap}</div>
-            <span class="cm-pill ${pillarClass(v.pillar)}">${escapeHtml(v.pillar)}</span>
-            <span class="cm-pill">${escapeHtml(v.platformTarget || "tiktok")}</span>${stageHtml({ status: v.status, compliance_flagged: v.complianceFlagged })}</div>
-            <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">${actions}</div></div>`;
+        const fresh = trendBadgeClass(trends.expiresAt) === "fresh";
+        if (badge) {
+          badge.textContent = fresh
+            ? `🟢 Trends fresh · ${formatMinutesAgo(trends.scrapedAt)}`
+            : "🔴 Trends expired · Refresh";
+          badge.className = "trend-badge " + (fresh ? "fresh" : "expired");
+        }
+        if (text) text.textContent = trends.trendBrief || "No brief available.";
+        if (pills) pills.innerHTML = (trends.trendingHashtags || []).slice(0, 8).map((h) =>
+          `<span class="hashtag-pill">#${escapeHtml(h)}</span>`
+        ).join("");
+        if (meta) meta.textContent = `Last scraped ${formatMinutesAgo(trends.scrapedAt)} from ${(trends.profilesScraped || []).length} competitor accounts.`;
+        if (cacheExpiry) cacheExpiry.textContent = `Cache expires: ${fmtDateTime(trends.expiresAt)}`;
+      } catch (e) { console.warn("trend intel", e); }
+    }
+
+    async function loadActivePipeline() {
+      try {
+        const { batches } = await cmFetch("/api/content/batches?days=7");
+        const list = document.getElementById("active-pipeline-list");
+        const batchSelect = document.getElementById("review-batch-filter");
+        if (!batches?.length) {
+          list.innerHTML = '<p class="cm-muted">No recent batches.</p>';
+          return;
+        }
+        if (batchSelect) {
+          const opts = batches.map((b) =>
+            `<option value="${b.id}">${escapeHtml(b.sessionName || b.id.slice(0, 8))} · ${fmtDateTime(b.createdAt)}</option>`
+          ).join("");
+          batchSelect.innerHTML = `<option value="">All batches</option>${opts}`;
+        }
+        list.innerHTML = batches.map((b) => {
+          const statusBadge = `<span class="cm-pill">${escapeHtml(b.status)}</span>`;
+          return `<div class="batch-session-row" data-batch-id="${b.id}">
+            <strong>${escapeHtml(b.sessionName || "Batch")}</strong> · ${fmtDateTime(b.createdAt)}
+            · ${b.sourceFileCount} files · ${b.clipsGenerated} clips ${statusBadge}
+          </div>`;
         }).join("");
-        pipelineRefreshAt = Date.now();
-        const lbl = document.getElementById("pipeline-refresh-label");
-        if (lbl) lbl.textContent = "· updated just now";
+        list.querySelectorAll(".batch-session-row").forEach((row) => {
+          row.addEventListener("click", () => {
+            reviewBatchFilter = row.getAttribute("data-batch-id") || "";
+            const sel = document.getElementById("review-batch-filter");
+            if (sel) sel.value = reviewBatchFilter;
+            switchCmSection("review");
+            void loadReviewQueue();
+          });
+        });
       } catch (e) { showToast(e.message); }
+    }
+
+    async function loadClipPipeline() {
+      await loadActivePipeline();
+      pipelineRefreshAt = Date.now();
+    }
+
+    function renderBatchFileTable() {
+      const table = document.getElementById("batch-file-table");
+      const tbody = document.getElementById("batch-file-tbody");
+      const btn = document.getElementById("batch-process-btn");
+      const pillar = document.getElementById("batch-pillar")?.value;
+      if (!tbody) return;
+      if (!batchFiles.length) {
+        table.style.display = "none";
+        if (btn) btn.disabled = true;
+        return;
+      }
+      table.style.display = "table";
+      tbody.innerHTML = batchFiles.map((f, i) => {
+        const st = batchFileStatuses[f.name] || "Queued";
+        return `<tr><td>${escapeHtml(f.name)}</td><td>${formatFileSize(f.size)}</td><td>—</td>
+          <td>${escapeHtml(st)}</td><td><button type="button" class="cm-btn" onclick="removeBatchFile(${i})">Remove</button></td></tr>`;
+      }).join("");
+      const targetClips = Math.max(7, batchFiles.length * 2);
+      if (btn) {
+        btn.disabled = !pillar;
+        btn.textContent = `Process ${batchFiles.length} videos → Target ${targetClips} clips`;
+      }
+    }
+
+    function removeBatchFile(index) {
+      batchFiles.splice(index, 1);
+      renderBatchFileTable();
+    }
+    window.removeBatchFile = removeBatchFile;
+
+    async function pollBatchStatus(batchId) {
+      try {
+        const data = await cmFetch(`/api/content/batch/${batchId}/status`);
+        updateBatchProgressUI(data);
+        if (data.sourceFiles) {
+          data.sourceFiles.forEach((sf) => {
+            batchFileStatuses[sf.originalFilename] = sf.opusStatus || sf.opus_status || "processing";
+          });
+          renderBatchFileTable();
+        }
+        if (data.status === "complete" || data.batch?.status === "complete") {
+          clearInterval(batchPollTimer);
+          batchPollTimer = null;
+          onBatchComplete(data);
+          return;
+        }
+        if (data.status === "failed" || data.batch?.status === "failed") {
+          clearInterval(batchPollTimer);
+          batchPollTimer = null;
+          showProcessingError("Processing failed. Check server logs for details.");
+        }
+      } catch (e) { console.warn("batch poll", e); }
+    }
+
+    function updateBatchProgressUI(data) {
+      const pct = data.progressPct ?? 10;
+      const label = data.stageLabel || data.batch?.status || "Processing...";
+      updateProgressBar(pct, label);
+      updateStageIndicators(data.status || data.batch?.status);
+      updateFileProgressRows(data.files || data.sourceFiles || []);
+      const clipsEl = document.getElementById("clipsReadyCount");
+      if (clipsEl) clipsEl.textContent = `${data.clipsReady || 0} clips ready`;
+    }
+
+    function updateProgressBar(pct, label) {
+      const bar = document.getElementById("mainProgressBar");
+      const pctEl = document.getElementById("progressPct");
+      const labelEl = document.getElementById("processingStageLabel");
+      if (bar) bar.style.width = `${pct}%`;
+      if (pctEl) pctEl.textContent = `${pct}%`;
+      if (labelEl) labelEl.textContent = label;
+    }
+
+    function setStageActive(stageId) {
+      const stages = ["stage-upload", "stage-trends", "stage-transcribe", "stage-analyze", "stage-reframe", "stage-enhance", "stage-complete"];
+      const activeIdx = stages.indexOf(stageId);
+      stages.forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove("active", "complete", "failed");
+        if (i < activeIdx) el.classList.add("complete");
+        else if (i === activeIdx) el.classList.add("active");
+      });
+    }
+
+    function updateStageIndicators(status) {
+      const statusToStage = {
+        uploading: "stage-upload",
+        analyzing_trends: "stage-trends",
+        processing_opus: "stage-transcribe",
+        transcribing: "stage-transcribe",
+        analyzing: "stage-analyze",
+        reframing: "stage-reframe",
+        enhancing: "stage-enhance",
+        complete: "stage-complete",
+      };
+      const stage = statusToStage[status];
+      if (stage) setStageActive(stage);
+    }
+
+    function updateFileProgressRows(files) {
+      const container = document.getElementById("fileProgressRows");
+      if (!container || !files.length) return;
+      container.innerHTML = files.map((f) => {
+        const name = f.filename || f.originalFilename || "file";
+        const st = (f.opusStatus || f.opus_status || "queued").toLowerCase();
+        const clips = f.clipsGenerated ?? f.clipsGeneratedCount ?? 0;
+        return `<div class="file-progress-row">
+          <span class="fname" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+          <span class="fstatus ${escapeHtml(st)}">${escapeHtml(st)}</span>
+          <span class="fclips">${clips > 0 ? `${clips} clips` : ""}</span>
+        </div>`;
+      }).join("");
+    }
+
+    function onBatchComplete(data) {
+      updateProgressBar(100, "Complete");
+      setStageActive("stage-complete");
+      document.querySelectorAll(".stage-item").forEach((el) => {
+        el.classList.remove("active");
+        el.classList.add("complete");
+      });
+      const successEl = document.getElementById("processingSuccess");
+      const msgEl = document.getElementById("successMessage");
+      const clips = data.clipsReady || data.batch?.clipsGenerated || 0;
+      if (msgEl) msgEl.textContent = `${clips} clips ready for review`;
+      if (successEl) successEl.style.display = "flex";
+      const btn = document.getElementById("batch-process-btn");
+      if (btn) btn.disabled = false;
+      const progress = document.getElementById("batch-progress-bar");
+      if (progress) progress.style.display = "none";
+      batchFiles = [];
+      renderBatchFileTable();
+      void loadActivePipeline();
+      void loadReviewQueue();
+      activeBatchId = null;
+      showToast("Batch complete — clips ready for review");
+    }
+
+    function showProcessingError(message) {
+      const errEl = document.getElementById("processingError");
+      const msgEl = document.getElementById("errorMessage");
+      if (msgEl) msgEl.textContent = message;
+      if (errEl) errEl.style.display = "flex";
+      updateProgressBar(0, "Failed");
+      const btn = document.getElementById("batch-process-btn");
+      if (btn) btn.disabled = false;
+    }
+
+    function resetUploadPanel() {
+      const panel = document.getElementById("processingPanel");
+      if (panel) panel.style.display = "none";
+      document.getElementById("processingSuccess").style.display = "none";
+      document.getElementById("processingError").style.display = "none";
+      updateProgressBar(0, "");
+      const rows = document.getElementById("fileProgressRows");
+      if (rows) rows.innerHTML = "";
+      activeBatchId = null;
+      if (batchPollTimer) { clearInterval(batchPollTimer); batchPollTimer = null; }
+      const btn = document.getElementById("batch-process-btn");
+      if (btn) btn.disabled = false;
+    }
+    window.resetUploadPanel = resetUploadPanel;
+
+    async function startBatchProcessing(formData) {
+      const panel = document.getElementById("processingPanel");
+      if (panel) panel.style.display = "block";
+      document.getElementById("processingSuccess").style.display = "none";
+      document.getElementById("processingError").style.display = "none";
+      updateProgressBar(5, "Uploading files...");
+      setStageActive("stage-upload");
+      const btn = document.getElementById("batch-process-btn");
+      if (btn) btn.disabled = true;
+
+      try {
+        const headers = {};
+        if (token) headers.Authorization = "Bearer " + token;
+        const res = await fetch(apiUrl("/api/content/batch-upload"), { method: "POST", headers, body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Upload failed");
+        activeBatchId = data.batchSessionId;
+        batchFiles.forEach((f) => { batchFileStatuses[f.name] = "submitted"; });
+        renderBatchFileTable();
+        showToast(data.message || "Batch processing started");
+        if (batchPollTimer) clearInterval(batchPollTimer);
+        batchPollTimer = setInterval(() => pollBatchStatus(activeBatchId), 3000);
+        void pollBatchStatus(activeBatchId);
+      } catch (err) {
+        console.error("[upload] Submit failed:", err);
+        showProcessingError(err.message || "Upload failed");
+      }
+    }
+
+    async function checkOpenShortsStatus() {
+      try {
+        const res = await fetch(apiUrl("/health"));
+        const data = await res.json();
+        const osStatus = data.openshorts;
+        const indicator = document.getElementById("openShortsStatusIndicator");
+        if (!indicator) return;
+        if (osStatus?.running) {
+          indicator.innerHTML = `<span style="color:var(--success)">● OpenShorts online</span> <span class="cm-muted" style="font-size:11px">${escapeHtml(osStatus.model || "gemini")} · ${osStatus.active_jobs || 0} active jobs</span>`;
+        } else {
+          indicator.innerHTML = `<span style="color:#f5c451">● OpenShorts offline</span> <span class="cm-muted" style="font-size:11px">Using mock clips — start Python sidecar for real processing</span>`;
+        }
+      } catch (_) { /* ignore */ }
+    }
+    checkOpenShortsStatus();
+    setInterval(checkOpenShortsStatus, 30000);
+
+    async function loadCompetitorProfiles() {
+      try {
+        const { profiles } = await cmFetch("/api/content/competitor-profiles");
+        const tbody = document.getElementById("competitor-profiles-tbody");
+        if (!tbody) return;
+        tbody.innerHTML = (profiles || []).map((p) =>
+          `<tr><td>${escapeHtml(p.tiktokHandle)}</td><td>${escapeHtml(p.profileType)}</td>
+          <td><input type="checkbox" ${p.active ? "checked" : ""} onchange="toggleCompetitor('${p.id}', this.checked)" /></td></tr>`
+        ).join("");
+      } catch (e) { console.warn(e); }
+    }
+    async function toggleCompetitor(id, active) {
+      await cmFetch(`/api/content/competitor-profiles/${id}`, { method: "PATCH", body: JSON.stringify({ active: active ? 1 : 0 }) });
+    }
+    window.toggleCompetitor = toggleCompetitor;
+
+    function clipTrendClass(score) {
+      if (score >= 70) return "high";
+      if (score >= 40) return "mid";
+      return "low";
+    }
+
+    function renderClipReviewCard(v) {
+      const e = v.enhancement || {};
+      const score = v.trendAlignmentScore || e.trendAlignmentScore || 0;
+      const thumbSrc = resolveClipThumbUrl(v);
+      const thumbHtml = buildClipThumbHtml(thumbSrc);
+      const platforms = e.platformTargets || v.platformTargets || [v.platformTarget || "tiktok"];
+      const hookAlts = (e.hookVariations || []).filter((h) => h !== (e.hookPrimary || v.hook));
+      const hashtags = e.hashtagsFinal || v.hashtags || [];
+      const compBadge = v.complianceFlagged
+        ? `<span class="cm-pill amber" title="${escapeHtml(v.complianceNotes || "")}">⚠ Flagged</span>`
+        : `<span class="cm-pill" style="color:var(--success);">✓ Clean</span>`;
+      return `<div class="clip-review-card" id="clip-card-${v.id}">
+        <div class="clip-review-body">
+          <div class="clip-thumb">${thumbHtml}
+            <span class="clip-trend-badge ${clipTrendClass(score)}">${score}/100</span>
+            <span class="clip-duration-badge">clip</span>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:0.35rem;" contenteditable="true" data-field="title" data-id="${v.id}">${escapeHtml(e.titleFinal || v.title || "")}</div>
+            <div style="margin-bottom:0.35rem;">${platforms.map((p) => `<span class="cm-pill">${escapeHtml(p)}</span>`).join(" ")}</div>
+            <div style="font-size:0.65rem;color:var(--muted);letter-spacing:0.08em;">HOOK</div>
+            <div contenteditable="true" data-field="hook" data-id="${v.id}" style="font-size:0.95rem;margin-bottom:0.25rem;">${escapeHtml(e.hookPrimary || v.hook || "")}</div>
+            <span class="cm-pill">${escapeHtml(e.hookType || v.hookType || "uncategorized")}</span>
+            ${hookAlts.length ? `<details class="hook-alt-list"><summary>${hookAlts.length} alternatives</summary>${hookAlts.map((h) =>
+              `<button type="button" onclick="applyHookAlt('${v.id}', '${escapeHtml(h).replace(/'/g, "\\'")}')">${escapeHtml(h)}</button>`
+            ).join("")}</details>` : ""}
+            <div style="font-size:0.65rem;color:var(--muted);letter-spacing:0.08em;margin-top:0.5rem;">CAPTION</div>
+            <div contenteditable="true" data-field="caption" data-id="${v.id}" style="font-size:0.85rem;">${escapeHtml(e.captionFinal || v.caption || "")}</div>
+            <div style="margin-top:0.35rem;">${hashtags.map((h) => `<span class="hashtag-pill">#${escapeHtml(String(h).replace(/^#/, ""))}</span>`).join("")}</div>
+            <p style="font-size:0.72rem;color:var(--cyan);font-style:italic;margin-top:0.35rem;">${escapeHtml(e.trendAlignmentReason || "")}</p>
+            ${compBadge}
+          </div>
+        </div>
+        <div class="clip-review-footer">
+          <button type="button" class="cm-btn" onclick="saveClipMetadata('${v.id}')">Save changes</button>
+          <button type="button" class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>
+          <button type="button" class="cm-btn green send-to-publisher-btn" onclick="sendToPublisher('${v.id}', document.getElementById('clip-card-${v.id}'), ${v.complianceFlagged ? "true" : "false"})">Send to Publisher →</button>
+        </div>
+      </div>`;
+    }
+
+    async function saveClipMetadata(id) {
+      const card = document.getElementById(`clip-card-${id}`);
+      if (!card) return;
+      const title = card.querySelector("[data-field=title]")?.textContent?.trim();
+      const hook = card.querySelector("[data-field=hook]")?.textContent?.trim();
+      const caption = card.querySelector("[data-field=caption]")?.textContent?.trim();
+      await cmFetch(`/api/content/clip/${id}/metadata`, {
+        method: "PATCH",
+        body: JSON.stringify({ title, hook, caption }),
+      });
+      showToast("Saved ✓");
+    }
+    window.saveClipMetadata = saveClipMetadata;
+
+    function applyHookAlt(id, hook) {
+      const el = document.querySelector(`#clip-card-${id} [data-field=hook]`);
+      if (el) el.textContent = hook;
+      void saveClipMetadata(id);
+    }
+    window.applyHookAlt = applyHookAlt;
+
+    async function sendToPublisher(clipId, cardElement, flagged) {
+      if (!cardElement) cardElement = document.getElementById(`clip-card-${clipId}`);
+      const btn = cardElement?.querySelector(".send-to-publisher-btn");
+      const originalText = btn?.textContent || "Send to Publisher →";
+      if (flagged) {
+        const ok = confirm("This clip has compliance flags. Override and send anyway?");
+        if (!ok) return;
+      }
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Sending...";
+      }
+      try {
+        const body = flagged
+          ? { override_compliance: true, override_reason: "human reviewed" }
+          : { scheduled_for: null, platforms: null };
+        const result = await cmFetch(`/api/content/clip/${clipId}/send-to-publisher`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        if (cardElement) {
+          cardElement.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+          cardElement.style.opacity = "0";
+          cardElement.style.transform = "scale(0.95)";
+          setTimeout(() => {
+            cardElement.remove();
+            refreshReviewQueueBadge();
+            refreshPublishingBadge();
+            showToast("Clip approved and queued for publishing");
+            void loadPublishing();
+          }, 300);
+        } else {
+          refreshReviewQueueBadge();
+          refreshPublishingBadge();
+          showToast("Clip approved and queued for publishing");
+          void loadReviewQueue();
+          void loadPublishing();
+        }
+        return result;
+      } catch (err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+        showToast(`Failed to send: ${err.message || "Unknown error"}`);
+        console.error("Send to publisher failed:", err);
+      }
+    }
+    window.sendToPublisher = sendToPublisher;
+
+    function refreshReviewQueueBadge() {
+      cmFetch("/api/content/queue?status=pending_review&limit=200")
+        .then((data) => {
+          const count = (data.videos || []).length;
+          const badge = document.getElementById("cm-count-review");
+          if (badge) {
+            badge.textContent = String(count);
+            badge.classList.toggle("crm-count-danger", count > 0);
+          }
+        })
+        .catch(() => {});
+    }
+
+    function refreshPublishingBadge() {
+      cmFetch("/api/content/publishing-queue?limit=200")
+        .then((data) => {
+          const count = (data.clips || []).length;
+          const badge = document.getElementById("cm-count-publishing");
+          if (badge) badge.textContent = String(count);
+        })
+        .catch(() => {});
     }
 
     async function cmDecision(id, decision, reason) {
@@ -1226,7 +1994,7 @@
       await loadClipPipeline(); await loadReviewQueue(); await loadCmStats(); showToast(decision === "approved" ? "Approved" : "Rejected");
     }
     function cmReject(id) {
-      const reason = prompt("Rejection reason:");
+      const reason = prompt("Reject this clip?", "");
       if (reason === null) return;
       void cmDecision(id, "rejected", reason);
     }
@@ -1240,28 +2008,25 @@
     }
 
     async function loadReviewQueue() {
-      const { videos } = await cmFetch("/api/content/queue?status=pending_review&limit=100");
-      const compliance = await cmFetch("/api/content/compliance-queue");
-      const cmap = new Map((compliance.pending || []).map((p) => [p.videoId, p]));
-      const filtered = (videos || []).filter((v) => {
-        if (reviewFilter === "flagged") return v.complianceFlagged;
-        if (reviewFilter === "clean") return !v.complianceFlagged;
-        return true;
-      });
-      document.getElementById("review-queue-list").innerHTML = filtered.length ? filtered.map((v) => {
-        const cq = cmap.get(v.id);
-        const comp = v.complianceFlagged
-          ? `<div class="cm-alert-warn" style="padding:0.5rem;border-radius:8px;margin:0.5rem 0;">${escapeHtml(v.complianceNotes || cq?.flaggedReason || "")}</div>`
-          : `<div class="cm-alert-ok" style="display:inline-block;padding:0.25rem 0.5rem;">Passed brand check ✓</div>`;
-        return `<div class="cm-review-card"><div class="cm-pill ${pillarClass(v.pillar)}">${v.pillar}</div> · ${escapeHtml(v.platformTarget)}
-          <p style="margin:0.5rem 0;">${escapeHtml(v.caption)}</p><p class="cm-muted"><em>${escapeHtml(v.hook)}</em></p>
-          <div>${(v.hashtags || []).map((h) => `<span class="cm-pill">${escapeHtml(h)}</span>`).join(" ")}</div>${comp}
-          <div style="margin-top:0.75rem;display:flex;gap:0.35rem;flex-wrap:wrap;">
-            <button class="cm-btn green" onclick="cmDecision('${v.id}','approved')">Approve</button>
-            <button class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>
-            <button class="cm-btn" onclick="cmRunCompliance('${v.id}')">Run compliance check</button>
-          </div></div>`;
-      }).join("") : '<p class="cm-muted">No items in review queue.</p>';
+      const statusParam = reviewFilter === "all" || reviewFilter === "flagged"
+        ? "&status=pending_review"
+        : reviewFilter === "approved"
+          ? "&status=approved"
+          : reviewFilter === "pending_review"
+            ? "&status=pending_review"
+            : "";
+      const batchParam = reviewBatchFilter ? `&batch_id=${reviewBatchFilter}` : "";
+      const { videos } = await cmFetch(`/api/content/queue?limit=100${statusParam}${batchParam}`);
+      let list = videos || [];
+      if (reviewFilter === "flagged") list = list.filter((v) => v.complianceFlagged);
+      if (reviewSort === "trend") list.sort((a, b) => (b.trendAlignmentScore || 0) - (a.trendAlignmentScore || 0));
+      else if (reviewSort === "compliance") list.sort((a, b) => (a.complianceFlagged ? 0 : 1) - (b.complianceFlagged ? 0 : 1));
+      else list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const el = document.getElementById("review-queue-list");
+      if (!el) return;
+      el.innerHTML = list.length
+        ? list.map(renderClipReviewCard).join("")
+        : '<p class="cm-muted">No clips in review. Upload footage above to generate your first batch.</p>';
     }
 
     async function cmRunCompliance(id) {
@@ -1270,12 +2035,34 @@
     }
 
     async function loadPublishing() {
-      const { videos } = await cmFetch("/api/content/queue?limit=200");
-      const pub = (videos || []).filter((v) => v.status === "scheduled" || v.status === "published");
-      document.getElementById("publishing-list").innerHTML = pub.length ? pub.map((v) =>
-        `<div class="cm-review-card ${v.status === "published" ? "" : ""}"><strong>${escapeHtml((v.caption || "").slice(0, 80))}</strong>
-        <div class="cm-muted">${v.status} · ${escapeHtml(v.platformTarget)} · ${v.scheduledFor ? "Scheduled " + fmtDateTime(v.scheduledFor) : ""} ${v.publishedAt ? "Published " + fmtDateTime(v.publishedAt) : ""}</div></div>`
-      ).join("") : '<p class="cm-muted">No scheduled or recently published clips.</p>';
+      const { clips } = await cmFetch("/api/content/publishing-queue?limit=50");
+      const list = document.getElementById("publishing-list");
+      if (!list) return;
+      if (!clips?.length) {
+        list.innerHTML = '<p class="cm-muted">No clips queued for publishing yet. Approve clips from the Review Queue.</p>';
+        return;
+      }
+      list.innerHTML = clips.map((item) => {
+        const v = item.video || item;
+        const e = item.enhancement || {};
+        const entries = item.entries || [];
+        const title = escapeHtml(e.titleFinal || v.title || (v.caption || "").slice(0, 80));
+        const platforms = entries.length
+          ? entries.map((en) =>
+              `<span class="cm-pill">${escapeHtml(en.platform)} · ${en.publishStatus === "scheduled" ? "Scheduled" : escapeHtml(en.publishStatus)} ${fmtDateTime(en.scheduledFor)}</span>`
+            ).join(" ")
+          : `<span class="cm-pill">${escapeHtml(v.platformTarget || "tiktok")}</span>`;
+        const statusLabel = v.status === "published" ? "Published" : v.status === "scheduled" ? "Scheduled" : "Approved";
+        return `<div class="cm-review-card">
+          <strong>${title}</strong>
+          <div style="margin-top:0.35rem;">${platforms}</div>
+          <div class="cm-muted" style="margin-top:0.35rem;font-size:0.78rem;">
+            <span class="cm-pill tier-hot">${statusLabel}</span>
+            ${v.scheduledFor ? " · " + fmtDateTime(v.scheduledFor) : ""}
+            ${v.publishedAt ? " · Published " + fmtDateTime(v.publishedAt) : ""}
+          </div>
+        </div>`;
+      }).join("");
     }
 
     async function loadCommunityPanel(tab) {
@@ -1324,22 +2111,12 @@
 
     let cmBrainSessionId = null;
 
-    async function initBrainSession() {
-      try {
-        const res = await cmFetch("/api/content-brain/sessions/new", { method: "POST", headers: apiHeaders() });
-        cmBrainSessionId = res.sessionId;
-        const sidEl = document.getElementById("cm-brain-session-id");
-        if (sidEl && cmBrainSessionId) sidEl.textContent = `Session: ${cmBrainSessionId}`;
-      } catch (_) { /* session optional */ }
-    }
-
     function gradeBadgeClass(g) {
       const letter = (g || "—").charAt(0).toUpperCase();
       return `cm-grade-badge cm-grade-${letter}`;
     }
 
     async function loadBrainSection() {
-      void initBrainSession();
       let momentum = null;
       try {
         momentum = await cmFetch("/api/content-brain/momentum").catch(() => null);
@@ -1400,52 +2177,22 @@
       } catch (e) {
         document.getElementById("cm-brain-strategy").innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
       }
-      const suggestions = [
-        "How's my content performing this week?",
-        "What should I focus on filming next?",
-        "What's holding back my numbers?",
-        "Am I going to hit 7 videos today?",
-      ];
-      document.getElementById("cm-brain-suggestions").innerHTML = suggestions.map((q) =>
-        `<div class="cm-suggested-q" data-brain-q="${escapeHtml(q)}">${escapeHtml(q)}</div>`).join("");
-      document.querySelectorAll("[data-brain-q]").forEach((el) => {
-        el.addEventListener("click", () => {
-          document.getElementById("cm-brain-input").value = el.getAttribute("data-brain-q");
-        });
-      });
-    }
 
-    const brainThread = [];
-    async function sendBrainMessage() {
-      const input = document.getElementById("cm-brain-input");
-      const q = input?.value?.trim();
-      if (!q) return;
-      input.value = "";
-      const box = document.getElementById("cm-brain-messages");
-      box.innerHTML += `<div class="cm-brain-msg user">${escapeHtml(q)}</div>`;
-      box.innerHTML += `<div class="cm-brain-msg brain" id="cm-brain-thinking"><span class="cm-brain-badge">Chance</span> Thinking…</div>`;
-      box.scrollTop = box.scrollHeight;
-      try {
-        const res = await cmFetch("/api/content-brain/ask", {
-          method: "POST",
-          headers: { ...apiHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({ question: q, sessionId: cmBrainSessionId }),
+      const sug = document.getElementById("cm-chat-suggestions");
+      if (sug) {
+        sug.innerHTML = CHAT_SUGGESTIONS.map((q) => `<button type="button" data-chat-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("");
+        sug.querySelectorAll("[data-chat-q]").forEach((btn) => {
+          btn.addEventListener("click", () => void sendChatMessage(btn.getAttribute("data-chat-q")));
         });
-        if (res.sessionId) {
-          cmBrainSessionId = res.sessionId;
-          const sidEl = document.getElementById("cm-brain-session-id");
-          if (sidEl) sidEl.textContent = `Session: ${cmBrainSessionId}`;
-        }
-        const thinking = document.getElementById("cm-brain-thinking");
-        if (thinking) {
-          thinking.id = "";
-          thinking.innerHTML = `<span class="cm-brain-badge">Chance</span>${escapeHtml(res.response || res.answer || "No response")}`;
-        }
-      } catch (e) {
-        const thinking = document.getElementById("cm-brain-thinking");
-        if (thinking) thinking.textContent = e.message || "Request failed";
       }
-      box.scrollTop = box.scrollHeight;
+      const quick = document.getElementById("cm-chat-quick");
+      if (quick) {
+        quick.innerHTML = CHAT_QUICK.map((x) => `<button type="button" data-chat-quick="${escapeHtml(x.q)}">${escapeHtml(x.label)}</button>`).join("");
+        quick.querySelectorAll("[data-chat-quick]").forEach((btn) => {
+          btn.addEventListener("click", () => void sendChatMessage(btn.getAttribute("data-chat-quick")));
+        });
+      }
+      await initBrainChatSession();
     }
     document.getElementById("cm-brain-toggle-eval")?.addEventListener("click", async () => {
       const card = document.getElementById("cm-brain-eval-card");
@@ -1473,10 +2220,6 @@
       card.innerHTML = `<p><strong>Current:</strong> ${current ? `${escapeHtml(current.status)} — ${escapeHtml(current.hypothesis || "")}` : "None active"}</p>
         <p><strong>Last completed:</strong> ${completed ? `${escapeHtml(completed.result || "")} — ${escapeHtml(completed.conclusion || "")}` : "None yet"}</p>`;
       card.style.display = "block";
-    });
-    document.getElementById("cm-brain-send")?.addEventListener("click", () => void sendBrainMessage());
-    document.getElementById("cm-brain-input")?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") void sendBrainMessage();
     });
 
     async function loadCmAnalytics(tab) {
@@ -1513,6 +2256,404 @@
       }
     }
 
+    let calendarSelectedDate = null;
+    let calendarView = "month";
+
+    function simpleMarkdownToHtml(md) {
+      if (!md) return "";
+      let html = escapeHtml(md);
+      html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+      html = html.replace(/^## (.+)$/gm, "<h3>$1</h3>");
+      html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      html = html.replace(/^\s*\d+[\.\)]\s+(.+)$/gm, "<li>$1</li>");
+      html = html.replace(/(<li>.*<\/li>)/gs, (m) => `<ol>${m}</ol>`);
+      html = html.replace(/\n\n/g, "</p><p>");
+      html = html.replace(/\n/g, "<br>");
+      return `<div class="analysis-md"><p>${html}</p></div>`;
+    }
+
+    function formatBrainChatHtml(text) {
+      let html = escapeHtml(text || "");
+      html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      html = html.replace(/^\s*\d+[\.\)]\s+(.+)$/gm, "<li>$1</li>");
+      if (html.includes("<li>")) html = html.replace(/(<li>[\s\S]*?<\/li>)+/g, (m) => `<ol>${m}</ol>`);
+      html = html.replace(/\n/g, "<br>");
+      return html;
+    }
+
+    function extractSituationSummary(md) {
+      if (!md) return "No analysis yet.";
+      const m = md.match(/SITUATION SUMMARY[\s\S]*?(?=\n[A-Z][A-Z ]|$)/i);
+      if (!m) return md.slice(0, 400);
+      return m[0].replace(/SITUATION SUMMARY\s*/i, "").trim().slice(0, 500);
+    }
+
+    async function updateStrategyBadges() {
+      try {
+        const [recs, tasks] = await Promise.all([
+          cmFetch("/api/content/strategy-recommendations?limit=50").catch(() => ({ recommendations: [] })),
+          cmFetch("/api/content/recording-tasks?days=7").catch(() => ({ tasks: [] })),
+        ]);
+        const stratEl = document.getElementById("cm-count-strategy");
+        if (stratEl) stratEl.textContent = String((recs.recommendations || []).length);
+        const calEl = document.getElementById("cm-count-calendar");
+        if (calEl) calEl.textContent = String((tasks.tasks || []).length);
+      } catch (_) {}
+    }
+
+    async function loadStrategySection(tab = "overview") {
+      document.querySelectorAll("[data-strategy-tab]").forEach((b) => {
+        b.classList.toggle("active", b.getAttribute("data-strategy-tab") === tab);
+      });
+      document.querySelectorAll(".strategy-panel").forEach((p) => {
+        p.style.display = "none";
+      });
+      const panel = document.getElementById(`strategy-${tab === "competitor" ? "competitor" : tab === "recommendations" ? "recommendations" : tab === "recording" ? "recording" : "overview"}`);
+      if (panel) panel.style.display = "block";
+
+      const data = await cmFetch("/api/content/competitive-analysis/latest").catch(() => null);
+      const analysis = data?.analysis;
+      const recommendations = data?.recommendations || [];
+
+      if (tab === "overview" || tab === "competitor") {
+        const cards = document.getElementById("strategy-comparison-cards");
+        if (cards) {
+          if (!analysis) {
+            cards.innerHTML = `<p class="cm-muted">No competitive analysis yet.</p>`;
+          } else {
+            const vsClass = analysis.marcoVsFieldPct >= 0 ? "positive" : "negative";
+            const sign = analysis.marcoVsFieldPct >= 0 ? "+" : "";
+            cards.innerHTML = `
+              <div class="strategy-compare-card marco"><strong>MARCO</strong><div>${Math.round(analysis.marcoAvgViews).toLocaleString()} avg views</div><div class="cm-muted">${analysis.marcoAvgEngagementRate.toFixed(1)}% engagement</div></div>
+              <div class="strategy-compare-card"><strong>FIELD AVERAGE</strong><div>${Math.round(analysis.competitorAvgViews).toLocaleString()} avg views</div><div class="cm-muted">${analysis.competitorAvgEngagementRate.toFixed(1)}% engagement</div></div>
+              <div class="strategy-compare-card vs ${vsClass}">${sign}${analysis.marcoVsFieldPct.toFixed(1)}%<div class="cm-muted" style="font-size:0.7rem;">vs field</div></div>`;
+          }
+        }
+        const sit = document.getElementById("strategy-situation-summary");
+        if (sit) {
+          if (!analysis) {
+            sit.innerHTML = `<p>No analysis yet. Click <strong>Run Analysis</strong> to generate your first competitive report.</p>
+              <button type="button" class="primary" id="strategy-run-analysis-inline">Run Analysis</button>`;
+            document.getElementById("strategy-run-analysis-inline")?.addEventListener("click", () => void runCompetitiveAnalysis());
+          } else {
+            sit.innerHTML = `<h3>Situation Summary</h3><p>${escapeHtml(extractSituationSummary(analysis.fullAnalysisMarkdown))}</p>`;
+          }
+        }
+        const strengthsEl = document.getElementById("strategy-strengths");
+        if (strengthsEl && analysis) {
+          strengthsEl.innerHTML = `<h3>What Marco Is Doing Right</h3><ul>${(analysis.marcoStrengths || []).map((s) => `<li>✓ ${escapeHtml(s)}</li>`).join("")}</ul>`;
+        }
+        const gapsEl = document.getElementById("strategy-gaps");
+        if (gapsEl && analysis) {
+          gapsEl.innerHTML = `<h3>Key Gaps to Close</h3><ul>${(analysis.marcoGaps || []).map((g, i) => `<li>⚠ ${escapeHtml(g)} ${recommendations[i] ? `<button type="button" class="cm-btn" style="font-size:0.65rem;margin-left:0.35rem;" onclick="createRecordingFromRec('${recommendations[i].id}')">Add to plan →</button>` : ""}</li>`).join("")}</ul>`;
+        }
+        const last = document.getElementById("strategy-last-analyzed");
+        if (last && analysis?.analyzedAt) {
+          const hrs = Math.round((Date.now() - new Date(analysis.analyzedAt).getTime()) / 3600000);
+          last.textContent = `Last analyzed ${hrs}h ago`;
+        }
+        const full = document.getElementById("strategy-full-analysis");
+        if (full && tab === "competitor" && analysis) {
+          const badges = (analysis.profilesAnalyzed || []).map((h) => `<span class="cm-pillar-tag education">@${escapeHtml(h)}</span>`).join(" ");
+          full.innerHTML = `<p class="cm-muted">Analysis from ${escapeHtml(analysis.analyzedAt?.slice(0, 10) || "")}</p><div>${badges}</div>${simpleMarkdownToHtml(analysis.fullAnalysisMarkdown)}`;
+        }
+      }
+
+      if (tab === "recommendations") {
+        const list = document.getElementById("strategy-rec-list");
+        if (list) {
+          list.innerHTML = (recommendations.length ? recommendations : await cmFetch("/api/content/strategy-recommendations?status=pending").then((d) => d.recommendations || []).catch(() => []))
+            .map((r) => `
+            <div class="strategy-rec-card">
+              <span class="cm-brain-badge">P${r.priority}</span>
+              <span class="cm-pillar-tag ${escapeHtml(r.pillar || "mixed")}">${escapeHtml(r.pillar || "mixed")}</span>
+              <span class="cm-pillar-tag education">${escapeHtml(r.hookType || "hook")}</span>
+              <p style="margin:0.5rem 0;font-weight:600;">${escapeHtml(r.recommendation)}</p>
+              <p class="cm-muted" style="font-size:0.75rem;font-style:italic;">${escapeHtml(r.dataBacking || "")}</p>
+              <select onchange="updateRecStatus('${r.id}', this.value)" style="font-size:0.72rem;margin-top:0.5rem;">
+                <option value="pending" ${r.status === "pending" ? "selected" : ""}>Pending</option>
+                <option value="in_progress" ${r.status === "in_progress" ? "selected" : ""}>In Progress</option>
+                <option value="implemented" ${r.status === "implemented" ? "selected" : ""}>Implemented</option>
+                <option value="dismissed" ${r.status === "dismissed" ? "selected" : ""}>Dismissed</option>
+              </select>
+              <button type="button" class="cm-btn" onclick="createRecordingFromRec('${r.id}')">Create Recording Task</button>
+            </div>`).join("") || "<p class='cm-muted'>No active recommendations.</p>";
+        }
+      }
+
+      if (tab === "recording") {
+        const tasks = await cmFetch("/api/content/recording-tasks?days=30").catch(() => ({ tasks: [] }));
+        const grouped = {};
+        (tasks.tasks || []).forEach((t) => {
+          if (!grouped[t.dueDate]) grouped[t.dueDate] = [];
+          grouped[t.dueDate].push(t);
+        });
+        const list = document.getElementById("strategy-recording-list");
+        if (list) {
+          list.innerHTML = Object.keys(grouped).sort().map((date) => `
+            <h4>${escapeHtml(date)}</h4>
+            ${grouped[date].map((t) => `
+              <div class="strategy-rec-card ${t.status === "filmed" ? "filmed" : ""}">
+                <span class="cm-pillar-tag ${escapeHtml(t.pillar || "brand")}">${escapeHtml(t.pillar || "")}</span>
+                <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
+                <p><strong>${escapeHtml(t.topic)}</strong></p>
+                <ol>${(t.suggestedHooks || []).map((h) => `<li onclick="navigator.clipboard.writeText('${escapeHtml(h).replace(/'/g, "\\'")}');showToast('Copied')" style="cursor:pointer;">${escapeHtml(h)}</li>`).join("")}</ol>
+                <p class="cm-muted">Target: ${t.suggestedDurationMin || 35}-${t.suggestedDurationMax || 55}s</p>
+                <blockquote class="cm-muted">${escapeHtml(t.filmingNotes || "")}</blockquote>
+                <p style="color:var(--cyan);font-style:italic;font-size:0.75rem;">${escapeHtml(t.reason || "")}</p>
+                ${t.status === "pending" ? `<button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')">Mark as Filmed</button>` : ""}
+              </div>`).join("")}`).join("") || "<p class='cm-muted'>No recording tasks.</p>";
+        }
+      }
+      void updateStrategyBadges();
+    }
+
+    async function runCompetitiveAnalysis() {
+      const btn = document.getElementById("strategy-run-analysis-btn");
+      if (btn) { btn.disabled = true; btn.textContent = "Running…"; }
+      await cmFetch("/api/content/competitive-analysis/run", { method: "POST" });
+      showToast("Analysis running — polling…");
+      for (let i = 0; i < 24; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const data = await cmFetch("/api/content/competitive-analysis/latest").catch(() => null);
+        if (data?.analysis?.analyzedAt && Date.now() - new Date(data.analysis.analyzedAt).getTime() < 120000) {
+          showToast("Analysis complete");
+          void loadStrategySection("overview");
+          if (btn) { btn.disabled = false; btn.textContent = "Run New Analysis"; }
+          return;
+        }
+      }
+      if (btn) { btn.disabled = false; btn.textContent = "Run New Analysis"; }
+      void loadStrategySection("overview");
+    }
+
+    window.createRecordingFromRec = async (id) => {
+      try {
+        const res = await cmFetch(`/api/content/strategy-recommendations/${id}/create-recording-task`, { method: "POST" });
+        showToast(`Task created for ${res.task?.dueDate || "calendar"}`);
+        void loadStrategySection("recording");
+      } catch (e) { showToast(e.message); }
+    };
+    window.updateRecStatus = async (id, status) => {
+      await cmFetch(`/api/content/strategy-recommendations/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+    };
+    window.markTaskFilmed = async (id) => {
+      await cmFetch(`/api/content/recording-tasks/${id}`, { method: "PATCH", body: JSON.stringify({ status: "filmed" }) });
+      void loadStrategySection("recording");
+      void loadCalendarSection();
+    };
+
+    document.getElementById("strategy-run-analysis-btn")?.addEventListener("click", () => void runCompetitiveAnalysis());
+    document.getElementById("strategy-generate-week-btn")?.addEventListener("click", async () => {
+      showToast("Generating week plan…");
+      await cmFetch("/api/content-brain/run-cycle", { method: "POST", body: JSON.stringify({ cycle: "monday_recording_plan" }) });
+      void loadStrategySection("recording");
+    });
+    document.querySelectorAll("[data-strategy-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => void loadStrategySection(btn.getAttribute("data-strategy-tab")));
+    });
+
+    const CHAT_SUGGESTIONS = [
+      "What should Marco film this week?",
+      "How do my videos compare to competitors?",
+      "Why are my recent videos underperforming?",
+      "Write 5 hooks for a first-time buyer video",
+      "Am I on track for 7 videos today?",
+      "What's the biggest content opportunity right now?",
+    ];
+    const CHAT_QUICK = [
+      { label: "Today's strategy", q: "What is today's content strategy and what should I focus on?" },
+      { label: "Competitors", q: "What are my competitors doing that I'm not? Give me the latest." },
+      { label: "Generate hooks", q: "Generate 5 hooks for an education video about first-time buyers in San Antonio." },
+      { label: "Recording ideas", q: "What should Marco film this week based on current gaps and strategy?" },
+      { label: "Sprint status", q: "Where do I stand on the 861-video sprint? Am I on track?" },
+      { label: "Why did this flop?", q: "I want to analyze why a recent video underperformed. Ask me which one." },
+    ];
+
+    async function initBrainChatSession() {
+      const sessions = await cmFetch("/api/content-brain/sessions").catch(() => ({ sessions: [] }));
+      const today = new Date().toISOString().slice(0, 10);
+      let session = (sessions.sessions || []).find((s) => s.startedAt?.startsWith(today));
+      if (!session) {
+        const res = await cmFetch("/api/content-brain/sessions/new", { method: "POST" });
+        cmBrainSessionId = res.sessionId || res.id;
+      } else {
+        cmBrainSessionId = session.id;
+      }
+      const sel = document.getElementById("cm-chat-session-select");
+      if (sel) {
+        sel.innerHTML = (sessions.sessions || []).slice(0, 10).map((s) =>
+          `<option value="${s.id}" ${s.id === cmBrainSessionId ? "selected" : ""}>${escapeHtml(s.sessionSummary || s.startedAt?.slice(11, 16) || s.id.slice(0, 8))}</option>`).join("");
+      }
+      if (cmBrainSessionId) {
+        const msgs = await cmFetch(`/api/content-brain/sessions/${cmBrainSessionId}/messages`).catch(() => ({ messages: [] }));
+        renderChatMessages(msgs.messages || []);
+      }
+    }
+
+    function renderChatMessages(messages) {
+      const box = document.getElementById("cm-chat-messages");
+      const empty = document.getElementById("cm-chat-empty");
+      if (!box) return;
+      if (!messages.length) {
+        if (empty) empty.style.display = "block";
+        box.querySelectorAll(".cm-chat-msg").forEach((el) => el.remove());
+        return;
+      }
+      if (empty) empty.style.display = "none";
+      box.innerHTML = messages.map((m) =>
+        `<div class="cm-chat-msg ${m.role === "user" ? "user" : "brain"}">${m.role !== "user" ? "<span class='cm-brain-badge'>CM</span>" : ""}${formatBrainChatHtml(m.content)}</div>`).join("");
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function sendChatMessage(text) {
+      const q = (text || document.getElementById("cm-chat-input")?.value || "").trim();
+      if (!q) return;
+      const input = document.getElementById("cm-chat-input");
+      if (input) input.value = "";
+      const box = document.getElementById("cm-chat-messages");
+      const empty = document.getElementById("cm-chat-empty");
+      if (empty) empty.style.display = "none";
+      box.innerHTML += `<div class="cm-chat-msg user">${escapeHtml(q)}</div>`;
+      box.innerHTML += `<div class="cm-chat-msg brain" id="cm-chat-thinking"><span class="cm-brain-badge">CM</span> <span class="cm-muted">…</span></div>`;
+      box.scrollTop = box.scrollHeight;
+      try {
+        const res = await cmFetch("/api/content-brain/ask", {
+          method: "POST",
+          body: JSON.stringify({ question: q, sessionId: cmBrainSessionId }),
+        });
+        if (res.sessionId) cmBrainSessionId = res.sessionId;
+        const thinking = document.getElementById("cm-chat-thinking");
+        if (thinking) {
+          thinking.id = "";
+          thinking.innerHTML = `<span class="cm-brain-badge">CM</span> ${formatBrainChatHtml(res.response || "")}`;
+        }
+      } catch (e) {
+        const thinking = document.getElementById("cm-chat-thinking");
+        if (thinking) thinking.innerHTML = `<span class="cm-muted">${escapeHtml(e.message)}</span> <button type="button" class="cm-btn" onclick="sendChatMessage('${escapeHtml(q).replace(/'/g, "\\'")}')">Retry</button>`;
+      }
+      box.scrollTop = box.scrollHeight;
+    }
+    window.sendChatMessage = sendChatMessage;
+
+    document.getElementById("cm-chat-send")?.addEventListener("click", () => void sendChatMessage());
+    document.getElementById("cm-chat-input")?.addEventListener("keydown", (e) => { if (e.key === "Enter") void sendChatMessage(); });
+    document.getElementById("cm-chat-new-session")?.addEventListener("click", async () => {
+      const res = await cmFetch("/api/content-brain/sessions/new", { method: "POST" });
+      cmBrainSessionId = res.sessionId || res.id;
+      document.getElementById("cm-chat-messages").innerHTML = "";
+      document.getElementById("cm-chat-empty").style.display = "block";
+      void loadBrainSection();
+    });
+    document.getElementById("cm-chat-session-select")?.addEventListener("change", async (e) => {
+      cmBrainSessionId = e.target.value;
+      const msgs = await cmFetch(`/api/content-brain/sessions/${cmBrainSessionId}/messages`);
+      renderChatMessages(msgs.messages || []);
+    });
+
+    async function loadCalendarMonth() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const data = await cmFetch(`/api/content/calendar/month/${year}/${month}`);
+      const grid = document.getElementById("calendar-grid");
+      if (!grid) return;
+      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      let html = dayNames.map((d) => `<div class="cm-muted" style="text-align:center;font-size:0.65rem;">${d}</div>`).join("");
+      const first = new Date(year, month - 1, 1);
+      let startPad = (first.getDay() + 6) % 7;
+      for (let i = 0; i < startPad; i++) html += `<div></div>`;
+      (data.days || []).forEach((day) => {
+        const dots = [];
+        const pillars = day.pillarsPublishing || [];
+        for (let i = 0; i < 7; i++) {
+          const p = pillars[i % pillars.length];
+          dots.push(p ? `<span class="calendar-dot ${escapeHtml(p)}"></span>` : `<span class="calendar-dot empty"></span>`);
+        }
+        html += `<div class="calendar-cell" data-cal-date="${day.date}">
+          <div>${day.date.slice(8)}</div>
+          <div>${dots.join("")}</div>
+          <div class="cm-muted">${day.publishCount}/7</div>
+          ${day.recordingTaskCount ? "🎥" : ""}
+        </div>`;
+      });
+      grid.innerHTML = html;
+      grid.querySelectorAll("[data-cal-date]").forEach((cell) => {
+        cell.addEventListener("click", () => {
+          calendarSelectedDate = cell.getAttribute("data-cal-date");
+          calendarView = "day";
+          document.getElementById("calendar-month-view").style.display = "none";
+          document.getElementById("calendar-day-view").style.display = "block";
+          void loadCalendarDay(calendarSelectedDate);
+        });
+      });
+      const sprint = data.sprintProgress || {};
+      const label = document.getElementById("calendar-sprint-label");
+      if (label) label.textContent = `${sprint.totalVideosEver || 0} / 861 videos | ${sprint.daysRemaining || 0} days remaining | Need ${(sprint.videosNeededPerDay || 0).toFixed(1)}/day`;
+      const fill = document.getElementById("calendar-sprint-fill");
+      if (fill) fill.style.width = `${Math.min(100, ((sprint.totalVideosEver || 0) / 861) * 100)}%`;
+      const sub = document.getElementById("calendar-sprint-sub");
+      const prog = await cmFetch("/api/content/sprint-progress").catch(() => null);
+      if (sub && prog) sub.textContent = `${prog.currentPace} videos/day current pace | ${prog.onTrack ? "on track" : `behind by ${(prog.videosNeededPerDay - prog.currentPace).toFixed(1)}/day`}`;
+    }
+
+    async function loadCalendarDay(date) {
+      const data = await cmFetch(`/api/content/calendar/day/${date}`);
+      document.getElementById("calendar-day-title").textContent = date;
+      const pub = document.getElementById("calendar-publish-column");
+      if (pub) {
+        const items = [...(data.videosScheduled || []), ...(data.videosPublished || [])];
+        pub.innerHTML = `<h3>Publishing Today</h3>${items.length ? items.map((v) => `<div style="margin:0.5rem 0;padding:0.5rem;border:1px solid var(--border);border-radius:8px;"><strong>${escapeHtml(v.title)}</strong> <span class="cm-pillar-tag education">${escapeHtml(v.platform)}</span></div>`).join("") : "<p class='cm-muted'>No content scheduled.</p>"}
+          ${data.targetGap > 0 ? `<p class="cm-muted">${data.targetGap} more videos needed today.</p>` : ""}`;
+      }
+      const rec = document.getElementById("calendar-recording-column");
+      if (rec) {
+        rec.innerHTML = `<h3>Recording Needed</h3>${(data.recordingTasks || []).map((t) => `
+          <div class="strategy-rec-card">
+            <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
+            <p><strong>${escapeHtml(t.topic)}</strong></p>
+            <ol>${(t.suggestedHooks || []).map((h) => `<li>${escapeHtml(h)}</li>`).join("")}</ol>
+            <button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')">Mark as Filmed</button>
+            <button type="button" class="cm-btn" onclick="switchCmSection('upload')">Upload Footage →</button>
+          </div>`).join("") || "<p class='cm-muted'>No recording tasks — pipeline healthy.</p>"}`;
+      }
+    }
+
+    async function loadCalendarSection() {
+      if (calendarView === "day" && calendarSelectedDate) {
+        document.getElementById("calendar-month-view").style.display = "none";
+        document.getElementById("calendar-day-view").style.display = "block";
+        await loadCalendarDay(calendarSelectedDate);
+      } else {
+        document.getElementById("calendar-month-view").style.display = "block";
+        document.getElementById("calendar-day-view").style.display = "none";
+        await loadCalendarMonth();
+      }
+      void updateStrategyBadges();
+    }
+
+    document.getElementById("cal-view-month")?.addEventListener("click", () => {
+      calendarView = "month";
+      void loadCalendarSection();
+    });
+    document.getElementById("cal-view-day")?.addEventListener("click", () => {
+      calendarView = "day";
+      calendarSelectedDate = calendarSelectedDate || new Date().toISOString().slice(0, 10);
+      void loadCalendarSection();
+    });
+    document.getElementById("calendar-back-month")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      calendarView = "month";
+      void loadCalendarSection();
+    });
+    document.getElementById("calendar-add-task-btn")?.addEventListener("click", async () => {
+      const due = calendarSelectedDate || new Date().toISOString().slice(0, 10);
+      const topic = prompt("Topic for recording task:");
+      if (!topic) return;
+      await cmFetch("/api/content/recording-tasks", { method: "POST", body: JSON.stringify({ due_date: due, pillar: "brand", topic, priority: "normal" }) });
+      void loadCalendarDay(due);
+    });
+
     function switchCmSection(section) {
       cmSection = section;
       document.querySelectorAll(".crm-side-btn[data-cm-section]").forEach((b) => {
@@ -1522,11 +2663,16 @@
         p.classList.toggle("active", p.id === "cm-section-" + section);
       });
       if (section === "overview") void loadCmOverview();
-      if (section === "upload") void loadClipPipeline();
+      if (section === "upload") {
+        void loadClipPipeline();
+        void loadTrendIntel();
+      }
       if (section === "review") void loadReviewQueue();
       if (section === "publishing") void loadPublishing();
       if (section === "community") void loadCommunityPanel("dms");
       if (section === "analytics") void loadCmAnalytics("performance");
+      if (section === "strategy") void loadStrategySection("overview");
+      if (section === "calendar") void loadCalendarSection();
       if (section === "brain") void loadBrainSection();
       if (section === "suggestions") loadContentSuggestionsTab();
       if (section === "activity") loadActivityLogTab();
@@ -1542,6 +2688,14 @@
         loadReviewQueue();
       });
     });
+    document.getElementById("review-batch-filter")?.addEventListener("change", (e) => {
+      reviewBatchFilter = e.target.value;
+      void loadReviewQueue();
+    });
+    document.getElementById("review-sort")?.addEventListener("change", (e) => {
+      reviewSort = e.target.value;
+      void loadReviewQueue();
+    });
     document.querySelectorAll("[data-community-tab]").forEach((btn) => {
       btn.addEventListener("click", () => {
         document.querySelectorAll("[data-community-tab]").forEach((b) => b.classList.toggle("active", b === btn));
@@ -1555,58 +2709,77 @@
       });
     });
 
-    /* Upload zone */
+    /* Upload zone — batch */
     const uploadZone = document.getElementById("upload-zone");
     const fileInput = document.getElementById("video-file-input");
-    let selectedFile = null;
     uploadZone?.addEventListener("click", () => fileInput?.click());
     uploadZone?.addEventListener("dragover", (e) => { e.preventDefault(); uploadZone.classList.add("dragover"); });
     uploadZone?.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
     uploadZone?.addEventListener("drop", (e) => {
       e.preventDefault(); uploadZone.classList.remove("dragover");
-      if (e.dataTransfer?.files?.[0]) setUploadFile(e.dataTransfer.files[0]);
+      if (e.dataTransfer?.files?.length) addBatchFiles(e.dataTransfer.files);
     });
-    fileInput?.addEventListener("change", () => { if (fileInput.files?.[0]) setUploadFile(fileInput.files[0]); });
-    function setUploadFile(file) {
-      selectedFile = file;
-      document.getElementById("upload-meta").classList.add("show");
-      document.getElementById("upload-file-info").textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
-      document.getElementById("upload-submit-btn").disabled = false;
-    }
-    document.getElementById("upload-submit-btn")?.addEventListener("click", async () => {
-      const pillar = document.getElementById("upload-pillar").value;
-      if (!selectedFile || !pillar) { showToast("Select file and pillar"); return; }
-      const status = document.getElementById("upload-status");
-      status.textContent = "Uploading…";
-      const fd = new FormData();
-      fd.append("video", selectedFile);
-      fd.append("pillar", pillar);
-      fd.append("notes", document.getElementById("upload-notes").value || "");
-      try {
-        const headers = {};
-        if (token) headers.Authorization = "Bearer " + token;
-        const res = await fetch(apiUrl("/api/content/upload"), { method: "POST", headers, body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Upload failed");
-        status.textContent = "Session created — OpusClip is processing your footage. Check the pipeline below.";
-        selectedFile = null;
-        document.getElementById("upload-meta").classList.remove("show");
-        await loadClipPipeline(); await loadCmStats(); await loadCmOverview();
-        showToast(`Created ${data.clips?.length || 0} clips`);
-      } catch (e) {
-        status.textContent = e.message || "Upload failed";
-        showToast(e.message);
+    fileInput?.addEventListener("change", () => {
+      if (fileInput.files?.length) addBatchFiles(fileInput.files);
+      fileInput.value = "";
+    });
+    function addBatchFiles(fileList) {
+      for (const f of fileList) {
+        if (batchFiles.length >= 20) break;
+        if (!/\.(mp4|mov|avi|mkv|webm)$/i.test(f.name)) continue;
+        batchFiles.push(f);
+        batchFileStatuses[f.name] = "Queued";
       }
+      renderBatchFileTable();
+    }
+    document.getElementById("batch-pillar")?.addEventListener("change", renderBatchFileTable);
+    document.getElementById("batch-process-btn")?.addEventListener("click", async () => {
+      const pillar = document.getElementById("batch-pillar")?.value;
+      if (!batchFiles.length || !pillar) { showToast("Add files and select pillar"); return; }
+      const fd = new FormData();
+      batchFiles.forEach((f) => fd.append("videos", f));
+      fd.append("pillar", pillar);
+      fd.append("session_name", document.getElementById("batch-session-name")?.value || "");
+      const filmedBy = document.querySelector('input[name="filmed-by"]:checked')?.value || "marco";
+      fd.append("filmed_by", filmedBy);
+      await startBatchProcessing(fd);
+    });
+    document.getElementById("trend-intel-badge")?.addEventListener("click", async () => {
+      const badge = document.getElementById("trend-intel-badge");
+      if (badge) badge.textContent = "↻ Refreshing…";
+      await cmFetch("/api/content/competitor-trends/refresh", { method: "POST" });
+      await loadTrendIntel();
+      showToast("Trends refreshed");
+    });
+    document.getElementById("refresh-trends-btn")?.addEventListener("click", async () => {
+      await cmFetch("/api/content/competitor-trends/refresh", { method: "POST" });
+      await loadTrendIntel();
+      showToast("Trends refreshed");
+    });
+    document.getElementById("add-competitor-btn")?.addEventListener("click", async () => {
+      const tiktok_handle = document.getElementById("new-comp-handle")?.value?.trim();
+      const display_name = document.getElementById("new-comp-name")?.value?.trim();
+      const profile_type = document.getElementById("new-comp-type")?.value;
+      if (!tiktok_handle || !display_name) { showToast("Handle and name required"); return; }
+      await cmFetch("/api/content/competitor-profiles", {
+        method: "POST",
+        body: JSON.stringify({ tiktok_handle, display_name, profile_type }),
+      });
+      await loadCompetitorProfiles();
+      showToast("Competitor added");
     });
 
     setInterval(() => {
+      if (cmSection === "upload" && activeBatchId && batchPollTimer) {
+        const ind = document.getElementById("review-poll-indicator");
+        if (ind) { ind.style.display = "block"; setTimeout(() => { ind.style.display = "none"; }, 2000); }
+        void loadReviewQueue();
+      }
       if (cmSection === "upload" && pipelineRefreshAt) {
         const sec = Math.round((Date.now() - pipelineRefreshAt) / 1000);
-        const lbl = document.getElementById("pipeline-refresh-label");
-        if (lbl && sec >= 30) { void loadClipPipeline(); }
-        else if (lbl) lbl.textContent = sec ? `· last updated ${sec}s ago` : "";
+        if (sec >= 60) { void loadClipPipeline(); }
       }
-    }, 5000);
+    }, 15000);
     setInterval(() => { if (cmSection === "overview") void loadCmOverview(); }, 60000);
 
     function switchTab(tabId) {
@@ -1670,7 +2843,7 @@
           </div>
           <div class="score-badge-wrap">
             <div class="score-big" style="color:${tierColor};">${sb.score}</div>
-            <div class="score-tier-label" style="color:${tierColor};">${tierLabel.toUpperCase()}</div>
+            <div class="score-tier-label tier-${tierLabel}">${tierLabel.toUpperCase()}</div>
           </div>
         </div>
         <div class="score-stats">
@@ -1681,10 +2854,10 @@
           <span>Shares: ${fmt(video.shares)}</span>
         </div>
         <div class="score-section-label">SCORE BREAKDOWN</div>
-        ${scoreBar("Views", sb.viewsScore, tierColor)}
-        ${scoreBar("Retention", sb.retentionScore, tierColor)}
-        ${scoreBar("Saves", sb.savesScore, tierColor)}
-        ${scoreBar("Shares", sb.sharesScore, tierColor)}
+        ${scoreBar("Views", sb.viewsScore, "var(--cyan)")}
+        ${scoreBar("Retention", sb.retentionScore, "var(--cyan)")}
+        ${scoreBar("Saves", sb.savesScore, "var(--cyan)")}
+        ${scoreBar("Shares", sb.sharesScore, "var(--cyan)")}
         <div class="score-section-label">IMPROVEMENTS</div>
         <div id="improvements-${postId}">${improvementsHtml}</div>
       </div>`;
@@ -1924,6 +3097,8 @@
       } catch (e) {
         container.innerHTML = `<div class="error">${escapeHtml(e.message || "Failed to load suggestions")}</div>`;
       }
+      void loadCompetitorProfiles();
+      void loadTrendIntel();
     }
 
     async function generateContentSuggestions() {
@@ -2257,6 +3432,8 @@
     void loadCmStats().then(() => {
       switchCmSection("overview");
       loadCmOverview();
+      refreshReviewQueueBadge();
+      refreshPublishingBadge();
     });
     void doLoad();
     void loadRefreshSchedule();

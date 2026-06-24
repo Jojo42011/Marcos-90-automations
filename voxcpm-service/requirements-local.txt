@@ -1,0 +1,6 @@
+# Local / mock mode — no GPU, no voxcpm package
+fastapi>=0.111.0
+uvicorn>=0.29.0
+soundfile>=0.12.1
+numpy>=1.24.0
+pydantic>=2.0.0

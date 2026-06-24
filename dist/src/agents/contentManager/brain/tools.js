@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.computeBenchmarkTrajectory = exports.CM_BRAIN_TOOL_DEFINITIONS = void 0;
 exports.executeContentBrainTool = executeContentBrainTool;
@@ -6,6 +39,10 @@ const gemini_js_1 = require("./gemini.js");
 const compliance_js_1 = require("../compliance.js");
 const contentDb_js_1 = require("../../../core/contentDb.js");
 Object.defineProperty(exports, "computeBenchmarkTrajectory", { enumerable: true, get: function () { return contentDb_js_1.computeBenchmarkTrajectory; } });
+const calendar_js_1 = require("../calendar.js");
+const competitiveAnalysis_js_1 = require("../competitiveAnalysis.js");
+const stats_js_1 = require("./stats.js");
+const contentDb_js_2 = require("../../../core/contentDb.js");
 exports.CM_BRAIN_TOOL_DEFINITIONS = [
     {
         name: "get_performance_data",
@@ -175,6 +212,71 @@ exports.CM_BRAIN_TOOL_DEFINITIONS = [
     {
         name: "get_benchmark_trajectory",
         description: "30-day benchmark trajectory and weekly view trends.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_competitive_analysis",
+        description: "Latest competitive analysis with strategy recommendations.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_strategy_recommendations",
+        description: "Strategy recommendations filtered by status.",
+        input_schema: {
+            type: "object",
+            properties: {
+                status: { type: "string" },
+                limit: { type: "number" },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "get_recording_tasks",
+        description: "Recording tasks for upcoming days.",
+        input_schema: {
+            type: "object",
+            properties: {
+                status: { type: "string" },
+                days: { type: "number" },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "get_calendar_week",
+        description: "7-day calendar view with publishing and recording tasks.",
+        input_schema: {
+            type: "object",
+            properties: { week_start: { type: "string" } },
+            required: [],
+        },
+    },
+    {
+        name: "create_recording_task",
+        description: "Add a recording task to Marco's production queue.",
+        input_schema: {
+            type: "object",
+            properties: {
+                due_date: { type: "string" },
+                pillar: { type: "string" },
+                topic: { type: "string" },
+                suggested_hooks: { type: "array", items: { type: "string" } },
+                filming_notes: { type: "string" },
+                reason: { type: "string" },
+                priority: { type: "string" },
+            },
+            required: ["due_date", "pillar", "topic"],
+        },
+    },
+    {
+        name: "get_sprint_progress",
+        description: "861-video sprint progress and pace.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "run_competitive_analysis",
+        description: "Trigger full competitive analysis (Apify + Gemini, 30-60 seconds).",
         input_schema: { type: "object", properties: {}, required: [] },
     },
 ];
@@ -419,6 +521,88 @@ async function executeContentBrainTool(toolName, input) {
             });
         case "get_benchmark_trajectory":
             return (0, contentDb_js_1.computeBenchmarkTrajectory)();
+        case "get_competitive_analysis": {
+            const analysis = (0, contentDb_js_1.getLatestCompetitiveAnalysis)();
+            const recommendations = analysis
+                ? (0, contentDb_js_1.listStrategyRecommendations)({ analysisId: analysis.id, limit: 10 })
+                : [];
+            return { analysis, recommendations };
+        }
+        case "get_strategy_recommendations": {
+            const status = input.status ? String(input.status) : undefined;
+            const limit = Number(input.limit) || 10;
+            if (status) {
+                return { recommendations: (0, contentDb_js_1.listStrategyRecommendations)({ status, limit }) };
+            }
+            return { recommendations: (0, contentDb_js_1.getActiveStrategyRecommendations)().slice(0, limit) };
+        }
+        case "get_recording_tasks": {
+            const days = Number(input.days) || 14;
+            const status = input.status ? String(input.status) : "pending";
+            const today = (0, contentDb_js_1.todayDateCst)();
+            const end = new Date(`${today}T12:00:00`);
+            end.setDate(end.getDate() + days);
+            const endStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(end);
+            return {
+                tasks: (0, contentDb_js_1.listRecordingTasks)({
+                    status,
+                    dueAfter: today,
+                    dueBefore: endStr,
+                    limit: 50,
+                }),
+            };
+        }
+        case "get_calendar_week": {
+            const weekStart = input.week_start ? String(input.week_start) : (0, stats_js_1.getWeekStart)();
+            const days = [];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(`${weekStart}T12:00:00`);
+                d.setDate(d.getDate() + i);
+                const dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(d);
+                days.push((0, calendar_js_1.getCalendarDayData)(dateStr));
+            }
+            return { week_start: weekStart, days };
+        }
+        case "create_recording_task": {
+            const dueDate = String(input.due_date || (0, contentDb_js_1.todayDateCst)());
+            const hooks = Array.isArray(input.suggested_hooks)
+                ? input.suggested_hooks.map(String)
+                : [String(input.topic || "")];
+            const task = (0, contentDb_js_1.insertRecordingTask)({
+                dueDate,
+                pillar: String(input.pillar || "brand"),
+                hookType: null,
+                topic: String(input.topic || ""),
+                suggestedHooks: hooks,
+                suggestedDurationMin: 35,
+                suggestedDurationMax: 55,
+                filmingNotes: input.filming_notes ? String(input.filming_notes) : null,
+                reason: input.reason ? String(input.reason) : null,
+                source: "brain",
+                priority: input.priority ? String(input.priority) : "normal",
+                strategyRecommendationId: null,
+            });
+            (0, contentDb_js_1.insertCalendarEvent)({
+                eventDate: dueDate,
+                eventType: "recording_needed",
+                title: `Film: ${task.topic.slice(0, 60)}`,
+                description: task.filmingNotes,
+                pillar: task.pillar,
+                platform: null,
+                videoId: null,
+                recordingTaskId: task.id,
+            });
+            return { task };
+        }
+        case "get_sprint_progress":
+            return (0, contentDb_js_2.getSprintProgressData)();
+        case "run_competitive_analysis": {
+            const { contentManagerBrain } = await Promise.resolve().then(() => __importStar(require("./index.js")));
+            return {
+                message: "Competitive analysis running — this calls Apify and may take 30-60 seconds.",
+                analysis: await (0, competitiveAnalysis_js_1.runFullCompetitiveAnalysis)(contentManagerBrain),
+            };
+        }
         default:
             return { error: `Unknown tool: ${toolName}` };
     }

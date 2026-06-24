@@ -21,6 +21,19 @@ class ContentManagerBrain {
         const strategy = (0, contentDb_js_1.getDailyStrategy)((0, contentDb_js_1.todayDateCst)());
         const targets = (0, contentDb_js_1.ensureDailyTargets)((0, contentDb_js_1.todayDateCst)());
         const logs = (0, contentDb_js_1.listLearningLogs)({ limit: 2 });
+        const analysis = (0, contentDb_js_1.getLatestCompetitiveAnalysis)();
+        const activeRecs = (0, contentDb_js_1.getActiveStrategyRecommendations)().slice(0, 3);
+        const today = (0, contentDb_js_1.todayDateCst)();
+        const weekEnd = new Date(`${today}T12:00:00`);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        const weekEndStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(weekEnd);
+        const pendingTasks = (0, contentDb_js_1.listRecordingTasks)({
+            status: "pending",
+            dueAfter: today,
+            dueBefore: weekEndStr,
+            limit: 20,
+        });
+        const sprint = (0, contentDb_js_1.getSprintProgressData)();
         return {
             avg_views: model.decayWeightedAvgViews || model.overallAvgViews,
             videos_today: targets.videosPublished,
@@ -33,7 +46,27 @@ class ContentManagerBrain {
             season_multiplier: model.seasonMultiplier,
             today_strategy: strategy,
             recent_learning: logs,
+            competitive: analysis
+                ? {
+                    marco_vs_field_pct: analysis.marcoVsFieldPct,
+                    top_competitor: analysis.topCompetitorHandle,
+                    strengths: analysis.marcoStrengths.slice(0, 3),
+                    gaps: analysis.marcoGaps.slice(0, 3),
+                    top_recommendation: activeRecs[0]?.recommendation ?? null,
+                }
+                : null,
+            strategy_recommendations: activeRecs.map((r) => ({
+                priority: r.priority,
+                recommendation: r.recommendation,
+                pillar: r.pillar,
+            })),
+            recording_tasks_pending_7d: pendingTasks.length,
+            top_recording_task: pendingTasks[0] ?? null,
+            sprint_progress: sprint,
         };
+    }
+    buildContextBlock() {
+        return "\n\nCurrent context: " + JSON.stringify(this.buildContextSnapshot());
     }
     async runToolRound(userMessage, extraContext = "", history) {
         if (!this.apiKey) {
@@ -58,6 +91,7 @@ class ContentManagerBrain {
         let extra = `\n\nCURRENT PERFORMANCE MODEL:\n${JSON.stringify(model, null, 2)}`;
         extra += `\n\nTODAY'S STRATEGY:\n${JSON.stringify(strategy, null, 2)}`;
         extra += `\n\nRECENT LEARNING (last 3):\n${JSON.stringify(logs, null, 2)}`;
+        extra += this.buildContextBlock();
         if (context)
             extra += `\n\nADDITIONAL CONTEXT:\n${JSON.stringify(context, null, 2)}`;
         return this.runToolRound(message, extra);
@@ -82,9 +116,7 @@ class ContentManagerBrain {
             parts: [{ text: m.content }],
         }));
         const contextSnapshot = this.buildContextSnapshot();
-        const system = prompts_js_1.CONTENT_MANAGER_BRAIN_PROMPT +
-            "\n\nCurrent context: " +
-            JSON.stringify(contextSnapshot);
+        const system = prompts_js_1.CONTENT_MANAGER_BRAIN_PROMPT + this.buildContextBlock();
         (0, contentDb_js_1.insertChatMessage)({
             sessionId: session.id,
             role: "user",

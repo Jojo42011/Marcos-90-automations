@@ -1,0 +1,281 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.processBatch = processBatch;
+const crypto_1 = require("crypto");
+const index_js_1 = require("./brain/index.js");
+const clipEnhancer_js_1 = require("./clipEnhancer.js");
+const competitorIntel_js_1 = require("./competitorIntel.js");
+const compliance_js_1 = require("./compliance.js");
+const index_js_2 = require("../../integrations/openshorts/index.js");
+const contentDb_js_1 = require("../../core/contentDb.js");
+const POLL_INTERVAL_MS = 30_000;
+const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function resolveVideoPillar(batchPillar) {
+    if (batchPillar === "education" || batchPillar === "listings" || batchPillar === "brand") {
+        return batchPillar;
+    }
+    return "brand";
+}
+function fallbackTrendRecord() {
+    const now = new Date().toISOString();
+    return {
+        id: "fallback",
+        scrapedAt: now,
+        profilesScraped: [],
+        rawVideoCount: 0,
+        topHooks: [],
+        trendingHashtags: ["sanantonio", "sanantoniohomes", "firsttimehomebuyer"],
+        topPerformingDurations: {},
+        bestDurationRange: "30_to_60",
+        topContentThemes: [],
+        trendBrief: "Focus on specific San Antonio neighborhoods, mortgage rates, and first-time buyer education.",
+        expiresAt: now,
+    };
+}
+function calculateTargetClipsPerFile(fileCount) {
+    const today = (0, contentDb_js_1.todayDateCst)();
+    const targets = (0, contentDb_js_1.ensureDailyTargets)(today);
+    const pipelineCount = targets.videosPublished + (0, contentDb_js_1.countClipsInApprovedOrScheduled)();
+    let gap = Math.max(0, 7 - pipelineCount);
+    const targetTotal = gap > 0 ? gap : 7;
+    const perFile = Array(fileCount).fill(1);
+    let remaining = targetTotal - fileCount;
+    let idx = 0;
+    while (remaining > 0) {
+        perFile[idx % fileCount]++;
+        remaining--;
+        idx++;
+    }
+    return { total: targetTotal, perFile };
+}
+async function pollUntilComplete(jobId) {
+    const interval = jobId.startsWith("mock_") ? 100 : POLL_INTERVAL_MS;
+    const start = Date.now();
+    while (Date.now() - start < POLL_TIMEOUT_MS) {
+        const result = await (0, index_js_2.pollOpenShortsJob)(jobId);
+        if ((result.status === "complete" || result.status === "completed") &&
+            result.clips?.length) {
+            return result.clips;
+        }
+        if (result.status === "failed") {
+            throw new Error(`OpenShorts job failed: ${jobId}`);
+        }
+        await sleep(interval);
+    }
+    throw new Error(`OpenShorts job timed out: ${jobId}`);
+}
+async function processOpenShortsResults(sourceFile, clips, batchSession, trendRecord) {
+    let enhanced = 0;
+    let compliant = 0;
+    const videoPillar = resolveVideoPillar(batchSession.pillar);
+    for (const clip of clips) {
+        const filePath = (0, index_js_2.mapClipUrlForFrontend)(clip.clipUrl || clip.clipPath);
+        const thumbnailUrl = clip.thumbnailUrl ? (0, index_js_2.mapClipUrlForFrontend)(clip.thumbnailUrl) : null;
+        const hookText = (clip.hookPreview || clip.suggestedCaption.split(/[.!?]/)[0]) ?? clip.suggestedCaption;
+        const caption = clip.suggestedCaption;
+        const title = clip.suggestedTitle || caption.slice(0, 60);
+        const clipPillar = resolveVideoPillar(clip.pillar || batchSession.pillar);
+        const session = (0, contentDb_js_1.createContentSession)({
+            rawInputType: "batch_clip",
+            rawInputPath: sourceFile.filePath,
+            rawInputMeta: {
+                openShortsClipId: clip.clipId,
+                startTime: clip.startTime,
+                endTime: clip.endTime,
+                thumbnailUrl,
+            },
+            batchSessionId: batchSession.id,
+            filmedBy: batchSession.filmedBy,
+        });
+        const videoId = (0, crypto_1.randomUUID)();
+        (0, contentDb_js_1.insertContentVideo)({
+            id: videoId,
+            sourceSessionId: session.id,
+            platformTarget: "tiktok",
+            title,
+            caption,
+            hook: hookText,
+            hashtags: [],
+            pillar: clipPillar || videoPillar,
+            filePath,
+            status: "processing",
+            complianceFlagged: false,
+            complianceNotes: null,
+            approvedAt: null,
+            scheduledFor: null,
+            publishedAt: null,
+            batchSessionId: batchSession.id,
+            sourceFileId: sourceFile.id,
+            opusClipScore: clip.viralScore / 100,
+            hookType: clip.hookType,
+        });
+        try {
+            const enhancement = await (0, clipEnhancer_js_1.enhanceClip)({
+                videoId,
+                sourceFileId: sourceFile.id,
+                clipResult: clip,
+                pillar: batchSession.pillar,
+                trendRecord,
+                brain: index_js_1.contentManagerBrain,
+            });
+            enhanced++;
+            (0, contentDb_js_1.updateContentVideo)(videoId, {
+                hook: enhancement.hookPrimary,
+                caption: enhancement.captionFinal,
+                hashtags: enhancement.hashtagsFinal,
+                title: enhancement.titleFinal,
+                hookType: enhancement.hookType,
+                trendAlignmentScore: enhancement.trendAlignmentScore,
+                platformTargets: enhancement.platformTargets,
+                optimalPostTime: enhancement.optimalPostTimeTiktok,
+                platformTarget: enhancement.platformTargets[0] ??
+                    "tiktok",
+            });
+        }
+        catch (enhanceErr) {
+            const msg = enhanceErr instanceof Error ? enhanceErr.message : String(enhanceErr);
+            console.warn(`[batch-processor] Enhancement failed for clip ${videoId}: ${msg}`);
+        }
+        try {
+            const complianceResult = await (0, compliance_js_1.runComplianceCheck)(videoId);
+            if (complianceResult.passed)
+                compliant++;
+        }
+        catch (compErr) {
+            const msg = compErr instanceof Error ? compErr.message : String(compErr);
+            console.warn(`[batch-processor] Compliance check failed for ${videoId}: ${msg}`);
+        }
+        (0, contentDb_js_1.updateContentVideo)(videoId, { status: "pending_review", approvedAt: null });
+        (0, contentDb_js_1.updateContentSession)(session.id, {
+            clipsGenerated: 1,
+            status: "complete",
+            completedAt: new Date().toISOString(),
+        });
+        const currentCount = sourceFile.clipsGeneratedCount + 1;
+        (0, contentDb_js_1.updateBatchSourceFile)(sourceFile.id, { clipsGeneratedCount: currentCount });
+        sourceFile.clipsGeneratedCount = currentCount;
+        console.log(`[batch-processor] Clip ${videoId} created and ready for review`);
+    }
+    return { enhanced, compliant };
+}
+async function processBatch(batchSessionId) {
+    console.log(`[batch-processor] Starting batch ${batchSessionId}`);
+    const batchSession = (0, contentDb_js_1.getBatchSession)(batchSessionId);
+    if (!batchSession) {
+        console.error("[batch-processor] Batch not found:", batchSessionId);
+        return;
+    }
+    const sourceFiles = (0, contentDb_js_1.listBatchSourceFiles)(batchSessionId);
+    if (sourceFiles.length === 0) {
+        console.error("[batch-processor] No source files for batch:", batchSessionId);
+        (0, contentDb_js_1.updateBatchSession)(batchSessionId, { status: "failed" });
+        return;
+    }
+    console.log(`[batch-processor] Found ${sourceFiles.length} source files`);
+    (0, contentDb_js_1.updateBatchSession)(batchSessionId, { status: "analyzing_trends" });
+    let trendRecord = null;
+    try {
+        trendRecord = (0, competitorIntel_js_1.getCachedTrends)();
+        if (!trendRecord) {
+            console.log("[batch-processor] No cached trends — running competitor scrape");
+            trendRecord = await (0, competitorIntel_js_1.runCompetitorScrape)();
+        }
+        console.log(`[batch-processor] Trend data ready: ${trendRecord.trendBrief?.slice(0, 80) || "empty"}...`);
+    }
+    catch (trendErr) {
+        const msg = trendErr instanceof Error ? trendErr.message : String(trendErr);
+        console.warn(`[batch-processor] Trend scrape failed (continuing without trends): ${msg}`);
+        trendRecord = null;
+    }
+    const effectiveTrend = trendRecord ?? fallbackTrendRecord();
+    if (trendRecord) {
+        (0, contentDb_js_1.updateBatchSession)(batchSessionId, { trendBriefId: trendRecord.id });
+    }
+    const { perFile } = calculateTargetClipsPerFile(sourceFiles.length);
+    const trendBrief = trendRecord ? (0, competitorIntel_js_1.getTrendBriefForOpusClip)(trendRecord) : effectiveTrend.trendBrief;
+    console.log(`[batch-processor] Target clips per file: ${perFile.join(", ")} (total gap-driven)`);
+    let totalClips = 0;
+    let totalEnhanced = 0;
+    let totalCompliant = 0;
+    (0, contentDb_js_1.updateBatchSession)(batchSessionId, { status: "processing_opus" });
+    for (const sourceFile of sourceFiles) {
+        const fileIndex = sourceFiles.indexOf(sourceFile);
+        const clipsForFile = perFile[fileIndex] ?? 1;
+        try {
+            console.log(`[batch-processor] Processing file: ${sourceFile.originalFilename}`);
+            (0, contentDb_js_1.updateBatchSourceFile)(sourceFile.id, {
+                opusStatus: "submitted",
+                opusSubmittedAt: new Date().toISOString(),
+            });
+            let jobId;
+            try {
+                const submission = await (0, index_js_2.submitToOpenShorts)({
+                    filePath: sourceFile.filePath,
+                    pillar: batchSession.pillar,
+                    trendBrief,
+                    targetClipCount: clipsForFile,
+                });
+                jobId = submission.jobId;
+                console.log(`[batch-processor] OpenShorts job submitted: ${jobId} (status: ${submission.status})`);
+            }
+            catch (submitErr) {
+                const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
+                console.error(`[batch-processor] OpenShorts submission failed: ${msg}. Using mock.`);
+                jobId = `mock_${Date.now()}_${clipsForFile}`;
+            }
+            (0, contentDb_js_1.updateBatchSourceFile)(sourceFile.id, { opusJobId: jobId, opusStatus: "processing" });
+            (0, contentDb_js_1.updateBatchSession)(batchSessionId, { status: "transcribing" });
+            let openShortsClips;
+            try {
+                openShortsClips = await pollUntilComplete(jobId);
+                console.log(`[batch-processor] Job ${jobId} complete: ${openShortsClips.length} clips`);
+            }
+            catch (pollErr) {
+                const msg = pollErr instanceof Error ? pollErr.message : String(pollErr);
+                console.error(`[batch-processor] Polling failed for job ${jobId}: ${msg}`);
+                (0, contentDb_js_1.updateBatchSourceFile)(sourceFile.id, {
+                    opusStatus: "failed",
+                    errorMessage: msg,
+                });
+                continue;
+            }
+            if (!openShortsClips.length) {
+                console.warn(`[batch-processor] Job ${jobId} returned no clips`);
+                (0, contentDb_js_1.updateBatchSourceFile)(sourceFile.id, { opusStatus: "failed", errorMessage: "No clips returned" });
+                continue;
+            }
+            (0, contentDb_js_1.updateBatchSession)(batchSessionId, { status: "analyzing" });
+            await sleep(200);
+            (0, contentDb_js_1.updateBatchSession)(batchSessionId, { status: "reframing" });
+            await sleep(200);
+            (0, contentDb_js_1.updateBatchSession)(batchSessionId, { status: "enhancing" });
+            const result = await processOpenShortsResults(sourceFile, openShortsClips, batchSession, effectiveTrend);
+            totalClips += openShortsClips.length;
+            totalEnhanced += result.enhanced;
+            totalCompliant += result.compliant;
+            (0, contentDb_js_1.updateBatchSourceFile)(sourceFile.id, {
+                opusStatus: "complete",
+                opusCompletedAt: new Date().toISOString(),
+                clipsGeneratedCount: openShortsClips.length,
+            });
+            console.log(`[batch-processor] File ${sourceFile.originalFilename}: ${openShortsClips.length} clips generated`);
+        }
+        catch (fileErr) {
+            const msg = fileErr instanceof Error ? fileErr.message : String(fileErr);
+            console.error(`[batch-processor] Failed processing file ${sourceFile.originalFilename}:`, msg);
+            (0, contentDb_js_1.updateBatchSourceFile)(sourceFile.id, {
+                opusStatus: "failed",
+                errorMessage: msg,
+            });
+        }
+    }
+    (0, contentDb_js_1.updateBatchSession)(batchSessionId, {
+        status: "complete",
+        completedAt: new Date().toISOString(),
+        clipsGenerated: totalClips,
+    });
+    console.log(`[batch-processor] Batch ${batchSessionId} complete — ${totalClips} clips generated from ${sourceFiles.length} videos, ${totalEnhanced} enhanced, ${totalCompliant} passed compliance.`);
+}

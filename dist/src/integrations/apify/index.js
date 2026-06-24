@@ -3,7 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractContentPatterns = exports.scoreVideos = void 0;
 exports.getApifyClient = getApifyClient;
 exports.fetchTikTokComments = fetchTikTokComments;
+exports.getMarcoOwnVideos = getMarcoOwnVideos;
 exports.fetchTikTokVideos = fetchTikTokVideos;
+exports.getCompetitorVideos = getCompetitorVideos;
 const apify_client_1 = require("apify-client");
 var scoring_js_1 = require("./scoring.js");
 Object.defineProperty(exports, "scoreVideos", { enumerable: true, get: function () { return scoring_js_1.scoreVideos; } });
@@ -306,6 +308,27 @@ async function fetchTikTokComments(postURLs, sinceMs) {
     console.log("[Apify] Fetched", comments.length, "comments from", urls.length, "videos");
     return comments;
 }
+function extractHandleFromRow(row) {
+    const author = (row.authorMeta && typeof row.authorMeta === "object"
+        ? row.authorMeta
+        : null) ||
+        (row.author && typeof row.author === "object"
+            ? row.author
+            : null);
+    if (!author)
+        return "";
+    return (str(author.name) ||
+        str(author.uniqueId) ||
+        str(author.username) ||
+        str(author.nickName));
+}
+/**
+ * Pull Marco's own TikTok (@puga.realtor) videos via Apify.
+ */
+async function getMarcoOwnVideos() {
+    const result = await fetchTikTokVideos("puga.realtor");
+    return result.videos;
+}
 /**
  * Pull TikTok profile videos via Apify clockworks/tiktok-scraper.
  */
@@ -358,4 +381,43 @@ async function fetchTikTokVideos(username) {
         return tb - ta;
     });
     return { profile, videos };
+}
+/**
+ * Fetch TikTok videos from multiple competitor profiles via Apify clockworks/tiktok-scraper.
+ */
+async function getCompetitorVideos(handles) {
+    const profiles = [...new Set(handles.map((h) => h.replace(/^@/, "").trim()).filter(Boolean))];
+    if (profiles.length === 0)
+        return [];
+    const client = getApifyClient();
+    console.log("[Apify] Fetching competitor videos for", profiles.length, "profile(s)");
+    const run = await client.actor("clockworks/tiktok-scraper").call({
+        profiles,
+        resultsPerPage: 30,
+        shouldDownloadVideos: false,
+        shouldDownloadCovers: false,
+        shouldDownloadSubtitles: false,
+        shouldDownloadSlideshowImages: false,
+    });
+    const datasetId = run.defaultDatasetId;
+    if (!datasetId) {
+        throw new Error("Apify run completed without a default dataset");
+    }
+    const { items } = await client.dataset(datasetId).listItems();
+    const rows = (items ?? []).filter((x) => Boolean(x) && typeof x === "object");
+    const seen = new Set();
+    const videos = [];
+    for (const row of rows) {
+        if (isProfileOnlyRow(row))
+            continue;
+        const video = normalizeVideo(row);
+        if (!video || seen.has(video.id))
+            continue;
+        seen.add(video.id);
+        const handle = extractHandleFromRow(row);
+        if (handle)
+            video.accountHandle = handle.replace(/^@/, "");
+        videos.push(video);
+    }
+    return videos;
 }

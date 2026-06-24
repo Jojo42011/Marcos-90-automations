@@ -33,11 +33,11 @@
     "title": "72",
     "type": "call",
     "priority": "normal",
-    "status": "due_soon",
+    "status": "overdue",
     "previousStatus": "pending",
     "dueDate": "2026-06-20",
     "createdAt": "2026-06-17T21:54:27.690Z",
-    "updatedAt": "2026-06-19T04:59:10.503Z",
+    "updatedAt": "2026-06-22T15:37:40.072Z",
     "source": "manual"
   },
   {
@@ -103,11 +103,11 @@
     "title": "CRM 72h",
     "type": "call",
     "priority": "normal",
-    "status": "due_soon",
+    "status": "overdue",
     "previousStatus": "pending",
     "dueDate": "2026-06-20",
     "createdAt": "2026-06-17T21:57:06.986Z",
-    "updatedAt": "2026-06-19T04:59:10.503Z",
+    "updatedAt": "2026-06-22T15:37:40.072Z",
     "source": "manual"
   },
   {

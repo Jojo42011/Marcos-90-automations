@@ -66,9 +66,14 @@ const index_js_10 = require("./agents/reEngagement/index.js");
 const index_js_11 = require("./agents/listingStatusAutomation/index.js");
 const index_js_12 = require("./agents/contentManager/index.js");
 const index_js_13 = require("./agents/contentManager/brain/index.js");
+const batchProcessor_js_1 = require("./agents/contentManager/batchProcessor.js");
+const competitorIntel_js_1 = require("./agents/contentManager/competitorIntel.js");
 const stats_js_1 = require("./agents/contentManager/brain/stats.js");
 const tools_js_1 = require("./agents/contentManager/brain/tools.js");
 const contentDb_js_1 = require("./core/contentDb.js");
+const competitiveAnalysis_js_1 = require("./agents/contentManager/competitiveAnalysis.js");
+const calendar_js_1 = require("./agents/contentManager/calendar.js");
+const stats_js_2 = require("./agents/contentManager/brain/stats.js");
 const autoPlans_js_1 = require("./core/autoPlans.js");
 const tagTemplates_js_1 = require("./core/tagTemplates.js");
 const leadFilter_js_1 = require("./core/leadFilter.js");
@@ -116,8 +121,18 @@ const index_js_23 = require("./agents/mojoOutreach/index.js");
 const index_js_24 = require("./agents/conversationEscalations/index.js");
 const textingRules_js_1 = require("./core/textingRules.js");
 const marcoLog_js_1 = require("./app/marcoLog.js");
+const index_js_25 = require("./integrations/openshorts/index.js");
+const http_proxy_middleware_1 = require("http-proxy-middleware");
+const index_js_26 = require("./integrations/voxcpm/index.js");
+const safetyLock_js_1 = require("./agents/voiceClone/safetyLock.js");
+const voiceCloneStore_js_1 = require("./core/voiceCloneStore.js");
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || 3000;
+app.use("/openshorts", (0, http_proxy_middleware_1.createProxyMiddleware)({
+    target: process.env.OPENSHORTS_URL || "http://localhost:8000",
+    changeOrigin: true,
+    pathRewrite: { "^/openshorts": "" },
+}));
 /** Base URL of the Flask ad dashboard (no trailing slash), e.g. http://127.0.0.1:5050 or https://your-ad-app.fly.dev */
 const AD_DASHBOARD_BASE_URL = process.env.AD_DASHBOARD_BASE_URL?.trim().replace(/\/$/, "") || "";
 /** Optional Bearer token sent to the ad app if you add auth there later */
@@ -210,8 +225,9 @@ function trimGeminiSystemPrompt(prompt) {
     console.warn(`[GeminiLive] System prompt truncated from ${prompt.length} to ${trimmed.length} chars (max ${GEMINI_LIVE_SYSTEM_PROMPT_MAX})`);
     return `${trimmed}\n\n[Context truncated for Live API limit]`;
 }
-app.get("/health", (_req, res) => {
+app.get("/health", async (_req, res) => {
     const apiKeyConfigured = (0, index_js_19.isAnthropicApiKeyConfigured)();
+    const openShortsHealth = await (0, index_js_25.checkOpenShortsHealth)().catch(() => ({ running: false }));
     res.status(200).json({
         ok: true,
         anthropic: {
@@ -238,6 +254,11 @@ app.get("/health", (_req, res) => {
                 tts: geminiApiKey() ? "gemini" : "none",
                 gemini_configured: Boolean(geminiApiKey()),
             },
+        },
+        openshorts: {
+            running: openShortsHealth.running,
+            model: "model" in openShortsHealth ? openShortsHealth.model || "gemini-2.5-flash" : "gemini-2.5-flash",
+            active_jobs: "activeJobs" in openShortsHealth ? openShortsHealth.activeJobs || 0 : 0,
         },
     });
 });
@@ -306,6 +327,37 @@ app.get("/reporting", (_req, res) => {
 app.get("/finance", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "finance.html"));
 });
+app.get("/voice-clone", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "voice-clone.html"));
+});
+const voiceCloneDataRoot = (0, voiceCloneStore_js_1.resolveVoiceCloneDataRoot)();
+app.use("/voice-clone-files", express_1.default.static(voiceCloneDataRoot));
+function mapVoiceCloneFileUrl(filePath, voxcpmApiUrl) {
+    if (!filePath)
+        return "";
+    const root = path_1.default.normalize(voiceCloneDataRoot);
+    const normPath = path_1.default.normalize(filePath);
+    if (normPath.startsWith(root)) {
+        const rel = path_1.default.relative(root, normPath).replace(/\\/g, "/");
+        return `/voice-clone-files/${rel}`;
+    }
+    if (voxcpmApiUrl && !filePath.startsWith("http")) {
+        const base = voxcpmApiUrl.replace(/\/$/, "");
+        const filename = path_1.default.basename(filePath);
+        return `${base}/audio/${filename}`;
+    }
+    return filePath;
+}
+function enrichVoiceoverRequest(req) {
+    if (!req)
+        return null;
+    const voxcpmUrl = process.env.VOXCPM_API_URL?.trim();
+    const audioUrls = (req.outputFilePaths || []).map((p) => mapVoiceCloneFileUrl(p, voxcpmUrl));
+    const exportUrl = req.exportFilePath
+        ? mapVoiceCloneFileUrl(req.exportFilePath, voxcpmUrl)
+        : undefined;
+    return { ...req, audioUrls, exportUrl };
+}
 app.get("/crm-followup-tasks.js", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "crm-followup-tasks.js"));
 });
@@ -2800,17 +2852,23 @@ app.get("/api/content/queue", (req, res) => {
         return;
     }
     const status = typeof req.query.status === "string" ? req.query.status.trim() : "";
+    const batchId = typeof req.query.batch_id === "string" ? req.query.batch_id.trim() : "";
     const limit = Number(req.query.limit) || 200;
     const validStatuses = new Set([
+        "processing",
         "pending_review",
         "approved",
         "scheduled",
         "published",
         "rejected",
     ]);
-    const videos = validStatuses.has(status)
-        ? (0, contentDb_js_1.listContentVideos)({ status: status, limit })
-        : (0, contentDb_js_1.listContentVideos)({ limit });
+    const videos = (0, contentDb_js_1.listContentVideosWithEnhancements)({
+        status: validStatuses.has(status)
+            ? status
+            : undefined,
+        batchSessionId: batchId || undefined,
+        limit,
+    });
     res.json({ videos });
 });
 app.get("/api/content/stats", (req, res) => {
@@ -2879,14 +2937,30 @@ const contentVideoUpload = (0, multer_1.default)({
     storage: multer_1.default.diskStorage({
         destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
         filename: (_req, file, cb) => {
-            const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
-            cb(null, `${Date.now()}-${safe}`);
+            const ext = path_1.default.extname(file.originalname) || ".mp4";
+            cb(null, `${Date.now()}-${(0, crypto_1.randomUUID)()}${ext}`);
         },
     }),
     limits: { fileSize: 2 * 1024 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
-        const ok = /\.(mp4|mov|avi)$/i.test(file.originalname);
-        cb(null, ok);
+        const allowed = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
+        const ext = path_1.default.extname(file.originalname).toLowerCase();
+        cb(null, allowed.includes(ext));
+    },
+});
+const batchVideoUpload = (0, multer_1.default)({
+    storage: multer_1.default.diskStorage({
+        destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
+        filename: (_req, file, cb) => {
+            const ext = path_1.default.extname(file.originalname) || ".mp4";
+            cb(null, `${Date.now()}-${(0, crypto_1.randomUUID)()}${ext}`);
+        },
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        const allowed = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
+        const ext = path_1.default.extname(file.originalname).toLowerCase();
+        cb(null, allowed.includes(ext));
     },
 });
 app.post("/api/content/upload", contentVideoUpload.single("video"), async (req, res) => {
@@ -2917,6 +2991,337 @@ app.post("/api/content/upload", contentVideoUpload.single("video"), async (req, 
     catch (err) {
         res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
+});
+app.post("/api/content/batch-upload", batchVideoUpload.array("videos", 20), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const files = req.files;
+    if (!files?.length) {
+        res.status(400).json({ error: "At least one video file required (field name: videos)" });
+        return;
+    }
+    const pillar = typeof req.body?.pillar === "string" ? req.body.pillar.trim() : "";
+    if (!["education", "listings", "brand", "mixed"].includes(pillar)) {
+        res.status(400).json({ error: "pillar required: education, listings, brand, or mixed" });
+        return;
+    }
+    const sessionName = typeof req.body?.session_name === "string" ? req.body.session_name.trim() : "";
+    const filmedBy = typeof req.body?.filmed_by === "string" && req.body.filmed_by.trim()
+        ? req.body.filmed_by.trim()
+        : "marco";
+    const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
+    const batch = (0, contentDb_js_1.createBatchSession)({
+        sessionName: sessionName || null,
+        pillar,
+        filmedBy,
+        status: "uploading",
+        sourceFileCount: files.length,
+        notes: notes || null,
+    });
+    for (const file of files) {
+        (0, contentDb_js_1.createBatchSourceFile)({
+            batchSessionId: batch.id,
+            originalFilename: file.originalname,
+            fileSizeBytes: file.size,
+            filePath: file.path,
+        });
+    }
+    (0, contentDb_js_1.updateBatchSession)(batch.id, { status: "analyzing_trends" });
+    setImmediate(() => {
+        (0, batchProcessor_js_1.processBatch)(batch.id).catch((err) => {
+            console.error(`[batch-upload] processBatch failed for ${batch.id}:`, err);
+            (0, contentDb_js_1.updateBatchSession)(batch.id, { status: "failed" });
+        });
+    });
+    res.json({
+        ok: true,
+        batchSessionId: batch.id,
+        fileCount: files.length,
+        status: "processing",
+        message: `${files.length} video(s) queued for processing`,
+    });
+});
+app.get("/api/content/batch/:batchId/status", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const batchId = String(req.params.batchId || "");
+    const batch = (0, contentDb_js_1.getBatchSession)(batchId);
+    if (!batch) {
+        res.status(404).json({ error: "Batch not found" });
+        return;
+    }
+    const sourceFiles = (0, contentDb_js_1.listBatchSourceFiles)(batchId);
+    const clipsReady = (0, contentDb_js_1.countVideosByBatchAndStatus)(batchId, "pending_review");
+    let trendBrief = null;
+    if (batch.trendBriefId) {
+        const trends = (0, contentDb_js_1.getCompetitorTrendsById)(batch.trendBriefId);
+        trendBrief = trends?.trendBrief ?? null;
+    }
+    const progressMap = {
+        uploading: 5,
+        analyzing_trends: 15,
+        processing_opus: 30,
+        transcribing: 40,
+        analyzing: 55,
+        reframing: 70,
+        enhancing: 85,
+        complete: 100,
+        failed: 0,
+    };
+    const stageLabelMap = {
+        uploading: "Uploading files...",
+        analyzing_trends: "Analyzing competitor trends...",
+        processing_opus: "Sending to OpenShorts...",
+        transcribing: "Transcribing audio...",
+        analyzing: "Gemini AI finding viral moments...",
+        reframing: "Reframing to vertical 9:16...",
+        enhancing: "Generating hooks and captions...",
+        complete: "Complete",
+        failed: "Processing failed",
+    };
+    const files = sourceFiles.map((f) => ({
+        id: f.id,
+        filename: f.originalFilename,
+        fileSize: f.fileSizeBytes,
+        opusStatus: f.opusStatus,
+        clipsGenerated: f.clipsGeneratedCount,
+        errorMessage: f.errorMessage,
+        uploadedAt: f.uploadedAt,
+        completedAt: f.opusCompletedAt,
+    }));
+    const progressPct = progressMap[batch.status] ?? 10;
+    res.json({
+        ok: true,
+        batchSessionId: batch.id,
+        sessionName: batch.sessionName,
+        status: batch.status,
+        stageLabel: stageLabelMap[batch.status] || "Processing...",
+        progressPct,
+        sourceFileCount: batch.sourceFileCount,
+        clipsGenerated: batch.clipsGenerated,
+        clipsReady,
+        trendBriefId: batch.trendBriefId,
+        createdAt: batch.createdAt,
+        completedAt: batch.completedAt,
+        trendBrief,
+        batch,
+        sourceFiles,
+        files,
+    });
+});
+app.get("/api/content/batch/:batchId/clips", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const batchId = String(req.params.batchId || "");
+    const clips = (0, contentDb_js_1.listContentVideosWithEnhancements)({ batchSessionId: batchId, limit: 200 });
+    res.json({ clips });
+});
+app.get("/api/content/batches", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const days = Number(req.query.days) || 7;
+    res.json({ batches: (0, contentDb_js_1.listBatchSessions)(days) });
+});
+app.get("/api/content/competitor-trends/latest", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const trends = (0, contentDb_js_1.getLatestCompetitorTrends)();
+    res.json({ trends });
+});
+app.post("/api/content/competitor-trends/refresh", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    try {
+        const trends = await (0, competitorIntel_js_1.runCompetitorScrape)();
+        res.json({ trends });
+    }
+    catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+});
+app.patch("/api/content/clip/:clipId/metadata", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const clipId = String(req.params.clipId || "");
+    const video = (0, contentDb_js_1.getContentVideo)(clipId);
+    if (!video) {
+        res.status(404).json({ error: "Clip not found" });
+        return;
+    }
+    const enhancement = (0, contentDb_js_1.getClipEnhancementByVideoId)(clipId);
+    const body = req.body;
+    const videoPatch = {};
+    if (typeof body.hook === "string")
+        videoPatch.hook = body.hook;
+    if (typeof body.caption === "string")
+        videoPatch.caption = body.caption;
+    if (typeof body.title === "string")
+        videoPatch.title = body.title;
+    if (Array.isArray(body.hashtags)) {
+        videoPatch.hashtags = body.hashtags.map(String);
+    }
+    if (Array.isArray(body.platform_targets)) {
+        videoPatch.platformTargets = body.platform_targets.map(String);
+        const first = body.platform_targets[0];
+        if (typeof first === "string") {
+            videoPatch.platformTarget = first;
+        }
+    }
+    (0, contentDb_js_1.updateContentVideo)(clipId, videoPatch);
+    if (enhancement) {
+        (0, contentDb_js_1.updateClipEnhancement)(enhancement.id, {
+            hookPrimary: typeof body.hook === "string" ? body.hook : undefined,
+            captionFinal: typeof body.caption === "string" ? body.caption : undefined,
+            titleFinal: typeof body.title === "string" ? body.title : undefined,
+            hashtagsFinal: Array.isArray(body.hashtags) ? body.hashtags.map(String) : undefined,
+            platformTargets: Array.isArray(body.platform_targets)
+                ? body.platform_targets.map(String)
+                : undefined,
+            editedBy: "human",
+        });
+    }
+    const updated = (0, contentDb_js_1.getContentVideo)(clipId);
+    const updatedEnhancement = (0, contentDb_js_1.getClipEnhancementByVideoId)(clipId);
+    res.json({ video: updated, enhancement: updatedEnhancement });
+});
+function getNextOptimalPostTimeCst() {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(19, 0, 0, 0);
+    if (now >= target)
+        target.setDate(target.getDate() + 1);
+    return target.toISOString();
+}
+app.get("/api/content/publishing-queue", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const limit = Number(req.query.limit) || 50;
+    const clips = (0, contentDb_js_1.listPublishingQueue)(limit);
+    res.json({ clips });
+});
+app.post("/api/content/clip/:clipId/send-to-publisher", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    try {
+        const clipId = String(req.params.clipId || "");
+        const video = (0, contentDb_js_1.getContentVideo)(clipId);
+        if (!video) {
+            res.status(404).json({ error: "Clip not found" });
+            return;
+        }
+        if (video.status !== "pending_review" && video.status !== "approved") {
+            res.status(400).json({ error: "Clip must be pending_review or approved" });
+            return;
+        }
+        const body = req.body;
+        const overrideCompliance = Boolean(body.override_compliance);
+        if (video.complianceFlagged && !overrideCompliance) {
+            res.status(400).json({
+                error: "Clip has compliance flags. Review before sending.",
+                flags: video.complianceNotes,
+            });
+            return;
+        }
+        const enhancement = (0, contentDb_js_1.getClipEnhancementByVideoId)(clipId);
+        const scheduledFor = typeof body.scheduled_for === "string" && body.scheduled_for.trim()
+            ? body.scheduled_for.trim()
+            : enhancement?.optimalPostTimeTiktok ?? getNextOptimalPostTimeCst();
+        const platforms = Array.isArray(body.platforms)
+            ? body.platforms.map(String)
+            : enhancement?.platformTargets?.length
+                ? enhancement.platformTargets
+                : [video.platformTarget];
+        const now = new Date().toISOString();
+        (0, contentDb_js_1.updateContentVideo)(clipId, {
+            status: "approved",
+            approvedAt: now,
+            scheduledFor,
+            platformTargets: platforms,
+        });
+        const publishEntries = [];
+        for (const platform of platforms) {
+            (0, contentDb_js_1.insertPublishLog)({
+                videoId: clipId,
+                platform,
+                platformPostId: null,
+                publishedAt: scheduledFor,
+                publishStatus: "scheduled",
+                errorMessage: null,
+            });
+            publishEntries.push({ platform, scheduledFor });
+        }
+        const scheduleDate = scheduledFor.slice(0, 10);
+        (0, contentDb_js_1.ensureDailyTargets)(scheduleDate);
+        (0, contentDb_js_1.incrementDailyTarget)(scheduleDate, "videos_published", 1);
+        res.json({
+            ok: true,
+            clipId,
+            status: "approved",
+            scheduledFor,
+            platforms,
+            publishEntries,
+        });
+    }
+    catch (err) {
+        console.error("[send-to-publisher] Error:", err);
+        res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+});
+app.get("/api/content/competitor-profiles", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json({ profiles: (0, contentDb_js_1.listAllCompetitorProfiles)() });
+});
+app.post("/api/content/competitor-profiles", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tiktokHandle = typeof req.body?.tiktok_handle === "string" ? req.body.tiktok_handle.trim() : "";
+    const displayName = typeof req.body?.display_name === "string" ? req.body.display_name.trim() : "";
+    const profileType = typeof req.body?.profile_type === "string" ? req.body.profile_type.trim() : "";
+    if (!tiktokHandle || !displayName || !profileType) {
+        res.status(400).json({ error: "tiktok_handle, display_name, and profile_type required" });
+        return;
+    }
+    const profile = (0, contentDb_js_1.insertCompetitorProfile)({ tiktokHandle, displayName, profileType });
+    res.json({ profile });
+});
+app.patch("/api/content/competitor-profiles/:id", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const id = String(req.params.id || "");
+    const active = req.body?.active;
+    const profile = (0, contentDb_js_1.updateCompetitorProfile)(id, {
+        active: active === 0 || active === false ? false : active === 1 || active === true ? true : undefined,
+    });
+    if (!profile) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+    }
+    res.json({ profile });
 });
 app.get("/api/content/compliance-queue", (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -3120,9 +3525,9 @@ app.post("/api/content-brain/run-cycle", express_1.default.json(), async (req, r
         return;
     }
     const cycle = req.body?.cycle;
-    const valid = new Set(["morning", "midday", "evening", "night"]);
+    const valid = new Set(["morning", "midday", "evening", "night", "monday_recording_plan"]);
     if (!valid.has(cycle)) {
-        res.status(400).json({ error: "cycle must be morning|midday|evening|night" });
+        res.status(400).json({ error: "cycle must be morning|midday|evening|night|monday_recording_plan" });
         return;
     }
     try {
@@ -3132,6 +3537,11 @@ app.post("/api/content-brain/run-cycle", express_1.default.json(), async (req, r
             await index_js_13.contentManagerBrain.runMiddayCycle();
         else if (cycle === "evening")
             await index_js_13.contentManagerBrain.runEveningCycle();
+        else if (cycle === "monday_recording_plan") {
+            const tasks = await (0, calendar_js_1.generateWeeklyRecordingPlan)((0, stats_js_2.getWeekStart)(), index_js_13.contentManagerBrain);
+            res.json({ ok: true, log: `[cm-brain] Recording plan: ${tasks.length} tasks created`, tasks });
+            return;
+        }
         else
             await index_js_13.contentManagerBrain.runNightCycle();
         res.json({ ok: true, log: `[cm-brain] ${cycle} cycle completed manually` });
@@ -3155,6 +3565,181 @@ app.get("/api/content-brain/hook-library", (req, res) => {
     const minUses = Number(req.query.min_uses) || 3;
     const limit = Number(req.query.limit) || 20;
     res.json({ hooks: (0, contentDb_js_1.listHookLibrary)({ minUses, limit, order: "desc" }) });
+});
+app.get("/api/content/competitive-analysis/latest", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const analysis = (0, competitiveAnalysis_js_1.getLatestCompetitiveAnalysis)();
+    if (!analysis) {
+        res.json({
+            analysis: null,
+            recommendations: [],
+            message: "No analysis yet. Run refresh to generate.",
+        });
+        return;
+    }
+    res.json({
+        analysis,
+        recommendations: (0, contentDb_js_1.getActiveStrategyRecommendations)(),
+    });
+});
+app.post("/api/content/competitive-analysis/run", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    (0, competitiveAnalysis_js_1.runFullCompetitiveAnalysis)(index_js_13.contentManagerBrain)
+        .then((analysis) => {
+        console.log("[competitive-analysis] Async run complete", analysis.id);
+    })
+        .catch((err) => {
+        console.error("[competitive-analysis] Async run failed:", err);
+    });
+    res.json({ ok: true, message: "Analysis running. Check back in 60 seconds." });
+});
+app.get("/api/content/strategy-recommendations", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const limit = Number(req.query.limit) || 10;
+    const recommendations = status
+        ? (0, contentDb_js_1.listStrategyRecommendations)({ status, limit })
+        : (0, contentDb_js_1.getActiveStrategyRecommendations)().slice(0, limit);
+    res.json({ recommendations });
+});
+app.patch("/api/content/strategy-recommendations/:id", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const id = String(req.params.id || "");
+    const body = req.body;
+    const updated = (0, contentDb_js_1.updateStrategyRecommendation)(id, {
+        status: body.status ? String(body.status) : undefined,
+        dismissedReason: body.dismissed_reason ? String(body.dismissed_reason) : undefined,
+    });
+    if (!updated) {
+        res.status(404).json({ error: "Recommendation not found" });
+        return;
+    }
+    res.json({ recommendation: updated });
+});
+app.post("/api/content/strategy-recommendations/:id/create-recording-task", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const id = String(req.params.id || "");
+    const rec = (0, contentDb_js_1.getStrategyRecommendationById)(id);
+    if (!rec) {
+        res.status(404).json({ error: "Recommendation not found" });
+        return;
+    }
+    try {
+        const task = await (0, competitiveAnalysis_js_1.generateRecordingTask)(rec, index_js_13.contentManagerBrain);
+        res.json({ task });
+    }
+    catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+});
+app.get("/api/content/recording-tasks", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const status = typeof req.query.status === "string" ? req.query.status : "pending";
+    const days = Number(req.query.days) || 30;
+    const today = (0, contentDb_js_1.todayDateCst)();
+    const end = new Date(`${today}T12:00:00`);
+    end.setDate(end.getDate() + days);
+    const endStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(end);
+    const tasks = (0, contentDb_js_1.listRecordingTasks)({
+        status,
+        dueAfter: today,
+        dueBefore: endStr,
+        limit: 100,
+    });
+    res.json({ tasks });
+});
+app.post("/api/content/recording-tasks", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const body = req.body;
+    const hooks = Array.isArray(body.suggested_hooks) ? body.suggested_hooks.map(String) : [];
+    const task = (0, contentDb_js_1.insertRecordingTask)({
+        dueDate: String(body.due_date || (0, contentDb_js_1.todayDateCst)()),
+        pillar: body.pillar ? String(body.pillar) : null,
+        hookType: null,
+        topic: String(body.topic || ""),
+        suggestedHooks: hooks,
+        suggestedDurationMin: 35,
+        suggestedDurationMax: 55,
+        filmingNotes: body.filming_notes ? String(body.filming_notes) : null,
+        reason: body.reason ? String(body.reason) : null,
+        source: "manual",
+        priority: body.priority ? String(body.priority) : "normal",
+        strategyRecommendationId: null,
+    });
+    res.json({ task });
+});
+app.patch("/api/content/recording-tasks/:id", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const id = String(req.params.id || "");
+    const body = req.body;
+    const status = body.status ? String(body.status) : undefined;
+    if (status === "filmed" || status === "uploaded") {
+        (0, calendar_js_1.markRecordingTaskFiled)(id, body.upload_batch_session_id ? String(body.upload_batch_session_id) : undefined);
+        res.json({ ok: true });
+        return;
+    }
+    const updated = (0, contentDb_js_1.updateRecordingTask)(id, { status });
+    if (!updated) {
+        res.status(404).json({ error: "Task not found" });
+        return;
+    }
+    res.json({ task: updated });
+});
+app.get("/api/content/calendar/day/:date", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const date = String(req.params.date || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        res.status(400).json({ error: "Date must be YYYY-MM-DD" });
+        return;
+    }
+    res.json((0, calendar_js_1.getCalendarDayData)(date));
+});
+app.get("/api/content/calendar/month/:year/:month", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const year = Number(req.params.year);
+    const month = Number(req.params.month);
+    if (!year || !month || month < 1 || month > 12) {
+        res.status(400).json({ error: "Invalid year or month" });
+        return;
+    }
+    res.json((0, calendar_js_1.getCalendarMonthData)(year, month));
+});
+app.get("/api/content/sprint-progress", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json((0, calendar_js_1.getSprintProgress)());
 });
 /** Legacy listing status change — maps active/off_market to new intake (uses propertyInquired as address). */
 app.post("/api/activity/listing-status-change", express_1.default.json(), async (req, res) => {
@@ -4964,6 +5549,173 @@ app.get("/api/finance/pace-status", (req, res) => {
         return;
     }
     res.json((0, index_js_16.getCurrentPaceStatus)());
+});
+app.get("/api/voice-clone/health", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const health = await (0, index_js_26.checkVoxCpmHealth)();
+    res.json({
+        configured: !!process.env.VOXCPM_API_URL?.trim(),
+        apiUrl: process.env.VOXCPM_API_URL?.trim() || null,
+        service: health,
+    });
+});
+app.get("/api/voice-clone/stats", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const all = (0, voiceCloneStore_js_1.getAllRequests)(500);
+    res.json({
+        total: all.length,
+        pendingApproval: (0, voiceCloneStore_js_1.countPendingApprovalRequests)(),
+        generating: all.filter((r) => r.generationStatus === "generating").length,
+        complete: all.filter((r) => r.generationStatus === "complete").length,
+    });
+});
+app.post("/api/voice-clone/requests", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { script, deliveryStyle, formatType, hookVariationCount, customStyleDescription, voxcpmMode } = req.body ?? {};
+    if (!script || !deliveryStyle || !formatType) {
+        res.status(400).json({ error: "script, deliveryStyle, and formatType required" });
+        return;
+    }
+    const safetyCheck = (0, safetyLock_js_1.checkScriptSafety)(script, "pre-check", "manual");
+    if (!safetyCheck.allowed) {
+        res.status(400).json({ error: `Script blocked: ${safetyCheck.reason}` });
+        return;
+    }
+    const request = (0, voiceCloneStore_js_1.createVoiceoverRequest)({
+        script,
+        deliveryStyle,
+        formatType,
+        hookVariationCount: hookVariationCount || 1,
+        customStyleDescription,
+        voxcpmMode,
+        requestedBy: "manual",
+    });
+    res.json({ request: enrichVoiceoverRequest(request) });
+});
+app.get("/api/voice-clone/requests", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const limit = parseInt(String(req.query.limit || "50"), 10) || 50;
+    const requests = (0, voiceCloneStore_js_1.getAllRequests)(limit).map((r) => enrichVoiceoverRequest(r));
+    res.json({ requests });
+});
+app.get("/api/voice-clone/requests/pending", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const requests = (0, voiceCloneStore_js_1.getPendingApprovalRequests)().map((r) => enrichVoiceoverRequest(r));
+    res.json({ requests });
+});
+app.get("/api/voice-clone/requests/:id", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const request = enrichVoiceoverRequest((0, voiceCloneStore_js_1.getVoiceoverRequest)(req.params.id));
+    if (!request) {
+        res.status(404).json({ error: "Not found" });
+        return;
+    }
+    res.json({ request });
+});
+app.post("/api/voice-clone/requests/:id/approve", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const request = (0, voiceCloneStore_js_1.getVoiceoverRequest)(req.params.id);
+    if (!request) {
+        res.status(404).json({ error: "Not found" });
+        return;
+    }
+    if (request.approvalStatus !== "pending") {
+        res.status(400).json({ error: "Request is not in pending state" });
+        return;
+    }
+    const safetyCheck = (0, safetyLock_js_1.checkScriptSafety)(request.script, request.id, "approval");
+    if (!safetyCheck.allowed) {
+        (0, voiceCloneStore_js_1.updateVoiceoverRequest)(request.id, {
+            approvalStatus: "blocked",
+            generationStatus: "failed",
+            error: safetyCheck.reason,
+        });
+        res.status(400).json({ error: `Blocked at approval: ${safetyCheck.reason}` });
+        return;
+    }
+    (0, voiceCloneStore_js_1.updateVoiceoverRequest)(request.id, {
+        approvalStatus: "approved",
+        approvedBy: "marco",
+        approvedAt: new Date().toISOString(),
+        generationStatus: "queued",
+    });
+    res.json({ success: true });
+});
+app.post("/api/voice-clone/requests/:id/reject", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { reason } = req.body ?? {};
+    (0, voiceCloneStore_js_1.updateVoiceoverRequest)(req.params.id, {
+        approvalStatus: "rejected",
+        rejectionReason: reason || "Rejected",
+        generationStatus: "failed",
+    });
+    res.json({ success: true });
+});
+app.get("/api/voice-clone/reference-clips", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    res.json({ clips: (0, voiceCloneStore_js_1.getAllReferenceClips)(), primary: (0, voiceCloneStore_js_1.getPrimaryReferenceClip)() });
+});
+app.post("/api/voice-clone/reference-clips", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { sourceUrl, localAudioPath, qualityRating, transcript } = req.body ?? {};
+    if (!sourceUrl) {
+        res.status(400).json({ error: "sourceUrl required" });
+        return;
+    }
+    const clip = (0, voiceCloneStore_js_1.createReferenceClip)({
+        sourceUrl,
+        localAudioPath,
+        qualityRating,
+        transcript,
+        isPrimary: false,
+    });
+    res.json({ clip });
+});
+app.post("/api/voice-clone/reference-clips/:id/set-primary", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    (0, voiceCloneStore_js_1.setPrimaryReferenceClip)(req.params.id);
+    res.json({ success: true });
+});
+app.get("/api/voice-clone/safety-log", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const limit = parseInt(String(req.query.limit || "100"), 10) || 100;
+    res.json({ entries: (0, voiceCloneStore_js_1.getSafetyLogEntries)(limit) });
 });
 app.post("/api/finance/sync", async (req, res) => {
     if (!dashboardTokenOk(req)) {

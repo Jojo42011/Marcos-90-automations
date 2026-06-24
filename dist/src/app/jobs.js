@@ -33,6 +33,7 @@ const pastClientQuarterly_js_1 = require("../agents/emailMarketing/pastClientQua
 const noReplyFollowup_js_1 = require("../agents/emailMarketing/noReplyFollowup.js");
 const index_js_16 = require("../agents/contentManager/index.js");
 const index_js_17 = require("../agents/contentManager/brain/index.js");
+const generator_js_1 = require("../agents/voiceClone/generator.js");
 function scheduleContentJobs() {
     (0, index_js_5.scheduleSocialMediaAgentDaily6pmCST)();
     (0, index_js_6.scheduleMorningScanDaily8am)();
@@ -60,6 +61,7 @@ function scheduleContentJobs() {
     (0, noReplyFollowup_js_1.scheduleNoReplyFollowupCheck)();
     (0, index_js_16.scheduleContentManagerDaily7pmCST)();
     (0, index_js_17.scheduleContentBrainCycles)();
+    (0, generator_js_1.scheduleVoiceoverProcessor)();
 }
 async function runDailyJobs() {
     await (0, index_js_1.run)();

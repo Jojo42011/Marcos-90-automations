@@ -12,6 +12,7 @@ import {
   getDailyStrategy,
   getDailyTargets,
   getPerformanceModel,
+  getActiveStrategyRecommendations,
   getSeasonalWeek,
   insertBriefing,
   insertCutListItem,
@@ -44,6 +45,12 @@ import { classifyAndUpdateHookLibrary, getHookTypePerformanceSummary } from "./h
 import { getTopCombinations, getWorstCombinations, updateCombinationPatterns } from "./patterns.js";
 import { evaluateCurrentExperiment, proposeWeeklyExperiment } from "./experiments.js";
 import { getMomentumStrategyAdjustment, updateMomentumState } from "./momentum.js";
+import { generateWeeklyRecordingPlan } from "../calendar.js";
+import { runFullCompetitiveAnalysis } from "../competitiveAnalysis.js";
+import {
+  countOverdueRecordingTasks,
+  countPendingRecordingTasksDueBefore,
+} from "../../../core/contentDb.js";
 import { getCalibrationAwarePromptSuffix } from "./prompts.js";
 import {
   getCurrentWeekNumber,
@@ -273,12 +280,35 @@ Generate pillar_priority, recommended_hooks (3), hashtag_set, platform_distribut
   );
   const briefingParsed = parseJsonFromText<{ body: string; action_items: string[] }>(briefingRaw);
 
+  let recordingPlanNote = "";
+  if (isMonday()) {
+    try {
+      const weekStart = getWeekStart();
+      const tasks = await generateWeeklyRecordingPlan(weekStart, brain);
+      const first = tasks[0];
+      recordingPlanNote = `Recording plan for the week: ${tasks.length} sessions planned, ${tasks.length * 2} clips targeted. First session due: ${first?.dueDate ?? "n/a"} — ${first?.topic ?? "see calendar"}.`;
+    } catch (err) {
+      console.error("[cm-brain] Weekly recording plan failed:", err);
+    }
+  }
+
+  const overdueCount = countOverdueRecordingTasks(date);
+  let overdueNote = "";
+  if (overdueCount > 0) {
+    const overdueTasks = countPendingRecordingTasksDueBefore(date);
+    overdueNote = `OVERDUE RECORDING TASKS: ${overdueCount} tasks are past due. Pipeline will be short ${overdueCount} videos if not filmed today.`;
+  }
+
+  const briefingBody =
+    (briefingParsed?.body ??
+      `Yesterday: ${yesterdayTargets.videosPublished}/${yesterdayTargets.videosTarget} videos, ${yesterdayTargets.phoneNumbersCaptured}/${yesterdayTargets.phoneNumbersTarget} phone numbers. Today prioritize ${strategy.pillarPriority[0] ?? "brand"}. ${pendingReview} clips awaiting review.`) +
+    (recordingPlanNote ? ` ${recordingPlanNote}` : "") +
+    (overdueNote ? ` ${overdueNote}` : "");
+
   insertBriefing({
     briefingType: "morning",
     title: `Content Manager — Morning Briefing ${date}`,
-    body:
-      briefingParsed?.body ??
-      `Yesterday: ${yesterdayTargets.videosPublished}/${yesterdayTargets.videosTarget} videos, ${yesterdayTargets.phoneNumbersCaptured}/${yesterdayTargets.phoneNumbersTarget} phone numbers. Today prioritize ${strategy.pillarPriority[0] ?? "brand"}. ${pendingReview} clips awaiting review.`,
+    body: briefingBody,
     keyMetrics: {
       yesterday_videos: yesterdayTargets.videosPublished,
       yesterday_phones: yesterdayTargets.phoneNumbersCaptured,
@@ -494,6 +524,29 @@ Learning logs: ${JSON.stringify(logs.slice(0, 7))}. Performance model: ${JSON.st
   let weeklyEvalNote = "";
 
   if (isSunday()) {
+    try {
+      const compAnalysis = await runFullCompetitiveAnalysis(brain);
+      const aboveBelow = compAnalysis.marcoVsFieldPct >= 0 ? "above" : "below";
+      const recCount = compAnalysis.marcoGaps.length;
+      console.log(
+        `[cm-brain] Competitive analysis complete — Marco ${aboveBelow} field by ${compAnalysis.marcoVsFieldPct.toFixed(1)}%, strategy recommendations generated, recording tasks created`,
+      );
+      const compNote = `Competitive analysis: Marco is ${Math.abs(compAnalysis.marcoVsFieldPct).toFixed(0)}% ${aboveBelow} competitor average. Top gap: ${compAnalysis.marcoGaps[0] ?? "n/a"}. Top recommendation: ${getActiveStrategyRecommendations()[0]?.recommendation ?? "see strategy panel"}.`;
+      insertBriefing({
+        briefingType: "weekly",
+        title: `Content Manager — Competitive Analysis ${today}`,
+        body: compNote,
+        keyMetrics: {
+          marco_vs_field_pct: compAnalysis.marcoVsFieldPct,
+          top_competitor: compAnalysis.topCompetitorHandle,
+        },
+        actionItems: compAnalysis.marcoGaps.slice(0, 2),
+        sentToHarvey: true,
+      });
+    } catch (err) {
+      console.error("[cm-brain] Sunday competitive analysis failed:", err);
+    }
+
     await evaluateCurrentExperiment(brain);
 
     const weekStart = getWeekStart();

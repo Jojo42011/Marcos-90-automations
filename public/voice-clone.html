@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voice Clone · Marco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #110f1a;
+      --border: rgba(168, 85, 247, 0.25);
+      --accent: #a855f7;
+      --accent-glow: rgba(168, 85, 247, 0.15);
+      --green: #10b981;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --font: "Plus Jakarta Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: #f1f5f9;
+      min-height: 100vh;
+      background-image: radial-gradient(ellipse 70% 45% at 50% -15%, var(--accent-glow), transparent);
+    }
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .vc-back { color: var(--accent); font-size: 11px; letter-spacing: 1px; text-decoration: none; font-family: var(--mono); }
+    .vc-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0 20px;
+      overflow-x: auto;
+    }
+    .tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #888;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      padding: 12px 16px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .vc-main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .vc-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .vc-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0; }
+    .vc-stat-label { font-family: var(--mono); font-size: 10px; color: #888; letter-spacing: 1px; }
+    .vc-stat-value { font-family: "Space Grotesk", monospace; font-size: 28px; font-weight: 700; margin-top: 6px; }
+    .vc-muted { color: #888; font-size: 11px; }
+    .vc-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .vc-btn.green { background: var(--green); }
+    .vc-btn.red { background: var(--red); }
+    .vc-btn.ghost { background: transparent; border: 1px solid var(--border); color: #ccc; }
+    .vc-form input, .vc-form select, .vc-form textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid rgba(168, 85, 247, 0.2);
+      color: #fff;
+      padding: 8px 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      border-radius: 2px;
+      margin-bottom: 8px;
+    }
+    .vc-pending-card { border-left: 3px solid var(--amber); }
+    .vc-complete-card { border-left: 3px solid var(--green); }
+    .vc-blocked-card { border-left: 3px solid var(--red); }
+    .vc-primary-clip { border: 2px solid var(--accent) !important; }
+    .vc-pulse { animation: vc-pulse 1.5s ease-in-out infinite; }
+    @keyframes vc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    #vc-toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 10px 16px;
+      font-family: var(--mono);
+      font-size: 11px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 100;
+    }
+    #vc-toast.show { opacity: 1; }
+    html[data-theme="light"], html[data-theme="light"] body { background: #faf5ff !important; color: #0f172a !important; }
+    html[data-theme="light"] .header { background: #ffffff !important; border-bottom: 2px solid #d8b4fe !important; }
+    html[data-theme="light"] .tab.active { color: #7c3aed !important; border-bottom: 2px solid #7c3aed !important; font-weight: 700 !important; }
+    html[data-theme="light"] .vc-card, html[data-theme="light"] #vc-form { background: #ffffff !important; border-color: #e9d5ff !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+    html[data-theme="light"] textarea, html[data-theme="light"] select, html[data-theme="light"] input { background: #f5f3ff !important; color: #0f172a !important; border-color: #c4b5fd !important; }
+    html[data-theme="light"] button.vc-btn, html[data-theme="light"] button[onclick*="approve"] { background: #7c3aed !important; color: #ffffff !important; }
+    html[data-theme="light"] table { background: #ffffff !important; color: #0f172a !important; }
+    html[data-theme="light"] [style*="color:#a855f7"] { color: #7c3aed !important; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div>
+      <a href="/" class="vc-back">← Hub</a>
+      <span style="color:#555;margin:0 8px;">|</span>
+      <strong style="font-family:'Space Grotesk',sans-serif;">Voice Clone</strong>
+      <span class="vc-muted" style="margin-left:8px;">VoxCPM2 · Marco</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <span id="vc-service-status" class="vc-muted">Checking service…</span>
+      <button type="button" class="vc-btn ghost" id="vc-theme-btn">Light mode</button>
+      <button type="button" class="vc-btn ghost" onclick="refreshAll()">Refresh</button>
+    </div>
+  </header>
+
+  <nav class="vc-tabs" id="vc-tabs">
+    <button type="button" class="tab active" data-tab="overview">Overview</button>
+    <button type="button" class="tab" data-tab="scripts">Scripts</button>
+    <button type="button" class="tab" data-tab="reference">Reference Clips</button>
+    <button type="button" class="tab" data-tab="hooks">Hook Variations</button>
+    <button type="button" class="tab" data-tab="safety">Safety Log</button>
+  </nav>
+
+  <main class="vc-main">
+    <section id="panel-overview" class="tab-panel active">
+      <div class="vc-stat-grid" id="vc-stats"></div>
+      <div class="vc-card" id="vc-form">
+        <div style="font-size:11px;color:var(--accent);letter-spacing:2px;margin-bottom:14px;">⬡ SUBMIT VOICEOVER SCRIPT</div>
+        <div class="vc-form">
+          <label class="vc-muted" style="display:block;margin-bottom:4px;">SCRIPT</label>
+          <textarea id="vc-script" rows="4" placeholder="Enter Marco's script here…"></textarea>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px;">
+            <button type="button" class="vc-btn ghost" onclick="loadTestScript('hook')">Load test hook</button>
+            <button type="button" class="vc-btn ghost" onclick="loadTestScript('explainer')">Load test explainer</button>
+            <button type="button" class="vc-btn ghost" onclick="loadTestScript('client')">Load client message</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+            <div>
+              <label class="vc-muted">FORMAT TYPE</label>
+              <select id="vc-format" onchange="onFormatChange()">
+                <option value="hook">Hook (first 3 sec)</option>
+                <option value="explainer">Explainer</option>
+                <option value="client_message">Client Message</option>
+                <option value="full_video">Full Video</option>
+              </select>
+            </div>
+            <div>
+              <label class="vc-muted">DELIVERY STYLE</label>
+              <select id="vc-style" onchange="onStyleChange()">
+                <option value="energetic_hook">Energetic — for hooks</option>
+                <option value="calm_explainer">Calm — for explainers</option>
+                <option value="warm_client">Warm — for client messages</option>
+                <option value="custom">Custom (describe below)</option>
+              </select>
+            </div>
+            <div id="vc-variations-container">
+              <label class="vc-muted">HOOK VARIATIONS</label>
+              <select id="vc-variations">
+                <option value="1">1 version</option>
+                <option value="3" selected>3 versions</option>
+                <option value="5">5 versions</option>
+              </select>
+            </div>
+          </div>
+          <div id="vc-custom-style-container" style="display:none;margin-top:8px;">
+            <label class="vc-muted">CUSTOM STYLE DESCRIPTION</label>
+            <input id="vc-custom-style" placeholder="e.g. slightly slower, serious tone, authoritative" />
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px;flex-wrap:wrap;">
+            <div class="vc-muted" style="max-width:520px;">Submitted scripts go to pending approval before generation — cloned voice never generates without Marco's explicit approval.</div>
+            <button type="button" class="vc-btn" onclick="submitScript()">SUBMIT FOR APPROVAL →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-scripts" class="tab-panel">
+      <h3 style="font-size:13px;margin-bottom:12px;color:var(--accent);">Pending Review</h3>
+      <div id="vc-pending-list"></div>
+      <h3 style="font-size:13px;margin:24px 0 12px;color:#888;">All Requests</h3>
+      <div id="vc-all-requests"></div>
+    </section>
+
+    <section id="panel-reference" class="tab-panel">
+      <div class="vc-card vc-form">
+        <div style="font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:10px;">+ ADD REFERENCE CLIP</div>
+        <input id="rc-url" placeholder="TikTok video URL (for reference)" />
+        <input id="rc-path" placeholder="Local audio path (e.g. /data/voice-clone/reference/marco1.wav)" />
+        <input id="rc-transcript" placeholder="What Marco says in this clip (for Ultimate Cloning mode)" />
+        <select id="rc-quality">
+          <option value="5">⭐⭐⭐⭐⭐ — Excellent clarity</option>
+          <option value="4">⭐⭐⭐⭐ — Good</option>
+          <option value="3">⭐⭐⭐ — Acceptable</option>
+          <option value="2">⭐⭐ — Noisy</option>
+          <option value="1">⭐ — Poor</option>
+        </select>
+        <button type="button" class="vc-btn" onclick="addReferenceClip()">+ ADD CLIP</button>
+      </div>
+      <div id="vc-ref-list"></div>
+    </section>
+
+    <section id="panel-hooks" class="tab-panel">
+      <div id="vc-hooks-list"><p class="vc-muted">Completed hook requests with multiple variations appear here.</p></div>
+    </section>
+
+    <section id="panel-safety" class="tab-panel">
+      <div id="vc-safety-list"></div>
+    </section>
+  </main>
+
+  <div id="vc-toast"></div>
+
+  <script>
+    function getToken() {
+      return new URLSearchParams(location.search).get("token") || localStorage.getItem("dashboardToken") || "";
+    }
+    function apiUrl(path) {
+      const u = new URL(path, location.origin);
+      const t = getToken();
+      if (t) u.searchParams.set("token", t);
+      return u.toString();
+    }
+    function authHeaders() {
+      const h = { "Content-Type": "application/json" };
+      const t = getToken();
+      if (t) h.Authorization = "Bearer " + t;
+      return h;
+    }
+    function escapeHtml(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+    function showToast(msg) {
+      const el = document.getElementById("vc-toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(() => el.classList.remove("show"), 3500);
+    }
+
+    let voxcpmApiUrl = "";
+
+    function buildServiceStatusBadge(health) {
+      if (!health.configured) return '<span style="color:#ef4444;">⚠ VOXCPM_API_URL not configured</span>';
+      if (!health.service?.ok) return '<span style="color:#ef4444;">⚠ VoxCPM service offline</span>';
+      const cuda = health.service.cudaAvailable ? "✓ CUDA" : "⚠ No CUDA";
+      const model = health.service.modelLoaded ? "✓ Model loaded" : "⟳ Loading on first request";
+      return `<span style="color:#10b981;">✓ Service online</span> · <span style="color:#888;">${cuda} · ${model}</span>`;
+    }
+
+    function onFormatChange() {
+      const format = document.getElementById("vc-format").value;
+      document.getElementById("vc-variations-container").style.display = format === "hook" ? "block" : "none";
+    }
+    function onStyleChange() {
+      const style = document.getElementById("vc-style").value;
+      document.getElementById("vc-custom-style-container").style.display = style === "custom" ? "block" : "none";
+    }
+
+    const TEST_SCRIPTS = {
+      hook: {
+        script: "Four hundred twelve thousand dollars. That is what a three-bed in Stone Oak actually costs right now — not what TikTok told you. I walked two listings last week and the numbers surprised even me. DM me if you want the full breakdown for your price range.",
+        format: "hook",
+        style: "energetic_hook",
+        variations: 3,
+      },
+      explainer: {
+        script: "A lot of first-time buyers think they need twenty percent down. You do not. On a three hundred fifty thousand dollar home in San Antonio, FHA can get you in with about three and a half percent. That is roughly twelve thousand dollars — not seventy thousand. Rates are not perfect, but waiting for a perfect rate has cost more people a home than bad timing ever did.",
+        format: "explainer",
+        style: "calm_explainer",
+        variations: 1,
+      },
+      client: {
+        script: "Hey — quick update on your search. I found two homes in Canyon Lake that match what you told me: under four hundred K, good schools, and room for a boat. One just hit the market this morning. I want to get you in before the weekend crowd. Call me when you have five minutes.",
+        format: "client_message",
+        style: "warm_client",
+        variations: 1,
+      },
+    };
+
+    function loadTestScript(kind) {
+      const sample = TEST_SCRIPTS[kind] || TEST_SCRIPTS.hook;
+      document.getElementById("vc-script").value = sample.script;
+      document.getElementById("vc-format").value = sample.format;
+      document.getElementById("vc-style").value = sample.style;
+      document.getElementById("vc-variations").value = String(sample.variations);
+      document.getElementById("vc-custom-style").value = "";
+      onFormatChange();
+      onStyleChange();
+      showToast("Test script loaded — click Submit for Approval");
+    }
+
+    async function submitScript() {
+      const script = document.getElementById("vc-script").value.trim();
+      if (!script) { showToast("Enter a script"); return; }
+      const body = {
+        script,
+        deliveryStyle: document.getElementById("vc-style").value,
+        formatType: document.getElementById("vc-format").value,
+        hookVariationCount: parseInt(document.getElementById("vc-variations").value, 10) || 1,
+        customStyleDescription: document.getElementById("vc-custom-style").value.trim() || undefined,
+      };
+      const r = await fetch(apiUrl("/api/voice-clone/requests"), { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+      const data = await r.json();
+      if (!r.ok) { showToast(data.error || "Submit failed"); return; }
+      document.getElementById("vc-script").value = "";
+      showToast("Submitted for approval");
+      await refreshAll();
+    }
+
+    async function approveRequest(id) {
+      const r = await fetch(apiUrl(`/api/voice-clone/requests/${id}/approve`), { method: "POST", headers: authHeaders() });
+      const data = await r.json();
+      if (!r.ok) { showToast(data.error || "Approve failed"); return; }
+      showToast("Approved — queued for generation");
+      await refreshAll();
+    }
+
+    async function rejectRequest(id) {
+      const reason = prompt("Rejection reason (optional):") || "Rejected";
+      await fetch(apiUrl(`/api/voice-clone/requests/${id}/reject`), { method: "POST", headers: authHeaders(), body: JSON.stringify({ reason }) });
+      showToast("Rejected");
+      await refreshAll();
+    }
+
+    function renderAudioPlayers(req) {
+      const urls = req.audioUrls || [];
+      if (!urls.length) return "";
+      return urls.map((url, i) =>
+        `<div style="margin-top:8px;"><span class="vc-muted">Variation ${i + 1}</span>
+        <audio controls style="width:100%;margin-top:4px;"><source src="${escapeHtml(url)}" type="audio/wav"></audio></div>`
+      ).join("");
+    }
+
+    function statusBadge(req) {
+      if (req.approvalStatus === "pending") return `<span style="color:var(--amber);">Pending approval</span>`;
+      if (req.generationStatus === "queued") return `<span style="color:var(--accent);">Queued — will generate within 30s</span>`;
+      if (req.generationStatus === "generating") return `<span class="vc-pulse" style="color:var(--accent);">Generating…</span>`;
+      if (req.generationStatus === "complete") return `<span style="color:var(--green);">Complete</span>`;
+      if (req.approvalStatus === "blocked") return `<span style="color:var(--red);">Blocked</span>`;
+      if (req.approvalStatus === "rejected") return `<span style="color:var(--red);">Rejected</span>`;
+      return `<span class="vc-muted">${escapeHtml(req.generationStatus)}</span>`;
+    }
+
+    function renderRequestCard(req, showActions) {
+      const exportBtn = req.exportUrl
+        ? `<button type="button" class="vc-btn ghost" style="margin-top:8px;" onclick="showToast('Ready at: ${escapeHtml(req.exportFilePath || req.exportUrl)}')">📁 Export to CapCut</button>`
+        : "";
+      const actions = showActions
+        ? `<div style="margin-top:10px;display:flex;gap:8px;">
+            <button type="button" class="vc-btn green" onclick="approveRequest('${req.id}')">✓ APPROVE</button>
+            <button type="button" class="vc-btn red" onclick="rejectRequest('${req.id}')">✕ REJECT</button>
+          </div>`
+        : "";
+      return `<div class="vc-card ${req.approvalStatus === "pending" ? "vc-pending-card" : req.generationStatus === "complete" ? "vc-complete-card" : req.approvalStatus === "blocked" ? "vc-blocked-card" : ""}">
+        <div class="vc-muted">${escapeHtml(req.formatType)} · ${escapeHtml(req.deliveryStyle)} · ${statusBadge(req)}</div>
+        <p style="margin:8px 0;font-size:13px;line-height:1.5;">${escapeHtml(req.script)}</p>
+        ${req.error ? `<p style="color:var(--red);font-size:11px;">${escapeHtml(req.error)}</p>` : ""}
+        ${renderAudioPlayers(req)}
+        ${exportBtn}
+        ${actions}
+      </div>`;
+    }
+
+    async function loadStats() {
+      const [statsR, healthR] = await Promise.all([
+        fetch(apiUrl("/api/voice-clone/stats")).then((r) => r.json()),
+        fetch(apiUrl("/api/voice-clone/health")).then((r) => r.json()),
+      ]);
+      voxcpmApiUrl = healthR.apiUrl || "";
+      document.getElementById("vc-service-status").innerHTML = buildServiceStatusBadge(healthR);
+      document.getElementById("vc-stats").innerHTML = `
+        <div class="vc-card"><div class="vc-stat-label">TOTAL REQUESTS</div><div class="vc-stat-value">${statsR.total || 0}</div></div>
+        <div class="vc-card" style="border-color:rgba(245,158,11,0.4);"><div class="vc-stat-label">PENDING APPROVAL</div><div class="vc-stat-value" style="color:var(--amber);">${statsR.pendingApproval || 0}</div></div>
+        <div class="vc-card"><div class="vc-stat-label">GENERATING</div><div class="vc-stat-value ${statsR.generating ? "vc-pulse" : ""}" style="color:var(--accent);">${statsR.generating || 0}</div></div>
+        <div class="vc-card" style="border-color:rgba(16,185,129,0.4);"><div class="vc-stat-label">COMPLETED</div><div class="vc-stat-value" style="color:var(--green);">${statsR.complete || 0}</div></div>`;
+    }
+
+    async function loadScripts() {
+      const [pendingR, allR] = await Promise.all([
+        fetch(apiUrl("/api/voice-clone/requests/pending")).then((r) => r.json()),
+        fetch(apiUrl("/api/voice-clone/requests?limit=50")).then((r) => r.json()),
+      ]);
+      document.getElementById("vc-pending-list").innerHTML = (pendingR.requests || []).length
+        ? pendingR.requests.map((r) => renderRequestCard(r, true)).join("")
+        : "<p class='vc-muted'>No scripts pending approval.</p>";
+      document.getElementById("vc-all-requests").innerHTML = (allR.requests || []).map((r) => renderRequestCard(r, false)).join("") || "<p class='vc-muted'>No requests yet.</p>";
+    }
+
+    async function loadReferenceClips() {
+      const data = await fetch(apiUrl("/api/voice-clone/reference-clips")).then((r) => r.json());
+      const clips = data.clips || [];
+      document.getElementById("vc-ref-list").innerHTML = clips.length
+        ? clips.map((c) => `<div class="vc-card ${c.isPrimary ? "vc-primary-clip" : ""}">
+            <div><strong>${escapeHtml(c.sourceUrl)}</strong> ${c.isPrimary ? '<span style="color:var(--accent);">★ Primary</span>' : ""}</div>
+            <div class="vc-muted">${escapeHtml(c.localAudioPath || "no path")} · ${c.qualityRating || "—"} stars · ${c.durationSeconds ? c.durationSeconds + "s" : "—"}</div>
+            <p class="vc-muted" style="margin-top:6px;">${escapeHtml((c.transcript || "").slice(0, 120))}</p>
+            ${!c.isPrimary ? `<button type="button" class="vc-btn ghost" style="margin-top:8px;" onclick="setPrimary('${c.id}')">★ Set as Primary</button>` : ""}
+          </div>`).join("")
+        : "<p class='vc-muted'>No reference clips yet. Add Marco's voice samples from TikTok audio.</p>";
+    }
+
+    async function addReferenceClip() {
+      const body = {
+        sourceUrl: document.getElementById("rc-url").value.trim(),
+        localAudioPath: document.getElementById("rc-path").value.trim(),
+        transcript: document.getElementById("rc-transcript").value.trim(),
+        qualityRating: parseInt(document.getElementById("rc-quality").value, 10),
+      };
+      if (!body.sourceUrl) { showToast("TikTok URL required"); return; }
+      const r = await fetch(apiUrl("/api/voice-clone/reference-clips"), { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+      if (!r.ok) { showToast("Failed to add clip"); return; }
+      showToast("Reference clip added");
+      await loadReferenceClips();
+    }
+
+    async function setPrimary(id) {
+      await fetch(apiUrl(`/api/voice-clone/reference-clips/${id}/set-primary`), { method: "POST", headers: authHeaders() });
+      showToast("Primary reference updated");
+      await loadReferenceClips();
+    }
+
+    async function loadHooks() {
+      const data = await fetch(apiUrl("/api/voice-clone/requests?limit=100")).then((r) => r.json());
+      const hooks = (data.requests || []).filter((r) => r.formatType === "hook" && r.generationStatus === "complete" && (r.audioUrls || []).length > 1);
+      document.getElementById("vc-hooks-list").innerHTML = hooks.length
+        ? hooks.map((req) => `<div class="vc-card">
+            <p class="vc-muted">${escapeHtml(req.script.slice(0, 80))}…</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:10px;">
+              ${(req.audioUrls || []).map((url, i) => `
+                <div>
+                  <div class="vc-muted">Variation ${i + 1}</div>
+                  <audio controls style="width:100%;margin-top:4px;"><source src="${escapeHtml(url)}" type="audio/wav"></audio>
+                  <button type="button" class="vc-btn ghost" style="margin-top:6px;width:100%;" onclick="showToast('Use this file in CapCut')">✓ Pick This</button>
+                </div>`).join("")}
+            </div>
+          </div>`).join("")
+        : "<p class='vc-muted'>No multi-variation hook outputs yet.</p>";
+    }
+
+    async function loadSafetyLog() {
+      const data = await fetch(apiUrl("/api/voice-clone/safety-log")).then((r) => r.json());
+      const entries = data.entries || [];
+      document.getElementById("vc-safety-list").innerHTML = entries.length
+        ? entries.map((e) => `<div class="vc-card vc-blocked-card">
+            <div class="vc-muted">${escapeHtml(e.flaggedAt)} · ${escapeHtml(e.requestedBy || "—")}</div>
+            <p style="margin:6px 0;"><strong>${escapeHtml(e.reason)}</strong></p>
+            <p class="vc-muted">${escapeHtml(e.scriptPreview)}</p>
+          </div>`).join("")
+        : "<p class='vc-muted'>No blocked attempts logged.</p>";
+    }
+
+    async function refreshAll() {
+      await loadStats();
+      await loadScripts();
+      await loadReferenceClips();
+      await loadHooks();
+      await loadSafetyLog();
+    }
+
+    document.querySelectorAll("#vc-tabs .tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#vc-tabs .tab").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+      });
+    });
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      document.getElementById("vc-theme-btn").textContent = theme === "light" ? "Dark mode" : "Light mode";
+    }
+    document.getElementById("vc-theme-btn").addEventListener("click", () => {
+      const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+      localStorage.setItem("dashboardTheme", next);
+      applyTheme(next);
+    });
+    applyTheme(localStorage.getItem("dashboardTheme") || "dark");
+
+    refreshAll();
+    setInterval(refreshAll, 30000);
+  </script>
+</body>
+</html>

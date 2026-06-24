@@ -16,6 +16,8 @@ exports.updateContentVideo = updateContentVideo;
 exports.listContentVideos = listContentVideos;
 exports.insertPublishLog = insertPublishLog;
 exports.listSuccessfulPublishLogs = listSuccessfulPublishLogs;
+exports.listPublishingQueue = listPublishingQueue;
+exports.countPublishingQueue = countPublishingQueue;
 exports.insertPerformance = insertPerformance;
 exports.getLatestPerformance = getLatestPerformance;
 exports.insertComplianceQueueItem = insertComplianceQueueItem;
@@ -91,6 +93,58 @@ exports.getSeasonalWeek = getSeasonalWeek;
 exports.upsertSeasonalWeek = upsertSeasonalWeek;
 exports.listVideosForWeekNumber = listVideosForWeekNumber;
 exports.seasonLabelForWeek = seasonLabelForWeek;
+exports.createBatchSession = createBatchSession;
+exports.getBatchSession = getBatchSession;
+exports.updateBatchSession = updateBatchSession;
+exports.listBatchSessions = listBatchSessions;
+exports.createBatchSourceFile = createBatchSourceFile;
+exports.getBatchSourceFile = getBatchSourceFile;
+exports.listBatchSourceFiles = listBatchSourceFiles;
+exports.updateBatchSourceFile = updateBatchSourceFile;
+exports.listActiveCompetitorProfiles = listActiveCompetitorProfiles;
+exports.listAllCompetitorProfiles = listAllCompetitorProfiles;
+exports.insertCompetitorProfile = insertCompetitorProfile;
+exports.updateCompetitorProfile = updateCompetitorProfile;
+exports.getCompetitorTrendsById = getCompetitorTrendsById;
+exports.getLatestCompetitorTrends = getLatestCompetitorTrends;
+exports.getCachedCompetitorTrends = getCachedCompetitorTrends;
+exports.insertCompetitorTrends = insertCompetitorTrends;
+exports.insertClipEnhancement = insertClipEnhancement;
+exports.getClipEnhancement = getClipEnhancement;
+exports.getClipEnhancementByVideoId = getClipEnhancementByVideoId;
+exports.updateClipEnhancement = updateClipEnhancement;
+exports.listVideosByBatchSession = listVideosByBatchSession;
+exports.countClipsInApprovedOrScheduled = countClipsInApprovedOrScheduled;
+exports.countVideosByBatchAndStatus = countVideosByBatchAndStatus;
+exports.listContentVideosWithEnhancements = listContentVideosWithEnhancements;
+exports.insertCompetitiveAnalysis = insertCompetitiveAnalysis;
+exports.getCompetitiveAnalysisById = getCompetitiveAnalysisById;
+exports.getLatestCompetitiveAnalysis = getLatestCompetitiveAnalysis;
+exports.insertStrategyRecommendation = insertStrategyRecommendation;
+exports.getStrategyRecommendationById = getStrategyRecommendationById;
+exports.listStrategyRecommendations = listStrategyRecommendations;
+exports.getActiveStrategyRecommendations = getActiveStrategyRecommendations;
+exports.countActiveStrategyRecommendations = countActiveStrategyRecommendations;
+exports.updateStrategyRecommendation = updateStrategyRecommendation;
+exports.insertRecordingTask = insertRecordingTask;
+exports.getRecordingTaskById = getRecordingTaskById;
+exports.listRecordingTasks = listRecordingTasks;
+exports.countPendingRecordingTasksDueBefore = countPendingRecordingTasksDueBefore;
+exports.countOverdueRecordingTasks = countOverdueRecordingTasks;
+exports.countPendingRecordingTasksThisWeek = countPendingRecordingTasksThisWeek;
+exports.updateRecordingTask = updateRecordingTask;
+exports.insertCalendarEvent = insertCalendarEvent;
+exports.getCalendarEventById = getCalendarEventById;
+exports.listCalendarEventsForDate = listCalendarEventsForDate;
+exports.updateCalendarEventByRecordingTaskId = updateCalendarEventByRecordingTaskId;
+exports.listPublishLogForDate = listPublishLogForDate;
+exports.countPipelineVideosForDate = countPipelineVideosForDate;
+exports.countPublishedVideosForDate = countPublishedVideosForDate;
+exports.countTotalPublishedVideos = countTotalPublishedVideos;
+exports.countPublishScheduledForDate = countPublishScheduledForDate;
+exports.listPublishCountsByDateRange = listPublishCountsByDateRange;
+exports.countVideosPublishedLastDays = countVideosPublishedLastDays;
+exports.getSprintProgressData = getSprintProgressData;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -389,8 +443,163 @@ function getContentDb() {
         last_updated TEXT
       );
     `);
+        db.exec(`
+      CREATE TABLE IF NOT EXISTS cm_batch_sessions (
+        id TEXT PRIMARY KEY,
+        session_name TEXT,
+        pillar TEXT,
+        filmed_by TEXT,
+        target_clip_count INTEGER,
+        status TEXT,
+        source_file_count INTEGER,
+        clips_generated INTEGER DEFAULT 0,
+        trend_brief_id TEXT,
+        created_at TEXT,
+        completed_at TEXT,
+        notes TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_batch_source_files (
+        id TEXT PRIMARY KEY,
+        batch_session_id TEXT,
+        original_filename TEXT,
+        file_size_bytes INTEGER,
+        file_path TEXT,
+        duration_seconds REAL,
+        opus_job_id TEXT,
+        opus_status TEXT,
+        clips_generated_count INTEGER DEFAULT 0,
+        uploaded_at TEXT,
+        opus_submitted_at TEXT,
+        opus_completed_at TEXT,
+        error_message TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
+        id TEXT PRIMARY KEY,
+        tiktok_handle TEXT UNIQUE,
+        display_name TEXT,
+        profile_type TEXT,
+        active INTEGER DEFAULT 1,
+        last_scraped_at TEXT,
+        added_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_competitor_trends (
+        id TEXT PRIMARY KEY,
+        scraped_at TEXT,
+        profiles_scraped TEXT,
+        raw_video_count INTEGER,
+        top_hooks TEXT,
+        trending_hashtags TEXT,
+        top_performing_durations TEXT,
+        best_duration_range TEXT,
+        top_content_themes TEXT,
+        trend_brief TEXT,
+        expires_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_clip_enhancements (
+        id TEXT PRIMARY KEY,
+        video_id TEXT,
+        hook_primary TEXT,
+        hook_variations TEXT,
+        hook_type TEXT,
+        caption_generated TEXT,
+        caption_final TEXT,
+        hashtags_generated TEXT,
+        hashtags_final TEXT,
+        title_generated TEXT,
+        title_final TEXT,
+        platform_targets TEXT,
+        trend_alignment_score INTEGER,
+        trend_alignment_reason TEXT,
+        optimal_post_time_tiktok TEXT,
+        optimal_post_time_instagram TEXT,
+        opus_clip_score REAL,
+        source_file_id TEXT,
+        created_at TEXT,
+        last_edited_at TEXT,
+        edited_by TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_competitive_analysis (
+        id TEXT PRIMARY KEY,
+        analyzed_at TEXT,
+        week_start TEXT,
+        profiles_analyzed TEXT,
+        marco_avg_views REAL,
+        marco_avg_engagement_rate REAL,
+        competitor_avg_views REAL,
+        competitor_avg_engagement_rate REAL,
+        marco_vs_field_pct REAL,
+        top_competitor_handle TEXT,
+        top_competitor_avg_views REAL,
+        marco_strengths TEXT,
+        marco_gaps TEXT,
+        top_competitor_themes TEXT,
+        full_analysis_markdown TEXT,
+        created_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_strategy_recommendations (
+        id TEXT PRIMARY KEY,
+        analysis_id TEXT,
+        priority INTEGER,
+        recommendation TEXT,
+        data_backing TEXT,
+        pillar TEXT,
+        hook_type TEXT,
+        example_from_competitor TEXT,
+        expected_impact TEXT,
+        status TEXT DEFAULT 'pending',
+        dismissed_reason TEXT,
+        created_at TEXT,
+        acted_on_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_recording_tasks (
+        id TEXT PRIMARY KEY,
+        due_date TEXT,
+        pillar TEXT,
+        hook_type TEXT,
+        topic TEXT,
+        suggested_hooks TEXT,
+        suggested_duration_min INTEGER,
+        suggested_duration_max INTEGER,
+        filming_notes TEXT,
+        reason TEXT,
+        source TEXT DEFAULT 'brain',
+        priority TEXT DEFAULT 'normal',
+        status TEXT DEFAULT 'pending',
+        strategy_recommendation_id TEXT,
+        created_at TEXT,
+        filmed_at TEXT,
+        upload_triggered_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_calendar_events (
+        id TEXT PRIMARY KEY,
+        event_date TEXT,
+        event_type TEXT,
+        title TEXT,
+        description TEXT,
+        pillar TEXT,
+        platform TEXT,
+        video_id TEXT,
+        recording_task_id TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_knowledge_base (
+        id TEXT PRIMARY KEY,
+        category TEXT,
+        title TEXT,
+        content TEXT,
+        source TEXT DEFAULT 'system',
+        confidence REAL DEFAULT 1.0,
+        created_at TEXT,
+        last_referenced_at TEXT
+      );
+    `);
         ensureBrainIntelligenceMigrations(db);
+        ensureBatchPipelineMigrations(db);
+        ensureStrategyEngineMigrations(db);
         initSeasonalModelIfEmpty(db);
+        initCompetitorProfilesIfEmpty(db);
+        initKnowledgeBaseIfEmpty(db);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_cv_status ON content_videos(status)`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_cv_session ON content_videos(source_session_id)`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_cpl_video ON content_publish_log(video_id)`);
@@ -421,6 +630,153 @@ function ensureBrainIntelligenceMigrations(database) {
     addCol("cm_performance_model", "season_multiplier", "REAL DEFAULT 1.0");
     addCol("cm_performance_model", "decay_weighted_avg_views", "REAL DEFAULT 0");
     addCol("cm_self_evaluation", "benchmark_assessment", "TEXT");
+}
+function ensureBatchPipelineMigrations(database) {
+    const addCol = (table, column, ddl) => {
+        const info = database.prepare(`PRAGMA table_info(${table})`).all();
+        if (!info.some((c) => c.name === column)) {
+            database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+        }
+    };
+    addCol("content_videos", "batch_session_id", "TEXT");
+    addCol("content_videos", "source_file_id", "TEXT");
+    addCol("content_videos", "trend_alignment_score", "INTEGER DEFAULT 0");
+    addCol("content_videos", "opus_clip_score", "REAL DEFAULT 0");
+    addCol("content_videos", "hook_type", "TEXT");
+    addCol("content_videos", "platform_targets", "TEXT");
+    addCol("content_videos", "optimal_post_time", "TEXT");
+    addCol("content_sessions", "batch_session_id", "TEXT");
+    addCol("content_sessions", "opus_job_id", "TEXT");
+    addCol("content_sessions", "filmed_by", `TEXT DEFAULT 'marco'`);
+}
+function initCompetitorProfilesIfEmpty(database) {
+    const count = database.prepare(`SELECT COUNT(*) AS c FROM cm_competitor_profiles`).get();
+    if (Number(count.c) > 0)
+        return;
+    const now = new Date().toISOString();
+    const defaults = [
+        { handle: "ryan.serhant", name: "Ryan Serhant", type: "national_influencer" },
+        { handle: "grahamstephan", name: "Graham Stephan", type: "national_influencer" },
+        { handle: "realestategreg", name: "Real Estate Greg", type: "education_account" },
+        { handle: "lisasalcido", name: "Lisa Salcido", type: "texas_state" },
+        { handle: "realestaterob", name: "Real Estate Rob", type: "education_account" },
+    ];
+    const stmt = database.prepare(`INSERT INTO cm_competitor_profiles (id, tiktok_handle, display_name, profile_type, active, added_at)
+     VALUES (?, ?, ?, ?, 1, ?)`);
+    for (const p of defaults) {
+        stmt.run((0, crypto_1.randomUUID)(), p.handle, p.name, p.type, now);
+    }
+}
+function ensureStrategyEngineMigrations(database) {
+    /* tables created via CREATE TABLE IF NOT EXISTS above */
+}
+function initKnowledgeBaseIfEmpty(database) {
+    const count = database.prepare(`SELECT COUNT(*) AS c FROM cm_knowledge_base`).get();
+    if (Number(count.c) > 0)
+        return;
+    const now = new Date().toISOString();
+    const entries = [
+        {
+            category: "algorithm_mechanics",
+            title: "The 1-3 Second Rule",
+            content: "The first 1-3 seconds of any TikTok determine whether viewers stay or scroll. If the hook does not create immediate curiosity, a specific promise, or a surprising statement in those seconds, watch time collapses and the algorithm buries the video. Every clip must open with something that makes a viewer think 'I need to hear the rest of this.' This is why hook type matters more than production quality.",
+        },
+        {
+            category: "algorithm_mechanics",
+            title: "Watch Time Is the Primary Signal",
+            content: "TikTok's algorithm prioritizes videos where viewers watch to completion or near-completion. A 45-second video watched 100% beats a 60-second video watched 70%. The goal is not the longest video but the most watched-through video. This is why 35-55 second clips consistently outperform longer content in real estate — they match the attention span of the intended audience.",
+        },
+        {
+            category: "algorithm_mechanics",
+            title: "Saves Signal Future Value",
+            content: "When a viewer saves a video, they are telling TikTok this content is worth returning to. Saves drive algorithmic distribution more than likes. Educational content that teaches buyers something they want to remember — pre-approval steps, what $400K buys in San Antonio, rate explanation — generates saves at a disproportionately high rate. Every Education pillar video should be created with the question: what would make someone save this?",
+        },
+        {
+            category: "algorithm_mechanics",
+            title: "Shares Signal Social Proof",
+            content: "Shares happen when a viewer thinks 'someone I know needs to see this.' In real estate, shares spike on price revelation content ('I just sold this for $___'), controversial takes ('Stop waiting for rates to drop'), and hyperlocal content that matches someone's specific situation. Shares are the hardest metric to earn and the most valuable for reach.",
+        },
+        {
+            category: "algorithm_mechanics",
+            title: "Comments Drive Distribution Loops",
+            content: "Comments tell TikTok a video created conversation. Question-based hooks drive the most comments because they create an obvious reply point. 'What would you do with 5 acres in Texas?' generates more comments than 'Here is a 5-acre property.' Every Brand and Education video should end with a question or a statement that makes viewers feel compelled to respond.",
+        },
+        {
+            category: "hook_science",
+            title: "The Six Hook Structures That Work in Real Estate",
+            content: "Question hooks ('Did you know you could buy a San Antonio home for under $350K?') drive comments. Shock hooks ('I just sold this house for $200K over asking') drive shares. Personal story hooks ('Last week my client walked away from a deal and I told them not to') drive trust. Data hooks ('Interest rates just hit X — here's what that means for your payment') drive saves. Controversy hooks ('Stop waiting for rates to drop — here's why') drive comments and shares. Local hooks ('Stone Oak buyers are doing something most agents won't tell you about') drive DMs. Know which outcome you want before you write the hook.",
+        },
+        {
+            category: "hook_science",
+            title: "Specificity Multiplies Hook Performance",
+            content: "Generic hooks fail. Specific hooks win. 'I have a home you should see' → nobody cares. 'I have a 4-bedroom in Stone Oak for $445K that closes in 30 days' → buyers in that market stop scrolling. Replace every vague claim with a specific number, neighborhood name, price point, or timeline. Marco's San Antonio specificity is a competitive advantage — use it in every hook possible.",
+        },
+        {
+            category: "conversion_psychology",
+            title: "People Follow Agents They Trust, Not Listings",
+            content: "No one on TikTok is looking for their next home. They are looking for someone who can help them understand a confusing and expensive decision. The real estate content that converts is not listing tours — it is Marco explaining what he knows in plain language. Trust is built through consistency, transparency about numbers, and moments where Marco shows he is on the buyer's side. Brand content converts 3x more than listing content because it builds the person, not the property.",
+        },
+        {
+            category: "conversion_psychology",
+            title: "The DM Is the Conversion Point",
+            content: "A viewer becoming a DM sender is the moment the $14M goal moves forward. Everything before the DM is marketing. The DM is the beginning of a sales relationship. Content should be designed to generate curiosity that can only be satisfied in a DM — 'DM me for the full breakdown,' 'I can only share this privately,' 'Text me the neighborhood and I'll send you the data.' The 44 DMs per day target is not a vanity metric. It is a revenue target.",
+        },
+        {
+            category: "conversion_psychology",
+            title: "The 246K Views Per Closing Math",
+            content: "Marco's data shows 246,000 views produces 1 closing. At 5,957 average views per video, that is 41 videos per closing. At 7 videos per day, Marco generates the views for 1 closing every 6 days. The 21-closing buyer target requires 861 videos. This math means every underperforming video that gets cut and replaced is a direct contribution to the closing count. The Brain's job is to maximize the percentage of videos that beat the 6,006 view benchmark, not just hit the volume target.",
+        },
+        {
+            category: "platform_strategy",
+            title: "TikTok First, Then Distribute",
+            content: "TikTok is the primary platform because it has the strongest organic reach algorithm for new creators and the largest Millennial and Gen Z buyer audience. Instagram Reels captures the same content but for a warmer audience that is already following real estate accounts. Facebook reaches the 40-55 year old move-up buyer and seller demographic that TikTok does not reach. YouTube Shorts captures search intent — people actively searching 'buying a home in San Antonio' or 'first time buyer Texas.' Content should be created for TikTok first, then formatted for each downstream platform.",
+        },
+        {
+            category: "platform_strategy",
+            title: "Platform-Specific Content Matching",
+            content: "Not all content belongs on all platforms. Brand content (Marco on camera, wins, personal moments) performs best on TikTok and Instagram where personality drives follows. Education content performs best on YouTube Shorts and TikTok where information drives saves and search. Listing content performs best on Facebook where buyers in the purchase mindset actively browse. Matching content type to platform increases performance across all channels without requiring any additional filming.",
+        },
+        {
+            category: "real_estate_niche",
+            title: "First-Time Buyers Are the Highest Volume TikTok Audience",
+            content: "The majority of real estate TikTok's organic audience is Millennials and Gen Z who are confused, anxious, and curious about homeownership. They do not know what pre-approval means. They do not know what a good interest rate looks like. They do not understand what $400K actually buys. Content that answers these foundational questions in plain language — without condescension — generates the highest saves, shares, and DMs of any content type in real estate.",
+        },
+        {
+            category: "real_estate_niche",
+            title: "San Antonio Specificity Is a Moat",
+            content: "Marco's hyperlocal knowledge of San Antonio — Stone Oak, Canyon Lake, New Braunfels, Alamo Heights, specific price bands by neighborhood — is something no national real estate influencer can replicate. Every time Marco says a specific neighborhood name with a specific price, he is speaking directly to the buyers in that market who are already looking. Hyperlocal content converts at a higher rate than generic real estate content because it feels like it was made for the viewer specifically.",
+        },
+        {
+            category: "real_estate_niche",
+            title: "Interest Rates Are the Permanent Hook",
+            content: "Since 2022 every buyer in America has been obsessed with interest rates. Rate content — what they are today, what they mean for a monthly payment, whether to buy now or wait, how to buy down the rate — generates consistent engagement regardless of season. Any week where competitors are posting rate content that outperforms, Marco should be posting rate content. This is the one topic where Education pillar and Data hooks combine for maximum performance.",
+        },
+        {
+            category: "community_management",
+            title: "Responding to Comments Is an Algorithm Lever",
+            content: "When Marco or the system responds to comments within the first hour of posting, TikTok reads the video as creating conversation and pushes it to more users. Every comment response is a mini-content piece. Asking a follow-up question in a comment response increases the comment count further. The 220 comments per day target is not just a service goal — it is an algorithm activation strategy.",
+        },
+        {
+            category: "community_management",
+            title: "Phone Number Capture Is the Only Metric That Generates Revenue",
+            content: "Views build brand. Comments build distribution. DMs build relationships. Phone numbers generate closings. The 22 phone numbers per day target is the only community management metric that directly traces to the $14M buyer goal. Every DM conversation should be designed to create a moment where providing a phone number feels natural and valuable — 'send me your number and I'll text you the full breakdown.'",
+        },
+        {
+            category: "sprint_math",
+            title: "The 861-Video Sprint Context",
+            content: "The sprint runs from now to November 30, 2026. 861 videos total at 7 per day. TikTok closings lag 2-4 months. Videos posted in July-August produce closings in October-November at the finish line. This means the most important time to post consistently is NOW — not when closings start appearing. The Brain should treat every day's video target as a non-negotiable sprint commitment, not a suggestion.",
+        },
+        {
+            category: "content_pillars",
+            title: "The Three Pillars in Conversion Order",
+            content: "Brand converts first and most powerfully because people buy from people they trust. Marco on camera — sharing a win, walking a listing, reacting to a market moment — builds the personal trust that drives DMs. Education converts second by establishing expertise and generating saves that bring viewers back repeatedly. Listings convert third with the broadest reach but the lowest direct-to-DM conversion because buyers who want a specific listing will DM, but most viewers do not. A healthy content mix is approximately 40% Brand, 35% Education, 25% Listings.",
+        },
+    ];
+    const stmt = database.prepare(`INSERT INTO cm_knowledge_base (id, category, title, content, source, confidence, created_at, last_referenced_at)
+     VALUES (?, ?, ?, ?, 'system', 1.0, ?, NULL)`);
+    for (const e of entries) {
+        stmt.run((0, crypto_1.randomUUID)(), e.category, e.title, e.content, now);
+    }
 }
 function initSeasonalModelIfEmpty(database) {
     const count = database.prepare(`SELECT COUNT(*) AS c FROM cm_seasonal_model`).get();
@@ -467,6 +823,9 @@ function rowToSession(row) {
         status: row.status,
         createdAt: String(row.created_at),
         completedAt: row.completed_at ? String(row.completed_at) : null,
+        batchSessionId: row.batch_session_id ? String(row.batch_session_id) : null,
+        opusJobId: row.opus_job_id ? String(row.opus_job_id) : null,
+        filmedBy: row.filmed_by ? String(row.filmed_by) : "marco",
     };
 }
 function rowToVideo(row) {
@@ -487,6 +846,13 @@ function rowToVideo(row) {
         approvedAt: row.approved_at ? String(row.approved_at) : null,
         scheduledFor: row.scheduled_for ? String(row.scheduled_for) : null,
         publishedAt: row.published_at ? String(row.published_at) : null,
+        batchSessionId: row.batch_session_id ? String(row.batch_session_id) : null,
+        sourceFileId: row.source_file_id ? String(row.source_file_id) : null,
+        trendAlignmentScore: Number(row.trend_alignment_score) || 0,
+        opusClipScore: Number(row.opus_clip_score) || 0,
+        hookType: row.hook_type ? String(row.hook_type) : null,
+        platformTargets: parseJson(String(row.platform_targets ?? "[]"), []),
+        optimalPostTime: row.optimal_post_time ? String(row.optimal_post_time) : null,
     };
 }
 function rowToPublishLog(row) {
@@ -566,9 +932,10 @@ function createContentSession(input) {
     const now = new Date().toISOString();
     database
         .prepare(`INSERT INTO content_sessions
-       (id, raw_input_type, raw_input_path, raw_input_meta, clips_generated, status, created_at, completed_at)
-       VALUES (?, ?, ?, ?, 0, ?, ?, NULL)`)
-        .run(id, input.rawInputType, input.rawInputPath ?? null, JSON.stringify(input.rawInputMeta ?? {}), input.status ?? "processing", now);
+       (id, raw_input_type, raw_input_path, raw_input_meta, clips_generated, status, created_at, completed_at,
+        batch_session_id, opus_job_id, filmed_by)
+       VALUES (?, ?, ?, ?, 0, ?, ?, NULL, ?, ?, ?)`)
+        .run(id, input.rawInputType, input.rawInputPath ?? null, JSON.stringify(input.rawInputMeta ?? {}), input.status ?? "processing", now, input.batchSessionId ?? null, input.opusJobId ?? null, input.filmedBy ?? "marco");
     return getContentSession(id);
 }
 function getContentSession(id) {
@@ -593,9 +960,11 @@ function insertContentVideo(video) {
     database
         .prepare(`INSERT INTO content_videos
        (id, source_session_id, platform_target, title, caption, hook, hashtags, pillar, file_path,
-        status, compliance_flagged, compliance_notes, created_at, approved_at, scheduled_for, published_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(video.id, video.sourceSessionId, video.platformTarget, video.title, video.caption, video.hook, JSON.stringify(video.hashtags), video.pillar, video.filePath, video.status, video.complianceFlagged ? 1 : 0, video.complianceNotes, createdAt, video.approvedAt, video.scheduledFor, video.publishedAt);
+        status, compliance_flagged, compliance_notes, created_at, approved_at, scheduled_for, published_at,
+        batch_session_id, source_file_id, trend_alignment_score, opus_clip_score, hook_type, platform_targets,
+        optimal_post_time)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(video.id, video.sourceSessionId, video.platformTarget, video.title, video.caption, video.hook, JSON.stringify(video.hashtags), video.pillar, video.filePath, video.status, video.complianceFlagged ? 1 : 0, video.complianceNotes, createdAt, video.approvedAt, video.scheduledFor, video.publishedAt, video.batchSessionId ?? null, video.sourceFileId ?? null, video.trendAlignmentScore ?? 0, video.opusClipScore ?? 0, video.hookType ?? null, JSON.stringify(video.platformTargets ?? []), video.optimalPostTime ?? null);
     return getContentVideo(video.id);
 }
 function getContentVideo(id) {
@@ -611,8 +980,10 @@ function updateContentVideo(id, patch) {
     const database = getContentDb();
     database
         .prepare(`UPDATE content_videos SET status = ?, compliance_flagged = ?, compliance_notes = ?,
-       approved_at = ?, scheduled_for = ?, published_at = ?, hook = ?, caption = ? WHERE id = ?`)
-        .run(patch.status ?? existing.status, (patch.complianceFlagged ?? existing.complianceFlagged) ? 1 : 0, patch.complianceNotes !== undefined ? patch.complianceNotes : existing.complianceNotes, patch.approvedAt !== undefined ? patch.approvedAt : existing.approvedAt, patch.scheduledFor !== undefined ? patch.scheduledFor : existing.scheduledFor, patch.publishedAt !== undefined ? patch.publishedAt : existing.publishedAt, patch.hook ?? existing.hook, patch.caption ?? existing.caption, id);
+       approved_at = ?, scheduled_for = ?, published_at = ?, hook = ?, caption = ?, title = ?,
+       hashtags = ?, trend_alignment_score = ?, opus_clip_score = ?, hook_type = ?,
+       platform_targets = ?, optimal_post_time = ?, platform_target = ? WHERE id = ?`)
+        .run(patch.status ?? existing.status, (patch.complianceFlagged ?? existing.complianceFlagged) ? 1 : 0, patch.complianceNotes !== undefined ? patch.complianceNotes : existing.complianceNotes, patch.approvedAt !== undefined ? patch.approvedAt : existing.approvedAt, patch.scheduledFor !== undefined ? patch.scheduledFor : existing.scheduledFor, patch.publishedAt !== undefined ? patch.publishedAt : existing.publishedAt, patch.hook ?? existing.hook, patch.caption ?? existing.caption, patch.title ?? existing.title, JSON.stringify(patch.hashtags ?? existing.hashtags), patch.trendAlignmentScore ?? existing.trendAlignmentScore ?? 0, patch.opusClipScore ?? existing.opusClipScore ?? 0, patch.hookType !== undefined ? patch.hookType : existing.hookType, JSON.stringify(patch.platformTargets ?? existing.platformTargets ?? []), patch.optimalPostTime !== undefined ? patch.optimalPostTime : existing.optimalPostTime, patch.platformTarget ?? existing.platformTarget, id);
     return getContentVideo(id);
 }
 function listContentVideos(input) {
@@ -642,6 +1013,37 @@ function listSuccessfulPublishLogs() {
         .prepare(`SELECT * FROM content_publish_log WHERE publish_status = 'success' ORDER BY published_at DESC`)
         .all();
     return rows.map(rowToPublishLog);
+}
+function listPublishingQueue(limit = 50) {
+    const database = getContentDb();
+    const rows = database
+        .prepare(`SELECT * FROM content_videos
+       WHERE status IN ('approved', 'scheduled', 'published')
+       ORDER BY COALESCE(approved_at, scheduled_for, created_at) DESC
+       LIMIT ?`)
+        .all(limit);
+    return rows.map((row) => {
+        const video = rowToVideo(row);
+        const logRows = database
+            .prepare(`SELECT * FROM content_publish_log WHERE video_id = ? ORDER BY published_at DESC`)
+            .all(video.id);
+        const entries = logRows.map((lr) => ({
+            platform: String(lr.platform),
+            scheduledFor: String(lr.published_at),
+            publishStatus: String(lr.publish_status),
+        }));
+        return {
+            video,
+            enhancement: getClipEnhancementByVideoId(video.id),
+            entries,
+        };
+    });
+}
+function countPublishingQueue() {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled', 'published')`)
+        .get();
+    return Number(row.c) || 0;
 }
 function insertPerformance(perf) {
     const database = getContentDb();
@@ -2004,4 +2406,708 @@ function seasonLabelForWeek(weekNumber) {
     if (weekNumber <= 43)
         return "buyer_peak_fall";
     return "holiday_slow";
+}
+function rowToBatchSession(row) {
+    return {
+        id: String(row.id),
+        sessionName: row.session_name ? String(row.session_name) : null,
+        pillar: String(row.pillar),
+        filmedBy: String(row.filmed_by ?? "marco"),
+        targetClipCount: row.target_clip_count != null ? Number(row.target_clip_count) : null,
+        status: row.status,
+        sourceFileCount: Number(row.source_file_count) || 0,
+        clipsGenerated: Number(row.clips_generated) || 0,
+        trendBriefId: row.trend_brief_id ? String(row.trend_brief_id) : null,
+        createdAt: String(row.created_at),
+        completedAt: row.completed_at ? String(row.completed_at) : null,
+        notes: row.notes ? String(row.notes) : null,
+    };
+}
+function rowToBatchSourceFile(row) {
+    return {
+        id: String(row.id),
+        batchSessionId: String(row.batch_session_id),
+        originalFilename: String(row.original_filename),
+        fileSizeBytes: Number(row.file_size_bytes) || 0,
+        filePath: String(row.file_path),
+        durationSeconds: row.duration_seconds != null ? Number(row.duration_seconds) : null,
+        opusJobId: row.opus_job_id ? String(row.opus_job_id) : null,
+        opusStatus: String(row.opus_status ?? "queued"),
+        clipsGeneratedCount: Number(row.clips_generated_count) || 0,
+        uploadedAt: String(row.uploaded_at),
+        opusSubmittedAt: row.opus_submitted_at ? String(row.opus_submitted_at) : null,
+        opusCompletedAt: row.opus_completed_at ? String(row.opus_completed_at) : null,
+        errorMessage: row.error_message ? String(row.error_message) : null,
+    };
+}
+function rowToCompetitorProfile(row) {
+    return {
+        id: String(row.id),
+        tiktokHandle: String(row.tiktok_handle),
+        displayName: String(row.display_name),
+        profileType: String(row.profile_type),
+        active: row.active === 1,
+        lastScrapedAt: row.last_scraped_at ? String(row.last_scraped_at) : null,
+        addedAt: String(row.added_at),
+    };
+}
+function rowToCompetitorTrends(row) {
+    return {
+        id: String(row.id),
+        scrapedAt: String(row.scraped_at),
+        profilesScraped: parseJson(String(row.profiles_scraped ?? "[]"), []),
+        rawVideoCount: Number(row.raw_video_count) || 0,
+        topHooks: parseJson(String(row.top_hooks ?? "[]"), []),
+        trendingHashtags: parseJson(String(row.trending_hashtags ?? "[]"), []),
+        topPerformingDurations: parseJson(String(row.top_performing_durations ?? "{}"), {}),
+        bestDurationRange: String(row.best_duration_range ?? "30_to_60"),
+        topContentThemes: parseJson(String(row.top_content_themes ?? "[]"), []),
+        trendBrief: String(row.trend_brief ?? ""),
+        expiresAt: String(row.expires_at),
+    };
+}
+function rowToClipEnhancement(row) {
+    return {
+        id: String(row.id),
+        videoId: String(row.video_id),
+        hookPrimary: String(row.hook_primary ?? ""),
+        hookVariations: parseJson(String(row.hook_variations ?? "[]"), []),
+        hookType: String(row.hook_type ?? ""),
+        captionGenerated: String(row.caption_generated ?? ""),
+        captionFinal: String(row.caption_final ?? ""),
+        hashtagsGenerated: parseJson(String(row.hashtags_generated ?? "[]"), []),
+        hashtagsFinal: parseJson(String(row.hashtags_final ?? "[]"), []),
+        titleGenerated: String(row.title_generated ?? ""),
+        titleFinal: String(row.title_final ?? ""),
+        platformTargets: parseJson(String(row.platform_targets ?? "[]"), []),
+        trendAlignmentScore: Number(row.trend_alignment_score) || 0,
+        trendAlignmentReason: String(row.trend_alignment_reason ?? ""),
+        optimalPostTimeTiktok: row.optimal_post_time_tiktok ? String(row.optimal_post_time_tiktok) : null,
+        optimalPostTimeInstagram: row.optimal_post_time_instagram
+            ? String(row.optimal_post_time_instagram)
+            : null,
+        opusClipScore: Number(row.opus_clip_score) || 0,
+        sourceFileId: row.source_file_id ? String(row.source_file_id) : null,
+        createdAt: String(row.created_at),
+        lastEditedAt: row.last_edited_at ? String(row.last_edited_at) : null,
+        editedBy: row.edited_by ? String(row.edited_by) : null,
+    };
+}
+function createBatchSession(input) {
+    const database = getContentDb();
+    const id = (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    database
+        .prepare(`INSERT INTO cm_batch_sessions
+       (id, session_name, pillar, filmed_by, target_clip_count, status, source_file_count,
+        clips_generated, trend_brief_id, created_at, completed_at, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, ?)`)
+        .run(id, input.sessionName ?? null, input.pillar, input.filmedBy ?? "marco", input.targetClipCount ?? null, input.status ?? "uploading", input.sourceFileCount ?? 0, now, input.notes ?? null);
+    return getBatchSession(id);
+}
+function getBatchSession(id) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_batch_sessions WHERE id = ?`)
+        .get(id);
+    return row ? rowToBatchSession(row) : null;
+}
+function updateBatchSession(id, patch) {
+    const existing = getBatchSession(id);
+    if (!existing)
+        return null;
+    const database = getContentDb();
+    database
+        .prepare(`UPDATE cm_batch_sessions SET status = ?, clips_generated = ?, trend_brief_id = ?,
+       completed_at = ?, target_clip_count = ?, source_file_count = ? WHERE id = ?`)
+        .run(patch.status ?? existing.status, patch.clipsGenerated ?? existing.clipsGenerated, patch.trendBriefId !== undefined ? patch.trendBriefId : existing.trendBriefId, patch.completedAt !== undefined ? patch.completedAt : existing.completedAt, patch.targetClipCount !== undefined ? patch.targetClipCount : existing.targetClipCount, patch.sourceFileCount !== undefined ? patch.sourceFileCount : existing.sourceFileCount, id);
+    return getBatchSession(id);
+}
+function listBatchSessions(days = 7) {
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+    const rows = getContentDb()
+        .prepare(`SELECT * FROM cm_batch_sessions WHERE created_at >= ? ORDER BY created_at DESC`)
+        .all(since);
+    return rows.map(rowToBatchSession);
+}
+function createBatchSourceFile(input) {
+    const database = getContentDb();
+    const id = (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    database
+        .prepare(`INSERT INTO cm_batch_source_files
+       (id, batch_session_id, original_filename, file_size_bytes, file_path, duration_seconds,
+        opus_job_id, opus_status, clips_generated_count, uploaded_at, opus_submitted_at,
+        opus_completed_at, error_message)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, 'queued', 0, ?, NULL, NULL, NULL)`)
+        .run(id, input.batchSessionId, input.originalFilename, input.fileSizeBytes, input.filePath, input.durationSeconds ?? null, now);
+    return getBatchSourceFile(id);
+}
+function getBatchSourceFile(id) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_batch_source_files WHERE id = ?`)
+        .get(id);
+    return row ? rowToBatchSourceFile(row) : null;
+}
+function listBatchSourceFiles(batchSessionId) {
+    const rows = getContentDb()
+        .prepare(`SELECT * FROM cm_batch_source_files WHERE batch_session_id = ? ORDER BY uploaded_at`)
+        .all(batchSessionId);
+    return rows.map(rowToBatchSourceFile);
+}
+function updateBatchSourceFile(id, patch) {
+    const existing = getBatchSourceFile(id);
+    if (!existing)
+        return null;
+    const database = getContentDb();
+    database
+        .prepare(`UPDATE cm_batch_source_files SET opus_job_id = ?, opus_status = ?, clips_generated_count = ?,
+       opus_submitted_at = ?, opus_completed_at = ?, error_message = ?, duration_seconds = ? WHERE id = ?`)
+        .run(patch.opusJobId !== undefined ? patch.opusJobId : existing.opusJobId, patch.opusStatus ?? existing.opusStatus, patch.clipsGeneratedCount ?? existing.clipsGeneratedCount, patch.opusSubmittedAt !== undefined ? patch.opusSubmittedAt : existing.opusSubmittedAt, patch.opusCompletedAt !== undefined ? patch.opusCompletedAt : existing.opusCompletedAt, patch.errorMessage !== undefined ? patch.errorMessage : existing.errorMessage, patch.durationSeconds !== undefined ? patch.durationSeconds : existing.durationSeconds, id);
+    return getBatchSourceFile(id);
+}
+function listActiveCompetitorProfiles() {
+    const rows = getContentDb()
+        .prepare(`SELECT * FROM cm_competitor_profiles WHERE active = 1 ORDER BY display_name`)
+        .all();
+    return rows.map(rowToCompetitorProfile);
+}
+function listAllCompetitorProfiles() {
+    const rows = getContentDb()
+        .prepare(`SELECT * FROM cm_competitor_profiles ORDER BY display_name`)
+        .all();
+    return rows.map(rowToCompetitorProfile);
+}
+function insertCompetitorProfile(input) {
+    const database = getContentDb();
+    const id = (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    const handle = input.tiktokHandle.replace(/^@/, "").trim();
+    database
+        .prepare(`INSERT INTO cm_competitor_profiles (id, tiktok_handle, display_name, profile_type, active, added_at)
+       VALUES (?, ?, ?, ?, 1, ?)`)
+        .run(id, handle, input.displayName, input.profileType, now);
+    const row = database
+        .prepare(`SELECT * FROM cm_competitor_profiles WHERE id = ?`)
+        .get(id);
+    return rowToCompetitorProfile(row);
+}
+function updateCompetitorProfile(id, patch) {
+    const database = getContentDb();
+    if (patch.active !== undefined) {
+        database
+            .prepare(`UPDATE cm_competitor_profiles SET active = ? WHERE id = ?`)
+            .run(patch.active ? 1 : 0, id);
+    }
+    const row = database
+        .prepare(`SELECT * FROM cm_competitor_profiles WHERE id = ?`)
+        .get(id);
+    return row ? rowToCompetitorProfile(row) : null;
+}
+function getCompetitorTrendsById(id) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_competitor_trends WHERE id = ?`)
+        .get(id);
+    return row ? rowToCompetitorTrends(row) : null;
+}
+function getLatestCompetitorTrends() {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_competitor_trends ORDER BY scraped_at DESC LIMIT 1`)
+        .get();
+    return row ? rowToCompetitorTrends(row) : null;
+}
+function getCachedCompetitorTrends() {
+    const now = new Date().toISOString();
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_competitor_trends WHERE expires_at > ? ORDER BY scraped_at DESC LIMIT 1`)
+        .get(now);
+    return row ? rowToCompetitorTrends(row) : null;
+}
+function insertCompetitorTrends(input) {
+    const database = getContentDb();
+    const id = input.id ?? (0, crypto_1.randomUUID)();
+    database
+        .prepare(`INSERT INTO cm_competitor_trends
+       (id, scraped_at, profiles_scraped, raw_video_count, top_hooks, trending_hashtags,
+        top_performing_durations, best_duration_range, top_content_themes, trend_brief, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, input.scrapedAt, JSON.stringify(input.profilesScraped), input.rawVideoCount, JSON.stringify(input.topHooks), JSON.stringify(input.trendingHashtags), JSON.stringify(input.topPerformingDurations), input.bestDurationRange, JSON.stringify(input.topContentThemes), input.trendBrief, input.expiresAt);
+    const row = database
+        .prepare(`SELECT * FROM cm_competitor_trends WHERE id = ?`)
+        .get(id);
+    return rowToCompetitorTrends(row);
+}
+function insertClipEnhancement(input) {
+    const database = getContentDb();
+    const id = input.id ?? (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    database
+        .prepare(`INSERT INTO cm_clip_enhancements
+       (id, video_id, hook_primary, hook_variations, hook_type, caption_generated, caption_final,
+        hashtags_generated, hashtags_final, title_generated, title_final, platform_targets,
+        trend_alignment_score, trend_alignment_reason, optimal_post_time_tiktok,
+        optimal_post_time_instagram, opus_clip_score, source_file_id, created_at, last_edited_at, edited_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, input.videoId, input.hookPrimary, JSON.stringify(input.hookVariations), input.hookType, input.captionGenerated, input.captionFinal, JSON.stringify(input.hashtagsGenerated), JSON.stringify(input.hashtagsFinal), input.titleGenerated, input.titleFinal, JSON.stringify(input.platformTargets), input.trendAlignmentScore, input.trendAlignmentReason, input.optimalPostTimeTiktok, input.optimalPostTimeInstagram, input.opusClipScore, input.sourceFileId, input.createdAt ?? now, input.lastEditedAt ?? null, input.editedBy ?? "brain");
+    return getClipEnhancement(id);
+}
+function getClipEnhancement(id) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_clip_enhancements WHERE id = ?`)
+        .get(id);
+    return row ? rowToClipEnhancement(row) : null;
+}
+function getClipEnhancementByVideoId(videoId) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_clip_enhancements WHERE video_id = ? ORDER BY created_at DESC LIMIT 1`)
+        .get(videoId);
+    return row ? rowToClipEnhancement(row) : null;
+}
+function updateClipEnhancement(id, patch) {
+    const existing = getClipEnhancement(id);
+    if (!existing)
+        return null;
+    const database = getContentDb();
+    const now = new Date().toISOString();
+    database
+        .prepare(`UPDATE cm_clip_enhancements SET hook_primary = ?, caption_final = ?, hashtags_final = ?,
+       title_final = ?, platform_targets = ?, last_edited_at = ?, edited_by = ? WHERE id = ?`)
+        .run(patch.hookPrimary ?? existing.hookPrimary, patch.captionFinal ?? existing.captionFinal, JSON.stringify(patch.hashtagsFinal ?? existing.hashtagsFinal), patch.titleFinal ?? existing.titleFinal, JSON.stringify(patch.platformTargets ?? existing.platformTargets), patch.lastEditedAt ?? now, patch.editedBy ?? "human", id);
+    return getClipEnhancement(id);
+}
+function listVideosByBatchSession(batchSessionId, status) {
+    const database = getContentDb();
+    const rows = status
+        ? database
+            .prepare(`SELECT * FROM content_videos WHERE batch_session_id = ? AND status = ? ORDER BY created_at`)
+            .all(batchSessionId, status)
+        : database
+            .prepare(`SELECT * FROM content_videos WHERE batch_session_id = ? ORDER BY created_at`)
+            .all(batchSessionId);
+    return rows.map(rowToVideo);
+}
+function countClipsInApprovedOrScheduled() {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled')`)
+        .get();
+    return Number(row.c) || 0;
+}
+function countVideosByBatchAndStatus(batchSessionId, status) {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE batch_session_id = ? AND status = ?`)
+        .get(batchSessionId, status);
+    return Number(row.c) || 0;
+}
+function listContentVideosWithEnhancements(input) {
+    const limit = input?.limit ?? 200;
+    const database = getContentDb();
+    let rows;
+    if (input?.batchSessionId && input?.status) {
+        rows = database
+            .prepare(`SELECT * FROM content_videos WHERE batch_session_id = ? AND status = ? ORDER BY created_at DESC LIMIT ?`)
+            .all(input.batchSessionId, input.status, limit);
+    }
+    else if (input?.batchSessionId) {
+        rows = database
+            .prepare(`SELECT * FROM content_videos WHERE batch_session_id = ? ORDER BY created_at DESC LIMIT ?`)
+            .all(input.batchSessionId, limit);
+    }
+    else if (input?.status) {
+        rows = database
+            .prepare(`SELECT * FROM content_videos WHERE status = ? ORDER BY created_at DESC LIMIT ?`)
+            .all(input.status, limit);
+    }
+    else {
+        rows = database
+            .prepare(`SELECT * FROM content_videos ORDER BY created_at DESC LIMIT ?`)
+            .all(limit);
+    }
+    return rows.map((row) => {
+        const video = rowToVideo(row);
+        const enhancement = getClipEnhancementByVideoId(video.id);
+        return { ...video, enhancement };
+    });
+}
+function parseJsonArray(val) {
+    if (Array.isArray(val))
+        return val.map(String);
+    if (typeof val === "string" && val.trim()) {
+        try {
+            const parsed = JSON.parse(val);
+            return Array.isArray(parsed) ? parsed.map(String) : [];
+        }
+        catch {
+            return [];
+        }
+    }
+    return [];
+}
+function rowToCompetitiveAnalysis(row) {
+    return {
+        id: String(row.id),
+        analyzedAt: String(row.analyzed_at),
+        weekStart: String(row.week_start),
+        profilesAnalyzed: parseJsonArray(row.profiles_analyzed),
+        marcoAvgViews: Number(row.marco_avg_views) || 0,
+        marcoAvgEngagementRate: Number(row.marco_avg_engagement_rate) || 0,
+        competitorAvgViews: Number(row.competitor_avg_views) || 0,
+        competitorAvgEngagementRate: Number(row.competitor_avg_engagement_rate) || 0,
+        marcoVsFieldPct: Number(row.marco_vs_field_pct) || 0,
+        topCompetitorHandle: String(row.top_competitor_handle ?? ""),
+        topCompetitorAvgViews: Number(row.top_competitor_avg_views) || 0,
+        marcoStrengths: parseJsonArray(row.marco_strengths),
+        marcoGaps: parseJsonArray(row.marco_gaps),
+        topCompetitorThemes: parseJsonArray(row.top_competitor_themes),
+        fullAnalysisMarkdown: String(row.full_analysis_markdown ?? ""),
+        createdAt: String(row.created_at),
+    };
+}
+function rowToStrategyRecommendation(row) {
+    return {
+        id: String(row.id),
+        analysisId: String(row.analysis_id),
+        priority: Number(row.priority) || 5,
+        recommendation: String(row.recommendation),
+        dataBacking: String(row.data_backing ?? ""),
+        pillar: row.pillar ? String(row.pillar) : null,
+        hookType: row.hook_type ? String(row.hook_type) : null,
+        exampleFromCompetitor: row.example_from_competitor ? String(row.example_from_competitor) : null,
+        expectedImpact: row.expected_impact ? String(row.expected_impact) : null,
+        status: String(row.status ?? "pending"),
+        dismissedReason: row.dismissed_reason ? String(row.dismissed_reason) : null,
+        createdAt: String(row.created_at),
+        actedOnAt: row.acted_on_at ? String(row.acted_on_at) : null,
+    };
+}
+function rowToRecordingTask(row) {
+    return {
+        id: String(row.id),
+        dueDate: String(row.due_date),
+        pillar: row.pillar ? String(row.pillar) : null,
+        hookType: row.hook_type ? String(row.hook_type) : null,
+        topic: String(row.topic),
+        suggestedHooks: parseJsonArray(row.suggested_hooks),
+        suggestedDurationMin: row.suggested_duration_min != null ? Number(row.suggested_duration_min) : null,
+        suggestedDurationMax: row.suggested_duration_max != null ? Number(row.suggested_duration_max) : null,
+        filmingNotes: row.filming_notes ? String(row.filming_notes) : null,
+        reason: row.reason ? String(row.reason) : null,
+        source: String(row.source ?? "brain"),
+        priority: String(row.priority ?? "normal"),
+        status: String(row.status ?? "pending"),
+        strategyRecommendationId: row.strategy_recommendation_id
+            ? String(row.strategy_recommendation_id)
+            : null,
+        createdAt: String(row.created_at),
+        filmedAt: row.filmed_at ? String(row.filmed_at) : null,
+        uploadTriggeredAt: row.upload_triggered_at ? String(row.upload_triggered_at) : null,
+    };
+}
+function rowToCalendarEvent(row) {
+    return {
+        id: String(row.id),
+        eventDate: String(row.event_date),
+        eventType: String(row.event_type),
+        title: String(row.title),
+        description: row.description ? String(row.description) : null,
+        pillar: row.pillar ? String(row.pillar) : null,
+        platform: row.platform ? String(row.platform) : null,
+        videoId: row.video_id ? String(row.video_id) : null,
+        recordingTaskId: row.recording_task_id ? String(row.recording_task_id) : null,
+        status: String(row.status ?? "pending"),
+        createdAt: String(row.created_at),
+    };
+}
+function insertCompetitiveAnalysis(patch) {
+    const id = (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    getContentDb()
+        .prepare(`INSERT INTO cm_competitive_analysis
+       (id, analyzed_at, week_start, profiles_analyzed, marco_avg_views, marco_avg_engagement_rate,
+        competitor_avg_views, competitor_avg_engagement_rate, marco_vs_field_pct, top_competitor_handle,
+        top_competitor_avg_views, marco_strengths, marco_gaps, top_competitor_themes,
+        full_analysis_markdown, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, patch.analyzedAt, patch.weekStart, JSON.stringify(patch.profilesAnalyzed), patch.marcoAvgViews, patch.marcoAvgEngagementRate, patch.competitorAvgViews, patch.competitorAvgEngagementRate, patch.marcoVsFieldPct, patch.topCompetitorHandle, patch.topCompetitorAvgViews, JSON.stringify(patch.marcoStrengths), JSON.stringify(patch.marcoGaps), JSON.stringify(patch.topCompetitorThemes), patch.fullAnalysisMarkdown, now);
+    return getCompetitiveAnalysisById(id);
+}
+function getCompetitiveAnalysisById(id) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_competitive_analysis WHERE id = ?`)
+        .get(id);
+    return row ? rowToCompetitiveAnalysis(row) : null;
+}
+function getLatestCompetitiveAnalysis() {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_competitive_analysis ORDER BY analyzed_at DESC LIMIT 1`)
+        .get();
+    return row ? rowToCompetitiveAnalysis(row) : null;
+}
+function insertStrategyRecommendation(patch) {
+    const id = (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    getContentDb()
+        .prepare(`INSERT INTO cm_strategy_recommendations
+       (id, analysis_id, priority, recommendation, data_backing, pillar, hook_type,
+        example_from_competitor, expected_impact, status, dismissed_reason, created_at, acted_on_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`)
+        .run(id, patch.analysisId, patch.priority, patch.recommendation, patch.dataBacking, patch.pillar, patch.hookType, patch.exampleFromCompetitor, patch.expectedImpact, patch.status ?? "pending", patch.dismissedReason ?? null, now);
+    return getStrategyRecommendationById(id);
+}
+function getStrategyRecommendationById(id) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_strategy_recommendations WHERE id = ?`)
+        .get(id);
+    return row ? rowToStrategyRecommendation(row) : null;
+}
+function listStrategyRecommendations(input) {
+    const limit = input?.limit ?? 50;
+    const database = getContentDb();
+    let rows;
+    if (input?.analysisId) {
+        rows = database
+            .prepare(`SELECT * FROM cm_strategy_recommendations WHERE analysis_id = ? ORDER BY priority ASC LIMIT ?`)
+            .all(input.analysisId, limit);
+    }
+    else if (input?.status) {
+        rows = database
+            .prepare(`SELECT * FROM cm_strategy_recommendations WHERE status = ? ORDER BY priority ASC LIMIT ?`)
+            .all(input.status, limit);
+    }
+    else {
+        rows = database
+            .prepare(`SELECT * FROM cm_strategy_recommendations ORDER BY priority ASC LIMIT ?`)
+            .all(limit);
+    }
+    return rows.map(rowToStrategyRecommendation);
+}
+function getActiveStrategyRecommendations() {
+    const rows = getContentDb()
+        .prepare(`SELECT * FROM cm_strategy_recommendations
+       WHERE status IN ('pending', 'in_progress')
+       ORDER BY priority ASC`)
+        .all();
+    return rows.map(rowToStrategyRecommendation);
+}
+function countActiveStrategyRecommendations() {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM cm_strategy_recommendations WHERE status IN ('pending', 'in_progress')`)
+        .get();
+    return Number(row.c) || 0;
+}
+function updateStrategyRecommendation(id, patch) {
+    const existing = getStrategyRecommendationById(id);
+    if (!existing)
+        return null;
+    const status = patch.status ?? existing.status;
+    const dismissedReason = patch.dismissedReason ?? existing.dismissedReason;
+    const actedOnAt = patch.actedOnAt ??
+        (patch.status && patch.status !== "pending" ? new Date().toISOString() : existing.actedOnAt);
+    getContentDb()
+        .prepare(`UPDATE cm_strategy_recommendations SET status = ?, dismissed_reason = ?, acted_on_at = ? WHERE id = ?`)
+        .run(status, dismissedReason, actedOnAt, id);
+    return getStrategyRecommendationById(id);
+}
+function insertRecordingTask(patch) {
+    const id = (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    getContentDb()
+        .prepare(`INSERT INTO cm_recording_tasks
+       (id, due_date, pillar, hook_type, topic, suggested_hooks, suggested_duration_min,
+        suggested_duration_max, filming_notes, reason, source, priority, status,
+        strategy_recommendation_id, created_at, filmed_at, upload_triggered_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`)
+        .run(id, patch.dueDate, patch.pillar, patch.hookType, patch.topic, JSON.stringify(patch.suggestedHooks), patch.suggestedDurationMin, patch.suggestedDurationMax, patch.filmingNotes, patch.reason, patch.source ?? "brain", patch.priority ?? "normal", patch.status ?? "pending", patch.strategyRecommendationId, now);
+    return getRecordingTaskById(id);
+}
+function getRecordingTaskById(id) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_recording_tasks WHERE id = ?`)
+        .get(id);
+    return row ? rowToRecordingTask(row) : null;
+}
+function listRecordingTasks(input) {
+    const limit = input?.limit ?? 100;
+    const database = getContentDb();
+    const conditions = [];
+    const params = [];
+    if (input?.status) {
+        conditions.push("status = ?");
+        params.push(input.status);
+    }
+    if (input?.dueBefore) {
+        conditions.push("due_date <= ?");
+        params.push(input.dueBefore);
+    }
+    if (input?.dueAfter) {
+        conditions.push("due_date >= ?");
+        params.push(input.dueAfter);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    params.push(limit);
+    const rows = database
+        .prepare(`SELECT * FROM cm_recording_tasks ${where} ORDER BY due_date ASC, priority DESC LIMIT ?`)
+        .all(...params);
+    return rows.map(rowToRecordingTask);
+}
+function countPendingRecordingTasksDueBefore(date) {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM cm_recording_tasks WHERE status = 'pending' AND due_date <= ?`)
+        .get(date);
+    return Number(row.c) || 0;
+}
+function countOverdueRecordingTasks(today) {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM cm_recording_tasks WHERE status = 'pending' AND due_date < ?`)
+        .get(today);
+    return Number(row.c) || 0;
+}
+function countPendingRecordingTasksThisWeek(weekStart, weekEnd) {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM cm_recording_tasks
+       WHERE status = 'pending' AND due_date >= ? AND due_date <= ?`)
+        .get(weekStart, weekEnd);
+    return Number(row.c) || 0;
+}
+function updateRecordingTask(id, patch) {
+    const existing = getRecordingTaskById(id);
+    if (!existing)
+        return null;
+    getContentDb()
+        .prepare(`UPDATE cm_recording_tasks SET status = ?, filmed_at = ?, upload_triggered_at = ?, priority = ?, due_date = ? WHERE id = ?`)
+        .run(patch.status ?? existing.status, patch.filmedAt !== undefined ? patch.filmedAt : existing.filmedAt, patch.uploadTriggeredAt !== undefined ? patch.uploadTriggeredAt : existing.uploadTriggeredAt, patch.priority ?? existing.priority, patch.dueDate ?? existing.dueDate, id);
+    return getRecordingTaskById(id);
+}
+function insertCalendarEvent(patch) {
+    const id = (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    getContentDb()
+        .prepare(`INSERT INTO cm_calendar_events
+       (id, event_date, event_type, title, description, pillar, platform, video_id,
+        recording_task_id, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, patch.eventDate, patch.eventType, patch.title, patch.description, patch.pillar, patch.platform, patch.videoId, patch.recordingTaskId, patch.status ?? "pending", now);
+    return getCalendarEventById(id);
+}
+function getCalendarEventById(id) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_calendar_events WHERE id = ?`)
+        .get(id);
+    return row ? rowToCalendarEvent(row) : null;
+}
+function listCalendarEventsForDate(date) {
+    const rows = getContentDb()
+        .prepare(`SELECT * FROM cm_calendar_events WHERE event_date = ? ORDER BY created_at ASC`)
+        .all(date);
+    return rows.map(rowToCalendarEvent);
+}
+function updateCalendarEventByRecordingTaskId(recordingTaskId, patch) {
+    if (!patch.status)
+        return;
+    getContentDb()
+        .prepare(`UPDATE cm_calendar_events SET status = ? WHERE recording_task_id = ?`)
+        .run(patch.status, recordingTaskId);
+}
+function listPublishLogForDate(date) {
+    const rows = getContentDb()
+        .prepare(`SELECT l.video_id, l.platform, l.published_at, l.publish_status,
+              v.title, v.pillar, v.file_path, v.scheduled_for,
+              COALESCE(p.views, 0) AS views, COALESCE(p.score, 0) AS score
+       FROM content_publish_log l
+       JOIN content_videos v ON v.id = l.video_id
+       LEFT JOIN content_performance p ON p.video_id = v.id
+       WHERE l.published_at LIKE ? OR v.scheduled_for LIKE ? OR v.published_at LIKE ?
+       ORDER BY l.published_at ASC`)
+        .all(`${date}%`, `${date}%`, `${date}%`);
+    return rows.map((r) => ({
+        videoId: String(r.video_id),
+        platform: String(r.platform),
+        publishedAt: String(r.published_at),
+        publishStatus: String(r.publish_status),
+        title: String(r.title ?? ""),
+        pillar: String(r.pillar ?? "brand"),
+        thumbnail: r.file_path ? String(r.file_path) : null,
+        scheduledFor: r.scheduled_for ? String(r.scheduled_for) : null,
+        views: Number(r.views) || 0,
+        score: Number(r.score) || 0,
+    }));
+}
+function countPipelineVideosForDate(date) {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM content_videos
+       WHERE status IN ('pending_review', 'approved', 'scheduled')
+       AND (scheduled_for LIKE ? OR created_at LIKE ?)`)
+        .get(`${date}%`, `${date}%`);
+    return Number(row.c) || 0;
+}
+function countPublishedVideosForDate(date) {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE published_at LIKE ?`)
+        .get(`${date}%`);
+    return Number(row.c) || 0;
+}
+function countTotalPublishedVideos() {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE status = 'published'`)
+        .get();
+    return Number(row.c) || 0;
+}
+function countPublishScheduledForDate(date) {
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM content_publish_log
+       WHERE publish_status = 'scheduled' AND published_at LIKE ?`)
+        .get(`${date}%`);
+    return Number(row.c) || 0;
+}
+function listPublishCountsByDateRange(startDate, endDate) {
+    const rows = getContentDb()
+        .prepare(`SELECT SUBSTR(COALESCE(v.published_at, l.published_at, v.scheduled_for), 1, 10) AS d,
+              v.pillar
+       FROM content_videos v
+       LEFT JOIN content_publish_log l ON l.video_id = v.id
+       WHERE (v.published_at >= ? AND v.published_at < ?)
+          OR (l.published_at >= ? AND l.published_at < ?)
+          OR (v.scheduled_for >= ? AND v.scheduled_for < ?)`)
+        .all(`${startDate}T00:00:00`, `${endDate}T23:59:59`, `${startDate}T00:00:00`, `${endDate}T23:59:59`, `${startDate}T00:00:00`, `${endDate}T23:59:59`);
+    const byDate = {};
+    for (const r of rows) {
+        const d = String(r.d ?? "").slice(0, 10);
+        if (!d)
+            continue;
+        if (!byDate[d])
+            byDate[d] = { count: 0, pillars: new Set() };
+        byDate[d].count++;
+        if (r.pillar)
+            byDate[d].pillars.add(String(r.pillar));
+    }
+    return Object.entries(byDate).map(([date, v]) => ({
+        date,
+        publishCount: v.count,
+        pillars: [...v.pillars],
+    }));
+}
+function countVideosPublishedLastDays(days) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    const sinceStr = since.toISOString();
+    const row = getContentDb()
+        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE published_at >= ?`)
+        .get(sinceStr);
+    return Number(row.c) || 0;
+}
+const SPRINT_TARGET_VIDEOS = 861;
+const SPRINT_END_DATE = "2026-11-30";
+function getSprintProgressData() {
+    const totalPublished = countTotalPublishedVideos();
+    const end = new Date(`${SPRINT_END_DATE}T23:59:59`);
+    const daysRemaining = Math.max(1, Math.ceil((end.getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+    const videosNeededPerDay = (SPRINT_TARGET_VIDEOS - totalPublished) / daysRemaining;
+    const currentPace = countVideosPublishedLastDays(7) / 7;
+    return {
+        totalPublished,
+        sprintTarget: SPRINT_TARGET_VIDEOS,
+        sprintEndDate: SPRINT_END_DATE,
+        daysRemaining,
+        videosNeededPerDay: Math.round(videosNeededPerDay * 10) / 10,
+        currentPace: Math.round(currentPace * 10) / 10,
+        onTrack: currentPace >= videosNeededPerDay,
+    };
 }

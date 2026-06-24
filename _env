@@ -13,7 +13,15 @@ ANTHROPIC_API_KEY=YOUR_ANTHROPIC_KEY
 ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 # HARVEY_MODEL=claude-sonnet-4-20250514
 
+# Content Manager Brain (Google Gemini — uses GEMINI_API_KEY above)
+# CONTENT_BRAIN_MODEL=gemini-2.5-flash
+# CONTENT_BRAIN_MINI_MODEL=gemini-2.5-flash
+
 GEMINI_API_KEY=YOUR_GEMINI_KEY
+OPENSHORTS_URL=http://localhost:8000
+OPENSHORTS_PORT=8000
+# VoxCPM2 GPU microservice (RunPod / Modal / local GPU — NOT Fly.io)
+VOXCPM_API_URL=
 GEMINI_LIVE_MODEL=models/gemini-2.0-flash-live-001
 
 AD_DASHBOARD_BASE_URL=https://marco-agents.fly.dev
@@ -27,6 +35,7 @@ GMAIL_CLIENT_SECRET=
 GMAIL_REFRESH_TOKEN=
 # GMAIL_FROM=optional — defaults to OAuth account profile email
 MARCO_EMAIL=pmarcopuga@gmail.com
+# MARCO_EMAIL_ADDRESS=pmarcopuga@gmail.com
 
 # Harvey WhatsApp owner (must match Marco's WhatsApp for owner tools on OpenClaw)
 # HARVEY_OWNER_NUMBER=+19804430453

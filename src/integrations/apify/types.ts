@@ -11,6 +11,7 @@ export interface TikTokVideoNormalized {
   saves: number;
   avgWatchTime?: number;
   duration?: number;
+  accountHandle?: string;
 }
 
 export interface TikTokProfileInfo {
