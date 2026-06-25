@@ -1844,18 +1844,42 @@
         }
         list.innerHTML = batches.map((b) => {
           const statusBadge = `<span class="cm-pill">${escapeHtml(b.status)}</span>`;
-          return `<div class="batch-session-row" data-batch-id="${b.id}">
-            <strong>${escapeHtml(b.sessionName || "Batch")}</strong> · ${fmtDateTime(b.createdAt)}
-            · ${b.sourceFileCount} files · ${b.clipsGenerated} clips ${statusBadge}
+          return `<div class="batch-session-row" data-batch-id="${b.id}" style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+            <div class="batch-session-main" style="flex:1;cursor:pointer;">
+              <strong>${escapeHtml(b.sessionName || "Batch")}</strong> · ${fmtDateTime(b.createdAt)}
+              · ${b.sourceFileCount} files · ${b.clipsGenerated} clips ${statusBadge}
+            </div>
+            <button type="button" class="batch-session-del" data-batch-id="${b.id}" title="Delete session" aria-label="Delete session"
+              style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--radius-xs);padding:0.25rem 0.55rem;cursor:pointer;flex:0 0 auto;font-size:0.8rem;">Delete</button>
           </div>`;
         }).join("");
-        list.querySelectorAll(".batch-session-row").forEach((row) => {
-          row.addEventListener("click", () => {
-            reviewBatchFilter = row.getAttribute("data-batch-id") || "";
+        list.querySelectorAll(".batch-session-main").forEach((main) => {
+          main.addEventListener("click", () => {
+            const row = main.closest(".batch-session-row");
+            reviewBatchFilter = (row && row.getAttribute("data-batch-id")) || "";
             const sel = document.getElementById("review-batch-filter");
             if (sel) sel.value = reviewBatchFilter;
             switchCmSection("review");
             void loadReviewQueue();
+          });
+        });
+        list.querySelectorAll(".batch-session-del").forEach((btn) => {
+          btn.addEventListener("click", async (ev) => {
+            ev.stopPropagation();
+            const id = btn.getAttribute("data-batch-id");
+            if (!id) return;
+            if (!confirm("Delete this session and all its clips? This cannot be undone.")) return;
+            btn.disabled = true;
+            btn.textContent = "Deleting...";
+            try {
+              await cmFetch(`/api/content/batch/${id}`, { method: "DELETE" });
+              showToast("Session deleted");
+              await loadActivePipeline();
+            } catch (e) {
+              showToast(e.message);
+              btn.disabled = false;
+              btn.textContent = "Delete";
+            }
           });
         });
       } catch (e) { showToast(e.message); }

@@ -81,12 +81,17 @@ async function pollOpenShortsJob(jobId) {
             clips: generateMockClips(count),
         };
     }
+    let unreachableStreak = 0;
     for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
         await sleep(POLL_INTERVAL_MS);
         try {
             const response = await axios_1.default.get(`${OPENSHORTS_BASE_URL}/api/jobs/${jobId}`, {
-                timeout: 10000,
+                // The sidecar is single-threaded and can be CPU-pegged transcribing/
+                // analyzing a video, so its status endpoint may respond slowly. Give it
+                // room rather than aborting the whole job on a short timeout.
+                timeout: 30000,
             });
+            unreachableStreak = 0;
             const job = response.data;
             if (job.status === "complete") {
                 return {
@@ -101,12 +106,28 @@ async function pollOpenShortsJob(jobId) {
         }
         catch (err) {
             const code = err?.code;
-            if (code === "ECONNREFUSED" || code === "ENOTFOUND" || code === "ETIMEDOUT") {
-                console.warn("[openshorts] Sidecar unreachable during poll — returning mock clips");
-                return {
-                    status: "complete",
-                    clips: generateMockClips(7),
-                };
+            const msg = err instanceof Error ? err.message : String(err);
+            // A genuine job failure reported by the sidecar — surface it, don't retry.
+            if (msg.startsWith("OpenShorts job failed")) {
+                throw err;
+            }
+            // Request/socket timeout: the sidecar is alive but busy processing the
+            // video and couldn't answer in time. Keep polling — this is expected
+            // while a clip job is actually running.
+            if (code === "ECONNABORTED" || code === "ETIMEDOUT" || /timeout/i.test(msg)) {
+                console.warn(`[openshorts] Job ${jobId} status check timed out (attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS}) — sidecar busy, retrying`);
+                continue;
+            }
+            // Connection refused / DNS failure: sidecar may be down or restarting.
+            // Tolerate a few transient blips before giving up to mock clips.
+            if (code === "ECONNREFUSED" || code === "ENOTFOUND") {
+                unreachableStreak++;
+                if (unreachableStreak >= 5) {
+                    console.warn(`[openshorts] Sidecar unreachable ${unreachableStreak}x during poll — falling back to mock clips`);
+                    return { status: "complete", clips: generateMockClips(7) };
+                }
+                console.warn(`[openshorts] Sidecar unreachable (${code}) during poll — retry ${unreachableStreak}/5`);
+                continue;
             }
             throw err;
         }

@@ -124,6 +124,7 @@ import {
   updateBatchSession,
   listBatchSourceFiles,
   listBatchSessions,
+  deleteBatchSession,
   listVideosByBatchSession,
   countVideosByBatchAndStatus,
   getCachedCompetitorTrends,
@@ -3861,6 +3862,25 @@ app.get("/api/content/batches", (req, res) => {
   }
   const days = Number(req.query.days) || 7;
   res.json({ batches: listBatchSessions(days) });
+});
+
+app.delete("/api/content/batch/:batchId", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const batchId = String(req.params.batchId || "");
+  try {
+    const result = deleteBatchSession(batchId);
+    if (!result.deleted) {
+      res.status(404).json({ error: "Batch not found" });
+      return;
+    }
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error(`[batch-delete] Failed to delete batch ${batchId}:`, err);
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 app.get("/api/content/competitor-trends/latest", (req, res) => {

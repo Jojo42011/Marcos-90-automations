@@ -3831,6 +3831,44 @@ export function listBatchSessions(days = 7): CmBatchSession[] {
   return rows.map(rowToBatchSession);
 }
 
+export function deleteBatchSession(id: string): {
+  deleted: boolean;
+  videosDeleted: number;
+  sourceFilesDeleted: number;
+} {
+  const database = getContentDb();
+  const existing = database
+    .prepare(`SELECT id FROM cm_batch_sessions WHERE id = ?`)
+    .get(id) as { id: string } | undefined;
+  if (!existing) {
+    return { deleted: false, videosDeleted: 0, sourceFilesDeleted: 0 };
+  }
+
+  const txn = database.transaction(() => {
+    const videoRows = database
+      .prepare(`SELECT id FROM content_videos WHERE batch_session_id = ?`)
+      .all(id) as Array<{ id: string }>;
+
+    let videosDeleted = 0;
+    for (const row of videoRows) {
+      database.prepare(`DELETE FROM cm_clip_enhancements WHERE video_id = ?`).run(row.id);
+      database.prepare(`DELETE FROM content_compliance_queue WHERE video_id = ?`).run(row.id);
+      database.prepare(`DELETE FROM content_videos WHERE id = ?`).run(row.id);
+      videosDeleted++;
+    }
+
+    const sf = database
+      .prepare(`DELETE FROM cm_batch_source_files WHERE batch_session_id = ?`)
+      .run(id);
+    database.prepare(`DELETE FROM cm_batch_sessions WHERE id = ?`).run(id);
+
+    return { videosDeleted, sourceFilesDeleted: sf.changes as number };
+  });
+
+  const result = txn();
+  return { deleted: true, ...result };
+}
+
 export function createBatchSourceFile(input: {
   batchSessionId: string;
   originalFilename: string;

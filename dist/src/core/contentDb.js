@@ -97,6 +97,7 @@ exports.createBatchSession = createBatchSession;
 exports.getBatchSession = getBatchSession;
 exports.updateBatchSession = updateBatchSession;
 exports.listBatchSessions = listBatchSessions;
+exports.deleteBatchSession = deleteBatchSession;
 exports.createBatchSourceFile = createBatchSourceFile;
 exports.getBatchSourceFile = getBatchSourceFile;
 exports.listBatchSourceFiles = listBatchSourceFiles;
@@ -2630,6 +2631,34 @@ function listBatchSessions(days = 7) {
         .prepare(`SELECT * FROM cm_batch_sessions WHERE created_at >= ? ORDER BY created_at DESC`)
         .all(since);
     return rows.map(rowToBatchSession);
+}
+function deleteBatchSession(id) {
+    const database = getContentDb();
+    const existing = database
+        .prepare(`SELECT id FROM cm_batch_sessions WHERE id = ?`)
+        .get(id);
+    if (!existing) {
+        return { deleted: false, videosDeleted: 0, sourceFilesDeleted: 0 };
+    }
+    const txn = database.transaction(() => {
+        const videoRows = database
+            .prepare(`SELECT id FROM content_videos WHERE batch_session_id = ?`)
+            .all(id);
+        let videosDeleted = 0;
+        for (const row of videoRows) {
+            database.prepare(`DELETE FROM cm_clip_enhancements WHERE video_id = ?`).run(row.id);
+            database.prepare(`DELETE FROM content_compliance_queue WHERE video_id = ?`).run(row.id);
+            database.prepare(`DELETE FROM content_videos WHERE id = ?`).run(row.id);
+            videosDeleted++;
+        }
+        const sf = database
+            .prepare(`DELETE FROM cm_batch_source_files WHERE batch_session_id = ?`)
+            .run(id);
+        database.prepare(`DELETE FROM cm_batch_sessions WHERE id = ?`).run(id);
+        return { videosDeleted, sourceFilesDeleted: sf.changes };
+    });
+    const result = txn();
+    return { deleted: true, ...result };
 }
 function createBatchSourceFile(input) {
     const database = getContentDb();
