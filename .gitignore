@@ -1,4 +1,11 @@
 node_modules/
+
+# Secrets — never commit real env files
+.env
+.env.*
+!.env.example
+services/openshorts/.env.marco
+
 /brivity-migration-scratch/
 brivity-migration-report.json
 /data/db.json
