@@ -38,6 +38,7 @@ export async function runHarveyChat(input: {
   sessionId?: string;
   deps?: PerceptionDeps;
   voiceMode?: boolean;
+  onToken?: (token: string) => void;
 }): Promise<HarveyChatResponse> {
   const sessionId = getOrCreateSessionId(input.sessionId);
   const trimmed = input.message.trim();
@@ -76,6 +77,7 @@ export async function runHarveyChat(input: {
         message: trimmed,
         history: sessionMemory,
         voiceMode: input.voiceMode,
+        onToken: input.onToken,
       });
       speech = result.speech;
       const inferredUi = panelResultToUi(inferredPanel);

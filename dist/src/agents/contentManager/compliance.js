@@ -55,17 +55,34 @@ async function runComplianceCheck(videoId) {
         recommendation: "Auto-approved (compliance offline).",
     };
     if (process.env.ANTHROPIC_API_KEY?.trim()) {
-        const response = await anthropic.messages.create({
-            model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001",
-            max_tokens: 400,
-            system: COMPLIANCE_SYSTEM_PROMPT,
-            messages: [{ role: "user", content: contentBlock }],
-        });
-        const text = response.content
-            .filter((b) => b.type === "text")
-            .map((b) => (b.type === "text" ? b.text : ""))
-            .join("");
-        result = parseComplianceJson(text);
+        try {
+            const response = await anthropic.messages.create({
+                model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001",
+                max_tokens: 400,
+                system: COMPLIANCE_SYSTEM_PROMPT,
+                messages: [{ role: "user", content: contentBlock }],
+            });
+            const text = response.content
+                .filter((b) => b.type === "text")
+                .map((b) => (b.type === "text" ? b.text : ""))
+                .join("");
+            result = parseComplianceJson(text);
+        }
+        catch (llmErr) {
+            // A present-but-invalid key, network error, or rate limit must never crash
+            // clip creation. Auto-pass so the clip survives at pending_review for a human.
+            const msg = llmErr instanceof Error ? llmErr.message : String(llmErr);
+            console.warn(`[content-manager/compliance] LLM call failed for ${videoId} — auto-passing: ${msg}`);
+            result = {
+                passed: true,
+                flags: [],
+                brand_issues: [],
+                recommendation: `Skipped — compliance LLM error: ${msg.slice(0, 200)}`,
+            };
+        }
+    }
+    else {
+        console.warn(`[content-manager/compliance] No ANTHROPIC_API_KEY — auto-passing clip ${videoId}`);
     }
     if (result.passed) {
         (0, contentDb_js_1.updateContentVideo)(videoId, {

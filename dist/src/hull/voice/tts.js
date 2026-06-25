@@ -1,52 +1,57 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildTtsPrompt = buildTtsPrompt;
 exports.generateTTS = generateTTS;
-const founderPrompt_js_1 = require("../founderPrompt.js");
-function buildTtsPrompt(spokenText) {
-    return `Synthesize speech. Do not read the director's notes aloud.
-### DIRECTOR'S NOTES
-Style: ${founderPrompt_js_1.VOICE_CHARACTER}
-#### TRANSCRIPT
-${spokenText}`;
-}
+const ttsCache = new Map();
+const TTS_CACHE_MAX = 50;
+/** ElevenLabs returns raw S16LE PCM when output_format=pcm_24000 — matches the client's Int16 decoder. */
+const ELEVENLABS_SAMPLE_RATE = 24000;
 async function generateTTS(text) {
-    const key = process.env.GEMINI_API_KEY?.trim();
+    const key = process.env.ELEVENLABS_API_KEY?.trim();
     if (!key || !text.trim())
         return null;
-    const model = process.env.GEMINI_TTS_MODEL?.trim() || "gemini-3.1-flash-tts-preview";
-    const voiceName = process.env.GEMINI_TTS_VOICE?.trim() || "Kore";
-    const prompt = buildTtsPrompt(text);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-    const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-                responseModalities: ["AUDIO"],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName },
-                    },
-                },
+    const cacheKey = text.trim().toLowerCase().substring(0, 200);
+    const cached = ttsCache.get(cacheKey);
+    if (cached) {
+        console.log("[TTS] Cache HIT for:", text.substring(0, 40));
+        return cached;
+    }
+    const voiceId = process.env.ELEVENLABS_VOICE_ID?.trim() || "21m00Tcm4TlvDq8ikWAM";
+    const modelId = process.env.ELEVENLABS_MODEL_ID?.trim() || "eleven_flash_v2_5";
+    const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=pcm_${ELEVENLABS_SAMPLE_RATE}`;
+    let res;
+    try {
+        res = await fetch(url, {
+            method: "POST",
+            headers: {
+                "xi-api-key": key,
+                "Content-Type": "application/json",
+                Accept: "audio/pcm",
             },
-        }),
-    });
-    if (!res.ok) {
-        console.error("[hull/tts] Gemini error:", res.status, await res.text().catch(() => ""));
+            signal: AbortSignal.timeout(30000),
+            body: JSON.stringify({
+                text,
+                model_id: modelId,
+            }),
+        });
+    }
+    catch (err) {
+        console.error("[hull/tts] ElevenLabs request failed:", err instanceof Error ? err.message : err);
         return null;
     }
-    const data = (await res.json());
-    const part = data.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-    const b64 = part?.inlineData?.data;
-    if (!b64)
+    if (!res.ok) {
+        console.error("[hull/tts] ElevenLabs error:", res.status, await res.text().catch(() => ""));
         return null;
-    const pcm = Buffer.from(b64, "base64");
-    const mime = (part?.inlineData?.mimeType || "").toLowerCase();
-    const rateMatch = mime.match(/rate\s*=\s*(\d+)/i);
-    let sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
-    if (!Number.isFinite(sampleRate) || sampleRate < 8000)
-        sampleRate = 24000;
-    return { pcm, sampleRate };
+    }
+    const pcm = Buffer.from(await res.arrayBuffer());
+    if (!pcm.length)
+        return null;
+    const result = { pcm, sampleRate: ELEVENLABS_SAMPLE_RATE };
+    if (ttsCache.size >= TTS_CACHE_MAX) {
+        const firstKey = ttsCache.keys().next().value;
+        if (firstKey)
+            ttsCache.delete(firstKey);
+    }
+    ttsCache.set(cacheKey, result);
+    console.log("[TTS] Cached result for:", text.substring(0, 40), "— cache size:", ttsCache.size);
+    return result;
 }

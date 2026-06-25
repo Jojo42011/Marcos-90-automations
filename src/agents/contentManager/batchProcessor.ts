@@ -113,12 +113,14 @@ async function processOpenShortsResults(
   clips: OpenShortsClipResult[],
   batchSession: CmBatchSession,
   trendRecord: CmCompetitorTrends,
-): Promise<{ enhanced: number; compliant: number }> {
+): Promise<{ created: number; enhanced: number; compliant: number }> {
+  let created = 0;
   let enhanced = 0;
   let compliant = 0;
   const videoPillar = resolveVideoPillar(batchSession.pillar);
 
   for (const clip of clips) {
+    try {
     const filePath = mapClipUrlForFrontend(clip.clipUrl || clip.clipPath);
     const thumbnailUrl = clip.thumbnailUrl ? mapClipUrlForFrontend(clip.thumbnailUrl) : null;
     const hookText =
@@ -211,10 +213,17 @@ async function processOpenShortsResults(
     updateBatchSourceFile(sourceFile.id, { clipsGeneratedCount: currentCount });
     sourceFile.clipsGeneratedCount = currentCount;
 
+    created++;
     console.log(`[batch-processor] Clip ${videoId} created and ready for review`);
+    } catch (clipErr) {
+      const msg = clipErr instanceof Error ? clipErr.message : String(clipErr);
+      console.error(`[batch-processor] Failed creating clip record: ${msg}`);
+      if (clipErr instanceof Error && clipErr.stack) console.error(clipErr.stack);
+      // Skip this clip — never let one clip failure kill the rest of the file's clips
+    }
   }
 
-  return { enhanced, compliant };
+  return { created, enhanced, compliant };
 }
 
 export async function processBatch(batchSessionId: string): Promise<void> {
@@ -235,6 +244,11 @@ export async function processBatch(batchSessionId: string): Promise<void> {
 
   console.log(`[batch-processor] Found ${sourceFiles.length} source files`);
 
+  let totalClips = 0;
+  let totalEnhanced = 0;
+  let totalCompliant = 0;
+
+  try {
   updateBatchSession(batchSessionId, { status: "analyzing_trends" });
 
   let trendRecord: CmCompetitorTrends | null = null;
@@ -263,10 +277,6 @@ export async function processBatch(batchSessionId: string): Promise<void> {
   console.log(
     `[batch-processor] Target clips per file: ${perFile.join(", ")} (total gap-driven)`,
   );
-
-  let totalClips = 0;
-  let totalEnhanced = 0;
-  let totalCompliant = 0;
 
   updateBatchSession(batchSessionId, { status: "processing_opus" });
 
@@ -339,18 +349,20 @@ export async function processBatch(batchSessionId: string): Promise<void> {
         effectiveTrend,
       );
 
-      totalClips += openShortsClips.length;
+      totalClips += result.created;
       totalEnhanced += result.enhanced;
       totalCompliant += result.compliant;
 
+      const fileStatus = result.created > 0 ? "complete" : "failed";
       updateBatchSourceFile(sourceFile.id, {
-        opusStatus: "complete",
+        opusStatus: fileStatus,
         opusCompletedAt: new Date().toISOString(),
-        clipsGeneratedCount: openShortsClips.length,
+        clipsGeneratedCount: result.created,
+        errorMessage: result.created > 0 ? null : "No clip records could be created",
       });
 
       console.log(
-        `[batch-processor] File ${sourceFile.originalFilename}: ${openShortsClips.length} clips generated`,
+        `[batch-processor] File ${sourceFile.originalFilename}: ${result.created}/${openShortsClips.length} clips saved`,
       );
     } catch (fileErr) {
       const msg = fileErr instanceof Error ? fileErr.message : String(fileErr);
@@ -365,13 +377,30 @@ export async function processBatch(batchSessionId: string): Promise<void> {
     }
   }
 
+  const finalStatus = totalClips > 0 ? "complete" : "failed";
   updateBatchSession(batchSessionId, {
-    status: "complete",
+    status: finalStatus,
     completedAt: new Date().toISOString(),
     clipsGenerated: totalClips,
   });
 
   console.log(
-    `[batch-processor] Batch ${batchSessionId} complete — ${totalClips} clips generated from ${sourceFiles.length} videos, ${totalEnhanced} enhanced, ${totalCompliant} passed compliance.`,
+    `[batch-processor] Batch ${batchSessionId} finished with status '${finalStatus}' — ${totalClips} clips generated from ${sourceFiles.length} videos, ${totalEnhanced} enhanced, ${totalCompliant} passed compliance.`,
   );
+  } catch (fatalErr) {
+    // Only a truly fatal error reaches here — individual file/clip failures are
+    // handled and skipped inside the loop. Fail the batch only if no clips were created.
+    const msg = fatalErr instanceof Error ? fatalErr.message : String(fatalErr);
+    console.error(`[batch-processor] FATAL error in batch ${batchSessionId}: ${msg}`);
+    if (fatalErr instanceof Error && fatalErr.stack) console.error(fatalErr.stack);
+    const recoveredStatus = totalClips > 0 ? "complete" : "failed";
+    updateBatchSession(batchSessionId, {
+      status: recoveredStatus,
+      completedAt: new Date().toISOString(),
+      clipsGenerated: totalClips,
+    });
+    console.log(
+      `[batch-processor] Batch ${batchSessionId} recovered to '${recoveredStatus}' after fatal error — ${totalClips} clips salvaged`,
+    );
+  }
 }

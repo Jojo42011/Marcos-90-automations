@@ -3612,6 +3612,10 @@
     html[data-theme="light"] .crm-mass-btn { color: #1a1a1a; background: #fff; border-color: #cbd5e1; }
     html[data-theme="light"] .crm-mass-btn:hover { border-color: var(--cyan); background: rgba(14,116,144,0.08); }
     html[data-theme="light"] .crm-mass-btn.crm-mass-clear { color: #b91c1c; }
+    html[data-theme="light"] #crm-mass-email-preview {
+      background: #f8fafc !important;
+      border-color: #e2e8f0 !important;
+    }
     html[data-theme="light"] .crm-table tr.crm-lead-row.selected td { background: rgba(74,158,255,0.12); }
     html[data-theme="light"] .crm-toast { background: #fff; color: #111; border-color: #cbd5e1; box-shadow: 0 14px 36px rgba(15,23,42,0.12); }
     html[data-theme="light"] .crm-alert-card { background: #f8fafc; border-color: #e2e8f0; }
@@ -4290,14 +4294,27 @@
 
     <!-- Mass Email modal -->
     <div id="crm-mass-email-modal" class="crm-modal-overlay" aria-hidden="true">
-      <div class="crm-modal" role="dialog">
-        <div class="crm-modal-head"><h2>Mass email</h2><button type="button" class="crm-drawer-close" data-mass-close>×</button></div>
+      <div class="crm-modal" role="dialog" style="max-width:520px;">
+        <div class="crm-modal-head"><h2>Send mass email</h2><button type="button" class="crm-drawer-close" data-mass-close>×</button></div>
         <div class="crm-modal-body">
           <p class="crm-muted" id="crm-mass-email-info" style="margin-bottom:0.6rem;"></p>
-          <div class="crm-form-field" style="margin-bottom:0.7rem;"><label>Subject</label><input id="crm-mass-email-subject" type="text" placeholder="Subject" /></div>
-          <div class="crm-form-field"><label>Body</label><textarea id="crm-mass-email-body" placeholder="Write your email…"></textarea></div>
+          <div class="crm-form-field" style="margin-bottom:0.7rem;">
+            <label>Select template</label>
+            <select id="crm-mass-email-template-select" onchange="previewMassEmailTemplate(this.value)">
+              <option value="">— choose a template —</option>
+            </select>
+          </div>
+          <div id="crm-mass-email-preview" style="display:none;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:12px;margin-bottom:12px;font-size:0.78rem;">
+            <div style="color:var(--muted);font-size:0.65rem;margin-bottom:6px;">PREVIEW (sample name)</div>
+            <div style="color:var(--muted);margin-bottom:4px;">Subject: <span id="crm-mass-email-preview-subject" style="color:var(--text);"></span></div>
+            <div style="color:var(--muted);white-space:pre-wrap;max-height:120px;overflow-y:auto;"><span id="crm-mass-email-preview-body" style="color:var(--text);"></span></div>
+          </div>
+          <p class="crm-muted" style="font-size:0.72rem;margin-bottom:0;">Emails use {firstName} and {name} personalization. Leads without email are skipped automatically.</p>
         </div>
-        <div class="crm-modal-foot"><button type="button" class="crm-light-btn" data-mass-close>Cancel</button><button type="button" class="crm-btn-primary" id="crm-mass-email-send">Open email (BCC all)</button></div>
+        <div class="crm-modal-foot">
+          <button type="button" class="crm-light-btn" data-mass-close>Cancel</button>
+          <button type="button" class="crm-btn-primary" id="crm-mass-email-send">✉ Send now</button>
+        </div>
       </div>
     </div>
 
@@ -5158,6 +5175,24 @@
       return u.toString();
     }
 
+    function emailTemplatesApiUrl(opts) {
+      const id = opts && typeof opts === "object" && opts.id ? String(opts.id) : "";
+      const type = opts && typeof opts === "object" && opts.type ? String(opts.type) : "";
+      const path = id
+        ? "/api/email/templates/" + encodeURIComponent(id)
+        : "/api/email/templates";
+      const u = new URL(path, window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      if (!id && type) u.searchParams.set("type", type);
+      return u.toString();
+    }
+
+    function emailMassSendApiUrl() {
+      const u = new URL("/api/email/mass-send", window.location.origin);
+      if (token) u.searchParams.set("token", token);
+      return u.toString();
+    }
+
     /** When set, opening the Text tab pre-selects this lead (e.g. from Leads table "Compose"). */
     let crmTextPrefillLeadId = null;
     /** When set, opening the Text tab fills the message box with this content. */
@@ -5853,6 +5888,33 @@
           <div class="crm-template-block"><h3>Text templates</h3>${crmTemplateItemsHtml("text", store.text)}</div>
           <div class="crm-template-block"><h3>Email templates</h3>${crmTemplateItemsHtml("email", store.email)}</div>
           <div class="crm-template-block"><h3>Auto plans / workflows</h3>${crmTemplateItemsHtml("plan", store.plan)}</div>
+        </div>
+        <div id="mass-email-templates" style="margin-top:24px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="font-size:9px;color:var(--muted);letter-spacing:2px;font-family:var(--mono);">MASS EMAIL TEMPLATES (SERVER)</div>
+            <button type="button" class="crm-light-btn" id="mass-email-tpl-new-btn" style="font-size:0.68rem;">+ New template</button>
+          </div>
+          <div id="mass-email-template-form" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+            <input type="hidden" id="tpl-editing-id">
+            <div class="crm-form-field" style="margin-bottom:0.6rem;">
+              <label>Template name</label>
+              <input id="tpl-name" type="text" placeholder="e.g. Open House Invite" />
+            </div>
+            <div class="crm-form-field" style="margin-bottom:0.6rem;">
+              <label>Subject line</label>
+              <input id="tpl-subject" type="text" placeholder="e.g. You're invited to 123 Oak St this Saturday" />
+            </div>
+            <div class="crm-form-field" style="margin-bottom:0.75rem;">
+              <label>Email body</label>
+              <div class="crm-muted" style="font-size:0.68rem;margin-bottom:4px;">Use {firstName} or {name} for personalization</div>
+              <textarea id="tpl-body" rows="8" placeholder="Hi {firstName},&#10;&#10;..."></textarea>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button type="button" class="crm-btn-primary" id="mass-email-tpl-save-btn">Save template</button>
+              <button type="button" class="crm-light-btn" id="mass-email-tpl-cancel-btn">Cancel</button>
+            </div>
+          </div>
+          <div id="mass-email-template-list"></div>
         </div>`;
       content.querySelectorAll("[data-tmpl-new]").forEach((btn) => {
         btn.addEventListener("click", () => crmOpenTemplateModal(btn.getAttribute("data-tmpl-new") || "text"));
@@ -5890,6 +5952,239 @@
           }
         });
       });
+      const tplNewBtn = content.querySelector("#mass-email-tpl-new-btn");
+      if (tplNewBtn) tplNewBtn.addEventListener("click", () => showNewMassEmailTemplateForm());
+      const tplSaveBtn = content.querySelector("#mass-email-tpl-save-btn");
+      if (tplSaveBtn) tplSaveBtn.addEventListener("click", () => void saveMassEmailTemplate());
+      const tplCancelBtn = content.querySelector("#mass-email-tpl-cancel-btn");
+      if (tplCancelBtn) tplCancelBtn.addEventListener("click", () => cancelMassEmailTemplateForm());
+      void loadMassEmailTemplates();
+    }
+
+    let crmMassEmailTemplatesCache = [];
+    let crmMassEmailSelectedIds = [];
+
+    async function loadMassEmailTemplates() {
+      const list = document.getElementById("mass-email-template-list");
+      if (!list) return;
+      try {
+        const res = await fetch(emailTemplatesApiUrl({ type: "mass_email" }));
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Failed to load templates");
+        crmMassEmailTemplatesCache = body.templates || [];
+        if (!crmMassEmailTemplatesCache.length) {
+          list.innerHTML =
+            `<p class="crm-muted" style="font-size:0.78rem;">No server templates yet — create one above. These are used by Mass Email on the Leads tab.</p>`;
+          return;
+        }
+        list.innerHTML = crmMassEmailTemplatesCache
+          .map(
+            (t) =>
+              `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                  <div>
+                    <div style="font-size:0.82rem;font-weight:600;margin-bottom:3px;">${escapeHtml(t.name)}</div>
+                    <div class="crm-muted" style="font-size:0.72rem;">Subject: ${escapeHtml(t.subject)}</div>
+                    <div class="crm-muted" style="font-size:0.68rem;margin-top:3px;">${escapeHtml(t.body.substring(0, 80))}${t.body.length > 80 ? "…" : ""}</div>
+                  </div>
+                  <div style="display:flex;gap:6px;flex-shrink:0;">
+                    <button type="button" class="crm-light-btn mass-email-tpl-edit" data-tpl-id="${escapeHtml(t.id)}" style="font-size:0.65rem;">Edit</button>
+                    <button type="button" class="crm-light-btn mass-email-tpl-delete" data-tpl-id="${escapeHtml(t.id)}" style="font-size:0.65rem;color:var(--danger);">Delete</button>
+                  </div>
+                </div>
+              </div>`,
+          )
+          .join("");
+        list.querySelectorAll(".mass-email-tpl-edit").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const id = btn.getAttribute("data-tpl-id");
+            if (id) void editMassEmailTemplate(id);
+          });
+        });
+        list.querySelectorAll(".mass-email-tpl-delete").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const id = btn.getAttribute("data-tpl-id");
+            if (id) void deleteMassEmailTemplate(id);
+          });
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn("loadMassEmailTemplates", e);
+        list.innerHTML = `<p class="crm-muted" style="font-size:0.78rem;color:var(--danger);">Could not load templates: ${escapeHtml(msg)}</p>`;
+        crmToast(msg, "error");
+      }
+    }
+
+    function showNewMassEmailTemplateForm() {
+      const form = document.getElementById("mass-email-template-form");
+      if (!form) return;
+      document.getElementById("tpl-editing-id").value = "";
+      document.getElementById("tpl-name").value = "";
+      document.getElementById("tpl-subject").value = "";
+      document.getElementById("tpl-body").value = "";
+      form.style.display = "block";
+      document.getElementById("tpl-name").focus();
+    }
+
+    function cancelMassEmailTemplateForm() {
+      const form = document.getElementById("mass-email-template-form");
+      if (form) form.style.display = "none";
+    }
+
+    async function saveMassEmailTemplate() {
+      const id = document.getElementById("tpl-editing-id").value;
+      const name = document.getElementById("tpl-name").value.trim();
+      const subject = document.getElementById("tpl-subject").value.trim();
+      const body = document.getElementById("tpl-body").value.trim();
+      if (!name || !subject || !body) {
+        crmToast("Name, subject, and body are all required.", "error");
+        return;
+      }
+      try {
+        if (id) {
+          const res = await fetch(emailTemplatesApiUrl({ id }), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, subject, body }),
+          });
+          const bodyJson = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(bodyJson.error || "Update failed");
+        } else {
+          const res = await fetch(emailTemplatesApiUrl(), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, subject, body, templateType: "mass_email" }),
+          });
+          const bodyJson = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(bodyJson.error || "Save failed");
+        }
+        cancelMassEmailTemplateForm();
+        crmToast(id ? "Template updated" : "Template saved", "success");
+        await loadMassEmailTemplates();
+      } catch (e) {
+        crmToast(e instanceof Error ? e.message : String(e), "error");
+      }
+    }
+
+    async function editMassEmailTemplate(id) {
+      const t = crmMassEmailTemplatesCache.find((x) => x.id === id);
+      if (!t) {
+        await loadMassEmailTemplates();
+        const again = crmMassEmailTemplatesCache.find((x) => x.id === id);
+        if (!again) return;
+        editMassEmailTemplateFill(again);
+        return;
+      }
+      editMassEmailTemplateFill(t);
+    }
+
+    function editMassEmailTemplateFill(t) {
+      document.getElementById("tpl-editing-id").value = t.id;
+      document.getElementById("tpl-name").value = t.name;
+      document.getElementById("tpl-subject").value = t.subject;
+      document.getElementById("tpl-body").value = t.body;
+      document.getElementById("mass-email-template-form").style.display = "block";
+      document.getElementById("tpl-name").focus();
+    }
+
+    async function deleteMassEmailTemplate(id) {
+      if (!confirm("Delete this template? This cannot be undone.")) return;
+      try {
+        const res = await fetch(emailTemplatesApiUrl({ id }), {
+          method: "DELETE",
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Delete failed");
+        crmToast("Template deleted", "success");
+        await loadMassEmailTemplates();
+      } catch (e) {
+        crmToast(e instanceof Error ? e.message : String(e), "error");
+      }
+    }
+
+    async function massEmailLeads() {
+      const selectedIds = [...crmSelectedLeadIds];
+      if (!selectedIds.length) {
+        crmToast("No leads selected", "error");
+        return;
+      }
+      try {
+        const res = await fetch(emailTemplatesApiUrl({ type: "mass_email" }));
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Failed to load templates");
+        const templates = body.templates || [];
+        if (!templates.length) {
+          crmToast("No mass email templates — create one in Templates first", "error");
+          return;
+        }
+        crmMassEmailSelectedIds = selectedIds;
+        showMassEmailModal(selectedIds, templates);
+      } catch (e) {
+        crmToast(e instanceof Error ? e.message : String(e), "error");
+      }
+    }
+
+    function showMassEmailModal(selectedIds, templates) {
+      crmMassEmailTemplatesCache = templates;
+      const leads = crmSelectedLeads();
+      const withEmail = leads.filter((r) => r.email && String(r.email).trim()).length;
+      const info = document.getElementById("crm-mass-email-info");
+      if (info) {
+        info.textContent =
+          selectedIds.length +
+          " selected · " +
+          withEmail +
+          " with email will receive this send (" +
+          (selectedIds.length - withEmail) +
+          " skipped — no email).";
+      }
+      const sel = document.getElementById("crm-mass-email-template-select");
+      if (sel) {
+        sel.innerHTML =
+          "<option value=\"\">— choose a template —</option>" +
+          templates
+            .map(
+              (t) =>
+                `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)} — "${escapeHtml(t.subject.substring(0, 50))}"</option>`,
+            )
+            .join("");
+      }
+      const previewEl = document.getElementById("crm-mass-email-preview");
+      if (previewEl) previewEl.style.display = "none";
+      if (templates.length === 1 && sel) {
+        sel.value = templates[0].id;
+        previewMassEmailTemplate(templates[0].id);
+      }
+      crmOpenMassModal("crm-mass-email-modal");
+    }
+
+    function previewMassEmailTemplate(templateId) {
+      const preview = document.getElementById("crm-mass-email-preview");
+      if (!preview) return;
+      if (!templateId) {
+        preview.style.display = "none";
+        return;
+      }
+      const t = crmMassEmailTemplatesCache.find((x) => x.id === templateId);
+      if (!t) {
+        fetch(emailTemplatesApiUrl({ type: "mass_email" }))
+          .then((r) => r.json())
+          .then(({ templates }) => {
+            const found = (templates || []).find((x) => x.id === templateId);
+            if (found) renderMassEmailPreview(found);
+          });
+        return;
+      }
+      renderMassEmailPreview(t);
+    }
+
+    function renderMassEmailPreview(t) {
+      const previewName = "Marco";
+      const subj = t.subject.replace(/\{firstName\}/g, previewName).replace(/\{name\}/g, previewName);
+      const body = t.body.replace(/\{firstName\}/g, previewName).replace(/\{name\}/g, previewName);
+      document.getElementById("crm-mass-email-preview-subject").textContent = subj;
+      document.getElementById("crm-mass-email-preview-body").textContent = body;
+      document.getElementById("crm-mass-email-preview").style.display = "block";
     }
 
     let crmTemplateModalKind = "text";
@@ -7670,13 +7965,59 @@
     }
 
     function crmMassEmailSend() {
-      const emails = [...new Set(crmSelectedLeads().map((r) => r.email).filter(Boolean))];
-      if (!emails.length) { crmToast("None of the selected leads have an email address.", "error"); return; }
-      const subject = encodeURIComponent(document.getElementById("crm-mass-email-subject").value || "");
-      const body = encodeURIComponent(document.getElementById("crm-mass-email-body").value || "");
-      window.open("mailto:?bcc=" + encodeURIComponent(emails.join(",")) + "&subject=" + subject + "&body=" + body, "_self");
-      crmCloseMassModal("crm-mass-email-modal");
-      crmToast("Opened email to " + emails.length + " recipient" + (emails.length === 1 ? "" : "s") + " (BCC).", "success");
+      const templateId = document.getElementById("crm-mass-email-template-select")?.value;
+      if (!templateId) {
+        crmToast("Please select a template", "error");
+        return;
+      }
+      const selectedIds = crmMassEmailSelectedIds.length ? crmMassEmailSelectedIds : [...crmSelectedLeadIds];
+      if (!selectedIds.length) {
+        crmToast("No leads selected", "error");
+        return;
+      }
+
+      const btn = document.getElementById("crm-mass-email-send");
+      const orig = btn ? btn.textContent : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+      }
+
+      fetch(emailMassSendApiUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: selectedIds, templateId }),
+      })
+        .then(async (res) => {
+          const result = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            crmToast(result.error || "Send failed", "error");
+            return;
+          }
+          crmCloseMassModal("crm-mass-email-modal");
+          crmToast(result.message || "Mass email queued", "success");
+          if (result.skipped > 0) {
+            setTimeout(() => {
+              crmToast(
+                result.skipped +
+                  " lead" +
+                  (result.skipped !== 1 ? "s" : "") +
+                  " skipped — no email address on file",
+                "error",
+              );
+            }, 1500);
+          }
+        })
+        .catch((err) => {
+          console.error("[process-btn] Mass email error:", err);
+          crmToast("Mass email failed: " + (err instanceof Error ? err.message : String(err)), "error");
+        })
+        .finally(() => {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = orig || "✉ Send now";
+          }
+        });
     }
 
     function crmRenderMassTagMenu() {
@@ -7825,12 +8166,7 @@
         return;
       }
       if (action === "email") {
-        document.getElementById("crm-mass-email-subject").value = "";
-        document.getElementById("crm-mass-email-body").value = "";
-        const withEmail = leads.filter((r) => r.email).length;
-        document.getElementById("crm-mass-email-info").textContent =
-          leads.length + " selected · " + withEmail + " with an email will be added to BCC.";
-        crmOpenMassModal("crm-mass-email-modal");
+        void massEmailLeads();
         return;
       }
       if (action === "tag") {
@@ -8898,8 +9234,13 @@
     }
 
     function crmCan(perm) {
-      if (!crmCurrentUser || !crmCurrentUser.permissions) return true;
-      return !!crmCurrentUser.permissions[perm];
+      if (!crmCurrentUser) return true;
+      const rolePerms = ROLE_PERMISSIONS[crmCurrentUser.role] || ROLE_PERMISSIONS.agent;
+      if (!crmCurrentUser.permissions) return !!rolePerms[perm];
+      if (crmCurrentUser.permissions[perm] !== undefined) {
+        return !!crmCurrentUser.permissions[perm];
+      }
+      return !!rolePerms[perm];
     }
 
     function crmSyncUsers(data) {

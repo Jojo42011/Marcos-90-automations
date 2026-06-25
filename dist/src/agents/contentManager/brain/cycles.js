@@ -16,6 +16,7 @@ const experiments_js_1 = require("./experiments.js");
 const momentum_js_1 = require("./momentum.js");
 const calendar_js_1 = require("../calendar.js");
 const competitiveAnalysis_js_1 = require("../competitiveAnalysis.js");
+const youtubeIntel_js_1 = require("../youtubeIntel.js");
 const contentDb_js_2 = require("../../../core/contentDb.js");
 const prompts_js_1 = require("./prompts.js");
 const stats_js_1 = require("./stats.js");
@@ -412,6 +413,31 @@ Learning logs: ${JSON.stringify(logs.slice(0, 7))}. Performance model: ${JSON.st
         }
         catch (err) {
             console.error("[cm-brain] Sunday competitive analysis failed:", err);
+        }
+        // SUNDAY NIGHT — YouTube competitor transcript analysis (non-blocking)
+        try {
+            console.log("[cm-brain] Running YouTube competitor transcript analysis...");
+            const youtubeAnalysis = await (0, youtubeIntel_js_1.runYouTubeCompetitorAnalysis)(brain);
+            if (youtubeAnalysis) {
+                console.log(`[cm-brain] YouTube analysis complete — ${youtubeAnalysis.videosAnalyzed} videos, ${youtubeAnalysis.channelsAnalyzed} channels`);
+                if (youtubeAnalysis.contentGaps.length) {
+                    (0, contentDb_js_1.insertBriefing)({
+                        briefingType: "weekly",
+                        title: `Content Manager — YouTube Intelligence ${today}`,
+                        body: `YouTube Intelligence: Analyzed ${youtubeAnalysis.videosAnalyzed} competitor videos across ${youtubeAnalysis.channelsAnalyzed} channels. Top content gap: ${youtubeAnalysis.contentGaps[0]}. Recommended video idea: ${youtubeAnalysis.topRecommendedVideoIdea.slice(0, 150)}`,
+                        keyMetrics: {
+                            videos_analyzed: youtubeAnalysis.videosAnalyzed,
+                            channels_analyzed: youtubeAnalysis.channelsAnalyzed,
+                        },
+                        actionItems: youtubeAnalysis.contentGaps.slice(0, 2),
+                        sentToHarvey: true,
+                    });
+                }
+            }
+        }
+        catch (youtubeErr) {
+            const msg = youtubeErr instanceof Error ? youtubeErr.message : String(youtubeErr);
+            console.warn(`[cm-brain] YouTube analysis failed (non-blocking): ${msg}`);
         }
         await (0, experiments_js_1.evaluateCurrentExperiment)(brain);
         const weekStart = (0, stats_js_1.getWeekStart)();

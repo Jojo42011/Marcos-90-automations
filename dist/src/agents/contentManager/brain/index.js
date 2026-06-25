@@ -10,6 +10,7 @@ const prompts_js_1 = require("./prompts.js");
 const tools_js_1 = require("./tools.js");
 const cycles_js_1 = require("./cycles.js");
 const contentDb_js_1 = require("../../../core/contentDb.js");
+const youtubeIntel_js_1 = require("../youtubeIntel.js");
 const gemini_js_1 = require("./gemini.js");
 class ContentManagerBrain {
     apiKey;
@@ -34,6 +35,22 @@ class ContentManagerBrain {
             limit: 20,
         });
         const sprint = (0, contentDb_js_1.getSprintProgressData)();
+        let youtubeContext = null;
+        try {
+            const latestYT = (0, youtubeIntel_js_1.getLatestYouTubeAnalysis)();
+            if (latestYT) {
+                const daysSince = Math.floor((Date.now() - new Date(latestYT.analyzedAt).getTime()) / (1000 * 60 * 60 * 24));
+                youtubeContext = {
+                    analyzed_days_ago: daysSince,
+                    content_gaps: latestYT.contentGaps.slice(0, 3),
+                    top_hook_structures: latestYT.topHookStructures.slice(0, 3),
+                    top_recommended_video: latestYT.topRecommendedVideoIdea,
+                };
+            }
+        }
+        catch {
+            /* ignore */
+        }
         return {
             avg_views: model.decayWeightedAvgViews || model.overallAvgViews,
             videos_today: targets.videosPublished,
@@ -63,6 +80,7 @@ class ContentManagerBrain {
             recording_tasks_pending_7d: pendingTasks.length,
             top_recording_task: pendingTasks[0] ?? null,
             sprint_progress: sprint,
+            youtube_intelligence: youtubeContext,
         };
     }
     buildContextBlock() {

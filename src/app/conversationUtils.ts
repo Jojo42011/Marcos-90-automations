@@ -35,6 +35,298 @@ export function normalizeUserMessageText(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Message handle dedup store — prevents the same webhook payload from processing twice. */
+const recentlyProcessedHandles = new Map<string, number>();
+
+/**
+ * Detects if the current user message is an exact duplicate of the prior user message
+ * in the conversation history (excludes the current turn when history already includes it).
+ */
+export function isExactDuplicateMessage(
+  currentMessage: string,
+  conversationHistory: Array<{ role: string; content: string }>,
+): boolean {
+  if (!currentMessage?.trim() || !conversationHistory?.length) {
+    return false;
+  }
+
+  const normalizedCurrent = currentMessage.trim().toLowerCase();
+
+  const userMessages = conversationHistory
+    .filter((turn) => turn.role === "user")
+    .map((turn) => (turn.content ?? "").trim().toLowerCase());
+
+  if (userMessages.length < 2) return false;
+
+  const mostRecentPriorUserMessage = userMessages[userMessages.length - 2];
+  return normalizedCurrent === mostRecentPriorUserMessage;
+}
+
+/** Human-curious response when a lead sends the exact same message twice. */
+export function getDuplicateMessageResponse(): string {
+  const responses = [
+    "Did you mean to send that again?",
+    "Looks like that came through twice. Did you want me to go into more detail?",
+    "Hey, did you mean to resend that? Just want to make sure I got you.",
+    "?",
+    "Just checking. Did that send twice on your end? Happy to clarify anything.",
+    "Looks like you sent that one more than once. Is there something specific you needed me to explain better?",
+  ];
+  const index = Math.floor(Date.now() / 10000) % responses.length;
+  return responses[index];
+}
+
+export function isDuplicateHandle(messageHandle: string): boolean {
+  if (!messageHandle?.trim()) return false;
+
+  const handle = messageHandle.trim();
+  const processedAt = recentlyProcessedHandles.get(handle);
+  if (processedAt) {
+    const ageMs = Date.now() - processedAt;
+    if (ageMs < 60000) {
+      console.log(`[dedup] Message handle ${handle} already processed ${ageMs}ms ago — dropping`);
+      return true;
+    }
+  }
+
+  recentlyProcessedHandles.set(handle, Date.now());
+
+  if (recentlyProcessedHandles.size > 500) {
+    const cutoff = Date.now() - 120000;
+    for (const [h, ts] of recentlyProcessedHandles.entries()) {
+      if (ts < cutoff) recentlyProcessedHandles.delete(h);
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Counts how many times the agent has already asked for a phone number in this conversation.
+ */
+export function getPhoneRequestCount(
+  conversationHistory: Array<{ role: string; content: string }>,
+): number {
+  if (!conversationHistory?.length) return 0;
+
+  const phoneAskPatterns = [
+    "good number",
+    "phone number",
+    "number would be best",
+    "send that over to",
+    "reach you at",
+    "best number",
+    "can i get a number",
+    "grab your number",
+  ];
+
+  return conversationHistory
+    .filter((turn) => turn.role === "assistant")
+    .filter((turn) => {
+      const content = (turn.content ?? "").toLowerCase();
+      return phoneAskPatterns.some((pattern) => content.includes(pattern));
+    }).length;
+}
+
+/** Phone request variation hint for the LLM based on prior ask count. */
+export function getPhoneRequestVariation(askCount: number): string {
+  if (askCount === 0) {
+    return "FIRST ASK. Standard approach. Ask for number naturally as part of getting them info.";
+  }
+  if (askCount === 1) {
+    return "SECOND ASK. Lead already declined once. Be slightly more casual and human. Add a touch of self-aware humor if they showed any frustration. Example approach: \"LOL I'm sorry, I promise I'm not trying to be difficult. For this specific property a number is honestly just the fastest way to get you everything.\"";
+  }
+  if (askCount === 2) {
+    return "THIRD ASK. Lead has declined twice. Take a completely different angle. Acknowledge their hesitation genuinely. Example: \"I completely understand, no pressure at all. I just want to make sure you get all the details as fast as possible, and a number is truly the quickest way I can do that for you.\"";
+  }
+  return "FOURTH ASK OR MORE. Back off entirely. Do not ask for number again this turn. Find another way to keep the conversation going and build trust. The number will come when they are ready.";
+}
+
+export type CommunicationStyle = "casual" | "formal" | "excited" | "terse";
+
+/**
+ * Detects if the current message is a simple acknowledgment that
+ * does not require or merit a substantive response.
+ */
+export function isSimpleAcknowledgment(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+
+  const acknowledgments = [
+    "okay",
+    "ok",
+    "k",
+    "kk",
+    "sounds good",
+    "got it",
+    "perfect",
+    "alright",
+    "alright!",
+    "cool",
+    "cool!",
+    "nice",
+    "great",
+    "thanks",
+    "thank you",
+    "ty",
+    "thx",
+    "👍",
+    "👍🏽",
+    "👍🏼",
+    "👍🏾",
+    "👍🏿",
+    "👏",
+    "🙏",
+    "✓",
+    "✔",
+    "✔️",
+    "yep",
+    "yup",
+    "yeah",
+    "sure",
+    "good",
+    "👌",
+    "ight",
+    "aight",
+    "bet",
+    "🤙",
+  ];
+
+  if (
+    normalized.length <= 15 &&
+    acknowledgments.some((a) => normalized === a || normalized === a + "!")
+  ) {
+    return true;
+  }
+
+  const emojiOnly = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s!.]+$/u;
+  if (emojiOnly.test(message.trim())) {
+    return true;
+  }
+
+  return false;
+}
+
+/** True when Marco's last outbound committed to sending info to the lead. */
+export function agentMessageCommittedToSend(lastAgentMessage: string | null): boolean {
+  if (!lastAgentMessage?.trim()) return false;
+  const t = lastAgentMessage.toLowerCase();
+  return (
+    t.includes("get that over to you") ||
+    t.includes("send that over") ||
+    t.includes("end of day") ||
+    t.includes("by tonight") ||
+    t.includes("will send") ||
+    t.includes("i'll get that") ||
+    t.includes("ill get that")
+  );
+}
+
+/**
+ * Analyzes the lead's conversation messages to detect their communication style.
+ */
+export function detectCommunicationStyle(
+  conversationHistory: Array<{ role: string; content: string }>,
+): CommunicationStyle {
+  const leadMessages = conversationHistory.filter((t) => t.role === "user").map((t) => t.content);
+
+  if (!leadMessages.length) return "casual";
+
+  const combined = leadMessages.join(" ");
+  const totalChars = combined.length;
+
+  const exclamationCount = (combined.match(/!/g) || []).length;
+  const periodCount = (combined.match(/\./g) || []).length;
+  const capitalCount = (combined.match(/[A-Z]/g) || []).length;
+  const emojiCount = (combined.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length;
+  const avgMessageLength = totalChars / leadMessages.length;
+
+  const hasCapitalization = capitalCount > leadMessages.length;
+  const hasEndPunctuation = periodCount >= leadMessages.length * 0.5;
+  const isExcited = exclamationCount >= 2;
+  const isTerse = avgMessageLength < 12;
+
+  if (isExcited || emojiCount >= 3) return "excited";
+  if (isTerse && !hasCapitalization && !hasEndPunctuation) return "terse";
+  if (hasCapitalization && hasEndPunctuation) return "formal";
+  return "casual";
+}
+
+/** Style instructions for the LLM based on detected communication style. */
+export function getCommunicationStyleInstructions(style: CommunicationStyle): string {
+  switch (style) {
+    case "formal":
+      return "COMMUNICATION STYLE: This lead writes formally with capitalization and punctuation. Match their level. Complete sentences are fine. Professional but still warm.";
+    case "excited":
+      return "COMMUNICATION STYLE: This lead uses exclamation points and/or emojis. They are upbeat and energetic. Match their energy. Short enthusiastic responses work well. One emoji is okay if it fits naturally.";
+    case "terse":
+      return "COMMUNICATION STYLE: This lead writes very short messages with no punctuation and likely no capitals. Match this style. Keep responses SHORT. Do not use formal phrases. Say \"gotcha\" not \"I understand.\" Say \"for sure\" not \"of course.\" Never use \"great question\" or formal opener words. One or two sentences max. Match their brevity.";
+    case "casual":
+    default:
+      return "COMMUNICATION STYLE: This lead writes casually without heavy punctuation. Keep a natural, relaxed tone. No \"Of course\" openers. No \"Great question.\" Just talk like a real person would. Contractions always.";
+  }
+}
+
+/** Detects if the lead is identifying as a realtor, agent, or broker. */
+export function isRealtorMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+
+  const realtorSignals = [
+    "i'm a realtor",
+    "i am a realtor",
+    "im a realtor",
+    "i'm a real estate agent",
+    "i am an agent",
+    "im an agent",
+    "i'm an agent",
+    "i'm a broker",
+    "im a broker",
+    "fellow agent",
+    "fellow realtor",
+    "i'm also in real estate",
+    "i sell homes",
+    "i'm in the business",
+    "i work in real estate",
+    "i'm a licensed",
+    "i represent",
+    "my client is interested",
+    "representing a buyer",
+    "buyers agent",
+    "buyer's agent",
+    "listing agent",
+  ];
+
+  return realtorSignals.some((signal) => normalized.includes(signal));
+}
+
+export const REALTOR_REDIRECT_REPLY =
+  "Hey! Sounds like you're in the business too, love it. For agent inquiries, feel free to reach out to Marco directly at his number and he'll get back to you as soon as possible.";
+
+/** Lead explicitly says they did not inquire or reach out. */
+export function isDenialOfInquiry(message: string): boolean {
+  const normalized = message.toLowerCase();
+
+  const denialPatterns = [
+    "i didn't inquire",
+    "i did not inquire",
+    "i didn't reach out",
+    "i didn't message",
+    "i didn't contact",
+    "i didn't send",
+    "i didn't ask",
+    "wrong person",
+    "i think you have the wrong",
+    "not me",
+    "wasn't me",
+    "i didn't do anything",
+    "i never messaged",
+  ];
+
+  return denialPatterns.some((pattern) => normalized.includes(pattern));
+}
+
+export const DENIAL_OF_INQUIRY_REPLY =
+  "My apologies for the confusion! You may have been included in an automated follow-up by mistake. Hope you have a great day, and feel free to reach out anytime if you ever have questions about real estate in San Antonio!";
+
 /** Strip punctuation variance and unicode noise for Marco duplicate checks. */
 export function normalizeForMarcoDuplicateCompare(text: string): string {
   let s = text

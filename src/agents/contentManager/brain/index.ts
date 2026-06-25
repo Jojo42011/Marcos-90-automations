@@ -25,6 +25,7 @@ import {
   updateChatSessionSummary,
   getSprintProgressData,
 } from "../../../core/contentDb.js";
+import { getLatestYouTubeAnalysis } from "../youtubeIntel.js";
 import {
   geminiChatWithTools,
   geminiSimpleChat,
@@ -60,6 +61,25 @@ export class ContentManagerBrain {
       limit: 20,
     });
     const sprint = getSprintProgressData();
+
+    let youtubeContext: Record<string, unknown> | null = null;
+    try {
+      const latestYT = getLatestYouTubeAnalysis();
+      if (latestYT) {
+        const daysSince = Math.floor(
+          (Date.now() - new Date(latestYT.analyzedAt).getTime()) / (1000 * 60 * 60 * 24),
+        );
+        youtubeContext = {
+          analyzed_days_ago: daysSince,
+          content_gaps: latestYT.contentGaps.slice(0, 3),
+          top_hook_structures: latestYT.topHookStructures.slice(0, 3),
+          top_recommended_video: latestYT.topRecommendedVideoIdea,
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+
     return {
       avg_views: model.decayWeightedAvgViews || model.overallAvgViews,
       videos_today: targets.videosPublished,
@@ -89,6 +109,7 @@ export class ContentManagerBrain {
       recording_tasks_pending_7d: pendingTasks.length,
       top_recording_task: pendingTasks[0] ?? null,
       sprint_progress: sprint,
+      youtube_intelligence: youtubeContext,
     };
   }
 

@@ -65,7 +65,7 @@ function normalizeUser(raw: Record<string, unknown>): CRMUser | null {
       : "agent";
   const permsRaw = raw.permissions && typeof raw.permissions === "object" ? (raw.permissions as UserPermissions) : null;
   const permissions: UserPermissions = permsRaw
-    ? { ...ROLE_PERMISSIONS.custom, ...permsRaw }
+    ? { ...ROLE_PERMISSIONS[role], ...permsRaw }
     : { ...ROLE_PERMISSIONS[role] };
   const assignedLeadIds = Array.isArray(raw.assignedLeadIds)
     ? raw.assignedLeadIds.filter((id): id is string => typeof id === "string")

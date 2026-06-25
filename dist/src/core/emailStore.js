@@ -28,6 +28,11 @@ exports.cacheGmailMessage = cacheGmailMessage;
 exports.getCachedGmailMessages = getCachedGmailMessages;
 exports.getCachedGmailMessage = getCachedGmailMessage;
 exports.getInboundCachedReplies = getInboundCachedReplies;
+exports.saveEmailTemplate = saveEmailTemplate;
+exports.updateEmailTemplate = updateEmailTemplate;
+exports.deleteEmailTemplate = deleteEmailTemplate;
+exports.getEmailTemplates = getEmailTemplates;
+exports.getEmailTemplate = getEmailTemplate;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -98,6 +103,19 @@ function getEmailDb() {
       )
     `);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_gmail_cache_received ON gmail_inbox_cache(received_at)`);
+        db.exec(`
+      CREATE TABLE IF NOT EXISTS email_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        template_type TEXT NOT NULL DEFAULT 'mass_email',
+        subject TEXT NOT NULL,
+        body TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_email_templates_type ON email_templates(template_type)`);
     }
     return db;
 }
@@ -343,4 +361,62 @@ function getInboundCachedReplies(limit = 50) {
         .prepare(`SELECT * FROM gmail_inbox_cache WHERE direction = 'inbound' ORDER BY received_at DESC LIMIT ?`)
         .all(limit);
     return rows.map(rowToCachedGmail);
+}
+function rowToEmailTemplate(row) {
+    return {
+        id: String(row.id),
+        name: String(row.name),
+        templateType: row.template_type,
+        subject: String(row.subject),
+        body: String(row.body),
+        isActive: Number(row.is_active) === 1,
+        createdAt: row.created_at ? String(row.created_at) : undefined,
+        updatedAt: row.updated_at ? String(row.updated_at) : undefined,
+    };
+}
+function saveEmailTemplate(template) {
+    const database = getEmailDb();
+    const id = (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    database
+        .prepare(`INSERT INTO email_templates (id, name, template_type, subject, body, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, template.name, template.templateType, template.subject, template.body, template.isActive ? 1 : 0, now, now);
+    return { ...template, id, createdAt: now, updatedAt: now };
+}
+function updateEmailTemplate(id, updates) {
+    const database = getEmailDb();
+    const now = new Date().toISOString();
+    if (updates.name !== undefined) {
+        database.prepare(`UPDATE email_templates SET name = ?, updated_at = ? WHERE id = ?`).run(updates.name, now, id);
+    }
+    if (updates.subject !== undefined) {
+        database.prepare(`UPDATE email_templates SET subject = ?, updated_at = ? WHERE id = ?`).run(updates.subject, now, id);
+    }
+    if (updates.body !== undefined) {
+        database.prepare(`UPDATE email_templates SET body = ?, updated_at = ? WHERE id = ?`).run(updates.body, now, id);
+    }
+    if (updates.isActive !== undefined) {
+        database
+            .prepare(`UPDATE email_templates SET is_active = ?, updated_at = ? WHERE id = ?`)
+            .run(updates.isActive ? 1 : 0, now, id);
+    }
+}
+function deleteEmailTemplate(id) {
+    getEmailDb().prepare(`DELETE FROM email_templates WHERE id = ?`).run(id);
+}
+function getEmailTemplates(type) {
+    const database = getEmailDb();
+    const rows = type
+        ? database
+            .prepare(`SELECT * FROM email_templates WHERE template_type = ? ORDER BY created_at DESC`)
+            .all(type)
+        : database
+            .prepare(`SELECT * FROM email_templates ORDER BY created_at DESC`)
+            .all();
+    return rows.map(rowToEmailTemplate);
+}
+function getEmailTemplate(id) {
+    const row = getEmailDb().prepare(`SELECT * FROM email_templates WHERE id = ?`).get(id);
+    return row ? rowToEmailTemplate(row) : null;
 }

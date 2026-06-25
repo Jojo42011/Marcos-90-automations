@@ -159,7 +159,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
       "\n\nLEAD NURTURE: For scoring, hot/warm/cold tiers, or nurture routing questions, call get_lead_nurture_overview or get_lead_nurture_tier before answering. Use get_lead_score_detail for one lead. Use lead_nurture_score_all / lead_nurture_rescore_cold only when Marco explicitly asks to refresh scores.";
   }
   const activeTools = toolsEnabled ? hullTools : undefined;
-  const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 1024 : getMaxTokens();
+  const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 384 : getMaxTokens();
 
   let toolRounds = 0;
   let hadToolOnly = false;

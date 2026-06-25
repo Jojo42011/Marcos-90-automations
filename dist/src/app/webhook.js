@@ -14,8 +14,38 @@ exports.handleWebhook = handleWebhook;
  *   { "platform": "instagram", "user_id": "<IG username>", "username": "<full name>", "comment_or_dm": "comment" }
  */
 const pipeline_js_1 = require("./pipeline.js");
+const conversationUtils_js_1 = require("./conversationUtils.js");
 const marcoLog_js_1 = require("./marcoLog.js");
 const IG_DEBOUNCE_MS = 4000;
+/** Prevent overlapping pipeline runs for the same lead. */
+const processingLeads = new Set();
+function leadProcessingKey(platform, userId) {
+    return `${platform}:${userId}`;
+}
+function extractMessageHandle(rawBody) {
+    if (!rawBody || typeof rawBody !== "object")
+        return null;
+    const b = normalizeWebhookRecord(rawBody);
+    const keys = [
+        "message_handle",
+        "messageHandle",
+        "message_id",
+        "messageId",
+        "mid",
+        "ig_mid",
+        "igMid",
+        "last_message_id",
+        "lastMessageId",
+    ];
+    for (const k of keys) {
+        const v = b[k];
+        if (typeof v === "string" && v.trim())
+            return v.trim();
+        if (typeof v === "number" && Number.isFinite(v))
+            return String(v);
+    }
+    return null;
+}
 /** Instagram-only burst queue — module level so it persists across requests. */
 const igMessageQueue = {};
 /** Prevent overlapping batch processing for the same sender. */
@@ -158,7 +188,16 @@ async function flushInstagramDm(senderId) {
         }
         return;
     }
+    const leadLockKey = leadProcessingKey(payloadTemplate.platform, payloadTemplate.userId);
+    if (processingLeads.has(leadLockKey)) {
+        console.log(`[webhook] Lead ${leadLockKey} already processing — dropping duplicate IG batch`);
+        for (const w of waiters) {
+            w.resolve({ status: 200, reply: undefined });
+        }
+        return;
+    }
     igProcessingSenders.add(senderId);
+    processingLeads.add(leadLockKey);
     try {
         const payload = {
             ...payloadTemplate,
@@ -201,6 +240,7 @@ async function flushInstagramDm(senderId) {
     }
     finally {
         igProcessingSenders.delete(senderId);
+        processingLeads.delete(leadLockKey);
     }
 }
 /**
@@ -434,19 +474,30 @@ async function handleIncomingPayload(payload, log) {
     const requestId = log?.requestId ?? (0, marcoLog_js_1.newMarcoRequestId)();
     const correlationId = log?.correlationId ?? (0, marcoLog_js_1.marcoCorrelationId)(payload.platform, payload.userId);
     const ctx = { requestId, correlationId };
+    const lockKey = leadProcessingKey(payload.platform, payload.userId);
+    if (processingLeads.has(lockKey)) {
+        console.log(`[webhook] Lead ${lockKey} already processing — dropping duplicate request`);
+        return { status: 200, reply: undefined };
+    }
+    processingLeads.add(lockKey);
     const start = Date.now();
-    const { reply } = await (0, pipeline_js_1.run)(payload, ctx);
-    const elapsed = Date.now() - start;
-    (0, marcoLog_js_1.marcoLog)("request_complete", {
-        requestId,
-        correlationId,
-        pipeline_ms: elapsed,
-        total_ms: elapsed,
-        debounced: false,
-        reply_chars: reply?.length ?? 0,
-        reply_preview: (0, marcoLog_js_1.previewText)(reply),
-    });
-    return { status: 200, reply: reply ?? undefined };
+    try {
+        const { reply } = await (0, pipeline_js_1.run)(payload, ctx);
+        const elapsed = Date.now() - start;
+        (0, marcoLog_js_1.marcoLog)("request_complete", {
+            requestId,
+            correlationId,
+            pipeline_ms: elapsed,
+            total_ms: elapsed,
+            debounced: false,
+            reply_chars: reply?.length ?? 0,
+            reply_preview: (0, marcoLog_js_1.previewText)(reply),
+        });
+        return { status: 200, reply: reply ?? undefined };
+    }
+    finally {
+        processingLeads.delete(lockKey);
+    }
 }
 /**
  * POST /webhook and POST /simulate entry.
@@ -457,6 +508,11 @@ async function handleWebhook(body) {
     logRawWebhookPayloadForDiagnostic(body);
     if (isInstagramEcho(body)) {
         console.log("[ig] Echo message ignored");
+        return { status: 200 };
+    }
+    const messageHandle = extractMessageHandle(body);
+    if (messageHandle && (0, conversationUtils_js_1.isDuplicateHandle)(messageHandle)) {
+        (0, marcoLog_js_1.marcoLog)("inbound_rejected", { reason: "duplicate_message_handle", message_handle: messageHandle });
         return { status: 200 };
     }
     const payload = parseBody(body);

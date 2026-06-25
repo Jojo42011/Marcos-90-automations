@@ -109,6 +109,18 @@ exports.getCompetitorTrendsById = getCompetitorTrendsById;
 exports.getLatestCompetitorTrends = getLatestCompetitorTrends;
 exports.getCachedCompetitorTrends = getCachedCompetitorTrends;
 exports.insertCompetitorTrends = insertCompetitorTrends;
+exports.listActiveYoutubeProfiles = listActiveYoutubeProfiles;
+exports.listAllYoutubeProfiles = listAllYoutubeProfiles;
+exports.insertYoutubeProfile = insertYoutubeProfile;
+exports.updateYoutubeProfile = updateYoutubeProfile;
+exports.markYoutubeProfileScraped = markYoutubeProfileScraped;
+exports.upsertYoutubeVideoCache = upsertYoutubeVideoCache;
+exports.getCachedYoutubeTranscript = getCachedYoutubeTranscript;
+exports.upsertYoutubeTranscript = upsertYoutubeTranscript;
+exports.listYoutubeTranscripts = listYoutubeTranscripts;
+exports.getYoutubeTranscript = getYoutubeTranscript;
+exports.insertYoutubeAnalysis = insertYoutubeAnalysis;
+exports.getLatestYoutubeAnalysis = getLatestYoutubeAnalysis;
 exports.insertClipEnhancement = insertClipEnhancement;
 exports.getClipEnhancement = getClipEnhancement;
 exports.getClipEnhancementByVideoId = getClipEnhancementByVideoId;
@@ -593,12 +605,73 @@ function getContentDb() {
         created_at TEXT,
         last_referenced_at TEXT
       );
+      CREATE TABLE IF NOT EXISTS cm_competitor_youtube_profiles (
+        id TEXT PRIMARY KEY,
+        competitor_profile_id TEXT,
+        youtube_channel_url TEXT NOT NULL,
+        youtube_handle TEXT,
+        channel_name TEXT,
+        profile_type TEXT DEFAULT 'competitor',
+        active INTEGER DEFAULT 1,
+        last_scraped_at TEXT,
+        videos_scraped_count INTEGER DEFAULT 0,
+        added_at TEXT,
+        notes TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_youtube_video_cache (
+        id TEXT PRIMARY KEY,
+        youtube_profile_id TEXT,
+        video_id TEXT UNIQUE NOT NULL,
+        title TEXT,
+        channel_name TEXT,
+        channel_url TEXT,
+        upload_date TEXT,
+        view_count INTEGER DEFAULT 0,
+        duration_seconds INTEGER DEFAULT 0,
+        url TEXT,
+        fetched_at TEXT,
+        transcript_fetched INTEGER DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS cm_youtube_transcripts (
+        id TEXT PRIMARY KEY,
+        video_id TEXT UNIQUE NOT NULL,
+        video_title TEXT,
+        channel_name TEXT,
+        view_count INTEGER DEFAULT 0,
+        full_text TEXT,
+        hook_text TEXT,
+        body_text TEXT,
+        cta_text TEXT,
+        word_count INTEGER DEFAULT 0,
+        language TEXT DEFAULT 'en',
+        fetch_status TEXT DEFAULT 'success',
+        error_message TEXT,
+        fetched_at TEXT,
+        expires_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_youtube_analysis (
+        id TEXT PRIMARY KEY,
+        analyzed_at TEXT,
+        videos_analyzed INTEGER DEFAULT 0,
+        channels_analyzed INTEGER DEFAULT 0,
+        top_hook_structures TEXT,
+        top_opening_phrases TEXT,
+        top_topics TEXT,
+        top_data_points TEXT,
+        top_cta_patterns TEXT,
+        content_gaps TEXT,
+        full_analysis_markdown TEXT,
+        trend_signals TEXT,
+        week_start TEXT
+      );
     `);
         ensureBrainIntelligenceMigrations(db);
         ensureBatchPipelineMigrations(db);
         ensureStrategyEngineMigrations(db);
         initSeasonalModelIfEmpty(db);
         initCompetitorProfilesIfEmpty(db);
+        ensureYoutubeIntelMigrations(db);
+        initYoutubeProfilesIfEmpty(db);
         initKnowledgeBaseIfEmpty(db);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_cv_status ON content_videos(status)`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_cv_session ON content_videos(source_session_id)`);
@@ -669,6 +742,35 @@ function initCompetitorProfilesIfEmpty(database) {
 }
 function ensureStrategyEngineMigrations(database) {
     /* tables created via CREATE TABLE IF NOT EXISTS above */
+}
+function ensureYoutubeIntelMigrations(database) {
+    const info = database
+        .prepare(`PRAGMA table_info(cm_competitor_profiles)`)
+        .all();
+    if (!info.some((c) => c.name === "youtube_channel_url")) {
+        database.exec(`ALTER TABLE cm_competitor_profiles ADD COLUMN youtube_channel_url TEXT`);
+    }
+}
+function initYoutubeProfilesIfEmpty(database) {
+    const count = database
+        .prepare(`SELECT COUNT(*) AS c FROM cm_competitor_youtube_profiles`)
+        .get();
+    if (Number(count.c) > 0)
+        return;
+    const now = new Date().toISOString();
+    const defaults = [
+        { handle: "@RyanSerhant", name: "Ryan Serhant", type: "national_influencer", url: "https://www.youtube.com/@RyanSerhant" },
+        { handle: "@GrahamStephan", name: "Graham Stephan", type: "national_influencer", url: "https://www.youtube.com/@GrahamStephan" },
+        { handle: "@RealEstateRookie", name: "Real Estate Rookie", type: "education_account", url: "https://www.youtube.com/@RealEstateRookie" },
+        { handle: "@MeetKevin", name: "Meet Kevin", type: "national_influencer", url: "https://www.youtube.com/@MeetKevin" },
+        { handle: "@JosieFayora", name: "Real Estate With Josie", type: "texas_state", url: "https://www.youtube.com/@JosieFayora" },
+    ];
+    const stmt = database.prepare(`INSERT INTO cm_competitor_youtube_profiles
+     (id, youtube_channel_url, youtube_handle, channel_name, profile_type, active, added_at)
+     VALUES (?, ?, ?, ?, ?, 1, ?)`);
+    for (const ch of defaults) {
+        stmt.run((0, crypto_1.randomUUID)(), ch.url, ch.handle, ch.name, ch.type, now);
+    }
 }
 function initKnowledgeBaseIfEmpty(database) {
     const count = database.prepare(`SELECT COUNT(*) AS c FROM cm_knowledge_base`).get();
@@ -2635,6 +2737,186 @@ function insertCompetitorTrends(input) {
         .prepare(`SELECT * FROM cm_competitor_trends WHERE id = ?`)
         .get(id);
     return rowToCompetitorTrends(row);
+}
+function rowToYoutubeProfile(row) {
+    return {
+        id: String(row.id),
+        competitorProfileId: row.competitor_profile_id ? String(row.competitor_profile_id) : null,
+        youtubeChannelUrl: String(row.youtube_channel_url),
+        youtubeHandle: row.youtube_handle ? String(row.youtube_handle) : null,
+        channelName: row.channel_name ? String(row.channel_name) : null,
+        profileType: String(row.profile_type ?? "competitor"),
+        active: Number(row.active) === 1,
+        lastScrapedAt: row.last_scraped_at ? String(row.last_scraped_at) : null,
+        videosScrapedCount: Number(row.videos_scraped_count ?? 0),
+        addedAt: row.added_at ? String(row.added_at) : null,
+        notes: row.notes ? String(row.notes) : null,
+    };
+}
+function rowToYoutubeTranscript(row) {
+    return {
+        id: String(row.id),
+        videoId: String(row.video_id),
+        videoTitle: row.video_title ? String(row.video_title) : null,
+        channelName: row.channel_name ? String(row.channel_name) : null,
+        viewCount: Number(row.view_count ?? 0),
+        fullText: row.full_text ? String(row.full_text) : null,
+        hookText: row.hook_text ? String(row.hook_text) : null,
+        bodyText: row.body_text ? String(row.body_text) : null,
+        ctaText: row.cta_text ? String(row.cta_text) : null,
+        wordCount: Number(row.word_count ?? 0),
+        language: String(row.language ?? "en"),
+        fetchStatus: String(row.fetch_status ?? "success"),
+        errorMessage: row.error_message ? String(row.error_message) : null,
+        fetchedAt: row.fetched_at ? String(row.fetched_at) : null,
+        expiresAt: row.expires_at ? String(row.expires_at) : null,
+    };
+}
+function parseYoutubeJsonArray(value) {
+    if (typeof value !== "string" || !value.trim())
+        return [];
+    try {
+        const arr = JSON.parse(value);
+        return Array.isArray(arr) ? arr.map(String) : [];
+    }
+    catch {
+        return [];
+    }
+}
+function rowToYoutubeAnalysis(row) {
+    return {
+        id: String(row.id),
+        analyzedAt: String(row.analyzed_at ?? ""),
+        videosAnalyzed: Number(row.videos_analyzed ?? 0),
+        channelsAnalyzed: Number(row.channels_analyzed ?? 0),
+        topHookStructures: parseYoutubeJsonArray(row.top_hook_structures),
+        topOpeningPhrases: parseYoutubeJsonArray(row.top_opening_phrases),
+        topTopics: parseYoutubeJsonArray(row.top_topics),
+        topDataPoints: parseYoutubeJsonArray(row.top_data_points),
+        topCtaPatterns: parseYoutubeJsonArray(row.top_cta_patterns),
+        contentGaps: parseYoutubeJsonArray(row.content_gaps),
+        keyInsights: String(row.full_analysis_markdown ?? ""),
+        topRecommendedVideoIdea: String(row.trend_signals ?? ""),
+        weekStart: String(row.week_start ?? ""),
+    };
+}
+function listActiveYoutubeProfiles() {
+    const rows = getContentDb()
+        .prepare(`SELECT * FROM cm_competitor_youtube_profiles WHERE active = 1 ORDER BY channel_name`)
+        .all();
+    return rows.map(rowToYoutubeProfile);
+}
+function listAllYoutubeProfiles() {
+    const rows = getContentDb()
+        .prepare(`SELECT * FROM cm_competitor_youtube_profiles ORDER BY channel_name`)
+        .all();
+    return rows.map(rowToYoutubeProfile);
+}
+function insertYoutubeProfile(input) {
+    const database = getContentDb();
+    const id = (0, crypto_1.randomUUID)();
+    const now = new Date().toISOString();
+    database
+        .prepare(`INSERT INTO cm_competitor_youtube_profiles
+       (id, youtube_channel_url, youtube_handle, channel_name, profile_type, active, added_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?)`)
+        .run(id, input.youtubeChannelUrl, input.youtubeHandle ?? null, input.channelName ?? null, input.profileType ?? "competitor", now);
+    const row = database
+        .prepare(`SELECT * FROM cm_competitor_youtube_profiles WHERE id = ?`)
+        .get(id);
+    return rowToYoutubeProfile(row);
+}
+function updateYoutubeProfile(id, patch) {
+    const database = getContentDb();
+    if (patch.active !== undefined) {
+        database
+            .prepare(`UPDATE cm_competitor_youtube_profiles SET active = ? WHERE id = ?`)
+            .run(patch.active ? 1 : 0, id);
+    }
+    const row = database
+        .prepare(`SELECT * FROM cm_competitor_youtube_profiles WHERE id = ?`)
+        .get(id);
+    return row ? rowToYoutubeProfile(row) : null;
+}
+function markYoutubeProfileScraped(id, videosScrapedCount) {
+    getContentDb()
+        .prepare(`UPDATE cm_competitor_youtube_profiles SET last_scraped_at = ?, videos_scraped_count = ? WHERE id = ?`)
+        .run(new Date().toISOString(), videosScrapedCount, id);
+}
+function upsertYoutubeVideoCache(input) {
+    getContentDb()
+        .prepare(`INSERT OR REPLACE INTO cm_youtube_video_cache
+       (id, youtube_profile_id, video_id, title, channel_name, channel_url, upload_date,
+        view_count, duration_seconds, url, fetched_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run((0, crypto_1.randomUUID)(), input.youtubeProfileId, input.videoId, input.title, input.channelName, input.channelUrl, input.uploadDate, input.viewCount, input.durationSeconds, input.url, new Date().toISOString());
+}
+/** Returns a cached transcript only if it exists, succeeded, and has not expired. */
+function getCachedYoutubeTranscript(videoId) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_youtube_transcripts WHERE video_id = ? AND fetch_status = 'success'`)
+        .get(videoId);
+    if (!row)
+        return null;
+    const parsed = rowToYoutubeTranscript(row);
+    if (parsed.expiresAt && new Date(parsed.expiresAt) < new Date())
+        return null;
+    return parsed;
+}
+function upsertYoutubeTranscript(input) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + input.cacheDays * 24 * 60 * 60 * 1000);
+    getContentDb()
+        .prepare(`INSERT OR REPLACE INTO cm_youtube_transcripts
+       (id, video_id, video_title, channel_name, view_count, full_text, hook_text, body_text, cta_text,
+        word_count, language, fetch_status, error_message, fetched_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run((0, crypto_1.randomUUID)(), input.videoId, input.videoTitle, input.channelName, input.viewCount, input.fullText, input.hookText, input.bodyText, input.ctaText, input.wordCount, "en", input.fetchStatus, input.errorMessage, now.toISOString(), expiresAt.toISOString());
+}
+function listYoutubeTranscripts(options) {
+    const limit = options?.limit ?? 20;
+    const database = getContentDb();
+    let rows;
+    if (options?.channelName) {
+        rows = database
+            .prepare(`SELECT * FROM cm_youtube_transcripts WHERE fetch_status = 'success' AND channel_name = ?
+         ORDER BY view_count DESC LIMIT ?`)
+            .all(options.channelName, limit);
+    }
+    else {
+        rows = database
+            .prepare(`SELECT * FROM cm_youtube_transcripts WHERE fetch_status = 'success'
+         ORDER BY view_count DESC LIMIT ?`)
+            .all(limit);
+    }
+    return rows.map(rowToYoutubeTranscript);
+}
+function getYoutubeTranscript(videoId) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_youtube_transcripts WHERE video_id = ?`)
+        .get(videoId);
+    return row ? rowToYoutubeTranscript(row) : null;
+}
+function insertYoutubeAnalysis(input) {
+    const database = getContentDb();
+    const id = (0, crypto_1.randomUUID)();
+    database
+        .prepare(`INSERT INTO cm_youtube_analysis
+       (id, analyzed_at, videos_analyzed, channels_analyzed, top_hook_structures, top_opening_phrases,
+        top_topics, top_data_points, top_cta_patterns, content_gaps, full_analysis_markdown,
+        trend_signals, week_start)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, new Date().toISOString(), input.videosAnalyzed, input.channelsAnalyzed, JSON.stringify(input.topHookStructures), JSON.stringify(input.topOpeningPhrases), JSON.stringify(input.topTopics), JSON.stringify(input.topDataPoints), JSON.stringify(input.topCtaPatterns), JSON.stringify(input.contentGaps), input.keyInsights, input.topRecommendedVideoIdea, input.weekStart);
+    const row = database
+        .prepare(`SELECT * FROM cm_youtube_analysis WHERE id = ?`)
+        .get(id);
+    return rowToYoutubeAnalysis(row);
+}
+function getLatestYoutubeAnalysis() {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_youtube_analysis ORDER BY analyzed_at DESC LIMIT 1`)
+        .get();
+    return row ? rowToYoutubeAnalysis(row) : null;
 }
 function insertClipEnhancement(input) {
     const database = getContentDb();

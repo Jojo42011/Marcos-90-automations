@@ -2,6 +2,10 @@
  * Aethon Intelligence voice — Deepgram Flux STT + Claude + Gemini TTS
  */
 (function () {
+  // Barge-in sensitivity. RMS computed on Float32 mic input × 100 (0–100 scale).
+  // lower = more sensitive. 2-3 = normal voice, 6-8 = loud voice.
+  const BARGE_IN_RMS_THRESHOLD = 3;
+
   let processor = null;
   let lpFilter = null;
   let captureCtx = null;
@@ -11,6 +15,7 @@
   let listening = false;
   let micSending = true;
   let voiceActive = false;
+  let bargeInCooldown = false;
 
   let playCtx = null;
   let ttsQueue = [];
@@ -23,6 +28,7 @@
   let currentTurnIndex = -1;
   let latestTurnTranscript = "";
   let pendingCommitTimer = null;
+  let micCaptureActive = false;
 
   function voiceSessionId() {
     const stored = sessionStorage.getItem("harvey_session_id");
@@ -39,7 +45,8 @@
   function shouldCommitTranscript(text, event) {
     const t = text.trim();
     if (!t) return false;
-    if (brainBusy || isPlaying) return false;
+    if (!isMicCaptureActive()) return false;
+    if (brainBusy || isVoicePlaybackActive()) return false;
     // Only finalize on high-confidence end of turn — eager fires too early on fragments.
     if (event !== "EndOfTurn") return false;
     if (wordCount(t) < 2 && t.length < 12) return false;
@@ -166,21 +173,23 @@
   }
 
   function pauseMicCapture() {
-    if (processor && lpFilter) {
-      try {
-        lpFilter.disconnect(processor);
-      } catch (_) {}
-    }
+    // Keep the audio node connected so the RMS monitor can still detect barge-in
+    // while Harvey speaks. micSending=false stops Deepgram transcription (so Harvey
+    // is never transcribed), but the processor keeps running for local RMS analysis.
+    micCaptureActive = false;
     micSending = false;
+    console.log("[Mic] Capture PAUSED — Harvey speaking");
   }
 
   function resumeMicCapture() {
-    if (processor && lpFilter && captureCtx) {
-      try {
-        lpFilter.connect(processor);
-      } catch (_) {}
-    }
+    if (!voiceActive || !listening) return;
+    micCaptureActive = true;
     micSending = true;
+    console.log("[Mic] Capture RESUMED — ready for Marco");
+  }
+
+  function isMicCaptureActive() {
+    return micCaptureActive;
   }
 
   async function startCapture() {
@@ -208,22 +217,37 @@
 
     processor = captureCtx.createScriptProcessor(2048, 1, 1);
     processor.onaudioprocess = (e) => {
-      if (!listening || !sessionReady || !micSending) return;
-      if (!sttWs || sttWs.readyState !== WebSocket.OPEN) return;
+      if (!listening || !sessionReady) return;
       const input = e.inputBuffer.getChannelData(0);
-      const down = downsampleBuffer(input, inputRate, 16000);
-      const pcm = floatTo16BitPCM(down);
-      sttWs.send(pcm.buffer);
+
+      if (micSending) {
+        if (!sttWs || sttWs.readyState !== WebSocket.OPEN) return;
+        const down = downsampleBuffer(input, inputRate, 16000);
+        const pcm = floatTo16BitPCM(down);
+        sttWs.send(pcm.buffer);
+        return;
+      }
+
+      // Mic muted for transcription (Harvey speaking) — watch for barge-in via local RMS.
+      if (!isVoicePlaybackActive() || bargeInCooldown) return;
+      let sum = 0;
+      for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
+      const rms = Math.sqrt(sum / input.length) * 100;
+      if (rms > BARGE_IN_RMS_THRESHOLD) {
+        triggerBargeIn();
+      }
     };
 
     source.connect(lpFilter);
     lpFilter.connect(processor);
     processor.connect(captureCtx.destination);
     micSending = true;
+    micCaptureActive = true;
   }
 
   function stopMicStream() {
     stopCapture();
+    micCaptureActive = false;
     if (micStream) {
       micStream.getTracks().forEach((t) => t.stop());
       micStream = null;
@@ -248,6 +272,19 @@
       const transcript = (msg.transcript || "").trim();
       const turnIndex = typeof msg.turn_index === "number" ? msg.turn_index : 0;
       const event = msg.event || "";
+
+      if (event === "StartOfTurn") {
+        if (!isMicCaptureActive()) {
+          console.log("[VAD] StartOfTurn ignored — mic is paused (Harvey speaking or generating)");
+          return;
+        }
+        if (!isVoicePlaybackActive()) {
+          return;
+        }
+        console.log("[Harvey] Barge-in detected — Marco interrupted");
+        triggerBargeIn();
+        return;
+      }
 
       if (event === "StartOfTurn" || event === "Update") {
         if (turnIndex !== currentTurnIndex) {
@@ -285,6 +322,11 @@
     if (msg.type === "Results" || msg.type === "Metadata") return;
   }
 
+  function pauseMicForHarveyResponse() {
+    pauseMicCapture();
+    setHarveyStatus("RESPONDING");
+  }
+
   async function commitTranscript(text) {
     if (!text || brainBusy) return;
     brainBusy = true;
@@ -297,17 +339,75 @@
       const res = await fetch(apiUrl("/api/jarvis/voice/command"), {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ message: text, sessionId: voiceSessionId() }),
+        body: JSON.stringify({ message: text, sessionId: voiceSessionId(), stream: true }),
       });
       if (!res.ok) throw new Error("Brain HTTP " + res.status);
-      const data = await res.json();
-      const speech = data.speech || "";
-      if (speech) {
-        sessionTranscript.push({ role: "assistant", text: speech, ts: Date.now() });
-        if (typeof addMsg === "function") addMsg("user", text);
-        if (typeof addMsg === "function") addMsg("ai", speech);
-        if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(speech);
-        await speakText(speech);
+
+      const contentType = res.headers.get("Content-Type") || "";
+      if (contentType.includes("text/event-stream") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let firstChunkStarted = false;
+        let fullSpeech = "";
+        let speakPromise = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() || "";
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith("data: ")) continue;
+            const data = JSON.parse(line.slice(6));
+            if (data.type === "error") throw new Error(data.error || "Brain stream error");
+            if (data.type === "speech_chunk" && !firstChunkStarted && data.text) {
+              firstChunkStarted = true;
+              console.log("[Harvey] First sentence received from brain — starting TTS immediately");
+              pauseMicForHarveyResponse();
+              speakPromise = window.HarveyStreamingTts.speak(data.text, {
+                streamingOpen: true,
+              });
+            }
+            if (data.type === "speech_complete") {
+              fullSpeech = data.speech || "";
+              if (data.sessionId) {
+                sessionStorage.setItem("harvey_session_id", data.sessionId);
+              }
+            }
+          }
+        }
+
+        if (fullSpeech) {
+          sessionTranscript.push({ role: "assistant", text: fullSpeech, ts: Date.now() });
+          if (typeof addMsg === "function") addMsg("user", text);
+          if (typeof addMsg === "function") addMsg("ai", fullSpeech);
+          if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(fullSpeech);
+          if (firstChunkStarted) {
+            window.HarveyStreamingTts.appendRemainingText(fullSpeech, {
+              onEnd: () => {
+                resumeMicCapture();
+                setHarveyStatus("LISTENING");
+                console.log("[Harvey] Mic re-enabled — ready for next message");
+              },
+            });
+            if (speakPromise) await speakPromise;
+          } else {
+            await speakText(fullSpeech);
+          }
+        }
+      } else {
+        const data = await res.json();
+        const speech = data.speech || "";
+        if (speech) {
+          sessionTranscript.push({ role: "assistant", text: speech, ts: Date.now() });
+          if (typeof addMsg === "function") addMsg("user", text);
+          if (typeof addMsg === "function") addMsg("ai", speech);
+          if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(speech);
+          await speakText(speech);
+        }
       }
     } catch (err) {
       showVoiceError(err instanceof Error ? err.message : String(err));
@@ -316,7 +416,8 @@
       brainBusy = false;
     }
 
-    if (ttsQueue.length === 0 && !isPlaying) {
+    // Fallback resume only if mic still paused after an error (onEnd did not run).
+    if (!isVoicePlaybackActive() && !isMicCaptureActive() && voiceActive) {
       resumeMicCapture();
       setHarveyStatus("LISTENING");
     }
@@ -333,7 +434,23 @@
       .trim();
   }
 
+  function isVoicePlaybackActive() {
+    if (window.HarveyStreamingTts?.isActive?.()) return true;
+    return isPlaying;
+  }
+
   async function speakText(fullText) {
+    if (window.HarveyStreamingTts) {
+      pauseMicForHarveyResponse();
+      await window.HarveyStreamingTts.speak(fullText, {
+        onEnd: () => {
+          resumeMicCapture();
+          setHarveyStatus("LISTENING");
+          console.log("[Harvey] Mic re-enabled — ready for next message");
+        },
+      });
+      return;
+    }
     const clean = stripForSpeech(fullText);
     if (!clean) return;
     ttsQueue.push(clean);
@@ -380,6 +497,7 @@
   }
 
   function unlockAudioFromUserGesture() {
+    window.HarveyStreamingTts?.unlock?.();
     if (!playCtx) playCtx = new AudioContext();
     if (playCtx.state === "suspended") playCtx.resume();
   }
@@ -504,6 +622,7 @@
     voiceActive = false;
     listening = false;
     ttsQueue = [];
+    window.HarveyStreamingTts?.stop?.();
     if (currentSource) {
       try {
         currentSource.stop();
@@ -524,15 +643,30 @@
   }
 
   function interruptHarvey() {
+    console.log("[Harvey] Barge-in — stopping immediately");
+    window.HarveyStreamingTts?.stop?.();
     ttsQueue = [];
     if (currentSource) {
       try {
-        currentSource.stop();
+        currentSource.stop(0);
       } catch (_) {}
       currentSource = null;
     }
     isPlaying = false;
-    resumeMicCapture();
+    if (!isMicCaptureActive()) {
+      resumeMicCapture();
+      setHarveyStatus("LISTENING");
+      console.log("[Mic] Capture RESUMED after barge-in");
+    }
+  }
+
+  function triggerBargeIn() {
+    if (bargeInCooldown) return;
+    bargeInCooldown = true;
+    setTimeout(() => {
+      bargeInCooldown = false;
+    }, 300);
+    interruptHarvey();
   }
 
   window.interruptHarvey = interruptHarvey;

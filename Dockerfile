@@ -1,7 +1,7 @@
 # Marco Puga Realty — Automation System
 # Multi-service: Node.js (port 3000) + OpenShorts Python sidecar (port 8000)
 
-FROM node:18-bookworm-slim
+FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     git \
     curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -38,17 +39,12 @@ RUN if [ ! -f "app.py" ]; then \
     rm -rf temp_clone ; \
 fi
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    fastapi \
-    uvicorn \
-    google-genai \
-    faster-whisper \
-    ultralytics \
-    mediapipe \
-    opencv-python-headless \
-    yt-dlp \
-    httpx \
-    python-multipart
+# OpenShorts main.py imports cv2 before scenedetect; install headless OpenCV first.
+RUN python3 -m pip install --no-cache-dir --break-system-packages opencv-python-headless \
+    && python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
+
+# Fail the image build if core clipping imports are broken (avoids "online" sidecar with no engine).
+RUN python3 -c "import main; print('OpenShorts main import OK:', main.__file__)"
 
 COPY services/openshorts/prompts_marco.py ./prompts_marco.py
 COPY services/openshorts/main_marco.py ./main_marco.py

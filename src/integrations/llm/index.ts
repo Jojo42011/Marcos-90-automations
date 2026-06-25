@@ -538,6 +538,71 @@ function isInstagramDm(platform?: string, channel?: "comment" | "dm"): boolean {
   return (platform ?? "").toLowerCase().includes("insta") && channel === "dm";
 }
 
+/** Dynamic rule reinforcement based on current message intent (Marco feedback). */
+function getDynamicRuleReinforcement(userMessage: string): string {
+  const msg = userMessage.toLowerCase();
+
+  const rules: string[] = [];
+
+  if (
+    msg.includes("show") ||
+    msg.includes("visit") ||
+    msg.includes("see it") ||
+    msg.includes("available today") ||
+    msg.includes("can i come")
+  ) {
+    rules.push(
+      "ACTIVE RULE, SHOWING REQUEST DETECTED: Do NOT confirm a same-day showing. Check schedule and guide toward tomorrow. Use: \"Let me check my schedule. I am typically more available in the afternoons. Would tomorrow work for you?\"",
+    );
+  }
+
+  if (
+    (msg.includes("price") ||
+      msg.includes("cost") ||
+      msg.includes("how much") ||
+      msg.includes("what is it listed")) &&
+    (msg.includes("asap") ||
+      msg.includes("now") ||
+      msg.includes("today") ||
+      msg.includes("urgent") ||
+      msg.includes("right now"))
+  ) {
+    rules.push(
+      "ACTIVE RULE, URGENT PRICE REQUEST DETECTED: Do NOT guess or state a price. Use: \"Let me get that over to you as soon as possible. I'm currently on the move and not at my desk, but I will send all the details as soon as I'm able.\"",
+    );
+  }
+
+  if (
+    msg.includes("email") ||
+    msg.includes("send me") ||
+    msg.includes("more options") ||
+    msg.includes("more listings")
+  ) {
+    rules.push(
+      "ACTIVE RULE, EMAIL/OPTIONS REQUEST: Only offer email AFTER phone number is captured. If phone is not yet captured, get the phone number first before offering to send anything via email.",
+    );
+  }
+
+  if (
+    (msg.includes("house") ||
+      msg.includes("home") ||
+      msg.includes("property") ||
+      msg.includes("listing")) &&
+    !msg.includes("stone oak") &&
+    !msg.includes("canyon lake") &&
+    !msg.includes("new braunfels") &&
+    !msg.includes("san antonio")
+  ) {
+    rules.push(
+      "ACTIVE RULE, AMBIGUOUS PROPERTY REFERENCE: Ask which property or video they are referring to. Use screenshot language from GLOBAL rules if property is unknown. Do NOT assume which property they mean.",
+    );
+  }
+
+  if (rules.length === 0) return "";
+
+  return "\n\nACTIVE SITUATION RULES FOR THIS MESSAGE:\n" + rules.join("\n");
+}
+
 /** TikTok DM and Instagram DM share the same neutral funnel (no listing-specific close in DM). */
 function isNeutralDmFlow(platform?: string, channel?: "comment" | "dm"): boolean {
   return isTikTokPlatform(platform) || isInstagramDm(platform, channel);
@@ -546,7 +611,7 @@ function isNeutralDmFlow(platform?: string, channel?: "comment" | "dm"): boolean
 function inboundChannelBlock(channel: "comment" | "dm"): string {
   if (channel === "comment") {
     return (
-      "CHANNEL: instagram_comment — The lead's latest line came from a COMMENT on your post (ManyChat comment automation). " +
+      "CHANNEL: instagram_comment. The lead's latest line came from a COMMENT on your post (ManyChat comment automation). " +
       "Treat it like a short public-adjacent question: answer what they asked first (price ballpark, info, location per your rules, tour, availability). " +
       "Do not ignore 'how much', 'price', 'info', or 'where' style asks. Stay concise.\n\n"
     );
@@ -571,8 +636,8 @@ function openingContextAppendix(
   const tikTokChannelBlock = isTikTokPlatform(platform)
     ? tikTokNoPrice +
       (tikTokOpenerAlreadyInThread
-        ? "CHANNEL: tiktok_dm — Marco already has at least one outbound in this thread (often the manual first DM with the first-time buying question). Do NOT send another opener and do NOT ask about first-time vs experienced buyer or the buying process again. Answer LATEST_LEAD_MESSAGE in Marco's voice. Order: offer to text the full breakdown first when they have not agreed yet; ask for a mobile number only after they clearly want the packet sent, or on the next turn after they agree. Never recycle appreciation + first-time question.\n\n"
-        : "CHANNEL: tiktok_dm — Use TikTok flow, not Instagram. If this is Marco's first line in the thread, first-time check then breakdown offer then number (after they agree to the packet) can apply; if any Marco line already exists above, skip opener scripts entirely.\n\n")
+        ? "CHANNEL: tiktok_dm. Marco already has at least one outbound in this thread (often the manual first DM with the first-time buying question). Do NOT send another opener and do NOT ask about first-time vs experienced buyer or the buying process again. Answer LATEST_LEAD_MESSAGE in Marco's voice. Order: offer to text the full breakdown first when they have not agreed yet; ask for a mobile number only after they clearly want the packet sent, or on the next turn after they agree. Never recycle appreciation + first-time question.\n\n"
+        : "CHANNEL: tiktok_dm. Use TikTok flow, not Instagram. If this is Marco's first line in the thread, first-time check then breakdown offer then number (after they agree to the packet) can apply; if any Marco line already exists above, skip opener scripts entirely.\n\n")
     : "";
   const igDmNeutral = isInstagramDm(platform, channel);
   const igDmOpenerAlreadyInThread =
@@ -581,8 +646,8 @@ function openingContextAppendix(
   const igNeutralDmChannelBlock = igDmNeutral
     ? tikTokNoPrice +
       (igDmOpenerAlreadyInThread
-        ? "CHANNEL: instagram_dm — Marco already has at least one outbound in this thread (often the manual first DM with the first-time buying question). Do NOT send another opener and do NOT ask about first-time vs experienced buyer or the buying process again. Answer LATEST_LEAD_MESSAGE in Marco's voice. Order: offer to text the full breakdown first when they have not agreed yet; ask for a mobile number only after they clearly want the packet sent, or on the next turn after they agree. Never recycle appreciation + first-time question.\n\n"
-        : "CHANNEL: instagram_dm — Use the same neutral DM flow as TikTok. If this is Marco's first line in the thread, first-time check then breakdown offer then number (after they agree to the packet) can apply; if any Marco line already exists above, skip opener scripts entirely. Never quote list price in DM.\n\n")
+        ? "CHANNEL: instagram_dm. Marco already has at least one outbound in this thread (often the manual first DM with the first-time buying question). Do NOT send another opener and do NOT ask about first-time vs experienced buyer or the buying process again. Answer LATEST_LEAD_MESSAGE in Marco's voice. Order: offer to text the full breakdown first when they have not agreed yet; ask for a mobile number only after they clearly want the packet sent, or on the next turn after they agree. Never recycle appreciation + first-time question.\n\n"
+        : "CHANNEL: instagram_dm. Use the same neutral DM flow as TikTok. If this is Marco's first line in the thread, first-time check then breakdown offer then number (after they agree to the packet) can apply; if any Marco line already exists above, skip opener scripts entirely. Never quote list price in DM.\n\n")
     : "";
   const prefix = tikTokChannelBlock + igNeutralDmChannelBlock + inboundChannelBlock(channel);
   if (assistantTurns === 0 && lastUserText.trim() && !igDmNeutral && !isTikTokPlatform(platform)) {
@@ -592,7 +657,7 @@ function openingContextAppendix(
   }
   if (signalsTourOrScheduleIntent(lastUserText)) {
     lines.push(
-      "TOUR_OR_SCHEDULE_SIGNAL: The lead is asking to tour, see the home, or schedule. Confirm you can help, ask timing or next step. Pricing is secondary in this turn.",
+      "TOUR_OR_SCHEDULE_SIGNAL: The lead is asking to tour, see the home, or schedule. Do NOT confirm same-day. Guide toward tomorrow with schedule-check language. Pricing is secondary in this turn.",
     );
   }
   if (signalsBrowsingOrPriceDeflection(lastUserText)) {
@@ -637,7 +702,7 @@ function openingContextAppendix(
   }
   if (signalsWantsInfoInDmOnly(lastUserText)) {
     lines.push(
-      "DM_ONLY_REQUEST_OPENING: They want the packet or details in this Instagram or TikTok DM instead of SMS. Never promise to send the full breakdown, pricing, links, or packet inside this DM thread. Do not promise you will text them until they give a mobile number. Brief empathy in Marco's casual texting voice, one short beat on why the full sheet and links land cleaner over text, then a fresh ask for a good number—different angle than MARCO_PREVIOUS_OUTBOUND. One or two short sentences.",
+      "DM_ONLY_REQUEST_OPENING: They want the packet or details in this Instagram or TikTok DM instead of SMS. Never promise to send the full breakdown, pricing, links, or packet inside this DM thread. Do not promise you will text them until they give a mobile number. Brief empathy in Marco's casual texting voice, one short beat on why the full sheet and links land cleaner over text, then a fresh ask for a good number. Different angle than MARCO_PREVIOUS_OUTBOUND. One or two short sentences.",
     );
   }
   if (!phoneOnFile) {
@@ -675,7 +740,7 @@ function fallbackOpeningReply(
     }
     if (messageAsksListingLocation(lastUserText)) {
       const hey = who !== "there" ? `Hey ${who}` : "Hey";
-      return `${hey}, it's west of Stone Oak. This one's typically mid 500s depending on finishes — does that line up with what you're looking for or a different price point?`;
+      return `${hey}, it's west of Stone Oak. This one's typically mid 500s depending on finishes. Does that line up with what you're looking for or a different price point?`;
     }
     if (signalsTourOrScheduleIntent(lastUserText)) {
       const hey = who !== "there" ? `Hey ${who}` : "Hey";
@@ -1003,9 +1068,13 @@ export async function generateMarcoOpeningReply(input: {
   const openingDeliveryBlock =
     "PHONE_ONLY_DELIVERY: Use SMS/text to their phone for breakdowns and options. Never ask phone or email, never offer email.\n\n";
 
+  const dynamicRules = getDynamicRuleReinforcement(lastUserText);
+
   const userBlock =
     contextPrefix +
     openingDeliveryBlock +
+    dynamicRules +
+    (dynamicRules ? "\n\n" : "") +
     `OPENING_STAGE: ${openingStage}\n\n` +
     `PREFLIGHT:\n${JSON.stringify(preflightPayload, null, 2)}\n\n` +
     `LATEST_LEAD_MESSAGE (address this directly; if it bundles several topics, handle them naturally in one reply):\n${lastUserText || "(empty)"}\n\n` +
@@ -1184,7 +1253,7 @@ export async function generateMarcoPipelineReply(input: {
   const canPromiseSms = Boolean(lead.phone?.trim()) || meta.phoneJustCaptured;
   if (!canPromiseSms) {
     postOpeningHints.push(
-      "NO_PHONE_ON_FILE: No mobile number captured yet (unless phone_just_captured in FUNNEL_CONTEXT is true). Never say you will text them, shoot a text, or promise SMS or WhatsApp delivery of the breakdown, pricing, or packet. Never promise the full breakdown or pricing packet inside TikTok or Instagram DM as the delivery path. You may offer that once they share a number you will text the full breakdown by end of day. If they want info in-app only, acknowledge in Marco's casual voice and persist toward a good number—links and full sheet read cleaner in one text thread—fresh wording, not a copy of MARCO_PREVIOUS_OUTBOUND.",
+      "NO_PHONE_ON_FILE: No mobile number captured yet (unless phone_just_captured in FUNNEL_CONTEXT is true). Never say you will text them, shoot a text, or promise SMS or WhatsApp delivery of the breakdown, pricing, or packet. Never promise the full breakdown or pricing packet inside TikTok or Instagram DM as the delivery path. You may offer that once they share a number you will text the full breakdown by end of day. If they want info in-app only, acknowledge in Marco's casual voice and persist toward a good number. Links and full sheet read cleaner in one text thread. Fresh wording, not a copy of MARCO_PREVIOUS_OUTBOUND.",
     );
   }
   if (isTikTokPlatform(inboundPlatform)) {
@@ -1209,7 +1278,7 @@ export async function generateMarcoPipelineReply(input: {
   }
   if (signalsTourOrScheduleIntent(lastUserText)) {
     postOpeningHints.push(
-      "TOUR_OR_SCHEDULE_SIGNAL: Lead is focused on seeing the home or scheduling. Address that before generic capture scripts.",
+      "TOUR_OR_SCHEDULE_SIGNAL: Lead is focused on seeing the home or scheduling. Do NOT confirm same-day. Guide toward tomorrow. Use Marco's schedule-check language from GLOBAL rules.",
     );
   }
   if (messageAsksListingLocation(lastUserText)) {
@@ -1229,12 +1298,12 @@ export async function generateMarcoPipelineReply(input: {
   }
   if (threadContainsFirstTimeBuyingQuestion(conversation) || leadThreadSignalsExperiencedBuyer(conversation)) {
     postOpeningHints.push(
-      "FIRST_TIME_TOPIC_CLOSED: Do not ask again about first time buying, first time through the process, or similar — already covered in the thread. Answer their latest message and advance.",
+      "FIRST_TIME_TOPIC_CLOSED: Do not ask again about first time buying, first time through the process, or similar. Already covered in the thread. Answer their latest message and advance.",
     );
   }
   if (signalsWantsInfoInDmOnly(lastUserText)) {
     postOpeningHints.push(
-      "DM_ONLY_REQUEST: They want the breakdown or packet in Instagram or TikTok DM instead of SMS. Never promise to send the full breakdown, pricing, links, or packet inside this DM thread. Do not promise you will text them until a number is on file. One or two short sentences: brief empathy in Marco's voice, one casual beat on why a number is smoother for the full sheet and links, then a fresh mobile ask—not the same wording as MARCO_PREVIOUS_OUTBOUND. Optional: one allowed non-price DM fact (e.g. west of Stone Oak if they asked area). No paragraphs.",
+      "DM_ONLY_REQUEST: They want the breakdown or packet in Instagram or TikTok DM instead of SMS. Never promise to send the full breakdown, pricing, links, or packet inside this DM thread. Do not promise you will text them until a number is on file. One or two short sentences: brief empathy in Marco's voice, one casual beat on why a number is smoother for the full sheet and links, then a fresh mobile ask. Not the same wording as MARCO_PREVIOUS_OUTBOUND. Optional: one allowed non-price DM fact (e.g. west of Stone Oak if they asked area). No paragraphs.",
     );
   }
   if (signalsEmailDeliveryRequest(lastUserText)) {
@@ -1262,8 +1331,12 @@ export async function generateMarcoPipelineReply(input: {
     "PHONE_ONLY_DELIVERY: Send breakdowns and listing options by text/SMS to their phone number only. Never ask phone or email, never offer email, never ask for email. If they sent an email, thank them briefly and still get a mobile number to text the packet.\n\n" +
     (postOpeningHints.length ? `${postOpeningHints.join("\n")}\n\n` : "");
 
+  const dynamicRules = getDynamicRuleReinforcement(lastUserText);
+
   const userBlock =
     postOpeningPrefix +
+    dynamicRules +
+    (dynamicRules ? "\n\n" : "") +
     `PREFLIGHT:\n${JSON.stringify(preflightPayload, null, 2)}\n\n` +
     `FUNNEL_CONTEXT:\n${JSON.stringify(funnelContext, null, 2)}\n\n` +
     `LATEST_LEAD_MESSAGE (answer this message directly in your reply; do not ignore their question or objection):\n${lastUserText || "(empty)"}\n\n` +

@@ -11,6 +11,7 @@ primary_region = "dfw"
   destination = "/data"
 
 [env]
+  PORT = "3000"
   # Public URL of the Meta ads Flask dashboard (must match your Fly app name).
   AD_DASHBOARD_BASE_URL = "https://marco-agents.fly.dev"
   OPENCLAW_GATEWAY_URL = "https://harvey-claw.fly.dev"
@@ -25,6 +26,13 @@ primary_region = "dfw"
   auto_start_machines = true
   min_machines_running = 1
 
+  [[http_service.checks]]
+    grace_period = "90s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    timeout = "10s"
+
 [[vm]]
-  size = "performance-cpu-2x"
+  size = "performance-2x"
   memory = "4gb"

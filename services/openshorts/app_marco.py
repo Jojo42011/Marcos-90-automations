@@ -209,6 +209,218 @@ async def serve_clip(job_id: str, filename: str):
     return FileResponse(str(file_path))
 
 
+@app.get("/api/youtube/channel-videos")
+async def get_channel_videos(channel_url: str, max_videos: int = 10):
+    """
+    Uses yt-dlp (already installed) to list the most recent video IDs from a
+    YouTube channel URL without downloading any video. No API key required.
+    Accepts a full channel URL, /channel/UCxxx, or a bare @handle.
+    """
+    import subprocess
+
+    if not channel_url.startswith("http"):
+        handle = channel_url if channel_url.startswith("@") else f"@{channel_url}"
+        channel_url = f"https://www.youtube.com/{handle}"
+
+    try:
+        result = subprocess.run(
+            [
+                "yt-dlp",
+                "--flat-playlist",
+                "--dump-json",
+                "--playlist-end",
+                str(max_videos),
+                "--no-warnings",
+                "--quiet",
+                channel_url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if result.returncode != 0 and not result.stdout.strip():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not fetch channel: {result.stderr[:200]}",
+            )
+
+        videos = []
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            vid = data.get("id", "")
+            videos.append(
+                {
+                    "video_id": vid,
+                    "title": data.get("title", ""),
+                    "url": f"https://www.youtube.com/watch?v={vid}",
+                    "upload_date": data.get("upload_date", ""),
+                    "view_count": data.get("view_count", 0),
+                    "duration": data.get("duration", 0),
+                    "channel": data.get("channel", ""),
+                    "channel_id": data.get("channel_id", ""),
+                }
+            )
+
+        return {
+            "channel_url": channel_url,
+            "videos_found": len(videos),
+            "videos": videos,
+        }
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=408, detail="Channel fetch timed out after 30 seconds")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _extract_video_id(raw: str) -> str:
+    if "youtube.com" in raw or "youtu.be" in raw:
+        import re
+
+        match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", raw)
+        if match:
+            return match.group(1)
+    return raw
+
+
+def _fetch_transcript_segments(video_id: str, language: str):
+    """Returns a list of {text, start, duration} segments or raises."""
+    from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
+
+    try:
+        return YouTubeTranscriptApi.get_transcript(video_id, languages=[language, "en"])
+    except NoTranscriptFound:
+        transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+        return transcripts.find_generated_transcript(["en"]).fetch()
+
+
+@app.post("/api/youtube/transcript")
+async def get_video_transcript(video_id: str = Form(...), language: str = Form("en")):
+    """
+    Fetches the full transcript for a YouTube video using youtube-transcript-api.
+    Free, no API key, no audio download. Returns full text plus hook/body/cta sections.
+    """
+    try:
+        from youtube_transcript_api import TranscriptsDisabled, NoTranscriptFound
+
+        video_id = _extract_video_id(video_id)
+
+        try:
+            transcript_list = _fetch_transcript_segments(video_id, language)
+        except TranscriptsDisabled:
+            return {
+                "video_id": video_id,
+                "error": "transcripts_disabled",
+                "message": "This video has transcripts disabled by the creator.",
+            }
+        except NoTranscriptFound:
+            return {
+                "video_id": video_id,
+                "error": "no_transcript",
+                "message": "No transcript available for this video.",
+            }
+
+        full_text = " ".join(entry["text"].strip() for entry in transcript_list)
+
+        segments = [
+            {"text": e["text"], "start": e["start"], "duration": e.get("duration", 0)}
+            for e in transcript_list
+        ]
+
+        hook_text = " ".join(s["text"] for s in segments if s["start"] < 60)
+
+        if segments:
+            total_duration = segments[-1]["start"]
+            cta_cutoff = max(0, total_duration - 90)
+            cta_text = " ".join(s["text"] for s in segments if s["start"] >= cta_cutoff)
+            body_text = " ".join(
+                s["text"] for s in segments if 60 <= s["start"] < (total_duration - 90)
+            )
+        else:
+            total_duration = 0
+            cta_text = ""
+            body_text = ""
+
+        return {
+            "video_id": video_id,
+            "language": language,
+            "total_segments": len(transcript_list),
+            "estimated_duration_seconds": total_duration,
+            "full_text": full_text,
+            "word_count": len(full_text.split()),
+            "sections": {"hook": hook_text, "body": body_text, "cta": cta_text},
+            "raw_segments": transcript_list,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcript fetch failed: {str(e)}")
+
+
+@app.post("/api/youtube/batch-transcripts")
+async def batch_fetch_transcripts(video_ids: str = Form(...), language: str = Form("en")):
+    """
+    Fetches transcripts for multiple videos in one call.
+    Skips videos with no transcripts rather than failing.
+    """
+    ids = [vid.strip() for vid in video_ids.split(",") if vid.strip()]
+    results = []
+
+    for video_id in ids:
+        clean_id = _extract_video_id(video_id)
+        try:
+            transcript_list = _fetch_transcript_segments(clean_id, language)
+            full_text = " ".join(entry["text"].strip() for entry in transcript_list)
+
+            hook_text = " ".join(s["text"] for s in transcript_list if s["start"] < 60)
+
+            if transcript_list:
+                last_start = transcript_list[-1]["start"]
+                cta_text = " ".join(
+                    s["text"] for s in transcript_list if s["start"] >= max(0, last_start - 90)
+                )
+            else:
+                cta_text = ""
+
+            results.append(
+                {
+                    "video_id": clean_id,
+                    "status": "success",
+                    "word_count": len(full_text.split()),
+                    "full_text": full_text,
+                    "hook_text": hook_text,
+                    "cta_text": cta_text,
+                }
+            )
+        except Exception as e:
+            results.append(
+                {
+                    "video_id": clean_id,
+                    "status": "failed",
+                    "error": str(e),
+                    "full_text": None,
+                }
+            )
+
+    successful = [r for r in results if r["status"] == "success"]
+
+    return {
+        "total_requested": len(ids),
+        "total_fetched": len(successful),
+        "total_failed": len(ids) - len(successful),
+        "results": results,
+    }
+
+
 @app.get("/health")
 async def health():
     return {

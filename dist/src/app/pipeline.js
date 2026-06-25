@@ -216,6 +216,32 @@ async function run(payload, log) {
         return { lead, reply: COMMENT_HANDSHAKE_REPLY };
     }
     if (!lead) {
+        const inboundText = payload.message.trim();
+        if (inboundText && (0, conversationUtils_js_1.isDenialOfInquiry)(inboundText)) {
+            console.error(`[pipeline] FALSE TRIGGER detected (new contact). Message: "${inboundText}". Investigate webhook trigger source.`);
+            (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+                requestId,
+                correlationId,
+                outcome: "denial_of_inquiry_new_contact",
+                reply_chars: conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY.length,
+                reply_preview: (0, marcoLog_js_1.previewText)(conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY),
+                phone_captured_this_turn: false,
+                email_captured_this_turn: false,
+            });
+            return { lead: null, reply: conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY };
+        }
+        if (inboundText && (0, conversationUtils_js_1.isRealtorMessage)(inboundText)) {
+            (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+                requestId,
+                correlationId,
+                outcome: "realtor_redirect_new_contact",
+                reply_chars: conversationUtils_js_1.REALTOR_REDIRECT_REPLY.length,
+                reply_preview: (0, marcoLog_js_1.previewText)(conversationUtils_js_1.REALTOR_REDIRECT_REPLY),
+                phone_captured_this_turn: false,
+                email_captured_this_turn: false,
+            });
+            return { lead: null, reply: conversationUtils_js_1.REALTOR_REDIRECT_REPLY };
+        }
         const skipIntentGateTiktokManualOpener = Boolean(payload.marcoPreviousOutbound?.trim()) &&
             (payload.platform.toLowerCase().includes("tik") ||
                 (payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm"));
@@ -300,6 +326,80 @@ async function run(payload, log) {
     const hadPhone = Boolean(lead.phone);
     const hadEmail = Boolean(lead.email);
     const latestLeadText = (0, conversationUtils_js_1.getLastUserMessageText)(conversation);
+    const conversationHistoryForDup = conversation.messages.map((m) => ({
+        role: m.role,
+        content: m.text,
+    }));
+    if ((0, conversationUtils_js_1.isDenialOfInquiry)(latestLeadText)) {
+        console.error(`[pipeline] FALSE TRIGGER detected for lead ${lead.id}. Message: "${latestLeadText}". Investigate webhook trigger source.`);
+        await db.appendMessage(lead.id, "assistant", conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY);
+        await db.updateLead(lead);
+        (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+            requestId,
+            correlationId,
+            lead_id: lead.id,
+            outcome: "denial_of_inquiry",
+            reply_chars: conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY.length,
+            reply_preview: (0, marcoLog_js_1.previewText)(conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY),
+            funnel_state_final: lead.state,
+            phone_captured_this_turn: false,
+            email_captured_this_turn: false,
+        });
+        return { lead, reply: conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY };
+    }
+    if ((0, conversationUtils_js_1.isRealtorMessage)(latestLeadText)) {
+        console.log(`[pipeline] Realtor detected for lead ${lead.id} — redirecting to Marco's number`);
+        await db.appendMessage(lead.id, "assistant", conversationUtils_js_1.REALTOR_REDIRECT_REPLY);
+        await db.updateLead(lead);
+        (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+            requestId,
+            correlationId,
+            lead_id: lead.id,
+            outcome: "realtor_redirect",
+            reply_chars: conversationUtils_js_1.REALTOR_REDIRECT_REPLY.length,
+            reply_preview: (0, marcoLog_js_1.previewText)(conversationUtils_js_1.REALTOR_REDIRECT_REPLY),
+            funnel_state_final: lead.state,
+            phone_captured_this_turn: false,
+            email_captured_this_turn: false,
+        });
+        return { lead, reply: conversationUtils_js_1.REALTOR_REDIRECT_REPLY };
+    }
+    if ((0, conversationUtils_js_1.isSimpleAcknowledgment)(latestLeadText)) {
+        const lastAgent = (0, conversationUtils_js_1.getLastAssistantMessageText)(conversation);
+        if ((0, conversationUtils_js_1.agentMessageCommittedToSend)(lastAgent)) {
+            console.log(`[pipeline] Simple acknowledgment after commitment — no response needed for lead ${lead.id}`);
+            await db.updateLead(lead);
+            (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+                requestId,
+                correlationId,
+                lead_id: lead.id,
+                outcome: "simple_ack_after_commitment_silence",
+                reply_chars: 0,
+                funnel_state_final: lead.state,
+                phone_captured_this_turn: false,
+                email_captured_this_turn: false,
+            });
+            return { lead, reply: null };
+        }
+    }
+    if ((0, conversationUtils_js_1.isExactDuplicateMessage)(latestLeadText, conversationHistoryForDup)) {
+        const duplicateResponse = (0, conversationUtils_js_1.getDuplicateMessageResponse)();
+        console.log(`[pipeline] Duplicate message detected for lead ${lead.id} — returning curious response`);
+        await db.appendMessage(lead.id, "assistant", duplicateResponse);
+        await db.updateLead(lead);
+        (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+            requestId,
+            correlationId,
+            lead_id: lead.id,
+            outcome: "duplicate_user_message_curious_reply",
+            reply_chars: duplicateResponse.length,
+            reply_preview: (0, marcoLog_js_1.previewText)(duplicateResponse),
+            funnel_state_final: lead.state,
+            phone_captured_this_turn: false,
+            email_captured_this_turn: false,
+        });
+        return { lead, reply: duplicateResponse };
+    }
     /** Out-of-state referral branch (non-Texas only; Texas metros keep the normal funnel). */
     const referralResult = resolveReferralFlow(lead, conversation, latestLeadText, ctx);
     lead = referralResult.lead;
@@ -519,6 +619,10 @@ async function run(payload, log) {
         correlationId,
         coaching_note: preflightRaw.coachingNote || "(empty)",
     });
+    const phoneAskCount = (0, conversationUtils_js_1.getPhoneRequestCount)(conversationHistoryForDup);
+    const phoneVariationHint = (0, conversationUtils_js_1.getPhoneRequestVariation)(phoneAskCount);
+    const commStyle = (0, conversationUtils_js_1.detectCommunicationStyle)(conversationHistoryForDup);
+    const styleInstructions = (0, conversationUtils_js_1.getCommunicationStyleInstructions)(commStyle);
     let coachingNote = preflightRaw.coachingNote.trim();
     const igDmTurn = payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm";
     if (leadLineRepeatForModel && !coachingNote) {
@@ -567,6 +671,8 @@ async function run(payload, log) {
     }
     coachingNote = [
         coachingNote,
+        styleInstructions,
+        `PHONE REQUEST CONTEXT: ${phoneVariationHint}`,
         "NO_NEEDS_ANALYSIS: Never ask about preferences, what is important in a home, timeline, bedrooms, bathrooms, or home features. Acknowledge, brief answer if they asked something specific, then steer to a mobile number only.",
         "PHONE_ONLY_DELIVERY: Never ask phone or email, never offer email for breakdowns or listings. Text/SMS to mobile only. If they gave an email, thank briefly and still ask for number to text the packet. No hyphen or dash pauses between phrases in the reply.",
         ...(payload.platform.toLowerCase().includes("tik") || igDmTurn

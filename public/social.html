@@ -463,6 +463,181 @@
     .error-icon { color: var(--danger); font-size: 18px; }
     .processing-error span { color: var(--danger); font-size: 13px; flex: 1; }
     .btn-retry { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; font-size: 12px; cursor: pointer; }
+    .btn-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    .status-badge.queued { background: rgba(138, 145, 156, 0.15); color: #8a919c; }
+    .status-badge.processing,
+    .status-badge.submitted {
+      background: rgba(37, 244, 238, 0.12);
+      color: #25f4ee;
+    }
+    .status-badge.processing::before,
+    .status-badge.submitted::before {
+      content: '';
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #25f4ee;
+      animation: pulse-badge 1.2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pulse-badge {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+    .status-badge.transcribing { background: rgba(37, 244, 238, 0.12); color: #25f4ee; }
+    .status-badge.transcribing::before {
+      content: '';
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #25f4ee;
+      animation: pulse-badge 0.8s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .status-badge.analyzing { background: rgba(245, 196, 81, 0.12); color: #f5c451; }
+    .status-badge.analyzing::before {
+      content: '';
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #f5c451;
+      animation: pulse-badge 0.6s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .status-badge.reframing { background: rgba(118, 100, 230, 0.12); color: #a78bfa; }
+    .status-badge.reframing::before {
+      content: '';
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #a78bfa;
+      animation: pulse-badge 0.6s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .status-badge.enhancing { background: rgba(59, 130, 246, 0.12); color: #60a5fa; }
+    .status-badge.enhancing::before {
+      content: '';
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #60a5fa;
+      animation: pulse-badge 0.6s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .status-badge.complete { background: rgba(61, 220, 132, 0.12); color: #3ddc84; }
+    .status-badge.failed { background: rgba(255, 90, 95, 0.12); color: #ff5a5f; }
+    .active-batch-card {
+      background: var(--panel-2, #1b1f26);
+      border: 1px solid var(--border, #262b33);
+      border-radius: 10px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .batch-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .batch-card-left { display: flex; flex-direction: column; gap: 3px; }
+    .batch-card-title { font-size: 13px; font-weight: 600; color: var(--text, #e8eaed); }
+    .batch-card-meta { font-size: 11px; color: var(--muted, #8a919c); font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .batch-status-label {
+      font-size: 12px;
+      color: var(--accent-2, #25f4ee);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      animation: pulse-text 1.5s ease-in-out infinite;
+    }
+    .batch-progress-track { background: #0d1014; border-radius: 999px; height: 6px; overflow: hidden; }
+    .batch-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-2, #25f4ee), #3b82f6);
+      border-radius: 999px;
+      transition: width 0.8s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .batch-progress-fill::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 60px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25));
+      animation: shimmer 1.8s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .batch-stages { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 2px 0; }
+    .batch-stage { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; }
+    .batch-stage-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #1b1f26;
+      border: 2px solid #2d333b;
+      transition: all 0.3s ease;
+    }
+    .batch-stage-dot.active {
+      background: var(--accent-2, #25f4ee);
+      border-color: var(--accent-2, #25f4ee);
+      box-shadow: 0 0 0 3px rgba(37, 244, 238, 0.2);
+      animation: pulse-dot 1.4s ease-in-out infinite;
+    }
+    .batch-stage-dot.done { background: #3ddc84; border-color: #3ddc84; }
+    .batch-stage-label { font-size: 9px; color: var(--muted, #8a919c); white-space: nowrap; text-align: center; }
+    .batch-stage.active-stage .batch-stage-label { color: var(--accent-2, #25f4ee); font-weight: 600; }
+    .batch-stage.done-stage .batch-stage-label { color: #3ddc84; }
+    .batch-stage-line {
+      flex: 1;
+      height: 2px;
+      background: #2d333b;
+      min-width: 16px;
+      max-width: 48px;
+      transition: background 0.3s ease;
+    }
+    .batch-stage-line.done { background: #3ddc84; }
+    .batch-live-message {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted, #8a919c);
+    }
+    .live-dot-indicator {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-2, #25f4ee);
+      flex-shrink: 0;
+      animation: pulse-badge 1s ease-in-out infinite;
+    }
     .batch-session-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem; margin-bottom: 0.5rem; cursor: pointer; }
     .clip-review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 1rem; }
   @media (max-width: 640px) { .clip-review-grid { grid-template-columns: 1fr; } }
@@ -751,6 +926,30 @@
     .strategy-compare-card.vs.positive { color:var(--success); }
     .strategy-compare-card.vs.negative { color:var(--warn); }
     .strategy-rec-card { border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem; margin-bottom:0.75rem; background:var(--surface); }
+    /* YouTube Competitor Intelligence */
+    .youtube-intel-panel { display:flex; flex-direction:column; gap:12px; margin-top:4px; }
+    .yt-panel-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .yt-panel-title { font-size:14px; font-weight:600; color:var(--text); }
+    .yt-panel-meta { display:flex; align-items:center; gap:8px; }
+    .yt-meta-badge { font-size:11px; color:var(--muted); font-family:ui-monospace,"SF Mono",Menlo,monospace; }
+    .btn-run-analysis { background:var(--surface); color:var(--cyan); border:1px solid var(--cyan); border-radius:6px; padding:6px 12px; font-size:11px; font-weight:600; cursor:pointer; transition:opacity 0.15s ease; }
+    .btn-run-analysis:hover { opacity:0.8; }
+    .btn-run-analysis:disabled { opacity:0.4; cursor:wait; }
+    .yt-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+    .yt-card-highlight { border-color:var(--cyan); background:var(--cyan-dim,rgba(37,244,238,0.04)); }
+    .yt-card-title { font-size:12px; font-weight:600; color:var(--text); margin-bottom:3px; }
+    .yt-card-subtitle { font-size:11px; color:var(--muted); margin-bottom:10px; }
+    .yt-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px; }
+    .yt-list li { font-size:12px; color:var(--text); padding:6px 10px; background:var(--bg,var(--surface)); border:1px solid var(--border); border-radius:5px; line-height:1.4; }
+    .yt-list.yt-list-copyable li { cursor:pointer; position:relative; }
+    .yt-list.yt-list-copyable li:hover::after { content:'Copy'; position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:10px; color:var(--cyan); }
+    .yt-recommendation-text { font-size:13px; color:var(--text); line-height:1.6; margin:0; }
+    .yt-insights-text { font-size:12px; color:var(--muted); line-height:1.7; margin:0; white-space:pre-wrap; }
+    .yt-footer { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--muted); padding-top:4px; }
+    .yt-manage-link { color:var(--cyan); text-decoration:none; font-size:11px; }
+    .yt-no-data { text-align:center; padding:32px 16px; color:var(--muted); font-size:13px; }
+    .yt-no-data-sub { font-size:12px; margin-top:4px; }
+    .btn-run-analysis-lg { margin-top:16px; background:var(--cyan); color:#0b0d10; border:none; border-radius:8px; padding:10px 20px; font-size:13px; font-weight:700; cursor:pointer; }
     .cm-chat-shell { display:flex; flex-direction:column; height:calc(100vh - 140px); min-height:480px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); overflow:hidden; }
     .cm-chat-header { display:flex; justify-content:space-between; align-items:center; padding:0.85rem 1rem; border-bottom:1px solid var(--border); }
     .cm-chat-body { flex:1; overflow-y:auto; padding:1rem; }
@@ -947,7 +1146,10 @@
               <thead><tr><th>Filename</th><th>Size</th><th>Duration</th><th>Status</th><th></th></tr></thead>
               <tbody id="batch-file-tbody"></tbody>
             </table>
-            <button type="button" class="primary" id="batch-process-btn" style="margin-top:1rem;width:100%;padding:0.75rem;" disabled>Process Batch</button>
+            <button type="button" class="primary" id="batch-process-btn" style="margin-top:1rem;width:100%;padding:0.75rem;" disabled>Process videos — Target 7 clips</button>
+            <p id="processBtnHint" style="text-align:center;font-size:12px;color:#8a919c;margin-top:6px;display:none;">
+              Add at least one video file to enable processing.
+            </p>
             <div id="batch-status-area"></div>
             <div class="batch-progress-bar" id="batch-progress-bar" style="display:none;"><div class="fill"></div></div>
 
@@ -1102,6 +1304,7 @@
           <div class="cm-subtabs">
             <button type="button" class="cm-subtab active" data-strategy-tab="overview">Overview</button>
             <button type="button" class="cm-subtab" data-strategy-tab="competitor">Competitor Analysis</button>
+            <button type="button" class="cm-subtab" data-strategy-tab="youtube">YouTube Intel</button>
             <button type="button" class="cm-subtab" data-strategy-tab="recommendations">Recommendations</button>
             <button type="button" class="cm-subtab" data-strategy-tab="recording">Recording Plan</button>
           </div>
@@ -1119,6 +1322,46 @@
           </div>
           <div id="strategy-competitor" class="strategy-panel" style="display:none;">
             <div id="strategy-full-analysis" class="cm-panel"></div>
+          </div>
+          <div id="strategy-youtube" class="strategy-panel" style="display:none;">
+            <div class="youtube-intel-panel" id="youtubeIntelPanel">
+              <div class="yt-panel-header">
+                <span class="yt-panel-title">📺 YouTube Competitor Intelligence</span>
+                <div class="yt-panel-meta">
+                  <span id="ytAnalysisAge" class="yt-meta-badge">—</span>
+                  <button type="button" id="runYouTubeAnalysisBtn" class="btn-run-analysis">Run Analysis</button>
+                </div>
+              </div>
+              <div id="ytPanelContent">
+                <div class="yt-card">
+                  <div class="yt-card-title">📌 Content Gaps</div>
+                  <div class="yt-card-subtitle">Topics competitors cover that Marco isn't</div>
+                  <ul id="ytContentGaps" class="yt-list"></ul>
+                </div>
+                <div class="yt-card">
+                  <div class="yt-card-title">🎣 Proven Hook Structures</div>
+                  <div class="yt-card-subtitle">Opening patterns from high-view competitor videos</div>
+                  <ul id="ytHookStructures" class="yt-list yt-list-copyable"></ul>
+                </div>
+                <div class="yt-card yt-card-highlight">
+                  <div class="yt-card-title">💡 This Week's Recommended Video Idea</div>
+                  <p id="ytTopRecommendation" class="yt-recommendation-text">Run analysis to generate a recommendation.</p>
+                </div>
+                <div class="yt-card">
+                  <div class="yt-card-title">📊 Key Insights</div>
+                  <p id="ytKeyInsights" class="yt-insights-text">No analysis yet.</p>
+                </div>
+                <div class="yt-footer">
+                  <span id="ytChannelsAnalyzed" class="yt-footer-text">—</span>
+                  <a href="#" id="ytAddChannelLink" class="yt-manage-link">+ Add channel</a>
+                </div>
+              </div>
+              <div id="ytNoDataState" style="display:none" class="yt-no-data">
+                <p>No YouTube analysis yet.</p>
+                <p class="yt-no-data-sub">Analysis runs automatically on Sunday nights. Click "Run Analysis" to start now.</p>
+                <button type="button" id="runYouTubeAnalysisBtnLg" class="btn-run-analysis-lg">Run YouTube Analysis Now</button>
+              </div>
+            </div>
           </div>
           <div id="strategy-recommendations" class="strategy-panel" style="display:none;">
             <div id="strategy-rec-list"></div>
@@ -1533,6 +1776,7 @@
     let batchFileStatuses = {};
     let activeBatchId = null;
     let batchPollTimer = null;
+    let batchUploadInFlight = false;
     let reviewBatchFilter = "";
     let reviewSort = "trend";
 
@@ -1622,27 +1866,262 @@
       pipelineRefreshAt = Date.now();
     }
 
+    function updateProcessButton() {
+      const btn = document.getElementById("batch-process-btn");
+      const hint = document.getElementById("processBtnHint");
+      if (!btn || batchUploadInFlight) return;
+
+      const hasFiles = batchFiles && batchFiles.length > 0;
+      const targetClips = hasFiles ? Math.max(7, batchFiles.length * 2) : 7;
+
+      btn.disabled = !hasFiles;
+      btn.style.opacity = hasFiles ? "1" : "0.45";
+      btn.style.cursor = hasFiles ? "pointer" : "not-allowed";
+
+      if (hasFiles) {
+        const label = `Process ${batchFiles.length} video${batchFiles.length !== 1 ? "s" : ""} — Target ${targetClips} clips`;
+        btn.textContent = label;
+        processBtnDefaultLabel = label;
+      } else {
+        btn.textContent = "Process videos — Target 7 clips";
+        processBtnDefaultLabel = "Process videos — Target 7 clips";
+      }
+
+      if (hint) hint.style.display = hasFiles ? "none" : "block";
+    }
+
     function renderBatchFileTable() {
       const table = document.getElementById("batch-file-table");
       const tbody = document.getElementById("batch-file-tbody");
-      const btn = document.getElementById("batch-process-btn");
-      const pillar = document.getElementById("batch-pillar")?.value;
       if (!tbody) return;
       if (!batchFiles.length) {
-        table.style.display = "none";
-        if (btn) btn.disabled = true;
+        if (table) table.style.display = "none";
+        updateProcessButton();
         return;
       }
-      table.style.display = "table";
+      if (table) table.style.display = "table";
       tbody.innerHTML = batchFiles.map((f, i) => {
-        const st = batchFileStatuses[f.name] || "Queued";
-        return `<tr><td>${escapeHtml(f.name)}</td><td>${formatFileSize(f.size)}</td><td>—</td>
-          <td>${escapeHtml(st)}</td><td><button type="button" class="cm-btn" onclick="removeBatchFile(${i})">Remove</button></td></tr>`;
+        const st = (batchFileStatuses[f.name] || "queued").toLowerCase();
+        const badgeLabel = statusBadgeLabel(st, 0);
+        return `<tr class="batch-file-row" data-filename="${escapeHtml(f.name)}">
+          <td class="file-name-cell">${escapeHtml(f.name)}</td>
+          <td>${formatFileSize(f.size)}</td><td>—</td>
+          <td class="file-status-cell"><span class="status-badge ${escapeHtml(st)}">${escapeHtml(badgeLabel)}</span></td>
+          <td><button type="button" class="cm-btn" onclick="removeBatchFile(${i})">Remove</button></td></tr>`;
       }).join("");
-      const targetClips = Math.max(7, batchFiles.length * 2);
-      if (btn) {
-        btn.disabled = !pillar;
-        btn.textContent = `Process ${batchFiles.length} videos → Target ${targetClips} clips`;
+      updateProcessButton();
+    }
+
+    function statusBadgeLabel(status, clipsCount) {
+      const st = (status || "").toLowerCase();
+      const labelMap = {
+        queued: "Queued",
+        processing: "Uploading",
+        submitted: "Submitted",
+        transcribing: "Transcribing",
+        analyzing: "AI Analysis",
+        reframing: "Reframing",
+        enhancing: "Enhancing",
+        complete: clipsCount > 0 ? `${clipsCount} clips ✓` : "Complete",
+        failed: "Failed",
+      };
+      return labelMap[st] || status || "Queued";
+    }
+
+    function setFileRowStatus(filename, status, clipsCount) {
+      const st = (status || "queued").toLowerCase();
+      const label = statusBadgeLabel(st, clipsCount ?? 0);
+      batchFileStatuses[filename] = st;
+      document.querySelectorAll(".batch-file-row").forEach((row) => {
+        const nameCell = row.querySelector(".file-name-cell");
+        if (!nameCell) return;
+        const rowName = row.getAttribute("data-filename") || nameCell.textContent.trim();
+        if (rowName !== filename && !filename.includes(rowName) && !rowName.includes(filename)) return;
+        const statusCell = row.querySelector(".file-status-cell");
+        if (!statusCell) return;
+        statusCell.innerHTML = `<span class="status-badge ${escapeHtml(st)}">${escapeHtml(label)}</span>`;
+      });
+    }
+
+    let processBtnDefaultLabel = "Process Batch";
+
+    function setProcessButtonLoading() {
+      const btn = document.getElementById("batch-process-btn");
+      if (!btn) return;
+      batchUploadInFlight = true;
+      btn.disabled = true;
+      btn.innerHTML = `<span class="btn-spinner"></span> Processing...`;
+      btn.style.opacity = "0.8";
+      btn.style.cursor = "not-allowed";
+    }
+
+    function resetProcessButton() {
+      batchUploadInFlight = false;
+      updateProcessButton();
+    }
+
+    function showActiveBatchCard(batchSessionId, fileCount, pillar) {
+      const pipelineContainer = document.getElementById("active-pipeline-list");
+      if (!pipelineContainer) return;
+      pipelineContainer.innerHTML = `
+    <div class="active-batch-card" id="activeBatch_${batchSessionId}">
+      <div class="batch-card-header">
+        <div class="batch-card-left">
+          <span class="batch-card-title">Processing batch</span>
+          <span class="batch-card-meta">${fileCount} video${fileCount !== 1 ? "s" : ""} · ${escapeHtml(pillar || "brand")} pillar</span>
+        </div>
+        <div class="batch-card-right">
+          <span class="batch-status-label" id="batchStatusLabel_${batchSessionId}">Starting...</span>
+        </div>
+      </div>
+      <div class="batch-progress-track">
+        <div class="batch-progress-fill" id="batchProgress_${batchSessionId}" style="width: 5%"></div>
+      </div>
+      <div class="batch-stages">
+        <div class="batch-stage" id="bstage_upload_${batchSessionId}">
+          <div class="batch-stage-dot active"></div>
+          <span class="batch-stage-label">Upload</span>
+        </div>
+        <div class="batch-stage-line"></div>
+        <div class="batch-stage" id="bstage_trends_${batchSessionId}">
+          <div class="batch-stage-dot"></div>
+          <span class="batch-stage-label">Trends</span>
+        </div>
+        <div class="batch-stage-line"></div>
+        <div class="batch-stage" id="bstage_transcribe_${batchSessionId}">
+          <div class="batch-stage-dot"></div>
+          <span class="batch-stage-label">Transcribe</span>
+        </div>
+        <div class="batch-stage-line"></div>
+        <div class="batch-stage" id="bstage_analyze_${batchSessionId}">
+          <div class="batch-stage-dot"></div>
+          <span class="batch-stage-label">AI Analysis</span>
+        </div>
+        <div class="batch-stage-line"></div>
+        <div class="batch-stage" id="bstage_reframe_${batchSessionId}">
+          <div class="batch-stage-dot"></div>
+          <span class="batch-stage-label">Reframe</span>
+        </div>
+        <div class="batch-stage-line"></div>
+        <div class="batch-stage" id="bstage_enhance_${batchSessionId}">
+          <div class="batch-stage-dot"></div>
+          <span class="batch-stage-label">Enhance</span>
+        </div>
+        <div class="batch-stage-line"></div>
+        <div class="batch-stage" id="bstage_complete_${batchSessionId}">
+          <div class="batch-stage-dot"></div>
+          <span class="batch-stage-label">Done</span>
+        </div>
+      </div>
+      <div class="batch-live-message" id="batchLiveMsg_${batchSessionId}">
+        <span class="live-dot-indicator"></span>
+        <span id="batchLiveMsgText_${batchSessionId}">Uploading footage to OpenShorts...</span>
+      </div>
+    </div>`;
+    }
+
+    function updateActiveBatchCard(batchSessionId, pollData) {
+      const progressEl = document.getElementById(`batchProgress_${batchSessionId}`);
+      const statusLabelEl = document.getElementById(`batchStatusLabel_${batchSessionId}`);
+      const liveMsgEl = document.getElementById(`batchLiveMsgText_${batchSessionId}`);
+      if (!progressEl) return;
+
+      const status = pollData.status || pollData.batch?.status || "uploading";
+      const pct = pollData.progressPct ?? 5;
+      progressEl.style.width = `${pct}%`;
+
+      if (statusLabelEl) statusLabelEl.textContent = pollData.stageLabel || "Processing...";
+
+      const liveMsgs = {
+        uploading: "Uploading footage to OpenShorts...",
+        analyzing_trends: "Scraping competitor accounts for trending patterns...",
+        processing_opus: "Sending footage to OpenShorts...",
+        transcribing: "Transcribing audio with faster-whisper...",
+        analyzing: "Gemini AI is identifying the most viral moments...",
+        reframing: "Reframing clips to 9:16 vertical with face tracking...",
+        enhancing: "Generating hooks, captions, and hashtags...",
+        complete: `Done. ${pollData.clipsReady || 0} clips are ready for review.`,
+        failed: "Processing failed. Check server logs.",
+      };
+      if (liveMsgEl) liveMsgEl.textContent = liveMsgs[status] || pollData.stageLabel || "Processing...";
+
+      const stageMap = {
+        uploading: 0,
+        analyzing_trends: 1,
+        processing_opus: 2,
+        transcribing: 2,
+        analyzing: 3,
+        reframing: 4,
+        enhancing: 5,
+        complete: 6,
+        failed: -1,
+      };
+      const stageIds = ["upload", "trends", "transcribe", "analyze", "reframe", "enhance", "complete"];
+      const currentStageIndex = stageMap[status] ?? 0;
+
+      stageIds.forEach((stageId, i) => {
+        const stageEl = document.getElementById(`bstage_${stageId}_${batchSessionId}`);
+        if (!stageEl) return;
+        const dot = stageEl.querySelector(".batch-stage-dot");
+        stageEl.classList.remove("active-stage", "done-stage");
+        if (dot) dot.classList.remove("active", "done");
+        if (i < currentStageIndex) {
+          stageEl.classList.add("done-stage");
+          if (dot) dot.classList.add("done");
+        } else if (i === currentStageIndex) {
+          stageEl.classList.add("active-stage");
+          if (dot) dot.classList.add("active");
+        }
+      });
+
+      const card = document.getElementById(`activeBatch_${batchSessionId}`);
+      if (card) {
+        const lines = card.querySelectorAll(".batch-stage-line");
+        lines.forEach((line, i) => {
+          line.classList.toggle("done", i < currentStageIndex);
+        });
+      }
+
+      const fileList = pollData.files || pollData.sourceFiles || [];
+      if (fileList.length) {
+        fileList.forEach((f) => {
+          const name = f.filename || f.originalFilename;
+          if (!name) return;
+          setFileRowStatus(name, f.opusStatus || f.opus_status || "processing", f.clipsGenerated ?? f.clipsGeneratedCount ?? 0);
+        });
+      }
+
+      if (status === "complete") {
+        const liveIndicator = card?.querySelector(".live-dot-indicator");
+        if (liveIndicator) {
+          liveIndicator.style.animation = "none";
+          liveIndicator.style.background = "#3ddc84";
+        }
+        if (statusLabelEl) {
+          statusLabelEl.style.animation = "none";
+          statusLabelEl.style.color = "#3ddc84";
+        }
+        if (card) {
+          const existingBtn = card.querySelector(".view-clips-btn");
+          const clipsReady = pollData.clipsReady || pollData.batch?.clipsGenerated || 0;
+          if (!existingBtn && clipsReady > 0) {
+            const btn = document.createElement("button");
+            btn.className = "view-clips-btn";
+            btn.textContent = `View ${clipsReady} clips in Review Queue →`;
+            btn.style.cssText = "background:#3ddc84;color:#0b0d10;border:none;border-radius:6px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px;width:100%;";
+            btn.onclick = () => { switchCmSection("review"); void loadReviewQueue(); };
+            card.appendChild(btn);
+          }
+        }
+        resetProcessButton();
+      }
+
+      if (status === "failed") {
+        if (statusLabelEl) {
+          statusLabelEl.style.animation = "none";
+          statusLabelEl.style.color = "#ff5a5f";
+        }
+        resetProcessButton();
       }
     }
 
@@ -1656,9 +2135,10 @@
       try {
         const data = await cmFetch(`/api/content/batch/${batchId}/status`);
         updateBatchProgressUI(data);
+        updateActiveBatchCard(batchId, data);
         if (data.sourceFiles) {
           data.sourceFiles.forEach((sf) => {
-            batchFileStatuses[sf.originalFilename] = sf.opusStatus || sf.opus_status || "processing";
+            batchFileStatuses[sf.originalFilename] = (sf.opusStatus || sf.opus_status || "processing").toLowerCase();
           });
           renderBatchFileTable();
         }
@@ -1749,8 +2229,7 @@
       const clips = data.clipsReady || data.batch?.clipsGenerated || 0;
       if (msgEl) msgEl.textContent = `${clips} clips ready for review`;
       if (successEl) successEl.style.display = "flex";
-      const btn = document.getElementById("batch-process-btn");
-      if (btn) btn.disabled = false;
+      resetProcessButton();
       const progress = document.getElementById("batch-progress-bar");
       if (progress) progress.style.display = "none";
       batchFiles = [];
@@ -1767,8 +2246,7 @@
       if (msgEl) msgEl.textContent = message;
       if (errEl) errEl.style.display = "flex";
       updateProgressBar(0, "Failed");
-      const btn = document.getElementById("batch-process-btn");
-      if (btn) btn.disabled = false;
+      resetProcessButton();
     }
 
     function resetUploadPanel() {
@@ -1781,20 +2259,20 @@
       if (rows) rows.innerHTML = "";
       activeBatchId = null;
       if (batchPollTimer) { clearInterval(batchPollTimer); batchPollTimer = null; }
-      const btn = document.getElementById("batch-process-btn");
-      if (btn) btn.disabled = false;
+      resetProcessButton();
     }
     window.resetUploadPanel = resetUploadPanel;
 
-    async function startBatchProcessing(formData) {
+    async function startBatchProcessing(formData, uiMeta) {
       const panel = document.getElementById("processingPanel");
       if (panel) panel.style.display = "block";
       document.getElementById("processingSuccess").style.display = "none";
       document.getElementById("processingError").style.display = "none";
       updateProgressBar(5, "Uploading files...");
       setStageActive("stage-upload");
-      const btn = document.getElementById("batch-process-btn");
-      if (btn) btn.disabled = true;
+
+      const fileCount = uiMeta?.fileCount ?? batchFiles.length;
+      const pillar = uiMeta?.pillar ?? document.getElementById("batch-pillar")?.value ?? "brand";
 
       try {
         const headers = {};
@@ -1803,8 +2281,18 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Upload failed");
         activeBatchId = data.batchSessionId;
+        if (uiMeta?.pendingCard) {
+          showActiveBatchCard(activeBatchId, fileCount, pillar);
+        }
         batchFiles.forEach((f) => { batchFileStatuses[f.name] = "submitted"; });
         renderBatchFileTable();
+        updateActiveBatchCard(activeBatchId, {
+          status: "uploading",
+          stageLabel: "Uploading files...",
+          progressPct: 5,
+          clipsReady: 0,
+          files: batchFiles.map((f) => ({ filename: f.name, opusStatus: "submitted", clipsGenerated: 0 })),
+        });
         showToast(data.message || "Batch processing started");
         if (batchPollTimer) clearInterval(batchPollTimer);
         batchPollTimer = setInterval(() => pollBatchStatus(activeBatchId), 3000);
@@ -2308,8 +2796,15 @@
       document.querySelectorAll(".strategy-panel").forEach((p) => {
         p.style.display = "none";
       });
-      const panel = document.getElementById(`strategy-${tab === "competitor" ? "competitor" : tab === "recommendations" ? "recommendations" : tab === "recording" ? "recording" : "overview"}`);
+      const knownTabs = ["competitor", "recommendations", "recording", "youtube"];
+      const panel = document.getElementById(`strategy-${knownTabs.includes(tab) ? tab : "overview"}`);
       if (panel) panel.style.display = "block";
+
+      if (tab === "youtube") {
+        await loadYouTubeIntelPanel();
+        void updateStrategyBadges();
+        return;
+      }
 
       const data = await cmFetch("/api/content/competitive-analysis/latest").catch(() => null);
       const analysis = data?.analysis;
@@ -2426,6 +2921,99 @@
       if (btn) { btn.disabled = false; btn.textContent = "Run New Analysis"; }
       void loadStrategySection("overview");
     }
+
+    async function loadYouTubeIntelPanel() {
+      const noData = document.getElementById("ytNoDataState");
+      const content = document.getElementById("ytPanelContent");
+      let data;
+      try {
+        data = await cmFetch("/api/content/youtube-analysis/latest");
+      } catch (err) {
+        if (content) content.style.display = "none";
+        if (noData) noData.style.display = "block";
+        return;
+      }
+
+      const a = data && data.analysis;
+      if (!a) {
+        if (noData) noData.style.display = "block";
+        if (content) content.style.display = "none";
+        return;
+      }
+      if (noData) noData.style.display = "none";
+      if (content) content.style.display = "flex";
+
+      const ageEl = document.getElementById("ytAnalysisAge");
+      if (ageEl && a.analyzed_at) {
+        const days = Math.floor((Date.now() - new Date(a.analyzed_at).getTime()) / 86400000);
+        ageEl.textContent = days <= 0 ? `Updated today · ${a.videos_analyzed} videos` : `Updated ${days}d ago · ${a.videos_analyzed} videos`;
+      }
+
+      const gapsEl = document.getElementById("ytContentGaps");
+      if (gapsEl) {
+        gapsEl.innerHTML = (a.content_gaps || []).slice(0, 6).map((g) => `<li>${escapeHtml(g)}</li>`).join("") || "<li class='cm-muted'>None detected.</li>";
+      }
+
+      const hooksEl = document.getElementById("ytHookStructures");
+      if (hooksEl) {
+        hooksEl.innerHTML = (a.top_hook_structures || []).slice(0, 5).map((h) => {
+          const safe = escapeHtml(h);
+          return `<li onclick="navigator.clipboard.writeText(this.getAttribute('data-hook')).then(()=>{this.style.color='var(--success)';showToast('Copied')})" data-hook="${safe.replace(/"/g, '&quot;')}">${safe}</li>`;
+        }).join("") || "<li class='cm-muted'>None yet.</li>";
+      }
+
+      const recEl = document.getElementById("ytTopRecommendation");
+      if (recEl) recEl.textContent = a.trend_signals || "No recommendation generated.";
+
+      const insightsEl = document.getElementById("ytKeyInsights");
+      if (insightsEl) insightsEl.textContent = a.full_analysis_markdown || "No analysis yet.";
+
+      const footerEl = document.getElementById("ytChannelsAnalyzed");
+      if (footerEl) footerEl.textContent = `${a.channels_analyzed} channels · ${a.videos_analyzed} videos analyzed`;
+    }
+
+    async function runYouTubeAnalysis() {
+      const btn = document.getElementById("runYouTubeAnalysisBtn");
+      if (btn) { btn.disabled = true; btn.textContent = "Running…"; }
+      try {
+        await cmFetch("/api/content/youtube-analysis/run", { method: "POST" });
+        showToast("YouTube analysis started — polling…");
+        const before = await cmFetch("/api/content/youtube-analysis/latest").catch(() => null);
+        const beforeAt = before?.analysis?.analyzed_at || null;
+        for (let i = 0; i < 36; i++) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const data = await cmFetch("/api/content/youtube-analysis/latest").catch(() => null);
+          const at = data?.analysis?.analyzed_at || null;
+          if (at && at !== beforeAt) {
+            showToast("YouTube analysis complete");
+            await loadYouTubeIntelPanel();
+            break;
+          }
+        }
+      } catch (e) {
+        showToast(e.message || "YouTube analysis failed");
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Run Analysis"; }
+      }
+    }
+
+    document.getElementById("runYouTubeAnalysisBtn")?.addEventListener("click", () => void runYouTubeAnalysis());
+    document.getElementById("runYouTubeAnalysisBtnLg")?.addEventListener("click", () => void runYouTubeAnalysis());
+    document.getElementById("ytAddChannelLink")?.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const url = prompt("YouTube channel URL or @handle:");
+      if (!url || !url.trim()) return;
+      const name = prompt("Channel name (optional):") || "";
+      try {
+        await cmFetch("/api/content/youtube-profiles", {
+          method: "POST",
+          body: JSON.stringify({ youtube_channel_url: url.trim(), channel_name: name.trim(), profile_type: "competitor" }),
+        });
+        showToast("Channel added — it will be analyzed on the next run.");
+      } catch (err) {
+        showToast(err.message || "Failed to add channel");
+      }
+    });
 
     window.createRecordingFromRec = async (id) => {
       try {
@@ -2728,21 +3316,46 @@
         if (batchFiles.length >= 20) break;
         if (!/\.(mp4|mov|avi|mkv|webm)$/i.test(f.name)) continue;
         batchFiles.push(f);
-        batchFileStatuses[f.name] = "Queued";
+        batchFileStatuses[f.name] = "queued";
       }
       renderBatchFileTable();
     }
-    document.getElementById("batch-pillar")?.addEventListener("change", renderBatchFileTable);
+    document.getElementById("batch-pillar")?.addEventListener("change", () => updateProcessButton());
     document.getElementById("batch-process-btn")?.addEventListener("click", async () => {
-      const pillar = document.getElementById("batch-pillar")?.value;
-      if (!batchFiles.length || !pillar) { showToast("Add files and select pillar"); return; }
-      const fd = new FormData();
-      batchFiles.forEach((f) => fd.append("videos", f));
-      fd.append("pillar", pillar);
-      fd.append("session_name", document.getElementById("batch-session-name")?.value || "");
-      const filmedBy = document.querySelector('input[name="filmed-by"]:checked')?.value || "marco";
-      fd.append("filmed_by", filmedBy);
-      await startBatchProcessing(fd);
+      const btn = document.getElementById("batch-process-btn");
+      try {
+        if (!batchFiles || batchFiles.length === 0) {
+          alert("Please add at least one video file before processing.");
+          return;
+        }
+
+        const pillar = document.getElementById("batch-pillar")?.value || "brand";
+        const sessionName =
+          document.getElementById("batch-session-name")?.value?.trim() ||
+          `Session ${new Date().toLocaleDateString()}`;
+        const filmedBy = document.querySelector('input[name="filmed-by"]:checked')?.value || "marco";
+        const fileCount = batchFiles.length;
+
+        setProcessButtonLoading();
+        batchFiles.forEach((f) => setFileRowStatus(f.name, "processing", 0));
+        showActiveBatchCard("pending", fileCount, pillar);
+
+        const fd = new FormData();
+        batchFiles.forEach((f) => fd.append("videos", f));
+        fd.append("pillar", pillar);
+        fd.append("session_name", sessionName);
+        fd.append("filmed_by", filmedBy);
+
+        await startBatchProcessing(fd, { fileCount, pillar, pendingCard: true });
+      } catch (err) {
+        console.error("[process-btn] Click handler error:", err);
+        alert(`Something went wrong: ${err instanceof Error ? err.message : String(err)}. Check the browser console for details.`);
+        batchUploadInFlight = false;
+        if (btn) {
+          btn.disabled = false;
+        }
+        updateProcessButton();
+      }
     });
     document.getElementById("trend-intel-badge")?.addEventListener("click", async () => {
       const badge = document.getElementById("trend-intel-badge");

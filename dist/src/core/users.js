@@ -66,7 +66,7 @@ function normalizeUser(raw) {
         : "agent";
     const permsRaw = raw.permissions && typeof raw.permissions === "object" ? raw.permissions : null;
     const permissions = permsRaw
-        ? { ...types_js_1.ROLE_PERMISSIONS.custom, ...permsRaw }
+        ? { ...types_js_1.ROLE_PERMISSIONS[role], ...permsRaw }
         : { ...types_js_1.ROLE_PERMISSIONS[role] };
     const assignedLeadIds = Array.isArray(raw.assignedLeadIds)
         ? raw.assignedLeadIds.filter((id) => typeof id === "string")

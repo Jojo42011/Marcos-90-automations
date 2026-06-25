@@ -47,6 +47,7 @@ import { evaluateCurrentExperiment, proposeWeeklyExperiment } from "./experiment
 import { getMomentumStrategyAdjustment, updateMomentumState } from "./momentum.js";
 import { generateWeeklyRecordingPlan } from "../calendar.js";
 import { runFullCompetitiveAnalysis } from "../competitiveAnalysis.js";
+import { runYouTubeCompetitorAnalysis } from "../youtubeIntel.js";
 import {
   countOverdueRecordingTasks,
   countPendingRecordingTasksDueBefore,
@@ -545,6 +546,33 @@ Learning logs: ${JSON.stringify(logs.slice(0, 7))}. Performance model: ${JSON.st
       });
     } catch (err) {
       console.error("[cm-brain] Sunday competitive analysis failed:", err);
+    }
+
+    // SUNDAY NIGHT — YouTube competitor transcript analysis (non-blocking)
+    try {
+      console.log("[cm-brain] Running YouTube competitor transcript analysis...");
+      const youtubeAnalysis = await runYouTubeCompetitorAnalysis(brain);
+      if (youtubeAnalysis) {
+        console.log(
+          `[cm-brain] YouTube analysis complete — ${youtubeAnalysis.videosAnalyzed} videos, ${youtubeAnalysis.channelsAnalyzed} channels`,
+        );
+        if (youtubeAnalysis.contentGaps.length) {
+          insertBriefing({
+            briefingType: "weekly",
+            title: `Content Manager — YouTube Intelligence ${today}`,
+            body: `YouTube Intelligence: Analyzed ${youtubeAnalysis.videosAnalyzed} competitor videos across ${youtubeAnalysis.channelsAnalyzed} channels. Top content gap: ${youtubeAnalysis.contentGaps[0]}. Recommended video idea: ${youtubeAnalysis.topRecommendedVideoIdea.slice(0, 150)}`,
+            keyMetrics: {
+              videos_analyzed: youtubeAnalysis.videosAnalyzed,
+              channels_analyzed: youtubeAnalysis.channelsAnalyzed,
+            },
+            actionItems: youtubeAnalysis.contentGaps.slice(0, 2),
+            sentToHarvey: true,
+          });
+        }
+      }
+    } catch (youtubeErr) {
+      const msg = youtubeErr instanceof Error ? youtubeErr.message : String(youtubeErr);
+      console.warn(`[cm-brain] YouTube analysis failed (non-blocking): ${msg}`);
     }
 
     await evaluateCurrentExperiment(brain);

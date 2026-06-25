@@ -71,6 +71,7 @@ const competitorIntel_js_1 = require("./agents/contentManager/competitorIntel.js
 const stats_js_1 = require("./agents/contentManager/brain/stats.js");
 const tools_js_1 = require("./agents/contentManager/brain/tools.js");
 const contentDb_js_1 = require("./core/contentDb.js");
+const youtubeIntel_js_1 = require("./agents/contentManager/youtubeIntel.js");
 const competitiveAnalysis_js_1 = require("./agents/contentManager/competitiveAnalysis.js");
 const calendar_js_1 = require("./agents/contentManager/calendar.js");
 const stats_js_2 = require("./agents/contentManager/brain/stats.js");
@@ -127,7 +128,7 @@ const index_js_26 = require("./integrations/voxcpm/index.js");
 const safetyLock_js_1 = require("./agents/voiceClone/safetyLock.js");
 const voiceCloneStore_js_1 = require("./core/voiceCloneStore.js");
 const app = (0, express_1.default)();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = parseInt(process.env.PORT || "3000", 10);
 app.use("/openshorts", (0, http_proxy_middleware_1.createProxyMiddleware)({
     target: process.env.OPENSHORTS_URL || "http://localhost:8000",
     changeOrigin: true,
@@ -1250,6 +1251,10 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
     }
 });
 /** Aethon voice command — Claude brain (not Gemini Live). */
+function findFirstSentenceBoundary(text) {
+    const match = text.match(/[.!?…]\s/);
+    return match ? match.index + 1 : -1;
+}
 app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
@@ -1261,6 +1266,49 @@ app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }),
         return;
     }
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
+    const streamMode = req.body?.stream === true;
+    if (streamMode) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.flushHeaders?.();
+        let accumulated = "";
+        let firstChunkSent = false;
+        try {
+            const result = await (0, index_js_20.runHarveyChat)({
+                message,
+                sessionId,
+                deps: harveyDeps(),
+                voiceMode: true,
+                onToken: (t) => {
+                    accumulated += t;
+                    if (!firstChunkSent) {
+                        const boundary = findFirstSentenceBoundary(accumulated);
+                        if (boundary > 0) {
+                            const first = accumulated.slice(0, boundary).trim();
+                            if (first.length > 10) {
+                                firstChunkSent = true;
+                                res.write(`data: ${JSON.stringify({ type: "speech_chunk", text: first, isFinal: false })}\n\n`);
+                                console.log("[Voice Command] Streamed first sentence at", first.length, "chars");
+                            }
+                        }
+                    }
+                },
+            });
+            res.write(`data: ${JSON.stringify({
+                type: "speech_complete",
+                speech: result.speech,
+                sessionId: result.sessionId,
+            })}\n\n`);
+            res.end();
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            res.write(`data: ${JSON.stringify({ type: "error", error: msg })}\n\n`);
+            res.end();
+        }
+        return;
+    }
     try {
         const result = await (0, index_js_20.runHarveyChat)({
             message,
@@ -2007,6 +2055,128 @@ app.get("/api/email/sequences", async (req, res) => {
         })),
     });
 });
+/** Mass email templates + send */
+app.get("/api/email/templates", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    try {
+        const { getEmailTemplates } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+        const type = typeof req.query.type === "string" ? req.query.type : undefined;
+        res.json({ templates: getEmailTemplates(type) });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[api/email/templates] GET failed:", message);
+        res.status(500).json({ error: message || "Failed to load templates" });
+    }
+});
+app.post("/api/email/templates", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { saveEmailTemplate } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    const subject = typeof req.body?.subject === "string" ? req.body.subject.trim() : "";
+    const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+    const templateType = typeof req.body?.templateType === "string" ? req.body.templateType.trim() : "mass_email";
+    if (!name || !subject || !body) {
+        return res.status(400).json({ error: "name, subject, and body required" });
+    }
+    const template = saveEmailTemplate({
+        name,
+        subject,
+        body,
+        templateType: templateType,
+        isActive: true,
+    });
+    res.json({ template });
+});
+app.patch("/api/email/templates/:id", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { updateEmailTemplate } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    const updates = {};
+    if (typeof req.body?.name === "string")
+        updates.name = req.body.name.trim();
+    if (typeof req.body?.subject === "string")
+        updates.subject = req.body.subject.trim();
+    if (typeof req.body?.body === "string")
+        updates.body = req.body.body.trim();
+    if (typeof req.body?.isActive === "boolean")
+        updates.isActive = req.body.isActive;
+    updateEmailTemplate(String(req.params.id || ""), updates);
+    res.json({ success: true });
+});
+app.delete("/api/email/templates/:id", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { deleteEmailTemplate } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    deleteEmailTemplate(String(req.params.id || ""));
+    res.json({ success: true });
+});
+app.post("/api/email/mass-send", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { isEmailConfigured, sendEmail } = await Promise.resolve().then(() => __importStar(require("./integrations/email/index.js")));
+    if (!isEmailConfigured()) {
+        return res.status(503).json({
+            error: "Email not configured — set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN",
+        });
+    }
+    const { logEmail, markEmailSent, markEmailFailed, getEmailTemplate } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+    const { findLeadById } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+    const leadIds = req.body?.leadIds;
+    const templateId = typeof req.body?.templateId === "string" ? req.body.templateId.trim() : "";
+    if (!Array.isArray(leadIds) || leadIds.length === 0) {
+        return res.status(400).json({ error: "leadIds array required" });
+    }
+    if (!templateId) {
+        return res.status(400).json({ error: "templateId required" });
+    }
+    const template = getEmailTemplate(templateId);
+    if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+    }
+    const leads = await Promise.all(leadIds.map((id) => findLeadById(String(id))));
+    const leadsWithEmail = leads.filter((l) => !!l && !!l.email && String(l.email).trim().length > 0);
+    const leadsWithoutEmail = leadIds.length - leadsWithEmail.length;
+    console.log("[MassEmail] Sending to", leadsWithEmail.length, "leads (", leadsWithoutEmail, "skipped — no email)");
+    res.json({
+        queued: leadsWithEmail.length,
+        skipped: leadsWithoutEmail,
+        templateName: template.name,
+        message: `Sending to ${leadsWithEmail.length} lead${leadsWithEmail.length !== 1 ? "s" : ""} — check Email Marketing for results.`,
+    });
+    const DELAY_MS = 750;
+    for (let i = 0; i < leadsWithEmail.length; i++) {
+        const lead = leadsWithEmail[i];
+        const firstName = lead.name?.trim().split(/\s+/)[0] || "there";
+        const displayName = lead.name?.trim() || firstName;
+        const personalizedSubject = template.subject
+            .replace(/\{firstName\}/g, firstName)
+            .replace(/\{name\}/g, displayName);
+        const personalizedBody = template.body
+            .replace(/\{firstName\}/g, firstName)
+            .replace(/\{name\}/g, displayName);
+        const emailRecord = logEmail({
+            leadId: lead.id,
+            subject: personalizedSubject,
+            body: personalizedBody,
+            emailType: "mass_email",
+            sendStatus: "pending",
+        });
+        setTimeout(async () => {
+            const result = await sendEmail(lead.email, personalizedSubject, personalizedBody);
+            if (result.success) {
+                markEmailSent(emailRecord.id, result.messageId);
+                console.log("[MassEmail] Sent to", lead.email, `(${i + 1}/${leadsWithEmail.length})`);
+            }
+            else {
+                markEmailFailed(emailRecord.id, result.error || "unknown error");
+                console.error("[MassEmail] Failed for", lead.email, "-", result.error);
+            }
+        }, i * DELAY_MS);
+    }
+});
 app.post("/api/email/send-existing-client", express_1.default.json(), async (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
@@ -2255,6 +2425,8 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
     res.status(200).json({ ok: true, id });
 });
 /** Gemini TTS — Aethon mouth (director's notes + Charon). */
+let ttsInFlight = 0;
+const TTS_MAX_CONCURRENT = 2;
 app.post("/api/jarvis/voice", express_1.default.json({ limit: "256kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
@@ -2265,6 +2437,12 @@ app.post("/api/jarvis/voice", express_1.default.json({ limit: "256kb" }), async 
         res.status(400).json({ error: "Missing text" });
         return;
     }
+    if (ttsInFlight >= TTS_MAX_CONCURRENT) {
+        console.warn("[TTS] Concurrent limit reached — rejecting request");
+        res.status(429).json({ error: "TTS busy — try again" });
+        return;
+    }
+    ttsInFlight++;
     try {
         const audio = await (0, index_js_21.generateTTS)(text);
         if (!audio) {
@@ -2279,6 +2457,9 @@ app.post("/api/jarvis/voice", express_1.default.json({ limit: "256kb" }), async 
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         res.status(502).json({ error: message });
+    }
+    finally {
+        ttsInFlight--;
     }
 });
 /** Legacy alias — gemini-tts → hull TTS. */
@@ -3094,6 +3275,11 @@ app.get("/api/content/batch/:batchId/status", (req, res) => {
         completedAt: f.opusCompletedAt,
     }));
     const progressPct = progressMap[batch.status] ?? 10;
+    const failedFiles = sourceFiles.filter((f) => f.opusStatus === "failed");
+    const errorMessages = failedFiles.map((f) => ({
+        filename: f.originalFilename,
+        error: f.errorMessage,
+    }));
     res.json({
         ok: true,
         batchSessionId: batch.id,
@@ -3111,6 +3297,8 @@ app.get("/api/content/batch/:batchId/status", (req, res) => {
         batch,
         sourceFiles,
         files,
+        errorMessages,
+        failedFileCount: failedFiles.length,
     });
 });
 app.get("/api/content/batch/:batchId/clips", (req, res) => {
@@ -3322,6 +3510,113 @@ app.patch("/api/content/competitor-profiles/:id", express_1.default.json(), (req
         return;
     }
     res.json({ profile });
+});
+app.get("/api/content/youtube-analysis/latest", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const a = (0, contentDb_js_1.getLatestYoutubeAnalysis)();
+    if (!a) {
+        res.json({
+            analysis: null,
+            message: "No YouTube analysis yet. It runs automatically on Sunday nights or you can trigger it manually.",
+        });
+        return;
+    }
+    res.json({
+        analysis: {
+            id: a.id,
+            analyzed_at: a.analyzedAt,
+            videos_analyzed: a.videosAnalyzed,
+            channels_analyzed: a.channelsAnalyzed,
+            top_hook_structures: a.topHookStructures,
+            top_opening_phrases: a.topOpeningPhrases,
+            top_topics: a.topTopics,
+            top_data_points: a.topDataPoints,
+            top_cta_patterns: a.topCtaPatterns,
+            content_gaps: a.contentGaps,
+            full_analysis_markdown: a.keyInsights,
+            trend_signals: a.topRecommendedVideoIdea,
+            week_start: a.weekStart,
+        },
+    });
+});
+app.post("/api/content/youtube-analysis/run", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    void (0, youtubeIntel_js_1.runYouTubeCompetitorAnalysis)(index_js_13.contentManagerBrain).catch((err) => {
+        console.error("[youtube-intel] manual run failed:", err);
+    });
+    res.json({
+        ok: true,
+        message: "YouTube transcript analysis started. Check back in 2-3 minutes.",
+    });
+});
+app.get("/api/content/youtube-profiles", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json({ profiles: (0, contentDb_js_1.listAllYoutubeProfiles)() });
+});
+app.post("/api/content/youtube-profiles", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const youtubeChannelUrl = typeof req.body?.youtube_channel_url === "string" ? req.body.youtube_channel_url.trim() : "";
+    const channelName = typeof req.body?.channel_name === "string" ? req.body.channel_name.trim() : "";
+    const profileType = typeof req.body?.profile_type === "string" ? req.body.profile_type.trim() : "competitor";
+    if (!youtubeChannelUrl) {
+        res.status(400).json({ error: "youtube_channel_url required" });
+        return;
+    }
+    const profile = (0, contentDb_js_1.insertYoutubeProfile)({
+        youtubeChannelUrl,
+        channelName: channelName || undefined,
+        profileType,
+    });
+    res.json({ profile });
+});
+app.patch("/api/content/youtube-profiles/:id", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const id = String(req.params.id || "");
+    const active = req.body?.active;
+    const profile = (0, contentDb_js_1.updateYoutubeProfile)(id, {
+        active: active === 0 || active === false ? false : active === 1 || active === true ? true : undefined,
+    });
+    if (!profile) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+    }
+    res.json({ profile });
+});
+app.get("/api/content/youtube-transcripts", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const channelName = typeof req.query.channel_name === "string" ? req.query.channel_name : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : 20;
+    res.json({ transcripts: (0, contentDb_js_1.listYoutubeTranscripts)({ channelName, limit }) });
+});
+app.get("/api/content/youtube-transcripts/:videoId", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const transcript = (0, contentDb_js_1.getYoutubeTranscript)(String(req.params.videoId || ""));
+    if (!transcript) {
+        res.status(404).json({ error: "Transcript not found" });
+        return;
+    }
+    res.json({ transcript });
 });
 app.get("/api/content/compliance-queue", (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -6249,8 +6544,6 @@ setInterval(() => {
     })
         .catch((err) => console.error("[autoPlans] scheduled run failed:", err));
 }, AUTO_PLAN_INTERVAL_MS);
-(0, contentDb_js_1.getContentDb)();
-(0, jobs_js_1.scheduleContentJobs)();
 async function ensureSocialDataExists() {
     try {
         if (!(0, socialStore_js_1.socialDataAvailable)()) {
@@ -6267,8 +6560,19 @@ async function ensureSocialDataExists() {
         console.error("[Social] Startup check failed:", err);
     }
 }
+httpServer.on("error", (err) => {
+    console.error("[Server] HTTP listen error:", err);
+    process.exit(1);
+});
 httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Listening on 0.0.0.0:${PORT}`);
+    console.log(`[Server] Listening on 0.0.0.0:${PORT}`);
+    try {
+        (0, contentDb_js_1.getContentDb)();
+        (0, jobs_js_1.scheduleContentJobs)();
+    }
+    catch (err) {
+        console.error("[Server] content DB / jobs init failed:", err);
+    }
     try {
         (0, index_js_21.initHull)();
     }

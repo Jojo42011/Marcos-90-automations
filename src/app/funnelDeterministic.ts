@@ -8,7 +8,7 @@ import { MARCO_PHONE_CAPTURED_REPLY } from "../../config/prompts.js";
 
 export interface FunnelDeterministicMeta {
   phoneJustCaptured?: boolean;
-  /** Advanced to Closed this turn (module 07 equivalent — personalized list email next). */
+  /** List send promised — personalized list email next. */
   listSendPromised?: boolean;
 }
 

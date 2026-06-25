@@ -65,6 +65,7 @@ async function runHarveyChat(input) {
                 message: trimmed,
                 history: sessionMemory,
                 voiceMode: input.voiceMode,
+                onToken: input.onToken,
             });
             speech = result.speech;
             const inferredUi = (0, panelNormalizer_js_1.panelResultToUi)(inferredPanel);

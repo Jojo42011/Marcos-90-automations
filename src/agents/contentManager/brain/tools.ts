@@ -31,6 +31,8 @@ import {
   updateContentVideo,
   getLatestCompetitiveAnalysis,
   getActiveStrategyRecommendations,
+  getLatestYoutubeAnalysis,
+  listYoutubeTranscripts,
   listStrategyRecommendations,
   listRecordingTasks,
   insertRecordingTask,
@@ -283,6 +285,25 @@ export const CM_BRAIN_TOOL_DEFINITIONS: CmBrainToolDefinition[] = [
     name: "run_competitive_analysis",
     description: "Trigger full competitive analysis (Apify + Gemini, 30-60 seconds).",
     input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_youtube_insights",
+    description:
+      "Latest YouTube competitor transcript analysis — hook structures, opening phrases, topics, data points, CTA patterns, content gaps, key insights, and the recommended video idea. Use when Marco asks what competitors are doing on YouTube, what content he's missing, or for a video idea based on competitor research.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_youtube_transcripts_sample",
+    description:
+      "Recent cached competitor YouTube transcripts (hook + CTA excerpts), optionally filtered by channel. Use to reference specific competitor video content.",
+    input_schema: {
+      type: "object",
+      properties: {
+        channel_name: { type: "string" },
+        limit: { type: "number" },
+      },
+      required: [],
+    },
   },
 ];
 
@@ -611,6 +632,51 @@ export async function executeContentBrainTool(
       return {
         message: "Competitive analysis running — this calls Apify and may take 30-60 seconds.",
         analysis: await runFullCompetitiveAnalysis(contentManagerBrain),
+      };
+    }
+    case "get_youtube_insights": {
+      const analysis = getLatestYoutubeAnalysis();
+      if (!analysis) {
+        return {
+          analysis: null,
+          message:
+            "No YouTube analysis yet. It runs automatically on Sunday nights or can be triggered manually.",
+        };
+      }
+      const daysSince = Math.floor(
+        (Date.now() - new Date(analysis.analyzedAt).getTime()) / (1000 * 60 * 60 * 24),
+      );
+      return {
+        analyzed_at: analysis.analyzedAt,
+        videos_analyzed: analysis.videosAnalyzed,
+        channels_analyzed: analysis.channelsAnalyzed,
+        top_hook_structures: analysis.topHookStructures,
+        top_opening_phrases: analysis.topOpeningPhrases,
+        top_topics: analysis.topTopics,
+        top_data_points: analysis.topDataPoints,
+        top_cta_patterns: analysis.topCtaPatterns,
+        content_gaps: analysis.contentGaps,
+        key_insights: analysis.keyInsights,
+        top_recommended_video_idea: analysis.topRecommendedVideoIdea,
+        days_since_analysis: daysSince,
+      };
+    }
+    case "get_youtube_transcripts_sample": {
+      const channelName = input.channel_name ? String(input.channel_name) : undefined;
+      const limit = Number(input.limit) || 10;
+      const transcripts = listYoutubeTranscripts({ channelName, limit });
+      return {
+        count: transcripts.length,
+        transcripts: transcripts.map((t) => ({
+          video_id: t.videoId,
+          video_title: t.videoTitle,
+          channel_name: t.channelName,
+          view_count: t.viewCount,
+          hook_text: t.hookText,
+          cta_text: t.ctaText,
+          word_count: t.wordCount,
+          fetched_at: t.fetchedAt,
+        })),
       };
     }
     default:
