@@ -4,6 +4,7 @@ Marco Puga Realty — OpenShorts FastAPI wrapper
 import os
 import uuid
 import json
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -18,6 +19,63 @@ try:
     import main as openshorts_main
 except ImportError:
     openshorts_main = None
+
+
+def _probe_duration(video_path: str) -> float:
+    """Return media duration in seconds via ffprobe (0.0 if it can't be read)."""
+    try:
+        out = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        return float(out.stdout.strip())
+    except Exception:
+        return 0.0
+
+
+def _cut_clip(input_path: str, output_path: str, start_time: float, end_time: float) -> str:
+    """Cut a precise sub-clip with ffmpeg (re-encode for frame accuracy)."""
+    result = subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-ss", str(start_time),
+            "-to", str(end_time),
+            "-i", input_path,
+            "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+            "-c:a", "aac",
+            output_path,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg cut failed: {result.stderr.decode()[-500:]}")
+    return output_path
+
+
+def _extract_thumbnail(video_path: str, output_path: str, timestamp: float = 1.0) -> str:
+    """Grab a single still frame as the clip thumbnail."""
+    result = subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-ss", str(timestamp),
+            "-i", video_path,
+            "-frames:v", "1",
+            "-q:v", "2",
+            output_path,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg thumbnail failed: {result.stderr.decode()[-300:]}")
+    return output_path
 
 app = FastAPI(title="OpenShorts — Marco Puga Realty", version="1.0.0")
 
@@ -55,7 +113,8 @@ async def process_video_job(
         transcript = openshorts_main.transcribe_video(video_path)
         jobs[job_id]["status"] = "analyzing"
 
-        video_duration = transcript.get("duration", 0)
+        # transcribe_video() does not return duration — probe the file directly.
+        video_duration = transcript.get("duration") or _probe_duration(video_path)
         clips_data = main_marco.get_viral_clips_marco(
             transcript_result=transcript,
             video_duration=video_duration,
@@ -77,7 +136,7 @@ async def process_video_job(
             clip_path = str(clip_output_dir / clip_filename)
             thumb_path = str(clip_output_dir / thumbnail_filename)
 
-            openshorts_main.cut_clip(
+            _cut_clip(
                 input_path=video_path,
                 output_path=clip_path,
                 start_time=clip["start_time"],
@@ -86,22 +145,20 @@ async def process_video_job(
 
             reframed_path = clip_path.replace(".mp4", "_vertical.mp4")
             try:
-                openshorts_main.reframe_to_vertical(
-                    input_path=clip_path,
-                    output_path=reframed_path,
-                )
-                final_clip_path = reframed_path
+                success = openshorts_main.process_video_to_vertical(clip_path, reframed_path)
+                final_clip_path = reframed_path if success and os.path.exists(reframed_path) else clip_path
             except Exception as reframe_err:
                 print(f"Reframe failed for clip {i + 1}: {reframe_err}. Using original cut.")
                 final_clip_path = clip_path
 
             try:
-                openshorts_main.extract_thumbnail(
+                _extract_thumbnail(
                     video_path=final_clip_path,
                     output_path=thumb_path,
                     timestamp=1.0,
                 )
-            except Exception:
+            except Exception as thumb_err:
+                print(f"Thumbnail failed for clip {i + 1}: {thumb_err}")
                 thumb_path = None
 
             output_clips.append(
