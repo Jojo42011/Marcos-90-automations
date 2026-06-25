@@ -101,6 +101,7 @@ import {
   getAnalyticsDataset,
   getPillarPerformanceSummary,
   updateContentVideo,
+  deleteContentVideo,
   getContentVideo,
   getLatestBriefing,
   getDailyStrategy,
@@ -569,11 +570,11 @@ app.get("/health", async (_req, res) => {
       api_key_configured: isAnthropicApiKeyConfigured(),
       hull: "aethon-intelligence",
       voice: {
-        engine: process.env.DEEPGRAM_API_KEY ? "deepgram-flux" : "none",
-        deepgram_configured: Boolean(process.env.DEEPGRAM_API_KEY?.trim()),
+        engine: process.env.ELEVENLABS_API_KEY?.trim() ? "elevenlabs-scribe" : "none",
+        stt_configured: Boolean(process.env.ELEVENLABS_API_KEY?.trim()),
         brain: "claude",
-        tts: geminiApiKey() ? "gemini" : "none",
-        gemini_configured: Boolean(geminiApiKey()),
+        tts: process.env.ELEVENLABS_API_KEY?.trim() ? "elevenlabs" : geminiApiKey() ? "gemini" : "none",
+        elevenlabs_configured: Boolean(process.env.ELEVENLABS_API_KEY?.trim()),
       },
     },
     openshorts: {
@@ -3969,6 +3970,25 @@ app.get("/api/content/publishing-queue", (req, res) => {
   const limit = Number(req.query.limit) || 50;
   const clips = listPublishingQueue(limit);
   res.json({ clips });
+});
+
+app.delete("/api/content/clip/:clipId", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  try {
+    const result = deleteContentVideo(clipId);
+    if (!result.deleted) {
+      res.status(404).json({ error: "Clip not found" });
+      return;
+    }
+    res.json({ ok: true, deleted: true });
+  } catch (err) {
+    console.error(`[clip-delete] Failed to delete clip ${clipId}:`, err);
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 app.post("/api/content/clip/:clipId/send-to-publisher", express.json(), (req, res) => {
@@ -7375,10 +7395,10 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   } catch (err) {
     console.error("[hull] init failed:", err);
   }
-  if (!process.env.DEEPGRAM_API_KEY?.trim()) {
-    console.warn("[Harvey] DEEPGRAM_API_KEY not set — Flux voice STT will not work");
+  if (!process.env.ELEVENLABS_API_KEY?.trim()) {
+    console.warn("[Harvey] ELEVENLABS_API_KEY not set — Scribe voice STT will not work");
   } else {
-    console.log("[Harvey] DEEPGRAM_API_KEY configured — Flux STT ready");
+    console.log("[Harvey] ELEVENLABS_API_KEY configured — Scribe v2 Realtime STT ready");
   }
   if (!geminiApiKey()) {
     console.warn("[Harvey] GEMINI_API_KEY not set — Gemini TTS will not work");

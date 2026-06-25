@@ -1191,6 +1191,24 @@ export function updateContentVideo(
   return getContentVideo(id);
 }
 
+export function deleteContentVideo(id: string): { deleted: boolean } {
+  const database = getContentDb();
+  const existing = database
+    .prepare(`SELECT id FROM content_videos WHERE id = ?`)
+    .get(id) as { id: string } | undefined;
+  if (!existing) return { deleted: false };
+
+  const txn = database.transaction(() => {
+    database.prepare(`DELETE FROM cm_clip_enhancements WHERE video_id = ?`).run(id);
+    database.prepare(`DELETE FROM content_compliance_queue WHERE video_id = ?`).run(id);
+    database.prepare(`DELETE FROM content_publish_log WHERE video_id = ?`).run(id);
+    database.prepare(`DELETE FROM content_performance WHERE video_id = ?`).run(id);
+    database.prepare(`DELETE FROM content_videos WHERE id = ?`).run(id);
+  });
+  txn();
+  return { deleted: true };
+}
+
 export function listContentVideos(input?: {
   status?: ContentVideoStatus;
   limit?: number;
