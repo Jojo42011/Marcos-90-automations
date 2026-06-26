@@ -13,7 +13,6 @@ exports.updateContentSession = updateContentSession;
 exports.insertContentVideo = insertContentVideo;
 exports.getContentVideo = getContentVideo;
 exports.updateContentVideo = updateContentVideo;
-exports.deleteContentVideo = deleteContentVideo;
 exports.listContentVideos = listContentVideos;
 exports.insertPublishLog = insertPublishLog;
 exports.listSuccessfulPublishLogs = listSuccessfulPublishLogs;
@@ -1089,23 +1088,6 @@ function updateContentVideo(id, patch) {
        platform_targets = ?, optimal_post_time = ?, platform_target = ? WHERE id = ?`)
         .run(patch.status ?? existing.status, (patch.complianceFlagged ?? existing.complianceFlagged) ? 1 : 0, patch.complianceNotes !== undefined ? patch.complianceNotes : existing.complianceNotes, patch.approvedAt !== undefined ? patch.approvedAt : existing.approvedAt, patch.scheduledFor !== undefined ? patch.scheduledFor : existing.scheduledFor, patch.publishedAt !== undefined ? patch.publishedAt : existing.publishedAt, patch.hook ?? existing.hook, patch.caption ?? existing.caption, patch.title ?? existing.title, JSON.stringify(patch.hashtags ?? existing.hashtags), patch.trendAlignmentScore ?? existing.trendAlignmentScore ?? 0, patch.opusClipScore ?? existing.opusClipScore ?? 0, patch.hookType !== undefined ? patch.hookType : existing.hookType, JSON.stringify(patch.platformTargets ?? existing.platformTargets ?? []), patch.optimalPostTime !== undefined ? patch.optimalPostTime : existing.optimalPostTime, patch.platformTarget ?? existing.platformTarget, id);
     return getContentVideo(id);
-}
-function deleteContentVideo(id) {
-    const database = getContentDb();
-    const existing = database
-        .prepare(`SELECT id FROM content_videos WHERE id = ?`)
-        .get(id);
-    if (!existing)
-        return { deleted: false };
-    const txn = database.transaction(() => {
-        database.prepare(`DELETE FROM cm_clip_enhancements WHERE video_id = ?`).run(id);
-        database.prepare(`DELETE FROM content_compliance_queue WHERE video_id = ?`).run(id);
-        database.prepare(`DELETE FROM content_publish_log WHERE video_id = ?`).run(id);
-        database.prepare(`DELETE FROM content_performance WHERE video_id = ?`).run(id);
-        database.prepare(`DELETE FROM content_videos WHERE id = ?`).run(id);
-    });
-    txn();
-    return { deleted: true };
 }
 function listContentVideos(input) {
     const limit = input?.limit ?? 20;
