@@ -15,3 +15,17 @@ data/sms.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Local server/test logs
+*.log
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+
+# Runtime media / generated data (not for version control)
+data/uploads/
+data/voice-clone/
+
+# Vendored OpenShorts engine — separate repo (github.com/mutonby/openshorts)
+services/openshorts/
