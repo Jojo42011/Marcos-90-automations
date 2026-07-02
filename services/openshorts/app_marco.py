@@ -183,6 +183,7 @@ async def process_video_job(
     pillar: str,
     trend_brief: str,
     target_clips: int,
+    enable_captions: bool = True,
 ):
     try:
         if openshorts_main is None:
@@ -200,6 +201,10 @@ async def process_video_job(
             return
 
         print(f"[openshorts] Disk space OK: {available_mb}MB available")
+        if enable_captions:
+            print(f"[openshorts] Captions enabled: white text, black bg, lower third position")
+        else:
+            print(f"[openshorts] Captions disabled for this job")
 
         if not validate_video_file(video_path):
             error_detail = (
@@ -265,7 +270,20 @@ async def process_video_job(
 
                 reframed_path = clip_path.replace(".mp4", "_vertical.mp4")
                 try:
-                    success = openshorts_main.process_video_to_vertical(clip_path, reframed_path)
+                    caption_kwargs = {}
+                    if enable_captions:
+                        caption_kwargs = {
+                            "captions": True,
+                            "caption_font_size": 32,
+                            "caption_font_color": "white",
+                            "caption_bg_color": "black",
+                            "caption_bg_opacity": 0.7,
+                            "caption_position": "bottom",
+                            "caption_margin": 30,
+                        }
+                    success = openshorts_main.process_video_to_vertical(
+                        clip_path, reframed_path, **caption_kwargs
+                    )
                     if success and os.path.exists(reframed_path):
                         final_clip_path = reframed_path
                         try:
@@ -353,6 +371,7 @@ async def process_video(
     pillar: str = Form("brand"),
     trend_brief: str = Form(""),
     target_clips: int = Form(7),
+    enable_captions: str = Form("true"),
     x_gemini_key: Optional[str] = Header(None),
 ):
     gemini_api_key = x_gemini_key or os.environ.get("GEMINI_API_KEY")
@@ -393,6 +412,7 @@ async def process_video(
         pillar=pillar,
         trend_brief=trend_brief,
         target_clips=target_clips,
+        enable_captions=(enable_captions.lower() == "true"),
     )
 
     return {"job_id": job_id, "status": "queued"}

@@ -44,7 +44,7 @@ function mapClipUrlForFrontend(url) {
     return url;
 }
 async function submitToOpenShorts(input) {
-    const { filePath, pillar, trendBrief = "", targetClipCount = 7 } = input;
+    const { filePath, pillar, trendBrief = "", targetClipCount = 7, enableCaptions = true } = input;
     if (!fs_1.default.existsSync(filePath)) {
         throw new Error(`Video file not found at path: ${filePath}`);
     }
@@ -64,6 +64,7 @@ async function submitToOpenShorts(input) {
         formData.append("pillar", pillar);
         formData.append("trend_brief", trendBrief);
         formData.append("target_clips", String(targetClipCount));
+        formData.append("enable_captions", String(enableCaptions));
         const response = await axios_1.default.post(`${OPENSHORTS_BASE_URL}/api/process`, formData, {
             headers: {
                 ...formData.getHeaders(),
