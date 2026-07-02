@@ -14,6 +14,8 @@ exports.insertContentVideo = insertContentVideo;
 exports.getContentVideo = getContentVideo;
 exports.updateContentVideo = updateContentVideo;
 exports.listContentVideos = listContentVideos;
+exports.listAllContentVideoFileRefs = listAllContentVideoFileRefs;
+exports.listAllBatchSourceFileRefs = listAllBatchSourceFileRefs;
 exports.insertPublishLog = insertPublishLog;
 exports.listSuccessfulPublishLogs = listSuccessfulPublishLogs;
 exports.listPublishingQueue = listPublishingQueue;
@@ -1100,6 +1102,31 @@ function listContentVideos(input) {
             .prepare(`SELECT * FROM content_videos ORDER BY created_at DESC LIMIT ?`)
             .all(limit);
     return rows.map(rowToVideo);
+}
+/** Lightweight refs for disk cleanup — every video's id/status/file_path (no limit). */
+function listAllContentVideoFileRefs() {
+    const database = getContentDb();
+    const rows = database
+        .prepare(`SELECT id, status, file_path FROM content_videos`)
+        .all();
+    return rows.map((r) => ({
+        id: String(r.id),
+        status: String(r.status),
+        filePath: r.file_path != null ? String(r.file_path) : null,
+    }));
+}
+/** Lightweight refs for disk cleanup — every source file's path + job status. */
+function listAllBatchSourceFileRefs() {
+    const database = getContentDb();
+    const rows = database
+        .prepare(`SELECT file_path, opus_status FROM cm_batch_source_files`)
+        .all();
+    return rows
+        .map((r) => ({
+        filePath: r.file_path != null ? String(r.file_path) : "",
+        opusStatus: String(r.opus_status ?? "queued"),
+    }))
+        .filter((r) => r.filePath);
 }
 function insertPublishLog(log) {
     const database = getContentDb();

@@ -7,6 +7,8 @@ const clipEnhancer_js_1 = require("./clipEnhancer.js");
 const competitorIntel_js_1 = require("./competitorIntel.js");
 const compliance_js_1 = require("./compliance.js");
 const index_js_2 = require("../../integrations/openshorts/index.js");
+const diskCleanup_js_1 = require("../../core/diskCleanup.js");
+const MIN_FREE_DISK_MB = 600;
 const contentDb_js_1 = require("../../core/contentDb.js");
 const POLL_INTERVAL_MS = 30_000;
 const POLL_TIMEOUT_MS = 10 * 60 * 1000;
@@ -222,6 +224,15 @@ async function processBatch(batchSessionId) {
             const clipsForFile = perFile[fileIndex] ?? 1;
             try {
                 console.log(`[batch-processor] Processing file: ${sourceFile.originalFilename}`);
+                // Fix 4 — fail fast on low disk instead of submitting and timing out ~8s later.
+                const freeMB = await (0, diskCleanup_js_1.getFreeDiskMB)();
+                if (Number.isFinite(freeMB) && freeMB < MIN_FREE_DISK_MB) {
+                    const msg = `Not enough disk space to process — ${freeMB}MB available, ${MIN_FREE_DISK_MB}MB required. ` +
+                        `Free up space by reviewing and publishing pending clips, or contact support.`;
+                    console.warn(`[batch-processor] Disk space check failed: ${freeMB}MB available, ${MIN_FREE_DISK_MB}MB required. Job not submitted.`);
+                    (0, contentDb_js_1.updateBatchSourceFile)(sourceFile.id, { opusStatus: "failed", errorMessage: msg });
+                    continue;
+                }
                 (0, contentDb_js_1.updateBatchSourceFile)(sourceFile.id, {
                     opusStatus: "submitted",
                     opusSubmittedAt: new Date().toISOString(),
@@ -289,6 +300,11 @@ async function processBatch(batchSessionId) {
                     errorMessage: result.created > 0 ? null : "No clip records could be created",
                 });
                 console.log(`[batch-processor] File ${sourceFile.originalFilename}: ${result.created}/${openShortsClips.length} clips saved`);
+                // Fix 1 — source file is no longer needed once its clips are created.
+                // Only on success; a failed file is kept so the user can retry.
+                if (fileStatus === "complete") {
+                    (0, diskCleanup_js_1.deleteSourceFile)(sourceFile.filePath);
+                }
             }
             catch (fileErr) {
                 const msg = fileErr instanceof Error ? fileErr.message : String(fileErr);

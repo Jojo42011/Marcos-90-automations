@@ -68,6 +68,7 @@ const index_js_11 = require("./agents/listingStatusAutomation/index.js");
 const index_js_12 = require("./agents/contentManager/index.js");
 const index_js_13 = require("./agents/contentManager/brain/index.js");
 const batchProcessor_js_1 = require("./agents/contentManager/batchProcessor.js");
+const diskCleanup_js_1 = require("./core/diskCleanup.js");
 const competitorIntel_js_1 = require("./agents/contentManager/competitorIntel.js");
 const stats_js_1 = require("./agents/contentManager/brain/stats.js");
 const tools_js_1 = require("./agents/contentManager/brain/tools.js");
@@ -3126,8 +3127,16 @@ app.post("/api/content/compliance/:videoId/decision", express_1.default.json(), 
         return;
     }
     try {
+        const videoId = String(req.params.videoId || "");
         const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
-        const result = (0, index_js_12.applyComplianceDecision)(String(req.params.videoId || ""), decision, reason);
+        const result = (0, index_js_12.applyComplianceDecision)(videoId, decision, reason);
+        // A rejected clip has no further use — reclaim its file immediately.
+        if (decision === "rejected") {
+            const video = (0, contentDb_js_1.getContentVideo)(videoId);
+            const clipPath = video ? resolveClipFileForVideo(video) : null;
+            if (clipPath)
+                (0, diskCleanup_js_1.deleteClipFile)(clipPath);
+        }
         res.json(result);
     }
     catch (err) {
@@ -3239,6 +3248,24 @@ function streamClipVideoFile(req, res, filePath) {
     });
     fs_1.default.createReadStream(filePath).pipe(res);
 }
+const MIN_UPLOAD_FREE_DISK_MB = 600;
+// Fix 4 — reject uploads immediately (before multer writes anything) when the
+// volume is too full to process a job, instead of accepting → failing ~8s later.
+function requireDiskSpace(minMb) {
+    return (req, res, next) => {
+        void (0, diskCleanup_js_1.getFreeDiskMB)().then((freeMB) => {
+            if (Number.isFinite(freeMB) && freeMB < minMb) {
+                console.warn(`[batch-processor] Disk space check failed: ${freeMB}MB available, ${minMb}MB required. Job not submitted.`);
+                res.status(507).json({
+                    error: `Not enough disk space to process — ${freeMB}MB available, ${minMb}MB required. ` +
+                        `Free up space by reviewing and publishing pending clips, or contact support.`,
+                });
+                return;
+            }
+            next();
+        });
+    };
+}
 const contentVideoUpload = (0, multer_1.default)({
     storage: multer_1.default.diskStorage({
         destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
@@ -3269,7 +3296,7 @@ const batchVideoUpload = (0, multer_1.default)({
         cb(null, allowed.includes(ext));
     },
 });
-app.post("/api/content/upload", contentVideoUpload.single("video"), async (req, res) => {
+app.post("/api/content/upload", requireDiskSpace(MIN_UPLOAD_FREE_DISK_MB), contentVideoUpload.single("video"), async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
@@ -3298,7 +3325,7 @@ app.post("/api/content/upload", contentVideoUpload.single("video"), async (req, 
         res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
 });
-app.post("/api/content/batch-upload", batchVideoUpload.array("videos", 20), async (req, res) => {
+app.post("/api/content/batch-upload", requireDiskSpace(MIN_UPLOAD_FREE_DISK_MB), batchVideoUpload.array("videos", 20), async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.publishVideo = publishVideo;
 const crypto_1 = require("crypto");
 const contentDb_js_1 = require("../../core/contentDb.js");
+const diskCleanup_js_1 = require("../../core/diskCleanup.js");
 async function publishToTikTok(_filePath, _caption, _hashtags, _scheduledFor) {
     // TIKTOK_UPLOADER — uses TikTokAutoUploader Python library (github.com/makiisthenes/TiktokAutoUploader).
     // Will call a Python script via child_process that accepts video file path, caption, hashtags,
@@ -55,6 +56,8 @@ async function publishVideo(videoId, platform, options) {
         });
         (0, contentDb_js_1.incrementDailyTarget)((0, contentDb_js_1.todayDateCst)(), "videos_published");
         console.log(`[content-manager/publish] video ${videoId} → ${plat} post ${platformPostId}`);
+        // Fix 2 — the clip file is no longer needed once it has actually posted.
+        (0, diskCleanup_js_1.deleteClipByStoredPath)(video.filePath);
         return log;
     }
     catch (err) {

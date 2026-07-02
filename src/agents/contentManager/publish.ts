@@ -7,6 +7,7 @@ import {
   updateContentVideo,
   type ContentPublishLog,
 } from "../../core/contentDb.js";
+import { deleteClipByStoredPath } from "../../core/diskCleanup.js";
 
 async function publishToTikTok(
   _filePath: string | null,
@@ -89,6 +90,8 @@ export async function publishVideo(
 
     incrementDailyTarget(todayDateCst(), "videos_published");
     console.log(`[content-manager/publish] video ${videoId} → ${plat} post ${platformPostId}`);
+    // Fix 2 — the clip file is no longer needed once it has actually posted.
+    deleteClipByStoredPath(video.filePath);
     return log;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

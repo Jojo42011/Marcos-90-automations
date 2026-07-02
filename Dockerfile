@@ -28,6 +28,7 @@ COPY src ./src
 COPY config ./config
 COPY public ./public
 COPY services ./services
+COPY scripts ./scripts
 COPY supervisord.conf ./supervisord.conf
 RUN npm run build && npm prune --omit=dev
 

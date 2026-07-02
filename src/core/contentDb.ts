@@ -1209,6 +1209,33 @@ export function listContentVideos(input?: {
   return rows.map(rowToVideo);
 }
 
+/** Lightweight refs for disk cleanup — every video's id/status/file_path (no limit). */
+export function listAllContentVideoFileRefs(): { id: string; status: string; filePath: string | null }[] {
+  const database = getContentDb();
+  const rows = database
+    .prepare(`SELECT id, status, file_path FROM content_videos`)
+    .all() as Record<string, unknown>[];
+  return rows.map((r) => ({
+    id: String(r.id),
+    status: String(r.status),
+    filePath: r.file_path != null ? String(r.file_path) : null,
+  }));
+}
+
+/** Lightweight refs for disk cleanup — every source file's path + job status. */
+export function listAllBatchSourceFileRefs(): { filePath: string; opusStatus: string }[] {
+  const database = getContentDb();
+  const rows = database
+    .prepare(`SELECT file_path, opus_status FROM cm_batch_source_files`)
+    .all() as Record<string, unknown>[];
+  return rows
+    .map((r) => ({
+      filePath: r.file_path != null ? String(r.file_path) : "",
+      opusStatus: String(r.opus_status ?? "queued"),
+    }))
+    .filter((r) => r.filePath);
+}
+
 export function insertPublishLog(
   log: Omit<ContentPublishLog, "id"> & { id?: string },
 ): ContentPublishLog {

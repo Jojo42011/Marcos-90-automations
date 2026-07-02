@@ -19,6 +19,10 @@ import {
   type OpenShortsClipResult,
 } from "../../integrations/openshorts/index.js";
 
+import { deleteSourceFile, getFreeDiskMB } from "../../core/diskCleanup.js";
+
+const MIN_FREE_DISK_MB = 600;
+
 import {
   createContentSession,
   countClipsInApprovedOrScheduled,
@@ -291,6 +295,19 @@ export async function processBatch(batchSessionId: string): Promise<void> {
     try {
       console.log(`[batch-processor] Processing file: ${sourceFile.originalFilename}`);
 
+      // Fix 4 — fail fast on low disk instead of submitting and timing out ~8s later.
+      const freeMB = await getFreeDiskMB();
+      if (Number.isFinite(freeMB) && freeMB < MIN_FREE_DISK_MB) {
+        const msg =
+          `Not enough disk space to process — ${freeMB}MB available, ${MIN_FREE_DISK_MB}MB required. ` +
+          `Free up space by reviewing and publishing pending clips, or contact support.`;
+        console.warn(
+          `[batch-processor] Disk space check failed: ${freeMB}MB available, ${MIN_FREE_DISK_MB}MB required. Job not submitted.`,
+        );
+        updateBatchSourceFile(sourceFile.id, { opusStatus: "failed", errorMessage: msg });
+        continue;
+      }
+
       updateBatchSourceFile(sourceFile.id, {
         opusStatus: "submitted",
         opusSubmittedAt: new Date().toISOString(),
@@ -377,6 +394,12 @@ export async function processBatch(batchSessionId: string): Promise<void> {
       console.log(
         `[batch-processor] File ${sourceFile.originalFilename}: ${result.created}/${openShortsClips.length} clips saved`,
       );
+
+      // Fix 1 — source file is no longer needed once its clips are created.
+      // Only on success; a failed file is kept so the user can retry.
+      if (fileStatus === "complete") {
+        deleteSourceFile(sourceFile.filePath);
+      }
     } catch (fileErr) {
       const msg = fileErr instanceof Error ? fileErr.message : String(fileErr);
       console.error(
