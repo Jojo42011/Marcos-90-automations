@@ -1543,6 +1543,50 @@
     @keyframes contentIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .cm-section.cm-entering { animation: contentIn 300ms var(--ease-out) both; }
 
+    /* ====================================================================
+       Phase 12/13 — apply the language to all sections + micro-details
+       ==================================================================== */
+    /* Button interactions everywhere */
+    .cm-btn, button.primary, .btn-secondary, .cm-subtab, .trend-badge, .rq-btn {
+      transition: background var(--t-fast) var(--ease-smooth), border-color var(--t-fast) var(--ease-smooth), color var(--t-fast) var(--ease-smooth), box-shadow var(--t-fast) var(--ease-smooth), transform var(--t-fast) var(--ease-spring);
+    }
+    .cm-btn:active, button.primary:active, .btn-secondary:active, .cm-subtab:active, .trend-badge:active { transform: scale(0.96); }
+    .cm-btn:disabled, button.primary:disabled, .btn-secondary:disabled, button:disabled { opacity: 0.35; cursor: not-allowed; }
+    .cm-btn:disabled:hover, button.primary:disabled:hover, .btn-secondary:disabled:hover { box-shadow: none; transform: none; }
+    .cm-btn:focus-visible, button:focus-visible, .cm-subtab:focus-visible, .tb-select:focus-visible, a.crm-side-btn:focus-visible { outline: 2px solid var(--teal-border); outline-offset: 2px; }
+    button.primary { background: var(--teal); color: #04121a; border: none; font-weight: 700; }
+    button.primary:hover { background: var(--teal-bright); box-shadow: var(--shadow-teal); filter: none; }
+    .btn-secondary { background: var(--bg-3); border: 1px solid var(--dimmest); }
+    .btn-secondary:hover { border-color: var(--teal-border); color: var(--teal); }
+    .cm-subtab.active { color: var(--teal); background: var(--teal-dim); border-color: var(--teal-border); }
+
+    /* Inputs / selects focus glow */
+    select:focus, input:focus, textarea:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-glow); }
+
+    /* Tables (Community, Publishing, etc.) */
+    .cm-content table th { font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--dimmer); text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--dimmest); font-weight: 600; }
+    .cm-content table td { padding: 10px; border-bottom: 1px solid var(--dimmest); }
+    .cm-content table tbody tr { transition: background var(--t-fast) var(--ease-smooth); }
+    .cm-content table tbody tr:hover { background: var(--bg-2); }
+
+    /* Upload & Clip — drop zone glow + border pulse */
+    .upload-zone { position: relative; transition: border-color var(--t-base) var(--ease-smooth), background var(--t-base) var(--ease-smooth), transform var(--t-base) var(--ease-spring); }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--teal-border-strong); background: radial-gradient(ellipse at center, var(--teal-glow), transparent 72%); transform: translateY(-2px); animation: dropPulse 1.6s var(--ease-smooth) infinite; }
+    @keyframes dropPulse { 0%, 100% { border-color: var(--teal-border); } 50% { border-color: var(--teal-border-strong); } }
+    .upload-zone .icon { color: var(--teal); }
+
+    /* Prominent FAILED badge */
+    .status-badge.failed, .fstatus.failed { background: var(--red-dim); border: 1px solid var(--red-border); color: var(--red); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* Strategy / Content Suggestions — AI cards */
+    .suggestion-card { position: relative; background: var(--bg-2); border: 1px solid var(--dimmest); border-radius: var(--radius-lg); transition: border-color var(--t-base) var(--ease-smooth), box-shadow var(--t-base) var(--ease-smooth), transform var(--t-base) var(--ease-spring); }
+    .suggestion-card:hover { border-color: var(--teal-border); box-shadow: var(--shadow-teal); transform: translateY(-2px); }
+    .suggestion-card-header { padding-right: 44px; }
+    .suggestion-card::after { content: "AI"; position: absolute; top: 12px; right: 12px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 1px; color: var(--teal); border: 1px solid var(--teal-border); border-radius: 20px; padding: 2px 7px; background: var(--teal-dim); pointer-events: none; }
+
+    /* Section labels used by Activity Log / Suggestions */
+    .suggestions-section-label { font-family: var(--font-display); font-size: 9px; letter-spacing: 3px; color: var(--dim); text-transform: uppercase; padding-left: 12px; border-left: 3px solid var(--teal); margin: 0 0 12px; }
+
   </style>
 </head>
 <body>
