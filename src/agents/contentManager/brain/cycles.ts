@@ -3,6 +3,7 @@
  */
 import { runPerformanceSync } from "../analytics.js";
 import type { ContentManagerBrain } from "./index.js";
+import { claudeContent, CONTENT_MODELS, logContentAiFailure } from "../../../integrations/claude-content.js";
 import {
   CONTENT_BENCHMARK_VIEWS,
   countLeadCapturesForDate,
@@ -250,7 +251,21 @@ Recent learning: ${JSON.stringify(recentLogs)}
 Performance model: ${JSON.stringify(model)}
 Generate pillar_priority, recommended_hooks (3), hashtag_set, platform_distribution, avoid_angles, reasoning, confidence_score (0-100). Return JSON only: { "pillar_priority": string[], "recommended_hooks": string[], "hashtag_set": string[], "avoid_angles": string[], "platform_distribution": object, "reasoning": string, "confidence_score": number }`;
 
-  const strategyRaw = await brain.chat(strategyPrompt);
+  let strategyRaw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.QUALITY,
+      max_tokens: 1024,
+      system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+      messages: [{ role: "user", content: strategyPrompt }],
+    });
+    strategyRaw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+  } catch (err) {
+    logContentAiFailure("morning strategy", err);
+  }
   const parsed = parseJsonFromText<{
     pillar_priority: string[];
     recommended_hooks: string[];
@@ -276,9 +291,24 @@ Generate pillar_priority, recommended_hooks (3), hashtag_set, platform_distribut
   });
 
   const experimentNote = isMonday() ? " Experiment proposed for this week — see cm_experiments." : "";
-  const briefingRaw = await brain.chat(
-    `Write a morning briefing for Harvey. Strategy: ${JSON.stringify(strategy)}. Pipeline pending review: ${pendingReview}. Momentum: ${momentum.streakType} (${momentum.streakCount}).${experimentNote} Return JSON: { "body": string (3-4 sentences), "action_items": string[] }`,
-  );
+  let briefingRaw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.QUALITY,
+      max_tokens: 500,
+      system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+      messages: [{
+        role: "user",
+        content: `Write a morning briefing for Harvey. Strategy: ${JSON.stringify(strategy)}. Pipeline pending review: ${pendingReview}. Momentum: ${momentum.streakType} (${momentum.streakCount}).${experimentNote} Return JSON: { "body": string (3-4 sentences), "action_items": string[] }`,
+      }],
+    });
+    briefingRaw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+  } catch (err) {
+    logContentAiFailure("morning briefing", err);
+  }
   const briefingParsed = parseJsonFromText<{ body: string; action_items: string[] }>(briefingRaw);
 
   let recordingPlanNote = "";
@@ -335,9 +365,27 @@ export async function runMiddayCycle(brain: ContentManagerBrain): Promise<void> 
   const leadUnder = targets.phoneNumbersCaptured < 8;
 
   if (behindPace || bottleneck || leadUnder) {
-    const alertRaw = await brain.chat(
-      `Midday alert needed. Videos published: ${targets.videosPublished}/7. Compliance queue: ${pendingCompliance}. Phone numbers: ${targets.phoneNumbersCaptured}/22. Write a 2-3 sentence escalation for Harvey.`,
-    );
+    let alertRaw = "";
+    try {
+      const response = await claudeContent.messages.create({
+        model: CONTENT_MODELS.QUALITY,
+        max_tokens: 300,
+        messages: [{
+          role: "user",
+          content: `Midday alert needed. Videos published: ${targets.videosPublished}/7. Compliance queue: ${pendingCompliance}. Phone numbers: ${targets.phoneNumbersCaptured}/22. Write a 2-3 sentence escalation for Harvey.`,
+        }],
+      });
+      alertRaw = response.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("")
+        .trim();
+    } catch (err) {
+      logContentAiFailure("midday alert", err);
+    }
+    if (!alertRaw) {
+      alertRaw = `Midday check: ${targets.videosPublished}/7 videos published, ${pendingCompliance} items in compliance queue, ${targets.phoneNumbersCaptured}/22 phone numbers captured. Needs attention.`;
+    }
     insertBriefing({
       briefingType: "escalation",
       title: `Content Manager — Midday Alert ${today}`,
@@ -401,7 +449,21 @@ export async function runEveningCycle(brain: ContentManagerBrain): Promise<void>
   const hookTypeSummary = getHookTypePerformanceSummary();
   const topCombinations = getTopCombinations(5);
   const learningPrompt = `Here is today's performance data (${freshData.length} videos updated). Top hooks: ${JSON.stringify(topHooks)}. Hook type summary: ${JSON.stringify(hookTypeSummary)}. Top combinations: ${JSON.stringify(topCombinations)}. Generate 3-5 data-backed insights and 1-3 strategy adjustments for tomorrow. Return JSON: { "insights": string[], "strategy_adjustments": string[] }`;
-  const learningRaw = await brain.chat(learningPrompt);
+  let learningRaw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.QUALITY,
+      max_tokens: 700,
+      system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+      messages: [{ role: "user", content: learningPrompt }],
+    });
+    learningRaw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+  } catch (err) {
+    logContentAiFailure("evening insights", err);
+  }
   const learning = parseJsonFromText<{ insights: string[]; strategy_adjustments: string[] }>(learningRaw);
 
   const insights = learning?.insights ?? ["Insufficient data for strong patterns today — maintain volume focus."];
@@ -436,9 +498,24 @@ export async function runEveningCycle(brain: ContentManagerBrain): Promise<void>
     const exists = listCutList().some((c) => c.contentAngle.includes(item.title.slice(0, 40)));
     if (exists) continue;
     if (item.latestViews < 3000 && item.consecutiveColdPulls >= 3) {
-      const evalRaw = await brain.chat(
-        `Video "${item.title}" averaged ${item.latestViews} views across ${item.consecutiveColdPulls} cold pulls (benchmark 6006). Should we cut this angle? Reply JSON: { "cut": boolean, "reason": string }`,
-      );
+      let evalRaw = "";
+      try {
+        const response = await claudeContent.messages.create({
+          model: CONTENT_MODELS.FAST,
+          max_tokens: 200,
+          system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+          messages: [{
+            role: "user",
+            content: `Video "${item.title}" averaged ${item.latestViews} views across ${item.consecutiveColdPulls} cold pulls (benchmark 6006). Should we cut this angle? Reply JSON: { "cut": boolean, "reason": string }`,
+          }],
+        });
+        evalRaw = response.content
+          .filter((b) => b.type === "text")
+          .map((b) => (b.type === "text" ? b.text : ""))
+          .join("");
+      } catch (err) {
+        logContentAiFailure("cut-angle decision", err);
+      }
       const evalParsed = parseJsonFromText<{ cut: boolean; reason: string }>(evalRaw);
       if (evalParsed?.cut) {
         insertCutListItem({
@@ -488,7 +565,21 @@ export async function runNightCycle(brain: ContentManagerBrain): Promise<void> {
 
   const analysisPrompt = `Nightly deep analysis. ${calibrationNote}
 Learning logs: ${JSON.stringify(logs.slice(0, 7))}. Performance model: ${JSON.stringify(model)}. Top hooks: ${JSON.stringify(topHooks)}. Bottom hooks: ${JSON.stringify(bottomHooks)}. Cut list: ${JSON.stringify(cutList)}. Return JSON: { "trend_assessment": string, "top_pillar": string, "biggest_opportunity": string, "biggest_risk": string, "tomorrow_priority": string, "weekly_summary": string }`;
-  const analysisRaw = await brain.chat(analysisPrompt);
+  let analysisRaw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.QUALITY,
+      max_tokens: 900,
+      system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+      messages: [{ role: "user", content: analysisPrompt }],
+    });
+    analysisRaw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+  } catch (err) {
+    logContentAiFailure("nightly deep analysis", err);
+  }
   const analysis = parseJsonFromText<{
     trend_assessment: string;
     top_pillar: string;
@@ -499,9 +590,24 @@ Learning logs: ${JSON.stringify(logs.slice(0, 7))}. Performance model: ${JSON.st
   }>(analysisRaw);
 
   const tomorrow = tomorrowDateCst();
-  const prelimRaw = await brain.chat(
-    `Based on this analysis: ${JSON.stringify(analysis)}. Generate tomorrow's preliminary strategy JSON with pillar_priority, recommended_hooks, hashtag_set, avoid_angles, platform_distribution, reasoning, confidence_score (low, 20-40).`,
-  );
+  let prelimRaw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.QUALITY,
+      max_tokens: 900,
+      system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+      messages: [{
+        role: "user",
+        content: `Based on this analysis: ${JSON.stringify(analysis)}. Generate tomorrow's preliminary strategy JSON with pillar_priority, recommended_hooks, hashtag_set, avoid_angles, platform_distribution, reasoning, confidence_score (low, 20-40).`,
+      }],
+    });
+    prelimRaw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+  } catch (err) {
+    logContentAiFailure("preliminary strategy", err);
+  }
   const prelim = parseJsonFromText<{
     pillar_priority: string[];
     recommended_hooks: string[];
@@ -593,9 +699,24 @@ Learning logs: ${JSON.stringify(logs.slice(0, 7))}. Performance model: ${JSON.st
         : 0;
     const topInsights = logs.slice(0, 3).flatMap((l) => l.insights);
 
-    const evalRaw = await brain.chat(
-      `Write your weekly self-evaluation for the week of ${weekStart}. Data: strategies followed ${strategiesFollowed}/7, average outcome score ${avgOutcome.toFixed(0)}/100, calibration score ${model.calibrationScore ?? "n/a"}, top insights this week: ${JSON.stringify(topInsights)}. Answer: (1) What did you get right? (2) What did you get wrong? (3) One change going forward? (4) 6006 benchmark trajectory? Return JSON only: { "what_worked": string, "what_failed": string, "one_change": string, "benchmark_assessment": string, "calibration_score": number }`,
-    );
+    let evalRaw = "";
+    try {
+      const response = await claudeContent.messages.create({
+        model: CONTENT_MODELS.QUALITY,
+        max_tokens: 800,
+        system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+        messages: [{
+          role: "user",
+          content: `Write your weekly self-evaluation for the week of ${weekStart}. Data: strategies followed ${strategiesFollowed}/7, average outcome score ${avgOutcome.toFixed(0)}/100, calibration score ${model.calibrationScore ?? "n/a"}, top insights this week: ${JSON.stringify(topInsights)}. Answer: (1) What did you get right? (2) What did you get wrong? (3) One change going forward? (4) 6006 benchmark trajectory? Return JSON only: { "what_worked": string, "what_failed": string, "one_change": string, "benchmark_assessment": string, "calibration_score": number }`,
+        }],
+      });
+      evalRaw = response.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("");
+    } catch (err) {
+      logContentAiFailure("weekly self-evaluation", err);
+    }
     const evalParsed = parseJsonFromText<{
       what_worked: string;
       what_failed: string;
@@ -645,9 +766,27 @@ Learning logs: ${JSON.stringify(logs.slice(0, 7))}. Performance model: ${JSON.st
     const weekTargets = listDailyTargetsLastDays(7);
     const totalVideos = weekTargets.reduce((s, t) => s + t.videosPublished, 0);
     const totalPhones = weekTargets.reduce((s, t) => s + t.phoneNumbersCaptured, 0);
-    const weeklyRaw = await brain.chat(
-      `Weekly summary: ${totalVideos}/49 videos, ${totalPhones}/154 phone numbers. Daily breakdown: ${JSON.stringify(weekTargets)}. Write a weekly content briefing for Harvey in 4-5 sentences.`,
-    );
+    let weeklyRaw = "";
+    try {
+      const response = await claudeContent.messages.create({
+        model: CONTENT_MODELS.QUALITY,
+        max_tokens: 500,
+        messages: [{
+          role: "user",
+          content: `Weekly summary: ${totalVideos}/49 videos, ${totalPhones}/154 phone numbers. Daily breakdown: ${JSON.stringify(weekTargets)}. Write a weekly content briefing for Harvey in 4-5 sentences.`,
+        }],
+      });
+      weeklyRaw = response.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("")
+        .trim();
+    } catch (err) {
+      logContentAiFailure("weekly summary briefing", err);
+    }
+    if (!weeklyRaw) {
+      weeklyRaw = `Weekly summary: ${totalVideos}/49 videos published, ${totalPhones}/154 phone numbers captured this week.`;
+    }
     insertBriefing({
       briefingType: "weekly",
       title: `Content Manager — Weekly Briefing ${today}`,

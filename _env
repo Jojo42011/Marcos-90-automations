@@ -13,10 +13,13 @@ ANTHROPIC_API_KEY=YOUR_ANTHROPIC_KEY
 ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 # HARVEY_MODEL=claude-sonnet-4-20250514
 
-# Content Manager Brain (Google Gemini — uses GEMINI_API_KEY above)
-# CONTENT_BRAIN_MODEL=gemini-2.5-flash
-# CONTENT_BRAIN_MINI_MODEL=gemini-2.5-flash
+# Content Manager Brain + OpenShorts clip analysis (Anthropic Claude — uses ANTHROPIC_API_KEY above)
+# CONTENT_MODEL_FAST=claude-haiku-4-5-20251001
+# CONTENT_MODEL_QUALITY=claude-sonnet-5
+# CONTENT_BRAIN_MODEL=claude-sonnet-5
 
+# GEMINI_API_KEY below is Harvey-only now (voice TTS + Gemini Live) — the
+# Content Manager and OpenShorts sidecar no longer use Gemini for anything.
 GEMINI_API_KEY=YOUR_GEMINI_KEY
 OPENSHORTS_URL=http://localhost:8000
 OPENSHORTS_PORT=8000

@@ -17,7 +17,7 @@ try:
 except ImportError:
     resource = None
 
-from fastapi import FastAPI, File, UploadFile, Form, Header, HTTPException, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -178,24 +178,22 @@ def _extract_thumbnail(video_path: str, output_path: str, timestamp: float = 1.0
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    if gemini_key.startswith("AIza"):
-        print(f"GEMINI_API_KEY configured: {gemini_key[:8]}...")
-    elif gemini_key:
-        print(
-            f"WARNING: GEMINI_API_KEY invalid for Google AI (got {gemini_key[:8]}…) — "
-            f"will use fallback LLM if available"
-        )
+    if _anthropic_key := os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        if _anthropic_key.startswith("sk-ant-"):
+            print(f"ANTHROPIC_API_KEY configured: {_anthropic_key[:8]}...")
+        else:
+            print(
+                f"[content-ai] WARNING: ANTHROPIC_API_KEY invalid format (got {_anthropic_key[:8]}…, "
+                f"expected sk-ant-…) — will use fallback LLM if available"
+            )
     else:
-        print("NOTE: GEMINI_API_KEY not set — will use OpenAI or Anthropic for clip analysis")
+        print("[content-ai] NOTE: ANTHROPIC_API_KEY not set — will use OpenAI for clip analysis")
 
     if _openai_key := os.environ.get("OPENAI_API_KEY", "").strip():
         print(f"OPENAI_API_KEY configured: {_openai_key[:8]}...")
-    if _anthropic_key := os.environ.get("ANTHROPIC_API_KEY", "").strip():
-        print(f"ANTHROPIC_API_KEY configured: {_anthropic_key[:8]}...")
 
     if not any_llm_configured():
-        print("WARNING: No LLM configured for clip analysis (need AIza Gemini, OpenAI, or Anthropic key)")
+        print("[content-ai] WARNING: No LLM configured for clip analysis (need ANTHROPIC_API_KEY or OPENAI_API_KEY)")
     else:
         print(f"Clip analysis LLM providers available: {configured_llm_summary()}")
 
@@ -237,7 +235,6 @@ CLIPS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 def process_video_job(
     job_id: str,
     video_path: str,
-    gemini_api_key: str,
     pillar: str,
     trend_brief: str,
     target_clips: int,
@@ -311,7 +308,6 @@ def process_video_job(
                 pillar=pillar,
                 trend_brief=trend_brief,
                 target_clips=target_clips,
-                gemini_api_key=gemini_api_key,
             )
         except Exception as analyze_err:
             error_detail = (
@@ -491,13 +487,11 @@ async def process_video(
     trend_brief: str = Form(""),
     target_clips: int = Form(7),
     enable_captions: str = Form("true"),
-    x_gemini_key: Optional[str] = Header(None),
 ):
-    gemini_api_key = x_gemini_key or os.environ.get("GEMINI_API_KEY")
     if not any_llm_configured():
         raise HTTPException(
             status_code=400,
-            detail="LLM API key required — set GEMINI_API_KEY (AIza…), OPENAI_API_KEY, or ANTHROPIC_API_KEY",
+            detail="LLM API key required — set ANTHROPIC_API_KEY (sk-ant-…) or OPENAI_API_KEY",
         )
 
     job_id = str(uuid.uuid4())
@@ -540,7 +534,6 @@ async def process_video(
         process_video_job,
         job_id=job_id,
         video_path=video_path,
-        gemini_api_key=gemini_api_key,
         pillar=pillar,
         trend_brief=trend_brief,
         target_clips=target_clips,

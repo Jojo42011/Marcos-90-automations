@@ -5,6 +5,7 @@ exports.getCalendarDayData = getCalendarDayData;
 exports.getCalendarMonthData = getCalendarMonthData;
 exports.generateWeeklyRecordingPlan = generateWeeklyRecordingPlan;
 exports.markRecordingTaskFiled = markRecordingTaskFiled;
+const claude_content_js_1 = require("../../integrations/claude-content.js");
 const competitiveAnalysis_js_1 = require("./competitiveAnalysis.js");
 const contentDb_js_1 = require("../../core/contentDb.js");
 const SPRINT_TARGET = 861;
@@ -142,7 +143,23 @@ async function generateWeeklyRecordingPlan(weekStart, brain) {
     const strategy = (0, contentDb_js_1.getDailyStrategy)((0, contentDb_js_1.todayDateCst)());
     const sprint = getSprintProgress();
     const recommendations = (0, contentDb_js_1.getActiveStrategyRecommendations)().slice(0, 3);
-    const raw = await brain.chat(`Plan next week's recording sessions for Marco Puga. Pipeline status for each day: ${JSON.stringify(pipelineGaps)}. Current pillar priority: ${JSON.stringify(strategy?.pillarPriority ?? ["brand", "education", "listings"])}. Sprint math: ${sprint.totalPublished} / ${SPRINT_TARGET} target, ${sprint.daysRemaining} days left, need ${sprint.videosNeededPerDay} per day to stay on track. Current strategy recommendations: ${JSON.stringify(recommendations.map((r) => r.recommendation))}. Generate a recording plan as JSON: { "sessions": [{ "due_date", "pillar", "topic", "hook_type", "priority", "filming_notes", "estimated_clips_from_session" }] }. Plan enough sessions to close the pipeline gap and keep the sprint on track.`);
+    const recordingPlanPrompt = `Plan next week's recording sessions for Marco Puga. Pipeline status for each day: ${JSON.stringify(pipelineGaps)}. Current pillar priority: ${JSON.stringify(strategy?.pillarPriority ?? ["brand", "education", "listings"])}. Sprint math: ${sprint.totalPublished} / ${SPRINT_TARGET} target, ${sprint.daysRemaining} days left, need ${sprint.videosNeededPerDay} per day to stay on track. Current strategy recommendations: ${JSON.stringify(recommendations.map((r) => r.recommendation))}. Generate a recording plan as JSON: { "sessions": [{ "due_date", "pillar", "topic", "hook_type", "priority", "filming_notes", "estimated_clips_from_session" }] }. Plan enough sessions to close the pipeline gap and keep the sprint on track.`;
+    let raw = "";
+    try {
+        const response = await claude_content_js_1.claudeContent.messages.create({
+            model: claude_content_js_1.CONTENT_MODELS.QUALITY,
+            max_tokens: 2048,
+            system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+            messages: [{ role: "user", content: recordingPlanPrompt }],
+        });
+        raw = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
+    }
+    catch (err) {
+        (0, claude_content_js_1.logContentAiFailure)("weekly recording plan", err);
+    }
     const parsed = parseJsonFromText(raw);
     const created = [];
     const sessions = parsed?.sessions ?? [];

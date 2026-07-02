@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.proposeWeeklyExperiment = proposeWeeklyExperiment;
 exports.evaluateCurrentExperiment = evaluateCurrentExperiment;
 exports.assignVideoToExperiment = assignVideoToExperiment;
+const claude_content_js_1 = require("../../../integrations/claude-content.js");
 const contentDb_js_1 = require("../../../core/contentDb.js");
 const hookClassifier_js_1 = require("./hookClassifier.js");
 const stats_js_1 = require("./stats.js");
@@ -29,7 +30,22 @@ async function proposeWeeklyExperiment(brain) {
     const combinations = (0, contentDb_js_1.listCombinationPatterns)({ minSamples: 2, limit: 10, order: "desc" });
     const hookSummary = (0, hookClassifier_js_1.getHookTypePerformanceSummary)();
     const prompt = `Based on this performance data: ${JSON.stringify(model)}, top combinations: ${JSON.stringify(combinations)}, hook type summary: ${JSON.stringify(hookSummary)} — propose ONE small experiment for this week. Test exactly ONE variable achievable with content in the pipeline. Return JSON only: { "hypothesis": string, "variable_tested": string, "control_description": string, "test_description": string }`;
-    const raw = await brain.chat(prompt);
+    let raw = "";
+    try {
+        const response = await claude_content_js_1.claudeContent.messages.create({
+            model: claude_content_js_1.CONTENT_MODELS.QUALITY,
+            max_tokens: 500,
+            system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+            messages: [{ role: "user", content: prompt }],
+        });
+        raw = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
+    }
+    catch (err) {
+        (0, claude_content_js_1.logContentAiFailure)("weekly experiment proposal", err);
+    }
     const parsed = parseJson(raw);
     if (!parsed?.hypothesis)
         return;
@@ -65,7 +81,25 @@ async function evaluateCurrentExperiment(brain) {
         result = "test_won";
     else if (controlAvg > testAvg * 1.1)
         result = "control_won";
-    const raw = await brain.chat(`Experiment result: control avg ${controlAvg} vs test avg ${testAvg}. Hypothesis: ${exp.hypothesis}. Result: ${result}. Return JSON: { "conclusion": string, "learning": string }`);
+    let raw = "";
+    try {
+        const response = await claude_content_js_1.claudeContent.messages.create({
+            model: claude_content_js_1.CONTENT_MODELS.QUALITY,
+            max_tokens: 400,
+            system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+            messages: [{
+                    role: "user",
+                    content: `Experiment result: control avg ${controlAvg} vs test avg ${testAvg}. Hypothesis: ${exp.hypothesis}. Result: ${result}. Return JSON: { "conclusion": string, "learning": string }`,
+                }],
+        });
+        raw = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
+    }
+    catch (err) {
+        (0, claude_content_js_1.logContentAiFailure)("experiment evaluation", err);
+    }
     const parsed = parseJson(raw);
     (0, contentDb_js_1.updateExperiment)(exp.id, {
         controlAvgViews: controlAvg,

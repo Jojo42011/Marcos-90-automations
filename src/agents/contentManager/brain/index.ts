@@ -1,5 +1,5 @@
 /**
- * Content Manager Brain — autonomous content intelligence agent (Google Gemini).
+ * Content Manager Brain — autonomous content intelligence agent (Anthropic Claude).
  */
 import { CONTENT_MANAGER_BRAIN_PROMPT } from "./prompts.js";
 import { CM_BRAIN_TOOL_DEFINITIONS, executeContentBrainTool } from "./tools.js";
@@ -27,18 +27,18 @@ import {
 } from "../../../core/contentDb.js";
 import { getLatestYouTubeAnalysis } from "../youtubeIntel.js";
 import {
-  geminiChatWithTools,
-  geminiSimpleChat,
-  getCmBrainModel,
-  getGeminiApiKey,
+  claudeChatWithTools,
+  claudeSimpleChat,
+  getContentBrainModel,
   type CmBrainChatMessage,
-} from "./gemini.js";
+} from "./claudeTools.js";
+import { validateAnthropicKey } from "../../../integrations/claude-content.js";
 
 export class ContentManagerBrain {
   private apiKey: string | null;
 
   constructor() {
-    this.apiKey = getGeminiApiKey();
+    this.apiKey = process.env.ANTHROPIC_API_KEY?.trim() || null;
   }
 
   private buildContextSnapshot(): Record<string, unknown> {
@@ -123,22 +123,28 @@ export class ContentManagerBrain {
     history?: CmBrainChatMessage[],
   ): Promise<string> {
     if (!this.apiKey) {
-      return "Content Manager Brain is offline — set GEMINI_API_KEY in .env.";
+      return "Content Manager Brain is offline — set ANTHROPIC_API_KEY in .env.";
     }
 
     const system = CONTENT_MANAGER_BRAIN_PROMPT + extraContext;
-    return geminiChatWithTools({
+    return claudeChatWithTools({
       system,
       userMessage,
       history,
       tools: CM_BRAIN_TOOL_DEFINITIONS,
-      model: getCmBrainModel(),
+      model: getContentBrainModel(),
       maxRounds: 8,
       onToolCall: executeContentBrainTool,
     });
   }
 
-  /** Cycle-internal chat (no session persistence). */
+  /**
+   * Public entry point for Harvey's `ask_content_manager` tool
+   * (src/harvey/tools.ts) — the one remaining caller. Every internal content
+   * manager module (cycles.ts, competitiveAnalysis.ts, youtubeIntel.ts,
+   * calendar.ts, clipEnhancer.ts, experiments.ts) now makes its own direct,
+   * independently-routed Claude call instead of going through this method.
+   */
   async chat(message: string, context?: object): Promise<string> {
     const model = getPerformanceModel();
     const strategy = getDailyStrategy(todayDateCst());
@@ -158,7 +164,7 @@ export class ContentManagerBrain {
   ): Promise<{ response: string; sessionId: string }> {
     if (!this.apiKey) {
       return {
-        response: "Content Manager Brain is offline — set GEMINI_API_KEY in .env.",
+        response: "Content Manager Brain is offline — set ANTHROPIC_API_KEY in .env.",
         sessionId: sessionId ?? "",
       };
     }
@@ -170,8 +176,8 @@ export class ContentManagerBrain {
 
     const priorMessages = listChatMessages(session.id);
     const history: CmBrainChatMessage[] = priorMessages.slice(-20).map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: m.content,
     }));
 
     const contextSnapshot = this.buildContextSnapshot();
@@ -184,12 +190,12 @@ export class ContentManagerBrain {
       performanceContext: contextSnapshot,
     });
 
-    const response = await geminiChatWithTools({
+    const response = await claudeChatWithTools({
       system,
       userMessage: message,
       history,
       tools: CM_BRAIN_TOOL_DEFINITIONS,
-      model: getCmBrainModel(),
+      model: getContentBrainModel(),
       maxRounds: 8,
       onToolCall: executeContentBrainTool,
     });
@@ -205,7 +211,7 @@ export class ContentManagerBrain {
     if (updated && updated.messageCount >= 6 && !updated.sessionSummary) {
       const recent = listChatMessages(session.id).slice(-6);
       const summaryText = recent.map((m) => `${m.role}: ${m.content}`).join("\n");
-      const summary = await geminiSimpleChat(
+      const summary = await claudeSimpleChat(
         `Summarize this conversation in one sentence:\n${summaryText}`,
       );
       if (summary) updateChatSessionSummary(session.id, summary);
@@ -241,9 +247,10 @@ const lastBrainRuns: Record<string, string> = {};
 
 /** Schedule 6am, 12pm, 6pm, 10pm CST intelligence cycles. */
 export function scheduleContentBrainCycles(): void {
-  const provider = getGeminiApiKey()
-    ? `Gemini (${getCmBrainModel()})`
-    : "offline — set GEMINI_API_KEY";
+  const keyValid = validateAnthropicKey();
+  const provider = keyValid
+    ? `Claude (${getContentBrainModel()})`
+    : "offline — set ANTHROPIC_API_KEY";
   console.log(
     `[cm-brain] intelligence cycles scheduled: 6am, 12pm, 6pm, 10pm America/Chicago — ${provider}`,
   );

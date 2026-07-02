@@ -5,7 +5,7 @@ exports.runCompetitorScrape = runCompetitorScrape;
 exports.getTrendBriefForOpusClip = getTrendBriefForOpusClip;
 exports.getTrendAlignmentScore = getTrendAlignmentScore;
 const index_js_1 = require("../../integrations/apify/index.js");
-const gemini_js_1 = require("../contentManager/brain/gemini.js");
+const claude_content_js_1 = require("../../integrations/claude-content.js");
 const contentDb_js_1 = require("../../core/contentDb.js");
 const THEME_KEYWORDS = [
     "interest rate",
@@ -139,12 +139,20 @@ async function runCompetitorScrape() {
     let trendBrief = fallbackTrendBrief(topHooks, trendingHashtags, bestDurationRange, topContentThemes);
     const prompt = `You are the Content Manager for Marco Puga, a San Antonio real estate agent. Here is what's performing best on competitor real estate TikTok accounts right now: Top hooks from high-performing videos: ${JSON.stringify(topHooks)}. Most used hashtags on viral posts: ${JSON.stringify(trendingHashtags)}. Best performing video duration: ${bestDurationRange}. Top content themes: ${JSON.stringify(topContentThemes)}. Write a trend brief of 4-5 specific, actionable sentences that could be used to direct a video clipping AI (OpusClip) to find the best moments in Marco's footage AND direct a caption writer to write hooks that match current trends. Be specific. Name the patterns. Example: 'Question hooks opening with a specific dollar amount are generating 3x average engagement this week.' Return plain text only — no JSON, no bullet points, just the trend brief paragraph.`;
     try {
-        const aiBrief = await (0, gemini_js_1.geminiSimpleChat)(prompt);
+        const response = await claude_content_js_1.claudeContent.messages.create({
+            model: claude_content_js_1.CONTENT_MODELS.QUALITY,
+            max_tokens: 400,
+            messages: [{ role: "user", content: prompt }],
+        });
+        const aiBrief = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
         if (aiBrief?.trim())
             trendBrief = aiBrief.trim();
     }
     catch (err) {
-        console.warn("[competitor-intel] Gemini trend brief failed, using fallback:", err);
+        (0, claude_content_js_1.logContentAiFailure)("competitor trend brief", err);
     }
     const now = new Date();
     const scrapedAt = now.toISOString();

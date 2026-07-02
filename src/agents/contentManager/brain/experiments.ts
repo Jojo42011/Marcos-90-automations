@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import type { ContentManagerBrain } from "./index.js";
+import { claudeContent, CONTENT_MODELS, logContentAiFailure } from "../../../integrations/claude-content.js";
 import {
   assignVideoToExperiment as dbAssignVideo,
   getActiveExperiment,
@@ -40,7 +41,21 @@ export async function proposeWeeklyExperiment(brain: ContentManagerBrain): Promi
 
   const prompt = `Based on this performance data: ${JSON.stringify(model)}, top combinations: ${JSON.stringify(combinations)}, hook type summary: ${JSON.stringify(hookSummary)} — propose ONE small experiment for this week. Test exactly ONE variable achievable with content in the pipeline. Return JSON only: { "hypothesis": string, "variable_tested": string, "control_description": string, "test_description": string }`;
 
-  const raw = await brain.chat(prompt);
+  let raw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.QUALITY,
+      max_tokens: 500,
+      system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+      messages: [{ role: "user", content: prompt }],
+    });
+    raw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+  } catch (err) {
+    logContentAiFailure("weekly experiment proposal", err);
+  }
   const parsed = parseJson<{
     hypothesis: string;
     variable_tested: string;
@@ -86,9 +101,24 @@ export async function evaluateCurrentExperiment(brain: ContentManagerBrain): Pro
   if (testAvg > controlAvg * 1.1) result = "test_won";
   else if (controlAvg > testAvg * 1.1) result = "control_won";
 
-  const raw = await brain.chat(
-    `Experiment result: control avg ${controlAvg} vs test avg ${testAvg}. Hypothesis: ${exp.hypothesis}. Result: ${result}. Return JSON: { "conclusion": string, "learning": string }`,
-  );
+  let raw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.QUALITY,
+      max_tokens: 400,
+      system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+      messages: [{
+        role: "user",
+        content: `Experiment result: control avg ${controlAvg} vs test avg ${testAvg}. Hypothesis: ${exp.hypothesis}. Result: ${result}. Return JSON: { "conclusion": string, "learning": string }`,
+      }],
+    });
+    raw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+  } catch (err) {
+    logContentAiFailure("experiment evaluation", err);
+  }
   const parsed = parseJson<{ conclusion: string; learning: string }>(raw);
 
   updateExperiment(exp.id, {

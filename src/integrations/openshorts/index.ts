@@ -8,21 +8,9 @@ import FormData from "form-data";
 import { randomUUID } from "crypto";
 
 const OPENSHORTS_BASE_URL = process.env.OPENSHORTS_URL || "http://localhost:8000";
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const POLL_INTERVAL_MS = 8000;
 const STATUS_CHECK_TIMEOUT_MS = 25000;
 const MAX_POLL_ATTEMPTS = 120;
-
-function validateGeminiKey(key: string): void {
-  if (!key) return;
-  if (!key.startsWith("AIza")) {
-    console.warn(
-      `[openshorts] GEMINI_API_KEY invalid format: got ${key.slice(0, 12)}… (expected AIza…). ` +
-      `Clip analysis will fall back to OpenAI/Anthropic or fail. ` +
-      `Get a valid API key from https://aistudio.google.com/app/apikey.`,
-    );
-  }
-}
 
 export interface OpenShortsClipResult {
   clipId: string;
@@ -75,8 +63,6 @@ export async function submitToOpenShorts(input: {
     throw new Error(`Video file not found at path: ${filePath}`);
   }
 
-  validateGeminiKey(GEMINI_API_KEY);
-
   // Pre-submission health check: fail fast if sidecar is offline.
   // This prevents silent fallback to mock clips when sidecar is clearly down.
   const health = await checkOpenShortsHealth();
@@ -98,10 +84,7 @@ export async function submitToOpenShorts(input: {
     formData.append("enable_captions", String(enableCaptions));
 
     const response = await axios.post(`${OPENSHORTS_BASE_URL}/api/process`, formData, {
-      headers: {
-        ...formData.getHeaders(),
-        "X-Gemini-Key": GEMINI_API_KEY,
-      },
+      headers: formData.getHeaders(),
       timeout: 30000,
     });
 

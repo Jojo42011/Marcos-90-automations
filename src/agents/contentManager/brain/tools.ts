@@ -1,8 +1,32 @@
 /**
  * Content Manager Brain — 16 tools for autonomous intelligence cycles.
  */
-import type { CmBrainToolDefinition } from "./gemini.js";
-import { geminiSimpleChat, getCmBrainMiniModel, getGeminiApiKey } from "./gemini.js";
+import type { CmBrainToolDefinition } from "./claudeTools.js";
+import { claudeContent, CONTENT_MODELS, logContentAiFailure } from "../../../integrations/claude-content.js";
+
+/** System prompt for hook/caption generation — Marco's voice, hook science, and funnel CTA logic. */
+const MARCO_VOICE_SYSTEM = `You are the hook and caption writer for Marco Puga Realty (@puga.realtor), a San Antonio real estate agent building a TikTok-first content system.
+
+MARCO'S VOICE (never break these rules):
+- Short sentences. Direct. First person ("I", never "we" or "our team").
+- Contractions always — "you're" not "you are", "here's" not "here is".
+- Zero corporate language. No "leverage", "synergy", "circle back", "unlock", "elevate".
+- One exclamation point max per piece of content.
+- San Antonio specific — real neighborhoods (Stone Oak, Canyon Lake, New Braunfels, Alamo Heights), never generic "your area".
+- Real numbers only — actual prices, actual square footage, actual rates. Never round vaguely.
+- Friendly but not soft. Confident but not arrogant.
+
+HOOK SCIENCE (the first 1-3 seconds decide watch time, the #1 ranking signal):
+Question hooks drive comments. Data hooks (a specific number/price/rate) drive saves. Local hooks ("Stone Oak buyers...") drive DMs. Personal-story hooks build trust. Controversy/shock hooks drive shares. Every hook must sound like something Marco would actually say out loud on camera — never marketing copy.
+
+THE FUNNEL (every caption moves a viewer down this path):
+entertained -> educated -> trusting -> DM -> phone number -> Carlos closes.
+CTAs should nudge toward a DM or comment Marco's team can convert into a phone number — never "link in bio" or generic engagement bait.
+
+PLATFORM PACING:
+TikTok (primary) wants the fastest pacing and native slang is fine. Instagram Reels reuses the same clip with a slightly warmer, more polished tone. Facebook Reels reuses it again with slightly more explanation since that audience skews older. Write for TikTok-native pacing first — it reads fine on Reels and Facebook too.
+
+Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON.`;
 import { runComplianceCheck } from "../compliance.js";
 import {
   CONTENT_BENCHMARK_VIEWS,
@@ -283,7 +307,7 @@ export const CM_BRAIN_TOOL_DEFINITIONS: CmBrainToolDefinition[] = [
   },
   {
     name: "run_competitive_analysis",
-    description: "Trigger full competitive analysis (Apify + Gemini, 30-60 seconds).",
+    description: "Trigger full competitive analysis (Apify + Claude, 30-60 seconds).",
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
@@ -454,12 +478,25 @@ export async function executeContentBrainTool(
       const originalHook = String(input.original_hook || "");
       const pillar = String(input.pillar || "education");
       let variations: string[] = [];
-      if (getGeminiApiKey()) {
-        const text = await geminiSimpleChat(
-          `Write 5 alternative hooks for a ${pillar} real estate video in Marco Puga's voice. Original hook: ${originalHook}. Use these patterns that are currently working above benchmark: ${working.join("; ") || "direct first-person San Antonio real estate"}. Marco's voice rules: direct, first person, contractions, no corporate speak, San Antonio specific, real numbers. Return JSON array of 5 hook strings only.`,
-          getCmBrainMiniModel(),
-        );
-        variations = parseHookJson(text);
+      if (process.env.ANTHROPIC_API_KEY?.trim()) {
+        try {
+          const response = await claudeContent.messages.create({
+            model: CONTENT_MODELS.QUALITY,
+            max_tokens: 1024,
+            system: MARCO_VOICE_SYSTEM,
+            messages: [{
+              role: "user",
+              content: `Write 5 alternative hooks for a ${pillar} pillar real estate video. The hook currently in use: "${originalHook}". Marco's hook patterns that are currently beating the 6,006-view benchmark: ${working.join("; ") || "direct first-person San Antonio real estate"}. Vary the hook type across the 5 (mix question/data/local/personal-story/controversy) so we can test which converts best — do not just reword the original 5 times. Return a JSON array of exactly 5 hook strings, nothing else.`,
+            }],
+          });
+          const text = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
+          variations = parseHookJson(text);
+        } catch (err) {
+          logContentAiFailure("generate_hook_variations", err);
+        }
       }
       if (variations.length === 0) {
         variations = [
@@ -481,16 +518,33 @@ export async function executeContentBrainTool(
       const hook = String(input.hook || "");
       const platform = String(input.platform || "tiktok");
       const hashtags = Array.isArray(input.hashtags) ? input.hashtags.map(String) : [];
-      if (getGeminiApiKey()) {
-        const text = await geminiSimpleChat(
-          `Write a social media caption for a ${pillar} real estate video on ${platform} in Marco Puga's voice. Hook: ${hook}. Hashtags to include: ${hashtags.join(" ")}. Max 150 characters for caption body. Return JSON: { "caption": string, "full_post": string }`,
-          getCmBrainMiniModel(),
-        );
-        const match = text.match(/\{[\s\S]*\}/);
-        if (match) {
-          try {
+      if (process.env.ANTHROPIC_API_KEY?.trim()) {
+        try {
+          const ctaByPillar: Record<string, string> = {
+            brand: `"DM me" — trust is already built by this point in a brand video, so ask directly`,
+            education: `"Comment your question and I'll answer it" — drives the comment signal and qualifies the lead`,
+            listings: `"DM me for the address" — gates a hyperlocal lead behind a DM`,
+          };
+          const cta = ctaByPillar[pillar] ?? ctaByPillar.brand;
+          const response = await claudeContent.messages.create({
+            model: CONTENT_MODELS.QUALITY,
+            max_tokens: 1024,
+            system: MARCO_VOICE_SYSTEM,
+            messages: [{
+              role: "user",
+              content: `Write the caption for this ${pillar} pillar video, going out on ${platform} first. The video opens with this exact hook: "${hook}". Hashtags to include: ${hashtags.join(" ")}. Caption body (the part after the hook) must be under 150 characters and end with a CTA styled like: ${cta}. Return JSON: { "caption": string, "full_post": string (hook + caption + hashtags, ready to post) }`,
+            }],
+          });
+          const text = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
+          const match = text.match(/\{[\s\S]*\}/);
+          if (match) {
             return JSON.parse(match[0]);
-          } catch { /* fall through */ }
+          }
+        } catch (err) {
+          logContentAiFailure("generate_caption", err);
         }
       }
       const caption = hook.slice(0, 150);

@@ -20,7 +20,6 @@ def get_viral_clips_marco(
     pillar: str = "brand",
     trend_brief: str = "",
     target_clips: int = 7,
-    gemini_api_key: str | None = None,
 ) -> dict:
     if openshorts_main is None:
         raise RuntimeError("OpenShorts main module not available")
@@ -37,7 +36,7 @@ def get_viral_clips_marco(
         target_clips=target_clips,
     )
 
-    clips_data, model = analyze_transcript_for_clips(prompt, gemini_api_key=gemini_api_key)
+    clips_data, model = analyze_transcript_for_clips(prompt)
 
     return {
         "clips": clips_data,
@@ -103,7 +102,6 @@ if openshorts_main is not None:
             pillar=kw.get("pillar", "brand"),
             trend_brief=kw.get("trend_brief", ""),
             target_clips=kw.get("target_clips", 7),
-            gemini_api_key=kw.get("gemini_api_key"),
         )
 
     openshorts_main.get_viral_clips = _patched_get_viral_clips

@@ -1,4 +1,5 @@
 import type { ContentManagerBrain } from "./brain/index.js";
+import { claudeContent, CONTENT_MODELS, logContentAiFailure } from "../../integrations/claude-content.js";
 import { getWeekStart } from "./brain/stats.js";
 import { generateRecordingTask } from "./competitiveAnalysis.js";
 import {
@@ -225,9 +226,23 @@ export async function generateWeeklyRecordingPlan(
   const sprint = getSprintProgress();
   const recommendations = getActiveStrategyRecommendations().slice(0, 3);
 
-  const raw = await brain.chat(
-    `Plan next week's recording sessions for Marco Puga. Pipeline status for each day: ${JSON.stringify(pipelineGaps)}. Current pillar priority: ${JSON.stringify(strategy?.pillarPriority ?? ["brand", "education", "listings"])}. Sprint math: ${sprint.totalPublished} / ${SPRINT_TARGET} target, ${sprint.daysRemaining} days left, need ${sprint.videosNeededPerDay} per day to stay on track. Current strategy recommendations: ${JSON.stringify(recommendations.map((r) => r.recommendation))}. Generate a recording plan as JSON: { "sessions": [{ "due_date", "pillar", "topic", "hook_type", "priority", "filming_notes", "estimated_clips_from_session" }] }. Plan enough sessions to close the pipeline gap and keep the sprint on track.`,
-  );
+  const recordingPlanPrompt = `Plan next week's recording sessions for Marco Puga. Pipeline status for each day: ${JSON.stringify(pipelineGaps)}. Current pillar priority: ${JSON.stringify(strategy?.pillarPriority ?? ["brand", "education", "listings"])}. Sprint math: ${sprint.totalPublished} / ${SPRINT_TARGET} target, ${sprint.daysRemaining} days left, need ${sprint.videosNeededPerDay} per day to stay on track. Current strategy recommendations: ${JSON.stringify(recommendations.map((r) => r.recommendation))}. Generate a recording plan as JSON: { "sessions": [{ "due_date", "pillar", "topic", "hook_type", "priority", "filming_notes", "estimated_clips_from_session" }] }. Plan enough sessions to close the pipeline gap and keep the sprint on track.`;
+
+  let raw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.QUALITY,
+      max_tokens: 2048,
+      system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+      messages: [{ role: "user", content: recordingPlanPrompt }],
+    });
+    raw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+  } catch (err) {
+    logContentAiFailure("weekly recording plan", err);
+  }
 
   const parsed = parseJsonFromText<{
     sessions: Array<{

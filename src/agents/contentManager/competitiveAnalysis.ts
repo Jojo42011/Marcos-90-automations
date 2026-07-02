@@ -1,6 +1,7 @@
 import { getCompetitorVideos, getMarcoOwnVideos } from "../../integrations/apify/index.js";
 import type { TikTokVideoNormalized } from "../../integrations/apify/types.js";
 import type { ContentManagerBrain } from "./brain/index.js";
+import { claudeContent, CONTENT_MODELS, logContentAiFailure } from "../../integrations/claude-content.js";
 import { classifyHook } from "./brain/hookClassifier.js";
 import {
   computeDecayWeightedAvg,
@@ -185,8 +186,7 @@ export async function generateRecordingTask(
   recommendation: CmStrategyRecommendation,
   brain: ContentManagerBrain,
 ): Promise<CmRecordingTask> {
-  const raw = await brain.chat(
-    `Based on this strategy recommendation: '${recommendation.recommendation}' (data backing: '${recommendation.dataBacking}'), generate a specific filming brief for Marco Puga. Return JSON only:
+  const recordingTaskPrompt = `Based on this strategy recommendation: '${recommendation.recommendation}' (data backing: '${recommendation.dataBacking}'), generate a specific filming brief for Marco Puga. Return JSON only:
 {
   "topic": "specific video topic in one sentence",
   "suggested_hooks": ["hook 1 - exactly what Marco says in first 3 seconds", "hook 2 - alternative opening", "hook 3 - alternative opening"],
@@ -195,8 +195,23 @@ export async function generateRecordingTask(
   "filming_notes": "specific instructions: where to stand, what to show on camera, what numbers to mention, how to end the video",
   "reason": "one sentence of why this specific video will perform based on the data",
   "due_date": "YYYY-MM-DD of the nearest day this should be filmed by to maintain pipeline"
-}`,
-  );
+}`;
+
+  let raw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.FAST,
+      max_tokens: 600,
+      system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+      messages: [{ role: "user", content: recordingTaskPrompt }],
+    });
+    raw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+  } catch (err) {
+    logContentAiFailure("recording task generation", err);
+  }
 
   const parsed = parseJsonFromText<{
     topic: string;
@@ -349,8 +364,7 @@ export async function runFullCompetitiveAnalysis(
   const marcoGaps = buildMarcoGaps(topCompetitorThemes, competitorHookFreq, marcoRecent);
 
   const aboveBelow = marcoVsFieldPct >= 0 ? "above" : "below";
-  const analysisRaw = await brain.chat(
-    `You are conducting a full competitive analysis for Marco Puga (@puga.realtor), a San Antonio real estate agent. Here is the data:
+  const competitiveAnalysisPrompt = `You are conducting a full competitive analysis for Marco Puga (@puga.realtor), a San Antonio real estate agent. Here is the data:
 Marco's metrics (last 30 days, decay-weighted): avg views: ${Math.round(marcoAvgViews)}, avg engagement rate: ${marcoAvgEngagementRate.toFixed(2)}%, trending direction: ${model.trendingDirection}.
 Competitor field average (last 14 days, ${handles.length} competitors): avg views: ${Math.round(competitorAvgViews)}, avg engagement rate: ${competitorAvgEngagementRate.toFixed(2)}%.
 Marco vs field: ${marcoVsFieldPct.toFixed(1)}% (${aboveBelow} competitor average).
@@ -367,8 +381,26 @@ WHAT COMPETITORS ARE WINNING WITH THAT MARCO IS MISSING (3-5 specific gaps with 
 THE SINGLE BIGGEST OPPORTUNITY (1 paragraph — the one thing that could move Marco's numbers the most based on this analysis)
 THIS WEEK'S STRATEGIC PRIORITIES (numbered list of 5 specific, actionable recommendations with the data that supports each one)
 
-Be specific. Name exact content types, hook structures, competitor strategies. Do not give generic social media advice. Every recommendation should be something Marco can execute in the next 7 days.`,
-  );
+Be specific. Name exact content types, hook structures, competitor strategies. Do not give generic social media advice. Every recommendation should be something Marco can execute in the next 7 days.`;
+
+  let analysisRaw = "";
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.QUALITY,
+      max_tokens: 2048,
+      messages: [{ role: "user", content: competitiveAnalysisPrompt }],
+    });
+    analysisRaw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("")
+      .trim();
+  } catch (err) {
+    logContentAiFailure("full competitive analysis", err);
+  }
+  if (!analysisRaw) {
+    analysisRaw = `SITUATION SUMMARY\nMarco is ${Math.abs(marcoVsFieldPct).toFixed(0)}% ${aboveBelow} the competitor field average this period.\n\nTHIS WEEK'S STRATEGIC PRIORITIES\n1. Increase volume on themes competitors are winning with this week.`;
+  }
 
   const now = new Date().toISOString();
   const weekStart = getWeekStart();

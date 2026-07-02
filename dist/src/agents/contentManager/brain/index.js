@@ -4,18 +4,19 @@ exports.contentManagerBrain = exports.ContentManagerBrain = void 0;
 exports.getOrCreateSession = getOrCreateSession;
 exports.scheduleContentBrainCycles = scheduleContentBrainCycles;
 /**
- * Content Manager Brain — autonomous content intelligence agent (Google Gemini).
+ * Content Manager Brain — autonomous content intelligence agent (Anthropic Claude).
  */
 const prompts_js_1 = require("./prompts.js");
 const tools_js_1 = require("./tools.js");
 const cycles_js_1 = require("./cycles.js");
 const contentDb_js_1 = require("../../../core/contentDb.js");
 const youtubeIntel_js_1 = require("../youtubeIntel.js");
-const gemini_js_1 = require("./gemini.js");
+const claudeTools_js_1 = require("./claudeTools.js");
+const claude_content_js_1 = require("../../../integrations/claude-content.js");
 class ContentManagerBrain {
     apiKey;
     constructor() {
-        this.apiKey = (0, gemini_js_1.getGeminiApiKey)();
+        this.apiKey = process.env.ANTHROPIC_API_KEY?.trim() || null;
     }
     buildContextSnapshot() {
         const model = (0, contentDb_js_1.getPerformanceModel)();
@@ -88,20 +89,26 @@ class ContentManagerBrain {
     }
     async runToolRound(userMessage, extraContext = "", history) {
         if (!this.apiKey) {
-            return "Content Manager Brain is offline — set GEMINI_API_KEY in .env.";
+            return "Content Manager Brain is offline — set ANTHROPIC_API_KEY in .env.";
         }
         const system = prompts_js_1.CONTENT_MANAGER_BRAIN_PROMPT + extraContext;
-        return (0, gemini_js_1.geminiChatWithTools)({
+        return (0, claudeTools_js_1.claudeChatWithTools)({
             system,
             userMessage,
             history,
             tools: tools_js_1.CM_BRAIN_TOOL_DEFINITIONS,
-            model: (0, gemini_js_1.getCmBrainModel)(),
+            model: (0, claudeTools_js_1.getContentBrainModel)(),
             maxRounds: 8,
             onToolCall: tools_js_1.executeContentBrainTool,
         });
     }
-    /** Cycle-internal chat (no session persistence). */
+    /**
+     * Public entry point for Harvey's `ask_content_manager` tool
+     * (src/harvey/tools.ts) — the one remaining caller. Every internal content
+     * manager module (cycles.ts, competitiveAnalysis.ts, youtubeIntel.ts,
+     * calendar.ts, clipEnhancer.ts, experiments.ts) now makes its own direct,
+     * independently-routed Claude call instead of going through this method.
+     */
     async chat(message, context) {
         const model = (0, contentDb_js_1.getPerformanceModel)();
         const strategy = (0, contentDb_js_1.getDailyStrategy)((0, contentDb_js_1.todayDateCst)());
@@ -118,7 +125,7 @@ class ContentManagerBrain {
     async chatWithSession(message, sessionId) {
         if (!this.apiKey) {
             return {
-                response: "Content Manager Brain is offline — set GEMINI_API_KEY in .env.",
+                response: "Content Manager Brain is offline — set ANTHROPIC_API_KEY in .env.",
                 sessionId: sessionId ?? "",
             };
         }
@@ -130,8 +137,8 @@ class ContentManagerBrain {
             session = (0, contentDb_js_1.createChatSession)();
         const priorMessages = (0, contentDb_js_1.listChatMessages)(session.id);
         const history = priorMessages.slice(-20).map((m) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }],
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: m.content,
         }));
         const contextSnapshot = this.buildContextSnapshot();
         const system = prompts_js_1.CONTENT_MANAGER_BRAIN_PROMPT + this.buildContextBlock();
@@ -141,12 +148,12 @@ class ContentManagerBrain {
             content: message,
             performanceContext: contextSnapshot,
         });
-        const response = await (0, gemini_js_1.geminiChatWithTools)({
+        const response = await (0, claudeTools_js_1.claudeChatWithTools)({
             system,
             userMessage: message,
             history,
             tools: tools_js_1.CM_BRAIN_TOOL_DEFINITIONS,
-            model: (0, gemini_js_1.getCmBrainModel)(),
+            model: (0, claudeTools_js_1.getContentBrainModel)(),
             maxRounds: 8,
             onToolCall: tools_js_1.executeContentBrainTool,
         });
@@ -160,7 +167,7 @@ class ContentManagerBrain {
         if (updated && updated.messageCount >= 6 && !updated.sessionSummary) {
             const recent = (0, contentDb_js_1.listChatMessages)(session.id).slice(-6);
             const summaryText = recent.map((m) => `${m.role}: ${m.content}`).join("\n");
-            const summary = await (0, gemini_js_1.geminiSimpleChat)(`Summarize this conversation in one sentence:\n${summaryText}`);
+            const summary = await (0, claudeTools_js_1.claudeSimpleChat)(`Summarize this conversation in one sentence:\n${summaryText}`);
             if (summary)
                 (0, contentDb_js_1.updateChatSessionSummary)(session.id, summary);
         }
@@ -187,9 +194,10 @@ function getOrCreateSession() {
 const lastBrainRuns = {};
 /** Schedule 6am, 12pm, 6pm, 10pm CST intelligence cycles. */
 function scheduleContentBrainCycles() {
-    const provider = (0, gemini_js_1.getGeminiApiKey)()
-        ? `Gemini (${(0, gemini_js_1.getCmBrainModel)()})`
-        : "offline — set GEMINI_API_KEY";
+    const keyValid = (0, claude_content_js_1.validateAnthropicKey)();
+    const provider = keyValid
+        ? `Claude (${(0, claudeTools_js_1.getContentBrainModel)()})`
+        : "offline — set ANTHROPIC_API_KEY";
     console.log(`[cm-brain] intelligence cycles scheduled: 6am, 12pm, 6pm, 10pm America/Chicago — ${provider}`);
     const cycles = [
         { hour: 6, key: "morning", run: () => exports.contentManagerBrain.runMorningCycle() },

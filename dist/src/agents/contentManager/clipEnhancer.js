@@ -2,10 +2,39 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.enhanceClip = enhanceClip;
 const crypto_1 = require("crypto");
+const claude_content_js_1 = require("../../integrations/claude-content.js");
 const hookClassifier_js_1 = require("./brain/hookClassifier.js");
 const patterns_js_1 = require("./brain/patterns.js");
 const competitorIntel_js_1 = require("./competitorIntel.js");
 const contentDb_js_1 = require("../../core/contentDb.js");
+/** System prompt for hook/caption generation — Marco's voice, hook science, and funnel CTA logic. */
+const MARCO_VOICE_SYSTEM = `You are the hook and caption writer for Marco Puga Realty (@puga.realtor), a San Antonio real estate agent building a TikTok-first content system.
+
+MARCO'S VOICE (never break these rules):
+- Short sentences. Direct. First person ("I", never "we" or "our team").
+- Contractions always — "you're" not "you are", "here's" not "here is".
+- Zero corporate language. No "leverage", "synergy", "circle back", "unlock", "elevate".
+- One exclamation point max per piece of content.
+- San Antonio specific — real neighborhoods (Stone Oak, Canyon Lake, New Braunfels, Alamo Heights), never generic "your area".
+- Real numbers only — actual prices, actual square footage, actual rates. Never round vaguely.
+- Friendly but not soft. Confident but not arrogant.
+
+HOOK SCIENCE (the first 1-3 seconds decide watch time, the #1 ranking signal):
+Question hooks drive comments. Data hooks (a specific number/price/rate) drive saves. Local hooks ("Stone Oak buyers...") drive DMs. Personal-story hooks build trust. Controversy/shock hooks drive shares. Every hook must be grounded in what Marco actually said in the footage — never invent details that aren't in the transcript excerpt.
+
+THE FUNNEL (every caption moves a viewer down this path):
+entertained -> educated -> trusting -> DM -> phone number -> Carlos closes.
+CTAs should nudge toward a DM or comment Marco's team can convert into a phone number — never "link in bio" or generic engagement bait.
+
+PLATFORM PACING:
+TikTok (primary) wants the fastest pacing and native slang is fine. Instagram Reels reuses the same clip with a slightly warmer, more polished tone. Facebook Reels reuses it again with slightly more explanation since that audience skews older. Write for TikTok-native pacing first — it reads fine on Reels and Facebook too.
+
+Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON.`;
+const CTA_BY_PILLAR = {
+    brand: `"DM me" — trust is already built by this point in a brand video, so ask directly`,
+    education: `"Comment your question and I'll answer it" — drives the comment signal and qualifies the lead`,
+    listings: `"DM me for the address" — gates a hyperlocal lead behind a DM`,
+};
 const HOUR_BUCKET_MAP = {
     morning: 9,
     afternoon: 14,
@@ -118,7 +147,7 @@ function topWinningHookType() {
     return bestType;
 }
 async function enhanceClip(input) {
-    const { videoId, sourceFileId, clipResult, pillar, trendRecord, brain } = input;
+    const { videoId, sourceFileId, clipResult, pillar, trendRecord } = input;
     const effectivePillar = pillar === "mixed" ? "brand" : pillar;
     const classified = clipResult.hookType !== "uncategorized"
         ? {
@@ -141,7 +170,28 @@ async function enhanceClip(input) {
         clipResult.suggestedCaption,
     ];
     try {
-        const hookResp = await brain.chat(`Generate 5 hook variations for a ${effectivePillar} real estate TikTok video for Marco Puga (@puga.realtor), a San Antonio agent. OpenShorts suggested opening: '${clipResult.suggestedCaption}'. Why this clip: '${clipResult.whyThisClip}'. Current trending patterns: ${trendRecord.trendBrief}. Working hook patterns from Marco's account: ${JSON.stringify(model.workingHookPatterns)}. Hook type that is currently winning: ${winningHookType}. Marco's voice rules: short sentences, first person, contractions always, San Antonio specific, no corporate speak, real numbers. Return JSON only: { hooks: [5 hook strings], recommended_index: 0, reasoning: 'one sentence' }`);
+        const response = await claude_content_js_1.claudeContent.messages.create({
+            model: claude_content_js_1.CONTENT_MODELS.QUALITY,
+            max_tokens: 800,
+            system: MARCO_VOICE_SYSTEM,
+            messages: [{
+                    role: "user",
+                    content: `Marco just recorded real footage for a ${effectivePillar} pillar TikTok video (${clipResult.duration}s). Here is what OpenShorts detected from the actual transcript:
+- Suggested opening line from the footage: "${clipResult.suggestedCaption}"
+- Why this moment was clipped: "${clipResult.whyThisClip}"
+
+Context to write from:
+- Current TikTok trend brief: ${trendRecord.trendBrief}
+- Marco's hook patterns currently beating the 6,006-view benchmark: ${JSON.stringify(model.workingHookPatterns)}
+- The hook type currently winning across Marco's account: ${winningHookType}
+
+Write 5 hook variations for the first line of this specific video, grounded in what he actually said in the footage above. Vary the hook type across the 5 (mix question/data/local/personal-story) so we can test which converts best. Return JSON only: { "hooks": [5 hook strings], "recommended_index": 0-4 (which one best fits the currently winning hook type and trend brief), "reasoning": "one sentence on why the recommended hook was chosen" }`,
+                }],
+        });
+        const hookResp = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
         const parsed = parseJsonFromText(hookResp, {});
         if (parsed.hooks?.length) {
             hookVariations = parsed.hooks.slice(0, 5);
@@ -150,12 +200,25 @@ async function enhanceClip(input) {
         }
     }
     catch (err) {
-        console.warn("[clip-enhancer] hook generation failed:", err);
+        (0, claude_content_js_1.logContentAiFailure)("clip hook variations", err);
     }
     let captionBody = clipResult.suggestedCaption;
     let fullPost = `${hookPrimary}\n\n${captionBody}`;
     try {
-        const captionResp = await brain.chat(`Write a TikTok caption for @puga.realtor (Marco Puga, San Antonio real estate agent) for this ${effectivePillar} video. Hook to use (first line): '${hookPrimary}'. Current trending patterns: ${trendRecord.trendBrief}. Caption must: be under 150 characters after the hook, sound exactly like Marco (direct, first person, contractions, real numbers), include a soft CTA ('DM me' or 'Comment below' or 'Follow for more San Antonio updates'). Return JSON only: { caption: string, full_post: string }`);
+        const cta = CTA_BY_PILLAR[effectivePillar] ?? CTA_BY_PILLAR.brand;
+        const response = await claude_content_js_1.claudeContent.messages.create({
+            model: claude_content_js_1.CONTENT_MODELS.QUALITY,
+            max_tokens: 600,
+            system: MARCO_VOICE_SYSTEM,
+            messages: [{
+                    role: "user",
+                    content: `Write the caption for this ${effectivePillar} pillar TikTok video, distributed to TikTok first and reused on Instagram Reels and Facebook Reels. The video opens with this exact hook: "${hookPrimary}". Why this clip was chosen: "${clipResult.whyThisClip}". Current trend brief: ${trendRecord.trendBrief}. Caption body (the part after the hook) must be under 150 characters and end with a CTA styled like: ${cta}. Return JSON only: { "caption": string, "full_post": string (hook + caption body, ready to post) }`,
+                }],
+        });
+        const captionResp = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
         const parsed = parseJsonFromText(captionResp, {});
         if (parsed.caption)
             captionBody = parsed.caption;
@@ -163,18 +226,30 @@ async function enhanceClip(input) {
             fullPost = parsed.full_post;
     }
     catch (err) {
-        console.warn("[clip-enhancer] caption generation failed:", err);
+        (0, claude_content_js_1.logContentAiFailure)("clip caption generation", err);
     }
     const hashtags = selectHashtags(trendRecord);
     const trendScore = (0, competitorIntel_js_1.getTrendAlignmentScore)(captionBody, hookPrimary, hashtags, trendRecord, clipResult.duration);
     let trendAlignmentReason = clipResult.whyThisClip || "Aligns with current competitor hook and hashtag patterns.";
     try {
-        const reasonResp = await brain.chat(`Why does this clip align or not align with current trends? In one sentence. Hook: '${hookPrimary}'. Trend score: ${trendScore}. Trend brief: ${trendRecord.trendBrief.slice(0, 200)}`);
-        if (reasonResp?.trim())
-            trendAlignmentReason = reasonResp.trim().split("\n")[0];
+        const response = await claude_content_js_1.claudeContent.messages.create({
+            model: claude_content_js_1.CONTENT_MODELS.FAST,
+            max_tokens: 150,
+            messages: [{
+                    role: "user",
+                    content: `Why does this clip align or not align with current trends? In one sentence. Hook: '${hookPrimary}'. Trend score: ${trendScore}. Trend brief: ${trendRecord.trendBrief.slice(0, 200)}`,
+                }],
+        });
+        const reasonResp = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("")
+            .trim();
+        if (reasonResp)
+            trendAlignmentReason = reasonResp.split("\n")[0];
     }
-    catch {
-        /* use default */
+    catch (err) {
+        (0, claude_content_js_1.logContentAiFailure)("clip trend alignment reasoning", err);
     }
     const platformTargets = determinePlatformTargets(pillar, clipResult.duration, trendScore);
     const bestSlot = (0, patterns_js_1.getBestHourForPillar)(effectivePillar);

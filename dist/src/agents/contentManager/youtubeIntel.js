@@ -5,7 +5,7 @@
  * Uses yt-dlp + youtube-transcript-api (both running in the OpenShorts Python sidecar)
  * to pull full transcripts from competitor YouTube channels.
  *
- * No API keys. No authentication. No cost beyond Gemini analysis.
+ * No API keys. No authentication. No cost beyond Claude analysis.
  * Transcripts cached in SQLite for 7 days.
  */
 var __importDefault = (this && this.__importDefault) || function (mod) {
@@ -17,6 +17,7 @@ exports.batchFetchTranscripts = batchFetchTranscripts;
 exports.runYouTubeCompetitorAnalysis = runYouTubeCompetitorAnalysis;
 exports.getLatestYouTubeAnalysis = getLatestYouTubeAnalysis;
 const axios_1 = __importDefault(require("axios"));
+const claude_content_js_1 = require("../../integrations/claude-content.js");
 const stats_js_1 = require("./brain/stats.js");
 const contentDb_js_1 = require("../../core/contentDb.js");
 const OPENSHORTS_URL = process.env.OPENSHORTS_URL || "http://localhost:8000";
@@ -70,7 +71,7 @@ async function batchFetchTranscripts(videoIds) {
 /**
  * Full YouTube competitor intelligence run.
  * For each active profile: list videos → check cache → fetch missing transcripts →
- * analyze all with Gemini → store in cm_youtube_analysis. Cached for the week.
+ * analyze all with Claude → store in cm_youtube_analysis. Cached for the week.
  */
 async function runYouTubeCompetitorAnalysis(brain) {
     console.log("[youtube-intel] Starting YouTube competitor transcript analysis");
@@ -188,7 +189,7 @@ async function runYouTubeCompetitorAnalysis(brain) {
         console.warn("[youtube-intel] No transcripts available for analysis");
         return null;
     }
-    console.log(`[youtube-intel] Analyzing ${allTranscripts.length} transcripts with Gemini`);
+    console.log(`[youtube-intel] Analyzing ${allTranscripts.length} transcripts with Claude`);
     const analysis = await analyzeTranscriptsWithBrain(allTranscripts, brain);
     console.log(`[youtube-intel] YouTube analysis complete — ${totalVideosFetched} videos analyzed`);
     return analysis;
@@ -233,11 +234,17 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.
 `;
     let parsed = {};
     try {
-        const response = await brain.chat(prompt);
-        const clean = (typeof response === "string" ? response : "")
-            .replace(/```json/g, "")
-            .replace(/```/g, "")
-            .trim();
+        const response = await claude_content_js_1.claudeContent.messages.create({
+            model: claude_content_js_1.CONTENT_MODELS.QUALITY,
+            max_tokens: 3072,
+            system: "Respond with valid JSON only. No markdown, no backticks, no explanation. Just the raw JSON object.",
+            messages: [{ role: "user", content: prompt }],
+        });
+        const text = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
+        const clean = text.replace(/```json/g, "").replace(/```/g, "").trim();
         const start = clean.indexOf("{");
         const end = clean.lastIndexOf("}");
         if (start >= 0 && end > start) {
@@ -245,8 +252,7 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.
         }
     }
     catch (parseErr) {
-        const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-        console.error("[youtube-intel] Failed to parse Brain analysis:", msg);
+        (0, claude_content_js_1.logContentAiFailure)("youtube transcript analysis", parseErr);
     }
     const channelsAnalyzed = new Set(transcripts.map((t) => t.channelName)).size;
     return (0, contentDb_js_1.insertYoutubeAnalysis)({
