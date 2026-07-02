@@ -26,6 +26,9 @@ __pycache__/
 # Runtime media / generated data (not for version control)
 data/uploads/
 data/voice-clone/
+data/*.db
+data/*.db-shm
+data/*.db-wal
 
 # Vendored OpenShorts engine — separate repo (github.com/mutonby/openshorts)
 services/openshorts/
