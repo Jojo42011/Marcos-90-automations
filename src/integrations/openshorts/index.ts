@@ -161,7 +161,8 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
         `[openshorts] Job ${jobId}: ${job.status} — attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS} (${Math.round((attempt * POLL_INTERVAL_MS) / 1000)}s elapsed)`,
       );
     } catch (err: unknown) {
-      const code = (err as { code?: string })?.code;
+      const axiosErr = err as { code?: string; response?: { status: number; data?: unknown } };
+      const code = axiosErr?.code;
       const msg = err instanceof Error ? err.message : String(err);
 
       // A genuine job failure reported by the sidecar — surface it, don't retry.
@@ -169,12 +170,26 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
         throw err;
       }
 
-      // Request/socket timeout: the sidecar is alive but busy processing the
-      // video and couldn't answer in time. Keep polling — this is expected
-      // while a clip job is actually running.
+      // The sidecar answered but with an HTTP error status — this is NOT a
+      // timeout and previously got silently swallowed into the generic
+      // "sidecar busy" bucket below (or an unlogged throw). Surface exactly
+      // what it said so a real server-side error is diagnosable, not mistaken
+      // for the sidecar just being busy.
+      if (axiosErr?.response) {
+        console.warn(
+          `[openshorts] Job ${jobId} status check got HTTP ${axiosErr.response.status} ` +
+          `(attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS}): ${JSON.stringify(axiosErr.response.data).slice(0, 300)}`,
+        );
+        continue;
+      }
+
+      // Request/socket timeout: no response at all within STATUS_CHECK_TIMEOUT_MS.
+      // The sidecar is alive but busy processing the video and couldn't answer
+      // in time. Keep polling — this is expected while a clip job is running.
       if (code === "ECONNABORTED" || code === "ETIMEDOUT" || /timeout/i.test(msg)) {
         console.warn(
-          `[openshorts] Job ${jobId} status check timed out (attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS}) — sidecar busy, retrying`,
+          `[openshorts] Job ${jobId} status check got no response within ${STATUS_CHECK_TIMEOUT_MS / 1000}s ` +
+          `(attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS}, code=${code || "timeout"}) — sidecar still processing, retrying`,
         );
         continue;
       }
@@ -195,6 +210,10 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
         continue;
       }
 
+      console.error(
+        `[openshorts] Job ${jobId} status check failed with an unexpected error ` +
+        `(code=${code || "none"}, attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS}): ${msg}`,
+      );
       throw err;
     }
   }
