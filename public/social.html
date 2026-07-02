@@ -120,11 +120,19 @@
     .page-bg {
       position: fixed;
       inset: 0;
+      /* blue that fades into black so the screen isn't flat */
       background:
-        radial-gradient(ellipse 70% 50% at 50% -10%, var(--glow), transparent 70%),
-        linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+        radial-gradient(ellipse 95% 60% at 50% -12%, rgba(56, 132, 224, 0.22), transparent 60%),
+        radial-gradient(ellipse 70% 45% at 50% 2%, var(--teal-glow), transparent 65%),
+        linear-gradient(180deg, #0b1728 0%, #070d18 42%, #04060b 100%);
       pointer-events: none;
       z-index: 0;
+    }
+    html[data-theme="light"] .page-bg {
+      /* blue that fades into white (vice-versa of dark) */
+      background:
+        radial-gradient(ellipse 95% 60% at 50% -12%, rgba(56, 132, 224, 0.16), transparent 62%),
+        linear-gradient(180deg, #dbe8fa 0%, #eef3fb 45%, #ffffff 100%);
     }
     ::selection { background: var(--cyan-dim); color: var(--text); }
     /* refined scrollbars */
@@ -1390,6 +1398,83 @@
       .rv-particle { width: 3px; height: 3px; }
     }
 
+    /* ====================================================================
+       AETHON OVERHAUL — Phase 4 (top bar), 5 (cards), 6 (stat cards)
+       ==================================================================== */
+    /* Phase 4 — top bar */
+    .crm-topbar {
+      height: 56px; min-height: 56px;
+      background: var(--bg-0);
+      border-bottom: 1px solid var(--dimmest);
+      display: flex; align-items: center; gap: var(--space-4);
+      padding: 0 var(--space-6);
+      position: sticky; top: 0; z-index: 30;
+    }
+    .tb-title { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+    .tb-title h1 { font-family: var(--font-display); font-size: 12px; font-weight: 700; letter-spacing: 2px; color: var(--white); text-transform: uppercase; }
+    .tb-sub { font-family: var(--font-mono); font-size: 10px; color: var(--dimmer); }
+    .tb-status { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .tb-updated { font-family: var(--font-mono); font-size: 10px; color: var(--dim); }
+    .crm-topbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); position: relative; flex: 0 0 8px; }
+    .crm-topbar .dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; animation: radarPing 2s var(--ease-out) infinite; }
+    @keyframes radarPing { 0% { box-shadow: 0 0 0 0 rgba(0, 232, 122, 0.45); } 100% { box-shadow: 0 0 0 6px rgba(0, 232, 122, 0); } }
+    .tb-controls { display: flex; align-items: center; gap: var(--space-3); flex: 0 0 auto; }
+    .tb-select { background: var(--bg-2); border: 1px solid var(--dimmest); color: var(--dim); font-family: var(--font-mono); font-size: 11px; border-radius: var(--radius-md); padding: 6px 8px; cursor: pointer; transition: border-color var(--t-fast) var(--ease-smooth), box-shadow 180ms ease; }
+    .tb-select:hover { border-color: var(--teal-border); }
+    .tb-select:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-glow); }
+    .tb-refresh { background: var(--teal); color: #04121a; font-family: var(--font-display); font-size: 9px; font-weight: 700; letter-spacing: 2px; border: none; border-radius: var(--radius-md); padding: 9px 14px; cursor: pointer; transition: background var(--t-fast) var(--ease-smooth), box-shadow var(--t-fast) var(--ease-smooth), transform var(--t-fast) var(--ease-spring); }
+    .tb-refresh:hover { background: var(--teal-bright); box-shadow: var(--shadow-teal); }
+    .tb-refresh:active { transform: scale(0.96); }
+    .tb-refresh:focus-visible, .tb-select:focus-visible { outline: 2px solid var(--teal-border); outline-offset: 2px; }
+    /* theme toggle pill (text set by JS is hidden; knob + label are CSS) */
+    #theme-toggle-btn {
+      position: relative; width: 78px; height: 26px; padding: 0; border-radius: 20px;
+      background: var(--bg-3); border: 1px solid var(--dimmest); cursor: pointer;
+      font-size: 0; color: transparent; overflow: hidden;
+      transition: background var(--t-base) var(--ease-smooth), border-color var(--t-base) var(--ease-smooth);
+    }
+    #theme-toggle-btn::before { content: "DARK"; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px; color: var(--dimmer); }
+    #theme-toggle-btn::after { content: ""; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); transition: left var(--t-base) var(--ease-smooth), right var(--t-base) var(--ease-smooth); }
+    html[data-theme="light"] #theme-toggle-btn { background: var(--teal-dim); border-color: var(--teal-border); }
+    html[data-theme="light"] #theme-toggle-btn::before { content: "LIGHT"; left: auto; right: 11px; }
+    html[data-theme="light"] #theme-toggle-btn::after { right: auto; left: 4px; }
+
+    /* Phase 5 — shared card + section header (also refreshes existing .cm-panel) */
+    .cm-card, .cm-panel {
+      background: var(--bg-2);
+      border: 1px solid var(--dimmest);
+      border-radius: var(--radius-lg);
+      transition: border-color var(--t-base) var(--ease-smooth), box-shadow var(--t-base) var(--ease-smooth), transform var(--t-base) var(--ease-spring);
+    }
+    .cm-card:hover, .cm-panel:hover { border-color: var(--teal-border); box-shadow: var(--shadow-teal); transform: translateY(-2px); }
+    .cm-section-header, .cm-panel h3 {
+      font-family: var(--font-display); font-size: 9px; letter-spacing: 3px; color: var(--dim);
+      text-transform: uppercase; padding-left: 12px; border-left: 3px solid var(--teal);
+      display: flex; align-items: center; line-height: 1.1; gap: 0;
+    }
+    .cm-panel h3 { margin-bottom: var(--space-4); }
+    .cm-panel h3::before { content: none; }
+
+    /* Phase 6 — stat cards with radial arc + count-up */
+    .cm-stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+    .cm-statc { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5); min-height: 104px; }
+    .cm-statc-arc { position: relative; width: 64px; height: 64px; flex: 0 0 64px; }
+    .cm-statc-arc svg { width: 64px; height: 64px; transform: rotate(-90deg); }
+    .statc-track { fill: none; stroke: var(--dimmest); stroke-width: 3; }
+    .statc-fill { fill: none; stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 1.2s var(--ease-out); }
+    .statc-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 18px; font-weight: 900; color: var(--white); }
+    .cm-statc-meta { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .statc-label { font-family: var(--font-display); font-size: 8px; letter-spacing: 3px; color: var(--dimmer); text-transform: uppercase; }
+    .statc-total { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); }
+    .statc-pct { align-self: flex-start; font-family: var(--font-mono); font-size: 10px; color: var(--teal); background: var(--teal-dim); border: 1px solid var(--teal-border); border-radius: 20px; padding: 2px 8px; }
+    .cm-statc.is-zero { animation: statBreathe 3s var(--ease-smooth) infinite; }
+    @keyframes statBreathe { 0%, 100% { box-shadow: none; } 50% { box-shadow: 0 0 12px var(--teal-glow); } }
+    .cm-statc.is-complete .cm-statc-arc { filter: drop-shadow(0 0 8px var(--teal)); }
+
+    /* Phase 11 (partial) — card entrance on section activate */
+    @keyframes cardIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    .cm-section.active .cm-anim-in { animation: cardIn 400ms var(--ease-out) both; }
+
   </style>
 </head>
 <body>
@@ -1439,20 +1524,25 @@
 
     <main class="crm-main">
       <header class="crm-topbar">
-        <h1 style="font-size:1rem;font-weight:700;flex:1;">Content Manager <span style="color:var(--cyan);font-size:0.75rem;font-weight:500;">7 videos/day · 6,006 view benchmark</span></h1>
-        <div class="meta" style="display:flex;align-items:center;gap:0.5rem;">
-          <span class="dot" id="statusDot"></span>
-          <span id="lastUpdated" style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);">Last updated —</span>
+        <div class="tb-title">
+          <h1>Content Manager</h1>
+          <span class="tb-sub">7 videos/day · 6,006 view benchmark</span>
         </div>
-        <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="cm-btn">Light mode</button>
-        <select id="intervalSelect" title="Auto-refresh" onchange="handleRefreshIntervalChange()" style="font-size:0.75rem;">
-          <option value="0">Manual</option>
-          <option value="60000">1 min</option>
-          <option value="300000" selected>5 min</option>
-          <option value="900000">15 min</option>
-        </select>
-        <button type="button" class="primary" id="refreshBtn" style="font-size:0.75rem;">Refresh Apify</button>
-        <span id="pipeline-updated" class="cm-muted"></span>
+        <div class="tb-status">
+          <span class="dot" id="statusDot"></span>
+          <span id="lastUpdated" class="tb-updated">Last updated —</span>
+        </div>
+        <div class="tb-controls">
+          <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" title="Toggle theme">Light mode</button>
+          <select id="intervalSelect" class="tb-select" title="Auto-refresh" onchange="handleRefreshIntervalChange()">
+            <option value="0">Manual</option>
+            <option value="60000">1 min</option>
+            <option value="300000" selected>5 min</option>
+            <option value="900000">15 min</option>
+          </select>
+          <button type="button" class="tb-refresh" id="refreshBtn">REFRESH</button>
+          <span id="pipeline-updated" class="cm-muted"></span>
+        </div>
       </header>
 
       <div class="cm-content">
@@ -2217,6 +2307,68 @@
       return "pillar-brand";
     }
 
+    /* Phase 6 — stat cards with SVG radial arc + count-up */
+    function renderStatCards(t, animate) {
+      const el = document.getElementById("cm-overview-stats");
+      if (!el) return;
+      const C = 2 * Math.PI * 27;
+      const cards = [
+        { label: "VIDEOS TODAY", val: t.videosPublished || 0, total: 7, color: "var(--teal)" },
+        { label: "PHONE NUMBERS", val: t.phoneNumbersCaptured || 0, total: 22, color: "var(--green)" },
+        { label: "COMMENTS MANAGED", val: t.commentsManaged || 0, total: null, color: "var(--teal)" },
+        { label: "DMS TRIAGED", val: t.dmsTriaged || 0, total: 44, color: "var(--amber)" },
+      ];
+      el.innerHTML = cards.map((c) => {
+        const hasTotal = c.total != null;
+        const pctv = hasTotal && c.total ? Math.min(100, Math.round((c.val / c.total) * 100)) : 0;
+        const fill = hasTotal
+          ? `<circle class="statc-fill" cx="32" cy="32" r="27" stroke="${c.color}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${C.toFixed(1)}"></circle>`
+          : "";
+        return `<div class="cm-card cm-statc cm-anim-in" data-val="${c.val}" data-total="${hasTotal ? c.total : ""}" data-c="${C.toFixed(1)}">
+          <div class="cm-statc-arc">
+            <svg viewBox="0 0 64 64"><circle class="statc-track" cx="32" cy="32" r="27"></circle>${fill}</svg>
+            <div class="statc-num">0</div>
+          </div>
+          <div class="cm-statc-meta">
+            <div class="statc-label">${c.label}</div>
+            ${hasTotal ? `<div class="statc-total">/ ${c.total}</div><div class="statc-pct">${pctv}%</div>` : `<div class="statc-total">tracked</div>`}
+          </div>
+        </div>`;
+      }).join("");
+      applyStatArcs(!animate);
+    }
+
+    function applyStatArcs(instant) {
+      document.querySelectorAll("#cm-overview-stats .cm-statc").forEach((card, i) => {
+        const val = parseInt(card.dataset.val || "0", 10);
+        const total = card.dataset.total ? parseInt(card.dataset.total, 10) : null;
+        const C = parseFloat(card.dataset.c || "0");
+        const fill = card.querySelector(".statc-fill");
+        const num = card.querySelector(".statc-num");
+        if (total != null) {
+          if (val === 0) card.classList.add("is-zero");
+          if (total && val >= total) card.classList.add("is-complete");
+          const ratio = total ? Math.min(1, val / total) : 0;
+          const target = (C * (1 - ratio)).toFixed(1);
+          if (fill) {
+            if (instant) { fill.style.transition = "none"; fill.style.strokeDashoffset = target; }
+            else { fill.style.strokeDashoffset = C.toFixed(1); setTimeout(() => { fill.style.strokeDashoffset = target; }, 80 * i + 60); }
+          }
+        }
+        if (num) {
+          if (instant) { num.textContent = String(val); return; }
+          const start = performance.now(), dur = 1200, delay = 80 * i;
+          const tick = (now) => {
+            const p = Math.min(1, Math.max(0, (now - start - delay) / dur));
+            const e = p <= 0 ? 0 : 1 - Math.pow(2, -10 * p);
+            num.textContent = String(Math.round(e * val));
+            if (p < 1) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }
+      });
+    }
+
     function pipelineStage(video) {
       if (video.status === "rejected") return 2;
       if (video.status === "published") return 5;
@@ -2263,7 +2415,7 @@
       el("cm-count-community", String(dmGap));
     }
 
-    async function loadCmOverview() {
+    async function loadCmOverview(animate = true) {
       try {
         const [daily, weekly, compliance] = await Promise.all([
           cmFetch("/api/content/report/daily"),
@@ -2271,12 +2423,7 @@
           cmFetch("/api/content/compliance-queue"),
         ]);
         const t = daily.targets || {};
-        const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
-        document.getElementById("cm-overview-stats").innerHTML = `
-          <div class="cm-stat-card">${progressRing(pct(t.videosPublished, 7), "var(--cyan)")}<div><label>Videos Today</label><div class="cm-stat-val">${t.videosPublished || 0} / 7</div></div></div>
-          <div class="cm-stat-card">${progressRing(pct(t.phoneNumbersCaptured, 22), "#4ade80")}<div><label>Phone Numbers</label><div class="cm-stat-val">${t.phoneNumbersCaptured || 0} / 22</div></div></div>
-          <div class="cm-stat-card"><div><label>Comments Managed</label><div class="cm-stat-val">${t.commentsManaged || 0}</div></div></div>
-          <div class="cm-stat-card">${progressRing(pct(t.dmsTriaged, 44), "#f59e0b")}<div><label>DMs Triaged</label><div class="cm-stat-val">${t.dmsTriaged || 0} / 44</div></div></div>`;
+        renderStatCards(t, animate);
 
         const sc = cmStatsCache?.statusCounts || {};
         document.getElementById("cm-pipeline-status").innerHTML = `<h3>Pipeline Status</h3>
@@ -4424,7 +4571,7 @@
         if (sec >= 60) { void loadClipPipeline(); }
       }
     }, 15000);
-    setInterval(() => { if (cmSection === "overview") void loadCmOverview(); }, 60000);
+    setInterval(() => { if (cmSection === "overview") void loadCmOverview(false); }, 60000);
 
     function switchTab(tabId) {
       const map = { overview: "overview", "video-scores": "analytics", "morning-scan": "analytics", "evening-pull": "analytics", escalations: "community", "content-suggestions": "suggestions", "activity-log": "activity", "comment-replies": "community" };
