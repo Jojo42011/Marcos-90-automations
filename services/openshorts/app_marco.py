@@ -53,13 +53,15 @@ def _probe_duration(video_path: str) -> float:
 
 def _cut_clip(input_path: str, output_path: str, start_time: float, end_time: float) -> str:
     """Cut a precise sub-clip with ffmpeg (re-encode for frame accuracy)."""
+    # Phase 4c — veryfast over fast: 3-5x faster encode for a quality delta
+    # that's negligible at social-media output resolution/bitrate.
     result = subprocess.run(
         [
             "ffmpeg", "-y",
             "-ss", str(start_time),
             "-to", str(end_time),
             "-i", input_path,
-            "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
             "-c:a", "aac",
             output_path,
         ],
@@ -433,6 +435,22 @@ def process_video_job(
             _fail_job(job_id, "Reframing produced no clips — check clip timestamps and ffmpeg logs")
             return
 
+        # Phase 5b — re-verify on disk right now, not just that the loop above
+        # didn't raise. Guards against a clip having been written then lost
+        # (disk pressure, a concurrent cleanup sweep, etc.) between being
+        # added to output_clips and this point.
+        clips_confirmed_on_disk = [c for c in output_clips if os.path.isfile(c["clip_path"])]
+        if not clips_confirmed_on_disk:
+            _fail_job(job_id, "Clips were generated but none are present on disk at completion time")
+            return
+        if len(clips_confirmed_on_disk) < len(output_clips):
+            print(
+                f"[openshorts] WARNING: {len(output_clips) - len(clips_confirmed_on_disk)} clip(s) "
+                f"went missing between generation and completion — proceeding with the "
+                f"{len(clips_confirmed_on_disk)} confirmed on disk"
+            )
+            output_clips = clips_confirmed_on_disk
+
         timer.finish()
         jobs[job_id].update(
             {
@@ -445,8 +463,15 @@ def process_video_job(
 
         try:
             if video_path.startswith("/data/uploads/") and os.path.isfile(video_path):
+                st = os.stat(video_path)
                 os.remove(video_path)
-                print(f"[openshorts] Cleaned up source video: {video_path}")
+                freed_gb = st.st_size / (1024 ** 3)
+                print(f"[cleanup] Source deleted: {os.path.basename(video_path)} ({freed_gb:.2f}GB freed)")
+                try:
+                    free_mb = shutil.disk_usage("/data" if os.path.exists("/data") else ".").free / (1024 * 1024)
+                    print(f"[cleanup] /data now has {free_mb / 1024:.1f}GB free")
+                except Exception:
+                    pass
         except Exception as cleanup_err:
             print(f"[openshorts] Could not clean up source video: {cleanup_err}")
 
@@ -480,11 +505,17 @@ async def process_video(
     if file_path and Path(file_path).exists():
         video_path = file_path
     elif file:
+        # Phase 4a — stream to disk in chunks instead of `await file.read()`,
+        # which buffers the entire upload in RAM before writing a single byte.
+        # For a 4GB file that's a 4GB RSS spike for no reason. This branch
+        # isn't on the normal Node -> sidecar path (that sends file_path, see
+        # above) but closes the gap for any direct multipart call.
         save_path = UPLOADS_INPUT_DIR / f"{job_id}_{file.filename}"
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        content = await file.read()
+        chunk_size = 8 * 1024 * 1024  # 8MB
         with open(save_path, "wb") as f:
-            f.write(content)
+            while chunk := await file.read(chunk_size):
+                f.write(chunk)
         video_path = str(save_path)
     else:
         raise HTTPException(status_code=400, detail="Either file or file_path is required")

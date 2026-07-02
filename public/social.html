@@ -1723,7 +1723,7 @@
             <div class="upload-zone" id="upload-zone">
               <div class="icon">⬆</div>
               <div><strong>Drop multiple video files here or click to browse</strong></div>
-              <div class="cm-muted" style="margin-top:0.35rem;">MP4, MOV, AVI up to 2GB each · Max 20 files per batch</div>
+              <div class="cm-muted" style="margin-top:0.35rem;">MP4, MOV, AVI up to 4GB each · Max 20 files per batch</div>
               <div class="cm-muted" style="margin-top:0.5rem;font-size:0.75rem;">OpenShorts uses Gemini AI to find the most viral moments, then automatically reframes to 9:16 vertical. Your footage never leaves your server.</div>
               <input type="file" id="video-file-input" accept=".mp4,.mov,.avi,.mkv,.webm,video/*" multiple hidden />
             </div>
@@ -2619,6 +2619,7 @@
     let batchFileStatuses = {};
     let activeBatchId = null;
     let batchPollTimer = null;
+    let uploadProgressTimer = null;
     let batchUploadInFlight = false;
     let reviewBatchFilter = "";
     let reviewSort = "trend";
@@ -3203,25 +3204,59 @@
       if (rows) rows.innerHTML = "";
       activeBatchId = null;
       if (batchPollTimer) { clearInterval(batchPollTimer); batchPollTimer = null; }
+      stopUploadProgressPolling();
       resetProcessButton();
     }
     window.resetUploadPanel = resetUploadPanel;
+
+    function stopUploadProgressPolling() {
+      if (uploadProgressTimer) { clearInterval(uploadProgressTimer); uploadProgressTimer = null; }
+    }
+
+    // Phase 3e — polls the server-tracked byte count for a large upload so the
+    // bar reflects real progress instead of sitting at a placeholder % (or a
+    // bare spinner) for however many minutes a 4GB file takes to stream in.
+    // Mapped into the 2-20% slice of the overall bar; processing stages after
+    // upload completes take over the rest via the existing batch-status poll.
+    async function pollUploadProgressOnce(uploadId) {
+      try {
+        const res = await fetch(apiUrl(`/api/content/upload-progress/${encodeURIComponent(uploadId)}`), {
+          headers: token ? { Authorization: "Bearer " + token } : {},
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const pct = Math.max(2, Math.min(20, 2 + Math.round((data.percentComplete || 0) * 0.18)));
+        const mb = (n) => (n / (1024 * 1024)).toFixed(0);
+        const label = data.totalBytes
+          ? `Uploading files... (${mb(data.bytesReceived)}MB / ${mb(data.totalBytes)}MB)`
+          : "Uploading files...";
+        updateProgressBar(pct, label);
+      } catch (_) {
+        // best-effort — a missed poll just skips one UI tick, upload continues regardless
+      }
+    }
 
     async function startBatchProcessing(formData, uiMeta) {
       const panel = document.getElementById("processingPanel");
       if (panel) panel.style.display = "block";
       document.getElementById("processingSuccess").style.display = "none";
       document.getElementById("processingError").style.display = "none";
-      updateProgressBar(5, "Uploading files...");
+      updateProgressBar(2, "Uploading files...");
       setStageActive("stage-upload");
 
       const fileCount = uiMeta?.fileCount ?? batchFiles.length;
       const pillar = uiMeta?.pillar ?? document.getElementById("batch-pillar")?.value ?? "brand";
 
+      const uploadId = window.crypto?.randomUUID
+        ? window.crypto.randomUUID()
+        : `up_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      stopUploadProgressPolling();
+      uploadProgressTimer = setInterval(() => pollUploadProgressOnce(uploadId), 2000);
+
       try {
         const headers = {};
         if (token) headers.Authorization = "Bearer " + token;
-        const res = await fetch(apiUrl("/api/content/batch-upload"), { method: "POST", headers, body: formData });
+        const res = await fetch(apiUrl(`/api/content/batch-upload?uploadId=${encodeURIComponent(uploadId)}`), { method: "POST", headers, body: formData });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Upload failed");
         activeBatchId = data.batchSessionId;
@@ -3244,6 +3279,8 @@
       } catch (err) {
         console.error("[upload] Submit failed:", err);
         showProcessingError(err.message || "Upload failed");
+      } finally {
+        stopUploadProgressPolling();
       }
     }
 

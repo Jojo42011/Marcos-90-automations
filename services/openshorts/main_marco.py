@@ -46,6 +46,55 @@ def get_viral_clips_marco(
     }
 
 
+# Phase 4b — faster-whisper model size, overridable without a code change.
+# "base" is fine for short clips but real-estate walkthroughs run 30-60min;
+# "small" is the right default balance of speed and accuracy for CPU-only
+# processing at that length. "medium"/"large" are too slow to be practical
+# here (see the model-speed table this was chosen from).
+WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL", "small")
+_whisper_model = None
+
+
+def _get_whisper_model():
+    """
+    Lazily load and cache the faster-whisper model for the life of the
+    process. The vendored transcribe_video() reloaded a fresh model on every
+    single call — wasted load time on every job for no reason, since nothing
+    about the model depends on the video being transcribed.
+    """
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+
+        print(f"[openshorts] Loading faster-whisper model '{WHISPER_MODEL_SIZE}' (cached for process lifetime)...")
+        _whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
+    return _whisper_model
+
+
+def transcribe_video_marco(video_path: str) -> dict:
+    """Marco override of OpenShorts' transcribe_video() — same return shape,
+    configurable/cached model instead of a hardcoded reload-per-call "base"."""
+    print(f"🎙️  Transcribing video with Faster-Whisper ({WHISPER_MODEL_SIZE}, CPU int8)...")
+    model = _get_whisper_model()
+    segments, info = model.transcribe(video_path, word_timestamps=True)
+    print(f"   Detected language '{info.language}' with probability {info.language_probability:.2f}")
+
+    transcript_segments = []
+    full_text = ""
+    for segment in segments:
+        print(f"   [{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
+        seg_dict = {"text": segment.text, "start": segment.start, "end": segment.end, "words": []}
+        if segment.words:
+            for word in segment.words:
+                seg_dict["words"].append(
+                    {"word": word.word, "start": word.start, "end": word.end, "probability": word.probability}
+                )
+        transcript_segments.append(seg_dict)
+        full_text += segment.text + " "
+
+    return {"text": full_text.strip(), "segments": transcript_segments, "language": info.language}
+
+
 if openshorts_main is not None:
     def _patched_get_viral_clips(tr, dur, **kw):
         return get_viral_clips_marco(
@@ -58,3 +107,4 @@ if openshorts_main is not None:
         )
 
     openshorts_main.get_viral_clips = _patched_get_viral_clips
+    openshorts_main.transcribe_video = transcribe_video_marco

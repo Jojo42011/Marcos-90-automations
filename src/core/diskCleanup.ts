@@ -44,6 +44,9 @@ function looksLikeDatabase(name: string): boolean {
   return /\.(db|sqlite|sqlite3|db-wal|db-shm)$/i.test(name);
 }
 
+// Phase 5c — headroom below which the daily sweep logs a prominent warning.
+const LOW_DISK_WARNING_THRESHOLD_MB = 15 * 1024; // 15GB
+
 /**
  * Free space in MB on the volume that holds `dir`. Returns +Infinity if it
  * can't be determined, so callers never block a job on an unknown value.
@@ -70,6 +73,7 @@ export function deleteSourceFile(filePath: string): { deleted: boolean; freedByt
     const st = fs.statSync(abs);
     fs.unlinkSync(abs);
     console.log(`[cleanup] Deleted source file: ${abs} (${toMb(st.size)}MB freed)`);
+    logFreeSpaceAfterDeletion();
     return { deleted: true, freedBytes: st.size };
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
@@ -77,6 +81,18 @@ export function deleteSourceFile(filePath: string): { deleted: boolean; freedByt
     console.error(`[cleanup] Failed to delete source file ${abs}: ${e?.message || String(err)}`);
     return { deleted: false, freedBytes: 0 };
   }
+}
+
+// Phase 5b — fire-and-forget follow-up log so each lifecycle deletion shows
+// its effect on headroom, not just the file that was removed. Deliberately
+// not awaited by callers (deleteSourceFile/deleteClipFile stay synchronous)
+// — this is a log-only side effect, not part of either function's contract.
+function logFreeSpaceAfterDeletion(): void {
+  void getFreeDiskMB().then((freeMB) => {
+    if (Number.isFinite(freeMB)) {
+      console.log(`[cleanup] /data now has ${(freeMB / 1024).toFixed(1)}GB free`);
+    }
+  });
 }
 
 /**
@@ -98,6 +114,7 @@ export function deleteClipFile(clipPath: string | null): { deleted: boolean; fre
     const st = fs.statSync(abs);
     fs.unlinkSync(abs);
     console.log(`[cleanup] Deleted clip: ${abs} (${toMb(st.size)}MB freed)`);
+    logFreeSpaceAfterDeletion();
     return { deleted: true, freedBytes: st.size };
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
@@ -297,5 +314,23 @@ export async function runSafetyDiskCleanup(): Promise<{ deleted: number; freedBy
   console.log(`[disk-cleanup] Complete: ${deleted} files deleted, ${freedMB}MB freed`);
   const freeMB = await getFreeDiskMB();
   console.log(`[disk-cleanup] /data free space: ${Number.isFinite(freeMB) ? freeMB : "unknown"}MB`);
+
+  // Phase 5c — warn before it becomes an error: the cleanup lifecycle only
+  // reclaims space once clips are actioned, so a review queue that's
+  // backing up (nobody publishing/rejecting) will still slowly starve the
+  // volume even with cleanup running correctly. Surface that early.
+  if (Number.isFinite(freeMB) && freeMB < LOW_DISK_WARNING_THRESHOLD_MB) {
+    let pendingReviewCount = 0;
+    try {
+      pendingReviewCount = listAllContentVideoFileRefs().filter((v) => v.status === "pending_review").length;
+    } catch (err) {
+      console.error(`[disk-cleanup] Could not count pending-review clips: ${(err as Error).message}`);
+    }
+    console.warn(
+      `[DISK WARNING] /data only ${(freeMB / 1024).toFixed(1)}GB free — review queue has ${pendingReviewCount} clips pending publish. ` +
+      `Consider publishing or rejecting clips to free space.`,
+    );
+  }
+
   return { deleted, freedBytes: freed };
 }

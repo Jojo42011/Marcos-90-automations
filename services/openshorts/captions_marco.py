@@ -207,13 +207,14 @@ def get_video_resolution(video_path: str) -> tuple[int, int]:
 
 def burn_captions(input_video: str, ass_path: str, output_video: str) -> bool:
     """Render the ASS subtitle track onto the video frames via ffmpeg + libass."""
+    # Phase 4c — veryfast over fast: same reasoning as _cut_clip in app_marco.py.
     escaped_ass_path = _escape_filter_path(ass_path)
     result = subprocess.run(
         [
             "ffmpeg", "-y",
             "-i", input_video,
             "-vf", f"ass={escaped_ass_path}",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
             "-c:a", "copy",
             output_video,
         ],

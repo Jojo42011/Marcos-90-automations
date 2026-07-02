@@ -3796,20 +3796,33 @@ function streamClipVideoFile(req: express.Request, res: express.Response, filePa
   fs.createReadStream(filePath).pipe(res);
 }
 
-const MIN_UPLOAD_FREE_DISK_MB = 600;
+// Phase 3b — raised from 2GB to support full-length real estate walkthroughs
+// shot on-device (iPhone 1080p/4K MOV can easily hit 3-4GB for 30-60 minutes).
+const MAX_UPLOAD_FILE_BYTES = 4 * 1024 * 1024 * 1024;
 
-// Fix 4 — reject uploads immediately (before multer writes anything) when the
-// volume is too full to process a job, instead of accepting → failing ~8s later.
-function requireDiskSpace(minMb: number): express.RequestHandler {
+// Phase 5a — size-aware pre-upload disk check. Replaces the old flat 600MB
+// threshold: a check that doesn't scale with the incoming file size lets a
+// 4GB upload through with only 700MB free, which then fails deep into
+// processing instead of at submission time. Required space = the upload
+// itself + processing headroom + a reserve for the clips it will generate.
+const UPLOAD_PROCESSING_HEADROOM_MB = 500;
+const UPLOAD_CLIPS_HEADROOM_MB = 7 * 1024; // 7GB — worst-case reserve for generated clips
+
+function requireDiskSpaceForUpload(): express.RequestHandler {
   return (req, res, next) => {
+    const contentLength = Number(req.headers["content-length"] || 0);
+    const incomingMB = contentLength > 0 ? contentLength / (1024 * 1024) : 0;
+    const neededMB = incomingMB + UPLOAD_PROCESSING_HEADROOM_MB + UPLOAD_CLIPS_HEADROOM_MB;
     void getFreeDiskMB().then((freeMB) => {
-      if (Number.isFinite(freeMB) && freeMB < minMb) {
+      if (Number.isFinite(freeMB) && freeMB < neededMB) {
         console.warn(
-          `[batch-processor] Disk space check failed: ${freeMB}MB available, ${minMb}MB required. Job not submitted.`,
+          `[batch-processor] Disk space check failed: ${freeMB}MB available, ~${Math.round(neededMB)}MB required ` +
+          `(${Math.round(incomingMB)}MB upload + ${UPLOAD_PROCESSING_HEADROOM_MB}MB processing + ${UPLOAD_CLIPS_HEADROOM_MB}MB clips reserve). ` +
+          `Upload rejected before any bytes were written.`,
         );
         res.status(507).json({
           error:
-            `Not enough disk space to process — ${freeMB}MB available, ${minMb}MB required. ` +
+            `Not enough disk space to process — ${freeMB}MB available, ~${Math.round(neededMB)}MB required. ` +
             `Free up space by reviewing and publishing pending clips, or contact support.`,
         });
         return;
@@ -3819,6 +3832,81 @@ function requireDiskSpace(minMb: number): express.RequestHandler {
   };
 }
 
+// Phase 5d — precise per-batch estimate once real file sizes are known (runs
+// after multer has written the files; the header-based check above is a fast
+// first-pass guard, this is the accurate second pass). Batches are gap-driven
+// toward the daily 7-video target (calculateTargetClipsPerFile in
+// batchProcessor.ts), not 7 clips per source file, so this estimates clip
+// space for the batch as a whole rather than multiplying per file.
+const CLIP_SIZE_RATIO = 0.3; // generated clips run ~30% of source bitrate (short duration, similar codec)
+const ESTIMATED_TOTAL_CLIPS_PER_BATCH = 7;
+
+function estimateBatchClipSpaceMB(files: Express.Multer.File[]): number {
+  const totalSourceMB = files.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024);
+  return totalSourceMB * CLIP_SIZE_RATIO * ESTIMATED_TOTAL_CLIPS_PER_BATCH;
+}
+
+// Phase 3e — upload progress tracking. The client generates an uploadId,
+// passes it as a query param (available before multer/body parsing runs),
+// and polls GET /api/content/upload-progress/:uploadId every 2s while the
+// bytes stream in. This is intentionally server-tracked (not just
+// xhr.upload.onprogress client-side) so progress is visible from any poller.
+interface UploadProgressEntry {
+  bytesReceived: number;
+  totalBytes: number;
+  startedAt: number;
+  done: boolean;
+}
+const uploadProgressMap = new Map<string, UploadProgressEntry>();
+const UPLOAD_PROGRESS_STALE_MS = 60 * 60 * 1000; // 1h — sweep abandoned entries
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, entry] of uploadProgressMap) {
+    if (now - entry.startedAt > UPLOAD_PROGRESS_STALE_MS) uploadProgressMap.delete(id);
+  }
+}, 10 * 60 * 1000).unref();
+
+function trackUploadProgress(): express.RequestHandler {
+  return (req, res, next) => {
+    const uploadId = typeof req.query.uploadId === "string" ? req.query.uploadId : null;
+    if (!uploadId) {
+      next();
+      return;
+    }
+    const totalBytes = Number(req.headers["content-length"] || 0);
+    const entry: UploadProgressEntry = { bytesReceived: 0, totalBytes, startedAt: Date.now(), done: false };
+    uploadProgressMap.set(uploadId, entry);
+    req.on("data", (chunk: Buffer) => {
+      entry.bytesReceived += chunk.length;
+    });
+    const finish = () => {
+      entry.done = true;
+      entry.bytesReceived = entry.totalBytes || entry.bytesReceived;
+      setTimeout(() => uploadProgressMap.delete(uploadId), 30_000);
+    };
+    res.on("finish", finish);
+    res.on("close", finish);
+    next();
+  };
+}
+
+app.get("/api/content/upload-progress/:uploadId", (req, res) => {
+  const entry = uploadProgressMap.get(req.params.uploadId);
+  if (!entry) {
+    res.status(404).json({ error: "Unknown or expired uploadId" });
+    return;
+  }
+  const percentComplete =
+    entry.totalBytes > 0 ? Math.min(100, Math.round((entry.bytesReceived / entry.totalBytes) * 100)) : 0;
+  res.json({
+    bytesReceived: entry.bytesReceived,
+    totalBytes: entry.totalBytes,
+    percentComplete,
+    done: entry.done,
+  });
+});
+
 const contentVideoUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
@@ -3827,7 +3915,7 @@ const contentVideoUpload = multer({
       cb(null, `${Date.now()}-${randomUUID()}${ext}`);
     },
   }),
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+  limits: { fileSize: MAX_UPLOAD_FILE_BYTES },
   fileFilter: (_req, file, cb) => {
     const allowed = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -3843,7 +3931,7 @@ const batchVideoUpload = multer({
       cb(null, `${Date.now()}-${randomUUID()}${ext}`);
     },
   }),
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+  limits: { fileSize: MAX_UPLOAD_FILE_BYTES },
   fileFilter: (_req, file, cb) => {
     const allowed = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -3851,7 +3939,7 @@ const batchVideoUpload = multer({
   },
 });
 
-app.post("/api/content/upload", requireDiskSpace(MIN_UPLOAD_FREE_DISK_MB), contentVideoUpload.single("video"), async (req, res) => {
+app.post("/api/content/upload", requireDiskSpaceForUpload(), trackUploadProgress(), contentVideoUpload.single("video"), async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
@@ -3880,7 +3968,7 @@ app.post("/api/content/upload", requireDiskSpace(MIN_UPLOAD_FREE_DISK_MB), conte
   }
 });
 
-app.post("/api/content/batch-upload", requireDiskSpace(MIN_UPLOAD_FREE_DISK_MB), batchVideoUpload.array("videos", 20), async (req, res) => {
+app.post("/api/content/batch-upload", requireDiskSpaceForUpload(), trackUploadProgress(), batchVideoUpload.array("videos", 20), async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
@@ -3890,6 +3978,32 @@ app.post("/api/content/batch-upload", requireDiskSpace(MIN_UPLOAD_FREE_DISK_MB),
     res.status(400).json({ error: "At least one video file required (field name: videos)" });
     return;
   }
+
+  // Phase 5d — precise per-batch estimate now that real file sizes are known.
+  const estimatedClipSpaceMB = estimateBatchClipSpaceMB(files);
+  const neededMB = estimatedClipSpaceMB + UPLOAD_PROCESSING_HEADROOM_MB;
+  const freeMBNow = await getFreeDiskMB();
+  if (Number.isFinite(freeMBNow) && freeMBNow < neededMB) {
+    for (const f of files) {
+      try {
+        fs.unlinkSync(f.path);
+      } catch {
+        /* best-effort — safety sweep will catch it if this fails */
+      }
+    }
+    console.warn(
+      `[batch-processor] Per-batch space estimate failed: ~${Math.round(neededMB)}MB needed ` +
+      `(${Math.round(estimatedClipSpaceMB)}MB estimated clips + ${UPLOAD_PROCESSING_HEADROOM_MB}MB processing), ` +
+      `${freeMBNow}MB available. Batch rejected, uploaded files removed.`,
+    );
+    res.status(507).json({
+      error:
+        `Not enough disk space for this batch — estimated ${Math.round(neededMB)}MB needed, ${freeMBNow}MB available. ` +
+        `Review and publish pending clips to free space, or upload fewer/smaller files.`,
+    });
+    return;
+  }
+
   const pillar = typeof req.body?.pillar === "string" ? req.body.pillar.trim() : "";
   if (!["education", "listings", "brand", "mixed"].includes(pillar)) {
     res.status(400).json({ error: "pillar required: education, listings, brand, or mixed" });
@@ -7581,6 +7695,19 @@ app.use((err: unknown, _req: express.Request, res: express.Response, next: expre
 });
 
 const httpServer = http.createServer(app);
+
+// Phase 3c — Node 18+ defaults server.requestTimeout to 5 minutes: the total
+// time allowed to RECEIVE an entire request body, enforced by Node itself
+// independent of multer's fileSize limit, Express, or Fly's proxy. A 4GB
+// upload over a real (non-datacenter) connection can easily take well past
+// 5 minutes to fully arrive, so without this the connection gets force-killed
+// mid-upload regardless of every other fix in this pass. Raised to 30 minutes
+// server-wide — harmless for the app's normal fast JSON routes (this is an
+// upper bound, not an added delay) and is what actually lets a large upload
+// finish. headersTimeout must stay below requestTimeout (Node requirement);
+// headers arrive in milliseconds even for a huge upload, so it stays short.
+httpServer.requestTimeout = 30 * 60 * 1000;
+httpServer.headersTimeout = 2 * 60 * 1000;
 
 const hullWss = new WebSocketServer({ noServer: true });
 hullWss.on("connection", (ws) => {
