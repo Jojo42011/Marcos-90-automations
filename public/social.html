@@ -2185,9 +2185,16 @@
       <span style="font-size:10px;color:#5b6573;font-family:ui-monospace,monospace">clip</span>`;
 
     function resolveClipThumbUrl(v) {
-      const candidates = [v.thumbnailUrl, v.thumbnail, v.filePath, v.clipUrl].filter(Boolean);
+      // Only real image files belong in an <img src>. filePath/clipUrl are the
+      // clip's VIDEO (.mp4) paths — pointing an <img> at those renders a
+      // broken-image box, so they are intentionally excluded. When no genuine
+      // image thumbnail exists this returns null and callers render their
+      // placeholder instead (no <img> element is emitted at all).
+      const candidates = [v.thumbnailUrl, v.thumbnail].filter(Boolean);
       for (let url of candidates) {
         if (typeof url !== "string" || url.startsWith("mock://")) continue;
+        const isImage = /\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i.test(url) || url.startsWith("data:image/");
+        if (!isImage) continue;
         if (url.startsWith("/clips/")) url = "/openshorts" + url;
         if (url.startsWith("http://localhost:8000/clips/")) url = url.replace("http://localhost:8000", "/openshorts");
         return url;
@@ -3470,9 +3477,7 @@
       await loadClipPipeline(); await loadReviewQueue(); await loadCmStats(); showToast(decision === "approved" ? "Approved" : "Rejected");
     }
     function cmReject(id) {
-      const reason = prompt("Reject this clip?", "");
-      if (reason === null) return;
-      void cmDecision(id, "rejected", reason);
+      void cmDecision(id, "rejected", "");
     }
     async function cmSchedule(id) {
       const platform = prompt("Platform (tiktok or instagram):", "tiktok");
@@ -3560,10 +3565,21 @@
       }
     }
 
+    // If a thumbnail image fails to load (e.g. the .jpg was reclaimed by disk
+    // cleanup), remove the broken <img> from the DOM entirely and swap in the
+    // play-icon placeholder — never leave a broken-image box behind.
+    function rvThumbError(img) {
+      const ph = document.createElement("div");
+      ph.className = "rv-qc-thumb-ph";
+      ph.innerHTML = RV_PLAY_SVG;
+      img.replaceWith(ph);
+    }
+    window.rvThumbError = rvThumbError;
+
     function rvQueueCardHtml(vm) {
       const color = RV_TIER_COLOR[clipTrendClass(vm.score)];
       const thumb = vm.thumb
-        ? `<img class="rv-qc-thumb" src="${vm.thumb}" alt="">`
+        ? `<img class="rv-qc-thumb" src="${vm.thumb}" alt="" onerror="rvThumbError(this)">`
         : `<div class="rv-qc-thumb-ph">${RV_PLAY_SVG}</div>`;
       return `<div class="rv-queue-card${vm.id === rvSelectedId ? " selected" : ""}" data-id="${vm.id}" tabindex="0" role="button" aria-label="${escapeHtml(vm.title)}">
         ${thumb}
@@ -3601,7 +3617,7 @@
       stage.innerHTML = `
         <div class="rv-stage-inner">
           <div class="rv-stage-video">
-            <img class="rv-video-img" id="rvVideoImg" alt="" src="${hasThumb ? vm.thumb : ""}" style="${hasThumb ? "" : "display:none"}">
+            <img class="rv-video-img" id="rvVideoImg" alt="" src="${hasThumb ? vm.thumb : ""}" style="${hasThumb ? "" : "display:none"}" onerror="this.style.display='none';var n=document.getElementById('rvVideoNoImg');if(n)n.style.display='flex'">
             <div class="rv-video-noimg" id="rvVideoNoImg" style="${hasThumb ? "display:none" : ""}"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="5" width="20" height="14" rx="3"/><circle cx="12" cy="12" r="3.2"/></svg><span class="lbl">No preview</span></div>
             <button type="button" class="rv-play-overlay" aria-label="Play clip" onclick="playClip('${vm.id}','${jsStr(vm.title)}')">${RV_PLAY_SVG}</button>
             <span class="rv-duration-badge" id="rvDuration" style="display:none"></span>
@@ -3707,8 +3723,9 @@
         if (rvSelectedId !== vm.id) return;
         const img = document.getElementById("rvVideoImg");
         const noimg = document.getElementById("rvVideoNoImg");
-        if (meta && meta.thumbnailUrl && img) {
-          img.src = meta.thumbnailUrl; img.style.display = "";
+        const metaThumb = meta && meta.thumbnailUrl ? resolveClipThumbUrl({ thumbnailUrl: meta.thumbnailUrl }) : null;
+        if (metaThumb && img) {
+          img.src = metaThumb; img.style.display = "";
           if (noimg) noimg.style.display = "none";
         }
         const videoUrl = (meta && meta.videoUrl) || resolveClipVideoUrl(vm.raw);
@@ -3798,10 +3815,8 @@
     }
 
     async function rvReject(id) {
-      const reason = prompt("Reject this clip?", "");
-      if (reason === null) return;
       try {
-        await cmFetch(`/api/content/compliance/${id}/decision`, { method: "POST", body: JSON.stringify({ decision: "rejected", reason }) });
+        await cmFetch(`/api/content/compliance/${id}/decision`, { method: "POST", body: JSON.stringify({ decision: "rejected", reason: "" }) });
         rvRemoveCardAnimated(id, true, () => rvAdvance(id));
         showToast("Rejected");
       } catch (err) { showToast(`Reject failed: ${err.message || "error"}`); }

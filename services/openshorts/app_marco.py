@@ -2,6 +2,7 @@
 Marco Puga Realty — OpenShorts FastAPI wrapper
 """
 import os
+import re
 import time
 import uuid
 import json
@@ -631,24 +632,62 @@ async def get_channel_videos(channel_url: str, max_videos: int = 10):
 
 
 def _extract_video_id(raw: str) -> str:
-    if "youtube.com" in raw or "youtu.be" in raw:
-        import re
-
-        match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", raw)
-        if match:
-            return match.group(1)
+    """
+    Extract an 11-char YouTube video ID from any URL form
+    (watch?v=, youtu.be/, /shorts/, /embed/, /v/) or return the input
+    unchanged if it already looks like a bare ID.
+    """
+    raw = (raw or "").strip()
+    match = re.search(r"(?:v=|/shorts/|youtu\.be/|/embed/|/v/)([a-zA-Z0-9_-]{11})", raw)
+    if match:
+        return match.group(1)
+    # No URL pattern matched — assume it's already a bare video ID.
     return raw
 
 
 def _fetch_transcript_segments(video_id: str, language: str):
-    """Returns a list of {text, start, duration} segments or raises."""
-    from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
+    """
+    Fetch a transcript as a list of {text, start, duration} dicts using the
+    youtube-transcript-api v1.x instance API (the v0.x static
+    get_transcript()/list_transcripts() were removed in v1.0.0). Prefers a
+    manually-created caption track and falls back to an auto-generated one.
+    Retries once after a short pause on a transient (network/rate) error;
+    re-raises the deterministic "no captions" exceptions so callers classify
+    them. Raises on failure.
+    """
+    from youtube_transcript_api import (
+        YouTubeTranscriptApi,
+        NoTranscriptFound,
+        TranscriptsDisabled,
+        VideoUnavailable,
+    )
+
+    # Preferred languages, de-duped while preserving order.
+    langs, seen = [], set()
+    for lang in [language, "en", "en-US"]:
+        if lang and lang not in seen:
+            seen.add(lang)
+            langs.append(lang)
+
+    def _attempt():
+        api = YouTubeTranscriptApi()
+        transcripts = api.list(video_id)
+        try:
+            transcript = transcripts.find_manually_created_transcript(langs)
+        except NoTranscriptFound:
+            transcript = transcripts.find_generated_transcript(langs)
+        # .to_raw_data() -> list of {text, start, duration} dicts (v0.x shape),
+        # so downstream dict access keeps working unchanged.
+        return transcript.fetch().to_raw_data()
 
     try:
-        return YouTubeTranscriptApi.get_transcript(video_id, languages=[language, "en"])
-    except NoTranscriptFound:
-        transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
-        return transcripts.find_generated_transcript(["en"]).fetch()
+        return _attempt()
+    except (NoTranscriptFound, TranscriptsDisabled, VideoUnavailable):
+        raise  # deterministic no-captions outcome — do not retry
+    except Exception as err:
+        print(f"[youtube-transcript] {video_id}: transient error, retrying once in 2s — {err}")
+        time.sleep(2)
+        return _attempt()
 
 
 @app.post("/api/youtube/transcript")
@@ -751,6 +790,9 @@ async def batch_fetch_transcripts(video_ids: str = Form(...), language: str = Fo
                 }
             )
         except Exception as e:
+            # A single video without captions must never block the rest of the
+            # analysis — log clearly and skip it, continuing with the others.
+            print(f"[youtube-transcript] skipping {clean_id}: {type(e).__name__}: {e}")
             results.append(
                 {
                     "video_id": clean_id,
@@ -761,6 +803,9 @@ async def batch_fetch_transcripts(video_ids: str = Form(...), language: str = Fo
             )
 
     successful = [r for r in results if r["status"] == "success"]
+    print(
+        f"[youtube-transcript] batch complete: {len(successful)}/{len(ids)} transcripts fetched"
+    )
 
     return {
         "total_requested": len(ids),

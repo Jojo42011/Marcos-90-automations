@@ -44,8 +44,15 @@ fi
 RUN python3 -m pip install --no-cache-dir --break-system-packages opencv-python-headless \
     && python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
 
+# Marco-specific Python deps not guaranteed by the upstream OpenShorts clone
+# (YouTube competitor transcript intelligence). Installed explicitly by an
+# absolute path so it never collides with the clone's own requirements.txt.
+COPY services/openshorts/requirements-marco.txt /tmp/requirements-marco.txt
+RUN python3 -m pip install --no-cache-dir --break-system-packages -r /tmp/requirements-marco.txt
+
 # Fail the image build if core clipping imports are broken (avoids "online" sidecar with no engine).
 RUN python3 -c "import main; print('OpenShorts main import OK:', main.__file__)"
+RUN python3 -c "import youtube_transcript_api as y; print('youtube-transcript-api OK:', y.__version__)"
 
 COPY services/openshorts/prompts_marco.py ./prompts_marco.py
 COPY services/openshorts/llm_analysis.py ./llm_analysis.py

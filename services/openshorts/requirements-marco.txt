@@ -1,0 +1,15 @@
+# Python deps the Marco-specific *_marco.py overrides need that are NOT
+# guaranteed by the upstream OpenShorts clone. Installed explicitly in the
+# Dockerfile (see the "Marco-specific Python deps" step) so they don't depend
+# on the cloned repo's requirements.txt.
+
+# YouTube competitor transcript intelligence (youtubeIntel.ts -> sidecar).
+# No API key / auth / audio download — fetches captions already on YouTube.
+# Pinned to the v1.x line: the API surface used in app_marco.py
+# (YouTubeTranscriptApi().fetch()/.list(), FetchedTranscript.to_raw_data())
+# is v1.x; the removed v0.x static get_transcript()/list_transcripts() are not.
+youtube-transcript-api>=1.0,<2.0
+
+# Lists recent competitor channel video IDs (yt-dlp --flat-playlist). Left
+# unpinned so it tracks YouTube's frequent server-side changes.
+yt-dlp
