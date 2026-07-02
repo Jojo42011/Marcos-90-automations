@@ -13,6 +13,17 @@ const POLL_INTERVAL_MS = 8000;
 const STATUS_CHECK_TIMEOUT_MS = 25000;
 const MAX_POLL_ATTEMPTS = 120;
 
+function validateGeminiKey(key: string): void {
+  if (!key) return;
+  if (!key.startsWith("AIza")) {
+    console.warn(
+      `[openshorts] GEMINI_API_KEY invalid format: got ${key.slice(0, 12)}… (expected AIza…). ` +
+      `Clip analysis will fall back to OpenAI/Anthropic or fail. ` +
+      `Get a valid API key from https://aistudio.google.com/app/apikey.`,
+    );
+  }
+}
+
 export interface OpenShortsClipResult {
   clipId: string;
   clipPath: string;
@@ -63,6 +74,20 @@ export async function submitToOpenShorts(input: {
     throw new Error(`Video file not found at path: ${filePath}`);
   }
 
+  validateGeminiKey(GEMINI_API_KEY);
+
+  // Pre-submission health check: fail fast if sidecar is offline.
+  // This prevents silent fallback to mock clips when sidecar is clearly down.
+  const health = await checkOpenShortsHealth();
+  if (!health.running) {
+    throw new Error(
+      `OpenShorts sidecar is not running. ` +
+      `Start it with: npm run sidecar:start (in a separate terminal) ` +
+      `then retry this operation. ` +
+      `Without the sidecar, only mock clips will be generated.`,
+    );
+  }
+
   try {
     const formData = new FormData();
     formData.append("file_path", filePath);
@@ -84,18 +109,8 @@ export async function submitToOpenShorts(input: {
     };
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code;
-    if (
-      code === "ECONNREFUSED" ||
-      code === "ENOTFOUND" ||
-      code === "ETIMEDOUT" ||
-      !OPENSHORTS_BASE_URL
-    ) {
-      const mockJobId = `mock_${Date.now()}_${targetClipCount}_${Math.random().toString(36).slice(2, 8)}`;
-      console.warn(
-        `[openshorts] Sidecar not reachable (${code ?? "no-url"}) — using mock job: ${mockJobId}`,
-      );
-      return { jobId: mockJobId, status: "queued" };
-    }
+    // If the health check passed but submission failed, it's a transient issue or sidecar crashed mid-request.
+    // Rethrow rather than silently falling back to mock.
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`OpenShorts submission failed: ${msg}`);
   }

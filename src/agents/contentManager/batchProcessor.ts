@@ -310,8 +310,17 @@ export async function processBatch(batchSessionId: string): Promise<void> {
         );
       } catch (submitErr) {
         const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
-        console.error(`[batch-processor] OpenShorts submission failed: ${msg}. Using mock.`);
-        jobId = `mock_${Date.now()}_${clipsForFile}`;
+        // Sidecar offline = a clear, actionable error. Rethrow so user sees it immediately.
+        if (msg.includes("sidecar is not running") || msg.includes("npm run sidecar:start")) {
+          throw new Error(`[batch-processor] ${msg}`);
+        }
+        // Other submission errors: log and skip this file
+        console.error(`[batch-processor] OpenShorts submission failed: ${msg}`);
+        updateBatchSourceFile(sourceFile.id, {
+          opusStatus: "failed",
+          errorMessage: msg,
+        });
+        continue;
       }
 
       updateBatchSourceFile(sourceFile.id, { opusJobId: jobId, opusStatus: "processing" });

@@ -9,6 +9,8 @@
     "dev": "ts-node src/app/webhook.ts",
     "dev:mock": "npm run build && node dist/src/server.js",
     "jobs": "ts-node src/app/jobs.ts",
+    "sidecar:start": "cd services/openshorts && python3 app_marco.py",
+    "sidecar:dev": "cd services/openshorts && PYTHONUNBUFFERED=1 python3 -u app_marco.py",
     "brivity-migration:inspect": "ts-node scripts/brivity-migration-dry-run.ts --inspect",
     "brivity-migration:dry-run": "ts-node scripts/brivity-migration-dry-run.ts",
     "brivity-migration:apply": "node scripts/brivity-migration-apply.mjs"

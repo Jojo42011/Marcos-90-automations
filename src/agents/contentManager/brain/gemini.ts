@@ -27,7 +27,15 @@ interface GeminiGenerateResponse {
 }
 
 export function getGeminiApiKey(): string | null {
-  return process.env.GEMINI_API_KEY?.trim() || null;
+  const key = process.env.GEMINI_API_KEY?.trim() || null;
+  if (key && !key.startsWith("AIza")) {
+    console.error(
+      `[Gemini] WARNING: GEMINI_API_KEY has unexpected format (got ${key.slice(0, 12)}…). ` +
+      `Expected AIza… key from Google AI Studio (https://aistudio.google.com/app/apikey). ` +
+      `If this is an OAuth token (AQ., ya29., etc.), the Gemini API will return 401 UNAUTHENTICATED.`,
+    );
+  }
+  return key;
 }
 
 export function getCmBrainModel(): string {
@@ -103,6 +111,14 @@ async function geminiGenerateContent(input: {
 }): Promise<GeminiPart[]> {
   const key = getGeminiApiKey();
   if (!key) throw new Error("GEMINI_API_KEY not configured");
+  if (!key.startsWith("AIza")) {
+    throw new Error(
+      `GEMINI_API_KEY has invalid format: got ${key.slice(0, 12)}… but expected AIza… API key. ` +
+      `Gemini generative language API only accepts API keys from Google AI Studio ` +
+      `(https://aistudio.google.com/app/apikey), not OAuth tokens. ` +
+      `If you have an OAuth token (AQ., ya29., etc.), get a new API key from AI Studio.`,
+    );
+  }
 
   const model = input.model ?? getCmBrainModel();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
