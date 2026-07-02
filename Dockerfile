@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     build-essential \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -48,6 +49,7 @@ RUN python3 -c "import main; print('OpenShorts main import OK:', main.__file__)"
 COPY services/openshorts/prompts_marco.py ./prompts_marco.py
 COPY services/openshorts/llm_analysis.py ./llm_analysis.py
 COPY services/openshorts/main_marco.py ./main_marco.py
+COPY services/openshorts/captions_marco.py ./captions_marco.py
 COPY services/openshorts/app_marco.py ./app_marco.py
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf

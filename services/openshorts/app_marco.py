@@ -18,6 +18,7 @@ import uvicorn
 
 import main_marco  # noqa: F401 — patches openshorts when available
 
+import captions_marco
 from llm_analysis import any_llm_configured, configured_llm_summary
 
 try:
@@ -202,7 +203,7 @@ async def process_video_job(
 
         print(f"[openshorts] Disk space OK: {available_mb}MB available")
         if enable_captions:
-            print(f"[openshorts] Captions enabled: white text, black bg, lower third position")
+            print(f"[openshorts] Burned-in captions enabled: word-highlight karaoke style, lower third")
         else:
             print(f"[openshorts] Captions disabled for this job")
 
@@ -270,20 +271,10 @@ async def process_video_job(
 
                 reframed_path = clip_path.replace(".mp4", "_vertical.mp4")
                 try:
-                    caption_kwargs = {}
-                    if enable_captions:
-                        caption_kwargs = {
-                            "captions": True,
-                            "caption_font_size": 32,
-                            "caption_font_color": "white",
-                            "caption_bg_color": "black",
-                            "caption_bg_opacity": 0.7,
-                            "caption_position": "bottom",
-                            "caption_margin": 30,
-                        }
-                    success = openshorts_main.process_video_to_vertical(
-                        clip_path, reframed_path, **caption_kwargs
-                    )
+                    # process_video_to_vertical() takes only (input, output) — no caption kwargs.
+                    # Captions are burned in as a separate ffmpeg pass below, after reframing,
+                    # so the ASS overlay is never cropped by the vertical reframe step.
+                    success = openshorts_main.process_video_to_vertical(clip_path, reframed_path)
                     if success and os.path.exists(reframed_path):
                         final_clip_path = reframed_path
                         try:
@@ -296,6 +287,37 @@ async def process_video_job(
                 except Exception as reframe_err:
                     print(f"Reframe failed for clip {i + 1}: {reframe_err}. Using original cut.")
                     final_clip_path = clip_path
+
+                if enable_captions and final_clip_path == reframed_path:
+                    ass_path = None
+                    try:
+                        cap_width, cap_height = captions_marco.get_video_resolution(reframed_path)
+                        ass_path = reframed_path.replace(".mp4", ".ass")
+                        ass_file = captions_marco.generate_captions_ass(
+                            transcript.get("segments", []),
+                            clip_start=clip["start_time"],
+                            clip_end=clip["end_time"],
+                            video_width=cap_width,
+                            video_height=cap_height,
+                            output_path=ass_path,
+                        )
+                        if ass_file:
+                            captioned_path = reframed_path.replace("_vertical.mp4", "_captioned.mp4")
+                            captions_marco.burn_captions(reframed_path, ass_file, captioned_path)
+                            if os.path.exists(captioned_path):
+                                final_clip_path = captioned_path
+                                os.remove(reframed_path)
+                                print(f"[openshorts] Captions burned in for clip {i + 1}")
+                        else:
+                            print(f"[openshorts] No transcript words in clip {i + 1} range — skipping captions")
+                    except Exception as caption_err:
+                        print(f"Caption burn-in failed for clip {i + 1}: {caption_err}. Using uncaptioned clip.")
+                    finally:
+                        try:
+                            if ass_path and os.path.exists(ass_path):
+                                os.remove(ass_path)
+                        except Exception:
+                            pass
 
                 try:
                     _extract_thumbnail(
