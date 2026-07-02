@@ -1,12 +1,11 @@
 """
 Marco Puga Realty — OpenShorts main.py override
-Patches viral clip detection to use Marco-specific prompts
+Patches viral clip detection to use Marco-specific prompts + multi-provider LLM.
 """
 import os
-import sys
-import json
 
-from prompts_marco import get_viral_moment_prompt, get_caption_prompt
+from prompts_marco import get_viral_moment_prompt
+from llm_analysis import analyze_transcript_for_clips
 
 try:
     import main as openshorts_main
@@ -26,14 +25,6 @@ def get_viral_clips_marco(
     if openshorts_main is None:
         raise RuntimeError("OpenShorts main module not available")
 
-    from google import genai
-
-    api_key = gemini_api_key or os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY not set")
-
-    client = genai.Client(api_key=api_key)
-
     transcript_text = " ".join(
         [seg.get("text", "") for seg in transcript_result.get("segments", [])],
     )
@@ -46,19 +37,11 @@ def get_viral_clips_marco(
         target_clips=target_clips,
     )
 
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-
-    response_text = response.text.strip()
-    if response_text.startswith("```"):
-        response_text = response_text.split("```")[1]
-        if response_text.startswith("json"):
-            response_text = response_text[4:]
-
-    clips_data = json.loads(response_text)
+    clips_data, model = analyze_transcript_for_clips(prompt, gemini_api_key=gemini_api_key)
 
     return {
         "clips": clips_data,
-        "model": "gemini-2.5-flash",
+        "model": model,
         "total_clips": len(clips_data),
     }
 

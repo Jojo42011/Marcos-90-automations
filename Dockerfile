@@ -7,13 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     python3 \
     python3-pip \
-    python3-venv \
     supervisor \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
     git \
     curl \
@@ -47,6 +46,7 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages opencv-python-
 RUN python3 -c "import main; print('OpenShorts main import OK:', main.__file__)"
 
 COPY services/openshorts/prompts_marco.py ./prompts_marco.py
+COPY services/openshorts/llm_analysis.py ./llm_analysis.py
 COPY services/openshorts/main_marco.py ./main_marco.py
 COPY services/openshorts/app_marco.py ./app_marco.py
 

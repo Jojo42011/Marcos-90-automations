@@ -74,7 +74,9 @@ async function processOpenShortsResults(sourceFile, clips, batchSession, trendRe
     const videoPillar = resolveVideoPillar(batchSession.pillar);
     for (const clip of clips) {
         try {
-            const filePath = (0, index_js_2.mapClipUrlForFrontend)(clip.clipUrl || clip.clipPath);
+            const filePath = clip.clipPath?.startsWith("mock://")
+                ? clip.clipPath
+                : clip.clipPath || (0, index_js_2.mapClipUrlForFrontend)(clip.clipUrl || "");
             const thumbnailUrl = clip.thumbnailUrl ? (0, index_js_2.mapClipUrlForFrontend)(clip.thumbnailUrl) : null;
             const hookText = (clip.hookPreview || clip.suggestedCaption.split(/[.!?]/)[0]) ?? clip.suggestedCaption;
             const caption = clip.suggestedCaption;
@@ -85,6 +87,8 @@ async function processOpenShortsResults(sourceFile, clips, batchSession, trendRe
                 rawInputPath: sourceFile.filePath,
                 rawInputMeta: {
                     openShortsClipId: clip.clipId,
+                    clipPath: clip.clipPath || null,
+                    clipUrl: clip.clipUrl || null,
                     startTime: clip.startTime,
                     endTime: clip.endTime,
                     thumbnailUrl,

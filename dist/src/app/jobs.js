@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.scheduleContentJobs = scheduleContentJobs;
 exports.runDailyJobs = runDailyJobs;
@@ -7,6 +10,8 @@ exports.runQuarterlyJobs = runQuarterlyJobs;
 /**
  * Cron/scheduled jobs: follow-up (10), retention (11), A/B evaluation (12).
  */
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const index_js_1 = require("../modules/09-brivity-sync-fix/index.js");
 const index_js_2 = require("../modules/10-follow-up-feedback/index.js");
 const index_js_3 = require("../modules/11-past-client-retention/index.js");
@@ -34,6 +39,79 @@ const noReplyFollowup_js_1 = require("../agents/emailMarketing/noReplyFollowup.j
 const index_js_16 = require("../agents/contentManager/index.js");
 const index_js_17 = require("../agents/contentManager/brain/index.js");
 const generator_js_1 = require("../agents/voiceClone/generator.js");
+function scheduleDiskCleanup() {
+    const runCleanup = () => {
+        console.log("[disk-cleanup] Running scheduled disk cleanup...");
+        const clipsDir = fs_1.default.existsSync("/data/clips")
+            ? "/data/clips"
+            : path_1.default.join(process.cwd(), "data", "clips");
+        const uploadsDir = fs_1.default.existsSync("/data/uploads")
+            ? "/data/uploads"
+            : path_1.default.join(process.cwd(), "data", "uploads");
+        let deletedCount = 0;
+        let freedBytes = 0;
+        const cutoffMs = 14 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const cleanDir = (dir) => {
+            if (!fs_1.default.existsSync(dir))
+                return;
+            const entries = fs_1.default.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                const fullPath = path_1.default.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    cleanDir(fullPath);
+                    try {
+                        if (fs_1.default.readdirSync(fullPath).length === 0) {
+                            fs_1.default.rmdirSync(fullPath);
+                        }
+                    }
+                    catch {
+                        /* ignore */
+                    }
+                }
+                else {
+                    const stat = fs_1.default.statSync(fullPath);
+                    if (now - stat.mtimeMs > cutoffMs) {
+                        freedBytes += stat.size;
+                        fs_1.default.unlinkSync(fullPath);
+                        deletedCount++;
+                    }
+                }
+            }
+        };
+        try {
+            cleanDir(clipsDir);
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error("[disk-cleanup] Error cleaning clips dir:", msg);
+        }
+        const uploadsVideoDir = path_1.default.join(uploadsDir, "videos");
+        if (fs_1.default.existsSync(uploadsVideoDir)) {
+            try {
+                const uploadCutoff = 2 * 24 * 60 * 60 * 1000;
+                const files = fs_1.default.readdirSync(uploadsVideoDir);
+                for (const file of files) {
+                    const fullPath = path_1.default.join(uploadsVideoDir, file);
+                    const stat = fs_1.default.statSync(fullPath);
+                    if (Date.now() - stat.mtimeMs > uploadCutoff) {
+                        freedBytes += stat.size;
+                        fs_1.default.unlinkSync(fullPath);
+                        deletedCount++;
+                    }
+                }
+            }
+            catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error("[disk-cleanup] Error cleaning uploads dir:", msg);
+            }
+        }
+        const freedMB = Math.round(freedBytes / (1024 * 1024));
+        console.log(`[disk-cleanup] Complete: ${deletedCount} files deleted, ${freedMB}MB freed`);
+    };
+    setTimeout(runCleanup, 30000);
+    setInterval(runCleanup, 24 * 60 * 60 * 1000);
+}
 function scheduleContentJobs() {
     (0, index_js_5.scheduleSocialMediaAgentDaily6pmCST)();
     (0, index_js_6.scheduleMorningScanDaily8am)();
@@ -62,6 +140,7 @@ function scheduleContentJobs() {
     (0, index_js_16.scheduleContentManagerDaily7pmCST)();
     (0, index_js_17.scheduleContentBrainCycles)();
     (0, generator_js_1.scheduleVoiceoverProcessor)();
+    scheduleDiskCleanup();
 }
 async function runDailyJobs() {
     await (0, index_js_1.run)();

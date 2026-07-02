@@ -4,7 +4,10 @@ Marco Puga Realty — OpenShorts FastAPI wrapper
 import os
 import uuid
 import json
+import shutil
 import subprocess
+import traceback
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -14,6 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 import main_marco  # noqa: F401 — patches openshorts when available
+
+from llm_analysis import any_llm_configured, configured_llm_summary
 
 try:
     import main as openshorts_main
@@ -59,6 +64,42 @@ def _cut_clip(input_path: str, output_path: str, start_time: float, end_time: fl
     return output_path
 
 
+def validate_video_file(video_path: str) -> bool:
+    """Return True if ffprobe can read the file (format/duration)."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _fail_job(job_id: str, error_detail: str) -> None:
+    jobs[job_id].update({"status": "failed", "error": error_detail})
+    print(f"[ERROR] Job {job_id} failed: {error_detail}")
+
+
+def check_disk_space(path: str, required_mb: int = 500) -> tuple[bool, int]:
+    """Check if enough disk space is available. Returns (ok, available_mb)."""
+    try:
+        usage = shutil.disk_usage(path)
+        available_mb = usage.free // (1024 * 1024)
+        return available_mb >= required_mb, available_mb
+    except Exception:
+        return True, -1
+
+
 def _extract_thumbnail(video_path: str, output_path: str, timestamp: float = 1.0) -> str:
     """Grab a single still frame as the clip thumbnail."""
     result = subprocess.run(
@@ -77,7 +118,45 @@ def _extract_thumbnail(video_path: str, output_path: str, timestamp: float = 1.0
         raise RuntimeError(f"ffmpeg thumbnail failed: {result.stderr.decode()[-300:]}")
     return output_path
 
-app = FastAPI(title="OpenShorts — Marco Puga Realty", version="1.0.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    if gemini_key.startswith("AIza"):
+        print(f"GEMINI_API_KEY configured: {gemini_key[:8]}...")
+    elif gemini_key:
+        print(
+            f"WARNING: GEMINI_API_KEY invalid for Google AI (got {gemini_key[:8]}…) — "
+            f"will use fallback LLM if available"
+        )
+    else:
+        print("NOTE: GEMINI_API_KEY not set — will use OpenAI or Anthropic for clip analysis")
+
+    if _openai_key := os.environ.get("OPENAI_API_KEY", "").strip():
+        print(f"OPENAI_API_KEY configured: {_openai_key[:8]}...")
+    if _anthropic_key := os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        print(f"ANTHROPIC_API_KEY configured: {_anthropic_key[:8]}...")
+
+    if not any_llm_configured():
+        print("WARNING: No LLM configured for clip analysis (need AIza Gemini, OpenAI, or Anthropic key)")
+    else:
+        print(f"Clip analysis LLM providers available: {configured_llm_summary()}")
+
+    if openshorts_main is None:
+        print("FATAL: OpenShorts main module not available — run setup-openshorts.sh")
+    else:
+        print(f"OpenShorts engine loaded: {openshorts_main.__file__}")
+
+    try:
+        import faster_whisper  # noqa: F401
+
+        print("faster-whisper loaded: version available")
+    except ImportError as e:
+        print(f"FATAL: faster-whisper import failed: {e}")
+
+    yield
+
+
+app = FastAPI(title="OpenShorts — Marco Puga Realty", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -109,20 +188,60 @@ async def process_video_job(
         if openshorts_main is None:
             raise RuntimeError("OpenShorts not installed — run setup-openshorts.sh")
 
-        jobs[job_id]["status"] = "transcribing"
-        transcript = openshorts_main.transcribe_video(video_path)
-        jobs[job_id]["status"] = "analyzing"
+        disk_root = "/data" if os.path.exists("/data") else str(CLIPS_OUTPUT_DIR.parent)
+        has_space, available_mb = check_disk_space(disk_root, required_mb=500)
+        if not has_space:
+            error_msg = (
+                f"Insufficient disk space: only {available_mb}MB available, need 500MB minimum. "
+                "Run disk cleanup on /data/clips and /data/uploads."
+            )
+            print(f"[ERROR] {error_msg}")
+            _fail_job(job_id, error_msg)
+            return
 
-        # transcribe_video() does not return duration — probe the file directly.
-        video_duration = transcript.get("duration") or _probe_duration(video_path)
-        clips_data = main_marco.get_viral_clips_marco(
-            transcript_result=transcript,
-            video_duration=video_duration,
-            pillar=pillar,
-            trend_brief=trend_brief,
-            target_clips=target_clips,
-            gemini_api_key=gemini_api_key,
-        )
+        print(f"[openshorts] Disk space OK: {available_mb}MB available")
+
+        if not validate_video_file(video_path):
+            error_detail = (
+                "Video file could not be read — check format "
+                f"(ffprobe failed on {video_path})"
+            )
+            print(f"[ERROR] {error_detail}")
+            _fail_job(job_id, error_detail)
+            return
+
+        jobs[job_id]["status"] = "transcribing"
+        try:
+            transcript = openshorts_main.transcribe_video(video_path)
+        except Exception as transcribe_err:
+            error_detail = (
+                f"Transcription failed: {type(transcribe_err).__name__}: {transcribe_err}"
+            )
+            print(f"[ERROR] {error_detail}")
+            traceback.print_exc()
+            _fail_job(job_id, error_detail)
+            return
+
+        jobs[job_id]["status"] = "analyzing"
+        try:
+            # transcribe_video() does not return duration — probe the file directly.
+            video_duration = transcript.get("duration") or _probe_duration(video_path)
+            clips_data = main_marco.get_viral_clips_marco(
+                transcript_result=transcript,
+                video_duration=video_duration,
+                pillar=pillar,
+                trend_brief=trend_brief,
+                target_clips=target_clips,
+                gemini_api_key=gemini_api_key,
+            )
+        except Exception as analyze_err:
+            error_detail = (
+                f"AI analysis failed: {type(analyze_err).__name__}: {analyze_err}"
+            )
+            print(f"[ERROR] {error_detail}")
+            traceback.print_exc()
+            _fail_job(job_id, error_detail)
+            return
 
         jobs[job_id]["status"] = "reframing"
         output_clips = []
@@ -130,59 +249,78 @@ async def process_video_job(
         clip_output_dir.mkdir(parents=True, exist_ok=True)
 
         for i, clip in enumerate(clips_data.get("clips", [])):
-            clip_id = str(uuid.uuid4())
-            clip_filename = f"clip_{i + 1}_{clip_id[:8]}.mp4"
-            thumbnail_filename = f"thumb_{i + 1}_{clip_id[:8]}.jpg"
-            clip_path = str(clip_output_dir / clip_filename)
-            thumb_path = str(clip_output_dir / thumbnail_filename)
-
-            _cut_clip(
-                input_path=video_path,
-                output_path=clip_path,
-                start_time=clip["start_time"],
-                end_time=clip["end_time"],
-            )
-
-            reframed_path = clip_path.replace(".mp4", "_vertical.mp4")
             try:
-                success = openshorts_main.process_video_to_vertical(clip_path, reframed_path)
-                final_clip_path = reframed_path if success and os.path.exists(reframed_path) else clip_path
-            except Exception as reframe_err:
-                print(f"Reframe failed for clip {i + 1}: {reframe_err}. Using original cut.")
-                final_clip_path = clip_path
+                clip_id = str(uuid.uuid4())
+                clip_filename = f"clip_{i + 1}_{clip_id[:8]}.mp4"
+                thumbnail_filename = f"thumb_{i + 1}_{clip_id[:8]}.jpg"
+                clip_path = str(clip_output_dir / clip_filename)
+                thumb_path = str(clip_output_dir / thumbnail_filename)
 
-            try:
-                _extract_thumbnail(
-                    video_path=final_clip_path,
-                    output_path=thumb_path,
-                    timestamp=1.0,
+                _cut_clip(
+                    input_path=video_path,
+                    output_path=clip_path,
+                    start_time=clip["start_time"],
+                    end_time=clip["end_time"],
                 )
-            except Exception as thumb_err:
-                print(f"Thumbnail failed for clip {i + 1}: {thumb_err}")
-                thumb_path = None
 
-            output_clips.append(
-                {
-                    "clip_id": clip_id,
-                    "clip_path": final_clip_path,
-                    "clip_url": f"/clips/{job_id}/{os.path.basename(final_clip_path)}",
-                    "thumbnail_path": thumb_path,
-                    "thumbnail_url": (
-                        f"/clips/{job_id}/{os.path.basename(thumb_path)}" if thumb_path else None
-                    ),
-                    "start_time": clip["start_time"],
-                    "end_time": clip["end_time"],
-                    "duration": clip["end_time"] - clip["start_time"],
-                    "viral_score": clip.get("viral_score", 50),
-                    "hook_type": clip.get("hook_type", "uncategorized"),
-                    "hook_preview": clip.get("hook_preview", ""),
-                    "transcript_segment": clip.get("why_this_clip", ""),
-                    "suggested_title": clip.get("suggested_title", f"Clip {i + 1}"),
-                    "suggested_caption": clip.get("suggested_caption", ""),
-                    "pillar": clip.get("pillar", pillar),
-                    "why_this_clip": clip.get("why_this_clip", ""),
-                },
-            )
+                reframed_path = clip_path.replace(".mp4", "_vertical.mp4")
+                try:
+                    success = openshorts_main.process_video_to_vertical(clip_path, reframed_path)
+                    if success and os.path.exists(reframed_path):
+                        final_clip_path = reframed_path
+                        try:
+                            os.remove(clip_path)
+                            print(f"[openshorts] Cleaned up intermediate file: {clip_path}")
+                        except Exception as cleanup_err:
+                            print(f"[openshorts] Could not remove intermediate file: {cleanup_err}")
+                    else:
+                        final_clip_path = clip_path
+                except Exception as reframe_err:
+                    print(f"Reframe failed for clip {i + 1}: {reframe_err}. Using original cut.")
+                    final_clip_path = clip_path
+
+                try:
+                    _extract_thumbnail(
+                        video_path=final_clip_path,
+                        output_path=thumb_path,
+                        timestamp=1.0,
+                    )
+                except Exception as thumb_err:
+                    print(f"Thumbnail failed for clip {i + 1}: {thumb_err}")
+                    thumb_path = None
+
+                output_clips.append(
+                    {
+                        "clip_id": clip_id,
+                        "clip_path": final_clip_path,
+                        "clip_url": f"/clips/{job_id}/{os.path.basename(final_clip_path)}",
+                        "thumbnail_path": thumb_path,
+                        "thumbnail_url": (
+                            f"/clips/{job_id}/{os.path.basename(thumb_path)}" if thumb_path else None
+                        ),
+                        "start_time": clip["start_time"],
+                        "end_time": clip["end_time"],
+                        "duration": clip["end_time"] - clip["start_time"],
+                        "viral_score": clip.get("viral_score", 50),
+                        "hook_type": clip.get("hook_type", "uncategorized"),
+                        "hook_preview": clip.get("hook_preview", ""),
+                        "transcript_segment": clip.get("why_this_clip", ""),
+                        "suggested_title": clip.get("suggested_title", f"Clip {i + 1}"),
+                        "suggested_caption": clip.get("suggested_caption", ""),
+                        "pillar": clip.get("pillar", pillar),
+                        "why_this_clip": clip.get("why_this_clip", ""),
+                    },
+                )
+            except Exception as clip_err:
+                error_detail = (
+                    f"Clip {i + 1} failed: {type(clip_err).__name__}: {clip_err}"
+                )
+                print(f"[ERROR] {error_detail}")
+                traceback.print_exc()
+
+        if not output_clips:
+            _fail_job(job_id, "Reframing produced no clips — check clip timestamps and ffmpeg logs")
+            return
 
         jobs[job_id].update(
             {
@@ -193,9 +331,18 @@ async def process_video_job(
             },
         )
 
+        try:
+            if video_path.startswith("/data/uploads/") and os.path.isfile(video_path):
+                os.remove(video_path)
+                print(f"[openshorts] Cleaned up source video: {video_path}")
+        except Exception as cleanup_err:
+            print(f"[openshorts] Could not clean up source video: {cleanup_err}")
+
     except Exception as e:
-        jobs[job_id].update({"status": "failed", "error": str(e)})
-        print(f"Job {job_id} failed: {e}")
+        error_detail = f"{type(e).__name__}: {e}"
+        print(f"[ERROR] Job {job_id} failed: {error_detail}")
+        traceback.print_exc()
+        _fail_job(job_id, error_detail)
 
 
 @app.post("/api/process")
@@ -209,10 +356,10 @@ async def process_video(
     x_gemini_key: Optional[str] = Header(None),
 ):
     gemini_api_key = x_gemini_key or os.environ.get("GEMINI_API_KEY")
-    if not gemini_api_key:
+    if not any_llm_configured():
         raise HTTPException(
             status_code=400,
-            detail="GEMINI_API_KEY required via X-Gemini-Key header or environment",
+            detail="LLM API key required — set GEMINI_API_KEY (AIza…), OPENAI_API_KEY, or ANTHROPIC_API_KEY",
         )
 
     job_id = str(uuid.uuid4())
@@ -483,7 +630,8 @@ async def health():
     return {
         "status": "ok",
         "service": "openshorts-marco",
-        "model": "gemini-2.5-flash",
+        "model": configured_llm_summary() or "none",
+        "llm_providers": configured_llm_summary(),
         "clips_dir": str(CLIPS_OUTPUT_DIR),
         "openshorts_installed": openshorts_main is not None,
         "active_jobs": len(

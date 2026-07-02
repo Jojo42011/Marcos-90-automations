@@ -18,8 +18,9 @@ const form_data_1 = __importDefault(require("form-data"));
 const crypto_1 = require("crypto");
 const OPENSHORTS_BASE_URL = process.env.OPENSHORTS_URL || "http://localhost:8000";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const POLL_INTERVAL_MS = 5000;
-const MAX_POLL_ATTEMPTS = 180;
+const POLL_INTERVAL_MS = 8000;
+const STATUS_CHECK_TIMEOUT_MS = 25000;
+const MAX_POLL_ATTEMPTS = 120;
 /** Map OpenShorts clip URL to Node proxy path for frontend. */
 function mapClipUrlForFrontend(url) {
     if (!url)
@@ -86,10 +87,7 @@ async function pollOpenShortsJob(jobId) {
         await sleep(POLL_INTERVAL_MS);
         try {
             const response = await axios_1.default.get(`${OPENSHORTS_BASE_URL}/api/jobs/${jobId}`, {
-                // The sidecar is single-threaded and can be CPU-pegged transcribing/
-                // analyzing a video, so its status endpoint may respond slowly. Give it
-                // room rather than aborting the whole job on a short timeout.
-                timeout: 30000,
+                timeout: STATUS_CHECK_TIMEOUT_MS,
             });
             unreachableStreak = 0;
             const job = response.data;
@@ -102,7 +100,7 @@ async function pollOpenShortsJob(jobId) {
             if (job.status === "failed") {
                 throw new Error(`OpenShorts job failed: ${job.error}`);
             }
-            console.log(`[openshorts] Job ${jobId}: ${job.status} (attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS})`);
+            console.log(`[openshorts] Job ${jobId}: ${job.status} — attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS} (${Math.round((attempt * POLL_INTERVAL_MS) / 1000)}s elapsed)`);
         }
         catch (err) {
             const code = err?.code;

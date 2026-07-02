@@ -2,13 +2,101 @@
 
 **Purpose:** Handoff for a new Cursor chat. Read this first so you have context without re-scanning the whole repo or a full conversation history.
 
-**Last updated:** June 26, 2026 (after ElevenLabs STT swap, batch-upload JSON fix, production outage triage + rollback).
+**Last updated:** June 30, 2026 (Content Manager diagnostic, transcription fix, clip player, Fly deploy).
 
 > The most recent session is documented immediately below. Older reference material (CRM/Sendblue era) is preserved further down under "EARLIER CONTEXT" and is still broadly valid for repo structure.
 
 ---
 
-# ===== MOST RECENT SESSION — June 25–26, 2026 =====
+# ===== MOST RECENT SESSION — June 30, 2026 =====
+
+## Session summary (for Claude / Jahan)
+
+This session focused on **Content Manager batch clipping failures** reported as "stuck at Transcribe." We ran a full production diagnostic, implemented fixes, added Review Queue clip playback, and **deployed to Fly** (`deployment-01KWDK0017TD05PJPNEQ71M6EM`). **Changes are live on prod but NOT yet committed to git.**
+
+## What we found (production diagnostic)
+
+| Check | Result |
+|-------|--------|
+| OpenShorts sidecar `/health` | ✅ `200`, `openshorts_installed: true` |
+| supervisord | ✅ `nodejs` + `openshorts` both RUNNING (pid 671/672) |
+| `faster-whisper` | ✅ v1.2.1 importable |
+| Gemini SDK | ✅ importable |
+| Memory | ✅ ~2.6 GB available on 4 GB `performance-2x` machine — NOT OOM |
+| Transcription | ✅ **Works** — Whisper logs show full transcript segments |
+| Actual failure | ❌ **Gemini viral-clip analysis** after transcribe |
+
+**Root cause:** `GEMINI_API_KEY` on Fly starts with `AQ.Ab8RN6…` — an **OAuth/access token**, not a Google AI API key (`AIza…`). Gemini returns:
+
+```
+401 UNAUTHENTICATED — ACCESS_TOKEN_TYPE_UNSUPPORTED
+method: google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent
+```
+
+The UI showed "Transcribe" stage then failed because `process_video_job()` sets status `transcribing` → transcribe succeeds → status `analyzing` → `get_viral_clips_marco()` calls Gemini → 401.
+
+**Not the problem:** sidecar crash, missing whisper, machine too small, Node not sending key (header `X-Gemini-Key` is sent correctly from `src/integrations/openshorts/index.ts`).
+
+**Fix required (ops):** `fly secrets set GEMINI_API_KEY=AIza... -a marco-90-automation` then restart machine.
+
+## What we built (Prompt 2 fixes — now deployed)
+
+### `services/openshorts/app_marco.py`
+- Startup lifespan check: warns if `GEMINI_API_KEY` missing or wrong prefix (`AIza` expected)
+- `validate_video_file()` — ffprobe before transcription
+- Per-step try/catch: `Transcription failed: …`, `AI analysis failed: …` with `traceback.print_exc()`
+- `_fail_job()` sets `status: failed` + `error` with real message (surfaces in batch poll)
+
+### `supervisord.conf`
+- Added `[unix_http_server]`, `[supervisorctl]`, `[rpcinterface:supervisor]` so `supervisorctl status` works
+- `startretries=10`, `startsecs=15`, `PYTHONUNBUFFERED=1` on openshorts
+
+### `Dockerfile`
+- Added `libgtk2.0-dev`, `libavcodec-dev`, `libavformat-dev`, `libswscale-dev`, `wget` for ML/video libs
+
+### `public/social.html`
+- Failed batch/file rows show **"Why?"** button + expandable error text (uses `errorMessage` from API)
+- Batch card shows error summary from `errorMessages` array
+- **Review Queue clip player:** ▶ overlay on thumb, "Play clip" footer button, modal with `<video controls>`, open/download links
+- Publishing tab also gets "Play clip" button
+
+### `src/server.ts`
+- `GET /api/content/clip/:clipId/video` — serves clip files from disk (`resolveClipVideoFilePath()`)
+- `resolveContentClipsDir()` helper for `/data/clips` and `/data/content/clips` paths
+
+## Deploy status (June 30)
+
+- **Prod URL:** https://marco-90-automation.fly.dev/social
+- **Health:** `200`, `openshorts.running: true`
+- **Image:** `deployment-01KWDK0017TD05PJPNEQ71M6EM`
+- **Git:** Local changes **deployed but uncommitted** — files modified: `Dockerfile`, `supervisord.conf`, `services/openshorts/app_marco.py`, `src/server.ts`, `public/social.html`, `dist/src/server.js`
+
+## Earlier in same chat thread (before diagnostic)
+
+1. **Local deploy** — ran Content Manager at `localhost:3000/social` (monolith; all schedulers boot)
+2. **Git push** — pushed `778a23f` (handoff + `.gitignore`) and `2030a42` (revert ElevenLabs STT) to `main`
+3. **Local batch failure** — OpenShorts `main.py` not installed locally → "OpenShorts not installed"; Apify 402 on competitor scrape (non-fatal)
+
+## Outstanding
+
+1. **Rotate `GEMINI_API_KEY` on Fly** to valid `AIza…` key — unblocks clip analysis after transcribe
+2. **Commit + push** the June 30 deploy changes to git (currently only on Fly image)
+3. **`ANTHROPIC_API_KEY`** — still may need rotation if DM agent down (see June 26 notes)
+4. Local OpenShorts engine still needs `pip install -r requirements.txt` + cloned `main.py` for full local clipping
+
+## Key files this session
+
+| File | Change |
+|------|--------|
+| `services/openshorts/app_marco.py` | Error handling, startup checks, video validation |
+| `supervisord.conf` | supervisorctl + PYTHONUNBUFFERED |
+| `Dockerfile` | Extra apt deps for ML |
+| `public/social.html` | Error UI + clip player modal |
+| `src/server.ts` | Clip video serve route |
+
+---
+
+# ===== SESSION — June 25–26, 2026 =====
 
 ## Environment / how to work in this repo
 - **Prod:** Fly app `marco-90-automation` → `https://marco-90-automation.fly.dev`. Region `dfw`, single machine `811701f9455e08`. Volume `vol_vly5ljmnzdeqmpm4` (3 GB) mounted at `/data`.

@@ -4,6 +4,7 @@
 import "dotenv/config";
 import http from "http";
 import type { IncomingMessage } from "http";
+import { execSync } from "child_process";
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -102,6 +103,7 @@ import {
   getPillarPerformanceSummary,
   updateContentVideo,
   getContentVideo,
+  getContentSession,
   getLatestBriefing,
   getDailyStrategy,
   ensureDailyTargets,
@@ -134,6 +136,7 @@ import {
   insertCompetitorProfile,
   updateCompetitorProfile,
   getClipEnhancementByVideoId,
+  type ContentVideo,
   updateClipEnhancement,
   listContentVideosWithEnhancements,
   insertPublishLog,
@@ -411,7 +414,10 @@ import {
 } from "./agents/conversationEscalations/index.js";
 import { checkTextingAllowed, isWithinTextingHours } from "./core/textingRules.js";
 import { newMarcoRequestId, marcoCorrelationId } from "./app/marcoLog.js";
-import { checkOpenShortsHealth } from "./integrations/openshorts/index.js";
+import {
+  checkOpenShortsHealth,
+  mapClipUrlForFrontend,
+} from "./integrations/openshorts/index.js";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { checkVoxCpmHealth } from "./integrations/voxcpm/index.js";
 import { checkScriptSafety } from "./agents/voiceClone/safetyLock.js";
@@ -546,11 +552,55 @@ function trimGeminiSystemPrompt(prompt: string): string {
   return `${trimmed}\n\n[Context truncated for Live API limit]`;
 }
 
+function getDiskInfo(): {
+  total_mb: number;
+  used_mb: number;
+  available_mb: number;
+  used_pct: number;
+  warning: string | null;
+  critical: string | null;
+} {
+  const fallback = {
+    total_mb: -1,
+    used_mb: -1,
+    available_mb: -1,
+    used_pct: -1,
+    warning: null as string | null,
+    critical: null as string | null,
+  };
+  try {
+    const dfOutput = execSync("df -m /data 2>/dev/null || df -m . 2>/dev/null", {
+      timeout: 3000,
+    }).toString();
+    const lines = dfOutput.trim().split("\n");
+    if (lines.length < 2) return fallback;
+    const parts = lines[1].split(/\s+/);
+    const total_mb = parseInt(parts[1], 10) || -1;
+    const used_mb = parseInt(parts[2], 10) || -1;
+    const available_mb = parseInt(parts[3], 10) || -1;
+    const used_pct = parseInt((parts[4] || "0").replace("%", ""), 10) || -1;
+    return {
+      total_mb,
+      used_mb,
+      available_mb,
+      used_pct,
+      warning:
+        used_pct > 85 ? "DISK ABOVE 85% — clean up /data/clips and /data/uploads" : null,
+      critical:
+        used_pct > 95 ? "DISK CRITICAL — processing will fail until space is freed" : null,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 app.get("/health", async (_req, res) => {
   const apiKeyConfigured = isAnthropicApiKeyConfigured();
   const openShortsHealth = await checkOpenShortsHealth().catch(() => ({ running: false }));
+  const disk = getDiskInfo();
   res.status(200).json({
     ok: true,
+    disk,
     anthropic: {
       api_key_configured: apiKeyConfigured,
       model: getAnthropicModel(),
@@ -3641,6 +3691,103 @@ function resolveContentVideoUploadDir(): string {
   return dir;
 }
 
+function resolveContentClipsDir(): string {
+  const base = fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const dir = path.join(base, "clips");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function resolveClipVideoFilePath(storedPath: string): string | null {
+  if (!storedPath || storedPath.startsWith("mock://")) return null;
+
+  const normalized = storedPath.replace(/\\/g, "/");
+
+  if (normalized.startsWith("/openshorts/clips/")) {
+    const rel = normalized.replace("/openshorts/clips/", "");
+    const candidate = path.join(resolveContentClipsDir(), rel);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  if (normalized.startsWith("/clips/")) {
+    const rel = normalized.replace("/clips/", "");
+    const candidate = path.join(resolveContentClipsDir(), rel);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  if (fs.existsSync(storedPath)) return storedPath;
+
+  const dataBase = fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const stripped = normalized
+    .replace(/^\/data\//, "")
+    .replace(/^data\//, "")
+    .replace(/^\\data\\/, "");
+  const candidates = [
+    path.join(dataBase, stripped),
+    path.join(resolveContentClipsDir(), path.basename(stripped)),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  return null;
+}
+
+function gatherClipPathCandidates(video: ContentVideo): string[] {
+  const candidates: string[] = [];
+  if (video.filePath) candidates.push(video.filePath);
+
+  if (video.sourceSessionId) {
+    const session = getContentSession(video.sourceSessionId);
+    const meta = session?.rawInputMeta;
+    if (meta && typeof meta.clipPath === "string" && meta.clipPath) {
+      candidates.push(meta.clipPath);
+    }
+    if (meta && typeof meta.clipUrl === "string" && meta.clipUrl) {
+      candidates.push(mapClipUrlForFrontend(meta.clipUrl));
+    }
+  }
+
+  return [...new Set(candidates.filter(Boolean))].filter((p) => !p.startsWith("mock://"));
+}
+
+function resolveClipFileForVideo(video: ContentVideo): string | null {
+  for (const candidate of gatherClipPathCandidates(video)) {
+    const resolved = resolveClipVideoFilePath(candidate);
+    if (resolved) return resolved;
+  }
+  return null;
+}
+
+function streamClipVideoFile(req: express.Request, res: express.Response, filePath: string): void {
+  const stat = fs.statSync(filePath);
+  const fileSize = stat.size;
+  const range = req.headers.range;
+
+  if (range) {
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const chunkSize = end - start + 1;
+
+    res.writeHead(206, {
+      "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": chunkSize,
+      "Content-Type": "video/mp4",
+    });
+    fs.createReadStream(filePath, { start, end }).pipe(res);
+    return;
+  }
+
+  res.writeHead(200, {
+    "Content-Length": fileSize,
+    "Content-Type": "video/mp4",
+    "Accept-Ranges": "bytes",
+  });
+  fs.createReadStream(filePath).pipe(res);
+}
+
 const contentVideoUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
@@ -3902,6 +4049,76 @@ app.post("/api/content/competitor-trends/refresh", async (req, res) => {
     res.json({ trends });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/api/content/clip/:clipId/meta", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  const video = getContentVideo(clipId);
+  if (!video) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+
+  const storedPath = video.filePath || "";
+  const isMock = !storedPath || storedPath.startsWith("mock://");
+  const resolvedPath = resolveClipFileForVideo(video);
+  const fileExists = Boolean(resolvedPath);
+
+  const session = video.sourceSessionId ? getContentSession(video.sourceSessionId) : null;
+  const thumbMeta = session?.rawInputMeta?.thumbnailUrl;
+  const thumbnailUrl =
+    typeof thumbMeta === "string" && thumbMeta && !thumbMeta.startsWith("mock://")
+      ? thumbMeta
+      : null;
+
+  res.json({
+    clipId,
+    hasVideo: fileExists,
+    isMock,
+    clipPath: fileExists ? resolvedPath : null,
+    videoUrl: fileExists ? `/api/content/clip/${clipId}/video` : null,
+    thumbnailUrl,
+  });
+});
+
+app.get("/api/content/clip/:clipId/video", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  const video = getContentVideo(clipId);
+  if (!video) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+
+  const candidatePaths = gatherClipPathCandidates(video);
+  const filePath = resolveClipFileForVideo(video);
+  if (!filePath) {
+    console.log(
+      `[clip-video] No video file found for clip ${clipId}. Candidates tried:`,
+      candidatePaths,
+    );
+    res.status(404).json({
+      error: "Video file not found on disk",
+      hint: "This may be a mock clip or the file was not saved correctly",
+      candidatePaths,
+    });
+    return;
+  }
+
+  try {
+    streamClipVideoFile(req, res, filePath);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[clip-video] Error serving clip:", message);
+    res.status(500).json({ error: message });
   }
 });
 
@@ -7303,6 +7520,34 @@ app.post("/api/leads/:id/documents/:docId/sign", async (req, res) => {
 
 /** Serve other public assets (CRM modules, etc.) after explicit routes. */
 app.use(express.static(publicDir, { index: false }));
+
+app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const e = err as { code?: string; status?: number; message?: string; stack?: string };
+
+  if (e.code === "ENOSPC") {
+    console.error("[server] DISK FULL error:", e.message);
+    res.status(507).json({
+      error: "Insufficient storage space on server",
+      detail:
+        "The server disk is full. Contact your administrator to free up space on the /data volume.",
+      code: "ENOSPC",
+    });
+    return;
+  }
+
+  console.error("[server] Unhandled error:", e.message);
+  if (e.stack) console.error(e.stack);
+
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+
+  res.status(e.status || 500).json({
+    error: e.message || "Internal server error",
+    code: e.code,
+  });
+});
 
 const httpServer = http.createServer(app);
 

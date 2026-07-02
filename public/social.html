@@ -554,6 +554,39 @@
     }
     .status-badge.complete { background: rgba(61, 220, 132, 0.12); color: #3ddc84; }
     .status-badge.failed { background: rgba(255, 90, 95, 0.12); color: #ff5a5f; }
+    .show-error-btn {
+      margin-left: 6px;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #ff5a5f;
+      background: rgba(255, 90, 95, 0.1);
+      border: 1px solid rgba(255, 90, 95, 0.35);
+      border-radius: 4px;
+      cursor: pointer;
+      vertical-align: middle;
+    }
+    .show-error-btn:hover { background: rgba(255, 90, 95, 0.2); }
+    .file-error-detail {
+      display: block;
+      margin-top: 4px;
+      font-size: 10px;
+      color: #ff8a8e;
+      line-height: 1.35;
+      max-width: 280px;
+      word-break: break-word;
+    }
+    .batch-error-summary {
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: rgba(255, 90, 95, 0.08);
+      border: 1px solid rgba(255, 90, 95, 0.25);
+      border-radius: 6px;
+      font-size: 11px;
+      color: #ffb4b7;
+      line-height: 1.4;
+      word-break: break-word;
+    }
     .active-batch-card {
       background: var(--panel-2, #1b1f26);
       border: 1px solid var(--border, #262b33);
@@ -643,8 +676,64 @@
   @media (max-width: 640px) { .clip-review-grid { grid-template-columns: 1fr; } }
     .clip-review-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
     .clip-review-body { display: grid; grid-template-columns: 140px 1fr; gap: 0.75rem; padding: 0.75rem; }
-    .clip-thumb { position: relative; background: var(--surface2); border-radius: var(--radius-xs); min-height: 120px; display: flex; align-items: center; justify-content: center; }
+    .clip-thumb { position: relative; background: var(--surface2); border-radius: var(--radius-xs); min-height: 120px; display: flex; align-items: center; justify-content: center; cursor: default; }
+    .clip-thumb.has-video { cursor: pointer; }
     .clip-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-xs); }
+    .clip-play-overlay {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 44px; height: 44px; border-radius: 999px; border: none;
+      background: rgba(0,0,0,0.6); color: #fff; font-size: 1.1rem; line-height: 1;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+      padding-left: 3px; transition: background 0.15s ease, transform 0.15s ease; z-index: 2;
+    }
+    .clip-play-overlay:hover { background: var(--cyan); color: #000; transform: translate(-50%, -50%) scale(1.08); }
+    .clip-player-modal { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center; }
+    .clip-player-modal.show { display: flex; }
+    .clip-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; padding: 20px;
+    }
+    .clip-modal-box {
+      background: var(--panel, #14171c);
+      border: 1px solid var(--border, #262b33);
+      border-radius: 12px; width: 100%; max-width: 640px;
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .clip-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--border, #262b33);
+    }
+    .clip-modal-title {
+      font-size: 14px; font-weight: 600; color: var(--text, #e8eaed);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 480px;
+    }
+    .clip-modal-close {
+      background: none; border: none; color: var(--muted, #8a919c);
+      font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 4px;
+    }
+    .clip-modal-close:hover { color: var(--text); background: var(--panel-2); }
+    .clip-modal-actions {
+      display: flex; gap: 10px; padding: 14px 18px;
+      border-top: 1px solid var(--border, #262b33);
+    }
+    .btn-secondary {
+      background: var(--panel-2, #1b1f26); color: var(--text, #e8eaed);
+      border: 1px solid var(--border, #262b33); border-radius: 6px;
+      padding: 8px 14px; font-size: 12px; cursor: pointer;
+    }
+    .btn-secondary:hover { border-color: var(--accent-2, #25f4ee); }
+    .clip-player-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.78); backdrop-filter: blur(2px); }
+    .clip-player-box {
+      position: relative; z-index: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 0.75rem; max-width: 480px; width: calc(100% - 2rem);
+      max-height: calc(100vh - 2rem); display: flex; flex-direction: column; gap: 0.6rem;
+    }
+    .clip-player-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-weight: 600; }
+    .clip-player-close { background: transparent; border: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; padding: 0.2rem 0.4rem; }
+    .clip-player-close:hover { color: var(--text); }
+    #clip-player-video { width: 100%; max-height: 70vh; border-radius: var(--radius-xs); background: #000; }
+    .clip-player-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .thumb-placeholder {
       width: 100%;
       height: 100%;
@@ -1038,6 +1127,31 @@
 <body>
   <div class="page-bg"></div>
   <div id="toast" class="toast"></div>
+
+  <div id="clipPlayerModal" style="display:none" class="clip-modal-overlay">
+    <div class="clip-modal-box" onclick="event.stopPropagation()">
+      <div class="clip-modal-header">
+        <span id="clipPlayerTitle" class="clip-modal-title">Clip Preview</span>
+        <button type="button" onclick="closeClipPlayer()" class="clip-modal-close" aria-label="Close">✕</button>
+      </div>
+      <div id="clipPlayerLoading" style="display:flex;align-items:center;justify-content:center;height:200px;color:#8a919c;gap:8px">
+        <div class="btn-spinner" style="border-color:rgba(255,255,255,0.2);border-top-color:#25f4ee"></div>
+        <span>Loading preview...</span>
+      </div>
+      <video
+        id="clipPlayerVideo"
+        controls
+        playsinline
+        style="display:none;width:100%;max-height:500px;border-radius:6px;background:#000"
+        preload="metadata"
+      ></video>
+      <div id="clipPlayerNoVideo" style="display:none"></div>
+      <div class="clip-modal-actions">
+        <button type="button" id="clipOpenTabBtn" style="display:none" class="btn-secondary">Open in new tab</button>
+        <button type="button" id="clipDownloadBtn" style="display:none" class="btn-secondary">Download</button>
+      </div>
+    </div>
+  </div>
   <div class="crm-shell">
     <aside class="crm-sidebar" aria-label="Content Manager navigation">
       <div class="crm-logo">Content Manager</div>
@@ -1588,6 +1702,129 @@
       return `<div class="thumb-placeholder">${thumbPlaceholderSvg}</div>`;
     }
 
+    function resolveClipVideoUrl(v) {
+      if (!v) return null;
+      const candidates = [v.filePath, v.clipUrl, v.fileUrl].filter(Boolean);
+      for (let url of candidates) {
+        if (typeof url !== "string" || url.startsWith("mock://")) continue;
+        if (url.startsWith("/clips/")) url = "/openshorts" + url;
+        if (url.startsWith("http://localhost:8000/clips/")) {
+          url = url.replace("http://localhost:8000", "/openshorts");
+        }
+        if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(url) || url.includes("/clips/")) {
+          return url.startsWith("/api/") ? apiUrl(url) : url;
+        }
+        if (/^[a-zA-Z]:[\\/]/.test(url) || url.startsWith("\\") || url.startsWith("/data/")) {
+          return apiUrl(`/api/content/clip/${v.id}/video`);
+        }
+      }
+      if (v.id && v.filePath && !String(v.filePath).startsWith("mock://")) {
+        return apiUrl(`/api/content/clip/${v.id}/video`);
+      }
+      return null;
+    }
+
+    function jsStr(s) {
+      return escapeHtml(String(s == null ? "" : s)).replace(/'/g, "\\'");
+    }
+
+    async function playClip(clipId, clipTitle) {
+      const modal = document.getElementById("clipPlayerModal");
+      const videoEl = document.getElementById("clipPlayerVideo");
+      const modalTitle = document.getElementById("clipPlayerTitle");
+      const openTabBtn = document.getElementById("clipOpenTabBtn");
+      const downloadBtn = document.getElementById("clipDownloadBtn");
+      const loadingMsg = document.getElementById("clipPlayerLoading");
+      const noVideoMsg = document.getElementById("clipPlayerNoVideo");
+
+      if (!modal || !videoEl || !clipId) return;
+
+      videoEl.src = "";
+      videoEl.style.display = "none";
+      if (loadingMsg) loadingMsg.style.display = "flex";
+      if (noVideoMsg) { noVideoMsg.style.display = "none"; noVideoMsg.innerHTML = ""; }
+      if (modalTitle) modalTitle.textContent = clipTitle || "Clip Preview";
+      if (openTabBtn) openTabBtn.style.display = "none";
+      if (downloadBtn) downloadBtn.style.display = "none";
+      modal.style.display = "flex";
+
+      try {
+        const metaRes = await fetch(apiUrl(`/api/content/clip/${clipId}/meta`), {
+          headers: apiHeaders(),
+        });
+        if (!metaRes.ok) throw new Error("Could not check clip metadata");
+        const meta = await metaRes.json();
+        if (loadingMsg) loadingMsg.style.display = "none";
+
+        if (meta.hasVideo && meta.videoUrl) {
+          const videoUrl = apiUrl(meta.videoUrl);
+          videoEl.src = videoUrl;
+          videoEl.style.display = "block";
+          if (openTabBtn) {
+            openTabBtn.style.display = "inline-block";
+            openTabBtn.onclick = () => window.open(videoUrl, "_blank");
+          }
+          if (downloadBtn) {
+            downloadBtn.style.display = "inline-block";
+            downloadBtn.onclick = () => {
+              const a = document.createElement("a");
+              a.href = videoUrl;
+              a.download = `${clipTitle || "clip"}.mp4`;
+              a.click();
+            };
+          }
+          videoEl.load();
+        } else if (meta.isMock) {
+          if (noVideoMsg) {
+            noVideoMsg.innerHTML = `
+              <div style="text-align:center;padding:32px 20px;color:#8a919c">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#5b6573" stroke-width="1.5" style="margin-bottom:12px">
+                  <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+                </svg>
+                <p style="font-size:14px;color:#e8eaed;margin:0 0 4px">Preview not available</p>
+                <p style="font-size:12px;margin:0">This clip was generated with mock data.<br>Upload real footage to get actual video clips.</p>
+              </div>`;
+            noVideoMsg.style.display = "block";
+          }
+        } else {
+          if (noVideoMsg) {
+            noVideoMsg.innerHTML = `
+              <div style="text-align:center;padding:32px 20px;color:#8a919c">
+                <p style="font-size:14px;color:#ff5a5f;margin:0 0 4px">Video file not found</p>
+                <p style="font-size:12px;margin:0">The clip was processed but the file could not be located on the server.<br>Check /data/clips/ on Fly.</p>
+              </div>`;
+            noVideoMsg.style.display = "block";
+          }
+        }
+      } catch (err) {
+        console.error("[clip-player] Failed to load clip:", err.message);
+        if (loadingMsg) loadingMsg.style.display = "none";
+        if (noVideoMsg) {
+          noVideoMsg.textContent = `Could not load video: ${err.message}`;
+          noVideoMsg.style.display = "block";
+        }
+      }
+    }
+    window.playClip = playClip;
+
+    function closeClipPlayer() {
+      const modal = document.getElementById("clipPlayerModal");
+      const videoEl = document.getElementById("clipPlayerVideo");
+      if (videoEl) {
+        videoEl.pause();
+        videoEl.src = "";
+      }
+      if (modal) modal.style.display = "none";
+    }
+    window.closeClipPlayer = closeClipPlayer;
+
+    document.getElementById("clipPlayerModal")?.addEventListener("click", function(e) {
+      if (e.target === this) closeClipPlayer();
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") closeClipPlayer();
+    });
+
     function showToast(msg) {
       const el = document.getElementById("toast");
       el.textContent = msg;
@@ -1952,7 +2189,39 @@
       return labelMap[st] || status || "Queued";
     }
 
-    function setFileRowStatus(filename, status, clipsCount) {
+    function failedStatusHtml(status, label, errorMessage) {
+      const safeLabel = escapeHtml(label);
+      const safeStatus = escapeHtml(status);
+      if (!errorMessage) {
+        return `<span class="status-badge ${safeStatus}">${safeLabel}</span>`;
+      }
+      const safeErr = escapeHtml(errorMessage);
+      const errId = `err-${Math.random().toString(36).slice(2, 9)}`;
+      return `<span class="status-badge ${safeStatus}" title="${safeErr}">${safeLabel}</span>
+        <button type="button" class="show-error-btn" data-err-id="${errId}">Why?</button>
+        <span class="file-error-detail" id="${errId}" style="display:none">${safeErr}</span>`;
+    }
+
+    function bindErrorButtons(root) {
+      (root || document).querySelectorAll(".show-error-btn").forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", () => {
+          const errId = btn.getAttribute("data-err-id");
+          const detail = errId ? document.getElementById(errId) : null;
+          const text = detail?.textContent || btn.previousElementSibling?.getAttribute("title") || "Unknown error";
+          if (detail) {
+            const showing = detail.style.display !== "none";
+            detail.style.display = showing ? "none" : "block";
+            btn.textContent = showing ? "Why?" : "Hide";
+          } else {
+            alert(text);
+          }
+        });
+      });
+    }
+
+    function setFileRowStatus(filename, status, clipsCount, errorMessage) {
       const st = (status || "queued").toLowerCase();
       const label = statusBadgeLabel(st, clipsCount ?? 0);
       batchFileStatuses[filename] = st;
@@ -1963,8 +2232,13 @@
         if (rowName !== filename && !filename.includes(rowName) && !rowName.includes(filename)) return;
         const statusCell = row.querySelector(".file-status-cell");
         if (!statusCell) return;
-        statusCell.innerHTML = `<span class="status-badge ${escapeHtml(st)}">${escapeHtml(label)}</span>`;
+        if (st === "failed" && errorMessage) {
+          statusCell.innerHTML = failedStatusHtml(st, label, errorMessage);
+        } else {
+          statusCell.innerHTML = `<span class="status-badge ${escapeHtml(st)}">${escapeHtml(label)}</span>`;
+        }
       });
+      bindErrorButtons();
     }
 
     let processBtnDefaultLabel = "Process Batch";
@@ -2111,7 +2385,13 @@
         fileList.forEach((f) => {
           const name = f.filename || f.originalFilename;
           if (!name) return;
-          setFileRowStatus(name, f.opusStatus || f.opus_status || "processing", f.clipsGenerated ?? f.clipsGeneratedCount ?? 0);
+          const err = f.errorMessage || f.error_message || null;
+          setFileRowStatus(
+            name,
+            f.opusStatus || f.opus_status || "processing",
+            f.clipsGenerated ?? f.clipsGeneratedCount ?? 0,
+            err,
+          );
         });
       }
 
@@ -2145,6 +2425,25 @@
           statusLabelEl.style.animation = "none";
           statusLabelEl.style.color = "#ff5a5f";
         }
+        const failedMsgs = pollData.errorMessages || [];
+        const firstErr = failedMsgs.find((e) => e.error)?.error
+          || fileList.find((f) => f.errorMessage || f.error_message)?.errorMessage
+          || fileList.find((f) => f.errorMessage || f.error_message)?.error_message;
+        if (liveMsgEl && firstErr) {
+          liveMsgEl.textContent = firstErr.length > 200 ? `${firstErr.slice(0, 200)}…` : firstErr;
+        }
+        let summaryEl = card?.querySelector(".batch-error-summary");
+        if (card && failedMsgs.length) {
+          if (!summaryEl) {
+            summaryEl = document.createElement("div");
+            summaryEl.className = "batch-error-summary";
+            card.appendChild(summaryEl);
+          }
+          summaryEl.innerHTML = failedMsgs
+            .filter((e) => e.error)
+            .map((e) => `<div><strong>${escapeHtml(e.filename || "file")}:</strong> ${escapeHtml(e.error)}</div>`)
+            .join("");
+        }
         resetProcessButton();
       }
     }
@@ -2163,6 +2462,12 @@
         if (data.sourceFiles) {
           data.sourceFiles.forEach((sf) => {
             batchFileStatuses[sf.originalFilename] = (sf.opusStatus || sf.opus_status || "processing").toLowerCase();
+            setFileRowStatus(
+              sf.originalFilename,
+              sf.opusStatus || sf.opus_status || "processing",
+              sf.clipsGeneratedCount ?? 0,
+              sf.errorMessage || sf.error_message || null,
+            );
           });
           renderBatchFileTable();
         }
@@ -2175,7 +2480,11 @@
         if (data.status === "failed" || data.batch?.status === "failed") {
           clearInterval(batchPollTimer);
           batchPollTimer = null;
-          showProcessingError("Processing failed. Check server logs for details.");
+          const failedMsgs = data.errorMessages || [];
+          const firstErr = failedMsgs.find((e) => e.error)?.error
+            || (data.sourceFiles || []).find((f) => f.errorMessage)?.errorMessage
+            || (data.files || []).find((f) => f.errorMessage)?.errorMessage;
+          showProcessingError(firstErr || "Processing failed. Check server logs for details.");
         }
       } catch (e) { console.warn("batch poll", e); }
     }
@@ -2233,10 +2542,15 @@
         const name = f.filename || f.originalFilename || "file";
         const st = (f.opusStatus || f.opus_status || "queued").toLowerCase();
         const clips = f.clipsGenerated ?? f.clipsGeneratedCount ?? 0;
+        const err = f.errorMessage || f.error_message || "";
+        const errLine = st === "failed" && err
+          ? `<div class="file-error-detail" style="display:block;grid-column:1/-1">${escapeHtml(err)}</div>`
+          : "";
         return `<div class="file-progress-row">
           <span class="fname" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
           <span class="fstatus ${escapeHtml(st)}">${escapeHtml(st)}</span>
           <span class="fclips">${clips > 0 ? `${clips} clips` : ""}</span>
+          ${errLine}
         </div>`;
       }).join("");
     }
@@ -2371,6 +2685,11 @@
       const score = v.trendAlignmentScore || e.trendAlignmentScore || 0;
       const thumbSrc = resolveClipThumbUrl(v);
       const thumbHtml = buildClipThumbHtml(thumbSrc);
+      const videoSrc = resolveClipVideoUrl(v);
+      const clipTitle = e.titleFinal || v.title || "Clip";
+      const playOverlay = v.id
+        ? `<button type="button" class="clip-play-overlay" title="Play clip" onclick="playClip('${v.id}','${jsStr(clipTitle)}')">▶</button>`
+        : "";
       const platforms = e.platformTargets || v.platformTargets || [v.platformTarget || "tiktok"];
       const hookAlts = (e.hookVariations || []).filter((h) => h !== (e.hookPrimary || v.hook));
       const hashtags = e.hashtagsFinal || v.hashtags || [];
@@ -2379,7 +2698,8 @@
         : `<span class="cm-pill" style="color:var(--success);">✓ Clean</span>`;
       return `<div class="clip-review-card" id="clip-card-${v.id}">
         <div class="clip-review-body">
-          <div class="clip-thumb">${thumbHtml}
+          <div class="clip-thumb${videoSrc || v.id ? " has-video" : ""}">${thumbHtml}
+            ${playOverlay}
             <span class="clip-trend-badge ${clipTrendClass(score)}">${score}/100</span>
             <span class="clip-duration-badge">clip</span>
           </div>
@@ -2400,6 +2720,7 @@
           </div>
         </div>
         <div class="clip-review-footer">
+          ${v.id ? `<button type="button" class="cm-btn" onclick="playClip('${v.id}','${jsStr(clipTitle)}')">▶ Play clip</button>` : ""}
           <button type="button" class="cm-btn" onclick="saveClipMetadata('${v.id}')">Save changes</button>
           <button type="button" class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>
           <button type="button" class="cm-btn green send-to-publisher-btn" onclick="sendToPublisher('${v.id}', document.getElementById('clip-card-${v.id}'), ${v.complianceFlagged ? "true" : "false"})">Send to Publisher →</button>
@@ -2558,7 +2879,9 @@
         const v = item.video || item;
         const e = item.enhancement || {};
         const entries = item.entries || [];
-        const title = escapeHtml(e.titleFinal || v.title || (v.caption || "").slice(0, 80));
+        const titleRaw = e.titleFinal || v.title || (v.caption || "").slice(0, 80);
+        const title = escapeHtml(titleRaw);
+        const videoSrc = resolveClipVideoUrl(v);
         const platforms = entries.length
           ? entries.map((en) =>
               `<span class="cm-pill">${escapeHtml(en.platform)} · ${en.publishStatus === "scheduled" ? "Scheduled" : escapeHtml(en.publishStatus)} ${fmtDateTime(en.scheduledFor)}</span>`
@@ -2572,6 +2895,9 @@
             <span class="cm-pill tier-hot">${statusLabel}</span>
             ${v.scheduledFor ? " · " + fmtDateTime(v.scheduledFor) : ""}
             ${v.publishedAt ? " · Published " + fmtDateTime(v.publishedAt) : ""}
+          </div>
+          <div style="margin-top:0.6rem;display:flex;gap:0.4rem;flex-wrap:wrap;">
+            ${v.id ? `<button type="button" class="cm-btn" onclick="playClip('${v.id}','${jsStr(titleRaw)}')">▶ Play clip</button>` : ""}
           </div>
         </div>`;
       }).join("");
