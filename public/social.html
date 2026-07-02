@@ -6,7 +6,7 @@
   <title>Social · Content Manager · Marco</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Orbitron:wght@400;600;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     /* ===================================================================
        CONTENT MANAGER — PREMIUM DESIGN SYSTEM
@@ -1122,6 +1122,249 @@
       .cm-stat-row, .cm-two-col { grid-template-columns: 1fr; }
     }
 
+    /* ====================================================================
+       REVIEW QUEUE — AETHON REDESIGN (scoped to .cm-review-redesign)
+       Cyan-mapped token system. Does not affect any other CM section.
+       ==================================================================== */
+    .cm-review-redesign {
+      --rv-bg-0: #06070b; --rv-bg-1: #0a0c11; --rv-bg-2: #13161e; --rv-bg-3: #1c212d;
+      --rv-accent: #2dd4ee; --rv-accent-bright: #7fe9f7;
+      --rv-accent-glow: rgba(45, 212, 238, 0.12); --rv-accent-border: rgba(45, 212, 238, 0.35);
+      --rv-green: #34d399; --rv-green-dim: rgba(52, 211, 153, 0.15);
+      --rv-red: #fb7185; --rv-red-dim: rgba(251, 113, 133, 0.15);
+      --rv-amber: #fbbf24;
+      --rv-white: #eef2f8;
+      --rv-dim: rgba(238, 242, 248, 0.45); --rv-dimmer: rgba(238, 242, 248, 0.2); --rv-dimmest: rgba(238, 242, 248, 0.08);
+      --rv-text-xs: 9px; --rv-text-sm: 11px; --rv-text-base: 13px; --rv-text-md: 15px;
+      --rv-text-lg: 18px; --rv-text-xl: 24px; --rv-text-2xl: 32px; --rv-text-3xl: 48px;
+      --rv-gap-xs: 4px; --rv-gap-sm: 8px; --rv-gap-md: 16px; --rv-gap-lg: 24px; --rv-gap-xl: 40px;
+      --rv-radius-sm: 4px; --rv-radius-md: 8px; --rv-radius-lg: 16px;
+      --rv-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --rv-ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+      --rv-ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      --rv-dur-fast: 150ms; --rv-dur-base: 250ms; --rv-dur-slow: 400ms; --rv-dur-entrance: 600ms;
+      --rv-display: "Orbitron", "Plus Jakarta Sans", system-ui, sans-serif;
+      --rv-body: "Inter", "Plus Jakarta Sans", system-ui, sans-serif;
+      --rv-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+      position: relative;
+      /* full-bleed inside .cm-content (cancel its 1.5rem/1.4rem/3rem padding) */
+      margin: -1.5rem -1.4rem -3rem;
+      height: calc(100vh - 60px);
+      background: var(--rv-bg-0);
+      color: var(--rv-white);
+      font-family: var(--rv-body);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .cm-review-redesign *, .cm-review-redesign *::before, .cm-review-redesign *::after { box-sizing: border-box; }
+    .cm-review-redesign::before {
+      content: ''; position: absolute; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px);
+      pointer-events: none; z-index: 50;
+    }
+
+    /* Top bar */
+    .rv-topbar { height: 64px; flex: 0 0 64px; display: flex; align-items: center; gap: var(--rv-gap-lg); padding: 0 var(--rv-gap-lg); background: var(--rv-bg-1); border-bottom: 1px solid var(--rv-accent-border); z-index: 20; }
+    .rv-topbar-left { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
+    .rv-title { font-family: var(--rv-display); font-size: var(--rv-text-sm); font-weight: 600; letter-spacing: 3px; color: var(--rv-dim); }
+    .rv-batch-id { font-family: var(--rv-mono); font-size: 10px; color: var(--rv-dimmer); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rv-topbar-center { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .rv-progress-pct { font-family: var(--rv-mono); font-size: var(--rv-text-xs); color: var(--rv-dim); text-align: right; }
+    .rv-progress-track { height: 4px; width: 100%; background: var(--rv-dimmest); border-radius: 999px; overflow: hidden; }
+    .rv-progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--rv-accent), var(--rv-accent-bright)); border-radius: 999px; transition: width var(--rv-dur-slow) var(--rv-ease-out-expo); }
+    .rv-topbar-right { display: flex; align-items: center; gap: var(--rv-gap-md); }
+    .rv-remaining { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+    .rv-remaining-num { font-family: var(--rv-display); font-size: var(--rv-text-base); font-weight: 700; color: var(--rv-white); line-height: 1; }
+    .rv-remaining-label { font-family: var(--rv-display); font-size: var(--rv-text-xs); letter-spacing: 2px; color: var(--rv-dimmer); }
+    .rv-arc { width: 40px; height: 40px; transform: rotate(-90deg); }
+    .rv-arc-track { fill: none; stroke: var(--rv-dimmest); stroke-width: 3; }
+    .rv-arc-fill { fill: none; stroke: var(--rv-accent); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset var(--rv-dur-slow) var(--rv-ease-out-expo); }
+
+    /* Three-column body */
+    .rv-body { flex: 1; display: flex; min-height: 0; }
+    .rv-queue { width: 240px; flex: 0 0 240px; border-right: 1px solid var(--rv-dimmest); overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+    .rv-queue-header, .rv-details-header { font-family: var(--rv-display); font-size: var(--rv-text-xs); letter-spacing: 3px; color: var(--rv-dim); padding: var(--rv-gap-md) var(--rv-gap-md) var(--rv-gap-sm); }
+    .rv-queue-filters { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 var(--rv-gap-md) var(--rv-gap-sm); }
+    .rv-chip { background: transparent; border: 1px solid var(--rv-dimmest); color: var(--rv-dim); font-family: var(--rv-mono); font-size: 10px; padding: 3px 9px; border-radius: 20px; cursor: pointer; transition: all var(--rv-dur-base); }
+    .rv-chip:hover { border-color: var(--rv-accent-border); color: var(--rv-white); }
+    .rv-chip.active { background: var(--rv-accent-glow); border-color: var(--rv-accent-border); color: var(--rv-accent); }
+    .rv-queue-controls { display: flex; gap: 6px; padding: 0 var(--rv-gap-md) var(--rv-gap-sm); }
+    .rv-queue-controls select { flex: 1; min-width: 0; background: var(--rv-bg-2); color: var(--rv-dim); border: 1px solid var(--rv-dimmest); border-radius: var(--rv-radius-sm); font-family: var(--rv-mono); font-size: 10px; padding: 4px 6px; }
+    .rv-poll { font-family: var(--rv-mono); font-size: 10px; color: var(--rv-accent); padding: 0 var(--rv-gap-md) var(--rv-gap-sm); }
+    .rv-queue-list { flex: 1; }
+    .rv-stage { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; padding: var(--rv-gap-lg); }
+    .rv-details { width: 288px; flex: 0 0 288px; border-left: 1px solid var(--rv-dimmest); overflow-y: auto; display: flex; flex-direction: column; }
+    .rv-queue::-webkit-scrollbar, .rv-stage::-webkit-scrollbar, .rv-details::-webkit-scrollbar { width: 4px; }
+    .rv-queue::-webkit-scrollbar-track, .rv-stage::-webkit-scrollbar-track, .rv-details::-webkit-scrollbar-track { background: transparent; }
+    .rv-queue::-webkit-scrollbar-thumb, .rv-stage::-webkit-scrollbar-thumb, .rv-details::-webkit-scrollbar-thumb { background: var(--rv-accent-glow); border-radius: 999px; }
+
+    /* Queue cards */
+    .rv-queue-card { height: 72px; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-left: 2px solid transparent; cursor: pointer; background: transparent; transition: background var(--rv-dur-base) var(--rv-ease-smooth), border-color var(--rv-dur-base) var(--rv-ease-smooth), box-shadow var(--rv-dur-base) var(--rv-ease-smooth); overflow: hidden; }
+    .rv-queue-card:hover:not(.selected) { background: rgba(19,22,30,0.5); border-left-color: var(--rv-dimmest); }
+    .rv-queue-card.selected { background: var(--rv-bg-2); border-left: 2px solid var(--rv-accent); box-shadow: inset 3px 0 12px rgba(45,212,238,0.1); }
+    .rv-qc-thumb { width: 44px; height: 44px; flex: 0 0 44px; border-radius: var(--rv-radius-sm); object-fit: cover; background: var(--rv-bg-3); display: block; }
+    .rv-qc-thumb-ph { width: 44px; height: 44px; flex: 0 0 44px; border-radius: var(--rv-radius-sm); background: var(--rv-bg-3); display: flex; align-items: center; justify-content: center; color: var(--rv-dimmer); }
+    .rv-qc-thumb-ph svg { width: 16px; height: 16px; }
+    .rv-qc-center { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+    .rv-qc-title { font-family: var(--rv-body); font-size: var(--rv-text-sm); font-weight: 500; color: var(--rv-white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rv-qc-platforms { display: flex; gap: var(--rv-gap-xs); color: var(--rv-dimmer); align-items: center; }
+    .rv-qc-platforms svg { width: 12px; height: 12px; display: block; }
+    .rv-qc-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+    .rv-qc-score { font-family: var(--rv-display); font-size: var(--rv-text-base); font-weight: 700; line-height: 1; }
+    .rv-qc-dot { width: 6px; height: 6px; border-radius: 50%; }
+    @keyframes rvReject { 0% { transform: translateX(0); } 15% { transform: translateX(-8px); } 30% { transform: translateX(8px); } 45% { transform: translateX(-6px); } 60% { transform: translateX(6px); } 80% { transform: translateX(-3px); } 100% { transform: translateX(0); } }
+    .rv-queue-card.rejecting { animation: rvReject 400ms var(--rv-ease-smooth); }
+    .rv-queue-card.removing { max-height: 0 !important; height: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; opacity: 0; transform: translateY(20px); transition: all 350ms var(--rv-ease-smooth); }
+
+    /* Video stage */
+    .rv-stage-inner { width: 100%; max-width: 360px; display: flex; flex-direction: column; }
+    .rv-stage-video { width: 100%; aspect-ratio: 9 / 16; background: var(--rv-bg-2); border: 1px solid var(--rv-accent-border); border-radius: var(--rv-radius-lg); overflow: hidden; position: relative; }
+    .rv-video-img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--rv-dur-slow) var(--rv-ease-smooth); display: block; }
+    .rv-stage-video:hover .rv-video-img { transform: scale(1.04); }
+    .rv-video-noimg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--rv-dimmer); }
+    .rv-video-noimg .lbl { font-family: var(--rv-mono); font-size: var(--rv-text-sm); }
+    .rv-play-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,0.7); border: 1px solid var(--rv-accent-border); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.75; transition: opacity var(--rv-dur-base), background var(--rv-dur-base), box-shadow var(--rv-dur-base); color: var(--rv-accent); }
+    .rv-stage-video:hover .rv-play-overlay { opacity: 1; background: rgba(0,0,0,0.82); box-shadow: 0 0 24px rgba(45,212,238,0.4); }
+    .rv-play-overlay svg { width: 20px; height: 20px; margin-left: 3px; }
+    .rv-duration-badge { position: absolute; bottom: 8px; right: 8px; font-family: var(--rv-mono); font-size: 10px; color: var(--rv-white); background: rgba(0,0,0,0.8); padding: 3px 7px; border-radius: 4px; }
+    .rv-watermark { position: absolute; bottom: 8px; left: 8px; font-family: var(--rv-mono); font-size: 10px; color: var(--rv-dim); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+    .rv-stage-title { font-family: var(--rv-display); font-size: var(--rv-text-lg); font-weight: 700; letter-spacing: 1px; color: var(--rv-white); margin-top: 20px; line-height: 1.25; outline: none; }
+    .rv-stage-title:focus { box-shadow: 0 2px 0 var(--rv-accent-border); }
+    .rv-stage-title.swapping { animation: rvTitleOut 200ms var(--rv-ease-smooth) forwards; }
+    @keyframes rvTitleOut { to { transform: translateY(-15px); opacity: 0; } }
+    @keyframes rvTitleIn { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .rv-stage-title.swapping-in { animation: rvTitleIn 300ms var(--rv-ease-out-expo) 100ms both; }
+    .rv-platform-badges { display: flex; gap: var(--rv-gap-sm); margin-top: 12px; flex-wrap: wrap; }
+    .rv-pbadge { background: var(--rv-bg-3); border: 1px solid var(--rv-dimmest); padding: 4px 10px; border-radius: 20px; font-family: var(--rv-mono); font-size: 10px; color: var(--rv-dim); transition: border-color var(--rv-dur-base), color var(--rv-dur-base); text-transform: uppercase; }
+    .rv-pbadge:hover { border-color: var(--rv-accent-border); color: var(--rv-white); }
+    .rv-alts { display: flex; align-items: center; gap: 10px; margin-top: 16px; cursor: pointer; }
+    .rv-alts-label { font-family: var(--rv-display); font-size: var(--rv-text-xs); letter-spacing: 2px; color: var(--rv-accent); white-space: nowrap; transition: color var(--rv-dur-base); }
+    .rv-alts-arrow { display: inline-block; transition: transform var(--rv-dur-base); }
+    .rv-alts:hover .rv-alts-label { color: var(--rv-accent-bright); }
+    .rv-alts:hover .rv-alts-arrow { transform: translateX(3px); }
+    .rv-alts-rule { flex: 1; height: 1px; background: var(--rv-dimmest); }
+    .rv-alts-list { display: none; flex-direction: column; gap: 6px; margin-top: 10px; width: 100%; max-width: 360px; }
+    .rv-alts-list.open { display: flex; }
+    .rv-alt-btn { text-align: left; background: var(--rv-bg-2); border: 1px solid var(--rv-dimmest); color: var(--rv-dim); font-family: var(--rv-body); font-size: 12px; padding: 8px 10px; border-radius: var(--rv-radius-sm); cursor: pointer; transition: all var(--rv-dur-base); }
+    .rv-alt-btn:hover { border-color: var(--rv-accent-border); color: var(--rv-white); }
+    .rv-ticker { margin-top: 20px; width: 100%; max-width: 360px; background: var(--rv-bg-2); border-top: 1px solid var(--rv-dimmest); border-bottom: 1px solid var(--rv-dimmest); padding: 10px 0; display: flex; align-items: center; gap: 12px; overflow: hidden; }
+    .rv-ticker-label { font-family: var(--rv-display); font-size: 8px; letter-spacing: 2px; color: var(--rv-accent); flex: 0 0 auto; padding-left: 4px; }
+    .rv-ticker-viewport { flex: 1; overflow: hidden; position: relative; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8px, #000 calc(100% - 8px), transparent); mask-image: linear-gradient(90deg, transparent, #000 8px, #000 calc(100% - 8px), transparent); }
+    .rv-ticker-track { display: inline-flex; gap: 40px; white-space: nowrap; animation: rvMarquee linear infinite; }
+    .rv-ticker:hover .rv-ticker-track { animation-play-state: paused; }
+    .rv-ticker-track span { font-family: var(--rv-mono); font-size: var(--rv-text-sm); color: var(--rv-dim); }
+    @keyframes rvMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    /* Score orbit */
+    .rv-orbit-wrap { display: flex; flex-direction: column; align-items: center; padding: 20px 0 12px; }
+    .rv-orbit { position: relative; width: 120px; height: 120px; }
+    .rv-orbit svg { width: 120px; height: 120px; transform: rotate(90deg); }
+    .rv-orbit-track { fill: none; stroke: var(--rv-dimmest); stroke-width: 2; }
+    .rv-orbit-fill { fill: none; stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 1400ms var(--rv-ease-out-expo); }
+    .rv-orbit-pulse { fill: none; stroke: var(--rv-green); stroke-width: 2; opacity: 0; }
+    .rv-orbit.high .rv-orbit-pulse { animation: rvPulse 3s ease-in-out infinite; }
+    @keyframes rvPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 0; } }
+    .rv-orbit-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .rv-orbit-num { font-family: var(--rv-display); font-size: 28px; font-weight: 900; line-height: 1; }
+    .rv-orbit-den { font-family: var(--rv-mono); font-size: 10px; color: var(--rv-dimmer); margin-top: 2px; }
+    .rv-orbit-label { font-family: var(--rv-display); font-size: 8px; letter-spacing: 3px; color: var(--rv-dim); margin-top: 10px; }
+
+    /* Details content */
+    .rv-details-body { padding: 0 var(--rv-gap-md) var(--rv-gap-md); display: flex; flex-direction: column; gap: var(--rv-gap-md); }
+    .rv-section { display: flex; flex-direction: column; gap: var(--rv-gap-sm); }
+    .rv-section + .rv-section { padding-top: var(--rv-gap-md); border-top: 1px solid var(--rv-dimmest); }
+    .rv-section-label { font-family: var(--rv-display); font-size: 8px; letter-spacing: 3px; color: var(--rv-dim); }
+    .rv-hook { font-family: var(--rv-body); font-size: var(--rv-text-base); color: var(--rv-white); line-height: 1.6; background: var(--rv-bg-2); padding: 12px; border-radius: var(--rv-radius-sm); border-left: 2px solid var(--rv-accent); outline: none; }
+    .rv-hook:focus { box-shadow: inset 0 0 0 1px var(--rv-accent-border); }
+    .rv-hook .w { opacity: 0; display: inline-block; }
+    .rv-hooktag { align-self: flex-start; background: var(--rv-accent-glow); border: 1px solid var(--rv-accent-border); color: var(--rv-accent); font-family: var(--rv-mono); font-size: var(--rv-text-xs); border-radius: 20px; padding: 3px 10px; }
+    .rv-caption { font-family: var(--rv-body); font-size: 12px; color: var(--rv-dim); line-height: 1.7; outline: none; }
+    .rv-caption:focus { color: var(--rv-white); }
+    .rv-hashtags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .rv-hashtag { background: var(--rv-bg-3); border: 1px solid var(--rv-dimmest); color: var(--rv-dim); font-family: var(--rv-mono); font-size: 10px; padding: 4px 10px; border-radius: 20px; transition: border-color var(--rv-dur-base), color var(--rv-dur-base); }
+    .rv-hashtag:hover { border-color: var(--rv-accent-border); color: var(--rv-accent); }
+    .rv-hashtag.enter { animation: rvPillIn 300ms var(--rv-ease-out-expo) both; }
+    @keyframes rvPillIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .rv-status-badge { align-self: flex-start; font-family: var(--rv-mono); font-size: 10px; padding: 4px 10px; border-radius: 20px; }
+    .rv-status-clean { background: var(--rv-green-dim); border: 1px solid rgba(52,211,153,0.3); color: var(--rv-green); }
+    .rv-status-flagged { background: rgba(251,179,64,0.15); border: 1px solid rgba(251,179,64,0.35); color: var(--rv-amber); }
+
+    /* Action buttons */
+    .rv-actions { position: sticky; bottom: 0; margin-top: auto; background: var(--rv-bg-1); border-top: 1px solid var(--rv-dimmest); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .rv-btn-save { width: 100%; height: 40px; background: var(--rv-bg-3); border: 1px solid var(--rv-dimmest); border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 10px; letter-spacing: 2px; color: var(--rv-dim); cursor: pointer; transition: all var(--rv-dur-base); }
+    .rv-btn-save:hover { border-color: var(--rv-accent-border); color: var(--rv-accent); }
+    .rv-actions-row { display: flex; gap: 10px; }
+    .rv-btn-reject { flex: 0 0 48%; height: 40px; background: var(--rv-red-dim); border: 1px solid rgba(251,113,133,0.3); border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 10px; letter-spacing: 2px; color: var(--rv-red); cursor: pointer; transition: all var(--rv-dur-base); }
+    .rv-btn-reject:hover { background: rgba(251,113,133,0.22); border-color: rgba(251,113,133,0.55); }
+    .rv-btn-publish { position: relative; z-index: 0; flex: 1; height: 40px; background: var(--rv-accent); border: none; border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #001014; cursor: pointer; box-shadow: 0 0 20px rgba(45,212,238,0.3); transition: background var(--rv-dur-base), box-shadow var(--rv-dur-base), transform var(--rv-dur-base) var(--rv-ease-spring); overflow: visible; }
+    .rv-btn-publish .lbl { display: inline-block; transition: transform var(--rv-dur-base); }
+    .rv-btn-publish:hover { background: var(--rv-accent-bright); box-shadow: 0 0 30px rgba(45,212,238,0.5); transform: scale(1.02); }
+    .rv-btn-publish:hover .lbl { transform: translateX(2px); }
+    .rv-btn-publish::before { content: ''; position: absolute; inset: -2px; border-radius: 6px; z-index: -1; background: conic-gradient(from 0deg, transparent 0deg, var(--rv-accent-bright) 60deg, transparent 140deg); opacity: 0; transition: opacity var(--rv-dur-base); }
+    .rv-btn-publish:hover::before { opacity: 1; animation: rvSpin 1.2s linear infinite; }
+    @keyframes rvSpin { to { transform: rotate(360deg); } }
+    .rv-btn-publish.flash { animation: rvFlash 150ms ease-out; }
+    @keyframes rvFlash { 0% { background: #fff; } 100% { background: var(--rv-accent); } }
+    .rv-btn-publish:active { transform: scale(0.96); }
+    .rv-particle { position: fixed; width: 4px; height: 4px; border-radius: 50%; background: var(--rv-accent); pointer-events: none; z-index: 9999; }
+
+    /* Empty + loading */
+    .rv-empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; position: relative; }
+    .rv-empty-glow { position: absolute; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle, rgba(52,211,153,0.18), transparent 70%); z-index: 0; }
+    .rv-empty-check { color: var(--rv-green); position: relative; z-index: 1; animation: rvCheckIn 500ms var(--rv-ease-spring) both; }
+    @keyframes rvCheckIn { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+    .rv-empty-title { font-family: var(--rv-display); font-size: var(--rv-text-lg); color: var(--rv-white); position: relative; z-index: 1; }
+    .rv-empty-sub { font-family: var(--rv-body); font-size: var(--rv-text-base); color: var(--rv-dim); position: relative; z-index: 1; }
+    @keyframes rvShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    .rv-shimmer { background: linear-gradient(90deg, var(--rv-bg-2) 25%, var(--rv-bg-3) 50%, var(--rv-bg-2) 75%); background-size: 200% 100%; animation: rvShimmer 1.4s var(--rv-ease-smooth) infinite; border-radius: var(--rv-radius-sm); }
+    .rv-skel-video { width: 100%; max-width: 360px; aspect-ratio: 9/16; border-radius: var(--rv-radius-lg); }
+    .rv-skel-line { height: 12px; margin-top: 12px; }
+    .rv-orbit-spinner { width: 120px; height: 120px; }
+    .rv-orbit-spinner circle { fill: none; stroke: var(--rv-accent); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 80 250; transform-origin: 60px 60px; animation: rvSpin 1s linear infinite; }
+
+    /* Entrance choreography */
+    .cm-review-redesign:not(.entered) .rv-topbar,
+    .cm-review-redesign:not(.entered) .rv-queue,
+    .cm-review-redesign:not(.entered) .rv-stage,
+    .cm-review-redesign:not(.entered) .rv-details { opacity: 0; }
+    @keyframes rvInDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes rvInLeft { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes rvInRight { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes rvInScale { from { transform: scale(0.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .cm-review-redesign.entered .rv-topbar { animation: rvInDown var(--rv-dur-slow) var(--rv-ease-out-expo) both; }
+    .cm-review-redesign.entered .rv-queue { animation: rvInLeft 500ms var(--rv-ease-out-expo) 100ms both; }
+    .cm-review-redesign.entered .rv-stage { animation: rvInScale var(--rv-dur-entrance) var(--rv-ease-smooth) 200ms both; }
+    .cm-review-redesign.entered .rv-details { animation: rvInRight 500ms var(--rv-ease-out-expo) 300ms both; }
+    @media (prefers-reduced-motion: reduce) {
+      .cm-review-redesign.entered .rv-topbar, .cm-review-redesign.entered .rv-queue,
+      .cm-review-redesign.entered .rv-stage, .cm-review-redesign.entered .rv-details { animation: none; }
+      .cm-review-redesign:not(.entered) .rv-topbar, .cm-review-redesign:not(.entered) .rv-queue,
+      .cm-review-redesign:not(.entered) .rv-stage, .cm-review-redesign:not(.entered) .rv-details { opacity: 1; }
+      .rv-orbit-fill, .rv-progress-fill, .rv-arc-fill { transition: none; }
+    }
+
+    /* Mobile (< 768px) */
+    @media (max-width: 768px) {
+      .cm-review-redesign { height: auto; min-height: calc(100vh - 60px); overflow: visible; }
+      .rv-topbar { gap: var(--rv-gap-md); padding: 0 var(--rv-gap-md); }
+      .rv-batch-id { display: none; }
+      .rv-topbar-left { min-width: 0; }
+      .rv-body { flex-direction: column; }
+      .rv-queue { width: 100%; flex: 0 0 auto; border-right: none; border-bottom: 1px solid var(--rv-dimmest); overflow-x: auto; overflow-y: hidden; }
+      .rv-queue-list { display: flex; flex-direction: row; gap: var(--rv-gap-sm); padding: 0 var(--rv-gap-md) 12px; }
+      .rv-queue-card { flex: 0 0 auto; width: 60px; height: 60px; flex-direction: column; padding: 0; border-left: none; border-bottom: 2px solid transparent; position: relative; border-radius: var(--rv-radius-sm); overflow: hidden; }
+      .rv-queue-card.selected { border-left: none; border-bottom: 2px solid var(--rv-accent); box-shadow: 0 0 0 1px var(--rv-accent-border); }
+      .rv-queue-card .rv-qc-center { display: none; }
+      .rv-qc-thumb, .rv-qc-thumb-ph { width: 60px; height: 60px; border-radius: var(--rv-radius-sm); }
+      .rv-queue-card .rv-qc-right { position: absolute; top: 3px; right: 3px; }
+      .rv-qc-score { font-size: 10px; text-shadow: 0 1px 3px #000; }
+      .rv-queue-card .rv-qc-dot { display: none; }
+      .rv-stage { padding: var(--rv-gap-md); }
+      .rv-details { width: 100%; flex: 0 0 auto; border-left: none; border-top: 1px solid var(--rv-dimmest); }
+      .rv-details-body, .rv-actions { max-width: 520px; margin-left: auto; margin-right: auto; width: 100%; }
+      .rv-particle { width: 3px; height: 3px; }
+    }
+
   </style>
 </head>
 <body>
@@ -1313,26 +1556,55 @@
           </div>
         </section>
 
-        <!-- REVIEW QUEUE -->
+        <!-- REVIEW QUEUE (Aethon redesign — master/detail) -->
         <section id="cm-section-review" class="cm-section">
-          <div class="cm-filter-bar">
-            <button type="button" class="cm-subtab active" data-review-filter="all">All</button>
-            <button type="button" class="cm-subtab" data-review-filter="pending_review">Pending Review</button>
-            <button type="button" class="cm-subtab" data-review-filter="flagged">Flagged</button>
-            <button type="button" class="cm-subtab" data-review-filter="approved">Approved</button>
-            <div class="review-filter-center">
-              <select id="review-batch-filter" style="padding:0.4rem 0.6rem;font-size:0.75rem;">
-                <option value="">All batches</option>
-              </select>
+          <div class="cm-review-redesign" id="reviewRoot">
+            <header class="rv-topbar">
+              <div class="rv-topbar-left">
+                <div class="rv-title">REVIEW QUEUE</div>
+                <div class="rv-batch-id" id="rvBatchId">—</div>
+              </div>
+              <div class="rv-topbar-center">
+                <div class="rv-progress-pct" id="rvProgressPct">0%</div>
+                <div class="rv-progress-track"><div class="rv-progress-fill" id="rvProgressFill"></div></div>
+              </div>
+              <div class="rv-topbar-right">
+                <div class="rv-remaining">
+                  <div class="rv-remaining-num" id="rvRemainingNum">0</div>
+                  <div class="rv-remaining-label">REMAINING</div>
+                </div>
+                <svg class="rv-arc" viewBox="0 0 40 40">
+                  <circle class="rv-arc-track" cx="20" cy="20" r="17" />
+                  <circle class="rv-arc-fill" id="rvArcFill" cx="20" cy="20" r="17" />
+                </svg>
+              </div>
+            </header>
+            <div class="rv-body">
+              <aside class="rv-queue">
+                <div class="rv-queue-header">QUEUE</div>
+                <div class="rv-queue-filters">
+                  <button type="button" class="rv-chip active" data-review-filter="all">All</button>
+                  <button type="button" class="rv-chip" data-review-filter="pending_review">Pending</button>
+                  <button type="button" class="rv-chip" data-review-filter="flagged">Flagged</button>
+                  <button type="button" class="rv-chip" data-review-filter="approved">Approved</button>
+                </div>
+                <div class="rv-queue-controls">
+                  <select id="review-batch-filter" title="Filter by batch">
+                    <option value="">All batches</option>
+                  </select>
+                  <select id="review-sort" title="Sort clips">
+                    <option value="trend">Trend ↓</option>
+                    <option value="date">Date ↓</option>
+                    <option value="compliance">Compliance</option>
+                  </select>
+                </div>
+                <p id="review-poll-indicator" class="rv-poll" style="display:none;">Checking for new clips…</p>
+                <div id="review-queue-list" class="rv-queue-list"></div>
+              </aside>
+              <main class="rv-stage" id="rvStage"></main>
+              <aside class="rv-details" id="rvDetails"></aside>
             </div>
-            <select id="review-sort" style="padding:0.4rem 0.6rem;font-size:0.75rem;">
-              <option value="trend">Trend Score ↓</option>
-              <option value="date">Date ↓</option>
-              <option value="compliance">Compliance first</option>
-            </select>
           </div>
-          <p id="review-poll-indicator" class="cm-muted" style="font-size:0.72rem;display:none;">Checking for new clips…</p>
-          <div id="review-queue-list" class="clip-review-grid"></div>
         </section>
 
         <!-- PUBLISHING -->
@@ -2841,6 +3113,7 @@
     }
 
     async function loadReviewQueue() {
+      if (rvSectionActive() && !rvClips.length) rvRenderLoading();
       const statusParam = reviewFilter === "all" || reviewFilter === "flagged"
         ? "&status=pending_review"
         : reviewFilter === "approved"
@@ -2855,12 +3128,395 @@
       if (reviewSort === "trend") list.sort((a, b) => (b.trendAlignmentScore || 0) - (a.trendAlignmentScore || 0));
       else if (reviewSort === "compliance") list.sort((a, b) => (a.complianceFlagged ? 0 : 1) - (b.complianceFlagged ? 0 : 1));
       else list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      const el = document.getElementById("review-queue-list");
-      if (!el) return;
-      el.innerHTML = list.length
-        ? list.map(renderClipReviewCard).join("")
-        : '<p class="cm-muted">No clips in review. Upload footage above to generate your first batch.</p>';
+      rvRenderQueueData(list);
     }
+
+    /* ==================================================================
+       REVIEW QUEUE — AETHON REDESIGN (rv-*) render + interaction layer.
+       Reuses existing helpers (cmFetch, playClip, resolveClip*Url,
+       showToast, refresh*Badge, loadPublishing, loadCmStats) so every
+       API call is identical to the prior implementation.
+       ================================================================== */
+    let rvClips = [];
+    let rvSelectedId = null;
+    let rvTotalCount = 0;
+    let rvReviewed = 0;
+    let rvEntranceDone = false;
+    const RV_TIER_COLOR = { high: "var(--rv-green)", mid: "var(--rv-amber)", low: "var(--rv-red)" };
+    const RV_PLATFORM_SVG = {
+      tiktok: "<svg viewBox='0 0 24 24' aria-label='TikTok'><path fill='currentColor' d='M14 4c.3 2 1.7 3.5 3.8 3.8v2.7c-1.3 0-2.6-.4-3.7-1.1v5.2c0 2.7-2.2 4.9-4.9 4.9S4.3 21.3 4.3 18.6 6.5 13.7 9.2 13.7c.3 0 .6 0 .9.1v2.8c-.3-.1-.6-.2-.9-.2-1.1 0-2 .9-2 2s.9 2 2 2 2-.8 2-1.9V4H14z'/></svg>",
+      instagram: "<svg viewBox='0 0 24 24' aria-label='Instagram'><rect x='2.5' y='2.5' width='19' height='19' rx='5.5' fill='none' stroke='currentColor' stroke-width='2'/><circle cx='12' cy='12' r='4.5' fill='none' stroke='currentColor' stroke-width='2'/><circle cx='17.5' cy='6.5' r='1.4' fill='currentColor'/></svg>",
+      facebook: "<svg viewBox='0 0 24 24' aria-label='Facebook'><path fill='currentColor' d='M13.5 21v-7h2.3l.4-3h-2.7V9c0-.9.3-1.5 1.6-1.5H16V4.9c-.3 0-1.2-.1-2.2-.1-2.2 0-3.7 1.3-3.7 3.8V11H7.7v3h2.4v7h3.4z'/></svg>",
+      youtube: "<svg viewBox='0 0 24 24' aria-label='YouTube'><rect x='2' y='5' width='20' height='14' rx='4' fill='none' stroke='currentColor' stroke-width='2'/><path fill='currentColor' d='M10 9l5 3-5 3z'/></svg>",
+    };
+    const RV_PLAY_SVG = "<svg viewBox='0 0 24 24' fill='currentColor'><path d='M8 5v14l11-7z'/></svg>";
+
+    function rvVM(v) {
+      const e = v.enhancement || {};
+      return {
+        id: v.id,
+        raw: v,
+        flagged: !!v.complianceFlagged,
+        complianceNotes: v.complianceNotes || "",
+        score: v.trendAlignmentScore || e.trendAlignmentScore || 0,
+        title: e.titleFinal || v.title || "Clip",
+        hook: e.hookPrimary || v.hook || "",
+        hookType: e.hookType || v.hookType || "uncategorized",
+        caption: e.captionFinal || v.caption || "",
+        hashtags: e.hashtagsFinal || v.hashtags || [],
+        platforms: e.platformTargets || v.platformTargets || [v.platformTarget || "tiktok"],
+        hookAlts: (e.hookVariations || []).filter((h) => h !== (e.hookPrimary || v.hook)),
+        trendReason: e.trendAlignmentReason || "",
+        thumb: resolveClipThumbUrl(v) || "",
+      };
+    }
+    function rvPlatformIconsHtml(list) { return (list || []).map((p) => RV_PLATFORM_SVG[p] || "").join(""); }
+
+    function rvUpdateProgress() {
+      const remaining = rvClips.length;
+      const pct = rvTotalCount ? Math.round((rvReviewed / rvTotalCount) * 100) : (rvReviewed ? 100 : 0);
+      const fill = document.getElementById("rvProgressFill");
+      const pctEl = document.getElementById("rvProgressPct");
+      const remEl = document.getElementById("rvRemainingNum");
+      if (fill) fill.style.width = pct + "%";
+      if (pctEl) pctEl.textContent = pct + "%";
+      if (remEl) remEl.textContent = String(remaining);
+      const arc = document.getElementById("rvArcFill");
+      if (arc) {
+        const C = 2 * Math.PI * 17;
+        arc.style.strokeDasharray = C.toFixed(2);
+        arc.style.strokeDashoffset = (C * (1 - pct / 100)).toFixed(2);
+      }
+    }
+
+    function rvQueueCardHtml(vm) {
+      const color = RV_TIER_COLOR[clipTrendClass(vm.score)];
+      const thumb = vm.thumb
+        ? `<img class="rv-qc-thumb" src="${vm.thumb}" alt="">`
+        : `<div class="rv-qc-thumb-ph">${RV_PLAY_SVG}</div>`;
+      return `<div class="rv-queue-card${vm.id === rvSelectedId ? " selected" : ""}" data-id="${vm.id}" tabindex="0" role="button" aria-label="${escapeHtml(vm.title)}">
+        ${thumb}
+        <div class="rv-qc-center">
+          <div class="rv-qc-title">${escapeHtml(vm.title)}</div>
+          <div class="rv-qc-platforms">${rvPlatformIconsHtml(vm.platforms)}</div>
+        </div>
+        <div class="rv-qc-right">
+          <div class="rv-qc-score" style="color:${color}">${vm.score}</div>
+          <div class="rv-qc-dot" style="background:${color};box-shadow:0 0 6px ${color}"></div>
+        </div>
+      </div>`;
+    }
+    function rvRenderQueue() {
+      const list = document.getElementById("review-queue-list");
+      if (!list) return;
+      list.innerHTML = rvClips.map(rvQueueCardHtml).join("");
+      list.querySelectorAll(".rv-queue-card").forEach((el) => {
+        el.addEventListener("click", () => rvSelect(el.dataset.id));
+        el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); rvSelect(el.dataset.id); } });
+      });
+    }
+
+    function rvTickerTrackHtml(text) {
+      if (!text) return `<div class="rv-ticker-track" style="animation:none"><span style="color:var(--rv-dimmer)">--</span></div>`;
+      const seg = `<span>${escapeHtml(text)}</span>`;
+      const dur = Math.max(8, Math.round((text.length * 9) / 60));
+      return `<div class="rv-ticker-track" style="animation-duration:${dur}s">${seg}${seg}</div>`;
+    }
+    function rvRenderStage(vm) {
+      const stage = document.getElementById("rvStage");
+      if (!stage) return;
+      const alts = vm.hookAlts.length;
+      const hasThumb = !!vm.thumb;
+      stage.innerHTML = `
+        <div class="rv-stage-inner">
+          <div class="rv-stage-video">
+            <img class="rv-video-img" id="rvVideoImg" alt="" src="${hasThumb ? vm.thumb : ""}" style="${hasThumb ? "" : "display:none"}">
+            <div class="rv-video-noimg" id="rvVideoNoImg" style="${hasThumb ? "display:none" : ""}"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="5" width="20" height="14" rx="3"/><circle cx="12" cy="12" r="3.2"/></svg><span class="lbl">No preview</span></div>
+            <button type="button" class="rv-play-overlay" aria-label="Play clip" onclick="playClip('${vm.id}','${jsStr(vm.title)}')">${RV_PLAY_SVG}</button>
+            <span class="rv-duration-badge" id="rvDuration" style="display:none"></span>
+            <span class="rv-watermark">@puga.realtor</span>
+          </div>
+          <div class="rv-stage-title" id="rvStageTitle" contenteditable="true" spellcheck="false" data-field="title">${escapeHtml(vm.title)}</div>
+          <div class="rv-platform-badges">${vm.platforms.map((p) => `<span class="rv-pbadge">${escapeHtml(p)}</span>`).join("")}</div>
+          ${alts ? `<div class="rv-alts" onclick="rvToggleAlts()"><span class="rv-alts-label"><span class="rv-alts-arrow">▶</span> ${alts} ALTERNATIVE${alts > 1 ? "S" : ""}</span><span class="rv-alts-rule"></span></div>
+          <div class="rv-alts-list" id="rvAltsList">${vm.hookAlts.map((h) => `<button type="button" class="rv-alt-btn" onclick="rvApplyAlt('${vm.id}','${jsStr(h)}')">${escapeHtml(h)}</button>`).join("")}</div>` : ""}
+          <div class="rv-ticker">
+            <span class="rv-ticker-label">TREND INSIGHT</span>
+            <div class="rv-ticker-viewport">${rvTickerTrackHtml(vm.trendReason)}</div>
+          </div>
+        </div>`;
+    }
+
+    function rvRenderDetails(vm) {
+      const details = document.getElementById("rvDetails");
+      if (!details) return;
+      const cls = clipTrendClass(vm.score);
+      const color = RV_TIER_COLOR[cls];
+      const C = 2 * Math.PI * 52;
+      details.innerHTML = `
+        <div class="rv-orbit-wrap">
+          <div class="rv-orbit${cls === "high" ? " high" : ""}" id="rvOrbit">
+            <svg viewBox="0 0 120 120">
+              <defs><linearGradient id="rvGrad" x1="0" y1="1" x2="1" y2="0">
+                <stop offset="0" stop-color="var(--rv-red)"/><stop offset="0.5" stop-color="var(--rv-amber)"/><stop offset="1" stop-color="var(--rv-green)"/>
+              </linearGradient></defs>
+              <circle class="rv-orbit-pulse" cx="60" cy="60" r="56"/>
+              <circle class="rv-orbit-track" cx="60" cy="60" r="52"/>
+              <circle class="rv-orbit-fill" id="rvOrbitFill" cx="60" cy="60" r="52" stroke="url(#rvGrad)" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${C.toFixed(2)}"/>
+            </svg>
+            <div class="rv-orbit-center">
+              <div class="rv-orbit-num" id="rvOrbitNum" style="color:${color}">0</div>
+              <div class="rv-orbit-den">/100</div>
+            </div>
+          </div>
+          <div class="rv-orbit-label">SCORE</div>
+        </div>
+        <div class="rv-details-body">
+          <div class="rv-section">
+            <div class="rv-section-label">HOOK</div>
+            <div class="rv-hook" id="rvHook" contenteditable="true" spellcheck="false" data-field="hook"></div>
+            <span class="rv-hooktag">${escapeHtml(vm.hookType)}</span>
+          </div>
+          <div class="rv-section">
+            <div class="rv-section-label">CAPTION</div>
+            <div class="rv-caption" id="rvCaption" contenteditable="true" spellcheck="false" data-field="caption">${escapeHtml(vm.caption)}</div>
+          </div>
+          <div class="rv-section">
+            <div class="rv-section-label">HASHTAGS</div>
+            <div class="rv-hashtags">${vm.hashtags.map((h, i) => `<span class="rv-hashtag enter" style="animation-delay:${i * 40}ms">#${escapeHtml(String(h).replace(/^#/, ""))}</span>`).join("")}</div>
+          </div>
+          <div class="rv-section">
+            <div class="rv-section-label">COMPLIANCE</div>
+            ${vm.flagged
+              ? `<span class="rv-status-badge rv-status-flagged" title="${escapeHtml(vm.complianceNotes)}">⚠ Flagged</span>`
+              : `<span class="rv-status-badge rv-status-clean">✓ Clean</span>`}
+          </div>
+        </div>
+        <div class="rv-actions">
+          <button type="button" class="rv-btn-save" onclick="rvSave('${vm.id}')">SAVE</button>
+          <div class="rv-actions-row">
+            <button type="button" class="rv-btn-reject" onclick="rvReject('${vm.id}')">REJECT</button>
+            <button type="button" class="rv-btn-publish" onclick="rvPublish('${vm.id}', event)"><span class="lbl">PUBLISH →</span></button>
+          </div>
+        </div>`;
+
+      const hookEl = document.getElementById("rvHook");
+      if (hookEl) {
+        hookEl.innerHTML = (vm.hook || "").split(/\s+/).map((w, i) => `<span class="w" style="transition:opacity 220ms ease ${i * 12}ms">${escapeHtml(w)}</span>`).join(" ");
+        requestAnimationFrame(() => requestAnimationFrame(() => { hookEl.querySelectorAll(".w").forEach((s) => (s.style.opacity = "1")); }));
+      }
+      rvAnimateScore(vm.score);
+    }
+
+    function rvEaseOutExpo(t) { return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); }
+    function rvAnimateScore(score) {
+      const fill = document.getElementById("rvOrbitFill");
+      const num = document.getElementById("rvOrbitNum");
+      if (!fill || !num) return;
+      const C = 2 * Math.PI * 52;
+      fill.style.transition = "none";
+      fill.style.strokeDashoffset = C.toFixed(2);
+      num.textContent = "0";
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        fill.style.transition = "stroke-dashoffset 1400ms cubic-bezier(0.16,1,0.3,1)";
+        fill.style.strokeDashoffset = (C * (1 - score / 100)).toFixed(2);
+      }));
+      const dur = 1400, start = performance.now();
+      function tick(now) {
+        const p = Math.min(1, (now - start) / dur);
+        num.textContent = String(Math.round(rvEaseOutExpo(p) * score));
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    async function rvLoadMeta(vm) {
+      try {
+        const meta = await cmFetch(`/api/content/clip/${vm.id}/meta`);
+        if (rvSelectedId !== vm.id) return;
+        const img = document.getElementById("rvVideoImg");
+        const noimg = document.getElementById("rvVideoNoImg");
+        if (meta && meta.thumbnailUrl && img) {
+          img.src = meta.thumbnailUrl; img.style.display = "";
+          if (noimg) noimg.style.display = "none";
+        }
+        const videoUrl = (meta && meta.videoUrl) || resolveClipVideoUrl(vm.raw);
+        if (videoUrl) rvProbeDuration(videoUrl, vm.id);
+      } catch (_) { /* meta is best-effort */ }
+    }
+    function rvProbeDuration(url, id) {
+      try {
+        const v = document.createElement("video");
+        v.preload = "metadata"; v.muted = true;
+        v.onloadedmetadata = () => {
+          if (rvSelectedId !== id || !isFinite(v.duration) || !v.duration) return;
+          const badge = document.getElementById("rvDuration");
+          if (badge) {
+            const m = Math.floor(v.duration / 60), s = Math.round(v.duration % 60);
+            badge.textContent = `${m}:${String(s).padStart(2, "0")}`;
+            badge.style.display = "";
+          }
+        };
+        v.src = url;
+      } catch (_) {}
+    }
+
+    function rvSelect(id, immediate) {
+      if (id === rvSelectedId) return;
+      const prev = rvSelectedId;
+      rvSelectedId = id;
+      document.querySelectorAll("#review-queue-list .rv-queue-card").forEach((el) => el.classList.toggle("selected", el.dataset.id === id));
+      const vm = rvClips.find((c) => c.id === id);
+      if (!vm) return;
+      const oldTitle = document.getElementById("rvStageTitle");
+      if (oldTitle && prev && !immediate) {
+        oldTitle.classList.add("swapping");
+        setTimeout(() => { rvRenderStage(vm); rvRenderDetails(vm); rvLoadMeta(vm); }, 200);
+      } else {
+        rvRenderStage(vm); rvRenderDetails(vm); rvLoadMeta(vm);
+      }
+    }
+
+    function rvToggleAlts() { const l = document.getElementById("rvAltsList"); if (l) l.classList.toggle("open"); }
+    function rvApplyAlt(id, hook) { const el = document.getElementById("rvHook"); if (el) el.textContent = hook; void rvSave(id); }
+
+    async function rvSave(id) {
+      const title = document.getElementById("rvStageTitle")?.textContent?.trim();
+      const hook = document.getElementById("rvHook")?.textContent?.trim();
+      const caption = document.getElementById("rvCaption")?.textContent?.trim();
+      try {
+        await cmFetch(`/api/content/clip/${id}/metadata`, { method: "PATCH", body: JSON.stringify({ title, hook, caption }) });
+        const vm = rvClips.find((c) => c.id === id);
+        if (vm) { vm.title = title; vm.hook = hook; vm.caption = caption; rvRenderQueue(); }
+        showToast("Saved ✓");
+      } catch (err) { showToast(`Save failed: ${err.message || "error"}`); }
+    }
+
+    function rvSpawnParticles(btn) {
+      const r = btn.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      for (let i = 0; i < 6; i++) {
+        const p = document.createElement("div");
+        p.className = "rv-particle";
+        p.style.left = cx + "px"; p.style.top = cy + "px";
+        document.body.appendChild(p);
+        const ang = (Math.PI * 2 * i) / 6, dist = 40;
+        p.animate([{ transform: "translate(0,0)", opacity: 1 }, { transform: `translate(${Math.cos(ang) * dist}px,${Math.sin(ang) * dist}px)`, opacity: 0 }],
+          { duration: 500, easing: "cubic-bezier(0.16,1,0.3,1)" }).onfinish = () => p.remove();
+      }
+    }
+    function rvRemoveCardAnimated(id, wasReject, after) {
+      const card = document.querySelector(`#review-queue-list .rv-queue-card[data-id="${id}"]`);
+      if (!card) { after && after(); return; }
+      card.style.maxHeight = card.offsetHeight + "px";
+      const doClose = () => { card.classList.add("removing"); setTimeout(() => after && after(), 360); };
+      if (wasReject) { card.classList.add("rejecting"); setTimeout(doClose, 400); } else { doClose(); }
+    }
+    function rvAdvance(removedId) {
+      const idx = rvClips.findIndex((x) => x.id === removedId);
+      rvClips = rvClips.filter((x) => x.id !== removedId);
+      rvReviewed++;
+      rvRenderQueue();
+      rvUpdateProgress();
+      if (typeof refreshReviewQueueBadge === "function") refreshReviewQueueBadge();
+      if (typeof loadCmStats === "function") { try { void loadCmStats(); } catch (_) {} }
+      if (rvClips.length === 0) { rvSelectedId = null; rvRenderEmpty(); return; }
+      const next = rvClips[Math.min(idx, rvClips.length - 1)];
+      rvSelectedId = null;
+      rvSelect(next.id, true);
+    }
+
+    async function rvReject(id) {
+      const reason = prompt("Reject this clip?", "");
+      if (reason === null) return;
+      try {
+        await cmFetch(`/api/content/compliance/${id}/decision`, { method: "POST", body: JSON.stringify({ decision: "rejected", reason }) });
+        rvRemoveCardAnimated(id, true, () => rvAdvance(id));
+        showToast("Rejected");
+      } catch (err) { showToast(`Reject failed: ${err.message || "error"}`); }
+    }
+    async function rvPublish(id, ev) {
+      const vm = rvClips.find((c) => c.id === id);
+      if (vm && vm.flagged && !confirm("This clip has compliance flags. Override and send anyway?")) return;
+      const btn = ev && ev.currentTarget;
+      if (btn) { btn.classList.add("flash"); setTimeout(() => btn.classList.remove("flash"), 150); rvSpawnParticles(btn); }
+      const body = vm && vm.flagged ? { override_compliance: true, override_reason: "human reviewed" } : { scheduled_for: null, platforms: null };
+      try {
+        await cmFetch(`/api/content/clip/${id}/send-to-publisher`, { method: "POST", body: JSON.stringify(body) });
+        rvRemoveCardAnimated(id, false, () => {
+          rvAdvance(id);
+          if (typeof refreshPublishingBadge === "function") refreshPublishingBadge();
+          if (typeof loadPublishing === "function") { try { void loadPublishing(); } catch (_) {} }
+        });
+        showToast("Clip approved and queued for publishing");
+      } catch (err) { showToast(`Failed to send: ${err.message || "error"}`); }
+    }
+
+    function rvRenderEmpty() {
+      const stage = document.getElementById("rvStage");
+      const details = document.getElementById("rvDetails");
+      if (stage) stage.innerHTML = `
+        <div class="rv-empty">
+          <div class="rv-empty-glow"></div>
+          <svg class="rv-empty-check" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+          <div class="rv-empty-title">BATCH COMPLETE</div>
+          <div class="rv-empty-sub">${rvTotalCount ? `All ${rvTotalCount} clips have been reviewed.` : "No clips in review. Upload footage to generate a batch."}</div>
+        </div>`;
+      if (details) details.innerHTML = "";
+    }
+    function rvRenderLoading() {
+      const stage = document.getElementById("rvStage");
+      const details = document.getElementById("rvDetails");
+      if (stage) stage.innerHTML = `
+        <div class="rv-stage-inner">
+          <div class="rv-shimmer rv-skel-video"></div>
+          <div class="rv-shimmer rv-skel-line" style="width:80%"></div>
+          <div class="rv-shimmer rv-skel-line" style="width:55%"></div>
+        </div>`;
+      if (details) details.innerHTML = `
+        <div class="rv-orbit-wrap">
+          <svg class="rv-orbit-spinner" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52"/></svg>
+          <div class="rv-orbit-label">SCORING</div>
+        </div>
+        <div class="rv-details-body">
+          <div class="rv-shimmer rv-skel-line" style="width:40%"></div>
+          <div class="rv-shimmer rv-skel-line" style="height:60px"></div>
+          <div class="rv-shimmer rv-skel-line" style="width:70%"></div>
+        </div>`;
+    }
+    function rvSectionActive() {
+      return document.getElementById("cm-section-review")?.classList.contains("active");
+    }
+    function rvRunEntrance() {
+      if (rvEntranceDone || !rvSectionActive()) return;
+      rvEntranceDone = true;
+      const root = document.getElementById("reviewRoot");
+      if (root) requestAnimationFrame(() => root.classList.add("entered"));
+    }
+
+    function rvRenderQueueData(list) {
+      rvRunEntrance();
+      const keepId = rvSelectedId;
+      rvReviewed = 0;
+      rvClips = (list || []).map(rvVM);
+      rvTotalCount = rvClips.length;
+      const sel = document.getElementById("review-batch-filter");
+      const batchLabel = sel && sel.value ? (sel.options[sel.selectedIndex]?.text || "batch") : "All batches";
+      const bid = document.getElementById("rvBatchId");
+      if (bid) bid.textContent = `${batchLabel} · ${rvTotalCount} clip${rvTotalCount === 1 ? "" : "s"}`;
+      rvRenderQueue();
+      rvUpdateProgress();
+      if (rvClips.length) {
+        const keep = rvClips.find((c) => c.id === keepId);
+        rvSelectedId = null;
+        rvSelect(keep ? keep.id : rvClips[0].id, true);
+      } else {
+        rvSelectedId = null;
+        rvRenderEmpty();
+      }
+    }
+    window.rvSave = rvSave; window.rvReject = rvReject; window.rvPublish = rvPublish;
+    window.rvToggleAlts = rvToggleAlts; window.rvApplyAlt = rvApplyAlt;
 
     async function cmRunCompliance(id) {
       await cmFetch(`/api/content/compliance/${id}`, { method: "POST" });
