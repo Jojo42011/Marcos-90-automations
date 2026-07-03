@@ -214,6 +214,7 @@ def burn_captions(input_video: str, ass_path: str, output_video: str) -> bool:
             "ffmpeg", "-y",
             "-i", input_video,
             "-vf", f"ass={escaped_ass_path}",
+            "-threads", "2",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
             "-c:a", "copy",
             output_video,

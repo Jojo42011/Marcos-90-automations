@@ -117,6 +117,7 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
   }
 
   let unreachableStreak = 0;
+  let notFoundStreak = 0;
   // Remember the last stage the sidecar reported so we can still show real
   // progress ("transcribing — Ns elapsed") on polls that time out because the
   // sidecar is too CPU-busy to answer — otherwise a long transcription looks
@@ -132,6 +133,7 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
       });
 
       unreachableStreak = 0;
+      notFoundStreak = 0;
       const job = response.data;
 
       if (job.status === "complete") {
@@ -164,6 +166,25 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
       // "sidecar busy" bucket below (or an unlogged throw). Surface exactly
       // what it said so a real server-side error is diagnosable, not mistaken
       // for the sidecar just being busy.
+      // A 404 means the sidecar no longer knows this job. Because the job is
+      // registered before its id is ever returned to us, a persistent 404 means
+      // the sidecar process restarted and lost its in-memory job map — almost
+      // always because it was OOM-killed mid-job. Fail fast instead of polling
+      // to the 960s ceiling waiting for a result that can never arrive.
+      if (axiosErr?.response?.status === 404) {
+        notFoundStreak++;
+        if (notFoundStreak >= 3) {
+          throw new Error(
+            `OpenShorts job ${jobId} disappeared from the sidecar (HTTP 404 x${notFoundStreak}) — ` +
+            `the sidecar likely crashed/restarted mid-job (possible out-of-memory). Not retrying.`,
+          );
+        }
+        console.warn(
+          `[openshorts] Job ${jobId} not found (404, ${notFoundStreak}/3) — sidecar may have restarted, retrying briefly`,
+        );
+        continue;
+      }
+
       if (axiosErr?.response) {
         console.warn(
           `[openshorts] Job ${jobId} status check got HTTP ${axiosErr.response.status} ` +

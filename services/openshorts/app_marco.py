@@ -8,6 +8,7 @@ import uuid
 import json
 import shutil
 import subprocess
+import threading
 import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,6 +18,18 @@ try:
     import resource  # POSIX only — available on the Fly/Linux runtime
 except ImportError:
     resource = None
+
+# Serialize heavy video jobs. Concurrent ffmpeg + OpenCV/MediaPipe reframe passes
+# each hold ~1-2GB of decoded frames; two at once on a 4GB machine trips the
+# kernel OOM killer (which is what was killing ffmpeg mid-job). Default to one
+# job at a time; raise OPENSHORTS_MAX_CONCURRENT_JOBS if the machine is bigger.
+_MAX_CONCURRENT_JOBS = max(1, int(os.environ.get("OPENSHORTS_MAX_CONCURRENT_JOBS", "1")))
+_PROCESS_SLOT = threading.Semaphore(_MAX_CONCURRENT_JOBS)
+# Refuse to start a job if free memory is already below this floor, rather than
+# starting and getting silently OOM-killed after minutes of apparent progress.
+_MIN_MEMORY_MB = int(os.environ.get("OPENSHORTS_MIN_MEMORY_MB", "700"))
+# Cap how long a queued job waits for a free slot before failing clearly.
+_SLOT_WAIT_TIMEOUT_S = int(os.environ.get("OPENSHORTS_SLOT_WAIT_TIMEOUT_S", "900"))
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
@@ -62,6 +75,15 @@ def _cut_clip(input_path: str, output_path: str, start_time: float, end_time: fl
             "-ss", str(start_time),
             "-to", str(end_time),
             "-i", input_path,
+            # Cap height at 1080p-vertical (1920) so the downstream reframe and
+            # caption passes decode ~1080p frames instead of full 4K. Re-encoding
+            # a 4K source is what spiked ffmpeg to ~2GB RSS and tripped the OOM
+            # killer; 1920 tall is plenty for a 1080x1920 vertical output. The
+            # single quotes protect the comma in min() from ffmpeg's filtergraph
+            # parser. -threads 2 matches the 2-core machine and bounds the frame
+            # buffers each encoder thread holds.
+            "-vf", "scale=-2:'min(1920,ih)'",
+            "-threads", "2",
             "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
             "-c:a", "aac",
             output_path,
@@ -157,6 +179,18 @@ def check_disk_space(path: str, required_mb: int = 500) -> tuple[bool, int]:
         return available_mb >= required_mb, available_mb
     except Exception:
         return True, -1
+
+
+def _available_memory_mb() -> Optional[int]:
+    """Free-to-use RAM in MB from /proc/meminfo (MemAvailable), or None if unknown."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except Exception:
+        return None
+    return None
 
 
 def _extract_thumbnail(video_path: str, output_path: str, timestamp: float = 1.0) -> str:
@@ -257,7 +291,31 @@ def process_video_job(
     stays responsive throughout.
     """
     timer = _StageTimer(job_id)
+    slot_acquired = False
     try:
+        # Serialize heavy jobs so concurrent ffmpeg/reframe passes don't stack up
+        # and trip the OOM killer. While waiting the job stays "queued".
+        if not _PROCESS_SLOT.acquire(timeout=_SLOT_WAIT_TIMEOUT_S):
+            _fail_job(
+                job_id,
+                f"Timed out after {_SLOT_WAIT_TIMEOUT_S}s waiting for a free processing "
+                "slot — another job is still running.",
+            )
+            return
+        slot_acquired = True
+
+        # Memory guard: fail early and clearly if RAM is already low, instead of
+        # starting the encode and getting silently OOM-killed minutes later.
+        avail_mb = _available_memory_mb()
+        print(f"[openshorts] Job {job_id} acquired processing slot — {avail_mb}MB memory available")
+        if avail_mb is not None and avail_mb < _MIN_MEMORY_MB:
+            _fail_job(
+                job_id,
+                f"Not enough memory to start safely: {avail_mb}MB available, need "
+                f"~{_MIN_MEMORY_MB}MB. Retry once other work finishes.",
+            )
+            return
+
         if openshorts_main is None:
             raise RuntimeError("OpenShorts not installed — run setup-openshorts.sh")
 
@@ -502,6 +560,9 @@ def process_video_job(
         print(f"[ERROR] Job {job_id} failed: {error_detail}")
         traceback.print_exc()
         _fail_job(job_id, error_detail)
+    finally:
+        if slot_acquired:
+            _PROCESS_SLOT.release()
 
 
 @app.post("/api/process")
