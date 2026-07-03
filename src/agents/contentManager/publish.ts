@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import {
   getContentVideo,
   incrementDailyTarget,
@@ -15,10 +14,15 @@ async function publishToTikTok(
   _hashtags: string[],
   _scheduledFor?: string | null,
 ): Promise<string> {
-  // TIKTOK_UPLOADER — uses TikTokAutoUploader Python library (github.com/makiisthenes/TiktokAutoUploader).
-  // Will call a Python script via child_process that accepts video file path, caption, hashtags,
-  // and optional scheduled_for timestamp. Returns platform_post_id.
-  return `tiktok_stub_${randomUUID().slice(0, 12)}`;
+  // NOT IMPLEMENTED YET. This must call a real TikTok posting integration
+  // (planned: TikTokAutoUploader via child_process) with valid credentials.
+  // Until that exists it throws — it must NEVER return a fake id, because the
+  // caller would then mark the video "published" and delete the clip file for
+  // a post that never happened. The dashboard's Publish Now button is disabled
+  // for TikTok until this is real (see PUBLISH_CONNECTED in social.html).
+  throw new Error(
+    "TikTok publishing is not connected yet — no posting integration or credentials are configured.",
+  );
 }
 
 async function publishToInstagram(
@@ -27,10 +31,12 @@ async function publishToInstagram(
   _hashtags: string[],
   _scheduledFor?: string | null,
 ): Promise<string> {
-  // INSTAGRAPI — uses instagrapi Python library (github.com/subzeroid/instagrapi) for Reels publishing only.
-  // ManyChat stays as the DM layer — instagrapi handles publishing only, never DMs.
-  // Will call a Python script via child_process.
-  return `instagram_stub_${randomUUID().slice(0, 12)}`;
+  // NOT IMPLEMENTED YET. Planned: instagrapi (Reels publishing only) via
+  // child_process with valid credentials. Throws until real — never returns a
+  // fake id (see the publishToTikTok note above for why).
+  throw new Error(
+    "Instagram publishing is not connected yet — no posting integration or credentials are configured.",
+  );
 }
 
 export async function publishVideo(

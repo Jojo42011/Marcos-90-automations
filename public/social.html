@@ -1028,6 +1028,14 @@
     .rec-detail-meta { margin: 0 0 0.5rem; color: var(--text-dim); font-size: 0.75rem; }
     .rec-detail-notes { margin: 0 0 0.5rem; padding: 0 0 0 0.75rem; border-left: 2px solid var(--border-bright); color: var(--text); font-size: 0.8rem; line-height: 1.55; }
     .rec-detail-reason { margin: 0; color: var(--cyan); font-style: italic; font-size: 0.75rem; line-height: 1.5; }
+    /* Publishing queue actions — Publish Now (primary teal) vs Remove (destructive), kept visually distinct */
+    .cm-btn-publish-now { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.42rem 0.95rem; border-radius: 6px; border: none; background: var(--cyan); color: #001014; cursor: pointer; }
+    .cm-btn-publish-now:hover:not(:disabled) { filter: brightness(1.08); }
+    .cm-btn-publish-now:disabled { background: transparent; color: var(--muted); border: 1px dashed var(--border-strong); cursor: not-allowed; font-weight: 600; }
+    .cm-btn-remove-queued { font-size: 0.72rem; padding: 0.42rem 0.85rem; border-radius: 6px; background: color-mix(in srgb, var(--danger) 12%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); color: var(--danger); cursor: pointer; }
+    .cm-btn-remove-queued:hover { background: color-mix(in srgb, var(--danger) 20%, transparent); border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
+    .cm-publish-note { font-size: 0.68rem; color: var(--muted); margin-top: 0.4rem; }
+    .cm-review-card.rejecting { animation: rvReject 400ms var(--rv-ease-smooth); }
 
     /* ──────────────────── SUGGESTIONS ──────────────────── */
     .suggestions-meta { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-bottom: 1rem; }
@@ -3964,11 +3972,86 @@
             ${v.scheduledFor ? " · " + fmtDateTime(v.scheduledFor) : ""}
             ${v.publishedAt ? " · Published " + fmtDateTime(v.publishedAt) : ""}
           </div>
-          <div style="margin-top:0.6rem;display:flex;gap:0.4rem;flex-wrap:wrap;">
+          <div style="margin-top:0.6rem;display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;">
             ${v.id ? `<button type="button" class="cm-btn" onclick="playClip('${v.id}','${jsStr(titleRaw)}')">▶ Play clip</button>` : ""}
+            ${v.id && v.status !== "published" ? publishNowButton(v, entries) : ""}
+            ${v.id && v.status !== "published" ? `<button type="button" class="cm-btn-remove-queued" onclick="removeFromQueue('${v.id}', this)">🗑 Remove</button>` : ""}
           </div>
+          ${v.id && v.status !== "published" ? publishConnNote(v, entries) : ""}
         </div>`;
       }).join("");
+    }
+
+    // Which platforms have a REAL, credentialed posting integration wired up.
+    // All false today — the backend publish path is not connected (see
+    // publish.ts). Flip a platform to true only once its live posting genuinely
+    // works, which enables the Publish Now button for that platform.
+    const PUBLISH_CONNECTED = { tiktok: false, instagram: false, facebook: false };
+
+    function clipPlatforms(v, entries) {
+      const ps = (entries && entries.length)
+        ? entries.map((e) => String(e.platform || "").toLowerCase())
+        : [String(v.platformTarget || "tiktok").toLowerCase()];
+      return [...new Set(ps.filter(Boolean))];
+    }
+
+    function publishNowButton(v, entries) {
+      const ps = clipPlatforms(v, entries);
+      const connected = ps.filter((p) => PUBLISH_CONNECTED[p]);
+      if (connected.length) {
+        return `<button type="button" class="cm-btn-publish-now" onclick="publishNow('${v.id}','${escapeHtml(connected[0])}', this)">PUBLISH NOW</button>`;
+      }
+      return `<button type="button" class="cm-btn-publish-now" disabled title="No posting integration is connected for ${escapeHtml(ps.join(", "))} yet — Publish Now is unavailable until it is set up.">PUBLISH NOW · Not connected</button>`;
+    }
+
+    function publishConnNote(v, entries) {
+      const ps = clipPlatforms(v, entries);
+      if (ps.some((p) => PUBLISH_CONNECTED[p])) return "";
+      return `<div class="cm-publish-note">⚠ Live posting isn't connected yet for ${escapeHtml(ps.join(", "))} — this clip will not auto-post.</div>`;
+    }
+
+    async function publishNow(videoId, platform, btn) {
+      if (!confirm(`Post this clip to ${platform} now — live and public on Marco's real account immediately. This cannot be undone. Continue?`)) return;
+      const prev = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Posting…";
+      try {
+        const log = await cmFetch(`/api/content/publish/${videoId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform }),
+        });
+        const link = log && log.platformPostId ? ` (post ${log.platformPostId})` : "";
+        showToast(`Posted to ${platform}${link}`);
+        loadPublishing();
+        if (typeof loadCmStats === "function") loadCmStats();
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = prev;
+        showToast(`Publish failed: ${e.message || e}`);
+      }
+    }
+
+    async function removeFromQueue(videoId, btn) {
+      if (!confirm("Remove this clip from the publish queue? It will not be posted.")) return;
+      const card = btn.closest(".cm-review-card");
+      try {
+        await cmFetch(`/api/content/publishing-queue/${videoId}/remove`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        showToast("Removed from publish queue");
+        if (card) {
+          card.classList.add("rejecting");
+          setTimeout(() => card.remove(), 400);
+        } else {
+          loadPublishing();
+        }
+        if (typeof loadCmStats === "function") loadCmStats();
+      } catch (e) {
+        showToast(`Remove failed: ${e.message || e}`);
+      }
     }
 
     async function loadCommunityPanel(tab) {

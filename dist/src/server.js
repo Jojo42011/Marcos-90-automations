@@ -3072,7 +3072,39 @@ app.post("/api/content/publish/:videoId", express_1.default.json(), async (req, 
             });
         }
         const log = await (0, index_js_13.publishVideo)(String(req.params.videoId || ""), platform, { scheduledFor });
+        // publishVideo records a "failed" log rather than throwing when the platform
+        // call fails. Surface that as an error status so the dashboard shows the real
+        // reason (e.g. "not connected", expired token) instead of a silent success.
+        if (log.publishStatus === "failed") {
+            res.status(502).json({ error: log.errorMessage || `Publish to ${platform} failed`, log });
+            return;
+        }
         res.json(log);
+    }
+    catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+});
+// Remove a clip from the publish queue — it will NOT be posted. Mirrors the
+// Review Queue reject flow: a status change (to "rejected", which drops it from
+// the queue) plus reclaiming the clip file, not a hard DB delete.
+app.post("/api/content/publishing-queue/:videoId/remove", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    try {
+        const videoId = String(req.params.videoId || "");
+        const video = (0, contentDb_js_1.getContentVideo)(videoId);
+        if (!video) {
+            res.status(404).json({ error: `Video not found: ${videoId}` });
+            return;
+        }
+        (0, contentDb_js_1.updateContentVideo)(videoId, { status: "rejected" });
+        const clipPath = resolveClipFileForVideo(video);
+        if (clipPath)
+            (0, diskCleanup_js_1.deleteClipFile)(clipPath);
+        res.json({ ok: true, videoId, removed: true });
     }
     catch (err) {
         res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
