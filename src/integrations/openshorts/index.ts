@@ -117,6 +117,11 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
   }
 
   let unreachableStreak = 0;
+  // Remember the last stage the sidecar reported so we can still show real
+  // progress ("transcribing — Ns elapsed") on polls that time out because the
+  // sidecar is too CPU-busy to answer — otherwise a long transcription looks
+  // like a stall with no stage/elapsed information.
+  let lastKnownStatus = "starting";
 
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
     await sleep(POLL_INTERVAL_MS);
@@ -140,6 +145,7 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
         throw new Error(`OpenShorts job failed: ${job.error}`);
       }
 
+      lastKnownStatus = job.status;
       console.log(
         `[openshorts] Job ${jobId}: ${job.status} — attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS} (${Math.round((attempt * POLL_INTERVAL_MS) / 1000)}s elapsed)`,
       );
@@ -171,8 +177,9 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
       // in time. Keep polling — this is expected while a clip job is running.
       if (code === "ECONNABORTED" || code === "ETIMEDOUT" || /timeout/i.test(msg)) {
         console.warn(
-          `[openshorts] Job ${jobId} status check got no response within ${STATUS_CHECK_TIMEOUT_MS / 1000}s ` +
-          `(attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS}, code=${code || "timeout"}) — sidecar still processing, retrying`,
+          `[openshorts] Job ${jobId}: ${lastKnownStatus} — attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS} ` +
+          `(${Math.round((attempt * POLL_INTERVAL_MS) / 1000)}s elapsed); status check timed out after ` +
+          `${STATUS_CHECK_TIMEOUT_MS / 1000}s — sidecar busy processing, retrying`,
         );
         continue;
       }
