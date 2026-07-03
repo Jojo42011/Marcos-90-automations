@@ -1385,13 +1385,10 @@
       .rv-body { flex-direction: column; }
       .rv-queue { width: 100%; flex: 0 0 auto; border-right: none; border-bottom: 1px solid var(--rv-dimmest); overflow-x: auto; overflow-y: hidden; }
       .rv-queue-list { display: flex; flex-direction: row; gap: var(--rv-gap-sm); padding: 0 var(--rv-gap-md) 12px; }
-      .rv-queue-card { flex: 0 0 auto; width: 60px; height: 60px; flex-direction: column; padding: 0; border-left: none; border-bottom: 2px solid transparent; position: relative; border-radius: var(--rv-radius-sm); overflow: hidden; }
+      .rv-queue-card { flex: 0 0 auto; height: auto; flex-direction: row; align-items: center; gap: 8px; padding: 8px 12px; border-left: none; border-bottom: 2px solid transparent; position: relative; border-radius: var(--rv-radius-sm); overflow: hidden; }
       .rv-queue-card.selected { border-left: none; border-bottom: 2px solid var(--rv-accent); box-shadow: 0 0 0 1px var(--rv-accent-border); }
-      .rv-queue-card .rv-qc-center { display: none; }
-      .rv-qc-thumb, .rv-qc-thumb-ph { width: 60px; height: 60px; border-radius: var(--rv-radius-sm); }
-      .rv-queue-card .rv-qc-right { position: absolute; top: 3px; right: 3px; }
-      .rv-qc-score { font-size: 10px; text-shadow: 0 1px 3px #000; }
-      .rv-queue-card .rv-qc-dot { display: none; }
+      .rv-queue-card .rv-qc-right { flex-direction: row; align-items: center; gap: 6px; }
+      .rv-qc-score { font-size: 10px; }
       .rv-stage { padding: var(--rv-gap-md); }
       .rv-details { width: 100%; flex: 0 0 auto; border-left: none; border-top: 1px solid var(--rv-dimmest); }
       .rv-details-body, .rv-actions { max-width: 520px; margin-left: auto; margin-right: auto; width: 100%; }
@@ -3565,24 +3562,11 @@
       }
     }
 
-    // If a thumbnail image fails to load (e.g. the .jpg was reclaimed by disk
-    // cleanup), remove the broken <img> from the DOM entirely and swap in the
-    // play-icon placeholder — never leave a broken-image box behind.
-    function rvThumbError(img) {
-      const ph = document.createElement("div");
-      ph.className = "rv-qc-thumb-ph";
-      ph.innerHTML = RV_PLAY_SVG;
-      img.replaceWith(ph);
-    }
-    window.rvThumbError = rvThumbError;
-
     function rvQueueCardHtml(vm) {
       const color = RV_TIER_COLOR[clipTrendClass(vm.score)];
-      const thumb = vm.thumb
-        ? `<img class="rv-qc-thumb" src="${vm.thumb}" alt="" onerror="rvThumbError(this)">`
-        : `<div class="rv-qc-thumb-ph">${RV_PLAY_SVG}</div>`;
+      // Queue rows carry no thumbnail — the clip preview lives in the detail
+      // panel. Each row shows only title, platform icons, and score.
       return `<div class="rv-queue-card${vm.id === rvSelectedId ? " selected" : ""}" data-id="${vm.id}" tabindex="0" role="button" aria-label="${escapeHtml(vm.title)}">
-        ${thumb}
         <div class="rv-qc-center">
           <div class="rv-qc-title">${escapeHtml(vm.title)}</div>
           <div class="rv-qc-platforms">${rvPlatformIconsHtml(vm.platforms)}</div>
