@@ -52,7 +52,7 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -r /tmp/requir
 
 # Fail the image build if core clipping imports are broken (avoids "online" sidecar with no engine).
 RUN python3 -c "import main; print('OpenShorts main import OK:', main.__file__)"
-RUN python3 -c "import youtube_transcript_api as y; print('youtube-transcript-api OK:', y.__version__)"
+RUN python3 -c "from youtube_transcript_api import YouTubeTranscriptApi; print('youtube-transcript-api import OK')"
 
 COPY services/openshorts/prompts_marco.py ./prompts_marco.py
 COPY services/openshorts/llm_analysis.py ./llm_analysis.py
