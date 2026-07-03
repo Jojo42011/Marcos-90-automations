@@ -321,10 +321,27 @@ def process_video_job(
 
         timer.transition("reframing")
         output_clips = []
+        clip_errors = []
         clip_output_dir = CLIPS_OUTPUT_DIR / job_id
         clip_output_dir.mkdir(parents=True, exist_ok=True)
 
-        for i, clip in enumerate(clips_data.get("clips", [])):
+        # Boundary between analysis output and reframing input. Log what actually
+        # arrived and fail with a specific message (not the generic "no clips")
+        # if analysis handed off nothing usable.
+        clips_list = clips_data.get("clips", [])
+        print(
+            f"[openshorts] analysis handed off {len(clips_list)} clip(s) to reframing; "
+            f"first-clip keys: {sorted(clips_list[0].keys()) if clips_list else 'none'}"
+        )
+        if not clips_list:
+            _fail_job(
+                job_id,
+                "Analysis produced zero clips — the AI returned no usable timestamps "
+                "(see [content-ai] logs for the raw response).",
+            )
+            return
+
+        for i, clip in enumerate(clips_list):
             try:
                 clip_id = str(uuid.uuid4())
                 clip_filename = f"clip_{i + 1}_{clip_id[:8]}.mp4"
@@ -427,9 +444,17 @@ def process_video_job(
                 )
                 print(f"[ERROR] {error_detail}")
                 traceback.print_exc()
+                clip_errors.append(error_detail)
 
         if not output_clips:
-            _fail_job(job_id, "Reframing produced no clips — check clip timestamps and ffmpeg logs")
+            # Surface why every clip failed instead of the generic message, so a
+            # systematic problem (bad timestamps, ffmpeg) is diagnosable at a glance.
+            detail = (
+                "; ".join(clip_errors[:5])
+                if clip_errors
+                else "analysis returned no usable clips"
+            )
+            _fail_job(job_id, f"Reframing produced no clips — {detail}")
             return
 
         # Phase 5b — re-verify on disk right now, not just that the loop above
