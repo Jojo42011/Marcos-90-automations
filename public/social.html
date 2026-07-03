@@ -1024,6 +1024,10 @@
     /* Recommendation card — action headline vs secondary reasoning */
     .rec-action { margin: 0.5rem 0 0.25rem; font-size: 0.84rem; font-weight: 600; color: var(--text); line-height: 1.45; }
     .rec-reason { margin: 0; color: var(--text-dim); font-size: 0.75rem; font-style: italic; line-height: 1.5; }
+    /* Recording Plan "Details" expander body — readable in light + dark */
+    .rec-detail-meta { margin: 0 0 0.5rem; color: var(--text-dim); font-size: 0.75rem; }
+    .rec-detail-notes { margin: 0 0 0.5rem; padding: 0 0 0 0.75rem; border-left: 2px solid var(--border-bright); color: var(--text); font-size: 0.8rem; line-height: 1.55; }
+    .rec-detail-reason { margin: 0; color: var(--cyan); font-style: italic; font-size: 0.75rem; line-height: 1.5; }
 
     /* ──────────────────── SUGGESTIONS ──────────────────── */
     .suggestions-meta { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-bottom: 1rem; }
@@ -1704,8 +1708,8 @@
       <button type="button" class="crm-side-btn" data-cm-section="upload">Upload &amp; Clip <span class="crm-count" id="cm-count-upload">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="review">Review Queue <span class="crm-count crm-count-danger" id="cm-count-review">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="publishing">Publishing <span class="crm-count" id="cm-count-publishing">0</span></button>
-      <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="strategy">Strategy <span class="crm-count" id="cm-count-strategy">0</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="calendar">Calendar <span class="crm-count" id="cm-count-calendar">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="activity">Activity Log <span class="crm-count" id="cm-count-activity">0</span></button>
       <a href="/" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;">Command center <span>←</span></a>
@@ -4370,9 +4374,9 @@
               const hooks = (t.suggestedHooks || []).slice(0, 2);
               const hooksHtml = hooks.map((h) => `<li onclick="navigator.clipboard.writeText('${escapeHtml(h).replace(/'/g, "\\'")}');showToast('Copied')" style="cursor:pointer;">${escapeHtml(h)}</li>`).join("");
               const detail = `
-                <p class="cm-muted">Target length: ${t.suggestedDurationMin || 35}-${t.suggestedDurationMax || 55}s</p>
-                ${t.filmingNotes ? `<blockquote class="cm-muted">${escapeHtml(t.filmingNotes)}</blockquote>` : ""}
-                ${t.reason ? `<p style="color:var(--cyan);font-style:italic;font-size:0.75rem;">${escapeHtml(t.reason)}</p>` : ""}`;
+                <p class="rec-detail-meta">Target length: ${t.suggestedDurationMin || 35}-${t.suggestedDurationMax || 55}s</p>
+                ${t.filmingNotes ? `<blockquote class="rec-detail-notes">${escapeHtml(t.filmingNotes)}</blockquote>` : ""}
+                ${t.reason ? `<p class="rec-detail-reason">${escapeHtml(t.reason)}</p>` : ""}`;
               return `
               <div class="strategy-rec-card ${t.status === "filmed" ? "filmed" : ""}">
                 <div class="strategy-rec-tags">
