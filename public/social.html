@@ -1683,7 +1683,6 @@
       <button type="button" class="crm-side-btn" data-cm-section="strategy">Strategy <span class="crm-count" id="cm-count-strategy">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="calendar">Calendar <span class="crm-count" id="cm-count-calendar">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="brain">Content Manager <span class="crm-count" id="cm-count-brain">—</span></button>
-      <button type="button" class="crm-side-btn" data-cm-section="suggestions">Content Suggestions <span class="crm-count">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="activity">Activity Log <span class="crm-count" id="cm-count-activity">0</span></button>
       <a href="/" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;">Command center <span>←</span></a>
     </aside>
@@ -1961,6 +1960,31 @@
               <span class="cm-muted" id="strategy-last-analyzed"></span>
               <button type="button" class="primary" id="strategy-run-analysis-btn">Run New Analysis</button>
             </div>
+            <div class="cm-panel" id="strategy-trends" style="margin-top:1rem;display:none;"></div>
+            <div class="cm-panel" style="margin-top:1rem;" id="competitor-intel-panel">
+              <h3>Competitor Intelligence</h3>
+              <p class="cm-muted" style="font-size:0.78rem;">Profiles tracked for trend scraping via Apify.</p>
+              <table class="competitor-table" id="competitor-profiles-table">
+                <thead><tr><th>Handle</th><th>Type</th><th>Active</th></tr></thead>
+                <tbody id="competitor-profiles-tbody"></tbody>
+              </table>
+              <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;">
+                <input type="text" id="new-comp-handle" placeholder="tiktok_handle" style="padding:0.4rem;" />
+                <input type="text" id="new-comp-name" placeholder="Display name" style="padding:0.4rem;" />
+                <select id="new-comp-type" style="padding:0.4rem;">
+                  <option value="national_influencer">National influencer</option>
+                  <option value="education_account">Education account</option>
+                  <option value="texas_state">Texas state</option>
+                  <option value="san_antonio_local">San Antonio local</option>
+                </select>
+                <button type="button" class="cm-btn" id="add-competitor-btn">Add</button>
+              </div>
+              <div style="margin-top:1.5rem;border-top:1px solid var(--border);padding-top:1rem;">
+                <strong>Trend Intelligence Cache</strong>
+                <p id="trend-cache-expiry" class="cm-muted" style="font-size:0.78rem;margin:0.35rem 0;"></p>
+                <button type="button" class="cm-btn" id="refresh-trends-btn">Refresh Now</button>
+              </div>
+            </div>
           </div>
           <div id="strategy-competitor" class="strategy-panel" style="display:none;">
             <div id="strategy-full-analysis" class="cm-panel"></div>
@@ -2084,35 +2108,6 @@
           <div id="cm-brain-eval-card" class="cm-brain-expand-card" style="display:none;"></div>
           <a class="cm-brain-expand" id="cm-brain-toggle-experiments">Experiments</a>
           <div id="cm-brain-experiments-card" class="cm-brain-expand-card" style="display:none;"></div>
-        </section>
-
-        <!-- CONTENT SUGGESTIONS -->
-        <section id="cm-section-suggestions" class="cm-section">
-          <div id="content-suggestions-container" class="reply-card"><div class="loading">// LOADING SUGGESTIONS //</div></div>
-          <div class="cm-panel" style="margin-top:1rem;" id="competitor-intel-panel">
-            <h3>Competitor Intelligence</h3>
-            <p class="cm-muted" style="font-size:0.78rem;">Profiles tracked for trend scraping via Apify.</p>
-            <table class="competitor-table" id="competitor-profiles-table">
-              <thead><tr><th>Handle</th><th>Type</th><th>Active</th></tr></thead>
-              <tbody id="competitor-profiles-tbody"></tbody>
-            </table>
-            <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;">
-              <input type="text" id="new-comp-handle" placeholder="tiktok_handle" style="padding:0.4rem;" />
-              <input type="text" id="new-comp-name" placeholder="Display name" style="padding:0.4rem;" />
-              <select id="new-comp-type" style="padding:0.4rem;">
-                <option value="national_influencer">National influencer</option>
-                <option value="education_account">Education account</option>
-                <option value="texas_state">Texas state</option>
-                <option value="san_antonio_local">San Antonio local</option>
-              </select>
-              <button type="button" class="cm-btn" id="add-competitor-btn">Add</button>
-            </div>
-            <div style="margin-top:1.5rem;border-top:1px solid var(--border);padding-top:1rem;">
-              <strong>Trend Intelligence Cache</strong>
-              <p id="trend-cache-expiry" class="cm-muted" style="font-size:0.78rem;margin:0.35rem 0;"></p>
-              <button type="button" class="cm-btn" id="refresh-trends-btn">Refresh Now</button>
-            </div>
-          </div>
         </section>
 
         <!-- ACTIVITY LOG -->
@@ -4340,6 +4335,24 @@
         if (full && tab === "competitor" && analysis) {
           full.innerHTML = renderCompetitiveTab(analysis, recommendations);
         }
+
+        // Trends summary + competitor management (merged from the former
+        // Content Suggestions tab) live in the Strategy Overview now.
+        if (tab === "overview") {
+          const trendsEl = document.getElementById("strategy-trends");
+          if (trendsEl) {
+            const cs = await cmFetch("/api/content-suggestions/latest").catch(() => null);
+            const summary = cs && cs.result && cs.result.currentTrendsSummary ? cs.result.currentTrendsSummary : "";
+            if (summary) {
+              trendsEl.style.display = "";
+              trendsEl.innerHTML = `<h3>Current TikTok Trends</h3><p style="font-size:0.82rem;line-height:1.5;">${escapeHtml(summary)}</p>`;
+            } else {
+              trendsEl.style.display = "none";
+            }
+          }
+          if (typeof loadCompetitorProfiles === "function") { try { loadCompetitorProfiles(); } catch (_) {} }
+          if (typeof loadTrendIntel === "function") { try { loadTrendIntel(); } catch (_) {} }
+        }
       }
 
       if (tab === "recommendations") {
@@ -4395,6 +4408,21 @@
               </div>`;
             }).join("")}`).join("") || "<p class='cm-muted'>No recording tasks.</p>";
         }
+        // Filmable content ideas — merged in from the former Content Suggestions tab.
+        try {
+          const cs = await cmFetch("/api/content-suggestions/latest").catch(() => null);
+          const ideas = cs && cs.result && Array.isArray(cs.result.suggestions) ? cs.result.suggestions : [];
+          if (list && ideas.length) {
+            const cards = ideas.map((s) => `
+              <div class="strategy-rec-card">
+                <div class="strategy-rec-tags">${s.trendBased ? '<span class="cm-pillar-tag education">trend-based</span>' : ""}<span class="cm-brain-badge">idea</span></div>
+                <p class="strategy-rec-title"><strong>${escapeHtml(s.title || "")}</strong></p>
+                ${s.angle ? `<p style="font-size:0.78rem;margin:0.25rem 0;line-height:1.45;">${escapeHtml(s.angle)}</p>` : ""}
+                ${s.reasoning ? cmExpander("Why this works", `<p class="cm-muted" style="line-height:1.5;">${escapeHtml(s.reasoning)}</p>`) : ""}
+              </div>`).join("");
+            list.innerHTML += `<h4 style="margin-top:1.25rem;">💡 Content Ideas to Film</h4>${cards}`;
+          }
+        } catch (_) { /* ideas are best-effort */ }
       }
       void updateStrategyBadges();
     }
@@ -4847,7 +4875,6 @@
       if (section === "strategy") void loadStrategySection("overview");
       if (section === "calendar") void loadCalendarSection();
       if (section === "brain") void loadBrainSection();
-      if (section === "suggestions") loadContentSuggestionsTab();
       if (section === "activity") loadActivityLogTab();
     }
 
