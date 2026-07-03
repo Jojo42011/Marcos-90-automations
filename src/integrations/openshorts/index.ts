@@ -10,7 +10,11 @@ import { randomUUID } from "crypto";
 const OPENSHORTS_BASE_URL = process.env.OPENSHORTS_URL || "http://localhost:8000";
 const POLL_INTERVAL_MS = 8000;
 const STATUS_CHECK_TIMEOUT_MS = 25000;
-const MAX_POLL_ATTEMPTS = 120;
+// Backstop poll ceiling: 90 × 8s = 720s (12 min), down from the old 960s. The
+// sidecar now fails a stuck job itself (per-ffmpeg timeout + per-job budget,
+// ~600s), so this only needs to sit just above that — a job that reaches this
+// ceiling is genuinely gone. Override with OPENSHORTS_MAX_POLL_ATTEMPTS.
+const MAX_POLL_ATTEMPTS = Number(process.env.OPENSHORTS_MAX_POLL_ATTEMPTS) || 90;
 
 export interface OpenShortsClipResult {
   clipId: string;

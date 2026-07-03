@@ -8,7 +8,12 @@ This module builds an ASS subtitle file from those word timestamps and burns
 it into a clip with ffmpeg's libass-backed `ass` filter, applied AFTER vertical
 reframing so captions never get cropped by the reframe step.
 """
+import os
 import subprocess
+
+# Hard timeout for the caption burn-in pass — kill a hung ffmpeg instead of
+# letting it block the job (mirrors _FFMPEG_TIMEOUT_S in app_marco.py).
+_CAPTION_TIMEOUT_S = int(os.environ.get("OPENSHORTS_FFMPEG_TIMEOUT_S", "180"))
 
 FONT_NAME = "Liberation Sans"  # metric-compatible Arial Bold substitute; ships via apt fonts-liberation
 
@@ -221,6 +226,7 @@ def burn_captions(input_video: str, ass_path: str, output_video: str) -> bool:
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
+        timeout=_CAPTION_TIMEOUT_S,
     )
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg caption burn failed: {result.stderr.decode()[-800:]}")

@@ -30,6 +30,15 @@ _PROCESS_SLOT = threading.Semaphore(_MAX_CONCURRENT_JOBS)
 _MIN_MEMORY_MB = int(os.environ.get("OPENSHORTS_MIN_MEMORY_MB", "700"))
 # Cap how long a queued job waits for a free slot before failing clearly.
 _SLOT_WAIT_TIMEOUT_S = int(os.environ.get("OPENSHORTS_SLOT_WAIT_TIMEOUT_S", "900"))
+# Hard timeout for a single ffmpeg cut/caption pass. A clip re-encode at
+# <=1080p/veryfast finishes in well under a minute; if ffmpeg hasn't returned
+# in this window it is hung — kill it and fail that clip fast instead of the
+# whole job silently polling to the 960s ceiling.
+_FFMPEG_TIMEOUT_S = int(os.environ.get("OPENSHORTS_FFMPEG_TIMEOUT_S", "180"))
+# Overall wall-clock budget for one job (transcription + all clips). Bounds how
+# long a single job can hold the processing slot so one bad video can't freeze
+# the whole batch. Raise for routinely long (30min+) source videos.
+_JOB_MAX_SECONDS = int(os.environ.get("OPENSHORTS_JOB_MAX_SECONDS", "600"))
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
@@ -90,6 +99,7 @@ def _cut_clip(input_path: str, output_path: str, start_time: float, end_time: fl
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
+        timeout=_FFMPEG_TIMEOUT_S,
     )
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg cut failed: {result.stderr.decode()[-500:]}")
@@ -400,6 +410,21 @@ def process_video_job(
             return
 
         for i, clip in enumerate(clips_list):
+            # Per-job wall-clock budget: stop starting new clips once the job has
+            # run too long, so one slow/stuck video can't hold the processing
+            # slot (and freeze the queue behind it) indefinitely. Whatever clips
+            # already succeeded are kept; if none, the check below fails clearly.
+            elapsed = time.monotonic() - timer.job_started_at
+            if elapsed > _JOB_MAX_SECONDS:
+                print(
+                    f"[openshorts] Job {job_id} hit the {_JOB_MAX_SECONDS}s budget after "
+                    f"{elapsed:.0f}s — stopping with {len(output_clips)} clip(s) done, "
+                    f"skipping the remaining {len(clips_list) - i}"
+                )
+                clip_errors.append(
+                    f"Job exceeded {_JOB_MAX_SECONDS}s budget; {len(clips_list) - i} clip(s) skipped"
+                )
+                break
             try:
                 clip_id = str(uuid.uuid4())
                 clip_filename = f"clip_{i + 1}_{clip_id[:8]}.mp4"
