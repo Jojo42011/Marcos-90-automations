@@ -53,20 +53,21 @@ const socialRefresh_js_1 = require("./app/socialRefresh.js");
 const index_js_1 = require("./agents/socialMedia/index.js");
 const jobs_js_1 = require("./app/jobs.js");
 const socialStore_js_1 = require("./core/socialStore.js");
-const index_js_2 = require("./agents/morningScan/index.js");
-const index_js_3 = require("./agents/commentReply/index.js");
-const index_js_4 = require("./agents/videoFeedback/index.js");
-const index_js_5 = require("./agents/eveningPull/index.js");
-const index_js_6 = require("./agents/reporting/index.js");
-const index_js_7 = require("./agents/contentSuggestions/index.js");
-const index_js_8 = require("./agents/escalations/index.js");
-const index_js_9 = require("./agents/harveyContentDigest/index.js");
+const index_js_2 = require("./integrations/apify/index.js");
+const index_js_3 = require("./agents/morningScan/index.js");
+const index_js_4 = require("./agents/commentReply/index.js");
+const index_js_5 = require("./agents/videoFeedback/index.js");
+const index_js_6 = require("./agents/eveningPull/index.js");
+const index_js_7 = require("./agents/reporting/index.js");
+const index_js_8 = require("./agents/contentSuggestions/index.js");
+const index_js_9 = require("./agents/escalations/index.js");
+const index_js_10 = require("./agents/harveyContentDigest/index.js");
 const db_js_1 = require("./core/db.js");
 const crmNotificationStore_js_1 = require("./core/crmNotificationStore.js");
-const index_js_10 = require("./agents/reEngagement/index.js");
-const index_js_11 = require("./agents/listingStatusAutomation/index.js");
-const index_js_12 = require("./agents/contentManager/index.js");
-const index_js_13 = require("./agents/contentManager/brain/index.js");
+const index_js_11 = require("./agents/reEngagement/index.js");
+const index_js_12 = require("./agents/listingStatusAutomation/index.js");
+const index_js_13 = require("./agents/contentManager/index.js");
+const index_js_14 = require("./agents/contentManager/brain/index.js");
 const batchProcessor_js_1 = require("./agents/contentManager/batchProcessor.js");
 const diskCleanup_js_1 = require("./core/diskCleanup.js");
 const competitorIntel_js_1 = require("./agents/contentManager/competitorIntel.js");
@@ -89,10 +90,10 @@ const harveyNotes_js_1 = require("./core/harveyNotes.js");
 const deals_js_1 = require("./core/deals.js");
 const transactionsStore_js_1 = require("./core/transactionsStore.js");
 const documentFill_js_1 = require("./core/documentFill.js");
-const index_js_14 = require("./agents/transactionDeadlines/index.js");
+const index_js_15 = require("./agents/transactionDeadlines/index.js");
 const inspectionFlow_js_1 = require("./agents/transactionFlows/inspectionFlow.js");
 const postCloseFlow_js_1 = require("./agents/transactionFlows/postCloseFlow.js");
-const index_js_15 = require("./agents/leadScoring/index.js");
+const index_js_16 = require("./agents/leadScoring/index.js");
 const warmLeadFlow_js_1 = require("./agents/leadNurture/warmLeadFlow.js");
 const coldLeadFlow_js_1 = require("./agents/leadNurture/coldLeadFlow.js");
 const sourceRouting_js_1 = require("./agents/leadNurture/sourceRouting.js");
@@ -101,32 +102,32 @@ const dailyDigest_js_1 = require("./agents/reporting/dailyDigest.js");
 const weeklyKPI_js_1 = require("./agents/reporting/weeklyKPI.js");
 const reportingStore_js_1 = require("./core/reportingStore.js");
 const financeStore_js_1 = require("./core/financeStore.js");
-const index_js_16 = require("./agents/finance/index.js");
+const index_js_17 = require("./agents/finance/index.js");
 const state_js_1 = require("./core/state.js");
 const dialSession_js_1 = require("./core/dialSession.js");
 const callAssistant_js_1 = require("./core/callAssistant.js");
 const forewarn_js_1 = require("./integrations/forewarn.js");
 const db_js_2 = require("./core/db.js");
-const index_js_17 = require("./integrations/sinch/index.js");
-const index_js_18 = require("./integrations/twilio/index.js");
+const index_js_18 = require("./integrations/sinch/index.js");
+const index_js_19 = require("./integrations/twilio/index.js");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
-const index_js_19 = require("./integrations/llm/index.js");
+const index_js_20 = require("./integrations/llm/index.js");
 const adsUpstream_js_1 = require("./harvey/adsUpstream.js");
 const crypto_1 = require("crypto");
-const index_js_20 = require("./harvey/index.js");
-const index_js_21 = require("./hull/index.js");
+const index_js_21 = require("./harvey/index.js");
+const index_js_22 = require("./hull/index.js");
 const deepgramProxy_js_1 = require("./hull/voice/deepgramProxy.js");
 const ws_1 = require("ws");
 const smsStore_js_1 = require("./core/smsStore.js");
 const inboundReplyHelper_js_1 = require("./app/inboundReplyHelper.js");
-const index_js_22 = require("./agents/showingReminders/index.js");
-const index_js_23 = require("./agents/mojoOutreach/index.js");
-const index_js_24 = require("./agents/conversationEscalations/index.js");
+const index_js_23 = require("./agents/showingReminders/index.js");
+const index_js_24 = require("./agents/mojoOutreach/index.js");
+const index_js_25 = require("./agents/conversationEscalations/index.js");
 const textingRules_js_1 = require("./core/textingRules.js");
 const marcoLog_js_1 = require("./app/marcoLog.js");
-const index_js_25 = require("./integrations/openshorts/index.js");
+const index_js_26 = require("./integrations/openshorts/index.js");
 const http_proxy_middleware_1 = require("http-proxy-middleware");
-const index_js_26 = require("./integrations/voxcpm/index.js");
+const index_js_27 = require("./integrations/voxcpm/index.js");
 const safetyLock_js_1 = require("./agents/voiceClone/safetyLock.js");
 const voiceCloneStore_js_1 = require("./core/voiceCloneStore.js");
 const app = (0, express_1.default)();
@@ -263,28 +264,28 @@ function getDiskInfo() {
     }
 }
 app.get("/health", async (_req, res) => {
-    const apiKeyConfigured = (0, index_js_19.isAnthropicApiKeyConfigured)();
-    const openShortsHealth = await (0, index_js_25.checkOpenShortsHealth)().catch(() => ({ running: false }));
+    const apiKeyConfigured = (0, index_js_20.isAnthropicApiKeyConfigured)();
+    const openShortsHealth = await (0, index_js_26.checkOpenShortsHealth)().catch(() => ({ running: false }));
     const disk = getDiskInfo();
     res.status(200).json({
         ok: true,
         disk,
         anthropic: {
             api_key_configured: apiKeyConfigured,
-            model: (0, index_js_19.getAnthropicModel)(),
+            model: (0, index_js_20.getAnthropicModel)(),
             hint: apiKeyConfigured
                 ? "Haiku runs for preflight, opening, and pipeline when those paths call the API (billing and valid JSON still required)."
                 : "Set ANTHROPIC_API_KEY on the host. Without it, DMs use hardcoded fallbacks only.",
         },
         twilio: {
-            configured: (0, index_js_18.isTwilioConfigured)(),
-            hint: (0, index_js_18.isTwilioConfigured)()
+            configured: (0, index_js_19.isTwilioConfigured)(),
+            hint: (0, index_js_19.isTwilioConfigured)()
                 ? "Outbound SMS available; inbound webhook should point to POST /webhook/twilio"
                 : "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER for SMS handoff from CRM.",
         },
         harvey: {
-            model: (0, index_js_20.getHarveyModel)(),
-            api_key_configured: (0, index_js_19.isAnthropicApiKeyConfigured)(),
+            model: (0, index_js_21.getHarveyModel)(),
+            api_key_configured: (0, index_js_20.isAnthropicApiKeyConfigured)(),
             hull: "aethon-intelligence",
             voice: {
                 engine: process.env.DEEPGRAM_API_KEY ? "deepgram-flux" : "none",
@@ -303,7 +304,7 @@ app.get("/health", async (_req, res) => {
 });
 /** OpenClaw — OpenAI-compatible brain endpoint (WhatsApp / messaging gateway). */
 app.post("/v1/chat/completions", express_1.default.json({ limit: "256kb" }), async (req, res) => {
-    if (!(0, index_js_19.isAnthropicApiKeyConfigured)()) {
+    if (!(0, index_js_20.isAnthropicApiKeyConfigured)()) {
         res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
         return;
     }
@@ -509,6 +510,18 @@ app.get("/api/social/video-scores", (req, res) => {
             ...v,
             improvements: (0, socialStore_js_1.getVideoImprovements)(v.id) ?? null,
         }));
+        // Recompute the score breakdown from live engagement rather than trusting
+        // the stored sub-score columns, which can be 0 for rows persisted before
+        // breakdown scoring (that was the "real views, 0 bars" bug). scoreVideos
+        // derives its own max from this set — no external benchmark needed.
+        if (videos.length) {
+            const rescored = (0, index_js_2.scoreVideos)(videos);
+            const byId = new Map(rescored.videos.map((r) => [r.id, r]));
+            videos = videos.map((v) => {
+                const r = byId.get(v.id);
+                return r ? { ...v, score: r.score, tier: r.tier, scoreBreakdown: r.scoreBreakdown } : v;
+            });
+        }
         if (tier && tier !== "all") {
             videos = videos.filter((v) => {
                 const t = v.scoreBreakdown?.tier ?? v.tier;
@@ -534,6 +547,31 @@ app.get("/api/social/video-scores", (req, res) => {
         res.status(500).json({ error: message });
     }
 });
+// Clear Storage — reuses the proven state-aware safe cleanup (never touches
+// files for jobs still processing or clips not yet reviewed). No new deletion
+// logic; this is a thin wrapper around runSafetyDiskCleanup().
+app.post("/api/content/clear-storage", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    try {
+        const freeBeforeMB = await (0, diskCleanup_js_1.getFreeDiskMB)();
+        const { deleted, freedBytes } = await (0, diskCleanup_js_1.runSafetyDiskCleanup)();
+        const freeAfterMB = await (0, diskCleanup_js_1.getFreeDiskMB)();
+        res.json({
+            ok: true,
+            deleted,
+            freedBytes,
+            freedGB: Math.round((freedBytes / (1024 * 1024 * 1024)) * 100) / 100,
+            freeBeforeMB: Number.isFinite(freeBeforeMB) ? freeBeforeMB : null,
+            freeAfterMB: Number.isFinite(freeAfterMB) ? freeAfterMB : null,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+});
 app.post("/api/social/video-improvements/:postId", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
@@ -555,7 +593,7 @@ app.post("/api/social/video-improvements/:postId", async (req, res) => {
             sharesScore: 0,
             tier: video.tier ?? "cold",
         };
-        const improvements = await (0, index_js_4.generateVideoImprovements)({
+        const improvements = await (0, index_js_5.generateVideoImprovements)({
             description: video.caption || "",
             views: video.views || 0,
             likes: video.likes || 0,
@@ -594,7 +632,7 @@ app.post("/api/social/video-improvements/generate-all", async (req, res) => {
                 sharesScore: 0,
                 tier: video.tier ?? "cold",
             };
-            const improvements = await (0, index_js_4.generateVideoImprovements)({
+            const improvements = await (0, index_js_5.generateVideoImprovements)({
                 description: video.caption || "",
                 views: video.views || 0,
                 likes: video.likes || 0,
@@ -641,7 +679,7 @@ app.get("/api/evening-pull/latest", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    res.json({ result: (0, index_js_6.getLatestReportingSnapshot)("evening") });
+    res.json({ result: (0, index_js_7.getLatestReportingSnapshot)("evening") });
 });
 app.post("/api/evening-pull/run", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -649,7 +687,7 @@ app.post("/api/evening-pull/run", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_5.runEveningPull)();
+        const result = await (0, index_js_6.runEveningPull)();
         res.json({ result });
     }
     catch (err) {
@@ -664,14 +702,14 @@ app.get("/api/reporting/recent", (req, res) => {
     }
     const limitRaw = req.query.limit;
     const limit = typeof limitRaw === "string" && /^\d+$/.test(limitRaw) ? parseInt(limitRaw, 10) : 14;
-    res.json({ snapshots: (0, index_js_6.getRecentReportingSnapshots)(limit) });
+    res.json({ snapshots: (0, index_js_7.getRecentReportingSnapshots)(limit) });
 });
 app.get("/api/content-suggestions/latest", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    res.json({ result: (0, index_js_7.getLatestContentSuggestions)() });
+    res.json({ result: (0, index_js_8.getLatestContentSuggestions)() });
 });
 app.post("/api/content-suggestions/generate", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -679,7 +717,7 @@ app.post("/api/content-suggestions/generate", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_7.generateWeeklyContentSuggestions)();
+        const result = await (0, index_js_8.generateWeeklyContentSuggestions)();
         res.json({ result });
     }
     catch (err) {
@@ -710,7 +748,7 @@ app.get("/api/agent/status", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const digest = (0, index_js_9.getLatestContentDigest)();
+    const digest = (0, index_js_10.getLatestContentDigest)();
     const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
     let lastRunAt = null;
     let nextRunAt = null;
@@ -739,7 +777,7 @@ app.get("/api/escalations/recent", (req, res) => {
     }
     const limitRaw = req.query.limit;
     const limit = typeof limitRaw === "string" && /^\d+$/.test(limitRaw) ? parseInt(limitRaw, 10) : 20;
-    res.json({ escalations: (0, index_js_8.getRecentEscalations)(limit) });
+    res.json({ escalations: (0, index_js_9.getRecentEscalations)(limit) });
 });
 app.post("/api/escalations/check-now", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -747,7 +785,7 @@ app.post("/api/escalations/check-now", async (req, res) => {
         return;
     }
     try {
-        await (0, index_js_8.runAllEscalationChecks)();
+        await (0, index_js_9.runAllEscalationChecks)();
         res.json({ success: true });
     }
     catch (err) {
@@ -760,7 +798,7 @@ app.get("/api/morning-scan/latest", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const result = (0, index_js_2.getLatestMorningScan)();
+    const result = (0, index_js_3.getLatestMorningScan)();
     res.json({ result });
 });
 app.post("/api/morning-scan/run", async (req, res) => {
@@ -769,7 +807,7 @@ app.post("/api/morning-scan/run", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_2.runMorningScan)();
+        const result = await (0, index_js_3.runMorningScan)();
         res.json({ result });
     }
     catch (err) {
@@ -815,7 +853,7 @@ app.post("/api/comment-replies/generate", express_1.default.json(), async (req, 
         return;
     }
     try {
-        const reply = await (0, index_js_3.generateCommentReply)(commentText, authorUsername, postId);
+        const reply = await (0, index_js_4.generateCommentReply)(commentText, authorUsername, postId);
         res.json({ reply });
     }
     catch (err) {
@@ -1046,7 +1084,7 @@ app.get("/api/showings/upcoming", async (req, res) => {
         return;
     }
     try {
-        const upcoming = await (0, index_js_22.getUpcomingShowings)();
+        const upcoming = await (0, index_js_23.getUpcomingShowings)();
         res.json({ upcoming });
     }
     catch (err) {
@@ -1060,7 +1098,7 @@ app.post("/api/showings/check-reminders", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_22.checkAndSendShowingReminders)();
+        const result = await (0, index_js_23.checkAndSendShowingReminders)();
         res.json(result);
     }
     catch (err) {
@@ -1074,7 +1112,7 @@ app.post("/api/mojo-outreach/run", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_23.runMojoOutreachSequence)();
+        const result = await (0, index_js_24.runMojoOutreachSequence)();
         res.json(result);
     }
     catch (err) {
@@ -1254,7 +1292,7 @@ app.get("/api/jarvis/ops", async (req, res) => {
         return;
     }
     try {
-        const ops = await (0, index_js_20.runHarveyOps)(harveyDeps());
+        const ops = await (0, index_js_21.runHarveyOps)(harveyDeps());
         res.status(200).json(ops);
     }
     catch (err) {
@@ -1275,7 +1313,7 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
     }
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
     try {
-        const result = await (0, index_js_20.runHarveyChat)({
+        const result = await (0, index_js_21.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -1313,7 +1351,7 @@ app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }),
         let accumulated = "";
         let firstChunkSent = false;
         try {
-            const result = await (0, index_js_20.runHarveyChat)({
+            const result = await (0, index_js_21.runHarveyChat)({
                 message,
                 sessionId,
                 deps: harveyDeps(),
@@ -1348,7 +1386,7 @@ app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }),
         return;
     }
     try {
-        const result = await (0, index_js_20.runHarveyChat)({
+        const result = await (0, index_js_21.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -1368,8 +1406,8 @@ app.get("/api/jarvis/activation", async (req, res) => {
         return;
     }
     try {
-        const packet = await (0, index_js_21.buildMemoryPacketForQuery)("morning activation brief");
-        const text = await (0, index_js_21.handleActivation)(packet);
+        const packet = await (0, index_js_22.buildMemoryPacketForQuery)("morning activation brief");
+        const text = await (0, index_js_22.handleActivation)(packet);
         res.status(200).json({ text });
     }
     catch (err) {
@@ -1405,7 +1443,7 @@ app.post("/api/jarvis/execute-tool", express_1.default.json({ limit: "64kb" }), 
     }
     console.log("[Harvey Voice Tool] Executing:", toolName, "input:", JSON.stringify(toolInput));
     try {
-        const result = await (0, index_js_20.runHarveyTool)(toolName, toolInput);
+        const result = await (0, index_js_21.runHarveyTool)(toolName, toolInput);
         console.log("[Harvey Voice Tool] Result for", toolName, ":", JSON.stringify(result).substring(0, 200));
         res.status(200).json({ success: true, result });
     }
@@ -1529,7 +1567,7 @@ app.post("/api/jarvis/market-intel", express_1.default.json({ limit: "64kb" }), 
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_20.getHarveyModel)(),
+            model: (0, index_js_21.getHarveyModel)(),
             max_tokens: 1500,
             tools: [{
                     type: "web_search_20250305",
@@ -1603,7 +1641,7 @@ app.post("/api/jarvis/world-intel", express_1.default.json({ limit: "64kb" }), a
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_20.getHarveyModel)(),
+            model: (0, index_js_21.getHarveyModel)(),
             max_tokens: 2000,
             tools: [{
                     type: "web_search_20250305",
@@ -1715,7 +1753,7 @@ async function runClaudeResearchJson(prompt) {
         throw new Error("ANTHROPIC_API_KEY not configured");
     const anthropic = new sdk_1.default({ apiKey });
     const response = await anthropic.messages.create({
-        model: (0, index_js_20.getHarveyModel)(),
+        model: (0, index_js_21.getHarveyModel)(),
         max_tokens: 2500,
         tools: [{
                 type: "web_search_20250305",
@@ -1988,7 +2026,7 @@ app.get("/api/jarvis/memory", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const db = (0, index_js_21.getHullDb)();
+    const db = (0, index_js_22.getHullDb)();
     res.json({
         facts: db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC LIMIT 50").all(),
         nodes: db.prepare("SELECT * FROM nodes ORDER BY created_at DESC LIMIT 50").all(),
@@ -2004,7 +2042,7 @@ app.get("/api/memory/all", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const db = (0, index_js_21.getHullDb)();
+    const db = (0, index_js_22.getHullDb)();
     const facts = db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC").all();
     const nodes = db.prepare("SELECT * FROM nodes").all();
     const edges = db
@@ -2029,7 +2067,7 @@ app.get("/api/memory/all", (req, res) => {
 app.get("/api/memory/graph", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_21.getHullDb)();
+    const db = (0, index_js_22.getHullDb)();
     res.json({
         nodes: db.prepare("SELECT * FROM nodes").all(),
         edges: db.prepare("SELECT * FROM edges").all(),
@@ -2038,19 +2076,19 @@ app.get("/api/memory/graph", (req, res) => {
 app.get("/api/memory/episodes", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_21.getHullDb)();
+    const db = (0, index_js_22.getHullDb)();
     res.json(db.prepare("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 20").all());
 });
 app.get("/api/memory/rules", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_21.getHullDb)();
+    const db = (0, index_js_22.getHullDb)();
     res.json(db.prepare("SELECT * FROM rules ORDER BY confidence DESC").all());
 });
 app.get("/api/memory/identity", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_21.getHullDb)();
+    const db = (0, index_js_22.getHullDb)();
     const profile = db.prepare("SELECT dimension, confidence FROM identity_dimensions ORDER BY dimension").all();
     const recentQuestions = db
         .prepare("SELECT dimension, question, asked_at, answered FROM identity_questions ORDER BY asked_at DESC LIMIT 10")
@@ -2396,11 +2434,11 @@ app.post("/api/memory/extract-voice", express_1.default.json({ limit: "512kb" })
         return res.status(401).json({ error: "Unauthorized" });
     const transcript = Array.isArray(req.body?.transcript) ? req.body.transcript : [];
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId : "voice";
-    await (0, index_js_21.runPostConversationExtraction)(sessionId, transcript.map((t) => ({
+    await (0, index_js_22.runPostConversationExtraction)(sessionId, transcript.map((t) => ({
         role: String(t.role || "user"),
         text: String(t.text || ""),
     })));
-    (0, index_js_21.broadcastHullEvent)({ type: "memory_updated" });
+    (0, index_js_22.broadcastHullEvent)({ type: "memory_updated" });
     res.json({ ok: true });
 });
 /** Harvey memory search — hybrid retrieval. */
@@ -2428,12 +2466,12 @@ app.post("/api/jarvis/memory/add", express_1.default.json(), async (req, res) =>
         res.status(400).json({ error: "Missing fact" });
         return;
     }
-    const db = (0, index_js_21.getHullDb)();
+    const db = (0, index_js_22.getHullDb)();
     const id = (0, crypto_1.randomUUID)();
     const now = new Date().toISOString();
     db.prepare(`INSERT INTO facts (id, content, category, keywords, strength, access_count, last_accessed, created_at)
      VALUES (?, ?, ?, ?, ?, 0, ?, ?)`).run(id, content, category, keywords, strength, now, now);
-    (0, index_js_21.broadcastHullEvent)({ type: "memory_updated" });
+    (0, index_js_22.broadcastHullEvent)({ type: "memory_updated" });
     res.status(201).json({ id, content, category, keywords, strength });
 });
 /** Delete memory row by id across hull tables. */
@@ -2447,7 +2485,7 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
         res.status(400).json({ error: "Missing id" });
         return;
     }
-    const db = (0, index_js_21.getHullDb)();
+    const db = (0, index_js_22.getHullDb)();
     const tables = ["facts", "nodes", "edges", "rules", "episodes", "syntheses", "identity_questions"];
     let deleted = false;
     for (const table of tables) {
@@ -2459,7 +2497,7 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
         res.status(404).json({ error: "Memory not found" });
         return;
     }
-    (0, index_js_21.broadcastHullEvent)({ type: "memory_updated" });
+    (0, index_js_22.broadcastHullEvent)({ type: "memory_updated" });
     res.status(200).json({ ok: true, id });
 });
 /** Gemini TTS — Aethon mouth (director's notes + Charon). */
@@ -2482,7 +2520,7 @@ app.post("/api/jarvis/voice", express_1.default.json({ limit: "256kb" }), async 
     }
     ttsInFlight++;
     try {
-        const audio = await (0, index_js_21.generateTTS)(text);
+        const audio = await (0, index_js_22.generateTTS)(text);
         if (!audio) {
             res.status(502).json({ error: "TTS failed" });
             return;
@@ -2512,7 +2550,7 @@ app.post("/api/jarvis/gemini-tts", express_1.default.json({ limit: "256kb" }), a
         return;
     }
     try {
-        const audio = await (0, index_js_21.generateTTS)(text);
+        const audio = await (0, index_js_22.generateTTS)(text);
         if (!audio) {
             res.status(502).json({ error: "TTS failed" });
             return;
@@ -2567,7 +2605,7 @@ app.post("/reset", resetCors, (_req, res) => {
 });
 app.post("/sinch/inbound", express_1.default.json(), async (req, res) => {
     try {
-        const payload = (0, index_js_17.receiveInbound)(req.body);
+        const payload = (0, index_js_18.receiveInbound)(req.body);
         if (!payload) {
             res.status(400).json({ error: "Invalid or unparseable Sinch inbound payload" });
             return;
@@ -2591,7 +2629,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const signature = req.get("x-twilio-signature") ?? "";
         const protocol = req.get("x-forwarded-proto") || req.protocol;
         const url = `${protocol}://${req.get("host")}${req.originalUrl}`;
-        if (signature && !(0, index_js_18.validateTwilioSignature)(signature, url, req.body)) {
+        if (signature && !(0, index_js_19.validateTwilioSignature)(signature, url, req.body)) {
             console.warn("[Twilio Webhook] Invalid signature — rejecting");
             res.status(403).send("Invalid signature");
             return;
@@ -2600,7 +2638,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const from = typeof req.body?.From === "string" ? req.body.From.trim() : "";
         const message = typeof req.body?.Body === "string" ? req.body.Body.trim() : "";
         console.log("[Twilio Webhook] Inbound from", from, "- body:", message.substring(0, 100));
-        if (messageSid && ((0, smsStore_js_1.isMessageHandleSeen)(messageSid) || !(0, index_js_18.claimTwilioInboundSid)(messageSid))) {
+        if (messageSid && ((0, smsStore_js_1.isMessageHandleSeen)(messageSid) || !(0, index_js_19.claimTwilioInboundSid)(messageSid))) {
             console.log("[Twilio Webhook] Duplicate message, ignoring:", messageSid);
             res.status(200).send("");
             return;
@@ -2612,8 +2650,8 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const inspectionConfirmation = (0, inspectionFlow_js_1.checkInspectionConfirmation)(from, message);
         if (inspectionConfirmation.handled && inspectionConfirmation.replyMessage?.trim()) {
             const replyText = inspectionConfirmation.replyMessage.trim();
-            if ((0, index_js_18.isTwilioConfigured)()) {
-                const send = await (0, index_js_18.sendTwilioMessage)({ to: from, content: replyText });
+            if ((0, index_js_19.isTwilioConfigured)()) {
+                const send = await (0, index_js_19.sendTwilioMessage)({ to: from, content: replyText });
                 if (!send.success) {
                     console.error("[Twilio] inspection confirmation reply failed:", send.error);
                 }
@@ -2645,14 +2683,14 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         if (firstName) {
             console.log("[InboundSMS] Lead", lead.id, "first name available for greeting:", firstName);
         }
-        const confirmationResult = await (0, index_js_22.checkShowingConfirmation)(lead, message);
+        const confirmationResult = await (0, index_js_23.checkShowingConfirmation)(lead, message);
         if (confirmationResult.handled && confirmationResult.replyMessage.trim()) {
             const replyText = confirmationResult.replyMessage.trim();
             if (message) {
                 await (0, db_js_1.appendMessage)(lead.id, "user", message);
             }
-            if ((0, index_js_18.isTwilioConfigured)() && lead.phone) {
-                const send = await (0, index_js_18.sendTwilioMessage)({ to: lead.phone, content: replyText });
+            if ((0, index_js_19.isTwilioConfigured)() && lead.phone) {
+                const send = await (0, index_js_19.sendTwilioMessage)({ to: lead.phone, content: replyText });
                 if (!send.success) {
                     console.error("[Twilio] showing confirmation reply failed:", send.error);
                 }
@@ -2679,9 +2717,9 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
             res.status(200).send("");
             return;
         }
-        await (0, index_js_22.checkPostShowingFeedback)(lead, message);
+        await (0, index_js_23.checkPostShowingFeedback)(lead, message);
         let activeLead = (await (0, db_js_1.getLeadById)(lead.id)) ?? lead;
-        if ((0, index_js_23.isMojoLead)(activeLead) &&
+        if ((0, index_js_24.isMojoLead)(activeLead) &&
             activeLead.mojoOutreach &&
             (activeLead.mojoOutreach.status === "active" || activeLead.mojoOutreach.status === "paused")) {
             await (0, db_js_1.updateLeadCrmFields)({
@@ -2690,7 +2728,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
             });
             activeLead = (await (0, db_js_1.getLeadById)(activeLead.id)) ?? activeLead;
         }
-        const escalation = (0, index_js_24.detectConversationEscalation)(message);
+        const escalation = (0, index_js_25.detectConversationEscalation)(message);
         if (escalation.triggered && escalation.type) {
             await (0, db_js_1.updateLeadCrmFields)({
                 leadId: activeLead.id,
@@ -2698,13 +2736,13 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
                 automationPausedReason: escalation.type,
                 automationPausedAt: new Date().toISOString(),
             });
-            await (0, index_js_24.notifyMarcoOfConversationEscalation)(activeLead, escalation.type, message);
+            await (0, index_js_25.notifyMarcoOfConversationEscalation)(activeLead, escalation.type, message);
             if (escalation.type === "angry_client" &&
                 escalation.holdMessage &&
-                (0, index_js_18.isTwilioConfigured)() &&
+                (0, index_js_19.isTwilioConfigured)() &&
                 activeLead.phone) {
                 const holdText = escalation.holdMessage;
-                const send = await (0, index_js_18.sendTwilioMessage)({ to: activeLead.phone, content: holdText });
+                const send = await (0, index_js_19.sendTwilioMessage)({ to: activeLead.phone, content: holdText });
                 if (!send.success) {
                     console.error("[ConvEscalation] empathy hold send failed:", send.error);
                 }
@@ -2742,9 +2780,9 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
         const correlationId = (0, marcoLog_js_1.marcoCorrelationId)(payload.platform, payload.userId);
         const result = await (0, webhook_js_1.handleIncomingPayload)(payload, { requestId, correlationId });
-        if (result.reply?.trim() && (0, index_js_18.isTwilioConfigured)()) {
+        if (result.reply?.trim() && (0, index_js_19.isTwilioConfigured)()) {
             const replyText = result.reply.trim();
-            const send = await (0, index_js_18.sendTwilioMessage)({ to: activeLead.phone, content: replyText });
+            const send = await (0, index_js_19.sendTwilioMessage)({ to: activeLead.phone, content: replyText });
             if (!send.success) {
                 console.error("[Twilio] outbound after pipeline failed:", send.error);
             }
@@ -2781,7 +2819,7 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    if (!(0, index_js_18.isTwilioConfigured)()) {
+    if (!(0, index_js_19.isTwilioConfigured)()) {
         res.status(503).json({
             error: "Twilio not configured",
             hint: "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER on the server",
@@ -2812,11 +2850,11 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
                 res.status(400).json({ error: "Lead has no phone number" });
                 return;
             }
-            to = (0, index_js_18.normalizeToUsE164)(lead.phone);
+            to = (0, index_js_19.normalizeToUsE164)(lead.phone);
             threadLeadId = lead.id;
         }
         else {
-            to = (0, index_js_18.normalizeToUsE164)(toRaw);
+            to = (0, index_js_19.normalizeToUsE164)(toRaw);
             const digits = to.replace(/\D/g, "");
             if (digits.length < 10) {
                 res.status(400).json({ error: "Invalid phone number" });
@@ -2826,7 +2864,7 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
             if (matched)
                 threadLeadId = matched.id;
         }
-        const send = await (0, index_js_18.sendTwilioMessage)({ to, content });
+        const send = await (0, index_js_19.sendTwilioMessage)({ to, content });
         if (!send.success) {
             res.status(502).json({ error: send.error });
             return;
@@ -2858,10 +2896,10 @@ async function sendLeadText(leadId, content, threadType = "general") {
     const lead = await (0, db_js_1.getLeadById)(leadId);
     if (!lead?.phone?.trim())
         return { ok: false, error: "Lead has no phone number" };
-    if (!(0, index_js_18.isTwilioConfigured)())
+    if (!(0, index_js_19.isTwilioConfigured)())
         return { ok: false, error: "Twilio not configured" };
-    const to = (0, index_js_18.normalizeToUsE164)(lead.phone);
-    const send = await (0, index_js_18.sendTwilioMessage)({ to, content });
+    const to = (0, index_js_19.normalizeToUsE164)(lead.phone);
+    const send = await (0, index_js_19.sendTwilioMessage)({ to, content });
     if (!send.success)
         return { ok: false, error: send.error };
     await (0, db_js_1.appendMessage)(leadId, "assistant", content);
@@ -2887,7 +2925,7 @@ app.post("/api/leads/:id/website-visit", express_1.default.json(), async (req, r
         return;
     }
     try {
-        const result = await (0, index_js_10.handleWebsiteVisit)(leadId);
+        const result = await (0, index_js_11.handleWebsiteVisit)(leadId);
         res.status(200).json(result);
     }
     catch (err) {
@@ -2911,7 +2949,7 @@ app.post("/api/activity/website-visit", express_1.default.json(), async (req, re
         return;
     }
     try {
-        const result = await (0, index_js_10.handleWebsiteVisit)(lead.id);
+        const result = await (0, index_js_11.handleWebsiteVisit)(lead.id);
         res.status(200).json({ ...result, leadId: lead.id });
     }
     catch (err) {
@@ -2940,7 +2978,7 @@ app.post("/api/leads/:id/listing-status", express_1.default.json(), async (req, 
         return;
     }
     try {
-        const result = await (0, index_js_11.handleListingStatusUpdate)(leadId, address, status, source);
+        const result = await (0, index_js_12.handleListingStatusUpdate)(leadId, address, status, source);
         res.status(200).json(result);
     }
     catch (err) {
@@ -2977,7 +3015,7 @@ app.post("/api/content/ingest", express_1.default.json(), async (req, res) => {
         return;
     }
     try {
-        const session = await (0, index_js_12.ingestContent)({
+        const session = await (0, index_js_13.ingestContent)({
             type,
             path: typeof req.body?.path === "string" ? req.body.path : undefined,
             url: typeof req.body?.url === "string" ? req.body.url : undefined,
@@ -2995,7 +3033,7 @@ app.post("/api/content/repurpose/:sessionId", async (req, res) => {
         return;
     }
     try {
-        const clips = await (0, index_js_12.repurposeSession)(String(req.params.sessionId || ""));
+        const clips = await (0, index_js_13.repurposeSession)(String(req.params.sessionId || ""));
         res.json({ clips });
     }
     catch (err) {
@@ -3008,7 +3046,7 @@ app.post("/api/content/compliance/:videoId", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_12.runComplianceCheck)(String(req.params.videoId || ""));
+        const result = await (0, index_js_13.runComplianceCheck)(String(req.params.videoId || ""));
         res.json(result);
     }
     catch (err) {
@@ -3033,7 +3071,7 @@ app.post("/api/content/publish/:videoId", express_1.default.json(), async (req, 
                 scheduledFor,
             });
         }
-        const log = await (0, index_js_12.publishVideo)(String(req.params.videoId || ""), platform, { scheduledFor });
+        const log = await (0, index_js_13.publishVideo)(String(req.params.videoId || ""), platform, { scheduledFor });
         res.json(log);
     }
     catch (err) {
@@ -3053,7 +3091,7 @@ app.post("/api/content/triage-dm", express_1.default.json(), async (req, res) =>
         return;
     }
     try {
-        const result = await (0, index_js_12.triageDm)({
+        const result = await (0, index_js_13.triageDm)({
             platform,
             userId,
             message,
@@ -3113,7 +3151,7 @@ app.post("/api/content/comments/log", (_req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    (0, index_js_12.trackCommentManaged)();
+    (0, index_js_13.trackCommentManaged)();
     res.json({ ok: true });
 });
 app.post("/api/content/compliance/:videoId/decision", express_1.default.json(), (req, res) => {
@@ -3129,7 +3167,7 @@ app.post("/api/content/compliance/:videoId/decision", express_1.default.json(), 
     try {
         const videoId = String(req.params.videoId || "");
         const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
-        const result = (0, index_js_12.applyComplianceDecision)(videoId, decision, reason);
+        const result = (0, index_js_13.applyComplianceDecision)(videoId, decision, reason);
         // A rejected clip has no further use — reclaim its file immediately.
         if (decision === "rejected") {
             const video = (0, contentDb_js_1.getContentVideo)(videoId);
@@ -3151,7 +3189,7 @@ app.get("/api/content/analytics", (req, res) => {
     res.json({
         rows: (0, contentDb_js_1.getAnalyticsDataset)(),
         pillarSummary: (0, contentDb_js_1.getPillarPerformanceSummary)(),
-        weekly: (0, index_js_12.getWeeklyReport)(),
+        weekly: (0, index_js_13.getWeeklyReport)(),
     });
 });
 function resolveContentVideoUploadDir() {
@@ -3210,7 +3248,7 @@ function gatherClipPathCandidates(video) {
             candidates.push(meta.clipPath);
         }
         if (meta && typeof meta.clipUrl === "string" && meta.clipUrl) {
-            candidates.push((0, index_js_25.mapClipUrlForFrontend)(meta.clipUrl));
+            candidates.push((0, index_js_26.mapClipUrlForFrontend)(meta.clipUrl));
         }
     }
     return [...new Set(candidates.filter(Boolean))].filter((p) => !p.startsWith("mock://"));
@@ -3383,12 +3421,12 @@ app.post("/api/content/upload", requireDiskSpaceForUpload(), trackUploadProgress
     const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
     const savedPath = req.file.path;
     try {
-        const session = await (0, index_js_12.ingestContent)({
+        const session = await (0, index_js_13.ingestContent)({
             type: "video",
             path: savedPath,
             meta: { pillar, notes, originalName: req.file.originalname },
         });
-        const clips = await (0, index_js_12.repurposeSession)(session.id);
+        const clips = await (0, index_js_13.repurposeSession)(session.id);
         res.json({ session, clips, savedPath });
     }
     catch (err) {
@@ -3870,7 +3908,7 @@ app.post("/api/content/youtube-analysis/run", (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    void (0, youtubeIntel_js_1.runYouTubeCompetitorAnalysis)(index_js_13.contentManagerBrain).catch((err) => {
+    void (0, youtubeIntel_js_1.runYouTubeCompetitorAnalysis)(index_js_14.contentManagerBrain).catch((err) => {
         console.error("[youtube-intel] manual run failed:", err);
     });
     res.json({
@@ -3962,14 +4000,14 @@ app.get("/api/content/report/daily", (req, res) => {
         return;
     }
     const date = typeof req.query.date === "string" ? req.query.date : undefined;
-    res.json((0, index_js_12.getDailyReport)(date));
+    res.json((0, index_js_13.getDailyReport)(date));
 });
 app.get("/api/content/report/weekly", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json((0, index_js_12.getWeeklyReport)());
+    res.json((0, index_js_13.getWeeklyReport)());
 });
 app.post("/api/content/sync", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -3977,7 +4015,7 @@ app.post("/api/content/sync", async (req, res) => {
         return;
     }
     try {
-        const summary = await (0, index_js_12.runPerformanceSync)();
+        const summary = await (0, index_js_13.runPerformanceSync)();
         res.json(summary);
     }
     catch (err) {
@@ -4057,7 +4095,7 @@ app.post("/api/content-brain/ask", express_1.default.json(), async (req, res) =>
     }
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
     try {
-        const { response, sessionId: sid } = await index_js_13.contentManagerBrain.chatWithSession(question, sessionId);
+        const { response, sessionId: sid } = await index_js_14.contentManagerBrain.chatWithSession(question, sessionId);
         res.json({ response, sessionId: sid, answer: response, timestamp: new Date().toISOString() });
     }
     catch (err) {
@@ -4084,7 +4122,7 @@ app.post("/api/content-brain/sessions/new", express_1.default.json(), (req, res)
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json({ sessionId: (0, index_js_13.getOrCreateSession)() });
+    res.json({ sessionId: (0, index_js_14.getOrCreateSession)() });
 });
 app.get("/api/content-brain/self-evaluation", (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -4158,18 +4196,18 @@ app.post("/api/content-brain/run-cycle", express_1.default.json(), async (req, r
     }
     try {
         if (cycle === "morning")
-            await index_js_13.contentManagerBrain.runMorningCycle();
+            await index_js_14.contentManagerBrain.runMorningCycle();
         else if (cycle === "midday")
-            await index_js_13.contentManagerBrain.runMiddayCycle();
+            await index_js_14.contentManagerBrain.runMiddayCycle();
         else if (cycle === "evening")
-            await index_js_13.contentManagerBrain.runEveningCycle();
+            await index_js_14.contentManagerBrain.runEveningCycle();
         else if (cycle === "monday_recording_plan") {
-            const tasks = await (0, calendar_js_1.generateWeeklyRecordingPlan)((0, stats_js_2.getWeekStart)(), index_js_13.contentManagerBrain);
+            const tasks = await (0, calendar_js_1.generateWeeklyRecordingPlan)((0, stats_js_2.getWeekStart)(), index_js_14.contentManagerBrain);
             res.json({ ok: true, log: `[cm-brain] Recording plan: ${tasks.length} tasks created`, tasks });
             return;
         }
         else
-            await index_js_13.contentManagerBrain.runNightCycle();
+            await index_js_14.contentManagerBrain.runNightCycle();
         res.json({ ok: true, log: `[cm-brain] ${cycle} cycle completed manually` });
     }
     catch (err) {
@@ -4216,7 +4254,7 @@ app.post("/api/content/competitive-analysis/run", (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    (0, competitiveAnalysis_js_1.runFullCompetitiveAnalysis)(index_js_13.contentManagerBrain)
+    (0, competitiveAnalysis_js_1.runFullCompetitiveAnalysis)(index_js_14.contentManagerBrain)
         .then((analysis) => {
         console.log("[competitive-analysis] Async run complete", analysis.id);
     })
@@ -4266,7 +4304,7 @@ app.post("/api/content/strategy-recommendations/:id/create-recording-task", asyn
         return;
     }
     try {
-        const task = await (0, competitiveAnalysis_js_1.generateRecordingTask)(rec, index_js_13.contentManagerBrain);
+        const task = await (0, competitiveAnalysis_js_1.generateRecordingTask)(rec, index_js_14.contentManagerBrain);
         res.json({ task });
     }
     catch (err) {
@@ -4393,7 +4431,7 @@ app.post("/api/activity/listing-status-change", express_1.default.json(), async 
         "Unknown address";
     try {
         const mapped = statusRaw === "off_market" ? "off_market" : "active";
-        const result = await (0, index_js_11.handleListingStatusUpdate)(leadId, address, mapped, "manual");
+        const result = await (0, index_js_12.handleListingStatusUpdate)(leadId, address, mapped, "manual");
         res.status(200).json({ success: true, ...result });
     }
     catch (err) {
@@ -5412,7 +5450,7 @@ app.patch("/api/transactions/:id", express_1.default.json(), (req, res) => {
         return;
     }
     if (body.status === "closed" || tx.status === "closed") {
-        void (0, index_js_16.tryRecordCommissionForClosedDeal)(tx);
+        void (0, index_js_17.tryRecordCommissionForClosedDeal)(tx);
     }
     res.json({ transaction: tx });
 });
@@ -5518,7 +5556,7 @@ app.post("/api/transactions/:id/inspection/schedule", express_1.default.json(), 
         if (!contact.phone?.trim())
             continue;
         const message = `Inspection scheduled for ${tx.address} on ${scheduledTimeStr}. Reply YES to confirm.`;
-        const result = await (0, index_js_18.sendTwilioMessage)(contact.phone, message);
+        const result = await (0, index_js_19.sendTwilioMessage)(contact.phone, message);
         if (result.success)
             notified++;
     }
@@ -5616,7 +5654,7 @@ app.post("/api/transactions/:id/final-week/walkthrough", express_1.default.json(
         timeZone: "America/Chicago",
     });
     if (tx.parties.buyerPhone) {
-        await (0, index_js_18.sendTwilioMessage)(tx.parties.buyerPhone, `Final walkthrough for ${tx.address} scheduled for ${timeStr}. Reply YES to confirm.`);
+        await (0, index_js_19.sendTwilioMessage)(tx.parties.buyerPhone, `Final walkthrough for ${tx.address} scheduled for ${timeStr}. Reply YES to confirm.`);
     }
     res.json({ transaction: (0, transactionsStore_js_1.getTransaction)(id) });
 });
@@ -5761,7 +5799,7 @@ app.post("/api/deadlines/check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_14.checkTransactionDeadlines)();
+    const result = await (0, index_js_15.checkTransactionDeadlines)();
     res.json(result);
 });
 app.post("/api/deadlines/daily-check-now", async (req, res) => {
@@ -5769,7 +5807,7 @@ app.post("/api/deadlines/daily-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_14.runDailyTransactionWorkflowChecks)();
+    const result = await (0, index_js_15.runDailyTransactionWorkflowChecks)();
     res.json(result);
 });
 app.post("/api/deadlines/close-day-check-now", async (req, res) => {
@@ -5793,7 +5831,7 @@ app.post("/api/deadlines/missed-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_14.checkMissedSameDayDeadlines)();
+    const result = await (0, index_js_15.checkMissedSameDayDeadlines)();
     res.json(result);
 });
 /* ===================== Lead scoring & nurture ===================== */
@@ -5802,7 +5840,7 @@ app.post("/api/lead-scoring/score-all", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_15.scoreAllLeads)();
+    const result = await (0, index_js_16.scoreAllLeads)();
     res.json(result);
 });
 app.post("/api/lead-scoring/score/:leadId", async (req, res) => {
@@ -5815,7 +5853,7 @@ app.post("/api/lead-scoring/score/:leadId", async (req, res) => {
         res.status(404).json({ error: "Lead not found" });
         return;
     }
-    const result = (0, index_js_15.scoreAndRecordLead)(lead);
+    const result = (0, index_js_16.scoreAndRecordLead)(lead);
     res.json(result);
 });
 app.get("/api/lead-scoring/:leadId", (req, res) => {
@@ -5846,7 +5884,7 @@ app.post("/api/lead-scoring/rescore-cold-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_15.scoreColdLeads)();
+    const result = await (0, index_js_16.scoreColdLeads)();
     res.json(result);
 });
 app.post("/api/lead-nurture/warm-touch-now", async (req, res) => {
@@ -6174,14 +6212,14 @@ app.get("/api/finance/pace-status", (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json((0, index_js_16.getCurrentPaceStatus)());
+    res.json((0, index_js_17.getCurrentPaceStatus)());
 });
 app.get("/api/voice-clone/health", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const health = await (0, index_js_26.checkVoxCpmHealth)();
+    const health = await (0, index_js_27.checkVoxCpmHealth)();
     res.json({
         configured: !!process.env.VOXCPM_API_URL?.trim(),
         apiUrl: process.env.VOXCPM_API_URL?.trim() || null,
@@ -6348,7 +6386,7 @@ app.post("/api/finance/sync", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const commissions = await (0, index_js_16.syncCommissionsFromClosedTransactions)();
+    const commissions = await (0, index_js_17.syncCommissionsFromClosedTransactions)();
     const projection = (0, financeStore_js_1.generatePipelineProjection)();
     res.json({
         commissions,
@@ -6383,21 +6421,21 @@ app.get("/api/finance/weekly-summary-preview", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json(await (0, index_js_16.buildWeeklyFinanceSummaryData)());
+    res.json(await (0, index_js_17.buildWeeklyFinanceSummaryData)());
 });
 app.get("/api/finance/monthly-report-preview", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json(await (0, index_js_16.buildMonthlyCloseReportData)());
+    res.json(await (0, index_js_17.buildMonthlyCloseReportData)());
 });
 app.post("/api/finance/weekly-summary-now", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_16.runWeeklyFinanceSummary)();
+    const result = await (0, index_js_17.runWeeklyFinanceSummary)();
     res.json(result);
 });
 app.post("/api/finance/monthly-report-now", async (req, res) => {
@@ -6405,7 +6443,7 @@ app.post("/api/finance/monthly-report-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_16.runMonthlyCloseReport)();
+    const result = await (0, index_js_17.runMonthlyCloseReport)();
     res.json(result);
 });
 app.post("/api/finance/pace-check-now", async (req, res) => {
@@ -6413,7 +6451,7 @@ app.post("/api/finance/pace-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_16.runPaceCheck)();
+    const result = await (0, index_js_17.runPaceCheck)();
     res.json(result);
 });
 app.post("/api/finance/expense-spike-check-now", async (req, res) => {
@@ -6421,7 +6459,7 @@ app.post("/api/finance/expense-spike-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_16.runExpenseSpikeCheck)();
+    const result = await (0, index_js_17.runExpenseSpikeCheck)();
     res.json(result);
 });
 app.post("/api/transactions/:id/documents", express_1.default.json(), (req, res) => {
@@ -6880,7 +6918,7 @@ httpServer.requestTimeout = 30 * 60 * 1000;
 httpServer.headersTimeout = 2 * 60 * 1000;
 const hullWss = new ws_1.WebSocketServer({ noServer: true });
 hullWss.on("connection", (ws) => {
-    (0, index_js_21.registerHullWs)(ws);
+    (0, index_js_22.registerHullWs)(ws);
 });
 httpServer.on("upgrade", (request, socket, head) => {
     if ((0, deepgramProxy_js_1.handleDeepgramUpgrade)(request, socket, head, dashboardTokenOkIncoming))
@@ -6940,7 +6978,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
         console.error("[Server] content DB / jobs init failed:", err);
     }
     try {
-        (0, index_js_21.initHull)();
+        (0, index_js_22.initHull)();
     }
     catch (err) {
         console.error("[hull] init failed:", err);
@@ -6957,8 +6995,8 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     else {
         console.log("[Harvey] GEMINI_API_KEY configured — Gemini TTS ready");
     }
-    if ((0, index_js_19.isAnthropicApiKeyConfigured)()) {
-        console.log(`[Anthropic] API key present — model ${(0, index_js_19.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
+    if ((0, index_js_20.isAnthropicApiKeyConfigured)()) {
+        console.log(`[Anthropic] API key present — model ${(0, index_js_20.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
     }
     else {
         console.warn("[Anthropic] ANTHROPIC_API_KEY missing — preflight/opening/pipeline skip Haiku and use template fallbacks only.");
@@ -6980,7 +7018,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Chat demo: GET http://localhost:${PORT}/chat`);
     console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
     console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
-    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_20.getHarveyModel)()})`);
+    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_21.getHarveyModel)()})`);
     console.log(`Harvey voice STT: WS   http://localhost:${PORT}/api/jarvis/deepgram/listen`);
     console.log(`Harvey voice TTS: POST http://localhost:${PORT}/api/jarvis/voice`);
     console.log(`Neural Map: GET http://localhost:${PORT}/memory`);

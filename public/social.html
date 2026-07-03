@@ -1001,6 +1001,12 @@
     .cm-exp-body { max-height: 0; overflow: hidden; transition: max-height 320ms ease; }
     .cm-exp.open .cm-exp-body { max-height: 1400px; }
     .cm-exp-inner { padding-top: 6px; }
+    /* Clear Storage (Upload & Clip) — secondary/outline with a warning tone */
+    .cm-clear-storage-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .cm-btn-clear-storage { font-size: 0.72rem; padding: 0.4rem 0.8rem; border-radius: 6px; background: transparent; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+    .cm-btn-clear-storage:hover { background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: var(--warn); }
+    .cm-btn-clear-storage:disabled { opacity: 0.6; cursor: default; }
+    #clear-storage-result { font-size: 0.75rem; }
     /* YouTube Intel + Recording Plan digestible styles */
     .yt-lead { font-size: 0.9rem; font-weight: 600; color: var(--text); line-height: 1.4; }
     .yt-takeaways { margin: 0; padding-left: 1.05rem; display: flex; flex-direction: column; gap: 5px; }
@@ -1071,7 +1077,10 @@
     .strategy-compare-card.vs { text-align:center; font-size:1.5rem; font-weight:700; }
     .strategy-compare-card.vs.positive { color:var(--success); }
     .strategy-compare-card.vs.negative { color:var(--warn); }
-    .strategy-rec-card { border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem; margin-bottom:0.75rem; background:var(--surface); }
+    .strategy-rec-card { border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem; margin-bottom:0.75rem; background:var(--surface); box-sizing:border-box; max-width:100%; overflow-wrap:anywhere; word-break:break-word; }
+    .strategy-rec-card p, .strategy-rec-card li, .strategy-rec-card blockquote, .strategy-rec-title { overflow-wrap:anywhere; word-break:break-word; white-space:normal; }
+    .strategy-rec-card ol, .strategy-rec-hooks { list-style-position:outside; }
+    .strategy-rec-card ol li, .strategy-rec-hooks li { overflow-wrap:anywhere; }
     /* Competitor Analysis — scannable cards (matches YouTube Intel quality bar) */
     .ca-wrap { display:flex; flex-direction:column; gap:14px; }
     .ca-topline { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
@@ -1676,13 +1685,13 @@
     <aside class="crm-sidebar" aria-label="Content Manager navigation">
       <div class="crm-logo">Content Manager</div>
       <button type="button" class="crm-side-btn active" data-cm-section="overview">Overview <span class="crm-count" id="cm-count-overview">0/7</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="brain">Content Manager <span class="crm-count" id="cm-count-brain">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="upload">Upload &amp; Clip <span class="crm-count" id="cm-count-upload">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="review">Review Queue <span class="crm-count crm-count-danger" id="cm-count-review">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="publishing">Publishing <span class="crm-count" id="cm-count-publishing">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="strategy">Strategy <span class="crm-count" id="cm-count-strategy">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="calendar">Calendar <span class="crm-count" id="cm-count-calendar">0</span></button>
-      <button type="button" class="crm-side-btn" data-cm-section="brain">Content Manager <span class="crm-count" id="cm-count-brain">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="activity">Activity Log <span class="crm-count" id="cm-count-activity">0</span></button>
       <a href="/" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;">Command center <span>←</span></a>
     </aside>
@@ -1737,6 +1746,10 @@
 
         <!-- UPLOAD & CLIP -->
         <section id="cm-section-upload" class="cm-section">
+          <div class="cm-clear-storage-bar">
+            <button type="button" class="cm-btn-clear-storage" id="clear-storage-btn">🧹 Clear Storage</button>
+            <span id="clear-storage-result" class="cm-muted"></span>
+          </div>
           <div class="cm-panel" id="batch-upload-panel">
             <div class="batch-header-row">
               <h3 style="margin:0;">Upload & Clip</h3>
@@ -1896,11 +1909,6 @@
         <!-- COMMUNITY -->
         <!-- ANALYTICS -->
         <section id="cm-section-analytics" class="cm-section">
-          <div class="cm-subtabs">
-            <button type="button" class="cm-subtab active" data-analytics-tab="performance">Performance</button>
-            <button type="button" class="cm-subtab" data-analytics-tab="benchmark">Benchmark</button>
-            <button type="button" class="cm-subtab" data-analytics-tab="trends">Trends</button>
-          </div>
           <div id="analytics-performance" class="analytics-panel">
             <div class="score-controls" style="margin-bottom:1rem;">
               <select id="score-tier-filter" onchange="loadVideoScoresTab()">
@@ -1924,20 +1932,6 @@
               <th>Date</th><th>Caption</th><th>Platform</th><th>Views</th><th>Likes</th><th>Comments</th><th>Shares</th><th>Score</th><th>Tier</th><th>Bench</th>
             </tr></thead><tbody id="cm-analytics-tbody"></tbody></table></div>
           </div>
-          <div id="analytics-benchmark" class="analytics-panel" style="display:none;"></div>
-          <div id="analytics-trends" class="analytics-panel" style="display:none;">
-            <div id="morningScanPanel" class="reply-card" style="margin-bottom:1rem;">
-              <p class="loading" id="morningScanStatus">Loading morning scan…</p>
-              <div id="morningScanFlags"></div>
-              <div class="reply-actions"><button type="button" class="btn-set" id="runMorningScanBtn">↻ RUN SCAN NOW</button></div>
-            </div>
-            <div id="eveningPullPanel" class="reply-card">
-              <p class="loading" id="eveningPullStatus">Loading evening pull…</p>
-              <div id="eveningPullDetails"></div>
-              <div class="reply-actions"><button type="button" class="btn-set" id="runEveningPullBtn">↻ RUN EVENING PULL NOW</button></div>
-            </div>
-            <div id="cm-pillar-trends" style="margin-top:1rem;"></div>
-          </div>
         </section>
 
         <!-- STRATEGY -->
@@ -1945,7 +1939,6 @@
           <div class="cm-subtabs">
             <button type="button" class="cm-subtab active" data-strategy-tab="overview">Overview</button>
             <button type="button" class="cm-subtab" data-strategy-tab="competitor">Competitor Analysis</button>
-            <button type="button" class="cm-subtab" data-strategy-tab="youtube">YouTube Intel</button>
             <button type="button" class="cm-subtab" data-strategy-tab="recommendations">Recommendations</button>
             <button type="button" class="cm-subtab" data-strategy-tab="recording">Recording Plan</button>
           </div>
@@ -1988,54 +1981,6 @@
           </div>
           <div id="strategy-competitor" class="strategy-panel" style="display:none;">
             <div id="strategy-full-analysis" class="cm-panel"></div>
-          </div>
-          <div id="strategy-youtube" class="strategy-panel" style="display:none;">
-            <div class="youtube-intel-panel" id="youtubeIntelPanel">
-              <div class="yt-panel-header">
-                <span class="yt-panel-title">📺 YouTube Competitor Intelligence</span>
-                <div class="yt-panel-meta">
-                  <span id="ytAnalysisAge" class="yt-meta-badge">—</span>
-                  <button type="button" id="runYouTubeAnalysisBtn" class="btn-run-analysis">Run Analysis</button>
-                </div>
-              </div>
-              <div id="ytProgress" class="yt-progress-wrap" style="display:none;">
-                <div class="yt-progress-track"><div id="ytProgressFill" class="yt-progress-fill"></div></div>
-                <div class="yt-progress-msg" id="ytProgressMsg">Starting…</div>
-                <div class="yt-progress-meta">
-                  <span class="yt-progress-channel" id="ytProgressChannel"></span>
-                  <span class="yt-progress-transcripts" id="ytProgressTranscripts">0 transcripts fetched</span>
-                </div>
-              </div>
-              <div id="ytPanelContent">
-                <div class="yt-card">
-                  <div class="yt-card-title">📌 Content Gaps</div>
-                  <div class="yt-card-subtitle">Topics competitors cover that Marco isn't</div>
-                  <ul id="ytContentGaps" class="yt-list"></ul>
-                </div>
-                <div class="yt-card">
-                  <div class="yt-card-title">🎣 Proven Hook Structures</div>
-                  <div class="yt-card-subtitle">Opening patterns from high-view competitor videos</div>
-                  <ul id="ytHookStructures" class="yt-list yt-list-copyable"></ul>
-                </div>
-                <div class="yt-card yt-card-highlight">
-                  <div class="yt-card-title">💡 This Week's Recommended Video Idea</div>
-                  <div id="ytTopRecommendation" class="yt-recommendation-text">Run analysis to generate a recommendation.</div>
-                </div>
-                <div class="yt-card">
-                  <div class="yt-card-title">📊 Key Insights</div>
-                  <div id="ytKeyInsights" class="yt-insights-text">No analysis yet.</div>
-                </div>
-                <div class="yt-footer">
-                  <span id="ytChannelsAnalyzed" class="yt-footer-text">—</span>
-                  <a href="#" id="ytAddChannelLink" class="yt-manage-link">+ Add channel</a>
-                </div>
-              </div>
-              <div id="ytNoDataState" style="display:none" class="yt-no-data">
-                <p>No YouTube analysis yet.</p>
-                <p class="yt-no-data-sub">Analysis runs automatically on Sunday nights. Click "Run Analysis" to start now.</p>
-                <button type="button" id="runYouTubeAnalysisBtnLg" class="btn-run-analysis-lg">Run YouTube Analysis Now</button>
-              </div>
-            </div>
           </div>
           <div id="strategy-recommendations" class="strategy-panel" style="display:none;">
             <div id="strategy-rec-list"></div>
@@ -4120,37 +4065,17 @@
       card.style.display = "block";
     });
 
-    async function loadCmAnalytics(tab) {
-      document.querySelectorAll(".analytics-panel").forEach((p) => { p.style.display = "none"; });
-      const id = tab === "performance" ? "analytics-performance" : tab === "benchmark" ? "analytics-benchmark" : "analytics-trends";
-      document.getElementById(id).style.display = "block";
-      if (tab === "performance") {
-        loadVideoScoresTab();
-        const data = await cmFetch("/api/content/analytics");
-        const tbody = document.getElementById("cm-analytics-tbody");
+    async function loadCmAnalytics() {
+      const panel = document.getElementById("analytics-performance");
+      if (panel) panel.style.display = "block";
+      loadVideoScoresTab();
+      const data = await cmFetch("/api/content/analytics").catch(() => ({ rows: [] }));
+      const tbody = document.getElementById("cm-analytics-tbody");
+      if (tbody) {
         tbody.innerHTML = (data.rows || []).map((r) => `<tr>
           <td>${fmtDate(r.pulledAt || r.publishedAt)}</td><td>${escapeHtml((r.caption || "").slice(0, 40))}</td><td>${escapeHtml(r.platformTarget)}</td>
           <td class="num">${fmt(r.views)}</td><td class="num">${fmt(r.likes)}</td><td class="num">${fmt(r.comments)}</td><td class="num">${fmt(r.shares)}</td>
           <td class="num">${r.score}</td><td><span class="badge ${r.tier}">${r.tier}</span></td><td>${r.benchmarkMet ? "✓" : "✗"}</td></tr>`).join("") || '<tr><td colspan="10">No performance data yet</td></tr>';
-      } else if (tab === "benchmark") {
-        const data = await cmFetch("/api/content/analytics");
-        const rows = data.rows || [];
-        const published = rows.filter((r) => r.views > 0);
-        const avg = published.length ? Math.round(published.reduce((s, r) => s + r.views, 0) / published.length) : 0;
-        const pct = avg ? Math.round(((avg - 6006) / 6006) * 100) : 0;
-        const below = (data.weekly?.consistentlyBelowBenchmark || []);
-        document.getElementById("analytics-benchmark").innerHTML = `
-          <div class="cm-two-col"><div class="cm-stat-card"><div><label>Avg views (published)</label><div class="cm-stat-val">${fmt(avg)}</div></div></div>
-          <div class="cm-stat-card"><div><label>vs 6,006 benchmark</label><div class="cm-stat-val" style="color:${pct >= 0 ? "#4ade80" : "#f87171"}">${pct >= 0 ? "+" : ""}${pct}%</div></div></div></div>
-          <h3 class="section-title">Flagged for cutting</h3>${below.length ? below.map((v) =>
-            `<div class="cm-review-card"><strong>${escapeHtml(v.title)}</strong> — ${fmt(v.latestViews)} views · ${v.consecutiveColdPulls} cold pulls
-            <button class="cm-btn amber" style="margin-top:0.35rem;">Flag for review</button></div>`).join("") : '<p class="cm-muted">No consistently underperforming videos.</p>'}`;
-      } else {
-        loadMorningScan(); loadEveningPull();
-        const data = await cmFetch("/api/content/analytics");
-        document.getElementById("cm-pillar-trends").innerHTML = `<h3>Performance by pillar</h3><div class="table-wrap"><table><thead><tr><th>Pillar</th><th>Videos</th><th>Avg views</th><th>Avg score</th></tr></thead><tbody>${
-          (data.pillarSummary || []).map((p) => `<tr><td>${escapeHtml(p.pillar)}</td><td>${p.videoCount}</td><td>${fmt(p.avgViews)}</td><td>${p.avgScore}</td></tr>`).join("")
-        }</tbody></table></div>`;
       }
     }
 
@@ -4280,15 +4205,9 @@
       document.querySelectorAll(".strategy-panel").forEach((p) => {
         p.style.display = "none";
       });
-      const knownTabs = ["competitor", "recommendations", "recording", "youtube"];
+      const knownTabs = ["competitor", "recommendations", "recording"];
       const panel = document.getElementById(`strategy-${knownTabs.includes(tab) ? tab : "overview"}`);
       if (panel) panel.style.display = "block";
-
-      if (tab === "youtube") {
-        await loadYouTubeIntelPanel();
-        void updateStrategyBadges();
-        return;
-      }
 
       const data = await cmFetch("/api/content/competitive-analysis/latest").catch(() => null);
       const analysis = data?.analysis;
@@ -4880,6 +4799,26 @@
 
     document.querySelectorAll(".crm-side-btn[data-cm-section]").forEach((btn) => {
       btn.addEventListener("click", () => switchCmSection(btn.getAttribute("data-cm-section")));
+    });
+    document.getElementById("clear-storage-btn")?.addEventListener("click", async () => {
+      const btn = document.getElementById("clear-storage-btn");
+      const out = document.getElementById("clear-storage-result");
+      if (!confirm("Clear storage now? This deletes source files from finished jobs and already-reviewed clips. Files for jobs still processing or clips awaiting review are never touched.")) return;
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = "Clearing…";
+      if (out) out.textContent = "";
+      try {
+        const r = await cmFetch("/api/content/clear-storage", { method: "POST" });
+        const gb = (r.freedGB != null ? r.freedGB : (r.freedBytes || 0) / 1073741824).toFixed(2);
+        const beforeGB = r.freeBeforeMB != null ? (r.freeBeforeMB / 1024).toFixed(1) : "?";
+        const afterGB = r.freeAfterMB != null ? (r.freeAfterMB / 1024).toFixed(1) : "?";
+        if (out) out.textContent = `Cleared ${r.deleted} files — ${gb} GB freed · free space ${beforeGB}GB → ${afterGB}GB`;
+        showToast(`Cleared ${r.deleted} files, ${gb} GB freed`);
+      } catch (e) {
+        if (out) out.textContent = `Failed: ${e.message || "error"}`;
+      } finally {
+        btn.disabled = false; btn.textContent = orig;
+      }
     });
     document.querySelectorAll("[data-review-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {

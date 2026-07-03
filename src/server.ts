@@ -30,6 +30,7 @@ import {
   getRecentAgentPulls,
   getTodaysAgentPulls,
 } from "./core/socialStore.js";
+import { scoreVideos } from "./integrations/apify/index.js";
 import { runMorningScan, getLatestMorningScan } from "./agents/morningScan/index.js";
 import { generateCommentReply } from "./agents/commentReply/index.js";
 import { generateVideoImprovements } from "./agents/videoFeedback/index.js";
@@ -87,7 +88,7 @@ import {
 } from "./agents/contentManager/index.js";
 import { contentManagerBrain, getOrCreateSession } from "./agents/contentManager/brain/index.js";
 import { processBatch } from "./agents/contentManager/batchProcessor.js";
-import { deleteClipFile, getFreeDiskMB } from "./core/diskCleanup.js";
+import { deleteClipFile, getFreeDiskMB, runSafetyDiskCleanup } from "./core/diskCleanup.js";
 import {
   getCachedTrends,
   runCompetitorScrape,
@@ -862,6 +863,19 @@ app.get("/api/social/video-scores", (req, res) => {
       improvements: getVideoImprovements(v.id) ?? null,
     }));
 
+    // Recompute the score breakdown from live engagement rather than trusting
+    // the stored sub-score columns, which can be 0 for rows persisted before
+    // breakdown scoring (that was the "real views, 0 bars" bug). scoreVideos
+    // derives its own max from this set — no external benchmark needed.
+    if (videos.length) {
+      const rescored = scoreVideos(videos as unknown as Parameters<typeof scoreVideos>[0]);
+      const byId = new Map(rescored.videos.map((r) => [r.id, r]));
+      videos = videos.map((v) => {
+        const r = byId.get(v.id);
+        return r ? { ...v, score: r.score, tier: r.tier, scoreBreakdown: r.scoreBreakdown } : v;
+      });
+    }
+
     if (tier && tier !== "all") {
       videos = videos.filter((v) => {
         const t = v.scoreBreakdown?.tier ?? v.tier;
@@ -891,6 +905,31 @@ app.get("/api/social/video-scores", (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
+  }
+});
+
+// Clear Storage — reuses the proven state-aware safe cleanup (never touches
+// files for jobs still processing or clips not yet reviewed). No new deletion
+// logic; this is a thin wrapper around runSafetyDiskCleanup().
+app.post("/api/content/clear-storage", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  try {
+    const freeBeforeMB = await getFreeDiskMB();
+    const { deleted, freedBytes } = await runSafetyDiskCleanup();
+    const freeAfterMB = await getFreeDiskMB();
+    res.json({
+      ok: true,
+      deleted,
+      freedBytes,
+      freedGB: Math.round((freedBytes / (1024 * 1024 * 1024)) * 100) / 100,
+      freeBeforeMB: Number.isFinite(freeBeforeMB) ? freeBeforeMB : null,
+      freeAfterMB: Number.isFinite(freeAfterMB) ? freeAfterMB : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
 

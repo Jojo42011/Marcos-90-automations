@@ -76,8 +76,14 @@ export class ContentManagerBrain {
         );
         youtubeContext = {
           analyzed_days_ago: daysSince,
-          content_gaps: latestYT.contentGaps.slice(0, 3),
-          top_hook_structures: latestYT.topHookStructures.slice(0, 3),
+          videos_analyzed: latestYT.videosAnalyzed,
+          channels_analyzed: latestYT.channelsAnalyzed,
+          content_gaps: latestYT.contentGaps.slice(0, 5),
+          top_hook_structures: latestYT.topHookStructures.slice(0, 5),
+          top_opening_phrases: latestYT.topOpeningPhrases.slice(0, 5),
+          top_topics: latestYT.topTopics.slice(0, 8),
+          top_cta_patterns: latestYT.topCtaPatterns.slice(0, 5),
+          key_insights: latestYT.keyInsights,
           top_recommended_video: latestYT.topRecommendedVideoIdea,
         };
       }
