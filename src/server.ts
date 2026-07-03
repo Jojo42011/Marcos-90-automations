@@ -159,7 +159,7 @@ import {
   listYoutubeTranscripts,
   getYoutubeTranscript,
 } from "./core/contentDb.js";
-import { runYouTubeCompetitorAnalysis } from "./agents/contentManager/youtubeIntel.js";
+import { runYouTubeCompetitorAnalysis, getYouTubeIntelProgress } from "./agents/contentManager/youtubeIntel.js";
 import {
   runFullCompetitiveAnalysis,
   generateRecordingTask,
@@ -4500,6 +4500,15 @@ app.post("/api/content/youtube-analysis/run", (req, res) => {
     ok: true,
     message: "YouTube transcript analysis started. Check back in 2-3 minutes.",
   });
+});
+
+// Live progress for the YouTube analysis run (polled by the UI progress bar).
+app.get("/api/content/youtube-intel/progress", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(getYouTubeIntelProgress());
 });
 
 app.get("/api/content/youtube-profiles", (req, res) => {

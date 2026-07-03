@@ -3878,6 +3878,14 @@ app.post("/api/content/youtube-analysis/run", (req, res) => {
         message: "YouTube transcript analysis started. Check back in 2-3 minutes.",
     });
 });
+// Live progress for the YouTube analysis run (polled by the UI progress bar).
+app.get("/api/content/youtube-intel/progress", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json((0, youtubeIntel_js_1.getYouTubeIntelProgress)());
+});
 app.get("/api/content/youtube-profiles", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });

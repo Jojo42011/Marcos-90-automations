@@ -633,6 +633,7 @@ export function getContentDb(): Database.Database {
     initCompetitorProfilesIfEmpty(db);
     ensureYoutubeIntelMigrations(db);
     initYoutubeProfilesIfEmpty(db);
+    migrateYoutubeProfilesJosieToBiggerPockets(db);
     initKnowledgeBaseIfEmpty(db);
 
     db.exec(`CREATE INDEX IF NOT EXISTS idx_cv_status ON content_videos(status)`);
@@ -731,7 +732,7 @@ function initYoutubeProfilesIfEmpty(database: Database.Database): void {
     { handle: "@GrahamStephan", name: "Graham Stephan", type: "national_influencer", url: "https://www.youtube.com/@GrahamStephan" },
     { handle: "@RealEstateRookie", name: "Real Estate Rookie", type: "education_account", url: "https://www.youtube.com/@RealEstateRookie" },
     { handle: "@MeetKevin", name: "Meet Kevin", type: "national_influencer", url: "https://www.youtube.com/@MeetKevin" },
-    { handle: "@JosieFayora", name: "Real Estate With Josie", type: "texas_state", url: "https://www.youtube.com/@JosieFayora" },
+    { handle: "@BiggerPockets", name: "BiggerPockets", type: "education_account", url: "https://www.youtube.com/@BiggerPockets" },
   ];
   const stmt = database.prepare(
     `INSERT INTO cm_competitor_youtube_profiles
@@ -740,6 +741,58 @@ function initYoutubeProfilesIfEmpty(database: Database.Database): void {
   );
   for (const ch of defaults) {
     stmt.run(randomUUID(), ch.url, ch.handle, ch.name, ch.type, now);
+  }
+}
+
+/**
+ * One-time, idempotent fix for already-seeded databases: the "Real Estate With
+ * Josie" channel (@JosieFayora) is dead — yt-dlp returns 400 on it — so
+ * deactivate it and ensure @BiggerPockets (an active real-estate channel) is
+ * present and active in its place. Safe to run on every startup.
+ */
+function migrateYoutubeProfilesJosieToBiggerPockets(database: Database.Database): void {
+  const josieActive = database
+    .prepare(
+      `SELECT COUNT(*) AS c FROM cm_competitor_youtube_profiles
+       WHERE active = 1 AND (youtube_handle = '@JosieFayora' OR channel_name = 'Real Estate With Josie')`,
+    )
+    .get() as { c: number };
+  if (Number(josieActive.c) > 0) {
+    database
+      .prepare(
+        `UPDATE cm_competitor_youtube_profiles SET active = 0
+         WHERE youtube_handle = '@JosieFayora' OR channel_name = 'Real Estate With Josie'`,
+      )
+      .run();
+    console.log("[youtube-intel] Deactivated dead channel @JosieFayora (400 on fetch)");
+  }
+
+  const bpExists = database
+    .prepare(
+      `SELECT COUNT(*) AS c FROM cm_competitor_youtube_profiles WHERE youtube_handle = '@BiggerPockets'`,
+    )
+    .get() as { c: number };
+  if (Number(bpExists.c) === 0) {
+    database
+      .prepare(
+        `INSERT INTO cm_competitor_youtube_profiles
+         (id, youtube_channel_url, youtube_handle, channel_name, profile_type, active, added_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?)`,
+      )
+      .run(
+        randomUUID(),
+        "https://www.youtube.com/@BiggerPockets",
+        "@BiggerPockets",
+        "BiggerPockets",
+        "education_account",
+        new Date().toISOString(),
+      );
+    console.log("[youtube-intel] Added replacement channel @BiggerPockets");
+  } else {
+    // If it exists but was deactivated, re-activate it.
+    database
+      .prepare(`UPDATE cm_competitor_youtube_profiles SET active = 1 WHERE youtube_handle = '@BiggerPockets'`)
+      .run();
   }
 }
 

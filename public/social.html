@@ -1050,6 +1050,18 @@
     .strategy-rec-card { border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem; margin-bottom:0.75rem; background:var(--surface); }
     /* YouTube Competitor Intelligence */
     .youtube-intel-panel { display:flex; flex-direction:column; gap:12px; margin-top:4px; }
+    /* Live analysis progress bar */
+    .yt-progress-wrap { display:flex; flex-direction:column; gap:6px; padding:10px 0 4px; }
+    .yt-progress-track { width:100%; height:4px; background:var(--dimmest); border-radius:2px; overflow:hidden; }
+    .yt-progress-fill { height:100%; width:0%; background:linear-gradient(90deg, var(--teal), var(--teal-bright)); border-radius:2px; transition:width 500ms ease-out; }
+    .yt-progress-msg { font-family:ui-monospace,"JetBrains Mono",Menlo,monospace; font-size:10px; color:var(--dim); }
+    .yt-progress-meta { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .yt-progress-channel { font-family:ui-monospace,"JetBrains Mono",Menlo,monospace; font-size:10px; color:var(--dimmer); }
+    .yt-progress-transcripts { font-family:ui-monospace,"JetBrains Mono",Menlo,monospace; font-size:10px; color:var(--teal); white-space:nowrap; }
+    .yt-progress-wrap.complete .yt-progress-msg { color:var(--green); }
+    .yt-progress-wrap.complete .yt-progress-fill { background:var(--teal); }
+    .btn-run-analysis.running, .btn-run-analysis-lg.running { opacity:0.75; cursor:default; animation:ytBtnPulse 1.2s ease-in-out infinite; }
+    @keyframes ytBtnPulse { 0%,100%{opacity:0.5;} 50%{opacity:0.9;} }
     .yt-panel-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     .yt-panel-title { font-size:14px; font-weight:600; color:var(--text); }
     .yt-panel-meta { display:flex; align-items:center; gap:8px; }
@@ -1941,6 +1953,14 @@
                 <div class="yt-panel-meta">
                   <span id="ytAnalysisAge" class="yt-meta-badge">—</span>
                   <button type="button" id="runYouTubeAnalysisBtn" class="btn-run-analysis">Run Analysis</button>
+                </div>
+              </div>
+              <div id="ytProgress" class="yt-progress-wrap" style="display:none;">
+                <div class="yt-progress-track"><div id="ytProgressFill" class="yt-progress-fill"></div></div>
+                <div class="yt-progress-msg" id="ytProgressMsg">Starting…</div>
+                <div class="yt-progress-meta">
+                  <span class="yt-progress-channel" id="ytProgressChannel"></span>
+                  <span class="yt-progress-transcripts" id="ytProgressTranscripts">0 transcripts fetched</span>
                 </div>
               </div>
               <div id="ytPanelContent">
@@ -4348,29 +4368,91 @@
       if (footerEl) footerEl.textContent = `${a.channels_analyzed} channels · ${a.videos_analyzed} videos analyzed`;
     }
 
+    let ytPollTimer = null;
+    function ytSetRunning(isRunning) {
+      ["runYouTubeAnalysisBtn", "runYouTubeAnalysisBtnLg"].forEach((id) => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        b.disabled = isRunning;
+        b.classList.toggle("running", isRunning);
+        if (isRunning) {
+          if (!b.dataset.label) b.dataset.label = b.textContent;
+          b.textContent = "Analyzing…";
+        } else if (b.dataset.label) {
+          b.textContent = b.dataset.label;
+        }
+      });
+    }
+    function ytRenderProgress(p) {
+      const wrap = document.getElementById("ytProgress");
+      if (wrap) wrap.style.display = "flex";
+      const pct = p.videosTotal > 0
+        ? Math.round((p.videosProcessed / p.videosTotal) * 100)
+        : (p.stage === "analyzing" ? 95 : p.stage === "complete" ? 100 : 5);
+      const fill = document.getElementById("ytProgressFill");
+      if (fill) fill.style.width = pct + "%";
+      const msg = document.getElementById("ytProgressMsg");
+      if (msg) msg.textContent = p.message || "Working…";
+      const ch = document.getElementById("ytProgressChannel");
+      if (ch) {
+        if (p.channelsTotal && p.currentChannel) {
+          const idx = Math.min(p.channelsComplete + 1, p.channelsTotal);
+          ch.textContent = `Channel ${idx}/${p.channelsTotal} — ${p.currentChannel}`;
+        } else if (p.channelsTotal) {
+          ch.textContent = `${p.channelsComplete}/${p.channelsTotal} channels`;
+        } else {
+          ch.textContent = "";
+        }
+      }
+      const tr = document.getElementById("ytProgressTranscripts");
+      if (tr) tr.textContent = `${p.transcriptsFetched} transcripts fetched`;
+    }
+    function ytStopPolling() {
+      if (ytPollTimer) { clearInterval(ytPollTimer); ytPollTimer = null; }
+    }
     async function runYouTubeAnalysis() {
-      const btn = document.getElementById("runYouTubeAnalysisBtn");
-      if (btn) { btn.disabled = true; btn.textContent = "Running…"; }
+      if (ytPollTimer) return; // already running
+      const wrap = document.getElementById("ytProgress");
+      ytSetRunning(true);
+      if (wrap) { wrap.classList.remove("complete"); wrap.style.display = "flex"; }
+      ytRenderProgress({
+        running: true, stage: "fetching_videos", currentChannel: "",
+        channelsComplete: 0, channelsTotal: 0, videosProcessed: 0, videosTotal: 0,
+        transcriptsFetched: 0, message: "Starting analysis…",
+      });
       try {
         await cmFetch("/api/content/youtube-analysis/run", { method: "POST" });
-        showToast("YouTube analysis started — polling…");
-        const before = await cmFetch("/api/content/youtube-analysis/latest").catch(() => null);
-        const beforeAt = before?.analysis?.analyzed_at || null;
-        for (let i = 0; i < 36; i++) {
-          await new Promise((r) => setTimeout(r, 5000));
-          const data = await cmFetch("/api/content/youtube-analysis/latest").catch(() => null);
-          const at = data?.analysis?.analyzed_at || null;
-          if (at && at !== beforeAt) {
-            showToast("YouTube analysis complete");
-            await loadYouTubeIntelPanel();
-            break;
-          }
-        }
       } catch (e) {
-        showToast(e.message || "YouTube analysis failed");
-      } finally {
-        if (btn) { btn.disabled = false; btn.textContent = "Run Analysis"; }
+        showToast(e.message || "Failed to start analysis");
+        ytSetRunning(false);
+        if (wrap) wrap.style.display = "none";
+        return;
       }
+      let polls = 0;
+      ytPollTimer = setInterval(async () => {
+        polls++;
+        let p = null;
+        try { p = await cmFetch("/api/content/youtube-intel/progress"); } catch (_) { p = null; }
+        if (!p) { if (polls > 120) { ytStopPolling(); ytSetRunning(false); } return; }
+        ytRenderProgress(p);
+        if (!p.running || p.stage === "complete" || polls > 120) {
+          ytStopPolling();
+          const fill = document.getElementById("ytProgressFill");
+          if (fill) fill.style.width = "100%";
+          if (wrap) wrap.classList.add("complete");
+          const msg = document.getElementById("ytProgressMsg");
+          if (msg) {
+            msg.textContent = p.suggestionsGenerated > 0
+              ? `Analysis complete — ${p.suggestionsGenerated} suggestions generated`
+              : (p.message || "Analysis complete");
+          }
+          await loadYouTubeIntelPanel();
+          setTimeout(() => {
+            if (wrap) { wrap.style.display = "none"; wrap.classList.remove("complete"); }
+            ytSetRunning(false);
+          }, 2000);
+        }
+      }, 3000);
     }
 
     document.getElementById("runYouTubeAnalysisBtn")?.addEventListener("click", () => void runYouTubeAnalysis());

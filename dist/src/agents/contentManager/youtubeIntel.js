@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getChannelRecentVideos = getChannelRecentVideos;
 exports.batchFetchTranscripts = batchFetchTranscripts;
+exports.getYouTubeIntelProgress = getYouTubeIntelProgress;
 exports.runYouTubeCompetitorAnalysis = runYouTubeCompetitorAnalysis;
 exports.getLatestYouTubeAnalysis = getLatestYouTubeAnalysis;
 const axios_1 = __importDefault(require("axios"));
@@ -67,26 +68,101 @@ async function batchFetchTranscripts(videoIds) {
         return [];
     }
 }
+async function fetchSingleTranscript(videoId) {
+    const empty = { fullText: "", hookText: "", ctaText: "", wordCount: 0 };
+    try {
+        const form = new URLSearchParams();
+        form.append("video_id", videoId);
+        form.append("language", "en");
+        const response = await axios_1.default.post(`${OPENSHORTS_URL}/api/youtube/transcript`, form.toString(), { headers: { "Content-Type": "application/x-www-form-urlencoded" }, timeout: 30000 });
+        const d = (response.data || {});
+        if (d.error || !d.full_text || !d.full_text.trim()) {
+            return { status: "unavailable", ...empty, error: d.message || d.error || "no transcript" };
+        }
+        return {
+            status: "success",
+            fullText: d.full_text,
+            hookText: d.sections?.hook || "",
+            ctaText: d.sections?.cta || "",
+            wordCount: d.word_count || d.full_text.split(/\s+/).length,
+        };
+    }
+    catch (err) {
+        const e = err;
+        if (e.code === "ECONNREFUSED") {
+            return { status: "unavailable", ...empty, error: "sidecar not running" };
+        }
+        return { status: "unavailable", ...empty, error: e.response?.data?.detail || e.message || "request failed" };
+    }
+}
+let ytProgress = {
+    running: false,
+    stage: "idle",
+    currentChannel: "",
+    channelsComplete: 0,
+    channelsTotal: 0,
+    videosProcessed: 0,
+    videosTotal: 0,
+    transcriptsFetched: 0,
+    suggestionsGenerated: 0,
+    message: "",
+    startedAt: null,
+    finishedAt: null,
+};
+/** Snapshot of the current (or last) analysis run for the UI progress bar. */
+function getYouTubeIntelProgress() {
+    return { ...ytProgress };
+}
 // ─── Main analysis ────────────────────────────────────────────────────────────
 /**
  * Full YouTube competitor intelligence run.
- * For each active profile: list videos → check cache → fetch missing transcripts →
- * analyze all with Claude → store in cm_youtube_analysis. Cached for the week.
+ * Pass 1 lists each channel's recent videos (so we know the total up front for
+ * the progress bar); pass 2 fetches transcripts one video at a time — checking
+ * the 7-day cache first and saving each fresh transcript immediately so a crash
+ * loses nothing — then Claude analyzes them all. A single video or channel
+ * failure never stops the run.
  */
 async function runYouTubeCompetitorAnalysis(brain) {
+    if (ytProgress.running) {
+        console.log("[youtube-intel] Analysis already running — skipping duplicate trigger");
+        return null;
+    }
     console.log("[youtube-intel] Starting YouTube competitor transcript analysis");
     const profiles = (0, contentDb_js_1.listActiveYoutubeProfiles)();
     if (!profiles.length) {
         console.log("[youtube-intel] No active YouTube profiles configured");
         return null;
     }
-    console.log(`[youtube-intel] Analyzing ${profiles.length} YouTube channels`);
+    ytProgress = {
+        running: true,
+        stage: "fetching_videos",
+        currentChannel: "",
+        channelsComplete: 0,
+        channelsTotal: profiles.length,
+        videosProcessed: 0,
+        videosTotal: 0,
+        transcriptsFetched: 0,
+        suggestionsGenerated: 0,
+        message: "Fetching channel video lists…",
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+    };
     const allTranscripts = [];
-    let totalVideosFetched = 0;
-    for (const profile of profiles) {
-        try {
-            console.log(`[youtube-intel] Processing channel: ${profile.channelName} (${profile.youtubeChannelUrl})`);
-            const videos = await getChannelRecentVideos(profile.youtubeChannelUrl, MAX_VIDEOS_PER_CHANNEL);
+    try {
+        console.log(`[youtube-intel] Analyzing ${profiles.length} YouTube channels`);
+        // ── Pass 1: list videos per channel so videosTotal is known up front ──
+        const perChannel = [];
+        for (const profile of profiles) {
+            ytProgress.currentChannel = profile.channelName || profile.youtubeHandle || "channel";
+            ytProgress.message = `Fetching videos from ${ytProgress.currentChannel}…`;
+            let videos = [];
+            try {
+                videos = await getChannelRecentVideos(profile.youtubeChannelUrl, MAX_VIDEOS_PER_CHANNEL);
+            }
+            catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`[youtube-intel] Channel video list failed for ${profile.channelName}: ${msg}`);
+            }
             if (!videos.length) {
                 console.warn(`[youtube-intel] No videos found for ${profile.channelName}`);
                 continue;
@@ -105,94 +181,127 @@ async function runYouTubeCompetitorAnalysis(brain) {
                     url: video.url,
                 });
             }
-            const videoIdsNeedingTranscript = [];
-            const cachedForProfile = [];
+            perChannel.push({ profile, videos });
+            ytProgress.videosTotal += videos.length;
+        }
+        // ── Pass 2: fetch transcripts one video at a time (cache-first) ──
+        ytProgress.stage = "fetching_transcripts";
+        ytProgress.channelsComplete = 0;
+        for (const { profile, videos } of perChannel) {
+            const channelName = profile.channelName || profile.youtubeHandle || "channel";
+            ytProgress.currentChannel = channelName;
+            let cachedCount = 0;
+            let fetchedCount = 0;
+            let unavailableCount = 0;
             for (const video of videos) {
-                const cached = (0, contentDb_js_1.getCachedYoutubeTranscript)(video.video_id);
+                ytProgress.message = `Fetching transcripts from ${channelName}…`;
+                const vid = video.video_id;
+                const cached = (0, contentDb_js_1.getCachedYoutubeTranscript)(vid);
                 if (cached && cached.fullText) {
-                    cachedForProfile.push({
-                        videoId: video.video_id,
+                    console.log(`[youtube-intel] cached: ${vid}`);
+                    cachedCount++;
+                    allTranscripts.push({
+                        videoId: vid,
                         title: video.title,
-                        channelName: profile.channelName || "",
+                        channelName,
                         viewCount: video.view_count || 0,
                         hookText: cached.hookText || "",
                         ctaText: cached.ctaText || "",
                         fullText: cached.fullText,
                         wordCount: cached.wordCount || 0,
                     });
+                    ytProgress.videosProcessed++;
+                    continue;
+                }
+                const result = await fetchSingleTranscript(vid);
+                if (result.status === "success") {
+                    console.log(`[youtube-intel] fetched: ${vid} (${result.fullText.length} chars)`);
+                    fetchedCount++;
+                    // Save immediately so a crash mid-run loses nothing.
+                    (0, contentDb_js_1.upsertYoutubeTranscript)({
+                        videoId: vid,
+                        videoTitle: video.title,
+                        channelName,
+                        viewCount: video.view_count || 0,
+                        fullText: result.fullText,
+                        hookText: result.hookText,
+                        bodyText: "",
+                        ctaText: result.ctaText,
+                        wordCount: result.wordCount,
+                        fetchStatus: "success",
+                        errorMessage: null,
+                        cacheDays: TRANSCRIPT_CACHE_DAYS,
+                    });
+                    allTranscripts.push({
+                        videoId: vid,
+                        title: video.title,
+                        channelName,
+                        viewCount: video.view_count || 0,
+                        hookText: result.hookText,
+                        ctaText: result.ctaText,
+                        fullText: result.fullText,
+                        wordCount: result.wordCount,
+                    });
+                    ytProgress.transcriptsFetched++;
                 }
                 else {
-                    videoIdsNeedingTranscript.push(video.video_id);
+                    console.log(`[youtube-intel] unavailable: ${vid} — ${result.error || "no transcript"}`);
+                    unavailableCount++;
+                    // Cache the miss so we don't re-hit it every run for 7 days.
+                    (0, contentDb_js_1.upsertYoutubeTranscript)({
+                        videoId: vid,
+                        videoTitle: video.title,
+                        channelName,
+                        viewCount: 0,
+                        fullText: null,
+                        hookText: null,
+                        bodyText: null,
+                        ctaText: null,
+                        wordCount: 0,
+                        fetchStatus: "failed",
+                        errorMessage: result.error || "No transcript available",
+                        cacheDays: TRANSCRIPT_CACHE_DAYS,
+                    });
                 }
+                ytProgress.videosProcessed++;
             }
-            console.log(`[youtube-intel] ${cachedForProfile.length} cached, ${videoIdsNeedingTranscript.length} need fetching for ${profile.channelName}`);
-            if (videoIdsNeedingTranscript.length > 0) {
-                const batchResults = await batchFetchTranscripts(videoIdsNeedingTranscript);
-                for (const result of batchResults) {
-                    const videoMeta = videos.find((v) => v.video_id === result.video_id);
-                    if (result.status === "success" && result.full_text) {
-                        const wordCount = result.full_text.split(" ").length;
-                        (0, contentDb_js_1.upsertYoutubeTranscript)({
-                            videoId: result.video_id,
-                            videoTitle: videoMeta?.title || "",
-                            channelName: profile.channelName || "",
-                            viewCount: videoMeta?.view_count || 0,
-                            fullText: result.full_text,
-                            hookText: result.hook_text || "",
-                            bodyText: "",
-                            ctaText: result.cta_text || "",
-                            wordCount,
-                            fetchStatus: "success",
-                            errorMessage: null,
-                            cacheDays: TRANSCRIPT_CACHE_DAYS,
-                        });
-                        cachedForProfile.push({
-                            videoId: result.video_id,
-                            title: videoMeta?.title || "",
-                            channelName: profile.channelName || "",
-                            viewCount: videoMeta?.view_count || 0,
-                            hookText: result.hook_text || "",
-                            ctaText: result.cta_text || "",
-                            fullText: result.full_text,
-                            wordCount,
-                        });
-                    }
-                    else {
-                        // Cache the failed fetch so we don't retry for 7 days
-                        (0, contentDb_js_1.upsertYoutubeTranscript)({
-                            videoId: result.video_id,
-                            videoTitle: videoMeta?.title || "",
-                            channelName: profile.channelName || "",
-                            viewCount: 0,
-                            fullText: null,
-                            hookText: null,
-                            bodyText: null,
-                            ctaText: null,
-                            wordCount: 0,
-                            fetchStatus: "failed",
-                            errorMessage: result.error || "No transcript available",
-                            cacheDays: TRANSCRIPT_CACHE_DAYS,
-                        });
-                    }
-                }
-            }
-            allTranscripts.push(...cachedForProfile);
-            totalVideosFetched += cachedForProfile.length;
+            console.log(`[youtube-intel] ${channelName}: ${cachedCount} cached, ${fetchedCount} fetched fresh, ${unavailableCount} unavailable`);
+            ytProgress.channelsComplete++;
             (0, contentDb_js_1.markYoutubeProfileScraped)(profile.id, videos.length);
         }
-        catch (profileErr) {
-            const msg = profileErr instanceof Error ? profileErr.message : String(profileErr);
-            console.error(`[youtube-intel] Failed processing ${profile.channelName}:`, msg);
+        if (!allTranscripts.length) {
+            console.warn("[youtube-intel] No transcripts available for analysis");
+            ytProgress.stage = "complete";
+            ytProgress.message = "No transcripts available — nothing to analyze";
+            return null;
         }
+        ytProgress.stage = "analyzing";
+        ytProgress.message = `Analyzing ${allTranscripts.length} transcripts with Claude…`;
+        console.log(`[youtube-intel] Analyzing ${allTranscripts.length} transcripts with Claude`);
+        const analysis = await analyzeTranscriptsWithBrain(allTranscripts, brain);
+        const channelsAnalyzed = new Set(allTranscripts.map((t) => t.channelName)).size;
+        const suggestionCount = (analysis.contentGaps?.length || 0) +
+            (analysis.topHookStructures?.length || 0) +
+            (analysis.topTopics?.length || 0) +
+            (analysis.topRecommendedVideoIdea ? 1 : 0);
+        console.log(`[youtube-intel] Generated ${suggestionCount} suggestions from ${allTranscripts.length} transcripts across ${channelsAnalyzed} channels`);
+        ytProgress.stage = "complete";
+        ytProgress.suggestionsGenerated = suggestionCount;
+        ytProgress.message = `Analysis complete — ${suggestionCount} suggestions generated`;
+        return analysis;
     }
-    if (!allTranscripts.length) {
-        console.warn("[youtube-intel] No transcripts available for analysis");
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[youtube-intel] Analysis run failed: ${msg}`);
+        ytProgress.stage = "complete";
+        ytProgress.message = `Analysis failed: ${msg}`;
         return null;
     }
-    console.log(`[youtube-intel] Analyzing ${allTranscripts.length} transcripts with Claude`);
-    const analysis = await analyzeTranscriptsWithBrain(allTranscripts, brain);
-    console.log(`[youtube-intel] YouTube analysis complete — ${totalVideosFetched} videos analyzed`);
-    return analysis;
+    finally {
+        ytProgress.running = false;
+        ytProgress.currentChannel = "";
+        ytProgress.finishedAt = new Date().toISOString();
+    }
 }
 async function analyzeTranscriptsWithBrain(transcripts, brain) {
     const transcriptSummaries = transcripts.map((t) => ({
