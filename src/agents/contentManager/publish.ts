@@ -8,6 +8,13 @@ import {
 } from "../../core/contentDb.js";
 import { deleteClipByStoredPath } from "../../core/diskCleanup.js";
 import { postVideoToTikTok, tiktokConfigured } from "./tiktokPublish.js";
+import {
+  postReelToInstagram,
+  postVideoToFacebookPage,
+  buildSignedClipUrl,
+  instagramConfigured,
+  facebookConfigured,
+} from "./metaPublish.js";
 
 async function publishToTikTok(
   filePath: string | null,
@@ -30,18 +37,28 @@ async function publishToTikTok(
   return publishId;
 }
 
-async function publishToInstagram(
-  _filePath: string | null,
-  _caption: string,
-  _hashtags: string[],
-  _scheduledFor?: string | null,
-): Promise<string> {
-  // NOT IMPLEMENTED YET. Planned: instagrapi (Reels publishing only) via
-  // child_process with valid credentials. Throws until real — never returns a
-  // fake id (see the publishToTikTok note above for why).
-  throw new Error(
-    "Instagram publishing is not connected yet — no posting integration or credentials are configured.",
-  );
+async function publishToInstagram(videoId: string, caption: string): Promise<string> {
+  // Real Instagram Graph API (Reels): container -> poll -> media_publish. Meta
+  // fetches the video from a short-lived signed public URL. Throws with the
+  // real Graph error on failure; never returns a fake id.
+  if (!instagramConfigured()) {
+    throw new Error(
+      "Instagram publishing is not connected — set INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_BUSINESS_ACCOUNT_ID and PUBLIC_BASE_URL.",
+    );
+  }
+  const { mediaId } = await postReelToInstagram(buildSignedClipUrl(videoId), caption);
+  return mediaId;
+}
+
+async function publishToFacebook(videoId: string, caption: string): Promise<string> {
+  // Real Facebook Graph API Page video post. Meta fetches from a signed public URL.
+  if (!facebookConfigured()) {
+    throw new Error(
+      "Facebook publishing is not connected — set FACEBOOK_PAGE_ACCESS_TOKEN, FACEBOOK_PAGE_ID and PUBLIC_BASE_URL.",
+    );
+  }
+  const { videoId: fbVideoId } = await postVideoToFacebookPage(buildSignedClipUrl(videoId), caption);
+  return fbVideoId;
 }
 
 export async function publishVideo(
@@ -75,14 +92,11 @@ export async function publishVideo(
         scheduledFor,
       );
     } else if (plat === "instagram") {
-      platformPostId = await publishToInstagram(
-        video.filePath,
-        fullCaption,
-        video.hashtags,
-        scheduledFor,
-      );
+      platformPostId = await publishToInstagram(videoId, fullCaption);
+    } else if (plat === "facebook") {
+      platformPostId = await publishToFacebook(videoId, fullCaption);
     } else {
-      throw new Error(`Unsupported platform: ${platform}. Supported: tiktok, instagram`);
+      throw new Error(`Unsupported platform: ${platform}. Supported: tiktok, instagram, facebook`);
     }
 
     const log = insertPublishLog({

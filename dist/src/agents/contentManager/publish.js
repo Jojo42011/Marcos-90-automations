@@ -4,6 +4,7 @@ exports.publishVideo = publishVideo;
 const contentDb_js_1 = require("../../core/contentDb.js");
 const diskCleanup_js_1 = require("../../core/diskCleanup.js");
 const tiktokPublish_js_1 = require("./tiktokPublish.js");
+const metaPublish_js_1 = require("./metaPublish.js");
 async function publishToTikTok(filePath, caption, _hashtags, _scheduledFor) {
     // Real TikTok Content Posting API (official). Unaudited apps post SELF_ONLY
     // (private) — see tiktokPublish.ts. Throws with the real TikTok error on
@@ -17,11 +18,23 @@ async function publishToTikTok(filePath, caption, _hashtags, _scheduledFor) {
     const { publishId } = await (0, tiktokPublish_js_1.postVideoToTikTok)(filePath, caption);
     return publishId;
 }
-async function publishToInstagram(_filePath, _caption, _hashtags, _scheduledFor) {
-    // NOT IMPLEMENTED YET. Planned: instagrapi (Reels publishing only) via
-    // child_process with valid credentials. Throws until real — never returns a
-    // fake id (see the publishToTikTok note above for why).
-    throw new Error("Instagram publishing is not connected yet — no posting integration or credentials are configured.");
+async function publishToInstagram(videoId, caption) {
+    // Real Instagram Graph API (Reels): container -> poll -> media_publish. Meta
+    // fetches the video from a short-lived signed public URL. Throws with the
+    // real Graph error on failure; never returns a fake id.
+    if (!(0, metaPublish_js_1.instagramConfigured)()) {
+        throw new Error("Instagram publishing is not connected — set INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_BUSINESS_ACCOUNT_ID and PUBLIC_BASE_URL.");
+    }
+    const { mediaId } = await (0, metaPublish_js_1.postReelToInstagram)((0, metaPublish_js_1.buildSignedClipUrl)(videoId), caption);
+    return mediaId;
+}
+async function publishToFacebook(videoId, caption) {
+    // Real Facebook Graph API Page video post. Meta fetches from a signed public URL.
+    if (!(0, metaPublish_js_1.facebookConfigured)()) {
+        throw new Error("Facebook publishing is not connected — set FACEBOOK_PAGE_ACCESS_TOKEN, FACEBOOK_PAGE_ID and PUBLIC_BASE_URL.");
+    }
+    const { videoId: fbVideoId } = await (0, metaPublish_js_1.postVideoToFacebookPage)((0, metaPublish_js_1.buildSignedClipUrl)(videoId), caption);
+    return fbVideoId;
 }
 async function publishVideo(videoId, platform, options) {
     const video = (0, contentDb_js_1.getContentVideo)(videoId);
@@ -44,10 +57,13 @@ async function publishVideo(videoId, platform, options) {
             platformPostId = await publishToTikTok(video.filePath, fullCaption, video.hashtags, scheduledFor);
         }
         else if (plat === "instagram") {
-            platformPostId = await publishToInstagram(video.filePath, fullCaption, video.hashtags, scheduledFor);
+            platformPostId = await publishToInstagram(videoId, fullCaption);
+        }
+        else if (plat === "facebook") {
+            platformPostId = await publishToFacebook(videoId, fullCaption);
         }
         else {
-            throw new Error(`Unsupported platform: ${platform}. Supported: tiktok, instagram`);
+            throw new Error(`Unsupported platform: ${platform}. Supported: tiktok, instagram, facebook`);
         }
         const log = (0, contentDb_js_1.insertPublishLog)({
             videoId,

@@ -88,6 +88,12 @@ import {
 } from "./agents/contentManager/index.js";
 import { contentManagerBrain, getOrCreateSession } from "./agents/contentManager/brain/index.js";
 import { tiktokConfigured, tiktokAudited, tiktokPrivacyLevel } from "./agents/contentManager/tiktokPublish.js";
+import {
+  instagramConfigured,
+  facebookConfigured,
+  validateMeta,
+  verifySignedClip,
+} from "./agents/contentManager/metaPublish.js";
 import { processBatch } from "./agents/contentManager/batchProcessor.js";
 import { deleteClipFile, getFreeDiskMB, runSafetyDiskCleanup } from "./core/diskCleanup.js";
 import {
@@ -3622,20 +3628,54 @@ app.post("/api/content/publish/:videoId", express.json(), async (req, res) => {
 
 // Which platforms Publish Now can actually post to right now, and in what
 // privacy mode. The dashboard uses this to enable/label the button honestly.
-app.get("/api/content/publish/capabilities", (req, res) => {
+app.get("/api/content/publish/capabilities", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
   }
+  // Instagram/Facebook "connected" = credentials present AND a real (cached)
+  // Graph API validation call succeeds — not just a presence check.
+  const [ig, fb] = await Promise.all([
+    instagramConfigured() ? validateMeta("instagram") : Promise.resolve({ ok: false, error: undefined }),
+    facebookConfigured() ? validateMeta("facebook") : Promise.resolve({ ok: false, error: undefined }),
+  ]);
   res.json({
     tiktok: {
       connected: tiktokConfigured(),
       audited: tiktokAudited(),
       privacy: tiktokPrivacyLevel(),
     },
-    instagram: { connected: false, audited: false, privacy: null },
-    facebook: { connected: false, audited: false, privacy: null },
+    instagram: { connected: ig.ok, audited: ig.ok, privacy: ig.ok ? "PUBLIC" : null, error: ig.error || null },
+    facebook: { connected: fb.ok, audited: fb.ok, privacy: fb.ok ? "PUBLIC" : null, error: fb.error || null },
   });
+});
+
+// Publicly fetchable clip stream for Meta (Instagram/Facebook cURL the video
+// by URL). Authorized by a short-lived HMAC signature in the query, NOT the
+// dashboard token — so the master token is never exposed to Meta.
+app.get("/api/content/public-clip/:videoId", (req, res) => {
+  const videoId = String(req.params.videoId || "");
+  const exp = String(req.query.exp || "");
+  const sig = String(req.query.sig || "");
+  if (!verifySignedClip(videoId, exp, sig)) {
+    res.status(403).json({ error: "Invalid or expired clip signature" });
+    return;
+  }
+  const video = getContentVideo(videoId);
+  if (!video) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+  const filePath = resolveClipFileForVideo(video);
+  if (!filePath) {
+    res.status(404).json({ error: "Video file not found on disk" });
+    return;
+  }
+  try {
+    streamClipVideoFile(req, res, filePath);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 // Remove a clip from the publish queue — it will NOT be posted. Mirrors the

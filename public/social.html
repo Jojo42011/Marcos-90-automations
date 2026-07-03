@@ -3988,7 +3988,8 @@
     }
 
     function platformConnected(p) { return Boolean(publishCaps[p] && publishCaps[p].connected); }
-    function platformPrivate(p) { return platformConnected(p) && publishCaps[p].privacy !== "PUBLIC_TO_EVERYONE"; }
+    // Only TikTok's unaudited SELF_ONLY mode is "private". Instagram/Facebook posts are public.
+    function platformPrivate(p) { return platformConnected(p) && publishCaps[p].privacy === "SELF_ONLY"; }
 
     function clipPlatforms(v, entries) {
       const ps = (entries && entries.length)
