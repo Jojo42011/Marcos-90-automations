@@ -4841,13 +4841,6 @@
         loadCommunityPanel(btn.getAttribute("data-community-tab"));
       });
     });
-    document.querySelectorAll("[data-analytics-tab]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll("[data-analytics-tab]").forEach((b) => b.classList.toggle("active", b === btn));
-        loadCmAnalytics(btn.getAttribute("data-analytics-tab"));
-      });
-    });
-
     /* Upload zone — batch */
     const uploadZone = document.getElementById("upload-zone");
     const fileInput = document.getElementById("video-file-input");
