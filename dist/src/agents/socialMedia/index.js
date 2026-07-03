@@ -13,109 +13,35 @@ function apifyToken() {
         process.env.APIFY_API_KEY?.trim() ||
         "");
 }
-function seedMockSocialData() {
-    const username = getTikTokUsername();
-    const pulledAt = new Date().toISOString();
-    const profile = {
-        username,
-        nickname: username,
-        followers: 12400,
-        following: 892,
-        heartCount: 45000,
-        videoCount: 124,
-        avatar: "",
-    };
-    const mockBase = [
-        {
-            id: "mock_1",
-            url: `https://www.tiktok.com/@${username}/video/mock_1`,
-            caption: "Stone Oak new construction tour — $450k 4/3",
-            coverUrl: "",
-            postedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-            views: 45200,
-            likes: 1240,
-            comments: 89,
-            shares: 234,
-            saves: 56,
-        },
-        {
-            id: "mock_2",
-            url: `https://www.tiktok.com/@${username}/video/mock_2`,
-            caption: "Why San Antonio real estate is booming right now",
-            coverUrl: "",
-            postedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-            views: 28100,
-            likes: 890,
-            comments: 67,
-            shares: 145,
-            saves: 32,
-        },
-        {
-            id: "mock_3",
-            url: `https://www.tiktok.com/@${username}/video/mock_3`,
-            caption: "Canyon Lake waterfront — how much does it cost?",
-            coverUrl: "",
-            postedAt: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
-            views: 8900,
-            likes: 210,
-            comments: 34,
-            shares: 28,
-            saves: 11,
-        },
-    ];
-    const scoredMock = (0, index_js_1.scoreVideos)(mockBase);
-    const mockVideos = scoredMock.videos;
-    const avgViews = Math.round(mockVideos.reduce((sum, v) => sum + v.views, 0) / mockVideos.length);
-    const contentPatterns = {
-        topHashtagsByAvgViews: [
-            { hashtag: "realestate", avgViews: 38000, count: 12 },
-            { hashtag: "sanantonio", avgViews: 32000, count: 18 },
-            { hashtag: "newconstruction", avgViews: 45000, count: 8 },
-        ],
-        hotCaptionKeywords: ["tour", "construction", "Stone Oak"],
-        bestPostingDay: "Tuesday",
-        bestPostingHour: 18,
-        contentTypeBreakdown: [
-            { category: "tour", videoCount: 45, avgViews: 42000, avgEngagementRate: 0.034 },
-            { category: "location", videoCount: 32, avgViews: 28000, avgEngagementRate: 0.031 },
-            { category: "pricing", videoCount: 18, avgViews: 22000, avgEngagementRate: 0.029 },
-        ],
-    };
-    const snapshot = (0, socialStore_js_1.upsertSocialPull)(profile, mockVideos, contentPatterns, avgViews, pulledAt);
-    console.log("[SocialAgent] Mock social data seeded for @" + username);
-    return snapshot;
-}
-/** Pull TikTok via Apify, score, extract patterns, persist snapshot + videos. */
+/** Pull TikTok via Apify, score, extract patterns, persist snapshot + videos.
+ *  Real data only — if APIFY_API_TOKEN is missing we fail loudly rather than
+ *  fabricate mock data (the dashboard shows an honest empty state instead). */
 async function runSocialMediaAgent() {
     const startTime = Date.now();
     try {
         const token = apifyToken();
-        let snapshot;
         if (!token) {
-            console.warn("[SocialAgent] APIFY_API_TOKEN not set — skipping real pull, seeding mock data");
-            snapshot = seedMockSocialData();
+            throw new Error("APIFY_API_TOKEN not set — cannot pull real TikTok data. Set it in the environment; no mock data is used.");
         }
-        else {
-            const username = getTikTokUsername();
-            const { profile, videos } = await (0, index_js_1.fetchTikTokVideos)(username);
-            const scored = (0, index_js_1.scoreVideos)(videos);
-            const contentPatterns = (0, index_js_1.extractContentPatterns)(scored.videos);
-            const pulledAt = new Date().toISOString();
-            const profileInfo = profile ?? {
-                username,
-                nickname: username,
-                followers: 0,
-                following: 0,
-                heartCount: 0,
-                videoCount: 0,
-                avatar: "",
-            };
-            snapshot = (0, socialStore_js_1.upsertSocialPull)(profileInfo, scored.videos, contentPatterns, scored.avgViews, pulledAt);
-            for (const v of scored.videos) {
-                (0, socialStore_js_1.upsertVideoScore)(v.id, v.scoreBreakdown, pulledAt);
-            }
-            console.log(`[social-agent] Pull complete — ${snapshot.totalVideos} videos, avg ${snapshot.avgViews} views, ${snapshot.hotCount} hot / ${snapshot.averageCount} warm / ${snapshot.coldCount} cold`);
+        const username = getTikTokUsername();
+        const { profile, videos } = await (0, index_js_1.fetchTikTokVideos)(username);
+        const scored = (0, index_js_1.scoreVideos)(videos);
+        const contentPatterns = (0, index_js_1.extractContentPatterns)(scored.videos);
+        const pulledAt = new Date().toISOString();
+        const profileInfo = profile ?? {
+            username,
+            nickname: username,
+            followers: 0,
+            following: 0,
+            heartCount: 0,
+            videoCount: 0,
+            avatar: "",
+        };
+        const snapshot = (0, socialStore_js_1.upsertSocialPull)(profileInfo, scored.videos, contentPatterns, scored.avgViews, pulledAt);
+        for (const v of scored.videos) {
+            (0, socialStore_js_1.upsertVideoScore)(v.id, v.scoreBreakdown, pulledAt);
         }
+        console.log(`[social-agent] Pull complete — ${snapshot.totalVideos} videos, avg ${snapshot.avgViews} views, ${snapshot.hotCount} hot / ${snapshot.averageCount} warm / ${snapshot.coldCount} cold`);
         const data = (0, socialStore_js_1.getLatestSocialDashboardData)();
         (0, socialStore_js_1.logAgentPull)({
             pulledAt: new Date().toISOString(),

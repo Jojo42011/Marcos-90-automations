@@ -170,6 +170,22 @@ function initSchema(database) {
   `);
     migrateVideoScoresTable(database);
     migrateMorningScansTable(database);
+    purgeMockSocialRows(database);
+}
+/** Remove any legacy seeded mock rows (ids like mock_1/mock_2/...) so the
+ *  dashboard only ever shows real pulled data. Idempotent — safe every boot. */
+function purgeMockSocialRows(database) {
+    try {
+        const res = database.prepare("DELETE FROM social_posts WHERE id LIKE 'mock\\_%' ESCAPE '\\'").run();
+        database.prepare("DELETE FROM social_engagements WHERE post_id LIKE 'mock\\_%' ESCAPE '\\'").run();
+        database.prepare("DELETE FROM social_video_scores WHERE post_id LIKE 'mock\\_%' ESCAPE '\\'").run();
+        if (res.changes > 0) {
+            console.log(`[social] Purged ${res.changes} legacy mock video row(s) — real data only.`);
+        }
+    }
+    catch (err) {
+        console.warn(`[social] Mock purge skipped: ${err instanceof Error ? err.message : String(err)}`);
+    }
 }
 function migrateMorningScansTable(database) {
     try {
