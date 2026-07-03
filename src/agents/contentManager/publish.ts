@@ -7,22 +7,27 @@ import {
   type ContentPublishLog,
 } from "../../core/contentDb.js";
 import { deleteClipByStoredPath } from "../../core/diskCleanup.js";
+import { postVideoToTikTok, tiktokConfigured } from "./tiktokPublish.js";
 
 async function publishToTikTok(
-  _filePath: string | null,
-  _caption: string,
+  filePath: string | null,
+  caption: string,
   _hashtags: string[],
   _scheduledFor?: string | null,
 ): Promise<string> {
-  // NOT IMPLEMENTED YET. This must call a real TikTok posting integration
-  // (planned: TikTokAutoUploader via child_process) with valid credentials.
-  // Until that exists it throws — it must NEVER return a fake id, because the
-  // caller would then mark the video "published" and delete the clip file for
-  // a post that never happened. The dashboard's Publish Now button is disabled
-  // for TikTok until this is real (see PUBLISH_CONNECTED in social.html).
-  throw new Error(
-    "TikTok publishing is not connected yet — no posting integration or credentials are configured.",
-  );
+  // Real TikTok Content Posting API (official). Unaudited apps post SELF_ONLY
+  // (private) — see tiktokPublish.ts. Throws with the real TikTok error on
+  // failure; never returns a fake id.
+  if (!tiktokConfigured()) {
+    throw new Error(
+      "TikTok publishing is not connected — set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET and TIKTOK_REFRESH_TOKEN.",
+    );
+  }
+  if (!filePath) {
+    throw new Error("TikTok publishing: this clip has no video file on disk to upload.");
+  }
+  const { publishId } = await postVideoToTikTok(filePath, caption);
+  return publishId;
 }
 
 async function publishToInstagram(

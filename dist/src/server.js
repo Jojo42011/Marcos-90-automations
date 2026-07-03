@@ -68,6 +68,7 @@ const index_js_11 = require("./agents/reEngagement/index.js");
 const index_js_12 = require("./agents/listingStatusAutomation/index.js");
 const index_js_13 = require("./agents/contentManager/index.js");
 const index_js_14 = require("./agents/contentManager/brain/index.js");
+const tiktokPublish_js_1 = require("./agents/contentManager/tiktokPublish.js");
 const batchProcessor_js_1 = require("./agents/contentManager/batchProcessor.js");
 const diskCleanup_js_1 = require("./core/diskCleanup.js");
 const competitorIntel_js_1 = require("./agents/contentManager/competitorIntel.js");
@@ -3084,6 +3085,23 @@ app.post("/api/content/publish/:videoId", express_1.default.json(), async (req, 
     catch (err) {
         res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
+});
+// Which platforms Publish Now can actually post to right now, and in what
+// privacy mode. The dashboard uses this to enable/label the button honestly.
+app.get("/api/content/publish/capabilities", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json({
+        tiktok: {
+            connected: (0, tiktokPublish_js_1.tiktokConfigured)(),
+            audited: (0, tiktokPublish_js_1.tiktokAudited)(),
+            privacy: (0, tiktokPublish_js_1.tiktokPrivacyLevel)(),
+        },
+        instagram: { connected: false, audited: false, privacy: null },
+        facebook: { connected: false, audited: false, privacy: null },
+    });
 });
 // Remove a clip from the publish queue — it will NOT be posted. Mirrors the
 // Review Queue reject flow: a status change (to "rejected", which drops it from

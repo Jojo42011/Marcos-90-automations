@@ -87,6 +87,7 @@ import {
   getWeeklyReport,
 } from "./agents/contentManager/index.js";
 import { contentManagerBrain, getOrCreateSession } from "./agents/contentManager/brain/index.js";
+import { tiktokConfigured, tiktokAudited, tiktokPrivacyLevel } from "./agents/contentManager/tiktokPublish.js";
 import { processBatch } from "./agents/contentManager/batchProcessor.js";
 import { deleteClipFile, getFreeDiskMB, runSafetyDiskCleanup } from "./core/diskCleanup.js";
 import {
@@ -3617,6 +3618,24 @@ app.post("/api/content/publish/:videoId", express.json(), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
+});
+
+// Which platforms Publish Now can actually post to right now, and in what
+// privacy mode. The dashboard uses this to enable/label the button honestly.
+app.get("/api/content/publish/capabilities", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json({
+    tiktok: {
+      connected: tiktokConfigured(),
+      audited: tiktokAudited(),
+      privacy: tiktokPrivacyLevel(),
+    },
+    instagram: { connected: false, audited: false, privacy: null },
+    facebook: { connected: false, audited: false, privacy: null },
+  });
 });
 
 // Remove a clip from the publish queue — it will NOT be posted. Mirrors the

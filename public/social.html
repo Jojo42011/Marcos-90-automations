@@ -3943,7 +3943,12 @@
       await loadReviewQueue(); await loadClipPipeline(); await loadCmStats();
     }
 
+    // Live posting capabilities per platform (connected? audited? privacy mode),
+    // fetched from the backend so the UI reflects real credentials, not a guess.
+    let publishCaps = { tiktok: { connected: false }, instagram: { connected: false }, facebook: { connected: false } };
+
     async function loadPublishing() {
+      try { publishCaps = await cmFetch("/api/content/publish/capabilities"); } catch (_) { /* keep defaults */ }
       const { clips } = await cmFetch("/api/content/publishing-queue?limit=50");
       const list = document.getElementById("publishing-list");
       if (!list) return;
@@ -3982,11 +3987,8 @@
       }).join("");
     }
 
-    // Which platforms have a REAL, credentialed posting integration wired up.
-    // All false today — the backend publish path is not connected (see
-    // publish.ts). Flip a platform to true only once its live posting genuinely
-    // works, which enables the Publish Now button for that platform.
-    const PUBLISH_CONNECTED = { tiktok: false, instagram: false, facebook: false };
+    function platformConnected(p) { return Boolean(publishCaps[p] && publishCaps[p].connected); }
+    function platformPrivate(p) { return platformConnected(p) && publishCaps[p].privacy !== "PUBLIC_TO_EVERYONE"; }
 
     function clipPlatforms(v, entries) {
       const ps = (entries && entries.length)
@@ -3997,21 +3999,34 @@
 
     function publishNowButton(v, entries) {
       const ps = clipPlatforms(v, entries);
-      const connected = ps.filter((p) => PUBLISH_CONNECTED[p]);
+      const connected = ps.filter((p) => platformConnected(p));
       if (connected.length) {
-        return `<button type="button" class="cm-btn-publish-now" onclick="publishNow('${v.id}','${escapeHtml(connected[0])}', this)">PUBLISH NOW</button>`;
+        const p = connected[0];
+        const label = platformPrivate(p) ? "PUBLISH NOW · Private" : "PUBLISH NOW";
+        return `<button type="button" class="cm-btn-publish-now" onclick="publishNow('${v.id}','${escapeHtml(p)}', this)">${label}</button>`;
       }
       return `<button type="button" class="cm-btn-publish-now" disabled title="No posting integration is connected for ${escapeHtml(ps.join(", "))} yet — Publish Now is unavailable until it is set up.">PUBLISH NOW · Not connected</button>`;
     }
 
     function publishConnNote(v, entries) {
       const ps = clipPlatforms(v, entries);
-      if (ps.some((p) => PUBLISH_CONNECTED[p])) return "";
-      return `<div class="cm-publish-note">⚠ Live posting isn't connected yet for ${escapeHtml(ps.join(", "))} — this clip will not auto-post.</div>`;
+      const connected = ps.filter((p) => platformConnected(p));
+      if (!connected.length) {
+        return `<div class="cm-publish-note">⚠ Live posting isn't connected yet for ${escapeHtml(ps.join(", "))} — this clip will not auto-post.</div>`;
+      }
+      const p = connected[0];
+      if (platformPrivate(p)) {
+        return `<div class="cm-publish-note">🔒 Posts to ${escapeHtml(p)} as a PRIVATE video (only Marco can see it) — the app isn't audited for public posting yet.</div>`;
+      }
+      return `<div class="cm-publish-note">🔴 Posts LIVE and PUBLIC to Marco's ${escapeHtml(p)} account.</div>`;
     }
 
     async function publishNow(videoId, platform, btn) {
-      if (!confirm(`Post this clip to ${platform} now — live and public on Marco's real account immediately. This cannot be undone. Continue?`)) return;
+      const isPrivate = platformPrivate(platform);
+      const consequence = isPrivate
+        ? `Post this clip to Marco's ${platform} now as a PRIVATE video — only Marco can see it (the app isn't audited for public posts yet). Continue?`
+        : `Post this clip to ${platform} now — live and public on Marco's real account immediately. This cannot be undone. Continue?`;
+      if (!confirm(consequence)) return;
       const prev = btn.textContent;
       btn.disabled = true;
       btn.textContent = "Posting…";
