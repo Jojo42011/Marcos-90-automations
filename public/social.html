@@ -1048,6 +1048,24 @@
     .strategy-compare-card.vs.positive { color:var(--success); }
     .strategy-compare-card.vs.negative { color:var(--warn); }
     .strategy-rec-card { border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem; margin-bottom:0.75rem; background:var(--surface); }
+    /* Competitor Analysis — scannable cards (matches YouTube Intel quality bar) */
+    .ca-wrap { display:flex; flex-direction:column; gap:14px; }
+    .ca-topline { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .ca-pills { display:flex; flex-wrap:wrap; gap:6px; }
+    .ca-headline { background:var(--surface2); border-left:3px solid var(--teal); border-radius:var(--radius-xs); padding:14px 16px; }
+    .ca-headline-label { font-family:ui-monospace,"JetBrains Mono",Menlo,monospace; font-size:10px; letter-spacing:1.5px; color:var(--teal); margin-bottom:6px; }
+    .ca-headline-text { font-size:1.05rem; line-height:1.4; color:var(--text); font-weight:600; }
+    .ca-headline-stat { margin-top:8px; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--muted); }
+    .ca-headline-stat.positive { color:var(--green); }
+    .ca-headline-stat.negative { color:#f5a3b0; }
+    .ca-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media (max-width:720px){ .ca-grid { grid-template-columns:1fr; } }
+    .ca-actions { background:var(--surface2); border:1px solid var(--teal-border); border-left:3px solid var(--teal); border-radius:var(--radius-xs); padding:14px 16px; }
+    .ca-actions-title { font-family:ui-monospace,"JetBrains Mono",Menlo,monospace; font-size:11px; letter-spacing:1.5px; color:var(--teal); margin-bottom:10px; }
+    .ca-action-list { margin:0; padding:0; list-style:none; counter-reset:ca; display:flex; flex-direction:column; gap:8px; }
+    .ca-action-list li { position:relative; padding:8px 10px 8px 36px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-xs); font-size:0.8rem; line-height:1.45; counter-increment:ca; }
+    .ca-action-list li::before { content:counter(ca); position:absolute; left:8px; top:7px; width:20px; height:20px; border-radius:50%; background:var(--teal); color:#00131a; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; font-family:ui-monospace,monospace; }
+
     /* YouTube Competitor Intelligence */
     .youtube-intel-panel { display:flex; flex-direction:column; gap:12px; margin-top:4px; }
     /* Live analysis progress bar */
@@ -4185,6 +4203,65 @@
       } catch (_) {}
     }
 
+    // Escape, then render **bold** as <strong> (the ** are literal in the model output).
+    function caBold(s) {
+      return escapeHtml(String(s || "")).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    }
+    // Parse the analysis markdown into scannable sections. Falls back cleanly
+    // for older records that used the previous long-form section headers.
+    function parseCompetitiveSections(md) {
+      const out = { headline: "", working: [], gap: [], actions: [] };
+      const text = String(md || "").replace(/\r/g, "");
+      const hl = text.match(/HEADLINE:\s*(.+)/i);
+      if (hl) out.headline = hl[1].trim();
+      const HEADERS = "HEADLINE|WHAT'S WORKING|WHAT MARCO IS DOING RIGHT|THE GAP|WHAT COMPETITORS ARE WINNING[A-Z ']*|THE SINGLE BIGGEST OPPORTUNITY|SITUATION SUMMARY|DO THIS NEXT|THIS WEEK'S STRATEGIC PRIORITIES";
+      const grab = (label) => {
+        const re = new RegExp(label + ":?\\s*([\\s\\S]*?)(?=\\n\\s*(?:" + HEADERS + ")\\b|$)", "i");
+        const m = text.match(re);
+        return m ? m[1] : "";
+      };
+      const bullets = (chunk) => chunk.split("\n")
+        .map((l) => l.replace(/^\s*[-*•]\s*/, "").replace(/^\s*\d+[.)]\s*/, "").trim())
+        .filter((l) => l.length > 2 && !/^\(.*\)$/.test(l));
+      out.working = bullets(grab("WHAT'S WORKING") || grab("WHAT MARCO IS DOING RIGHT"));
+      out.gap = bullets(grab("THE GAP") || grab("WHAT COMPETITORS ARE WINNING[A-Z ']*"));
+      out.actions = bullets(grab("DO THIS NEXT") || grab("THIS WEEK'S STRATEGIC PRIORITIES"));
+      return out;
+    }
+    function renderCompetitiveTab(analysis, recommendations) {
+      const sec = parseCompetitiveSections(analysis.fullAnalysisMarkdown);
+      const pct = Number(analysis.marcoVsFieldPct) || 0;
+      const sign = pct >= 0 ? "+" : "";
+      const vsClass = pct >= 0 ? "positive" : "negative";
+      const headline = sec.headline || `Marco is ${sign}${pct.toFixed(1)}% vs the San Antonio field average.`;
+      const working = (sec.working.length ? sec.working : (analysis.marcoStrengths || [])).slice(0, 3);
+      const gap = (sec.gap.length ? sec.gap : (analysis.marcoGaps || [])).slice(0, 3);
+      const actions = (sec.actions.length ? sec.actions : (recommendations || []).map((r) => r.recommendation)).slice(0, 3);
+      const pills = (analysis.profilesAnalyzed || []).map((h) => `<span class="cm-pillar-tag education">@${escapeHtml(h)}</span>`).join(" ");
+      const when = analysis.analyzedAt ? escapeHtml(analysis.analyzedAt.slice(0, 10)) : "";
+      const li = (arr) => arr.map((b) => `<li>${caBold(b)}</li>`).join("");
+      return `
+        <div class="ca-wrap">
+          <div class="ca-topline">
+            <div class="ca-pills">${pills}</div>
+            <span class="cm-muted" style="font-size:0.7rem;">Analyzed ${when}</span>
+          </div>
+          <div class="ca-headline">
+            <div class="ca-headline-label">THE HEADLINE</div>
+            <div class="ca-headline-text">${caBold(headline)}</div>
+            <div class="ca-headline-stat ${vsClass}">${sign}${pct.toFixed(1)}% vs field · ${Math.round(analysis.marcoAvgViews).toLocaleString()} vs ${Math.round(analysis.competitorAvgViews).toLocaleString()} avg views</div>
+          </div>
+          <div class="ca-grid">
+            <div class="yt-card"><div class="yt-card-title">✅ WHAT'S WORKING</div><ul class="yt-list">${li(working) || "<li class='cm-muted'>—</li>"}</ul></div>
+            <div class="yt-card"><div class="yt-card-title">⚠️ THE GAP</div><ul class="yt-list">${li(gap) || "<li class='cm-muted'>—</li>"}</ul></div>
+          </div>
+          <div class="ca-actions">
+            <div class="ca-actions-title">🎯 DO THIS NEXT</div>
+            <ol class="ca-action-list">${li(actions) || "<li class='cm-muted'>Run analysis to generate actions.</li>"}</ol>
+          </div>
+        </div>`;
+    }
+
     async function loadStrategySection(tab = "overview") {
       document.querySelectorAll("[data-strategy-tab]").forEach((b) => {
         b.classList.toggle("active", b.getAttribute("data-strategy-tab") === tab);
@@ -4245,8 +4322,7 @@
         }
         const full = document.getElementById("strategy-full-analysis");
         if (full && tab === "competitor" && analysis) {
-          const badges = (analysis.profilesAnalyzed || []).map((h) => `<span class="cm-pillar-tag education">@${escapeHtml(h)}</span>`).join(" ");
-          full.innerHTML = `<p class="cm-muted">Analysis from ${escapeHtml(analysis.analyzedAt?.slice(0, 10) || "")}</p><div>${badges}</div>${simpleMarkdownToHtml(analysis.fullAnalysisMarkdown)}`;
+          full.innerHTML = renderCompetitiveTab(analysis, recommendations);
         }
       }
 

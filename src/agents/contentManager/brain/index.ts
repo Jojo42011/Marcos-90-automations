@@ -32,7 +32,12 @@ import {
   getContentBrainModel,
   type CmBrainChatMessage,
 } from "./claudeTools.js";
-import { validateAnthropicKey } from "../../../integrations/claude-content.js";
+import {
+  claudeContent,
+  CONTENT_MODELS,
+  logContentAiFailure,
+  validateAnthropicKey,
+} from "../../../integrations/claude-content.js";
 
 export class ContentManagerBrain {
   private apiKey: string | null;
@@ -175,13 +180,17 @@ export class ContentManagerBrain {
     if (!session) session = createChatSession();
 
     const priorMessages = listChatMessages(session.id);
-    const history: CmBrainChatMessage[] = priorMessages.slice(-20).map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.content,
-    }));
+    const history: Array<{ role: "user" | "assistant"; content: string }> = priorMessages
+      .slice(-20)
+      .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content }));
 
     const contextSnapshot = this.buildContextSnapshot();
-    const system = CONTENT_MANAGER_BRAIN_PROMPT + this.buildContextBlock();
+    const system =
+      CONTENT_MANAGER_BRAIN_PROMPT +
+      this.buildContextBlock() +
+      "\n\nYou are answering a question in the dashboard chat. Answer directly and " +
+      "concisely using the real numbers in the context above — never generic advice. " +
+      "If the context does not contain what is needed, say so plainly.";
 
     insertChatMessage({
       sessionId: session.id,
@@ -190,15 +199,31 @@ export class ContentManagerBrain {
       performanceContext: contextSnapshot,
     });
 
-    const response = await claudeChatWithTools({
-      system,
-      userMessage: message,
-      history,
-      tools: CM_BRAIN_TOOL_DEFINITIONS,
-      model: getContentBrainModel(),
-      maxRounds: 8,
-      onToolCall: executeContentBrainTool,
-    });
+    // One direct Claude call with the live context injected — no agentic tool
+    // loop. The former tool loop could invoke slow tools (competitive analysis
+    // hits Apify) or nested Claude calls across up to 8 rounds and hang or 500;
+    // this answers in a single QUALITY-tier call, fast and reliably.
+    let response: string;
+    try {
+      const completion = await claudeContent.messages.create({
+        model: CONTENT_MODELS.QUALITY,
+        max_tokens: 1024,
+        system,
+        messages: [...history, { role: "user", content: message }],
+      });
+      response =
+        completion.content
+          .filter((b) => b.type === "text")
+          .map((b) => (b.type === "text" ? b.text : ""))
+          .join("")
+          .trim() || "No response generated.";
+      console.log(`[content-chat] answered (${response.length} chars, session ${session.id})`);
+    } catch (err) {
+      logContentAiFailure("content-chat", err);
+      throw new Error(
+        "The content manager couldn't answer that just now — the AI request failed. Please try again in a moment.",
+      );
+    }
 
     insertChatMessage({
       sessionId: session.id,
@@ -209,12 +234,17 @@ export class ContentManagerBrain {
 
     const updated = getChatSession(session.id);
     if (updated && updated.messageCount >= 6 && !updated.sessionSummary) {
-      const recent = listChatMessages(session.id).slice(-6);
-      const summaryText = recent.map((m) => `${m.role}: ${m.content}`).join("\n");
-      const summary = await claudeSimpleChat(
-        `Summarize this conversation in one sentence:\n${summaryText}`,
-      );
-      if (summary) updateChatSessionSummary(session.id, summary);
+      try {
+        const recent = listChatMessages(session.id).slice(-6);
+        const summaryText = recent.map((m) => `${m.role}: ${m.content}`).join("\n");
+        const summary = await claudeSimpleChat(
+          `Summarize this conversation in one sentence:\n${summaryText}`,
+        );
+        if (summary) updateChatSessionSummary(session.id, summary);
+      } catch (err) {
+        // A summary failure must never break the chat response.
+        console.warn(`[content-chat] session summary skipped: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     return { response, sessionId: session.id };

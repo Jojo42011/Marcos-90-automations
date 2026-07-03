@@ -136,27 +136,45 @@ class ContentManagerBrain {
         if (!session)
             session = (0, contentDb_js_1.createChatSession)();
         const priorMessages = (0, contentDb_js_1.listChatMessages)(session.id);
-        const history = priorMessages.slice(-20).map((m) => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: m.content,
-        }));
+        const history = priorMessages
+            .slice(-20)
+            .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content }));
         const contextSnapshot = this.buildContextSnapshot();
-        const system = prompts_js_1.CONTENT_MANAGER_BRAIN_PROMPT + this.buildContextBlock();
+        const system = prompts_js_1.CONTENT_MANAGER_BRAIN_PROMPT +
+            this.buildContextBlock() +
+            "\n\nYou are answering a question in the dashboard chat. Answer directly and " +
+            "concisely using the real numbers in the context above — never generic advice. " +
+            "If the context does not contain what is needed, say so plainly.";
         (0, contentDb_js_1.insertChatMessage)({
             sessionId: session.id,
             role: "user",
             content: message,
             performanceContext: contextSnapshot,
         });
-        const response = await (0, claudeTools_js_1.claudeChatWithTools)({
-            system,
-            userMessage: message,
-            history,
-            tools: tools_js_1.CM_BRAIN_TOOL_DEFINITIONS,
-            model: (0, claudeTools_js_1.getContentBrainModel)(),
-            maxRounds: 8,
-            onToolCall: tools_js_1.executeContentBrainTool,
-        });
+        // One direct Claude call with the live context injected — no agentic tool
+        // loop. The former tool loop could invoke slow tools (competitive analysis
+        // hits Apify) or nested Claude calls across up to 8 rounds and hang or 500;
+        // this answers in a single QUALITY-tier call, fast and reliably.
+        let response;
+        try {
+            const completion = await claude_content_js_1.claudeContent.messages.create({
+                model: claude_content_js_1.CONTENT_MODELS.QUALITY,
+                max_tokens: 1024,
+                system,
+                messages: [...history, { role: "user", content: message }],
+            });
+            response =
+                completion.content
+                    .filter((b) => b.type === "text")
+                    .map((b) => (b.type === "text" ? b.text : ""))
+                    .join("")
+                    .trim() || "No response generated.";
+            console.log(`[content-chat] answered (${response.length} chars, session ${session.id})`);
+        }
+        catch (err) {
+            (0, claude_content_js_1.logContentAiFailure)("content-chat", err);
+            throw new Error("The content manager couldn't answer that just now — the AI request failed. Please try again in a moment.");
+        }
         (0, contentDb_js_1.insertChatMessage)({
             sessionId: session.id,
             role: "assistant",
@@ -165,11 +183,17 @@ class ContentManagerBrain {
         });
         const updated = (0, contentDb_js_1.getChatSession)(session.id);
         if (updated && updated.messageCount >= 6 && !updated.sessionSummary) {
-            const recent = (0, contentDb_js_1.listChatMessages)(session.id).slice(-6);
-            const summaryText = recent.map((m) => `${m.role}: ${m.content}`).join("\n");
-            const summary = await (0, claudeTools_js_1.claudeSimpleChat)(`Summarize this conversation in one sentence:\n${summaryText}`);
-            if (summary)
-                (0, contentDb_js_1.updateChatSessionSummary)(session.id, summary);
+            try {
+                const recent = (0, contentDb_js_1.listChatMessages)(session.id).slice(-6);
+                const summaryText = recent.map((m) => `${m.role}: ${m.content}`).join("\n");
+                const summary = await (0, claudeTools_js_1.claudeSimpleChat)(`Summarize this conversation in one sentence:\n${summaryText}`);
+                if (summary)
+                    (0, contentDb_js_1.updateChatSessionSummary)(session.id, summary);
+            }
+            catch (err) {
+                // A summary failure must never break the chat response.
+                console.warn(`[content-chat] session summary skipped: ${err instanceof Error ? err.message : String(err)}`);
+            }
         }
         return { response, sessionId: session.id };
     }

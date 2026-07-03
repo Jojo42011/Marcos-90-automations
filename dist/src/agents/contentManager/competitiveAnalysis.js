@@ -93,12 +93,15 @@ function hookTypeFrequency(videos) {
     return freq;
 }
 function parseStrategicPriorities(markdown) {
-    const sectionMatch = markdown.match(/THIS WEEK'S STRATEGIC PRIORITIES[\s\S]*?(?=\n[A-Z][A-Z ]+\(|$)/i);
-    const section = sectionMatch?.[0] ?? markdown;
+    // "DO THIS NEXT" is the current header; keep the old header for records
+    // generated before the prompt was made scannable. It is the last section,
+    // so capture to end of string.
+    const sectionMatch = markdown.match(/(?:DO THIS NEXT|THIS WEEK'S STRATEGIC PRIORITIES)[:\s]*([\s\S]*)$/i);
+    const section = sectionMatch?.[1] ?? markdown;
     const items = [];
     const numbered = section.matchAll(/^\s*\d+[\.\)]\s*(.+)$/gm);
     for (const m of numbered) {
-        const text = m[1].trim();
+        const text = m[1].replace(/\*\*/g, "").trim();
         if (text.length > 10)
             items.push(text);
     }
@@ -291,29 +294,41 @@ async function runFullCompetitiveAnalysis(brain, options) {
     const marcoStrengths = buildMarcoStrengths(marcoAvgViews, competitorAvgViews, model);
     const marcoGaps = buildMarcoGaps(topCompetitorThemes, competitorHookFreq, marcoRecent);
     const aboveBelow = marcoVsFieldPct >= 0 ? "above" : "below";
-    const competitiveAnalysisPrompt = `You are conducting a full competitive analysis for Marco Puga (@puga.realtor), a San Antonio real estate agent. Here is the data:
-Marco's metrics (last 30 days, decay-weighted): avg views: ${Math.round(marcoAvgViews)}, avg engagement rate: ${marcoAvgEngagementRate.toFixed(2)}%, trending direction: ${model.trendingDirection}.
-Competitor field average (last 14 days, ${handles.length} competitors): avg views: ${Math.round(competitorAvgViews)}, avg engagement rate: ${competitorAvgEngagementRate.toFixed(2)}%.
-Marco vs field: ${marcoVsFieldPct.toFixed(1)}% (${aboveBelow} competitor average).
-Top competitor: @${topCompetitor.handle} averaging ${Math.round(topCompetitor.avg)} views per video.
-What competitors are winning with (content themes in their high-performing videos): ${JSON.stringify(topCompetitorThemes)}.
-What hook types are in competitor top-performers: ${JSON.stringify(competitorHookFreq)}.
-Marco's identified strengths: ${JSON.stringify(marcoStrengths)}.
-Marco's identified gaps: ${JSON.stringify(marcoGaps)}.
-Write a complete competitive analysis in this exact structure:
+    const competitiveAnalysisPrompt = `Competitive analysis for Marco Puga (@puga.realtor), a San Antonio real estate agent. Data:
+Marco (last 30 days, decay-weighted): ${Math.round(marcoAvgViews)} avg views, ${marcoAvgEngagementRate.toFixed(2)}% engagement, trending ${model.trendingDirection}.
+Competitor field (last 14 days, ${handles.length} competitors): ${Math.round(competitorAvgViews)} avg views, ${competitorAvgEngagementRate.toFixed(2)}% engagement.
+Marco vs field: ${marcoVsFieldPct.toFixed(1)}% (${aboveBelow} field average).
+Top competitor: @${topCompetitor.handle} at ${Math.round(topCompetitor.avg)} avg views.
+Competitor winning themes: ${JSON.stringify(topCompetitorThemes)}.
+Competitor top-performer hook types: ${JSON.stringify(competitorHookFreq)}.
+Marco's data-backed strengths: ${JSON.stringify(marcoStrengths)}.
+Marco's data-backed gaps: ${JSON.stringify(marcoGaps)}.
 
-SITUATION SUMMARY (2-3 sentences: where Marco stands vs the field right now)
-WHAT MARCO IS DOING RIGHT (3-5 specific points with data)
-WHAT COMPETITORS ARE WINNING WITH THAT MARCO IS MISSING (3-5 specific gaps with data — be brutally honest)
-THE SINGLE BIGGEST OPPORTUNITY (1 paragraph — the one thing that could move Marco's numbers the most based on this analysis)
-THIS WEEK'S STRATEGIC PRIORITIES (numbered list of 5 specific, actionable recommendations with the data that supports each one)
+Be concise. This is for a busy person reading on a screen. Bullets over paragraphs. Every line earns its place or gets cut. No hedging, no meta-commentary — if a point isn't supported by the data above, leave it out entirely (do NOT write sentences explaining what you're leaving out). Name exact content types, hooks, and topics — no generic social-media advice. Match Marco's voice: direct, no corporate speak.
 
-Be specific. Name exact content types, hook structures, competitor strategies. Do not give generic social media advice. Every recommendation should be something Marco can execute in the next 7 days.`;
+Output EXACTLY this structure and nothing else. Start with "HEADLINE:".
+
+HEADLINE: <one sharp sentence — the single most important finding, include the key number>
+
+WHAT'S WORKING:
+- **<key phrase>** — <one short clause, max 2 lines total>
+(max 3 bullets; one idea each; bold the key phrase)
+
+THE GAP:
+- **<key phrase>** — <one short clause>
+(max 3 bullets; brutally honest but data-backed only)
+
+DO THIS NEXT:
+1. <one concrete action Marco can film/post in the next 7 days — name the exact topic or hook>
+2. <action>
+3. <action>
+(exactly 3 numbered actions)`;
     let analysisRaw = "";
     try {
         const response = await claude_content_js_1.claudeContent.messages.create({
             model: claude_content_js_1.CONTENT_MODELS.QUALITY,
-            max_tokens: 2048,
+            max_tokens: 1200,
+            system: "You are a sharp content strategist texting a busy client. Concise, punchy, bullets over paragraphs. Every line earns its place or gets cut. No preamble, no closing, no hedging.",
             messages: [{ role: "user", content: competitiveAnalysisPrompt }],
         });
         analysisRaw = response.content
@@ -326,7 +341,9 @@ Be specific. Name exact content types, hook structures, competitor strategies. D
         (0, claude_content_js_1.logContentAiFailure)("full competitive analysis", err);
     }
     if (!analysisRaw) {
-        analysisRaw = `SITUATION SUMMARY\nMarco is ${Math.abs(marcoVsFieldPct).toFixed(0)}% ${aboveBelow} the competitor field average this period.\n\nTHIS WEEK'S STRATEGIC PRIORITIES\n1. Increase volume on themes competitors are winning with this week.`;
+        analysisRaw =
+            `HEADLINE: Marco is ${Math.abs(marcoVsFieldPct).toFixed(0)}% ${aboveBelow} the competitor field average this period.\n\n` +
+                `DO THIS NEXT:\n1. Increase volume on themes competitors are winning with this week.`;
     }
     const now = new Date().toISOString();
     const weekStart = (0, stats_js_1.getWeekStart)();
