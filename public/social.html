@@ -1016,6 +1016,14 @@
     .strategy-rec-hooks { list-style: none; margin: 0.35rem 0; padding-left: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.76rem; }
     .strategy-rec-hooks li { position: relative; padding-left: 0.95rem; line-height: 1.45; }
     .strategy-rec-hooks li::before { content: "•"; position: absolute; left: 0.1rem; top: 0; color: var(--dimmer); }
+    /* Strategy reasoning — structured into readable lines, priority line emphasized */
+    .strategy-reason { color: var(--text); font-size: 0.8125rem; }
+    .strategy-reason .reason-line { margin: 0 0 0.6rem; line-height: 1.65; }
+    .strategy-reason .reason-line:last-child { margin-bottom: 0; }
+    .strategy-reason .reason-priority { color: var(--cyan); font-weight: 600; }
+    /* Recommendation card — action headline vs secondary reasoning */
+    .rec-action { margin: 0.5rem 0 0.25rem; font-size: 0.84rem; font-weight: 600; color: var(--text); line-height: 1.45; }
+    .rec-reason { margin: 0; color: var(--text-dim); font-size: 0.75rem; font-style: italic; line-height: 1.5; }
 
     /* ──────────────────── SUGGESTIONS ──────────────────── */
     .suggestions-meta { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-bottom: 1rem; }
@@ -2151,6 +2159,32 @@
 
     function escapeHtml(s) {
       return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    // Display-only inline markdown → HTML (bold / italic / inline code). Escapes
+    // first, so it is safe for any AI-generated string. Reuse this wherever AI
+    // text may contain markdown so **bold** etc. render instead of showing raw.
+    function renderMarkdownInline(text) {
+      return escapeHtml(text || "")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, "$1<em>$2</em>")
+        .replace(/`([^`]+?)`/g, "<code>$1</code>");
+    }
+
+    // Display-only: break the strategy reasoning paragraph into readable sentence
+    // lines and emphasize the single actionable "today's priority" line.
+    function renderStrategyReasoning(text) {
+      const clean = String(text || "").trim();
+      if (!clean) return "";
+      const sentences = clean.match(/[^.!?]+[.!?]+["”’)]*\s*|[^.!?]+$/g) || [clean];
+      return sentences
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => {
+          const priority = /today'?s priority|priority (?:must|should|is|today)|top priority/i.test(s);
+          return `<p class="reason-line${priority ? " reason-priority" : ""}">${renderMarkdownInline(s)}</p>`;
+        })
+        .join("");
     }
 
     // Display-only: split an existing trend paragraph into readable sentence
@@ -4010,8 +4044,8 @@
           const conf = strategy.confidenceScore ?? 0;
           const pillars = (strategy.pillarPriority || []).map((p, i) =>
             `<span class="cm-pillar-tag ${escapeHtml(p)}">${i + 1}. ${escapeHtml(p)}</span>`).join(" ");
-          const hooks = (strategy.recommendedHooks || []).map((h, i) =>
-            `<li style="cursor:pointer;margin:0.35rem 0;" onclick="navigator.clipboard.writeText(${JSON.stringify(h)});showToast('Copied')">${i + 1}. ${escapeHtml(h)}</li>`).join("");
+          const hooks = (strategy.recommendedHooks || []).map((h) =>
+            `<li style="cursor:pointer;" onclick="navigator.clipboard.writeText(${JSON.stringify(h)});showToast('Copied')">${escapeHtml(h)}</li>`).join("");
           const tags = (strategy.hashtagSet || []).map((t) =>
             `<span class="cm-pillar-tag education">#${escapeHtml(t.replace(/^#/, ""))}</span>`).join(" ");
           const avoid = (strategy.avoidAngles || []).map((a) =>
@@ -4027,13 +4061,13 @@
               <div style="flex:1;min-width:200px;">
                 ${statusRow}
                 <label style="font-size:0.65rem;color:var(--muted);">Pillar priority</label><div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin:0.35rem 0;">${pillars}</div>
-                <label style="font-size:0.65rem;color:var(--muted);">Recommended hooks</label><ol style="margin:0.35rem 0;padding-left:1.2rem;">${hooks}</ol>
+                <label style="font-size:0.65rem;color:var(--muted);">Recommended hooks</label><ul class="strategy-rec-hooks">${hooks}</ul>
                 <label style="font-size:0.65rem;color:var(--muted);">Hashtag set</label><div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin:0.35rem 0;">${tags}</div>
                 <label style="font-size:0.65rem;color:var(--muted);">Avoid today</label><div style="margin:0.35rem 0;">${avoid}</div>
               </div>
             </div>
             <label style="font-size:0.65rem;color:var(--muted);">Platform distribution</label>${bars}
-            <blockquote style="margin:1rem 0 0;padding:0.75rem 1rem;border-left:3px solid var(--cyan);background:rgba(255,255,255,0.03);font-size:0.8125rem;color:var(--muted);">${escapeHtml(strategy.reasoning || "")}</blockquote>
+            <blockquote class="strategy-reason" style="margin:1rem 0 0;padding:0.75rem 1rem;border-left:3px solid var(--cyan);background:rgba(255,255,255,0.03);">${renderStrategyReasoning(strategy.reasoning || "")}</blockquote>
             <p class="cm-muted" style="font-size:0.65rem;margin-top:0.5rem;">Generated ${escapeHtml(strategy.generatedAt || strategy.lastUpdated || "—")}</p>
             <button type="button" class="cm-btn" id="cm-brain-refresh-strategy" style="margin-top:0.75rem;">Refresh strategy</button>`;
         }
@@ -4308,8 +4342,8 @@
               <span class="cm-brain-badge">P${r.priority}</span>
               <span class="cm-pillar-tag ${escapeHtml(r.pillar || "mixed")}">${escapeHtml(r.pillar || "mixed")}</span>
               <span class="cm-pillar-tag education">${escapeHtml(r.hookType || "hook")}</span>
-              <p style="margin:0.5rem 0;font-weight:600;">${escapeHtml(r.recommendation)}</p>
-              <p class="cm-muted" style="font-size:0.75rem;font-style:italic;">${escapeHtml(r.dataBacking || "")}</p>
+              <p class="rec-action">${renderMarkdownInline(r.recommendation)}</p>
+              <p class="rec-reason">${renderMarkdownInline(r.dataBacking || "")}</p>
               <select onchange="updateRecStatus('${r.id}', this.value)" style="font-size:0.72rem;margin-top:0.5rem;">
                 <option value="pending" ${r.status === "pending" ? "selected" : ""}>Pending</option>
                 <option value="in_progress" ${r.status === "in_progress" ? "selected" : ""}>In Progress</option>
@@ -4755,7 +4789,7 @@
           <div class="strategy-rec-card">
             <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
             <p><strong>${escapeHtml(t.topic)}</strong></p>
-            <ol>${(t.suggestedHooks || []).map((h) => `<li>${escapeHtml(h)}</li>`).join("")}</ol>
+            <ul class="strategy-rec-hooks">${(t.suggestedHooks || []).map((h) => `<li>${escapeHtml(h)}</li>`).join("")}</ul>
             <button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')">Mark as Filmed</button>
             <button type="button" class="cm-btn" onclick="switchCmSection('upload')">Upload Footage →</button>
           </div>`).join("") || "<p class='cm-muted'>No recording tasks — pipeline healthy.</p>"}`;
