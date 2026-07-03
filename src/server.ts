@@ -122,6 +122,7 @@ import {
   listCutList,
   listHookLibrary,
   todayDateCst,
+  getLatestAgentRun,
   listActiveChatSessions,
   listChatMessages,
   listSelfEvaluations,
@@ -4747,6 +4748,69 @@ app.post("/api/content/sync", async (req, res) => {
     res.json(summary);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// Real autonomous-agent (content-brain cycles) status for the Overview page —
+// reads the persisted run state, computes the next scheduled cycle, and never
+// 500s (falls back to a sane payload).
+app.get("/api/content/agent-status", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  try {
+    const CYCLE_HOURS = [6, 12, 18, 22]; // America/Chicago cycle times
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hour12: false,
+    }).formatToParts(now);
+    const gp = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+    let h = gp("hour");
+    if (h === 24) h = 0;
+    const curMin = h * 60 + gp("minute");
+    const curSec = gp("second");
+    const cycleMins = CYCLE_HOURS.map((x) => x * 60);
+    const nextMin = cycleMins.find((m) => m > curMin);
+    const deltaMin = nextMin == null ? 1440 - curMin + cycleMins[0] : nextMin - curMin;
+    const msUntilNext = Math.max(0, deltaMin * 60000 - curSec * 1000);
+    const nextRunAt = new Date(now.getTime() + msUntilNext).toISOString();
+
+    const last = getLatestAgentRun();
+    let health: "green" | "amber" | "red" = "amber";
+    if (last) {
+      if (last.status === "failure") {
+        health = "red";
+      } else {
+        const ageMs = now.getTime() - new Date(last.ranAt).getTime();
+        health = ageMs <= 26 * 3600 * 1000 ? "green" : "amber";
+      }
+    }
+
+    res.json({
+      lastRunAt: last?.ranAt ?? null,
+      lastRunStatus: last?.status ?? null,
+      lastRunCycle: last?.cycle ?? null,
+      summary: last?.summary ?? null,
+      nextRunAt,
+      msUntilNext,
+      health,
+      scheduleHours: CYCLE_HOURS,
+    });
+  } catch (err) {
+    res.json({
+      lastRunAt: null,
+      lastRunStatus: null,
+      summary: null,
+      nextRunAt: null,
+      msUntilNext: null,
+      health: "amber",
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 

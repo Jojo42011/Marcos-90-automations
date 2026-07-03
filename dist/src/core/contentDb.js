@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CONTENT_BENCHMARK_SHARES = exports.CONTENT_BENCHMARK_COMMENTS = exports.CONTENT_BENCHMARK_VIEWS = void 0;
 exports.getContentDb = getContentDb;
 exports.todayDateCst = todayDateCst;
+exports.recordAgentRun = recordAgentRun;
+exports.getLatestAgentRun = getLatestAgentRun;
 exports.ensureDailyTargets = ensureDailyTargets;
 exports.createContentSession = createContentSession;
 exports.getContentSession = getContentSession;
@@ -667,6 +669,13 @@ function getContentDb() {
         trend_signals TEXT,
         week_start TEXT
       );
+      CREATE TABLE IF NOT EXISTS cm_agent_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cycle TEXT NOT NULL,
+        status TEXT NOT NULL,
+        summary TEXT,
+        ran_at TEXT NOT NULL
+      );
     `);
         ensureBrainIntelligenceMigrations(db);
         ensureBatchPipelineMigrations(db);
@@ -944,6 +953,37 @@ function initSeasonalModelIfEmpty(database) {
 }
 function todayDateCst() {
     return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
+}
+/** Persist an autonomous-agent (content-brain) cycle run so status survives restarts. */
+function recordAgentRun(run) {
+    try {
+        getContentDb()
+            .prepare(`INSERT INTO cm_agent_runs (cycle, status, summary, ran_at) VALUES (?, ?, ?, ?)`)
+            .run(run.cycle, run.status, run.summary ?? null, new Date().toISOString());
+    }
+    catch (err) {
+        // Never let state-recording break the cycle itself.
+        console.warn(`[cm-agent] could not persist run: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+/** Most recent agent run (any status), or null if none recorded yet. */
+function getLatestAgentRun() {
+    try {
+        const row = getContentDb()
+            .prepare(`SELECT cycle, status, summary, ran_at FROM cm_agent_runs ORDER BY ran_at DESC LIMIT 1`)
+            .get();
+        if (!row)
+            return null;
+        return {
+            cycle: row.cycle,
+            status: row.status === "failure" ? "failure" : "success",
+            summary: row.summary ?? null,
+            ranAt: row.ran_at,
+        };
+    }
+    catch {
+        return null;
+    }
 }
 function parseJson(raw, fallback) {
     if (!raw)

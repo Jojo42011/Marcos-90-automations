@@ -2421,34 +2421,47 @@
       }
     }
 
+    function setAgentHealth(health) {
+      // Color the ACTIVE dot + label by real health: green=recent success,
+      // amber=stale/never-run, red=last run failed.
+      const bar = document.getElementById("agent-status-bar");
+      const dot = bar ? bar.querySelector(".agent-live .dot2") : null;
+      const label = bar ? bar.querySelector(".agent-live b") : null;
+      const colors = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)" };
+      const labels = { green: "ACTIVE", amber: "IDLE", red: "LAST RUN FAILED" };
+      const c = colors[health] || colors.amber;
+      if (dot) { dot.style.background = c; dot.style.boxShadow = `0 0 8px ${c}`; }
+      if (label) { label.textContent = labels[health] || "IDLE"; label.style.color = c; }
+    }
+
     async function loadAgentStatus() {
+      const lastRunEl = document.getElementById("agent-last-run");
+      const topLu = document.getElementById("lastUpdated");
       try {
-        const res = await fetch(apiUrl("/api/agent/status"), { headers: apiHeaders() });
-        if (!res.ok) return;
+        const res = await fetch(apiUrl("/api/content/agent-status"), { headers: apiHeaders() });
+        if (!res.ok) throw new Error("status " + res.status);
         const status = await res.json();
 
-        const lastRunEl = document.getElementById("agent-last-run");
         if (lastRunEl) {
-          lastRunEl.textContent = status.lastRunAt
-            ? fmtDateTime(status.lastRunAt)
-            : "Never — running soon";
+          const base = status.lastRunAt ? fmtDateTime(status.lastRunAt) : "Never yet — first cycle pending";
+          lastRunEl.textContent = status.summary && status.lastRunAt ? `${base} · ${status.summary}` : base;
         }
+        if (topLu && status.lastRunAt) topLu.textContent = "Last updated " + fmtDateTime(status.lastRunAt);
+        setAgentHealth(status.health || "amber");
 
         if (agentStatusInterval) clearInterval(agentStatusInterval);
-
         let msRemaining = status.msUntilNext ?? 0;
         updateCountdownDisplay(msRemaining);
-
         agentStatusInterval = setInterval(() => {
           msRemaining -= 1000;
-          if (msRemaining <= 0) {
-            void loadAgentStatus();
-            return;
-          }
+          if (msRemaining <= 0) { void loadAgentStatus(); return; }
           updateCountdownDisplay(msRemaining);
         }, 1000);
       } catch (e) {
         console.warn("[AgentStatus] Failed to load:", e);
+        // Don't leave stale dashes — show an honest unknown state.
+        if (lastRunEl && lastRunEl.textContent.trim() === "--") lastRunEl.textContent = "Status unavailable";
+        setAgentHealth("amber");
       }
     }
 
@@ -2583,27 +2596,31 @@
     }
 
     async function loadCmOverview(animate = true) {
+      // Stat cards render from the daily report on their own, so a failure in
+      // the weekly/compliance fetches can never blank the cards (they used to
+      // share one Promise.all — one rejection wiped everything).
       try {
-        const [daily, weekly, compliance] = await Promise.all([
-          cmFetch("/api/content/report/daily"),
-          cmFetch("/api/content/report/weekly"),
-          cmFetch("/api/content/compliance-queue"),
-        ]);
-        const t = daily.targets || {};
-        renderStatCards(t, animate);
+        const daily = await cmFetch("/api/content/report/daily");
+        renderStatCards(daily.targets || {}, animate);
+      } catch (e) {
+        renderStatCards({}, animate); // still draw the arcs (at zero) rather than nothing
+        console.warn("[CM] overview stats", e);
+      }
 
+      const [weekly, compliance] = await Promise.all([
+        cmFetch("/api/content/report/weekly").catch(() => ({ days: [], totalVideosPublished: 0 })),
+        cmFetch("/api/content/compliance-queue").catch(() => ({ pending: [] })),
+      ]);
+      try {
         const sc = cmStatsCache?.statusCounts || {};
         document.getElementById("cm-pipeline-status").innerHTML = `<h3>Pipeline Status</h3>${renderPipelineFlow(sc)}`;
-
-        const pending = compliance.pending || [];
-        document.getElementById("cm-review-alert").innerHTML = `<h3>Review Queue Alert</h3>${renderReviewAlert(pending.length)}`;
-
+        document.getElementById("cm-review-alert").innerHTML = `<h3>Review Queue Alert</h3>${renderReviewAlert((compliance.pending || []).length)}`;
         document.getElementById("cm-weekly-chart").innerHTML = renderWeeklyChart(weekly.days || [], weekly.totalVideosPublished || 0);
         requestAnimationFrame(() => requestAnimationFrame(() => {
           document.querySelectorAll("#cm-weekly-chart .wk-bar-fill").forEach((b) => { b.style.height = (b.dataset.h || 0) + "%"; });
         }));
       } catch (e) {
-        showToast(e.message || "Failed to load overview");
+        console.warn("[CM] overview panels", e);
       }
     }
 

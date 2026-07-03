@@ -624,6 +624,13 @@ export function getContentDb(): Database.Database {
         trend_signals TEXT,
         week_start TEXT
       );
+      CREATE TABLE IF NOT EXISTS cm_agent_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cycle TEXT NOT NULL,
+        status TEXT NOT NULL,
+        summary TEXT,
+        ran_at TEXT NOT NULL
+      );
     `);
 
     ensureBrainIntelligenceMigrations(db);
@@ -946,6 +953,43 @@ function initSeasonalModelIfEmpty(database: Database.Database): void {
 
 export function todayDateCst(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
+}
+
+export interface AgentRun {
+  cycle: string;
+  status: "success" | "failure";
+  summary: string | null;
+  ranAt: string;
+}
+
+/** Persist an autonomous-agent (content-brain) cycle run so status survives restarts. */
+export function recordAgentRun(run: { cycle: string; status: "success" | "failure"; summary?: string | null }): void {
+  try {
+    getContentDb()
+      .prepare(`INSERT INTO cm_agent_runs (cycle, status, summary, ran_at) VALUES (?, ?, ?, ?)`)
+      .run(run.cycle, run.status, run.summary ?? null, new Date().toISOString());
+  } catch (err) {
+    // Never let state-recording break the cycle itself.
+    console.warn(`[cm-agent] could not persist run: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Most recent agent run (any status), or null if none recorded yet. */
+export function getLatestAgentRun(): AgentRun | null {
+  try {
+    const row = getContentDb()
+      .prepare(`SELECT cycle, status, summary, ran_at FROM cm_agent_runs ORDER BY ran_at DESC LIMIT 1`)
+      .get() as { cycle: string; status: string; summary: string | null; ran_at: string } | undefined;
+    if (!row) return null;
+    return {
+      cycle: row.cycle,
+      status: row.status === "failure" ? "failure" : "success",
+      summary: row.summary ?? null,
+      ranAt: row.ran_at,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {

@@ -250,9 +250,18 @@ function scheduleContentBrainCycles() {
             const runKey = `${cycle.key}-${dateStr}`;
             if (hour === cycle.hour && minute >= 0 && minute < 2 && lastBrainRuns[runKey] !== dateStr) {
                 lastBrainRuns[runKey] = dateStr;
-                cycle.run().catch((err) => {
+                cycle
+                    .run()
+                    .then(() => {
+                    // Persist success so the dashboard shows real last-run state across restarts.
+                    (0, contentDb_js_1.recordAgentRun)({ cycle: cycle.key, status: "success", summary: `${cycle.key} cycle completed` });
+                })
+                    .catch((err) => {
+                    // One failed run must not kill the scheduler — the setInterval keeps
+                    // firing. Log it and persist the failure so the UI can flag it.
                     const msg = err instanceof Error ? err.message : String(err);
                     console.error(`[cm-brain] ${cycle.key} cycle failed: ${msg}`);
+                    (0, contentDb_js_1.recordAgentRun)({ cycle: cycle.key, status: "failure", summary: msg.slice(0, 300) });
                 });
             }
         }
