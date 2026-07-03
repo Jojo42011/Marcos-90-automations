@@ -1013,7 +1013,9 @@
     .yt-takeaways li { font-size: 0.78rem; color: var(--text); line-height: 1.4; }
     .strategy-rec-tags { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
     .strategy-rec-title { font-size: 0.86rem; margin: 0.15rem 0 0.35rem; }
-    .strategy-rec-hooks { margin: 0.25rem 0; padding-left: 1.05rem; display: flex; flex-direction: column; gap: 4px; font-size: 0.76rem; }
+    .strategy-rec-hooks { list-style: none; margin: 0.35rem 0; padding-left: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.76rem; }
+    .strategy-rec-hooks li { position: relative; padding-left: 0.95rem; line-height: 1.45; }
+    .strategy-rec-hooks li::before { content: "•"; position: absolute; left: 0.1rem; top: 0; color: var(--dimmer); }
 
     /* ──────────────────── SUGGESTIONS ──────────────────── */
     .suggestions-meta { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-bottom: 1rem; }
@@ -1026,6 +1028,11 @@
     .trend-badge { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.08em; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); padding: 0.18rem 0.5rem; border-radius: 5px; flex-shrink: 0; font-weight: 700; }
     .suggestion-detail { font-size: 0.76rem; color: var(--text-dim); margin-top: 0.5rem; line-height: 1.55; }
     .suggestion-detail strong { color: var(--text); font-weight: 600; }
+    /* Readable trend prose — bright text, breathing room, sentence separation */
+    .trend-prose { color: var(--text); font-size: 0.82rem; line-height: 1.7; }
+    .trend-prose .trend-line { margin: 0 0 0.65rem; }
+    .trend-prose .trend-line:last-child { margin-bottom: 0; }
+    .trend-prose .trend-quote { color: var(--cyan); font-weight: 600; }
     .suggestions-actions { margin-top: 1rem; }
 
     /* ──────────────────── ACTIVITY / PULL LOG ──────────────────── */
@@ -1079,7 +1086,7 @@
     .strategy-compare-card.vs.negative { color:var(--warn); }
     .strategy-rec-card { border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem; margin-bottom:0.75rem; background:var(--surface); box-sizing:border-box; max-width:100%; overflow-wrap:anywhere; word-break:break-word; }
     .strategy-rec-card p, .strategy-rec-card li, .strategy-rec-card blockquote, .strategy-rec-title { overflow-wrap:anywhere; word-break:break-word; white-space:normal; }
-    .strategy-rec-card ol, .strategy-rec-hooks { list-style-position:outside; }
+    .strategy-rec-card ol { list-style-position:outside; }
     .strategy-rec-card ol li, .strategy-rec-hooks li { overflow-wrap:anywhere; }
     /* Competitor Analysis — scannable cards (matches YouTube Intel quality bar) */
     .ca-wrap { display:flex; flex-direction:column; gap:14px; }
@@ -1758,7 +1765,7 @@
             <div id="openShortsStatusIndicator" class="cm-muted" style="font-size:12px;margin-bottom:12px;"></div>
             <div class="trend-brief-card" id="trend-brief-card">
               <h4>Current Trends in Real Estate TikTok</h4>
-              <p id="trend-brief-text" class="cm-muted">Loading trend intelligence…</p>
+              <div id="trend-brief-text" class="trend-prose">Loading trend intelligence…</div>
               <div id="trend-hashtag-pills" style="margin-top:0.5rem;"></div>
               <p id="trend-meta-text" class="cm-muted" style="font-size:0.72rem;margin-top:0.5rem;text-align:right;"></p>
             </div>
@@ -2144,6 +2151,24 @@
 
     function escapeHtml(s) {
       return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    // Display-only: split an existing trend paragraph into readable sentence
+    // lines and highlight quoted hook patterns. Does NOT alter the text content.
+    function trendProseHtml(text) {
+      const clean = String(text || "").trim();
+      if (!clean) return "";
+      const sentences = clean.match(/[^.!?]+[.!?]+["”’)]*\s*|[^.!?]+$/g) || [clean];
+      return sentences
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => {
+          const esc = escapeHtml(s)
+            .replace(/&quot;(.*?)&quot;/g, '<span class="trend-quote">&quot;$1&quot;</span>')
+            .replace(/“([^”]+)”/g, '<span class="trend-quote">“$1”</span>');
+          return `<p class="trend-line">${esc}</p>`;
+        })
+        .join("");
     }
 
     function getTierColor(tier, score) {
@@ -2645,7 +2670,7 @@
             : "🔴 Trends expired · Refresh";
           badge.className = "trend-badge " + (fresh ? "fresh" : "expired");
         }
-        if (text) text.textContent = trends.trendBrief || "No brief available.";
+        if (text) text.innerHTML = trendProseHtml(trends.trendBrief || "No brief available.");
         if (pills) pills.innerHTML = (trends.trendingHashtags || []).slice(0, 8).map((h) =>
           `<span class="hashtag-pill">#${escapeHtml(h)}</span>`
         ).join("");
@@ -4264,7 +4289,7 @@
             const summary = cs && cs.result && cs.result.currentTrendsSummary ? cs.result.currentTrendsSummary : "";
             if (summary) {
               trendsEl.style.display = "";
-              trendsEl.innerHTML = `<h3>Current TikTok Trends</h3><p style="font-size:0.82rem;line-height:1.5;">${escapeHtml(summary)}</p>`;
+              trendsEl.innerHTML = `<h3>Current TikTok Trends</h3><div class="trend-prose">${trendProseHtml(summary)}</div>`;
             } else {
               trendsEl.style.display = "none";
             }
@@ -4321,7 +4346,7 @@
                   <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
                 </div>
                 <p class="strategy-rec-title"><strong>${escapeHtml(t.topic)}</strong></p>
-                ${hooksHtml ? `<ol class="strategy-rec-hooks">${hooksHtml}</ol>` : ""}
+                ${hooksHtml ? `<ul class="strategy-rec-hooks">${hooksHtml}</ul>` : ""}
                 ${cmExpander("Details", detail)}
                 ${t.status === "pending" ? `<button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')" style="margin-top:0.5rem;">Mark as Filmed</button>` : ""}
               </div>`;
@@ -5257,7 +5282,7 @@
           </div>
           <div class="trends-box">
             <div class="suggestions-section-label">CURRENT TIKTOK TRENDS</div>
-            <div class="suggestion-detail" style="margin-top:0;">${escapeHtml(result.currentTrendsSummary || "No trend data")}</div>
+            <div class="suggestion-detail trend-prose" style="margin-top:0;">${trendProseHtml(result.currentTrendsSummary || "No trend data")}</div>
           </div>
           <div class="suggestions-section-label">THIS WEEK'S IDEAS</div>
           ${(result.suggestions || []).map((s, i) => buildSuggestionCard(s, i)).join("")}
