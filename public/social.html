@@ -992,6 +992,22 @@
     .score-graph-val { font-size: 0.66rem; font-weight: 700; font-family: ui-monospace, Menlo, monospace; }
     .score-graph-label { font-size: 0.52rem; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
     .improvement-item { font-size: 0.7rem; color: var(--text-dim); margin-bottom: 0.32rem; line-height: 1.45; }
+    /* Shared collapsible expander — used across every tab for long content */
+    .cm-exp { margin-top: 0.5rem; }
+    .cm-exp-head { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: transparent; border: none; color: var(--muted); font-size: 0.66rem; letter-spacing: 0.06em; cursor: pointer; padding: 4px 0; font-weight: 600; text-transform: uppercase; }
+    .cm-exp-head:hover { color: var(--cyan); }
+    .cm-exp-chevron { display: inline-block; transition: transform 220ms ease; font-size: 0.7rem; }
+    .cm-exp.open .cm-exp-chevron { transform: rotate(90deg); }
+    .cm-exp-body { max-height: 0; overflow: hidden; transition: max-height 320ms ease; }
+    .cm-exp.open .cm-exp-body { max-height: 1400px; }
+    .cm-exp-inner { padding-top: 6px; }
+    /* YouTube Intel + Recording Plan digestible styles */
+    .yt-lead { font-size: 0.9rem; font-weight: 600; color: var(--text); line-height: 1.4; }
+    .yt-takeaways { margin: 0; padding-left: 1.05rem; display: flex; flex-direction: column; gap: 5px; }
+    .yt-takeaways li { font-size: 0.78rem; color: var(--text); line-height: 1.4; }
+    .strategy-rec-tags { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+    .strategy-rec-title { font-size: 0.86rem; margin: 0.15rem 0 0.35rem; }
+    .strategy-rec-hooks { margin: 0.25rem 0; padding-left: 1.05rem; display: flex; flex-direction: column; gap: 4px; font-size: 0.76rem; }
 
     /* ──────────────────── SUGGESTIONS ──────────────────── */
     .suggestions-meta { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-bottom: 1rem; }
@@ -1979,11 +1995,11 @@
                 </div>
                 <div class="yt-card yt-card-highlight">
                   <div class="yt-card-title">💡 This Week's Recommended Video Idea</div>
-                  <p id="ytTopRecommendation" class="yt-recommendation-text">Run analysis to generate a recommendation.</p>
+                  <div id="ytTopRecommendation" class="yt-recommendation-text">Run analysis to generate a recommendation.</div>
                 </div>
                 <div class="yt-card">
                   <div class="yt-card-title">📊 Key Insights</div>
-                  <p id="ytKeyInsights" class="yt-insights-text">No analysis yet.</p>
+                  <div id="ytKeyInsights" class="yt-insights-text">No analysis yet.</div>
                 </div>
                 <div class="yt-footer">
                   <span id="ytChannelsAnalyzed" class="yt-footer-text">—</span>
@@ -4188,6 +4204,21 @@
       } catch (_) {}
     }
 
+    // Shared collapsible expander used across every tab. Collapsed by default;
+    // one global delegated handler toggles it. `label` is the affordance text,
+    // `detailHtml` is trusted HTML the caller has already escaped.
+    function cmExpander(label, detailHtml, opts) {
+      const open = opts && opts.open ? " open" : "";
+      return `<div class="cm-exp${open}">
+        <button type="button" class="cm-exp-head"><span class="cm-exp-chevron">▸</span> ${escapeHtml(label)}</button>
+        <div class="cm-exp-body"><div class="cm-exp-inner">${detailHtml}</div></div>
+      </div>`;
+    }
+    document.addEventListener("click", (e) => {
+      const head = e.target.closest ? e.target.closest(".cm-exp-head") : null;
+      if (head && head.parentElement) head.parentElement.classList.toggle("open");
+    });
+
     // Escape, then render **bold** as <strong> (the ** are literal in the model output).
     function caBold(s) {
       return escapeHtml(String(s || "")).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
@@ -4344,17 +4375,25 @@
         if (list) {
           list.innerHTML = Object.keys(grouped).sort().map((date) => `
             <h4>${escapeHtml(date)}</h4>
-            ${grouped[date].map((t) => `
+            ${grouped[date].map((t) => {
+              const hooks = (t.suggestedHooks || []).slice(0, 2);
+              const hooksHtml = hooks.map((h) => `<li onclick="navigator.clipboard.writeText('${escapeHtml(h).replace(/'/g, "\\'")}');showToast('Copied')" style="cursor:pointer;">${escapeHtml(h)}</li>`).join("");
+              const detail = `
+                <p class="cm-muted">Target length: ${t.suggestedDurationMin || 35}-${t.suggestedDurationMax || 55}s</p>
+                ${t.filmingNotes ? `<blockquote class="cm-muted">${escapeHtml(t.filmingNotes)}</blockquote>` : ""}
+                ${t.reason ? `<p style="color:var(--cyan);font-style:italic;font-size:0.75rem;">${escapeHtml(t.reason)}</p>` : ""}`;
+              return `
               <div class="strategy-rec-card ${t.status === "filmed" ? "filmed" : ""}">
-                <span class="cm-pillar-tag ${escapeHtml(t.pillar || "brand")}">${escapeHtml(t.pillar || "")}</span>
-                <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
-                <p><strong>${escapeHtml(t.topic)}</strong></p>
-                <ol>${(t.suggestedHooks || []).map((h) => `<li onclick="navigator.clipboard.writeText('${escapeHtml(h).replace(/'/g, "\\'")}');showToast('Copied')" style="cursor:pointer;">${escapeHtml(h)}</li>`).join("")}</ol>
-                <p class="cm-muted">Target: ${t.suggestedDurationMin || 35}-${t.suggestedDurationMax || 55}s</p>
-                <blockquote class="cm-muted">${escapeHtml(t.filmingNotes || "")}</blockquote>
-                <p style="color:var(--cyan);font-style:italic;font-size:0.75rem;">${escapeHtml(t.reason || "")}</p>
-                ${t.status === "pending" ? `<button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')">Mark as Filmed</button>` : ""}
-              </div>`).join("")}`).join("") || "<p class='cm-muted'>No recording tasks.</p>";
+                <div class="strategy-rec-tags">
+                  <span class="cm-pillar-tag ${escapeHtml(t.pillar || "brand")}">${escapeHtml(t.pillar || "")}</span>
+                  <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
+                </div>
+                <p class="strategy-rec-title"><strong>${escapeHtml(t.topic)}</strong></p>
+                ${hooksHtml ? `<ol class="strategy-rec-hooks">${hooksHtml}</ol>` : ""}
+                ${cmExpander("Details", detail)}
+                ${t.status === "pending" ? `<button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')" style="margin-top:0.5rem;">Mark as Filmed</button>` : ""}
+              </div>`;
+            }).join("")}`).join("") || "<p class='cm-muted'>No recording tasks.</p>";
         }
       }
       void updateStrategyBadges();
@@ -4420,10 +4459,33 @@
       }
 
       const recEl = document.getElementById("ytTopRecommendation");
-      if (recEl) recEl.textContent = a.trend_signals || "No recommendation generated.";
+      if (recEl) {
+        const full = (a.trend_signals || "").trim();
+        if (!full) {
+          recEl.innerHTML = "<span class='cm-muted'>No recommendation generated.</span>";
+        } else {
+          const sentences = full.match(/[^.!?]+[.!?]+/g) || [full];
+          const lead = (sentences[0] || full).trim();
+          const rest = full.slice(lead.length).trim();
+          recEl.innerHTML = `<div class="yt-lead">${escapeHtml(lead)}</div>` +
+            (rest ? cmExpander("See full breakdown", `<p class="cm-muted" style="line-height:1.5;">${escapeHtml(rest)}</p>`) : "");
+        }
+      }
 
       const insightsEl = document.getElementById("ytKeyInsights");
-      if (insightsEl) insightsEl.textContent = a.full_analysis_markdown || "No analysis yet.";
+      if (insightsEl) {
+        const full = (a.full_analysis_markdown || "").trim();
+        if (!full) {
+          insightsEl.innerHTML = "<span class='cm-muted'>No analysis yet.</span>";
+        } else {
+          const sentences = full.match(/[^.!?]+[.!?]+/g) || [full];
+          const leadN = Math.min(3, sentences.length);
+          const leadHtml = sentences.slice(0, leadN).map((s) => `<li>${escapeHtml(s.trim())}</li>`).join("");
+          const rest = full.slice(sentences.slice(0, leadN).join("").length).trim();
+          insightsEl.innerHTML = `<ul class="yt-takeaways">${leadHtml}</ul>` +
+            (rest ? cmExpander("See full analysis", `<p class="cm-muted" style="line-height:1.5;">${escapeHtml(rest)}</p>`) : "");
+        }
+      }
 
       const footerEl = document.getElementById("ytChannelsAnalyzed");
       if (footerEl) footerEl.textContent = `${a.channels_analyzed} channels · ${a.videos_analyzed} videos analyzed`;
