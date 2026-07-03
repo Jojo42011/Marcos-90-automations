@@ -304,7 +304,7 @@ Competitor top-performer hook types: ${JSON.stringify(competitorHookFreq)}.
 Marco's data-backed strengths: ${JSON.stringify(marcoStrengths)}.
 Marco's data-backed gaps: ${JSON.stringify(marcoGaps)}.
 
-Be concise. This is for a busy person reading on a screen. Bullets over paragraphs. Every line earns its place or gets cut. No hedging, no meta-commentary — if a point isn't supported by the data above, leave it out entirely (do NOT write sentences explaining what you're leaving out). Name exact content types, hooks, and topics — no generic social-media advice. Match Marco's voice: direct, no corporate speak.
+Be concise. This is for a busy person reading on a screen. Bullets over paragraphs. Every line earns its place or gets cut. No hedging, no meta-commentary — if a point isn't supported by the data above, leave it out entirely (do NOT write sentences explaining what you're leaving out). Name exact content types, hooks, and topics — no generic social-media advice. Match Marco's voice: direct, no corporate speak. Never reference data structures, code syntax, brackets, or braces in the output — if a data field above is empty, describe it in plain English (e.g. "no competitor hook data has been collected yet"), never write out empty arrays or objects like [] or {}.
 
 Output EXACTLY this structure and nothing else. Start with "HEADLINE:".
 
