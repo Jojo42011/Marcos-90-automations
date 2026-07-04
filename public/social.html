@@ -1110,6 +1110,30 @@
     .strategy-rec-card p, .strategy-rec-card li, .strategy-rec-card blockquote, .strategy-rec-title { overflow-wrap:anywhere; word-break:break-word; white-space:normal; }
     .strategy-rec-card ol { list-style-position:outside; }
     .strategy-rec-card ol li, .strategy-rec-hooks li { overflow-wrap:anywhere; }
+    /* Overview — active operational blocker banner (only real, actionable blockers) */
+    .cm-blocker-banner { display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem; padding:0.85rem 1rem; border:1px solid var(--danger); border-left:3px solid var(--danger); border-radius:var(--radius-sm); background:color-mix(in srgb, var(--danger) 10%, transparent); }
+    .cm-blocker-icon { font-size:1.1rem; color:var(--danger); }
+    .cm-blocker-text { flex:1; min-width:220px; font-size:0.82rem; line-height:1.45; color:var(--text); }
+    .cm-blocker-btn { border:1px solid var(--danger); background:transparent; color:var(--danger); font-weight:600; padding:0.4rem 0.8rem; border-radius:var(--radius-xs); cursor:pointer; font-size:0.78rem; }
+    .cm-blocker-btn:hover { background:var(--danger); color:#fff; }
+    /* Recording Plan — step-by-step filming walkthrough */
+    .rec-walk-header { margin-bottom:1rem; }
+    .rec-walk-title { font-size:0.95rem; color:var(--text); }
+    .rec-walk-list { display:flex; flex-direction:column; gap:0.85rem; }
+    .rec-step-card { border:1px solid var(--border); border-left:3px solid var(--cyan); border-radius:var(--radius-sm); padding:1rem 1.1rem; background:var(--surface); box-sizing:border-box; max-width:100%; overflow-wrap:anywhere; word-break:break-word; transition:opacity 0.4s, border-color 0.3s; }
+    .rec-step-card.filmed { opacity:0.5; border-left-color:var(--success); }
+    .rec-step-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem; }
+    .rec-step-num { font-size:0.72rem; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; color:var(--cyan); }
+    .rec-step-check { display:none; font-size:0.72rem; font-weight:700; color:var(--success); }
+    .rec-step-card.filmed .rec-step-check { display:inline; }
+    .rec-step-topic { font-size:0.92rem; margin:0.4rem 0 0.6rem; }
+    .rec-step-label { display:block; font-size:0.6rem; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:0.2rem; }
+    .rec-step-hook { margin:0.5rem 0; }
+    .rec-step-hook p { margin:0; font-size:0.86rem; font-weight:600; color:var(--text); line-height:1.4; }
+    .rec-step-guidance { margin:0.6rem 0; }
+    .rec-step-meta { display:flex; flex-wrap:wrap; gap:1.25rem; margin:0.6rem 0; font-size:0.78rem; color:var(--text); }
+    .rec-step-hashtags { margin:0.5rem 0; display:flex; flex-wrap:wrap; align-items:center; gap:0.3rem; }
+    .rec-step-actions { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.75rem; }
     /* Competitor Analysis — scannable cards (matches YouTube Intel quality bar) */
     .ca-wrap { display:flex; flex-direction:column; gap:14px; }
     .ca-topline { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
@@ -1792,6 +1816,7 @@
       <div class="cm-content">
         <!-- OVERVIEW -->
         <section id="cm-section-overview" class="cm-section active">
+          <div id="cm-blocker-banner" class="cm-blocker-banner" style="display:none;"></div>
           <div class="cm-stat-row" id="cm-overview-stats"></div>
           <div class="cm-two-col">
             <div class="cm-panel cm-anim-in" id="cm-pipeline-status"></div>
@@ -2051,7 +2076,7 @@
 
         <!-- RECORDING PLAN (top-level) — only what Marco needs to film -->
         <section id="cm-section-recording" class="cm-section">
-          <h2 class="section-title">Recording Needed <span>what to film</span></h2>
+          <h2 class="section-title">Recording Plan <span>step-by-step filming walkthrough</span></h2>
           <div style="margin:0.75rem 0 1rem;">
             <button type="button" class="cm-btn" id="strategy-generate-week-btn">Generate Week Plan</button>
           </div>
@@ -2085,10 +2110,8 @@
 
         <!-- CONTENT MANAGER (strategy + chat) -->
         <section id="cm-section-brain" class="cm-section">
-          <h2 class="section-title">Today's Strategy <span>Content Manager · CM</span></h2>
-          <div id="cm-brain-strategy" class="cm-panel" style="margin-bottom:1rem;">
-            <p class="loading">Loading strategy…</p>
-          </div>
+          <h2 class="section-title">Content Manager <span>strategy chat · CM</span></h2>
+          <p class="cm-muted" style="margin:0 0 1rem;font-size:0.8rem;">Today's strategy runs silently in the background and powers the Recording Plan. Ask for it here — try "What's today's strategy?"</p>
           <div class="cm-chat-shell" style="height:calc(100vh - 320px);min-height:420px;">
             <div class="cm-chat-header">
               <div><strong>Ask the Content Manager</strong> <span class="cm-brain-badge">CM</span></div>
@@ -2220,20 +2243,6 @@
 
     // Display-only: break the strategy reasoning paragraph into readable sentence
     // lines and emphasize the single actionable "today's priority" line.
-    function renderStrategyReasoning(text) {
-      const clean = String(text || "").trim();
-      if (!clean) return "";
-      const sentences = clean.match(/[^.!?]+[.!?]+["”’)]*\s*|[^.!?]+$/g) || [clean];
-      return sentences
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((s) => {
-          const priority = /today'?s priority|priority (?:must|should|is|today)|top priority/i.test(s);
-          return `<p class="reason-line${priority ? " reason-priority" : ""}">${renderMarkdownInline(s)}</p>`;
-        })
-        .join("");
-    }
-
     // Display-only: split an existing trend paragraph into readable sentence
     // lines and highlight quoted hook patterns. Does NOT alter the text content.
     function trendProseHtml(text) {
@@ -2630,10 +2639,36 @@
       el("cm-count-community", String(dmGap));
     }
 
+    // Surface only a GENUINELY active operational blocker — a clip that is
+    // compliance-flagged AND still pending review, which blocks publishing.
+    // Driven by the real reviewFlagged count (content_videos pending_review +
+    // compliance_flagged), never generic strategic caution.
+    function renderBlockerBanner(flaggedCount) {
+      const el = document.getElementById("cm-blocker-banner");
+      if (!el) return;
+      const n = Number(flaggedCount) || 0;
+      if (n <= 0) { el.style.display = "none"; el.innerHTML = ""; return; }
+      el.style.display = "block";
+      el.innerHTML = `<span class="cm-blocker-icon">⚠</span>
+        <span class="cm-blocker-text"><strong>${n} clip${n > 1 ? "s are" : " is"} compliance-flagged and blocking publish.</strong> Resolve in the Review Queue to unblock.</span>
+        <button type="button" class="cm-blocker-btn" onclick="jumpToFlaggedReview()">Resolve now →</button>`;
+    }
+
+    function jumpToFlaggedReview() {
+      switchCmSection("review");
+      reviewFilter = "flagged";
+      document.querySelectorAll("[data-review-filter]").forEach((b) =>
+        b.classList.toggle("active", b.getAttribute("data-review-filter") === "flagged"));
+      void loadReviewQueue();
+    }
+
     async function loadCmOverview(animate = true) {
       // Stat cards render from the daily report on their own, so a failure in
       // the weekly/compliance fetches can never blank the cards (they used to
       // share one Promise.all — one rejection wiped everything).
+      cmFetch("/api/content/stats")
+        .then((s) => { cmStatsCache = s; renderBlockerBanner(s?.reviewFlagged || 0); })
+        .catch(() => renderBlockerBanner(cmStatsCache?.reviewFlagged || 0));
       try {
         const daily = await cmFetch("/api/content/report/daily");
         renderStatCards(daily.targets || {}, animate);
@@ -4168,73 +4203,12 @@
 
     let cmBrainSessionId = null;
 
-    function gradeBadgeClass(g) {
-      const letter = (g || "—").charAt(0).toUpperCase();
-      return `cm-grade-badge cm-grade-${letter}`;
-    }
-
     async function loadBrainSection() {
-      let momentum = null;
-      try {
-        momentum = await cmFetch("/api/content-brain/momentum").catch(() => null);
-      } catch (_) {}
-      try {
-        const strategy = await cmFetch("/api/content-brain/strategy").catch(() => null);
-        const el = document.getElementById("cm-brain-strategy");
-        const streakType = momentum?.current_streak_type || "neutral";
-        const streakCount = streakType === "hot" ? (momentum?.hot_streak_count || 0) : streakType === "cold" ? (momentum?.cold_streak_count || 0) : 0;
-        const streakLabel = streakType === "hot" ? `🔥 Hot streak ${streakCount} days` : streakType === "cold" ? `❄️ Cold streak ${streakCount} days` : "Neutral";
-        const seasonLabel = (momentum?.season_label || "season").replace(/_/g, " ");
-        const seasonMult = momentum?.season_multiplier ?? 1;
-        const grade = momentum?.self_grade_last_week;
-        const statusRow = `<div class="cm-brain-status-row">
-          <span class="cm-streak-badge ${escapeHtml(streakType)}">${escapeHtml(streakLabel)}</span>
-          <span class="cm-season-tag">📅 ${escapeHtml(seasonLabel)} · ${seasonMult}x</span>
-          ${grade ? `<span title="Yesterday's strategy grade"><span class="${gradeBadgeClass(grade)}">${escapeHtml(grade)}</span> <span class="cm-muted" style="font-size:0.65rem;">Yesterday's strategy grade</span></span>` : ""}
-        </div>`;
-        if (!strategy || strategy.error) {
-          el.innerHTML = `${statusRow}<p class="cm-muted">${escapeHtml(strategy?.error || "No strategy yet — morning cycle runs at 6am CST, or click Refresh strategy.")}</p>
-            <button type="button" class="cm-btn" id="cm-brain-refresh-strategy" style="margin-top:0.75rem;">Refresh strategy</button>`;
-        } else {
-          const conf = strategy.confidenceScore ?? 0;
-          const pillars = (strategy.pillarPriority || []).map((p, i) =>
-            `<span class="cm-pillar-tag ${escapeHtml(p)}">${i + 1}. ${escapeHtml(p)}</span>`).join(" ");
-          const hooks = (strategy.recommendedHooks || []).map((h) =>
-            `<li style="cursor:pointer;" onclick="navigator.clipboard.writeText(${JSON.stringify(h)});showToast('Copied')">${escapeHtml(h)}</li>`).join("");
-          const tags = (strategy.hashtagSet || []).map((t) =>
-            `<span class="cm-pillar-tag education">#${escapeHtml(t.replace(/^#/, ""))}</span>`).join(" ");
-          const avoid = (strategy.avoidAngles || []).map((a) =>
-            `<span class="cm-avoid-pill">${escapeHtml(a)}</span>`).join(" ") || '<span class="cm-muted">None flagged</span>';
-          const dist = strategy.platformDistribution || {};
-          const distMax = Math.max(...Object.values(dist).map(Number), 1);
-          const bars = Object.entries(dist).map(([plat, n]) =>
-            `<div style="margin:0.25rem 0;"><span style="display:inline-block;width:80px;font-size:0.7rem;">${escapeHtml(plat)}</span>
-            <span style="display:inline-block;height:8px;background:var(--cyan);width:${(Number(n) / distMax) * 120}px;border-radius:4px;"></span> ${n}</div>`).join("");
-          el.innerHTML = `
-            <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start;">
-              <div class="cm-confidence-ring"><span>${conf}%</span><span style="font-size:0.55rem;font-weight:500;">confident</span></div>
-              <div style="flex:1;min-width:200px;">
-                ${statusRow}
-                <label style="font-size:0.65rem;color:var(--muted);">Pillar priority</label><div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin:0.35rem 0;">${pillars}</div>
-                <label style="font-size:0.65rem;color:var(--muted);">Recommended hooks</label><ul class="strategy-rec-hooks">${hooks}</ul>
-                <label style="font-size:0.65rem;color:var(--muted);">Hashtag set</label><div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin:0.35rem 0;">${tags}</div>
-                <label style="font-size:0.65rem;color:var(--muted);">Avoid today</label><div style="margin:0.35rem 0;">${avoid}</div>
-              </div>
-            </div>
-            <label style="font-size:0.65rem;color:var(--muted);">Platform distribution</label>${bars}
-            <blockquote class="strategy-reason" style="margin:1rem 0 0;padding:0.75rem 1rem;border-left:3px solid var(--cyan);background:rgba(255,255,255,0.03);">${renderStrategyReasoning(strategy.reasoning || "")}</blockquote>
-            <p class="cm-muted" style="font-size:0.65rem;margin-top:0.5rem;">Generated ${escapeHtml(strategy.generatedAt || strategy.lastUpdated || "—")}</p>
-            <button type="button" class="cm-btn" id="cm-brain-refresh-strategy" style="margin-top:0.75rem;">Refresh strategy</button>`;
-        }
-        document.getElementById("cm-brain-refresh-strategy")?.addEventListener("click", async () => {
-          showToast("Running morning cycle…");
-          await cmFetch("/api/content-brain/run-cycle", { method: "POST", headers: { ...apiHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ cycle: "morning" }) });
-          void loadBrainSection();
-        });
-      } catch (e) {
-        document.getElementById("cm-brain-strategy").innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
-      }
-
+      // The static "Today's Strategy" display was removed — the underlying
+      // strategy still generates on the morning cycle and is injected into this
+      // chat's context (buildContextSnapshot.today_strategy), so the agent
+      // answers strategy questions directly, and the Recording Plan uses it to
+      // order/guide the walkthrough. This section is now the chat only.
       const sug = document.getElementById("cm-chat-suggestions");
       if (sug) {
         sug.innerHTML = CHAT_SUGGESTIONS.map((q) => `<button type="button" data-chat-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("");
@@ -4516,38 +4490,115 @@
 
     // Recording Plan is its own top-level sidebar section now — a clean, scannable
     // list of only what Marco needs to film (no recommendations/analysis clutter).
+    // Recording Plan = an ordered, strategy-driven filming walkthrough.
+    // Steps are sequenced by TODAY'S strategy: pillar balance first (a task's
+    // pillar rank in strategy.pillarPriority — so an over-indexed pillar sorts
+    // later), then priority tag, then due date. Platform + hashtags per step are
+    // DERIVED from the same daily strategy (tasks don't store them); the hook
+    // and filming notes are the task's own real fields.
+    const REC_PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
+    const PLATFORM_LABELS = { tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", youtube: "YouTube" };
+
+    function derivePlatformLine(dist) {
+      const entries = Object.entries(dist || {}).filter(([, n]) => Number(n) > 0)
+        .sort((a, b) => Number(b[1]) - Number(a[1]));
+      if (!entries.length) return "TikTok (primary)";
+      const nice = (p) => PLATFORM_LABELS[p.toLowerCase()] || p;
+      const primary = nice(entries[0][0]);
+      const rest = entries.slice(1).map(([p]) => nice(p));
+      return rest.length ? `${primary} (primary) → also ${rest.join(", ")}` : `${primary} (primary)`;
+    }
+
     async function loadRecordingSection() {
       const list = document.getElementById("strategy-recording-list");
       if (!list) return;
-      const tasks = await cmFetch("/api/content/recording-tasks?days=30").catch(() => ({ tasks: [] }));
-      const grouped = {};
-      (tasks.tasks || []).forEach((t) => {
-        if (!grouped[t.dueDate]) grouped[t.dueDate] = [];
-        grouped[t.dueDate].push(t);
-      });
-      list.innerHTML = Object.keys(grouped).sort().map((date) => `
-        <h4>${escapeHtml(date)}</h4>
-        ${grouped[date].map((t) => {
-          const hooks = (t.suggestedHooks || []).slice(0, 2);
-          const hooksHtml = hooks.map((h) => `<li onclick="navigator.clipboard.writeText('${escapeHtml(h).replace(/'/g, "\\'")}');showToast('Copied')" style="cursor:pointer;">${escapeHtml(h)}</li>`).join("");
-          const detail = `
-            <p class="rec-detail-meta">Target length: ${t.suggestedDurationMin || 35}-${t.suggestedDurationMax || 55}s</p>
-            ${t.filmingNotes ? `<blockquote class="rec-detail-notes">${escapeHtml(t.filmingNotes)}</blockquote>` : ""}
-            ${t.reason ? `<p class="rec-detail-reason">${escapeHtml(t.reason)}</p>` : ""}`;
-          return `
-          <div class="strategy-rec-card ${t.status === "filmed" ? "filmed" : ""}">
-            <div class="strategy-rec-tags">
-              <span class="cm-pillar-tag ${escapeHtml(t.pillar || "brand")}">${escapeHtml(t.pillar || "")}</span>
-              <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
-            </div>
-            <p class="strategy-rec-title"><strong>${escapeHtml(t.topic)}</strong></p>
-            ${hooksHtml ? `<ul class="strategy-rec-hooks">${hooksHtml}</ul>` : ""}
-            ${cmExpander("Details", detail)}
-            ${t.status === "pending" ? `<button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')" style="margin-top:0.5rem;">Mark as Filmed</button>` : ""}
-          </div>`;
-        }).join("")}`).join("") || "<p class='cm-muted'>Nothing queued to film right now.</p>";
+      const [taskResp, strategy] = await Promise.all([
+        cmFetch("/api/content/recording-tasks?days=30").catch(() => ({ tasks: [] })),
+        cmFetch("/api/content-brain/strategy").catch(() => null),
+      ]);
+      const pillarOrder = (strategy?.pillarPriority || []).map((p) => String(p).toLowerCase());
+      const pillarRank = (pillar) => {
+        const i = pillarOrder.indexOf(String(pillar || "").toLowerCase());
+        return i === -1 ? 99 : i;
+      };
+      const platformLine = derivePlatformLine(strategy?.platformDistribution);
+      const dayHashtags = (strategy?.hashtagSet || []).map((h) => String(h).replace(/^#/, "")).filter(Boolean);
+
+      const all = (taskResp.tasks || []).filter((t) => t.status !== "filmed" && t.status !== "uploaded");
+      // Strategy-driven ordering: pillar balance → priority → due date → created.
+      all.sort((a, b) =>
+        pillarRank(a.pillar) - pillarRank(b.pillar) ||
+        (REC_PRIORITY_RANK[a.priority] ?? 2) - (REC_PRIORITY_RANK[b.priority] ?? 2) ||
+        String(a.dueDate).localeCompare(String(b.dueDate)) ||
+        String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+
+      if (!all.length) {
+        list.innerHTML = "<p class='cm-muted'>Nothing queued to film right now — pipeline healthy.</p>";
+        void updateStrategyBadges();
+        return;
+      }
+
+      const total = all.length;
+      const header = `<div class="rec-walk-header">
+        <div class="rec-walk-title">Today's filming session · <strong>${total} step${total > 1 ? "s" : ""}</strong></div>
+        <div class="cm-muted" style="font-size:0.72rem;">Daily target 7/day · ordered by today's strategy${pillarOrder.length ? ` (pillar priority: ${escapeHtml(pillarOrder.join(" → "))})` : ""}</div>
+      </div>`;
+
+      const cards = all.map((t, idx) => {
+        const pillar = t.pillar || "brand";
+        const hooks = (t.suggestedHooks || []).filter(Boolean);
+        const primaryHook = hooks[0] || "";
+        const altHooks = hooks.slice(1);
+        const stepHashtags = [...new Set([pillar.toLowerCase(), ...dayHashtags])].slice(0, 8);
+        const hashtagPills = stepHashtags.map((h) => `<span class="cm-pillar-tag education">#${escapeHtml(h)}</span>`).join(" ");
+        const altHtml = altHooks.length
+          ? cmExpander(`Other hook options (${altHooks.length})`, `<ul class="strategy-rec-hooks">${altHooks.map((h) => `<li onclick="navigator.clipboard.writeText('${escapeHtml(h).replace(/'/g, "\\'")}');showToast('Copied')" style="cursor:pointer;">${escapeHtml(h)}</li>`).join("")}</ul>`)
+          : "";
+        const why = t.reason ? cmExpander("Why this step", `<p class="rec-detail-reason">${escapeHtml(t.reason)}</p>`) : "";
+        return `
+        <div class="rec-step-card" id="rec-step-${escapeHtml(t.id)}">
+          <div class="rec-step-head">
+            <span class="rec-step-num">Step ${idx + 1} of ${total}</span>
+            <span class="rec-step-check" aria-hidden="true">✓ Filmed</span>
+          </div>
+          <div class="strategy-rec-tags">
+            <span class="cm-pillar-tag ${escapeHtml(pillar)}">${escapeHtml(pillar)}</span>
+            <span class="cm-brain-badge">${escapeHtml(t.priority || "normal")}</span>
+            <span class="cm-muted" style="font-size:0.7rem;">due ${escapeHtml(t.dueDate)}</span>
+          </div>
+          <p class="rec-step-topic"><strong>${escapeHtml(t.topic)}</strong></p>
+          ${primaryHook ? `<div class="rec-step-hook"><span class="rec-step-label">Open with</span>
+            <p onclick="navigator.clipboard.writeText('${escapeHtml(primaryHook).replace(/'/g, "\\'")}');showToast('Copied')" style="cursor:pointer;">“${escapeHtml(primaryHook)}”</p></div>` : ""}
+          ${altHtml}
+          ${t.filmingNotes ? `<div class="rec-step-guidance"><span class="rec-step-label">How to film</span><blockquote class="rec-detail-notes">${escapeHtml(t.filmingNotes)}</blockquote></div>` : ""}
+          <div class="rec-step-meta">
+            <div><span class="rec-step-label">Film for</span> ${escapeHtml(platformLine)}</div>
+            <div><span class="rec-step-label">Length</span> ${t.suggestedDurationMin || 35}-${t.suggestedDurationMax || 55}s</div>
+          </div>
+          <div class="rec-step-hashtags"><span class="rec-step-label">Hashtags</span> ${hashtagPills}</div>
+          ${why}
+          <div class="rec-step-actions">
+            <button type="button" class="cm-btn green" onclick="markStepFilmed('${escapeHtml(t.id)}', this)">Mark as Filmed</button>
+            <button type="button" class="cm-btn" onclick="switchCmSection('upload')">Upload Footage →</button>
+          </div>
+        </div>`;
+      }).join("");
+
+      list.innerHTML = header + `<div class="rec-walk-list">${cards}</div>`;
       void updateStrategyBadges();
     }
+
+    // Check the step off in place (progression feel), then reload so the next
+    // step moves into focus. markTaskFilmed (used by Calendar) stays as-is.
+    window.markStepFilmed = async (id, btn) => {
+      if (btn) { btn.disabled = true; btn.textContent = "Logging…"; }
+      const card = document.getElementById(`rec-step-${id}`);
+      if (card) card.classList.add("filmed");
+      try {
+        await cmFetch(`/api/content/recording-tasks/${id}`, { method: "PATCH", body: JSON.stringify({ status: "filmed" }) });
+      } catch (e) { showToast("Couldn't mark filmed"); }
+      setTimeout(() => { void loadRecordingSection(); void loadCalendarSection(); }, 650);
+    };
 
     async function runCompetitiveAnalysis() {
       const btn = document.getElementById("strategy-run-analysis-btn");
