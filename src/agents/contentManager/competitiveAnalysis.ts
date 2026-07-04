@@ -8,6 +8,7 @@ import {
   computeDecayWeightedEngagement,
 } from "./brain/decay.js";
 import { getWeekStart } from "./brain/stats.js";
+import { getRedditQuestionSignals } from "./redditIntel.js";
 import {
   getActiveStrategyRecommendations as dbGetActiveStrategyRecommendations,
   getLatestCompetitiveAnalysis as dbGetLatestCompetitiveAnalysis,
@@ -365,6 +366,7 @@ export async function runFullCompetitiveAnalysis(
 
   const marcoStrengths = buildMarcoStrengths(marcoAvgViews, competitorAvgViews, model);
   const marcoGaps = buildMarcoGaps(topCompetitorThemes, competitorHookFreq, marcoRecent);
+  const redditSignals = getRedditQuestionSignals(12);
 
   const aboveBelow = marcoVsFieldPct >= 0 ? "above" : "below";
   const competitiveAnalysisPrompt = `Competitive analysis for Marco Puga (@puga.realtor), a San Antonio real estate agent. Data:
@@ -376,7 +378,7 @@ Competitor winning themes: ${JSON.stringify(topCompetitorThemes)}.
 Competitor top-performer hook types: ${JSON.stringify(competitorHookFreq)}.
 Marco's data-backed strengths: ${JSON.stringify(marcoStrengths)}.
 Marco's data-backed gaps: ${JSON.stringify(marcoGaps)}.
-
+${redditSignals.length ? `Real questions real buyers are asking on Reddit this week (treat these as content-gap signals and reference specific ones in DO THIS NEXT):\n${redditSignals.map((q) => `- ${q}`).join("\n")}\n` : ""}
 Be concise. This is for a busy person reading on a screen. Bullets over paragraphs. Every line earns its place or gets cut. No hedging, no meta-commentary — if a point isn't supported by the data above, leave it out entirely (do NOT write sentences explaining what you're leaving out). Name exact content types, hooks, and topics — no generic social-media advice. Match Marco's voice: direct, no corporate speak. Never reference data structures, code syntax, brackets, or braces in the output — if a data field above is empty, describe it in plain English (e.g. "no competitor hook data has been collected yet"), never write out empty arrays or objects like [] or {}.
 
 Output EXACTLY this structure and nothing else. Start with "HEADLINE:".

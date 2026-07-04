@@ -676,6 +676,12 @@ function getContentDb() {
         summary TEXT,
         ran_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS cm_reddit_intel (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fetched_at TEXT NOT NULL,
+        post_count INTEGER NOT NULL DEFAULT 0,
+        posts_json TEXT
+      );
     `);
         ensureBrainIntelligenceMigrations(db);
         ensureBatchPipelineMigrations(db);

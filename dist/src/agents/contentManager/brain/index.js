@@ -11,6 +11,7 @@ const tools_js_1 = require("./tools.js");
 const cycles_js_1 = require("./cycles.js");
 const contentDb_js_1 = require("../../../core/contentDb.js");
 const youtubeIntel_js_1 = require("../youtubeIntel.js");
+const redditIntel_js_1 = require("../redditIntel.js");
 const claudeTools_js_1 = require("./claudeTools.js");
 const claude_content_js_1 = require("../../../integrations/claude-content.js");
 class ContentManagerBrain {
@@ -88,6 +89,7 @@ class ContentManagerBrain {
             top_recording_task: pendingTasks[0] ?? null,
             sprint_progress: sprint,
             youtube_intelligence: youtubeContext,
+            reddit_buyer_questions: (0, redditIntel_js_1.getRedditQuestionSignals)(8),
         };
     }
     buildContextBlock() {

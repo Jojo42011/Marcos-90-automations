@@ -18,6 +18,7 @@ const momentum_js_1 = require("./momentum.js");
 const calendar_js_1 = require("../calendar.js");
 const competitiveAnalysis_js_1 = require("../competitiveAnalysis.js");
 const youtubeIntel_js_1 = require("../youtubeIntel.js");
+const redditIntel_js_1 = require("../redditIntel.js");
 const contentDb_js_2 = require("../../../core/contentDb.js");
 const prompts_js_1 = require("./prompts.js");
 const stats_js_1 = require("./stats.js");
@@ -149,6 +150,9 @@ function updateSeasonalityModel() {
     (0, contentDb_js_1.upsertPerformanceModel)({ seasonMultiplier: multiplier });
 }
 async function runMorningCycle(brain) {
+    // Refresh Reddit buyer-question signals once daily (cached; non-blocking —
+    // a failure must never break the morning cycle).
+    (0, redditIntel_js_1.runRedditIntel)().catch((err) => console.warn(`[cm-brain] reddit intel refresh skipped: ${err instanceof Error ? err.message : String(err)}`));
     const date = (0, contentDb_js_1.todayDateCst)();
     const yesterday = (0, contentDb_js_1.yesterdayDateCst)();
     const yesterdayTargets = (0, contentDb_js_1.getDailyTargets)(yesterday);

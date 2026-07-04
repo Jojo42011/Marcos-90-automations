@@ -49,6 +49,7 @@ import { getMomentumStrategyAdjustment, updateMomentumState } from "./momentum.j
 import { generateWeeklyRecordingPlan } from "../calendar.js";
 import { runFullCompetitiveAnalysis } from "../competitiveAnalysis.js";
 import { runYouTubeCompetitorAnalysis } from "../youtubeIntel.js";
+import { runRedditIntel } from "../redditIntel.js";
 import {
   countOverdueRecordingTasks,
   countPendingRecordingTasksDueBefore,
@@ -215,6 +216,12 @@ function updateSeasonalityModel(): void {
 }
 
 export async function runMorningCycle(brain: ContentManagerBrain): Promise<void> {
+  // Refresh Reddit buyer-question signals once daily (cached; non-blocking —
+  // a failure must never break the morning cycle).
+  runRedditIntel().catch((err) =>
+    console.warn(`[cm-brain] reddit intel refresh skipped: ${err instanceof Error ? err.message : String(err)}`),
+  );
+
   const date = todayDateCst();
   const yesterday = yesterdayDateCst();
   const yesterdayTargets = getDailyTargets(yesterday);

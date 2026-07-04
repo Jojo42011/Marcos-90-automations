@@ -27,6 +27,7 @@ import {
   recordAgentRun,
 } from "../../../core/contentDb.js";
 import { getLatestYouTubeAnalysis } from "../youtubeIntel.js";
+import { getRedditQuestionSignals } from "../redditIntel.js";
 import {
   claudeChatWithTools,
   claudeSimpleChat,
@@ -122,6 +123,7 @@ export class ContentManagerBrain {
       top_recording_task: pendingTasks[0] ?? null,
       sprint_progress: sprint,
       youtube_intelligence: youtubeContext,
+      reddit_buyer_questions: getRedditQuestionSignals(8),
     };
   }
 
