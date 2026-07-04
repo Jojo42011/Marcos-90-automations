@@ -442,8 +442,6 @@
     .trend-badge { font-size: 0.72rem; padding: 0.35rem 0.75rem; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; background: var(--surface2); }
     .trend-badge.fresh { border-color: var(--success); color: var(--success); }
     .trend-badge.expired { border-color: var(--danger); color: var(--danger); }
-    .trend-brief-card { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--cyan); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
-    .trend-brief-card h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
     .hashtag-pill { font-size: 0.65rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); margin: 0.15rem; display: inline-block; }
     .batch-config-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: flex-end; }
     .batch-config-row label { font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 0.25rem; }
@@ -972,7 +970,11 @@
     .score-card-left { display: flex; gap: 0.85rem; flex: 1; min-width: 0; }
     .score-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.7rem; }
     .score-card-title { font-size: 0.82rem; color: var(--text); font-weight: 600; line-height: 1.4; font-family: var(--font); }
+    a.score-card-title-link { display: block; text-decoration: none; color: var(--text); transition: color 0.15s; }
+    a.score-card-title-link:hover { color: var(--cyan); text-decoration: underline; }
     .score-card-meta { font-size: 0.62rem; color: var(--muted); margin-top: 0.25rem; }
+    .score-card-tiktok-link { color: var(--cyan); text-decoration: none; font-weight: 600; }
+    .score-card-tiktok-link:hover { text-decoration: underline; }
     .score-badge-wrap { text-align: center; flex-shrink: 0; }
     .score-big { font-size: 1.8rem; font-weight: 700; line-height: 1; }
     .score-tier-label { font-size: 0.55rem; letter-spacing: 0.12em; margin-top: 0.18rem; font-weight: 700; }
@@ -1190,6 +1192,18 @@
     .calendar-dot.empty { border:1px solid var(--border); background:transparent; }
     .calendar-sprint-bar { height:10px; background:var(--surface2); border-radius:999px; overflow:hidden; }
     .calendar-sprint-bar div { height:100%; background:var(--cyan); transition:width 0.3s; }
+    .calendar-day-slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:0.6rem; }
+    .calendar-overflow-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:0.6rem; }
+    .calendar-slot { border:1px solid var(--border); border-radius:var(--radius); padding:0.75rem; min-height:88px; display:flex; flex-direction:column; gap:0.4rem; background:var(--surface); }
+    .calendar-slot.filled { border-left:3px solid var(--teal); }
+    .calendar-slot.clickable { cursor:pointer; transition:border-color 0.15s, transform 0.1s; }
+    .calendar-slot.clickable:hover { border-color:var(--cyan); transform:translateY(-1px); }
+    .calendar-slot.empty { border-style:dashed; align-items:center; justify-content:center; text-align:center; background:transparent; }
+    .calendar-slot-num { font-size:1.1rem; font-weight:700; color:var(--muted); }
+    .calendar-slot-empty-label { font-size:0.72rem; }
+    .calendar-slot-title { font-size:0.8rem; font-weight:600; color:var(--text); line-height:1.35; }
+    .calendar-slot-badges { display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:auto; }
+    .calendar-slot-stats { font-size:0.68rem; }
     .analysis-md h3 { color:var(--cyan); margin:1rem 0 0.5rem; font-size:0.9rem; }
     .analysis-md p { margin:0.5rem 0; line-height:1.55; }
     .analysis-md ol, .analysis-md ul { margin:0.5rem 0; padding-left:1.2rem; }
@@ -1812,12 +1826,6 @@
               <button type="button" class="trend-badge" id="trend-intel-badge">Trend Intelligence</button>
             </div>
             <div id="openShortsStatusIndicator" class="cm-muted" style="font-size:12px;margin-bottom:12px;"></div>
-            <div class="trend-brief-card" id="trend-brief-card">
-              <h4>Current Trends in Real Estate TikTok</h4>
-              <div id="trend-brief-text" class="trend-prose">Loading trend intelligence…</div>
-              <div id="trend-hashtag-pills" style="margin-top:0.5rem;"></div>
-              <p id="trend-meta-text" class="cm-muted" style="font-size:0.72rem;margin-top:0.5rem;text-align:right;"></p>
-            </div>
             <div class="batch-config-row">
               <div style="flex:1;min-width:180px;">
                 <label>Session name</label>
@@ -2069,13 +2077,10 @@
             <div style="margin-bottom:1rem;">
               <a href="#" id="calendar-back-month" class="cm-muted">← Back to month</a>
               <h3 id="calendar-day-title" style="margin:0.5rem 0;"></h3>
+              <div id="calendar-day-summary" class="cm-muted" style="font-size:0.8rem;"></div>
             </div>
-            <div class="cm-two-col">
-              <div class="cm-panel" id="calendar-publish-column"></div>
-              <div class="cm-panel" id="calendar-recording-column"></div>
-            </div>
-            <div class="cm-panel" id="calendar-events-extra" style="margin-top:1rem;"></div>
-            <button type="button" class="cm-btn" id="calendar-add-task-btn" style="margin-top:1rem;">+ Add Recording Task</button>
+            <div id="calendar-day-slots" class="calendar-day-slots"></div>
+            <div id="calendar-day-overflow" style="margin-top:1rem;"></div>
           </div>
         </section>
 
@@ -4924,25 +4929,85 @@
       if (sub && prog) sub.textContent = `${prog.currentPace} videos/day current pace | ${prog.onTrack ? "on track" : `behind by ${(prog.videosNeededPerDay - prog.currentPace).toFixed(1)}/day`}`;
     }
 
+    const DAILY_VIDEO_TARGET = 7;
+
+    function normalizeCalendarClip(v, kind) {
+      return {
+        videoId: v.videoId || v.id || "",
+        title: v.title || "(untitled clip)",
+        platform: v.platform || "",
+        pillar: v.pillar || "",
+        thumbnail: v.thumbnail || null,
+        status: kind === "published" ? "Published" : (v.status || "Scheduled"),
+        kind,
+        views: typeof v.views === "number" ? v.views : null,
+        score: typeof v.score === "number" ? v.score : null,
+      };
+    }
+
+    function calendarSlotCardHtml(clip) {
+      const badge = clip.kind === "published"
+        ? `<span class="cm-pillar-tag listings">${escapeHtml(clip.status)}</span>`
+        : `<span class="cm-pillar-tag education">${escapeHtml(clip.status)}</span>`;
+      const platform = clip.platform ? `<span class="cm-pillar-tag brand">${escapeHtml(clip.platform)}</span>` : "";
+      const stats = clip.kind === "published" && (clip.views != null || clip.score != null)
+        ? `<div class="calendar-slot-stats cm-muted">${clip.views != null ? `${fmt(clip.views)} views` : ""}${clip.views != null && clip.score != null ? " · " : ""}${clip.score != null ? `score ${clip.score}` : ""}</div>`
+        : "";
+      const clickable = clip.videoId
+        ? `onclick="playClip('${jsStr(clip.videoId)}', '${jsStr(clip.title)}')" role="button" tabindex="0"`
+        : "";
+      return `<div class="calendar-slot filled${clip.videoId ? " clickable" : ""}" ${clickable}>
+          <div class="calendar-slot-title">${escapeHtml(clip.title)}</div>
+          <div class="calendar-slot-badges">${badge}${platform}</div>
+          ${stats}
+        </div>`;
+    }
+
+    function calendarEmptySlotHtml(n) {
+      return `<div class="calendar-slot empty">
+          <div class="calendar-slot-num">${n}</div>
+          <div class="calendar-slot-empty-label cm-muted">Not yet filmed</div>
+        </div>`;
+    }
+
     async function loadCalendarDay(date) {
       const data = await cmFetch(`/api/content/calendar/day/${date}`);
       document.getElementById("calendar-day-title").textContent = date;
-      const pub = document.getElementById("calendar-publish-column");
-      if (pub) {
-        const items = [...(data.videosScheduled || []), ...(data.videosPublished || [])];
-        pub.innerHTML = `<h3>Publishing Today</h3>${items.length ? items.map((v) => `<div style="margin:0.5rem 0;padding:0.5rem;border:1px solid var(--border);border-radius:8px;"><strong>${escapeHtml(v.title)}</strong> <span class="cm-pillar-tag education">${escapeHtml(v.platform)}</span></div>`).join("") : "<p class='cm-muted'>No content scheduled.</p>"}
-          ${data.targetGap > 0 ? `<p class="cm-muted">${data.targetGap} more videos needed today.</p>` : ""}`;
+
+      // Real clip data for this day: published + scheduled, matched by
+      // published_at / scheduled_for in content_videos + content_publish_log.
+      const clips = [
+        ...(data.videosPublished || []).map((v) => normalizeCalendarClip(v, "published")),
+        ...(data.videosScheduled || []).map((v) => normalizeCalendarClip(v, "scheduled")),
+      ];
+
+      const summary = document.getElementById("calendar-day-summary");
+      if (summary) {
+        const filled = clips.length;
+        summary.textContent = filled >= DAILY_VIDEO_TARGET
+          ? `${filled} / ${DAILY_VIDEO_TARGET} videos — target met${filled > DAILY_VIDEO_TARGET ? ` (+${filled - DAILY_VIDEO_TARGET} bonus)` : ""}`
+          : `${filled} / ${DAILY_VIDEO_TARGET} videos — ${DAILY_VIDEO_TARGET - filled} more to hit today's target`;
       }
-      const rec = document.getElementById("calendar-recording-column");
-      if (rec) {
-        rec.innerHTML = `<h3>Recording Needed</h3>${(data.recordingTasks || []).map((t) => `
-          <div class="strategy-rec-card">
-            <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
-            <p><strong>${escapeHtml(t.topic)}</strong></p>
-            <ul class="strategy-rec-hooks">${(t.suggestedHooks || []).map((h) => `<li>${escapeHtml(h)}</li>`).join("")}</ul>
-            <button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')">Mark as Filmed</button>
-            <button type="button" class="cm-btn" onclick="switchCmSection('upload')">Upload Footage →</button>
-          </div>`).join("") || "<p class='cm-muted'>No recording tasks — pipeline healthy.</p>"}`;
+
+      // Always render exactly 7 target slots: fill with real clips, then label
+      // the remainder "Not yet filmed". Clips beyond 7 go to the overflow list.
+      const slots = document.getElementById("calendar-day-slots");
+      if (slots) {
+        const primary = clips.slice(0, DAILY_VIDEO_TARGET);
+        let html = "";
+        for (let i = 0; i < DAILY_VIDEO_TARGET; i++) {
+          html += primary[i] ? calendarSlotCardHtml(primary[i]) : calendarEmptySlotHtml(i + 1);
+        }
+        slots.innerHTML = html;
+      }
+
+      const overflow = document.getElementById("calendar-day-overflow");
+      if (overflow) {
+        const extras = clips.slice(DAILY_VIDEO_TARGET);
+        overflow.innerHTML = extras.length
+          ? `<div class="cm-panel"><h4 style="margin:0 0 0.5rem;">Bonus / extra clips (${extras.length})</h4>
+              <div class="calendar-overflow-list">${extras.map(calendarSlotCardHtml).join("")}</div></div>`
+          : "";
       }
     }
 
@@ -4973,14 +5038,6 @@
       calendarView = "month";
       void loadCalendarSection();
     });
-    document.getElementById("calendar-add-task-btn")?.addEventListener("click", async () => {
-      const due = calendarSelectedDate || new Date().toISOString().slice(0, 10);
-      const topic = prompt("Topic for recording task:");
-      if (!topic) return;
-      await cmFetch("/api/content/recording-tasks", { method: "POST", body: JSON.stringify({ due_date: due, pillar: "brand", topic, priority: "normal" }) });
-      void loadCalendarDay(due);
-    });
-
     function switchCmSection(section) {
       cmSection = section;
       document.querySelectorAll(".crm-side-btn[data-cm-section]").forEach((b) => {
@@ -5211,6 +5268,12 @@
       const tierColor = getTierColor(tierLabel, sb.score);
       const postId = escapeHtml(video.id || video.postId || "");
       const caption = escapeHtml((video.caption || video.description || "").substring(0, 100));
+      const rawUrl = typeof video.url === "string" ? video.url.trim() : "";
+      const ttUrl = /^https?:\/\//i.test(rawUrl) ? escapeHtml(rawUrl) : "";
+      const titleText = caption || "(no caption)";
+      const titleHtml = ttUrl
+        ? `<a href="${ttUrl}" target="_blank" rel="noopener noreferrer" class="score-card-title score-card-title-link">${titleText}</a>`
+        : `<div class="score-card-title">${titleText}</div>`;
 
       const improvementsHtml = video.improvements && video.improvements.length
         ? video.improvements.map((i) => `<div class="improvement-item">• ${escapeHtml(i)}</div>`).join("")
@@ -5220,8 +5283,8 @@
         <div class="score-card-header">
           <div class="score-card-left">
             <div>
-              <div class="score-card-title">${caption || "(no caption)"}</div>
-              <div class="score-card-meta">Posted ${fmtDate(video.postedAt)}</div>
+              ${titleHtml}
+              <div class="score-card-meta">Posted ${fmtDate(video.postedAt)}${ttUrl ? ` · <a href="${ttUrl}" target="_blank" rel="noopener noreferrer" class="score-card-tiktok-link">View on TikTok ↗</a>` : ""}</div>
             </div>
           </div>
           <div class="score-badge-wrap">
