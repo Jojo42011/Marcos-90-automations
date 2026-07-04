@@ -1966,7 +1966,6 @@
           <div class="cm-subtabs">
             <button type="button" class="cm-subtab active" data-strategy-tab="overview">Overview</button>
             <button type="button" class="cm-subtab" data-strategy-tab="competitor">Competitor Analysis</button>
-            <button type="button" class="cm-subtab" data-strategy-tab="recommendations">Recommendations</button>
             <button type="button" class="cm-subtab" data-strategy-tab="recording">Recording Plan</button>
           </div>
           <div id="strategy-overview" class="strategy-panel">
@@ -2009,11 +2008,11 @@
           <div id="strategy-competitor" class="strategy-panel" style="display:none;">
             <div id="strategy-full-analysis" class="cm-panel"></div>
           </div>
-          <div id="strategy-recommendations" class="strategy-panel" style="display:none;">
-            <div id="strategy-rec-list"></div>
-          </div>
           <div id="strategy-recording" class="strategy-panel" style="display:none;">
-            <div style="margin-bottom:1rem;">
+            <h2 class="section-title">Recommendations <span>what the AI recommends strategically</span></h2>
+            <div id="strategy-rec-list"></div>
+            <h2 class="section-title" style="margin-top:1.75rem;">Recording Needed <span>queued to film</span></h2>
+            <div style="margin:0.75rem 0 1rem;">
               <button type="button" class="cm-btn" id="strategy-generate-week-btn">Generate Week Plan</button>
             </div>
             <div id="strategy-recording-list"></div>
@@ -4378,13 +4377,16 @@
     }
 
     async function loadStrategySection(tab = "overview") {
+      // Recommendations was merged into the Recording Plan tab — alias any old
+      // link/route so it lands on the combined page instead of a dead panel.
+      if (tab === "recommendations") tab = "recording";
       document.querySelectorAll("[data-strategy-tab]").forEach((b) => {
         b.classList.toggle("active", b.getAttribute("data-strategy-tab") === tab);
       });
       document.querySelectorAll(".strategy-panel").forEach((p) => {
         p.style.display = "none";
       });
-      const knownTabs = ["competitor", "recommendations", "recording"];
+      const knownTabs = ["competitor", "recording"];
       const panel = document.getElementById(`strategy-${knownTabs.includes(tab) ? tab : "overview"}`);
       if (panel) panel.style.display = "block";
 
@@ -4453,10 +4455,11 @@
         }
       }
 
-      if (tab === "recommendations") {
-        const list = document.getElementById("strategy-rec-list");
-        if (list) {
-          list.innerHTML = (recommendations.length ? recommendations : await cmFetch("/api/content/strategy-recommendations?status=pending").then((d) => d.recommendations || []).catch(() => []))
+      if (tab === "recording") {
+        // Section 1 — Recommendations (what the AI recommends strategically).
+        const recList = document.getElementById("strategy-rec-list");
+        if (recList) {
+          recList.innerHTML = (recommendations.length ? recommendations : await cmFetch("/api/content/strategy-recommendations?status=pending").then((d) => d.recommendations || []).catch(() => []))
             .map((r) => `
             <div class="strategy-rec-card">
               <span class="cm-brain-badge">P${r.priority}</span>
@@ -4473,9 +4476,8 @@
               <button type="button" class="cm-btn" onclick="createRecordingFromRec('${r.id}')">Create Recording Task</button>
             </div>`).join("") || "<p class='cm-muted'>No active recommendations.</p>";
         }
-      }
 
-      if (tab === "recording") {
+        // Section 2 — Recording Needed (queued to film).
         const tasks = await cmFetch("/api/content/recording-tasks?days=30").catch(() => ({ tasks: [] }));
         const grouped = {};
         (tasks.tasks || []).forEach((t) => {
@@ -4726,7 +4728,16 @@
       try {
         const res = await cmFetch(`/api/content/strategy-recommendations/${id}/create-recording-task`, { method: "POST" });
         showToast(`Task created for ${res.task?.dueDate || "calendar"}`);
-        void loadStrategySection("recording");
+        // Now that both sections share one page, scroll to the Recording Needed
+        // list and briefly highlight it so the new card is obvious.
+        await loadStrategySection("recording");
+        const recEl = document.getElementById("strategy-recording-list");
+        if (recEl) {
+          recEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          recEl.style.transition = "box-shadow 0.4s ease";
+          recEl.style.boxShadow = "0 0 0 2px var(--teal-border), 0 0 18px var(--teal-dim)";
+          setTimeout(() => { recEl.style.boxShadow = "none"; }, 1400);
+        }
       } catch (e) { showToast(e.message); }
     };
     window.updateRecStatus = async (id, status) => {
