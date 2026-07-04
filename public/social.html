@@ -1823,7 +1823,6 @@
           <div class="cm-panel" id="batch-upload-panel">
             <div class="batch-header-row">
               <h3 style="margin:0;">Upload & Clip</h3>
-              <button type="button" class="trend-badge" id="trend-intel-badge">Trend Intelligence</button>
             </div>
             <div id="openShortsStatusIndicator" class="cm-muted" style="font-size:12px;margin-bottom:12px;"></div>
             <div class="batch-config-row">
@@ -5167,13 +5166,6 @@
         }
         updateProcessButton();
       }
-    });
-    document.getElementById("trend-intel-badge")?.addEventListener("click", async () => {
-      const badge = document.getElementById("trend-intel-badge");
-      if (badge) badge.textContent = "↻ Refreshing…";
-      await cmFetch("/api/content/competitor-trends/refresh", { method: "POST" });
-      await loadTrendIntel();
-      showToast("Trends refreshed");
     });
     document.getElementById("refresh-trends-btn")?.addEventListener("click", async () => {
       await cmFetch("/api/content/competitor-trends/refresh", { method: "POST" });
