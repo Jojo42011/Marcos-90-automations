@@ -1714,6 +1714,7 @@
       <button type="button" class="crm-side-btn active" data-cm-section="overview">Overview <span class="crm-count" id="cm-count-overview">0/7</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="brain">Content Manager <span class="crm-count" id="cm-count-brain">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="upload">Upload &amp; Clip <span class="crm-count" id="cm-count-upload">0</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="recording">Recording Plan <span class="crm-count" id="cm-count-recording">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="review">Review Queue <span class="crm-count crm-count-danger" id="cm-count-review">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="publishing">Publishing <span class="crm-count" id="cm-count-publishing">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="strategy">Strategy <span class="crm-count" id="cm-count-strategy">0</span></button>
@@ -1966,7 +1967,7 @@
           <div class="cm-subtabs">
             <button type="button" class="cm-subtab active" data-strategy-tab="overview">Overview</button>
             <button type="button" class="cm-subtab" data-strategy-tab="competitor">Competitor Analysis</button>
-            <button type="button" class="cm-subtab" data-strategy-tab="recording">Recording Plan</button>
+            <button type="button" class="cm-subtab" data-strategy-tab="recommendations">Recommendations</button>
           </div>
           <div id="strategy-overview" class="strategy-panel">
             <div class="cm-stat-row" id="strategy-comparison-cards"></div>
@@ -2008,15 +2009,18 @@
           <div id="strategy-competitor" class="strategy-panel" style="display:none;">
             <div id="strategy-full-analysis" class="cm-panel"></div>
           </div>
-          <div id="strategy-recording" class="strategy-panel" style="display:none;">
-            <h2 class="section-title">Recommendations <span>what the AI recommends strategically</span></h2>
+          <div id="strategy-recommendations" class="strategy-panel" style="display:none;">
             <div id="strategy-rec-list"></div>
-            <h2 class="section-title" style="margin-top:1.75rem;">Recording Needed <span>queued to film</span></h2>
-            <div style="margin:0.75rem 0 1rem;">
-              <button type="button" class="cm-btn" id="strategy-generate-week-btn">Generate Week Plan</button>
-            </div>
-            <div id="strategy-recording-list"></div>
           </div>
+        </section>
+
+        <!-- RECORDING PLAN (top-level) — only what Marco needs to film -->
+        <section id="cm-section-recording" class="cm-section">
+          <h2 class="section-title">Recording Needed <span>what to film</span></h2>
+          <div style="margin:0.75rem 0 1rem;">
+            <button type="button" class="cm-btn" id="strategy-generate-week-btn">Generate Week Plan</button>
+          </div>
+          <div id="strategy-recording-list"></div>
         </section>
 
         <!-- CALENDAR -->
@@ -4299,6 +4303,8 @@
         if (stratEl) stratEl.textContent = String((recs.recommendations || []).length);
         const calEl = document.getElementById("cm-count-calendar");
         if (calEl) calEl.textContent = String((tasks.tasks || []).length);
+        const recEl = document.getElementById("cm-count-recording");
+        if (recEl) recEl.textContent = String((tasks.tasks || []).filter((t) => t.status !== "filmed").length);
       } catch (_) {}
     }
 
@@ -4377,16 +4383,13 @@
     }
 
     async function loadStrategySection(tab = "overview") {
-      // Recommendations was merged into the Recording Plan tab — alias any old
-      // link/route so it lands on the combined page instead of a dead panel.
-      if (tab === "recommendations") tab = "recording";
       document.querySelectorAll("[data-strategy-tab]").forEach((b) => {
         b.classList.toggle("active", b.getAttribute("data-strategy-tab") === tab);
       });
       document.querySelectorAll(".strategy-panel").forEach((p) => {
         p.style.display = "none";
       });
-      const knownTabs = ["competitor", "recording"];
+      const knownTabs = ["competitor", "recommendations"];
       const panel = document.getElementById(`strategy-${knownTabs.includes(tab) ? tab : "overview"}`);
       if (panel) panel.style.display = "block";
 
@@ -4455,8 +4458,7 @@
         }
       }
 
-      if (tab === "recording") {
-        // Section 1 — Recommendations (what the AI recommends strategically).
+      if (tab === "recommendations") {
         const recList = document.getElementById("strategy-rec-list");
         if (recList) {
           recList.innerHTML = (recommendations.length ? recommendations : await cmFetch("/api/content/strategy-recommendations?status=pending").then((d) => d.recommendations || []).catch(() => []))
@@ -4476,54 +4478,42 @@
               <button type="button" class="cm-btn" onclick="createRecordingFromRec('${r.id}')">Create Recording Task</button>
             </div>`).join("") || "<p class='cm-muted'>No active recommendations.</p>";
         }
-
-        // Section 2 — Recording Needed (queued to film).
-        const tasks = await cmFetch("/api/content/recording-tasks?days=30").catch(() => ({ tasks: [] }));
-        const grouped = {};
-        (tasks.tasks || []).forEach((t) => {
-          if (!grouped[t.dueDate]) grouped[t.dueDate] = [];
-          grouped[t.dueDate].push(t);
-        });
-        const list = document.getElementById("strategy-recording-list");
-        if (list) {
-          list.innerHTML = Object.keys(grouped).sort().map((date) => `
-            <h4>${escapeHtml(date)}</h4>
-            ${grouped[date].map((t) => {
-              const hooks = (t.suggestedHooks || []).slice(0, 2);
-              const hooksHtml = hooks.map((h) => `<li onclick="navigator.clipboard.writeText('${escapeHtml(h).replace(/'/g, "\\'")}');showToast('Copied')" style="cursor:pointer;">${escapeHtml(h)}</li>`).join("");
-              const detail = `
-                <p class="rec-detail-meta">Target length: ${t.suggestedDurationMin || 35}-${t.suggestedDurationMax || 55}s</p>
-                ${t.filmingNotes ? `<blockquote class="rec-detail-notes">${escapeHtml(t.filmingNotes)}</blockquote>` : ""}
-                ${t.reason ? `<p class="rec-detail-reason">${escapeHtml(t.reason)}</p>` : ""}`;
-              return `
-              <div class="strategy-rec-card ${t.status === "filmed" ? "filmed" : ""}">
-                <div class="strategy-rec-tags">
-                  <span class="cm-pillar-tag ${escapeHtml(t.pillar || "brand")}">${escapeHtml(t.pillar || "")}</span>
-                  <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
-                </div>
-                <p class="strategy-rec-title"><strong>${escapeHtml(t.topic)}</strong></p>
-                ${hooksHtml ? `<ul class="strategy-rec-hooks">${hooksHtml}</ul>` : ""}
-                ${cmExpander("Details", detail)}
-                ${t.status === "pending" ? `<button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')" style="margin-top:0.5rem;">Mark as Filmed</button>` : ""}
-              </div>`;
-            }).join("")}`).join("") || "<p class='cm-muted'>No recording tasks.</p>";
-        }
-        // Filmable content ideas — merged in from the former Content Suggestions tab.
-        try {
-          const cs = await cmFetch("/api/content-suggestions/latest").catch(() => null);
-          const ideas = cs && cs.result && Array.isArray(cs.result.suggestions) ? cs.result.suggestions : [];
-          if (list && ideas.length) {
-            const cards = ideas.map((s) => `
-              <div class="strategy-rec-card">
-                <div class="strategy-rec-tags">${s.trendBased ? '<span class="cm-pillar-tag education">trend-based</span>' : ""}<span class="cm-brain-badge">idea</span></div>
-                <p class="strategy-rec-title"><strong>${escapeHtml(s.title || "")}</strong></p>
-                ${s.angle ? `<p style="font-size:0.78rem;margin:0.25rem 0;line-height:1.45;">${escapeHtml(s.angle)}</p>` : ""}
-                ${s.reasoning ? cmExpander("Why this works", `<p class="cm-muted" style="line-height:1.5;">${escapeHtml(s.reasoning)}</p>`) : ""}
-              </div>`).join("");
-            list.innerHTML += `<h4 style="margin-top:1.25rem;">💡 Content Ideas to Film</h4>${cards}`;
-          }
-        } catch (_) { /* ideas are best-effort */ }
       }
+      void updateStrategyBadges();
+    }
+
+    // Recording Plan is its own top-level sidebar section now — a clean, scannable
+    // list of only what Marco needs to film (no recommendations/analysis clutter).
+    async function loadRecordingSection() {
+      const list = document.getElementById("strategy-recording-list");
+      if (!list) return;
+      const tasks = await cmFetch("/api/content/recording-tasks?days=30").catch(() => ({ tasks: [] }));
+      const grouped = {};
+      (tasks.tasks || []).forEach((t) => {
+        if (!grouped[t.dueDate]) grouped[t.dueDate] = [];
+        grouped[t.dueDate].push(t);
+      });
+      list.innerHTML = Object.keys(grouped).sort().map((date) => `
+        <h4>${escapeHtml(date)}</h4>
+        ${grouped[date].map((t) => {
+          const hooks = (t.suggestedHooks || []).slice(0, 2);
+          const hooksHtml = hooks.map((h) => `<li onclick="navigator.clipboard.writeText('${escapeHtml(h).replace(/'/g, "\\'")}');showToast('Copied')" style="cursor:pointer;">${escapeHtml(h)}</li>`).join("");
+          const detail = `
+            <p class="rec-detail-meta">Target length: ${t.suggestedDurationMin || 35}-${t.suggestedDurationMax || 55}s</p>
+            ${t.filmingNotes ? `<blockquote class="rec-detail-notes">${escapeHtml(t.filmingNotes)}</blockquote>` : ""}
+            ${t.reason ? `<p class="rec-detail-reason">${escapeHtml(t.reason)}</p>` : ""}`;
+          return `
+          <div class="strategy-rec-card ${t.status === "filmed" ? "filmed" : ""}">
+            <div class="strategy-rec-tags">
+              <span class="cm-pillar-tag ${escapeHtml(t.pillar || "brand")}">${escapeHtml(t.pillar || "")}</span>
+              <span class="cm-brain-badge">${escapeHtml(t.priority)}</span>
+            </div>
+            <p class="strategy-rec-title"><strong>${escapeHtml(t.topic)}</strong></p>
+            ${hooksHtml ? `<ul class="strategy-rec-hooks">${hooksHtml}</ul>` : ""}
+            ${cmExpander("Details", detail)}
+            ${t.status === "pending" ? `<button type="button" class="cm-btn" onclick="markTaskFilmed('${t.id}')" style="margin-top:0.5rem;">Mark as Filmed</button>` : ""}
+          </div>`;
+        }).join("")}`).join("") || "<p class='cm-muted'>Nothing queued to film right now.</p>";
       void updateStrategyBadges();
     }
 
@@ -4728,9 +4718,10 @@
       try {
         const res = await cmFetch(`/api/content/strategy-recommendations/${id}/create-recording-task`, { method: "POST" });
         showToast(`Task created for ${res.task?.dueDate || "calendar"}`);
-        // Now that both sections share one page, scroll to the Recording Needed
-        // list and briefly highlight it so the new card is obvious.
-        await loadStrategySection("recording");
+        // Recording Plan is its own sidebar section now — jump to it and briefly
+        // highlight the list so the newly-created filming task is obvious.
+        switchCmSection("recording");
+        await loadRecordingSection();
         const recEl = document.getElementById("strategy-recording-list");
         if (recEl) {
           recEl.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -4745,7 +4736,7 @@
     };
     window.markTaskFilmed = async (id) => {
       await cmFetch(`/api/content/recording-tasks/${id}`, { method: "PATCH", body: JSON.stringify({ status: "filmed" }) });
-      void loadStrategySection("recording");
+      void loadRecordingSection();
       void loadCalendarSection();
     };
 
@@ -4753,7 +4744,7 @@
     document.getElementById("strategy-generate-week-btn")?.addEventListener("click", async () => {
       showToast("Generating week plan…");
       await cmFetch("/api/content-brain/run-cycle", { method: "POST", body: JSON.stringify({ cycle: "monday_recording_plan" }) });
-      void loadStrategySection("recording");
+      void loadRecordingSection();
     });
     document.querySelectorAll("[data-strategy-tab]").forEach((btn) => {
       btn.addEventListener("click", () => void loadStrategySection(btn.getAttribute("data-strategy-tab")));
@@ -4982,6 +4973,7 @@
       if (section === "community") void loadCommunityPanel("dms");
       if (section === "analytics") void loadCmAnalytics("performance");
       if (section === "strategy") void loadStrategySection("overview");
+      if (section === "recording") void loadRecordingSection();
       if (section === "calendar") void loadCalendarSection();
       if (section === "brain") void loadBrainSection();
       if (section === "activity") loadActivityLogTab();
