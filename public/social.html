@@ -5766,11 +5766,17 @@
       }
     }
 
-    document.getElementById("refreshBtn").addEventListener("click", () => void doRefresh());
-    document.getElementById("runMorningScanBtn").addEventListener("click", () => void runMorningScanNow());
-    document.getElementById("runEveningPullBtn").addEventListener("click", () => void runEveningPullNow());
-    document.getElementById("runEscalationsBtn").addEventListener("click", () => void runEscalationsNow());
-    document.getElementById("commentRepliesList").addEventListener("click", (ev) => {
+    // These bind to controls that some UI overhauls removed (morning-scan,
+    // evening-pull, escalations, comment-replies). getElementById returns null
+    // for the missing ones, and an unguarded .addEventListener threw here —
+    // which aborted the REST of init (loadCmStats/switchCmSection/overview),
+    // leaving the whole Overview on placeholder dashes. Optional-chain them so
+    // a missing control is a harmless no-op instead of a fatal init crash.
+    document.getElementById("refreshBtn")?.addEventListener("click", () => void doRefresh());
+    document.getElementById("runMorningScanBtn")?.addEventListener("click", () => void runMorningScanNow());
+    document.getElementById("runEveningPullBtn")?.addEventListener("click", () => void runEveningPullNow());
+    document.getElementById("runEscalationsBtn")?.addEventListener("click", () => void runEscalationsNow());
+    document.getElementById("commentRepliesList")?.addEventListener("click", (ev) => {
       const btn = ev.target.closest("button[data-action]");
       if (!btn) return;
       const id = btn.getAttribute("data-id");
