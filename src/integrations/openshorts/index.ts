@@ -122,6 +122,7 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
 
   let unreachableStreak = 0;
   let notFoundStreak = 0;
+  let resetStreak = 0;
   // Remember the last stage the sidecar reported so we can still show real
   // progress ("transcribing — Ns elapsed") on polls that time out because the
   // sidecar is too CPU-busy to answer — otherwise a long transcription looks
@@ -138,6 +139,7 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
 
       unreachableStreak = 0;
       notFoundStreak = 0;
+      resetStreak = 0;
       const job = response.data;
 
       if (job.status === "complete") {
@@ -221,6 +223,29 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
         }
         console.warn(
           `[openshorts] Sidecar unreachable (${code}) during poll — retry ${unreachableStreak}/5`,
+        );
+        continue;
+      }
+
+      // Connection reset / broken pipe mid-request ("socket hang up"): the
+      // sidecar dropped the connection, almost always because it briefly
+      // restarted (supervisord auto-restarts it). This is transient — retry a
+      // few times instead of failing the whole batch on the first blip. If the
+      // sidecar restarted, the job it was tracking is gone from its in-memory
+      // map, so a later poll returns 404 and fails cleanly via the branch above;
+      // if it was just a dropped connection, the next poll resumes normally.
+      if (code === "ECONNRESET" || code === "EPIPE" || /socket hang up/i.test(msg)) {
+        resetStreak++;
+        if (resetStreak >= 4) {
+          throw new Error(
+            `OpenShorts poll connection reset ${resetStreak}x (${code || "socket hang up"}) — ` +
+            `the sidecar keeps dropping the connection (likely crashed/restarted mid-job). ` +
+            `Check /tmp/openshorts_err.log on the machine for the traceback.`,
+          );
+        }
+        console.warn(
+          `[openshorts] Job ${jobId} poll connection reset (${code || "socket hang up"}), ` +
+          `retry ${resetStreak}/4 — sidecar may be restarting`,
         );
         continue;
       }
