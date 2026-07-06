@@ -115,6 +115,8 @@ import {
   recordClipVersion,
   getLatestClipVersion,
   deleteClipVersion,
+  insertClipChatMessage,
+  listClipChatMessages,
   getContentVideo,
   getContentSession,
   getLatestBriefing,
@@ -434,6 +436,7 @@ import {
   trimClipViaOpenShorts,
   editClipViaOpenShorts,
 } from "./integrations/openshorts/index.js";
+import { runClipEditChat, type ClipEditContext } from "./agents/contentManager/clipEditAgent.js";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { checkVoxCpmHealth } from "./integrations/voxcpm/index.js";
 import { checkScriptSafety } from "./agents/voiceClone/safetyLock.js";
@@ -4700,6 +4703,86 @@ app.post("/api/content/clip/:clipId/revert", express.json(), (req, res) => {
     deleteClipFile(currentPath);
   }
   res.json({ ok: true, videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}` });
+});
+
+// Build the per-clip context the chat agent reasons over (copy fields + caption
+// lines with timings, for locating moments like "around 0:14").
+function buildClipEditContext(video: ContentVideo): ClipEditContext {
+  let captions: Array<{ start: number; end: number; text: string }> = [];
+  let captionsEditable = false;
+  const clipPath = resolveClipFileForVideo(video);
+  if (clipPath) {
+    const dir = path.dirname(clipPath);
+    let stem = path.basename(clipPath).replace(/\.[^.]+$/, "");
+    stem = stem.replace(/_(edit|trim)_[0-9a-f]+$/, "").replace(/_(captioned|vertical)$/, "");
+    const linesPath = path.join(dir, `${stem}_base.lines.json`);
+    try {
+      if (fs.existsSync(linesPath)) {
+        const parsed = JSON.parse(fs.readFileSync(linesPath, "utf8"));
+        if (Array.isArray(parsed)) {
+          captions = parsed;
+          captionsEditable = true;
+        }
+      }
+    } catch {
+      /* ignore — non-editable captions */
+    }
+  }
+  return {
+    clipId: video.id,
+    hook: video.hook || "",
+    caption: video.caption || "",
+    hashtags: video.hashtags || [],
+    score: video.trendAlignmentScore || 0,
+    durationSeconds: null,
+    hasPreviousVersion: Boolean(getLatestClipVersion(video.id)),
+    captions,
+    captionsEditable,
+  };
+}
+
+// Conversational clip editing — one turn. Returns the agent reply, plus a
+// structured proposal to confirm (video edits) or the applied copy change.
+app.post("/api/content/clip/:clipId/edit-chat", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  const video = getContentVideo(clipId);
+  if (!video) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  if (!message) {
+    res.status(400).json({ error: "message is required" });
+    return;
+  }
+  try {
+    const history = listClipChatMessages(clipId, 20);
+    const result = await runClipEditChat({ message, history, context: buildClipEditContext(video) });
+    insertClipChatMessage(clipId, "user", message);
+    insertClipChatMessage(clipId, "assistant", result.reply);
+    res.json({
+      reply: result.reply,
+      proposal: result.proposal, // { summary, spec } | null — UI confirms before /edit
+      copyUpdated: result.copyUpdated, // { field, value } | null — already applied
+    });
+  } catch (err) {
+    const message2 = err instanceof Error ? err.message : String(err);
+    console.error(`[clip-edit-chat] ${clipId}: ${message2}`);
+    res.status(502).json({ error: message2 });
+  }
+});
+
+app.get("/api/content/clip/:clipId/edit-chat", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  res.json({ messages: listClipChatMessages(clipId, 40) });
 });
 
 app.patch("/api/content/clip/:clipId/metadata", express.json(), (req, res) => {

@@ -20,6 +20,8 @@ exports.recordClipVersion = recordClipVersion;
 exports.getLatestClipVersion = getLatestClipVersion;
 exports.deleteClipVersion = deleteClipVersion;
 exports.listClipVersionFileRefs = listClipVersionFileRefs;
+exports.insertClipChatMessage = insertClipChatMessage;
+exports.listClipChatMessages = listClipChatMessages;
 exports.listContentVideos = listContentVideos;
 exports.listAllContentVideoFileRefs = listAllContentVideoFileRefs;
 exports.listAllBatchSourceFileRefs = listAllBatchSourceFileRefs;
@@ -503,6 +505,14 @@ function getContentDb() {
         created_at TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_clip_versions_video ON cm_clip_versions(video_id);
+      CREATE TABLE IF NOT EXISTS cm_clip_chat (
+        id TEXT PRIMARY KEY,
+        clip_id TEXT,
+        role TEXT,
+        content TEXT,
+        created_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_clip_chat_clip ON cm_clip_chat(clip_id);
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
         tiktok_handle TEXT UNIQUE,
@@ -1235,6 +1245,18 @@ function listClipVersionFileRefs() {
         .prepare(`SELECT video_id, file_path FROM cm_clip_versions WHERE file_path IS NOT NULL`)
         .all();
     return rows.map((r) => ({ videoId: String(r.video_id), filePath: String(r.file_path) }));
+}
+/* ── Per-clip edit-chat history ── */
+function insertClipChatMessage(clipId, role, content) {
+    getContentDb()
+        .prepare(`INSERT INTO cm_clip_chat (id, clip_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`)
+        .run((0, crypto_1.randomUUID)(), clipId, role, content, new Date().toISOString());
+}
+function listClipChatMessages(clipId, limit = 40) {
+    const rows = getContentDb()
+        .prepare(`SELECT role, content FROM cm_clip_chat WHERE clip_id = ? ORDER BY created_at ASC LIMIT ?`)
+        .all(clipId, limit);
+    return rows.map((r) => ({ role: r.role === "assistant" ? "assistant" : "user", content: String(r.content) }));
 }
 function listContentVideos(input) {
     const limit = input?.limit ?? 20;

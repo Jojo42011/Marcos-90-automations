@@ -453,6 +453,14 @@ export function getContentDb(): Database.Database {
         created_at TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_clip_versions_video ON cm_clip_versions(video_id);
+      CREATE TABLE IF NOT EXISTS cm_clip_chat (
+        id TEXT PRIMARY KEY,
+        clip_id TEXT,
+        role TEXT,
+        content TEXT,
+        created_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_clip_chat_clip ON cm_clip_chat(clip_id);
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
         tiktok_handle TEXT UNIQUE,
@@ -1361,6 +1369,20 @@ export function listClipVersionFileRefs(): { videoId: string; filePath: string }
     .prepare(`SELECT video_id, file_path FROM cm_clip_versions WHERE file_path IS NOT NULL`)
     .all() as Array<Record<string, unknown>>;
   return rows.map((r) => ({ videoId: String(r.video_id), filePath: String(r.file_path) }));
+}
+
+/* ── Per-clip edit-chat history ── */
+export function insertClipChatMessage(clipId: string, role: "user" | "assistant", content: string): void {
+  getContentDb()
+    .prepare(`INSERT INTO cm_clip_chat (id, clip_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`)
+    .run(randomUUID(), clipId, role, content, new Date().toISOString());
+}
+
+export function listClipChatMessages(clipId: string, limit = 40): Array<{ role: "user" | "assistant"; content: string }> {
+  const rows = getContentDb()
+    .prepare(`SELECT role, content FROM cm_clip_chat WHERE clip_id = ? ORDER BY created_at ASC LIMIT ?`)
+    .all(clipId, limit) as Array<Record<string, unknown>>;
+  return rows.map((r) => ({ role: r.role === "assistant" ? "assistant" : "user", content: String(r.content) }));
 }
 
 export function listContentVideos(input?: {
