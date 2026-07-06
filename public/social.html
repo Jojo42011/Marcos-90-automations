@@ -1878,6 +1878,9 @@
             <button type="button" class="trim-audio-btn active" data-audio="keep" onclick="setAudioMode('keep')">🔊 Original</button>
             <button type="button" class="trim-audio-btn" data-audio="mute" onclick="setAudioMode('mute')">🔇 Mute</button>
             <button type="button" class="trim-audio-btn" data-audio="remove" onclick="setAudioMode('remove')">🗑 Remove</button>
+            <button type="button" class="trim-audio-btn" data-audio="replace" onclick="document.getElementById('trimAudioFile').click()">🎵 Replace…</button>
+            <input type="file" id="trimAudioFile" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg" style="display:none" onchange="uploadReplacementAudio(this)" />
+            <span class="trim-cut-readout" id="trimAudioName" style="color:var(--muted);"></span>
           </div>
 
           <div class="trim-caption-section" id="trimCaptionSection" style="display:none;">
@@ -2559,9 +2562,13 @@
     }
 
     async function openTrimEditor(clipId, title) {
-      trimState = { clipId, title: title || "Clip", duration: 0, start: 0, end: 0, cut: null, audio: "keep", captions: [], captionsEditable: false, captionsDirty: false };
+      trimState = { clipId, title: title || "Clip", duration: 0, start: 0, end: 0, cut: null, audio: "keep", audioReplacePath: null, captions: [], captionsEditable: false, captionsDirty: false };
       const capSection = document.getElementById("trimCaptionSection");
       if (capSection) capSection.style.display = "none";
+      const audioName0 = document.getElementById("trimAudioName");
+      if (audioName0) audioName0.textContent = "";
+      const audioFile0 = document.getElementById("trimAudioFile");
+      if (audioFile0) audioFile0.value = "";
       const revertBtnReset = document.getElementById("trimRevertBtn");
       if (revertBtnReset) revertBtnReset.style.display = "none";
       const modal = document.getElementById("trimModal");
@@ -2792,11 +2799,47 @@
     window.clearCut = clearCut;
 
     function setAudioMode(mode) {
-      if (trimState) trimState.audio = mode;
+      if (trimState) {
+        trimState.audio = mode;
+        // Switching to a non-replace mode discards any pending uploaded track.
+        if (mode !== "replace") {
+          trimState.audioReplacePath = null;
+          const nm = document.getElementById("trimAudioName");
+          if (nm) nm.textContent = "";
+          const fi = document.getElementById("trimAudioFile");
+          if (fi) fi.value = "";
+        }
+      }
       document.querySelectorAll("#trimControls .trim-audio-btn").forEach((b) =>
         b.classList.toggle("active", b.getAttribute("data-audio") === mode));
     }
     window.setAudioMode = setAudioMode;
+
+    async function uploadReplacementAudio(input) {
+      if (!trimState || !input.files || !input.files[0]) return;
+      const file = input.files[0];
+      const nm = document.getElementById("trimAudioName");
+      if (nm) nm.textContent = "uploading…";
+      try {
+        const fd = new FormData();
+        fd.append("audio", file);
+        const authHdr = {};
+        if (typeof token !== "undefined" && token) authHdr.Authorization = "Bearer " + token;
+        const res = await fetch(apiUrl(`/api/content/clip/${trimState.clipId}/audio`), {
+          method: "POST", headers: authHdr, body: fd,
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Upload failed");
+        const data = await res.json();
+        trimState.audioReplacePath = data.audioReplacePath;
+        setAudioMode("replace");
+        if (nm) nm.textContent = data.fileName || file.name;
+      } catch (e) {
+        if (nm) nm.textContent = "";
+        const err = document.getElementById("trimError");
+        if (err) { err.style.display = "block"; err.textContent = e.message || "Audio upload failed."; }
+      }
+    }
+    window.uploadReplacementAudio = uploadReplacementAudio;
 
     let trimPreviewHandler = null;
     function toggleTrimPreview() {
@@ -2839,6 +2882,10 @@
         if (err) { err.style.display = "block"; err.textContent = "No edits to apply — trim, mark a cut, change the audio, or edit a caption first."; }
         return;
       }
+      if (trimState.audio === "replace" && !trimState.audioReplacePath) {
+        if (err) { err.style.display = "block"; err.textContent = "Upload a replacement audio file first (Replace…)."; }
+        return;
+      }
       const cutLen = cut ? cut.end - cut.start : 0;
       if ((end - start - cutLen) < MIN_TRIM_SECONDS) {
         if (err) { err.style.display = "block"; err.textContent = "Result must be at least 3 seconds long."; }
@@ -2849,6 +2896,7 @@
         trim: trimmed ? { start, end } : null,
         cuts: cut ? [[cut.start, cut.end]] : [],
         audio: trimState.audio || "keep",
+        ...(trimState.audio === "replace" ? { audioReplacePath: trimState.audioReplacePath } : {}),
         // Only send captions when the user edited them — otherwise the original
         // burned captions are preserved (render stays off the base).
         ...(captionsChanged ? { captions: trimState.captions } : {}),

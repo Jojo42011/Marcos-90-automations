@@ -3489,6 +3489,34 @@ const batchVideoUpload = (0, multer_1.default)({
         cb(null, allowed.includes(ext));
     },
 });
+// Audio track upload for the clip editor's "replace audio" action. Saved to the
+// shared uploads volume; its path is passed to a subsequent /edit (audio=replace).
+const clipAudioUpload = (0, multer_1.default)({
+    storage: multer_1.default.diskStorage({
+        destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
+        filename: (_req, file, cb) => {
+            const ext = path_1.default.extname(file.originalname).toLowerCase() || ".mp3";
+            cb(null, `audio-${Date.now()}-${(0, crypto_1.randomUUID)()}${ext}`);
+        },
+    }),
+    limits: { fileSize: 64 * 1024 * 1024 }, // 64MB — ample for a clip-length track
+    fileFilter: (_req, file, cb) => {
+        const allowed = [".mp3", ".m4a", ".aac", ".wav", ".ogg"];
+        cb(null, allowed.includes(path_1.default.extname(file.originalname).toLowerCase()));
+    },
+});
+app.post("/api/content/clip/:clipId/audio", clipAudioUpload.single("audio"), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    if (!req.file) {
+        res.status(400).json({ error: "No audio file uploaded (field name: audio; allowed: mp3, m4a, aac, wav, ogg)." });
+        return;
+    }
+    // Return the server path — the client sends it back with the /edit call.
+    res.json({ ok: true, audioReplacePath: req.file.path, fileName: req.file.originalname });
+});
 app.post("/api/content/upload", requireDiskSpaceForUpload(), trackUploadProgress(), contentVideoUpload.single("video"), async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -3883,7 +3911,15 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
         return;
     }
     const body = req.body;
-    const audio = body?.audio === "mute" || body?.audio === "remove" ? body.audio : "keep";
+    const audio = body?.audio === "mute" || body?.audio === "remove" || body?.audio === "replace" ? body.audio : "keep";
+    let audioReplacePath;
+    if (audio === "replace") {
+        audioReplacePath = typeof body?.audioReplacePath === "string" ? body.audioReplacePath : "";
+        if (!audioReplacePath) {
+            res.status(400).json({ error: "audio=replace requires an uploaded audioReplacePath (upload the track first)." });
+            return;
+        }
+    }
     // Edited caption lines (start/end on the clip's original timeline + text).
     // Presence of this array switches the sidecar to render from the persisted
     // uncaptioned base and re-burn the re-synced text.
@@ -3949,7 +3985,7 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
         return;
     }
     try {
-        const result = await (0, index_js_26.editClipViaOpenShorts)({ clipPath: currentPath, editSpec: { trim, cuts, audio, captions } });
+        const result = await (0, index_js_26.editClipViaOpenShorts)({ clipPath: currentPath, editSpec: { trim, cuts, audio, audioReplacePath, captions } });
         if (!result.newClipPath)
             throw new Error("Edit did not return a new file path");
         (0, contentDb_js_1.updateContentVideoFilePath)(clipId, result.newClipPath);

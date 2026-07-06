@@ -311,7 +311,8 @@ export async function trimClipViaOpenShorts(input: {
 export interface ClipEditSpec {
   trim?: { start: number; end: number } | null;
   cuts?: Array<[number, number]>;
-  audio?: "keep" | "mute" | "remove";
+  audio?: "keep" | "mute" | "remove" | "replace";
+  audioReplacePath?: string;
   captions?: Array<{ start: number; end: number; text: string }>;
 }
 

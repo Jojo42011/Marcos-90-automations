@@ -866,6 +866,25 @@ def _strip_audio(input_path: str, output_path: str) -> str:
     return output_path
 
 
+def _replace_audio(input_video: str, audio_file: str, output_path: str) -> str:
+    """Swap in a new audio track (video copied, audio re-encoded to AAC), cut to
+    the shorter of the two so a long music file doesn't extend the clip."""
+    result = subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", input_video, "-i", audio_file,
+            "-map", "0:v", "-map", "1:a",
+            "-c:v", "copy", "-c:a", "aac", "-shortest",
+            output_path,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        timeout=_FFMPEG_TIMEOUT_S,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg audio replace failed: {result.stderr.decode()[-500:]}")
+    return output_path
+
+
 @app.post("/api/clips/edit")
 async def edit_clip(
     clip_path: str = Form(...),
@@ -909,8 +928,18 @@ async def edit_clip(
         raise HTTPException(status_code=400, detail="Invalid trim range: end must be after start")
 
     audio_mode = str(spec.get("audio", "keep")).lower()
-    if audio_mode not in ("keep", "mute", "remove"):
-        raise HTTPException(status_code=400, detail="audio must be keep, mute, or remove")
+    if audio_mode not in ("keep", "mute", "remove", "replace"):
+        raise HTTPException(status_code=400, detail="audio must be keep, mute, remove, or replace")
+
+    # For replace: validate the uploaded audio file is real and inside /data.
+    audio_replace_path = None
+    if audio_mode == "replace":
+        raw = spec.get("audioReplacePath")
+        data_root = os.path.dirname(clips_root)
+        aud_abs = os.path.realpath(str(raw)) if raw else ""
+        if not aud_abs or not os.path.isfile(aud_abs) or os.path.commonpath([aud_abs, data_root]) != data_root:
+            raise HTTPException(status_code=400, detail="Replacement audio file not found on the server")
+        audio_replace_path = aud_abs
 
     # Normalize cuts, clamp into [t_start, t_end], sort, validate.
     raw_cuts = spec.get("cuts") or []
@@ -998,10 +1027,14 @@ async def edit_clip(
             _concat_segments(segments, joined)
             tmp_files.append(joined)
 
-        # 3) Audio: keep as-is, or strip for mute/remove.
+        # 3) Audio: keep as-is, strip for mute/remove, or swap for replace.
         if audio_mode in ("mute", "remove"):
             audio_out = str(parent / f"{stem}_aud_{token}.mp4")
             _strip_audio(joined, audio_out)
+            tmp_files.append(audio_out)
+        elif audio_mode == "replace":
+            audio_out = str(parent / f"{stem}_aud_{token}.mp4")
+            _replace_audio(joined, audio_replace_path, audio_out)
             tmp_files.append(audio_out)
         else:
             audio_out = joined
