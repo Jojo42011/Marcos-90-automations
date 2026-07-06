@@ -484,6 +484,7 @@ def process_video_job(
 
                 if enable_captions and final_clip_path == reframed_path:
                     ass_path = None
+                    ass_kept = False
                     try:
                         cap_width, cap_height = captions_marco.get_video_resolution(reframed_path)
                         ass_path = reframed_path.replace(".mp4", ".ass")
@@ -500,15 +501,33 @@ def process_video_job(
                             captions_marco.burn_captions(reframed_path, ass_file, captioned_path)
                             if os.path.exists(captioned_path):
                                 final_clip_path = captioned_path
-                                os.remove(reframed_path)
-                                print(f"[openshorts] Captions burned in for clip {i + 1}")
+                                # Persist the uncaptioned base + ASS next to the clip so the
+                                # editor can re-edit captions / re-render without the source
+                                # (small: one vertical clip + a text file). Sibling naming
+                                # (_base.mp4 / _base.ass) is derived from the clip stem by the
+                                # edit engine and protected by disk cleanup while in review.
+                                base_kept = reframed_path.replace("_vertical.mp4", "_base.mp4")
+                                ass_kept_path = reframed_path.replace("_vertical.mp4", "_base.ass")
+                                try:
+                                    os.replace(reframed_path, base_kept)
+                                    os.replace(ass_path, ass_kept_path)
+                                    ass_kept = True
+                                    print(f"[openshorts] Captions burned in for clip {i + 1}; persisted editable base+ASS")
+                                except Exception as persist_err:
+                                    print(f"[openshorts] Could not persist base/ASS for clip {i + 1}: {persist_err}")
+                                    if os.path.exists(reframed_path):
+                                        try:
+                                            os.remove(reframed_path)
+                                        except Exception:
+                                            pass
                         else:
                             print(f"[openshorts] No transcript words in clip {i + 1} range — skipping captions")
                     except Exception as caption_err:
                         print(f"Caption burn-in failed for clip {i + 1}: {caption_err}. Using uncaptioned clip.")
                     finally:
+                        # Only delete the ASS if we did NOT keep it as the editable copy.
                         try:
-                            if ass_path and os.path.exists(ass_path):
+                            if ass_path and not ass_kept and os.path.exists(ass_path):
                                 os.remove(ass_path)
                         except Exception:
                             pass

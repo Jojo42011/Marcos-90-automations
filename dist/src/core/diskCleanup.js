@@ -202,9 +202,19 @@ function computeCleanupCandidates(now = Date.now()) {
         .filter((s) => !TERMINAL_UPLOAD_STATUSES.has(s.opusStatus))
         .map((s) => path_1.default.resolve(s.filePath)));
     // Protected clips: basenames of clip files for videos still needing them.
-    const protectedClipNames = new Set(videoRefs
-        .filter((v) => v.filePath && KEEP_CLIP_STATUSES.has(v.status))
-        .map((v) => path_1.default.basename(String(v.filePath).replace(/\\/g, "/"))));
+    // Also protect each clip's editable siblings — the uncaptioned base (_base.mp4)
+    // and caption file (_base.ass) the clip editor re-renders from — while the clip
+    // is in a KEEP state, so a mid-review edit isn't broken by the daily sweep.
+    const protectedClipNames = new Set();
+    for (const v of videoRefs) {
+        if (!v.filePath || !KEEP_CLIP_STATUSES.has(v.status))
+            continue;
+        const base = path_1.default.basename(String(v.filePath).replace(/\\/g, "/"));
+        protectedClipNames.add(base);
+        const stem = base.replace(/_captioned\.mp4$/i, "").replace(/_vertical\.mp4$/i, "").replace(/\.mp4$/i, "");
+        protectedClipNames.add(`${stem}_base.mp4`);
+        protectedClipNames.add(`${stem}_base.ass`);
+    }
     // Uploads sweep
     const uv = uploadsVideosDir();
     if (fs_1.default.existsSync(uv)) {
