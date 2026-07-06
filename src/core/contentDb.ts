@@ -445,6 +445,14 @@ export function getContentDb(): Database.Database {
         opus_completed_at TEXT,
         error_message TEXT
       );
+      CREATE TABLE IF NOT EXISTS cm_clip_versions (
+        id TEXT PRIMARY KEY,
+        video_id TEXT,
+        file_path TEXT,
+        note TEXT,
+        created_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_clip_versions_video ON cm_clip_versions(video_id);
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
         tiktok_handle TEXT UNIQUE,
@@ -1304,6 +1312,55 @@ export function updateContentVideoFilePath(id: string, filePath: string): Conten
   if (!existing) return null;
   getContentDb().prepare(`UPDATE content_videos SET file_path = ? WHERE id = ?`).run(filePath, id);
   return getContentVideo(id);
+}
+
+/* ── Clip edit versioning (revert-once) ── */
+export interface CmClipVersion {
+  id: string;
+  videoId: string;
+  filePath: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export function recordClipVersion(videoId: string, filePath: string, note?: string): CmClipVersion {
+  const row: CmClipVersion = {
+    id: randomUUID(),
+    videoId,
+    filePath,
+    note: note ?? null,
+    createdAt: new Date().toISOString(),
+  };
+  getContentDb()
+    .prepare(`INSERT INTO cm_clip_versions (id, video_id, file_path, note, created_at) VALUES (?, ?, ?, ?, ?)`)
+    .run(row.id, row.videoId, row.filePath, row.note, row.createdAt);
+  return row;
+}
+
+export function getLatestClipVersion(videoId: string): CmClipVersion | null {
+  const r = getContentDb()
+    .prepare(`SELECT * FROM cm_clip_versions WHERE video_id = ? ORDER BY created_at DESC LIMIT 1`)
+    .get(videoId) as Record<string, unknown> | undefined;
+  if (!r) return null;
+  return {
+    id: String(r.id),
+    videoId: String(r.video_id),
+    filePath: String(r.file_path),
+    note: r.note != null ? String(r.note) : null,
+    createdAt: String(r.created_at),
+  };
+}
+
+export function deleteClipVersion(id: string): void {
+  getContentDb().prepare(`DELETE FROM cm_clip_versions WHERE id = ?`).run(id);
+}
+
+/** All version file references, for the disk-cleanup protection set. */
+export function listClipVersionFileRefs(): { videoId: string; filePath: string }[] {
+  const rows = getContentDb()
+    .prepare(`SELECT video_id, file_path FROM cm_clip_versions WHERE file_path IS NOT NULL`)
+    .all() as Array<Record<string, unknown>>;
+  return rows.map((r) => ({ videoId: String(r.video_id), filePath: String(r.file_path) }));
 }
 
 export function listContentVideos(input?: {

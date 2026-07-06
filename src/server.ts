@@ -112,6 +112,9 @@ import {
   getPillarPerformanceSummary,
   updateContentVideo,
   updateContentVideoFilePath,
+  recordClipVersion,
+  getLatestClipVersion,
+  deleteClipVersion,
   getContentVideo,
   getContentSession,
   getLatestBriefing,
@@ -4361,6 +4364,7 @@ app.get("/api/content/clip/:clipId/meta", (req, res) => {
     clipPath: fileExists ? resolvedPath : null,
     videoUrl: fileExists ? `/api/content/clip/${clipId}/video` : null,
     thumbnailUrl,
+    hasPreviousVersion: Boolean(getLatestClipVersion(clipId)),
   });
 });
 
@@ -4399,6 +4403,23 @@ app.get("/api/content/clip/:clipId/video", (req, res) => {
     res.status(500).json({ error: message });
   }
 });
+
+// Retain the pre-edit clip as the (single) prior version so an edit is
+// revertible. Keep-1: discard any older version first, then record this one.
+function saveClipVersionKeepingOne(videoId: string, oldClipPath: string): void {
+  try {
+    const prior = getLatestClipVersion(videoId);
+    if (prior) {
+      deleteClipFile(prior.filePath);
+      deleteClipVersion(prior.id);
+    }
+    recordClipVersion(videoId, oldClipPath);
+  } catch (err) {
+    // Versioning must never block an edit — fall back to reclaiming the old file.
+    console.error(`[clip-version] Could not retain version for ${videoId}: ${(err as Error).message}`);
+    deleteClipFile(oldClipPath);
+  }
+}
 
 // Trim an already-generated clip to a new [start, end] range (seconds, relative
 // to the clip's own duration) and re-render via the sidecar. Non-destructive:
@@ -4455,7 +4476,7 @@ app.post("/api/content/clip/:clipId/trim", express.json(), async (req, res) => {
     // succeeded; any earlier failure left the original clip + DB untouched.
     updateContentVideoFilePath(clipId, result.newClipPath);
     if (path.resolve(result.newClipPath) !== path.resolve(currentPath)) {
-      deleteClipFile(currentPath);
+      saveClipVersionKeepingOne(clipId, currentPath);
     }
 
     res.json({
@@ -4559,7 +4580,7 @@ app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
     if (!result.newClipPath) throw new Error("Edit did not return a new file path");
     updateContentVideoFilePath(clipId, result.newClipPath);
     if (path.resolve(result.newClipPath) !== path.resolve(currentPath)) {
-      deleteClipFile(currentPath);
+      saveClipVersionKeepingOne(clipId, currentPath);
     }
     res.json({
       ok: true,
@@ -4606,6 +4627,40 @@ app.get("/api/content/clip/:clipId/captions", (req, res) => {
     console.warn(`[clip-captions] Could not read ${linesPath}: ${(err as Error).message}`);
   }
   res.json({ editable: false, captions: [], reason: "This clip was generated before caption-editing support." });
+});
+
+// Revert a clip to its retained prior version (revert-once). Repoints filePath
+// to the previous file and discards the unwanted current render.
+app.post("/api/content/clip/:clipId/revert", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  const video = getContentVideo(clipId);
+  if (!video) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+  const prior = getLatestClipVersion(clipId);
+  if (!prior) {
+    res.status(400).json({ error: "No previous version to revert to." });
+    return;
+  }
+  const priorAbs = resolveClipVideoFilePath(prior.filePath) || prior.filePath;
+  if (!fs.existsSync(priorAbs)) {
+    deleteClipVersion(prior.id); // stale pointer — clean it up
+    res.status(410).json({ error: "The previous version file is no longer available on disk." });
+    return;
+  }
+  const currentPath = resolveClipFileForVideo(video);
+  updateContentVideoFilePath(clipId, prior.filePath);
+  deleteClipVersion(prior.id);
+  // Discard the reverted-away render (only if it's a different file).
+  if (currentPath && path.resolve(currentPath) !== path.resolve(priorAbs)) {
+    deleteClipFile(currentPath);
+  }
+  res.json({ ok: true, videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}` });
 });
 
 app.patch("/api/content/clip/:clipId/metadata", express.json(), (req, res) => {

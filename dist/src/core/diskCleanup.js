@@ -216,6 +216,19 @@ function computeCleanupCandidates(now = Date.now()) {
         protectedClipNames.add(`${stem}_base.ass`);
         protectedClipNames.add(`${stem}_base.lines.json`);
     }
+    // Also protect retained prior-version clip files (revert targets) while their
+    // clip is still in a KEEP state — reclaimed once the clip is published/rejected.
+    const keepVideoIds = new Set(videoRefs.filter((v) => KEEP_CLIP_STATUSES.has(v.status)).map((v) => v.id));
+    try {
+        for (const ref of (0, contentDb_js_1.listClipVersionFileRefs)()) {
+            if (keepVideoIds.has(ref.videoId) && ref.filePath) {
+                protectedClipNames.add(path_1.default.basename(String(ref.filePath).replace(/\\/g, "/")));
+            }
+        }
+    }
+    catch (err) {
+        console.error(`[disk-cleanup] Could not read clip-version refs: ${err.message}`);
+    }
     // Uploads sweep
     const uv = uploadsVideosDir();
     if (fs_1.default.existsSync(uv)) {

@@ -1891,6 +1891,7 @@
         </div>
       </div>
       <div class="trim-foot">
+        <button type="button" class="cm-btn" id="trimRevertBtn" style="display:none;margin-right:auto;" onclick="revertClip()">↺ Revert last edit</button>
         <button type="button" class="cm-btn" onclick="closeTrimEditor()">Cancel</button>
         <button type="button" class="cm-btn primary" id="trimApplyBtn" onclick="applyEdit()">Apply Edits</button>
       </div>
@@ -2561,6 +2562,8 @@
       trimState = { clipId, title: title || "Clip", duration: 0, start: 0, end: 0, cut: null, audio: "keep", captions: [], captionsEditable: false, captionsDirty: false };
       const capSection = document.getElementById("trimCaptionSection");
       if (capSection) capSection.style.display = "none";
+      const revertBtnReset = document.getElementById("trimRevertBtn");
+      if (revertBtnReset) revertBtnReset.style.display = "none";
       const modal = document.getElementById("trimModal");
       const video = document.getElementById("trimVideo");
       const controls = document.getElementById("trimControls");
@@ -2593,6 +2596,8 @@
           if (applyBtn) applyBtn.disabled = true;
           return;
         }
+        const revertBtn0 = document.getElementById("trimRevertBtn");
+        if (revertBtn0) revertBtn0.style.display = meta.hasPreviousVersion ? "inline-block" : "none";
         video.src = apiUrl(meta.videoUrl);
         video.load();
         void loadCaptionsForEditor(clipId);
@@ -2861,6 +2866,9 @@
         const video = document.getElementById("trimVideo");
         if (video && resp.videoUrl) { video.src = apiUrl(resp.videoUrl); video.load(); }
         showToast("Clip edited ✓");
+        // A prior version was just retained — revert is now available.
+        const revertBtn = document.getElementById("trimRevertBtn");
+        if (revertBtn) revertBtn.style.display = "inline-block";
         void loadReviewQueue();
         if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Edits"; }
       } catch (e) {
@@ -2870,6 +2878,29 @@
       }
     }
     window.applyEdit = applyEdit;
+
+    async function revertClip() {
+      if (!trimState) return;
+      const clipId = trimState.clipId;
+      const btn = document.getElementById("trimRevertBtn");
+      const err = document.getElementById("trimError");
+      if (err) { err.style.display = "none"; err.textContent = ""; }
+      if (btn) { btn.disabled = true; btn.textContent = "Reverting…"; }
+      try {
+        const resp = await cmFetch(`/api/content/clip/${clipId}/revert`, { method: "POST", body: JSON.stringify({}) });
+        const video = document.getElementById("trimVideo");
+        if (video && resp.videoUrl) { video.src = apiUrl(resp.videoUrl); video.load(); }
+        showToast("Reverted to previous version ✓");
+        if (btn) btn.style.display = "none"; // revert-once consumed
+        void loadCaptionsForEditor(clipId);
+        void loadReviewQueue();
+      } catch (e) {
+        if (err) { err.style.display = "block"; err.textContent = e.message || "Revert failed."; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "↺ Revert last edit"; }
+      }
+    }
+    window.revertClip = revertClip;
 
     function closeTrimEditor() {
       stopTrimPreview();

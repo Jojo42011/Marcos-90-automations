@@ -16,6 +16,10 @@ exports.insertContentVideo = insertContentVideo;
 exports.getContentVideo = getContentVideo;
 exports.updateContentVideo = updateContentVideo;
 exports.updateContentVideoFilePath = updateContentVideoFilePath;
+exports.recordClipVersion = recordClipVersion;
+exports.getLatestClipVersion = getLatestClipVersion;
+exports.deleteClipVersion = deleteClipVersion;
+exports.listClipVersionFileRefs = listClipVersionFileRefs;
 exports.listContentVideos = listContentVideos;
 exports.listAllContentVideoFileRefs = listAllContentVideoFileRefs;
 exports.listAllBatchSourceFileRefs = listAllBatchSourceFileRefs;
@@ -491,6 +495,14 @@ function getContentDb() {
         opus_completed_at TEXT,
         error_message TEXT
       );
+      CREATE TABLE IF NOT EXISTS cm_clip_versions (
+        id TEXT PRIMARY KEY,
+        video_id TEXT,
+        file_path TEXT,
+        note TEXT,
+        created_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_clip_versions_video ON cm_clip_versions(video_id);
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
         tiktok_handle TEXT UNIQUE,
@@ -1186,6 +1198,43 @@ function updateContentVideoFilePath(id, filePath) {
         return null;
     getContentDb().prepare(`UPDATE content_videos SET file_path = ? WHERE id = ?`).run(filePath, id);
     return getContentVideo(id);
+}
+function recordClipVersion(videoId, filePath, note) {
+    const row = {
+        id: (0, crypto_1.randomUUID)(),
+        videoId,
+        filePath,
+        note: note ?? null,
+        createdAt: new Date().toISOString(),
+    };
+    getContentDb()
+        .prepare(`INSERT INTO cm_clip_versions (id, video_id, file_path, note, created_at) VALUES (?, ?, ?, ?, ?)`)
+        .run(row.id, row.videoId, row.filePath, row.note, row.createdAt);
+    return row;
+}
+function getLatestClipVersion(videoId) {
+    const r = getContentDb()
+        .prepare(`SELECT * FROM cm_clip_versions WHERE video_id = ? ORDER BY created_at DESC LIMIT 1`)
+        .get(videoId);
+    if (!r)
+        return null;
+    return {
+        id: String(r.id),
+        videoId: String(r.video_id),
+        filePath: String(r.file_path),
+        note: r.note != null ? String(r.note) : null,
+        createdAt: String(r.created_at),
+    };
+}
+function deleteClipVersion(id) {
+    getContentDb().prepare(`DELETE FROM cm_clip_versions WHERE id = ?`).run(id);
+}
+/** All version file references, for the disk-cleanup protection set. */
+function listClipVersionFileRefs() {
+    const rows = getContentDb()
+        .prepare(`SELECT video_id, file_path FROM cm_clip_versions WHERE file_path IS NOT NULL`)
+        .all();
+    return rows.map((r) => ({ videoId: String(r.video_id), filePath: String(r.file_path) }));
 }
 function listContentVideos(input) {
     const limit = input?.limit ?? 20;

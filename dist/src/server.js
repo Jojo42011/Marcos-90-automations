@@ -3752,6 +3752,7 @@ app.get("/api/content/clip/:clipId/meta", (req, res) => {
         clipPath: fileExists ? resolvedPath : null,
         videoUrl: fileExists ? `/api/content/clip/${clipId}/video` : null,
         thumbnailUrl,
+        hasPreviousVersion: Boolean((0, contentDb_js_1.getLatestClipVersion)(clipId)),
     });
 });
 app.get("/api/content/clip/:clipId/video", (req, res) => {
@@ -3785,6 +3786,23 @@ app.get("/api/content/clip/:clipId/video", (req, res) => {
         res.status(500).json({ error: message });
     }
 });
+// Retain the pre-edit clip as the (single) prior version so an edit is
+// revertible. Keep-1: discard any older version first, then record this one.
+function saveClipVersionKeepingOne(videoId, oldClipPath) {
+    try {
+        const prior = (0, contentDb_js_1.getLatestClipVersion)(videoId);
+        if (prior) {
+            (0, diskCleanup_js_1.deleteClipFile)(prior.filePath);
+            (0, contentDb_js_1.deleteClipVersion)(prior.id);
+        }
+        (0, contentDb_js_1.recordClipVersion)(videoId, oldClipPath);
+    }
+    catch (err) {
+        // Versioning must never block an edit — fall back to reclaiming the old file.
+        console.error(`[clip-version] Could not retain version for ${videoId}: ${err.message}`);
+        (0, diskCleanup_js_1.deleteClipFile)(oldClipPath);
+    }
+}
 // Trim an already-generated clip to a new [start, end] range (seconds, relative
 // to the clip's own duration) and re-render via the sidecar. Non-destructive:
 // the original clip is only replaced after a confirmed-good render, and any
@@ -3836,7 +3854,7 @@ app.post("/api/content/clip/:clipId/trim", express_1.default.json(), async (req,
         // succeeded; any earlier failure left the original clip + DB untouched.
         (0, contentDb_js_1.updateContentVideoFilePath)(clipId, result.newClipPath);
         if (path_1.default.resolve(result.newClipPath) !== path_1.default.resolve(currentPath)) {
-            (0, diskCleanup_js_1.deleteClipFile)(currentPath);
+            saveClipVersionKeepingOne(clipId, currentPath);
         }
         res.json({
             ok: true,
@@ -3936,7 +3954,7 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
             throw new Error("Edit did not return a new file path");
         (0, contentDb_js_1.updateContentVideoFilePath)(clipId, result.newClipPath);
         if (path_1.default.resolve(result.newClipPath) !== path_1.default.resolve(currentPath)) {
-            (0, diskCleanup_js_1.deleteClipFile)(currentPath);
+            saveClipVersionKeepingOne(clipId, currentPath);
         }
         res.json({
             ok: true,
@@ -3984,6 +4002,39 @@ app.get("/api/content/clip/:clipId/captions", (req, res) => {
         console.warn(`[clip-captions] Could not read ${linesPath}: ${err.message}`);
     }
     res.json({ editable: false, captions: [], reason: "This clip was generated before caption-editing support." });
+});
+// Revert a clip to its retained prior version (revert-once). Repoints filePath
+// to the previous file and discards the unwanted current render.
+app.post("/api/content/clip/:clipId/revert", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const clipId = String(req.params.clipId || "");
+    const video = (0, contentDb_js_1.getContentVideo)(clipId);
+    if (!video) {
+        res.status(404).json({ error: "Clip not found" });
+        return;
+    }
+    const prior = (0, contentDb_js_1.getLatestClipVersion)(clipId);
+    if (!prior) {
+        res.status(400).json({ error: "No previous version to revert to." });
+        return;
+    }
+    const priorAbs = resolveClipVideoFilePath(prior.filePath) || prior.filePath;
+    if (!fs_1.default.existsSync(priorAbs)) {
+        (0, contentDb_js_1.deleteClipVersion)(prior.id); // stale pointer — clean it up
+        res.status(410).json({ error: "The previous version file is no longer available on disk." });
+        return;
+    }
+    const currentPath = resolveClipFileForVideo(video);
+    (0, contentDb_js_1.updateContentVideoFilePath)(clipId, prior.filePath);
+    (0, contentDb_js_1.deleteClipVersion)(prior.id);
+    // Discard the reverted-away render (only if it's a different file).
+    if (currentPath && path_1.default.resolve(currentPath) !== path_1.default.resolve(priorAbs)) {
+        (0, diskCleanup_js_1.deleteClipFile)(currentPath);
+    }
+    res.json({ ok: true, videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}` });
 });
 app.patch("/api/content/clip/:clipId/metadata", express_1.default.json(), (req, res) => {
     if (!dashboardTokenOk(req)) {
