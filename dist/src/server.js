@@ -3866,6 +3866,24 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
     }
     const body = req.body;
     const audio = body?.audio === "mute" || body?.audio === "remove" ? body.audio : "keep";
+    // Edited caption lines (start/end on the clip's original timeline + text).
+    // Presence of this array switches the sidecar to render from the persisted
+    // uncaptioned base and re-burn the re-synced text.
+    let captions;
+    if (Array.isArray(body?.captions)) {
+        captions = [];
+        for (const c of body.captions) {
+            const line = c;
+            const s = Number(line?.start);
+            const e = Number(line?.end);
+            const text = typeof line?.text === "string" ? line.text : "";
+            if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) {
+                res.status(400).json({ error: "Each caption line needs numeric start < end and text." });
+                return;
+            }
+            captions.push({ start: s, end: e, text });
+        }
+    }
     let trim = null;
     if (body?.trim && typeof body.trim === "object") {
         const t = body.trim;
@@ -3893,7 +3911,7 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
             cuts.push([cs, ce]);
         }
     }
-    if (!trim && cuts.length === 0 && audio === "keep") {
+    if (!trim && cuts.length === 0 && audio === "keep" && !captions) {
         res.status(400).json({ error: "No edits specified." });
         return;
     }
@@ -3913,7 +3931,7 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
         return;
     }
     try {
-        const result = await (0, index_js_26.editClipViaOpenShorts)({ clipPath: currentPath, editSpec: { trim, cuts, audio } });
+        const result = await (0, index_js_26.editClipViaOpenShorts)({ clipPath: currentPath, editSpec: { trim, cuts, audio, captions } });
         if (!result.newClipPath)
             throw new Error("Edit did not return a new file path");
         (0, contentDb_js_1.updateContentVideoFilePath)(clipId, result.newClipPath);
@@ -3931,6 +3949,41 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
         console.error(`[clip-edit] Clip ${clipId} edit failed: ${message}`);
         res.status(502).json({ error: message }); // original clip untouched
     }
+});
+// Current line-level captions for the editor to display + edit. Reads the
+// persisted _base.lines.json sibling; editable only for clips generated with
+// caption-editing support (i.e. that have a persisted base).
+app.get("/api/content/clip/:clipId/captions", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const clipId = String(req.params.clipId || "");
+    const video = (0, contentDb_js_1.getContentVideo)(clipId);
+    if (!video) {
+        res.status(404).json({ error: "Clip not found" });
+        return;
+    }
+    const clipPath = resolveClipFileForVideo(video);
+    if (!clipPath) {
+        res.json({ editable: false, captions: [], reason: "Clip file is not available on disk." });
+        return;
+    }
+    const dir = path_1.default.dirname(clipPath);
+    let stem = path_1.default.basename(clipPath).replace(/\.[^.]+$/, "");
+    stem = stem.replace(/_(edit|trim)_[0-9a-f]+$/, "").replace(/_(captioned|vertical)$/, "");
+    const linesPath = path_1.default.join(dir, `${stem}_base.lines.json`);
+    try {
+        if (fs_1.default.existsSync(linesPath)) {
+            const parsed = JSON.parse(fs_1.default.readFileSync(linesPath, "utf8"));
+            res.json({ editable: true, captions: Array.isArray(parsed) ? parsed : [] });
+            return;
+        }
+    }
+    catch (err) {
+        console.warn(`[clip-captions] Could not read ${linesPath}: ${err.message}`);
+    }
+    res.json({ editable: false, captions: [], reason: "This clip was generated before caption-editing support." });
 });
 app.patch("/api/content/clip/:clipId/metadata", express_1.default.json(), (req, res) => {
     if (!dashboardTokenOk(req)) {

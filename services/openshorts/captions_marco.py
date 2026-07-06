@@ -185,6 +185,23 @@ def generate_captions_ass(
     lines = group_words_into_lines(words, layout["max_chars_per_line"])
     if not lines:
         return None
+    # Persist a line-level caption list next to the ASS so the clip editor can
+    # display + edit caption text without parsing per-word karaoke ASS events.
+    try:
+        import json as _json
+        line_objs = [
+            {
+                "start": round(ln[0]["start"], 2),
+                "end": round(ln[-1]["end"], 2),
+                "text": " ".join((w.get("text") or "").strip() for w in ln).strip(),
+            }
+            for ln in lines
+            if ln
+        ]
+        with open(output_path.replace(".ass", ".lines.json"), "w", encoding="utf-8") as f:
+            _json.dump(line_objs, f)
+    except Exception as err:
+        print(f"[captions] could not write lines.json: {err}")
     return build_ass_file(lines, video_width, video_height, output_path)
 
 

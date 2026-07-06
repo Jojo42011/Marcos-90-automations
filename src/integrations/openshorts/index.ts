@@ -312,6 +312,7 @@ export interface ClipEditSpec {
   trim?: { start: number; end: number } | null;
   cuts?: Array<[number, number]>;
   audio?: "keep" | "mute" | "remove";
+  captions?: Array<{ start: number; end: number; text: string }>;
 }
 
 /**

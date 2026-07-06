@@ -800,6 +800,14 @@
     .trim-cut-readout { font-family: var(--mono); font-size: 11px; color: var(--red); margin-left: auto; }
     .trim-audio-btn { font-family: var(--font); font-size: 11.5px; padding: 6px 12px; border-radius: var(--radius-xs); border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer; }
     .trim-audio-btn.active { border-color: var(--teal-border-strong); color: var(--teal); background: var(--teal-dim); }
+    .trim-caption-section { margin-top: 14px; }
+    .trim-caption-list { max-height: 168px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-xs); }
+    .trim-cap-row { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    .trim-cap-row:last-child { border-bottom: none; }
+    .trim-cap-time { font-family: var(--mono); font-size: 10px; color: var(--teal); white-space: nowrap; min-width: 74px; }
+    .trim-cap-text { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 5px 8px; font-size: 12px; color: var(--text); font-family: var(--font); }
+    .trim-cap-text:focus { border-color: var(--teal); outline: none; }
+    .trim-cap-empty { padding: 10px; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; }
     .trim-cap-note { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 12px; }
     .trim-error { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--red-border); background: var(--red-dim); color: var(--red); border-radius: var(--radius-xs); font-size: 12.5px; }
     .trim-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
@@ -1872,8 +1880,13 @@
             <button type="button" class="trim-audio-btn" data-audio="remove" onclick="setAudioMode('remove')">🗑 Remove</button>
           </div>
 
+          <div class="trim-caption-section" id="trimCaptionSection" style="display:none;">
+            <div class="trim-tool-label" style="margin-bottom:6px;">Captions <span id="trimCaptionHint" class="cm-muted" style="font-size:10px;text-transform:none;letter-spacing:0;"></span></div>
+            <div class="trim-caption-list" id="trimCaptionList"></div>
+          </div>
+
           <div class="trim-readout" id="trimReadout"></div>
-          <div class="trim-cap-note">Burned-in captions ride along with each kept segment and stay in sync. Audio-replace &amp; caption text-editing coming next.</div>
+          <div class="trim-cap-note">Edited captions are re-synced to the new timeline and re-burned. Trim/cut without caption edits keeps the original burned captions.</div>
           <div class="trim-error" id="trimError" style="display:none;"></div>
         </div>
       </div>
@@ -2545,7 +2558,9 @@
     }
 
     async function openTrimEditor(clipId, title) {
-      trimState = { clipId, title: title || "Clip", duration: 0, start: 0, end: 0, cut: null, audio: "keep" };
+      trimState = { clipId, title: title || "Clip", duration: 0, start: 0, end: 0, cut: null, audio: "keep", captions: [], captionsEditable: false, captionsDirty: false };
+      const capSection = document.getElementById("trimCaptionSection");
+      if (capSection) capSection.style.display = "none";
       const modal = document.getElementById("trimModal");
       const video = document.getElementById("trimVideo");
       const controls = document.getElementById("trimControls");
@@ -2580,6 +2595,7 @@
         }
         video.src = apiUrl(meta.videoUrl);
         video.load();
+        void loadCaptionsForEditor(clipId);
       } catch (e) {
         if (controls) controls.style.display = "none";
         if (noVideo) { noVideo.style.display = "block"; noVideo.textContent = `Could not load clip: ${e.message}`; }
@@ -2587,6 +2603,53 @@
       }
     }
     window.openTrimEditor = openTrimEditor;
+
+    async function loadCaptionsForEditor(clipId) {
+      const section = document.getElementById("trimCaptionSection");
+      const list = document.getElementById("trimCaptionList");
+      const hint = document.getElementById("trimCaptionHint");
+      if (!section || !list) return;
+      try {
+        const data = await cmFetch(`/api/content/clip/${clipId}/captions`);
+        if (!trimState || trimState.clipId !== clipId) return; // modal changed clips
+        if (data.editable && Array.isArray(data.captions) && data.captions.length) {
+          trimState.captions = data.captions.map((c) => ({ start: Number(c.start) || 0, end: Number(c.end) || 0, text: String(c.text || "") }));
+          trimState.captionsEditable = true;
+          trimState.captionsDirty = false;
+          if (hint) hint.textContent = "— edit text, re-burned on apply";
+          renderCaptionEditor();
+          section.style.display = "block";
+        } else {
+          trimState.captionsEditable = false;
+          section.style.display = "none";
+        }
+      } catch (_) {
+        if (section) section.style.display = "none";
+      }
+    }
+
+    function renderCaptionEditor() {
+      const list = document.getElementById("trimCaptionList");
+      if (!list || !trimState) return;
+      if (!trimState.captions.length) {
+        list.innerHTML = `<div class="trim-cap-empty">No caption lines on this clip.</div>`;
+        return;
+      }
+      list.innerHTML = trimState.captions.map((c, i) =>
+        `<div class="trim-cap-row">
+          <span class="trim-cap-time">${fmtClipTime(c.start)}–${fmtClipTime(c.end)}</span>
+          <input type="text" class="trim-cap-text" data-cap-idx="${i}" value="${escapeHtml(c.text)}" />
+        </div>`).join("");
+      list.querySelectorAll(".trim-cap-text").forEach((inp) => {
+        inp.addEventListener("input", () => {
+          const idx = Number(inp.getAttribute("data-cap-idx"));
+          if (trimState && trimState.captions[idx]) {
+            trimState.captions[idx].text = inp.value;
+            trimState.captionsDirty = true;
+          }
+        });
+      });
+    }
 
     (function wireTrimEditor() {
       const video = document.getElementById("trimVideo");
@@ -2766,8 +2829,9 @@
       const trimmed = start > 0.05 || end < duration - 0.05;
       const cut = effectiveCut();
       const audioChanged = trimState.audio && trimState.audio !== "keep";
-      if (!trimmed && !cut && !audioChanged) {
-        if (err) { err.style.display = "block"; err.textContent = "No edits to apply — trim, mark a cut, or change the audio first."; }
+      const captionsChanged = trimState.captionsEditable && trimState.captionsDirty;
+      if (!trimmed && !cut && !audioChanged && !captionsChanged) {
+        if (err) { err.style.display = "block"; err.textContent = "No edits to apply — trim, mark a cut, change the audio, or edit a caption first."; }
         return;
       }
       const cutLen = cut ? cut.end - cut.start : 0;
@@ -2780,6 +2844,9 @@
         trim: trimmed ? { start, end } : null,
         cuts: cut ? [[cut.start, cut.end]] : [],
         audio: trimState.audio || "keep",
+        // Only send captions when the user edited them — otherwise the original
+        // burned captions are preserved (render stays off the base).
+        ...(captionsChanged ? { captions: trimState.captions } : {}),
       };
 
       stopTrimPreview();

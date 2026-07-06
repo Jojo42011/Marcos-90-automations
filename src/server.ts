@@ -4485,8 +4485,26 @@ app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
     return;
   }
 
-  const body = req.body as { trim?: unknown; cuts?: unknown; audio?: unknown };
+  const body = req.body as { trim?: unknown; cuts?: unknown; audio?: unknown; captions?: unknown };
   const audio = body?.audio === "mute" || body?.audio === "remove" ? body.audio : "keep";
+  // Edited caption lines (start/end on the clip's original timeline + text).
+  // Presence of this array switches the sidecar to render from the persisted
+  // uncaptioned base and re-burn the re-synced text.
+  let captions: Array<{ start: number; end: number; text: string }> | undefined;
+  if (Array.isArray(body?.captions)) {
+    captions = [];
+    for (const c of body.captions as unknown[]) {
+      const line = c as { start?: unknown; end?: unknown; text?: unknown };
+      const s = Number(line?.start);
+      const e = Number(line?.end);
+      const text = typeof line?.text === "string" ? line.text : "";
+      if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) {
+        res.status(400).json({ error: "Each caption line needs numeric start < end and text." });
+        return;
+      }
+      captions.push({ start: s, end: e, text });
+    }
+  }
   let trim: { start: number; end: number } | null = null;
   if (body?.trim && typeof body.trim === "object") {
     const t = body.trim as { start?: unknown; end?: unknown };
@@ -4514,7 +4532,7 @@ app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
       cuts.push([cs, ce]);
     }
   }
-  if (!trim && cuts.length === 0 && audio === "keep") {
+  if (!trim && cuts.length === 0 && audio === "keep" && !captions) {
     res.status(400).json({ error: "No edits specified." });
     return;
   }
@@ -4537,7 +4555,7 @@ app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
   }
 
   try {
-    const result = await editClipViaOpenShorts({ clipPath: currentPath, editSpec: { trim, cuts, audio } });
+    const result = await editClipViaOpenShorts({ clipPath: currentPath, editSpec: { trim, cuts, audio, captions } });
     if (!result.newClipPath) throw new Error("Edit did not return a new file path");
     updateContentVideoFilePath(clipId, result.newClipPath);
     if (path.resolve(result.newClipPath) !== path.resolve(currentPath)) {
@@ -4553,6 +4571,41 @@ app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
     console.error(`[clip-edit] Clip ${clipId} edit failed: ${message}`);
     res.status(502).json({ error: message }); // original clip untouched
   }
+});
+
+// Current line-level captions for the editor to display + edit. Reads the
+// persisted _base.lines.json sibling; editable only for clips generated with
+// caption-editing support (i.e. that have a persisted base).
+app.get("/api/content/clip/:clipId/captions", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  const video = getContentVideo(clipId);
+  if (!video) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+  const clipPath = resolveClipFileForVideo(video);
+  if (!clipPath) {
+    res.json({ editable: false, captions: [], reason: "Clip file is not available on disk." });
+    return;
+  }
+  const dir = path.dirname(clipPath);
+  let stem = path.basename(clipPath).replace(/\.[^.]+$/, "");
+  stem = stem.replace(/_(edit|trim)_[0-9a-f]+$/, "").replace(/_(captioned|vertical)$/, "");
+  const linesPath = path.join(dir, `${stem}_base.lines.json`);
+  try {
+    if (fs.existsSync(linesPath)) {
+      const parsed = JSON.parse(fs.readFileSync(linesPath, "utf8"));
+      res.json({ editable: true, captions: Array.isArray(parsed) ? parsed : [] });
+      return;
+    }
+  } catch (err) {
+    console.warn(`[clip-captions] Could not read ${linesPath}: ${(err as Error).message}`);
+  }
+  res.json({ editable: false, captions: [], reason: "This clip was generated before caption-editing support." });
 });
 
 app.patch("/api/content/clip/:clipId/metadata", express.json(), (req, res) => {

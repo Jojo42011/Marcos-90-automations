@@ -212,6 +212,7 @@ export function computeCleanupCandidates(now: number = Date.now()): CleanupCandi
     const stem = base.replace(/_captioned\.mp4$/i, "").replace(/_vertical\.mp4$/i, "").replace(/\.mp4$/i, "");
     protectedClipNames.add(`${stem}_base.mp4`);
     protectedClipNames.add(`${stem}_base.ass`);
+    protectedClipNames.add(`${stem}_base.lines.json`);
   }
 
   // Uploads sweep

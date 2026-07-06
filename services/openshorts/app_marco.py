@@ -508,9 +508,13 @@ def process_video_job(
                                 # edit engine and protected by disk cleanup while in review.
                                 base_kept = reframed_path.replace("_vertical.mp4", "_base.mp4")
                                 ass_kept_path = reframed_path.replace("_vertical.mp4", "_base.ass")
+                                lines_src = ass_path.replace(".ass", ".lines.json")
+                                lines_kept = reframed_path.replace("_vertical.mp4", "_base.lines.json")
                                 try:
                                     os.replace(reframed_path, base_kept)
                                     os.replace(ass_path, ass_kept_path)
+                                    if os.path.exists(lines_src):
+                                        os.replace(lines_src, lines_kept)
                                     ass_kept = True
                                     print(f"[openshorts] Captions burned in for clip {i + 1}; persisted editable base+ASS")
                                 except Exception as persist_err:
@@ -961,11 +965,28 @@ async def edit_clip(
         stem = Path(abs_clip).stem
         token = uuid.uuid4().hex[:8]
 
+        # Caption editing renders from the persisted UNCAPTIONED base so text can
+        # change, then re-burns the re-synced edited lines. Trim/cut/audio-only
+        # edits render from the clip itself (captions ride along as burned pixels
+        # — the existing behavior, no regression).
+        edit_captions = spec.get("captions") if isinstance(spec.get("captions"), list) else None
+        render_source = abs_clip
+        if edit_captions is not None:
+            base_stem = re.sub(r"_(edit|trim)_[0-9a-f]+$", "", stem)
+            base_stem = re.sub(r"_(captioned|vertical)$", "", base_stem)
+            base_path = str(parent / f"{base_stem}_base.mp4")
+            if not os.path.isfile(base_path):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Caption editing isn't available for this clip (it was generated before editing support). Trim, cut, and audio still work.",
+                )
+            render_source = base_path
+
         # 1) Re-encode each kept interval (bounded ~300MB each via _cut_clip).
         segments = []
         for idx, (s, e) in enumerate(keeps):
             seg = str(parent / f"{stem}_seg{idx}_{token}.mp4")
-            _cut_clip(input_path=abs_clip, output_path=seg, start_time=s, end_time=e)
+            _cut_clip(input_path=render_source, output_path=seg, start_time=s, end_time=e)
             segments.append(seg)
             tmp_files.append(seg)
 
@@ -978,14 +999,38 @@ async def edit_clip(
             tmp_files.append(joined)
 
         # 3) Audio: keep as-is, or strip for mute/remove.
-        new_path = str(parent / f"{stem}_edit_{token}.mp4")
         if audio_mode in ("mute", "remove"):
-            _strip_audio(joined, new_path)
+            audio_out = str(parent / f"{stem}_aud_{token}.mp4")
+            _strip_audio(joined, audio_out)
+            tmp_files.append(audio_out)
         else:
-            # Move/copy the joined result into the final name.
-            if joined in tmp_files:
-                tmp_files.remove(joined)
-            os.replace(joined, new_path)
+            audio_out = joined
+
+        # 4) Captions: burn the re-synced edited lines onto the base-rendered video.
+        new_path = str(parent / f"{stem}_edit_{token}.mp4")
+        if edit_captions is not None:
+            import caption_edit
+            cap_w, cap_h = captions_marco.get_video_resolution(audio_out)
+            ass_out = str(parent / f"{stem}_edit_{token}.ass")
+            written = caption_edit.write_edited_ass(edit_captions, keeps, cap_w, cap_h, ass_out)
+            try:
+                if written:
+                    captions_marco.burn_captions(audio_out, ass_out, new_path)
+                else:
+                    # No caption lines survive the edit → keep the uncaptioned render.
+                    if audio_out in tmp_files:
+                        tmp_files.remove(audio_out)
+                    os.replace(audio_out, new_path)
+            finally:
+                try:
+                    if os.path.exists(ass_out):
+                        os.remove(ass_out)
+                except Exception:
+                    pass
+        else:
+            if audio_out in tmp_files:
+                tmp_files.remove(audio_out)
+            os.replace(audio_out, new_path)
 
         if not os.path.isfile(new_path) or not validate_video_file(new_path):
             raise HTTPException(status_code=500, detail="Edit produced no readable output file")
