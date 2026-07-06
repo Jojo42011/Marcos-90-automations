@@ -429,6 +429,7 @@ import {
   checkOpenShortsHealth,
   mapClipUrlForFrontend,
   trimClipViaOpenShorts,
+  editClipViaOpenShorts,
 } from "./integrations/openshorts/index.js";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { checkVoxCpmHealth } from "./integrations/voxcpm/index.js";
@@ -4465,6 +4466,91 @@ app.post("/api/content/clip/:clipId/trim", express.json(), async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[clip-trim] Clip ${clipId} trim failed: ${message}`);
+    res.status(502).json({ error: message }); // original clip untouched
+  }
+});
+
+// Structural edit of an already-generated clip: trim ends, remove middle
+// sections, mute/remove audio. Non-destructive (original replaced only after a
+// confirmed render); mirrors the /trim endpoint's safety pattern.
+app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  const video = getContentVideo(clipId);
+  if (!video) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+
+  const body = req.body as { trim?: unknown; cuts?: unknown; audio?: unknown };
+  const audio = body?.audio === "mute" || body?.audio === "remove" ? body.audio : "keep";
+  let trim: { start: number; end: number } | null = null;
+  if (body?.trim && typeof body.trim === "object") {
+    const t = body.trim as { start?: unknown; end?: unknown };
+    const s = Number(t.start);
+    const e = Number(t.end);
+    if (!Number.isFinite(s) || !Number.isFinite(e) || s < 0 || e <= s) {
+      res.status(400).json({ error: "Invalid trim range: need 0 <= start < end (seconds)." });
+      return;
+    }
+    trim = { start: s, end: e };
+  }
+  const cuts: Array<[number, number]> = [];
+  if (Array.isArray(body?.cuts)) {
+    for (const c of body.cuts as unknown[]) {
+      if (!Array.isArray(c) || c.length < 2) {
+        res.status(400).json({ error: "Each cut must be [start, end]." });
+        return;
+      }
+      const cs = Number(c[0]);
+      const ce = Number(c[1]);
+      if (!Number.isFinite(cs) || !Number.isFinite(ce) || ce <= cs) {
+        res.status(400).json({ error: "Each cut must have numeric start < end." });
+        return;
+      }
+      cuts.push([cs, ce]);
+    }
+  }
+  if (!trim && cuts.length === 0 && audio === "keep") {
+    res.status(400).json({ error: "No edits specified." });
+    return;
+  }
+
+  const storedPath = video.filePath || "";
+  if (!storedPath || storedPath.startsWith("mock://")) {
+    res.status(400).json({ error: "This clip has no real video file to edit (mock clip or not yet rendered)." });
+    return;
+  }
+  const currentPath = resolveClipFileForVideo(video);
+  if (!currentPath) {
+    res.status(410).json({ error: "Clip file is no longer available on disk — it may have been cleaned up." });
+    return;
+  }
+
+  const freeMB = await getFreeDiskMB();
+  if (Number.isFinite(freeMB) && freeMB < 300) {
+    res.status(507).json({ error: `Insufficient disk space to render an edit (${freeMB}MB free).` });
+    return;
+  }
+
+  try {
+    const result = await editClipViaOpenShorts({ clipPath: currentPath, editSpec: { trim, cuts, audio } });
+    if (!result.newClipPath) throw new Error("Edit did not return a new file path");
+    updateContentVideoFilePath(clipId, result.newClipPath);
+    if (path.resolve(result.newClipPath) !== path.resolve(currentPath)) {
+      deleteClipFile(currentPath);
+    }
+    res.json({
+      ok: true,
+      newDuration: result.newDuration,
+      videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}`,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[clip-edit] Clip ${clipId} edit failed: ${message}`);
     res.status(502).json({ error: message }); // original clip untouched
   }
 });

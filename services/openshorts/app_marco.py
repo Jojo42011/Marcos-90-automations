@@ -802,6 +802,211 @@ async def trim_clip(
         _PROCESS_SLOT.release()
 
 
+def _concat_segments(segment_paths: list, output_path: str) -> str:
+    """Join same-codec segments with the concat DEMUXER (stream copy).
+
+    This is the memory-safe way to splice: benchmarks showed a single
+    filter_complex concat spikes to ~3.4GB (OOM risk on the 4GB machine),
+    while segment-then-concat-demuxer stays ~300MB (bounded by one re-encode).
+    """
+    list_path = output_path + ".concat.txt"
+    with open(list_path, "w") as f:
+        for p in segment_paths:
+            f.write(f"file '{os.path.abspath(p)}'\n")
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, "-c", "copy", output_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=_FFMPEG_TIMEOUT_S,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"ffmpeg concat failed: {result.stderr.decode()[-500:]}")
+        return output_path
+    finally:
+        try:
+            os.remove(list_path)
+        except Exception:
+            pass
+
+
+def _strip_audio(input_path: str, output_path: str) -> str:
+    """Copy video, drop audio (mute/remove) — no re-encode, trivial cost."""
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-i", input_path, "-map", "0:v", "-an", "-c:v", "copy", output_path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        timeout=_FFMPEG_TIMEOUT_S,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg mute failed: {result.stderr.decode()[-500:]}")
+    return output_path
+
+
+@app.post("/api/clips/edit")
+async def edit_clip(
+    clip_path: str = Form(...),
+    edit_spec: str = Form(...),
+):
+    """
+    Structural edit of an already-generated clip: trim the ends, remove one or
+    more middle sections, and/or mute/remove the audio track. Re-renders with
+    the same batch primitive (_cut_clip) + the memory-safe concat DEMUXER, under
+    the shared processing slot and the same memory/disk guardrails. Captions are
+    burned into the frames, so they ride along with every kept segment and stay
+    in sync automatically. Never deletes the original — the caller repoints the
+    clip only after this returns a confirmed-good file.
+
+    edit_spec (JSON): {
+      "trim":  {"start": float, "end": float} | null,   # clip-relative seconds
+      "cuts":  [[start, end], ...],                       # middle sections to REMOVE
+      "audio": "keep" | "mute" | "remove"
+    }
+    """
+    clips_root = os.path.realpath(str(CLIPS_OUTPUT_DIR))
+    abs_clip = os.path.realpath(clip_path)
+    if os.path.commonpath([abs_clip, clips_root]) != clips_root:
+        raise HTTPException(status_code=400, detail="clip_path is outside the clips directory")
+    if not os.path.isfile(abs_clip):
+        raise HTTPException(status_code=410, detail="Clip file no longer available on disk")
+
+    try:
+        spec = json.loads(edit_spec)
+    except Exception:
+        raise HTTPException(status_code=400, detail="edit_spec is not valid JSON")
+
+    duration = _probe_duration(abs_clip)
+    if duration <= 0:
+        raise HTTPException(status_code=422, detail="Could not read clip duration (file may be corrupt)")
+
+    trim = spec.get("trim") or {"start": 0.0, "end": duration}
+    t_start = max(0.0, float(trim.get("start", 0.0)))
+    t_end = min(duration, float(trim.get("end", duration)))
+    if t_end <= t_start:
+        raise HTTPException(status_code=400, detail="Invalid trim range: end must be after start")
+
+    audio_mode = str(spec.get("audio", "keep")).lower()
+    if audio_mode not in ("keep", "mute", "remove"):
+        raise HTTPException(status_code=400, detail="audio must be keep, mute, or remove")
+
+    # Normalize cuts, clamp into [t_start, t_end], sort, validate.
+    raw_cuts = spec.get("cuts") or []
+    cuts = []
+    for c in raw_cuts:
+        try:
+            cs, ce = float(c[0]), float(c[1])
+        except Exception:
+            raise HTTPException(status_code=400, detail="each cut must be [start, end]")
+        cs = max(t_start, min(cs, t_end))
+        ce = max(t_start, min(ce, t_end))
+        if ce - cs > 0.05:
+            cuts.append((cs, ce))
+    cuts.sort()
+    # Reject overlapping cuts (ambiguous) rather than silently merging wrong.
+    for i in range(1, len(cuts)):
+        if cuts[i][0] < cuts[i - 1][1] - 0.01:
+            raise HTTPException(status_code=400, detail="cut ranges must not overlap")
+
+    # Build the ordered list of KEEP intervals = [t_start, t_end] minus the cuts.
+    keeps = []
+    cursor = t_start
+    for cs, ce in cuts:
+        if cs - cursor > 0.05:
+            keeps.append((cursor, cs))
+        cursor = max(cursor, ce)
+    if t_end - cursor > 0.05:
+        keeps.append((cursor, t_end))
+    if not keeps:
+        raise HTTPException(status_code=400, detail="Nothing left after trim + cuts")
+    total_kept = sum(e - s for s, e in keeps)
+    if total_kept < _MIN_TRIM_SECONDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Result must be at least {_MIN_TRIM_SECONDS:.0f}s (got {total_kept:.2f}s)",
+        )
+
+    if not _PROCESS_SLOT.acquire(timeout=_TRIM_SLOT_WAIT_S):
+        raise HTTPException(status_code=503, detail="Video processor busy with another job — try again shortly")
+
+    tmp_files = []
+    new_path = None
+    try:
+        avail_mb = _available_memory_mb()
+        if avail_mb is not None and avail_mb < _MIN_MEMORY_MB:
+            raise HTTPException(status_code=503, detail=f"Not enough memory to edit safely: {avail_mb}MB available")
+        has_space, available_mb = check_disk_space(clips_root, required_mb=300)
+        if not has_space:
+            raise HTTPException(status_code=507, detail=f"Insufficient disk space: only {available_mb}MB free")
+
+        parent = Path(abs_clip).parent
+        stem = Path(abs_clip).stem
+        token = uuid.uuid4().hex[:8]
+
+        # 1) Re-encode each kept interval (bounded ~300MB each via _cut_clip).
+        segments = []
+        for idx, (s, e) in enumerate(keeps):
+            seg = str(parent / f"{stem}_seg{idx}_{token}.mp4")
+            _cut_clip(input_path=abs_clip, output_path=seg, start_time=s, end_time=e)
+            segments.append(seg)
+            tmp_files.append(seg)
+
+        # 2) One segment => no splice needed; else concat with the demuxer.
+        if len(segments) == 1:
+            joined = segments[0]
+        else:
+            joined = str(parent / f"{stem}_joined_{token}.mp4")
+            _concat_segments(segments, joined)
+            tmp_files.append(joined)
+
+        # 3) Audio: keep as-is, or strip for mute/remove.
+        new_path = str(parent / f"{stem}_edit_{token}.mp4")
+        if audio_mode in ("mute", "remove"):
+            _strip_audio(joined, new_path)
+        else:
+            # Move/copy the joined result into the final name.
+            if joined in tmp_files:
+                tmp_files.remove(joined)
+            os.replace(joined, new_path)
+
+        if not os.path.isfile(new_path) or not validate_video_file(new_path):
+            raise HTTPException(status_code=500, detail="Edit produced no readable output file")
+
+        new_duration = _probe_duration(new_path)
+        rel_url = os.path.relpath(new_path, clips_root).replace(os.sep, "/")
+        print(
+            f"[openshorts] Edited {os.path.basename(abs_clip)} -> {os.path.basename(new_path)} "
+            f"({new_duration:.1f}s, {len(keeps)} kept segment(s), audio={audio_mode})"
+        )
+        return {
+            "new_clip_path": new_path,
+            "new_clip_url": f"/clips/{rel_url}",
+            "new_duration": round(new_duration, 2),
+        }
+    except HTTPException:
+        if new_path and os.path.exists(new_path):
+            try:
+                os.remove(new_path)
+            except Exception:
+                pass
+        raise
+    except Exception as e:
+        if new_path and os.path.exists(new_path):
+            try:
+                os.remove(new_path)
+            except Exception:
+                pass
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Edit failed: {type(e).__name__}: {e}")
+    finally:
+        for f in tmp_files:
+            try:
+                if os.path.exists(f):
+                    os.remove(f)
+            except Exception:
+                pass
+        _PROCESS_SLOT.release()
+
+
 @app.get("/api/youtube/channel-videos")
 async def get_channel_videos(channel_url: str, max_videos: int = 10):
     """

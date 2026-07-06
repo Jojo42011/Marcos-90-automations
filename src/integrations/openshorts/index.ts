@@ -308,6 +308,46 @@ export async function trimClipViaOpenShorts(input: {
   }
 }
 
+export interface ClipEditSpec {
+  trim?: { start: number; end: number } | null;
+  cuts?: Array<[number, number]>;
+  audio?: "keep" | "mute" | "remove";
+}
+
+/**
+ * Structural edit of an already-generated clip (trim ends, remove middle
+ * sections, mute/remove audio) via the sidecar's memory-safe edit engine.
+ * Returns a NEW file; never deletes the original. Surfaces the sidecar's error
+ * detail (busy / invalid spec / render failure) for honest reporting.
+ */
+export async function editClipViaOpenShorts(input: {
+  clipPath: string;
+  editSpec: ClipEditSpec;
+}): Promise<OpenShortsTrimResult> {
+  const health = await checkOpenShortsHealth();
+  if (!health.running) {
+    throw new Error("OpenShorts sidecar is not running — cannot edit clips. Start the sidecar and retry.");
+  }
+  try {
+    const formData = new FormData();
+    formData.append("clip_path", input.clipPath);
+    formData.append("edit_spec", JSON.stringify(input.editSpec));
+    const response = await axios.post(`${OPENSHORTS_BASE_URL}/api/clips/edit`, formData, {
+      headers: formData.getHeaders(),
+      timeout: 210000,
+    });
+    return {
+      newClipPath: String(response.data.new_clip_path || ""),
+      newClipUrl: String(response.data.new_clip_url || ""),
+      newDuration: Number(response.data.new_duration || 0),
+    };
+  } catch (err: unknown) {
+    const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+    const detail = axiosErr?.response?.data?.detail;
+    throw new Error(detail || axiosErr?.message || "OpenShorts edit failed");
+  }
+}
+
 export async function checkOpenShortsHealth(): Promise<{
   running: boolean;
   model?: string;

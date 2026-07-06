@@ -790,6 +790,16 @@
     .trim-readout .arrow { color: var(--muted); }
     .trim-readout .new { color: var(--teal); font-weight: 600; }
     .trim-readout .delta { color: var(--amber); font-size: 11px; }
+    .trim-cut-band { position: absolute; top: 15px; height: 18px; background: var(--red-dim); border: 1px solid var(--red-border); border-radius: 4px; pointer-events: none; }
+    .trim-cut-band::after { content: 'CUT'; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 8.5px; letter-spacing: 1px; color: var(--red); }
+    .trim-tool-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .trim-tool-label { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); min-width: 78px; }
+    .trim-mini-btn { font-family: var(--font); font-size: 11.5px; padding: 6px 10px; border-radius: var(--radius-xs); border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; }
+    .trim-mini-btn:hover { border-color: var(--red-border); color: var(--red); }
+    .trim-mini-btn.ghost { color: var(--muted); }
+    .trim-cut-readout { font-family: var(--mono); font-size: 11px; color: var(--red); margin-left: auto; }
+    .trim-audio-btn { font-family: var(--font); font-size: 11.5px; padding: 6px 12px; border-radius: var(--radius-xs); border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer; }
+    .trim-audio-btn.active { border-color: var(--teal-border-strong); color: var(--teal); background: var(--teal-dim); }
     .trim-cap-note { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 12px; }
     .trim-error { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--red-border); background: var(--red-dim); color: var(--red); border-radius: var(--radius-xs); font-size: 12.5px; }
     .trim-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
@@ -1823,8 +1833,8 @@
     <div class="trim-modal-box" onclick="event.stopPropagation()">
       <div class="trim-head">
         <div>
-          <div class="trim-title"><span class="trim-scissors">✂</span> Trim Clip</div>
-          <div class="trim-sub" id="trimSub">Adjust start &amp; end · captions stay in sync</div>
+          <div class="trim-title"><span class="trim-scissors">✂</span> Clip Editor</div>
+          <div class="trim-sub" id="trimSub">Trim ends · remove a middle section · edit audio</div>
         </div>
         <button type="button" class="trim-close" onclick="closeTrimEditor()" aria-label="Close">✕</button>
       </div>
@@ -1834,25 +1844,42 @@
         </div>
         <div id="trimNoVideo" class="trim-no-video" style="display:none;"></div>
         <div id="trimControls">
-          <div class="trim-range-label">Trim range — drag either handle to seek</div>
+          <div class="trim-range-label">Trim range — drag either teal handle to seek</div>
           <div class="trim-slider" id="trimSlider">
             <div class="trim-track"></div>
+            <div class="trim-cut-band" id="trimCutBand" style="display:none;"></div>
             <div class="trim-sel" id="trimSel"></div>
             <input type="range" id="trimStartInput" class="trim-input" min="0" max="100" step="0.1" value="0" aria-label="Start point" />
             <input type="range" id="trimEndInput" class="trim-input" min="0" max="100" step="0.1" value="100" aria-label="End point" />
           </div>
           <div class="trim-times"><span id="trimStartLbl">0:00</span><span id="trimEndLbl">0:00</span></div>
           <div class="trim-preview-row">
-            <button type="button" class="trim-preview-btn" id="trimPreviewBtn" onclick="toggleTrimPreview()">▶ Preview Trimmed Range <span class="trim-loop">⟳ loop</span></button>
+            <button type="button" class="trim-preview-btn" id="trimPreviewBtn" onclick="toggleTrimPreview()">▶ Preview kept range <span class="trim-loop">⟳ loop</span></button>
           </div>
+
+          <div class="trim-tool-row">
+            <span class="trim-tool-label">Middle cut</span>
+            <button type="button" class="trim-mini-btn" onclick="markCut('start')">Set start @ playhead</button>
+            <button type="button" class="trim-mini-btn" onclick="markCut('end')">Set end @ playhead</button>
+            <button type="button" class="trim-mini-btn ghost" onclick="clearCut()">Clear</button>
+            <span class="trim-cut-readout" id="trimCutReadout">none</span>
+          </div>
+
+          <div class="trim-tool-row">
+            <span class="trim-tool-label">Audio</span>
+            <button type="button" class="trim-audio-btn active" data-audio="keep" onclick="setAudioMode('keep')">🔊 Original</button>
+            <button type="button" class="trim-audio-btn" data-audio="mute" onclick="setAudioMode('mute')">🔇 Mute</button>
+            <button type="button" class="trim-audio-btn" data-audio="remove" onclick="setAudioMode('remove')">🗑 Remove</button>
+          </div>
+
           <div class="trim-readout" id="trimReadout"></div>
-          <div class="trim-cap-note">Burned-in captions are preserved and stay in sync — no re-transcription.</div>
+          <div class="trim-cap-note">Burned-in captions ride along with each kept segment and stay in sync. Audio-replace &amp; caption text-editing coming next.</div>
           <div class="trim-error" id="trimError" style="display:none;"></div>
         </div>
       </div>
       <div class="trim-foot">
         <button type="button" class="cm-btn" onclick="closeTrimEditor()">Cancel</button>
-        <button type="button" class="cm-btn primary" id="trimApplyBtn" onclick="applyTrim()">Apply Trim</button>
+        <button type="button" class="cm-btn primary" id="trimApplyBtn" onclick="applyEdit()">Apply Edits</button>
       </div>
     </div>
   </div>
@@ -2518,7 +2545,7 @@
     }
 
     async function openTrimEditor(clipId, title) {
-      trimState = { clipId, title: title || "Clip", duration: 0, start: 0, end: 0 };
+      trimState = { clipId, title: title || "Clip", duration: 0, start: 0, end: 0, cut: null, audio: "keep" };
       const modal = document.getElementById("trimModal");
       const video = document.getElementById("trimVideo");
       const controls = document.getElementById("trimControls");
@@ -2529,8 +2556,10 @@
       if (err) { err.style.display = "none"; err.textContent = ""; }
       if (noVideo) noVideo.style.display = "none";
       if (controls) controls.style.display = "block";
-      if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Trim"; }
-      if (sub) sub.textContent = `${trimState.title} · captions stay in sync`;
+      if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Edits"; }
+      if (sub) sub.textContent = `${trimState.title} · trim · cut middle · audio`;
+      setAudioMode("keep");
+      clearCut();
       if (video) { video.style.display = "block"; video.src = ""; }
       modal.style.display = "flex";
 
@@ -2580,6 +2609,7 @@
           const err = document.getElementById("trimError");
           if (err) { err.style.display = "block"; err.textContent = "This clip is too short to trim (under 3s)."; }
         }
+        clearCut();
         renderTrimUI();
       });
 
@@ -2626,14 +2656,79 @@
       }
       document.getElementById("trimStartLbl").textContent = fmtClipTime(trimState.start);
       document.getElementById("trimEndLbl").textContent = fmtClipTime(trimState.end);
-      const newLen = Math.max(0, trimState.end - trimState.start);
+      // Cut band: only the portion of the cut inside the trimmed range counts.
+      const band = document.getElementById("trimCutBand");
+      let cutLen = 0;
+      if (band) {
+        const c = effectiveCut();
+        if (c) {
+          band.style.display = "block";
+          band.style.left = `${(c.start / dur) * 100}%`;
+          band.style.width = `${((c.end - c.start) / dur) * 100}%`;
+          cutLen = c.end - c.start;
+        } else {
+          band.style.display = "none";
+        }
+      }
+      const newLen = Math.max(0, (trimState.end - trimState.start) - cutLen);
       const delta = trimState.duration - newLen;
+      const parts = [];
+      if (trimState.end - trimState.start < trimState.duration - 0.05) parts.push("trim");
+      if (cutLen > 0.05) parts.push(`cut ${fmtClipTime(cutLen)}`);
       document.getElementById("trimReadout").innerHTML =
         `<span class="orig">Original ${fmtClipTime(trimState.duration)}</span>` +
         `<span class="arrow">→</span>` +
         `<span class="new">New ${fmtClipTime(newLen)}</span>` +
-        (delta > 0.5 ? `<span class="delta">(−${fmtClipTime(delta)})</span>` : "");
+        (delta > 0.5 ? `<span class="delta">(−${fmtClipTime(delta)}${parts.length ? " · " + parts.join(" + ") : ""})</span>` : "");
     }
+
+    // The cut clamped to the current [start,end] trim window (null if it falls
+    // entirely outside the kept range).
+    function effectiveCut() {
+      if (!trimState || !trimState.cut) return null;
+      const s = Math.max(trimState.start, trimState.cut.start);
+      const e = Math.min(trimState.end, trimState.cut.end);
+      return e - s > 0.05 ? { start: s, end: e } : null;
+    }
+
+    function markCut(which) {
+      if (!trimState) return;
+      const video = document.getElementById("trimVideo");
+      const t = video ? video.currentTime : trimState.start;
+      const cut = trimState.cut || { start: null, end: null };
+      if (which === "start") cut.start = t;
+      else cut.end = t;
+      // Once both ends are set, normalize order.
+      if (cut.start != null && cut.end != null && cut.end < cut.start) {
+        const tmp = cut.start; cut.start = cut.end; cut.end = tmp;
+      }
+      trimState.cut = cut;
+      const ro = document.getElementById("trimCutReadout");
+      if (ro) {
+        ro.textContent = (cut.start != null && cut.end != null)
+          ? `${fmtClipTime(cut.start)}–${fmtClipTime(cut.end)}`
+          : cut.start != null ? `start ${fmtClipTime(cut.start)} · set end` : `set start`;
+      }
+      renderTrimUI();
+    }
+    window.markCut = markCut;
+
+    function clearCut() {
+      if (trimState) trimState.cut = null;
+      const ro = document.getElementById("trimCutReadout");
+      if (ro) ro.textContent = "none";
+      const band = document.getElementById("trimCutBand");
+      if (band) band.style.display = "none";
+      renderTrimUI();
+    }
+    window.clearCut = clearCut;
+
+    function setAudioMode(mode) {
+      if (trimState) trimState.audio = mode;
+      document.querySelectorAll("#trimControls .trim-audio-btn").forEach((b) =>
+        b.classList.toggle("active", b.getAttribute("data-audio") === mode));
+    }
+    window.setAudioMode = setAudioMode;
 
     let trimPreviewHandler = null;
     function toggleTrimPreview() {
@@ -2661,36 +2756,53 @@
     }
     window.toggleTrimPreview = toggleTrimPreview;
 
-    async function applyTrim() {
+    async function applyEdit() {
       if (!trimState) return;
       const applyBtn = document.getElementById("trimApplyBtn");
       const err = document.getElementById("trimError");
-      const { clipId, start, end } = trimState;
+      const { clipId, start, end, duration } = trimState;
       if (err) { err.style.display = "none"; err.textContent = ""; }
-      if ((end - start) < MIN_TRIM_SECONDS) {
-        if (err) { err.style.display = "block"; err.textContent = "Trimmed length must be at least 3 seconds."; }
+
+      const trimmed = start > 0.05 || end < duration - 0.05;
+      const cut = effectiveCut();
+      const audioChanged = trimState.audio && trimState.audio !== "keep";
+      if (!trimmed && !cut && !audioChanged) {
+        if (err) { err.style.display = "block"; err.textContent = "No edits to apply — trim, mark a cut, or change the audio first."; }
         return;
       }
+      const cutLen = cut ? cut.end - cut.start : 0;
+      if ((end - start - cutLen) < MIN_TRIM_SECONDS) {
+        if (err) { err.style.display = "block"; err.textContent = "Result must be at least 3 seconds long."; }
+        return;
+      }
+
+      const spec = {
+        trim: trimmed ? { start, end } : null,
+        cuts: cut ? [[cut.start, cut.end]] : [],
+        audio: trimState.audio || "keep",
+      };
+
       stopTrimPreview();
-      if (applyBtn) { applyBtn.disabled = true; applyBtn.innerHTML = `<span class="btn-spinner" style="border-color:rgba(4,34,43,.35);border-top-color:#04222b"></span> Trimming…`; }
+      if (applyBtn) { applyBtn.disabled = true; applyBtn.innerHTML = `<span class="btn-spinner" style="border-color:rgba(4,34,43,.35);border-top-color:#04222b"></span> Rendering…`; }
       try {
-        const resp = await cmFetch(`/api/content/clip/${clipId}/trim`, {
+        const resp = await cmFetch(`/api/content/clip/${clipId}/edit`, {
           method: "POST",
-          body: JSON.stringify({ start, end }),
+          body: JSON.stringify(spec),
         });
-        // Success — swap the preview to the freshly trimmed clip and reset handles.
+        // Success — swap the preview to the freshly rendered clip; loadedmetadata
+        // resets the handles + clears the cut against the new (shorter) timeline.
         const video = document.getElementById("trimVideo");
         if (video && resp.videoUrl) { video.src = apiUrl(resp.videoUrl); video.load(); }
-        showToast("Clip trimmed ✓");
+        showToast("Clip edited ✓");
         void loadReviewQueue();
-        if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Trim"; }
+        if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Edits"; }
       } catch (e) {
         // Original clip untouched — surface the real error, keep the UI usable.
-        if (err) { err.style.display = "block"; err.textContent = e.message || "Trim failed — the original clip is unchanged."; }
-        if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Trim"; }
+        if (err) { err.style.display = "block"; err.textContent = e.message || "Edit failed — the original clip is unchanged."; }
+        if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Edits"; }
       }
     }
-    window.applyTrim = applyTrim;
+    window.applyEdit = applyEdit;
 
     function closeTrimEditor() {
       stopTrimPreview();

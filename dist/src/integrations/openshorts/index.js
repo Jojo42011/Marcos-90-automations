@@ -7,6 +7,7 @@ exports.mapClipUrlForFrontend = mapClipUrlForFrontend;
 exports.submitToOpenShorts = submitToOpenShorts;
 exports.pollOpenShortsJob = pollOpenShortsJob;
 exports.trimClipViaOpenShorts = trimClipViaOpenShorts;
+exports.editClipViaOpenShorts = editClipViaOpenShorts;
 exports.checkOpenShortsHealth = checkOpenShortsHealth;
 exports.generateMockClips = generateMockClips;
 /**
@@ -227,6 +228,37 @@ async function trimClipViaOpenShorts(input) {
         const axiosErr = err;
         const detail = axiosErr?.response?.data?.detail;
         throw new Error(detail || axiosErr?.message || "OpenShorts trim failed");
+    }
+}
+/**
+ * Structural edit of an already-generated clip (trim ends, remove middle
+ * sections, mute/remove audio) via the sidecar's memory-safe edit engine.
+ * Returns a NEW file; never deletes the original. Surfaces the sidecar's error
+ * detail (busy / invalid spec / render failure) for honest reporting.
+ */
+async function editClipViaOpenShorts(input) {
+    const health = await checkOpenShortsHealth();
+    if (!health.running) {
+        throw new Error("OpenShorts sidecar is not running — cannot edit clips. Start the sidecar and retry.");
+    }
+    try {
+        const formData = new form_data_1.default();
+        formData.append("clip_path", input.clipPath);
+        formData.append("edit_spec", JSON.stringify(input.editSpec));
+        const response = await axios_1.default.post(`${OPENSHORTS_BASE_URL}/api/clips/edit`, formData, {
+            headers: formData.getHeaders(),
+            timeout: 210000,
+        });
+        return {
+            newClipPath: String(response.data.new_clip_path || ""),
+            newClipUrl: String(response.data.new_clip_url || ""),
+            newDuration: Number(response.data.new_duration || 0),
+        };
+    }
+    catch (err) {
+        const axiosErr = err;
+        const detail = axiosErr?.response?.data?.detail;
+        throw new Error(detail || axiosErr?.message || "OpenShorts edit failed");
     }
 }
 async function checkOpenShortsHealth() {
