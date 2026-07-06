@@ -111,6 +111,7 @@ import {
   getAnalyticsDataset,
   getPillarPerformanceSummary,
   updateContentVideo,
+  updateContentVideoFilePath,
   getContentVideo,
   getContentSession,
   getLatestBriefing,
@@ -427,6 +428,7 @@ import { newMarcoRequestId, marcoCorrelationId } from "./app/marcoLog.js";
 import {
   checkOpenShortsHealth,
   mapClipUrlForFrontend,
+  trimClipViaOpenShorts,
 } from "./integrations/openshorts/index.js";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { checkVoxCpmHealth } from "./integrations/voxcpm/index.js";
@@ -4394,6 +4396,76 @@ app.get("/api/content/clip/:clipId/video", (req, res) => {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[clip-video] Error serving clip:", message);
     res.status(500).json({ error: message });
+  }
+});
+
+// Trim an already-generated clip to a new [start, end] range (seconds, relative
+// to the clip's own duration) and re-render via the sidecar. Non-destructive:
+// the original clip is only replaced after a confirmed-good render, and any
+// failure leaves it fully intact and playable.
+app.post("/api/content/clip/:clipId/trim", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  const video = getContentVideo(clipId);
+  if (!video) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+
+  const body = req.body as { start?: unknown; end?: unknown };
+  const start = Number(body?.start);
+  const end = Number(body?.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
+    res.status(400).json({ error: "Invalid range: provide numeric start/end in seconds with 0 <= start < end." });
+    return;
+  }
+  if (end - start < 3) {
+    res.status(400).json({ error: "Trimmed length must be at least 3 seconds." });
+    return;
+  }
+
+  const storedPath = video.filePath || "";
+  if (!storedPath || storedPath.startsWith("mock://")) {
+    res.status(400).json({ error: "This clip has no real video file to trim (mock clip or not yet rendered)." });
+    return;
+  }
+  const currentPath = resolveClipFileForVideo(video);
+  if (!currentPath) {
+    res.status(410).json({ error: "Clip file is no longer available on disk — it may have been cleaned up." });
+    return;
+  }
+
+  // Light Node-side disk guard; the sidecar runs the authoritative pre-check.
+  const freeMB = await getFreeDiskMB();
+  if (Number.isFinite(freeMB) && freeMB < 300) {
+    res.status(507).json({ error: `Insufficient disk space to render a trim (${freeMB}MB free).` });
+    return;
+  }
+
+  try {
+    const result = await trimClipViaOpenShorts({ clipPath: currentPath, start, end });
+    if (!result.newClipPath) throw new Error("Trim did not return a new file path");
+
+    // Repoint the clip only after a confirmed-good render, then clean up the old
+    // file via the existing safe cleanup pattern. Reaching here means the render
+    // succeeded; any earlier failure left the original clip + DB untouched.
+    updateContentVideoFilePath(clipId, result.newClipPath);
+    if (path.resolve(result.newClipPath) !== path.resolve(currentPath)) {
+      deleteClipFile(currentPath);
+    }
+
+    res.json({
+      ok: true,
+      newDuration: result.newDuration,
+      videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}`,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[clip-trim] Clip ${clipId} trim failed: ${message}`);
+    res.status(502).json({ error: message }); // original clip untouched
   }
 });
 

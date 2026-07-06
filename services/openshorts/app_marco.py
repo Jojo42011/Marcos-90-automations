@@ -670,6 +670,114 @@ async def serve_clip(job_id: str, filename: str):
     return FileResponse(str(file_path))
 
 
+# Minimum length of a trimmed clip — anything shorter is almost certainly a
+# mis-drag and produces an unusable micro-clip.
+_MIN_TRIM_SECONDS = float(os.environ.get("OPENSHORTS_MIN_TRIM_SECONDS", "3.0"))
+# Trim waits only briefly for the shared processing slot — if a batch job holds
+# it, fail fast with a clear "busy" instead of hanging the user's request.
+_TRIM_SLOT_WAIT_S = int(os.environ.get("OPENSHORTS_TRIM_SLOT_WAIT_S", "8"))
+
+
+@app.post("/api/clips/trim")
+async def trim_clip(
+    clip_path: str = Form(...),
+    start: float = Form(...),
+    end: float = Form(...),
+):
+    """
+    Re-cut an ALREADY-GENERATED clip to a new [start, end] range (both relative
+    to the clip's own timeline, in seconds) and return the new file.
+
+    Reuses the exact batch-pipeline rendering primitive (_cut_clip) and the same
+    memory-safety guardrails: the shared processing slot (so a trim never runs
+    concurrently with a batch encode), a low-memory pre-check, a disk pre-check,
+    and _cut_clip's own ffmpeg timeout + non-zero-exit fail-fast. Captions are
+    already burned into the clip's frames, so cutting the clip preserves them in
+    sync — no re-transcription. NEVER deletes the original; the caller (Node)
+    repoints the clip and cleans up the old file only after this returns success.
+    """
+    # Confine to the clips dir — never read/write outside it, even if asked.
+    clips_root = os.path.realpath(str(CLIPS_OUTPUT_DIR))
+    abs_clip = os.path.realpath(clip_path)
+    if os.path.commonpath([abs_clip, clips_root]) != clips_root:
+        raise HTTPException(status_code=400, detail="clip_path is outside the clips directory")
+    if not os.path.isfile(abs_clip):
+        raise HTTPException(status_code=410, detail="Clip file no longer available on disk")
+
+    duration = _probe_duration(abs_clip)
+    if duration <= 0:
+        raise HTTPException(status_code=422, detail="Could not read clip duration (file may be corrupt)")
+
+    # Authoritative range validation against the real file duration.
+    if start < 0 or end <= start:
+        raise HTTPException(status_code=400, detail="Invalid range: need 0 <= start < end")
+    if end > duration + 0.25:
+        raise HTTPException(status_code=400, detail=f"End {end:.2f}s exceeds clip duration {duration:.2f}s")
+    end = min(end, duration)
+    if (end - start) < _MIN_TRIM_SECONDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Trimmed length must be at least {_MIN_TRIM_SECONDS:.0f}s (got {end - start:.2f}s)",
+        )
+
+    # Serialize against batch jobs — brief wait, then fail fast if busy.
+    if not _PROCESS_SLOT.acquire(timeout=_TRIM_SLOT_WAIT_S):
+        raise HTTPException(status_code=503, detail="Video processor busy with another job — try again shortly")
+
+    new_path = None
+    try:
+        avail_mb = _available_memory_mb()
+        if avail_mb is not None and avail_mb < _MIN_MEMORY_MB:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Not enough memory to trim safely: {avail_mb}MB available, need ~{_MIN_MEMORY_MB}MB",
+            )
+        has_space, available_mb = check_disk_space(clips_root, required_mb=300)
+        if not has_space:
+            raise HTTPException(
+                status_code=507,
+                detail=f"Insufficient disk space: only {available_mb}MB free, need 300MB to render a trim",
+            )
+
+        new_name = f"{Path(abs_clip).stem}_trim_{uuid.uuid4().hex[:8]}.mp4"
+        new_path = str(Path(abs_clip).parent / new_name)
+
+        # Same rendering primitive as the batch pipeline, scoped to the new range.
+        _cut_clip(input_path=abs_clip, output_path=new_path, start_time=start, end_time=end)
+
+        # Confirm the new file is real and playable BEFORE reporting success, so
+        # the caller never repoints the clip at a broken render.
+        if not os.path.isfile(new_path) or not validate_video_file(new_path):
+            raise HTTPException(status_code=500, detail="Trim produced no readable output file")
+
+        new_duration = _probe_duration(new_path)
+        rel_url = os.path.relpath(new_path, clips_root).replace(os.sep, "/")
+        print(f"[openshorts] Trimmed {os.path.basename(abs_clip)} -> {new_name} ({new_duration:.1f}s)")
+        return {
+            "new_clip_path": new_path,
+            "new_clip_url": f"/clips/{rel_url}",
+            "new_duration": round(new_duration, 2),
+        }
+    except HTTPException:
+        # Clean up any partial output, then re-raise unchanged.
+        if new_path and os.path.exists(new_path):
+            try:
+                os.remove(new_path)
+            except Exception:
+                pass
+        raise
+    except Exception as e:
+        if new_path and os.path.exists(new_path):
+            try:
+                os.remove(new_path)
+            except Exception:
+                pass
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Trim failed: {type(e).__name__}: {e}")
+    finally:
+        _PROCESS_SLOT.release()
+
+
 @app.get("/api/youtube/channel-videos")
 async def get_channel_videos(channel_url: str, max_videos: int = 10):
     """

@@ -1294,6 +1294,18 @@ export function updateContentVideo(
   return getContentVideo(id);
 }
 
+/**
+ * Point a clip at a newly-rendered file (used by the trim editor). Kept separate
+ * from updateContentVideo so the clip-file reference is only ever repointed by a
+ * caller that has already confirmed the new file is good on disk.
+ */
+export function updateContentVideoFilePath(id: string, filePath: string): ContentVideo | null {
+  const existing = getContentVideo(id);
+  if (!existing) return null;
+  getContentDb().prepare(`UPDATE content_videos SET file_path = ? WHERE id = ?`).run(filePath, id);
+  return getContentVideo(id);
+}
+
 export function listContentVideos(input?: {
   status?: ContentVideoStatus;
   limit?: number;

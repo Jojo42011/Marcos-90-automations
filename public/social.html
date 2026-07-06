@@ -755,6 +755,47 @@
     }
     .btn-secondary:hover { border-color: var(--accent-2, #25f4ee); }
     .clip-player-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.78); backdrop-filter: blur(2px); }
+
+    /* Trim editor modal */
+    .trim-modal-overlay { position: fixed; inset: 0; background: rgba(7,8,12,0.72); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px; }
+    .trim-modal-box { background: var(--surface); border: 1px solid var(--teal-border); border-radius: var(--radius); box-shadow: var(--shadow-lg), 0 0 24px rgba(45,212,238,0.12); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; }
+    .trim-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+    .trim-title { font-family: var(--mono); font-size: 15px; font-weight: 600; letter-spacing: 0.02em; color: var(--text); }
+    .trim-scissors { color: var(--teal); }
+    .trim-sub { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+    .trim-close { background: none; border: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+    .trim-close:hover { color: var(--text); background: var(--surface2); }
+    .trim-body { padding: 18px; }
+    .trim-video-wrap { display: flex; justify-content: center; margin-bottom: 18px; }
+    #trimVideo { width: auto; max-width: 100%; max-height: 46vh; border-radius: 12px; background: #000; border: 1px solid var(--border); }
+    .trim-no-video { text-align: center; color: var(--muted); font-size: 13px; padding: 30px 10px; }
+    .trim-range-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+    .trim-slider { position: relative; height: 44px; margin: 0 8px; }
+    .trim-track { position: absolute; top: 19px; left: 0; right: 0; height: 6px; background: var(--dimmest); border-radius: 999px; }
+    .trim-sel { position: absolute; top: 19px; height: 6px; background: var(--teal); border-radius: 999px; box-shadow: 0 0 8px rgba(45,212,238,0.5); pointer-events: none; }
+    .trim-input { position: absolute; top: 8px; left: 0; width: 100%; height: 28px; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
+    .trim-input:focus { outline: none; box-shadow: none; }
+    .trim-input::-webkit-slider-runnable-track { background: transparent; border: none; }
+    .trim-input::-moz-range-track { background: transparent; border: none; }
+    .trim-input::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; appearance: none; width: 16px; height: 28px; border-radius: 6px; background: var(--bg-4); border: 2px solid var(--teal); cursor: ew-resize; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+    .trim-input::-moz-range-thumb { pointer-events: auto; width: 16px; height: 28px; border-radius: 6px; background: var(--bg-4); border: 2px solid var(--teal); cursor: ew-resize; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+    .trim-times { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--teal); margin: 2px 8px 0; }
+    .trim-preview-row { display: flex; justify-content: center; margin: 16px 0 4px; }
+    .trim-preview-btn { font-family: var(--font); font-size: 12.5px; color: var(--teal); background: var(--teal-dim); border: 1px solid var(--teal-border); border-radius: 999px; padding: 7px 15px; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; }
+    .trim-preview-btn:hover { border-color: var(--teal-border-strong); }
+    .trim-preview-btn.active { background: var(--teal); color: #04222b; }
+    .trim-loop { opacity: 0.75; font-size: 11px; }
+    .trim-readout { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 18px 0 6px; font-family: var(--mono); font-size: 13px; }
+    .trim-readout .orig { color: var(--muted); text-decoration: line-through; }
+    .trim-readout .arrow { color: var(--muted); }
+    .trim-readout .new { color: var(--teal); font-weight: 600; }
+    .trim-readout .delta { color: var(--amber); font-size: 11px; }
+    .trim-cap-note { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 12px; }
+    .trim-error { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--red-border); background: var(--red-dim); color: var(--red); border-radius: var(--radius-xs); font-size: 12.5px; }
+    .trim-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
+    .cm-btn.primary { background: var(--teal); color: #04222b; border-color: var(--teal); font-weight: 600; }
+    .cm-btn.primary:disabled { opacity: 0.6; cursor: default; }
+    .cm-btn-edit { border-color: var(--teal-border-strong); color: var(--teal); }
     .clip-player-box {
       position: relative; z-index: 1; background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 0.75rem; max-width: 480px; width: calc(100% - 2rem);
@@ -1774,6 +1815,46 @@
       </div>
     </div>
   </div>
+
+  <!-- Trim editor — re-cut an already-generated clip to a new start/end range -->
+  <div id="trimModal" style="display:none" class="trim-modal-overlay">
+    <div class="trim-modal-box" onclick="event.stopPropagation()">
+      <div class="trim-head">
+        <div>
+          <div class="trim-title"><span class="trim-scissors">✂</span> Trim Clip</div>
+          <div class="trim-sub" id="trimSub">Adjust start &amp; end · captions stay in sync</div>
+        </div>
+        <button type="button" class="trim-close" onclick="closeTrimEditor()" aria-label="Close">✕</button>
+      </div>
+      <div class="trim-body">
+        <div class="trim-video-wrap">
+          <video id="trimVideo" controls playsinline preload="metadata"></video>
+        </div>
+        <div id="trimNoVideo" class="trim-no-video" style="display:none;"></div>
+        <div id="trimControls">
+          <div class="trim-range-label">Trim range — drag either handle to seek</div>
+          <div class="trim-slider" id="trimSlider">
+            <div class="trim-track"></div>
+            <div class="trim-sel" id="trimSel"></div>
+            <input type="range" id="trimStartInput" class="trim-input" min="0" max="100" step="0.1" value="0" aria-label="Start point" />
+            <input type="range" id="trimEndInput" class="trim-input" min="0" max="100" step="0.1" value="100" aria-label="End point" />
+          </div>
+          <div class="trim-times"><span id="trimStartLbl">0:00</span><span id="trimEndLbl">0:00</span></div>
+          <div class="trim-preview-row">
+            <button type="button" class="trim-preview-btn" id="trimPreviewBtn" onclick="toggleTrimPreview()">▶ Preview Trimmed Range <span class="trim-loop">⟳ loop</span></button>
+          </div>
+          <div class="trim-readout" id="trimReadout"></div>
+          <div class="trim-cap-note">Burned-in captions are preserved and stay in sync — no re-transcription.</div>
+          <div class="trim-error" id="trimError" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="trim-foot">
+        <button type="button" class="cm-btn" onclick="closeTrimEditor()">Cancel</button>
+        <button type="button" class="cm-btn primary" id="trimApplyBtn" onclick="applyTrim()">Apply Trim</button>
+      </div>
+    </div>
+  </div>
+
   <div class="crm-shell">
     <aside class="crm-sidebar" aria-label="Content Manager navigation">
       <div class="crm-logo">Content Manager</div>
@@ -2420,7 +2501,207 @@
       if (e.target === this) closeClipPlayer();
     });
     document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape") closeClipPlayer();
+      if (ev.key === "Escape") { closeClipPlayer(); if (typeof closeTrimEditor === "function") closeTrimEditor(); }
+    });
+
+    /* ── Trim editor — re-cut an already-generated clip to a new range ── */
+    const MIN_TRIM_SECONDS = 3;
+    let trimState = null; // { clipId, title, duration, start, end }
+
+    function fmtClipTime(sec) {
+      sec = Math.max(0, Math.floor(sec || 0));
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m}:${String(s).padStart(2, "0")}`;
+    }
+
+    async function openTrimEditor(clipId, title) {
+      trimState = { clipId, title: title || "Clip", duration: 0, start: 0, end: 0 };
+      const modal = document.getElementById("trimModal");
+      const video = document.getElementById("trimVideo");
+      const controls = document.getElementById("trimControls");
+      const noVideo = document.getElementById("trimNoVideo");
+      const err = document.getElementById("trimError");
+      const applyBtn = document.getElementById("trimApplyBtn");
+      const sub = document.getElementById("trimSub");
+      if (err) { err.style.display = "none"; err.textContent = ""; }
+      if (noVideo) noVideo.style.display = "none";
+      if (controls) controls.style.display = "block";
+      if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Trim"; }
+      if (sub) sub.textContent = `${trimState.title} · captions stay in sync`;
+      if (video) { video.style.display = "block"; video.src = ""; }
+      modal.style.display = "flex";
+
+      // Confirm the clip has a real, editable video file before showing controls.
+      try {
+        const meta = await cmFetch(`/api/content/clip/${clipId}/meta`);
+        if (!meta.hasVideo || !meta.videoUrl) {
+          if (controls) controls.style.display = "none";
+          if (video) video.style.display = "none";
+          if (noVideo) {
+            noVideo.style.display = "block";
+            noVideo.textContent = meta.isMock
+              ? "This clip was generated with mock data and has no editable video file."
+              : "This clip's video file could not be found on disk, so it can't be trimmed.";
+          }
+          if (applyBtn) applyBtn.disabled = true;
+          return;
+        }
+        video.src = apiUrl(meta.videoUrl);
+        video.load();
+      } catch (e) {
+        if (controls) controls.style.display = "none";
+        if (noVideo) { noVideo.style.display = "block"; noVideo.textContent = `Could not load clip: ${e.message}`; }
+        if (applyBtn) applyBtn.disabled = true;
+      }
+    }
+    window.openTrimEditor = openTrimEditor;
+
+    (function wireTrimEditor() {
+      const video = document.getElementById("trimVideo");
+      const startInput = document.getElementById("trimStartInput");
+      const endInput = document.getElementById("trimEndInput");
+      if (!video || !startInput || !endInput) return;
+
+      video.addEventListener("loadedmetadata", () => {
+        if (!trimState) return;
+        const dur = video.duration && isFinite(video.duration) ? video.duration : 0;
+        trimState.duration = dur;
+        trimState.start = 0;
+        trimState.end = dur;
+        for (const inp of [startInput, endInput]) { inp.min = 0; inp.max = String(dur); inp.step = "0.1"; }
+        startInput.value = "0";
+        endInput.value = String(dur);
+        const applyBtn = document.getElementById("trimApplyBtn");
+        if (applyBtn) applyBtn.disabled = dur < MIN_TRIM_SECONDS;
+        if (dur < MIN_TRIM_SECONDS) {
+          const err = document.getElementById("trimError");
+          if (err) { err.style.display = "block"; err.textContent = "This clip is too short to trim (under 3s)."; }
+        }
+        renderTrimUI();
+      });
+
+      const onStart = () => {
+        if (!trimState) return;
+        let s = Number(startInput.value);
+        if (s > trimState.end - MIN_TRIM_SECONDS) s = Math.max(0, trimState.end - MIN_TRIM_SECONDS);
+        trimState.start = s;
+        startInput.value = String(s);
+        stopTrimPreview();
+        seekTrim(s);
+        renderTrimUI();
+      };
+      const onEnd = () => {
+        if (!trimState) return;
+        let e = Number(endInput.value);
+        if (e < trimState.start + MIN_TRIM_SECONDS) e = Math.min(trimState.duration, trimState.start + MIN_TRIM_SECONDS);
+        trimState.end = e;
+        endInput.value = String(e);
+        stopTrimPreview();
+        seekTrim(e);
+        renderTrimUI();
+      };
+      startInput.addEventListener("input", onStart);
+      endInput.addEventListener("input", onEnd);
+    })();
+
+    function seekTrim(t) {
+      const video = document.getElementById("trimVideo");
+      if (video && isFinite(t)) { try { video.currentTime = t; } catch (_) {} }
+    }
+
+    function renderTrimUI() {
+      if (!trimState) return;
+      const dur = trimState.duration || 1;
+      const sel = document.getElementById("trimSel");
+      const slider = document.getElementById("trimSlider");
+      if (sel && slider) {
+        const w = slider.clientWidth || 1;
+        const leftPct = (trimState.start / dur) * 100;
+        const widthPct = ((trimState.end - trimState.start) / dur) * 100;
+        sel.style.left = `${leftPct}%`;
+        sel.style.width = `${widthPct}%`;
+      }
+      document.getElementById("trimStartLbl").textContent = fmtClipTime(trimState.start);
+      document.getElementById("trimEndLbl").textContent = fmtClipTime(trimState.end);
+      const newLen = Math.max(0, trimState.end - trimState.start);
+      const delta = trimState.duration - newLen;
+      document.getElementById("trimReadout").innerHTML =
+        `<span class="orig">Original ${fmtClipTime(trimState.duration)}</span>` +
+        `<span class="arrow">→</span>` +
+        `<span class="new">New ${fmtClipTime(newLen)}</span>` +
+        (delta > 0.5 ? `<span class="delta">(−${fmtClipTime(delta)})</span>` : "");
+    }
+
+    let trimPreviewHandler = null;
+    function toggleTrimPreview() {
+      const video = document.getElementById("trimVideo");
+      const btn = document.getElementById("trimPreviewBtn");
+      if (!video || !trimState) return;
+      if (trimPreviewHandler) { stopTrimPreview(); return; }
+      // Loop playback within [start, end].
+      trimPreviewHandler = () => {
+        if (!trimState) return;
+        if (video.currentTime >= trimState.end - 0.05) { video.currentTime = trimState.start; }
+      };
+      video.addEventListener("timeupdate", trimPreviewHandler);
+      video.currentTime = trimState.start;
+      video.play().catch(() => {});
+      if (btn) btn.classList.add("active");
+    }
+    function stopTrimPreview() {
+      const video = document.getElementById("trimVideo");
+      const btn = document.getElementById("trimPreviewBtn");
+      if (video && trimPreviewHandler) video.removeEventListener("timeupdate", trimPreviewHandler);
+      trimPreviewHandler = null;
+      if (video) video.pause();
+      if (btn) btn.classList.remove("active");
+    }
+    window.toggleTrimPreview = toggleTrimPreview;
+
+    async function applyTrim() {
+      if (!trimState) return;
+      const applyBtn = document.getElementById("trimApplyBtn");
+      const err = document.getElementById("trimError");
+      const { clipId, start, end } = trimState;
+      if (err) { err.style.display = "none"; err.textContent = ""; }
+      if ((end - start) < MIN_TRIM_SECONDS) {
+        if (err) { err.style.display = "block"; err.textContent = "Trimmed length must be at least 3 seconds."; }
+        return;
+      }
+      stopTrimPreview();
+      if (applyBtn) { applyBtn.disabled = true; applyBtn.innerHTML = `<span class="btn-spinner" style="border-color:rgba(4,34,43,.35);border-top-color:#04222b"></span> Trimming…`; }
+      try {
+        const resp = await cmFetch(`/api/content/clip/${clipId}/trim`, {
+          method: "POST",
+          body: JSON.stringify({ start, end }),
+        });
+        // Success — swap the preview to the freshly trimmed clip and reset handles.
+        const video = document.getElementById("trimVideo");
+        if (video && resp.videoUrl) { video.src = apiUrl(resp.videoUrl); video.load(); }
+        showToast("Clip trimmed ✓");
+        void loadReviewQueue();
+        if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Trim"; }
+      } catch (e) {
+        // Original clip untouched — surface the real error, keep the UI usable.
+        if (err) { err.style.display = "block"; err.textContent = e.message || "Trim failed — the original clip is unchanged."; }
+        if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Trim"; }
+      }
+    }
+    window.applyTrim = applyTrim;
+
+    function closeTrimEditor() {
+      stopTrimPreview();
+      const modal = document.getElementById("trimModal");
+      const video = document.getElementById("trimVideo");
+      if (video) { video.pause(); video.src = ""; }
+      if (modal) modal.style.display = "none";
+      trimState = null;
+    }
+    window.closeTrimEditor = closeTrimEditor;
+
+    document.getElementById("trimModal")?.addEventListener("click", function(e) {
+      if (e.target === this) closeTrimEditor();
     });
 
     function showToast(msg) {
@@ -3505,6 +3786,7 @@
         </div>
         <div class="clip-review-footer">
           ${v.id ? `<button type="button" class="cm-btn" onclick="playClip('${v.id}','${jsStr(clipTitle)}')">▶ Play clip</button>` : ""}
+          ${v.id ? `<button type="button" class="cm-btn cm-btn-edit" onclick="openTrimEditor('${v.id}','${jsStr(clipTitle)}')">✂ Edit</button>` : ""}
           <button type="button" class="cm-btn" onclick="saveClipMetadata('${v.id}')">Save changes</button>
           <button type="button" class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>
           <button type="button" class="cm-btn green send-to-publisher-btn" onclick="sendToPublisher('${v.id}', document.getElementById('clip-card-${v.id}'), ${v.complianceFlagged ? "true" : "false"})">Send to Publisher →</button>

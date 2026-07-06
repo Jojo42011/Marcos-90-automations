@@ -263,6 +263,51 @@ export async function pollOpenShortsJob(jobId: string): Promise<{
   );
 }
 
+export interface OpenShortsTrimResult {
+  newClipPath: string;
+  newClipUrl: string;
+  newDuration: number;
+}
+
+/**
+ * Re-cut an already-generated clip to a new [start, end] range via the sidecar.
+ * The sidecar reuses the batch FFmpeg primitive + memory guardrails and returns
+ * a NEW file — it never deletes the original. Surfaces the sidecar's own error
+ * detail (busy / low-memory / invalid range / render failure) so the caller can
+ * report it and leave the original clip untouched.
+ */
+export async function trimClipViaOpenShorts(input: {
+  clipPath: string;
+  start: number;
+  end: number;
+}): Promise<OpenShortsTrimResult> {
+  const health = await checkOpenShortsHealth();
+  if (!health.running) {
+    throw new Error("OpenShorts sidecar is not running — cannot trim clips. Start the sidecar and retry.");
+  }
+  try {
+    const formData = new FormData();
+    formData.append("clip_path", input.clipPath);
+    formData.append("start", String(input.start));
+    formData.append("end", String(input.end));
+    // A trim is a single re-encode bounded by the sidecar's 180s ffmpeg timeout;
+    // give the HTTP call headroom above that so the sidecar's own fail-fast wins.
+    const response = await axios.post(`${OPENSHORTS_BASE_URL}/api/clips/trim`, formData, {
+      headers: formData.getHeaders(),
+      timeout: 210000,
+    });
+    return {
+      newClipPath: String(response.data.new_clip_path || ""),
+      newClipUrl: String(response.data.new_clip_url || ""),
+      newDuration: Number(response.data.new_duration || 0),
+    };
+  } catch (err: unknown) {
+    const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+    const detail = axiosErr?.response?.data?.detail;
+    throw new Error(detail || axiosErr?.message || "OpenShorts trim failed");
+  }
+}
+
 export async function checkOpenShortsHealth(): Promise<{
   running: boolean;
   model?: string;
