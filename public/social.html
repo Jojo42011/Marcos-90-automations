@@ -1511,8 +1511,10 @@
 
     /* Action buttons */
     .rv-actions { position: sticky; bottom: 0; margin-top: auto; background: var(--rv-bg-1); border-top: 1px solid var(--rv-dimmest); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-    .rv-btn-save { width: 100%; height: 40px; background: var(--rv-bg-3); border: 1px solid var(--rv-dimmest); border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 10px; letter-spacing: 2px; color: var(--rv-dim); cursor: pointer; transition: all var(--rv-dur-base); }
+    .rv-btn-save { flex: 1; width: 100%; height: 40px; background: var(--rv-bg-3); border: 1px solid var(--rv-dimmest); border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 10px; letter-spacing: 2px; color: var(--rv-dim); cursor: pointer; transition: all var(--rv-dur-base); }
     .rv-btn-save:hover { border-color: var(--rv-accent-border); color: var(--rv-accent); }
+    .rv-btn-edit { flex: 1; height: 40px; background: rgba(45,212,238,0.08); border: 1px solid var(--rv-accent-border); border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 10px; letter-spacing: 2px; color: var(--rv-accent); cursor: pointer; transition: all var(--rv-dur-base); }
+    .rv-btn-edit:hover { background: rgba(45,212,238,0.16); border-color: var(--rv-accent); }
     .rv-actions-row { display: flex; gap: 10px; }
     .rv-btn-reject { flex: 0 0 48%; height: 40px; background: var(--rv-red-dim); border: 1px solid rgba(251,113,133,0.3); border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 10px; letter-spacing: 2px; color: var(--rv-red); cursor: pointer; transition: all var(--rv-dur-base); }
     .rv-btn-reject:hover { background: rgba(251,113,133,0.22); border-color: rgba(251,113,133,0.55); }
@@ -3786,7 +3788,6 @@
         </div>
         <div class="clip-review-footer">
           ${v.id ? `<button type="button" class="cm-btn" onclick="playClip('${v.id}','${jsStr(clipTitle)}')">▶ Play clip</button>` : ""}
-          ${v.id ? `<button type="button" class="cm-btn cm-btn-edit" onclick="openTrimEditor('${v.id}','${jsStr(clipTitle)}')">✂ Edit</button>` : ""}
           <button type="button" class="cm-btn" onclick="saveClipMetadata('${v.id}')">Save changes</button>
           <button type="button" class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>
           <button type="button" class="cm-btn green send-to-publisher-btn" onclick="sendToPublisher('${v.id}', document.getElementById('clip-card-${v.id}'), ${v.complianceFlagged ? "true" : "false"})">Send to Publisher →</button>
@@ -4083,7 +4084,10 @@
           </div>
         </div>
         <div class="rv-actions">
-          <button type="button" class="rv-btn-save" onclick="rvSave('${vm.id}')">SAVE</button>
+          <div class="rv-actions-row">
+            <button type="button" class="rv-btn-save" onclick="rvSave('${vm.id}')">SAVE</button>
+            <button type="button" class="rv-btn-edit" onclick="openTrimEditor('${vm.id}','${jsStr(vm.title)}')">✂ EDIT CLIP</button>
+          </div>
           <div class="rv-actions-row">
             <button type="button" class="rv-btn-reject" onclick="rvReject('${vm.id}')">REJECT</button>
             <button type="button" class="rv-btn-publish" onclick="rvPublish('${vm.id}', event)"><span class="lbl">PUBLISH →</span></button>
