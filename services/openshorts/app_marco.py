@@ -48,7 +48,7 @@ import uvicorn
 import main_marco  # noqa: F401 — patches openshorts when available
 
 import captions_marco
-from llm_analysis import any_llm_configured, configured_llm_summary
+from llm_analysis import any_llm_configured, configured_llm_summary, NoUsableClipsError
 
 try:
     import main as openshorts_main
@@ -368,9 +368,23 @@ def process_video_job(
             return
 
         timer.transition("analyzing")
+        # transcribe_video() does not return duration — probe the file directly.
+        video_duration = transcript.get("duration") or _probe_duration(video_path)
+
+        # Guard: catch hallucinated / empty / non-speech transcripts BEFORE the
+        # expensive AI analysis call. faster-whisper hallucinates fluent text
+        # (often in a wrong language) on silent/non-speech audio; sending that to
+        # the model wastes an analysis call and produces a confusing failure.
+        quality = main_marco.assess_transcript_quality(transcript, video_duration)
+        if not quality["ok"]:
+            print(
+                f"[openshorts] Job {job_id} transcript rejected before analysis: "
+                f"{quality['debug']} | signals={quality['signals']}"
+            )
+            _fail_job(job_id, quality["message"])
+            return
+
         try:
-            # transcribe_video() does not return duration — probe the file directly.
-            video_duration = transcript.get("duration") or _probe_duration(video_path)
             clips_data = main_marco.get_viral_clips_marco(
                 transcript_result=transcript,
                 video_duration=video_duration,
@@ -378,6 +392,16 @@ def process_video_job(
                 trend_brief=trend_brief,
                 target_clips=target_clips,
             )
+        except NoUsableClipsError as no_clips:
+            # The model responded fine but found no viable clip moments — a
+            # content outcome, not an API/auth failure. Distinct, honest message.
+            print(f"[openshorts] Job {job_id} — no usable clips: {no_clips}")
+            _fail_job(
+                job_id,
+                "The AI reviewed the transcript but found no viable clip moments in this "
+                "video. Try a longer clip, or one with clearer talking-head content.",
+            )
+            return
         except Exception as analyze_err:
             error_detail = (
                 f"AI analysis failed: {type(analyze_err).__name__}: {analyze_err}"

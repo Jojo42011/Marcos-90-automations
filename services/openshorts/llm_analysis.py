@@ -14,6 +14,33 @@ DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
 
+class NoUsableClipsError(Exception):
+    """The model RESPONDED successfully but produced no usable clips — e.g. it
+    judged the transcript unclippable and replied in prose, or returned an empty
+    or malformed array. This is a content outcome, NOT a provider/auth failure,
+    and must never surface as an "API key" error."""
+
+
+def _looks_like_auth_error(msg: str) -> bool:
+    """True if a provider-call error looks like a credentials/permission problem
+    (the only case where telling the user to fix their API key is correct)."""
+    m = (msg or "").lower()
+    return any(
+        t in m
+        for t in (
+            "401",
+            "403",
+            "invalid_api_key",
+            "invalid x-api-key",
+            "invalid api key",
+            "authentication",
+            "unauthorized",
+            "permission",
+            "no llm api key",
+        )
+    )
+
+
 def _openai_key() -> str | None:
     key = os.environ.get("OPENAI_API_KEY", "").strip()
     return key or None
@@ -250,16 +277,26 @@ def _parse_normalize_or_raise(text: str, model: str, provider: str) -> list[dict
     preview = text[:400].replace("\n", " ")
     print(f"[content-ai] {provider} raw response ({len(text)} chars): {preview}")
 
-    parsed = parse_clips_json(text)
+    try:
+        parsed = parse_clips_json(text)
+    except (ValueError, json.JSONDecodeError) as parse_err:
+        # The provider responded but the reply is not a clip array — almost
+        # always the model explaining, in prose, that there are no viable clips
+        # (e.g. when the transcript was empty/garbled). This is a "no usable
+        # clips" outcome, not a provider failure.
+        raise NoUsableClipsError(
+            f"{model} responded but returned no parseable clip array ({parse_err}). "
+            f"Raw response (first 400 chars): {text[:400]!r}"
+        )
     usable, issues = normalize_clips(parsed)
     print(
         f"[content-ai] {provider} parsed {len(parsed)} item(s), {len(usable)} usable clip(s)"
         + (f"; dropped: {issues[:5]}" if issues else "")
     )
     if not usable:
-        raise ValueError(
-            f"{model} returned {len(parsed)} item(s) but none had a usable start/end "
-            f"timestamp. Issues: {issues[:8]}. Raw response (first 600 chars): {text[:600]!r}"
+        raise NoUsableClipsError(
+            f"{model} returned {len(parsed)} item(s) but none were usable clips. "
+            f"Issues: {issues[:8]}. Raw response (first 400 chars): {text[:400]!r}"
         )
     return usable
 
@@ -271,30 +308,56 @@ def analyze_transcript_for_clips(prompt: str) -> tuple[list[dict[str, Any]], str
     OpenAI is the fallback if ANTHROPIC_API_KEY is missing or the call fails.
     Returns (clips_list, model_label).
     """
-    errors: list[str] = []
+    # Only genuine provider-CALL failures (network/HTTP/auth) go here. A
+    # successful response that yields no clips raises NoUsableClipsError and
+    # propagates straight out — it is NOT retried on the next provider and is
+    # NEVER reported as an API-key problem.
+    call_errors: list[str] = []
 
+    providers: list[tuple[str, str, Any, str]] = []
     anthropic_key = _anthropic_key()
     if anthropic_key:
-        try:
-            text = _call_anthropic(prompt, anthropic_key)
-            model = os.environ.get("ANTHROPIC_MODEL", "").strip() or DEFAULT_ANTHROPIC_MODEL
-            return _parse_normalize_or_raise(text, model, "anthropic"), model
-        except Exception as err:
-            print(f"[content-ai] viral-clip analysis failed (anthropic): {err}")
-            errors.append(f"Anthropic: {err}")
-
+        providers.append((
+            "anthropic",
+            anthropic_key,
+            _call_anthropic,
+            os.environ.get("ANTHROPIC_MODEL", "").strip() or DEFAULT_ANTHROPIC_MODEL,
+        ))
     openai_key = _openai_key()
     if openai_key:
-        try:
-            text = _call_openai(prompt, openai_key)
-            model = os.environ.get("OPENAI_MODEL", "").strip() or DEFAULT_OPENAI_MODEL
-            return _parse_normalize_or_raise(text, model, "openai"), model
-        except Exception as err:
-            print(f"[content-ai] viral-clip analysis failed (openai): {err}")
-            errors.append(f"OpenAI: {err}")
+        providers.append((
+            "openai",
+            openai_key,
+            _call_openai,
+            os.environ.get("OPENAI_MODEL", "").strip() or DEFAULT_OPENAI_MODEL,
+        ))
 
-    detail = "; ".join(errors) if errors else "no LLM API keys configured"
+    if not providers:
+        raise RuntimeError(
+            "AI analysis unavailable — no LLM API key configured. "
+            "Set a valid ANTHROPIC_API_KEY (sk-ant-…) or OPENAI_API_KEY."
+        )
+
+    for provider, key, caller, model in providers:
+        try:
+            text = caller(prompt, key)  # transport/HTTP/auth failures raise here
+        except Exception as err:
+            print(f"[content-ai] {provider} call failed: {err}")
+            call_errors.append(f"{provider}: {err}")
+            continue  # a real provider failure — try the next configured provider
+        # Provider responded. Parsing to clips (or a NoUsableClipsError) is a
+        # content outcome — return or let NoUsableClipsError propagate; do not
+        # fall through to the next provider as if the credentials were bad.
+        return _parse_normalize_or_raise(text, model, provider), model
+
+    # Every configured provider failed at the CALL level.
+    detail = "; ".join(call_errors) if call_errors else "unknown error"
+    if any(_looks_like_auth_error(e) for e in call_errors):
+        raise RuntimeError(
+            "AI analysis failed — the model API rejected the credentials. "
+            f"Set a valid ANTHROPIC_API_KEY (sk-ant-…) or OPENAI_API_KEY. Attempts: {detail}"
+        )
     raise RuntimeError(
-        "AI analysis failed — set a valid ANTHROPIC_API_KEY (sk-ant-…) or OPENAI_API_KEY. "
-        f"Attempts: {detail}"
+        "AI analysis failed — the model API call did not succeed. This is a provider "
+        f"or network error, not an API-key problem. Attempts: {detail}"
     )

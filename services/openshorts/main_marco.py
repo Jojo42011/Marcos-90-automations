@@ -72,17 +72,37 @@ def _get_whisper_model():
 
 def transcribe_video_marco(video_path: str) -> dict:
     """Marco override of OpenShorts' transcribe_video() — same return shape,
-    configurable/cached model instead of a hardcoded reload-per-call "base"."""
+    configurable/cached model instead of a hardcoded reload-per-call "base".
+    Also carries whisper's confidence signals (language probability, per-segment
+    avg_logprob and no_speech_prob) so a hallucinated transcript can be caught
+    before the expensive AI analysis call (see assess_transcript_quality)."""
     print(f"🎙️  Transcribing video with Faster-Whisper ({WHISPER_MODEL_SIZE}, CPU int8)...")
     model = _get_whisper_model()
     segments, info = model.transcribe(video_path, word_timestamps=True)
-    print(f"   Detected language '{info.language}' with probability {info.language_probability:.2f}")
+    lang = getattr(info, "language", "") or ""
+    lang_prob = float(getattr(info, "language_probability", 0.0) or 0.0)
+    print(f"   Detected language '{lang}' with probability {lang_prob:.2f}")
 
     transcript_segments = []
     full_text = ""
+    no_speech_probs: list[float] = []
+    avg_logprobs: list[float] = []
     for segment in segments:
         print(f"   [{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
-        seg_dict = {"text": segment.text, "start": segment.start, "end": segment.end, "words": []}
+        nsp = getattr(segment, "no_speech_prob", None)
+        alp = getattr(segment, "avg_logprob", None)
+        if nsp is not None:
+            no_speech_probs.append(float(nsp))
+        if alp is not None:
+            avg_logprobs.append(float(alp))
+        seg_dict = {
+            "text": segment.text,
+            "start": segment.start,
+            "end": segment.end,
+            "no_speech_prob": float(nsp) if nsp is not None else None,
+            "avg_logprob": float(alp) if alp is not None else None,
+            "words": [],
+        }
         if segment.words:
             for word in segment.words:
                 seg_dict["words"].append(
@@ -91,7 +111,105 @@ def transcribe_video_marco(video_path: str) -> dict:
         transcript_segments.append(seg_dict)
         full_text += segment.text + " "
 
-    return {"text": full_text.strip(), "segments": transcript_segments, "language": info.language}
+    return {
+        "text": full_text.strip(),
+        "segments": transcript_segments,
+        "language": lang,
+        "language_probability": lang_prob,
+        "mean_no_speech_prob": (sum(no_speech_probs) / len(no_speech_probs)) if no_speech_probs else None,
+        "mean_avg_logprob": (sum(avg_logprobs) / len(avg_logprobs)) if avg_logprobs else None,
+    }
+
+
+# ── Transcript quality guard ─────────────────────────────────────────────────
+# faster-whisper hallucinates fluent text (often in a wrong language) when the
+# audio is silent, near-silent, or non-speech. These checks catch that BEFORE
+# the expensive AI analysis call so a garbage transcript fails fast with a clear
+# reason instead of burning an analysis call and returning a confusing error.
+# All thresholds are env-overridable so they can be tuned without a code change.
+EXPECTED_LANGUAGE = os.environ.get("WHISPER_EXPECTED_LANGUAGE", "en").strip().lower()
+_MIN_LANGUAGE_PROB = float(os.environ.get("WHISPER_MIN_LANGUAGE_PROB", "0.5"))
+_MIN_WORDS_PER_MIN = float(os.environ.get("WHISPER_MIN_WORDS_PER_MIN", "5"))
+_MAX_NO_SPEECH_PROB = float(os.environ.get("WHISPER_MAX_NO_SPEECH_PROB", "0.6"))
+_MAX_NON_LATIN_RATIO = float(os.environ.get("WHISPER_MAX_NON_LATIN_RATIO", "0.5"))
+_MIN_UNIQUE_WORD_RATIO = float(os.environ.get("WHISPER_MIN_UNIQUE_WORD_RATIO", "0.15"))
+
+# The single user-facing message for every "the audio had no usable speech"
+# outcome (Phase 1 wording). Distinct from any API-key / provider-error message.
+NO_SPEECH_MESSAGE = (
+    "Transcription produced no usable speech content for this video — the audio "
+    "may be silent, very quiet, or non-speech. Try a different source clip or "
+    "check the video's audio track."
+)
+
+
+def _non_latin_alpha_ratio(text: str) -> float:
+    """Fraction of alphabetic characters that are NOT basic Latin A–Z/a–z.
+    A high ratio means the transcript is in a different script (Georgian,
+    Cyrillic, CJK, …) — a strong hallucination signal when we expect English."""
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return 0.0
+    non_latin = sum(1 for c in letters if not ("A" <= c <= "Z" or "a" <= c <= "z"))
+    return non_latin / len(letters)
+
+
+def assess_transcript_quality(transcript_result: dict, video_duration: float) -> dict:
+    """Judge whether a transcript is real speech or a likely hallucination.
+
+    Returns {ok, message, debug, signals}. On ok=False, `message` is the
+    user-facing NO_SPEECH_MESSAGE and `debug` names the exact signal that fired.
+    Conservative by design: a normal English talking-head clip passes all checks.
+    """
+    text = (transcript_result.get("text") or "").strip()
+    words = text.split()
+    word_count = len(words)
+    lang = (transcript_result.get("language") or "").lower()
+    lang_prob = transcript_result.get("language_probability")
+    mean_no_speech = transcript_result.get("mean_no_speech_prob")
+    non_latin = _non_latin_alpha_ratio(text)
+    wpm = (word_count / (video_duration / 60.0)) if video_duration and video_duration > 0 else None
+    unique_ratio = (len({w.lower() for w in words}) / word_count) if word_count else 0.0
+
+    signals = {
+        "word_count": word_count,
+        "language": lang,
+        "language_probability": lang_prob,
+        "mean_no_speech_prob": mean_no_speech,
+        "non_latin_ratio": round(non_latin, 3),
+        "words_per_min": round(wpm, 1) if wpm is not None else None,
+        "unique_word_ratio": round(unique_ratio, 3),
+        "video_duration": round(video_duration, 1) if video_duration else None,
+    }
+
+    def reject(debug: str) -> dict:
+        return {"ok": False, "message": NO_SPEECH_MESSAGE, "debug": debug, "signals": signals}
+
+    # a) Empty / whitespace transcript — no speech at all.
+    if word_count == 0 or len(text) < 2:
+        return reject("empty transcript (no speech detected)")
+    # b) Dominant non-Latin script — the classic wrong-language hallucination.
+    if non_latin > _MAX_NON_LATIN_RATIO:
+        return reject(f"dominant non-Latin script (non_latin_ratio={non_latin:.2f})")
+    # c) Wrong language with shaky confidence (a confident non-English detection
+    #    on Latin text is left alone — could be legitimate Spanish content).
+    if lang and EXPECTED_LANGUAGE and lang != EXPECTED_LANGUAGE:
+        if lang_prob is None or lang_prob < 0.85:
+            return reject(f"detected non-{EXPECTED_LANGUAGE} language '{lang}' (prob={lang_prob})")
+    # d) Low language-detection confidence overall.
+    if lang_prob is not None and lang_prob < _MIN_LANGUAGE_PROB:
+        return reject(f"low language-detection confidence ({lang_prob:.2f})")
+    # e) Audio scored as non-speech by whisper's own no_speech head.
+    if mean_no_speech is not None and mean_no_speech > _MAX_NO_SPEECH_PROB:
+        return reject(f"high mean no_speech_prob ({mean_no_speech:.2f}) — audio likely non-speech/silent")
+    # f) Almost no words for a video of real length.
+    if wpm is not None and video_duration > 15 and wpm < _MIN_WORDS_PER_MIN:
+        return reject(f"very sparse speech ({wpm:.1f} words/min over {video_duration:.0f}s)")
+    # g) Extreme repetition — a common hallucination signature.
+    if word_count >= 20 and unique_ratio < _MIN_UNIQUE_WORD_RATIO:
+        return reject(f"highly repetitive transcript (unique-word ratio {unique_ratio:.2f})")
+
+    return {"ok": True, "message": "", "debug": "transcript passed quality checks", "signals": signals}
 
 
 if openshorts_main is not None:
