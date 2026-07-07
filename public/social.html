@@ -809,6 +809,20 @@
     .trim-cap-text:focus { border-color: var(--teal); outline: none; }
     .trim-cap-empty { padding: 10px; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; }
     .trim-cap-note { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 12px; }
+    /* Chat-edit panel */
+    .rv-btn-chat { width: 100%; height: 38px; margin-top: 10px; background: rgba(45,212,238,0.08); border: 1px solid var(--rv-accent-border); border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 10px; letter-spacing: 2px; color: var(--rv-accent); cursor: pointer; transition: all var(--rv-dur-base); }
+    .rv-btn-chat:hover { background: rgba(45,212,238,0.16); border-color: var(--rv-accent); }
+    .chat-edit-body { padding: 14px 16px; min-height: 220px; max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .chat-msg { max-width: 86%; padding: 8px 11px; border-radius: 10px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+    .chat-msg.user { align-self: flex-end; background: var(--teal-dim); border: 1px solid var(--teal-border); color: var(--text); }
+    .chat-msg.assistant { align-self: flex-start; background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+    .chat-msg.system { align-self: center; color: var(--muted); font-size: 11px; font-family: var(--mono); }
+    .chat-edit-proposal { margin: 0 16px 12px; padding: 12px; border: 1px solid var(--teal-border-strong); border-radius: var(--radius-sm); background: var(--teal-dim); }
+    .chat-edit-proposal p { margin: 0 0 10px; font-size: 13px; color: var(--text); }
+    .chat-edit-proposal .row { display: flex; gap: 8px; }
+    .chat-edit-input-row { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+    .chat-edit-input-row input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 9px 11px; color: var(--text); font-family: var(--font); font-size: 13px; }
+    .chat-edit-input-row input:focus { border-color: var(--teal); outline: none; }
     .trim-error { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--red-border); background: var(--red-dim); color: var(--red); border-radius: var(--radius-xs); font-size: 12.5px; }
     .trim-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
     .cm-btn.primary { background: var(--teal); color: #04222b; border-color: var(--teal); font-weight: 600; }
@@ -1901,6 +1915,25 @@
     </div>
   </div>
 
+  <!-- Chat-based clip editing — conversational alternative to the manual editor -->
+  <div id="chatEditModal" style="display:none" class="trim-modal-overlay">
+    <div class="trim-modal-box" onclick="event.stopPropagation()" style="max-width:480px;">
+      <div class="trim-head">
+        <div>
+          <div class="trim-title"><span class="trim-scissors">💬</span> Chat Edit</div>
+          <div class="trim-sub" id="chatEditSub">Describe a change in plain language</div>
+        </div>
+        <button type="button" class="trim-close" onclick="closeChatEdit()" aria-label="Close">✕</button>
+      </div>
+      <div class="chat-edit-body" id="chatEditBody"></div>
+      <div class="chat-edit-proposal" id="chatEditProposal" style="display:none;"></div>
+      <div class="chat-edit-input-row">
+        <input type="text" id="chatEditInput" placeholder="e.g. cut where I fumble around 0:14" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatEdit();}" />
+        <button type="button" class="cm-btn primary" id="chatEditSend" onclick="sendChatEdit()">Send</button>
+      </div>
+    </div>
+  </div>
+
   <div class="crm-shell">
     <aside class="crm-sidebar" aria-label="Content Manager navigation">
       <div class="crm-logo">Content Manager</div>
@@ -2547,7 +2580,7 @@
       if (e.target === this) closeClipPlayer();
     });
     document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape") { closeClipPlayer(); if (typeof closeTrimEditor === "function") closeTrimEditor(); }
+      if (ev.key === "Escape") { closeClipPlayer(); if (typeof closeTrimEditor === "function") closeTrimEditor(); if (typeof closeChatEdit === "function") closeChatEdit(); }
     });
 
     /* ── Trim editor — re-cut an already-generated clip to a new range ── */
@@ -2962,6 +2995,117 @@
 
     document.getElementById("trimModal")?.addEventListener("click", function(e) {
       if (e.target === this) closeTrimEditor();
+    });
+
+    /* ── Chat-based clip editing (conversational alternative to ✂ Edit Clip) ── */
+    let chatEditState = null; // { clipId, title, pendingSpec }
+
+    function appendChatMsg(role, content) {
+      const body = document.getElementById("chatEditBody");
+      if (!body) return;
+      const div = document.createElement("div");
+      div.className = "chat-msg " + (role === "user" ? "user" : role === "system" ? "system" : "assistant");
+      div.textContent = content;
+      body.appendChild(div);
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function hideChatProposal() {
+      const p = document.getElementById("chatEditProposal");
+      if (p) { p.style.display = "none"; p.innerHTML = ""; }
+      if (chatEditState) chatEditState.pendingSpec = null;
+    }
+
+    async function openChatEdit(clipId, title) {
+      chatEditState = { clipId, title: title || "Clip", pendingSpec: null };
+      const modal = document.getElementById("chatEditModal");
+      const sub = document.getElementById("chatEditSub");
+      const body = document.getElementById("chatEditBody");
+      if (sub) sub.textContent = chatEditState.title;
+      hideChatProposal();
+      if (body) body.innerHTML = `<div class="chat-msg system">Loading…</div>`;
+      if (modal) modal.style.display = "flex";
+      try {
+        const data = await cmFetch(`/api/content/clip/${clipId}/edit-chat`);
+        if (!chatEditState || chatEditState.clipId !== clipId) return;
+        if (body) body.innerHTML = "";
+        if (data.messages && data.messages.length) {
+          data.messages.forEach((m) => appendChatMsg(m.role, m.content));
+        } else {
+          appendChatMsg("assistant", "Tell me what to change — the hook, caption, hashtags, or the video (trim, cut a fumble, mute/replace audio).");
+        }
+      } catch (e) {
+        if (body) body.innerHTML = "";
+        appendChatMsg("system", "Couldn't load chat history.");
+      }
+    }
+    window.openChatEdit = openChatEdit;
+
+    async function sendChatEdit() {
+      if (!chatEditState) return;
+      const input = document.getElementById("chatEditInput");
+      const send = document.getElementById("chatEditSend");
+      const msg = (input?.value || "").trim();
+      if (!msg) return;
+      appendChatMsg("user", msg);
+      input.value = "";
+      if (send) { send.disabled = true; send.textContent = "…"; }
+      hideChatProposal();
+      try {
+        const resp = await cmFetch(`/api/content/clip/${chatEditState.clipId}/edit-chat`, {
+          method: "POST", body: JSON.stringify({ message: msg }),
+        });
+        if (resp.reply) appendChatMsg("assistant", resp.reply);
+        if (resp.copyUpdated) { showToast(`${resp.copyUpdated.field} updated ✓`); void loadReviewQueue(); }
+        if (resp.proposal) showChatProposal(resp.proposal);
+      } catch (e) {
+        appendChatMsg("system", e.message || "Something went wrong.");
+      } finally {
+        if (send) { send.disabled = false; send.textContent = "Send"; }
+      }
+    }
+    window.sendChatEdit = sendChatEdit;
+
+    function showChatProposal(proposal) {
+      if (!chatEditState) return;
+      chatEditState.pendingSpec = proposal.spec;
+      const p = document.getElementById("chatEditProposal");
+      if (!p) return;
+      p.style.display = "block";
+      p.innerHTML = `<p>${escapeHtml(proposal.summary)}</p>
+        <div class="row">
+          <button type="button" class="cm-btn primary" onclick="confirmChatEdit()">Confirm &amp; render</button>
+          <button type="button" class="cm-btn" onclick="hideChatProposal()">Cancel</button>
+        </div>`;
+    }
+
+    async function confirmChatEdit() {
+      if (!chatEditState || !chatEditState.pendingSpec) return;
+      const p = document.getElementById("chatEditProposal");
+      if (p) p.innerHTML = `<p><span class="btn-spinner" style="border-color:rgba(45,212,238,.3);border-top-color:var(--teal)"></span> Rendering… this can take a moment.</p>`;
+      try {
+        const resp = await cmFetch(`/api/content/clip/${chatEditState.clipId}/edit`, {
+          method: "POST", body: JSON.stringify(chatEditState.pendingSpec),
+        });
+        hideChatProposal();
+        appendChatMsg("assistant", `Done — re-rendered${resp.newDuration ? ` (${Math.round(resp.newDuration)}s)` : ""}. If it's not right, open ✂ Edit Clip and hit Revert.`);
+        showToast("Clip edited ✓");
+        void loadReviewQueue();
+      } catch (e) {
+        if (p) p.innerHTML = `<p style="color:var(--danger)">${escapeHtml(e.message || "Render failed — original clip is unchanged.")}</p>
+          <div class="row"><button type="button" class="cm-btn" onclick="hideChatProposal()">Dismiss</button></div>`;
+      }
+    }
+    window.confirmChatEdit = confirmChatEdit;
+
+    function closeChatEdit() {
+      const modal = document.getElementById("chatEditModal");
+      if (modal) modal.style.display = "none";
+      chatEditState = null;
+    }
+    window.closeChatEdit = closeChatEdit;
+    document.getElementById("chatEditModal")?.addEventListener("click", function(e) {
+      if (e.target === this) closeChatEdit();
     });
 
     function showToast(msg) {
@@ -4346,6 +4490,7 @@
             <button type="button" class="rv-btn-save" onclick="rvSave('${vm.id}')">SAVE</button>
             <button type="button" class="rv-btn-edit" onclick="openTrimEditor('${vm.id}','${jsStr(vm.title)}')">✂ EDIT CLIP</button>
           </div>
+          <button type="button" class="rv-btn-chat" onclick="openChatEdit('${vm.id}','${jsStr(vm.title)}')">💬 CHAT EDIT</button>
           <div class="rv-actions-row">
             <button type="button" class="rv-btn-reject" onclick="rvReject('${vm.id}')">REJECT</button>
             <button type="button" class="rv-btn-publish" onclick="rvPublish('${vm.id}', event)"><span class="lbl">PUBLISH →</span></button>
