@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.tiktokConfigured = tiktokConfigured;
+exports.tiktokConnected = tiktokConnected;
 exports.tiktokPrivacyLevel = tiktokPrivacyLevel;
 exports.tiktokAudited = tiktokAudited;
 exports.postVideoToTikTok = postVideoToTikTok;
@@ -53,6 +54,35 @@ function tiktokConfigured() {
     return Boolean(process.env.TIKTOK_CLIENT_KEY?.trim() &&
         process.env.TIKTOK_CLIENT_SECRET?.trim() &&
         process.env.TIKTOK_REFRESH_TOKEN?.trim());
+}
+// A live connection probe result is cached briefly so a page that polls
+// capabilities doesn't hit TikTok's token endpoint on every render.
+let connProbeCache = null;
+const CONN_PROBE_TTL_MS = 60_000;
+/**
+ * REAL connection check: TikTok counts as connected only if the credentials are
+ * present AND a live refresh (getFreshAccessToken) actually returns a token.
+ * A missing/expired/invalid refresh token → false, so the UI stays honestly
+ * "Not connected" and the button disabled until a working token exists. Never
+ * throws — a failed probe is just "not connected".
+ */
+async function tiktokConnected() {
+    if (!tiktokConfigured())
+        return false;
+    const now = Date.now();
+    if (connProbeCache && now - connProbeCache.at < CONN_PROBE_TTL_MS) {
+        return connProbeCache.ok;
+    }
+    try {
+        await getFreshAccessToken();
+        connProbeCache = { ok: true, at: now };
+        return true;
+    }
+    catch (err) {
+        console.warn(`[tiktok] connection check failed: ${err instanceof Error ? err.message : String(err)}`);
+        connProbeCache = { ok: false, at: now };
+        return false;
+    }
 }
 /** Default privacy — unaudited apps may only use SELF_ONLY (private). */
 function tiktokPrivacyLevel() {

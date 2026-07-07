@@ -3166,15 +3166,18 @@ app.get("/api/content/publish/capabilities", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    // Instagram/Facebook "connected" = credentials present AND a real (cached)
-    // Graph API validation call succeeds — not just a presence check.
-    const [ig, fb] = await Promise.all([
+    // Each platform's "connected" is a REAL check, independent of the others:
+    // Instagram/Facebook = a live Graph validation; TikTok = a live token refresh
+    // (tiktokConnected) — not just env-var presence. So TikTok stays "Not
+    // connected" until a working refresh token exists, then auto-enables.
+    const [tk, ig, fb] = await Promise.all([
+        (0, tiktokPublish_js_1.tiktokConnected)(),
         (0, metaPublish_js_1.instagramConfigured)() ? (0, metaPublish_js_1.validateMeta)("instagram") : Promise.resolve({ ok: false, error: undefined }),
         (0, metaPublish_js_1.facebookConfigured)() ? (0, metaPublish_js_1.validateMeta)("facebook") : Promise.resolve({ ok: false, error: undefined }),
     ]);
     res.json({
         tiktok: {
-            connected: (0, tiktokPublish_js_1.tiktokConfigured)(),
+            connected: tk,
             // This app has the video.upload scope only: uploads go to the creator's
             // TikTok DRAFTS/inbox, they are NOT posted publicly. mode drives honest
             // UI labelling ("Send to TikTok drafts", not "Publish now").
