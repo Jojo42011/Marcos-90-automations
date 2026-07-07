@@ -129,6 +129,7 @@ import {
   getLatestAgentRun,
   listActiveChatSessions,
   listChatMessages,
+  deleteChatSession,
   listSelfEvaluations,
   listStrategyAccuracy,
   listExperiments,
@@ -5353,6 +5354,19 @@ app.post("/api/content-brain/sessions/new", express.json(), (req, res) => {
     return;
   }
   res.json({ sessionId: getOrCreateSession() });
+});
+
+// Clear a general Content Manager chat session (deletes its persisted history)
+// and hand back a fresh session id. Only affects cm_chat_* — the per-clip edit
+// chat (cm_clip_chat) is a separate feature and is untouched.
+app.post("/api/content-brain/sessions/:sessionId/clear", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const sessionId = String(req.params.sessionId || "");
+  if (sessionId) deleteChatSession(sessionId);
+  res.json({ ok: true, sessionId: getOrCreateSession() });
 });
 
 app.get("/api/content-brain/self-evaluation", (req, res) => {

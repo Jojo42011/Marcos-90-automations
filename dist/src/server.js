@@ -4682,6 +4682,19 @@ app.post("/api/content-brain/sessions/new", express_1.default.json(), (req, res)
     }
     res.json({ sessionId: (0, index_js_14.getOrCreateSession)() });
 });
+// Clear a general Content Manager chat session (deletes its persisted history)
+// and hand back a fresh session id. Only affects cm_chat_* — the per-clip edit
+// chat (cm_clip_chat) is a separate feature and is untouched.
+app.post("/api/content-brain/sessions/:sessionId/clear", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const sessionId = String(req.params.sessionId || "");
+    if (sessionId)
+        (0, contentDb_js_1.deleteChatSession)(sessionId);
+    res.json({ ok: true, sessionId: (0, index_js_14.getOrCreateSession)() });
+});
 app.get("/api/content-brain/self-evaluation", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });

@@ -101,6 +101,7 @@ exports.listActiveChatSessions = listActiveChatSessions;
 exports.listChatMessages = listChatMessages;
 exports.insertChatMessage = insertChatMessage;
 exports.updateChatSessionSummary = updateChatSessionSummary;
+exports.deleteChatSession = deleteChatSession;
 exports.insertSelfEvaluation = insertSelfEvaluation;
 exports.listSelfEvaluations = listSelfEvaluations;
 exports.getSeasonalWeek = getSeasonalWeek;
@@ -2673,6 +2674,16 @@ function updateChatSessionSummary(sessionId, summary) {
     getContentDb()
         .prepare(`UPDATE cm_chat_sessions SET session_summary = ? WHERE id = ?`)
         .run(summary, sessionId);
+}
+/**
+ * Clear a general "Ask the Content Manager" chat session — deletes its messages
+ * and the session row. Only touches cm_chat_* (the general brain chat); the
+ * per-clip edit chat lives in the separate cm_clip_chat table and is untouched.
+ */
+function deleteChatSession(sessionId) {
+    const db = getContentDb();
+    db.prepare(`DELETE FROM cm_chat_messages WHERE session_id = ?`).run(sessionId);
+    db.prepare(`DELETE FROM cm_chat_sessions WHERE id = ?`).run(sessionId);
 }
 function insertSelfEvaluation(patch) {
     const id = patch.id ?? (0, crypto_1.randomUUID)();

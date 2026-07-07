@@ -70,6 +70,7 @@ import {
 import {
   runFullCompetitiveAnalysis,
 } from "../competitiveAnalysis.js";
+import { getDriveStatus } from "../googleDrivePull.js";
 import { getWeekStart } from "./stats.js";
 import { getSprintProgressData } from "../../../core/contentDb.js";
 
@@ -328,6 +329,12 @@ export const CM_BRAIN_TOOL_DEFINITIONS: CmBrainToolDefinition[] = [
       },
       required: [],
     },
+  },
+  {
+    name: "get_drive_folder_status",
+    description:
+      "Status of the Google Drive auto-pull that watches Marco's 'New Raw Videos' folder and feeds new videos into the Upload & Clip pipeline. Returns whether Drive is connected (valid credentials + folder accessible), how many videos are currently in the folder, how many have been pulled/processed so far, how many are still pending (detected but not yet pulled — e.g. downloading or waiting on disk space), and the last poll time. Use when Marco asks about Google Drive: how many videos are in the folder, whether anything has been pulled recently, or if the Drive connection is working.",
+    input_schema: { type: "object", properties: {}, required: [] },
   },
 ];
 
@@ -731,6 +738,27 @@ export async function executeContentBrainTool(
           word_count: t.wordCount,
           fetched_at: t.fetchedAt,
         })),
+      };
+    }
+    case "get_drive_folder_status": {
+      const s = getDriveStatus();
+      const pending = Math.max(0, s.known - s.processed);
+      return {
+        connected: s.configured && s.connected && s.folderAccessible,
+        configured: s.configured,
+        folder_accessible: s.folderAccessible,
+        videos_in_folder: s.known,
+        videos_processed: s.processed,
+        videos_pending: pending, // detected but not yet pulled (downloading or waiting on disk space)
+        last_poll_at: s.lastPollAt,
+        last_error: s.lastError,
+        note: !s.configured
+          ? "Google Drive not connected — GOOGLE_DRIVE_CREDENTIALS is not set."
+          : s.lastError
+            ? `Last poll had an error: ${s.lastError}`
+            : s.lastPollAt
+              ? "Healthy. Polls every 30 minutes."
+              : "Connected; first poll in progress (large videos download and clip one at a time).",
       };
     }
     default:

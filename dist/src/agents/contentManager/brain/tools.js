@@ -64,6 +64,7 @@ const contentDb_js_1 = require("../../../core/contentDb.js");
 Object.defineProperty(exports, "computeBenchmarkTrajectory", { enumerable: true, get: function () { return contentDb_js_1.computeBenchmarkTrajectory; } });
 const calendar_js_1 = require("../calendar.js");
 const competitiveAnalysis_js_1 = require("../competitiveAnalysis.js");
+const googleDrivePull_js_1 = require("../googleDrivePull.js");
 const stats_js_1 = require("./stats.js");
 const contentDb_js_2 = require("../../../core/contentDb.js");
 exports.CM_BRAIN_TOOL_DEFINITIONS = [
@@ -318,6 +319,11 @@ exports.CM_BRAIN_TOOL_DEFINITIONS = [
             },
             required: [],
         },
+    },
+    {
+        name: "get_drive_folder_status",
+        description: "Status of the Google Drive auto-pull that watches Marco's 'New Raw Videos' folder and feeds new videos into the Upload & Clip pipeline. Returns whether Drive is connected (valid credentials + folder accessible), how many videos are currently in the folder, how many have been pulled/processed so far, how many are still pending (detected but not yet pulled — e.g. downloading or waiting on disk space), and the last poll time. Use when Marco asks about Google Drive: how many videos are in the folder, whether anything has been pulled recently, or if the Drive connection is working.",
+        input_schema: { type: "object", properties: {}, required: [] },
     },
 ];
 function parseHookJson(text) {
@@ -720,6 +726,27 @@ async function executeContentBrainTool(toolName, input) {
                     word_count: t.wordCount,
                     fetched_at: t.fetchedAt,
                 })),
+            };
+        }
+        case "get_drive_folder_status": {
+            const s = (0, googleDrivePull_js_1.getDriveStatus)();
+            const pending = Math.max(0, s.known - s.processed);
+            return {
+                connected: s.configured && s.connected && s.folderAccessible,
+                configured: s.configured,
+                folder_accessible: s.folderAccessible,
+                videos_in_folder: s.known,
+                videos_processed: s.processed,
+                videos_pending: pending, // detected but not yet pulled (downloading or waiting on disk space)
+                last_poll_at: s.lastPollAt,
+                last_error: s.lastError,
+                note: !s.configured
+                    ? "Google Drive not connected — GOOGLE_DRIVE_CREDENTIALS is not set."
+                    : s.lastError
+                        ? `Last poll had an error: ${s.lastError}`
+                        : s.lastPollAt
+                            ? "Healthy. Polls every 30 minutes."
+                            : "Connected; first poll in progress (large videos download and clip one at a time).",
             };
         }
         default:

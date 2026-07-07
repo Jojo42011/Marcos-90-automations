@@ -3647,6 +3647,17 @@ export function updateChatSessionSummary(sessionId: string, summary: string): vo
     .run(summary, sessionId);
 }
 
+/**
+ * Clear a general "Ask the Content Manager" chat session — deletes its messages
+ * and the session row. Only touches cm_chat_* (the general brain chat); the
+ * per-clip edit chat lives in the separate cm_clip_chat table and is untouched.
+ */
+export function deleteChatSession(sessionId: string): void {
+  const db = getContentDb();
+  db.prepare(`DELETE FROM cm_chat_messages WHERE session_id = ?`).run(sessionId);
+  db.prepare(`DELETE FROM cm_chat_sessions WHERE id = ?`).run(sessionId);
+}
+
 export function insertSelfEvaluation(
   patch: Omit<CmSelfEvaluation, "id" | "createdAt"> & { id?: string },
 ): CmSelfEvaluation {

@@ -2278,6 +2278,7 @@
               <div><strong>Ask the Content Manager</strong> <span class="cm-brain-badge">CM</span></div>
               <div style="display:flex;gap:0.5rem;align-items:center;">
                 <button type="button" class="cm-btn" id="cm-chat-new-session">New Chat</button>
+                <button type="button" class="cm-btn" id="cm-chat-clear">Clear Chat</button>
                 <select id="cm-chat-session-select" style="font-size:0.75rem;padding:0.35rem;"></select>
               </div>
             </div>
@@ -5674,6 +5675,25 @@
       cmBrainSessionId = e.target.value;
       const msgs = await cmFetch(`/api/content-brain/sessions/${cmBrainSessionId}/messages`);
       renderChatMessages(msgs.messages || []);
+    });
+    document.getElementById("cm-chat-clear")?.addEventListener("click", async () => {
+      if (!confirm("Clear this chat's saved history? This permanently deletes the messages for this conversation. (It does NOT affect the per-clip Edit Chat in the Review Queue.)")) return;
+      try {
+        if (cmBrainSessionId) {
+          const res = await cmFetch(`/api/content-brain/sessions/${cmBrainSessionId}/clear`, { method: "POST" });
+          cmBrainSessionId = res.sessionId || null;
+        }
+      } catch (e) {
+        showToast(`Clear failed: ${e.message || e}`);
+        return;
+      }
+      // Reset the panel to its empty/welcome state, then re-init.
+      const box = document.getElementById("cm-chat-messages");
+      if (box) {
+        box.innerHTML = `<div class="cm-chat-empty" id="cm-chat-empty"><div style="font-size:2rem;color:var(--cyan);">🎬</div><h3>Your content strategist.</h3><p class="cm-muted">Ask about performance, competitors, hooks, what to film, or sprint status. Not Harvey — the dedicated content brain.</p><div class="cm-chat-suggestions" id="cm-chat-suggestions"></div></div>`;
+      }
+      await loadBrainSection();
+      showToast("Chat cleared");
     });
 
     async function loadCalendarMonth() {
