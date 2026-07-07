@@ -5,17 +5,18 @@ const contentDb_js_1 = require("../../core/contentDb.js");
 const diskCleanup_js_1 = require("../../core/diskCleanup.js");
 const tiktokPublish_js_1 = require("./tiktokPublish.js");
 const metaPublish_js_1 = require("./metaPublish.js");
-async function publishToTikTok(filePath, caption, _hashtags, _scheduledFor) {
-    // Real TikTok Content Posting API (official). Unaudited apps post SELF_ONLY
-    // (private) — see tiktokPublish.ts. Throws with the real TikTok error on
-    // failure; never returns a fake id.
+async function sendToTikTokDrafts(filePath, caption, _hashtags, _scheduledFor) {
+    // This app has the `video.upload` scope only, which uploads the clip to the
+    // creator's TikTok DRAFTS/inbox — it does NOT post publicly. Marco opens the
+    // TikTok app to add the caption and post. Throws with the real TikTok error
+    // on failure; never returns a fake id.
     if (!(0, tiktokPublish_js_1.tiktokConfigured)()) {
-        throw new Error("TikTok publishing is not connected — set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET and TIKTOK_REFRESH_TOKEN.");
+        throw new Error("TikTok is not connected — set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET and TIKTOK_REFRESH_TOKEN.");
     }
     if (!filePath) {
-        throw new Error("TikTok publishing: this clip has no video file on disk to upload.");
+        throw new Error("TikTok draft upload: this clip has no video file on disk to upload.");
     }
-    const { publishId } = await (0, tiktokPublish_js_1.postVideoToTikTok)(filePath, caption);
+    const { publishId } = await (0, tiktokPublish_js_1.uploadToDrafts)(filePath, caption);
     return publishId;
 }
 async function publishToInstagram(videoId, caption) {
@@ -51,10 +52,14 @@ async function publishVideo(videoId, platform, options) {
     const fullCaption = `${video.caption}\n\n${video.hashtags.join(" ")}`.trim();
     const now = new Date().toISOString();
     const scheduledFor = options?.scheduledFor ?? video.scheduledFor;
+    // TikTok only uploads to DRAFTS (video.upload scope) — it is not a live post,
+    // so it must not be recorded as "published", must not count toward the
+    // published target, and the clip file is kept (Marco still has to post it).
+    const isTikTokDraft = plat === "tiktok";
     try {
         let platformPostId;
         if (plat === "tiktok") {
-            platformPostId = await publishToTikTok(video.filePath, fullCaption, video.hashtags, scheduledFor);
+            platformPostId = await sendToTikTokDrafts(video.filePath, fullCaption, video.hashtags, scheduledFor);
         }
         else if (plat === "instagram") {
             platformPostId = await publishToInstagram(videoId, fullCaption);
@@ -70,17 +75,26 @@ async function publishVideo(videoId, platform, options) {
             platform: plat,
             platformPostId,
             publishedAt: now,
-            publishStatus: "success",
+            publishStatus: isTikTokDraft ? "sent_to_drafts" : "success",
             errorMessage: null,
         });
-        (0, contentDb_js_1.updateContentVideo)(videoId, {
-            status: "published",
-            publishedAt: now,
-        });
-        (0, contentDb_js_1.incrementDailyTarget)((0, contentDb_js_1.todayDateCst)(), "videos_published");
-        console.log(`[content-manager/publish] video ${videoId} → ${plat} post ${platformPostId}`);
-        // Fix 2 — the clip file is no longer needed once it has actually posted.
-        (0, diskCleanup_js_1.deleteClipByStoredPath)(video.filePath);
+        if (isTikTokDraft) {
+            // Sent to TikTok drafts — NOT live. Reflect that honestly; do not set
+            // publishedAt, do not count it as published, and keep the clip file so
+            // Marco can re-send if the draft never gets posted.
+            (0, contentDb_js_1.updateContentVideo)(videoId, { status: "sent_to_drafts" });
+            console.log(`[content-manager/publish] video ${videoId} → tiktok DRAFT ${platformPostId} (inbox — not live)`);
+        }
+        else {
+            (0, contentDb_js_1.updateContentVideo)(videoId, {
+                status: "published",
+                publishedAt: now,
+            });
+            (0, contentDb_js_1.incrementDailyTarget)((0, contentDb_js_1.todayDateCst)(), "videos_published");
+            console.log(`[content-manager/publish] video ${videoId} → ${plat} post ${platformPostId}`);
+            // The clip file is no longer needed once it has actually posted publicly.
+            (0, diskCleanup_js_1.deleteClipByStoredPath)(video.filePath);
+        }
         return log;
     }
     catch (err) {

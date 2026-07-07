@@ -89,8 +89,7 @@ import {
 import { contentManagerBrain, getOrCreateSession } from "./agents/contentManager/brain/index.js";
 import {
   tiktokConfigured,
-  tiktokAudited,
-  tiktokPrivacyLevel,
+  tiktokMode,
   buildTikTokAuthorizeUrl,
   exchangeCodeForToken,
   scheduleDailyTokenRefresh,
@@ -3735,8 +3734,10 @@ app.get("/api/content/publish/capabilities", async (req, res) => {
   res.json({
     tiktok: {
       connected: tiktokConfigured(),
-      audited: tiktokAudited(),
-      privacy: tiktokPrivacyLevel(),
+      // This app has the video.upload scope only: uploads go to the creator's
+      // TikTok DRAFTS/inbox, they are NOT posted publicly. mode drives honest
+      // UI labelling ("Send to TikTok drafts", not "Publish now").
+      mode: tiktokMode(),
     },
     instagram: { connected: ig.ok, audited: ig.ok, privacy: ig.ok ? "PUBLIC" : null, error: ig.error || null },
     facebook: { connected: fb.ok, audited: fb.ok, privacy: fb.ok ? "PUBLIC" : null, error: fb.error || null },

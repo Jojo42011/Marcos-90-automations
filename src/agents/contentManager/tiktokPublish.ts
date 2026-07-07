@@ -228,6 +228,102 @@ export async function postVideoToTikTok(
   return { publishId };
 }
 
+/**
+ * Which TikTok capability this app currently has. We are granted `video.upload`
+ * (draft upload to the creator's inbox), NOT `video.publish` (direct posting),
+ * so this is "draft". The UI keys off it to label the action honestly.
+ */
+export function tiktokMode(): "draft" | "direct" {
+  return "draft";
+}
+
+/**
+ * Upload a video to the creator's TikTok INBOX as a DRAFT using the
+ * `video.upload` scope. This is NOT a public post — TikTok sends the creator an
+ * inbox notification; they must open the TikTok app to add a caption and tap
+ * post. (https://developers.tiktok.com/doc/content-posting-api-reference-upload-video)
+ *
+ * Differences from postVideoToTikTok (direct post):
+ *   - endpoint /v2/post/publish/inbox/video/init/  (vs .../video/init/)
+ *   - payload has ONLY source_info — NO post_info (no title/privacy_level; the
+ *     creator sets those in-app), so `caption` is NOT sent to TikTok here.
+ *   - terminal success status is SEND_TO_USER_INBOX (vs PUBLISH_COMPLETE).
+ *
+ * Returns the publish_id and the terminal status. Throws with the real TikTok
+ * error on any failure — never swallows it.
+ */
+export async function uploadToDrafts(
+  filePath: string,
+  _caption: string,
+): Promise<{ publishId: string; status: string }> {
+  if (!filePath) throw new Error("TikTok draft upload: no video file path");
+  const bytes = await fs.readFile(filePath);
+  const videoSize = bytes.byteLength;
+  if (videoSize === 0) throw new Error(`TikTok draft upload: video file is empty (${filePath})`);
+  if (videoSize > SINGLE_CHUNK_MAX) {
+    throw new Error(
+      `TikTok draft upload: video is ${(videoSize / 1024 / 1024).toFixed(1)}MB, over the ${SINGLE_CHUNK_MAX / 1024 / 1024}MB single-chunk limit (multi-chunk upload not implemented).`,
+    );
+  }
+
+  const accessToken = await getFreshAccessToken();
+
+  // 1) init — inbox/draft endpoint, source_info ONLY (no post_info for drafts).
+  const init = await tiktokJson("/v2/post/publish/inbox/video/init/", accessToken, {
+    source_info: {
+      source: "FILE_UPLOAD",
+      video_size: videoSize,
+      chunk_size: videoSize,
+      total_chunk_count: 1,
+    },
+  });
+  const initData = (init.data as Record<string, unknown>) || {};
+  const publishId = String(initData.publish_id || "");
+  const uploadUrl = String(initData.upload_url || "");
+  if (!publishId || !uploadUrl) {
+    throw new Error(`TikTok draft init returned no publish_id/upload_url: ${JSON.stringify(init).slice(0, 300)}`);
+  }
+
+  // 2) upload the single chunk
+  const uploadRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "video/mp4",
+      "Content-Length": String(videoSize),
+      "Content-Range": `bytes 0-${videoSize - 1}/${videoSize}`,
+    },
+    body: bytes,
+  });
+  if (!uploadRes.ok) {
+    const text = await uploadRes.text().catch(() => "");
+    throw new Error(`TikTok draft upload failed (HTTP ${uploadRes.status}): ${text.slice(0, 300)}`);
+  }
+
+  // 3) poll status until terminal. For drafts, SEND_TO_USER_INBOX is success
+  //    (the notification reached the creator's inbox). PUBLISH_COMPLETE only
+  //    happens if the creator posts it from the app before we stop polling.
+  const deadline = Date.now() + 120_000;
+  let lastStatus = "PROCESSING_UPLOAD";
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 4000));
+    const statusResp = await tiktokJson("/v2/post/publish/status/fetch/", accessToken, {
+      publish_id: publishId,
+    });
+    const sData = (statusResp.data as Record<string, unknown>) || {};
+    lastStatus = String(sData.status || lastStatus);
+    if (lastStatus === "SEND_TO_USER_INBOX" || lastStatus === "PUBLISH_COMPLETE") {
+      return { publishId, status: lastStatus };
+    }
+    if (lastStatus === "FAILED") {
+      throw new Error(`TikTok draft upload FAILED: ${String(sData.fail_reason || "unknown")}`);
+    }
+  }
+  // Bytes accepted; TikTok is still moving it to the inbox. Not a failure — the
+  // draft will land shortly. Return what we have.
+  console.log(`[tiktok-publish] draft ${publishId} still ${lastStatus} after 120s — accepted, TikTok is finalizing to inbox`);
+  return { publishId, status: lastStatus };
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
  * OAuth token-grab flow (one-time) + daily refresh keep-alive.
  *
@@ -241,7 +337,9 @@ export async function postVideoToTikTok(
  * ────────────────────────────────────────────────────────────────────────── */
 
 const AUTHORIZE_ENDPOINT = "https://www.tiktok.com/v2/auth/authorize/";
-const OAUTH_SCOPES = "user.info.basic video.publish"; // space-separated, NOT comma-separated
+// This app is granted video.upload (draft upload to the creator's inbox), NOT
+// video.publish (direct public posting). Space-separated, NOT comma-separated.
+const OAUTH_SCOPES = "user.info.basic video.upload";
 
 /** OAuth redirect URI — must EXACTLY match the URI registered in the TikTok app. */
 export function tiktokRedirectUri(): string {

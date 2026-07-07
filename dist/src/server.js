@@ -3175,8 +3175,10 @@ app.get("/api/content/publish/capabilities", async (req, res) => {
     res.json({
         tiktok: {
             connected: (0, tiktokPublish_js_1.tiktokConfigured)(),
-            audited: (0, tiktokPublish_js_1.tiktokAudited)(),
-            privacy: (0, tiktokPublish_js_1.tiktokPrivacyLevel)(),
+            // This app has the video.upload scope only: uploads go to the creator's
+            // TikTok DRAFTS/inbox, they are NOT posted publicly. mode drives honest
+            // UI labelling ("Send to TikTok drafts", not "Publish now").
+            mode: (0, tiktokPublish_js_1.tiktokMode)(),
         },
         instagram: { connected: ig.ok, audited: ig.ok, privacy: ig.ok ? "PUBLIC" : null, error: ig.error || null },
         facebook: { connected: fb.ok, audited: fb.ok, privacy: fb.ok ? "PUBLIC" : null, error: fb.error || null },

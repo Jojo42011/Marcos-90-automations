@@ -1321,7 +1321,7 @@ function listPublishingQueue(limit = 50) {
     const database = getContentDb();
     const rows = database
         .prepare(`SELECT * FROM content_videos
-       WHERE status IN ('approved', 'scheduled', 'published')
+       WHERE status IN ('approved', 'scheduled', 'published', 'sent_to_drafts')
        ORDER BY COALESCE(approved_at, scheduled_for, created_at) DESC
        LIMIT ?`)
         .all(limit);
@@ -1344,7 +1344,7 @@ function listPublishingQueue(limit = 50) {
 }
 function countPublishingQueue() {
     const row = getContentDb()
-        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled', 'published')`)
+        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled', 'published', 'sent_to_drafts')`)
         .get();
     return Number(row.c) || 0;
 }

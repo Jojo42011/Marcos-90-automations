@@ -7,7 +7,7 @@ import {
   type ContentPublishLog,
 } from "../../core/contentDb.js";
 import { deleteClipByStoredPath } from "../../core/diskCleanup.js";
-import { postVideoToTikTok, tiktokConfigured } from "./tiktokPublish.js";
+import { uploadToDrafts, tiktokConfigured } from "./tiktokPublish.js";
 import {
   postReelToInstagram,
   postVideoToFacebookPage,
@@ -16,24 +16,25 @@ import {
   facebookConfigured,
 } from "./metaPublish.js";
 
-async function publishToTikTok(
+async function sendToTikTokDrafts(
   filePath: string | null,
   caption: string,
   _hashtags: string[],
   _scheduledFor?: string | null,
 ): Promise<string> {
-  // Real TikTok Content Posting API (official). Unaudited apps post SELF_ONLY
-  // (private) — see tiktokPublish.ts. Throws with the real TikTok error on
-  // failure; never returns a fake id.
+  // This app has the `video.upload` scope only, which uploads the clip to the
+  // creator's TikTok DRAFTS/inbox — it does NOT post publicly. Marco opens the
+  // TikTok app to add the caption and post. Throws with the real TikTok error
+  // on failure; never returns a fake id.
   if (!tiktokConfigured()) {
     throw new Error(
-      "TikTok publishing is not connected — set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET and TIKTOK_REFRESH_TOKEN.",
+      "TikTok is not connected — set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET and TIKTOK_REFRESH_TOKEN.",
     );
   }
   if (!filePath) {
-    throw new Error("TikTok publishing: this clip has no video file on disk to upload.");
+    throw new Error("TikTok draft upload: this clip has no video file on disk to upload.");
   }
-  const { publishId } = await postVideoToTikTok(filePath, caption);
+  const { publishId } = await uploadToDrafts(filePath, caption);
   return publishId;
 }
 
@@ -82,10 +83,15 @@ export async function publishVideo(
   const now = new Date().toISOString();
   const scheduledFor = options?.scheduledFor ?? video.scheduledFor;
 
+  // TikTok only uploads to DRAFTS (video.upload scope) — it is not a live post,
+  // so it must not be recorded as "published", must not count toward the
+  // published target, and the clip file is kept (Marco still has to post it).
+  const isTikTokDraft = plat === "tiktok";
+
   try {
     let platformPostId: string;
     if (plat === "tiktok") {
-      platformPostId = await publishToTikTok(
+      platformPostId = await sendToTikTokDrafts(
         video.filePath,
         fullCaption,
         video.hashtags,
@@ -104,19 +110,26 @@ export async function publishVideo(
       platform: plat,
       platformPostId,
       publishedAt: now,
-      publishStatus: "success",
+      publishStatus: isTikTokDraft ? "sent_to_drafts" : "success",
       errorMessage: null,
     });
 
-    updateContentVideo(videoId, {
-      status: "published",
-      publishedAt: now,
-    });
-
-    incrementDailyTarget(todayDateCst(), "videos_published");
-    console.log(`[content-manager/publish] video ${videoId} → ${plat} post ${platformPostId}`);
-    // Fix 2 — the clip file is no longer needed once it has actually posted.
-    deleteClipByStoredPath(video.filePath);
+    if (isTikTokDraft) {
+      // Sent to TikTok drafts — NOT live. Reflect that honestly; do not set
+      // publishedAt, do not count it as published, and keep the clip file so
+      // Marco can re-send if the draft never gets posted.
+      updateContentVideo(videoId, { status: "sent_to_drafts" });
+      console.log(`[content-manager/publish] video ${videoId} → tiktok DRAFT ${platformPostId} (inbox — not live)`);
+    } else {
+      updateContentVideo(videoId, {
+        status: "published",
+        publishedAt: now,
+      });
+      incrementDailyTarget(todayDateCst(), "videos_published");
+      console.log(`[content-manager/publish] video ${videoId} → ${plat} post ${platformPostId}`);
+      // The clip file is no longer needed once it has actually posted publicly.
+      deleteClipByStoredPath(video.filePath);
+    }
     return log;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
