@@ -13,6 +13,7 @@ export type ContentVideoStatus =
   | "pending_review"
   | "approved"
   | "scheduled"
+  | "submitted" // sent to Upload-Post, awaiting genuine per-platform confirmation
   | "published"
   | "rejected";
 export type ContentSessionStatus = "processing" | "complete" | "failed";
@@ -1485,7 +1486,7 @@ export function listPublishingQueue(limit = 50): PublishingQueueItem[] {
   const rows = database
     .prepare(
       `SELECT * FROM content_videos
-       WHERE status IN ('approved', 'scheduled', 'published')
+       WHERE status IN ('approved', 'scheduled', 'submitted', 'published')
        ORDER BY COALESCE(approved_at, scheduled_for, created_at) DESC
        LIMIT ?`,
     )
@@ -1514,7 +1515,7 @@ export function listPublishingQueue(limit = 50): PublishingQueueItem[] {
 export function countPublishingQueue(): number {
   const row = getContentDb()
     .prepare(
-      `SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled', 'published')`,
+      `SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled', 'submitted', 'published')`,
     )
     .get() as { c: number };
   return Number(row.c) || 0;
@@ -5237,10 +5238,11 @@ export function listPublishLogForDate(date: string): Array<{
   scheduledFor: string | null;
   views: number;
   score: number;
+  platformPostId: string | null;
 }> {
   const rows = getContentDb()
     .prepare(
-      `SELECT l.video_id, l.platform, l.published_at, l.publish_status,
+      `SELECT l.video_id, l.platform, l.published_at, l.publish_status, l.platform_post_id,
               v.title, v.pillar, v.file_path, v.scheduled_for,
               COALESCE(p.views, 0) AS views, COALESCE(p.score, 0) AS score
        FROM content_publish_log l
@@ -5261,6 +5263,9 @@ export function listPublishLogForDate(date: string): Array<{
     scheduledFor: r.scheduled_for ? String(r.scheduled_for) : null,
     views: Number(r.views) || 0,
     score: Number(r.score) || 0,
+    // Real post URL once the publish is confirmed (stored on the log at
+    // confirmation) — used for the calendar "View on platform" link.
+    platformPostId: r.platform_post_id ? String(r.platform_post_id) : null,
   }));
 }
 

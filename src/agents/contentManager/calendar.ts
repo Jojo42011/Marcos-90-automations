@@ -42,6 +42,7 @@ export interface CalendarDayData {
     publishedAt: string;
     views: number;
     score: number;
+    postUrl: string | null;
   }>;
   recordingTasks: CmRecordingTask[];
   totalScheduledAndPublished: number;
@@ -120,6 +121,9 @@ export function getCalendarDayData(date: string): CalendarDayData {
       publishedAt: r.publishedAt,
       views: r.views,
       score: r.score,
+      // Live post URL (if Upload-Post returned one on confirmation) so the
+      // calendar can link out to the real post.
+      postUrl: r.platformPostId && /^https?:\/\//i.test(r.platformPostId) ? r.platformPostId : null,
     }));
 
   const publishedCount = countPublishedVideosForDate(date);

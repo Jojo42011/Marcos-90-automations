@@ -3386,7 +3386,7 @@
     }
 
     function jumpPipelineStatus(status) {
-      switchCmSection(status === "pending_review" ? "review" : status === "published" || status === "scheduled" ? "publishing" : "upload");
+      switchCmSection(status === "pending_review" ? "review" : status === "published" || status === "scheduled" || status === "submitted" ? "publishing" : "upload");
     }
 
     /* Phase 7 — pipeline flow diagram */
@@ -4727,10 +4727,14 @@
 
     // Live posting capabilities per platform (connected? audited? privacy mode),
     // fetched from the backend so the UI reflects real credentials, not a guess.
-    let publishCaps = { tiktok: { connected: false }, instagram: { connected: false }, facebook: { connected: false } };
+    let publishCaps = { connected: false, tiktok: { connected: false }, instagram: { connected: false }, facebook: { connected: false } };
+
+    async function ensurePublishCaps() {
+      try { publishCaps = await cmFetch("/api/content/publish/capabilities"); } catch (_) { /* keep defaults */ }
+    }
 
     async function loadPublishing() {
-      try { publishCaps = await cmFetch("/api/content/publish/capabilities"); } catch (_) { /* keep defaults */ }
+      await ensurePublishCaps();
       const { clips } = await cmFetch("/api/content/publishing-queue?limit=50");
       const list = document.getElementById("publishing-list");
       if (!list) return;
@@ -4757,6 +4761,7 @@
             ).join(" ")
           : `<span class="cm-pill">${escapeHtml(v.platformTarget || "tiktok")}</span>`;
         const statusLabel = v.status === "published" ? "Published"
+          : v.status === "submitted" ? "Submitted — awaiting confirmation"
           : v.status === "scheduled" ? "Scheduled" : "Approved";
         return `<div class="cm-review-card">
           <strong>${title}</strong>
@@ -4819,8 +4824,12 @@
       return `<div class="cm-publish-note">🔴 Publishes LIVE to Marco's selected account(s) via Upload-Post (${escapeHtml(ps.join(", "))}).</div>`;
     }
 
-    async function doPublish(videoId, btn) {
-      const panel = document.getElementById("pp-" + videoId);
+    // Shared by the Publishing queue AND the Calendar day view. panelId defaults
+    // to the queue's picker; onDone defaults to reloading the queue. Same honest
+    // per-platform result handling (Published / submitted-awaiting / failed).
+    async function doPublish(videoId, btn, panelId, onDone) {
+      panelId = panelId || ("pp-" + videoId);
+      const panel = document.getElementById(panelId);
       const checked = panel ? [...panel.querySelectorAll('input[type="checkbox"]:checked')].map((c) => c.value) : [];
       if (!checked.length) { showToast("Pick at least one platform"); return; }
       if (!confirm(`Publish this clip to: ${checked.join(", ")}? This posts to Marco's real account(s) via Upload-Post.`)) return;
@@ -4834,12 +4843,15 @@
           body: JSON.stringify({ platforms: checked }),
         });
         const results = (resp && resp.results) || [];
-        const ok = results.filter((r) => r.success).map((r) => r.platform);
-        const bad = results.filter((r) => !r.success);
-        let msg = ok.length ? `Published to ${ok.join(", ")}` : "Published";
-        if (bad.length) msg += ` · failed: ${bad.map((b) => b.platform + (b.error ? " (" + b.error + ")" : "")).join(", ")}`;
-        showToast(msg);
-        loadPublishing();
+        const ok = results.filter((r) => r.state === "success").map((r) => r.platform);
+        const pending = results.filter((r) => r.state === "pending").map((r) => r.platform);
+        const bad = results.filter((r) => r.state === "failed");
+        const parts = [];
+        if (ok.length) parts.push(`Published to ${ok.join(", ")}`);
+        if (pending.length) parts.push(`submitted (awaiting confirmation): ${pending.join(", ")}`);
+        if (bad.length) parts.push(`failed: ${bad.map((b) => b.platform + (b.error ? " (" + b.error + ")" : "")).join(", ")}`);
+        showToast(parts.join(" · ") || "Submitted");
+        (onDone || loadPublishing)();
         if (typeof loadCmStats === "function") loadCmStats();
       } catch (e) {
         btn.disabled = false;
@@ -5706,7 +5718,16 @@
         kind,
         views: typeof v.views === "number" ? v.views : null,
         score: typeof v.score === "number" ? v.score : null,
+        postUrl: v.postUrl || null,
       };
+    }
+
+    function toggleEl(id) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = el.style.display === "none" ? "block" : "none";
+    }
+    function reloadCalendarDay() {
+      if (calendarSelectedDate) loadCalendarDay(calendarSelectedDate);
     }
 
     function calendarSlotCardHtml(clip) {
@@ -5720,10 +5741,44 @@
       const clickable = clip.videoId
         ? `onclick="playClip('${jsStr(clip.videoId)}', '${jsStr(clip.title)}')" role="button" tabindex="0"`
         : "";
+
+      // Scheduled clips (primary OR bonus) get the SAME publish flow as the
+      // Publishing queue — a platform picker that posts via Upload-Post. Honest
+      // status is inherited (Submitted → Published only on real confirmation).
+      let action = "";
+      if (clip.kind === "scheduled" && clip.videoId) {
+        if (socialsConnected()) {
+          const plats = [...new Set((clip.platform ? [String(clip.platform).toLowerCase()] : ["tiktok", "instagram", "facebook"]).filter(Boolean))];
+          const boxes = plats.map((p) =>
+            `<label style="display:inline-flex;align-items:center;gap:0.3rem;margin-right:0.7rem;font-size:0.72rem;text-transform:capitalize;"><input type="checkbox" value="${escapeHtml(p)}" checked> ${escapeHtml(p)}</label>`
+          ).join("");
+          action = `<div style="margin-top:0.45rem;" onclick="event.stopPropagation()">
+              <button type="button" class="cm-btn-publish-now" onclick="toggleEl('ppc-${clip.videoId}')">PUBLISH</button>
+              <div id="ppc-${clip.videoId}" style="display:none;margin-top:0.45rem;padding:0.55rem;border:1px solid var(--border);border-radius:6px;background:var(--surface2, rgba(255,255,255,0.03));">
+                <div style="font-size:0.68rem;color:var(--muted);margin-bottom:0.35rem;">Publish to which platforms?</div>
+                <div style="margin-bottom:0.45rem;">${boxes}</div>
+                <button type="button" class="cm-btn-publish-now" onclick="doPublish('${clip.videoId}', this, 'ppc-${clip.videoId}', reloadCalendarDay)">Publish selected</button>
+                <button type="button" class="cm-btn" onclick="toggleEl('ppc-${clip.videoId}')">Cancel</button>
+              </div>
+            </div>`;
+        } else {
+          action = `<div class="cm-muted" style="margin-top:0.45rem;font-size:0.66rem;">Publishing not connected</div>`;
+        }
+      }
+
+      // Published clips: link out to the real post. Upload-Post cannot take down
+      // a live post via API, so there is deliberately no "delete" action here.
+      let viewLink = "";
+      if (clip.kind === "published" && clip.postUrl) {
+        viewLink = `<div style="margin-top:0.45rem;" onclick="event.stopPropagation()"><a href="${escapeHtml(clip.postUrl)}" target="_blank" rel="noopener" class="cm-btn" style="text-decoration:none;display:inline-block;">↗ View on ${escapeHtml(clip.platform || "platform")}</a></div>`;
+      }
+
       return `<div class="calendar-slot filled${clip.videoId ? " clickable" : ""}" ${clickable}>
           <div class="calendar-slot-title">${escapeHtml(clip.title)}</div>
           <div class="calendar-slot-badges">${badge}${platform}</div>
           ${stats}
+          ${action}
+          ${viewLink}
         </div>`;
     }
 
@@ -5735,6 +5790,7 @@
     }
 
     async function loadCalendarDay(date) {
+      await ensurePublishCaps(); // so the calendar's PUBLISH controls reflect the real connection state
       const data = await cmFetch(`/api/content/calendar/day/${date}`);
       document.getElementById("calendar-day-title").textContent = date;
 

@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.publishVideo = publishVideo;
 const contentDb_js_1 = require("../../core/contentDb.js");
-const diskCleanup_js_1 = require("../../core/diskCleanup.js");
 const uploadPostPublish_js_1 = require("./uploadPostPublish.js");
 /**
  * Publish (or schedule) one clip to the selected platforms via Upload-Post — a
@@ -41,32 +40,48 @@ async function publishVideo(videoId, platforms, options) {
         platforms: plats,
         scheduledDate: scheduledFor,
     });
-    // One publish-log row per platform — the honest per-platform record.
+    // One publish-log row per platform — the honest per-platform record. The log
+    // status mirrors the REAL confirmed state (success/failed) or "scheduled" for a
+    // queued post; a still-unconfirmed platform is recorded as "scheduled" (a
+    // pending, non-terminal marker) rather than a false "success".
+    const logStatusFor = (r) => {
+        if (r.state === "success")
+            return "success";
+        if (r.state === "failed")
+            return "failed";
+        return "scheduled"; // pending / queued — not confirmed
+    };
     const logs = results.map((r) => (0, contentDb_js_1.insertPublishLog)({
         videoId,
         platform: r.platform,
-        platformPostId: r.postId || r.url || null,
+        platformPostId: r.postId || r.url || null, // real post_url once confirmed
         publishedAt: now,
-        publishStatus: r.success ? (scheduledFor ? "scheduled" : "success") : "failed",
+        publishStatus: logStatusFor(r),
         errorMessage: r.error,
     }));
-    const anySuccess = results.some((r) => r.success);
-    const allSuccess = results.length > 0 && results.every((r) => r.success);
+    const anyConfirmed = results.some((r) => r.state === "success");
+    const anyPending = results.some((r) => r.state === "pending");
     if (scheduledFor) {
-        if (anySuccess)
-            (0, contentDb_js_1.updateContentVideo)(videoId, { status: "scheduled", scheduledFor });
+        // Accepted for later — honest "scheduled", file kept.
+        (0, contentDb_js_1.updateContentVideo)(videoId, { status: "scheduled", scheduledFor });
     }
-    else if (anySuccess) {
-        // At least one platform genuinely posted — mark the clip published.
+    else if (anyConfirmed) {
+        // At least one platform is GENUINELY confirmed live. Mark published; count it
+        // once. Do NOT delete the clip file here — the scheduled safety cleanup
+        // reclaims genuinely-published clips after a grace period, which keeps the
+        // Calendar preview working in the meantime.
         (0, contentDb_js_1.updateContentVideo)(videoId, { status: "published", publishedAt: now });
         (0, contentDb_js_1.incrementDailyTarget)((0, contentDb_js_1.todayDateCst)(), "videos_published");
-        // Only discard the local clip once EVERY targeted platform posted, so a
-        // partial failure can still be retried.
-        if (allSuccess)
-            (0, diskCleanup_js_1.deleteClipByStoredPath)(video.filePath);
     }
-    const okList = results.filter((r) => r.success).map((r) => r.platform).join(", ") || "none";
+    else if (anyPending) {
+        // Accepted but not yet confirmed by any platform — honest interim status, NOT
+        // "published". A later status check / re-publish resolves it. File kept.
+        (0, contentDb_js_1.updateContentVideo)(videoId, { status: "submitted" });
+    }
+    // else: every platform confirmed FAILED — leave the clip approved so it can be
+    // retried; the failed publish-log rows carry the real reasons.
+    const summary = results.map((r) => `${r.platform}:${r.state}`).join(" ");
     console.log(`[content-manager/publish] video ${videoId} → upload-post [${plats.join(",")}]` +
-        `${scheduledFor ? " (scheduled)" : ""} ok=[${okList}]`);
+        `${scheduledFor ? " (scheduled)" : ""} ${summary}`);
     return { results, logs };
 }

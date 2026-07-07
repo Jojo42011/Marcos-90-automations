@@ -163,7 +163,9 @@ const TERMINAL_UPLOAD_STATUSES = new Set(["complete", "failed"]);
 // Clip files for videos in these states are still needed (in review, or awaiting
 // / at posting — publishVideo hands video.filePath to the uploader). Only
 // published/rejected clips (and true orphans) are reclaimable.
-const KEEP_CLIP_STATUSES = new Set(["processing", "pending_review", "approved", "scheduled"]);
+// "submitted" = handed to Upload-Post but not yet confirmed live, so its file
+// must be kept until publishing is genuinely confirmed (or fails).
+const KEEP_CLIP_STATUSES = new Set(["processing", "pending_review", "approved", "scheduled", "submitted"]);
 
 export interface CleanupCandidate {
   path: string;

@@ -106,7 +106,10 @@ async function publishToSocials(input) {
         platforms,
         title: body,
         description: body,
-        asyncUpload: false, // synchronous → per-platform results come back in the response
+        // TikTok/Instagram posting completes ASYNCHRONOUSLY on Upload-Post's side —
+        // the upload() response only means "accepted". We poll getStatus() below for
+        // the REAL per-platform result rather than trusting the initial response.
+        asyncUpload: true,
         tiktokPrivacyLevel: (process.env.UPLOAD_POST_TIKTOK_PRIVACY?.trim() ||
             "PUBLIC_TO_EVERYONE"),
         tiktokPostMode: (process.env.UPLOAD_POST_TIKTOK_MODE?.trim() ||
@@ -123,44 +126,107 @@ async function publishToSocials(input) {
         resp = await getClient().upload(input.videoPath, options);
     }
     catch (err) {
-        // A thrown error means the whole call failed (auth, network, quota). Report
-        // it for every requested platform rather than swallowing it.
+        // A thrown error means the whole call was rejected (auth, network, quota) —
+        // a terminal FAILURE for every requested platform. Never swallow it.
         const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[upload-post] upload failed: ${msg}`);
+        console.error(`[upload-post] upload rejected: ${msg}`);
         return {
-            results: platforms.map((p) => ({ platform: p, success: false, url: null, postId: null, error: msg })),
+            results: platforms.map((p) => ({ platform: p, state: "failed", success: false, url: null, postId: null, error: msg })),
             requestId: null,
             usage: null,
+            confirmed: true,
         };
     }
-    const perPlatform = Array.isArray(resp?.data?.platforms) ? resp.data.platforms : [];
-    const byName = new Map(perPlatform.map((x) => [String(x.name).toLowerCase(), x]));
-    // When scheduled or when the API returns no per-platform breakdown, fall back
-    // to the overall success flag.
-    const overallOk = resp?.success === true;
+    const requestId = resp?.request_id || null;
+    const usage = readUsage(resp);
+    // Scheduled/queued: Upload-Post accepted it for LATER — it isn't posted now, so
+    // there's nothing to poll. Report acceptance; the clip is marked "scheduled"
+    // upstream, not "published".
+    if (input.scheduledDate) {
+        const accepted = resp?.success !== false;
+        return {
+            results: platforms.map((p) => ({
+                platform: p,
+                state: "pending",
+                success: false,
+                url: null,
+                postId: requestId,
+                error: accepted ? null : resp?.message || "scheduling rejected",
+            })),
+            requestId,
+            usage,
+            confirmed: accepted,
+        };
+    }
+    // Immediate publish — poll getStatus(request_id) until each platform reaches a
+    // genuine terminal state (success with post_url, or a real failure). We do NOT
+    // treat "accepted" as "published".
+    const POLL_TOTAL_MS = 180_000; // up to ~3 min (posts confirmed in ~2 min in testing)
+    const POLL_EVERY_MS = 5_000;
+    const wanted = platforms.map((p) => String(p));
+    let statusResults = [];
+    let confirmed = false;
+    if (requestId) {
+        const deadline = Date.now() + POLL_TOTAL_MS;
+        while (Date.now() < deadline) {
+            let st = null;
+            try {
+                st = (await getClient().getStatus(requestId));
+            }
+            catch {
+                /* transient — keep polling */
+            }
+            if (st) {
+                const overall = String(st.status || "").toLowerCase();
+                const rs = Array.isArray(st.results) ? st.results : [];
+                if (rs.length)
+                    statusResults = rs;
+                const everyResolved = wanted.every((p) => rs.some((x) => String(x.platform).toLowerCase() === p && x.success !== null && x.success !== undefined));
+                if (overall === "completed" || overall === "failed" || everyResolved) {
+                    confirmed = true;
+                    break;
+                }
+            }
+            await new Promise((r) => setTimeout(r, POLL_EVERY_MS));
+        }
+    }
+    else {
+        // No request_id to poll — fall back to any per-platform breakdown the initial
+        // response happened to carry.
+        statusResults = (Array.isArray(resp?.data?.platforms) ? resp.data.platforms : []).map((x) => ({
+            platform: x.name,
+            success: x.error ? false : Boolean(x.url),
+            post_url: x.url,
+            error_message: x.error,
+        }));
+        confirmed = statusResults.length > 0;
+    }
+    const byName = new Map(statusResults.map((x) => [String(x.platform).toLowerCase(), x]));
     const results = platforms.map((p) => {
         const r = byName.get(p);
-        if (r) {
-            const success = !r.error;
-            const anyId = r;
-            const postId = anyId.post_id || anyId.id || null;
-            return { platform: p, success, url: r.url || null, postId, error: r.error || null };
+        if (r && r.success !== null && r.success !== undefined) {
+            const ok = r.success === true;
+            return {
+                platform: p,
+                state: ok ? "success" : "failed",
+                success: ok,
+                url: r.post_url || null,
+                postId: r.platform_post_id || r.post_url || null,
+                error: r.error_message || null,
+            };
         }
-        return {
-            platform: p,
-            success: overallOk,
-            url: null,
-            postId: resp?.request_id || null,
-            error: overallOk ? null : resp?.message || "No result returned for this platform",
-        };
+        // Accepted but never confirmed within the window — honest "pending", NOT success.
+        return { platform: p, state: "pending", success: false, url: null, postId: requestId, error: null };
     });
-    const rawUsage = resp.usage;
-    const usage = rawUsage
-        ? { count: Number(rawUsage.count) || 0, limit: Number(rawUsage.limit) || 0 }
-        : null;
-    const failed = results.filter((r) => !r.success);
-    if (failed.length) {
-        console.error(`[upload-post] partial/failed publish: ${failed.map((f) => `${f.platform}=${f.error}`).join("; ")}`);
-    }
-    return { results, requestId: resp?.request_id || null, usage };
+    const failed = results.filter((r) => r.state === "failed");
+    const pending = results.filter((r) => r.state === "pending");
+    if (failed.length)
+        console.error(`[upload-post] confirmed failures: ${failed.map((f) => `${f.platform}=${f.error}`).join("; ")}`);
+    if (pending.length)
+        console.warn(`[upload-post] unconfirmed after ${POLL_TOTAL_MS / 1000}s (request ${requestId}): ${pending.map((p) => p.platform).join(", ")}`);
+    return { results, requestId, usage, confirmed };
+}
+function readUsage(resp) {
+    const rawUsage = resp?.usage;
+    return rawUsage ? { count: Number(rawUsage.count) || 0, limit: Number(rawUsage.limit) || 0 } : null;
 }

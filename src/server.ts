@@ -3624,17 +3624,20 @@ app.post("/api/content/publish/:videoId", express.json(), async (req, res) => {
   const scheduledFor = typeof body.scheduled_for === "string" ? body.scheduled_for.trim() : null;
   try {
     const outcome = await publishVideo(String(req.params.videoId || ""), platforms, { scheduledFor });
-    const anySuccess = outcome.results.some((r) => r.success);
-    // Every requested platform failed → surface as an error with the real per-platform reasons.
-    if (!anySuccess) {
+    const anySuccess = outcome.results.some((r) => r.state === "success");
+    const anyPending = outcome.results.some((r) => r.state === "pending");
+    const allFailed = outcome.results.length > 0 && outcome.results.every((r) => r.state === "failed");
+    // Only a genuine all-platform failure is an error. "pending" (accepted, not
+    // yet confirmed) is a normal 200 — the clip shows "Submitted".
+    if (allFailed) {
       res.status(502).json({
         error: outcome.results.map((r) => `${r.platform}: ${r.error || "failed"}`).join("; "),
         results: outcome.results,
       });
       return;
     }
-    // Partial or full success — return honest per-platform results (never a blanket "published").
-    res.json({ ok: anySuccess, results: outcome.results });
+    // Honest per-platform results — never a blanket "published".
+    res.json({ ok: anySuccess, pending: anyPending, results: outcome.results });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }

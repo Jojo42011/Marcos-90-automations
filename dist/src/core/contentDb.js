@@ -1321,7 +1321,7 @@ function listPublishingQueue(limit = 50) {
     const database = getContentDb();
     const rows = database
         .prepare(`SELECT * FROM content_videos
-       WHERE status IN ('approved', 'scheduled', 'published')
+       WHERE status IN ('approved', 'scheduled', 'submitted', 'published')
        ORDER BY COALESCE(approved_at, scheduled_for, created_at) DESC
        LIMIT ?`)
         .all(limit);
@@ -1344,7 +1344,7 @@ function listPublishingQueue(limit = 50) {
 }
 function countPublishingQueue() {
     const row = getContentDb()
-        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled', 'published')`)
+        .prepare(`SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled', 'submitted', 'published')`)
         .get();
     return Number(row.c) || 0;
 }
@@ -3519,7 +3519,7 @@ function updateCalendarEventByRecordingTaskId(recordingTaskId, patch) {
 }
 function listPublishLogForDate(date) {
     const rows = getContentDb()
-        .prepare(`SELECT l.video_id, l.platform, l.published_at, l.publish_status,
+        .prepare(`SELECT l.video_id, l.platform, l.published_at, l.publish_status, l.platform_post_id,
               v.title, v.pillar, v.file_path, v.scheduled_for,
               COALESCE(p.views, 0) AS views, COALESCE(p.score, 0) AS score
        FROM content_publish_log l
@@ -3539,6 +3539,9 @@ function listPublishLogForDate(date) {
         scheduledFor: r.scheduled_for ? String(r.scheduled_for) : null,
         views: Number(r.views) || 0,
         score: Number(r.score) || 0,
+        // Real post URL once the publish is confirmed (stored on the log at
+        // confirmation) — used for the calendar "View on platform" link.
+        platformPostId: r.platform_post_id ? String(r.platform_post_id) : null,
     }));
 }
 function countPipelineVideosForDate(date) {
