@@ -1253,10 +1253,16 @@ function insertClipChatMessage(clipId, role, content) {
         .run((0, crypto_1.randomUUID)(), clipId, role, content, new Date().toISOString());
 }
 function listClipChatMessages(clipId, limit = 40) {
+    // Take the MOST RECENT `limit` messages (DESC + limit), then flip back to
+    // chronological order for display/replay. rowid is the tiebreak so a user +
+    // assistant pair written in the same millisecond keeps its true insert order
+    // (ORDER BY created_at alone can reorder same-ms rows).
     const rows = getContentDb()
-        .prepare(`SELECT role, content FROM cm_clip_chat WHERE clip_id = ? ORDER BY created_at ASC LIMIT ?`)
+        .prepare(`SELECT role, content FROM cm_clip_chat WHERE clip_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`)
         .all(clipId, limit);
-    return rows.map((r) => ({ role: r.role === "assistant" ? "assistant" : "user", content: String(r.content) }));
+    return rows
+        .reverse()
+        .map((r) => ({ role: r.role === "assistant" ? "assistant" : "user", content: String(r.content) }));
 }
 function listContentVideos(input) {
     const limit = input?.limit ?? 20;

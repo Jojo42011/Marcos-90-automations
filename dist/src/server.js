@@ -4092,6 +4092,22 @@ app.post("/api/content/clip/:clipId/revert", express_1.default.json(), (req, res
     }
     res.json({ ok: true, videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}` });
 });
+// Read the real playback duration of a clip file straight from the container
+// via ffprobe. Duration is NOT stored in content_videos, so ffprobe (the same
+// tool the render pipeline relies on) is the honest source. Returns null on any
+// failure so callers degrade gracefully rather than reporting a wrong number.
+function probeClipDurationSeconds(filePath) {
+    try {
+        const out = (0, child_process_1.execSync)(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${JSON.stringify(filePath)}`, { encoding: "utf8", timeout: 10000 }).trim();
+        const seconds = Number.parseFloat(out);
+        if (!Number.isFinite(seconds) || seconds <= 0)
+            return null;
+        return Math.round(seconds * 10) / 10; // 0.1s precision — enough for "delete the last two seconds"
+    }
+    catch {
+        return null;
+    }
+}
 // Build the per-clip context the chat agent reasons over (copy fields + caption
 // lines with timings, for locating moments like "around 0:14").
 function buildClipEditContext(video) {
@@ -4122,7 +4138,7 @@ function buildClipEditContext(video) {
         caption: video.caption || "",
         hashtags: video.hashtags || [],
         score: video.trendAlignmentScore || 0,
-        durationSeconds: null,
+        durationSeconds: clipPath ? probeClipDurationSeconds(clipPath) : null,
         hasPreviousVersion: Boolean((0, contentDb_js_1.getLatestClipVersion)(video.id)),
         captions,
         captionsEditable,

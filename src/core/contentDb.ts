@@ -1379,10 +1379,18 @@ export function insertClipChatMessage(clipId: string, role: "user" | "assistant"
 }
 
 export function listClipChatMessages(clipId: string, limit = 40): Array<{ role: "user" | "assistant"; content: string }> {
+  // Take the MOST RECENT `limit` messages (DESC + limit), then flip back to
+  // chronological order for display/replay. rowid is the tiebreak so a user +
+  // assistant pair written in the same millisecond keeps its true insert order
+  // (ORDER BY created_at alone can reorder same-ms rows).
   const rows = getContentDb()
-    .prepare(`SELECT role, content FROM cm_clip_chat WHERE clip_id = ? ORDER BY created_at ASC LIMIT ?`)
+    .prepare(
+      `SELECT role, content FROM cm_clip_chat WHERE clip_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+    )
     .all(clipId, limit) as Array<Record<string, unknown>>;
-  return rows.map((r) => ({ role: r.role === "assistant" ? "assistant" : "user", content: String(r.content) }));
+  return rows
+    .reverse()
+    .map((r) => ({ role: r.role === "assistant" ? "assistant" : "user", content: String(r.content) }));
 }
 
 export function listContentVideos(input?: {
