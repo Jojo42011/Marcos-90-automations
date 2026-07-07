@@ -20,6 +20,9 @@ exports.recordClipVersion = recordClipVersion;
 exports.getLatestClipVersion = getLatestClipVersion;
 exports.deleteClipVersion = deleteClipVersion;
 exports.listClipVersionFileRefs = listClipVersionFileRefs;
+exports.isDriveFileProcessed = isDriveFileProcessed;
+exports.markDriveFileProcessed = markDriveFileProcessed;
+exports.countDriveProcessed = countDriveProcessed;
 exports.insertClipChatMessage = insertClipChatMessage;
 exports.listClipChatMessages = listClipChatMessages;
 exports.listContentVideos = listContentVideos;
@@ -513,6 +516,12 @@ function getContentDb() {
         created_at TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_clip_chat_clip ON cm_clip_chat(clip_id);
+      CREATE TABLE IF NOT EXISTS cm_drive_processed (
+        file_id TEXT PRIMARY KEY,
+        name TEXT,
+        session_id TEXT,
+        processed_at TEXT
+      );
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
         tiktok_handle TEXT UNIQUE,
@@ -1245,6 +1254,22 @@ function listClipVersionFileRefs() {
         .prepare(`SELECT video_id, file_path FROM cm_clip_versions WHERE file_path IS NOT NULL`)
         .all();
     return rows.map((r) => ({ videoId: String(r.video_id), filePath: String(r.file_path) }));
+}
+/* ── Google Drive auto-pull: already-processed file IDs (never re-pull) ── */
+function isDriveFileProcessed(fileId) {
+    const row = getContentDb()
+        .prepare(`SELECT 1 FROM cm_drive_processed WHERE file_id = ?`)
+        .get(fileId);
+    return Boolean(row);
+}
+function markDriveFileProcessed(fileId, name, sessionId) {
+    getContentDb()
+        .prepare(`INSERT OR IGNORE INTO cm_drive_processed (file_id, name, session_id, processed_at) VALUES (?, ?, ?, ?)`)
+        .run(fileId, name, sessionId, new Date().toISOString());
+}
+function countDriveProcessed() {
+    const row = getContentDb().prepare(`SELECT COUNT(*) AS c FROM cm_drive_processed`).get();
+    return Number(row.c) || 0;
 }
 /* ── Per-clip edit-chat history ── */
 function insertClipChatMessage(clipId, role, content) {

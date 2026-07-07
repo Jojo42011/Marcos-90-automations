@@ -34,6 +34,7 @@ import { scheduleNoReplyFollowupCheck } from "../agents/emailMarketing/noReplyFo
 import { scheduleContentManagerDaily7pmCST } from "../agents/contentManager/index.js";
 import { scheduleContentBrainCycles } from "../agents/contentManager/brain/index.js";
 import { scheduleVoiceoverProcessor } from "../agents/voiceClone/generator.js";
+import { scheduleGoogleDrivePoller } from "../agents/contentManager/googleDrivePull.js";
 
 function msUntilNextUtcHour(hour: number): number {
   const now = new Date();
@@ -89,6 +90,7 @@ export function scheduleContentJobs(): void {
   scheduleContentManagerDaily7pmCST();
   scheduleContentBrainCycles();
   scheduleVoiceoverProcessor();
+  scheduleGoogleDrivePoller();
   scheduleDiskCleanup();
 }
 

@@ -2009,7 +2009,8 @@
             <div class="batch-header-row">
               <h3 style="margin:0;">Upload & Clip</h3>
             </div>
-            <div id="openShortsStatusIndicator" class="cm-muted" style="font-size:12px;margin-bottom:12px;"></div>
+            <div id="openShortsStatusIndicator" class="cm-muted" style="font-size:12px;margin-bottom:4px;"></div>
+            <div id="driveStatusIndicator" class="cm-muted" style="font-size:12px;margin-bottom:12px;"></div>
             <div class="batch-config-row">
               <div style="flex:1;min-width:180px;">
                 <label>Session name</label>
@@ -4132,6 +4133,24 @@
     }
     checkOpenShortsStatus();
     setInterval(checkOpenShortsStatus, 30000);
+
+    async function checkDriveStatus() {
+      const indicator = document.getElementById("driveStatusIndicator");
+      if (!indicator) return;
+      try {
+        const d = await cmFetch("/api/content/drive/status");
+        const last = d.lastPollAt ? fmtDateTime(d.lastPollAt) : "never";
+        if (!d.configured) {
+          indicator.innerHTML = `<span style="color:#f5c451">● Drive auto-pull not connected</span> <span class="cm-muted" style="font-size:11px">set GOOGLE_DRIVE_CREDENTIALS to enable</span>`;
+        } else if (d.connected && d.folderAccessible) {
+          indicator.innerHTML = `<span style="color:var(--success)">● Drive auto-pull online</span> <span class="cm-muted" style="font-size:11px">${d.known} in folder · ${d.processed} pulled · last poll ${escapeHtml(last)}</span>`;
+        } else {
+          indicator.innerHTML = `<span style="color:#e5534b">● Drive auto-pull error</span> <span class="cm-muted" style="font-size:11px">${escapeHtml(d.lastError || "folder not accessible")}</span>`;
+        }
+      } catch (_) { /* ignore */ }
+    }
+    checkDriveStatus();
+    setInterval(checkDriveStatus, 60000);
 
     async function loadCompetitorProfiles() {
       try {

@@ -35,6 +35,7 @@ const noReplyFollowup_js_1 = require("../agents/emailMarketing/noReplyFollowup.j
 const index_js_16 = require("../agents/contentManager/index.js");
 const index_js_17 = require("../agents/contentManager/brain/index.js");
 const generator_js_1 = require("../agents/voiceClone/generator.js");
+const googleDrivePull_js_1 = require("../agents/contentManager/googleDrivePull.js");
 function msUntilNextUtcHour(hour) {
     const now = new Date();
     const next = new Date(now);
@@ -83,6 +84,7 @@ function scheduleContentJobs() {
     (0, index_js_16.scheduleContentManagerDaily7pmCST)();
     (0, index_js_17.scheduleContentBrainCycles)();
     (0, generator_js_1.scheduleVoiceoverProcessor)();
+    (0, googleDrivePull_js_1.scheduleGoogleDrivePoller)();
     scheduleDiskCleanup();
 }
 async function runDailyJobs() {

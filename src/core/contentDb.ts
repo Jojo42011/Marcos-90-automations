@@ -462,6 +462,12 @@ export function getContentDb(): Database.Database {
         created_at TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_clip_chat_clip ON cm_clip_chat(clip_id);
+      CREATE TABLE IF NOT EXISTS cm_drive_processed (
+        file_id TEXT PRIMARY KEY,
+        name TEXT,
+        session_id TEXT,
+        processed_at TEXT
+      );
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
         tiktok_handle TEXT UNIQUE,
@@ -1370,6 +1376,27 @@ export function listClipVersionFileRefs(): { videoId: string; filePath: string }
     .prepare(`SELECT video_id, file_path FROM cm_clip_versions WHERE file_path IS NOT NULL`)
     .all() as Array<Record<string, unknown>>;
   return rows.map((r) => ({ videoId: String(r.video_id), filePath: String(r.file_path) }));
+}
+
+/* ── Google Drive auto-pull: already-processed file IDs (never re-pull) ── */
+export function isDriveFileProcessed(fileId: string): boolean {
+  const row = getContentDb()
+    .prepare(`SELECT 1 FROM cm_drive_processed WHERE file_id = ?`)
+    .get(fileId);
+  return Boolean(row);
+}
+
+export function markDriveFileProcessed(fileId: string, name: string, sessionId: string | null): void {
+  getContentDb()
+    .prepare(
+      `INSERT OR IGNORE INTO cm_drive_processed (file_id, name, session_id, processed_at) VALUES (?, ?, ?, ?)`,
+    )
+    .run(fileId, name, sessionId, new Date().toISOString());
+}
+
+export function countDriveProcessed(): number {
+  const row = getContentDb().prepare(`SELECT COUNT(*) AS c FROM cm_drive_processed`).get() as { c: number };
+  return Number(row.c) || 0;
 }
 
 /* ── Per-clip edit-chat history ── */

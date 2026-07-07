@@ -69,6 +69,7 @@ const index_js_12 = require("./agents/listingStatusAutomation/index.js");
 const index_js_13 = require("./agents/contentManager/index.js");
 const index_js_14 = require("./agents/contentManager/brain/index.js");
 const uploadPostPublish_js_1 = require("./agents/contentManager/uploadPostPublish.js");
+const googleDrivePull_js_1 = require("./agents/contentManager/googleDrivePull.js");
 const metaPublish_js_1 = require("./agents/contentManager/metaPublish.js");
 const batchProcessor_js_1 = require("./agents/contentManager/batchProcessor.js");
 const diskCleanup_js_1 = require("./core/diskCleanup.js");
@@ -4929,6 +4930,28 @@ app.patch("/api/content/recording-tasks/:id", express_1.default.json(), (req, re
         return;
     }
     res.json({ task: updated });
+});
+// Google Drive auto-pull status for the Upload & Clip page indicator.
+app.get("/api/content/drive/status", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    res.json((0, googleDrivePull_js_1.getDriveStatus)());
+});
+// Manual "poll now" trigger (used for the setup test — the scheduler still runs
+// every 30 min on its own). Fire-and-forget so the request returns immediately.
+app.post("/api/content/drive/poll", express_1.default.json(), (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    if (!(0, googleDrivePull_js_1.driveConfigured)()) {
+        res.status(400).json({ error: "Google Drive not connected — set the GOOGLE_DRIVE_CREDENTIALS secret." });
+        return;
+    }
+    void (0, googleDrivePull_js_1.pollGoogleDrive)().catch((err) => console.error("[drive-pull] manual poll failed:", err));
+    res.json({ ok: true, message: "Drive poll started — new videos will appear in the Review Queue shortly." });
 });
 app.get("/api/content/calendar/day/:date", (req, res) => {
     if (!dashboardTokenOk(req)) {

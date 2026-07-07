@@ -88,6 +88,7 @@ import {
 } from "./agents/contentManager/index.js";
 import { contentManagerBrain, getOrCreateSession } from "./agents/contentManager/brain/index.js";
 import { uploadPostConnected } from "./agents/contentManager/uploadPostPublish.js";
+import { getDriveStatus, pollGoogleDrive, driveConfigured } from "./agents/contentManager/googleDrivePull.js";
 import {
   verifySignedClip,
 } from "./agents/contentManager/metaPublish.js";
@@ -5613,6 +5614,30 @@ app.patch("/api/content/recording-tasks/:id", express.json(), (req, res) => {
     return;
   }
   res.json({ task: updated });
+});
+
+// Google Drive auto-pull status for the Upload & Clip page indicator.
+app.get("/api/content/drive/status", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(getDriveStatus());
+});
+
+// Manual "poll now" trigger (used for the setup test — the scheduler still runs
+// every 30 min on its own). Fire-and-forget so the request returns immediately.
+app.post("/api/content/drive/poll", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  if (!driveConfigured()) {
+    res.status(400).json({ error: "Google Drive not connected — set the GOOGLE_DRIVE_CREDENTIALS secret." });
+    return;
+  }
+  void pollGoogleDrive().catch((err) => console.error("[drive-pull] manual poll failed:", err));
+  res.json({ ok: true, message: "Drive poll started — new videos will appear in the Review Queue shortly." });
 });
 
 app.get("/api/content/calendar/day/:date", (req, res) => {
