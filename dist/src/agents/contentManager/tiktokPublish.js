@@ -7,6 +7,10 @@ exports.tiktokConfigured = tiktokConfigured;
 exports.tiktokPrivacyLevel = tiktokPrivacyLevel;
 exports.tiktokAudited = tiktokAudited;
 exports.postVideoToTikTok = postVideoToTikTok;
+exports.tiktokRedirectUri = tiktokRedirectUri;
+exports.buildTikTokAuthorizeUrl = buildTikTokAuthorizeUrl;
+exports.exchangeCodeForToken = exchangeCodeForToken;
+exports.scheduleDailyTokenRefresh = scheduleDailyTokenRefresh;
 /**
  * TikTok Content Posting API (official) — direct video post.
  *
@@ -203,4 +207,102 @@ async function postVideoToTikTok(filePath, caption, opts) {
     // Uploaded and accepted, still processing on TikTok's side — not a failure.
     console.log(`[tiktok-publish] publish ${publishId} still ${lastStatus} after 120s — accepted, TikTok is finalizing`);
     return { publishId };
+}
+/* ──────────────────────────────────────────────────────────────────────────
+ * OAuth token-grab flow (one-time) + daily refresh keep-alive.
+ *
+ * The refresh token is obtained ONCE by a human: visit GET /auth/tiktok, log in
+ * as the target account, and copy the refresh token off the callback page into
+ * the TIKTOK_REFRESH_TOKEN Fly secret. From then on getFreshAccessToken() (used
+ * by every post) refreshes access tokens from it. All of this shares the single
+ * token store above — there is deliberately no second store, because TikTok
+ * rotates the refresh token on every refresh and two stores would invalidate
+ * each other.
+ * ────────────────────────────────────────────────────────────────────────── */
+const AUTHORIZE_ENDPOINT = "https://www.tiktok.com/v2/auth/authorize/";
+const OAUTH_SCOPES = "user.info.basic video.publish"; // space-separated, NOT comma-separated
+/** OAuth redirect URI — must EXACTLY match the URI registered in the TikTok app. */
+function tiktokRedirectUri() {
+    return (process.env.TIKTOK_REDIRECT_URI?.trim() ||
+        "https://marco-90-automation.fly.dev/auth/tiktok/callback");
+}
+/**
+ * Build the TikTok login URL. scope is space-separated and every value is
+ * percent-encoded (space → %20), which the authorize endpoint requires.
+ */
+function buildTikTokAuthorizeUrl(state) {
+    const clientKey = process.env.TIKTOK_CLIENT_KEY?.trim();
+    if (!clientKey)
+        throw new Error("TIKTOK_CLIENT_KEY is not set");
+    const params = [
+        ["client_key", clientKey],
+        ["scope", OAUTH_SCOPES],
+        ["response_type", "code"],
+        ["redirect_uri", tiktokRedirectUri()],
+        ["state", state],
+    ];
+    const query = params.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+    return `${AUTHORIZE_ENDPOINT}?${query}`;
+}
+/**
+ * Exchange the ?code from the /auth/tiktok/callback redirect for the initial
+ * token pair (authorization_code grant), persisting it to the same store the
+ * publisher refreshes from. Returns the refresh token so the callback page can
+ * display it. Only needs the client key/secret (the refresh token doesn't exist
+ * yet), so it does NOT call creds().
+ */
+async function exchangeCodeForToken(code) {
+    const clientKey = process.env.TIKTOK_CLIENT_KEY?.trim();
+    const clientSecret = process.env.TIKTOK_CLIENT_SECRET?.trim();
+    if (!clientKey || !clientSecret) {
+        throw new Error("TikTok OAuth not configured — set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET");
+    }
+    const res = await fetch(`${TIKTOK_API}/v2/oauth/token/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+            client_key: clientKey,
+            client_secret: clientSecret,
+            code,
+            grant_type: "authorization_code",
+            redirect_uri: tiktokRedirectUri(),
+        }),
+    });
+    const data = (await res.json().catch(() => ({})));
+    const accessToken = typeof data.access_token === "string" ? data.access_token : "";
+    const refreshToken = typeof data.refresh_token === "string" ? data.refresh_token : "";
+    if (!res.ok || !accessToken || !refreshToken) {
+        const detail = data.error_description || data.error || JSON.stringify(data).slice(0, 300);
+        throw new Error(`TikTok code exchange failed (HTTP ${res.status}): ${detail}`);
+    }
+    const expiresIn = Number(data.expires_in) || 86400;
+    await writeStoredToken({ refreshToken, accessToken, accessExpiresAt: Date.now() + expiresIn * 1000 });
+    return {
+        refreshToken,
+        accessToken,
+        expiresIn,
+        scope: typeof data.scope === "string" ? data.scope : undefined,
+        openId: typeof data.open_id === "string" ? data.open_id : undefined,
+    };
+}
+let refreshTimer = null;
+/**
+ * Keep the access token warm: refresh on startup and every 23h (access tokens
+ * live ~24h), which also rotates + persists the refresh token so it never goes
+ * stale between posts. Never throws — logs a note if not configured yet.
+ */
+function scheduleDailyTokenRefresh() {
+    const runOnce = () => {
+        if (!tiktokConfigured()) {
+            console.log("[tiktok] daily refresh skipped — TIKTOK_REFRESH_TOKEN not set yet (visit /auth/tiktok)");
+            return;
+        }
+        getFreshAccessToken()
+            .then(() => console.log("[tiktok] daily token refresh OK"))
+            .catch((err) => console.warn(`[tiktok] daily token refresh failed: ${err instanceof Error ? err.message : String(err)}`));
+    };
+    runOnce();
+    if (refreshTimer)
+        clearInterval(refreshTimer);
+    refreshTimer = setInterval(runOnce, 23 * 60 * 60 * 1000);
 }

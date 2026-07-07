@@ -305,6 +305,77 @@ app.get("/health", async (_req, res) => {
         },
     });
 });
+/* ── TikTok OAuth token-grab (one-time) ──
+ * GET /auth/tiktok            → redirect to TikTok login (video.publish consent)
+ * GET /auth/tiktok/callback   → exchange the code, show the refresh token to copy
+ * These are intentionally NOT behind DASHBOARD_TOKEN: the browser hits them
+ * during the OAuth redirect, and the callback only yields a token to whoever
+ * completed the TikTok login. A short-lived `state` guards against CSRF.
+ */
+const tiktokOAuthStates = new Map(); // state → expiry epoch ms
+function issueTikTokState() {
+    const now = Date.now();
+    for (const [s, exp] of tiktokOAuthStates)
+        if (exp < now)
+            tiktokOAuthStates.delete(s);
+    const state = (0, crypto_1.randomUUID)();
+    tiktokOAuthStates.set(state, now + 10 * 60 * 1000); // valid 10 minutes
+    return state;
+}
+function consumeTikTokState(state) {
+    const exp = tiktokOAuthStates.get(state);
+    if (exp === undefined)
+        return false;
+    tiktokOAuthStates.delete(state);
+    return exp >= Date.now();
+}
+function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+app.get("/auth/tiktok", (_req, res) => {
+    try {
+        const url = (0, tiktokPublish_js_1.buildTikTokAuthorizeUrl)(issueTikTokState());
+        res.redirect(url);
+    }
+    catch (err) {
+        res
+            .status(500)
+            .send(`TikTok OAuth not configured: ${escapeHtml(err instanceof Error ? err.message : String(err))}`);
+    }
+});
+app.get("/auth/tiktok/callback", async (req, res) => {
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    const oauthError = typeof req.query.error === "string" ? req.query.error : "";
+    const page = (title, body) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+        `<title>${title}</title><body style="font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;line-height:1.5">${body}</body>`;
+    if (oauthError) {
+        res.status(400).send(page("TikTok auth error", `<h1>TikTok denied the request</h1><p>${escapeHtml(oauthError)}</p>`));
+        return;
+    }
+    if (!code) {
+        res.status(400).send(page("Missing code", `<h1>Missing authorization code</h1><p>Start again at <a href="/auth/tiktok">/auth/tiktok</a>.</p>`));
+        return;
+    }
+    if (!state || !consumeTikTokState(state)) {
+        res.status(400).send(page("Bad state", `<h1>Invalid or expired session</h1><p>For security, start the flow again at <a href="/auth/tiktok">/auth/tiktok</a>.</p>`));
+        return;
+    }
+    try {
+        const tok = await (0, tiktokPublish_js_1.exchangeCodeForToken)(code);
+        res.send(page("TikTok connected", `<h1>✅ TikTok connected</h1>` +
+            `<p>Copy this refresh token and set it as the Fly secret:</p>` +
+            `<pre style="background:#f4f4f5;border:1px solid #ddd;border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-all">${escapeHtml(tok.refreshToken)}</pre>` +
+            `<p>Then run:</p>` +
+            `<pre style="background:#0b1021;color:#e6e6e6;border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-all">fly secrets set TIKTOK_REFRESH_TOKEN=${escapeHtml(tok.refreshToken)} -a marco-90-automation</pre>` +
+            `<p style="color:#666;font-size:14px">Scope: ${escapeHtml(tok.scope || "")}${tok.openId ? " · open_id: " + escapeHtml(tok.openId) : ""}. The token is also saved to the data volume so posting works immediately; setting the secret makes it survive a volume reset.</p>`));
+    }
+    catch (err) {
+        res
+            .status(502)
+            .send(page("Token exchange failed", `<h1>Token exchange failed</h1><p>${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`));
+    }
+});
 /** OpenClaw — OpenAI-compatible brain endpoint (WhatsApp / messaging gateway). */
 app.post("/v1/chat/completions", express_1.default.json({ limit: "256kb" }), async (req, res) => {
     if (!(0, index_js_20.isAnthropicApiKeyConfigured)()) {
@@ -7550,6 +7621,12 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     }
     else {
         console.warn("[Anthropic] ANTHROPIC_API_KEY missing — preflight/opening/pipeline skip Haiku and use template fallbacks only.");
+    }
+    try {
+        (0, tiktokPublish_js_1.scheduleDailyTokenRefresh)(); // keep the TikTok access token warm (no-op-with-note until configured)
+    }
+    catch (err) {
+        console.error("[tiktok] scheduleDailyTokenRefresh failed to start:", err);
     }
     void Promise.resolve().then(() => __importStar(require("./integrations/email/index.js"))).then(async (m) => {
         const ok = await m.verifyEmailConnection();
