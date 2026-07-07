@@ -87,17 +87,8 @@ import {
   getWeeklyReport,
 } from "./agents/contentManager/index.js";
 import { contentManagerBrain, getOrCreateSession } from "./agents/contentManager/brain/index.js";
+import { uploadPostConnected } from "./agents/contentManager/uploadPostPublish.js";
 import {
-  tiktokConnected,
-  tiktokMode,
-  buildTikTokAuthorizeUrl,
-  exchangeCodeForToken,
-  scheduleDailyTokenRefresh,
-} from "./agents/contentManager/tiktokPublish.js";
-import {
-  instagramConfigured,
-  facebookConfigured,
-  validateMeta,
   verifySignedClip,
 } from "./agents/contentManager/metaPublish.js";
 import { processBatch } from "./agents/contentManager/batchProcessor.js";
@@ -659,81 +650,8 @@ app.get("/health", async (_req, res) => {
   });
 });
 
-/* ── TikTok OAuth token-grab (one-time) ──
- * GET /auth/tiktok            → redirect to TikTok login (video.publish consent)
- * GET /auth/tiktok/callback   → exchange the code, show the refresh token to copy
- * These are intentionally NOT behind DASHBOARD_TOKEN: the browser hits them
- * during the OAuth redirect, and the callback only yields a token to whoever
- * completed the TikTok login. A short-lived `state` guards against CSRF.
- */
-const tiktokOAuthStates = new Map<string, number>(); // state → expiry epoch ms
-function issueTikTokState(): string {
-  const now = Date.now();
-  for (const [s, exp] of tiktokOAuthStates) if (exp < now) tiktokOAuthStates.delete(s);
-  const state = randomUUID();
-  tiktokOAuthStates.set(state, now + 10 * 60 * 1000); // valid 10 minutes
-  return state;
-}
-function consumeTikTokState(state: string): boolean {
-  const exp = tiktokOAuthStates.get(state);
-  if (exp === undefined) return false;
-  tiktokOAuthStates.delete(state);
-  return exp >= Date.now();
-}
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
-}
-
-app.get("/auth/tiktok", (_req, res) => {
-  try {
-    const url = buildTikTokAuthorizeUrl(issueTikTokState());
-    res.redirect(url);
-  } catch (err) {
-    res
-      .status(500)
-      .send(`TikTok OAuth not configured: ${escapeHtml(err instanceof Error ? err.message : String(err))}`);
-  }
-});
-
-app.get("/auth/tiktok/callback", async (req, res) => {
-  const code = typeof req.query.code === "string" ? req.query.code : "";
-  const state = typeof req.query.state === "string" ? req.query.state : "";
-  const oauthError = typeof req.query.error === "string" ? req.query.error : "";
-  const page = (title: string, body: string) =>
-    `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
-    `<title>${title}</title><body style="font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;line-height:1.5">${body}</body>`;
-
-  if (oauthError) {
-    res.status(400).send(page("TikTok auth error", `<h1>TikTok denied the request</h1><p>${escapeHtml(oauthError)}</p>`));
-    return;
-  }
-  if (!code) {
-    res.status(400).send(page("Missing code", `<h1>Missing authorization code</h1><p>Start again at <a href="/auth/tiktok">/auth/tiktok</a>.</p>`));
-    return;
-  }
-  if (!state || !consumeTikTokState(state)) {
-    res.status(400).send(page("Bad state", `<h1>Invalid or expired session</h1><p>For security, start the flow again at <a href="/auth/tiktok">/auth/tiktok</a>.</p>`));
-    return;
-  }
-  try {
-    const tok = await exchangeCodeForToken(code);
-    res.send(
-      page(
-        "TikTok connected",
-        `<h1>✅ TikTok connected</h1>` +
-          `<p>Copy this refresh token and set it as the Fly secret:</p>` +
-          `<pre style="background:#f4f4f5;border:1px solid #ddd;border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-all">${escapeHtml(tok.refreshToken)}</pre>` +
-          `<p>Then run:</p>` +
-          `<pre style="background:#0b1021;color:#e6e6e6;border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-all">fly secrets set TIKTOK_REFRESH_TOKEN=${escapeHtml(tok.refreshToken)} -a marco-90-automation</pre>` +
-          `<p style="color:#666;font-size:14px">Scope: ${escapeHtml(tok.scope || "")}${tok.openId ? " · open_id: " + escapeHtml(tok.openId) : ""}. The token is also saved to the data volume so posting works immediately; setting the secret makes it survive a volume reset.</p>`,
-      ),
-    );
-  } catch (err) {
-    res
-      .status(502)
-      .send(page("Token exchange failed", `<h1>Token exchange failed</h1><p>${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`));
-  }
-});
+// (The in-house TikTok OAuth token-grab routes were removed — publishing now
+// goes through Upload-Post, which handles OAuth for all platforms externally.)
 
 /** OpenClaw — OpenAI-compatible brain endpoint (WhatsApp / messaging gateway). */
 app.post("/v1/chat/completions", express.json({ limit: "256kb" }), async (req, res) => {
@@ -3690,60 +3608,55 @@ app.post("/api/content/publish/:videoId", express.json(), async (req, res) => {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
   }
-  const platform = typeof req.body?.platform === "string" ? req.body.platform.trim() : "";
-  if (!platform) {
-    res.status(400).json({ error: "platform required" });
+  // Accept a platforms[] array (one call → many platforms via Upload-Post).
+  // Back-compat: a single `platform` string is wrapped into the array.
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  let platforms: string[] = [];
+  if (Array.isArray(body.platforms)) {
+    platforms = body.platforms.map((p) => String(p).trim().toLowerCase()).filter(Boolean);
+  } else if (typeof body.platform === "string" && body.platform.trim()) {
+    platforms = [body.platform.trim().toLowerCase()];
+  }
+  if (!platforms.length) {
+    res.status(400).json({ error: "platforms required (array of tiktok/instagram/facebook)" });
     return;
   }
-  const scheduledFor =
-    typeof req.body?.scheduled_for === "string" ? req.body.scheduled_for.trim() : null;
+  const scheduledFor = typeof body.scheduled_for === "string" ? body.scheduled_for.trim() : null;
   try {
-    if (scheduledFor) {
-      updateContentVideo(String(req.params.videoId || ""), {
-        status: "scheduled",
-        scheduledFor,
+    const outcome = await publishVideo(String(req.params.videoId || ""), platforms, { scheduledFor });
+    const anySuccess = outcome.results.some((r) => r.success);
+    // Every requested platform failed → surface as an error with the real per-platform reasons.
+    if (!anySuccess) {
+      res.status(502).json({
+        error: outcome.results.map((r) => `${r.platform}: ${r.error || "failed"}`).join("; "),
+        results: outcome.results,
       });
-    }
-    const log = await publishVideo(String(req.params.videoId || ""), platform, { scheduledFor });
-    // publishVideo records a "failed" log rather than throwing when the platform
-    // call fails. Surface that as an error status so the dashboard shows the real
-    // reason (e.g. "not connected", expired token) instead of a silent success.
-    if (log.publishStatus === "failed") {
-      res.status(502).json({ error: log.errorMessage || `Publish to ${platform} failed`, log });
       return;
     }
-    res.json(log);
+    // Partial or full success — return honest per-platform results (never a blanket "published").
+    res.json({ ok: anySuccess, results: outcome.results });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
 
-// Which platforms Publish Now can actually post to right now, and in what
-// privacy mode. The dashboard uses this to enable/label the button honestly.
+// Whether publishing is connected right now. Upload-Post handles TikTok,
+// Instagram and Facebook through ONE API key, so this is a single real check
+// (a live listUsers() call) mirrored across the three platform flags the UI
+// reads. Until UPLOAD_POST_API_KEY is set and valid, all three are "Not
+// connected" — no faked state.
 app.get("/api/content/publish/capabilities", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
   }
-  // Each platform's "connected" is a REAL check, independent of the others:
-  // Instagram/Facebook = a live Graph validation; TikTok = a live token refresh
-  // (tiktokConnected) — not just env-var presence. So TikTok stays "Not
-  // connected" until a working refresh token exists, then auto-enables.
-  const [tk, ig, fb] = await Promise.all([
-    tiktokConnected(),
-    instagramConfigured() ? validateMeta("instagram") : Promise.resolve({ ok: false, error: undefined }),
-    facebookConfigured() ? validateMeta("facebook") : Promise.resolve({ ok: false, error: undefined }),
-  ]);
+  const connected = await uploadPostConnected();
   res.json({
-    tiktok: {
-      connected: tk,
-      // This app has the video.upload scope only: uploads go to the creator's
-      // TikTok DRAFTS/inbox, they are NOT posted publicly. mode drives honest
-      // UI labelling ("Send to TikTok drafts", not "Publish now").
-      mode: tiktokMode(),
-    },
-    instagram: { connected: ig.ok, audited: ig.ok, privacy: ig.ok ? "PUBLIC" : null, error: ig.error || null },
-    facebook: { connected: fb.ok, audited: fb.ok, privacy: fb.ok ? "PUBLIC" : null, error: fb.error || null },
+    provider: "upload-post",
+    connected,
+    tiktok: { connected },
+    instagram: { connected },
+    facebook: { connected },
   });
 });
 
@@ -8509,11 +8422,6 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     console.warn(
       "[Anthropic] ANTHROPIC_API_KEY missing — preflight/opening/pipeline skip Haiku and use template fallbacks only.",
     );
-  }
-  try {
-    scheduleDailyTokenRefresh(); // keep the TikTok access token warm (no-op-with-note until configured)
-  } catch (err) {
-    console.error("[tiktok] scheduleDailyTokenRefresh failed to start:", err);
   }
   void import("./integrations/email/index.js").then(async (m) => {
     const ok = await m.verifyEmailConnection();

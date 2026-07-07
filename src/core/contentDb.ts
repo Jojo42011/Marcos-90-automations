@@ -14,7 +14,6 @@ export type ContentVideoStatus =
   | "approved"
   | "scheduled"
   | "published"
-  | "sent_to_drafts" // uploaded to TikTok drafts/inbox — NOT live; the human posts it in-app
   | "rejected";
 export type ContentSessionStatus = "processing" | "complete" | "failed";
 export type ContentPlatformTarget = "tiktok" | "instagram" | "facebook" | "youtube";
@@ -66,7 +65,7 @@ export interface ContentPublishLog {
   platform: string;
   platformPostId: string | null;
   publishedAt: string;
-  publishStatus: "success" | "failed" | "scheduled" | "sent_to_drafts";
+  publishStatus: "success" | "failed" | "scheduled";
   errorMessage: string | null;
 }
 
@@ -1075,7 +1074,7 @@ function rowToPublishLog(row: Record<string, unknown>): ContentPublishLog {
     platform: String(row.platform),
     platformPostId: row.platform_post_id ? String(row.platform_post_id) : null,
     publishedAt: String(row.published_at),
-    publishStatus: row.publish_status as "success" | "failed" | "scheduled" | "sent_to_drafts",
+    publishStatus: row.publish_status as "success" | "failed" | "scheduled",
     errorMessage: row.error_message ? String(row.error_message) : null,
   };
 }
@@ -1486,7 +1485,7 @@ export function listPublishingQueue(limit = 50): PublishingQueueItem[] {
   const rows = database
     .prepare(
       `SELECT * FROM content_videos
-       WHERE status IN ('approved', 'scheduled', 'published', 'sent_to_drafts')
+       WHERE status IN ('approved', 'scheduled', 'published')
        ORDER BY COALESCE(approved_at, scheduled_for, created_at) DESC
        LIMIT ?`,
     )
@@ -1515,7 +1514,7 @@ export function listPublishingQueue(limit = 50): PublishingQueueItem[] {
 export function countPublishingQueue(): number {
   const row = getContentDb()
     .prepare(
-      `SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled', 'published', 'sent_to_drafts')`,
+      `SELECT COUNT(*) AS c FROM content_videos WHERE status IN ('approved', 'scheduled', 'published')`,
     )
     .get() as { c: number };
   return Number(row.c) || 0;

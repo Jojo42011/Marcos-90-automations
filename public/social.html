@@ -3386,7 +3386,7 @@
     }
 
     function jumpPipelineStatus(status) {
-      switchCmSection(status === "pending_review" ? "review" : status === "published" || status === "scheduled" || status === "sent_to_drafts" ? "publishing" : "upload");
+      switchCmSection(status === "pending_review" ? "review" : status === "published" || status === "scheduled" ? "publishing" : "upload");
     }
 
     /* Phase 7 — pipeline flow diagram */
@@ -4745,14 +4745,18 @@
         const titleRaw = e.titleFinal || v.title || (v.caption || "").slice(0, 80);
         const title = escapeHtml(titleRaw);
         const videoSrc = resolveClipVideoUrl(v);
-        const pillStatus = (s) => s === "scheduled" ? "Scheduled" : s === "sent_to_drafts" ? "In TikTok drafts" : escapeHtml(s);
+        const pillStatus = (s) => {
+          if (s === "scheduled") return "Scheduled";
+          if (s === "failed") return "Failed";
+          if (s === "success") return "Published";
+          return escapeHtml(s);
+        };
         const platforms = entries.length
           ? entries.map((en) =>
               `<span class="cm-pill">${escapeHtml(en.platform)} · ${pillStatus(en.publishStatus)} ${fmtDateTime(en.scheduledFor)}</span>`
             ).join(" ")
           : `<span class="cm-pill">${escapeHtml(v.platformTarget || "tiktok")}</span>`;
         const statusLabel = v.status === "published" ? "Published"
-          : v.status === "sent_to_drafts" ? "Sent to drafts"
           : v.status === "scheduled" ? "Scheduled" : "Approved";
         return `<div class="cm-review-card">
           <strong>${title}</strong>
@@ -4764,7 +4768,7 @@
           </div>
           <div style="margin-top:0.6rem;display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;">
             ${v.id ? `<button type="button" class="cm-btn" onclick="playClip('${v.id}','${jsStr(titleRaw)}')">▶ Play clip</button>` : ""}
-            ${v.id && v.status !== "published" ? publishNowButton(v, entries) : ""}
+            ${v.id && v.status !== "published" ? publishButton(v, entries) : ""}
             ${v.id && v.status !== "published" ? `<button type="button" class="cm-btn-remove-queued" onclick="removeFromQueue('${v.id}', this)">🗑 Remove</button>` : ""}
           </div>
           ${v.id && v.status !== "published" ? publishConnNote(v, entries) : ""}
@@ -4772,11 +4776,9 @@
       }).join("");
     }
 
-    function platformConnected(p) { return Boolean(publishCaps[p] && publishCaps[p].connected); }
-    // Only TikTok's unaudited SELF_ONLY mode is "private". Instagram/Facebook posts are public.
-    function platformPrivate(p) { return platformConnected(p) && publishCaps[p].privacy === "SELF_ONLY"; }
-    // TikTok has the video.upload scope only: it uploads to DRAFTS, it does not post live.
-    function platformDraft(p) { return platformConnected(p) && publishCaps[p].mode === "draft"; }
+    // Upload-Post handles TikTok/Instagram/Facebook through one API key, so
+    // publishing is connected (or not) as a single unified state.
+    function socialsConnected() { return Boolean(publishCaps && publishCaps.connected); }
 
     function clipPlatforms(v, entries) {
       const ps = (entries && entries.length)
@@ -4785,64 +4787,65 @@
       return [...new Set(ps.filter(Boolean))];
     }
 
-    function publishNowButton(v, entries) {
-      const ps = clipPlatforms(v, entries);
-      const connected = ps.filter((p) => platformConnected(p));
-      if (connected.length) {
-        const p = connected[0];
-        // TikTok only uploads to drafts (video.upload) — label it honestly.
-        const label = platformDraft(p)
-          ? "SEND TO TIKTOK DRAFTS"
-          : platformPrivate(p) ? "PUBLISH NOW · Private" : "PUBLISH NOW";
-        return `<button type="button" class="cm-btn-publish-now" onclick="publishNow('${v.id}','${escapeHtml(p)}', this)">${label}</button>`;
+    // Single PUBLISH action. When connected, clicking it opens a checkbox picker
+    // of the platforms tagged on this clip so Marco chooses which to publish to.
+    function publishButton(v, entries) {
+      if (!socialsConnected()) {
+        return `<button type="button" class="cm-btn-publish-now" disabled title="Publishing isn't connected yet — connect accounts in Upload-Post and set UPLOAD_POST_API_KEY.">PUBLISH · Not connected</button>`;
       }
-      return `<button type="button" class="cm-btn-publish-now" disabled title="No posting integration is connected for ${escapeHtml(ps.join(", "))} yet — this action is unavailable until it is set up.">PUBLISH NOW · Not connected</button>`;
+      const ps = clipPlatforms(v, entries);
+      const boxes = ps.map((p) =>
+        `<label style="display:inline-flex;align-items:center;gap:0.3rem;margin-right:0.8rem;font-size:0.78rem;text-transform:capitalize;"><input type="checkbox" value="${escapeHtml(p)}" checked> ${escapeHtml(p)}</label>`
+      ).join("");
+      return `<button type="button" class="cm-btn-publish-now" onclick="togglePublishPicker('${v.id}')">PUBLISH</button>
+        <div id="pp-${v.id}" class="cm-publish-picker" style="display:none;width:100%;margin-top:0.5rem;padding:0.65rem 0.75rem;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface2, rgba(255,255,255,0.03));">
+          <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.45rem;">Publish to which platforms?</div>
+          <div style="margin-bottom:0.55rem;">${boxes}</div>
+          <button type="button" class="cm-btn-publish-now" onclick="doPublish('${v.id}', this)">Publish selected</button>
+          <button type="button" class="cm-btn" onclick="togglePublishPicker('${v.id}')">Cancel</button>
+        </div>`;
+    }
+
+    function togglePublishPicker(videoId) {
+      const el = document.getElementById("pp-" + videoId);
+      if (el) el.style.display = el.style.display === "none" ? "block" : "none";
     }
 
     function publishConnNote(v, entries) {
       const ps = clipPlatforms(v, entries);
-      const connected = ps.filter((p) => platformConnected(p));
-      if (!connected.length) {
-        return `<div class="cm-publish-note">⚠ Posting isn't connected yet for ${escapeHtml(ps.join(", "))} — this clip will not be sent.</div>`;
+      if (!socialsConnected()) {
+        return `<div class="cm-publish-note">⚠ Publishing isn't connected yet — connect the accounts in Upload-Post and set UPLOAD_POST_API_KEY. This clip won't be sent until then.</div>`;
       }
-      const p = connected[0];
-      if (platformDraft(p)) {
-        return `<div class="cm-publish-note">📥 Uploads to Marco's TikTok <strong>drafts</strong> — it does <strong>not</strong> post automatically. Marco opens the TikTok app to add the caption and tap post.</div>`;
-      }
-      if (platformPrivate(p)) {
-        return `<div class="cm-publish-note">🔒 Posts to ${escapeHtml(p)} as a PRIVATE video (only Marco can see it) — the app isn't audited for public posting yet.</div>`;
-      }
-      return `<div class="cm-publish-note">🔴 Posts LIVE and PUBLIC to Marco's ${escapeHtml(p)} account.</div>`;
+      return `<div class="cm-publish-note">🔴 Publishes LIVE to Marco's selected account(s) via Upload-Post (${escapeHtml(ps.join(", "))}).</div>`;
     }
 
-    async function publishNow(videoId, platform, btn) {
-      const isDraft = platformDraft(platform);
-      const isPrivate = platformPrivate(platform);
-      const consequence = isDraft
-        ? `Upload this clip to Marco's TikTok drafts? It will NOT go live — Marco has to open the TikTok app, add the caption, and tap post to publish it.`
-        : isPrivate
-          ? `Post this clip to Marco's ${platform} now as a PRIVATE video — only Marco can see it (the app isn't audited for public posts yet). Continue?`
-          : `Post this clip to ${platform} now — live and public on Marco's real account immediately. This cannot be undone. Continue?`;
-      if (!confirm(consequence)) return;
+    async function doPublish(videoId, btn) {
+      const panel = document.getElementById("pp-" + videoId);
+      const checked = panel ? [...panel.querySelectorAll('input[type="checkbox"]:checked')].map((c) => c.value) : [];
+      if (!checked.length) { showToast("Pick at least one platform"); return; }
+      if (!confirm(`Publish this clip to: ${checked.join(", ")}? This posts to Marco's real account(s) via Upload-Post.`)) return;
       const prev = btn.textContent;
       btn.disabled = true;
-      btn.textContent = isDraft ? "Sending…" : "Posting…";
+      btn.textContent = "Publishing…";
       try {
-        const log = await cmFetch(`/api/content/publish/${videoId}`, {
+        const resp = await cmFetch(`/api/content/publish/${videoId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ platform }),
+          body: JSON.stringify({ platforms: checked }),
         });
-        const link = log && log.platformPostId ? ` (id ${log.platformPostId})` : "";
-        showToast(isDraft
-          ? `Sent to TikTok drafts${link} — open the TikTok app to review and post`
-          : `Posted to ${platform}${link}`);
+        const results = (resp && resp.results) || [];
+        const ok = results.filter((r) => r.success).map((r) => r.platform);
+        const bad = results.filter((r) => !r.success);
+        let msg = ok.length ? `Published to ${ok.join(", ")}` : "Published";
+        if (bad.length) msg += ` · failed: ${bad.map((b) => b.platform + (b.error ? " (" + b.error + ")" : "")).join(", ")}`;
+        showToast(msg);
         loadPublishing();
         if (typeof loadCmStats === "function") loadCmStats();
       } catch (e) {
         btn.disabled = false;
         btn.textContent = prev;
-        showToast(`${isDraft ? "Draft upload" : "Publish"} failed: ${e.message || e}`);
+        // The API returns per-platform reasons when everything failed.
+        showToast(`Publish failed: ${e.message || e}`);
       }
     }
 
