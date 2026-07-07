@@ -3348,29 +3348,48 @@ function resolveClipFileForVideo(video) {
     return null;
 }
 function streamClipVideoFile(req, res, filePath) {
+    // Size is read fresh from disk on every request. Clip files are REPLACED in
+    // place (same URL) when edited, so the browser must never reuse a cached
+    // byte-size — no-store forces it to revalidate against the current file.
     const stat = fs_1.default.statSync(filePath);
     const fileSize = stat.size;
     const range = req.headers.range;
+    res.setHeader("Cache-Control", "no-store, must-revalidate");
+    res.setHeader("Accept-Ranges", "bytes");
+    // Pipe with an error guard so a mid-stream read failure never crashes the
+    // process or triggers a double-response.
+    const pipeWithGuard = (opts) => {
+        const stream = opts ? fs_1.default.createReadStream(filePath, opts) : fs_1.default.createReadStream(filePath);
+        stream.on("error", (err) => {
+            console.error(`[clip-video] stream error for ${filePath}: ${err.message}`);
+            res.destroy();
+        });
+        stream.pipe(res);
+    };
     if (range) {
         const parts = range.replace(/bytes=/, "").split("-");
         const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunkSize = end - start + 1;
+        let end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        if (end > fileSize - 1)
+            end = fileSize - 1;
+        // Defensive 416: a start beyond the current file end (classic stale-browser-
+        // metadata after an edit shrank the file) must fail cleanly BEFORE any 206
+        // header is written — never hand createReadStream start > end.
+        if (Number.isNaN(start) || start < 0 || start >= fileSize || start > end) {
+            res.writeHead(416, { "Content-Range": `bytes */${fileSize}`, "Content-Type": "video/mp4" });
+            res.end();
+            return;
+        }
         res.writeHead(206, {
             "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-            "Accept-Ranges": "bytes",
-            "Content-Length": chunkSize,
+            "Content-Length": end - start + 1,
             "Content-Type": "video/mp4",
         });
-        fs_1.default.createReadStream(filePath, { start, end }).pipe(res);
+        pipeWithGuard({ start, end });
         return;
     }
-    res.writeHead(200, {
-        "Content-Length": fileSize,
-        "Content-Type": "video/mp4",
-        "Accept-Ranges": "bytes",
-    });
-    fs_1.default.createReadStream(filePath).pipe(res);
+    res.writeHead(200, { "Content-Length": fileSize, "Content-Type": "video/mp4" });
+    pipeWithGuard();
 }
 // Phase 3b — raised from 2GB to support full-length real estate walkthroughs
 // shot on-device (iPhone 1080p/4K MOV can easily hit 3-4GB for 30-60 minutes).

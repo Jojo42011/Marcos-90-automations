@@ -2515,7 +2515,11 @@
         if (loadingMsg) loadingMsg.style.display = "none";
 
         if (meta.hasVideo && meta.videoUrl) {
-          const videoUrl = apiUrl(meta.videoUrl);
+          // Cache-bust: clip files are replaced in place on edit, so a stable
+          // URL could otherwise reuse the browser's stale byte-size and issue an
+          // out-of-range Range request against the now-smaller file.
+          const bustedUrl = meta.videoUrl + (meta.videoUrl.includes("?") ? "&" : "?") + "cb=" + Date.now();
+          const videoUrl = apiUrl(bustedUrl);
           videoEl.src = videoUrl;
           videoEl.style.display = "block";
           if (openTabBtn) {
@@ -2638,7 +2642,9 @@
         }
         const revertBtn0 = document.getElementById("trimRevertBtn");
         if (revertBtn0) revertBtn0.style.display = meta.hasPreviousVersion ? "inline-block" : "none";
-        video.src = apiUrl(meta.videoUrl);
+        // Cache-bust so the editor never opens against a stale cached byte-size.
+        const bust = meta.videoUrl + (meta.videoUrl.includes("?") ? "&" : "?") + "cb=" + Date.now();
+        video.src = apiUrl(bust);
         video.load();
         void loadCaptionsForEditor(clipId);
       } catch (e) {
