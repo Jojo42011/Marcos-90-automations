@@ -71,6 +71,10 @@ interface DriveStatus {
   processed: number; // total pulled + handed off so far
   pending: number; // detected in folder but not yet pulled
   pulledToday: boolean; // whether the one-per-day pull already happened today
+  lastPullResult: "success" | "failed" | null; // outcome of the last pull ATTEMPT
+  lastPullFile: string | null; // file the last attempt targeted
+  lastPullError: string | null; // real error from the last failed pull (download/ingest/clip)
+  lastAttemptAt: string | null; // when the last pull attempt ran
   processedFiles?: Array<{ fileId: string; name: string; processedAt: string }>;
 }
 
@@ -81,6 +85,10 @@ const runtime = {
   folderAccessible: false,
   lastError: null as string | null,
   known: 0,
+  lastPullResult: null as "success" | "failed" | null,
+  lastPullFile: null as string | null,
+  lastPullError: null as string | null,
+  lastAttemptAt: null as string | null,
 };
 
 export function getDriveStatus(): DriveStatus {
@@ -97,6 +105,10 @@ export function getDriveStatus(): DriveStatus {
     processed: safeCount(),
     pending: Math.max(0, runtime.known - safeCount()),
     pulledToday: Boolean(persisted.lastPullDate && persisted.lastPullDate === today),
+    lastPullResult: runtime.lastPullResult,
+    lastPullFile: runtime.lastPullFile,
+    lastPullError: runtime.lastPullError,
+    lastAttemptAt: runtime.lastAttemptAt,
     processedFiles: safeProcessedList(),
   };
 }
@@ -274,15 +286,18 @@ export async function pollGoogleDrive(opts?: { force?: boolean }): Promise<void>
     }
 
     const file = fresh[0]; // the single oldest unprocessed video
+    runtime.lastPullFile = file.name;
+    runtime.lastAttemptAt = new Date().toISOString();
     try {
       // Disk pre-flight — same reserve the manual upload flow uses.
       const fileMB = Math.ceil((file.size || 0) / (1024 * 1024));
       const neededMB = fileMB + Math.max(fileMB, 200) + PROCESSING_HEADROOM_MB;
       const freeMB = await getFreeDiskMB();
       if (Number.isFinite(freeMB) && freeMB < neededMB) {
-        console.warn(
-          `[drive-pull] Skipping "${file.name}" — need ~${neededMB}MB, ${freeMB}MB free. Will retry next cycle (day not consumed).`,
-        );
+        const msg = `Not enough disk: need ~${neededMB}MB, ${freeMB}MB free`;
+        console.warn(`[drive-pull] Skipping "${file.name}" — ${msg}. Will retry next cycle (day not consumed).`);
+        runtime.lastPullResult = "failed";
+        runtime.lastPullError = msg;
         stampPoll();
         return; // NOT marked processed and day NOT consumed — retried next cycle
       }
@@ -301,10 +316,16 @@ export async function pollGoogleDrive(opts?: { force?: boolean }): Promise<void>
 
       markDriveFileProcessed(file.id, file.name, session.id);
       setDriveLastPullDate(today); // consume today's one-per-day slot only on success
+      runtime.lastPullResult = "success";
+      runtime.lastPullError = null;
       console.log(`[drive-pull] pulled oldest "${file.name}" → session ${session.id} (Review Queue). ${fresh.length - 1} remaining.`);
     } catch (err) {
       // Isolate the failure; day NOT consumed so the next cycle retries this file.
-      console.error(`[drive-pull] file "${file.name}" (${file.id}) failed: ${err instanceof Error ? err.message : String(err)}`);
+      // Surface the real reason in status so it isn't invisible.
+      const msg = err instanceof Error ? err.message : String(err);
+      runtime.lastPullResult = "failed";
+      runtime.lastPullError = msg;
+      console.error(`[drive-pull] file "${file.name}" (${file.id}) failed: ${msg}`);
     }
 
     stampPoll();

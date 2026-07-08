@@ -65,6 +65,10 @@ const runtime = {
     folderAccessible: false,
     lastError: null,
     known: 0,
+    lastPullResult: null,
+    lastPullFile: null,
+    lastPullError: null,
+    lastAttemptAt: null,
 };
 function getDriveStatus() {
     const persisted = safeState();
@@ -80,6 +84,10 @@ function getDriveStatus() {
         processed: safeCount(),
         pending: Math.max(0, runtime.known - safeCount()),
         pulledToday: Boolean(persisted.lastPullDate && persisted.lastPullDate === today),
+        lastPullResult: runtime.lastPullResult,
+        lastPullFile: runtime.lastPullFile,
+        lastPullError: runtime.lastPullError,
+        lastAttemptAt: runtime.lastAttemptAt,
         processedFiles: safeProcessedList(),
     };
 }
@@ -241,13 +249,18 @@ async function pollGoogleDrive(opts) {
             return;
         }
         const file = fresh[0]; // the single oldest unprocessed video
+        runtime.lastPullFile = file.name;
+        runtime.lastAttemptAt = new Date().toISOString();
         try {
             // Disk pre-flight — same reserve the manual upload flow uses.
             const fileMB = Math.ceil((file.size || 0) / (1024 * 1024));
             const neededMB = fileMB + Math.max(fileMB, 200) + PROCESSING_HEADROOM_MB;
             const freeMB = await (0, diskCleanup_js_1.getFreeDiskMB)();
             if (Number.isFinite(freeMB) && freeMB < neededMB) {
-                console.warn(`[drive-pull] Skipping "${file.name}" — need ~${neededMB}MB, ${freeMB}MB free. Will retry next cycle (day not consumed).`);
+                const msg = `Not enough disk: need ~${neededMB}MB, ${freeMB}MB free`;
+                console.warn(`[drive-pull] Skipping "${file.name}" — ${msg}. Will retry next cycle (day not consumed).`);
+                runtime.lastPullResult = "failed";
+                runtime.lastPullError = msg;
                 stampPoll();
                 return; // NOT marked processed and day NOT consumed — retried next cycle
             }
@@ -263,11 +276,17 @@ async function pollGoogleDrive(opts) {
             await (0, repurpose_js_1.repurposeSession)(session.id);
             (0, contentDb_js_1.markDriveFileProcessed)(file.id, file.name, session.id);
             (0, contentDb_js_1.setDriveLastPullDate)(today); // consume today's one-per-day slot only on success
+            runtime.lastPullResult = "success";
+            runtime.lastPullError = null;
             console.log(`[drive-pull] pulled oldest "${file.name}" → session ${session.id} (Review Queue). ${fresh.length - 1} remaining.`);
         }
         catch (err) {
             // Isolate the failure; day NOT consumed so the next cycle retries this file.
-            console.error(`[drive-pull] file "${file.name}" (${file.id}) failed: ${err instanceof Error ? err.message : String(err)}`);
+            // Surface the real reason in status so it isn't invisible.
+            const msg = err instanceof Error ? err.message : String(err);
+            runtime.lastPullResult = "failed";
+            runtime.lastPullError = msg;
+            console.error(`[drive-pull] file "${file.name}" (${file.id}) failed: ${msg}`);
         }
         stampPoll();
     }
