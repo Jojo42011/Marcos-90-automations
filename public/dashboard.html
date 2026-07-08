@@ -11775,5 +11775,31 @@
     crmBindDialGlobal();
     crmBindDealsGlobalOnce();
   </script>
+  <script>
+  /* Shell iframe compatibility: when the dashboard runs INSIDE the unified shell
+     (as the CRM tab), its hub module-cards link to other sub-agents (/tasks,
+     /social, …). A plain anchor would navigate THIS iframe; instead switch the
+     shell tab so the sub-agent opens in its own tab (Harvey stays live). Runs
+     only when embedded — standalone the links work exactly as before. */
+  (function () {
+    if (window.parent === window) return; // standalone — leave links untouched
+    var ROUTE_TO_TAB = {
+      "/jarvis": "harvey", "/dashboard": "crm", "/social": "content",
+      "/lead-nurture": "leads", "/reporting": "reporting", "/finance": "finance",
+      "/email-marketing": "email", "/voice-clone": "voice", "/tasks": "tasks"
+    };
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest('a[href]');
+      if (!a) return;
+      var href = a.getAttribute("href") || "";
+      var path = href.replace(/^https?:\/\/[^/]+/, "").split(/[?#]/)[0];
+      var tab = ROUTE_TO_TAB[path];
+      if (tab) {
+        e.preventDefault();
+        window.parent.postMessage({ type: "app-navigate", tab: tab }, "*");
+      }
+    }, true);
+  })();
+  </script>
 </body>
 </html>
