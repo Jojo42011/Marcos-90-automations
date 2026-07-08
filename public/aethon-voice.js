@@ -19,6 +19,14 @@
   let micSending = true;
   let voiceActive = false;
   let bargeInCooldown = false;
+  // STT WebSocket lifecycle: created ONCE per session via initSttWebSocket().
+  // pause/resumeMicCapture only toggle micSending on this same socket — the
+  // socket is never recreated on a barge-in or mic pause. It is only re-created
+  // by a controlled reconnect if it drops unexpectedly while the session is
+  // still active (which must NOT re-run the greeting).
+  let sttConnected = false;
+  let captureStarted = false; // mic AudioContext/ScriptProcessor set up once
+  let sttReconnectTimer = null;
 
   let playCtx = null;
   let ttsQueue = [];
@@ -84,6 +92,57 @@
       "Content-Type": "application/json",
       Authorization: t ? `Bearer ${t}` : "",
     };
+  }
+
+  // ── Voice-driven shell navigation ──────────────────────────────────────────
+  // Detect a navigation command in a committed transcript and switch the shell
+  // tab instantly — no brain round-trip. Self-contained (duplicated from the
+  // shell contract, small enough per spec). Tab keys match public/shell.html TABS.
+  const NAV_INTENTS = [
+    { patterns: [/\b(crm|leads?|contacts?|pipeline)\b/i], tab: "crm", label: "CRM" },
+    { patterns: [/\b(content|tiktok|videos?|social|posts?)\b/i], tab: "content", label: "Content Manager" },
+    { patterns: [/\b(email|drip|templates?|campaigns?)\b/i], tab: "email", label: "Email Marketing" },
+    { patterns: [/\b(finance|gci|commissions?|expenses?|revenue)\b/i], tab: "finance", label: "Finance" },
+    { patterns: [/\b(report|reporting|digest|kpi|analytics)\b/i], tab: "reporting", label: "Reporting" },
+    { patterns: [/\b(nurture|scoring|hot leads?|cold leads?|warm leads?)\b/i], tab: "leads", label: "Lead Nurture" },
+    { patterns: [/\b(voice( clone)?|voiceover|scripts?|voxcpm)\b/i], tab: "voice", label: "Voice Clone" },
+    { patterns: [/\b(tasks?|task center|to.?do)\b/i], tab: "tasks", label: "Tasks" },
+    { patterns: [/\b(harvey|home|back|assistant)\b/i], tab: "harvey", label: "Harvey" },
+  ];
+  // A navigation command must pair a nav phrase with a target above, so ordinary
+  // conversation that merely mentions "email" or "leads" is not hijacked.
+  const NAV_PHRASES = /\b(take me|go to|open|show me|navigate|switch to|bring up|launch|pull up)\b/i;
+
+  function detectNavigationIntent(transcript) {
+    if (!transcript || !NAV_PHRASES.test(transcript)) return null;
+    for (const intent of NAV_INTENTS) {
+      if (intent.patterns.some((p) => p.test(transcript))) return intent;
+    }
+    return null;
+  }
+
+  // Switch the shell tab, covering all three runtime cases: the ShellNav bridge
+  // (voice-nav-bridge inlined in jarvis.html), an embedded iframe (postMessage to
+  // the parent shell), or standalone (hard navigate). Content → /social (there is
+  // no /content route).
+  function navigateShell(tab) {
+    // Embedded in the shell (the normal case — Harvey is the home tab): tell the
+    // parent shell to switch tabs via the bridge (or a direct postMessage).
+    if (window.parent !== window) {
+      if (typeof ShellNav !== "undefined" && ShellNav && typeof ShellNav.go === "function") {
+        ShellNav.go(tab);
+      } else {
+        window.parent.postMessage({ type: "app-navigate", tab: tab }, "*");
+      }
+      return;
+    }
+    // Standalone (page opened directly, no shell): hard-navigate to the route.
+    const routes = {
+      crm: "/dashboard", content: "/social", email: "/email-marketing",
+      finance: "/finance", reporting: "/reporting", leads: "/lead-nurture",
+      voice: "/voice-clone", tasks: "/tasks", harvey: "/jarvis",
+    };
+    if (routes[tab]) window.location.href = routes[tab];
   }
 
   window.isGeminiLiveActive = function () {
@@ -218,6 +277,11 @@
     lpFilter.frequency.value = 7500;
     lpFilter.Q.value = 0.707;
 
+    // TODO(separate task): migrate to AudioWorkletNode — createScriptProcessor is
+    // deprecated (console warning on mic start). Not done here: it needs a separate
+    // worklet module file + main-thread message passing for the WS send, plus
+    // re-homing the downsample and RMS barge-in detection off this callback, which
+    // risks the barge-in path. Functional today; the warning is cosmetic.
     processor = captureCtx.createScriptProcessor(2048, 1, 1);
     processor.onaudioprocess = (e) => {
       if (!listening || !sessionReady) return;
@@ -332,8 +396,20 @@
 
   async function commitTranscript(text) {
     if (!text || brainBusy) return;
-    brainBusy = true;
     console.log("[aethon-voice] commit:", text);
+
+    // Navigation intent → switch the shell tab instantly and skip the brain
+    // round-trip. Harvey speaks a short confirmation (mic pause/resume handled
+    // by speakText). brainBusy stays false so the next command still works.
+    const navIntent = detectNavigationIntent(text);
+    if (navIntent) {
+      console.log("[Harvey] Navigation intent detected → " + navIntent.tab);
+      navigateShell(navIntent.tab);
+      await speakText("Opening " + navIntent.label + " now.");
+      return;
+    }
+
+    brainBusy = true;
     sessionTranscript.push({ role: "user", text, ts: Date.now() });
     setHarveyStatus("PROCESSING");
     pauseMicCapture();
@@ -556,22 +632,22 @@
     sessionStartTime = null;
   }
 
-  async function startAethonVoice() {
-    if (typeof window.onHarveyVoiceSessionStart === "function") {
-      window.onHarveyVoiceSessionStart();
+  // Create the STT WebSocket exactly once (or re-create it on an unexpected drop
+  // while a session is still active). This is the ONLY place sttWs is created —
+  // barge-in and mic pause/resume never touch the socket, so sttWs.onopen fires
+  // once per page load under normal conversation. A reconnect here rebuilds ONLY
+  // the socket; it never re-runs the activation greeting.
+  function initSttWebSocket() {
+    if (sttWs && (sttWs.readyState === WebSocket.OPEN || sttWs.readyState === WebSocket.CONNECTING)) {
+      console.log("[STT] WebSocket already open/connecting — skipping init");
+      return;
     }
-    clearVoiceError();
-    setHarveyStatus("CONNECTING");
-    voiceActive = true;
-    sessionStartTime = new Date().toISOString();
-    listening = true;
-    sessionReady = false;
-
     const u = new URL("/api/jarvis/elevenlabs/listen", window.location.origin);
     const t = getToken();
     if (t) u.searchParams.set("token", t);
     const wsUrl = u.toString().replace(/^http/, "ws");
 
+    console.log("[STT] Creating ElevenLabs STT WebSocket");
     sttWs = new WebSocket(wsUrl);
     sttWs.binaryType = "arraybuffer";
 
@@ -585,14 +661,57 @@
       setHarveyStatus("ERROR");
     };
 
-    sttWs.onclose = () => {
-      listening = false;
+    sttWs.onclose = (evt) => {
+      sttConnected = false;
       sessionReady = false;
+      listening = false;
+      console.log("[STT] WebSocket closed — code:", evt && evt.code);
+      // Reconnect ONLY if the session is still active (i.e. not an intentional
+      // stopAethonVoice, which sets voiceActive=false before closing). This
+      // rebuilds just the socket — no greeting, no new mic pipeline.
+      if (voiceActive) {
+        if (sttReconnectTimer) clearTimeout(sttReconnectTimer);
+        sttReconnectTimer = setTimeout(() => {
+          sttReconnectTimer = null;
+          if (voiceActive) {
+            listening = true;
+            console.log("[STT] Reconnecting STT WebSocket (session still active)");
+            initSttWebSocket();
+          }
+        }, 2000);
+      }
     };
 
     sttWs.onopen = async () => {
-      await startCapture();
+      sttConnected = true;
+      listening = true;
+      console.log("[STT] WebSocket connected");
+      // Set up the mic pipeline once; on a reconnect it persists (don't rebuild
+      // the AudioContext — that would churn the mic and drop barge-in monitoring).
+      if (!captureStarted) {
+        captureStarted = true;
+        await startCapture();
+      }
     };
+  }
+
+  async function startAethonVoice() {
+    if (typeof window.onHarveyVoiceSessionStart === "function") {
+      window.onHarveyVoiceSessionStart();
+    }
+    clearVoiceError();
+    setHarveyStatus("CONNECTING");
+    voiceActive = true;
+    sessionStartTime = new Date().toISOString();
+    listening = true;
+    sessionReady = false;
+    captureStarted = false;
+    if (sttReconnectTimer) {
+      clearTimeout(sttReconnectTimer);
+      sttReconnectTimer = null;
+    }
+
+    initSttWebSocket();
 
     try {
       const act = await fetch(apiUrl("/api/jarvis/activation"), { headers: authHeaders() });
@@ -622,8 +741,12 @@
   }
 
   function stopAethonVoice() {
-    voiceActive = false;
+    voiceActive = false; // set BEFORE closing so onclose does not reconnect
     listening = false;
+    if (sttReconnectTimer) {
+      clearTimeout(sttReconnectTimer);
+      sttReconnectTimer = null;
+    }
     ttsQueue = [];
     window.HarveyStreamingTts?.stop?.();
     if (currentSource) {
@@ -634,9 +757,11 @@
     }
     isPlaying = false;
     if (sttWs) {
-      sttWs.close();
+      sttWs.close(1000, "session ended"); // clean close — no reconnect
       sttWs = null;
     }
+    sttConnected = false;
+    captureStarted = false;
     stopMicStream();
     void flushTranscriptToMemory();
     setHarveyStatus("STANDBY");
