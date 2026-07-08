@@ -28,6 +28,7 @@ import {
 } from "../../../core/contentDb.js";
 import { getLatestYouTubeAnalysis } from "../youtubeIntel.js";
 import { getRedditQuestionSignals } from "../redditIntel.js";
+import { getDriveStatus } from "../googleDrivePull.js";
 import {
   claudeChatWithTools,
   claudeSimpleChat,
@@ -68,6 +69,24 @@ export class ContentManagerBrain {
       limit: 20,
     });
     const sprint = getSprintProgressData();
+
+    // Google Drive auto-pull status, so the chat can answer "how many videos are
+    // in the Drive folder / has anything been pulled" from real data. The chat
+    // answers from this context block (it doesn't run a tool loop).
+    let driveContext: Record<string, unknown> | null = null;
+    try {
+      const d = getDriveStatus();
+      driveContext = {
+        connected: d.configured && d.connected && d.folderAccessible,
+        videos_in_folder: d.known,
+        videos_pulled_into_review_queue: d.processed,
+        videos_pending: Math.max(0, d.known - d.processed),
+        last_poll_at: d.lastPollAt,
+        last_error: d.lastError,
+      };
+    } catch {
+      /* ignore — Drive status unavailable */
+    }
 
     let youtubeContext: Record<string, unknown> | null = null;
     try {
@@ -122,6 +141,7 @@ export class ContentManagerBrain {
       recording_tasks_pending_7d: pendingTasks.length,
       top_recording_task: pendingTasks[0] ?? null,
       sprint_progress: sprint,
+      google_drive: driveContext,
       youtube_intelligence: youtubeContext,
       reddit_buyer_questions: getRedditQuestionSignals(8),
     };

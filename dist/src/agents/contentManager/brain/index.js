@@ -12,6 +12,7 @@ const cycles_js_1 = require("./cycles.js");
 const contentDb_js_1 = require("../../../core/contentDb.js");
 const youtubeIntel_js_1 = require("../youtubeIntel.js");
 const redditIntel_js_1 = require("../redditIntel.js");
+const googleDrivePull_js_1 = require("../googleDrivePull.js");
 const claudeTools_js_1 = require("./claudeTools.js");
 const claude_content_js_1 = require("../../../integrations/claude-content.js");
 class ContentManagerBrain {
@@ -37,6 +38,24 @@ class ContentManagerBrain {
             limit: 20,
         });
         const sprint = (0, contentDb_js_1.getSprintProgressData)();
+        // Google Drive auto-pull status, so the chat can answer "how many videos are
+        // in the Drive folder / has anything been pulled" from real data. The chat
+        // answers from this context block (it doesn't run a tool loop).
+        let driveContext = null;
+        try {
+            const d = (0, googleDrivePull_js_1.getDriveStatus)();
+            driveContext = {
+                connected: d.configured && d.connected && d.folderAccessible,
+                videos_in_folder: d.known,
+                videos_pulled_into_review_queue: d.processed,
+                videos_pending: Math.max(0, d.known - d.processed),
+                last_poll_at: d.lastPollAt,
+                last_error: d.lastError,
+            };
+        }
+        catch {
+            /* ignore — Drive status unavailable */
+        }
         let youtubeContext = null;
         try {
             const latestYT = (0, youtubeIntel_js_1.getLatestYouTubeAnalysis)();
@@ -88,6 +107,7 @@ class ContentManagerBrain {
             recording_tasks_pending_7d: pendingTasks.length,
             top_recording_task: pendingTasks[0] ?? null,
             sprint_progress: sprint,
+            google_drive: driveContext,
             youtube_intelligence: youtubeContext,
             reddit_buyer_questions: (0, redditIntel_js_1.getRedditQuestionSignals)(8),
         };
