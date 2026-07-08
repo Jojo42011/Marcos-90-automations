@@ -1954,7 +1954,7 @@
       <header class="crm-topbar">
         <div class="tb-title">
           <h1>Content Manager</h1>
-          <span class="tb-sub">7 videos/day · 6,006 view benchmark</span>
+          <span class="tb-sub">Record 7/day · editing keeps only the strongest clips · 6,006 view benchmark</span>
         </div>
         <div class="tb-status">
           <span class="dot" id="statusDot"></span>
@@ -5287,7 +5287,7 @@
       const total = all.length;
       const header = `<div class="rec-walk-header">
         <div class="rec-walk-title">Today's filming session · <strong>${total} step${total > 1 ? "s" : ""}</strong></div>
-        <div class="cm-muted" style="font-size:0.72rem;">Daily target 7/day · ordered by today's strategy${pillarOrder.length ? ` (pillar priority: ${escapeHtml(pillarOrder.join(" → "))})` : ""}</div>
+        <div class="cm-muted" style="font-size:0.72rem;">Record 7/day · editing quality-gates to fewer, stronger clips · ordered by today's strategy${pillarOrder.length ? ` (pillar priority: ${escapeHtml(pillarOrder.join(" → "))})` : ""}</div>
       </div>`;
 
       const cards = all.map((t, idx) => {
@@ -5844,8 +5844,8 @@
       if (summary) {
         const filled = clips.length;
         summary.textContent = filled >= DAILY_VIDEO_TARGET
-          ? `${filled} / ${DAILY_VIDEO_TARGET} videos — target met${filled > DAILY_VIDEO_TARGET ? ` (+${filled - DAILY_VIDEO_TARGET} bonus)` : ""}`
-          : `${filled} / ${DAILY_VIDEO_TARGET} videos — ${DAILY_VIDEO_TARGET - filled} more to hit today's target`;
+          ? `${filled} / ${DAILY_VIDEO_TARGET} recording slots filled${filled > DAILY_VIDEO_TARGET ? ` (+${filled - DAILY_VIDEO_TARGET} bonus)` : ""}`
+          : `${filled} / ${DAILY_VIDEO_TARGET} recording slots — quality-gated, so fewer strong clips is fine`;
       }
 
       // Always render exactly 7 target slots: fill with real clips, then label

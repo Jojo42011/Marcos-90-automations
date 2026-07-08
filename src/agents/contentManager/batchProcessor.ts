@@ -73,19 +73,35 @@ function fallbackTrendRecord(): CmCompetitorTrends {
   };
 }
 
+// Phase 4 — quality over volume. Each per-file number here is a MAXIMUM handed to
+// the engine, not a quota: the sidecar's viral-score gate returns fewer, stronger
+// clips when a source only has a couple of great moments (it never pads). We also
+// cap any single source at MAX_CLIPS_PER_SOURCE so a low day's gap can't demand 7
+// clips out of one recording. The daily 7 stays a raw-recording goal, not a
+// per-video publish quota.
+const MAX_CLIPS_PER_SOURCE = Math.max(1, Number(process.env.MAX_CLIPS_PER_SOURCE) || 5);
+
 function calculateTargetClipsPerFile(fileCount: number): { total: number; perFile: number[] } {
   const today = todayDateCst();
   const targets = ensureDailyTargets(today);
   const pipelineCount = targets.videosPublished + countClipsInApprovedOrScheduled();
-  let gap = Math.max(0, 7 - pipelineCount);
+  const gap = Math.max(0, 7 - pipelineCount);
   const targetTotal = gap > 0 ? gap : 7;
 
   const perFile = Array(fileCount).fill(1);
   let remaining = targetTotal - fileCount;
   let idx = 0;
+  // Distribute the day's remaining budget across sources, but never ask any one
+  // source for more than MAX_CLIPS_PER_SOURCE — better to leave the gap for the
+  // next recording than to squeeze filler clips out of a single video.
   while (remaining > 0) {
-    perFile[idx % fileCount]++;
-    remaining--;
+    const target = idx % fileCount;
+    if (perFile[target] < MAX_CLIPS_PER_SOURCE) {
+      perFile[target]++;
+      remaining--;
+    } else if (perFile.every((n: number) => n >= MAX_CLIPS_PER_SOURCE)) {
+      break; // every source is already at its cap
+    }
     idx++;
   }
   return { total: targetTotal, perFile };
@@ -283,7 +299,8 @@ export async function processBatch(batchSessionId: string): Promise<void> {
   const { perFile } = calculateTargetClipsPerFile(sourceFiles.length);
   const trendBrief = trendRecord ? getTrendBriefForOpusClip(trendRecord) : effectiveTrend.trendBrief;
   console.log(
-    `[batch-processor] Target clips per file: ${perFile.join(", ")} (total gap-driven)`,
+    `[batch-processor] Max clips per file: ${perFile.join(", ")} ` +
+      `(gap-driven ceiling, capped at ${MAX_CLIPS_PER_SOURCE}/source; the engine quality-gates below this)`,
   );
 
   updateBatchSession(batchSessionId, { status: "processing_opus" });

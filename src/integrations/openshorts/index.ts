@@ -308,12 +308,42 @@ export async function trimClipViaOpenShorts(input: {
   }
 }
 
+export type ClipColorMode = "auto" | "warm" | "cool" | "punch" | "flat";
+export type ClipEffectType = "zoom_in" | "zoom_out" | "punch_in";
+
+export interface ClipVisualEffect {
+  type: ClipEffectType;
+  /** Start/end in EDITED-timeline seconds (after trim + cuts). */
+  start: number;
+  end: number;
+  /** Zoom amount as a fraction, e.g. 0.15 = 15%. Clamped 0.03–0.6 server-side. */
+  amount?: number;
+}
+
 export interface ClipEditSpec {
   trim?: { start: number; end: number } | null;
   cuts?: Array<[number, number]>;
   audio?: "keep" | "mute" | "remove" | "replace";
   audioReplacePath?: string;
   captions?: Array<{ start: number; end: number; text: string }>;
+  /** Phase 2 — auto exposure/colour correction preset. */
+  color?: ClipColorMode | null;
+  /** Phase 2 — zoom / punch-in effects on the edited timeline. */
+  effects?: ClipVisualEffect[];
+  /** Phase 2 — remove dead air. true for defaults, or tune the gap/threshold. */
+  autoTighten?: boolean | { maxGap?: number; noiseDb?: number };
+  /** Phase 2 — snap cut boundaries to detected scene changes. */
+  snapToScenes?: boolean;
+}
+
+export interface SuggestedCutsResult {
+  duration: number;
+  suggestedCuts: Array<[number, number]>;
+  estimatedRemovedSeconds: number;
+  estimatedResultSeconds: number;
+  dramaticPausesKept: Array<{ start: number; end: number; dur: number }>;
+  fillerLines: Array<{ start: number; end: number; text: string }>;
+  sceneChanges: number[];
 }
 
 /**
@@ -347,6 +377,47 @@ export async function editClipViaOpenShorts(input: {
     const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
     const detail = axiosErr?.response?.data?.detail;
     throw new Error(detail || axiosErr?.message || "OpenShorts edit failed");
+  }
+}
+
+/**
+ * Phase 3 — ask the sidecar which dead-air cuts it would suggest for a clip
+ * (plus the dramatic pauses it would KEEP, filler lines, and scene changes),
+ * WITHOUT applying anything. Read-only; renders nothing. The caller decides what
+ * to apply via editClipViaOpenShorts.
+ */
+export async function suggestCutsViaOpenShorts(input: {
+  clipPath: string;
+  maxGap?: number;
+  noiseDb?: number;
+}): Promise<SuggestedCutsResult> {
+  const health = await checkOpenShortsHealth();
+  if (!health.running) {
+    throw new Error("OpenShorts sidecar is not running — cannot analyse clips. Start the sidecar and retry.");
+  }
+  try {
+    const formData = new FormData();
+    formData.append("clip_path", input.clipPath);
+    if (input.maxGap !== undefined) formData.append("max_gap", String(input.maxGap));
+    if (input.noiseDb !== undefined) formData.append("noise_db", String(input.noiseDb));
+    const response = await axios.post(`${OPENSHORTS_BASE_URL}/api/clips/suggest-cuts`, formData, {
+      headers: formData.getHeaders(),
+      timeout: 120000,
+    });
+    const d = response.data ?? {};
+    return {
+      duration: Number(d.duration ?? 0),
+      suggestedCuts: Array.isArray(d.suggested_cuts) ? d.suggested_cuts : [],
+      estimatedRemovedSeconds: Number(d.estimated_removed_seconds ?? 0),
+      estimatedResultSeconds: Number(d.estimated_result_seconds ?? 0),
+      dramaticPausesKept: Array.isArray(d.dramatic_pauses_kept) ? d.dramatic_pauses_kept : [],
+      fillerLines: Array.isArray(d.filler_lines) ? d.filler_lines : [],
+      sceneChanges: Array.isArray(d.scene_changes) ? d.scene_changes : [],
+    };
+  } catch (err: unknown) {
+    const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+    const detail = axiosErr?.response?.data?.detail;
+    throw new Error(detail || axiosErr?.message || "OpenShorts suggest-cuts failed");
   }
 }
 

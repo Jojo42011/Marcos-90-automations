@@ -8,6 +8,12 @@ const crypto_1 = require("crypto");
 const contentDb_js_1 = require("../../core/contentDb.js");
 const experiments_js_1 = require("./brain/experiments.js");
 const index_js_1 = require("../../integrations/openshorts/index.js");
+// Phase 4 — quality over volume. This is the MAXIMUM number of clips we let the
+// engine cut from a single source; the sidecar's viral-score gate returns FEWER,
+// higher-quality clips when the footage only has a couple of strong moments (it
+// never pads to hit the number). The daily 7 remains a raw-recording goal
+// upstream — it is NOT a per-video publish quota. Env-overridable.
+const MAX_CLIPS_PER_SOURCE = Math.max(1, Number(process.env.MAX_CLIPS_PER_SOURCE) || 5);
 async function callOpenShortsApi(sessionId, sourcePath, pillar = "brand") {
     if (!sourcePath) {
         throw new Error(`Session ${sessionId} has no source video path`);
@@ -16,7 +22,7 @@ async function callOpenShortsApi(sessionId, sourcePath, pillar = "brand") {
         filePath: sourcePath,
         pillar,
         trendBrief: "",
-        targetClipCount: 7,
+        targetClipCount: MAX_CLIPS_PER_SOURCE,
     });
     const result = await (0, index_js_1.pollOpenShortsJob)(jobId);
     if (!result.clips?.length) {

@@ -8,6 +8,7 @@ exports.submitToOpenShorts = submitToOpenShorts;
 exports.pollOpenShortsJob = pollOpenShortsJob;
 exports.trimClipViaOpenShorts = trimClipViaOpenShorts;
 exports.editClipViaOpenShorts = editClipViaOpenShorts;
+exports.suggestCutsViaOpenShorts = suggestCutsViaOpenShorts;
 exports.checkOpenShortsHealth = checkOpenShortsHealth;
 exports.generateMockClips = generateMockClips;
 /**
@@ -259,6 +260,45 @@ async function editClipViaOpenShorts(input) {
         const axiosErr = err;
         const detail = axiosErr?.response?.data?.detail;
         throw new Error(detail || axiosErr?.message || "OpenShorts edit failed");
+    }
+}
+/**
+ * Phase 3 — ask the sidecar which dead-air cuts it would suggest for a clip
+ * (plus the dramatic pauses it would KEEP, filler lines, and scene changes),
+ * WITHOUT applying anything. Read-only; renders nothing. The caller decides what
+ * to apply via editClipViaOpenShorts.
+ */
+async function suggestCutsViaOpenShorts(input) {
+    const health = await checkOpenShortsHealth();
+    if (!health.running) {
+        throw new Error("OpenShorts sidecar is not running — cannot analyse clips. Start the sidecar and retry.");
+    }
+    try {
+        const formData = new form_data_1.default();
+        formData.append("clip_path", input.clipPath);
+        if (input.maxGap !== undefined)
+            formData.append("max_gap", String(input.maxGap));
+        if (input.noiseDb !== undefined)
+            formData.append("noise_db", String(input.noiseDb));
+        const response = await axios_1.default.post(`${OPENSHORTS_BASE_URL}/api/clips/suggest-cuts`, formData, {
+            headers: formData.getHeaders(),
+            timeout: 120000,
+        });
+        const d = response.data ?? {};
+        return {
+            duration: Number(d.duration ?? 0),
+            suggestedCuts: Array.isArray(d.suggested_cuts) ? d.suggested_cuts : [],
+            estimatedRemovedSeconds: Number(d.estimated_removed_seconds ?? 0),
+            estimatedResultSeconds: Number(d.estimated_result_seconds ?? 0),
+            dramaticPausesKept: Array.isArray(d.dramatic_pauses_kept) ? d.dramatic_pauses_kept : [],
+            fillerLines: Array.isArray(d.filler_lines) ? d.filler_lines : [],
+            sceneChanges: Array.isArray(d.scene_changes) ? d.scene_changes : [],
+        };
+    }
+    catch (err) {
+        const axiosErr = err;
+        const detail = axiosErr?.response?.data?.detail;
+        throw new Error(detail || axiosErr?.message || "OpenShorts suggest-cuts failed");
     }
 }
 async function checkOpenShortsHealth() {

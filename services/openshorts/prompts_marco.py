@@ -42,6 +42,8 @@ def get_viral_moment_prompt(
     pillar: str = "brand",
     trend_brief: str = "",
     target_clips: int = 7,
+    prosody_brief: str = "",
+    quality_floor: int = 70,
 ) -> str:
     pillar_instructions = {
         "education": "Prioritize moments where Marco explains a specific number, process step, or market insight clearly and concisely. Look for 'did you know', 'here's what that means', 'most buyers don't realize' type moments.",
@@ -62,11 +64,17 @@ def get_viral_moment_prompt(
 CONTENT PILLAR FOR THIS SESSION: {pillar.upper()}
 {pillar_instructions.get(pillar, pillar_instructions["mixed"])}
 {trend_section}
-
+{prosody_brief}
 VIDEO TRANSCRIPT (total duration: {video_duration:.1f} seconds):
 {transcript}
 
-TASK: Identify exactly {target_clips} clips from this video that will perform best on TikTok for Marco's real estate content.
+TASK: Identify the BEST clips from this video for Marco's real estate TikTok —
+UP TO {target_clips}, but only the ones that are genuinely strong. Quality over
+volume: it is far better to return 2 excellent clips than {target_clips} mediocre
+ones. Do NOT pad the list to reach {target_clips}. Return ONLY clips you would
+score {quality_floor} or higher on the viral_score scale below. If only one moment
+in the whole video clears that bar, return exactly one clip. If none do, return
+the single strongest moment anyway (never an empty array).
 
 For each clip, return:
 - start_time: seconds from beginning (float)
@@ -83,11 +91,15 @@ Return as valid JSON array only. No markdown, no explanation outside the JSON.
 Sort by viral_score descending (best clip first).
 
 IMPORTANT:
-- Never start a clip mid-sentence. Find the natural speech boundary.
+- Never start a clip mid-sentence. Find the natural speech boundary (use the pause
+  timestamps in the vocal-delivery signals above when they are provided).
 - Minimum clip duration is 25 seconds. Maximum is 65 seconds.
 - Every clip must open with a strong hook in the first 3 seconds.
 - Prefer clips where Marco mentions specific prices, neighborhoods, or market data.
 - Avoid clips where Marco says generic phrases like "reach out to me" without context.
+- QUALITY GATE: only include a clip if its viral_score is {quality_floor}+. Returning
+  fewer, stronger clips is the goal — a short list of great clips beats a long list of
+  average ones. Never invent filler clips to hit a count.
 """
 
 

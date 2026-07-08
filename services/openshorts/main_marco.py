@@ -6,6 +6,13 @@ import os
 
 from prompts_marco import get_viral_moment_prompt
 from llm_analysis import analyze_transcript_for_clips
+import audio_features_marco
+
+# Phase 4 — quality-over-volume. target_clips is now a MAXIMUM, not a quota. The
+# engine returns FEWER, higher-quality clips per source video; the daily 7 stays a
+# raw-recording goal upstream. Clips below this viral_score floor are dropped rather
+# than padding the list. Env-overridable so the bar can be tuned without a deploy.
+VIRAL_SCORE_FLOOR = int(os.environ.get("VIRAL_SCORE_FLOOR", "70"))
 
 try:
     import main as openshorts_main
@@ -14,12 +21,38 @@ except ImportError:
     openshorts_main = None
 
 
+def _apply_quality_gate(clips: list, target_clips: int) -> list:
+    """Phase 4 — enforce quality-over-volume on the model's output.
+
+    Keep only clips at or above VIRAL_SCORE_FLOOR, best first, capped at
+    target_clips (a MAX). If nothing clears the floor, keep the single strongest
+    clip so a decent source never yields zero — but never pad up to the count.
+    """
+    scored = sorted(
+        clips,
+        key=lambda c: float(c.get("viral_score", 0) or 0),
+        reverse=True,
+    )
+    strong = [c for c in scored if float(c.get("viral_score", 0) or 0) >= VIRAL_SCORE_FLOOR]
+    if strong:
+        kept = strong[:target_clips]
+    else:
+        kept = scored[:1]  # nothing cleared the bar — the single best, not filler
+    print(
+        f"[content-ai] quality gate (floor={VIRAL_SCORE_FLOOR}, max={target_clips}): "
+        f"{len(clips)} analyzed → {len(kept)} kept "
+        f"({'above floor' if strong else 'fallback: best-of below floor'})"
+    )
+    return kept
+
+
 def get_viral_clips_marco(
     transcript_result: dict,
     video_duration: float,
     pillar: str = "brand",
     trend_brief: str = "",
     target_clips: int = 7,
+    video_path: str | None = None,
 ) -> dict:
     if openshorts_main is None:
         raise RuntimeError("OpenShorts main module not available")
@@ -28,15 +61,38 @@ def get_viral_clips_marco(
         [seg.get("text", "") for seg in transcript_result.get("segments", [])],
     )
 
+    # Phase 1 — extract ffmpeg-only vocal-delivery signals (pauses/energy/pace)
+    # and hand the model a compact brief so clip selection aligns with HOW Marco
+    # delivers, not just the words. Best-effort: a failure yields an empty brief
+    # and the prompt is exactly what it was before.
+    prosody_brief = ""
+    if video_path:
+        try:
+            prosody = audio_features_marco.analyze_prosody(
+                video_path, transcript_result, video_duration
+            )
+            prosody_brief = audio_features_marco.prosody_prompt_block(prosody)
+            if prosody_brief:
+                print(
+                    f"[content-ai] prosody signals attached "
+                    f"(pauses={len(prosody.get('pauses', []))}, "
+                    f"energy_peaks={len(prosody.get('energy', {}).get('peaks', []))})"
+                )
+        except Exception as prosody_err:  # noqa: BLE001 — never fatal
+            print(f"[content-ai] prosody analysis skipped: {type(prosody_err).__name__}: {prosody_err}")
+
     prompt = get_viral_moment_prompt(
         transcript=transcript_text,
         video_duration=video_duration,
         pillar=pillar,
         trend_brief=trend_brief,
         target_clips=target_clips,
+        prosody_brief=prosody_brief,
+        quality_floor=VIRAL_SCORE_FLOOR,
     )
 
     clips_data, model = analyze_transcript_for_clips(prompt)
+    clips_data = _apply_quality_gate(clips_data, target_clips)
 
     return {
         "clips": clips_data,

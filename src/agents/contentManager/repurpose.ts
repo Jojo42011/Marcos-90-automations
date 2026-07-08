@@ -17,6 +17,13 @@ import {
   type OpenShortsClipResult,
 } from "../../integrations/openshorts/index.js";
 
+// Phase 4 — quality over volume. This is the MAXIMUM number of clips we let the
+// engine cut from a single source; the sidecar's viral-score gate returns FEWER,
+// higher-quality clips when the footage only has a couple of strong moments (it
+// never pads to hit the number). The daily 7 remains a raw-recording goal
+// upstream — it is NOT a per-video publish quota. Env-overridable.
+const MAX_CLIPS_PER_SOURCE = Math.max(1, Number(process.env.MAX_CLIPS_PER_SOURCE) || 5);
+
 async function callOpenShortsApi(
   sessionId: string,
   sourcePath: string | null,
@@ -30,7 +37,7 @@ async function callOpenShortsApi(
     filePath: sourcePath,
     pillar,
     trendBrief: "",
-    targetClipCount: 7,
+    targetClipCount: MAX_CLIPS_PER_SOURCE,
   });
 
   const result = await pollOpenShortsJob(jobId);

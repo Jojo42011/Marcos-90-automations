@@ -48,6 +48,8 @@ import uvicorn
 import main_marco  # noqa: F401 — patches openshorts when available
 
 import captions_marco
+import audio_features_marco
+import edit_effects_marco
 from llm_analysis import any_llm_configured, configured_llm_summary, NoUsableClipsError
 
 try:
@@ -391,6 +393,7 @@ def process_video_job(
                 pillar=pillar,
                 trend_brief=trend_brief,
                 target_clips=target_clips,
+                video_path=video_path,
             )
         except NoUsableClipsError as no_clips:
             # The model responded fine but found no viable clip moments — a
@@ -885,6 +888,29 @@ def _replace_audio(input_video: str, audio_file: str, output_path: str) -> str:
     return output_path
 
 
+def _apply_visual_pass(input_path: str, output_path: str, filtergraph: str) -> str:
+    """Apply a Phase-2 visual filtergraph (colour correct + zoom/punch-in) in one
+    re-encode. Audio is stream-copied so A/V sync is untouched; the same
+    veryfast/crf18/2-thread profile as _cut_clip keeps memory bounded on the 4GB
+    machine."""
+    result = subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", input_path,
+            "-vf", filtergraph,
+            "-threads", "2",
+            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            "-c:a", "copy",
+            output_path,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        timeout=_FFMPEG_TIMEOUT_S,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg visual pass failed: {result.stderr.decode()[-500:]}")
+    return output_path
+
+
 @app.post("/api/clips/edit")
 async def edit_clip(
     clip_path: str = Form(...),
@@ -902,8 +928,24 @@ async def edit_clip(
     edit_spec (JSON): {
       "trim":  {"start": float, "end": float} | null,   # clip-relative seconds
       "cuts":  [[start, end], ...],                       # middle sections to REMOVE
-      "audio": "keep" | "mute" | "remove"
+      "audio": "keep" | "mute" | "remove" | "replace",
+      "captions": [{start, end, text}, ...] | null,       # re-synced caption lines
+
+      # ── Phase 2 skills (all optional) ──────────────────────────────────────
+      "color":  "auto"|"warm"|"cool"|"punch"|"flat"|null, # exposure/colour correct
+      "effects": [                                         # zoom / punch-in (EDITED-
+        {"type":"zoom_in"|"zoom_out"|"punch_in",           #  timeline seconds)
+         "start": float, "end": float, "amount": 0.15}
+      ],
+      "autoTighten": true | {"maxGap": 0.6, "noiseDb": -30}, # remove dead air
+      "snapToScenes": true                                  # snap cuts to scene changes
     }
+
+    Coordinate spaces: trim/cuts/autoTighten/snapToScenes operate on the SOURCE
+    clip timeline (before assembly); effects operate on the EDITED timeline (what
+    the viewer sees after trim+cuts). Auto-generated cuts (dead-air tightening)
+    are unioned with the caller's cuts, then optionally snapped to scene cuts, so
+    the result is always a clean set of non-overlapping REMOVE intervals.
     """
     clips_root = os.path.realpath(str(CLIPS_OUTPUT_DIR))
     abs_clip = os.path.realpath(clip_path)
@@ -941,7 +983,7 @@ async def edit_clip(
             raise HTTPException(status_code=400, detail="Replacement audio file not found on the server")
         audio_replace_path = aud_abs
 
-    # Normalize cuts, clamp into [t_start, t_end], sort, validate.
+    # Normalize cuts, clamp into [t_start, t_end].
     raw_cuts = spec.get("cuts") or []
     cuts = []
     for c in raw_cuts:
@@ -952,30 +994,23 @@ async def edit_clip(
         cs = max(t_start, min(cs, t_end))
         ce = max(t_start, min(ce, t_end))
         if ce - cs > 0.05:
-            cuts.append((cs, ce))
-    cuts.sort()
-    # Reject overlapping cuts (ambiguous) rather than silently merging wrong.
-    for i in range(1, len(cuts)):
-        if cuts[i][0] < cuts[i - 1][1] - 0.01:
-            raise HTTPException(status_code=400, detail="cut ranges must not overlap")
+            cuts.append([cs, ce])
 
-    # Build the ordered list of KEEP intervals = [t_start, t_end] minus the cuts.
-    keeps = []
-    cursor = t_start
-    for cs, ce in cuts:
-        if cs - cursor > 0.05:
-            keeps.append((cursor, cs))
-        cursor = max(cursor, ce)
-    if t_end - cursor > 0.05:
-        keeps.append((cursor, t_end))
-    if not keeps:
-        raise HTTPException(status_code=400, detail="Nothing left after trim + cuts")
-    total_kept = sum(e - s for s, e in keeps)
-    if total_kept < _MIN_TRIM_SECONDS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Result must be at least {_MIN_TRIM_SECONDS:.0f}s (got {total_kept:.2f}s)",
-        )
+    # NOTE: cut augmentation (auto-tighten dead air, snap-to-scenes) runs ffmpeg,
+    # so it happens UNDER the processing slot below — after render_source and the
+    # edited caption lines are resolved. keeps + the min-length check are built
+    # there too, once the final cut set is known.
+
+    # Parse the Phase-2 visual skills up front (pure validation, no ffmpeg).
+    color_mode = spec.get("color")
+    if color_mode is not None:
+        color_mode = str(color_mode).lower()
+        if color_mode not in edit_effects_marco._COLOR_PRESETS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"color must be one of {sorted(edit_effects_marco._COLOR_PRESETS)} or null",
+            )
+    effects = spec.get("effects") if isinstance(spec.get("effects"), list) else []
 
     if not _PROCESS_SLOT.acquire(timeout=_TRIM_SLOT_WAIT_S):
         raise HTTPException(status_code=503, detail="Video processor busy with another job — try again shortly")
@@ -1011,6 +1046,66 @@ async def edit_clip(
                 )
             render_source = base_path
 
+        # ── Phase 2/3: dead-air tightening (runs ffmpeg → under the slot) ──────
+        # Detect silences in the render source within [t_start, t_end], keep the
+        # intentional/dramatic pauses, and add REMOVE cuts for the genuine dead air.
+        tighten = spec.get("autoTighten")
+        if tighten:
+            opts = tighten if isinstance(tighten, dict) else {}
+            try:
+                max_gap = float(opts.get("maxGap", 0.6))
+                noise_db = float(opts.get("noiseDb", -30.0))
+                pauses = audio_features_marco.detect_pauses(
+                    render_source, noise_db=noise_db, min_silence_s=min(max_gap, 0.45)
+                )
+                classified = edit_effects_marco.classify_pauses(
+                    pauses, edit_captions or [], max_keep_gap=max_gap
+                )
+                auto_cuts = edit_effects_marco.deadair_cuts_from_pauses(
+                    classified["cut"], t_start, t_end
+                )
+                if auto_cuts:
+                    print(
+                        f"[edit] auto-tighten: {len(pauses)} pause(s) → {len(auto_cuts)} dead-air "
+                        f"cut(s) added, {len(classified['keep'])} dramatic pause(s) kept"
+                    )
+                    cuts.extend(auto_cuts)
+            except Exception as tighten_err:  # noqa: BLE001 — never fatal
+                print(f"[edit] auto-tighten skipped: {type(tighten_err).__name__}: {tighten_err}")
+
+        # ── Phase 2: scene-aware cut points ───────────────────────────────────
+        if spec.get("snapToScenes") and cuts:
+            try:
+                scenes = edit_effects_marco.detect_scene_changes(render_source)
+                if scenes:
+                    cuts = edit_effects_marco.snap_cuts_to_scenes(cuts, scenes)
+                    print(f"[edit] snap-to-scenes: {len(scenes)} scene change(s) detected")
+            except Exception as snap_err:  # noqa: BLE001
+                print(f"[edit] snap-to-scenes skipped: {type(snap_err).__name__}: {snap_err}")
+
+        # Union overlapping/adjacent cuts — removing sections is commutative, so an
+        # overlap is unambiguous (merge). This also absorbs any auto-generated cut
+        # that abuts a caller cut.
+        cuts = [tuple(c) for c in edit_effects_marco.merge_intervals(cuts)]
+
+        # Build the ordered KEEP intervals = [t_start, t_end] minus the cuts.
+        keeps = []
+        cursor = t_start
+        for cs, ce in cuts:
+            if cs - cursor > 0.05:
+                keeps.append((cursor, cs))
+            cursor = max(cursor, ce)
+        if t_end - cursor > 0.05:
+            keeps.append((cursor, t_end))
+        if not keeps:
+            raise HTTPException(status_code=400, detail="Nothing left after trim + cuts")
+        total_kept = sum(e - s for s, e in keeps)
+        if total_kept < _MIN_TRIM_SECONDS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Result must be at least {_MIN_TRIM_SECONDS:.0f}s (got {total_kept:.2f}s)",
+            )
+
         # 1) Re-encode each kept interval (bounded ~300MB each via _cut_clip).
         segments = []
         for idx, (s, e) in enumerate(keeps):
@@ -1038,6 +1133,27 @@ async def edit_clip(
             tmp_files.append(audio_out)
         else:
             audio_out = joined
+
+        # 3b) Phase 2 visual polish — colour/exposure correct + zoom/punch-in in ONE
+        # re-encode, applied BEFORE captions so burned-in text is never scaled or
+        # cropped by a zoom. Effects are in edited-timeline seconds (audio_out is
+        # already the edited timeline). No-op when neither color nor effects are set.
+        if color_mode or effects:
+            try:
+                vw, vh = edit_effects_marco.probe_resolution(audio_out)
+                vfps = edit_effects_marco.probe_fps(audio_out)
+                visual_fg = edit_effects_marco.build_visual_filtergraph(
+                    effects, color_mode, vw, vh, vfps
+                )
+            except Exception as fg_err:  # noqa: BLE001
+                print(f"[edit] visual filter build skipped: {type(fg_err).__name__}: {fg_err}")
+                visual_fg = None
+            if visual_fg:
+                fx_out = str(parent / f"{stem}_fx_{token}.mp4")
+                _apply_visual_pass(audio_out, fx_out, visual_fg)
+                tmp_files.append(fx_out)
+                audio_out = fx_out
+                print(f"[edit] visual pass applied (color={color_mode or 'none'}, effects={len(effects)})")
 
         # 4) Captions: burn the re-synced edited lines onto the base-rendered video.
         new_path = str(parent / f"{stem}_edit_{token}.mp4")
@@ -1101,6 +1217,76 @@ async def edit_clip(
                     os.remove(f)
             except Exception:
                 pass
+        _PROCESS_SLOT.release()
+
+
+@app.post("/api/clips/suggest-cuts")
+async def suggest_cuts(
+    clip_path: str = Form(...),
+    max_gap: float = Form(0.6),
+    noise_db: float = Form(-30.0),
+):
+    """Phase 3 — analyse a clip and SUGGEST edits without applying any.
+
+    Returns the dead-air cuts the engine would make, the dramatic pauses it would
+    KEEP (so the caller can see the engine isn't flattening deliberate beats),
+    filler-only caption lines, and scene-change timestamps. The caller (UI or an
+    autonomous cycle) can then apply the ones it wants via /api/clips/edit. This
+    is read-only: it renders nothing and never mutates the clip.
+    """
+    clips_root = os.path.realpath(str(CLIPS_OUTPUT_DIR))
+    abs_clip = os.path.realpath(clip_path)
+    if os.path.commonpath([abs_clip, clips_root]) != clips_root:
+        raise HTTPException(status_code=400, detail="clip_path is outside the clips directory")
+    if not os.path.isfile(abs_clip):
+        raise HTTPException(status_code=410, detail="Clip file no longer available on disk")
+
+    duration = _probe_duration(abs_clip)
+    if duration <= 0:
+        raise HTTPException(status_code=422, detail="Could not read clip duration (file may be corrupt)")
+
+    # Reuse the persisted editable caption lines if this clip has them, so pause
+    # classification can tell a mid-sentence stumble from a sentence-final beat.
+    lines: list = []
+    try:
+        stem = re.sub(r"_(edit|trim)_[0-9a-f]+$", "", Path(abs_clip).stem)
+        stem = re.sub(r"_(captioned|vertical)$", "", stem)
+        lines_path = Path(abs_clip).parent / f"{stem}_base.lines.json"
+        if lines_path.is_file():
+            lines = json.loads(lines_path.read_text())
+            if not isinstance(lines, list):
+                lines = []
+    except Exception as lines_err:  # noqa: BLE001
+        print(f"[edit] suggest-cuts could not read caption lines: {lines_err}")
+        lines = []
+
+    if not _PROCESS_SLOT.acquire(timeout=_TRIM_SLOT_WAIT_S):
+        raise HTTPException(status_code=503, detail="Video processor busy with another job — try again shortly")
+    try:
+        pauses = audio_features_marco.detect_pauses(
+            abs_clip, noise_db=noise_db, min_silence_s=min(max_gap, 0.45)
+        )
+        classified = edit_effects_marco.classify_pauses(pauses, lines, max_keep_gap=max_gap)
+        deadair = edit_effects_marco.merge_intervals(
+            edit_effects_marco.deadair_cuts_from_pauses(classified["cut"], 0.0, duration)
+        )
+        scenes = edit_effects_marco.detect_scene_changes(abs_clip)
+        est_removed = round(sum(e - s for s, e in deadair), 2)
+        return {
+            "duration": round(duration, 2),
+            "suggested_cuts": [[round(s, 2), round(e, 2)] for s, e in deadair],
+            "estimated_removed_seconds": est_removed,
+            "estimated_result_seconds": round(max(0.0, duration - est_removed), 2),
+            "dramatic_pauses_kept": classified["keep"],
+            "filler_lines": classified["fillers"],
+            "scene_changes": scenes,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"suggest-cuts failed: {type(e).__name__}: {e}")
+    finally:
         _PROCESS_SLOT.release()
 
 
