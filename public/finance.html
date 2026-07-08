@@ -247,7 +247,7 @@
 <body>
   <div class="header">
     <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <a href="/dashboard" class="fin-back">← COMMAND CENTER</a>
+      <a href="/dashboard" class="fin-back" onclick="goToCommandCenter(); return false;">← COMMAND CENTER</a>
       <span class="fin-hdr-sep">|</span>
       <span class="fin-title">Finance</span>
       <span id="fin-live-label" class="fin-muted" style="font-family:var(--mono);font-size:10px;letter-spacing:1px;">live data</span>
@@ -771,6 +771,15 @@
     })();
 
     refreshAll();
+  </script>
+  <script>
+  /* Shell back-nav: return to the shell's home (Harvey) tab when embedded;
+     navigate normally when opened standalone. */
+  function goToCommandCenter(){
+    if (window.parent !== window) { window.parent.postMessage({ type: 'app-navigate', tab: 'harvey' }, '*'); }
+    else { window.location.href = '/dashboard'; }
+  }
+  window.goToCommandCenter = goToCommandCenter;
   </script>
 </body>
 </html>

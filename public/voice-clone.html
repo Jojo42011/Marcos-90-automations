@@ -134,7 +134,7 @@
 <body>
   <header class="header">
     <div>
-      <a href="/" class="vc-back">← Hub</a>
+      <a href="/dashboard" class="vc-back" onclick="goToCommandCenter(); return false;">← Hub</a>
       <span style="color:#555;margin:0 8px;">|</span>
       <strong style="font-family:'Space Grotesk',sans-serif;">Voice Clone</strong>
       <span class="vc-muted" style="margin-left:8px;">VoxCPM2 · Marco</span>
@@ -511,6 +511,15 @@
 
     refreshAll();
     setInterval(refreshAll, 30000);
+  </script>
+  <script>
+  /* Shell back-nav: return to the shell's home (Harvey) tab when embedded;
+     navigate normally when opened standalone. */
+  function goToCommandCenter(){
+    if (window.parent !== window) { window.parent.postMessage({ type: 'app-navigate', tab: 'harvey' }, '*'); }
+    else { window.location.href = '/dashboard'; }
+  }
+  window.goToCommandCenter = goToCommandCenter;
   </script>
 </body>
 </html>

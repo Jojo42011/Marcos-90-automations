@@ -689,8 +689,15 @@ app.get("/v1/sessions/:sessionId", async (req, res) => {
   res.json(getOpenClawSession(sessionId));
 });
 
+// Unified UI shell — the new entry point. Every sub-agent page loads as a tab
+// inside it (Harvey is the persistent home tab). The individual routes below are
+// kept intact so each page still works standalone (they're loaded via iframe).
+app.get("/shell", (_req, res) => {
+  res.sendFile(path.join(publicDir, "shell.html"));
+});
+
 app.get("/", (_req, res) => {
-  res.sendFile(path.join(publicDir, "dashboard.html"));
+  res.redirect("/shell");
 });
 
 app.get("/dashboard", (_req, res) => {

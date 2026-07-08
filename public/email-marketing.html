@@ -288,7 +288,7 @@
 <body>
   <div class="wrap">
     <div class="topbar">
-      <a class="back" href="/dashboard">← Command Center</a>
+      <a class="back" href="/dashboard" onclick="goToCommandCenter(); return false;">← Command Center</a>
       <h1>Email Marketing <span>Harvey sub-agent · Live Gmail</span></h1>
       <span id="conn-badge" class="conn bad">Gmail checking…</span>
       <button type="button" class="sync-btn" id="sync-gmail-btn" title="Pull from real Gmail inbox">Sync Gmail</button>
@@ -734,6 +734,15 @@
     setInterval(() => {
       if (document.getElementById("auto-refresh").checked) refreshAll();
     }, 30000);
+  </script>
+  <script>
+  /* Shell back-nav: return to the shell's home (Harvey) tab when embedded;
+     navigate normally when opened standalone. */
+  function goToCommandCenter(){
+    if (window.parent !== window) { window.parent.postMessage({ type: 'app-navigate', tab: 'harvey' }, '*'); }
+    else { window.location.href = '/dashboard'; }
+  }
+  window.goToCommandCenter = goToCommandCenter;
   </script>
 </body>
 </html>

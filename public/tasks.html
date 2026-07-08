@@ -613,7 +613,7 @@
 </head>
 <body>
   <header class="topbar">
-    <a id="back-link" class="back-btn" href="/dashboard">← BACK TO DASHBOARD</a>
+    <a id="back-link" class="back-btn" href="/dashboard" onclick="goToCommandCenter(); return false;">← BACK TO DASHBOARD</a>
     <div class="title">// MARCO · TASK COMMAND CENTER //</div>
     <div class="topbar-right">
       <button id="theme-toggle-btn" type="button" onclick="toggleTheme()"
@@ -1814,6 +1814,15 @@
         showToast("Failed to load tasks: " + err.message, "error");
         quickInput.focus();
       });
+  </script>
+  <script>
+  /* Shell back-nav: return to the shell's home (Harvey) tab when embedded;
+     navigate normally when opened standalone. */
+  function goToCommandCenter(){
+    if (window.parent !== window) { window.parent.postMessage({ type: 'app-navigate', tab: 'harvey' }, '*'); }
+    else { window.location.href = '/dashboard'; }
+  }
+  window.goToCommandCenter = goToCommandCenter;
   </script>
 </body>
 </html>

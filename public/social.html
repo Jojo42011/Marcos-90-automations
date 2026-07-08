@@ -1947,7 +1947,7 @@
       <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">—</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="calendar">Calendar <span class="crm-count" id="cm-count-calendar">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="activity">Activity Log <span class="crm-count" id="cm-count-activity">0</span></button>
-      <a href="/" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;">Command center <span>←</span></a>
+      <a href="/dashboard" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;" onclick="goToCommandCenter(); return false;">Command center <span>←</span></a>
     </aside>
 
     <main class="crm-main">
@@ -6783,6 +6783,15 @@
         btn.insertBefore(ico, lab);
       });
     })();
+  </script>
+  <script>
+  /* Shell back-nav: return to the shell's home (Harvey) tab when embedded;
+     navigate normally when opened standalone. */
+  function goToCommandCenter(){
+    if (window.parent !== window) { window.parent.postMessage({ type: 'app-navigate', tab: 'harvey' }, '*'); }
+    else { window.location.href = '/dashboard'; }
+  }
+  window.goToCommandCenter = goToCommandCenter;
   </script>
 </body>
 </html>

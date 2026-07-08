@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Harvey — Marco 90</title>
+<style>
+ /* ============================================================
+    NEUTRAL UI SHELL — collapsible sidebar + tabbed iframe views
+    + programmatic ("voice") navigation. No brand, no colors.
+    THEME: override the CSS variables below. Everything is driven
+    off --accent / --bg / --line — change those and it re-skins.
+    ============================================================ */
+ :root {
+   --bg:       #0a0a0a;
+   --panel:    rgba(255,255,255,0.03);
+   --text:     #ededed;
+   --muted:    #666;
+   --line:     rgba(255,255,255,0.08);
+   --line-2:   rgba(0,212,255,0.25);
+   --accent:   #00d4ff;
+   --accent-2: #38bdf8;
+   --ok:       #10b981;
+   --w:        240px;
+   --font:     ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+   --mono:     ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+ }
+ * { box-sizing:border-box; margin:0; padding:0; }
+ html,body { height:100%; background:var(--bg); color:var(--text); font-family:var(--font); overflow:hidden; -webkit-font-smoothing:antialiased; }
+ #shell { display:flex; height:100vh; width:100vw; }
+
+
+ /* ── Sidebar ── */
+ #side {
+   position:relative; flex:0 0 var(--w); width:var(--w);
+   background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+   border-right:1px solid var(--line); backdrop-filter:blur(8px);
+   display:flex; flex-direction:column; z-index:20;
+   transition:margin-left .34s cubic-bezier(.4,0,.2,1), opacity .3s;
+ }
+ #shell.collapsed #side { margin-left:calc(-1 * var(--w)); opacity:0; }
+
+
+ #side-head { display:flex; align-items:center; justify-content:space-between; padding:18px 14px 14px 18px; }
+ #brand { display:flex; align-items:center; gap:10px; }
+ #brand .mark { width:22px; height:22px; border-radius:6px; background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
+ #brand .t { font-size:12px; letter-spacing:0.22em; text-transform:uppercase; color:var(--text); font-weight:600; }
+ #collapse { width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--accent); cursor:pointer; display:flex; align-items:center; justify-content:center; }
+ #collapse:hover { border-color:var(--line-2); background:rgba(255,255,255,0.04); }
+
+
+ #nav { flex:1; overflow-y:auto; padding:6px 12px; }
+ #nav::-webkit-scrollbar { width:0; }
+ .nav-sep { font-family:var(--mono); font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted); padding:14px 10px 8px; }
+ .nav-item { position:relative; display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:11px; cursor:pointer; margin-bottom:3px; border:1px solid transparent; transition:background .16s, border-color .16s, transform .1s; }
+ .nav-item:hover { background:rgba(255,255,255,0.04); transform:translateX(2px); }
+ .nav-item.active { background:rgba(255,255,255,0.06); border-color:var(--line-2); }
+ .nav-item.active::before { content:""; position:absolute; left:-12px; top:50%; transform:translateY(-50%); width:3px; height:22px; border-radius:2px; background:var(--accent); }
+ .nav-item .ic { flex:0 0 auto; width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); color:var(--accent); }
+ .nav-item .ic svg { width:18px; height:18px; }
+ .nav-item .tx .l { font-size:14px; font-weight:600; color:var(--text); }
+ .nav-item .tx .s { font-family:var(--mono); font-size:10.5px; color:var(--muted); margin-top:1px; }
+ #side-foot { padding:14px 18px; border-top:1px solid var(--line); font-family:var(--mono); font-size:9px; letter-spacing:0.14em; color:var(--muted); text-transform:uppercase; display:flex; align-items:center; gap:8px; }
+ .dot { width:6px; height:6px; border-radius:50%; background:var(--ok); }
+
+
+ /* ── Floating reopen (when collapsed) ── */
+ #reopen { position:fixed; top:16px; left:16px; z-index:60; display:none; align-items:center; gap:9px; padding:8px 12px 8px 8px; border-radius:40px; background:var(--bg); border:1px solid var(--line-2); cursor:pointer; }
+ #shell.collapsed #reopen { display:flex; }
+ #reopen .mark { width:20px; height:20px; border-radius:6px; background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
+ #reopen .rl { font-family:var(--mono); font-size:10px; letter-spacing:0.2em; color:var(--accent); text-transform:uppercase; }
+
+
+ /* ── Main + iframe views ── */
+ #main { flex:1; position:relative; min-width:0; }
+ .frame { position:absolute; inset:0; width:100%; height:100%; border:0; opacity:0; pointer-events:none; transition:opacity .2s; background:var(--bg); }
+ .frame.active { opacity:1; pointer-events:auto; }
+
+
+ /* ── Assistant dock (shown when off the home tab, keeps it reachable) ── */
+ #dock { position:absolute; bottom:22px; left:50%; transform:translateX(-50%); z-index:50; display:none; align-items:center; gap:12px; padding:9px 18px 9px 14px; background:var(--bg); border:1px solid var(--line-2); border-radius:44px; cursor:pointer; }
+ #dock.show { display:flex; }
+ #dock .p { width:10px; height:10px; border-radius:50%; background:var(--accent); }
+ #dock .dt { font-size:13px; } #dock .dt b { color:var(--accent); } #dock .dt span { color:var(--muted); font-size:11px; }
+
+
+ #toast { position:absolute; top:18px; left:50%; transform:translateX(-50%) translateY(-24px); z-index:70; background:var(--bg); border:1px solid var(--line-2); color:var(--text); font-size:13px; padding:11px 18px; border-radius:11px; opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; }
+ #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+ #toast b { color:var(--accent); }
+
+
+ @media (max-width:780px){ :root{ --w:210px; } }
+</style>
+</head>
+<body>
+ <div id="shell">
+   <aside id="side">
+     <div id="side-head">
+       <div id="brand"><span class="mark"></span><span class="t">Marco 90</span></div>
+       <button id="collapse" title="Collapse (Ctrl/⌘ + \)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+     </div>
+     <nav id="nav"></nav>
+     <div id="side-foot">
+       <span class="dot"></span>
+       <span style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;">Marco 90 · Live</span>
+     </div>
+   </aside>
+
+
+   <div id="reopen"><span class="mark"></span><span class="rl">Menu</span></div>
+
+
+   <div id="main">
+     <div id="frames"></div>
+     <div id="dock"><span class="p"></span><span class="dt"><b>Harvey</b> is here <span>· tap to return</span></span></div>
+     <div id="toast"></div>
+   </div>
+ </div>
+
+
+<script>
+/* ================================================================
+  CONFIG — edit this. Each tab is one iframe view.
+  - key:   unique id, used by programmatic navigation
+  - label / sub: sidebar text
+  - src:   the page/app to embed (same-origin recommended so
+           postMessage works and audio persists across tabs)
+  - home:  the first/primary tab (loads immediately, stays live
+           in the background so a voice assistant can keep running)
+  - icon:  inline SVG string (optional)
+  ================================================================ */
+var TABS = [
+ {
+   key: "harvey",
+   label: "Harvey",
+   sub: "AI Assistant",
+   src: "/jarvis",
+   home: true,
+   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>'
+ },
+ {
+   key: "crm",
+   label: "CRM",
+   sub: "Leads · Deals · Tasks",
+   src: "/dashboard",
+   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
+ },
+ {
+   key: "content",
+   label: "Content",
+   sub: "TikTok · Scores · Brain",
+   src: "/social",
+   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 10l4.553-2.069A1 1 0 0121 8.845v6.31a1 1 0 01-1.447.894L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>'
+ },
+ {
+   key: "leads",
+   label: "Lead Nurture",
+   sub: "Scoring · Hot · Cold",
+   src: "/lead-nurture",
+   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>'
+ },
+ {
+   key: "reporting",
+   label: "Reporting",
+   sub: "Digest · KPIs · Anomalies",
+   src: "/reporting",
+   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>'
+ },
+ {
+   key: "finance",
+   label: "Finance",
+   sub: "GCI · Expenses · Pace",
+   src: "/finance",
+   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>'
+ },
+ {
+   key: "email",
+   label: "Email",
+   sub: "Drip · Templates · Stats",
+   src: "/email-marketing",
+   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'
+ },
+ {
+   key: "voice",
+   label: "Voice Clone",
+   sub: "VoxCPM · Scripts · Safety",
+   src: "/voice-clone",
+   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>'
+ },
+ {
+   key: "tasks",
+   label: "Tasks",
+   sub: "Command Center",
+   src: "/tasks",
+   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>'
+ }
+];
+
+
+/* Section separators — a label is rendered before the tab whose key is listed
+   here (null = no separator before that item). Configured, not core logic. */
+var SECTIONS = {
+ harvey:    null,
+ crm:       'Operations',
+ content:   'Growth',
+ leads:     null,
+ reporting: null,
+ finance:   'Revenue',
+ email:     null,
+ voice:     'Content',
+ tasks:     'Tools'
+};
+
+
+/* Message type the shell listens for (from an embedded page / assistant). */
+var NAV_MESSAGE_TYPE = "app-navigate";
+
+
+/* A generic dot icon; replace per-tab via TABS[i].icon if you want. */
+var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg>';
+
+
+(function(){
+ "use strict";
+ var byKey = {}; TABS.forEach(function(t){ byKey[t.key]=t; });
+ var home = (TABS.find(function(t){return t.home;}) || TABS[0]).key;
+ var current = home;
+ var nav = document.getElementById("nav"), frames = document.getElementById("frames");
+ var dock = document.getElementById("dock"), toastEl = document.getElementById("toast"), shell = document.getElementById("shell");
+
+
+ nav.innerHTML = TABS.map(function(t,i){
+   var sep = SECTIONS[t.key] ? '<div class="nav-sep">'+SECTIONS[t.key]+'</div>' : '';
+   return sep + '<div class="nav-item'+(t.key===current?' active':'')+'" data-key="'+t.key+'" title="'+t.label+'">'+
+     '<div class="ic">'+(t.icon||DEFAULT_ICON)+'</div><div class="tx"><div class="l">'+t.label+'</div><div class="s">'+(t.sub||'')+'</div></div></div>';
+ }).join("");
+
+
+ frames.innerHTML = TABS.map(function(t){
+   var src = t.key===home ? ' src="'+t.src+'"' : ''; // home loads now; others lazy-load on first open
+   return '<iframe class="frame'+(t.key===current?' active':'')+'" id="frame-'+t.key+'" data-src="'+t.src+'"'+src+' allow="microphone; autoplay; camera"></iframe>';
+ }).join("");
+
+
+ function toast(m){ toastEl.innerHTML=m; toastEl.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(function(){toastEl.classList.remove("show");},3000); }
+
+
+ function activate(key, programmatic){
+   if(!byKey[key]) return;
+   var f = document.getElementById("frame-"+key);
+   if(f && !f.src) f.src = f.getAttribute("data-src");  // lazy-load on first visit
+   TABS.forEach(function(t){
+     document.getElementById("frame-"+t.key).classList.toggle("active", t.key===key);
+     var ni = nav.querySelector('.nav-item[data-key="'+t.key+'"]'); if(ni) ni.classList.toggle("active", t.key===key);
+   });
+   current = key;
+   dock.classList.toggle("show", key!==home);   // home tab stays loaded+live in the background
+   if(programmatic && key!==home) toast('Opened <b>'+byKey[key].label+'</b>');
+ }
+
+
+ /* Collapse → current tab goes full-screen. Persisted. */
+ function setCollapsed(v){ shell.classList.toggle("collapsed", v); try{ localStorage.setItem("shell_collapsed", v?"1":"0"); }catch(_){} }
+ document.getElementById("collapse").onclick = function(){ setCollapsed(true); };
+ document.getElementById("reopen").onclick = function(){ setCollapsed(false); };
+ document.addEventListener("keydown", function(e){ if((e.metaKey||e.ctrlKey) && e.key==="\\"){ e.preventDefault(); setCollapsed(!shell.classList.contains("collapsed")); } });
+ try{ if(localStorage.getItem("shell_collapsed")==="1") shell.classList.add("collapsed"); }catch(_){}
+
+
+ nav.addEventListener("click", function(e){ var it=e.target.closest(".nav-item"); if(it) activate(it.getAttribute("data-key")); });
+ dock.addEventListener("click", function(){ activate(home); });
+
+
+ /* PROGRAMMATIC / VOICE NAVIGATION ────────────────────────────────
+    An embedded page (e.g. your assistant iframe) tells the shell to
+    switch tabs by posting a message to the parent window:
+        window.parent.postMessage({ type: "app-navigate", tab: "view2" }, "*");
+    The home tab stays loaded in the background, so if it's a voice
+    assistant it keeps talking/listening while another tab is shown. */
+ window.addEventListener("message", function(e){
+   var d = e.data || {};
+   if(d.type===NAV_MESSAGE_TYPE && d.tab){ activate(String(d.tab).toLowerCase(), true); }
+ });
+
+
+ /* Optional deep link: ?tab=view2 */
+ var q = new URLSearchParams(location.search).get("tab"); if(q && byKey[q]) activate(q);
+
+
+ /* Expose a tiny API in case you want to drive it from this window too. */
+ window.AppShell = { open:function(k){ activate(k, true); }, collapse:setCollapsed, tabs:TABS };
+})();
+
+
+/* ── Marco 90 addition: respect the existing dark/light theme preference ──
+   The sub-agent pages persist their theme under 'marco_crm_theme' (values
+   'light'/'dark') — see dashboard.html/jarvis.html. The shell chrome mirrors
+   it (falling back to the generic 'theme' key). Defaults to dark; re-applies
+   when a tab flips it (storage event). */
+var SHELL_THEME_KEY = 'marco_crm_theme';
+function initShellTheme() {
+ var saved = localStorage.getItem(SHELL_THEME_KEY) || localStorage.getItem('theme') || 'dark';
+ var root = document.documentElement;
+ if (saved === 'light') {
+   root.style.setProperty('--bg', '#f1f5f9');
+   root.style.setProperty('--panel', 'rgba(0,0,0,0.03)');
+   root.style.setProperty('--text', '#0f172a');
+   root.style.setProperty('--muted', '#64748b');
+   root.style.setProperty('--line', 'rgba(0,0,0,0.08)');
+   root.style.setProperty('--line-2', 'rgba(3,105,161,0.3)');
+   root.style.setProperty('--accent', '#0369a1');
+   root.style.setProperty('--accent-2', '#0284c7');
+ } else {
+   // Restore dark defaults (in case a light tab set them earlier this session).
+   root.style.removeProperty('--bg');
+   root.style.removeProperty('--panel');
+   root.style.removeProperty('--text');
+   root.style.removeProperty('--muted');
+   root.style.removeProperty('--line');
+   root.style.removeProperty('--line-2');
+   root.style.removeProperty('--accent');
+   root.style.removeProperty('--accent-2');
+ }
+}
+initShellTheme();
+window.addEventListener('storage', function(e){ if (e.key === SHELL_THEME_KEY || e.key === 'theme') initShellTheme(); });
+</script>
+</body>
+</html>

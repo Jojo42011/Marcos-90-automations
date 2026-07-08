@@ -258,7 +258,7 @@
 <body>
   <div class="header">
     <div class="header-left">
-      <a href="/dashboard" style="color:#00d4ff; font-size:11px; letter-spacing:1px; text-decoration:none; font-family:var(--mono);">← COMMAND CENTER</a>
+      <a href="/dashboard" onclick="goToCommandCenter(); return false;" style="color:#00d4ff; font-size:11px; letter-spacing:1px; text-decoration:none; font-family:var(--mono);">← COMMAND CENTER</a>
       <span style="color:#888;">|</span>
       <span style="color:#fff; font-size:14px; font-weight:700;">Reporting</span>
       <span class="rpt-live" id="rpt-live-wrap"><span class="rpt-live-dot" id="rpt-live-dot"></span><span id="rpt-live-label">connecting</span></span>
@@ -889,6 +889,15 @@
     })();
 
     refreshAll();
+  </script>
+  <script>
+  /* Shell back-nav: return to the shell's home (Harvey) tab when embedded;
+     navigate normally when opened standalone. */
+  function goToCommandCenter(){
+    if (window.parent !== window) { window.parent.postMessage({ type: 'app-navigate', tab: 'harvey' }, '*'); }
+    else { window.location.href = '/dashboard'; }
+  }
+  window.goToCommandCenter = goToCommandCenter;
   </script>
 </body>
 </html>

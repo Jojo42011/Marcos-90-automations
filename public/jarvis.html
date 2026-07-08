@@ -1339,7 +1339,7 @@
     </div>
 
     <header class="j-topbar">
-      <a href="/dashboard" class="j-back">â—‚ CRM</a>
+      <a href="/dashboard" class="j-back" onclick="goToCommandCenter(); return false;">â—‚ CRM</a>
       <button type="button" class="j-panel-toggle" id="jToggleOps">OPS</button>
       <div class="j-logo">
         <span class="j-logo-bracket">[</span>HARVEY<span class="j-logo-bracket">]</span>
@@ -1467,6 +1467,36 @@
   </button>
 
   <script>
+    /* ── voice-nav-bridge (inlined) ─────────────────────────────────────────
+     * Forwards a backend "navigate" directive up to the parent shell, which
+     * switches tabs. Harvey is the shell's persistent home tab, so it keeps
+     * running while another tab is shown. Contract: the shell listens for
+     * window.postMessage({ type: "app-navigate", tab }). */
+    (function (global) {
+      var NAV_MESSAGE_TYPE = "app-navigate";
+      function go(tab) {
+        if (!tab) return;
+        try {
+          (window.parent || window).postMessage({ type: NAV_MESSAGE_TYPE, tab: String(tab).toLowerCase() }, "*");
+        } catch (e) { /* not embedded / blocked — ignore */ }
+      }
+      function handle(evt) {
+        if (evt && evt.type === "navigate" && evt.tab) go(evt.tab);
+      }
+      global.ShellNav = { go: go, handle: handle };
+    })(window);
+
+    /* Return to the shell's home (Harvey) tab from a sub-page back-link when
+     * embedded; navigate normally when opened standalone. */
+    function goToCommandCenter() {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: "app-navigate", tab: "harvey" }, "*");
+      } else {
+        window.location.href = "/dashboard";
+      }
+    }
+    window.goToCommandCenter = goToCommandCenter;
+
     // Sync theme with dashboard preference (marco_crm_theme â€” same key as dashboard.html)
     const THEME_KEY = "marco_crm_theme";
 
@@ -2646,7 +2676,10 @@
         renderDirectives(body.directives || body.judgment?.directives || []);
         if (body.metrics) renderMetrics(body.metrics);
         setStatus("RESPONDING", true);
-        if (body.ui && body.ui.panel && body.ui.panel !== "ops") {
+        // Backend-emitted shell navigation ({type:"navigate",tab} or ui.tab) →
+        // switch the shell tab while Harvey keeps running as the home tab.
+        if (body.navigate) ShellNav.handle(body.navigate);
+        if (body.ui && (body.ui.tab || (body.ui.panel && body.ui.panel !== "ops"))) {
           handlePanelResponse(body.ui);
         } else {
           detectMetricsTrigger(speech || "");
@@ -2849,7 +2882,11 @@
     window.openDynamicPanel = openDynamicPanel;
 
     function handlePanelResponse(ui) {
-      if (!ui || !ui.panel) return;
+      if (!ui) return;
+      // Full tab switch (backend-emitted directive) → drive the shell instead
+      // of opening an in-Harvey overlay panel.
+      if (ui.tab) { ShellNav.go(ui.tab); console.log("[Harvey] Shell navigation → " + ui.tab); return; }
+      if (!ui.panel) return;
       console.log("[Harvey] handlePanelResponse:", ui.panel, ui.action);
       if (ui.action === "close") {
         closeActivePanel();
