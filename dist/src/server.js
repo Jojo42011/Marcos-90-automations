@@ -120,6 +120,7 @@ const crypto_1 = require("crypto");
 const index_js_21 = require("./harvey/index.js");
 const index_js_22 = require("./hull/index.js");
 const deepgramProxy_js_1 = require("./hull/voice/deepgramProxy.js");
+const elevenlabsProxy_js_1 = require("./hull/voice/elevenlabsProxy.js");
 const ws_1 = require("ws");
 const smsStore_js_1 = require("./core/smsStore.js");
 const inboundReplyHelper_js_1 = require("./app/inboundReplyHelper.js");
@@ -7567,6 +7568,10 @@ hullWss.on("connection", (ws) => {
     (0, index_js_22.registerHullWs)(ws);
 });
 httpServer.on("upgrade", (request, socket, head) => {
+    // Harvey STT: ElevenLabs Scribe v2 realtime is the primary engine; Deepgram
+    // Flux is kept as a fallback path (still functional if hit directly).
+    if ((0, elevenlabsProxy_js_1.handleElevenLabsUpgrade)(request, socket, head, dashboardTokenOkIncoming))
+        return;
     if ((0, deepgramProxy_js_1.handleDeepgramUpgrade)(request, socket, head, dashboardTokenOkIncoming))
         return;
     const url = request.url || "";
@@ -7629,11 +7634,17 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     catch (err) {
         console.error("[hull] init failed:", err);
     }
-    if (!process.env.DEEPGRAM_API_KEY?.trim()) {
-        console.warn("[Harvey] DEEPGRAM_API_KEY not set — Flux voice STT will not work");
+    if (!process.env.ELEVENLABS_API_KEY?.trim()) {
+        console.warn("[Harvey] ELEVENLABS_API_KEY not set — Scribe v2 Realtime STT will not work");
     }
     else {
-        console.log("[Harvey] DEEPGRAM_API_KEY configured — Flux STT ready");
+        console.log("[Harvey] ELEVENLABS_API_KEY configured — Scribe v2 Realtime STT ready");
+    }
+    if (!process.env.DEEPGRAM_API_KEY?.trim()) {
+        console.warn("[Harvey] DEEPGRAM_API_KEY not set — Deepgram Flux STT fallback unavailable");
+    }
+    else {
+        console.log("[Harvey] DEEPGRAM_API_KEY configured — Flux STT fallback ready");
     }
     if (!geminiApiKey()) {
         console.warn("[Harvey] GEMINI_API_KEY not set — Gemini TTS will not work");
@@ -7665,7 +7676,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
     console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
     console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_21.getHarveyModel)()})`);
-    console.log(`Harvey voice STT: WS   http://localhost:${PORT}/api/jarvis/deepgram/listen`);
+    console.log(`Harvey voice STT: WS   http://localhost:${PORT}/api/jarvis/elevenlabs/listen (fallback: /api/jarvis/deepgram/listen)`);
     console.log(`Harvey voice TTS: POST http://localhost:${PORT}/api/jarvis/voice`);
     console.log(`Neural Map: GET http://localhost:${PORT}/memory`);
     console.log(`Harvey market intel: POST http://localhost:${PORT}/api/jarvis/market-intel`);

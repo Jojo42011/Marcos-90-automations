@@ -1,5 +1,8 @@
 /**
- * Aethon Intelligence voice — Deepgram Flux STT + Claude + Gemini TTS
+ * Aethon Intelligence voice — ElevenLabs Scribe v2 Realtime STT + Claude + Gemini TTS
+ * (STT flows through the server proxy at /api/jarvis/elevenlabs/listen, which
+ *  translates ElevenLabs messages into this client's turn contract — so the VAD
+ *  and barge-in logic below are STT-vendor-agnostic and unchanged.)
  */
 (function () {
   // Barge-in sensitivity. RMS computed on Float32 mic input × 100 (0–100 scale).
@@ -174,7 +177,7 @@
 
   function pauseMicCapture() {
     // Keep the audio node connected so the RMS monitor can still detect barge-in
-    // while Harvey speaks. micSending=false stops Deepgram transcription (so Harvey
+    // while Harvey speaks. micSending=false stops STT transcription (so Harvey
     // is never transcribed), but the processor keeps running for local RMS analysis.
     micCaptureActive = false;
     micSending = false;
@@ -254,7 +257,7 @@
     }
   }
 
-  function handleDeepgramMessage(raw) {
+  function handleSttMessage(raw) {
     let msg;
     try {
       msg = typeof raw === "string" ? JSON.parse(raw) : JSON.parse(new TextDecoder().decode(raw));
@@ -564,7 +567,7 @@
     listening = true;
     sessionReady = false;
 
-    const u = new URL("/api/jarvis/deepgram/listen", window.location.origin);
+    const u = new URL("/api/jarvis/elevenlabs/listen", window.location.origin);
     const t = getToken();
     if (t) u.searchParams.set("token", t);
     const wsUrl = u.toString().replace(/^http/, "ws");
@@ -574,11 +577,11 @@
 
     // Register message handler BEFORE onopen — Connected can arrive immediately.
     sttWs.onmessage = (ev) => {
-      handleDeepgramMessage(ev.data);
+      handleSttMessage(ev.data);
     };
 
     sttWs.onerror = () => {
-      showVoiceError("Deepgram WebSocket error — check DEEPGRAM_API_KEY");
+      showVoiceError("STT WebSocket error — check ELEVENLABS_API_KEY");
       setHarveyStatus("ERROR");
     };
 
