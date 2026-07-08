@@ -468,6 +468,11 @@ export function getContentDb(): Database.Database {
         session_id TEXT,
         processed_at TEXT
       );
+      CREATE TABLE IF NOT EXISTS cm_drive_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        last_poll_at TEXT,
+        last_pull_date TEXT
+      );
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
         tiktok_handle TEXT UNIQUE,
@@ -1397,6 +1402,44 @@ export function markDriveFileProcessed(fileId: string, name: string, sessionId: 
 export function countDriveProcessed(): number {
   const row = getContentDb().prepare(`SELECT COUNT(*) AS c FROM cm_drive_processed`).get() as { c: number };
   return Number(row.c) || 0;
+}
+
+export function listDriveProcessed(): Array<{ fileId: string; name: string; processedAt: string }> {
+  const rows = getContentDb()
+    .prepare(`SELECT file_id, name, processed_at FROM cm_drive_processed ORDER BY processed_at ASC`)
+    .all() as Array<Record<string, unknown>>;
+  return rows.map((r) => ({
+    fileId: String(r.file_id),
+    name: String(r.name ?? ""),
+    processedAt: String(r.processed_at ?? ""),
+  }));
+}
+
+/* Drive poller state (survives restarts): last poll time + last calendar day a
+ * file was actually pulled (drives the one-per-day throttle). */
+export function getDriveState(): { lastPollAt: string | null; lastPullDate: string | null } {
+  const row = getContentDb().prepare(`SELECT last_poll_at, last_pull_date FROM cm_drive_state WHERE id = 1`).get() as
+    | { last_poll_at: string | null; last_pull_date: string | null }
+    | undefined;
+  return { lastPollAt: row?.last_poll_at ?? null, lastPullDate: row?.last_pull_date ?? null };
+}
+
+export function setDriveLastPollAt(iso: string): void {
+  getContentDb()
+    .prepare(
+      `INSERT INTO cm_drive_state (id, last_poll_at) VALUES (1, ?)
+       ON CONFLICT(id) DO UPDATE SET last_poll_at = excluded.last_poll_at`,
+    )
+    .run(iso);
+}
+
+export function setDriveLastPullDate(day: string): void {
+  getContentDb()
+    .prepare(
+      `INSERT INTO cm_drive_state (id, last_pull_date) VALUES (1, ?)
+       ON CONFLICT(id) DO UPDATE SET last_pull_date = excluded.last_pull_date`,
+    )
+    .run(day);
 }
 
 /* ── Per-clip edit-chat history ── */

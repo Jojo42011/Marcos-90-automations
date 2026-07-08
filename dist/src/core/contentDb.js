@@ -23,6 +23,10 @@ exports.listClipVersionFileRefs = listClipVersionFileRefs;
 exports.isDriveFileProcessed = isDriveFileProcessed;
 exports.markDriveFileProcessed = markDriveFileProcessed;
 exports.countDriveProcessed = countDriveProcessed;
+exports.listDriveProcessed = listDriveProcessed;
+exports.getDriveState = getDriveState;
+exports.setDriveLastPollAt = setDriveLastPollAt;
+exports.setDriveLastPullDate = setDriveLastPullDate;
 exports.insertClipChatMessage = insertClipChatMessage;
 exports.listClipChatMessages = listClipChatMessages;
 exports.listContentVideos = listContentVideos;
@@ -522,6 +526,11 @@ function getContentDb() {
         name TEXT,
         session_id TEXT,
         processed_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_drive_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        last_poll_at TEXT,
+        last_pull_date TEXT
       );
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
@@ -1271,6 +1280,34 @@ function markDriveFileProcessed(fileId, name, sessionId) {
 function countDriveProcessed() {
     const row = getContentDb().prepare(`SELECT COUNT(*) AS c FROM cm_drive_processed`).get();
     return Number(row.c) || 0;
+}
+function listDriveProcessed() {
+    const rows = getContentDb()
+        .prepare(`SELECT file_id, name, processed_at FROM cm_drive_processed ORDER BY processed_at ASC`)
+        .all();
+    return rows.map((r) => ({
+        fileId: String(r.file_id),
+        name: String(r.name ?? ""),
+        processedAt: String(r.processed_at ?? ""),
+    }));
+}
+/* Drive poller state (survives restarts): last poll time + last calendar day a
+ * file was actually pulled (drives the one-per-day throttle). */
+function getDriveState() {
+    const row = getContentDb().prepare(`SELECT last_poll_at, last_pull_date FROM cm_drive_state WHERE id = 1`).get();
+    return { lastPollAt: row?.last_poll_at ?? null, lastPullDate: row?.last_pull_date ?? null };
+}
+function setDriveLastPollAt(iso) {
+    getContentDb()
+        .prepare(`INSERT INTO cm_drive_state (id, last_poll_at) VALUES (1, ?)
+       ON CONFLICT(id) DO UPDATE SET last_poll_at = excluded.last_poll_at`)
+        .run(iso);
+}
+function setDriveLastPullDate(day) {
+    getContentDb()
+        .prepare(`INSERT INTO cm_drive_state (id, last_pull_date) VALUES (1, ?)
+       ON CONFLICT(id) DO UPDATE SET last_pull_date = excluded.last_pull_date`)
+        .run(day);
 }
 /* ── Per-clip edit-chat history ── */
 function insertClipChatMessage(clipId, role, content) {

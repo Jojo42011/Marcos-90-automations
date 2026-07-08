@@ -5650,8 +5650,11 @@ app.post("/api/content/drive/poll", express.json(), (req, res) => {
     res.status(400).json({ error: "Google Drive not connected — set the GOOGLE_DRIVE_CREDENTIALS secret." });
     return;
   }
-  void pollGoogleDrive().catch((err) => console.error("[drive-pull] manual poll failed:", err));
-  res.json({ ok: true, message: "Drive poll started — new videos will appear in the Review Queue shortly." });
+  // Manual "poll now" forces a single pull (bypasses the once-a-day throttle) so
+  // setup/testing doesn't have to wait for the daily slot. Still only ONE file
+  // (the oldest unprocessed), never re-processing anything already done.
+  void pollGoogleDrive({ force: true }).catch((err) => console.error("[drive-pull] manual poll failed:", err));
+  res.json({ ok: true, message: "Pulling the oldest unprocessed video now — it'll appear in the Review Queue shortly." });
 });
 
 app.get("/api/content/calendar/day/:date", (req, res) => {

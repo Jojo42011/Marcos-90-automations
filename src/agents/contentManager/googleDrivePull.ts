@@ -26,7 +26,16 @@ import { GoogleAuth } from "google-auth-library";
 import { getFreeDiskMB } from "../../core/diskCleanup.js";
 import { ingestContent } from "./ingest.js";
 import { repurposeSession } from "./repurpose.js";
-import { isDriveFileProcessed, markDriveFileProcessed, countDriveProcessed } from "../../core/contentDb.js";
+import {
+  isDriveFileProcessed,
+  markDriveFileProcessed,
+  countDriveProcessed,
+  listDriveProcessed,
+  getDriveState,
+  setDriveLastPollAt,
+  setDriveLastPullDate,
+  todayDateCst,
+} from "../../core/contentDb.js";
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
 const DEFAULT_FOLDER_ID = "1SQMevfe1HKLhRaqzGBg-ZN7LbQzEBV92";
@@ -56,30 +65,68 @@ interface DriveStatus {
   connected: boolean;
   folderAccessible: boolean;
   lastPollAt: string | null;
+  lastPullDate: string | null; // calendar day (CST) a file was last actually pulled
   lastError: string | null;
   known: number; // video files currently visible in the folder
   processed: number; // total pulled + handed off so far
+  pending: number; // detected in folder but not yet pulled
+  pulledToday: boolean; // whether the one-per-day pull already happened today
+  processedFiles?: Array<{ fileId: string; name: string; processedAt: string }>;
 }
 
-const status: DriveStatus = {
-  configured: false,
+// Health/connectivity of the last cycle (in-memory); poll/pull timestamps and the
+// processed set are read from the DB so they survive restarts.
+const runtime = {
   connected: false,
   folderAccessible: false,
-  lastPollAt: null,
-  lastError: null,
+  lastError: null as string | null,
   known: 0,
-  processed: 0,
 };
 
 export function getDriveStatus(): DriveStatus {
-  return { ...status, configured: driveConfigured(), processed: safeCount() };
+  const persisted = safeState();
+  const today = safeToday();
+  return {
+    configured: driveConfigured(),
+    connected: runtime.connected,
+    folderAccessible: runtime.folderAccessible,
+    lastPollAt: persisted.lastPollAt,
+    lastPullDate: persisted.lastPullDate,
+    lastError: runtime.lastError,
+    known: runtime.known,
+    processed: safeCount(),
+    pending: Math.max(0, runtime.known - safeCount()),
+    pulledToday: Boolean(persisted.lastPullDate && persisted.lastPullDate === today),
+    processedFiles: safeProcessedList(),
+  };
 }
 
 function safeCount(): number {
   try {
     return countDriveProcessed();
   } catch {
-    return status.processed;
+    return 0;
+  }
+}
+function safeState(): { lastPollAt: string | null; lastPullDate: string | null } {
+  try {
+    return getDriveState();
+  } catch {
+    return { lastPollAt: null, lastPullDate: null };
+  }
+}
+function safeProcessedList(): Array<{ fileId: string; name: string; processedAt: string }> {
+  try {
+    return listDriveProcessed();
+  } catch {
+    return [];
+  }
+}
+function safeToday(): string {
+  try {
+    return todayDateCst();
+  } catch {
+    return "";
   }
 }
 
@@ -105,6 +152,7 @@ interface DriveFile {
   name: string;
   mimeType: string;
   size: number; // bytes (0 if Drive didn't report it)
+  createdTime: string; // RFC3339 — used to sort oldest-first
 }
 
 async function listVideoFiles(token: string): Promise<DriveFile[]> {
@@ -112,7 +160,7 @@ async function listVideoFiles(token: string): Promise<DriveFile[]> {
   const url =
     `https://www.googleapis.com/drive/v3/files?` +
     `q=${encodeURIComponent(q)}` +
-    `&fields=${encodeURIComponent("files(id,name,mimeType,size)")}` +
+    `&fields=${encodeURIComponent("files(id,name,mimeType,size,createdTime)")}` +
     `&pageSize=1000&orderBy=createdTime` +
     `&supportsAllDrives=true&includeItemsFromAllDrives=true`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -121,12 +169,16 @@ async function listVideoFiles(token: string): Promise<DriveFile[]> {
     throw new Error(`Drive files.list failed (HTTP ${res.status}): ${body.slice(0, 300)}`);
   }
   const data = (await res.json()) as { files?: Array<Record<string, unknown>> };
-  return (data.files || []).map((f) => ({
+  const files = (data.files || []).map((f) => ({
     id: String(f.id),
     name: String(f.name || f.id),
     mimeType: String(f.mimeType || ""),
     size: Number(f.size) || 0,
+    createdTime: String(f.createdTime || ""),
   }));
+  // Sort oldest-first by real Drive creation time — never rely on API order.
+  files.sort((a, b) => a.createdTime.localeCompare(b.createdTime));
+  return files;
 }
 
 function uploadDir(): string {
@@ -154,42 +206,74 @@ async function downloadFile(fileId: string, token: string, destPath: string): Pr
   await pipeline(Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]), fs.createWriteStream(destPath));
 }
 
+let pollInFlight = false;
+
 /**
- * One poll cycle. Never throws — records the outcome in `status` and logs. A
- * single bad file is isolated and the rest of the cycle continues.
+ * One poll cycle. Checks the folder (cheap, every 30 min) but PULLS at most ONE
+ * file per calendar day — the oldest unprocessed video by Drive creation time.
+ * Never throws; a bad file is isolated. `force` (manual "poll now") bypasses the
+ * once-a-day throttle to pull the single oldest file immediately for testing.
+ * last_poll_at is recorded on EVERY cycle, whether or not a file was pulled.
  */
-export async function pollGoogleDrive(): Promise<void> {
-  if (!driveConfigured()) {
-    status.configured = false;
-    status.connected = false;
-    status.folderAccessible = false;
-    status.lastError = "GOOGLE_DRIVE_CREDENTIALS not set or invalid JSON";
+export async function pollGoogleDrive(opts?: { force?: boolean }): Promise<void> {
+  const force = Boolean(opts?.force);
+  if (pollInFlight) {
+    console.log("[drive-pull] a poll is already running — skipping this tick");
     return;
   }
-  status.configured = true;
-
-  let token: string;
-  let files: DriveFile[];
+  pollInFlight = true;
+  const stampPoll = () => {
+    try {
+      setDriveLastPollAt(new Date().toISOString());
+    } catch {
+      /* ignore */
+    }
+  };
   try {
-    token = await accessToken();
-    files = await listVideoFiles(token);
-    status.connected = true;
-    status.folderAccessible = true;
-    status.known = files.length;
-    status.lastError = null;
-  } catch (err) {
-    status.connected = false;
-    status.folderAccessible = false;
-    status.lastError = err instanceof Error ? err.message : String(err);
-    status.lastPollAt = new Date().toISOString();
-    console.warn(`[drive-pull] poll failed (auth/list): ${status.lastError}`);
-    return;
-  }
+    if (!driveConfigured()) {
+      runtime.connected = false;
+      runtime.folderAccessible = false;
+      runtime.lastError = "GOOGLE_DRIVE_CREDENTIALS not set or invalid JSON";
+      return; // not configured — nothing to stamp
+    }
 
-  const fresh = files.filter((f) => !isDriveFileProcessed(f.id));
-  if (fresh.length) console.log(`[drive-pull] ${files.length} video(s) in folder, ${fresh.length} new`);
+    let token: string;
+    let files: DriveFile[];
+    try {
+      token = await accessToken();
+      files = await listVideoFiles(token);
+      runtime.connected = true;
+      runtime.folderAccessible = true;
+      runtime.known = files.length;
+      runtime.lastError = null;
+    } catch (err) {
+      runtime.connected = false;
+      runtime.folderAccessible = false;
+      runtime.lastError = err instanceof Error ? err.message : String(err);
+      console.warn(`[drive-pull] poll failed (auth/list): ${runtime.lastError}`);
+      stampPoll();
+      return;
+    }
 
-  for (const file of fresh) {
+    // Oldest unprocessed first (listVideoFiles already sorts by createdTime).
+    const fresh = files.filter((f) => !isDriveFileProcessed(f.id));
+
+    // One-per-day throttle: if a file was already pulled today, only check —
+    // don't pull again (unless this is a forced manual poll).
+    const today = todayDateCst();
+    const lastPullDate = safeState().lastPullDate;
+    if (!force && lastPullDate === today) {
+      console.log(`[drive-pull] already pulled a file today (${today}); ${fresh.length} still queued for the coming days`);
+      stampPoll();
+      return;
+    }
+
+    if (!fresh.length) {
+      stampPoll();
+      return;
+    }
+
+    const file = fresh[0]; // the single oldest unprocessed video
     try {
       // Disk pre-flight — same reserve the manual upload flow uses.
       const fileMB = Math.ceil((file.size || 0) / (1024 * 1024));
@@ -197,15 +281,17 @@ export async function pollGoogleDrive(): Promise<void> {
       const freeMB = await getFreeDiskMB();
       if (Number.isFinite(freeMB) && freeMB < neededMB) {
         console.warn(
-          `[drive-pull] Skipping "${file.name}" this cycle — need ~${neededMB}MB, ${freeMB}MB free. Will retry next poll.`,
+          `[drive-pull] Skipping "${file.name}" — need ~${neededMB}MB, ${freeMB}MB free. Will retry next cycle (day not consumed).`,
         );
-        continue; // NOT marked processed — retried next cycle
+        stampPoll();
+        return; // NOT marked processed and day NOT consumed — retried next cycle
       }
 
       const dest = path.join(uploadDir(), safeName(file.name));
       await downloadFile(file.id, token, dest);
 
-      // Feed into the EXACT same entry point as a manual upload.
+      // Feed into the EXACT same entry point as a manual upload → OpenShorts →
+      // Review Queue (fully automatic; only the final approve/reject is manual).
       const session = await ingestContent({
         type: "video",
         path: dest,
@@ -214,15 +300,17 @@ export async function pollGoogleDrive(): Promise<void> {
       await repurposeSession(session.id);
 
       markDriveFileProcessed(file.id, file.name, session.id);
-      console.log(`[drive-pull] pulled "${file.name}" → session ${session.id} (Review Queue)`);
+      setDriveLastPullDate(today); // consume today's one-per-day slot only on success
+      console.log(`[drive-pull] pulled oldest "${file.name}" → session ${session.id} (Review Queue). ${fresh.length - 1} remaining.`);
     } catch (err) {
-      // Isolate this file; keep going. It stays unprocessed so a later cycle retries.
+      // Isolate the failure; day NOT consumed so the next cycle retries this file.
       console.error(`[drive-pull] file "${file.name}" (${file.id}) failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-  }
 
-  status.processed = safeCount();
-  status.lastPollAt = new Date().toISOString();
+    stampPoll();
+  } finally {
+    pollInFlight = false;
+  }
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
