@@ -888,6 +888,23 @@ def _replace_audio(input_video: str, audio_file: str, output_path: str) -> str:
     return output_path
 
 
+def _load_caption_lines(abs_clip: str) -> list:
+    """Best-effort read of a clip's persisted editable caption lines
+    (<base>_base.lines.json). Used so pause classification can tell a
+    sentence-final dramatic beat from a mid-sentence stumble. Returns []
+    if the clip predates caption persistence or anything goes wrong."""
+    try:
+        stem = re.sub(r"_(edit|trim)_[0-9a-f]+$", "", Path(abs_clip).stem)
+        stem = re.sub(r"_(captioned|vertical)$", "", stem)
+        lines_path = Path(abs_clip).parent / f"{stem}_base.lines.json"
+        if lines_path.is_file():
+            data = json.loads(lines_path.read_text())
+            return data if isinstance(data, list) else []
+    except Exception as err:  # noqa: BLE001
+        print(f"[edit] could not read caption lines for {os.path.basename(abs_clip)}: {err}")
+    return []
+
+
 def _apply_visual_pass(input_path: str, output_path: str, filtergraph: str) -> str:
     """Apply a Phase-2 visual filtergraph (colour correct + zoom/punch-in) in one
     re-encode. Audio is stream-copied so A/V sync is untouched; the same
@@ -1058,8 +1075,11 @@ async def edit_clip(
                 pauses = audio_features_marco.detect_pauses(
                     render_source, noise_db=noise_db, min_silence_s=min(max_gap, 0.45)
                 )
+                # Prefer the caption lines being edited; otherwise fall back to the
+                # clip's persisted lines so dramatic pauses are still recognised.
+                classify_lines = edit_captions if edit_captions is not None else _load_caption_lines(abs_clip)
                 classified = edit_effects_marco.classify_pauses(
-                    pauses, edit_captions or [], max_keep_gap=max_gap
+                    pauses, classify_lines, max_keep_gap=max_gap
                 )
                 auto_cuts = edit_effects_marco.deadair_cuts_from_pauses(
                     classified["cut"], t_start, t_end
@@ -1247,18 +1267,7 @@ async def suggest_cuts(
 
     # Reuse the persisted editable caption lines if this clip has them, so pause
     # classification can tell a mid-sentence stumble from a sentence-final beat.
-    lines: list = []
-    try:
-        stem = re.sub(r"_(edit|trim)_[0-9a-f]+$", "", Path(abs_clip).stem)
-        stem = re.sub(r"_(captioned|vertical)$", "", stem)
-        lines_path = Path(abs_clip).parent / f"{stem}_base.lines.json"
-        if lines_path.is_file():
-            lines = json.loads(lines_path.read_text())
-            if not isinstance(lines, list):
-                lines = []
-    except Exception as lines_err:  # noqa: BLE001
-        print(f"[edit] suggest-cuts could not read caption lines: {lines_err}")
-        lines = []
+    lines = _load_caption_lines(abs_clip)
 
     if not _PROCESS_SLOT.acquire(timeout=_TRIM_SLOT_WAIT_S):
         raise HTTPException(status_code=503, detail="Video processor busy with another job — try again shortly")
