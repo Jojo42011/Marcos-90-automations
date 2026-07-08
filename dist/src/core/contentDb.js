@@ -24,6 +24,11 @@ exports.isDriveFileProcessed = isDriveFileProcessed;
 exports.markDriveFileProcessed = markDriveFileProcessed;
 exports.countDriveProcessed = countDriveProcessed;
 exports.listDriveProcessed = listDriveProcessed;
+exports.getDriveFailure = getDriveFailure;
+exports.isDriveFileQuarantined = isDriveFileQuarantined;
+exports.recordDriveFileFailure = recordDriveFileFailure;
+exports.clearDriveFileFailure = clearDriveFileFailure;
+exports.listDriveFailures = listDriveFailures;
 exports.getDriveState = getDriveState;
 exports.setDriveLastPollAt = setDriveLastPollAt;
 exports.setDriveLastPullDate = setDriveLastPullDate;
@@ -531,6 +536,15 @@ function getContentDb() {
         id INTEGER PRIMARY KEY CHECK (id = 1),
         last_poll_at TEXT,
         last_pull_date TEXT
+      );
+      CREATE TABLE IF NOT EXISTS cm_drive_failed (
+        file_id TEXT PRIMARY KEY,
+        name TEXT,
+        attempts INTEGER DEFAULT 0,
+        last_error TEXT,
+        quarantined INTEGER DEFAULT 0,
+        first_failed_at TEXT,
+        last_failed_at TEXT
       );
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
@@ -1289,6 +1303,65 @@ function listDriveProcessed() {
         fileId: String(r.file_id),
         name: String(r.name ?? ""),
         processedAt: String(r.processed_at ?? ""),
+    }));
+}
+function getDriveFailure(fileId) {
+    const row = getContentDb()
+        .prepare(`SELECT * FROM cm_drive_failed WHERE file_id = ?`)
+        .get(fileId);
+    if (!row)
+        return null;
+    return {
+        fileId: String(row.file_id),
+        name: String(row.name ?? ""),
+        attempts: Number(row.attempts) || 0,
+        lastError: row.last_error ?? null,
+        quarantined: Boolean(row.quarantined),
+        firstFailedAt: row.first_failed_at ?? null,
+        lastFailedAt: row.last_failed_at ?? null,
+    };
+}
+function isDriveFileQuarantined(fileId) {
+    const row = getContentDb()
+        .prepare(`SELECT 1 FROM cm_drive_failed WHERE file_id = ? AND quarantined = 1`)
+        .get(fileId);
+    return Boolean(row);
+}
+/** Record a failed pull attempt; increments the attempt count and sets the
+ * quarantine flag when asked (a permanent content failure, or too many tries).
+ * Returns the new attempt count. */
+function recordDriveFileFailure(fileId, name, error, quarantine) {
+    const now = new Date().toISOString();
+    const existing = getDriveFailure(fileId);
+    const attempts = (existing?.attempts ?? 0) + 1;
+    getContentDb()
+        .prepare(`INSERT INTO cm_drive_failed (file_id, name, attempts, last_error, quarantined, first_failed_at, last_failed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(file_id) DO UPDATE SET
+         name = excluded.name,
+         attempts = excluded.attempts,
+         last_error = excluded.last_error,
+         quarantined = MAX(cm_drive_failed.quarantined, excluded.quarantined),
+         last_failed_at = excluded.last_failed_at`)
+        .run(fileId, name, attempts, error, quarantine ? 1 : 0, existing?.firstFailedAt ?? now, now);
+    return attempts;
+}
+/** Clear any failure record for a file (called when it finally succeeds). */
+function clearDriveFileFailure(fileId) {
+    getContentDb().prepare(`DELETE FROM cm_drive_failed WHERE file_id = ?`).run(fileId);
+}
+function listDriveFailures() {
+    const rows = getContentDb()
+        .prepare(`SELECT * FROM cm_drive_failed ORDER BY last_failed_at DESC`)
+        .all();
+    return rows.map((row) => ({
+        fileId: String(row.file_id),
+        name: String(row.name ?? ""),
+        attempts: Number(row.attempts) || 0,
+        lastError: row.last_error ?? null,
+        quarantined: Boolean(row.quarantined),
+        firstFailedAt: row.first_failed_at ?? null,
+        lastFailedAt: row.last_failed_at ?? null,
     }));
 }
 /* Drive poller state (survives restarts): last poll time + last calendar day a

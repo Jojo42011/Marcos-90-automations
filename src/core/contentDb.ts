@@ -473,6 +473,15 @@ export function getContentDb(): Database.Database {
         last_poll_at TEXT,
         last_pull_date TEXT
       );
+      CREATE TABLE IF NOT EXISTS cm_drive_failed (
+        file_id TEXT PRIMARY KEY,
+        name TEXT,
+        attempts INTEGER DEFAULT 0,
+        last_error TEXT,
+        quarantined INTEGER DEFAULT 0,
+        first_failed_at TEXT,
+        last_failed_at TEXT
+      );
       CREATE TABLE IF NOT EXISTS cm_competitor_profiles (
         id TEXT PRIMARY KEY,
         tiktok_handle TEXT UNIQUE,
@@ -1412,6 +1421,91 @@ export function listDriveProcessed(): Array<{ fileId: string; name: string; proc
     fileId: String(r.file_id),
     name: String(r.name ?? ""),
     processedAt: String(r.processed_at ?? ""),
+  }));
+}
+
+/* ── Google Drive auto-pull: failed / quarantined files ──────────────────────
+ * A file that keeps failing downstream (e.g. OpenShorts judges it unclippable)
+ * must not block every file behind it forever. We track attempts + the last
+ * error, and once a file is quarantined the poller skips it so the queue always
+ * advances. Cleared automatically if the file later succeeds. */
+export interface DriveFailure {
+  fileId: string;
+  name: string;
+  attempts: number;
+  lastError: string | null;
+  quarantined: boolean;
+  firstFailedAt: string | null;
+  lastFailedAt: string | null;
+}
+
+export function getDriveFailure(fileId: string): DriveFailure | null {
+  const row = getContentDb()
+    .prepare(`SELECT * FROM cm_drive_failed WHERE file_id = ?`)
+    .get(fileId) as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    fileId: String(row.file_id),
+    name: String(row.name ?? ""),
+    attempts: Number(row.attempts) || 0,
+    lastError: (row.last_error as string) ?? null,
+    quarantined: Boolean(row.quarantined),
+    firstFailedAt: (row.first_failed_at as string) ?? null,
+    lastFailedAt: (row.last_failed_at as string) ?? null,
+  };
+}
+
+export function isDriveFileQuarantined(fileId: string): boolean {
+  const row = getContentDb()
+    .prepare(`SELECT 1 FROM cm_drive_failed WHERE file_id = ? AND quarantined = 1`)
+    .get(fileId);
+  return Boolean(row);
+}
+
+/** Record a failed pull attempt; increments the attempt count and sets the
+ * quarantine flag when asked (a permanent content failure, or too many tries).
+ * Returns the new attempt count. */
+export function recordDriveFileFailure(
+  fileId: string,
+  name: string,
+  error: string,
+  quarantine: boolean,
+): number {
+  const now = new Date().toISOString();
+  const existing = getDriveFailure(fileId);
+  const attempts = (existing?.attempts ?? 0) + 1;
+  getContentDb()
+    .prepare(
+      `INSERT INTO cm_drive_failed (file_id, name, attempts, last_error, quarantined, first_failed_at, last_failed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(file_id) DO UPDATE SET
+         name = excluded.name,
+         attempts = excluded.attempts,
+         last_error = excluded.last_error,
+         quarantined = MAX(cm_drive_failed.quarantined, excluded.quarantined),
+         last_failed_at = excluded.last_failed_at`,
+    )
+    .run(fileId, name, attempts, error, quarantine ? 1 : 0, existing?.firstFailedAt ?? now, now);
+  return attempts;
+}
+
+/** Clear any failure record for a file (called when it finally succeeds). */
+export function clearDriveFileFailure(fileId: string): void {
+  getContentDb().prepare(`DELETE FROM cm_drive_failed WHERE file_id = ?`).run(fileId);
+}
+
+export function listDriveFailures(): DriveFailure[] {
+  const rows = getContentDb()
+    .prepare(`SELECT * FROM cm_drive_failed ORDER BY last_failed_at DESC`)
+    .all() as Array<Record<string, unknown>>;
+  return rows.map((row) => ({
+    fileId: String(row.file_id),
+    name: String(row.name ?? ""),
+    attempts: Number(row.attempts) || 0,
+    lastError: (row.last_error as string) ?? null,
+    quarantined: Boolean(row.quarantined),
+    firstFailedAt: (row.first_failed_at as string) ?? null,
+    lastFailedAt: (row.last_failed_at as string) ?? null,
   }));
 }
 

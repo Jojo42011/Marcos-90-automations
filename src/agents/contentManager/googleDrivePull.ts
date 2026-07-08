@@ -16,7 +16,12 @@
  *    fetch calls — matching this codebase's style and keeping the image lean.
  *  - Processed Drive file IDs are persisted (cm_drive_processed) so a file is
  *    never pulled twice, even across restarts.
- *  - Per-file failures are isolated; one bad file never blocks the cycle.
+ *  - Per-file failures are isolated AND quarantined: because we pull the single
+ *    oldest unprocessed file per day, a file that fails downstream every time
+ *    (e.g. OpenShorts judges it unclippable) would otherwise be retried forever
+ *    and block every file behind it. Failures are tracked in cm_drive_failed;
+ *    a permanent content failure quarantines on the first hit, a transient one
+ *    after a few attempts, so the queue always advances to the next file.
  */
 import fs from "fs";
 import path from "path";
@@ -34,6 +39,11 @@ import {
   getDriveState,
   setDriveLastPollAt,
   setDriveLastPullDate,
+  isDriveFileQuarantined,
+  recordDriveFileFailure,
+  clearDriveFileFailure,
+  getDriveFailure,
+  listDriveFailures,
   todayDateCst,
 } from "../../core/contentDb.js";
 
@@ -44,6 +54,29 @@ const STARTUP_DELAY_MS = 90 * 1000; // let the server settle before the first po
 // Headroom mirrors the manual upload flow (UPLOAD_PROCESSING_HEADROOM_MB = 500):
 // reserve space for the source file, its clips, and processing scratch.
 const PROCESSING_HEADROOM_MB = 500;
+// A transient failure (sidecar restarting, brief network/disk blip) is retried
+// this many times before the file is quarantined. A PERMANENT content failure
+// (the video has no usable speech, or the AI finds no viable clip) is quarantined
+// on the first hit — retrying it daily forever would just block every file behind
+// it (which is exactly what left the queue stuck at 5/8).
+const MAX_TRANSIENT_ATTEMPTS = 3;
+
+/** True when the failure is a content outcome that WILL recur on every retry, so
+ * the file should be skipped rather than retried forever. These strings are the
+ * sidecar's own user-facing failure messages (see main_marco / app_marco). */
+function isPermanentContentFailure(msg: string): boolean {
+  const m = (msg || "").toLowerCase();
+  return (
+    m.includes("no usable speech") ||
+    m.includes("no viable clip") ||
+    m.includes("found no viable") ||
+    m.includes("returned no clips") ||
+    m.includes("no usable clips") ||
+    m.includes("produced no usable speech") ||
+    m.includes("could not be read") || // unreadable/corrupt source (ffprobe failed)
+    m.includes("no readable output")
+  );
+}
 
 function folderId(): string {
   return process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || DEFAULT_FOLDER_ID;
@@ -75,7 +108,16 @@ interface DriveStatus {
   lastPullFile: string | null; // file the last attempt targeted
   lastPullError: string | null; // real error from the last failed pull (download/ingest/clip)
   lastAttemptAt: string | null; // when the last pull attempt ran
+  quarantined: number; // files skipped because they keep failing downstream
   processedFiles?: Array<{ fileId: string; name: string; processedAt: string }>;
+  failedFiles?: Array<{
+    fileId: string;
+    name: string;
+    attempts: number;
+    lastError: string | null;
+    quarantined: boolean;
+    lastFailedAt: string | null;
+  }>;
 }
 
 // Health/connectivity of the last cycle (in-memory); poll/pull timestamps and the
@@ -94,6 +136,11 @@ const runtime = {
 export function getDriveStatus(): DriveStatus {
   const persisted = safeState();
   const today = safeToday();
+  const failures = safeFailures();
+  const quarantinedCount = failures.filter((f) => f.quarantined).length;
+  const processed = safeCount();
+  // Pending excludes quarantined files — they are no longer waiting to be pulled.
+  const pending = Math.max(0, runtime.known - processed - quarantinedCount);
   return {
     configured: driveConfigured(),
     connected: runtime.connected,
@@ -102,14 +149,23 @@ export function getDriveStatus(): DriveStatus {
     lastPullDate: persisted.lastPullDate,
     lastError: runtime.lastError,
     known: runtime.known,
-    processed: safeCount(),
-    pending: Math.max(0, runtime.known - safeCount()),
+    processed,
+    pending,
     pulledToday: Boolean(persisted.lastPullDate && persisted.lastPullDate === today),
     lastPullResult: runtime.lastPullResult,
     lastPullFile: runtime.lastPullFile,
     lastPullError: runtime.lastPullError,
     lastAttemptAt: runtime.lastAttemptAt,
+    quarantined: quarantinedCount,
     processedFiles: safeProcessedList(),
+    failedFiles: failures.map((f) => ({
+      fileId: f.fileId,
+      name: f.name,
+      attempts: f.attempts,
+      lastError: f.lastError,
+      quarantined: f.quarantined,
+      lastFailedAt: f.lastFailedAt,
+    })),
   };
 }
 
@@ -139,6 +195,13 @@ function safeToday(): string {
     return todayDateCst();
   } catch {
     return "";
+  }
+}
+function safeFailures(): ReturnType<typeof listDriveFailures> {
+  try {
+    return listDriveFailures();
+  } catch {
+    return [];
   }
 }
 
@@ -268,7 +331,11 @@ export async function pollGoogleDrive(opts?: { force?: boolean }): Promise<void>
     }
 
     // Oldest unprocessed first (listVideoFiles already sorts by createdTime).
-    const fresh = files.filter((f) => !isDriveFileProcessed(f.id));
+    // Quarantined files (permanently failing / poison) are skipped so the queue
+    // always advances to the next pullable file instead of retrying the same one.
+    const fresh = files.filter(
+      (f) => !isDriveFileProcessed(f.id) && !isDriveFileQuarantined(f.id),
+    );
 
     // One-per-day throttle: if a file was already pulled today, only check —
     // don't pull again (unless this is a forced manual poll).
@@ -315,17 +382,34 @@ export async function pollGoogleDrive(opts?: { force?: boolean }): Promise<void>
       await repurposeSession(session.id);
 
       markDriveFileProcessed(file.id, file.name, session.id);
+      clearDriveFileFailure(file.id); // clear any earlier transient-failure record
       setDriveLastPullDate(today); // consume today's one-per-day slot only on success
       runtime.lastPullResult = "success";
       runtime.lastPullError = null;
       console.log(`[drive-pull] pulled oldest "${file.name}" → session ${session.id} (Review Queue). ${fresh.length - 1} remaining.`);
     } catch (err) {
-      // Isolate the failure; day NOT consumed so the next cycle retries this file.
-      // Surface the real reason in status so it isn't invisible.
+      // Isolate the failure and record it. A permanent content failure (no
+      // speech / no viable clip / unreadable) is quarantined immediately so it
+      // never blocks the files behind it; a transient failure gets a few retries
+      // first. Either way the real reason is surfaced in status. The day is NOT
+      // consumed, so a quarantine lets the NEXT oldest file pull on the next cycle.
       const msg = err instanceof Error ? err.message : String(err);
+      const permanent = isPermanentContentFailure(msg);
+      const attempts = recordDriveFileFailure(
+        file.id,
+        file.name,
+        msg,
+        permanent || (getDriveFailure(file.id)?.attempts ?? 0) + 1 >= MAX_TRANSIENT_ATTEMPTS,
+      );
+      const quarantined = isDriveFileQuarantined(file.id);
       runtime.lastPullResult = "failed";
       runtime.lastPullError = msg;
-      console.error(`[drive-pull] file "${file.name}" (${file.id}) failed: ${msg}`);
+      console.error(
+        `[drive-pull] file "${file.name}" (${file.id}) failed (attempt ${attempts}${permanent ? ", permanent" : ""}): ${msg}` +
+          (quarantined
+            ? " — QUARANTINED; the next oldest file will pull on the next cycle."
+            : ` — will retry (up to ${MAX_TRANSIENT_ATTEMPTS} attempts).`),
+      );
     }
 
     stampPoll();
