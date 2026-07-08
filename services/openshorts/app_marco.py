@@ -40,6 +40,16 @@ _FFMPEG_TIMEOUT_S = int(os.environ.get("OPENSHORTS_FFMPEG_TIMEOUT_S", "180"))
 # the whole batch. Raise for routinely long (30min+) source videos.
 _JOB_MAX_SECONDS = int(os.environ.get("OPENSHORTS_JOB_MAX_SECONDS", "600"))
 
+# Generation-time automatic dead-air removal. When on, every freshly generated
+# clip has clear dead air removed and its captions re-synced, so new clips come
+# out tight without Marco touching the editor. DEAD AIR ONLY — intentional
+# dramatic pauses (short + sentence-final) are preserved, and filler-word removal
+# stays a manual editor choice. Best-effort: any error/low-memory/negligible
+# saving leaves the clip untouched (never fails or fatally slows a job).
+AUTO_TIGHTEN_CLIPS = os.environ.get("AUTO_TIGHTEN_CLIPS", "true").strip().lower() in ("1", "true", "yes", "on")
+_AUTO_TIGHTEN_MAX_GAP = float(os.environ.get("AUTO_TIGHTEN_MAX_GAP", "0.6"))
+_AUTO_TIGHTEN_MIN_SAVINGS = float(os.environ.get("AUTO_TIGHTEN_MIN_SAVINGS", "0.5"))
+
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -539,6 +549,31 @@ def process_video_job(
                         except Exception:
                             pass
 
+                # Phase 1 (this task) — automatic dead-air removal. Runs only when
+                # the editable base+lines were persisted (final is the captioned
+                # clip). Best-effort: on None nothing changes. On success we swap in
+                # the tightened clip AND update the persisted base+lines so the
+                # manual editor stays consistent with the delivered clip.
+                if AUTO_TIGHTEN_CLIPS and enable_captions and final_clip_path.endswith("_captioned.mp4") and os.path.isfile(final_clip_path):
+                    base_p = final_clip_path.replace("_captioned.mp4", "_base.mp4")
+                    lines_p = final_clip_path.replace("_captioned.mp4", "_base.lines.json")
+                    tightened = _auto_tighten_generated_clip(base_p, lines_p, i + 1)
+                    if tightened:
+                        try:
+                            old_final = final_clip_path
+                            os.replace(tightened["tight_base"], base_p)  # keep base consistent
+                            with open(lines_p, "w") as lf:
+                                json.dump(tightened["new_lines"], lf)
+                            final_clip_path = tightened["new_captioned"]
+                            if old_final != final_clip_path and os.path.exists(old_final):
+                                os.remove(old_final)
+                            print(
+                                f"[openshorts] Clip {i + 1} auto-tightened: removed {tightened['removed']}s dead air "
+                                f"across {tightened['cuts']} cut(s) → {tightened['new_duration']:.1f}s"
+                            )
+                        except Exception as swap_err:
+                            print(f"[openshorts] auto-tighten swap failed for clip {i + 1} (keeping original): {swap_err}")
+
                 try:
                     _extract_thumbnail(
                         video_path=final_clip_path,
@@ -560,7 +595,9 @@ def process_video_job(
                         ),
                         "start_time": clip["start_time"],
                         "end_time": clip["end_time"],
-                        "duration": clip["end_time"] - clip["start_time"],
+                        # Actual delivered length (shorter than end-start when the
+                        # clip was auto-tightened); falls back to the source span.
+                        "duration": _probe_duration(final_clip_path) or (clip["end_time"] - clip["start_time"]),
                         "viral_score": clip.get("viral_score", 50),
                         "hook_type": clip.get("hook_type", "uncategorized"),
                         "hook_preview": clip.get("hook_preview", ""),
@@ -888,21 +925,26 @@ def _replace_audio(input_video: str, audio_file: str, output_path: str) -> str:
     return output_path
 
 
+def _load_caption_lines_from(lines_path: str) -> list:
+    """Best-effort read of a persisted caption-lines JSON file. Returns [] on any
+    problem (missing file / bad JSON)."""
+    try:
+        p = Path(lines_path)
+        if p.is_file():
+            data = json.loads(p.read_text())
+            return data if isinstance(data, list) else []
+    except Exception as err:  # noqa: BLE001
+        print(f"[edit] could not read caption lines {os.path.basename(str(lines_path))}: {err}")
+    return []
+
+
 def _load_caption_lines(abs_clip: str) -> list:
     """Best-effort read of a clip's persisted editable caption lines
     (<base>_base.lines.json). Used so pause classification can tell a
-    sentence-final dramatic beat from a mid-sentence stumble. Returns []
-    if the clip predates caption persistence or anything goes wrong."""
-    try:
-        stem = re.sub(r"_(edit|trim)_[0-9a-f]+$", "", Path(abs_clip).stem)
-        stem = re.sub(r"_(captioned|vertical)$", "", stem)
-        lines_path = Path(abs_clip).parent / f"{stem}_base.lines.json"
-        if lines_path.is_file():
-            data = json.loads(lines_path.read_text())
-            return data if isinstance(data, list) else []
-    except Exception as err:  # noqa: BLE001
-        print(f"[edit] could not read caption lines for {os.path.basename(abs_clip)}: {err}")
-    return []
+    sentence-final dramatic beat from a mid-sentence stumble."""
+    stem = re.sub(r"_(edit|trim)_[0-9a-f]+$", "", Path(abs_clip).stem)
+    stem = re.sub(r"_(captioned|vertical)$", "", stem)
+    return _load_caption_lines_from(str(Path(abs_clip).parent / f"{stem}_base.lines.json"))
 
 
 def _apply_visual_pass(input_path: str, output_path: str, filtergraph: str) -> str:
@@ -926,6 +968,131 @@ def _apply_visual_pass(input_path: str, output_path: str, filtergraph: str) -> s
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg visual pass failed: {result.stderr.decode()[-500:]}")
     return output_path
+
+
+def _auto_tighten_generated_clip(base_path: str, lines_path: str, clip_index: int):
+    """Generation-time dead-air removal for one freshly generated clip.
+
+    Cuts the UNcaptioned base into keep-segments (dead air removed, dramatic
+    pauses kept), re-syncs the caption lines to the new shorter timeline, and
+    re-burns them. Reuses the exact primitives the manual edit engine uses, so
+    the result is identical to a manual auto-tighten. Returns a dict
+    {new_captioned, tight_base, new_lines, removed, cuts, new_duration} the
+    caller swaps in — or None to mean "no change, keep the original clip".
+
+    Best-effort by contract: any failure, low memory, or a saving below the
+    threshold returns None. Runs inside process_video_job, which already holds
+    the single processing slot, so it does not re-acquire it.
+    """
+    import caption_edit
+    tmp: list[str] = []
+    try:
+        if not os.path.isfile(base_path):
+            return None
+        lines = _load_caption_lines_from(lines_path)
+        avail = _available_memory_mb()
+        if avail is not None and avail < _MIN_MEMORY_MB:
+            print(f"[openshorts] auto-tighten skipped for clip {clip_index} (low memory {avail}MB)")
+            return None
+        duration = _probe_duration(base_path)
+        if duration <= 0:
+            return None
+
+        pauses = audio_features_marco.detect_pauses(
+            base_path, noise_db=-30.0, min_silence_s=min(_AUTO_TIGHTEN_MAX_GAP, 0.45)
+        )
+        classified = edit_effects_marco.classify_pauses(pauses, lines, max_keep_gap=_AUTO_TIGHTEN_MAX_GAP)
+        cuts = edit_effects_marco.merge_intervals(
+            edit_effects_marco.deadair_cuts_from_pauses(classified["cut"], 0.0, duration)
+        )
+        removed = sum(e - s for s, e in cuts)
+        if not cuts or removed < _AUTO_TIGHTEN_MIN_SAVINGS:
+            return None  # nothing worth cutting — keep the original clip
+
+        # keeps = [0, duration] minus the dead-air cuts.
+        keeps: list[tuple[float, float]] = []
+        cursor = 0.0
+        for cs, ce in cuts:
+            if cs - cursor > 0.05:
+                keeps.append((cursor, cs))
+            cursor = max(cursor, ce)
+        if duration - cursor > 0.05:
+            keeps.append((cursor, duration))
+        total_kept = sum(e - s for s, e in keeps)
+        if not keeps or total_kept < _MIN_TRIM_SECONDS:
+            return None  # would over-shorten — leave it alone
+
+        parent = Path(base_path).parent
+        stem = Path(base_path).stem
+        token = uuid.uuid4().hex[:8]
+
+        # Cut + concat the kept segments from the uncaptioned base.
+        segs = []
+        for idx, (s, e) in enumerate(keeps):
+            seg = str(parent / f"{stem}_tt{idx}_{token}.mp4")
+            _cut_clip(input_path=base_path, output_path=seg, start_time=s, end_time=e)
+            segs.append(seg)
+            tmp.append(seg)
+        if len(segs) == 1:
+            tight_base = segs[0]
+        else:
+            tight_base = str(parent / f"{stem}_ttbase_{token}.mp4")
+            _concat_segments(segs, tight_base)
+            tmp.append(tight_base)
+
+        # Re-sync captions to the new timeline. write_edited_ass re-syncs the
+        # ORIGINAL lines against `keeps` internally, so it must receive the
+        # original lines (passing the already-synced ones would double-shift and
+        # mis-time every caption). new_lines is the single-resynced set we persist.
+        new_lines = caption_edit.resync_caption_lines(lines, keeps)
+        cap_w, cap_h = captions_marco.get_video_resolution(tight_base)
+        new_captioned = str(parent / f"{stem}_tight_{token}.mp4")
+        ass_out = str(parent / f"{stem}_tight_{token}.ass")
+        burned = False
+        try:
+            written = caption_edit.write_edited_ass(lines, keeps, cap_w, cap_h, ass_out) if lines else None
+            if written:
+                captions_marco.burn_captions(tight_base, ass_out, new_captioned)
+                burned = os.path.isfile(new_captioned)
+        finally:
+            try:
+                if os.path.exists(ass_out):
+                    os.remove(ass_out)
+            except Exception:
+                pass
+        if not burned:
+            # No caption lines survived (or burn failed) — deliver the tightened
+            # video uncaptioned rather than dropping the tighten.
+            shutil.copyfile(tight_base, new_captioned)
+
+        if not os.path.isfile(new_captioned) or not validate_video_file(new_captioned):
+            return None
+
+        # Clean seg intermediates, but keep tight_base (caller moves it onto _base.mp4).
+        for f in tmp:
+            if f != tight_base and os.path.exists(f):
+                try:
+                    os.remove(f)
+                except Exception:
+                    pass
+
+        return {
+            "new_captioned": new_captioned,
+            "tight_base": tight_base,
+            "new_lines": new_lines,
+            "removed": round(removed, 2),
+            "cuts": len(cuts),
+            "new_duration": round(_probe_duration(new_captioned), 2),
+        }
+    except Exception as e:  # noqa: BLE001 — best-effort, never fail the clip
+        print(f"[openshorts] auto-tighten error for clip {clip_index} (keeping original): {type(e).__name__}: {e}")
+        for f in tmp:
+            try:
+                if os.path.exists(f):
+                    os.remove(f)
+            except Exception:
+                pass
+        return None
 
 
 @app.post("/api/clips/edit")

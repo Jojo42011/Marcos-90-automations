@@ -4564,7 +4564,10 @@ app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
     return;
   }
 
-  const body = req.body as { trim?: unknown; cuts?: unknown; audio?: unknown; captions?: unknown; audioReplacePath?: unknown };
+  const body = req.body as {
+    trim?: unknown; cuts?: unknown; audio?: unknown; captions?: unknown; audioReplacePath?: unknown;
+    color?: unknown; effects?: unknown; autoTighten?: unknown; snapToScenes?: unknown;
+  };
   const audio =
     body?.audio === "mute" || body?.audio === "remove" || body?.audio === "replace" ? body.audio : "keep";
   let audioReplacePath: string | undefined;
@@ -4620,7 +4623,48 @@ app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
       cuts.push([cs, ce]);
     }
   }
-  if (!trim && cuts.length === 0 && audio === "keep" && !captions) {
+  // ── Phase 2 visual/structural skills (all optional) ──────────────────────
+  const COLOR_MODES = ["auto", "warm", "cool", "punch", "flat"] as const;
+  const EFFECT_TYPES = ["zoom_in", "zoom_out", "punch_in"] as const;
+  let color: (typeof COLOR_MODES)[number] | undefined;
+  if (typeof body?.color === "string") {
+    const c = body.color.toLowerCase();
+    if (!(COLOR_MODES as readonly string[]).includes(c)) {
+      res.status(400).json({ error: `color must be one of ${COLOR_MODES.join(", ")}.` });
+      return;
+    }
+    color = c as (typeof COLOR_MODES)[number];
+  }
+  const effects: Array<{ type: "zoom_in" | "zoom_out" | "punch_in"; start: number; end: number; amount?: number }> = [];
+  if (Array.isArray(body?.effects)) {
+    for (const e of body.effects as unknown[]) {
+      const eff = e as { type?: unknown; start?: unknown; end?: unknown; amount?: unknown };
+      const type = String(eff?.type || "");
+      const s = Number(eff?.start);
+      const en = Number(eff?.end);
+      if (!(EFFECT_TYPES as readonly string[]).includes(type) || !Number.isFinite(s) || !Number.isFinite(en) || en <= s) {
+        res.status(400).json({ error: `Each effect needs type in [${EFFECT_TYPES.join(", ")}] and numeric start < end.` });
+        return;
+      }
+      const amount = Number(eff?.amount);
+      effects.push({ type: type as "zoom_in" | "zoom_out" | "punch_in", start: s, end: en, ...(Number.isFinite(amount) ? { amount } : {}) });
+    }
+  }
+  // autoTighten: true, or { maxGap?, noiseDb? }
+  let autoTighten: boolean | { maxGap?: number; noiseDb?: number } | undefined;
+  if (body?.autoTighten === true) {
+    autoTighten = true;
+  } else if (body?.autoTighten && typeof body.autoTighten === "object") {
+    const o = body.autoTighten as { maxGap?: unknown; noiseDb?: unknown };
+    autoTighten = {
+      ...(Number.isFinite(Number(o.maxGap)) ? { maxGap: Number(o.maxGap) } : {}),
+      ...(Number.isFinite(Number(o.noiseDb)) ? { noiseDb: Number(o.noiseDb) } : {}),
+    };
+  }
+  const snapToScenes = body?.snapToScenes === true ? true : undefined;
+
+  const hasVisualOrTighten = Boolean(color || effects.length || autoTighten || snapToScenes);
+  if (!trim && cuts.length === 0 && audio === "keep" && !captions && !hasVisualOrTighten) {
     res.status(400).json({ error: "No edits specified." });
     return;
   }
@@ -4643,7 +4687,10 @@ app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
   }
 
   try {
-    const result = await editClipViaOpenShorts({ clipPath: currentPath, editSpec: { trim, cuts, audio, audioReplacePath, captions } });
+    const result = await editClipViaOpenShorts({
+      clipPath: currentPath,
+      editSpec: { trim, cuts, audio, audioReplacePath, captions, color, effects, autoTighten, snapToScenes },
+    });
     if (!result.newClipPath) throw new Error("Edit did not return a new file path");
     updateContentVideoFilePath(clipId, result.newClipPath);
     if (path.resolve(result.newClipPath) !== path.resolve(currentPath)) {

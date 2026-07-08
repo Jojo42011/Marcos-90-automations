@@ -3993,7 +3993,48 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
             cuts.push([cs, ce]);
         }
     }
-    if (!trim && cuts.length === 0 && audio === "keep" && !captions) {
+    // ── Phase 2 visual/structural skills (all optional) ──────────────────────
+    const COLOR_MODES = ["auto", "warm", "cool", "punch", "flat"];
+    const EFFECT_TYPES = ["zoom_in", "zoom_out", "punch_in"];
+    let color;
+    if (typeof body?.color === "string") {
+        const c = body.color.toLowerCase();
+        if (!COLOR_MODES.includes(c)) {
+            res.status(400).json({ error: `color must be one of ${COLOR_MODES.join(", ")}.` });
+            return;
+        }
+        color = c;
+    }
+    const effects = [];
+    if (Array.isArray(body?.effects)) {
+        for (const e of body.effects) {
+            const eff = e;
+            const type = String(eff?.type || "");
+            const s = Number(eff?.start);
+            const en = Number(eff?.end);
+            if (!EFFECT_TYPES.includes(type) || !Number.isFinite(s) || !Number.isFinite(en) || en <= s) {
+                res.status(400).json({ error: `Each effect needs type in [${EFFECT_TYPES.join(", ")}] and numeric start < end.` });
+                return;
+            }
+            const amount = Number(eff?.amount);
+            effects.push({ type: type, start: s, end: en, ...(Number.isFinite(amount) ? { amount } : {}) });
+        }
+    }
+    // autoTighten: true, or { maxGap?, noiseDb? }
+    let autoTighten;
+    if (body?.autoTighten === true) {
+        autoTighten = true;
+    }
+    else if (body?.autoTighten && typeof body.autoTighten === "object") {
+        const o = body.autoTighten;
+        autoTighten = {
+            ...(Number.isFinite(Number(o.maxGap)) ? { maxGap: Number(o.maxGap) } : {}),
+            ...(Number.isFinite(Number(o.noiseDb)) ? { noiseDb: Number(o.noiseDb) } : {}),
+        };
+    }
+    const snapToScenes = body?.snapToScenes === true ? true : undefined;
+    const hasVisualOrTighten = Boolean(color || effects.length || autoTighten || snapToScenes);
+    if (!trim && cuts.length === 0 && audio === "keep" && !captions && !hasVisualOrTighten) {
         res.status(400).json({ error: "No edits specified." });
         return;
     }
@@ -4013,7 +4054,10 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
         return;
     }
     try {
-        const result = await (0, index_js_26.editClipViaOpenShorts)({ clipPath: currentPath, editSpec: { trim, cuts, audio, audioReplacePath, captions } });
+        const result = await (0, index_js_26.editClipViaOpenShorts)({
+            clipPath: currentPath,
+            editSpec: { trim, cuts, audio, audioReplacePath, captions, color, effects, autoTighten, snapToScenes },
+        });
         if (!result.newClipPath)
             throw new Error("Edit did not return a new file path");
         (0, contentDb_js_1.updateContentVideoFilePath)(clipId, result.newClipPath);

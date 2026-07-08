@@ -25,7 +25,12 @@ exports.scheduleGoogleDrivePoller = scheduleGoogleDrivePoller;
  *    fetch calls — matching this codebase's style and keeping the image lean.
  *  - Processed Drive file IDs are persisted (cm_drive_processed) so a file is
  *    never pulled twice, even across restarts.
- *  - Per-file failures are isolated; one bad file never blocks the cycle.
+ *  - Per-file failures are isolated AND quarantined: because we pull the single
+ *    oldest unprocessed file per day, a file that fails downstream every time
+ *    (e.g. OpenShorts judges it unclippable) would otherwise be retried forever
+ *    and block every file behind it. Failures are tracked in cm_drive_failed;
+ *    a permanent content failure quarantines on the first hit, a transient one
+ *    after a few attempts, so the queue always advances to the next file.
  */
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));

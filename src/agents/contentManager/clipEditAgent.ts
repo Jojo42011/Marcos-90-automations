@@ -30,6 +30,10 @@ export interface ClipEditProposal {
     trim?: { start: number; end: number } | null;
     cuts?: Array<[number, number]>;
     audio?: "keep" | "mute" | "remove" | "replace";
+    color?: "auto" | "warm" | "cool" | "punch" | "flat";
+    effects?: Array<{ type: "zoom_in" | "zoom_out" | "punch_in"; start: number; end: number; amount?: number }>;
+    autoTighten?: boolean;
+    snapToScenes?: boolean;
   };
 }
 
@@ -37,7 +41,7 @@ const CLIP_EDIT_SYSTEM = `You are Marco Puga's clip-editing assistant inside the
 
 Two kinds of change:
 1. COPY (hook / caption / hashtags text) — cheap, instant, reversible. Use update_clip_copy. Never ask permission for these.
-2. VIDEO (trim the ends, remove a middle section, or change the audio) — EXPENSIVE (a re-render). Use propose_video_edit, which only PROPOSES the change. Never claim a video edit is done from a proposal — the human must confirm it separately.
+2. VIDEO (trim the ends, remove a middle section, change the audio, remove dead air / bloopers, colour-correct, or add a zoom / punch-in) — EXPENSIVE (a re-render). Use propose_video_edit, which only PROPOSES the change. Never claim a video edit is done from a proposal — the human must confirm it separately.
 
 Rules:
 - The clip's hook/caption/hashtags/captions AND its real duration (duration_seconds) are already provided in CURRENT CLIP CONTEXT below — you start every conversation knowing them. Never say you don't have the clip's length; if duration_seconds is a number, that IS the total length. Only call get_clip_context to re-read after a change.
@@ -67,16 +71,25 @@ const TOOLS: CmBrainToolDefinition[] = [
   },
   {
     name: "propose_video_edit",
-    description: "PROPOSE (do not execute) a trim, middle-section cut, or audio change. Returns a proposal the human must confirm before any render.",
+    description:
+      "PROPOSE (do not execute) a video edit. Returns a proposal the human must confirm before any render. " +
+      "Operations: trim (keep start..end), cut (remove one section), audio (mute/remove/replace), " +
+      "tighten (auto-remove dead air / long pauses — dramatic pauses are kept), " +
+      "color (exposure/colour correction), zoom (Ken Burns zoom_in/zoom_out, or a punch_in for emphasis).",
     input_schema: {
       type: "object",
       properties: {
-        operation: { type: "string", enum: ["trim", "cut", "audio"] },
+        operation: { type: "string", enum: ["trim", "cut", "audio", "tighten", "color", "zoom"] },
         start: { type: "number", description: "trim: new start (s)" },
         end: { type: "number", description: "trim: new end (s)" },
         cut_start: { type: "number", description: "cut: start of the section to REMOVE (s)" },
         cut_end: { type: "number", description: "cut: end of the section to REMOVE (s)" },
         audio_action: { type: "string", enum: ["mute", "remove", "replace"], description: "audio: what to do (replace needs a file the human uploads in the manual editor)" },
+        color_style: { type: "string", enum: ["auto", "warm", "cool", "punch", "flat"], description: "color: grading preset (auto = subtle exposure/colour correct)" },
+        zoom_type: { type: "string", enum: ["zoom_in", "zoom_out", "punch_in"], description: "zoom: kind of move" },
+        zoom_start: { type: "number", description: "zoom: start (s) on the clip timeline" },
+        zoom_end: { type: "number", description: "zoom: end (s) on the clip timeline" },
+        zoom_amount: { type: "number", description: "zoom: strength as a fraction, e.g. 0.15 = 15% (default 0.15)" },
         reason: { type: "string", description: "why this edit, in plain language" },
       },
       required: ["operation", "reason"],
@@ -195,8 +208,33 @@ export async function runClipEditChat(input: {
             return { proposed: false, note: "Audio replace needs a file — tell Marco to use the ✂ Edit Clip → Replace… control to upload the track." };
           }
           proposal = { summary: `${act === "mute" ? "Mute" : "Remove"} the clip's audio (${reason}), then re-render.`, spec: { audio: act as "mute" | "remove" } };
+        } else if (op === "tighten") {
+          proposal = {
+            summary: `Auto-remove dead air / long pauses (${reason}), re-sync the captions to the tighter timeline, then re-render. Intentional dramatic pauses are kept.`,
+            spec: { autoTighten: true },
+          };
+        } else if (op === "color") {
+          const style = String(args.color_style || "auto");
+          if (!["auto", "warm", "cool", "punch", "flat"].includes(style)) return { error: "color_style must be auto, warm, cool, punch, or flat" };
+          proposal = {
+            summary: `Apply "${style}" colour/exposure correction (${reason}), then re-render.`,
+            spec: { color: style as "auto" | "warm" | "cool" | "punch" | "flat" },
+          };
+        } else if (op === "zoom") {
+          const zt = String(args.zoom_type || "");
+          if (!["zoom_in", "zoom_out", "punch_in"].includes(zt)) return { error: "zoom_type must be zoom_in, zoom_out, or punch_in" };
+          const zs = Number(args.zoom_start);
+          const ze = Number(args.zoom_end);
+          if (!Number.isFinite(zs) || !Number.isFinite(ze) || ze <= zs) return { error: "zoom needs numeric zoom_start < zoom_end" };
+          const amt = Number(args.zoom_amount);
+          const amount = Number.isFinite(amt) && amt > 0 ? amt : 0.15;
+          const label = zt === "punch_in" ? "punch-in" : zt === "zoom_out" ? "zoom-out" : "zoom-in";
+          proposal = {
+            summary: `Add a ${label} (${Math.round(amount * 100)}%) from ${fmt(zs)} to ${fmt(ze)} (${reason}), then re-render.`,
+            spec: { effects: [{ type: zt as "zoom_in" | "zoom_out" | "punch_in", start: zs, end: ze, amount }] },
+          };
         } else {
-          return { error: "operation must be trim, cut, or audio" };
+          return { error: "operation must be trim, cut, audio, tighten, color, or zoom" };
         }
         return { proposed: true, summary: proposal.summary };
       }
