@@ -11774,6 +11774,25 @@
     if (typeof crmInitTaskNotifications === "function") crmInitTaskNotifications();
     crmBindDialGlobal();
     crmBindDealsGlobalOnce();
+
+    /* Deep-link into the CRM workspace: /dashboard?section=leads (used by the
+       shell's CRM tab) opens the CRM view directly to a section instead of the
+       default hub overview (view-home has class "active" by default — this
+       bypasses it). Also accepts ?view=crm (opens CRM to its Overview). Invalid
+       or absent params leave the normal hub landing untouched. */
+    (function initCrmSectionDeepLink() {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var section = (params.get("section") || params.get("crm") || "").trim();
+        var wantsCrm = section || params.get("view") === "crm" || params.get("tab") === "crm";
+        if (!wantsCrm) return;
+        var valid = ["dashboard", "leads", "calls", "chats", "deals", "text", "reports",
+          "tasks", "marco-tasks", "followup", "plans", "templates", "knowledge", "users"];
+        if (section && valid.indexOf(section) !== -1) crmSection = section;
+        showView("view-crm");
+        void loadCrm();
+      } catch (e) { /* leave the default hub view on any error */ }
+    })();
   </script>
   <script>
   /* Shell iframe compatibility: when the dashboard runs INSIDE the unified shell
