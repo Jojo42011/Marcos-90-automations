@@ -235,14 +235,40 @@ def _call_openai(prompt: str, api_key: str) -> str:
     return str(text).strip()
 
 
-def _call_anthropic(prompt: str, api_key: str) -> str:
-    model = os.environ.get("ANTHROPIC_MODEL", "").strip() or DEFAULT_ANTHROPIC_MODEL
+def _call_anthropic(
+    prompt: str,
+    api_key: str,
+    images: list[dict[str, Any]] | None = None,
+    model_override: str | None = None,
+) -> str:
+    model = (model_override or "").strip() or os.environ.get("ANTHROPIC_MODEL", "").strip() or DEFAULT_ANTHROPIC_MODEL
+    # Multimodal: when frames are provided, send them as image blocks BEFORE the
+    # text (Anthropic's recommended ordering) so the model grounds its reasoning
+    # in what it sees. Otherwise a plain string content — unchanged behavior.
+    if images:
+        content: list[dict[str, Any]] = []
+        for img in images:
+            b64 = img.get("b64")
+            if not b64:
+                continue
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": img.get("media_type", "image/jpeg"),
+                    "data": b64,
+                },
+            })
+        content.append({"type": "text", "text": prompt})
+        message_content: Any = content
+    else:
+        message_content = prompt
     payload = {
         "model": model,
         "max_tokens": 4096,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [{"role": "user", "content": message_content}],
     }
-    with httpx.Client(timeout=120.0) as client:
+    with httpx.Client(timeout=180.0) as client:
         res = client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -301,12 +327,21 @@ def _parse_normalize_or_raise(text: str, model: str, provider: str) -> list[dict
     return usable
 
 
-def analyze_transcript_for_clips(prompt: str) -> tuple[list[dict[str, Any]], str]:
+def analyze_transcript_for_clips(
+    prompt: str,
+    images: list[dict[str, Any]] | None = None,
+    vision_model: str | None = None,
+) -> tuple[list[dict[str, Any]], str]:
     """
     Run viral-moment analysis using the first working provider.
     Anthropic is primary (matches the rest of the content-manager system);
     OpenAI is the fallback if ANTHROPIC_API_KEY is missing or the call fails.
     Returns (clips_list, model_label).
+
+    `images` (optional base64 frames) are sent ONLY on the Anthropic path, using
+    `vision_model` (a stronger model than the text default). The OpenAI fallback
+    stays text-only — Anthropic-format image blocks are not portable to it, and a
+    text-only fallback is still a correct (if less visually-aware) analysis.
     """
     # Only genuine provider-CALL failures (network/HTTP/auth) go here. A
     # successful response that yields no clips raises NoUsableClipsError and
@@ -340,7 +375,13 @@ def analyze_transcript_for_clips(prompt: str) -> tuple[list[dict[str, Any]], str
 
     for provider, key, caller, model in providers:
         try:
-            text = caller(prompt, key)  # transport/HTTP/auth failures raise here
+            if provider == "anthropic" and images:
+                # Multimodal analysis on the vision model.
+                model = (vision_model or "").strip() or model
+                text = _call_anthropic(prompt, key, images=images, model_override=model)
+                print(f"[content-ai] anthropic multimodal analysis with {len(images)} frame(s) on {model}")
+            else:
+                text = caller(prompt, key)  # transport/HTTP/auth failures raise here
         except Exception as err:
             print(f"[content-ai] {provider} call failed: {err}")
             call_errors.append(f"{provider}: {err}")

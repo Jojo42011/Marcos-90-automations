@@ -7,6 +7,13 @@ import os
 from prompts_marco import get_viral_moment_prompt
 from llm_analysis import analyze_transcript_for_clips
 import audio_features_marco
+import frame_analysis_marco
+
+# Visual frame analysis. Frames are read by a stronger vision model than the
+# text default (env-overridable) — Sonnet materially out-reasons Haiku on framing/
+# expression/quality judgments. Frame count is capped in frame_analysis_marco.
+VISION_MODEL = os.environ.get("VISION_MODEL", "claude-sonnet-4-20250514")
+MAX_ANALYSIS_FRAMES = int(os.environ.get("MAX_ANALYSIS_FRAMES", "16"))
 
 # Phase 4 — quality-over-volume. target_clips is now a MAXIMUM, not a quota. The
 # engine returns FEWER, higher-quality clips per source video; the daily 7 stays a
@@ -66,6 +73,7 @@ def get_viral_clips_marco(
     # delivers, not just the words. Best-effort: a failure yields an empty brief
     # and the prompt is exactly what it was before.
     prosody_brief = ""
+    prosody: dict = {}
     if video_path:
         try:
             prosody = audio_features_marco.analyze_prosody(
@@ -81,6 +89,27 @@ def get_viral_clips_marco(
         except Exception as prosody_err:  # noqa: BLE001 — never fatal
             print(f"[content-ai] prosody analysis skipped: {type(prosody_err).__name__}: {prosody_err}")
 
+    # Visual frames — scene changes + the prosody-flagged moments (energy peaks,
+    # long pauses/bloopers, fast-pace hook candidates). Best-effort: on any
+    # failure `images` is empty and analysis proceeds transcript+audio-only.
+    images: list = []
+    if video_path:
+        try:
+            energy = prosody.get("energy", {}) if isinstance(prosody, dict) else {}
+            pace = prosody.get("pace", {}) if isinstance(prosody, dict) else {}
+            pauses = prosody.get("pauses", []) if isinstance(prosody, dict) else []
+            flagged: list[float] = []
+            flagged += [float(t) for t in energy.get("peaks", [])]
+            flagged += [float(t) for t in pace.get("fast", [])]
+            flagged += [float(p.get("start", 0)) for p in pauses if float(p.get("dur", 0)) >= 0.7]
+            flagged.append(0.5)  # the opening frame (hook)
+            images = frame_analysis_marco.extract_analysis_frames(
+                video_path, flagged_timestamps=flagged, max_frames=MAX_ANALYSIS_FRAMES
+            )
+        except Exception as frame_err:  # noqa: BLE001 — never fatal
+            print(f"[content-ai] frame extraction skipped: {type(frame_err).__name__}: {frame_err}")
+            images = []
+
     prompt = get_viral_moment_prompt(
         transcript=transcript_text,
         video_duration=video_duration,
@@ -89,9 +118,12 @@ def get_viral_clips_marco(
         target_clips=target_clips,
         prosody_brief=prosody_brief,
         quality_floor=VIRAL_SCORE_FLOOR,
+        has_frames=bool(images),
     )
 
-    clips_data, model = analyze_transcript_for_clips(prompt)
+    clips_data, model = analyze_transcript_for_clips(
+        prompt, images=images, vision_model=VISION_MODEL if images else None
+    )
     clips_data = _apply_quality_gate(clips_data, target_clips)
 
     return {

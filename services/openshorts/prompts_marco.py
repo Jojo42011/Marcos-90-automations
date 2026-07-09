@@ -44,6 +44,7 @@ def get_viral_moment_prompt(
     target_clips: int = 7,
     prosody_brief: str = "",
     quality_floor: int = 70,
+    has_frames: bool = False,
 ) -> str:
     pillar_instructions = {
         "education": "Prioritize moments where Marco explains a specific number, process step, or market insight clearly and concisely. Look for 'did you know', 'here's what that means', 'most buyers don't realize' type moments.",
@@ -58,13 +59,39 @@ def get_viral_moment_prompt(
         else ""
     )
 
+    # When video frames accompany this prompt, tell the model to reason about what
+    # it SEES, not only the words — and to report visual problems the transcript
+    # can't reveal. The frames are sampled at scene changes + the flagged moments.
+    frames_section = (
+        "\n\nVIDEO FRAMES ATTACHED: A set of still frames from this video is provided as images "
+        "(sampled at scene changes and at the flagged delivery moments above). Study them. Using BOTH "
+        "the transcript and these frames, judge each candidate clip on:\n"
+        "- Visual quality of the shot: framing, camera movement/shake, clarity, lighting.\n"
+        "- Visible bloopers the transcript can't show: an awkward expression, Marco looking off-camera, "
+        "bad framing, someone/something entering the frame unexpectedly, a cluttered or unflattering shot.\n"
+        "- Whether the visual matches the claimed content — e.g. a 'walkthrough' moment should actually "
+        "show movement through a space; a 'reveal' should show the feature being revealed.\n"
+        "Prefer clips whose VISUALS are strong, and penalize (or avoid) clips with visual problems even if "
+        "the words are good."
+        if has_frames
+        else ""
+    )
+
+    visual_field_line = (
+        '\n- visual_issues_detected: array of short strings naming any visual problems you SEE in this '
+        "clip's frames (framing, shake, blur, awkward expression, unexpected person/object, visual/"
+        'transcript mismatch). Use an empty array [] if the visuals look clean.'
+        if has_frames
+        else ""
+    )
+
     return f"""
 {MARCO_CONTEXT}
 
 CONTENT PILLAR FOR THIS SESSION: {pillar.upper()}
 {pillar_instructions.get(pillar, pillar_instructions["mixed"])}
 {trend_section}
-{prosody_brief}
+{prosody_brief}{frames_section}
 VIDEO TRANSCRIPT (total duration: {video_duration:.1f} seconds):
 {transcript}
 
@@ -85,7 +112,7 @@ For each clip, return:
 - suggested_title: internal title for the clip (not for posting)
 - suggested_caption: TikTok caption in Marco's voice (direct, first person, San Antonio specific, ends with CTA)
 - pillar: which content pillar this clip maps to
-- why_this_clip: one sentence explanation of why this moment will perform
+- why_this_clip: one sentence explanation of why this moment will perform{visual_field_line}
 
 Return as valid JSON array only. No markdown, no explanation outside the JSON.
 Sort by viral_score descending (best clip first).
