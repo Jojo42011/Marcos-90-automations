@@ -36,7 +36,7 @@ function migrateContentSuggestionsTable(db: ReturnType<typeof getSocialDb>): voi
   }
 }
 
-async function fetchCurrentContentTrends(): Promise<string> {
+export async function fetchCurrentContentTrends(): Promise<string> {
   try {
     const response = await anthropic.messages.create({
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",

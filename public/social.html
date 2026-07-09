@@ -4515,6 +4515,7 @@
           <div class="rv-actions-row">
             <button type="button" class="rv-btn-save" onclick="rvSave('${vm.id}')">SAVE</button>
             <button type="button" class="rv-btn-edit" onclick="openTrimEditor('${vm.id}','${jsStr(vm.title)}')">✂ EDIT CLIP</button>
+            <button type="button" class="rv-btn-edit" onclick="openEditPlanPanel('${vm.id}','${jsStr(vm.title)}')">📝 EDIT PLAN</button>
           </div>
           <button type="button" class="rv-btn-chat" onclick="openChatEdit('${vm.id}','${jsStr(vm.title)}')">💬 CHAT EDIT</button>
           <div class="rv-actions-row">
@@ -6127,8 +6128,9 @@
         ? `<a href="${ttUrl}" target="_blank" rel="noopener noreferrer" class="score-card-title score-card-title-link">${titleText}</a>`
         : `<div class="score-card-title">${titleText}</div>`;
 
-      const improvementsHtml = video.improvements && video.improvements.length
-        ? video.improvements.map((i) => `<div class="improvement-item">• ${escapeHtml(i)}</div>`).join("")
+      const reviewText = typeof video.improvements === "string" ? video.improvements.trim() : "";
+      const improvementsHtml = reviewText
+        ? feedbackBlockHtml(reviewText, postId)
         : `<button type="button" class="btn-ghost" onclick="generateImprovements('${postId}')">GENERATE FEEDBACK</button>`;
 
       return `<div class="score-card" style="border-left-color:${tierColor};">
@@ -6176,9 +6178,51 @@
         }
 
         container.innerHTML = videos.map(buildVideoScoreCard).join("");
+        // Hydrate the "Recommended Transitions" section under each video that
+        // already has editor feedback (content type inferred from the caption).
+        videos
+          .filter((v) => typeof v.improvements === "string" && v.improvements.trim())
+          .forEach((v) => hydrateFeedbackTransitions(v.id, v.caption || ""));
       } catch (e) {
         container.innerHTML = `<div class="error">${escapeHtml(e.message || "Load failed")}</div>`;
       }
+    }
+
+    // ── Editor-review rendering + recommended transitions (Part 4) ────────────
+    function feedbackBlockHtml(review, postId) {
+      return `<div class="improvement-review" style="white-space:pre-wrap; font-size:0.72rem; line-height:1.6; color:var(--text-dim);">${escapeHtml(review)}</div>
+        <div id="feedback-transitions-${postId}" class="feedback-transitions"></div>`;
+    }
+
+    function contentTypeFromCaption(desc) {
+      const d = (desc || "").toLowerCase();
+      if (/hook|first|wait|you won/.test(d)) return "hook";
+      if (/price|\$|million|list/.test(d)) return "reveal";
+      if (/tip|how|why|should|mistake/.test(d)) return "educational";
+      if (/tour|walkthrough|inside|bedroom|kitchen/.test(d)) return "walkthrough";
+      return "walkthrough";
+    }
+
+    async function hydrateFeedbackTransitions(postId, caption) {
+      const host = document.getElementById(`feedback-transitions-${postId}`);
+      if (!host) return;
+      try {
+        const ct = contentTypeFromCaption(caption);
+        const res = await fetch(apiUrl(`/api/content/transitions?type=${ct}`), { headers: apiHeaders() });
+        if (!res.ok) return;
+        const { transitions } = await res.json();
+        if (!transitions || !transitions.length) return;
+        host.innerHTML = `
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:9px; color:var(--text-dim); letter-spacing:2px; margin-bottom:8px;">RECOMMENDED TRANSITIONS</div>
+            ${transitions.slice(0, 3).map((t) => `
+              <div style="margin-bottom:6px; font-size:11px;">
+                <span style="color:var(--accent, #00d4ff);">${escapeHtml(t.name)}</span>
+                <span style="color:var(--text-dim); margin-left:6px;">${escapeHtml(t.timing)}</span>
+                <div style="color:var(--text-dim); font-size:10px; margin-top:2px;">${escapeHtml(t.howTo)}</div>
+              </div>`).join("")}
+          </div>`;
+      } catch (_) { /* non-blocking */ }
     }
 
     async function generateImprovements(postId) {
@@ -6190,9 +6234,13 @@
         const res = await fetch(apiUrl(`/api/social/video-improvements/${postId}`), { method: "POST", headers: apiHeaders() });
         if (!res.ok) throw new Error("Generation failed");
         const { improvements } = await res.json();
-        container.innerHTML = (improvements || []).map((i) =>
-          `<div class="improvement-item">• ${escapeHtml(i)}</div>`
-        ).join("");
+        const reviewText = typeof improvements === "string" ? improvements.trim() : "";
+        container.innerHTML = reviewText
+          ? feedbackBlockHtml(reviewText, postId)
+          : '<div style="font-size:10px; color:#888;">No feedback returned.</div>';
+        // Fill the transitions section (caption from the card title if present).
+        const cap = document.querySelector(`#improvements-${postId}`)?.closest(".score-card")?.querySelector(".score-card-title")?.textContent || "";
+        if (reviewText) hydrateFeedbackTransitions(postId, cap);
       } catch (e) {
         container.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
       }
@@ -6792,6 +6840,274 @@
     else { window.location.href = '/dashboard'; }
   }
   window.goToCommandCenter = goToCommandCenter;
+  </script>
+
+  <!-- ════ EDIT PLAN — 4-step guided CapCut planning workflow ════ -->
+  <div id="editPlanModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); justify-content:center; padding:32px 14px; overflow-y:auto;">
+    <div style="background:var(--card-bg,#0d0f14); border:1px solid rgba(0,212,255,0.25); border-radius:8px; max-width:640px; width:100%; height:fit-content; padding:20px; font-family:monospace;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div style="font-size:13px; color:var(--text,#fff); letter-spacing:1px;">📝 EDIT PLAN <span id="edit-plan-title" style="color:var(--text-dim,#888); font-size:11px; letter-spacing:0;"></span></div>
+        <button onclick="closeEditPlanPanel()" style="background:transparent; border:none; color:var(--text-dim,#888); cursor:pointer; font-size:18px;">✕</button>
+      </div>
+
+      <div id="manual-edit-panel" style="font-family:monospace;">
+        <div id="edit-steps-bar" style="display:flex; gap:0; margin-bottom:20px; border-radius:4px; overflow:hidden;">
+          <div class="edit-step active" data-step="1" onclick="goToEditStep(1)" style="flex:1; padding:10px; background:rgba(0,212,255,0.15); border-right:1px solid rgba(0,212,255,0.1); cursor:pointer; text-align:center;">
+            <div style="font-size:9px; color:var(--text-dim,#555); letter-spacing:1px;">STEP 1</div>
+            <div class="edit-step-label" style="font-size:11px; color:#00d4ff; margin-top:2px;">Hook</div>
+          </div>
+          <div class="edit-step" data-step="2" onclick="goToEditStep(2)" style="flex:1; padding:10px; background:rgba(255,255,255,0.02); border-right:1px solid rgba(255,255,255,0.05); cursor:pointer; text-align:center;">
+            <div style="font-size:9px; color:var(--text-dim,#555); letter-spacing:1px;">STEP 2</div>
+            <div class="edit-step-label" style="font-size:11px; color:var(--text-dim,#888); margin-top:2px;">Structure</div>
+          </div>
+          <div class="edit-step" data-step="3" onclick="goToEditStep(3)" style="flex:1; padding:10px; background:rgba(255,255,255,0.02); border-right:1px solid rgba(255,255,255,0.05); cursor:pointer; text-align:center;">
+            <div style="font-size:9px; color:var(--text-dim,#555); letter-spacing:1px;">STEP 3</div>
+            <div class="edit-step-label" style="font-size:11px; color:var(--text-dim,#888); margin-top:2px;">Transitions</div>
+          </div>
+          <div class="edit-step" data-step="4" onclick="goToEditStep(4)" style="flex:1; padding:10px; background:rgba(255,255,255,0.02); cursor:pointer; text-align:center;">
+            <div style="font-size:9px; color:var(--text-dim,#555); letter-spacing:1px;">STEP 4</div>
+            <div class="edit-step-label" style="font-size:11px; color:var(--text-dim,#888); margin-top:2px;">Export</div>
+          </div>
+        </div>
+
+        <!-- STEP 1: Hook -->
+        <div id="edit-step-1" class="edit-step-content">
+          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">HOOK — FIRST 3 SECONDS</div>
+          <p style="font-size:11px; color:var(--text-dim,#888); margin-bottom:16px;">The hook determines whether anyone watches the rest. Get this right before anything else.</p>
+          <div style="margin-bottom:12px;">
+            <label style="font-size:10px; color:var(--text-dim,#555); letter-spacing:1px; display:block; margin-bottom:6px;">HOOK TYPE</label>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;" id="hook-type-grid"></div>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="font-size:10px; color:var(--text-dim,#555); letter-spacing:1px; display:block; margin-bottom:6px;">HOOK OPENING LINE</label>
+            <textarea id="edit-hook-text" rows="2" oninput="editState.hookText=this.value" placeholder="What does Marco say or show in the first 3 seconds?"
+              style="width:100%; background:var(--input-bg,#0a0a0f); border:1px solid rgba(0,212,255,0.15); color:var(--text,#fff); padding:8px; font-family:monospace; font-size:11px; border-radius:2px; resize:none; box-sizing:border-box;"></textarea>
+            <div style="font-size:10px; color:var(--text-dim,#555); margin-top:4px;">Keep it under 10 words. Start with a visual, a price, or a question.</div>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="font-size:10px; color:var(--text-dim,#555); letter-spacing:1px; display:block; margin-bottom:6px;">HOOK TRANSITION INTO CONTENT</label>
+            <div id="hook-transitions" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;"></div>
+          </div>
+          <button onclick="goToEditStep(2)" style="background:#00d4ff; color:#000; border:none; padding:8px 16px; font-family:monospace; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer; margin-top:8px;">NEXT: Structure →</button>
+        </div>
+
+        <!-- STEP 2: Structure -->
+        <div id="edit-step-2" class="edit-step-content" style="display:none;">
+          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">STRUCTURE — SCENE ORDER</div>
+          <p style="font-size:11px; color:var(--text-dim,#888); margin-bottom:16px;">Map out your scenes in order. Each scene should earn the next one.</p>
+          <div id="scene-list" style="margin-bottom:12px;"></div>
+          <button onclick="addScene()" style="background:transparent; border:1px dashed rgba(0,212,255,0.3); color:#00d4ff; padding:6px 12px; font-family:monospace; font-size:10px; border-radius:2px; cursor:pointer; width:100%;">+ ADD SCENE</button>
+          <div style="margin-top:16px; padding:12px; background:rgba(0,212,255,0.03); border:1px solid rgba(0,212,255,0.1); border-radius:4px;">
+            <div style="font-size:9px; color:var(--text-dim,#555); letter-spacing:1px; margin-bottom:6px;">STRUCTURE TEMPLATES</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;" id="structure-templates"></div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:16px;">
+            <button onclick="goToEditStep(1)" style="background:transparent; border:1px solid #555; color:var(--text-dim,#888); padding:8px 14px; font-family:monospace; font-size:11px; border-radius:2px; cursor:pointer;">← Back</button>
+            <button onclick="goToEditStep(3)" style="background:#00d4ff; color:#000; border:none; padding:8px 16px; font-family:monospace; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer;">NEXT: Transitions →</button>
+          </div>
+        </div>
+
+        <!-- STEP 3: Transitions -->
+        <div id="edit-step-3" class="edit-step-content" style="display:none;">
+          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">TRANSITIONS — BETWEEN SCENES</div>
+          <p style="font-size:11px; color:var(--text-dim,#888); margin-bottom:16px;">Pick a transition for each scene cut. CapCut names listed — open CapCut alongside this.</p>
+          <div id="transition-assignments" style="margin-bottom:16px;"></div>
+          <div style="background:rgba(0,212,255,0.03); border:1px solid rgba(0,212,255,0.1); border-radius:4px; padding:12px; margin-bottom:12px;">
+            <div style="font-size:9px; color:var(--text-dim,#555); letter-spacing:1px; margin-bottom:8px;">TRANSITION GUIDE — REAL ESTATE</div>
+            <div id="transition-reference-list"></div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:16px;">
+            <button onclick="goToEditStep(2)" style="background:transparent; border:1px solid #555; color:var(--text-dim,#888); padding:8px 14px; font-family:monospace; font-size:11px; border-radius:2px; cursor:pointer;">← Back</button>
+            <button onclick="goToEditStep(4)" style="background:#00d4ff; color:#000; border:none; padding:8px 16px; font-family:monospace; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer;">NEXT: Export Notes →</button>
+          </div>
+        </div>
+
+        <!-- STEP 4: Export -->
+        <div id="edit-step-4" class="edit-step-content" style="display:none;">
+          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">EXPORT — CAPCUT CHECKLIST</div>
+          <div style="background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.2); border-radius:4px; padding:12px; margin-bottom:16px;">
+            <div style="font-size:9px; color:#10b981; letter-spacing:1px; margin-bottom:6px;">EXPORT SETTINGS FOR TIKTOK</div>
+            <div style="font-size:11px; color:var(--text,#ccc); line-height:1.8;">
+              Resolution: 1080 × 1920 (9:16)<br>Frame rate: 30fps<br>Format: MP4 (H.264)<br>Audio: Stereo, normalized to -14 LUFS
+            </div>
+          </div>
+          <button onclick="generateEditSummary()" style="background:#10b981; color:#000; border:none; padding:10px 20px; font-family:monospace; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer; width:100%;">📋 GENERATE EDIT SUMMARY</button>
+          <div id="edit-summary-output" style="display:none; margin-top:12px; padding:12px; background:var(--input-bg,#0a0a0f); border:1px solid rgba(255,255,255,0.08); border-radius:4px; font-size:11px; color:var(--text,#ccc); white-space:pre-wrap; line-height:1.7;"></div>
+          <button onclick="goToEditStep(3)" style="background:transparent; border:1px solid #555; color:var(--text-dim,#888); padding:8px 14px; font-family:monospace; font-size:11px; border-radius:2px; cursor:pointer; margin-top:8px;">← Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* ═══ EDIT PLAN — guided CapCut planning workflow (Hook→Structure→Transitions→Export) ═══
+     A planning/guidance tool: it produces a CapCut checklist, separate from the
+     render-based ✂ Clip Editor (which is preserved). Uses the app's apiUrl/apiHeaders. */
+  var editState = { step: 1, hookType: null, hookText: '', scenes: [], transitionAssignments: {}, videoId: null, videoTitle: '' };
+
+  var HOOK_TYPES = [
+    { id: 'question',   label: '❓ Question',     example: '"Would you pay $650k for this?"' },
+    { id: 'price',      label: '💰 Price reveal', example: '"$2.3 million for THIS?"' },
+    { id: 'tour_tease', label: '🏡 Tour tease',   example: 'Show the best room first, pull back' },
+    { id: 'stat',       label: '📊 Stat drop',    example: '"73% appreciation in 3 years."' }
+  ];
+  var STRUCTURE_TEMPLATES = [
+    { id: 'problem_solve', label: 'Problem → Solution', scenes: ['Hook: The problem', 'Agitate: Why it matters', 'Solution: The property', 'CTA'] },
+    { id: 'tour',          label: 'Property Tour',      scenes: ['Hook: Best feature', 'Exterior', 'Living areas', 'Kitchen/Baths', 'Bedrooms', 'Price + CTA'] },
+    { id: 'reveal',        label: 'Price Reveal',       scenes: ['Hook: Tease the value', 'Tour highlights (fast)', 'Price drop reveal', 'CTA'] },
+    { id: 'education',     label: 'Buyer Education',     scenes: ['Hook: Common mistake', 'What you should know', 'How to avoid it', 'Work with Marco CTA'] }
+  ];
+
+  function ep_esc(s){ return (typeof escapeHtml === 'function') ? escapeHtml(String(s)) : String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function ep_tUrl(q){ return (typeof apiUrl === 'function') ? apiUrl(q) : q; }
+  function ep_headers(){ return (typeof apiHeaders === 'function') ? apiHeaders() : {}; }
+
+  function openEditPlanPanel(videoId, title){
+    editState = { step: 1, hookType: null, hookText: '', scenes: [], transitionAssignments: {}, videoId: videoId || null, videoTitle: title || '' };
+    var t = document.getElementById('edit-plan-title'); if (t) t.textContent = title ? ('· ' + title) : '';
+    var hk = document.getElementById('edit-hook-text'); if (hk) hk.value = '';
+    var out = document.getElementById('edit-summary-output'); if (out) { out.style.display = 'none'; out.textContent = ''; }
+    document.getElementById('editPlanModal').style.display = 'flex';
+    initManualEditUI();
+    goToEditStep(1);
+  }
+  function closeEditPlanPanel(){ var m = document.getElementById('editPlanModal'); if (m) m.style.display = 'none'; }
+  window.openEditPlanPanel = openEditPlanPanel;
+  window.closeEditPlanPanel = closeEditPlanPanel;
+  document.getElementById('editPlanModal')?.addEventListener('click', function(e){ if (e.target === this) closeEditPlanPanel(); });
+
+  function initManualEditUI(){
+    var hookGrid = document.getElementById('hook-type-grid');
+    if (hookGrid) hookGrid.innerHTML = HOOK_TYPES.map(function(h){
+      return '<div class="hook-type-card" data-id="'+h.id+'" onclick="selectHookType(\''+h.id+'\')" style="border:1px solid rgba(255,255,255,0.08); border-radius:3px; padding:10px; cursor:pointer;">'
+        + '<div style="font-size:12px; color:var(--text,#fff); margin-bottom:4px;">'+h.label+'</div>'
+        + '<div style="font-size:10px; color:var(--text-dim,#555);">'+ep_esc(h.example)+'</div></div>';
+    }).join('');
+    var templateGrid = document.getElementById('structure-templates');
+    if (templateGrid) templateGrid.innerHTML = STRUCTURE_TEMPLATES.map(function(t){
+      return '<button onclick="applyStructureTemplate(\''+t.id+'\')" style="background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.15); color:#00d4ff; padding:8px; font-family:monospace; font-size:10px; border-radius:2px; cursor:pointer; text-align:left;">'+t.label+'</button>';
+    }).join('');
+    loadTransitionReference();
+  }
+
+  function selectHookType(id){
+    editState.hookType = id;
+    document.querySelectorAll('.hook-type-card').forEach(function(card){
+      var sel = card.dataset.id === id;
+      card.style.borderColor = sel ? '#00d4ff' : 'rgba(255,255,255,0.08)';
+      card.style.background = sel ? 'rgba(0,212,255,0.1)' : 'transparent';
+    });
+    loadTransitionsForStep('hook');
+  }
+  function applyStructureTemplate(templateId){
+    var tpl = STRUCTURE_TEMPLATES.find(function(t){ return t.id === templateId; });
+    if (!tpl) return;
+    editState.scenes = tpl.scenes.map(function(label, i){ return { id: i, label: label, duration: '' }; });
+    renderSceneList();
+  }
+  function renderSceneList(){
+    var list = document.getElementById('scene-list'); if (!list) return;
+    list.innerHTML = editState.scenes.map(function(scene, i){
+      return '<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; padding:8px; background:rgba(255,255,255,0.02); border-radius:3px; border:1px solid rgba(255,255,255,0.05);">'
+        + '<div style="font-size:10px; color:var(--text-dim,#555); width:20px; text-align:center;">'+(i+1)+'</div>'
+        + '<input value="'+ep_esc(scene.label)+'" onchange="updateScene('+i+', \'label\', this.value)" style="flex:1; background:transparent; border:none; border-bottom:1px solid rgba(255,255,255,0.1); color:var(--text,#fff); font-family:monospace; font-size:11px; padding:2px 4px;">'
+        + '<input value="'+ep_esc(scene.duration)+'" onchange="updateScene('+i+', \'duration\', this.value)" placeholder="0s" style="width:40px; background:transparent; border:none; border-bottom:1px solid rgba(255,255,255,0.1); color:var(--text-dim,#888); font-family:monospace; font-size:10px; padding:2px; text-align:center;">'
+        + '<button onclick="removeScene('+i+')" style="background:transparent; border:none; color:var(--text-dim,#555); cursor:pointer; font-size:12px;">✕</button></div>';
+    }).join('');
+  }
+  function addScene(){ editState.scenes.push({ id: Date.now(), label: 'New scene', duration: '' }); renderSceneList(); }
+  function updateScene(i, field, value){ if (editState.scenes[i]) editState.scenes[i][field] = value; }
+  function removeScene(i){ editState.scenes.splice(i, 1); renderSceneList(); }
+
+  function loadTransitionReference(){
+    fetch(ep_tUrl('/api/content/transitions'), { headers: ep_headers() })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var list = document.getElementById('transition-reference-list'); if (!list) return;
+        list.innerHTML = (d.transitions || []).map(function(t){
+          return '<div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04);">'
+            + '<div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-size:11px; color:var(--text,#fff); font-weight:600;">'+ep_esc(t.name)+'</span>'
+            + '<span style="font-size:9px; color:var(--text-dim,#555); background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:2px;">'+ep_esc(t.timing)+'</span></div>'
+            + '<div style="font-size:10px; color:var(--text-dim,#888); margin-top:2px;">'+ep_esc((t.bestFor||[]).join(' · '))+'</div>'
+            + '<div style="font-size:10px; color:var(--text-dim,#555); margin-top:2px; font-style:italic;">'+ep_esc(t.howTo)+'</div></div>';
+        }).join('');
+      }).catch(function(){});
+  }
+  function loadTransitionsForStep(contentType){
+    fetch(ep_tUrl('/api/content/transitions?type='+contentType), { headers: ep_headers() })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var c = document.getElementById('hook-transitions'); if (!c) return;
+        c.innerHTML = (d.transitions || []).map(function(t){
+          return '<div class="transition-option" data-id="'+t.id+'" onclick="selectTransition(\'hook\', \''+t.id+'\')" style="border:1px solid rgba(255,255,255,0.08); border-radius:3px; padding:8px; cursor:pointer;">'
+            + '<div style="font-size:11px; color:var(--text,#fff);">'+ep_esc(t.name)+'</div>'
+            + '<div style="font-size:9px; color:var(--text-dim,#555); margin-top:2px;">'+ep_esc(t.timing)+'</div></div>';
+        }).join('');
+      }).catch(function(){});
+  }
+  function selectTransition(position, transitionId){
+    editState.transitionAssignments[position] = transitionId;
+    if (position === 'hook') {
+      document.querySelectorAll('#hook-transitions .transition-option').forEach(function(el){
+        var sel = el.dataset.id === transitionId;
+        el.style.borderColor = sel ? '#00d4ff' : 'rgba(255,255,255,0.08)';
+        el.style.background = sel ? 'rgba(0,212,255,0.1)' : 'transparent';
+      });
+    } else {
+      renderTransitionAssignments();
+    }
+  }
+  function renderTransitionAssignments(){
+    var container = document.getElementById('transition-assignments'); if (!container) return;
+    if (editState.scenes.length < 2) { container.innerHTML = '<div style="font-size:11px; color:var(--text-dim,#555);">Add at least two scenes in Step 2 first.</div>'; return; }
+    fetch(ep_tUrl('/api/content/transitions'), { headers: ep_headers() })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var transitions = d.transitions || [];
+        container.innerHTML = editState.scenes.slice(0, -1).map(function(scene, i){
+          var next = editState.scenes[i + 1];
+          var chips = transitions.map(function(t){
+            var sel = editState.transitionAssignments['scene_' + i] === t.id;
+            return '<div onclick="selectTransition(\'scene_'+i+'\', \''+t.id+'\')" data-id="'+t.id+'" style="padding:4px 10px; border:1px solid '+(sel?'#00d4ff':'rgba(255,255,255,0.08)')+'; border-radius:12px; font-size:10px; color:'+(sel?'#00d4ff':'var(--text-dim,#888)')+'; cursor:pointer; background:'+(sel?'rgba(0,212,255,0.1)':'transparent')+';">'+ep_esc(t.name)+'</div>';
+          }).join('');
+          return '<div style="margin-bottom:12px;"><div style="font-size:10px; color:var(--text-dim,#555); margin-bottom:6px;">Scene '+(i+1)+' → Scene '+(i+2)+': <span style="color:var(--text-dim,#888);">"'+ep_esc(scene.label)+'" → "'+ep_esc(next.label)+'"</span></div><div style="display:flex; gap:6px; flex-wrap:wrap;">'+chips+'</div></div>';
+        }).join('');
+      }).catch(function(){});
+  }
+
+  function generateEditSummary(){
+    var hook = HOOK_TYPES.find(function(h){ return h.id === editState.hookType; });
+    var lines = [
+      '═══════════════════════════════', '  EDIT SUMMARY — CAPCUT GUIDE', '═══════════════════════════════', '',
+      'CLIP: ' + (editState.videoTitle || editState.videoId || 'untitled'), '',
+      'HOOK TYPE: ' + (hook ? hook.label : 'Not set'),
+      'OPENING LINE: "' + (editState.hookText || 'Not set') + '"',
+      'HOOK TRANSITION: ' + (editState.transitionAssignments['hook'] || 'Hard cut (recommended)'), '',
+      'SCENE ORDER:'
+    ];
+    editState.scenes.forEach(function(s, i){ lines.push('  ' + (i+1) + '. ' + s.label + (s.duration ? ' [' + s.duration + ']' : '')); });
+    lines.push('', 'TRANSITIONS:');
+    editState.scenes.slice(0, -1).forEach(function(s, i){ lines.push('  Scene ' + (i+1) + '→' + (i+2) + ': ' + (editState.transitionAssignments['scene_' + i] || 'Hard cut')); });
+    lines.push('', 'EXPORT SETTINGS:', '  Resolution: 1080×1920 (9:16)', '  Frame rate: 30fps', '  Audio: -14 LUFS normalized', '', 'Generated by Harvey Content Manager');
+    var out = document.getElementById('edit-summary-output');
+    out.textContent = lines.join('\n');
+    out.style.display = 'block';
+  }
+
+  function goToEditStep(step){
+    editState.step = step;
+    document.querySelectorAll('#edit-steps-bar .edit-step').forEach(function(el, i){
+      var active = (i + 1) === step;
+      el.style.background = active ? 'rgba(0,212,255,0.15)' : 'rgba(255,255,255,0.02)';
+      var lbl = el.querySelector('.edit-step-label'); if (lbl) lbl.style.color = active ? '#00d4ff' : 'var(--text-dim,#888)';
+    });
+    for (var i = 1; i <= 4; i++){ var el = document.getElementById('edit-step-' + i); if (el) el.style.display = (i === step) ? 'block' : 'none'; }
+    if (step === 2) renderSceneList();
+    if (step === 3) { renderTransitionAssignments(); loadTransitionReference(); }
+  }
+  window.selectHookType = selectHookType; window.applyStructureTemplate = applyStructureTemplate;
+  window.addScene = addScene; window.updateScene = updateScene; window.removeScene = removeScene;
+  window.selectTransition = selectTransition; window.generateEditSummary = generateEditSummary; window.goToEditStep = goToEditStep;
   </script>
 </body>
 </html>

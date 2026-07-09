@@ -57,6 +57,7 @@ const index_js_2 = require("./integrations/apify/index.js");
 const index_js_3 = require("./agents/morningScan/index.js");
 const index_js_4 = require("./agents/commentReply/index.js");
 const index_js_5 = require("./agents/videoFeedback/index.js");
+const transitions_js_1 = require("./agents/videoFeedback/transitions.js");
 const index_js_6 = require("./agents/eveningPull/index.js");
 const index_js_7 = require("./agents/reporting/index.js");
 const index_js_8 = require("./agents/contentSuggestions/index.js");
@@ -593,7 +594,8 @@ app.post("/api/social/video-improvements/:postId", async (req, res) => {
     try {
         const postId = String(req.params.postId || "");
         const data = (0, socialStore_js_1.getLatestSocialDashboardData)();
-        const video = (data.videos || []).find((v) => v.id === postId);
+        const videos = data.videos || [];
+        const video = videos.find((v) => v.id === postId);
         if (!video) {
             res.status(404).json({ error: "Video not found" });
             return;
@@ -606,6 +608,10 @@ app.post("/api/social/video-improvements/:postId", async (req, res) => {
             sharesScore: 0,
             tier: video.tier ?? "cold",
         };
+        const avgViews = videos.length
+            ? videos.reduce((s, v) => s + (v.views || 0), 0) / videos.length
+            : 0;
+        const topViews = videos.reduce((m, v) => Math.max(m, v.views || 0), 0);
         const improvements = await (0, index_js_5.generateVideoImprovements)({
             description: video.caption || "",
             views: video.views || 0,
@@ -614,6 +620,8 @@ app.post("/api/social/video-improvements/:postId", async (req, res) => {
             shares: video.shares || 0,
             saves: video.saves || 0,
             scoreBreakdown: breakdown,
+            avgViews,
+            isTopPerformer: topViews > 0 && (video.views || 0) >= topViews,
         });
         (0, socialStore_js_1.saveVideoImprovements)(postId, improvements);
         res.json({ improvements });
@@ -632,6 +640,10 @@ app.post("/api/social/video-improvements/generate-all", async (req, res) => {
         const data = (0, socialStore_js_1.getLatestSocialDashboardData)();
         const videos = data.videos || [];
         let generated = 0;
+        const avgViews = videos.length
+            ? videos.reduce((s, v) => s + (v.views || 0), 0) / videos.length
+            : 0;
+        const topViews = videos.reduce((m, v) => Math.max(m, v.views || 0), 0);
         for (const video of videos) {
             const postId = video.id;
             const existing = (0, socialStore_js_1.getVideoImprovements)(postId);
@@ -653,6 +665,8 @@ app.post("/api/social/video-improvements/generate-all", async (req, res) => {
                 shares: video.shares || 0,
                 saves: video.saves || 0,
                 scoreBreakdown: breakdown,
+                avgViews,
+                isTopPerformer: topViews > 0 && (video.views || 0) >= topViews,
             });
             (0, socialStore_js_1.saveVideoImprovements)(postId, improvements);
             generated++;
@@ -664,6 +678,19 @@ app.post("/api/social/video-improvements/generate-all", async (req, res) => {
         const message = err instanceof Error ? err.message : String(err);
         res.status(500).json({ error: message });
     }
+});
+// CapCut transition reference — filtered by content type, or the real-estate
+// "best of" list when no type is given. Powers the guided editor + feedback tips.
+app.get("/api/content/transitions", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const contentType = typeof req.query.type === "string" ? req.query.type : "";
+    const transitions = contentType
+        ? (0, transitions_js_1.getTransitionsForContentType)(contentType)
+        : (0, transitions_js_1.getTopTransitionsForRealEstate)();
+    res.json({ transitions });
 });
 app.get("/api/social/refresh-schedule", (req, res) => {
     if (!dashboardTokenOk(req)) {

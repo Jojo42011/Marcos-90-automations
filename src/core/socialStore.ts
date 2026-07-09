@@ -866,7 +866,10 @@ export function getVideoScore(postId: string): VideoScoreBreakdown | null {
   };
 }
 
-export function saveVideoImprovements(postId: string, improvements: string[]): void {
+// A professional-editor review (multi-section string) is stored per video.
+// (Older data may hold a JSON array of short bullets — getVideoImprovements
+// migrates that to a string on read.)
+export function saveVideoImprovements(postId: string, review: string): void {
   const database = getSocialDb();
   database
     .prepare(
@@ -874,10 +877,10 @@ export function saveVideoImprovements(postId: string, improvements: string[]): v
        SET improvements = ?, improvements_generated_at = ?
        WHERE post_id = ?`,
     )
-    .run(JSON.stringify(improvements), new Date().toISOString(), postId);
+    .run(JSON.stringify(review), new Date().toISOString(), postId);
 }
 
-export function getVideoImprovements(postId: string): string[] | null {
+export function getVideoImprovements(postId: string): string | null {
   const database = getSocialDb();
   const row = database
     .prepare(`SELECT improvements FROM social_video_scores WHERE post_id = ?`)
@@ -885,9 +888,13 @@ export function getVideoImprovements(postId: string): string[] | null {
   if (!row?.improvements) return null;
   try {
     const parsed = JSON.parse(String(row.improvements));
-    return Array.isArray(parsed) ? parsed.map(String) : null;
-  } catch {
+    if (typeof parsed === "string") return parsed || null;
+    // Legacy bullet-array data → present as lines so the UI still renders it.
+    if (Array.isArray(parsed)) return parsed.map(String).map((b) => `• ${b}`).join("\n") || null;
     return null;
+  } catch {
+    // Not JSON — treat the raw column value as the review string.
+    return String(row.improvements) || null;
   }
 }
 

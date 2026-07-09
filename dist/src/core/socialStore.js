@@ -737,13 +737,16 @@ function getVideoScore(postId) {
         tier: String(row.tier),
     };
 }
-function saveVideoImprovements(postId, improvements) {
+// A professional-editor review (multi-section string) is stored per video.
+// (Older data may hold a JSON array of short bullets — getVideoImprovements
+// migrates that to a string on read.)
+function saveVideoImprovements(postId, review) {
     const database = getSocialDb();
     database
         .prepare(`UPDATE social_video_scores
        SET improvements = ?, improvements_generated_at = ?
        WHERE post_id = ?`)
-        .run(JSON.stringify(improvements), new Date().toISOString(), postId);
+        .run(JSON.stringify(review), new Date().toISOString(), postId);
 }
 function getVideoImprovements(postId) {
     const database = getSocialDb();
@@ -754,10 +757,16 @@ function getVideoImprovements(postId) {
         return null;
     try {
         const parsed = JSON.parse(String(row.improvements));
-        return Array.isArray(parsed) ? parsed.map(String) : null;
+        if (typeof parsed === "string")
+            return parsed || null;
+        // Legacy bullet-array data → present as lines so the UI still renders it.
+        if (Array.isArray(parsed))
+            return parsed.map(String).map((b) => `• ${b}`).join("\n") || null;
+        return null;
     }
     catch {
-        return null;
+        // Not JSON — treat the raw column value as the review string.
+        return String(row.improvements) || null;
     }
 }
 function setSocialRefreshTime(time) {
