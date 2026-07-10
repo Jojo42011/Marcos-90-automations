@@ -4514,11 +4514,8 @@
         <div class="rv-actions">
           <div class="rv-actions-row">
             <button type="button" class="rv-btn-save" onclick="rvSave('${vm.id}')">SAVE</button>
-            <button type="button" class="rv-btn-edit" onclick="openTrimEditor('${vm.id}','${jsStr(vm.title)}')">✂ EDIT CLIP</button>
-            <button type="button" class="rv-btn-edit" onclick="openEditPlanPanel('${vm.id}','${jsStr(vm.title)}')">📝 EDIT PLAN</button>
-            <button type="button" class="rv-btn-edit" onclick="openFreecut('${vm.id}','${jsStr(vm.title)}')">🎬 EDIT IN FREECUT</button>
+            <button type="button" class="rv-btn-edit" onclick="openFreecut('${vm.id}','${jsStr(vm.title)}')">✂ EDIT CLIP</button>
           </div>
-          <button type="button" class="rv-btn-chat" onclick="openChatEdit('${vm.id}','${jsStr(vm.title)}')">💬 CHAT EDIT</button>
           <div class="rv-actions-row">
             <button type="button" class="rv-btn-reject" onclick="rvReject('${vm.id}')">REJECT</button>
             <button type="button" class="rv-btn-publish" onclick="rvPublish('${vm.id}', event)"><span class="lbl">PUBLISH →</span></button>
