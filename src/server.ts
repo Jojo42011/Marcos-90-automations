@@ -4175,6 +4175,63 @@ app.post("/api/content/clip/:clipId/audio", clipAudioUpload.single("audio"), (re
   res.json({ ok: true, audioReplacePath: req.file.path, fileName: req.file.originalname });
 });
 
+// FreeCut round-trip: Marco edits a clip in the FreeCut browser editor (external,
+// client-side), exports it to disk, and re-uploads it here. The uploaded file
+// REPLACES this clip's video so the existing publish flow uses the edited version.
+// Non-destructive: the previous file is kept as a revertable version, mirroring
+// the /trim + /edit safety pattern.
+const clipVideoReplaceUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".mp4";
+      cb(null, `freecut-${Date.now()}-${randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB — a full edited export can be large
+  fileFilter: (_req, file, cb) => {
+    const allowed = [".mp4", ".mov", ".webm", ".mkv", ".m4v"];
+    cb(null, allowed.includes(path.extname(file.originalname).toLowerCase()));
+  },
+});
+
+app.post(
+  "/api/content/clip/:clipId/replace-upload",
+  requireDiskSpaceForUpload(),
+  clipVideoReplaceUpload.single("video"),
+  (req, res) => {
+    if (!dashboardTokenOk(req)) {
+      res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+      return;
+    }
+    const clipId = String(req.params.clipId || "");
+    const video = getContentVideo(clipId);
+    if (!video) {
+      res.status(404).json({ error: "Clip not found" });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ error: "No video uploaded (field name: video; allowed: mp4, mov, webm, mkv, m4v)." });
+      return;
+    }
+    // Confirm the upload is a readable video (ffprobe returns a real duration)
+    // before repointing the clip at it.
+    const dur = probeClipDurationSeconds(req.file.path);
+    if (!dur || dur <= 0) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      res.status(422).json({ error: "Uploaded file could not be read as a video (corrupt or unsupported)." });
+      return;
+    }
+    const oldPath = resolveClipFileForVideo(video);
+    updateContentVideoFilePath(clipId, req.file.path);
+    if (oldPath && path.resolve(oldPath) !== path.resolve(req.file.path)) {
+      saveClipVersionKeepingOne(clipId, oldPath); // keep the pre-FreeCut version for revert
+    }
+    console.log(`[freecut] Clip ${clipId} replaced with uploaded edit (${req.file.originalname})`);
+    res.json({ ok: true, videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}` });
+  },
+);
+
 app.post("/api/content/upload", requireDiskSpaceForUpload(), trackUploadProgress(), contentVideoUpload.single("video"), async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });

@@ -4516,6 +4516,7 @@
             <button type="button" class="rv-btn-save" onclick="rvSave('${vm.id}')">SAVE</button>
             <button type="button" class="rv-btn-edit" onclick="openTrimEditor('${vm.id}','${jsStr(vm.title)}')">✂ EDIT CLIP</button>
             <button type="button" class="rv-btn-edit" onclick="openEditPlanPanel('${vm.id}','${jsStr(vm.title)}')">📝 EDIT PLAN</button>
+            <button type="button" class="rv-btn-edit" onclick="openFreecut('${vm.id}','${jsStr(vm.title)}')">🎬 EDIT IN FREECUT</button>
           </div>
           <button type="button" class="rv-btn-chat" onclick="openChatEdit('${vm.id}','${jsStr(vm.title)}')">💬 CHAT EDIT</button>
           <div class="rv-actions-row">
@@ -6840,6 +6841,82 @@
     else { window.location.href = '/dashboard'; }
   }
   window.goToCommandCenter = goToCommandCenter;
+  </script>
+
+  <!-- ════ EDIT IN FREECUT — open the free browser editor, round-trip the export ════ -->
+  <div id="freecutModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); justify-content:center; padding:32px 14px; overflow-y:auto;">
+    <div style="background:var(--card-bg,#0d0f14); border:1px solid rgba(0,212,255,0.25); border-radius:8px; max-width:560px; width:100%; height:fit-content; padding:20px; font-family:monospace;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div style="font-size:13px; color:var(--text,#fff); letter-spacing:1px;">🎬 EDIT IN FREECUT <span id="freecut-title" style="color:var(--text-dim,#888); font-size:11px; letter-spacing:0;"></span></div>
+        <button onclick="closeFreecut()" style="background:transparent; border:none; color:var(--text-dim,#888); cursor:pointer; font-size:18px;">✕</button>
+      </div>
+      <p style="font-size:11px; color:var(--text-dim,#888); line-height:1.6; margin-bottom:16px;">
+        FreeCut is a free, private browser editor — your video never leaves your computer. Three quick steps:
+      </p>
+
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="padding:12px; background:rgba(0,212,255,0.03); border:1px solid rgba(0,212,255,0.1); border-radius:4px;">
+          <div style="font-size:10px; color:#00d4ff; letter-spacing:1px; margin-bottom:8px;">STEP 1 · DOWNLOAD THIS CLIP</div>
+          <a id="freecut-download" href="#" download style="display:inline-block; background:#00d4ff; color:#000; text-decoration:none; padding:8px 16px; font-size:11px; font-weight:700; border-radius:2px;">⬇ Download clip</a>
+        </div>
+        <div style="padding:12px; background:rgba(0,212,255,0.03); border:1px solid rgba(0,212,255,0.1); border-radius:4px;">
+          <div style="font-size:10px; color:#00d4ff; letter-spacing:1px; margin-bottom:8px;">STEP 2 · OPEN FREECUT &amp; EDIT</div>
+          <p style="font-size:10px; color:var(--text-dim,#888); margin-bottom:8px; line-height:1.5;">Opens FreeCut in a new tab. Drag the downloaded clip in, edit, then export as MP4 (1080×1920, 30fps).</p>
+          <button onclick="window.open('https://freecut.net','_blank','noopener')" style="background:transparent; border:1px solid #00d4ff; color:#00d4ff; padding:8px 16px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer;">Open FreeCut ↗</button>
+        </div>
+        <div style="padding:12px; background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.2); border-radius:4px;">
+          <div style="font-size:10px; color:#10b981; letter-spacing:1px; margin-bottom:8px;">STEP 3 · RE-UPLOAD YOUR EXPORT</div>
+          <p style="font-size:10px; color:var(--text-dim,#888); margin-bottom:8px; line-height:1.5;">This replaces the clip in the Review Queue with your edited version (the original is kept as a revertable version).</p>
+          <input type="file" id="freecut-file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,.mp4,.mov,.webm,.mkv,.m4v" style="font-size:10px; color:var(--text,#fff); margin-bottom:8px; display:block;">
+          <button id="freecut-upload-btn" onclick="uploadFreecutEdit()" style="background:#10b981; color:#000; border:none; padding:8px 16px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer;">⬆ Replace clip with edit</button>
+          <div id="freecut-upload-status" style="font-size:10px; color:var(--text-dim,#888); margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* EDIT IN FREECUT (Path A): open the free browser editor, download the clip to
+     load into it, and re-upload the export to replace the clip in the Review
+     Queue. FreeCut runs entirely in the browser — the clip never uploads to it. */
+  var freecutClipId = null;
+  function openFreecut(clipId, title){
+    freecutClipId = clipId;
+    var t = document.getElementById('freecut-title'); if (t) t.textContent = title ? ('· ' + title) : '';
+    var dl = document.getElementById('freecut-download');
+    if (dl) { dl.setAttribute('href', apiUrl('/api/content/clip/' + clipId + '/video')); dl.setAttribute('download', (title || 'clip').replace(/[^\w.-]+/g,'_') + '.mp4'); }
+    var f = document.getElementById('freecut-file'); if (f) f.value = '';
+    var s = document.getElementById('freecut-upload-status'); if (s) s.textContent = '';
+    document.getElementById('freecutModal').style.display = 'flex';
+  }
+  function closeFreecut(){ var m = document.getElementById('freecutModal'); if (m) m.style.display = 'none'; }
+  window.openFreecut = openFreecut; window.closeFreecut = closeFreecut;
+  document.getElementById('freecutModal')?.addEventListener('click', function(e){ if (e.target === this) closeFreecut(); });
+
+  async function uploadFreecutEdit(){
+    var status = document.getElementById('freecut-upload-status');
+    var input = document.getElementById('freecut-file');
+    var btn = document.getElementById('freecut-upload-btn');
+    if (!freecutClipId || !input || !input.files || !input.files[0]) { if (status) status.textContent = 'Pick your exported video first.'; return; }
+    var fd = new FormData();
+    fd.append('video', input.files[0]);
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Uploading + replacing…';
+    try {
+      // apiUrl adds the token; apiHeaders sets JSON content-type which must NOT be
+      // set for multipart — so use apiUrl only and let the browser set the boundary.
+      var res = await fetch(apiUrl('/api/content/clip/' + freecutClipId + '/replace-upload'), { method: 'POST', body: fd });
+      if (!res.ok) { var e = await res.json().catch(function(){return {};}); throw new Error(e.error || ('HTTP ' + res.status)); }
+      if (status) status.textContent = 'Done ✓ — clip replaced with your FreeCut edit.';
+      if (typeof showToast === 'function') showToast('Clip replaced with FreeCut edit ✓');
+      setTimeout(function(){ closeFreecut(); if (typeof loadReviewQueue === 'function') loadReviewQueue(); else location.reload(); }, 1200);
+    } catch (err) {
+      if (status) status.textContent = 'Upload failed: ' + (err.message || err);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+  window.uploadFreecutEdit = uploadFreecutEdit;
   </script>
 
   <!-- ════ EDIT PLAN — 4-step guided CapCut planning workflow ════ -->
