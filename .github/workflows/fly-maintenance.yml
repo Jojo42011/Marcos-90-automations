@@ -99,6 +99,25 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      # EMERGENCY: force every machine onto the last-known-good image (v240,
+      # under the 8GB unpack limit) and start it. Used after the oversized
+      # image left the app with no startable machine.
+      - name: Rescue to last-good image
+        if: ${{ contains(env.MAINT_ACTION, 'rescue') }}
+        run: |
+          GOOD="registry.fly.io/marco-90-automation:deployment-01KX7GG6JFS96ZBST8PR8SKFZN"
+          for id in $(flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id']) for m in json.load(sys.stdin)]"); do
+            echo "Rescuing $id → $GOOD"
+            flyctl machine update "$id" -a marco-90-automation --image "$GOOD" --yes --skip-health-checks || true
+            flyctl machine start "$id" -a marco-90-automation || true
+          done
+          sleep 20
+          echo "===== post-rescue state ====="
+          flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id'], m['state'], m.get('config',{}).get('image','?')) for m in json.load(sys.stdin)]"
+          curl -sS -o /dev/null -w "health: HTTP %{http_code}\n" --max-time 20 https://marco-90-automation.fly.dev/health || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Restart machines
         if: ${{ contains(env.MAINT_ACTION, 'restart') }}
         run: |
