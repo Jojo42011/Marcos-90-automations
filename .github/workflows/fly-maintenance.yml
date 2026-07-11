@@ -70,6 +70,35 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      # Update to the latest release image WITHOUT health-wait, then capture the
+      # machine's boot logs while it tries (and possibly fails) to come up.
+      # Exists because flyd reverts the new image on boot failure and hides the
+      # crash — this catches the actual error in the act.
+      - name: Boot debug
+        if: ${{ contains(env.MAINT_ACTION, 'boot-debug') }}
+        run: |
+          IMAGE=$(flyctl releases -a marco-90-automation --json | python3 -c "
+          import json, sys
+          rels = json.load(sys.stdin)
+          for r in rels:
+              ref = r.get('ImageRef') or r.get('image_ref') or ''
+              if ref:
+                  print(ref)
+                  break
+          ")
+          echo "Target image: $IMAGE"
+          MID=$(flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
+          echo "Machine: $MID"
+          # Fire the update without blocking on health, then tail logs during boot.
+          flyctl machine update "$MID" -a marco-90-automation --image "$IMAGE" --yes --skip-health-checks || true
+          echo "===== capturing logs for 150s ====="
+          timeout 150 flyctl logs -a marco-90-automation --no-tail=false 2>&1 | head -300 || true
+          echo "===== post-attempt machine state ====="
+          flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id'], m['state'], m.get('config',{}).get('image','?')) for m in json.load(sys.stdin)]"
+          flyctl machine status "$MID" -a marco-90-automation || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Restart machines
         if: ${{ contains(env.MAINT_ACTION, 'restart') }}
         run: |
