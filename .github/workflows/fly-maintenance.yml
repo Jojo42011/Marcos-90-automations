@@ -15,9 +15,17 @@ on:
           - status            # fly status + machines + releases (read-only)
           - restart           # restart all machines (picks up current release image)
           - destroy-stale     # destroy machines NOT on the latest release image, then status
+  # Fallback trigger for tokens that cannot dispatch workflows: push a branch
+  # named fly-maint/status, fly-maint/restart, or fly-maint/destroy-stale.
+  push:
+    branches:
+      - "fly-maint/**"
 jobs:
   maintain:
     runs-on: ubuntu-latest
+    env:
+      # From dispatch input, or from the fly-maint/<action> branch name.
+      MAINT_ACTION: ${{ inputs.action || github.ref_name }}
     steps:
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
@@ -34,7 +42,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Restart machines
-        if: ${{ inputs.action == 'restart' }}
+        if: ${{ contains(env.MAINT_ACTION, 'restart') }}
         run: |
           for id in $(flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id']) for m in json.load(sys.stdin)]"); do
             echo "Restarting $id"
@@ -44,7 +52,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Destroy stale machines
-        if: ${{ inputs.action == 'destroy-stale' }}
+        if: ${{ contains(env.MAINT_ACTION, 'destroy-stale') }}
         run: |
           python3 - <<'EOF' > /tmp/stale.txt
           import json, subprocess

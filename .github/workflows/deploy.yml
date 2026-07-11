@@ -20,3 +20,16 @@ jobs:
         run: flyctl deploy --local-only -c fly.toml
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # Post-deploy truth check: list every machine and the image it actually
+      # runs. Exists because a deploy once reported success while production
+      # kept serving an old image (stale machine) — this makes that visible.
+      - name: Verify machine images
+        if: always()
+        run: |
+          echo "===== fly status ====="
+          flyctl status -a marco-90-automation || true
+          echo "===== machines (id / state / region / image) ====="
+          flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id'], m['state'], m['region'], m.get('config',{}).get('image','?')) for m in json.load(sys.stdin)]" || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
