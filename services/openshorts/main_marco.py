@@ -60,6 +60,8 @@ def get_viral_clips_marco(
     trend_brief: str = "",
     target_clips: int = 7,
     video_path: str | None = None,
+    user_context: str = "",
+    script_text: str = "",
 ) -> dict:
     if openshorts_main is None:
         raise RuntimeError("OpenShorts main module not available")
@@ -119,7 +121,14 @@ def get_viral_clips_marco(
         prosody_brief=prosody_brief,
         quality_floor=VIRAL_SCORE_FLOOR,
         has_frames=bool(images),
+        user_context=user_context,
+        script_text=script_text,
     )
+    if user_context or script_text:
+        print(
+            f"[content-ai] human direction attached "
+            f"(context={len(user_context)} chars, script={len(script_text)} chars)"
+        )
 
     clips_data, model = analyze_transcript_for_clips(
         prompt, images=images, vision_model=VISION_MODEL if images else None

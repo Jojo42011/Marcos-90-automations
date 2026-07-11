@@ -337,6 +337,8 @@ export async function processBatch(batchSessionId: string): Promise<void> {
           pillar: batchSession.pillar,
           trendBrief,
           targetClipCount: clipsForFile,
+          userContext: batchSession.userContext || "",
+          scriptText: batchSession.scriptText || "",
         });
         jobId = submission.jobId;
         console.log(

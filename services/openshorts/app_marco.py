@@ -296,6 +296,8 @@ def process_video_job(
     trend_brief: str,
     target_clips: int,
     enable_captions: bool = True,
+    user_context: str = "",
+    script_text: str = "",
 ):
     """
     Runs the actual video processing. This is intentionally a PLAIN (synchronous)
@@ -404,6 +406,8 @@ def process_video_job(
                 trend_brief=trend_brief,
                 target_clips=target_clips,
                 video_path=video_path,
+                user_context=user_context,
+                script_text=script_text,
             )
         except NoUsableClipsError as no_clips:
             # The model responded fine but found no viable clip moments — a
@@ -686,6 +690,11 @@ async def process_video(
     trend_brief: str = Form(""),
     target_clips: int = Form(7),
     enable_captions: str = Form("true"),
+    # Human direction: what the uploader said to focus on, and any script text.
+    # Both are injected into the viral-moment prompt so the AI cuts with
+    # direction instead of guessing.
+    user_context: str = Form(""),
+    script_text: str = Form(""),
 ):
     if not any_llm_configured():
         raise HTTPException(
@@ -718,6 +727,8 @@ async def process_video(
         "video_path": video_path,
         "pillar": pillar,
         "target_clips": target_clips,
+        "user_context": user_context,
+        "script_text": script_text,
         "clips": [],
         "error": None,
         "created_at": time.time(),
@@ -737,6 +748,8 @@ async def process_video(
         trend_brief=trend_brief,
         target_clips=target_clips,
         enable_captions=(enable_captions.lower() == "true"),
+        user_context=user_context,
+        script_text=script_text,
     )
 
     return {"job_id": job_id, "status": "queued"}

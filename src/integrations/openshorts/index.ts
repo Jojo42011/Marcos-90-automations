@@ -60,8 +60,18 @@ export async function submitToOpenShorts(input: {
   trendBrief?: string;
   targetClipCount?: number;
   enableCaptions?: boolean;
+  userContext?: string; // what the human said to focus on — goes into the clipping prompt
+  scriptText?: string; // uploaded script content, same destination
 }): Promise<{ jobId: string; status: string }> {
-  const { filePath, pillar, trendBrief = "", targetClipCount = 7, enableCaptions = true } = input;
+  const {
+    filePath,
+    pillar,
+    trendBrief = "",
+    targetClipCount = 7,
+    enableCaptions = true,
+    userContext = "",
+    scriptText = "",
+  } = input;
 
   if (!fs.existsSync(filePath)) {
     throw new Error(`Video file not found at path: ${filePath}`);
@@ -86,6 +96,8 @@ export async function submitToOpenShorts(input: {
     formData.append("trend_brief", trendBrief);
     formData.append("target_clips", String(targetClipCount));
     formData.append("enable_captions", String(enableCaptions));
+    formData.append("user_context", userContext);
+    formData.append("script_text", scriptText);
 
     const response = await axios.post(`${OPENSHORTS_BASE_URL}/api/process`, formData, {
       headers: formData.getHeaders(),

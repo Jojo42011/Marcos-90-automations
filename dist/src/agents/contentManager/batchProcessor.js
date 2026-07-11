@@ -261,6 +261,8 @@ async function processBatch(batchSessionId) {
                         pillar: batchSession.pillar,
                         trendBrief,
                         targetClipCount: clipsForFile,
+                        userContext: batchSession.userContext || "",
+                        scriptText: batchSession.scriptText || "",
                     });
                     jobId = submission.jobId;
                     console.log(`[batch-processor] OpenShorts job submitted: ${jobId} (status: ${submission.status})`);

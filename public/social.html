@@ -1819,6 +1819,40 @@
     /* Section labels used by Activity Log / Suggestions */
     .suggestions-section-label { font-family: var(--font-display); font-size: 9px; letter-spacing: 3px; color: var(--dim); text-transform: uppercase; padding-left: 12px; border-left: 3px solid var(--teal); margin: 0 0 12px; }
 
+    /* ── Upload & Clip: script upload + context chat ─────────────────────── */
+    .script-upload-section, .context-chat-section { margin: 12px 0 4px; display: flex; flex-direction: column; gap: 8px; }
+    .script-section-label, .context-chat-label { display: flex; flex-direction: column; gap: 2px; }
+    .script-label-text, .context-label-text { font-size: 13px; font-weight: 600; color: var(--text, #e8eaed); }
+    .script-label-sub, .context-label-sub { font-size: 11px; color: var(--muted, #8a919c); }
+    .script-drop-zone { border: 1px dashed #3a4049; border-radius: 8px; padding: 14px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; background: var(--panel-2, #1b1f26); }
+    .script-drop-zone:hover, .script-drop-zone.drag-over { border-color: var(--accent-2, #25f4ee); background: rgba(37, 244, 238, 0.04); }
+    .script-drop-icon { font-size: 18px; }
+    .script-drop-text { font-size: 12px; color: var(--muted, #8a919c); }
+    .script-browse-link { color: var(--accent-2, #25f4ee); cursor: pointer; text-decoration: underline; }
+    .script-preview { background: var(--panel-2, #1b1f26); border: 1px solid var(--border, #262b33); border-radius: 8px; padding: 10px 12px; }
+    .script-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .script-file-name { font-size: 12px; color: var(--accent-2, #25f4ee); font-family: ui-monospace, monospace; }
+    .script-clear-btn { background: none; border: none; color: var(--muted, #8a919c); font-size: 11px; cursor: pointer; }
+    .script-preview-text { font-size: 11px; color: var(--muted, #8a919c); max-height: 80px; overflow-y: auto; white-space: pre-wrap; margin: 0; font-family: ui-monospace, monospace; }
+    .context-chat-messages { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+    .context-suggestion-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .context-suggestion { background: var(--panel-2, #1b1f26); border: 1px solid var(--border, #262b33); border-radius: 999px; padding: 5px 12px; font-size: 11px; color: var(--muted, #8a919c); cursor: pointer; transition: all 0.15s ease; }
+    .context-suggestion:hover { border-color: var(--accent-2, #25f4ee); color: var(--accent-2, #25f4ee); }
+    .context-message-bubble { background: rgba(37, 244, 238, 0.08); border: 1px solid rgba(37, 244, 238, 0.2); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--text, #e8eaed); display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .context-message-bubble button { background: none; border: none; color: var(--muted, #8a919c); font-size: 10px; cursor: pointer; flex-shrink: 0; }
+    .context-chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
+    .context-chat-input { flex: 1; background: var(--panel-2, #1b1f26); border: 1px solid var(--border, #262b33); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--text, #e8eaed); font-family: inherit; resize: none; transition: border-color 0.15s ease; }
+    .context-chat-input:focus { outline: none; border-color: var(--accent-2, #25f4ee); }
+    .context-add-btn { background: var(--accent-2, #25f4ee); color: #0b0d10; border: none; border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .context-add-btn:disabled { opacity: 0.5; cursor: default; }
+    .context-summary { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 6px 10px; background: rgba(37, 244, 238, 0.06); border-radius: 6px; }
+    .context-summary-label { color: var(--muted, #8a919c); white-space: nowrap; }
+    #contextSummaryText { color: var(--accent-2, #25f4ee); flex: 1; }
+    .context-clear-link { background: none; border: none; color: var(--muted, #8a919c); font-size: 11px; cursor: pointer; text-decoration: underline; }
+    /* ── Review Queue: AI Edit button (replaces SAVE; metadata now auto-saves) ── */
+    .rv-btn-ai-edit { flex: 1; height: 40px; background: rgba(37,244,238,0.1); border: 1px solid rgba(37,244,238,0.3); border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 10px; letter-spacing: 2px; color: var(--accent-2, #25f4ee); cursor: pointer; transition: all var(--rv-dur-base); }
+    .rv-btn-ai-edit:hover { background: rgba(37,244,238,0.18); border-color: var(--accent-2, #25f4ee); }
+    .ai-edit-message { border-radius: 8px; padding: 8px 12px; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -2039,9 +2073,55 @@
               <div class="icon">⬆</div>
               <div><strong>Drop multiple video files here or click to browse</strong></div>
               <div class="cm-muted" style="margin-top:0.35rem;">MP4, MOV, AVI up to 4GB each · Max 20 files per batch</div>
-              <div class="cm-muted" style="margin-top:0.5rem;font-size:0.75rem;">OpenShorts uses Gemini AI to find the most viral moments, then automatically reframes to 9:16 vertical. Your footage never leaves your server.</div>
+              <div class="cm-muted" style="margin-top:0.5rem;font-size:0.75rem;">OpenShorts uses AI to find the most viral moments, then automatically reframes to 9:16 vertical. Your footage never leaves your server.</div>
               <input type="file" id="video-file-input" accept=".mp4,.mov,.avi,.mkv,.webm,video/*" multiple hidden />
             </div>
+
+            <!-- Script upload (optional) — extracted text rides into the clipping prompt -->
+            <div class="script-upload-section">
+              <div class="script-section-label">
+                <span class="script-label-text">📄 Script or notes (optional)</span>
+                <span class="script-label-sub">Drop a .txt or .pdf — helps the AI find the best moments faster</span>
+              </div>
+              <div id="scriptDropZone" class="script-drop-zone">
+                <span class="script-drop-icon">📋</span>
+                <span class="script-drop-text">Drop script here or <span class="script-browse-link">browse</span></span>
+                <input type="file" id="scriptFileInput" accept=".txt,.pdf,.docx,.doc" style="display:none" />
+              </div>
+              <div id="scriptPreview" style="display:none" class="script-preview">
+                <div class="script-preview-header">
+                  <span id="scriptFileName" class="script-file-name"></span>
+                  <button type="button" onclick="clearScript()" class="script-clear-btn">✕ Remove</button>
+                </div>
+                <pre id="scriptPreviewText" class="script-preview-text"></pre>
+              </div>
+            </div>
+
+            <!-- Context chat — tell the AI what to focus on in this footage -->
+            <div class="context-chat-section">
+              <div class="context-chat-label">
+                <span class="context-label-text">💬 Tell the AI what to focus on</span>
+                <span class="context-label-sub">The more specific you are, the better the clips. Mention timestamps, topics, or energy moments worth cutting.</span>
+              </div>
+              <div class="context-chat-messages" id="contextChatMessages">
+                <div class="context-suggestion-row">
+                  <button type="button" class="context-suggestion" onclick="addContextSuggestion(this)">I talk about pricing at the 2 minute mark</button>
+                  <button type="button" class="context-suggestion" onclick="addContextSuggestion(this)">The energy really picks up when I show the backyard</button>
+                  <button type="button" class="context-suggestion" onclick="addContextSuggestion(this)">Focus on the part where I explain the interest rate math</button>
+                  <button type="button" class="context-suggestion" onclick="addContextSuggestion(this)">Skip the first 3 minutes of setup</button>
+                </div>
+              </div>
+              <div class="context-chat-input-row">
+                <textarea id="contextInput" class="context-chat-input" placeholder="Tell the AI what to look for… (e.g. 'At the 3 minute mark I walk through Canyon Lake pricing — that's the most important part')" rows="3"></textarea>
+                <button type="button" id="addContextBtn" onclick="submitContextMessage()" class="context-add-btn">Add</button>
+              </div>
+              <div id="contextSummary" style="display:none" class="context-summary">
+                <span class="context-summary-label">AI will focus on:</span>
+                <span id="contextSummaryText"></span>
+                <button type="button" onclick="clearContext()" class="context-clear-link">Clear</button>
+              </div>
+            </div>
+
             <table class="batch-file-table" id="batch-file-table" style="display:none;">
               <thead><tr><th>Filename</th><th>Size</th><th>Duration</th><th>Status</th><th></th></tr></thead>
               <tbody id="batch-file-tbody"></tbody>
@@ -4217,7 +4297,7 @@
         </div>
         <div class="clip-review-footer">
           ${v.id ? `<button type="button" class="cm-btn" onclick="playClip('${v.id}','${jsStr(clipTitle)}')">▶ Play clip</button>` : ""}
-          <button type="button" class="cm-btn" onclick="saveClipMetadata('${v.id}')">Save changes</button>
+          <button type="button" class="cm-btn" onclick="openAiEdit('${v.id}','${jsStr(clipTitle)}')">✦ AI Edit</button>
           <button type="button" class="cm-btn red" onclick="cmReject('${v.id}')">Reject</button>
           <button type="button" class="cm-btn green send-to-publisher-btn" onclick="sendToPublisher('${v.id}', document.getElementById('clip-card-${v.id}'), ${v.complianceFlagged ? "true" : "false"})">Send to Publisher →</button>
         </div>
@@ -4514,7 +4594,7 @@
         </div>
         <div class="rv-actions">
           <div class="rv-actions-row">
-            <button type="button" class="rv-btn-save" onclick="rvSave('${vm.id}')">SAVE</button>
+            <button type="button" class="rv-btn-ai-edit" onclick="openAiEdit('${vm.id}','${jsStr(vm.title)}')">✦ AI EDIT</button>
             <button type="button" class="rv-btn-edit" onclick="openClipEditor('${vm.id}','${jsStr(vm.title)}')">✂ EDIT CLIP</button>
           </div>
           <div class="rv-actions-row">
@@ -4604,7 +4684,7 @@
     function rvToggleAlts() { const l = document.getElementById("rvAltsList"); if (l) l.classList.toggle("open"); }
     function rvApplyAlt(id, hook) { const el = document.getElementById("rvHook"); if (el) el.textContent = hook; void rvSave(id); }
 
-    async function rvSave(id) {
+    async function rvSave(id, silent) {
       const title = document.getElementById("rvStageTitle")?.textContent?.trim();
       const hook = document.getElementById("rvHook")?.textContent?.trim();
       const caption = document.getElementById("rvCaption")?.textContent?.trim();
@@ -4612,9 +4692,19 @@
         await cmFetch(`/api/content/clip/${id}/metadata`, { method: "PATCH", body: JSON.stringify({ title, hook, caption }) });
         const vm = rvClips.find((c) => c.id === id);
         if (vm) { vm.title = title; vm.hook = hook; vm.caption = caption; rvRenderQueue(); }
-        showToast("Saved ✓");
-      } catch (err) { showToast(`Save failed: ${err.message || "error"}`); }
+        if (!silent) showToast("Saved ✓");
+      } catch (err) { if (!silent) showToast(`Save failed: ${err.message || "error"}`); }
     }
+
+    // Metadata now auto-saves (the SAVE button became ✦ AI EDIT). focusout
+    // bubbles (blur doesn't), so one listener covers the stage title + hook +
+    // caption contenteditables across re-renders.
+    document.addEventListener("focusout", (e) => {
+      const el = e.target;
+      if (!el || !el.getAttribute || !el.getAttribute("data-field")) return;
+      if (!el.closest("#rvStage") && !el.closest("#rvDetails")) return;
+      if (rvSelectedId) void rvSave(rvSelectedId, true);
+    });
 
     function rvSpawnParticles(btn) {
       const r = btn.getBoundingClientRect();
@@ -4664,6 +4754,9 @@
       if (btn) { btn.classList.add("flash"); setTimeout(() => btn.classList.remove("flash"), 150); rvSpawnParticles(btn); }
       const body = vm && vm.flagged ? { override_compliance: true, override_reason: "human reviewed" } : { scheduled_for: null, platforms: null };
       try {
+        // Persist any unsaved title/hook/caption edits before publishing (the
+        // SAVE button is gone — auto-save covers blur, this covers "type → publish").
+        try { await rvSave(id, true); } catch (_) { /* publish anyway */ }
         await cmFetch(`/api/content/clip/${id}/send-to-publisher`, { method: "POST", body: JSON.stringify(body) });
         rvRemoveCardAnimated(id, false, () => {
           rvAdvance(id);
@@ -4673,6 +4766,107 @@
         showToast("Clip approved and queued for publishing");
       } catch (err) { showToast(`Failed to send: ${err.message || "error"}`); }
     }
+
+    /* ── AI EDIT modal — natural-language clip edits (FFmpeg via sidecar) ── */
+    let activeEditClipId = null;
+
+    function openAiEdit(clipId, clipTitle) {
+      activeEditClipId = clipId;
+      const titleEl = document.getElementById("aiEditTitle");
+      if (titleEl) titleEl.textContent = `AI Edit — ${clipTitle || "Clip"}`;
+      const thread = document.getElementById("aiEditThread");
+      thread?.querySelectorAll(".ai-edit-message").forEach((el) => el.remove());
+      const emptyState = document.getElementById("aiEditEmptyState");
+      if (emptyState) emptyState.style.display = "block";
+      const statusEl = document.getElementById("aiEditStatus");
+      if (statusEl) statusEl.style.display = "none";
+      const input = document.getElementById("aiEditInput");
+      if (input) input.value = "";
+      const modal = document.getElementById("aiEditModal");
+      if (modal) modal.style.display = "flex";
+      setTimeout(() => document.getElementById("aiEditInput")?.focus(), 100);
+    }
+    window.openAiEdit = openAiEdit;
+
+    function closeAiEditModal() {
+      const modal = document.getElementById("aiEditModal");
+      if (modal) modal.style.display = "none";
+      activeEditClipId = null;
+    }
+    window.closeAiEditModal = closeAiEditModal;
+
+    function fillAiEditInput(btn) {
+      const input = document.getElementById("aiEditInput");
+      if (input) { input.value = btn.textContent || ""; input.focus(); }
+    }
+    window.fillAiEditInput = fillAiEditInput;
+
+    function aiEditThreadMessage(kind, text) {
+      const thread = document.getElementById("aiEditThread");
+      const emptyState = document.getElementById("aiEditEmptyState");
+      if (emptyState) emptyState.style.display = "none";
+      const msg = document.createElement("div");
+      msg.className = "ai-edit-message";
+      if (kind === "user") {
+        msg.style.cssText = "background:var(--panel-2);border:1px solid var(--border);color:var(--text)";
+      } else if (kind === "ok") {
+        msg.style.cssText = "background:rgba(61,220,132,0.08);border:1px solid rgba(61,220,132,0.2);color:#3ddc84";
+      } else {
+        msg.style.cssText = "background:rgba(255,90,95,0.08);border:1px solid rgba(255,90,95,0.2);color:#ff5a5f";
+      }
+      msg.textContent = text; // user/AI text is never injected as HTML
+      thread?.appendChild(msg);
+      thread?.scrollTo(0, thread.scrollHeight);
+      return msg;
+    }
+
+    async function submitAiEdit() {
+      if (!activeEditClipId) return;
+      const input = document.getElementById("aiEditInput");
+      const instruction = input?.value?.trim();
+      if (!instruction) return;
+      const clipId = activeEditClipId;
+      const sendBtn = document.getElementById("aiEditSendBtn");
+      const statusEl = document.getElementById("aiEditStatus");
+      const statusText = document.getElementById("aiEditStatusText");
+
+      aiEditThreadMessage("user", instruction);
+      if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "Editing…"; }
+      if (statusEl) statusEl.style.display = "flex";
+      if (statusText) statusText.textContent = "AI is processing your edit — rendering can take a minute…";
+      if (input) input.value = "";
+
+      try {
+        const data = await cmFetch(`/api/content/clip/${clipId}/ai-edit`, {
+          method: "POST",
+          body: JSON.stringify({ instruction }),
+        });
+        const dur = data.new_duration_seconds ? `New duration: ${Math.round(data.new_duration_seconds)}s` : "Clip updated";
+        aiEditThreadMessage("ok", `✓ ${data.description || instruction} — ${dur}`);
+        showToast("Clip edited ✓");
+        setTimeout(() => { if (typeof loadReviewQueue === "function") void loadReviewQueue(); }, 800);
+      } catch (err) {
+        aiEditThreadMessage("err", `✕ ${err.message || "Edit failed"}`);
+      } finally {
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Edit"; }
+        if (statusEl) statusEl.style.display = "none";
+      }
+    }
+    window.submitAiEdit = submitAiEdit;
+
+    // The modal markup sits near the end of <body>, after this script runs —
+    // bind its listeners once the DOM is fully parsed.
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("aiEditModal")?.addEventListener("click", function (e) {
+        if (e.target === this) closeAiEditModal();
+      });
+      document.getElementById("aiEditInput")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          submitAiEdit();
+        }
+      });
+    });
 
     function rvRenderEmpty() {
       const stage = document.getElementById("rvStage");
@@ -6006,6 +6200,147 @@
       }
       renderBatchFileTable();
     }
+    /* ── Script upload + context chat (Upload & Clip) ─────────────────────
+       Both feed the clipping AI: contextMessages joins into user_context and
+       scriptContent becomes script_text on the batch-upload form. */
+    let scriptContent = "";
+    let contextMessages = [];
+
+    const scriptDrop = document.getElementById("scriptDropZone");
+    const scriptInput = document.getElementById("scriptFileInput");
+    scriptDrop?.addEventListener("dragover", (e) => { e.preventDefault(); scriptDrop.classList.add("drag-over"); });
+    scriptDrop?.addEventListener("dragleave", () => scriptDrop.classList.remove("drag-over"));
+    scriptDrop?.addEventListener("drop", (e) => {
+      e.preventDefault();
+      scriptDrop.classList.remove("drag-over");
+      const file = e.dataTransfer?.files?.[0];
+      if (file) handleScriptFile(file);
+    });
+    scriptDrop?.addEventListener("click", () => scriptInput?.click());
+    scriptInput?.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) handleScriptFile(file);
+    });
+
+    async function handleScriptFile(file) {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      if (!["txt", "pdf", "docx", "doc"].includes(ext || "")) {
+        showToast("Please upload a .txt, .pdf, or .docx file");
+        return;
+      }
+      if (ext === "txt") {
+        const text = await file.text();
+        scriptContent = text;
+        showScriptPreview(file.name, text.slice(0, 500));
+        return;
+      }
+      // PDF/docx — extract text server-side. apiUrl carries the token; do NOT
+      // set a JSON content-type on multipart (browser sets the boundary).
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const res = await fetch(apiUrl("/api/content/extract-text"), { method: "POST", body: fd });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "extract failed");
+        const data = await res.json();
+        scriptContent = data.text || "";
+        showScriptPreview(file.name, scriptContent.slice(0, 500));
+      } catch (err) {
+        console.warn("[script-upload] extract failed:", err);
+        scriptContent = `Script file: ${file.name}`;
+        showScriptPreview(file.name, "(Text could not be extracted — paste key lines into the context box below)");
+      }
+    }
+
+    function showScriptPreview(name, preview) {
+      const dz = document.getElementById("scriptDropZone");
+      if (dz) dz.style.display = "none";
+      const sp = document.getElementById("scriptPreview");
+      if (sp) sp.style.display = "block";
+      const nameEl = document.getElementById("scriptFileName");
+      if (nameEl) nameEl.textContent = name;
+      const previewEl = document.getElementById("scriptPreviewText");
+      if (previewEl) previewEl.textContent = preview + (preview.length >= 500 ? "…" : "");
+    }
+
+    function clearScript() {
+      scriptContent = "";
+      const dz = document.getElementById("scriptDropZone");
+      if (dz) dz.style.display = "flex";
+      const sp = document.getElementById("scriptPreview");
+      if (sp) sp.style.display = "none";
+      if (scriptInput) scriptInput.value = "";
+    }
+    window.clearScript = clearScript;
+
+    function addContextSuggestion(btn) {
+      addContextMessage(btn.textContent || "");
+      btn.style.opacity = "0.4";
+      btn.disabled = true;
+    }
+    window.addContextSuggestion = addContextSuggestion;
+
+    function submitContextMessage() {
+      const input = document.getElementById("contextInput");
+      const text = input?.value?.trim();
+      if (!text) return;
+      addContextMessage(text);
+      if (input) input.value = "";
+    }
+    window.submitContextMessage = submitContextMessage;
+
+    function addContextMessage(text) {
+      if (!text) return;
+      contextMessages.push(text);
+      const container = document.getElementById("contextChatMessages");
+      const bubble = document.createElement("div");
+      bubble.className = "context-message-bubble";
+      const span = document.createElement("span");
+      span.textContent = text; // textContent — never inject user text as HTML
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "✕";
+      remove.addEventListener("click", () => {
+        const idx = contextMessages.indexOf(text);
+        if (idx !== -1) contextMessages.splice(idx, 1);
+        bubble.remove();
+        updateContextSummary();
+      });
+      bubble.appendChild(span);
+      bubble.appendChild(remove);
+      container?.appendChild(bubble);
+      updateContextSummary();
+    }
+
+    function clearContext() {
+      contextMessages = [];
+      document.querySelectorAll("#contextChatMessages .context-message-bubble").forEach((el) => el.remove());
+      document.querySelectorAll("#contextChatMessages .context-suggestion").forEach((btn) => {
+        btn.disabled = false;
+        btn.style.opacity = "";
+      });
+      updateContextSummary();
+    }
+    window.clearContext = clearContext;
+
+    function updateContextSummary() {
+      const summary = document.getElementById("contextSummary");
+      const summaryText = document.getElementById("contextSummaryText");
+      if (!summary || !summaryText) return;
+      if (contextMessages.length === 0) {
+        summary.style.display = "none";
+      } else {
+        summary.style.display = "flex";
+        summaryText.textContent = contextMessages.join(" · ");
+      }
+    }
+
+    document.getElementById("contextInput")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submitContextMessage();
+      }
+    });
+
     document.getElementById("batch-pillar")?.addEventListener("change", () => updateProcessButton());
     document.getElementById("batch-process-btn")?.addEventListener("click", async () => {
       const btn = document.getElementById("batch-process-btn");
@@ -6031,6 +6366,9 @@
         fd.append("pillar", pillar);
         fd.append("session_name", sessionName);
         fd.append("filmed_by", filmedBy);
+        // Human direction for the clipping AI (context chat + uploaded script)
+        fd.append("user_context", contextMessages.join("\n"));
+        fd.append("script_text", scriptContent);
 
         await startBatchProcessing(fd, { fileCount, pillar, pendingCard: true });
       } catch (err) {
@@ -6856,6 +7194,42 @@
   }
   window.goToCommandCenter = goToCommandCenter;
   </script>
+
+  <!-- ════ AI EDIT — describe a change in plain English, FFmpeg applies it ════ -->
+  <div id="aiEditModal" style="display:none" class="clip-modal-overlay">
+    <div class="clip-modal-box" style="max-width:580px">
+      <div class="clip-modal-header">
+        <div>
+          <div class="clip-modal-title" id="aiEditTitle">AI Edit</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Describe what to change and the AI will edit the clip</div>
+        </div>
+        <button type="button" onclick="closeAiEditModal()" class="clip-modal-close">✕</button>
+      </div>
+
+      <div style="padding:14px 18px 0;display:flex;flex-wrap:wrap;gap:6px" id="aiEditSuggestions">
+        <button type="button" class="context-suggestion" onclick="fillAiEditInput(this)">Remove the first 5 seconds</button>
+        <button type="button" class="context-suggestion" onclick="fillAiEditInput(this)">Trim the last 10 seconds</button>
+        <button type="button" class="context-suggestion" onclick="fillAiEditInput(this)">Keep only the first 45 seconds</button>
+        <button type="button" class="context-suggestion" onclick="fillAiEditInput(this)">Cut the section from 0:20 to 0:30</button>
+      </div>
+
+      <div id="aiEditThread" style="padding:14px 18px;min-height:80px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:12px;color:var(--muted);text-align:center;padding:20px 0" id="aiEditEmptyState">
+          Describe what you'd like changed in this clip. Be specific — times work best ("remove the first 8 seconds", "cut from 0:30 to 0:40").
+        </div>
+      </div>
+
+      <div style="padding:12px 18px 14px;display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--border)">
+        <textarea id="aiEditInput" class="context-chat-input" placeholder="e.g. 'Remove the first 8 seconds where I'm still setting up'" rows="3" style="flex:1"></textarea>
+        <button type="button" id="aiEditSendBtn" onclick="submitAiEdit()" class="context-add-btn">Edit</button>
+      </div>
+
+      <div id="aiEditStatus" style="display:none;padding:10px 18px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);align-items:center;gap:8px">
+        <div class="btn-spinner" style="border-color:rgba(255,255,255,0.2);border-top-color:#25f4ee;width:12px;height:12px"></div>
+        <span id="aiEditStatusText">Processing edit…</span>
+      </div>
+    </div>
+  </div>
 
   <!-- ════ EDIT CLIP — open OpenReel (free browser editor), round-trip the export ════ -->
   <div id="clipEditorModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); justify-content:center; padding:32px 14px; overflow-y:auto;">

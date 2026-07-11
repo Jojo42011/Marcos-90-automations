@@ -31,6 +31,7 @@ import {
   getTodaysAgentPulls,
 } from "./core/socialStore.js";
 import { scoreVideos } from "./integrations/apify/index.js";
+import { claudeContent, CONTENT_MODELS } from "./integrations/claude-content.js";
 import { runMorningScan, getLatestMorningScan } from "./agents/morningScan/index.js";
 import { generateCommentReply } from "./agents/commentReply/index.js";
 import { generateVideoImprovements } from "./agents/videoFeedback/index.js";
@@ -115,6 +116,7 @@ import {
   getPillarPerformanceSummary,
   updateContentVideo,
   updateContentVideoFilePath,
+  appendContentVideoEditHistory,
   recordClipVersion,
   getLatestClipVersion,
   deleteClipVersion,
@@ -4163,6 +4165,61 @@ const clipAudioUpload = multer({
   },
 });
 
+// Script/notes upload for the Upload & Clip context feature. Small text-ish
+// files only; the extracted text rides the batch session into the clipping prompt.
+const scriptTextUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".txt";
+      cb(null, `script-${Date.now()}-${randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB — scripts are text, not media
+  fileFilter: (_req, file, cb) => {
+    const allowed = [".txt", ".pdf", ".docx", ".doc"];
+    cb(null, allowed.includes(path.extname(file.originalname).toLowerCase()));
+  },
+});
+
+// Extract plain text from an uploaded script (.txt directly, .pdf via pdf-parse,
+// .docx/.doc placeholder). The temp file is always removed — only text survives.
+app.post("/api/content/extract-text", scriptTextUpload.single("file"), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const file = req.file;
+  if (!file) {
+    res.status(400).json({ error: "No file uploaded (field name: file; allowed: txt, pdf, docx, doc)." });
+    return;
+  }
+  try {
+    const ext = path.extname(file.originalname).toLowerCase();
+    let text = "";
+    if (ext === ".txt") {
+      text = fs.readFileSync(file.path, "utf8");
+    } else if (ext === ".pdf") {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+        const data = await pdfParse(fs.readFileSync(file.path));
+        text = data.text || "";
+      } catch (pdfErr) {
+        console.warn(`[extract-text] pdf-parse failed for ${file.originalname}:`, pdfErr);
+        text = `[PDF: ${file.originalname} — text could not be extracted]`;
+      }
+    } else {
+      text = `[File: ${file.originalname} — only .txt and .pdf text extraction is supported; paste key lines into the context box instead]`;
+    }
+    res.json({ text: text.slice(0, 10000), truncated: text.length > 10000 });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  } finally {
+    try { fs.unlinkSync(file.path); } catch { /* best-effort temp cleanup */ }
+  }
+});
+
 app.post("/api/content/clip/:clipId/audio", clipAudioUpload.single("audio"), (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -4310,6 +4367,12 @@ app.post("/api/content/batch-upload", requireDiskSpaceForUpload(), trackUploadPr
       ? req.body.filmed_by.trim()
       : "marco";
   const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
+  // Human direction for the clipping AI ("the good stuff starts at 3:10") and
+  // optional script text — both flow into the sidecar's viral-moment prompt.
+  const userContext =
+    typeof req.body?.user_context === "string" ? req.body.user_context.trim().slice(0, 4000) : "";
+  const scriptText =
+    typeof req.body?.script_text === "string" ? req.body.script_text.trim().slice(0, 12000) : "";
 
   const batch = createBatchSession({
     sessionName: sessionName || null,
@@ -4318,6 +4381,8 @@ app.post("/api/content/batch-upload", requireDiskSpaceForUpload(), trackUploadPr
     status: "uploading",
     sourceFileCount: files.length,
     notes: notes || null,
+    userContext: userContext || undefined,
+    scriptText: scriptText || undefined,
   });
 
   for (const file of files) {
@@ -4805,6 +4870,229 @@ app.post("/api/content/clip/:clipId/edit", express.json(), async (req, res) => {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[clip-edit] Clip ${clipId} edit failed: ${message}`);
     res.status(502).json({ error: message }); // original clip untouched
+  }
+});
+
+/* ── AI Edit: natural-language clip edits ─────────────────────────────────
+   Parses an instruction like "remove the first 8 seconds" into a structural
+   edit and applies it through the SAME non-destructive pipeline as /edit
+   (frame-accurate re-encode via the sidecar, original kept as a revertable
+   version). Common patterns are handled by regex with no LLM call; anything
+   else is interpreted by Claude. */
+
+/** Parse a time token from instruction text: "8", "8.5s", "2 minutes", "1:30". */
+function parseAiEditTime(raw: string): number | null {
+  const t = raw.trim();
+  const mmss = t.match(/^(\d+):([0-5]?\d(?:\.\d+)?)$/);
+  if (mmss) return Number(mmss[1]) * 60 + Number(mmss[2]);
+  const num = t.match(/^(\d+(?:\.\d+)?)$/);
+  if (num) return Number(num[1]);
+  return null;
+}
+
+/** Regex fast-paths for the common edit phrasings. Returns null when unsure. */
+function parseAiEditInstruction(
+  instruction: string,
+  duration: number,
+): { start: number; end: number; description: string } | null {
+  const s = instruction.toLowerCase();
+  // Time expression: seconds ("8", "8.5 seconds", "8s"), minutes ("2 minutes"), or m:ss ("1:30")
+  const T = String.raw`(\d+:\d+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(minutes?|mins?|m\b|seconds?|secs?|s\b)?`;
+  const toSeconds = (value: string, unit?: string): number | null => {
+    const base = parseAiEditTime(value);
+    if (base == null) return null;
+    if (unit && /^m/.test(unit) && !value.includes(":")) return base * 60;
+    return base;
+  };
+
+  let m = s.match(new RegExp(String.raw`(?:remove|skip|cut|trim)\s+(?:the\s+)?first\s+${T}`));
+  if (m) {
+    const t = toSeconds(m[1], m[2]);
+    if (t != null) return { start: t, end: duration, description: `Removed the first ${Math.round(t)}s` };
+  }
+  m = s.match(new RegExp(String.raw`(?:remove|trim|cut)\s+(?:the\s+)?last\s+${T}`));
+  if (m) {
+    const t = toSeconds(m[1], m[2]);
+    if (t != null) return { start: 0, end: duration - t, description: `Removed the last ${Math.round(t)}s` };
+  }
+  m = s.match(new RegExp(String.raw`keep\s+(?:only\s+)?(?:the\s+)?first\s+${T}`));
+  if (m) {
+    const t = toSeconds(m[1], m[2]);
+    if (t != null) return { start: 0, end: t, description: `Kept only the first ${Math.round(t)}s` };
+  }
+  m = s.match(new RegExp(String.raw`(?:cut|remove)\s+everything\s+after\s+${T}`));
+  if (m) {
+    const t = toSeconds(m[1], m[2]);
+    if (t != null) return { start: 0, end: t, description: `Cut everything after ${Math.round(t)}s` };
+  }
+  m = s.match(new RegExp(String.raw`(?:start(?:ing)?\s+(?:at|from)|from)\s+${T}`));
+  if (m) {
+    const t = toSeconds(m[1], m[2]);
+    if (t != null) return { start: t, end: duration, description: `Started the clip at ${Math.round(t)}s` };
+  }
+  return null;
+}
+
+/** Claude fallback for instructions the regexes can't parse. Conservative:
+ * returns null (→ 422 to the user) rather than guessing a destructive cut. */
+async function parseAiEditWithClaude(
+  instruction: string,
+  duration: number,
+): Promise<{ action: "trim" | "cut_middle"; start: number; end: number; description: string } | null> {
+  const prompt = `A video clip is exactly ${duration.toFixed(1)} seconds long. The editor's instruction: "${instruction}"
+
+Interpret it as ONE structural edit and answer with JSON only (no markdown):
+{"action": "trim" | "cut_middle" | "none", "start": <seconds>, "end": <seconds>, "description": "<one sentence, past tense>"}
+
+- "trim": KEEP only [start, end] of the clip.
+- "cut_middle": REMOVE the section [start, end] from the middle, joining what remains.
+- "none": the instruction cannot be resolved to concrete timestamps from the wording alone (e.g. it refers to spoken words or visual events you cannot locate). When in doubt, use "none" — never guess.`;
+  try {
+    const response = await claudeContent.messages.create({
+      model: CONTENT_MODELS.FAST,
+      max_tokens: 300,
+      system: "You convert plain-English video edit requests into exact cut timestamps. JSON only.",
+      messages: [{ role: "user", content: prompt }],
+    });
+    const raw = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("")
+      .replace(/```json|```/g, "")
+      .trim();
+    const parsed = JSON.parse(raw) as { action?: string; start?: unknown; end?: unknown; description?: string };
+    if (parsed.action !== "trim" && parsed.action !== "cut_middle") return null;
+    const start = Number(parsed.start);
+    const end = Number(parsed.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return { action: parsed.action, start, end, description: parsed.description || instruction };
+  } catch (err) {
+    console.warn(`[ai-edit] Claude parse failed: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+app.post("/api/content/clip/:clipId/ai-edit", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const clipId = String(req.params.clipId || "");
+  const instruction =
+    typeof (req.body as { instruction?: unknown })?.instruction === "string"
+      ? String((req.body as { instruction: string }).instruction).trim()
+      : "";
+  if (!instruction) {
+    res.status(400).json({ error: "instruction is required" });
+    return;
+  }
+  const video = getContentVideo(clipId);
+  if (!video) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+  const storedPath = video.filePath || "";
+  if (!storedPath || storedPath.startsWith("mock://")) {
+    res.status(400).json({
+      error: "This clip has no real video file to edit (mock clip or not yet rendered).",
+      hint: "AI editing needs a processed clip file — run a real batch through OpenShorts first.",
+    });
+    return;
+  }
+  const currentPath = resolveClipFileForVideo(video);
+  if (!currentPath) {
+    res.status(410).json({ error: "Clip file is no longer available on disk — it may have been cleaned up." });
+    return;
+  }
+  const duration = probeClipDurationSeconds(currentPath);
+  if (!duration || duration <= 0) {
+    res.status(422).json({ error: "Could not read the clip's duration — the file may be corrupt." });
+    return;
+  }
+  const freeMB = await getFreeDiskMB();
+  if (Number.isFinite(freeMB) && freeMB < 300) {
+    res.status(507).json({ error: `Insufficient disk space to render an edit (${freeMB}MB free).` });
+    return;
+  }
+
+  // 1) Regex fast-paths (no LLM); 2) Claude for everything else.
+  let editSpec: { trim?: { start: number; end: number }; cuts?: Array<[number, number]> } | null = null;
+  let description = instruction;
+  const fast = parseAiEditInstruction(instruction, duration);
+  if (fast) {
+    editSpec = { trim: { start: fast.start, end: fast.end } };
+    description = fast.description;
+  } else {
+    const parsed = await parseAiEditWithClaude(instruction, duration);
+    if (parsed) {
+      editSpec =
+        parsed.action === "cut_middle"
+          ? { cuts: [[parsed.start, parsed.end]] }
+          : { trim: { start: parsed.start, end: parsed.end } };
+      description = parsed.description;
+    }
+  }
+  if (!editSpec) {
+    res.status(422).json({
+      error:
+        "Couldn't turn that instruction into a concrete cut. Try phrasing it with times, e.g. " +
+        `"remove the first 8 seconds", "keep only the first 45 seconds", or "cut the section from 0:30 to 0:40".`,
+    });
+    return;
+  }
+
+  // Validate against the clip's real bounds; refuse no-ops and sub-3s results.
+  const clamp = (v: number) => Math.min(Math.max(v, 0), duration);
+  if (editSpec.trim) {
+    editSpec.trim.start = clamp(editSpec.trim.start);
+    editSpec.trim.end = clamp(editSpec.trim.end);
+    if (editSpec.trim.end - editSpec.trim.start < 3) {
+      res.status(400).json({ error: "That edit would leave less than 3 seconds of video." });
+      return;
+    }
+    if (editSpec.trim.start === 0 && Math.abs(editSpec.trim.end - duration) < 0.05) {
+      res.status(422).json({ error: "That instruction doesn't change the clip (it keeps the full length)." });
+      return;
+    }
+  }
+  if (editSpec.cuts) {
+    editSpec.cuts = editSpec.cuts.map(([a, b]) => [clamp(a), clamp(b)] as [number, number]);
+    const removed = editSpec.cuts.reduce((sum, [a, b]) => sum + Math.max(0, b - a), 0);
+    if (removed < 0.2) {
+      res.status(422).json({ error: "That instruction doesn't remove anything from the clip." });
+      return;
+    }
+    if (duration - removed < 3) {
+      res.status(400).json({ error: "That edit would leave less than 3 seconds of video." });
+      return;
+    }
+  }
+
+  try {
+    const result = await editClipViaOpenShorts({ clipPath: currentPath, editSpec });
+    if (!result.newClipPath) throw new Error("Edit did not return a new file path");
+    updateContentVideoFilePath(clipId, result.newClipPath);
+    if (path.resolve(result.newClipPath) !== path.resolve(currentPath)) {
+      saveClipVersionKeepingOne(clipId, currentPath);
+    }
+    appendContentVideoEditHistory(clipId, {
+      instruction,
+      description,
+      appliedAt: new Date().toISOString(),
+      durationBefore: duration,
+      durationAfter: result.newDuration || null,
+    });
+    console.log(`[ai-edit] Clip ${clipId}: ${description} (${duration.toFixed(1)}s → ${result.newDuration}s)`);
+    res.json({
+      ok: true,
+      description,
+      new_duration_seconds: result.newDuration,
+      videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}`,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[ai-edit] Clip ${clipId} edit failed: ${message}`);
+    res.status(502).json({ error: message, hint: "The original clip is untouched. Check that the OpenShorts sidecar is running." });
   }
 });
 

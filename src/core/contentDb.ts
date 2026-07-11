@@ -736,6 +736,15 @@ function ensureBatchPipelineMigrations(database: Database.Database): void {
   addCol("content_sessions", "batch_session_id", "TEXT");
   addCol("content_sessions", "opus_job_id", "TEXT");
   addCol("content_sessions", "filmed_by", `TEXT DEFAULT 'marco'`);
+  // Script/context upload + AI Edit (natural-language clip edits):
+  // - user_context / script_text ride the batch session into the clipping prompt
+  //   so the AI cuts with human direction instead of guessing.
+  // - edit_history records applied AI edits per clip (JSON array).
+  // - edit_instructions is reserved for pending/queued instructions.
+  addCol("cm_batch_sessions", "user_context", "TEXT");
+  addCol("cm_batch_sessions", "script_text", "TEXT");
+  addCol("content_videos", "edit_instructions", "TEXT");
+  addCol("content_videos", "edit_history", "TEXT");
 }
 
 function initCompetitorProfilesIfEmpty(database: Database.Database): void {
@@ -1341,6 +1350,35 @@ export function updateContentVideoFilePath(id: string, filePath: string): Conten
   if (!existing) return null;
   getContentDb().prepare(`UPDATE content_videos SET file_path = ? WHERE id = ?`).run(filePath, id);
   return getContentVideo(id);
+}
+
+/** Append one applied AI-edit record to a clip's edit_history (JSON array).
+ * Best-effort: history must never block an edit, so parse failures start fresh. */
+export function appendContentVideoEditHistory(
+  id: string,
+  record: {
+    instruction: string;
+    description: string;
+    appliedAt: string;
+    durationBefore: number | null;
+    durationAfter: number | null;
+  },
+): void {
+  const row = getContentDb()
+    .prepare(`SELECT edit_history FROM content_videos WHERE id = ?`)
+    .get(id) as { edit_history?: string | null } | undefined;
+  if (!row) return;
+  let history: unknown[] = [];
+  try {
+    const parsed = row.edit_history ? JSON.parse(row.edit_history) : [];
+    if (Array.isArray(parsed)) history = parsed;
+  } catch {
+    /* corrupt history — restart it rather than fail the edit */
+  }
+  history.push(record);
+  getContentDb()
+    .prepare(`UPDATE content_videos SET edit_history = ? WHERE id = ?`)
+    .run(JSON.stringify(history), id);
 }
 
 /* ── Clip edit versioning (revert-once) ── */
@@ -3924,6 +3962,8 @@ export interface CmBatchSession {
   createdAt: string;
   completedAt: string | null;
   notes: string | null;
+  userContext: string | null;
+  scriptText: string | null;
 }
 
 export interface CmBatchSourceFile {
@@ -4074,6 +4114,8 @@ function rowToBatchSession(row: Record<string, unknown>): CmBatchSession {
     createdAt: String(row.created_at),
     completedAt: row.completed_at ? String(row.completed_at) : null,
     notes: row.notes ? String(row.notes) : null,
+    userContext: row.user_context ? String(row.user_context) : null,
+    scriptText: row.script_text ? String(row.script_text) : null,
   };
 }
 
@@ -4162,6 +4204,8 @@ export function createBatchSession(input: {
   status?: BatchSessionStatus;
   sourceFileCount?: number;
   notes?: string;
+  userContext?: string;
+  scriptText?: string;
 }): CmBatchSession {
   const database = getContentDb();
   const id = randomUUID();
@@ -4170,8 +4214,8 @@ export function createBatchSession(input: {
     .prepare(
       `INSERT INTO cm_batch_sessions
        (id, session_name, pillar, filmed_by, target_clip_count, status, source_file_count,
-        clips_generated, trend_brief_id, created_at, completed_at, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, ?)`,
+        clips_generated, trend_brief_id, created_at, completed_at, notes, user_context, script_text)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, ?, ?, ?)`,
     )
     .run(
       id,
@@ -4183,6 +4227,8 @@ export function createBatchSession(input: {
       input.sourceFileCount ?? 0,
       now,
       input.notes ?? null,
+      input.userContext ?? null,
+      input.scriptText ?? null,
     );
   return getBatchSession(id)!;
 }

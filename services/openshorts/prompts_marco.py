@@ -45,6 +45,8 @@ def get_viral_moment_prompt(
     prosody_brief: str = "",
     quality_floor: int = 70,
     has_frames: bool = False,
+    user_context: str = "",
+    script_text: str = "",
 ) -> str:
     pillar_instructions = {
         "education": "Prioritize moments where Marco explains a specific number, process step, or market insight clearly and concisely. Look for 'did you know', 'here's what that means', 'most buyers don't realize' type moments.",
@@ -52,6 +54,25 @@ def get_viral_moment_prompt(
         "brand": "Prioritize moments where Marco is confident, direct, and speaking from personal experience or a recent win. Look for storytelling moments, client results, and behind-the-scenes insights.",
         "mixed": "Balance across all three pillars. Prioritize the moments with the strongest hooks regardless of pillar.",
     }
+
+    # Human direction outranks every algorithmic signal (trends, prosody, frames):
+    # the person who filmed the video knows what's in it better than any model.
+    human_direction = ""
+    if user_context or script_text:
+        human_direction = "\n\nHUMAN DIRECTION — PRIORITIZE THIS ABOVE ALL OTHER SIGNALS:\n"
+        if user_context:
+            human_direction += (
+                f'The person uploading this video said: "{user_context}"\n'
+                "Find and prioritize the moments they described. Their knowledge of the "
+                "content overrides algorithmic judgment — if they point at a moment, clip it "
+                "(as long as it meets the minimum quality bar).\n"
+            )
+        if script_text:
+            human_direction += (
+                f"\nSCRIPT PROVIDED FOR THIS VIDEO:\n{script_text[:3000]}\n"
+                "Use the script to identify the most impactful lines, then find those exact "
+                "moments in the transcript below.\n"
+            )
 
     trend_section = (
         f"\n\nCURRENT TRENDING PATTERNS IN REAL ESTATE TIKTOK (factor these into your selection):\n{trend_brief}"
@@ -90,7 +111,7 @@ def get_viral_moment_prompt(
 
 CONTENT PILLAR FOR THIS SESSION: {pillar.upper()}
 {pillar_instructions.get(pillar, pillar_instructions["mixed"])}
-{trend_section}
+{human_direction}{trend_section}
 {prosody_brief}{frames_section}
 VIDEO TRANSCRIPT (total duration: {video_duration:.1f} seconds):
 {transcript}
