@@ -6865,21 +6865,22 @@
         <button onclick="closeClipEditor()" style="background:transparent; border:none; color:var(--text-dim,#888); cursor:pointer; font-size:18px;">✕</button>
       </div>
       <p style="font-size:11px; color:var(--text-dim,#888); line-height:1.6; margin-bottom:16px;">
-        The <strong style="color:var(--text,#fff);">OpenReel editor</strong> opens automatically in a new tab (a free, private browser editor — your video never leaves your computer). Just follow the three steps:
+        The <strong style="color:var(--text,#fff);">OpenReel editor</strong> opens automatically in a new tab <strong style="color:var(--text,#fff);">with this clip already loaded on the timeline</strong> — a free, private editor that runs in your browser. Edit, export, then bring the result back here.
       </p>
 
       <div style="display:flex; flex-direction:column; gap:12px;">
         <div style="padding:12px; background:rgba(0,212,255,0.03); border:1px solid rgba(0,212,255,0.1); border-radius:4px;">
-          <div style="font-size:10px; color:#00d4ff; letter-spacing:1px; margin-bottom:8px;">STEP 1 · SAVE THIS CLIP TO YOUR COMPUTER</div>
-          <a id="clipeditor-download" href="#" download style="display:inline-block; background:#00d4ff; color:#000; text-decoration:none; padding:8px 16px; font-size:11px; font-weight:700; border-radius:2px;">⬇ Download clip</a>
+          <div style="font-size:10px; color:#00d4ff; letter-spacing:1px; margin-bottom:8px;">STEP 1 · EDIT IN THE OPENREEL EDITOR</div>
+          <p style="font-size:10px; color:var(--text-dim,#888); margin-bottom:8px; line-height:1.5;">The editor opened in a new tab and loaded this clip automatically. Make your edits, then <strong style="color:var(--text,#fff);">Export</strong> as MP4 at 1080×1920, 30fps, and come back to this tab. (If the tab didn't open, use the button below.)</p>
+          <button onclick="reopenClipEditor()" style="background:transparent; border:1px solid #00d4ff; color:#00d4ff; padding:8px 16px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer;">Re-open editor ↗</button>
         </div>
         <div style="padding:12px; background:rgba(0,212,255,0.03); border:1px solid rgba(0,212,255,0.1); border-radius:4px;">
-          <div style="font-size:10px; color:#00d4ff; letter-spacing:1px; margin-bottom:8px;">STEP 2 · EDIT IN THE OPENREEL EDITOR</div>
-          <p style="font-size:10px; color:var(--text-dim,#888); margin-bottom:8px; line-height:1.5;">The editor already opened in a new tab. Drag the clip you just downloaded onto the timeline, make your edits, then <strong style="color:var(--text,#fff);">Export</strong> as MP4 at 1080×1920, 30fps. Come back to this tab when the export finishes. (If the tab didn't open, use the button below.)</p>
-          <button onclick="window.open(OPENREEL_EDITOR_URL,'_blank','noopener')" style="background:transparent; border:1px solid #00d4ff; color:#00d4ff; padding:8px 16px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer;">Re-open editor ↗</button>
+          <div style="font-size:10px; color:#00d4ff; letter-spacing:1px; margin-bottom:8px;">DIDN'T LOAD? · DOWNLOAD THE CLIP</div>
+          <p style="font-size:10px; color:var(--text-dim,#888); margin-bottom:8px; line-height:1.5;">Only if the clip didn't appear on the timeline automatically: download it here and drag it into the editor by hand.</p>
+          <a id="clipeditor-download" href="#" download style="display:inline-block; background:transparent; border:1px solid #00d4ff; color:#00d4ff; text-decoration:none; padding:8px 16px; font-size:11px; font-weight:700; border-radius:2px;">⬇ Download clip</a>
         </div>
         <div style="padding:12px; background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.2); border-radius:4px;">
-          <div style="font-size:10px; color:#10b981; letter-spacing:1px; margin-bottom:8px;">STEP 3 · BRING YOUR EXPORT BACK HERE</div>
+          <div style="font-size:10px; color:#10b981; letter-spacing:1px; margin-bottom:8px;">STEP 2 · BRING YOUR EXPORT BACK HERE</div>
           <p style="font-size:10px; color:var(--text-dim,#888); margin-bottom:8px; line-height:1.5;">Choose the MP4 you just exported from OpenReel. It replaces this clip in the Review Queue (the original is kept as a revertable version).</p>
           <input type="file" id="clipeditor-file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,.mp4,.mov,.webm,.mkv,.m4v" style="font-size:10px; color:var(--text,#fff); margin-bottom:8px; display:block;">
           <button id="clipeditor-upload-btn" onclick="uploadClipEdit()" style="background:#10b981; color:#000; border:none; padding:8px 16px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer;">⬆ Replace clip with edit</button>
@@ -6890,13 +6891,19 @@
   </div>
 
   <script>
-  /* EDIT CLIP (Path A): open the OpenReel editor directly (deep-linked at its
-     /#/editor route), download the clip to load into it, and re-upload the export
-     to replace the clip in the Review Queue. OpenReel runs entirely in the
-     browser — the clip never uploads to it. The hosted editor sends
-     X-Frame-Options: DENY so it can't be embedded here; we open it in a new tab. */
-  var OPENREEL_EDITOR_URL = 'https://app.openreel.video/#/editor';
+  /* EDIT CLIP: open our self-hosted OpenReel editor (same-origin, /editor) with
+     the clip auto-loaded onto the timeline via ?clip=<id>&token=. The editor
+     runs entirely in the browser. Save-back is not wired yet, so the export is
+     brought back via the re-upload step below (keeps a revertable original). */
   var clipEditorId = null;
+  function marcoEditorUrl(clipId){
+    var t = (typeof token !== 'undefined' && token) ? ('&token=' + encodeURIComponent(token)) : '';
+    return '/editor/#/editor?clip=' + encodeURIComponent(clipId) + t;
+  }
+  function reopenClipEditor(){
+    if (clipEditorId) { try { window.open(marcoEditorUrl(clipEditorId), '_blank', 'noopener'); } catch (e) {} }
+  }
+  window.reopenClipEditor = reopenClipEditor;
   function openClipEditor(clipId, title){
     clipEditorId = clipId;
     var t = document.getElementById('clipeditor-title'); if (t) t.textContent = title ? ('· ' + title) : '';
@@ -6905,9 +6912,9 @@
     var f = document.getElementById('clipeditor-file'); if (f) f.value = '';
     var s = document.getElementById('clipeditor-upload-status'); if (s) s.textContent = '';
     document.getElementById('clipEditorModal').style.display = 'flex';
-    // Launch the editor straight away (this runs inside the button's click
-    // gesture, so the popup is not blocked). It "starts from" the editor page.
-    try { window.open(OPENREEL_EDITOR_URL, '_blank', 'noopener'); } catch (e) {}
+    // Launch the editor straight away (runs inside the click gesture, so the
+    // popup is not blocked). Deep-links to the editor with the clip auto-loaded.
+    try { window.open(marcoEditorUrl(clipId), '_blank', 'noopener'); } catch (e) {}
   }
   function closeClipEditor(){ var m = document.getElementById('clipEditorModal'); if (m) m.style.display = 'none'; }
   window.openClipEditor = openClipEditor; window.closeClipEditor = closeClipEditor;
