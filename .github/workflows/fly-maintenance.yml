@@ -1,0 +1,72 @@
+name: Fly maintenance
+
+# Manually-triggered diagnostics/repair for the Fly app. Exists because the
+# deploy pipeline reported success while production kept serving an old
+# image — this surfaces machine/release state without needing local flyctl.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "What to run"
+        required: true
+        default: "status"
+        type: choice
+        options:
+          - status            # fly status + machines + releases (read-only)
+          - restart           # restart all machines (picks up current release image)
+          - destroy-stale     # destroy machines NOT on the latest release image, then status
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Status (always)
+        run: |
+          flyctl status -a marco-90-automation
+          echo "===== machines ====="
+          flyctl machines list -a marco-90-automation
+          echo "===== machines (json: id/state/region/image) ====="
+          flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id'], m['state'], m['region'], m.get('config',{}).get('image','?')) for m in json.load(sys.stdin)]"
+          echo "===== releases ====="
+          flyctl releases -a marco-90-automation
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Restart machines
+        if: ${{ inputs.action == 'restart' }}
+        run: |
+          for id in $(flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id']) for m in json.load(sys.stdin)]"); do
+            echo "Restarting $id"
+            flyctl machine restart "$id" -a marco-90-automation
+          done
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Destroy stale machines
+        if: ${{ inputs.action == 'destroy-stale' }}
+        run: |
+          python3 - <<'EOF' > /tmp/stale.txt
+          import json, subprocess
+          ms = json.loads(subprocess.check_output(
+              ["flyctl", "machines", "list", "-a", "marco-90-automation", "--json"]))
+          images = {}
+          for m in ms:
+              images.setdefault(m.get("config", {}).get("image", "?"), []).append(m["id"])
+          if len(images) <= 1:
+              print("")  # all machines on one image — nothing stale
+          else:
+              # newest deployment tag sorts last; keep those, mark the rest stale
+              latest = sorted(images.keys())[-1]
+              stale = [i for img, ids in images.items() if img != latest for i in ids]
+              print(" ".join(stale))
+          EOF
+          STALE=$(cat /tmp/stale.txt)
+          if [ -z "$STALE" ]; then echo "No stale machines."; exit 0; fi
+          for id in $STALE; do
+            echo "Destroying stale machine $id"
+            flyctl machine destroy "$id" -a marco-90-automation --force
+          done
+          flyctl status -a marco-90-automation
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
