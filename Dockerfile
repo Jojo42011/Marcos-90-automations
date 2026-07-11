@@ -31,7 +31,7 @@ COPY public ./public
 COPY services ./services
 COPY scripts ./scripts
 COPY supervisord.conf ./supervisord.conf
-RUN npm run build && npm prune --omit=dev
+RUN npm run build && npm prune --omit=dev && npm cache clean --force && rm -rf /root/.npm
 
 WORKDIR /app/services/openshorts
 
@@ -41,9 +41,19 @@ RUN if [ ! -f "app.py" ]; then \
     rm -rf temp_clone ; \
 fi
 
+# IMAGE-SIZE CRITICAL: Fly machines refuse images over 8GB uncompressed
+# ("Not enough space to unpack image" → silent revert to the old image; this
+# took production down on 2026-07-11). The default torch wheels bundle
+# multi-GB NVIDIA CUDA libraries this CPU-only box can never use — install
+# the CPU-only builds FIRST so requirements.txt sees torch/torchvision
+# already satisfied (PEP 440: 2.11.0+cpu satisfies ==2.11.0).
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+    torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cpu
+
 # OpenShorts main.py imports cv2 before scenedetect; install headless OpenCV first.
 RUN python3 -m pip install --no-cache-dir --break-system-packages opencv-python-headless \
-    && python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
+    && python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt \
+    && rm -rf /root/.cache /app/services/openshorts/.git
 
 # Marco-specific Python deps not guaranteed by the upstream OpenShorts clone
 # (YouTube competitor transcript intelligence). Installed explicitly by an
