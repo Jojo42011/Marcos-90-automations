@@ -63,6 +63,26 @@ COPY services/openshorts/gaze_analysis_marco.py ./gaze_analysis_marco.py
 COPY services/openshorts/take_analysis_marco.py ./take_analysis_marco.py
 COPY services/openshorts/app_marco.py ./app_marco.py
 
+# ── CapCut draft-export service (ashreo/CapCutAPI, pinned commit) ──────────
+# Generates CapCut DRAFT projects (clip + captions) the user opens in the
+# CapCut desktop app; it renders nothing itself. See services/capcutapi-marco.
+WORKDIR /app/services
+RUN git clone https://github.com/ashreo/CapCutAPI.git capcutapi \
+    && cd capcutapi \
+    && git checkout 369fa2d45e3cce0e633c5f43004464c0db268c11
+WORKDIR /app/services/capcutapi
+# Explicit dep list on purpose: upstream requirements.txt pulls oss2 (native
+# builds, cloud-upload only) which the oss.py override below removes the need for.
+RUN python3 -m pip install --no-cache-dir --break-system-packages flask requests imageio psutil
+COPY services/capcutapi-marco/config.json ./config.json
+COPY services/capcutapi-marco/oss.py ./oss.py
+COPY services/capcutapi-marco/text_segment_shim.py /tmp/text_segment_shim.py
+RUN printf '\n\n' >> pyJianYingDraft/text_segment.py \
+    && cat /tmp/text_segment_shim.py >> pyJianYingDraft/text_segment.py \
+    && rm /tmp/text_segment_shim.py
+# Fail the image build if the service can't even import (missing dep / broken patch).
+RUN python3 -c "import capcut_server; print('CapCutAPI import OK')"
+
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 RUN mkdir -p /data/uploads/videos /data/clips /data/uploads

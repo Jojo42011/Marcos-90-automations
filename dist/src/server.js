@@ -43,10 +43,12 @@ exports.executeDueAutoPlanSteps = executeDueAutoPlanSteps;
 require("dotenv/config");
 const http_1 = __importDefault(require("http"));
 const child_process_1 = require("child_process");
+const axios_1 = __importDefault(require("axios"));
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const os_1 = __importDefault(require("os"));
 const multer_1 = __importDefault(require("multer"));
 const webhook_js_1 = require("./app/webhook.js");
 const socialRefresh_js_1 = require("./app/socialRefresh.js");
@@ -4450,6 +4452,140 @@ app.post("/api/content/clip/:clipId/ai-edit", express_1.default.json(), async (r
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[ai-edit] Clip ${clipId} edit failed: ${message}`);
         res.status(502).json({ error: message, hint: "The original clip is untouched. Check that the OpenShorts sidecar is running." });
+    }
+});
+/* ── Export a clip as a CapCut draft project ──────────────────────────────
+   Assembles the clip + its caption lines into a CapCut draft via the local
+   CapCutAPI sidecar (port 9001) and streams back a ZIP. The user extracts it
+   into their CapCut drafts folder and CapCut opens it as a normal project —
+   CapCut itself renders the final export. Passing the user's drafts-folder
+   path (optional) bakes correct absolute asset paths into the draft. */
+function linesToSrt(lines) {
+    const ts = (sec) => {
+        const ms = Math.max(0, Math.round(sec * 1000));
+        const h = Math.floor(ms / 3600000);
+        const m = Math.floor((ms % 3600000) / 60000);
+        const s = Math.floor((ms % 60000) / 1000);
+        const r = ms % 1000;
+        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(r).padStart(3, "0")}`;
+    };
+    return lines
+        .map((ln, i) => `${i + 1}\n${ts(ln.start)} --> ${ts(ln.end)}\n${ln.text}\n`)
+        .join("\n");
+}
+app.post("/api/content/clip/:clipId/export-capcut", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const clipId = String(req.params.clipId || "");
+    const video = (0, contentDb_js_1.getContentVideo)(clipId);
+    if (!video) {
+        res.status(404).json({ error: "Clip not found" });
+        return;
+    }
+    const storedPath = video.filePath || "";
+    if (!storedPath || storedPath.startsWith("mock://")) {
+        res.status(400).json({ error: "This clip has no real video file to export (mock clip or not yet rendered)." });
+        return;
+    }
+    const clipPath = resolveClipFileForVideo(video);
+    if (!clipPath) {
+        res.status(410).json({ error: "Clip file is no longer available on disk." });
+        return;
+    }
+    const draftFolder = typeof req.body?.draft_folder === "string"
+        ? String(req.body.draft_folder).trim()
+        : "";
+    const CAPCUT_BASE = process.env.CAPCUTAPI_URL || "http://127.0.0.1:9001";
+    const CAPCUT_DIR = process.env.CAPCUTAPI_DIR || "/app/services/capcutapi";
+    // The CapCut service downloads the clip over HTTP from this same app.
+    const selfPort = process.env.PORT || "3000";
+    const tokenQs = process.env.DASHBOARD_TOKEN ? `?token=${encodeURIComponent(process.env.DASHBOARD_TOKEN)}` : "";
+    const videoUrl = `http://127.0.0.1:${selfPort}/api/content/clip/${clipId}/video${tokenQs}`;
+    // Caption lines (same sibling convention as the caption editor).
+    const dir = path_1.default.dirname(clipPath);
+    let stem = path_1.default.basename(clipPath).replace(/\.[^.]+$/, "");
+    stem = stem.replace(/_(edit|trim)_[0-9a-f]+$/, "").replace(/_(captioned|vertical)$/, "");
+    const linesPath = path_1.default.join(dir, `${stem}_base.lines.json`);
+    let captionLines = [];
+    try {
+        if (fs_1.default.existsSync(linesPath)) {
+            const parsed = JSON.parse(fs_1.default.readFileSync(linesPath, "utf8"));
+            if (Array.isArray(parsed))
+                captionLines = parsed;
+        }
+    }
+    catch {
+        /* captions optional — export the video alone */
+    }
+    const call = async (endpoint, body, timeout = 60000) => {
+        const r = await axios_1.default.post(`${CAPCUT_BASE}/${endpoint}`, body, { timeout });
+        if (!r.data?.success)
+            throw new Error(r.data?.error || `${endpoint} failed`);
+        return r.data.output;
+    };
+    let draftId = "";
+    try {
+        const created = await call("create_draft", { width: 1080, height: 1920 });
+        draftId = String(created?.draft_id || "");
+        if (!draftId)
+            throw new Error("create_draft returned no draft_id");
+        await call("add_video", { video_url: videoUrl, draft_id: draftId, width: 1080, height: 1920 }, 120000);
+        if (captionLines.length) {
+            // Upstream bug: /add_subtitle crashes when `font` is omitted — always send one.
+            await call("add_subtitle", {
+                srt: linesToSrt(captionLines),
+                draft_id: draftId,
+                font: "HarmonyOS_Sans_SC_Bold",
+                bold: true,
+                font_size: 8,
+                font_color: "#FFFFFF",
+                border_width: 20,
+                border_color: "#000000",
+                transform_y: -0.7,
+            }, 60000);
+        }
+        // Synchronous: returns after assets are downloaded into the draft folder.
+        await call("save_draft", draftFolder ? { draft_id: draftId, draft_folder: draftFolder } : { draft_id: draftId }, 300000);
+        const draftDir = path_1.default.join(CAPCUT_DIR, draftId);
+        if (!fs_1.default.existsSync(path_1.default.join(draftDir, "draft_info.json"))) {
+            throw new Error("Draft folder was not materialized (check the capcutapi service log)");
+        }
+        const zipBase = path_1.default.join(os_1.default.tmpdir(), `${draftId}`);
+        (0, child_process_1.execFileSync)("python3", [
+            "-c",
+            "import shutil, sys; shutil.make_archive(sys.argv[1], 'zip', sys.argv[2], sys.argv[3])",
+            zipBase,
+            CAPCUT_DIR,
+            draftId,
+        ], { timeout: 120000 });
+        const zipPath = `${zipBase}.zip`;
+        res.download(zipPath, `capcut-draft-${clipId.slice(0, 8)}.zip`, () => {
+            // Cleanup both the zip and the draft folder after the response finishes.
+            try {
+                fs_1.default.unlinkSync(zipPath);
+            }
+            catch { /* best-effort */ }
+            try {
+                fs_1.default.rmSync(path_1.default.join(CAPCUT_DIR, draftId), { recursive: true, force: true });
+            }
+            catch { /* best-effort */ }
+        });
+    }
+    catch (err) {
+        if (draftId) {
+            try {
+                fs_1.default.rmSync(path_1.default.join(CAPCUT_DIR, draftId), { recursive: true, force: true });
+            }
+            catch { /* best-effort */ }
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[capcut-export] Clip ${clipId} export failed: ${message}`);
+        res.status(502).json({
+            error: message,
+            hint: "The CapCut export service may be offline or the clip file unreadable. The clip itself is untouched.",
+        });
     }
 });
 // Current line-level captions for the editor to display + edit. Reads the

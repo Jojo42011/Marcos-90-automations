@@ -4597,6 +4597,7 @@
             <button type="button" class="rv-btn-ai-edit" onclick="openAiEdit('${vm.id}','${jsStr(vm.title)}')">✦ AI EDIT</button>
             <button type="button" class="rv-btn-edit" onclick="openClipEditor('${vm.id}','${jsStr(vm.title)}')">✂ EDIT CLIP</button>
           </div>
+          <button type="button" class="rv-btn-chat" onclick="exportCapcutDraft('${vm.id}', this)">⬇ CAPCUT DRAFT</button>
           <div class="rv-actions-row">
             <button type="button" class="rv-btn-reject" onclick="rvReject('${vm.id}')">REJECT</button>
             <button type="button" class="rv-btn-publish" onclick="rvPublish('${vm.id}', event)"><span class="lbl">PUBLISH →</span></button>
@@ -4766,6 +4767,53 @@
         showToast("Clip approved and queued for publishing");
       } catch (err) { showToast(`Failed to send: ${err.message || "error"}`); }
     }
+
+    /* ── CAPCUT DRAFT export — assemble clip+captions into a CapCut project ── */
+    async function exportCapcutDraft(clipId, btn) {
+      // Optional: Marco's CapCut drafts folder path. If provided once, the draft's
+      // internal asset paths are baked for his machine so it opens perfectly.
+      let draftFolder = localStorage.getItem("marco_capcut_draft_folder") || "";
+      if (!draftFolder && !localStorage.getItem("marco_capcut_folder_asked")) {
+        draftFolder = (prompt(
+          "Optional: paste your CapCut drafts folder path so the draft opens perfectly.\n\n" +
+          "Windows: C:\\Users\\YOURNAME\\AppData\\Local\\CapCut\\User Data\\Projects\\com.lveditor.draft\n" +
+          "Mac: /Users/YOURNAME/Movies/CapCut/User Data/Projects/com.lveditor.draft\n\n" +
+          "Leave empty to skip (you can still open the draft).",
+          ""
+        ) || "").trim();
+        localStorage.setItem("marco_capcut_folder_asked", "1");
+        if (draftFolder) localStorage.setItem("marco_capcut_draft_folder", draftFolder);
+      }
+      const prevLabel = btn ? btn.textContent : "";
+      if (btn) { btn.disabled = true; btn.textContent = "BUILDING DRAFT…"; }
+      showToast("Building CapCut draft — this takes ~15-30s…");
+      try {
+        const res = await fetch(apiUrl(`/api/content/clip/${clipId}/export-capcut`), {
+          method: "POST",
+          headers: apiHeaders(),
+          body: JSON.stringify(draftFolder ? { draft_folder: draftFolder } : {}),
+        });
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.error || `HTTP ${res.status}`);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `capcut-draft-${clipId.slice(0, 8)}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("Draft downloaded ✓ Unzip it into your CapCut drafts folder, then open CapCut");
+      } catch (err) {
+        showToast(`CapCut export failed: ${err.message || "error"}`);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = prevLabel || "⬇ CAPCUT DRAFT"; }
+      }
+    }
+    window.exportCapcutDraft = exportCapcutDraft;
 
     /* ── AI EDIT modal — natural-language clip edits (FFmpeg via sidecar) ── */
     let activeEditClipId = null;
