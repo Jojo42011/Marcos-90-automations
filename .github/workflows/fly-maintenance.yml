@@ -36,8 +36,37 @@ jobs:
           flyctl machines list -a marco-90-automation
           echo "===== machines (json: id/state/region/image) ====="
           flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id'], m['state'], m['region'], m.get('config',{}).get('image','?')) for m in json.load(sys.stdin)]"
+          echo "===== machine event history ====="
+          for id in $(flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id']) for m in json.load(sys.stdin)]"); do
+            flyctl machine status "$id" -a marco-90-automation || true
+          done
           echo "===== releases ====="
           flyctl releases -a marco-90-automation
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # Force every machine onto the image of the LATEST release. Fixes the
+      # "release complete but machine still runs the old image" failure mode.
+      - name: Sync machines to latest release image
+        if: ${{ contains(env.MAINT_ACTION, 'sync-image') }}
+        run: |
+          IMAGE=$(flyctl releases -a marco-90-automation --json | python3 -c "
+          import json, sys
+          rels = json.load(sys.stdin)
+          for r in rels:
+              ref = r.get('ImageRef') or r.get('image_ref') or ''
+              if ref:
+                  print(ref)
+                  break
+          ")
+          if [ -z "$IMAGE" ]; then echo "Could not resolve latest release image"; exit 1; fi
+          echo "Target image: $IMAGE"
+          for id in $(flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id']) for m in json.load(sys.stdin)]"); do
+            echo "Updating $id → $IMAGE"
+            flyctl machine update "$id" -a marco-90-automation --image "$IMAGE" --yes
+          done
+          echo "===== post-sync verification ====="
+          flyctl machines list -a marco-90-automation --json | python3 -c "import json,sys; [print(m['id'], m['state'], m.get('config',{}).get('image','?')) for m in json.load(sys.stdin)]"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
