@@ -47,8 +47,12 @@ fi
 # multi-GB NVIDIA CUDA libraries this CPU-only box can never use — install
 # the CPU-only builds FIRST so requirements.txt sees torch/torchvision
 # already satisfied (PEP 440: 2.11.0+cpu satisfies ==2.11.0).
+# --extra-index-url (not --index-url): the +cpu wheels live only on the
+# PyTorch index, while their dependencies (typing-extensions etc.) must come
+# from PyPI — the PyTorch index's copies fail pip's name-normalization check.
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cpu
+    torch==2.11.0+cpu torchvision==0.26.0+cpu \
+    --extra-index-url https://download.pytorch.org/whl/cpu
 
 # OpenShorts main.py imports cv2 before scenedetect; install headless OpenCV first.
 RUN python3 -m pip install --no-cache-dir --break-system-packages opencv-python-headless \
