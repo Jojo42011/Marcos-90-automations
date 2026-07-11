@@ -166,6 +166,7 @@ exports.updateStrategyRecommendation = updateStrategyRecommendation;
 exports.insertRecordingTask = insertRecordingTask;
 exports.getRecordingTaskById = getRecordingTaskById;
 exports.listRecordingTasks = listRecordingTasks;
+exports.deleteDayPlanRecordingTasks = deleteDayPlanRecordingTasks;
 exports.countPendingRecordingTasksDueBefore = countPendingRecordingTasksDueBefore;
 exports.countOverdueRecordingTasks = countOverdueRecordingTasks;
 exports.countPendingRecordingTasksThisWeek = countPendingRecordingTasksThisWeek;
@@ -3604,6 +3605,17 @@ function listRecordingTasks(input) {
         .prepare(`SELECT * FROM cm_recording_tasks ${where} ORDER BY due_date ASC, priority DESC LIMIT ?`)
         .all(...params);
     return rows.map(rowToRecordingTask);
+}
+/** Delete the still-pending recording tasks for one day from a given source.
+ * Used by the daily-plan generator so hitting "Generate" again replaces that
+ * day's auto-generated plan instead of piling up duplicates. Never touches
+ * filmed/uploaded tasks or tasks from other sources (e.g. manual). Returns the
+ * number deleted. */
+function deleteDayPlanRecordingTasks(date, source) {
+    const info = getContentDb()
+        .prepare(`DELETE FROM cm_recording_tasks WHERE due_date = ? AND source = ? AND status = 'pending'`)
+        .run(date, source);
+    return Number(info.changes) || 0;
 }
 function countPendingRecordingTasksDueBefore(date) {
     const row = getContentDb()

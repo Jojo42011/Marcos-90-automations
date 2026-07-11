@@ -5298,6 +5298,18 @@ export function listRecordingTasks(input?: {
   return rows.map(rowToRecordingTask);
 }
 
+/** Delete the still-pending recording tasks for one day from a given source.
+ * Used by the daily-plan generator so hitting "Generate" again replaces that
+ * day's auto-generated plan instead of piling up duplicates. Never touches
+ * filmed/uploaded tasks or tasks from other sources (e.g. manual). Returns the
+ * number deleted. */
+export function deleteDayPlanRecordingTasks(date: string, source: string): number {
+  const info = getContentDb()
+    .prepare(`DELETE FROM cm_recording_tasks WHERE due_date = ? AND source = ? AND status = 'pending'`)
+    .run(date, source);
+  return Number(info.changes) || 0;
+}
+
 export function countPendingRecordingTasksDueBefore(date: string): number {
   const row = getContentDb()
     .prepare(

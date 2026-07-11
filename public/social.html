@@ -2238,7 +2238,8 @@
         <!-- RECORDING PLAN (top-level) — only what Marco needs to film -->
         <section id="cm-section-recording" class="cm-section">
           <h2 class="section-title">Recording Plan <span>step-by-step filming walkthrough</span></h2>
-          <div style="margin:0.75rem 0 1rem;">
+          <div style="margin:0.75rem 0 1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="button" class="cm-btn" id="strategy-generate-day-btn">Generate Daily Plan</button>
             <button type="button" class="cm-btn" id="strategy-generate-week-btn">Generate Week Plan</button>
           </div>
           <div id="strategy-recording-list"></div>
@@ -5573,6 +5574,22 @@
       showToast("Generating week plan…");
       await cmFetch("/api/content-brain/run-cycle", { method: "POST", body: JSON.stringify({ cycle: "monday_recording_plan" }) });
       void loadRecordingSection();
+    });
+    document.getElementById("strategy-generate-day-btn")?.addEventListener("click", async (ev) => {
+      const btn = ev.currentTarget;
+      const prevLabel = btn ? btn.textContent : "";
+      if (btn) { btn.disabled = true; btn.textContent = "Generating…"; }
+      showToast("Generating today's plan…");
+      try {
+        const data = await cmFetch("/api/content/recording-tasks/generate-day", { method: "POST", body: JSON.stringify({}) });
+        const count = data && Array.isArray(data.tasks) ? data.tasks.length : 0;
+        showToast(count ? `New daily plan: ${count} session${count === 1 ? "" : "s"}` : "Daily plan generated");
+      } catch {
+        showToast("Could not generate daily plan");
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = prevLabel || "Generate Daily Plan"; }
+        void loadRecordingSection();
+      }
     });
     document.querySelectorAll("[data-strategy-tab]").forEach((btn) => {
       btn.addEventListener("click", () => void loadStrategySection(btn.getAttribute("data-strategy-tab")));

@@ -189,6 +189,7 @@ import {
   getCalendarMonthData,
   getSprintProgress,
   generateWeeklyRecordingPlan,
+  generateDailyRecordingPlan,
   markRecordingTaskFiled,
 } from "./agents/contentManager/calendar.js";
 import { getWeekStart } from "./agents/contentManager/brain/stats.js";
@@ -5726,6 +5727,24 @@ app.get("/api/content/recording-tasks", (req, res) => {
     limit: 100,
   });
   res.json({ tasks });
+});
+
+// Generate (or regenerate) a fresh recording plan for a single day. Hitting
+// this again replaces the prior daily plan with a genuinely different one.
+app.post("/api/content/recording-tasks/generate-day", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const dateStr = typeof body.date === "string" && body.date ? body.date : todayDateCst();
+  try {
+    const tasks = await generateDailyRecordingPlan(dateStr, contentManagerBrain);
+    res.json({ tasks, date: dateStr });
+  } catch (err) {
+    console.error("[content] daily recording plan failed", err);
+    res.status(500).json({ error: "Failed to generate daily plan" });
+  }
 });
 
 app.post("/api/content/recording-tasks", express.json(), (req, res) => {

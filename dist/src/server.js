@@ -5032,6 +5032,24 @@ app.get("/api/content/recording-tasks", (req, res) => {
     });
     res.json({ tasks });
 });
+// Generate (or regenerate) a fresh recording plan for a single day. Hitting
+// this again replaces the prior daily plan with a genuinely different one.
+app.post("/api/content/recording-tasks/generate-day", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const body = (req.body ?? {});
+    const dateStr = typeof body.date === "string" && body.date ? body.date : (0, contentDb_js_1.todayDateCst)();
+    try {
+        const tasks = await (0, calendar_js_1.generateDailyRecordingPlan)(dateStr, index_js_14.contentManagerBrain);
+        res.json({ tasks, date: dateStr });
+    }
+    catch (err) {
+        console.error("[content] daily recording plan failed", err);
+        res.status(500).json({ error: "Failed to generate daily plan" });
+    }
+});
 app.post("/api/content/recording-tasks", express_1.default.json(), (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
