@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
     fonts-liberation \
+    fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -58,6 +59,8 @@ COPY services/openshorts/prompts_marco.py ./prompts_marco.py
 COPY services/openshorts/llm_analysis.py ./llm_analysis.py
 COPY services/openshorts/main_marco.py ./main_marco.py
 COPY services/openshorts/captions_marco.py ./captions_marco.py
+COPY services/openshorts/gaze_analysis_marco.py ./gaze_analysis_marco.py
+COPY services/openshorts/take_analysis_marco.py ./take_analysis_marco.py
 COPY services/openshorts/app_marco.py ./app_marco.py
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf

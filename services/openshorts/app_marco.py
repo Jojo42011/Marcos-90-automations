@@ -49,6 +49,11 @@ _JOB_MAX_SECONDS = int(os.environ.get("OPENSHORTS_JOB_MAX_SECONDS", "600"))
 AUTO_TIGHTEN_CLIPS = os.environ.get("AUTO_TIGHTEN_CLIPS", "true").strip().lower() in ("1", "true", "yes", "on")
 _AUTO_TIGHTEN_MAX_GAP = float(os.environ.get("AUTO_TIGHTEN_MAX_GAP", "0.6"))
 _AUTO_TIGHTEN_MIN_SAVINGS = float(os.environ.get("AUTO_TIGHTEN_MIN_SAVINGS", "0.5"))
+# Full-timeline smart cuts (generation time): remove sustained looking-away
+# segments and inferior repeated takes from freshly generated clips, through
+# the same keep/cut/concat + caption-resync path as dead-air removal.
+GAZE_CUTS = os.environ.get("OPENSHORTS_GAZE_CUTS", "true").strip().lower() in ("1", "true", "yes", "on")
+TAKE_CUTS = os.environ.get("OPENSHORTS_TAKE_CUTS", "true").strip().lower() in ("1", "true", "yes", "on")
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
@@ -60,6 +65,8 @@ import main_marco  # noqa: F401 — patches openshorts when available
 import captions_marco
 import audio_features_marco
 import edit_effects_marco
+import gaze_analysis_marco
+import take_analysis_marco
 from llm_analysis import any_llm_configured, configured_llm_summary, NoUsableClipsError
 
 try:
@@ -561,7 +568,27 @@ def process_video_job(
                 if AUTO_TIGHTEN_CLIPS and enable_captions and final_clip_path.endswith("_captioned.mp4") and os.path.isfile(final_clip_path):
                     base_p = final_clip_path.replace("_captioned.mp4", "_base.mp4")
                     lines_p = final_clip_path.replace("_captioned.mp4", "_base.lines.json")
-                    tightened = _auto_tighten_generated_clip(base_p, lines_p, i + 1)
+                    # Full-timeline smart cuts for THIS clip: sustained away-looks
+                    # + inferior repeated takes, rebased to clip-local time.
+                    extra_cuts: list[tuple[float, float]] = []
+                    try:
+                        if GAZE_CUTS:
+                            extra_cuts += gaze_analysis_marco.away_cut_candidates(
+                                clips_data.get("gaze", {}), clip["start_time"], clip["end_time"]
+                            )
+                        if TAKE_CUTS:
+                            extra_cuts += take_analysis_marco.inferior_cut_candidates(
+                                clips_data.get("retakes", {}), clip["start_time"], clip["end_time"]
+                            )
+                        if extra_cuts:
+                            print(
+                                f"[openshorts] Clip {i + 1}: {len(extra_cuts)} smart-cut candidate(s) "
+                                f"from gaze/take analysis"
+                            )
+                    except Exception as smart_err:
+                        print(f"[openshorts] smart-cut candidates failed for clip {i + 1}: {smart_err}")
+                        extra_cuts = []
+                    tightened = _auto_tighten_generated_clip(base_p, lines_p, i + 1, extra_cuts=extra_cuts)
                     if tightened:
                         try:
                             old_final = final_clip_path
@@ -983,15 +1010,54 @@ def _apply_visual_pass(input_path: str, output_path: str, filtergraph: str) -> s
     return output_path
 
 
-def _auto_tighten_generated_clip(base_path: str, lines_path: str, clip_index: int):
-    """Generation-time dead-air removal for one freshly generated clip.
+def _snap_cut_to_caption_lines(
+    cut: tuple[float, float],
+    lines: list[dict],
+) -> tuple[float, float] | None:
+    """Adjust one visual cut so it never slices a caption line in half.
 
-    Cuts the UNcaptioned base into keep-segments (dead air removed, dramatic
-    pauses kept), re-syncs the caption lines to the new shorter timeline, and
-    re-burns them. Reuses the exact primitives the manual edit engine uses, so
-    the result is identical to a manual auto-tighten. Returns a dict
-    {new_captioned, tight_base, new_lines, removed, cuts, new_duration} the
-    caller swaps in — or None to mean "no change, keep the original clip".
+    A cut that covers ≥60% of a caption line swallows the whole line (the
+    away-look owns that speech); a cut that merely clips a line's edge is
+    truncated at the line boundary instead. Returns None when nothing
+    meaningful survives the adjustment.
+    """
+    s, e = cut
+    for ln in lines or []:
+        try:
+            ls, le = float(ln["start"]), float(ln["end"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if le <= s or ls >= e or le <= ls:
+            continue  # no overlap
+        overlap = (min(e, le) - max(s, ls)) / (le - ls)
+        if overlap >= 0.6:
+            s, e = min(s, ls), max(e, le)  # own the whole line
+        elif ls < s < le:
+            s = le  # cut starts inside a mostly-kept line — start after it
+        elif ls < e < le:
+            e = ls  # cut ends inside a mostly-kept line — end before it
+    s, e = round(s, 2), round(e, 2)
+    if e - s < 0.6 - 1e-6:  # epsilon: 0.6-wide remnants survive float noise
+        return None
+    return (s, e)
+
+
+def _auto_tighten_generated_clip(
+    base_path: str,
+    lines_path: str,
+    clip_index: int,
+    extra_cuts: list[tuple[float, float]] | None = None,
+):
+    """Generation-time smart cutting for one freshly generated clip.
+
+    Removes dead air (as before) PLUS any `extra_cuts` — clip-local intervals
+    from the full-timeline analysis (sustained looking-away segments, inferior
+    repeated takes). Visual cuts are snapped to caption-line boundaries so a
+    cut never slices a sentence in half; take cuts arrive spanning whole
+    segments already. Cuts the UNcaptioned base into keep-segments, re-syncs
+    the caption lines to the new shorter timeline, and re-burns them. Returns
+    a dict {new_captioned, tight_base, new_lines, removed, cuts, new_duration}
+    the caller swaps in — or None to mean "no change, keep the original clip".
 
     Best-effort by contract: any failure, low memory, or a saving below the
     threshold returns None. Runs inside process_video_job, which already holds
@@ -1015,11 +1081,22 @@ def _auto_tighten_generated_clip(base_path: str, lines_path: str, clip_index: in
             base_path, noise_db=-30.0, min_silence_s=min(_AUTO_TIGHTEN_MAX_GAP, 0.45)
         )
         classified = edit_effects_marco.classify_pauses(pauses, lines, max_keep_gap=_AUTO_TIGHTEN_MAX_GAP)
-        cuts = edit_effects_marco.merge_intervals(
-            edit_effects_marco.deadair_cuts_from_pauses(classified["cut"], 0.0, duration)
-        )
+        deadair = edit_effects_marco.deadair_cuts_from_pauses(classified["cut"], 0.0, duration)
+
+        # Merge in the full-timeline analysis cuts (gaze/take), snapped so no
+        # caption line is ever half-cut, and clamped to the clip's bounds.
+        snapped_extra: list[tuple[float, float]] = []
+        for raw in extra_cuts or []:
+            c = (max(0.0, float(raw[0])), min(duration, float(raw[1])))
+            if c[1] - c[0] < 0.4:
+                continue
+            snapped = _snap_cut_to_caption_lines(c, lines)
+            if snapped:
+                snapped_extra.append(snapped)
+
+        cuts = edit_effects_marco.merge_intervals(list(deadair) + snapped_extra)
         removed = sum(e - s for s, e in cuts)
-        if not cuts or removed < _AUTO_TIGHTEN_MIN_SAVINGS:
+        if not cuts or (removed < _AUTO_TIGHTEN_MIN_SAVINGS and not snapped_extra):
             return None  # nothing worth cutting — keep the original clip
 
         # keeps = [0, duration] minus the dead-air cuts.

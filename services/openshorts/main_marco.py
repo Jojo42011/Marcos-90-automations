@@ -8,6 +8,8 @@ from prompts_marco import get_viral_moment_prompt
 from llm_analysis import analyze_transcript_for_clips
 import audio_features_marco
 import frame_analysis_marco
+import gaze_analysis_marco
+import take_analysis_marco
 
 # Visual frame analysis. Frames are read by a stronger vision model than the
 # text default (env-overridable) — Sonnet materially out-reasons Haiku on framing/
@@ -91,6 +93,41 @@ def get_viral_clips_marco(
         except Exception as prosody_err:  # noqa: BLE001 — never fatal
             print(f"[content-ai] prosody analysis skipped: {type(prosody_err).__name__}: {prosody_err}")
 
+    # Full-timeline gaze scan — every moment of the video is checked locally
+    # (MediaPipe FaceMesh) for camera eye contact. Produces the away-look map
+    # used both in the prompt and for generation-time cutting. Best-effort.
+    gaze: dict = {}
+    if video_path:
+        try:
+            gaze = gaze_analysis_marco.analyze_gaze(video_path)
+            if gaze.get("available"):
+                print(
+                    f"[content-ai] gaze map: {gaze['frames_analyzed']} frames at "
+                    f"{gaze['sample_fps']}fps, coverage {gaze['coverage'] * 100:.0f}%, "
+                    f"{len(gaze['away_segments'])} away segment(s) "
+                    f"({gaze['away_total_s']}s total){'' if gaze['reliable'] else ' — UNRELIABLE, cuts disabled'}"
+                )
+        except Exception as gaze_err:  # noqa: BLE001 — never fatal
+            print(f"[content-ai] gaze analysis skipped: {type(gaze_err).__name__}: {gaze_err}")
+            gaze = {}
+
+    # Repeated-take map — near-duplicate transcript stretches scored by delivery
+    # (energy/liveliness/pace/fluency); only the best take should survive.
+    retakes: dict = {}
+    try:
+        energy_wins = audio_features_marco.energy_windows(video_path) if video_path else []
+        retakes = take_analysis_marco.detect_retakes(
+            transcript_result.get("segments", []), energy_wins
+        )
+        if retakes.get("available"):
+            print(
+                f"[content-ai] retake map: {len(retakes['groups'])} repeated-take group(s), "
+                f"{len(retakes['inferior_spans'])} inferior take(s) marked for avoidance"
+            )
+    except Exception as take_err:  # noqa: BLE001 — never fatal
+        print(f"[content-ai] retake analysis skipped: {type(take_err).__name__}: {take_err}")
+        retakes = {}
+
     # Visual frames — scene changes + the prosody-flagged moments (energy peaks,
     # long pauses/bloopers, fast-pace hook candidates). Best-effort: on any
     # failure `images` is empty and analysis proceeds transcript+audio-only.
@@ -112,13 +149,19 @@ def get_viral_clips_marco(
             print(f"[content-ai] frame extraction skipped: {type(frame_err).__name__}: {frame_err}")
             images = []
 
+    # Gaze + retake briefs ride the prosody_brief slot — they are delivery
+    # signals of the same kind, and this keeps the prompt signature stable.
+    signals_brief = prosody_brief
+    signals_brief += gaze_analysis_marco.gaze_prompt_block(gaze)
+    signals_brief += take_analysis_marco.retake_prompt_block(retakes)
+
     prompt = get_viral_moment_prompt(
         transcript=transcript_text,
         video_duration=video_duration,
         pillar=pillar,
         trend_brief=trend_brief,
         target_clips=target_clips,
-        prosody_brief=prosody_brief,
+        prosody_brief=signals_brief,
         quality_floor=VIRAL_SCORE_FLOOR,
         has_frames=bool(images),
         user_context=user_context,
@@ -139,6 +182,9 @@ def get_viral_clips_marco(
         "clips": clips_data,
         "model": model,
         "total_clips": len(clips_data),
+        # Full-timeline maps for generation-time cutting (app_marco).
+        "gaze": gaze,
+        "retakes": retakes,
     }
 
 

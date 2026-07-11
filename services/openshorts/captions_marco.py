@@ -9,6 +9,7 @@ it into a clip with ffmpeg's libass-backed `ass` filter, applied AFTER vertical
 reframing so captions never get cropped by the reframe step.
 """
 import os
+import re
 import subprocess
 
 # Hard timeout for the caption burn-in pass — kill a hung ffmpeg instead of
@@ -24,6 +25,54 @@ HIGHLIGHT_BG = "&H002B2BFF"  # ASS BGR order -> RGB(FF,2B,2B), bold red/orange
 MAX_WORDS_PER_LINE = 6
 PAUSE_GAP_SECONDS = 0.5
 AVG_CHAR_WIDTH_FACTOR = 0.62  # rough bold-sans average glyph width as a fraction of font size
+
+# ── Content-aware caption emojis (viewer retention) ──────────────────────────
+# One emoji per caption line, picked from what the line actually says. Rendering
+# relies on libass font fallback to an installed emoji font (fonts-noto-color-emoji
+# in the Docker image); libass draws them as white pictograph outlines that match
+# the caption style. Disable with CAPTION_EMOJIS=false.
+CAPTION_EMOJIS = os.environ.get("CAPTION_EMOJIS", "true").lower() == "true"
+
+# Ordered — first match wins, so the most specific real-estate signals sit on top.
+_EMOJI_RULES: list[tuple[str, str]] = [
+    (r"\b(dm|message|inbox)\b", "📩"),
+    (r"\b(price[ds]?|prices|pricing|dollar[s]?|money|cash|paid|pay(ing|s)?|afford|budget)\b", "💰"),
+    (r"\b(interest|rate[s]?|mortgage|apr)\b", "📉"),
+    (r"\b(sold|closing|closed|deal|offer[s]?)\b", "🤝"),
+    (r"\b(key[s]?|move[- ]?in|moving)\b", "🔑"),
+    (r"\b(house[s]?|home[s]?|property|properties|listing[s]?|real estate|condo[s]?|townhome[s]?)\b", "🏠"),
+    (r"\b(build(er|ing)?|construction|new build)\b", "🏗️"),
+    (r"\b(san antonio|stone oak|canyon lake|new braunfels|alamo heights|neighborhood|area|location)\b", "📍"),
+    (r"\b(up|increase[d]?|rising|jump(ed)?|grow(th|ing)?|more)\b", "📈"),
+    (r"\b(down|drop(ped|s)?|falling|lower|decrease[d]?)\b", "📉"),
+    (r"\b(save[d]?|saving[s]?|discount)\b", "🏦"),
+    (r"\b(credit|score|loan[s]?|lender|va loan|fha)\b", "💳"),
+    (r"\b(family|families|kids|children)\b", "👨‍👩‍👧"),
+    (r"\b(school[s]?|district)\b", "🎓"),
+    (r"\b(hot|fire|crazy|insane|huge)\b", "🔥"),
+    (r"\b(warning|careful|mistake[s]?|avoid|scam)\b", "⚠️"),
+    (r"\b(secret[s]?|nobody|won'?t tell)\b", "🤫"),
+    (r"\b(first[- ]time buyer[s]?|buyer[s]?|buy(ing)?)\b", "🛒"),
+    (r"\b(follow|subscribe)\b", "➕"),
+    (r"\b(free)\b", "🎁"),
+]
+_EMOJI_COMPILED = [(re.compile(p, re.IGNORECASE), e) for p, e in _EMOJI_RULES]
+
+# Cooldown: never the same emoji twice in a row — repetition reads as spam.
+_last_emoji: list[str] = [""]
+
+
+def emoji_for_text(text: str) -> str:
+    """Pick one content-matched emoji for a caption line ('' if nothing fits)."""
+    if not CAPTION_EMOJIS or not text:
+        return ""
+    for pattern, emoji in _EMOJI_COMPILED:
+        if pattern.search(text):
+            if emoji == _last_emoji[0]:
+                continue  # skip repeat; fall through to the next matching rule
+            _last_emoji[0] = emoji
+            return emoji
+    return ""
 
 
 def _layout_params(video_width: int, video_height: int) -> dict:
@@ -105,6 +154,11 @@ def group_words_into_lines(words: list[dict], max_chars_per_line: int) -> list[l
 
 
 def _line_dialogue_events(line: list[dict], style_name: str) -> list[str]:
+    # One content-matched emoji per line, appended after the last word. It is
+    # never the karaoke-highlight target — always the plain black-border style.
+    line_text = " ".join((w.get("text") or "") for w in line)
+    emoji = emoji_for_text(line_text)
+
     events = []
     for i, active_word in enumerate(line):
         start = active_word["start"]
@@ -121,6 +175,8 @@ def _line_dialogue_events(line: list[dict], style_name: str) -> list[str]:
                 parts.append(f"{{\\1c{WHITE}&\\3c{HIGHLIGHT_BG}&\\bord14}}{text}")
             else:
                 parts.append(f"{{\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{text}")
+        if emoji:
+            parts.append(f"{{\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{emoji}")
         text_field = " ".join(parts)
 
         events.append(
