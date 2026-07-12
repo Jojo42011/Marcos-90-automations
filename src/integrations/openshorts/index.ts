@@ -32,6 +32,9 @@ export interface OpenShortsClipResult {
   suggestedCaption: string;
   pillar: string;
   whyThisClip: string;
+  /** Which enhancement passes ran on this clip (vertical_reframe, auto_zoom,
+   *  broll, captions, smart_cuts). Empty for older sidecar versions. */
+  enhancementsApplied: string[];
 }
 
 export interface OpenShortsJobResult {
@@ -470,6 +473,11 @@ function normalizeClipResult(raw: Record<string, unknown>): OpenShortsClipResult
     suggestedCaption: String(raw.suggested_caption || raw.suggestedCaption || ""),
     pillar: String(raw.pillar || "brand"),
     whyThisClip: String(raw.why_this_clip || raw.whyThisClip || ""),
+    enhancementsApplied: Array.isArray(raw.enhancements_applied)
+      ? (raw.enhancements_applied as unknown[]).map(String)
+      : Array.isArray(raw.enhancementsApplied)
+        ? (raw.enhancementsApplied as unknown[]).map(String)
+        : [],
   };
 }
 
@@ -506,6 +514,7 @@ export function generateMockClips(count: number): OpenShortsClipResult[] {
       suggestedCaption: `${mockHooks[i % mockHooks.length]} DM me for the full breakdown.`,
       pillar: pillars[i % pillars.length],
       whyThisClip: `Strong ${hookTypes[i % hookTypes.length]} hook with San Antonio market specificity`,
+      enhancementsApplied: [],
     };
   });
 }

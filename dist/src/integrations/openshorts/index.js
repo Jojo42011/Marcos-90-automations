@@ -335,6 +335,11 @@ function normalizeClipResult(raw) {
         suggestedCaption: String(raw.suggested_caption || raw.suggestedCaption || ""),
         pillar: String(raw.pillar || "brand"),
         whyThisClip: String(raw.why_this_clip || raw.whyThisClip || ""),
+        enhancementsApplied: Array.isArray(raw.enhancements_applied)
+            ? raw.enhancements_applied.map(String)
+            : Array.isArray(raw.enhancementsApplied)
+                ? raw.enhancementsApplied.map(String)
+                : [],
     };
 }
 function generateMockClips(count) {
@@ -369,6 +374,7 @@ function generateMockClips(count) {
             suggestedCaption: `${mockHooks[i % mockHooks.length]} DM me for the full breakdown.`,
             pillar: pillars[i % pillars.length],
             whyThisClip: `Strong ${hookTypes[i % hookTypes.length]} hook with San Antonio market specificity`,
+            enhancementsApplied: [],
         };
     });
 }

@@ -13,3 +13,7 @@ youtube-transcript-api>=1.0,<2.0
 # Lists recent competitor channel video IDs (yt-dlp --flat-playlist). Left
 # unpinned so it tracks YouTube's frequent server-side changes.
 yt-dlp
+
+# Pexels B-roll downloads (broll_marco.py). Usually already present as a
+# transitive dep, pinned here so the lazy import never fails at runtime.
+requests>=2.31.0

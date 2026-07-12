@@ -54,6 +54,16 @@ _AUTO_TIGHTEN_MIN_SAVINGS = float(os.environ.get("AUTO_TIGHTEN_MIN_SAVINGS", "0.
 # the same keep/cut/concat + caption-resync path as dead-air removal.
 GAZE_CUTS = os.environ.get("OPENSHORTS_GAZE_CUTS", "true").strip().lower() in ("1", "true", "yes", "on")
 TAKE_CUTS = os.environ.get("OPENSHORTS_TAKE_CUTS", "true").strip().lower() in ("1", "true", "yes", "on")
+# Generation-time auto-zoom: subtle zoom-in/zoom-out emphasis pairs at the
+# highest speech-density moments (Submagic-style dynamic feel). Applied to the
+# reframed clip BEFORE captions so the caption text is never scaled.
+AUTO_ZOOM = os.environ.get("OPENSHORTS_AUTO_ZOOM", "true").strip().lower() in ("1", "true", "yes", "on")
+_AUTO_ZOOM_AMOUNT = float(os.environ.get("OPENSHORTS_AUTO_ZOOM_AMOUNT", "0.05"))
+# Pexels B-roll overlay (optional): requires PEXELS_API_KEY. Dormant without it.
+BROLL_ENABLED = (
+    os.environ.get("OPENSHORTS_BROLL", "true").strip().lower() in ("1", "true", "yes", "on")
+    and bool(os.environ.get("PEXELS_API_KEY", "").strip())
+)
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
@@ -67,6 +77,7 @@ import audio_features_marco
 import edit_effects_marco
 import gaze_analysis_marco
 import take_analysis_marco
+import broll_marco
 from llm_analysis import any_llm_configured, configured_llm_summary, NoUsableClipsError
 
 try:
@@ -501,6 +512,9 @@ def process_video_job(
                 thumbnail_filename = f"thumb_{i + 1}_{clip_id[:8]}.jpg"
                 clip_path = str(clip_output_dir / clip_filename)
                 thumb_path = str(clip_output_dir / thumbnail_filename)
+                # What actually got applied to THIS clip — travels with the
+                # result so the dashboard can badge it.
+                clip_enhancements: list[str] = []
 
                 _cut_clip(
                     input_path=video_path,
@@ -517,6 +531,20 @@ def process_video_job(
                     success = openshorts_main.process_video_to_vertical(clip_path, reframed_path)
                     if success and os.path.exists(reframed_path):
                         final_clip_path = reframed_path
+                        clip_enhancements.append("vertical_reframe")
+                        # Visual polish BEFORE captions so caption text is never
+                        # scaled by zoom or covered logic-side by b-roll (it
+                        # renders on top). Both best-effort, in-place.
+                        if AUTO_ZOOM and _apply_auto_zoom_pass(
+                            reframed_path, transcript.get("segments", []),
+                            clip["start_time"], clip["end_time"], i + 1,
+                        ):
+                            clip_enhancements.append("auto_zoom")
+                        if BROLL_ENABLED and broll_marco.apply_broll(
+                            reframed_path, transcript.get("segments", []),
+                            clip["start_time"], clip["end_time"], i + 1,
+                        ):
+                            clip_enhancements.append("broll")
                         try:
                             os.remove(clip_path)
                             print(f"[openshorts] Cleaned up intermediate file: {clip_path}")
@@ -547,6 +575,7 @@ def process_video_job(
                             captions_marco.burn_captions(reframed_path, ass_file, captioned_path)
                             if os.path.exists(captioned_path):
                                 final_clip_path = captioned_path
+                                clip_enhancements.append("captions")
                                 # Persist the uncaptioned base + ASS next to the clip so the
                                 # editor can re-edit captions / re-render without the source
                                 # (small: one vertical clip + a text file). Sibling naming
@@ -629,6 +658,7 @@ def process_video_job(
                             final_clip_path = tightened["new_captioned"]
                             if old_final != final_clip_path and os.path.exists(old_final):
                                 os.remove(old_final)
+                            clip_enhancements.append("smart_cuts")
                             print(
                                 f"[openshorts] Clip {i + 1} auto-tightened: removed {tightened['removed']}s dead air "
                                 f"across {tightened['cuts']} cut(s) → {tightened['new_duration']:.1f}s"
@@ -668,6 +698,7 @@ def process_video_job(
                         "suggested_caption": clip.get("suggested_caption", ""),
                         "pillar": clip.get("pillar", pillar),
                         "why_this_clip": clip.get("why_this_clip", ""),
+                        "enhancements_applied": clip_enhancements,
                     },
                 )
             except Exception as clip_err:
@@ -1153,6 +1184,103 @@ def _snap_cut_to_words(
     if new_e - new_s < 0.3:
         return cut_local  # snapping collapsed the cut — use original
     return (new_s, new_e)
+
+
+def _clip_local_words(segments: list, clip_start: float, clip_end: float) -> list:
+    """Word (start, end) pairs overlapping the clip, rebased to clip-local time."""
+    out = []
+    for seg in segments or []:
+        for w in seg.get("words", []) or []:
+            try:
+                ws, we = float(w["start"]), float(w["end"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if we <= clip_start or ws >= clip_end:
+                continue
+            out.append((max(0.0, ws - clip_start), we - clip_start))
+    out.sort()
+    return out
+
+
+def _auto_zoom_effects(words_local: list, duration: float) -> list:
+    """Pick subtle zoom emphasis moments from speech density.
+
+    Each emphasis is a zoom_in immediately followed by a matching zoom_out, so
+    the scale eases 1.0 → 1.05 → 1.0 with no snap — the motion always flows.
+    One emphasis per clip; a second for clips ≥40s, placed in the later half.
+    Windows avoid the first 4s (the hook must stay stable) and the last 6s.
+    """
+    if duration < 15 or len(words_local) < 12:
+        return []
+    density: dict[int, int] = {}
+    for ws, _we in words_local:
+        density[int(ws)] = density.get(int(ws), 0) + 1
+
+    def window_score(t: int) -> int:
+        return sum(density.get(s, 0) for s in range(t, t + 3))
+
+    hi = int(duration) - 10
+    if hi <= 4:
+        return []
+    candidates = list(range(4, hi))
+    best = max(candidates, key=window_score)
+    a = _AUTO_ZOOM_AMOUNT
+    effects = [
+        {"type": "zoom_in", "start": float(best), "end": float(best + 2.2), "amount": a},
+        {"type": "zoom_out", "start": float(best + 2.2), "end": float(best + 4.2), "amount": a},
+    ]
+    if duration >= 40:
+        later = [t for t in range(max(4, int(duration * 0.55)), hi) if abs(t - best) > 10]
+        if later:
+            b2 = max(later, key=window_score)
+            effects += [
+                {"type": "zoom_in", "start": float(b2), "end": float(b2 + 2.2), "amount": a},
+                {"type": "zoom_out", "start": float(b2 + 2.2), "end": float(b2 + 4.2), "amount": a},
+            ]
+    return effects
+
+
+def _apply_auto_zoom_pass(
+    reframed_path: str,
+    segments: list,
+    clip_start: float,
+    clip_end: float,
+    clip_index: int,
+) -> bool:
+    """Bake subtle speech-driven zoom emphasis into the reframed clip in place.
+
+    Runs BEFORE the caption burn so caption text is never scaled by the zoom.
+    Best-effort: any failure leaves the clip untouched and returns False.
+    """
+    try:
+        duration = _probe_duration(reframed_path)
+        words = _clip_local_words(segments, clip_start, clip_end)
+        effects = _auto_zoom_effects(words, duration)
+        if not effects:
+            return False
+        w, h = edit_effects_marco.probe_resolution(reframed_path)
+        fps = edit_effects_marco.probe_fps(reframed_path)
+        graph = edit_effects_marco.build_visual_filtergraph(effects, None, w, h, fps)
+        if not graph:
+            return False
+        out = reframed_path.replace(".mp4", "_zoom.mp4")
+        _apply_visual_pass(reframed_path, out, graph)
+        if os.path.isfile(out) and validate_video_file(out):
+            os.replace(out, reframed_path)
+            zoom_at = ", ".join(
+                f"{e['start']:.0f}s" for e in effects if e["type"] == "zoom_in"
+            )
+            print(f"[openshorts] Clip {clip_index}: auto-zoom applied at {zoom_at}")
+            return True
+        try:
+            if os.path.exists(out):
+                os.remove(out)
+        except Exception:
+            pass
+        return False
+    except Exception as err:  # noqa: BLE001 — best-effort, never fail the clip
+        print(f"[openshorts] auto-zoom failed for clip {clip_index} (keeping original): {err}")
+        return False
 
 
 def _auto_tighten_generated_clip(

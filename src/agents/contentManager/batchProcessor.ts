@@ -161,6 +161,7 @@ async function processOpenShortsResults(
         startTime: clip.startTime,
         endTime: clip.endTime,
         thumbnailUrl,
+        enhancementsApplied: clip.enhancementsApplied || [],
       },
       batchSessionId: batchSession.id,
       filmedBy: batchSession.filmedBy,

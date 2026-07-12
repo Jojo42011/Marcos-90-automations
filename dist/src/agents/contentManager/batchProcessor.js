@@ -110,6 +110,7 @@ async function processOpenShortsResults(sourceFile, clips, batchSession, trendRe
                     startTime: clip.startTime,
                     endTime: clip.endTime,
                     thumbnailUrl,
+                    enhancementsApplied: clip.enhancementsApplied || [],
                 },
                 batchSessionId: batchSession.id,
                 filmedBy: batchSession.filmedBy,

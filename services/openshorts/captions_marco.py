@@ -21,6 +21,22 @@ FONT_NAME = "Liberation Sans"  # metric-compatible Arial Bold substitute; ships 
 WHITE = "&H00FFFFFF"
 BLACK = "&H00000000"
 HIGHLIGHT_BG = "&H002B2BFF"  # ASS BGR order -> RGB(FF,2B,2B), bold red/orange
+KEYWORD_GOLD = "&H0000C8FF"  # ASS BGR order -> RGB(FF,C8,00), gold for RE keywords
+
+# Real-estate keywords rendered in gold even when not the active karaoke word —
+# neighborhood names, money terms, and market data pop visually (Submagic-style
+# keyword emphasis). Matched against the lowercased word with punctuation kept.
+_KEYWORD_RE = re.compile(
+    r"\b(san antonio|antonio|stone oak|canyon lake|braunfels|alamo|boerne|helotes|"
+    r"bulverde|texas|mortgage|rate[s]?|price[ds]?|equity|zestimate|appraisal|"
+    r"down payment|payment[s]?|closing|sold|listing[s]?|market|neighborhood|"
+    r"\$[\d,]+[km]?|\d+%|78\d{3})\b",
+    re.IGNORECASE,
+)
+
+
+def _is_keyword(text: str) -> bool:
+    return bool(_KEYWORD_RE.search(text or ""))
 
 MAX_WORDS_PER_LINE = 6
 PAUSE_GAP_SECONDS = 0.5
@@ -178,6 +194,9 @@ def _line_dialogue_events(line: list[dict], style_name: str, font_size: int = 40
                 continue
             if word is active_word:
                 parts.append(f"{{\\1c{WHITE}&\\3c{HIGHLIGHT_BG}&\\bord14}}{text}")
+            elif _is_keyword(word["text"]):
+                # Real-estate keyword — gold, so prices/neighborhoods pop.
+                parts.append(f"{{\\1c{KEYWORD_GOLD}&\\3c{BLACK}&\\bord5}}{text}")
             else:
                 parts.append(f"{{\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{text}")
         if emoji:
