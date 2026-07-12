@@ -627,6 +627,7 @@ def process_video_job(
                     # Full-timeline smart cuts for THIS clip: sustained away-looks
                     # + inferior repeated takes, rebased to clip-local time.
                     extra_cuts: list[tuple[float, float]] = []
+                    retake_cuts: list[tuple[float, float]] = []
                     try:
                         if GAZE_CUTS:
                             raw_gaze = gaze_analysis_marco.away_cut_candidates(
@@ -635,25 +636,34 @@ def process_video_job(
                             if raw_gaze:
                                 # Snap each gaze cut to the nearest word boundary so cuts
                                 # fall in the natural silence between spoken words instead
-                                # of mid-word (avoids the "sharp and abrupt" feel).
-                                _words = _extract_word_timestamps(transcript.get("segments", []))
-                                for gc in raw_gaze:
-                                    extra_cuts.append(
-                                        _snap_cut_to_words(gc, _words, clip["start_time"])
+                                # of mid-word (avoids the "sharp and abrupt" feel). Words
+                                # are sliced to THIS clip (clip-local) so a boundary can
+                                # never snap to a word outside the clip.
+                                _words = [
+                                    (w["start"], w["end"])
+                                    for w in captions_marco.slice_words_for_clip(
+                                        transcript.get("segments", []),
+                                        clip["start_time"], clip["end_time"],
                                     )
+                                ]
+                                for gc in raw_gaze:
+                                    extra_cuts.append(_snap_cut_to_words(gc, _words))
                         if TAKE_CUTS:
-                            extra_cuts += take_analysis_marco.inferior_cut_candidates(
+                            retake_cuts += take_analysis_marco.inferior_cut_candidates(
                                 clips_data.get("retakes", {}), clip["start_time"], clip["end_time"]
                             )
-                        if extra_cuts:
+                        if extra_cuts or retake_cuts:
                             print(
-                                f"[openshorts] Clip {i + 1}: {len(extra_cuts)} smart-cut candidate(s) "
-                                f"from gaze/take analysis"
+                                f"[openshorts] Clip {i + 1}: {len(extra_cuts)} gaze + "
+                                f"{len(retake_cuts)} retake smart-cut candidate(s)"
                             )
                     except Exception as smart_err:
                         print(f"[openshorts] smart-cut candidates failed for clip {i + 1}: {smart_err}")
                         extra_cuts = []
-                    tightened = _auto_tighten_generated_clip(base_p, lines_p, i + 1, extra_cuts=extra_cuts)
+                        retake_cuts = []
+                    tightened = _auto_tighten_generated_clip(
+                        base_p, lines_p, i + 1, extra_cuts=extra_cuts, retake_cuts=retake_cuts
+                    )
                     if tightened:
                         try:
                             old_final = final_clip_path
@@ -1131,29 +1141,9 @@ def _snap_cut_to_caption_lines(
     return (s, e)
 
 
-def _extract_word_timestamps(segments: list) -> list:
-    """Flat sorted list of (word_start, word_end) in source-video seconds from Whisper.
-
-    Returns an empty list when word-level data is unavailable — callers must
-    handle that case gracefully (word snapping is best-effort).
-    """
-    out = []
-    for seg in segments or []:
-        for w in seg.get("words", []):
-            try:
-                ws, we = float(w["start"]), float(w["end"])
-                if we > ws + 0.01:
-                    out.append((ws, we))
-            except (KeyError, TypeError, ValueError):
-                continue
-    out.sort()
-    return out
-
-
 def _snap_cut_to_words(
     cut_local: tuple[float, float],
-    words_source: list[tuple[float, float]],
-    clip_start: float,
+    words_local: list[tuple[float, float]],
     max_snap_s: float = 1.5,
 ) -> tuple[float, float]:
     """Snap a clip-local gaze cut to the nearest inter-word gap.
@@ -1163,62 +1153,31 @@ def _snap_cut_to_words(
     edge so the edit always cuts in the natural silence between spoken words.
 
     cut_local: (start, end) in clip-local seconds
-    words_source: sorted (ws, we) word timestamps in source-video seconds
-    clip_start: clip start in source seconds (coordinate-space bridge)
-    max_snap_s: furthest a boundary may move to reach a word edge
+    words_local: sorted (ws, we) word timestamps, ALSO clip-local — the caller
+        must slice words to the clip range first, so a boundary can never snap
+        to a word outside the clip
+    max_snap_s: furthest a boundary may move to reach a word edge; a boundary
+        with no word edge inside this radius keeps its original position
 
-    Returns a clip-local (start, end) aligned to word boundaries, or the
-    original cut if no word edges are close enough or snapping would collapse
-    the cut below 0.3 s.
+    Returns a clip-local (start, end), or the original cut unchanged if
+    snapping would collapse it below 0.3 s.
     """
-    if not words_source:
+    if not words_local:
         return cut_local
 
-    cs_src = cut_local[0] + clip_start  # convert to source time
-    ce_src = cut_local[1] + clip_start
+    def nearest(target: float, edge_index: int) -> float:
+        # edge_index 1 = word ends (for cut starts: cutting after a word ends
+        # is inaudible), 0 = word starts (for cut ends: resuming at a word
+        # start never chops a word off).
+        edge = min(words_local, key=lambda p: abs(p[edge_index] - target))[edge_index]
+        return edge if abs(edge - target) <= max_snap_s else target
 
-    # Cut start → end of the nearest word close to cs_src.
-    # Cutting after a word ends (in the gap) is invisible to the ear.
-    best_s = cs_src
-    best_s_dist = max_snap_s + 1.0
-    for ws, we in words_source:
-        dist = abs(we - cs_src)
-        if dist < best_s_dist:
-            best_s_dist = dist
-            best_s = we
-
-    # Cut end → start of the nearest word close to ce_src.
-    # Resuming at a word start means the viewer never hears a word chopped off.
-    best_e = ce_src
-    best_e_dist = max_snap_s + 1.0
-    for ws, we in words_source:
-        dist = abs(ws - ce_src)
-        if dist < best_e_dist:
-            best_e_dist = dist
-            best_e = ws
-
-    new_s = round(max(0.0, best_s - clip_start), 2)
-    new_e = round(best_e - clip_start, 2)
+    new_s = round(max(0.0, nearest(cut_local[0], 1)), 2)
+    new_e = round(nearest(cut_local[1], 0), 2)
 
     if new_e - new_s < 0.3:
         return cut_local  # snapping collapsed the cut — use original
     return (new_s, new_e)
-
-
-def _clip_local_words(segments: list, clip_start: float, clip_end: float) -> list:
-    """Word (start, end) pairs overlapping the clip, rebased to clip-local time."""
-    out = []
-    for seg in segments or []:
-        for w in seg.get("words", []) or []:
-            try:
-                ws, we = float(w["start"]), float(w["end"])
-            except (KeyError, TypeError, ValueError):
-                continue
-            if we <= clip_start or ws >= clip_end:
-                continue
-            out.append((max(0.0, ws - clip_start), we - clip_start))
-    out.sort()
-    return out
 
 
 def _auto_zoom_effects(words_local: list, duration: float) -> list:
@@ -1273,7 +1232,10 @@ def _apply_auto_zoom_pass(
     """
     try:
         duration = _probe_duration(reframed_path)
-        words = _clip_local_words(segments, clip_start, clip_end)
+        words = [
+            (w["start"], w["end"])
+            for w in captions_marco.slice_words_for_clip(segments, clip_start, clip_end)
+        ]
         effects = _auto_zoom_effects(words, duration)
         if not effects:
             return False
@@ -1307,6 +1269,7 @@ def _auto_tighten_generated_clip(
     lines_path: str,
     clip_index: int,
     extra_cuts: list[tuple[float, float]] | None = None,
+    retake_cuts: list[tuple[float, float]] | None = None,
 ):
     """Generation-time smart cutting for one freshly generated clip.
 
@@ -1343,36 +1306,59 @@ def _auto_tighten_generated_clip(
         classified = edit_effects_marco.classify_pauses(pauses, lines, max_keep_gap=_AUTO_TIGHTEN_MAX_GAP)
         deadair = edit_effects_marco.deadair_cuts_from_pauses(classified["cut"], 0.0, duration)
 
-        # Merge in the full-timeline analysis cuts (gaze/take), snapped so no
-        # caption line is ever half-cut, and clamped to the clip's bounds.
-        snapped_extra: list[tuple[float, float]] = []
-        for raw in extra_cuts or []:
-            c = (max(0.0, float(raw[0])), min(duration, float(raw[1])))
-            if c[1] - c[0] < 0.4:
-                continue
-            snapped = _snap_cut_to_caption_lines(c, lines)
-            if snapped:
-                snapped_extra.append(snapped)
+        # Snap the full-timeline analysis cuts so no caption line is ever
+        # half-cut, and clamp to the clip's bounds. Retake cuts are kept in a
+        # separate bucket: they remove DUPLICATED content, so they take
+        # priority when the length floor forces a choice.
+        def _snap_list(raw_cuts) -> list[tuple[float, float]]:
+            out: list[tuple[float, float]] = []
+            for raw in raw_cuts or []:
+                c = (max(0.0, float(raw[0])), min(duration, float(raw[1])))
+                if c[1] - c[0] < 0.4:
+                    continue
+                snapped = _snap_cut_to_caption_lines(c, lines)
+                if snapped:
+                    out.append(snapped)
+            return out
 
-        cuts = edit_effects_marco.merge_intervals(list(deadair) + snapped_extra)
+        snapped_extra = _snap_list(extra_cuts)
+        snapped_retake = _snap_list(retake_cuts)
+
+        def _keeps_for(cut_set: list) -> list[tuple[float, float]]:
+            ks: list[tuple[float, float]] = []
+            cursor = 0.0
+            for cs, ce in cut_set:
+                if cs - cursor > 0.05:
+                    ks.append((cursor, cs))
+                cursor = max(cursor, ce)
+            if duration - cursor > 0.05:
+                ks.append((cursor, duration))
+            return ks
+
+        cuts = edit_effects_marco.merge_intervals(list(deadair) + snapped_extra + snapped_retake)
         removed = sum(e - s for s, e in cuts)
-        if not cuts or (removed < _AUTO_TIGHTEN_MIN_SAVINGS and not snapped_extra):
+        if not cuts or (removed < _AUTO_TIGHTEN_MIN_SAVINGS and not snapped_extra and not snapped_retake):
             return None  # nothing worth cutting — keep the original clip
 
-        # keeps = [0, duration] minus the dead-air cuts.
-        keeps: list[tuple[float, float]] = []
-        cursor = 0.0
-        for cs, ce in cuts:
-            if cs - cursor > 0.05:
-                keeps.append((cursor, cs))
-            cursor = max(cursor, ce)
-        if duration - cursor > 0.05:
-            keeps.append((cursor, duration))
+        keeps = _keeps_for(cuts)
         total_kept = sum(e - s for s, e in keeps)
-        # Use the higher auto-tighten floor (not the manual-trim 3s floor) so
-        # smart cuts never shrink a generated clip below the story-flow minimum.
+        # Story-flow floor: the full cut set must not shrink the clip below
+        # _MIN_AUTO_TIGHTEN_S. If it would, fall back to retake cuts ONLY —
+        # a shorter clip beats one where Marco visibly repeats the same line —
+        # and if even that over-shortens, leave the clip alone.
         if not keeps or total_kept < _MIN_AUTO_TIGHTEN_S:
-            return None  # would over-shorten — leave it alone
+            if not snapped_retake:
+                return None  # only dead-air/gaze cuts — skip, keep full length
+            cuts = edit_effects_marco.merge_intervals(list(snapped_retake))
+            removed = sum(e - s for s, e in cuts)
+            keeps = _keeps_for(cuts)
+            total_kept = sum(e - s for s, e in keeps)
+            if not keeps or total_kept < _MIN_TRIM_SECONDS:
+                return None
+            print(
+                f"[openshorts] Clip {clip_index}: full smart-cut set would leave "
+                f"{total_kept:.1f}s — applying retake cuts only"
+            )
 
         parent = Path(base_path).parent
         stem = Path(base_path).stem
@@ -1649,10 +1635,13 @@ async def edit_clip(
             )
 
         # 1) Re-encode each kept interval (bounded ~300MB each via _cut_clip).
+        # Multi-segment joins get the same tiny splice fades as the batch
+        # auto-tighten path, so manual/AI edits never pop at cut points.
+        edit_fade_s = _SPLICE_FADE_S if len(keeps) > 1 else 0.0
         segments = []
         for idx, (s, e) in enumerate(keeps):
             seg = str(parent / f"{stem}_seg{idx}_{token}.mp4")
-            _cut_clip(input_path=render_source, output_path=seg, start_time=s, end_time=e)
+            _cut_clip(input_path=render_source, output_path=seg, start_time=s, end_time=e, audio_fade_s=edit_fade_s)
             segments.append(seg)
             tmp_files.append(seg)
 

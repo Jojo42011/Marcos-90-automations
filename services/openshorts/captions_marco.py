@@ -23,14 +23,23 @@ BLACK = "&H00000000"
 HIGHLIGHT_BG = "&H002B2BFF"  # ASS BGR order -> RGB(FF,2B,2B), bold red/orange
 KEYWORD_GOLD = "&H0000C8FF"  # ASS BGR order -> RGB(FF,C8,00), gold for RE keywords
 
+# Monochrome outline emoji font (installed in the Docker image). libass renders
+# through FreeType and cannot draw color bitmap fonts (Noto COLOR Emoji), which
+# is why emojis burned as tofu rectangles — select the mono font explicitly.
+EMOJI_FONT = os.environ.get("CAPTION_EMOJI_FONT", "Noto Emoji")
+
 # Real-estate keywords rendered in gold even when not the active karaoke word —
 # neighborhood names, money terms, and market data pop visually (Submagic-style
-# keyword emphasis). Matched against the lowercased word with punctuation kept.
+# keyword emphasis). Matching is PER WORD (each caption token is tested alone),
+# so every alternative must be a single token. Money/percent alternatives sit
+# outside the \b group because \b cannot match before '$' or after '%'.
 _KEYWORD_RE = re.compile(
-    r"\b(san antonio|antonio|stone oak|canyon lake|braunfels|alamo|boerne|helotes|"
-    r"bulverde|texas|mortgage|rate[s]?|price[ds]?|equity|zestimate|appraisal|"
-    r"down payment|payment[s]?|closing|sold|listing[s]?|market|neighborhood|"
-    r"\$[\d,]+[km]?|\d+%|78\d{3})\b",
+    r"\b(san|antonio|stone|oak|canyon|lake|braunfels|alamo|boerne|helotes|"
+    r"bulverde|texas|mortgage|rate[s]?|price[ds]?|prices|pricing|equity|"
+    r"zestimate|zillow|redfin|appraisal|payment[s]?|closing|sold|listing[s]?|"
+    r"market|neighborhood|78\d{3})\b"
+    r"|\$[\d,.]+[km]?"
+    r"|\b\d+(?:\.\d+)?%",
     re.IGNORECASE,
 )
 
@@ -43,10 +52,11 @@ PAUSE_GAP_SECONDS = 0.5
 AVG_CHAR_WIDTH_FACTOR = 0.62  # rough bold-sans average glyph width as a fraction of font size
 
 # ── Content-aware caption emojis (viewer retention) ──────────────────────────
-# One emoji per caption line, picked from what the line actually says. Rendering
-# relies on libass font fallback to an installed emoji font (fonts-noto-color-emoji
-# in the Docker image); libass draws them as white pictograph outlines that match
-# the caption style. Disable with CAPTION_EMOJIS=false.
+# One emoji per caption line, picked from what the line actually says. Rendered
+# with the MONOCHROME "Noto Emoji" outline font via an explicit {\fn} override
+# (see EMOJI_FONT above) — libass cannot draw color bitmap emoji fonts. Emojis
+# must be single-codepoint (no ZWJ sequences, no U+FE0F variation selectors).
+# Disable with CAPTION_EMOJIS=false.
 CAPTION_EMOJIS = os.environ.get("CAPTION_EMOJIS", "true").lower() == "true"
 
 # Ordered — first match wins, so the most specific real-estate signals sit on top.
@@ -60,17 +70,17 @@ _EMOJI_RULES: list[tuple[str, str]] = [
     (r"\b(car[s]?|vehicle[s]?|driv(e|ing|er)|commut(e|ing)|truck[s]?|suv[s]?)\b", "🚗"),
     (r"\b(house[s]?|home[s]?|property|properties|listing[s]?|real estate|condo[s]?|townhome[s]?)\b", "🏠"),
     (r"\b(pool[s]?|yard|garden|backyard|patio|outdoor)\b", "🏊"),
-    (r"\b(build(er|ing)?|construction|new build|renovat(e|ing|ion)|upgrad(e|ing))\b", "🏗️"),
+    (r"\b(build(er|ing)?|construction|new build|renovat(e|ing|ion)|upgrad(e|ing))\b", "🏗"),
     (r"\b(san antonio|stone oak|canyon lake|new braunfels|alamo heights|neighborhood|area|location)\b", "📍"),
     (r"\b(stale|day[s]? on market|sit(ting)?|wait(ing)?|week[s]? (on|in)|dom)\b", "⏳"),
     (r"\b(up|increase[d]?|rising|jump(ed)?|grow(th|ing)?|more)\b", "📈"),
     (r"\b(down|drop(ped|s)?|falling|lower|decrease[d]?|reduc(e|ing|tion))\b", "📉"),
     (r"\b(save[d]?|saving[s]?|discount)\b", "🏦"),
     (r"\b(credit|score|loan[s]?|lender|va loan|fha)\b", "💳"),
-    (r"\b(family|families|kids|children)\b", "👨‍👩‍👧"),
+    (r"\b(family|families|kids|children)\b", "👪"),
     (r"\b(school[s]?|district)\b", "🎓"),
     (r"\b(hot|fire|crazy|insane|huge)\b", "🔥"),
-    (r"\b(warning|careful|mistake[s]?|avoid|scam)\b", "⚠️"),
+    (r"\b(warning|careful|mistake[s]?|avoid|scam)\b", "⚠"),
     (r"\b(secret[s]?|nobody|won'?t tell)\b", "🤫"),
     (r"\b(first[- ]time buyer[s]?|buyer[s]?|buy(ing)?|seller[s]?|sell(ing)?)\b", "🛒"),
     (r"\b(follow|subscribe)\b", "➕"),
@@ -91,7 +101,9 @@ def emoji_for_text(text: str) -> str:
             if emoji == _last_emoji[0]:
                 continue  # skip repeat; fall through to the next matching rule
             _last_emoji[0] = emoji
-            return emoji
+            # Strip variation selectors (U+FE0F) — the mono emoji font has no
+            # glyph for them and they render as a tofu box.
+            return emoji.replace("\ufe0f", "")
     return ""
 
 
@@ -200,9 +212,12 @@ def _line_dialogue_events(line: list[dict], style_name: str, font_size: int = 40
             else:
                 parts.append(f"{{\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{text}")
         if emoji:
-            # Larger size via \fs override; reset to default after so it doesn't
-            # bleed into the next event's inherited style.
-            parts.append(f"{{\\fs{emoji_size}\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{emoji}{{\\fs{font_size}}}")
+            # Explicit mono emoji font (\fn): the default Liberation Sans has no
+            # emoji glyphs and libass cannot draw the color-emoji fallback font,
+            # which rendered tofu boxes. Larger \fs so it reads at a glance.
+            parts.append(
+                f"{{\\fn{EMOJI_FONT}\\fs{emoji_size}\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{emoji}"
+            )
         text_field = " ".join(parts)
 
         events.append(

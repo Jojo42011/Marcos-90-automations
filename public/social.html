@@ -2153,7 +2153,7 @@
                 <label class="enhance-toggle-item">
                   <input type="checkbox" id="enhanceCaptions" checked onchange="updateEnhanceSummary()" />
                   <span class="enhance-item-name">Animated captions</span>
-                  <span class="enhance-item-note">word-by-word karaoke highlight, emojis, gold real-estate keywords</span>
+                  <span class="enhance-item-note">word-by-word karaoke highlight, emojis, gold real-estate keywords — smart cuts ride on this pass, so turning it off also disables them</span>
                 </label>
                 <label class="enhance-toggle-item">
                   <input type="checkbox" id="enhanceAutoZoom" checked onchange="updateEnhanceSummary()" />
@@ -2165,7 +2165,7 @@
                   <span class="enhance-item-name">B-roll overlay</span>
                   <span class="enhance-item-note">topic-matched stock footage (needs PEXELS_API_KEY on the server)</span>
                 </label>
-                <p class="enhance-settings-footnote">Silence removal, look-away cuts, and repeated-take cleanup always run — they're part of the smart-cut pass.</p>
+                <p class="enhance-settings-footnote">Silence removal, look-away cuts, and repeated-take cleanup run automatically whenever captions are on.</p>
               </div>
             </div>
 
@@ -6344,12 +6344,13 @@
     }
     function updateEnhanceSummary() {
       const parts = [];
-      if (document.getElementById("enhanceCaptions")?.checked) parts.push("Captions");
+      const captionsOn = document.getElementById("enhanceCaptions")?.checked;
+      if (captionsOn) parts.push("Captions");
       if (document.getElementById("enhanceAutoZoom")?.checked) parts.push("Auto-zoom");
       if (document.getElementById("enhanceBroll")?.checked) parts.push("B-roll");
-      parts.push("Smart cuts");
+      if (captionsOn) parts.push("Smart cuts");
       const el = document.getElementById("enhanceSettingsSummary");
-      if (el) el.textContent = parts.join(" · ");
+      if (el) el.textContent = parts.length ? parts.join(" · ") : "All enhancements off";
     }
 
     async function handleScriptFile(file) {

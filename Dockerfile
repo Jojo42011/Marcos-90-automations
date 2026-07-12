@@ -21,6 +21,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
+# Caption emojis: libass renders through FreeType and CANNOT draw color bitmap
+# fonts (fonts-noto-color-emoji) — emojis came out as tofu rectangles. Install
+# the MONOCHROME outline "Noto Emoji" font; captions_marco.py selects it
+# explicitly with {\fnNoto Emoji} for the emoji glyph.
+RUN mkdir -p /usr/share/fonts/truetype/noto-emoji-mono && \
+    curl -fsSL -o "/usr/share/fonts/truetype/noto-emoji-mono/NotoEmoji.ttf" \
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf" && \
+    fc-cache -f
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

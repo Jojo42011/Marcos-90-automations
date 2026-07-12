@@ -5034,18 +5034,23 @@ export function listContentVideosWithEnhancements(input?: {
       .prepare(`SELECT * FROM content_videos ORDER BY created_at DESC LIMIT ?`)
       .all(limit) as Record<string, unknown>[];
   }
+  // Which video-enhancement passes ran on each clip (auto_zoom, captions,
+  // broll, smart_cuts...) — recorded on the source session at clip creation.
+  // Cache session lookups within this call: many videos share a session read.
+  const sessionEnhCache = new Map<string, string[]>();
+  const enhancementsFor = (sessionId: string | null): string[] => {
+    if (!sessionId) return [];
+    const cached = sessionEnhCache.get(sessionId);
+    if (cached) return cached;
+    const applied = getContentSession(sessionId)?.rawInputMeta?.enhancementsApplied;
+    const list = Array.isArray(applied) ? applied.map(String) : [];
+    sessionEnhCache.set(sessionId, list);
+    return list;
+  };
   return rows.map((row) => {
     const video = rowToVideo(row);
     const enhancement = getClipEnhancementByVideoId(video.id);
-    // Which video-enhancement passes ran on this clip (auto_zoom, captions,
-    // broll, smart_cuts...) — recorded on the source session at clip creation.
-    let videoEnhancements: string[] = [];
-    if (video.sourceSessionId) {
-      const session = getContentSession(video.sourceSessionId);
-      const applied = session?.rawInputMeta?.enhancementsApplied;
-      if (Array.isArray(applied)) videoEnhancements = applied.map(String);
-    }
-    return { ...video, enhancement, videoEnhancements };
+    return { ...video, enhancement, videoEnhancements: enhancementsFor(video.sourceSessionId) };
   });
 }
 

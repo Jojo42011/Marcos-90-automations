@@ -152,12 +152,15 @@ def apply_broll(
 
         out_path = clip_path.replace(".mp4", "_broll.mp4")
         end_at = insert_at + _BROLL_DUR_S
-        # Fill the frame (cover-crop to the clip's own resolution), shift the
-        # b-roll PTS to the insertion point, and gate visibility with enable=.
-        # Marco's audio (0:a) is passed through untouched.
+        # Cover-crop to the clip's REAL resolution (a 720p source reframes to
+        # ~608x1080, not 1080x1920 — a hardcoded size would misframe the
+        # overlay). Shift the b-roll PTS to the insertion point and gate
+        # visibility with enable=. Marco's audio (0:a) passes through untouched.
+        import edit_effects_marco  # noqa: PLC0415 — sibling module, lazy to avoid cycles
+        vw, vh = edit_effects_marco.probe_resolution(clip_path)
         filter_complex = (
-            f"[1:v]trim=0:{_BROLL_DUR_S},scale=1080:1920:force_original_aspect_ratio=increase,"
-            f"crop=1080:1920,setsar=1,setpts=PTS-STARTPTS+{insert_at}/TB[br];"
+            f"[1:v]trim=0:{_BROLL_DUR_S},scale={vw}:{vh}:force_original_aspect_ratio=increase,"
+            f"crop={vw}:{vh},setsar=1,setpts=PTS-STARTPTS+{insert_at}/TB[br];"
             f"[0:v][br]overlay=x=0:y=0:enable='between(t,{insert_at},{end_at})':eof_action=pass[outv]"
         )
         result = subprocess.run(
