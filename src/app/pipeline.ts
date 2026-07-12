@@ -21,6 +21,7 @@ import {
 } from "./funnelDeterministic.js";
 import {
   MARCO_BUSINESS_COLLAB_REPLY,
+  MARCO_CITY_REPLY,
   MARCO_CLOSEOUT_REPLY,
   MARCO_PHONE_ASK_REPLY,
   MARCO_PHONE_REFUSAL_APOLOGY,
@@ -46,9 +47,11 @@ import {
   isDenialOfInquiry,
   isExactDuplicateMessage,
   isLastUserMessageRepeated,
+  isRealtorAndRelocating,
   isRealtorMessage,
   isSimpleAcknowledgment,
   REALTOR_REDIRECT_REPLY,
+  REALTOR_RELOCATION_REPLY,
   isShortDuplicateUserPair,
   isWaveOnlyMessage,
   lastTwoAssistantMessagesAreDuplicate,
@@ -56,6 +59,7 @@ import {
   leadThreadSignalsExperiencedBuyer,
   messageAsksBuilderIdentity,
   messageAsksPropertyPriceOrCost,
+  messageAsksWhatCity,
   REFERRAL_AREA_FOLLOW_UP,
   resolveAcknowledgmentCloseoutTurn,
   resolveCallAskBucketF,
@@ -325,6 +329,19 @@ export async function run(
       return { lead: null, reply: DENIAL_OF_INQUIRY_REPLY };
     }
 
+    if (inboundText && isRealtorAndRelocating(inboundText)) {
+      marcoLog("pipeline_end", {
+        requestId,
+        correlationId,
+        outcome: "realtor_relocation_ask_new_contact",
+        reply_chars: REALTOR_RELOCATION_REPLY.length,
+        reply_preview: previewText(REALTOR_RELOCATION_REPLY),
+        phone_captured_this_turn: false,
+        email_captured_this_turn: false,
+      });
+      return { lead: null, reply: REALTOR_RELOCATION_REPLY };
+    }
+
     if (inboundText && isRealtorMessage(inboundText)) {
       marcoLog("pipeline_end", {
         requestId,
@@ -465,6 +482,23 @@ export async function run(
     return { lead, reply: DENIAL_OF_INQUIRY_REPLY };
   }
 
+  if (isRealtorAndRelocating(latestLeadText)) {
+    await db.appendMessage(lead.id, "assistant", REALTOR_RELOCATION_REPLY);
+    await db.updateLead(lead);
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: "realtor_relocation_ask",
+      reply_chars: REALTOR_RELOCATION_REPLY.length,
+      reply_preview: previewText(REALTOR_RELOCATION_REPLY),
+      funnel_state_final: lead.state,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: REALTOR_RELOCATION_REPLY };
+  }
+
   if (isRealtorMessage(latestLeadText)) {
     console.log(`[pipeline] Realtor detected for lead ${lead.id} — redirecting to Marco's number`);
     await db.appendMessage(lead.id, "assistant", REALTOR_REDIRECT_REPLY);
@@ -599,6 +633,30 @@ export async function run(
 
   const phoneInThreadEarly = lead.phone ?? extractPhoneFromConversation(conversation);
   const phoneCapturedThisTurn = !hadPhone && Boolean(phoneInThreadEarly);
+
+  if (
+    !hadPhone &&
+    !phoneCapturedThisTurn &&
+    messageAsksWhatCity(latestLeadText)
+  ) {
+    if (lead.state === FunnelStage.New) {
+      lead = { ...lead, state: FunnelStage.OpeningAskedFirstTime };
+    }
+    await db.appendMessage(lead.id, "assistant", MARCO_CITY_REPLY);
+    await db.updateLead(lead);
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: "city_pinned",
+      reply_chars: MARCO_CITY_REPLY.length,
+      reply_preview: previewText(MARCO_CITY_REPLY),
+      funnel_state_final: lead.state,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: MARCO_CITY_REPLY };
+  }
 
   if (
     !hadPhone &&
@@ -879,6 +937,14 @@ export async function run(
     coachingNote = [
       coachingNote,
       "POST_PHONE_CAPTURE: Mobile number is already on file. Never ask price range, budget, suitability, preferences, timeline, or bedrooms. Answer specific property questions only; do not run needs analysis or re-offer the full breakdown unless they explicitly ask for it again.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  if (!hadPhone) {
+    coachingNote = [
+      coachingNote,
+      "EMAIL_DELIVERY_FORBIDDEN: A mobile number is the ONLY way to send the breakdown. NEVER promise to send anything by email, NEVER offer email as an alternative, and NEVER agree when the lead asks you to just email it. If the lead insists on email, the ONLY acceptable response is a polite variation of 'My apologies, for this specific property a good number would be best.' Do not say you will email them anything.",
     ]
       .filter(Boolean)
       .join(" ");

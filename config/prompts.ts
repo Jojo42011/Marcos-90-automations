@@ -33,6 +33,10 @@ export const MARCO_PHONE_REFUSAL_APOLOGY =
 export const MARCO_BUSINESS_COLLAB_REPLY =
   "I would definitely be open to it. For any business ideas or collaboration opportunities, please email my assistant at jamescarterpugarealestate@gmail.com.";
 
+/** Pre-phone only: lead asks what city the property is in — answer then offer breakdown. */
+export const MARCO_CITY_REPLY =
+  "San Antonio, Texas. Would it be helpful if I sent you over the full breakdown of the property you inquired about?";
+
 /** Bucket F: lead clearly confirmed in-state (Texas / San Antonio), pre-phone. */
 export const MARCO_CALL_ASK_INSTATE =
   "Would you be open to a quick call sometime this week, just so I can get a better understanding of what you're looking for?";

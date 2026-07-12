@@ -1,10 +1,10 @@
 /**
  * Module 04: Phone number — Marco’s second-line ask + short deflection if they push price/address first.
  */
-import { prompts } from "../../../config/prompts.js";
+import { MARCO_CITY_REPLY, prompts } from "../../../config/prompts.js";
 import type { Conversation, Lead, Message } from "../../core/types.js";
 import { FunnelStage } from "../../core/state.js";
-import { messageAsksListingLocation } from "../../app/conversationUtils.js";
+import { messageAsksListingLocation, messageAsksWhatCity } from "../../app/conversationUtils.js";
 import { rewriteReplyWithTone } from "../../integrations/llm/index.js";
 import { extractPhone as extractPhoneDeterministic } from "../../app/funnelDeterministic.js";
 
@@ -71,6 +71,14 @@ export async function process(lead: Lead, conversation: Conversation): Promise<M
   }
 
   const lower = last.text.toLowerCase();
+
+  // Bare "what city?" — answer San Antonio, then offer breakdown.
+  if (messageAsksWhatCity(last.text)) {
+    return {
+      lead: { ...lead, state: FunnelStage.PhoneRequested },
+      reply: MARCO_CITY_REPLY,
+    };
+  }
 
   // Location ask: only approved area hint, then pivot to number for full details.
   if (messageAsksListingLocation(last.text)) {
