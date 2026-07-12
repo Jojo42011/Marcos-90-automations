@@ -101,6 +101,7 @@ import {
   verifySignedClip,
 } from "./agents/contentManager/metaPublish.js";
 import { processBatch } from "./agents/contentManager/batchProcessor.js";
+import { processStyleExample } from "./agents/contentManager/styleExamples.js";
 import { deleteClipFile, getFreeDiskMB, runSafetyDiskCleanup } from "./core/diskCleanup.js";
 import {
   getCachedTrends,
@@ -181,6 +182,10 @@ import {
   updateYoutubeProfile,
   listYoutubeTranscripts,
   getYoutubeTranscript,
+  createStyleExample,
+  listStyleExamples,
+  deleteStyleExample,
+  type CmStyleExampleKind,
 } from "./core/contentDb.js";
 import { runYouTubeCompetitorAnalysis, getYouTubeIntelProgress } from "./agents/contentManager/youtubeIntel.js";
 import {
@@ -4150,6 +4155,25 @@ const batchVideoUpload = multer({
   },
 });
 
+// Style-example upload (Upload & Clip → "Teach the clipper" zones). Same
+// video-type restrictions as batchVideoUpload; kept separate so its route can
+// stay independent of batch-session lifecycle.
+const styleExampleUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || ".mp4";
+      cb(null, `style-${Date.now()}-${randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: MAX_UPLOAD_FILE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, allowed.includes(ext));
+  },
+});
+
 // Audio track upload for the clip editor's "replace audio" action. Saved to the
 // shared uploads volume; its path is passed to a subsequent /edit (audio=replace).
 const clipAudioUpload = multer({
@@ -4428,6 +4452,65 @@ app.post("/api/content/batch-upload", requireDiskSpaceForUpload(), trackUploadPr
     status: "processing",
     message: `${files.length} video(s) queued for processing`,
   });
+});
+
+// ── Style examples — "teach the clipper" upload zones (Upload & Clip panel).
+// Each upload is transcribed + analyzed for style (no cutting/reframing) and
+// the resulting brief automatically rides into every future batch job — see
+// getStyleGuideText() / submitToOpenShorts's style_guide field.
+app.post(
+  "/api/content/style-examples/upload",
+  requireDiskSpaceForUpload(),
+  styleExampleUpload.single("video"),
+  async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+      res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+      return;
+    }
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file) {
+      res.status(400).json({ error: "A video file is required (field name: video)" });
+      return;
+    }
+    const kind = req.body?.kind === "raw" ? "raw" : "clip";
+
+    const example = createStyleExample({
+      kind,
+      originalFilename: file.originalname,
+      filePath: file.path,
+    });
+
+    setImmediate(() => {
+      processStyleExample(example.id).catch((err) => {
+        console.error(`[style-examples] processStyleExample failed for ${example.id}:`, err);
+      });
+    });
+
+    res.json({ ok: true, example });
+  },
+);
+
+app.get("/api/content/style-examples", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const kindParam = typeof req.query.kind === "string" ? req.query.kind : "";
+  const kind: CmStyleExampleKind | undefined = kindParam === "raw" || kindParam === "clip" ? kindParam : undefined;
+  res.json({ examples: listStyleExamples(kind) });
+});
+
+app.delete("/api/content/style-examples/:id", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const ok = deleteStyleExample(String(req.params.id || ""));
+  if (!ok) {
+    res.status(404).json({ error: "Style example not found" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 app.get("/api/content/batch/:batchId/status", (req, res) => {

@@ -267,6 +267,7 @@ async function processBatch(batchSessionId) {
                         enableBroll: batchSession.enhanceOptions?.broll,
                         userContext: batchSession.userContext || "",
                         scriptText: batchSession.scriptText || "",
+                        styleGuide: (0, contentDb_js_1.getStyleGuideText)(),
                     });
                     jobId = submission.jobId;
                     console.log(`[batch-processor] OpenShorts job submitted: ${jobId} (status: ${submission.status})`);

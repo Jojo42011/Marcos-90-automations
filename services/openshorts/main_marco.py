@@ -64,6 +64,7 @@ def get_viral_clips_marco(
     video_path: str | None = None,
     user_context: str = "",
     script_text: str = "",
+    style_guide: str = "",
 ) -> dict:
     if openshorts_main is None:
         raise RuntimeError("OpenShorts main module not available")
@@ -166,7 +167,10 @@ def get_viral_clips_marco(
         has_frames=bool(images),
         user_context=user_context,
         script_text=script_text,
+        style_guide=style_guide,
     )
+    if style_guide:
+        print(f"[content-ai] style guide attached ({len(style_guide)} chars)")
     if user_context or script_text:
         print(
             f"[content-ai] human direction attached "

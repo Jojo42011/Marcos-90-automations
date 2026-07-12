@@ -1866,6 +1866,23 @@
     .enhance-item-name { font-size: 12px; font-weight: 600; color: var(--text, #e8eaed); white-space: nowrap; }
     .enhance-item-note { font-size: 11px; color: var(--muted, #8a919c); }
     .enhance-settings-footnote { margin: 2px 0 0; font-size: 10.5px; color: var(--muted, #8a919c); font-style: italic; }
+    /* ── Upload & Clip: style examples ("teach the clipper") ─────────────── */
+    .style-examples-row { margin: 12px 0 4px; }
+    .style-example-zone-pair { display: flex; gap: 12px; flex-wrap: wrap; }
+    .style-example-zone { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 6px; }
+    .style-zone-label { font-size: 12px; font-weight: 600; color: var(--text, #e8eaed); }
+    .style-zone-sub { font-size: 10.5px; color: var(--muted, #8a919c); margin-bottom: 2px; }
+    .style-drop-zone { border: 1px dashed #3a4049; border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; background: var(--panel, #14171c); }
+    .style-drop-zone:hover, .style-drop-zone.drag-over { border-color: var(--accent-2, #25f4ee); background: rgba(37, 244, 238, 0.04); }
+    .style-example-list { display: flex; flex-direction: column; gap: 6px; }
+    .style-example-item { display: flex; align-items: center; gap: 8px; background: var(--panel, #14171c); border: 1px solid var(--border, #262b33); border-radius: 6px; padding: 6px 10px; font-size: 11px; }
+    .style-example-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text, #e8eaed); }
+    .style-example-status { padding: 1px 8px; border-radius: 999px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; }
+    .style-status-processing { background: rgba(245,196,81,0.14); color: #f5c451; }
+    .style-status-analyzed { background: rgba(61,220,132,0.14); color: #3ddc84; }
+    .style-status-failed { background: rgba(255,90,90,0.14); color: #ff5a5a; }
+    .style-example-del { background: none; border: none; color: var(--muted, #8a919c); font-size: 12px; cursor: pointer; padding: 0 2px; }
+    .style-example-del:hover { color: #ff5a5a; }
     /* ── Review Queue: enhancement badges ────────────────────────────────── */
     .rv-enh-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; justify-content: center; }
     .rv-enh-badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 600; letter-spacing: 0.03em; }
@@ -2166,6 +2183,43 @@
                   <span class="enhance-item-note">topic-matched stock footage (needs PEXELS_API_KEY on the server)</span>
                 </label>
                 <p class="enhance-settings-footnote">Silence removal, look-away cuts, and repeated-take cleanup run automatically whenever captions are on.</p>
+              </div>
+            </div>
+
+            <!-- Style examples — teach the clipper how Marco films and edits -->
+            <div class="style-examples-row">
+              <button type="button" class="enhance-settings-toggle" onclick="toggleStyleExamples()">
+                <span class="enhance-toggle-title">🎓 Teach the clipper your style</span>
+                <span class="enhance-toggle-summary" id="styleExamplesSummary">Drop example videos so future clips match your style</span>
+                <span class="enhance-toggle-arrow" id="styleExamplesToggleArrow">▾</span>
+              </button>
+              <div id="styleExamplesPanel" class="enhance-settings-panel" style="display:none">
+                <p class="enhance-settings-footnote" style="margin:0 0 4px;">
+                  Every video dropped here is watched once, then its style notes are automatically
+                  applied to every future batch — no per-batch setup needed.
+                </p>
+                <div class="style-example-zone-pair">
+                  <div class="style-example-zone">
+                    <div class="style-zone-label">📈 Published good clips</div>
+                    <div class="style-zone-sub">Finished clips that already did well — studies pacing, hook, cut rhythm</div>
+                    <div class="style-drop-zone" id="styleDropZoneClip">
+                      <span class="script-drop-icon">🎬</span>
+                      <span class="script-drop-text">Drop clips or <span class="script-browse-link">browse</span></span>
+                      <input type="file" id="styleFileInputClip" accept=".mp4,.mov,.avi,.mkv,.webm,video/*" multiple hidden />
+                    </div>
+                    <div class="style-example-list" id="styleExampleListClip"></div>
+                  </div>
+                  <div class="style-example-zone">
+                    <div class="style-zone-label">🎙️ Raw footage</div>
+                    <div class="style-zone-sub">Unedited talking — studies energy, pacing, natural pause patterns</div>
+                    <div class="style-drop-zone" id="styleDropZoneRaw">
+                      <span class="script-drop-icon">🎥</span>
+                      <span class="script-drop-text">Drop footage or <span class="script-browse-link">browse</span></span>
+                      <input type="file" id="styleFileInputRaw" accept=".mp4,.mov,.avi,.mkv,.webm,video/*" multiple hidden />
+                    </div>
+                    <div class="style-example-list" id="styleExampleListRaw"></div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -6352,6 +6406,100 @@
       const el = document.getElementById("enhanceSettingsSummary");
       if (el) el.textContent = parts.length ? parts.join(" · ") : "All enhancements off";
     }
+
+    /* ── Style examples ("teach the clipper") ───────────────────────────── */
+    let styleExamplesPollTimer = null;
+
+    function toggleStyleExamples() {
+      const panel = document.getElementById("styleExamplesPanel");
+      const arrow = document.getElementById("styleExamplesToggleArrow");
+      if (!panel) return;
+      const open = panel.style.display !== "none";
+      panel.style.display = open ? "none" : "block";
+      if (arrow) arrow.textContent = open ? "▾" : "▴";
+      if (!open) void loadStyleExamples();
+    }
+
+    function styleExampleItemHtml(ex) {
+      const statusLabel = { processing: "Learning…", analyzed: "Learned", failed: "Failed" }[ex.status] || ex.status;
+      const title = ex.status === "failed" && ex.errorMessage ? escapeHtml(ex.errorMessage)
+        : ex.status === "analyzed" && ex.styleNotes ? escapeHtml(ex.styleNotes) : "";
+      return `<div class="style-example-item" title="${title}">
+        <span class="style-example-name">${escapeHtml(ex.originalFilename)}</span>
+        <span class="style-example-status style-status-${ex.status}">${statusLabel}</span>
+        <button type="button" class="style-example-del" onclick="deleteStyleExampleUi('${ex.id}')" aria-label="Remove">✕</button>
+      </div>`;
+    }
+
+    async function loadStyleExamples() {
+      try {
+        const { examples } = await cmFetch("/api/content/style-examples");
+        const clips = (examples || []).filter((e) => e.kind === "clip");
+        const raw = (examples || []).filter((e) => e.kind === "raw");
+        const clipList = document.getElementById("styleExampleListClip");
+        const rawList = document.getElementById("styleExampleListRaw");
+        if (clipList) clipList.innerHTML = clips.map(styleExampleItemHtml).join("");
+        if (rawList) rawList.innerHTML = raw.map(styleExampleItemHtml).join("");
+
+        const analyzedCount = (examples || []).filter((e) => e.status === "analyzed").length;
+        const summary = document.getElementById("styleExamplesSummary");
+        if (summary) {
+          summary.textContent = analyzedCount > 0
+            ? `${analyzedCount} example${analyzedCount === 1 ? "" : "s"} learned — applied to every batch`
+            : "Drop example videos so future clips match your style";
+        }
+
+        clearTimeout(styleExamplesPollTimer);
+        const stillProcessing = (examples || []).some((e) => e.status === "processing");
+        const panelOpen = document.getElementById("styleExamplesPanel")?.style.display !== "none";
+        if (stillProcessing && panelOpen) {
+          styleExamplesPollTimer = setTimeout(loadStyleExamples, 8000);
+        }
+      } catch (e) { console.warn("[style-examples] load failed", e); }
+    }
+
+    async function uploadStyleExample(file, kind) {
+      const fd = new FormData();
+      fd.append("video", file);
+      fd.append("kind", kind);
+      try {
+        const res = await fetch(apiUrl("/api/content/style-examples/upload"), { method: "POST", body: fd });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+        showToast(`"${file.name}" is learning your style…`);
+        void loadStyleExamples();
+      } catch (e) {
+        showToast(`Upload failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    async function deleteStyleExampleUi(id) {
+      try {
+        await cmFetch(`/api/content/style-examples/${id}`, { method: "DELETE" });
+        void loadStyleExamples();
+      } catch (e) { showToast(`Could not remove example: ${e instanceof Error ? e.message : String(e)}`); }
+    }
+
+    function wireStyleDropZone(zoneId, inputId, kind) {
+      const zone = document.getElementById(zoneId);
+      const input = document.getElementById(inputId);
+      if (!zone || !input) return;
+      zone.addEventListener("click", () => input.click());
+      zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("drag-over"); });
+      zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+      zone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        zone.classList.remove("drag-over");
+        const files = e.dataTransfer?.files;
+        if (files?.length) Array.from(files).forEach((f) => uploadStyleExample(f, kind));
+      });
+      input.addEventListener("change", () => {
+        if (input.files?.length) Array.from(input.files).forEach((f) => uploadStyleExample(f, kind));
+        input.value = "";
+      });
+    }
+    wireStyleDropZone("styleDropZoneClip", "styleFileInputClip", "clip");
+    wireStyleDropZone("styleDropZoneRaw", "styleFileInputRaw", "raw");
+    void loadStyleExamples();
 
     async function handleScriptFile(file) {
       const ext = file.name.split(".").pop()?.toLowerCase();

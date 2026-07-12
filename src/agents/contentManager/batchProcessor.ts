@@ -28,6 +28,7 @@ import {
   countClipsInApprovedOrScheduled,
   ensureDailyTargets,
   getBatchSession,
+  getStyleGuideText,
   listBatchSourceFiles,
   type CmBatchSession,
   type CmBatchSourceFile,
@@ -343,6 +344,7 @@ export async function processBatch(batchSessionId: string): Promise<void> {
           enableBroll: batchSession.enhanceOptions?.broll,
           userContext: batchSession.userContext || "",
           scriptText: batchSession.scriptText || "",
+          styleGuide: getStyleGuideText(),
         });
         jobId = submission.jobId;
         console.log(

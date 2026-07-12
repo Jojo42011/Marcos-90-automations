@@ -402,3 +402,57 @@ def analyze_transcript_for_clips(
         "AI analysis failed — the model API call did not succeed. This is a provider "
         f"or network error, not an API-key problem. Attempts: {detail}"
     )
+
+
+def analyze_style(
+    prompt: str,
+    images: list[dict[str, Any]] | None = None,
+    vision_model: str | None = None,
+) -> tuple[str, str]:
+    """Run one style-analysis call (free-text response, NOT a clip array).
+
+    Same provider chain/fallback as analyze_transcript_for_clips, but the
+    response is returned as-is (stripped) instead of being parsed as JSON —
+    style briefs are prose meant for direct prompt injection.
+    Returns (style_text, model_label).
+    """
+    call_errors: list[str] = []
+    providers: list[tuple[str, str, Any, str]] = []
+    anthropic_key = _anthropic_key()
+    if anthropic_key:
+        providers.append((
+            "anthropic",
+            anthropic_key,
+            _call_anthropic,
+            os.environ.get("ANTHROPIC_MODEL", "").strip() or DEFAULT_ANTHROPIC_MODEL,
+        ))
+    openai_key = _openai_key()
+    if openai_key:
+        providers.append((
+            "openai",
+            openai_key,
+            _call_openai,
+            os.environ.get("OPENAI_MODEL", "").strip() or DEFAULT_OPENAI_MODEL,
+        ))
+
+    if not providers:
+        raise RuntimeError(
+            "AI analysis unavailable — no LLM API key configured. "
+            "Set a valid ANTHROPIC_API_KEY (sk-ant-…) or OPENAI_API_KEY."
+        )
+
+    for provider, key, caller, model in providers:
+        try:
+            if provider == "anthropic" and images:
+                model = (vision_model or "").strip() or model
+                text = _call_anthropic(prompt, key, images=images, model_override=model)
+            else:
+                text = caller(prompt, key)
+        except Exception as err:
+            print(f"[content-ai] style analysis {provider} call failed: {err}")
+            call_errors.append(f"{provider}: {err}")
+            continue
+        return text.strip(), model
+
+    detail = "; ".join(call_errors) if call_errors else "unknown error"
+    raise RuntimeError(f"Style analysis failed — every provider call failed. Attempts: {detail}")

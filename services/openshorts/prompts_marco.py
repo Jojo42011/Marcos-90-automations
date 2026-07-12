@@ -47,6 +47,7 @@ def get_viral_moment_prompt(
     has_frames: bool = False,
     user_context: str = "",
     script_text: str = "",
+    style_guide: str = "",
 ) -> str:
     pillar_instructions = {
         "education": "Prioritize moments where Marco explains a specific number, process step, or market insight clearly and concisely. Look for 'did you know', 'here's what that means', 'most buyers don't realize' type moments.",
@@ -73,6 +74,18 @@ def get_viral_moment_prompt(
                 "Use the script to identify the most impactful lines, then find those exact "
                 "moments in the transcript below.\n"
             )
+
+    # Marco's own accumulated style profile — built from reference videos he
+    # uploaded specifically to teach the clipper his pacing/hook/editing habits.
+    # This is a standing preference, weaker than per-batch human_direction (which
+    # is about THIS footage) but stronger than generic trend data.
+    style_section = (
+        f"\n\nMARCO'S STYLE GUIDE (learned from videos he uploaded as examples of "
+        f"how he films and how he wants clips cut — apply this as a standing "
+        f"preference for every clip you select from THIS video):\n{style_guide}"
+        if style_guide
+        else ""
+    )
 
     trend_section = (
         f"\n\nCURRENT TRENDING PATTERNS IN REAL ESTATE TIKTOK (factor these into your selection):\n{trend_brief}"
@@ -111,7 +124,7 @@ def get_viral_moment_prompt(
 
 CONTENT PILLAR FOR THIS SESSION: {pillar.upper()}
 {pillar_instructions.get(pillar, pillar_instructions["mixed"])}
-{human_direction}{trend_section}
+{human_direction}{style_section}{trend_section}
 {prosody_brief}{frames_section}
 VIDEO TRANSCRIPT (total duration: {video_duration:.1f} seconds):
 {transcript}
@@ -148,6 +161,75 @@ IMPORTANT:
 - QUALITY GATE: only include a clip if its viral_score is {quality_floor}+. Returning
   fewer, stronger clips is the goal — a short list of great clips beats a long list of
   average ones. Never invent filler clips to hit a count.
+"""
+
+
+def get_style_analysis_prompt(
+    transcript: str,
+    kind: str,
+    video_duration: float,
+    has_frames: bool = False,
+) -> str:
+    """Prompt for analyzing ONE reference video Marco uploaded to teach the
+    clipper his style — NOT a clip-selection prompt. Returns a short reusable
+    brief (plain text, not JSON) that gets folded into MARCO'S STYLE GUIDE and
+    injected into every future clip-selection prompt.
+
+    kind: "clip" — an already-published, well-performing FINAL clip. Analyze
+        the finished edit: pacing, hook technique, cut rhythm, tone, structure.
+    kind: "raw" — unedited source footage. Analyze Marco's DELIVERY: energy,
+        pacing of speech, natural pause patterns, how he sets up a point —
+        habits an editor should preserve when choosing/cutting clips.
+    """
+    if kind == "raw":
+        focus = (
+            "This is RAW, UNEDITED footage of Marco — there is no editing to study here, "
+            "only his natural delivery. Focus on:\n"
+            "- His speech pacing and energy: where does he speed up, slow down, get more "
+            "animated or more serious?\n"
+            "- How he builds to a point: does he lead with the number, or build up to it? "
+            "Does he ask a question before answering it?\n"
+            "- Natural pause patterns: where does he pause for effect vs. where does he "
+            "just trail off or lose his train of thought?\n"
+            "- Verbal habits: phrases he repeats, how he opens a thought, how he signals "
+            "he's about to say something important.\n"
+        )
+    else:
+        focus = (
+            "This is an ALREADY-PUBLISHED, well-performing clip — study the FINISHED EDIT "
+            "as an example of what a good clip from Marco looks like. Focus on:\n"
+            "- Pacing: how long does the hook run before the payoff? How quickly do beats move?\n"
+            "- Hook technique: exactly how does the first 3 seconds grab attention?\n"
+            "- Structure: what's the shape of the clip (hook → build → payoff → CTA, or "
+            "something else)?\n"
+            "- Tone and energy throughout — does it stay constant or shift?\n"
+        )
+
+    frames_note = (
+        "\nFrames from this video are attached — use them alongside the transcript to judge "
+        "pacing and visual energy, not just the words.\n"
+        if has_frames
+        else ""
+    )
+
+    return f"""
+{MARCO_CONTEXT}
+
+You are studying ONE reference video ({video_duration:.0f}s long) that Marco uploaded
+specifically so you can learn his style — NOT to select clips from it.
+
+{focus}{frames_note}
+TRANSCRIPT:
+{transcript}
+
+TASK: Write a SHORT, REUSABLE style brief (4-8 sentences, plain prose, no JSON, no
+markdown headers) that captures what makes this example distinctive. Write it as
+standing guidance for a future clip-selection pass — e.g. "Marco favors an
+abrupt, data-first hook with no warmup" or "Natural energy peaks come ~8-10s into
+a thought, right before the specific number — clips should open close to there."
+Be concrete and specific to THIS video, not generic real-estate advice. If the
+footage is too short, too garbled, or shows nothing distinctive, say so briefly
+in one sentence instead of inventing detail.
 """
 
 

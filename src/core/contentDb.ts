@@ -446,6 +446,19 @@ export function getContentDb(): Database.Database {
         opus_completed_at TEXT,
         error_message TEXT
       );
+      CREATE TABLE IF NOT EXISTS cm_style_examples (
+        id TEXT PRIMARY KEY,
+        kind TEXT,
+        original_filename TEXT,
+        file_path TEXT,
+        status TEXT,
+        style_notes TEXT,
+        model TEXT,
+        error_message TEXT,
+        created_at TEXT,
+        analyzed_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_style_examples_kind ON cm_style_examples(kind);
       CREATE TABLE IF NOT EXISTS cm_clip_versions (
         id TEXT PRIMARY KEY,
         video_id TEXT,
@@ -4416,6 +4429,148 @@ export function updateBatchSourceFile(
       id,
     );
   return getBatchSourceFile(id);
+}
+
+// ── Style examples — reference videos Marco uploads to teach the clipper his
+// pacing/hook/editing habits. "clip" = an already-published good clip (study
+// the finished edit); "raw" = unedited footage (study his delivery). Each
+// analyzed example contributes a short style_notes brief; getStyleGuideText()
+// aggregates the most recent ones into the text injected into every future
+// clip-selection prompt (see submitToOpenShorts / prompts_marco.py).
+export type CmStyleExampleKind = "clip" | "raw";
+export type CmStyleExampleStatus = "processing" | "analyzed" | "failed";
+
+export interface CmStyleExample {
+  id: string;
+  kind: CmStyleExampleKind;
+  originalFilename: string;
+  filePath: string | null;
+  status: CmStyleExampleStatus;
+  styleNotes: string | null;
+  model: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  analyzedAt: string | null;
+}
+
+function rowToStyleExample(row: Record<string, unknown>): CmStyleExample {
+  return {
+    id: String(row.id),
+    kind: (row.kind as CmStyleExampleKind) ?? "clip",
+    originalFilename: String(row.original_filename ?? ""),
+    filePath: row.file_path ? String(row.file_path) : null,
+    status: (row.status as CmStyleExampleStatus) ?? "processing",
+    styleNotes: row.style_notes ? String(row.style_notes) : null,
+    model: row.model ? String(row.model) : null,
+    errorMessage: row.error_message ? String(row.error_message) : null,
+    createdAt: String(row.created_at),
+    analyzedAt: row.analyzed_at ? String(row.analyzed_at) : null,
+  };
+}
+
+export function createStyleExample(input: {
+  kind: CmStyleExampleKind;
+  originalFilename: string;
+  filePath: string;
+}): CmStyleExample {
+  const database = getContentDb();
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  database
+    .prepare(
+      `INSERT INTO cm_style_examples
+       (id, kind, original_filename, file_path, status, style_notes, model, error_message, created_at, analyzed_at)
+       VALUES (?, ?, ?, ?, 'processing', NULL, NULL, NULL, ?, NULL)`,
+    )
+    .run(id, input.kind, input.originalFilename, input.filePath, now);
+  return getStyleExample(id)!;
+}
+
+export function getStyleExample(id: string): CmStyleExample | null {
+  const row = getContentDb()
+    .prepare(`SELECT * FROM cm_style_examples WHERE id = ?`)
+    .get(id) as Record<string, unknown> | undefined;
+  return row ? rowToStyleExample(row) : null;
+}
+
+export function listStyleExamples(kind?: CmStyleExampleKind): CmStyleExample[] {
+  const database = getContentDb();
+  const rows = (
+    kind
+      ? database
+          .prepare(`SELECT * FROM cm_style_examples WHERE kind = ? ORDER BY created_at DESC`)
+          .all(kind)
+      : database.prepare(`SELECT * FROM cm_style_examples ORDER BY created_at DESC`).all()
+  ) as Record<string, unknown>[];
+  return rows.map(rowToStyleExample);
+}
+
+export function updateStyleExample(
+  id: string,
+  patch: Partial<Pick<CmStyleExample, "status" | "styleNotes" | "model" | "errorMessage" | "filePath">> & {
+    analyzedAt?: string;
+  },
+): CmStyleExample | null {
+  const existing = getStyleExample(id);
+  if (!existing) return null;
+  const database = getContentDb();
+  database
+    .prepare(
+      `UPDATE cm_style_examples SET status = ?, style_notes = ?, model = ?, error_message = ?,
+       file_path = ?, analyzed_at = ? WHERE id = ?`,
+    )
+    .run(
+      patch.status ?? existing.status,
+      patch.styleNotes !== undefined ? patch.styleNotes : existing.styleNotes,
+      patch.model !== undefined ? patch.model : existing.model,
+      patch.errorMessage !== undefined ? patch.errorMessage : existing.errorMessage,
+      patch.filePath !== undefined ? patch.filePath : existing.filePath,
+      patch.analyzedAt !== undefined ? patch.analyzedAt : existing.analyzedAt,
+      id,
+    );
+  return getStyleExample(id);
+}
+
+export function deleteStyleExample(id: string): boolean {
+  const existing = getStyleExample(id);
+  if (!existing) return false;
+  if (existing.filePath && fs.existsSync(existing.filePath)) {
+    try {
+      fs.unlinkSync(existing.filePath);
+    } catch {
+      /* best-effort — a stale path is not worth failing the delete over */
+    }
+  }
+  getContentDb().prepare(`DELETE FROM cm_style_examples WHERE id = ?`).run(id);
+  return true;
+}
+
+// Cap on how many recent per-kind briefs feed the aggregated guide, and on the
+// guide's total length — this rides into every clip-selection prompt, so it
+// must stay a "brief," not accumulate into an unbounded wall of text.
+const STYLE_GUIDE_MAX_EXAMPLES_PER_KIND = 8;
+const STYLE_GUIDE_MAX_CHARS = 4000;
+
+export function getStyleGuideText(): string {
+  const database = getContentDb();
+  const sections: string[] = [];
+  for (const [kind, label] of [
+    ["clip", "From published clips that performed well"],
+    ["raw", "From raw footage (delivery habits)"],
+  ] as const) {
+    const rows = database
+      .prepare(
+        `SELECT style_notes FROM cm_style_examples
+         WHERE kind = ? AND status = 'analyzed' AND style_notes IS NOT NULL AND style_notes != ''
+         ORDER BY analyzed_at DESC LIMIT ?`,
+      )
+      .all(kind, STYLE_GUIDE_MAX_EXAMPLES_PER_KIND) as Array<{ style_notes: string }>;
+    if (!rows.length) continue;
+    const bullets = rows.map((r) => `- ${r.style_notes.trim()}`).join("\n");
+    sections.push(`${label}:\n${bullets}`);
+  }
+  const text = sections.join("\n\n");
+  return text.length > STYLE_GUIDE_MAX_CHARS ? text.slice(0, STYLE_GUIDE_MAX_CHARS) : text;
 }
 
 export function listActiveCompetitorProfiles(): CmCompetitorProfile[] {

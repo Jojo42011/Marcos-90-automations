@@ -78,6 +78,9 @@ import edit_effects_marco
 import gaze_analysis_marco
 import take_analysis_marco
 import broll_marco
+import frame_analysis_marco
+import prompts_marco
+import llm_analysis
 from llm_analysis import any_llm_configured, configured_llm_summary, NoUsableClipsError
 
 try:
@@ -338,6 +341,7 @@ def process_video_job(
     enable_captions: bool = True,
     user_context: str = "",
     script_text: str = "",
+    style_guide: str = "",
     enable_auto_zoom: Optional[bool] = None,
     enable_broll: Optional[bool] = None,
 ):
@@ -453,6 +457,7 @@ def process_video_job(
                 video_path=video_path,
                 user_context=user_context,
                 script_text=script_text,
+                style_guide=style_guide,
             )
         except NoUsableClipsError as no_clips:
             # The model responded fine but found no viable clip moments — a
@@ -803,6 +808,10 @@ async def process_video(
     # direction instead of guessing.
     user_context: str = Form(""),
     script_text: str = Form(""),
+    # Marco's accumulated style guide (built from his uploaded reference
+    # videos in the Content Manager's Style Examples zones) — Node fetches and
+    # attaches the current text on every job so it applies automatically.
+    style_guide: str = Form(""),
 ):
     if not any_llm_configured():
         raise HTTPException(
@@ -866,6 +875,7 @@ async def process_video(
         enable_captions=(enable_captions.lower() == "true"),
         user_context=user_context,
         script_text=script_text,
+        style_guide=style_guide,
         enable_auto_zoom=_tri(enable_auto_zoom),
         enable_broll=_tri(enable_broll),
     )
@@ -878,6 +888,113 @@ async def get_job_status(job_id: str):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     return jobs[job_id]
+
+
+# ── Style examples — teach the clipper Marco's editing/delivery habits ──────
+# A lightweight sibling to the batch job pipeline: transcribe + one LLM call,
+# no cutting/reframing/captioning. Kept in a separate dict so it never
+# collides with batch job IDs, but shares the same processing slot — a style
+# analysis on this 2-core box should not run concurrently with a batch encode.
+style_jobs: dict = {}
+_MAX_STYLE_ANALYSIS_FRAMES = 6
+
+
+def process_style_job(job_id: str, video_path: str, kind: str) -> None:
+    """Synchronous — see process_video_job's docstring for why (BackgroundTasks
+    runs plain functions off the event loop; this keeps /health responsive)."""
+    slot_acquired = False
+    try:
+        if not _PROCESS_SLOT.acquire(timeout=_SLOT_WAIT_TIMEOUT_S):
+            style_jobs[job_id].update(status="failed", error="Timed out waiting for a free processing slot")
+            return
+        slot_acquired = True
+
+        if openshorts_main is None:
+            raise RuntimeError("OpenShorts not installed — run setup-openshorts.sh")
+        if not validate_video_file(video_path):
+            style_jobs[job_id].update(status="failed", error="Video file could not be read")
+            return
+
+        style_jobs[job_id]["status"] = "transcribing"
+        transcript = openshorts_main.transcribe_video(video_path)
+        video_duration = transcript.get("duration") or _probe_duration(video_path)
+
+        quality = main_marco.assess_transcript_quality(transcript, video_duration)
+        if not quality["ok"]:
+            style_jobs[job_id].update(status="failed", error=quality["message"])
+            return
+
+        style_jobs[job_id]["status"] = "analyzing"
+        transcript_text = " ".join(seg.get("text", "") for seg in transcript.get("segments", []))
+
+        images: list = []
+        try:
+            images = frame_analysis_marco.extract_analysis_frames(
+                video_path, flagged_timestamps=[0.5], max_frames=_MAX_STYLE_ANALYSIS_FRAMES
+            )
+        except Exception as frame_err:  # noqa: BLE001 — best-effort
+            print(f"[style] frame extraction skipped: {frame_err}")
+
+        prompt = prompts_marco.get_style_analysis_prompt(
+            transcript=transcript_text,
+            kind=kind,
+            video_duration=video_duration,
+            has_frames=bool(images),
+        )
+        style_text, model = llm_analysis.analyze_style(
+            prompt, images=images, vision_model=main_marco.VISION_MODEL if images else None
+        )
+
+        style_jobs[job_id].update(status="complete", style_notes=style_text, model=model)
+    except Exception as err:  # noqa: BLE001 — best-effort job, never crash the worker
+        print(f"[style] job {job_id} failed: {type(err).__name__}: {err}")
+        traceback.print_exc()
+        style_jobs[job_id].update(status="failed", error=f"{type(err).__name__}: {err}")
+    finally:
+        if slot_acquired:
+            _PROCESS_SLOT.release()
+        # Best-effort cleanup — the source video isn't needed once analyzed.
+        try:
+            if video_path.startswith("/data/uploads/") and os.path.isfile(video_path):
+                os.remove(video_path)
+        except Exception:
+            pass
+
+
+@app.post("/api/style/analyze")
+async def analyze_style_video(
+    background_tasks: BackgroundTasks,
+    file_path: str = Form(...),
+    kind: str = Form("clip"),
+):
+    if not any_llm_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="LLM API key required — set ANTHROPIC_API_KEY (sk-ant-…) or OPENAI_API_KEY",
+        )
+    if not Path(file_path).exists():
+        raise HTTPException(status_code=400, detail=f"Video file not found at {file_path}")
+    if kind not in ("clip", "raw"):
+        raise HTTPException(status_code=400, detail="kind must be 'clip' or 'raw'")
+
+    job_id = str(uuid.uuid4())
+    style_jobs[job_id] = {
+        "status": "queued",
+        "kind": kind,
+        "style_notes": None,
+        "model": None,
+        "error": None,
+        "created_at": time.time(),
+    }
+    background_tasks.add_task(process_style_job, job_id=job_id, video_path=file_path, kind=kind)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@app.get("/api/style/jobs/{job_id}")
+async def get_style_job_status(job_id: str):
+    if job_id not in style_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return style_jobs[job_id]
 
 
 @app.get("/clips/{job_id}/{filename}")

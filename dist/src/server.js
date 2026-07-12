@@ -76,6 +76,7 @@ const uploadPostPublish_js_1 = require("./agents/contentManager/uploadPostPublis
 const googleDrivePull_js_1 = require("./agents/contentManager/googleDrivePull.js");
 const metaPublish_js_1 = require("./agents/contentManager/metaPublish.js");
 const batchProcessor_js_1 = require("./agents/contentManager/batchProcessor.js");
+const styleExamples_js_1 = require("./agents/contentManager/styleExamples.js");
 const diskCleanup_js_1 = require("./core/diskCleanup.js");
 const competitorIntel_js_1 = require("./agents/contentManager/competitorIntel.js");
 const stats_js_1 = require("./agents/contentManager/brain/stats.js");
@@ -3554,6 +3555,24 @@ const batchVideoUpload = (0, multer_1.default)({
         cb(null, allowed.includes(ext));
     },
 });
+// Style-example upload (Upload & Clip → "Teach the clipper" zones). Same
+// video-type restrictions as batchVideoUpload; kept separate so its route can
+// stay independent of batch-session lifecycle.
+const styleExampleUpload = (0, multer_1.default)({
+    storage: multer_1.default.diskStorage({
+        destination: (_req, _file, cb) => cb(null, resolveContentVideoUploadDir()),
+        filename: (_req, file, cb) => {
+            const ext = path_1.default.extname(file.originalname) || ".mp4";
+            cb(null, `style-${Date.now()}-${(0, crypto_1.randomUUID)()}${ext}`);
+        },
+    }),
+    limits: { fileSize: MAX_UPLOAD_FILE_BYTES },
+    fileFilter: (_req, file, cb) => {
+        const allowed = [".mp4", ".mov", ".avi", ".mkv", ".webm"];
+        const ext = path_1.default.extname(file.originalname).toLowerCase();
+        cb(null, allowed.includes(ext));
+    },
+});
 // Audio track upload for the clip editor's "replace audio" action. Saved to the
 // shared uploads volume; its path is passed to a subsequent /edit (audio=replace).
 const clipAudioUpload = (0, multer_1.default)({
@@ -3820,6 +3839,54 @@ app.post("/api/content/batch-upload", requireDiskSpaceForUpload(), trackUploadPr
         status: "processing",
         message: `${files.length} video(s) queued for processing`,
     });
+});
+// ── Style examples — "teach the clipper" upload zones (Upload & Clip panel).
+// Each upload is transcribed + analyzed for style (no cutting/reframing) and
+// the resulting brief automatically rides into every future batch job — see
+// getStyleGuideText() / submitToOpenShorts's style_guide field.
+app.post("/api/content/style-examples/upload", requireDiskSpaceForUpload(), styleExampleUpload.single("video"), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const file = req.file;
+    if (!file) {
+        res.status(400).json({ error: "A video file is required (field name: video)" });
+        return;
+    }
+    const kind = req.body?.kind === "raw" ? "raw" : "clip";
+    const example = (0, contentDb_js_1.createStyleExample)({
+        kind,
+        originalFilename: file.originalname,
+        filePath: file.path,
+    });
+    setImmediate(() => {
+        (0, styleExamples_js_1.processStyleExample)(example.id).catch((err) => {
+            console.error(`[style-examples] processStyleExample failed for ${example.id}:`, err);
+        });
+    });
+    res.json({ ok: true, example });
+});
+app.get("/api/content/style-examples", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const kindParam = typeof req.query.kind === "string" ? req.query.kind : "";
+    const kind = kindParam === "raw" || kindParam === "clip" ? kindParam : undefined;
+    res.json({ examples: (0, contentDb_js_1.listStyleExamples)(kind) });
+});
+app.delete("/api/content/style-examples/:id", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const ok = (0, contentDb_js_1.deleteStyleExample)(String(req.params.id || ""));
+    if (!ok) {
+        res.status(404).json({ error: "Style example not found" });
+        return;
+    }
+    res.json({ ok: true });
 });
 app.get("/api/content/batch/:batchId/status", (req, res) => {
     if (!dashboardTokenOk(req)) {

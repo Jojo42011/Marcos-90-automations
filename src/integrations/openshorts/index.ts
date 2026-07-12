@@ -67,6 +67,7 @@ export async function submitToOpenShorts(input: {
   enableBroll?: boolean;
   userContext?: string; // what the human said to focus on — goes into the clipping prompt
   scriptText?: string; // uploaded script content, same destination
+  styleGuide?: string; // Marco's accumulated style profile (see contentDb.getStyleGuideText)
 }): Promise<{ jobId: string; status: string }> {
   const {
     filePath,
@@ -78,6 +79,7 @@ export async function submitToOpenShorts(input: {
     enableBroll,
     userContext = "",
     scriptText = "",
+    styleGuide = "",
   } = input;
 
   if (!fs.existsSync(filePath)) {
@@ -108,6 +110,7 @@ export async function submitToOpenShorts(input: {
     if (enableBroll !== undefined) formData.append("enable_broll", String(enableBroll));
     formData.append("user_context", userContext);
     formData.append("script_text", scriptText);
+    formData.append("style_guide", styleGuide);
 
     const response = await axios.post(`${OPENSHORTS_BASE_URL}/api/process`, formData, {
       headers: formData.getHeaders(),
@@ -529,4 +532,54 @@ export function generateMockClips(count: number): OpenShortsClipResult[] {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ── Style examples — lightweight sibling of the batch pipeline (transcribe +
+// one LLM call, no cutting/reframing) that teaches the clipper Marco's style
+// from a reference video. See app_marco.py's /api/style/* routes.
+export interface OpenShortsStyleJobResult {
+  status: "queued" | "transcribing" | "analyzing" | "complete" | "failed";
+  styleNotes?: string;
+  model?: string;
+  error?: string;
+}
+
+export async function submitStyleAnalysis(input: {
+  filePath: string;
+  kind: "clip" | "raw";
+}): Promise<{ jobId: string; status: string }> {
+  const { filePath, kind } = input;
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Video file not found at path: ${filePath}`);
+  }
+  const health = await checkOpenShortsHealth();
+  if (!health.running) {
+    throw new Error("OpenShorts sidecar is not running — cannot analyze style example.");
+  }
+  const formData = new FormData();
+  formData.append("file_path", filePath);
+  formData.append("kind", kind);
+  const response = await axios.post(`${OPENSHORTS_BASE_URL}/api/style/analyze`, formData, {
+    headers: formData.getHeaders(),
+    timeout: 30000,
+  });
+  return { jobId: response.data.job_id, status: response.data.status };
+}
+
+export async function pollStyleAnalysisJob(jobId: string): Promise<OpenShortsStyleJobResult> {
+  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+    const response = await axios.get(`${OPENSHORTS_BASE_URL}/api/style/jobs/${jobId}`, {
+      timeout: STATUS_CHECK_TIMEOUT_MS,
+    });
+    const data = response.data as Record<string, unknown>;
+    const status = String(data.status || "queued") as OpenShortsStyleJobResult["status"];
+    if (status === "complete") {
+      return { status, styleNotes: String(data.style_notes || ""), model: String(data.model || "") };
+    }
+    if (status === "failed") {
+      return { status, error: String(data.error || "Style analysis failed") };
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
+  return { status: "failed", error: `Style analysis timed out after ${MAX_POLL_ATTEMPTS} poll attempts` };
 }

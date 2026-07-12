@@ -11,6 +11,8 @@ exports.editClipViaOpenShorts = editClipViaOpenShorts;
 exports.suggestCutsViaOpenShorts = suggestCutsViaOpenShorts;
 exports.checkOpenShortsHealth = checkOpenShortsHealth;
 exports.generateMockClips = generateMockClips;
+exports.submitStyleAnalysis = submitStyleAnalysis;
+exports.pollStyleAnalysisJob = pollStyleAnalysisJob;
 /**
  * OpenShorts integration for Marco Puga Realty
  * Replaces OpusClip. Communicates with the local OpenShorts Python sidecar at port 8000.
@@ -40,7 +42,7 @@ function mapClipUrlForFrontend(url) {
     return url;
 }
 async function submitToOpenShorts(input) {
-    const { filePath, pillar, trendBrief = "", targetClipCount = 7, enableCaptions = true, enableAutoZoom, enableBroll, userContext = "", scriptText = "", } = input;
+    const { filePath, pillar, trendBrief = "", targetClipCount = 7, enableCaptions = true, enableAutoZoom, enableBroll, userContext = "", scriptText = "", styleGuide = "", } = input;
     if (!fs_1.default.existsSync(filePath)) {
         throw new Error(`Video file not found at path: ${filePath}`);
     }
@@ -67,6 +69,7 @@ async function submitToOpenShorts(input) {
             formData.append("enable_broll", String(enableBroll));
         formData.append("user_context", userContext);
         formData.append("script_text", scriptText);
+        formData.append("style_guide", styleGuide);
         const response = await axios_1.default.post(`${OPENSHORTS_BASE_URL}/api/process`, formData, {
             headers: formData.getHeaders(),
             timeout: 30000,
@@ -385,4 +388,39 @@ function generateMockClips(count) {
 }
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+async function submitStyleAnalysis(input) {
+    const { filePath, kind } = input;
+    if (!fs_1.default.existsSync(filePath)) {
+        throw new Error(`Video file not found at path: ${filePath}`);
+    }
+    const health = await checkOpenShortsHealth();
+    if (!health.running) {
+        throw new Error("OpenShorts sidecar is not running — cannot analyze style example.");
+    }
+    const formData = new form_data_1.default();
+    formData.append("file_path", filePath);
+    formData.append("kind", kind);
+    const response = await axios_1.default.post(`${OPENSHORTS_BASE_URL}/api/style/analyze`, formData, {
+        headers: formData.getHeaders(),
+        timeout: 30000,
+    });
+    return { jobId: response.data.job_id, status: response.data.status };
+}
+async function pollStyleAnalysisJob(jobId) {
+    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+        const response = await axios_1.default.get(`${OPENSHORTS_BASE_URL}/api/style/jobs/${jobId}`, {
+            timeout: STATUS_CHECK_TIMEOUT_MS,
+        });
+        const data = response.data;
+        const status = String(data.status || "queued");
+        if (status === "complete") {
+            return { status, styleNotes: String(data.style_notes || ""), model: String(data.model || "") };
+        }
+        if (status === "failed") {
+            return { status, error: String(data.error || "Style analysis failed") };
+        }
+        await sleep(POLL_INTERVAL_MS);
+    }
+    return { status: "failed", error: `Style analysis timed out after ${MAX_POLL_ATTEMPTS} poll attempts` };
 }
