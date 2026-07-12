@@ -385,7 +385,7 @@ async function rewriteReplyWithTone(systemPrompt, deterministicReply, conversati
 
 Rewrite ONLY the draft. Do not add new facts, addresses, prices, listing details, or promises not already implied. Keep the same intent and CTA.
 If a PREFLIGHT_NOTE is present, follow it: acknowledge repeats or stuck threads naturally; stay on the same funnel step (do not restart the intro).
-Your reply_text must use only periods, commas, question marks, exclamation marks, and apostrophes. No em dashes or hyphen punctuation between clauses.
+Your reply_text must use only periods, commas, question marks, exclamation marks, and apostrophes. No em dashes, en dashes, or hyphens anywhere, including inside compound words (write "one time" not "one-time").
 
 ${prompts_js_1.GLOBAL_MARCO_DM_RULES}
 
