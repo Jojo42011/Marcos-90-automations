@@ -43,5 +43,10 @@ export interface IncomingWebhookPayload {
   username: string | null;
   message: string;
   commentOrDm: "comment" | "dm";
+  /**
+   * "message_deleted" when the platform reports the lead removed a message.
+   * Requires ManyChat to be configured to forward that event; defaults to "message".
+   */
+  event?: "message" | "message_deleted";
 }
 

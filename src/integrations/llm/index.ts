@@ -10,7 +10,7 @@ import {
 } from "../../../config/prompts.js";
 import type { Conversation, Lead, Message } from "../../core/types.js";
 import type { FunnelDeterministicMeta } from "../../app/funnelDeterministic.js";
-import { isLastUserMessageRepeated } from "../../app/conversationUtils.js";
+import { assistantAlreadySaid, isLastUserMessageRepeated } from "../../app/conversationUtils.js";
 
 /** Default: Claude 3.5 Haiku. Override with ANTHROPIC_MODEL in .env if needed. */
 const DEFAULT_MODEL = "claude-3-5-haiku-latest";
@@ -366,7 +366,31 @@ export async function generateMarcoPipelineReply(input: {
     if (block.type !== "text") {
       return fallbackMarcoReply(lead, meta);
     }
-    return parsePipelineReplyJson(block.text) ?? fallbackMarcoReply(lead, meta);
+    const reply = parsePipelineReplyJson(block.text);
+    if (!reply) {
+      return fallbackMarcoReply(lead, meta);
+    }
+    if (!assistantAlreadySaid(conversation, reply)) {
+      return reply;
+    }
+    // Bucket E: never fire the identical line twice in one thread — one reword retry.
+    const retry = await client.messages.create({
+      model,
+      max_tokens: 900,
+      system: getMarcoUnifiedPipelineSystem(),
+      messages: [
+        { role: "user", content: userBlock },
+        { role: "assistant", content: JSON.stringify({ reply }) },
+        {
+          role: "user",
+          content:
+            "That reply is identical to a line Marco already sent earlier in this thread. Rewrite it much shorter, with a different opener, keeping the same intent. Output ONLY the JSON.",
+        },
+      ],
+    });
+    const retryBlock = retry.content[0];
+    const reworded = retryBlock.type === "text" ? parsePipelineReplyJson(retryBlock.text) : null;
+    return reworded ?? reply;
   } catch (e) {
     console.warn("[llm] generateMarcoPipelineReply failed:", e);
     return fallbackMarcoReply(lead, meta);

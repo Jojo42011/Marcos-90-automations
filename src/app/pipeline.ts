@@ -14,7 +14,11 @@ import {
   type PreflightTurnResult,
 } from "../integrations/llm/index.js";
 import { advanceFunnelDeterministic } from "./funnelDeterministic.js";
-import { isLastUserMessageRepeated, isShortDuplicateUserPair } from "./conversationUtils.js";
+import {
+  isAmbiguousPropertyReference,
+  isLastUserMessageRepeated,
+  isShortDuplicateUserPair,
+} from "./conversationUtils.js";
 
 export interface PipelineResult {
   reply: string | null;
@@ -25,7 +29,11 @@ export interface PipelineResult {
 export async function run(payload: IncomingWebhookPayload): Promise<PipelineResult> {
   let lead = await db.getLead(payload.platform, payload.userId);
   if (!lead) {
-    const interested = await classifyNewLeadBuyingIntent(payload.message);
+    // Ambiguous listing fragments ("Stone") fail the strict intent gate but are real
+    // inquiries in production — let them through so module 03 can ask for a screenshot.
+    const interested =
+      isAmbiguousPropertyReference(payload.message) ||
+      (await classifyNewLeadBuyingIntent(payload.message));
     if (!interested) {
       return { lead: null, reply: null };
     }
@@ -74,6 +82,7 @@ export async function run(payload: IncomingWebhookPayload): Promise<PipelineResu
 
   if (
     lead.state === FunnelStage.New ||
+    lead.state === FunnelStage.ListingClarificationRequested ||
     lead.state === FunnelStage.OpeningAskedFirstTime ||
     lead.state === FunnelStage.OpeningOfferedDetails
   ) {

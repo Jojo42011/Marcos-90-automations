@@ -6,6 +6,10 @@ import { prompts } from "../../../config/prompts.js";
 import type { Conversation, Lead, Message } from "../../core/types.js";
 import { FunnelStage } from "../../core/state.js";
 import { rewriteReplyWithTone } from "../../integrations/llm/index.js";
+import {
+  assistantAlreadySaid,
+  isAmbiguousPropertyReference,
+} from "../../app/conversationUtils.js";
 
 export interface ModuleResult {
   lead: Lead;
@@ -77,6 +81,18 @@ function openToAdvisor(text: string): boolean {
   return /\b(open|maybe|i guess|sure|okay|ok|possibly|interview)\b/.test(t);
 }
 
+/** Bucket E: if this exact line already went out in the thread, force a shorter reworded version. */
+function withVerbatimRepeatGuard(
+  conversation: Conversation,
+  deterministic: string,
+  appendix: string | undefined,
+): string | undefined {
+  if (!assistantAlreadySaid(conversation, deterministic)) return appendix;
+  const note =
+    "You already sent this exact line earlier in this thread. Reword it much shorter with a different opener; never repeat any earlier outbound verbatim.";
+  return appendix ? `${appendix} ${note}` : note;
+}
+
 function getLastUserMessage(conversation: Conversation): Message | null {
   const reversed = [...conversation.messages].reverse();
   return reversed.find((m) => m.role === "user") ?? null;
@@ -105,7 +121,33 @@ export async function process(
   }
 
   const repeat = Boolean(options?.treatAsRepeat && lead.state !== FunnelStage.New);
-  const appendix = repeat && options?.coachingNote?.trim() ? options.coachingNote.trim() : undefined;
+  let appendix = repeat && options?.coachingNote?.trim() ? options.coachingNote.trim() : undefined;
+
+  if (lead.state === FunnelStage.New && isAmbiguousPropertyReference(last.text)) {
+    // Fragment like "Stone" — we can't tell which listing they mean. Ask for a screenshot
+    // instead of guessing or sending a generic clarification.
+    const reply =
+      "Hey, I appreciate you reaching out. Do you happen to have a screenshot of the home I toured, just so I can give you the right information?";
+    return {
+      lead: { ...lead, state: FunnelStage.ListingClarificationRequested },
+      reply,
+    };
+  }
+
+  if (lead.state === FunnelStage.ListingClarificationRequested) {
+    const deterministic =
+      "Perfect. Yeah, that one's a beaut. Would it help if I sent over the entire breakdown of the home, location and pricing included?";
+    const rewritten = await rewriteReplyWithTone(
+      prompts.toneMatchedOpening,
+      deterministic,
+      conversation,
+      appendix,
+    );
+    return {
+      lead: { ...lead, state: FunnelStage.OpeningOfferedDetails },
+      reply: rewritten ?? deterministic,
+    };
+  }
 
   if (lead.state === FunnelStage.New) {
     const who = greetingName(lead);
@@ -141,6 +183,7 @@ export async function process(
               ? "No worries at all, I know of some beautiful homes similar to what you inquired about in that range as well. Are you currently working with an agent?"
               : "For sure, that helps. Are you currently working with an agent?";
 
+    appendix = withVerbatimRepeatGuard(conversation, deterministic, appendix);
     const rewritten = await rewriteReplyWithTone(
       prompts.toneMatchedOpening,
       deterministic,
@@ -167,6 +210,7 @@ export async function process(
           ? "Makes sense. Would there be a good number I could send all this info over to?"
           : "Noted. Would there be a good number I could send all this info over to?";
 
+    appendix = withVerbatimRepeatGuard(conversation, deterministic, appendix);
     const rewritten = await rewriteReplyWithTone(
       prompts.toneMatchedOpening,
       deterministic,

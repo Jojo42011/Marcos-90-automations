@@ -324,7 +324,30 @@ async function generateMarcoPipelineReply(input) {
         if (block.type !== "text") {
             return fallbackMarcoReply(lead, meta);
         }
-        return parsePipelineReplyJson(block.text) ?? fallbackMarcoReply(lead, meta);
+        const reply = parsePipelineReplyJson(block.text);
+        if (!reply) {
+            return fallbackMarcoReply(lead, meta);
+        }
+        if (!(0, conversationUtils_js_1.assistantAlreadySaid)(conversation, reply)) {
+            return reply;
+        }
+        // Bucket E: never fire the identical line twice in one thread — one reword retry.
+        const retry = await client.messages.create({
+            model,
+            max_tokens: 900,
+            system: (0, prompts_js_1.getMarcoUnifiedPipelineSystem)(),
+            messages: [
+                { role: "user", content: userBlock },
+                { role: "assistant", content: JSON.stringify({ reply }) },
+                {
+                    role: "user",
+                    content: "That reply is identical to a line Marco already sent earlier in this thread. Rewrite it much shorter, with a different opener, keeping the same intent. Output ONLY the JSON.",
+                },
+            ],
+        });
+        const retryBlock = retry.content[0];
+        const reworded = retryBlock.type === "text" ? parsePipelineReplyJson(retryBlock.text) : null;
+        return reworded ?? reply;
     }
     catch (e) {
         console.warn("[llm] generateMarcoPipelineReply failed:", e);

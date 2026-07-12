@@ -7,6 +7,37 @@ exports.handleWebhook = handleWebhook;
  * In production mount this as POST /webhook or similar.
  */
 const pipeline_js_1 = require("./pipeline.js");
+const index_js_1 = require("../integrations/manychat/index.js");
+/**
+ * Deleted-message handling (Bucket D): when ManyChat forwards event="message_deleted",
+ * wait ~2 minutes; if the lead sends nothing else in that window, send just "?".
+ * NOTE: requires ManyChat to actually forward a deleted-message event — the default
+ * payload today has no event field, so this path is inert until that's wired up.
+ */
+const pendingDeletedTimers = new Map();
+function leadKey(p) {
+    return `${p.platform}:${p.userId}`;
+}
+function scheduleDeletedMessageFallback(payload) {
+    const key = leadKey(payload);
+    const existing = pendingDeletedTimers.get(key);
+    if (existing)
+        clearTimeout(existing);
+    const waitMs = parsePositiveIntEnv("DELETED_MESSAGE_WAIT_MS", 120000);
+    const timer = setTimeout(() => {
+        pendingDeletedTimers.delete(key);
+        (0, index_js_1.sendDM)(payload.userId, "?").catch((e) => console.warn("[webhook] deleted-message fallback send failed:", e));
+    }, waitMs);
+    pendingDeletedTimers.set(key, timer);
+}
+function cancelDeletedMessageFallback(payload) {
+    const key = leadKey(payload);
+    const existing = pendingDeletedTimers.get(key);
+    if (existing) {
+        clearTimeout(existing);
+        pendingDeletedTimers.delete(key);
+    }
+}
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -60,11 +91,18 @@ function parseBody(body) {
     const username = typeof b.username === "string" ? b.username : null;
     const message = typeof b.message === "string" ? b.message : "";
     const commentOrDm = b.comment_or_dm === "comment" ? "comment" : "dm";
+    const event = b.event === "message_deleted" ? "message_deleted" : "message";
     if (!userId)
         return null;
-    return { platform, userId, username, message, commentOrDm };
+    return { platform, userId, username, message, commentOrDm, event };
 }
 async function handleIncomingPayload(payload) {
+    if (payload.event === "message_deleted") {
+        scheduleDeletedMessageFallback(payload);
+        return { status: 200 };
+    }
+    // A real inbound message supersedes any pending deleted-message "?" fallback.
+    cancelDeletedMessageFallback(payload);
     const start = Date.now();
     const { reply } = await (0, pipeline_js_1.run)(payload);
     const elapsed = Date.now() - start;

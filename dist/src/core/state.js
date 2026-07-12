@@ -8,6 +8,8 @@ exports.FunnelStage = void 0;
 var FunnelStage;
 (function (FunnelStage) {
     FunnelStage["New"] = "new";
+    /** Ambiguous first message: asked for a screenshot of the home so we know which listing. */
+    FunnelStage["ListingClarificationRequested"] = "listing_clarification_requested";
     /** Step 1 sent: thanks + first-time buyer question; waiting for lead reply. */
     FunnelStage["OpeningAskedFirstTime"] = "opening_asked_first_time";
     /** Step 2 sent: details + other options pitch; waiting for lead to agree. */

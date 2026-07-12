@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.normalizeUserMessageText = normalizeUserMessageText;
 exports.isLastUserMessageRepeated = isLastUserMessageRepeated;
+exports.isAmbiguousPropertyReference = isAmbiguousPropertyReference;
+exports.assistantAlreadySaid = assistantAlreadySaid;
 exports.isShortDuplicateUserPair = isShortDuplicateUserPair;
 /** Normalize for comparing lead messages (repeat taps, etc.). */
 function normalizeUserMessageText(text) {
@@ -29,6 +31,36 @@ function isLastUserMessageRepeated(conversation) {
     if (last.length < 12)
         return false;
     return true;
+}
+/**
+ * Ambiguous listing fragments ("Stone", "the corner one") — short, no clear intent keyword,
+ * no digits, not a plain conversational token. Route these to the screenshot-request pattern.
+ */
+function isAmbiguousPropertyReference(text) {
+    const t = normalizeUserMessageText(text);
+    if (!t)
+        return false;
+    const tokens = t.split(" ");
+    if (tokens.length > 3)
+        return false;
+    if (/[\d@?]/.test(t))
+        return false;
+    // Clear standalone intent words are handled by the normal opening flow.
+    if (/\b(price|pricing|cost|much|info|details|available|availability|tour|showing|interested|address|location|where|casita)\b/.test(t)) {
+        return false;
+    }
+    // Plain conversational fragments are not listing references.
+    if (/^(yes|yeah|yep|yup|no|nope|nah|ok|okay|k|thanks|thank you|ty|hi|hey|hello|sup|sure|cool|nice|wow|lol|haha)$/.test(t)) {
+        return false;
+    }
+    return true;
+}
+/** True if Marco already sent this exact line (normalized) earlier in the thread. */
+function assistantAlreadySaid(conversation, text) {
+    const norm = normalizeUserMessageText(text);
+    if (!norm)
+        return false;
+    return conversation.messages.some((m) => m.role === "assistant" && normalizeUserMessageText(m.text) === norm);
 }
 /** Same short line twice (e.g. double-tap "yes") — do not treat as stuck/repeat for funnel logic. */
 function isShortDuplicateUserPair(conversation) {

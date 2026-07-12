@@ -8,6 +8,7 @@ exports.process = process;
 const prompts_js_1 = require("../../../config/prompts.js");
 const state_js_1 = require("../../core/state.js");
 const index_js_1 = require("../../integrations/llm/index.js");
+const conversationUtils_js_1 = require("../../app/conversationUtils.js");
 function seemsDifferentPricePoint(text) {
     const t = text.toLowerCase();
     return /\b(different|lower|cheaper|less|out of budget|too high|too much|not in my range|another range|price point)\b/.test(t);
@@ -60,6 +61,13 @@ function openToAdvisor(text) {
     const t = text.toLowerCase();
     return /\b(open|maybe|i guess|sure|okay|ok|possibly|interview)\b/.test(t);
 }
+/** Bucket E: if this exact line already went out in the thread, force a shorter reworded version. */
+function withVerbatimRepeatGuard(conversation, deterministic, appendix) {
+    if (!(0, conversationUtils_js_1.assistantAlreadySaid)(conversation, deterministic))
+        return appendix;
+    const note = "You already sent this exact line earlier in this thread. Reword it much shorter with a different opener; never repeat any earlier outbound verbatim.";
+    return appendix ? `${appendix} ${note}` : note;
+}
 function getLastUserMessage(conversation) {
     const reversed = [...conversation.messages].reverse();
     return reversed.find((m) => m.role === "user") ?? null;
@@ -83,7 +91,24 @@ async function process(lead, conversation, options) {
         return { lead, reply: null };
     }
     const repeat = Boolean(options?.treatAsRepeat && lead.state !== state_js_1.FunnelStage.New);
-    const appendix = repeat && options?.coachingNote?.trim() ? options.coachingNote.trim() : undefined;
+    let appendix = repeat && options?.coachingNote?.trim() ? options.coachingNote.trim() : undefined;
+    if (lead.state === state_js_1.FunnelStage.New && (0, conversationUtils_js_1.isAmbiguousPropertyReference)(last.text)) {
+        // Fragment like "Stone" — we can't tell which listing they mean. Ask for a screenshot
+        // instead of guessing or sending a generic clarification.
+        const reply = "Hey, I appreciate you reaching out. Do you happen to have a screenshot of the home I toured, just so I can give you the right information?";
+        return {
+            lead: { ...lead, state: state_js_1.FunnelStage.ListingClarificationRequested },
+            reply,
+        };
+    }
+    if (lead.state === state_js_1.FunnelStage.ListingClarificationRequested) {
+        const deterministic = "Perfect. Yeah, that one's a beaut. Would it help if I sent over the entire breakdown of the home, location and pricing included?";
+        const rewritten = await (0, index_js_1.rewriteReplyWithTone)(prompts_js_1.prompts.toneMatchedOpening, deterministic, conversation, appendix);
+        return {
+            lead: { ...lead, state: state_js_1.FunnelStage.OpeningOfferedDetails },
+            reply: rewritten ?? deterministic,
+        };
+    }
     if (lead.state === state_js_1.FunnelStage.New) {
         const who = greetingName(lead);
         const deterministic = who !== "there"
@@ -108,6 +133,7 @@ async function process(lead, conversation, options) {
                         : seemsDifferentPricePoint(last.text) || mentionsDifferentArea(last.text) || mentionsBedBathCriteria(last.text)
                             ? "No worries at all, I know of some beautiful homes similar to what you inquired about in that range as well. Are you currently working with an agent?"
                             : "For sure, that helps. Are you currently working with an agent?";
+        appendix = withVerbatimRepeatGuard(conversation, deterministic, appendix);
         const rewritten = await (0, index_js_1.rewriteReplyWithTone)(prompts_js_1.prompts.toneMatchedOpening, deterministic, conversation, appendix);
         const reply = rewritten ?? deterministic;
         return {
@@ -126,6 +152,7 @@ async function process(lead, conversation, options) {
                 : saysNoAgent(last.text) || openToAdvisor(last.text)
                     ? "Makes sense. Would there be a good number I could send all this info over to?"
                     : "Noted. Would there be a good number I could send all this info over to?";
+        appendix = withVerbatimRepeatGuard(conversation, deterministic, appendix);
         const rewritten = await (0, index_js_1.rewriteReplyWithTone)(prompts_js_1.prompts.toneMatchedOpening, deterministic, conversation, appendix);
         const reply = rewritten ?? deterministic;
         return {

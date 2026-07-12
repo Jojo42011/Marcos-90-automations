@@ -48,7 +48,10 @@ const conversationUtils_js_1 = require("./conversationUtils.js");
 async function run(payload) {
     let lead = await db.getLead(payload.platform, payload.userId);
     if (!lead) {
-        const interested = await (0, index_js_4.classifyNewLeadBuyingIntent)(payload.message);
+        // Ambiguous listing fragments ("Stone") fail the strict intent gate but are real
+        // inquiries in production — let them through so module 03 can ask for a screenshot.
+        const interested = (0, conversationUtils_js_1.isAmbiguousPropertyReference)(payload.message) ||
+            (await (0, index_js_4.classifyNewLeadBuyingIntent)(payload.message));
         if (!interested) {
             return { lead: null, reply: null };
         }
@@ -88,6 +91,7 @@ async function run(payload) {
     };
     let reply = null;
     if (lead.state === state_js_1.FunnelStage.New ||
+        lead.state === state_js_1.FunnelStage.ListingClarificationRequested ||
         lead.state === state_js_1.FunnelStage.OpeningAskedFirstTime ||
         lead.state === state_js_1.FunnelStage.OpeningOfferedDetails) {
         lead = (await (0, index_js_2.process)(lead, conversation)).lead;
