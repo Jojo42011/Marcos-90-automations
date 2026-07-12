@@ -1,9 +1,14 @@
 """
-Marco Puga Realty — repeated-take detection + best-take selection by tonality.
+Marco Puga Realty — repeated-take detection + last-take selection.
 
 Marco often re-records the same line several times back-to-back ("take 3 —
 that's the one"). The raw footage therefore contains near-duplicate stretches,
-and a professional edit keeps exactly one: the take with the best delivery.
+and a professional edit keeps exactly one: the LAST take Marco recorded.
+
+Marco's workflow: the final time he says a line is always the keeper — he
+intentionally re-records until he's happy, so the last occurrence is by
+definition the approved version. Delivery scoring is still computed for the
+LLM brief (context only), but the LAST take in time wins.
 
 This module finds those duplicate takes from the whisper transcript (fuzzy
 text similarity between nearby segments) and scores each take's DELIVERY using
@@ -151,7 +156,9 @@ def detect_retakes(
                 **s,
                 "best": False,
             })
-        best_i = max(range(len(takes)), key=lambda idx: takes[idx]["score"])
+        # Always keep the LAST take — Marco's workflow is to re-record until
+        # satisfied, so the final occurrence is the approved delivery.
+        best_i = len(takes) - 1
         takes[best_i]["best"] = True
         for idx, t in enumerate(takes):
             if idx != best_i:
@@ -174,18 +181,18 @@ def retake_prompt_block(retakes: dict[str, Any]) -> str:
     lines = [
         "",
         "REPEATED-TAKE MAP (the speaker recorded the same line multiple times — "
-        "delivery was scored from the audio; use ONLY the best take):",
+        "the LAST take is always the keeper; earlier takes will be cut automatically):",
     ]
     for g in retakes["groups"][:8]:
         take_bits = []
         for t in g["takes"]:
-            tag = "BEST" if t["best"] else "inferior"
+            tag = "LAST (keeper)" if t["best"] else "earlier take"
             take_bits.append(f"{t['start']:.0f}-{t['end']:.0f}s ({tag}, delivery {t['score']:.0f}/100)")
         lines.append(f'- "{g["text"]}": {"; ".join(take_bits)}')
     lines.append(
-        "Guidance: never place a clip inside an inferior take — the same words exist "
-        "with better delivery in the BEST take. Inferior takes overlapping a chosen "
-        "clip will be cut automatically, so build clips around the BEST takes."
+        "Guidance: never place a clip inside an earlier take — the LAST take is the "
+        "approved delivery. Earlier takes overlapping a chosen clip will be cut "
+        "automatically, so build clips around the LAST (keeper) takes."
     )
     lines.append("")
     return "\n".join(lines)

@@ -573,9 +573,18 @@ def process_video_job(
                     extra_cuts: list[tuple[float, float]] = []
                     try:
                         if GAZE_CUTS:
-                            extra_cuts += gaze_analysis_marco.away_cut_candidates(
+                            raw_gaze = gaze_analysis_marco.away_cut_candidates(
                                 clips_data.get("gaze", {}), clip["start_time"], clip["end_time"]
                             )
+                            if raw_gaze:
+                                # Snap each gaze cut to the nearest word boundary so cuts
+                                # fall in the natural silence between spoken words instead
+                                # of mid-word (avoids the "sharp and abrupt" feel).
+                                _words = _extract_word_timestamps(transcript.get("segments", []))
+                                for gc in raw_gaze:
+                                    extra_cuts.append(
+                                        _snap_cut_to_words(gc, _words, clip["start_time"])
+                                    )
                         if TAKE_CUTS:
                             extra_cuts += take_analysis_marco.inferior_cut_candidates(
                                 clips_data.get("retakes", {}), clip["start_time"], clip["end_time"]
@@ -1040,6 +1049,80 @@ def _snap_cut_to_caption_lines(
     if e - s < 0.6 - 1e-6:  # epsilon: 0.6-wide remnants survive float noise
         return None
     return (s, e)
+
+
+def _extract_word_timestamps(segments: list) -> list:
+    """Flat sorted list of (word_start, word_end) in source-video seconds from Whisper.
+
+    Returns an empty list when word-level data is unavailable — callers must
+    handle that case gracefully (word snapping is best-effort).
+    """
+    out = []
+    for seg in segments or []:
+        for w in seg.get("words", []):
+            try:
+                ws, we = float(w["start"]), float(w["end"])
+                if we > ws + 0.01:
+                    out.append((ws, we))
+            except (KeyError, TypeError, ValueError):
+                continue
+    out.sort()
+    return out
+
+
+def _snap_cut_to_words(
+    cut_local: tuple[float, float],
+    words_source: list[tuple[float, float]],
+    clip_start: float,
+    max_snap_s: float = 1.5,
+) -> tuple[float, float]:
+    """Snap a clip-local gaze cut to the nearest inter-word gap.
+
+    Gaze cuts applied at raw MediaPipe timestamps can fall mid-word, producing
+    jarring abrupt transitions. This moves each boundary to the nearest word
+    edge so the edit always cuts in the natural silence between spoken words.
+
+    cut_local: (start, end) in clip-local seconds
+    words_source: sorted (ws, we) word timestamps in source-video seconds
+    clip_start: clip start in source seconds (coordinate-space bridge)
+    max_snap_s: furthest a boundary may move to reach a word edge
+
+    Returns a clip-local (start, end) aligned to word boundaries, or the
+    original cut if no word edges are close enough or snapping would collapse
+    the cut below 0.3 s.
+    """
+    if not words_source:
+        return cut_local
+
+    cs_src = cut_local[0] + clip_start  # convert to source time
+    ce_src = cut_local[1] + clip_start
+
+    # Cut start → end of the nearest word close to cs_src.
+    # Cutting after a word ends (in the gap) is invisible to the ear.
+    best_s = cs_src
+    best_s_dist = max_snap_s + 1.0
+    for ws, we in words_source:
+        dist = abs(we - cs_src)
+        if dist < best_s_dist:
+            best_s_dist = dist
+            best_s = we
+
+    # Cut end → start of the nearest word close to ce_src.
+    # Resuming at a word start means the viewer never hears a word chopped off.
+    best_e = ce_src
+    best_e_dist = max_snap_s + 1.0
+    for ws, we in words_source:
+        dist = abs(ws - ce_src)
+        if dist < best_e_dist:
+            best_e_dist = dist
+            best_e = ws
+
+    new_s = round(max(0.0, best_s - clip_start), 2)
+    new_e = round(best_e - clip_start, 2)
+
+    if new_e - new_s < 0.3:
+        return cut_local  # snapping collapsed the cut — use original
+    return (new_s, new_e)
 
 
 def _auto_tighten_generated_clip(
