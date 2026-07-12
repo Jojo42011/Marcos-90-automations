@@ -67,7 +67,12 @@ async function run(payload) {
             propertyInquired: null,
             criteria: null,
             brivityId: null,
+            listingId: payload.listingId ?? null,
+            crmNotes: null,
         });
+    }
+    else if (!lead.listingId && payload.listingId) {
+        lead = { ...lead, listingId: payload.listingId };
     }
     await db.appendMessage(lead.id, "user", payload.message);
     const conversation = await db.getConversation(lead.id);

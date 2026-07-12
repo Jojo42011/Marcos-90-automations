@@ -59,6 +59,48 @@ function extractPriceCap(text: string): number | null {
   return n;
 }
 
+/** Bucket I: short structured CRM notes so Carlos knows what was stated without re-reading the thread. */
+export function appendCrmNotes(lead: Lead, notes: string[]): Lead {
+  if (notes.length === 0) return lead;
+  const existing = lead.crmNotes ?? [];
+  const merged = [...existing];
+  for (const note of notes) {
+    if (!merged.includes(note)) merged.push(note);
+  }
+  return merged.length === existing.length ? lead : { ...lead, crmNotes: merged };
+}
+
+/** Freeform stated-preference notes not already covered by structured criteria fields. */
+export function deriveFreeTextCrmNotes(text: string): string[] {
+  const notes: string[] = [];
+  const t = text.toLowerCase();
+  if (/\b(layout|floor plan|floorplan)\b/.test(t)) {
+    notes.push("Lead requested: layout/floor plan");
+  }
+  if (/\bacreage\b/.test(t)) {
+    notes.push("Lead wants: acreage");
+  }
+  return notes;
+}
+
+/** Notes for newly-extracted structured criteria (beds/baths/area/price) this turn only. */
+function criteriaChangeNotes(before: Lead["criteria"], after: Lead["criteria"]): string[] {
+  const notes: string[] = [];
+  if (!after) return notes;
+  const bedsNew = after.beds !== null && before?.beds !== after.beds;
+  const bathsNew = after.baths !== null && before?.baths !== after.baths;
+  if (bedsNew || bathsNew) {
+    notes.push(`Lead wants: ${after.beds ?? "?"}bd/${after.baths ?? "?"}ba`);
+  }
+  if (after.area !== null && before?.area !== after.area) {
+    notes.push(`Lead wants: ${after.area} area`);
+  }
+  if (after.priceCap !== null && before?.priceCap !== after.priceCap) {
+    notes.push(`Lead wants: budget around $${after.priceCap.toLocaleString()}`);
+  }
+  return notes;
+}
+
 /** Module 06 state + criteria/email extraction only (no reply strings). */
 function applyModule06Deterministic(lead: Lead, lastText: string): Lead {
   const email = lead.email ?? extractEmail(lastText);
@@ -81,6 +123,9 @@ function applyModule06Deterministic(lead: Lead, lastText: string): Lead {
         baths: baths ?? null,
         area: area ?? null,
       };
+
+  const crmNotes = [...criteriaChangeNotes(lead.criteria, criteria), ...deriveFreeTextCrmNotes(lastText)];
+  lead = appendCrmNotes(lead, crmNotes);
 
   const isAffirmative = /\b(yes|that.?s the (one|house)|correct|exactly|perfect|sounds good)\b/i.test(
     lastText,

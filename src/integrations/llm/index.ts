@@ -7,9 +7,11 @@ import {
   getMarcoUnifiedPipelineSystem,
   prompts,
   GLOBAL_MARCO_DM_RULES,
+  MARCO_POST_CAPTURE_FOLLOWUP,
 } from "../../../config/prompts.js";
 import type { Conversation, Lead, Message } from "../../core/types.js";
 import type { FunnelDeterministicMeta } from "../../app/funnelDeterministic.js";
+import { getListingFacts } from "../../../config/listings.js";
 import { assistantAlreadySaid, isLastUserMessageRepeated } from "../../app/conversationUtils.js";
 
 /** Default: Claude 3.5 Haiku. Override with ANTHROPIC_MODEL in .env if needed. */
@@ -299,7 +301,8 @@ function fallbackMarcoReply(lead: Lead, meta: FunnelDeterministicMeta): string {
   if (meta.phoneJustCaptured) {
     return (
       "For sure. I'll send you the full breakdown on that home with specs, pricing, and a couple similar options. " +
-      "Was this what you had in mind, or are you leaning toward a different area or price range?"
+      "Was this what you had in mind, or are you leaning toward a different area or price range? " +
+      MARCO_POST_CAPTURE_FOLLOWUP
     );
   }
   if (meta.listSendPromised) {
@@ -337,6 +340,8 @@ export async function generateMarcoPipelineReply(input: {
     coaching_note: preflight.coachingNote,
   };
 
+  const listingFacts = getListingFacts(lead.listingId);
+
   const funnelContext = {
     stage: lead.state,
     phone_on_file: Boolean(lead.phone),
@@ -344,6 +349,9 @@ export async function generateMarcoPipelineReply(input: {
     criteria: lead.criteria,
     phone_just_captured: Boolean(meta.phoneJustCaptured),
     list_send_promised: Boolean(meta.listSendPromised),
+    // Only present when ManyChat forwarded a listing_id AND it's in config/listings.ts.
+    // If null, do NOT guess or state any location/construction/price fact.
+    listing_facts: listingFacts,
   };
 
   const userBlock =

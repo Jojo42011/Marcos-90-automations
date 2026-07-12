@@ -33,6 +33,7 @@ function toContactPayload(lead: Lead): {
   email?: string;
   source: string;
   stage: string;
+  notes?: string;
 } {
   return {
     first_name: firstNameFromLead(lead),
@@ -40,6 +41,7 @@ function toContactPayload(lead: Lead): {
     email: lead.email ?? undefined,
     source: normalizeSource(lead.platform),
     stage: leadStage(lead),
+    notes: lead.crmNotes && lead.crmNotes.length > 0 ? lead.crmNotes.join("; ") : undefined,
   };
 }
 

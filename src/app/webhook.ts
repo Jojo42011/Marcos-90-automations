@@ -97,8 +97,9 @@ function parseBody(body: unknown): IncomingWebhookPayload | null {
   const message = typeof b.message === "string" ? b.message : "";
   const commentOrDm = b.comment_or_dm === "comment" ? "comment" : "dm";
   const event = b.event === "message_deleted" ? ("message_deleted" as const) : ("message" as const);
+  const listingId = typeof b.listing_id === "string" && b.listing_id.trim() ? b.listing_id.trim() : null;
   if (!userId) return null;
-  return { platform, userId, username, message, commentOrDm, event };
+  return { platform, userId, username, message, commentOrDm, event, listingId };
 }
 
 export async function handleIncomingPayload(

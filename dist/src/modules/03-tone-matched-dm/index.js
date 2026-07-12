@@ -6,9 +6,11 @@ exports.process = process;
  * 1) Thanks + first-time buyer question → 2) Details + other options pitch → 3) Phone ask → PhoneRequested.
  */
 const prompts_js_1 = require("../../../config/prompts.js");
+const listings_js_1 = require("../../../config/listings.js");
 const state_js_1 = require("../../core/state.js");
 const index_js_1 = require("../../integrations/llm/index.js");
 const conversationUtils_js_1 = require("../../app/conversationUtils.js");
+const funnelDeterministic_js_1 = require("../../app/funnelDeterministic.js");
 function seemsDifferentPricePoint(text) {
     const t = text.toLowerCase();
     return /\b(different|lower|cheaper|less|out of budget|too high|too much|not in my range|another range|price point)\b/.test(t);
@@ -90,6 +92,7 @@ async function process(lead, conversation, options) {
     if (!last) {
         return { lead, reply: null };
     }
+    lead = (0, funnelDeterministic_js_1.appendCrmNotes)(lead, (0, funnelDeterministic_js_1.deriveFreeTextCrmNotes)(last.text));
     const repeat = Boolean(options?.treatAsRepeat && lead.state !== state_js_1.FunnelStage.New);
     let appendix = repeat && options?.coachingNote?.trim() ? options.coachingNote.trim() : undefined;
     if (lead.state === state_js_1.FunnelStage.New && (0, conversationUtils_js_1.isAmbiguousPropertyReference)(last.text)) {
@@ -111,9 +114,21 @@ async function process(lead, conversation, options) {
     }
     if (lead.state === state_js_1.FunnelStage.New) {
         const who = greetingName(lead);
-        const deterministic = who !== "there"
-            ? `Hey ${who}, I appreciate you reaching out. This home has a strong layout and value for the area, and pricing usually falls in a competitive range depending on finishes. Did this home somewhat align with what you're looking for or something in a different price point?`
-            : `Hey, I appreciate you reaching out. This home has a strong layout and value for the area, and pricing usually falls in a competitive range depending on finishes. Did this home somewhat align with what you're looking for or something in a different price point?`;
+        const greeting = who !== "there" ? `Hey ${who}, I appreciate you reaching out.` : "Hey, I appreciate you reaching out.";
+        const facts = (0, listings_js_1.getListingFacts)(lead.listingId);
+        const valueLine = facts
+            ? [
+                `This home has ${facts.beds ?? "a number of"} beds`,
+                facts.baths !== null ? `${facts.baths} baths` : null,
+                facts.hasCasita ? "and a casita" : null,
+            ]
+                .filter(Boolean)
+                .join(", ") +
+                (facts.priceRangeLow && facts.priceRangeHigh
+                    ? `, typically priced between $${facts.priceRangeLow.toLocaleString()} and $${facts.priceRangeHigh.toLocaleString()}.`
+                    : ".")
+            : "This home has a strong layout and value for the area, and pricing usually falls in a competitive range depending on finishes.";
+        const deterministic = `${greeting} ${valueLine} Did this home somewhat align with what you're looking for or something in a different price point?`;
         const rewritten = await (0, index_js_1.rewriteReplyWithTone)(prompts_js_1.prompts.toneMatchedOpening, deterministic, conversation, appendix);
         const reply = rewritten ?? deterministic;
         return {

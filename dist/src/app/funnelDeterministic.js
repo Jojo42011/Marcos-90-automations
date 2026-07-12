@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractPhone = extractPhone;
+exports.appendCrmNotes = appendCrmNotes;
+exports.deriveFreeTextCrmNotes = deriveFreeTextCrmNotes;
 exports.advanceFunnelDeterministic = advanceFunnelDeterministic;
 const state_js_1 = require("../core/state.js");
 function getLastUserMessage(conversation) {
@@ -50,6 +52,48 @@ function extractPriceCap(text) {
         return null;
     return n;
 }
+/** Bucket I: short structured CRM notes so Carlos knows what was stated without re-reading the thread. */
+function appendCrmNotes(lead, notes) {
+    if (notes.length === 0)
+        return lead;
+    const existing = lead.crmNotes ?? [];
+    const merged = [...existing];
+    for (const note of notes) {
+        if (!merged.includes(note))
+            merged.push(note);
+    }
+    return merged.length === existing.length ? lead : { ...lead, crmNotes: merged };
+}
+/** Freeform stated-preference notes not already covered by structured criteria fields. */
+function deriveFreeTextCrmNotes(text) {
+    const notes = [];
+    const t = text.toLowerCase();
+    if (/\b(layout|floor plan|floorplan)\b/.test(t)) {
+        notes.push("Lead requested: layout/floor plan");
+    }
+    if (/\bacreage\b/.test(t)) {
+        notes.push("Lead wants: acreage");
+    }
+    return notes;
+}
+/** Notes for newly-extracted structured criteria (beds/baths/area/price) this turn only. */
+function criteriaChangeNotes(before, after) {
+    const notes = [];
+    if (!after)
+        return notes;
+    const bedsNew = after.beds !== null && before?.beds !== after.beds;
+    const bathsNew = after.baths !== null && before?.baths !== after.baths;
+    if (bedsNew || bathsNew) {
+        notes.push(`Lead wants: ${after.beds ?? "?"}bd/${after.baths ?? "?"}ba`);
+    }
+    if (after.area !== null && before?.area !== after.area) {
+        notes.push(`Lead wants: ${after.area} area`);
+    }
+    if (after.priceCap !== null && before?.priceCap !== after.priceCap) {
+        notes.push(`Lead wants: budget around $${after.priceCap.toLocaleString()}`);
+    }
+    return notes;
+}
 /** Module 06 state + criteria/email extraction only (no reply strings). */
 function applyModule06Deterministic(lead, lastText) {
     const email = lead.email ?? extractEmail(lastText);
@@ -71,6 +115,8 @@ function applyModule06Deterministic(lead, lastText) {
             baths: baths ?? null,
             area: area ?? null,
         };
+    const crmNotes = [...criteriaChangeNotes(lead.criteria, criteria), ...deriveFreeTextCrmNotes(lastText)];
+    lead = appendCrmNotes(lead, crmNotes);
     const isAffirmative = /\b(yes|that.?s the (one|house)|correct|exactly|perfect|sounds good)\b/i.test(lastText);
     if (isAffirmative) {
         if (!email) {

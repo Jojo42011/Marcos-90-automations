@@ -49,7 +49,11 @@ export async function run(payload: IncomingWebhookPayload): Promise<PipelineResu
       propertyInquired: null,
       criteria: null,
       brivityId: null,
+      listingId: payload.listingId ?? null,
+      crmNotes: null,
     });
+  } else if (!lead.listingId && payload.listingId) {
+    lead = { ...lead, listingId: payload.listingId };
   }
 
   await db.appendMessage(lead.id, "user", payload.message);

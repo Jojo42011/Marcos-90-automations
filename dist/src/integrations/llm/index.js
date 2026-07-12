@@ -15,6 +15,7 @@ exports.rewriteReplyWithTone = rewriteReplyWithTone;
 require("dotenv/config");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const prompts_js_1 = require("../../../config/prompts.js");
+const listings_js_1 = require("../../../config/listings.js");
 const conversationUtils_js_1 = require("../../app/conversationUtils.js");
 /** Default: Claude 3.5 Haiku. Override with ANTHROPIC_MODEL in .env if needed. */
 const DEFAULT_MODEL = "claude-3-5-haiku-latest";
@@ -272,7 +273,8 @@ function parsePipelineReplyJson(raw) {
 function fallbackMarcoReply(lead, meta) {
     if (meta.phoneJustCaptured) {
         return ("For sure. I'll send you the full breakdown on that home with specs, pricing, and a couple similar options. " +
-            "Was this what you had in mind, or are you leaning toward a different area or price range?");
+            "Was this what you had in mind, or are you leaning toward a different area or price range? " +
+            prompts_js_1.MARCO_POST_CAPTURE_FOLLOWUP);
     }
     if (meta.listSendPromised) {
         return ("Of course. I'll email a personalized list of matching homes. " +
@@ -299,6 +301,7 @@ async function generateMarcoPipelineReply(input) {
         repeated_message: preflight.repeatedMessage,
         coaching_note: preflight.coachingNote,
     };
+    const listingFacts = (0, listings_js_1.getListingFacts)(lead.listingId);
     const funnelContext = {
         stage: lead.state,
         phone_on_file: Boolean(lead.phone),
@@ -306,6 +309,9 @@ async function generateMarcoPipelineReply(input) {
         criteria: lead.criteria,
         phone_just_captured: Boolean(meta.phoneJustCaptured),
         list_send_promised: Boolean(meta.listSendPromised),
+        // Only present when ManyChat forwarded a listing_id AND it's in config/listings.ts.
+        // If null, do NOT guess or state any location/construction/price fact.
+        listing_facts: listingFacts,
     };
     const userBlock = `PREFLIGHT:\n${JSON.stringify(preflightPayload, null, 2)}\n\n` +
         `FUNNEL_CONTEXT:\n${JSON.stringify(funnelContext, null, 2)}\n\n` +

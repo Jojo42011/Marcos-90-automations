@@ -36,6 +36,7 @@ function toContactPayload(lead) {
         email: lead.email ?? undefined,
         source: normalizeSource(lead.platform),
         stage: leadStage(lead),
+        notes: lead.crmNotes && lead.crmNotes.length > 0 ? lead.crmNotes.join("; ") : undefined,
     };
 }
 async function findByPhone(phone) {

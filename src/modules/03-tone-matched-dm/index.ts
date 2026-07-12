@@ -3,6 +3,7 @@
  * 1) Thanks + first-time buyer question → 2) Details + other options pitch → 3) Phone ask → PhoneRequested.
  */
 import { prompts } from "../../../config/prompts.js";
+import { getListingFacts } from "../../../config/listings.js";
 import type { Conversation, Lead, Message } from "../../core/types.js";
 import { FunnelStage } from "../../core/state.js";
 import { rewriteReplyWithTone } from "../../integrations/llm/index.js";
@@ -10,6 +11,7 @@ import {
   assistantAlreadySaid,
   isAmbiguousPropertyReference,
 } from "../../app/conversationUtils.js";
+import { appendCrmNotes, deriveFreeTextCrmNotes } from "../../app/funnelDeterministic.js";
 
 export interface ModuleResult {
   lead: Lead;
@@ -120,6 +122,8 @@ export async function process(
     return { lead, reply: null };
   }
 
+  lead = appendCrmNotes(lead, deriveFreeTextCrmNotes(last.text));
+
   const repeat = Boolean(options?.treatAsRepeat && lead.state !== FunnelStage.New);
   let appendix = repeat && options?.coachingNote?.trim() ? options.coachingNote.trim() : undefined;
 
@@ -151,10 +155,21 @@ export async function process(
 
   if (lead.state === FunnelStage.New) {
     const who = greetingName(lead);
-    const deterministic =
-      who !== "there"
-        ? `Hey ${who}, I appreciate you reaching out. This home has a strong layout and value for the area, and pricing usually falls in a competitive range depending on finishes. Did this home somewhat align with what you're looking for or something in a different price point?`
-        : `Hey, I appreciate you reaching out. This home has a strong layout and value for the area, and pricing usually falls in a competitive range depending on finishes. Did this home somewhat align with what you're looking for or something in a different price point?`;
+    const greeting = who !== "there" ? `Hey ${who}, I appreciate you reaching out.` : "Hey, I appreciate you reaching out.";
+    const facts = getListingFacts(lead.listingId);
+    const valueLine = facts
+      ? [
+          `This home has ${facts.beds ?? "a number of"} beds`,
+          facts.baths !== null ? `${facts.baths} baths` : null,
+          facts.hasCasita ? "and a casita" : null,
+        ]
+          .filter(Boolean)
+          .join(", ") +
+        (facts.priceRangeLow && facts.priceRangeHigh
+          ? `, typically priced between $${facts.priceRangeLow.toLocaleString()} and $${facts.priceRangeHigh.toLocaleString()}.`
+          : ".")
+      : "This home has a strong layout and value for the area, and pricing usually falls in a competitive range depending on finishes.";
+    const deterministic = `${greeting} ${valueLine} Did this home somewhat align with what you're looking for or something in a different price point?`;
 
     const rewritten = await rewriteReplyWithTone(
       prompts.toneMatchedOpening,
