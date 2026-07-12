@@ -552,7 +552,7 @@ function openingContextAppendix(lastUserText, conversation, channel, platform, p
         lines.push("BROWSING_OR_PRICE_DEFLECTION: The lead is browsing or said price is not their focus. Acknowledge briefly and steer toward a good number to text the breakdown. Do not ask preferences, timeline, bedrooms, or what matters in a home.");
     }
     if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUserText)) {
-        lines.push("LOCATION_ASK: The lead asked where this home is. Answer using only west of Stone Oak (natural phrasing). No other neighborhood, corridor, or street. Still no exact address or builder.");
+        lines.push("LOCATION_ASK: The lead asked where this home is. Let them know you can text the full breakdown which includes the address and all specs. Steer toward getting a good mobile number. Do not state any specific street, neighborhood, or location detail in DM.");
     }
     if (isNeutralDmFlow(platform, channel) && (0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(lastUserText)) {
         lines.push("PRICE_ASK_TIKTOK: They asked price or cost. Do not quote any dollar amount in DM. First beat: Marco's breakdown offer in casual voice (yeah of course, would it help if I sent the entire breakdown on the home they inquired about, location and pricing included, by text when they want it). No lecturing about the app or DMs being a rough place for sheets. Do not ask for their phone number in the same reply unless they already clearly agreed to receive the packet. After they agree, next turn can ask for a good mobile number to text it to.");
@@ -594,13 +594,13 @@ function fallbackOpeningReply(lead, openingStage, lastUserText, conversation, in
                 return `${hey} I'd love to help. Want me to send the full breakdown on that place first, specs and timing, then we can line up a tour from there?`;
             }
             if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUserText)) {
-                return `${hey} It's west of Stone Oak. Want me to text you the full breakdown on that home when you're ready, specs and all?`;
+                return `${hey} I'd love to help. Want me to text you the full breakdown on that home, address and all the specs included?`;
             }
             return `${hey} I'd love to help. Is this going to be your first time going through the buying process?!`;
         }
         if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUserText)) {
             const hey = who !== "there" ? `Hey ${who}` : "Hey";
-            return `${hey}, it's west of Stone Oak. This one's typically mid 500s depending on finishes. Does that line up with what you're looking for or a different price point?`;
+            return `${hey}, this one's typically mid 500s depending on finishes. Does that line up with what you're looking for or a different price point?`;
         }
         if (signalsTourOrScheduleIntent(lastUserText)) {
             const hey = who !== "there" ? `Hey ${who}` : "Hey";
@@ -633,7 +633,7 @@ function fallbackOpeningReply(lead, openingStage, lastUserText, conversation, in
                 return "Got it, just looking is totally fine. Want me to text you the full breakdown when you're ready? What's a good number?";
             }
             if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUserText) && (0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(lastUserText)) {
-                return "Yeah of course, it's west of Stone Oak. Would it help if I just sent the entire breakdown on the home you inquired about, location and pricing included?";
+                return "Would it help if I sent the entire breakdown on the home you inquired about, location and pricing included?";
             }
             if ((0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(lastUserText)) {
                 return "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
@@ -785,7 +785,7 @@ function fallbackMarcoPipelineReply(lead, meta, lastUser, recentMarco, platform,
             return "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
         }
         if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUser)) {
-            return `${hey} It's west of Stone Oak. Want me to text you the full breakdown on that home when you're ready, specs and all?`;
+            return `${hey} I'd love to help with that. Want me to text you the full breakdown on that home, address and all the specs included?`;
         }
         if (!lead.phone) {
             return "Of course. Is there a good number I can reach you at to send you more info?";
@@ -979,7 +979,7 @@ async function generateMarcoPipelineReply(input) {
         postOpeningHints.push("TOUR_OR_SCHEDULE_SIGNAL: Lead is focused on seeing the home or scheduling. Do NOT confirm same-day. Guide toward tomorrow. Use Marco's schedule-check language from GLOBAL rules.");
     }
     if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUserText)) {
-        postOpeningHints.push("LOCATION_ASK: Lead asked where this listing is. Reply using only west of Stone Oak (natural wording). No other area labels or streets. No exact address or builder.");
+        postOpeningHints.push("LOCATION_ASK: Lead asked where this listing is. Let them know you can text the full breakdown including the address and specs. Steer toward a mobile number. Do not state any specific area, neighborhood, or street in DM.");
     }
     if (neutralDmPipeline && (0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(lastUserText)) {
         postOpeningHints.push("PRICE_ASK_TIKTOK: No dollar amounts in DM. First beat is the entire-breakdown offer in Marco's casual texting voice (same shape as screenshots: would it help if I sent the breakdown on the home they inquired about, location and pricing included). No app or DM quality lectures. Ask for a mobile number only after they agree they want it sent.");
@@ -991,7 +991,7 @@ async function generateMarcoPipelineReply(input) {
         postOpeningHints.push("FIRST_TIME_TOPIC_CLOSED: Do not ask again about first time buying, first time through the process, or similar. Already covered in the thread. Answer their latest message and advance.");
     }
     if ((0, conversationUtils_js_1.signalsWantsInfoInDmOnly)(lastUserText)) {
-        postOpeningHints.push("DM_ONLY_REQUEST: They want the breakdown or packet in Instagram or TikTok DM instead of SMS. Never promise to send the full breakdown, pricing, links, or packet inside this DM thread. Do not promise you will text them until a number is on file. One or two short sentences: brief empathy in Marco's voice, one casual beat on why a number is smoother for the full sheet and links, then a fresh mobile ask. Not the same wording as MARCO_PREVIOUS_OUTBOUND. Optional: one allowed non-price DM fact (e.g. west of Stone Oak if they asked area). No paragraphs.");
+        postOpeningHints.push("DM_ONLY_REQUEST: They want the breakdown or packet in Instagram or TikTok DM instead of SMS. Never promise to send the full breakdown, pricing, links, or packet inside this DM thread. Do not promise you will text them until a number is on file. One or two short sentences: brief empathy in Marco's voice, one casual beat on why a number is smoother for the full sheet and links, then a fresh mobile ask. Not the same wording as MARCO_PREVIOUS_OUTBOUND. Do not give any area or location detail in DM; steer to phone number so the full breakdown (address included) can be sent by text. No paragraphs.");
     }
     if ((0, conversationUtils_js_1.signalsEmailDeliveryRequest)(lastUserText)) {
         postOpeningHints.push("EMAIL_DELIVERY_ASK: They asked to get the packet or details by email. Answer that directly in casual Marco voice, not corporate. One short honest line on why text is better here (links, full breakdown readable). Then ask for a mobile number in fresh wording, not the same sentence as MARCO_PREVIOUS_OUTBOUND. Never offer to send by email.");

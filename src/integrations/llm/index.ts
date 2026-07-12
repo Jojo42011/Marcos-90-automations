@@ -681,7 +681,7 @@ function openingContextAppendix(
   }
   if (messageAsksListingLocation(lastUserText)) {
     lines.push(
-      "LOCATION_ASK: The lead asked where this home is. Answer using only west of Stone Oak (natural phrasing). No other neighborhood, corridor, or street. Still no exact address or builder.",
+      "LOCATION_ASK: The lead asked where this home is. Let them know you can text the full breakdown which includes the address and all specs. Steer toward getting a good mobile number. Do not state any specific street, neighborhood, or location detail in DM.",
     );
   }
   if (isNeutralDmFlow(platform, channel) && messageAsksPropertyPriceOrCost(lastUserText)) {
@@ -748,13 +748,13 @@ function fallbackOpeningReply(
         return `${hey} I'd love to help. Want me to send the full breakdown on that place first, specs and timing, then we can line up a tour from there?`;
       }
       if (messageAsksListingLocation(lastUserText)) {
-        return `${hey} It's west of Stone Oak. Want me to text you the full breakdown on that home when you're ready, specs and all?`;
+        return `${hey} I'd love to help. Want me to text you the full breakdown on that home, address and all the specs included?`;
       }
       return `${hey} I'd love to help. Is this going to be your first time going through the buying process?!`;
     }
     if (messageAsksListingLocation(lastUserText)) {
       const hey = who !== "there" ? `Hey ${who}` : "Hey";
-      return `${hey}, it's west of Stone Oak. This one's typically mid 500s depending on finishes. Does that line up with what you're looking for or a different price point?`;
+      return `${hey}, this one's typically mid 500s depending on finishes. Does that line up with what you're looking for or a different price point?`;
     }
     if (signalsTourOrScheduleIntent(lastUserText)) {
       const hey = who !== "there" ? `Hey ${who}` : "Hey";
@@ -790,7 +790,7 @@ function fallbackOpeningReply(
         return "Got it, just looking is totally fine. Want me to text you the full breakdown when you're ready? What's a good number?";
       }
       if (messageAsksListingLocation(lastUserText) && messageAsksPropertyPriceOrCost(lastUserText)) {
-        return "Yeah of course, it's west of Stone Oak. Would it help if I just sent the entire breakdown on the home you inquired about, location and pricing included?";
+        return "Would it help if I sent the entire breakdown on the home you inquired about, location and pricing included?";
       }
       if (messageAsksPropertyPriceOrCost(lastUserText)) {
         return "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
@@ -1017,7 +1017,7 @@ function fallbackMarcoPipelineReply(
       return "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
     }
     if (messageAsksListingLocation(lastUser)) {
-      return `${hey} It's west of Stone Oak. Want me to text you the full breakdown on that home when you're ready, specs and all?`;
+      return `${hey} I'd love to help with that. Want me to text you the full breakdown on that home, address and all the specs included?`;
     }
     if (!lead.phone) {
       return "Of course. Is there a good number I can reach you at to send you more info?";
@@ -1300,7 +1300,7 @@ export async function generateMarcoPipelineReply(input: {
   }
   if (messageAsksListingLocation(lastUserText)) {
     postOpeningHints.push(
-      "LOCATION_ASK: Lead asked where this listing is. Reply using only west of Stone Oak (natural wording). No other area labels or streets. No exact address or builder.",
+      "LOCATION_ASK: Lead asked where this listing is. Let them know you can text the full breakdown including the address and specs. Steer toward a mobile number. Do not state any specific area, neighborhood, or street in DM.",
     );
   }
   if (neutralDmPipeline && messageAsksPropertyPriceOrCost(lastUserText)) {
@@ -1320,7 +1320,7 @@ export async function generateMarcoPipelineReply(input: {
   }
   if (signalsWantsInfoInDmOnly(lastUserText)) {
     postOpeningHints.push(
-      "DM_ONLY_REQUEST: They want the breakdown or packet in Instagram or TikTok DM instead of SMS. Never promise to send the full breakdown, pricing, links, or packet inside this DM thread. Do not promise you will text them until a number is on file. One or two short sentences: brief empathy in Marco's voice, one casual beat on why a number is smoother for the full sheet and links, then a fresh mobile ask. Not the same wording as MARCO_PREVIOUS_OUTBOUND. Optional: one allowed non-price DM fact (e.g. west of Stone Oak if they asked area). No paragraphs.",
+      "DM_ONLY_REQUEST: They want the breakdown or packet in Instagram or TikTok DM instead of SMS. Never promise to send the full breakdown, pricing, links, or packet inside this DM thread. Do not promise you will text them until a number is on file. One or two short sentences: brief empathy in Marco's voice, one casual beat on why a number is smoother for the full sheet and links, then a fresh mobile ask. Not the same wording as MARCO_PREVIOUS_OUTBOUND. Do not give any area or location detail in DM; steer to phone number so the full breakdown (address included) can be sent by text. No paragraphs.",
     );
   }
   if (signalsEmailDeliveryRequest(lastUserText)) {

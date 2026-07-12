@@ -75,7 +75,7 @@ export async function process(lead: Lead, conversation: Conversation): Promise<M
   // Location ask: only approved area hint, then pivot to number for full details.
   if (messageAsksListingLocation(last.text)) {
     const reply =
-      "It's west of Stone Oak. If you want the full breakdown with specs and pricing, what's a good number I can text it to?";
+      "I can definitely get you the full address along with all the specs and pricing. What's a good number I can send that over to?";
     return {
       lead: { ...lead, state: FunnelStage.PhoneRequested },
       reply,

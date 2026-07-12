@@ -65,7 +65,7 @@ async function process(lead, conversation) {
     const lower = last.text.toLowerCase();
     // Location ask: only approved area hint, then pivot to number for full details.
     if ((0, conversationUtils_js_1.messageAsksListingLocation)(last.text)) {
-        const reply = "It's west of Stone Oak. If you want the full breakdown with specs and pricing, what's a good number I can text it to?";
+        const reply = "I can definitely get you the full address along with all the specs and pricing. What's a good number I can send that over to?";
         return {
             lead: { ...lead, state: state_js_1.FunnelStage.PhoneRequested },
             reply,
