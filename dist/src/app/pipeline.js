@@ -248,6 +248,18 @@ async function run(payload, log) {
             });
             return { lead: null, reply: conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY };
         }
+        if (inboundText && (0, conversationUtils_js_1.isRealtorAndRelocating)(inboundText)) {
+            (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+                requestId,
+                correlationId,
+                outcome: "realtor_relocation_ask_new_contact",
+                reply_chars: conversationUtils_js_1.REALTOR_RELOCATION_REPLY.length,
+                reply_preview: (0, marcoLog_js_1.previewText)(conversationUtils_js_1.REALTOR_RELOCATION_REPLY),
+                phone_captured_this_turn: false,
+                email_captured_this_turn: false,
+            });
+            return { lead: null, reply: conversationUtils_js_1.REALTOR_RELOCATION_REPLY };
+        }
         if (inboundText && (0, conversationUtils_js_1.isRealtorMessage)(inboundText)) {
             (0, marcoLog_js_1.marcoLog)("pipeline_end", {
                 requestId,
@@ -377,6 +389,22 @@ async function run(payload, log) {
         });
         return { lead, reply: conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY };
     }
+    if ((0, conversationUtils_js_1.isRealtorAndRelocating)(latestLeadText)) {
+        await db.appendMessage(lead.id, "assistant", conversationUtils_js_1.REALTOR_RELOCATION_REPLY);
+        await db.updateLead(lead);
+        (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+            requestId,
+            correlationId,
+            lead_id: lead.id,
+            outcome: "realtor_relocation_ask",
+            reply_chars: conversationUtils_js_1.REALTOR_RELOCATION_REPLY.length,
+            reply_preview: (0, marcoLog_js_1.previewText)(conversationUtils_js_1.REALTOR_RELOCATION_REPLY),
+            funnel_state_final: lead.state,
+            phone_captured_this_turn: false,
+            email_captured_this_turn: false,
+        });
+        return { lead, reply: conversationUtils_js_1.REALTOR_RELOCATION_REPLY };
+    }
     if ((0, conversationUtils_js_1.isRealtorMessage)(latestLeadText)) {
         console.log(`[pipeline] Realtor detected for lead ${lead.id} — redirecting to Marco's number`);
         await db.appendMessage(lead.id, "assistant", conversationUtils_js_1.REALTOR_REDIRECT_REPLY);
@@ -500,6 +528,27 @@ async function run(payload, log) {
     }
     const phoneInThreadEarly = lead.phone ?? (0, funnelDeterministic_js_1.extractPhoneFromConversation)(conversation);
     const phoneCapturedThisTurn = !hadPhone && Boolean(phoneInThreadEarly);
+    if (!hadPhone &&
+        !phoneCapturedThisTurn &&
+        (0, conversationUtils_js_1.messageAsksWhatCity)(latestLeadText)) {
+        if (lead.state === state_js_1.FunnelStage.New) {
+            lead = { ...lead, state: state_js_1.FunnelStage.OpeningAskedFirstTime };
+        }
+        await db.appendMessage(lead.id, "assistant", prompts_js_1.MARCO_CITY_REPLY);
+        await db.updateLead(lead);
+        (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+            requestId,
+            correlationId,
+            lead_id: lead.id,
+            outcome: "city_pinned",
+            reply_chars: prompts_js_1.MARCO_CITY_REPLY.length,
+            reply_preview: (0, marcoLog_js_1.previewText)(prompts_js_1.MARCO_CITY_REPLY),
+            funnel_state_final: lead.state,
+            phone_captured_this_turn: false,
+            email_captured_this_turn: false,
+        });
+        return { lead, reply: prompts_js_1.MARCO_CITY_REPLY };
+    }
     if (!hadPhone &&
         !phoneCapturedThisTurn &&
         (0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(latestLeadText)) {
@@ -753,6 +802,14 @@ async function run(payload, log) {
         coachingNote = [
             coachingNote,
             "POST_PHONE_CAPTURE: Mobile number is already on file. Never ask price range, budget, suitability, preferences, timeline, or bedrooms. Answer specific property questions only; do not run needs analysis or re-offer the full breakdown unless they explicitly ask for it again.",
+        ]
+            .filter(Boolean)
+            .join(" ");
+    }
+    if (!hadPhone) {
+        coachingNote = [
+            coachingNote,
+            "EMAIL_DELIVERY_FORBIDDEN: A mobile number is the ONLY way to send the breakdown. NEVER promise to send anything by email, NEVER offer email as an alternative, and NEVER agree when the lead asks you to just email it. If the lead insists on email, the ONLY acceptable response is a polite variation of 'My apologies, for this specific property a good number would be best.' Do not say you will email them anything.",
         ]
             .filter(Boolean)
             .join(" ");

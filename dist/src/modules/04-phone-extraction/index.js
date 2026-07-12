@@ -63,6 +63,13 @@ async function process(lead, conversation) {
         return { lead: updatedLead, reply };
     }
     const lower = last.text.toLowerCase();
+    // Bare "what city?" — answer San Antonio, then offer breakdown.
+    if ((0, conversationUtils_js_1.messageAsksWhatCity)(last.text)) {
+        return {
+            lead: { ...lead, state: state_js_1.FunnelStage.PhoneRequested },
+            reply: prompts_js_1.MARCO_CITY_REPLY,
+        };
+    }
     // Location ask: only approved area hint, then pivot to number for full details.
     if ((0, conversationUtils_js_1.messageAsksListingLocation)(last.text)) {
         const reply = "I can definitely get you the full address along with all the specs and pricing. What's a good number I can send that over to?";

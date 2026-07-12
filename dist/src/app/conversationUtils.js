@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.REFERRAL_AREA_FOLLOW_UP = exports.MAX_CALL_ASK_ATTEMPTS = exports.MARCO_CALL_ASK_ATTEMPT_LINES = exports.DENIAL_OF_INQUIRY_REPLY = exports.REALTOR_REDIRECT_REPLY = void 0;
+exports.REFERRAL_AREA_FOLLOW_UP = exports.MAX_CALL_ASK_ATTEMPTS = exports.MARCO_CALL_ASK_ATTEMPT_LINES = exports.DENIAL_OF_INQUIRY_REPLY = exports.REALTOR_RELOCATION_REPLY = exports.REALTOR_REDIRECT_REPLY = void 0;
 exports.detectAdCampaign = detectAdCampaign;
 exports.normalizeUserMessageText = normalizeUserMessageText;
 exports.isExactDuplicateMessage = isExactDuplicateMessage;
@@ -13,6 +13,7 @@ exports.agentMessageCommittedToSend = agentMessageCommittedToSend;
 exports.detectCommunicationStyle = detectCommunicationStyle;
 exports.getCommunicationStyleInstructions = getCommunicationStyleInstructions;
 exports.isRealtorMessage = isRealtorMessage;
+exports.isRealtorAndRelocating = isRealtorAndRelocating;
 exports.isDenialOfInquiry = isDenialOfInquiry;
 exports.enforceOutboundTextRules = enforceOutboundTextRules;
 exports.normalizeForMarcoDuplicateCompare = normalizeForMarcoDuplicateCompare;
@@ -52,6 +53,7 @@ exports.isDuplicateMarcoReply = isDuplicateMarcoReply;
 exports.candidateMatchesRecentMarco = candidateMatchesRecentMarco;
 exports.isLastUserMessageRepeated = isLastUserMessageRepeated;
 exports.messageAsksListingLocation = messageAsksListingLocation;
+exports.messageAsksWhatCity = messageAsksWhatCity;
 exports.signalsLookingOutsideSanAntonio = signalsLookingOutsideSanAntonio;
 exports.detectOutOfStateLead = detectOutOfStateLead;
 exports.threadContainsReferralOffer = threadContainsReferralOffer;
@@ -221,6 +223,15 @@ function isSimpleAcknowledgment(message) {
         "aight",
         "bet",
         "🤙",
+        "bye",
+        "bye bye",
+        "byebye",
+        "goodbye",
+        "cya",
+        "ttyl",
+        "you too",
+        "u too",
+        "gotta go",
     ];
     if (normalized.length <= 15 &&
         acknowledgments.some((a) => normalized === a || normalized === a + "!")) {
@@ -315,6 +326,15 @@ function isRealtorMessage(message) {
     return realtorSignals.some((signal) => normalized.includes(signal));
 }
 exports.REALTOR_REDIRECT_REPLY = "Hey! Sounds like you're in the business too, love it. For agent inquiries, feel free to reach out to Marco directly at his number and he'll get back to you as soon as possible.";
+/** Realtor who mentions relocating to Texas — ask where they're coming from (referral opportunity). */
+exports.REALTOR_RELOCATION_REPLY = "Oh awesome, where are you relocating from? If you're not licensed in Texas, I may be able to help facilitate the transaction on the listing side.";
+/** True if the realtor message also mentions relocating to the area (potential referral situation). */
+function isRealtorAndRelocating(text) {
+    if (!isRealtorMessage(text))
+        return false;
+    const t = text.trim().toLowerCase();
+    return /\b(relocat(ing|e|ion)|moving (here|to|into)|transferr?ing)\b/.test(t);
+}
 /** Lead explicitly says they did not inquire or reach out. */
 function isDenialOfInquiry(message) {
     const normalized = message.toLowerCase();
@@ -734,6 +754,9 @@ const ACK_ONLY_PATTERNS = [
     /^(got it|sounds good|perfect|awesome|alright|cool|great|nice|sweet|lovely|wonderful)( thank you| thanks?| so much)?$/,
     /^(perfect|awesome|alright|cool|great)\s+(thank you|thanks)( so much)?$/,
     /^appreciate it$/,
+    /^(bye(bye)?|goodbye|cya|ttyl|later|gotta go)[!.?]*$/,
+    /^(you too|u too)[!.?]*$/,
+    /^(take care|have a good (day|night|one)|talk (to you )?later|catch you later)[!.?]*$/,
 ];
 /**
  * Short closing phrase with no question — thanks, ok thanks, got it, etc.
@@ -1082,6 +1105,22 @@ function messageAsksListingLocation(text) {
     return false;
 }
 /**
+ * Lead asks what city the property is in ("what city?", "which city is it?") without giving
+ * enough context to match messageAsksListingLocation (no "it", "this", "the house" pointer).
+ */
+function messageAsksWhatCity(text) {
+    const t = text.trim().toLowerCase();
+    if (!t)
+        return false;
+    if (/\b(what|which)\s+city\b/.test(t))
+        return true;
+    if (/\bin what city\b/.test(t))
+        return true;
+    if (/\bwhat city (is (it|this|that|the (house|home|property|listing)))\b/.test(t))
+        return true;
+    return false;
+}
+/**
  * Lead is shopping / searching for a home outside San Antonio (another Texas market or explicit "not SA").
  * Triggers Marco's Texas-wide service line ($600k+) without claiming SA-only coverage for that buyer.
  */
@@ -1366,6 +1405,24 @@ function signalsExplicitPhoneRefusal(text) {
     if (/\b(not comfortable (with\s+)?(sharing|giving|providing)\s+(my\s+)?(phone|number))\b/.test(t))
         return true;
     if (/\b(prefer not to (share|give)\s+(my\s+)?(phone|number))\b/.test(t))
+        return true;
+    // Lead requesting DM / in-chat delivery — equivalent to refusing to give a number
+    if (/\bcan (you|u) (just\s+)?(send|dm|message)\s*(it|that|the (info|breakdown|details))?\s*(here|in (the\s+)?(dm|dms?|chat|messages?|inbox))\b/.test(t))
+        return true;
+    if (/\bjust send (it|them|the info|everything|that|this)?\s*(here|in (the\s+)?(dm|dms?|chat|messages?))\b/.test(t))
+        return true;
+    if (/\b(send|give) it (to me )?(here|in (the\s+)?(dm|dms?|chat|messages?|inbox))\b/.test(t))
+        return true;
+    // Lead insisting on email delivery as substitute for phone — treated the same as phone refusal
+    if (/^(just\s+)?(email\s+only|email\s+is\s+(fine|ok(ay)?|good|enough|best))\s*[.!?]*$/.test(t))
+        return true;
+    if (/^just\s+email\s*[.!?]*$/.test(t))
+        return true;
+    if (/\bemail\s+(only|is fine|is ok(ay)?|will (do|work|be enough|suffice)|is enough|works)\b/.test(t))
+        return true;
+    if (/\b(just|only)\s+email\s+(me\s+)?(will|is|works?)\b/.test(t))
+        return true;
+    if (/\bjust email (me|it|that|the|everything)\b/.test(t) && !/\b(my|their|his|her|your)\s+email\b/.test(t))
         return true;
     return false;
 }
