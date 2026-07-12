@@ -42,7 +42,7 @@ import {
 } from "../../core/contentDb.js";
 
 const POLL_INTERVAL_MS = 30_000;
-const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+const POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours — matches sidecar job budget
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

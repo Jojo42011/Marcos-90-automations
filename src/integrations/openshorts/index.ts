@@ -10,11 +10,10 @@ import { randomUUID } from "crypto";
 const OPENSHORTS_BASE_URL = process.env.OPENSHORTS_URL || "http://localhost:8000";
 const POLL_INTERVAL_MS = 8000;
 const STATUS_CHECK_TIMEOUT_MS = 25000;
-// Backstop poll ceiling: 90 × 8s = 720s (12 min), down from the old 960s. The
-// sidecar now fails a stuck job itself (per-ffmpeg timeout + per-job budget,
-// ~600s), so this only needs to sit just above that — a job that reaches this
-// ceiling is genuinely gone. Override with OPENSHORTS_MAX_POLL_ATTEMPTS.
-const MAX_POLL_ATTEMPTS = Number(process.env.OPENSHORTS_MAX_POLL_ATTEMPTS) || 90;
+// Backstop poll ceiling: 900 × 8s = 7200s (2 hrs), matching the per-job budget
+// in app_marco.py (_JOB_MAX_SECONDS). Large MOV files (400MB+) need the full
+// analysis + reframe window. Override with OPENSHORTS_MAX_POLL_ATTEMPTS.
+const MAX_POLL_ATTEMPTS = Number(process.env.OPENSHORTS_MAX_POLL_ATTEMPTS) || 900;
 
 export interface OpenShortsClipResult {
   clipId: string;
