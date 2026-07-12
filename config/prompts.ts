@@ -25,6 +25,14 @@ export const MARCO_PRICE_REPLY =
 /** Pre-phone only: lead agreed to receive the breakdown. Pinned number ask (no LLM "perfect"). */
 export const MARCO_PHONE_ASK_REPLY = "Yeah, of course, is there a good number I can get that over to?";
 
+/** First-touch soft apology when a lead explicitly refuses to share their phone number. */
+export const MARCO_PHONE_REFUSAL_APOLOGY =
+  "I completely understand. My apologies, for this specific property a good number would be best.";
+
+/** Business pitcher (video editor, loan officer, marketer, collaborator) redirect to assistant email. */
+export const MARCO_BUSINESS_COLLAB_REPLY =
+  "I would definitely be open to it. For any business ideas or collaboration opportunities, please email my assistant at jamescarterpugarealestate@gmail.com.";
+
 /** Bucket F: lead clearly confirmed in-state (Texas / San Antonio), pre-phone. */
 export const MARCO_CALL_ASK_INSTATE =
   "Would you be open to a quick call sometime this week, just so I can get a better understanding of what you're looking for?";

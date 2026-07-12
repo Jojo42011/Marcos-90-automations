@@ -6,6 +6,7 @@ import {
   MARCO_CALL_NUMBER_ASK_REPLY,
   MARCO_PHONE_CAPTURED_CALL_REPLY,
   MARCO_PHONE_CAPTURED_REPLY,
+  MARCO_PHONE_REFUSAL_APOLOGY,
   MARCO_PRICE_REPLY,
   MARCO_REBATE_REPLY,
 } from "../../config/prompts.js";
@@ -1344,5 +1345,88 @@ export function isShortDuplicateUserPair(conversation: Conversation): boolean {
   const last = userTexts[userTexts.length - 1];
   const prev = userTexts[userTexts.length - 2];
   return last === prev && last.length < 12;
+}
+
+/**
+ * Lead is explicitly and directly refusing to share their phone number.
+ * Stronger/more direct than general phone resistance (isPhoneResistance) —
+ * catches "I don't share my number", "I won't give my number", "sorry I don't
+ * provide my phone number on TikTok", etc.
+ */
+export function signalsExplicitPhoneRefusal(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  if (/\b(don'?t|do not|won'?t|will not)\s+(share|give|give out|provide)\s+(my\s+)?(phone\s+)?(number|phone)\b/.test(t)) return true;
+  if (/\b(i'?m not going to give|not giving (you|anyone)\s+(my\s+)?(phone|number))\b/.test(t)) return true;
+  if (/\bi (never|don'?t) give (out\s+)?(my\s+)?(phone|number)\b/.test(t)) return true;
+  // "I'm sorry I don't provide my phone number on TikTok"
+  if (/\b(i'?m sorry|sorry|apologi)\b/.test(t) && /\b(don'?t|won'?t|not|no)\s+.{0,20}\b(phone|number)\b/.test(t)) return true;
+  if (/\b(not comfortable (with\s+)?(sharing|giving|providing)\s+(my\s+)?(phone|number))\b/.test(t)) return true;
+  if (/\b(prefer not to (share|give)\s+(my\s+)?(phone|number))\b/.test(t)) return true;
+  return false;
+}
+
+/** True if Marco already sent the phone refusal apology in this thread. */
+export function threadContainsPhoneRefusalApology(conversation: Conversation): boolean {
+  return conversation.messages.some(
+    (m) =>
+      m.role === "assistant" &&
+      m.text?.trim() &&
+      messagesAreSubstantiallyDuplicate(m.text, MARCO_PHONE_REFUSAL_APOLOGY),
+  );
+}
+
+/**
+ * DM is from a business pitcher (video editor, loan officer, marketer, collaborator)
+ * trying to sell services to Marco — NOT a property buyer asking about a listing.
+ */
+export function isBusinessPitchInquiry(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+
+  // Video editor / content creator pitching services
+  if (/\b(i'?m a |i am a |im a )(video editor|content creator|videographer|filmmaker)\b/.test(t)) return true;
+  if (
+    /\bi (can edit|do editing|do video editing|edit videos?|create content|make content|produce content|film videos?)\b/.test(t) &&
+    /\b(for (you|your|real estate)|i'?d love|work (with|together))\b/.test(t)
+  ) return true;
+  if (
+    /\b(video editing|content creation|video production)\s+(services?|packages?|work)\b/.test(t) &&
+    /\b(for (you|your|real estate|realtors?))\b/.test(t)
+  ) return true;
+
+  // Loan officer pitching to Marco (not a buyer referencing their own financing)
+  if (
+    /\b(i'?m a |i am a |im a )(loan officer|mortgage (broker|officer|specialist|lender))\b/.test(t) &&
+    /\b(i can help|work (with|together)|would love|reach out|realtors?|clients?)\b/.test(t)
+  ) return true;
+  if (
+    /\b(i work with realtors?|i partner with realtors?)\b/.test(t) &&
+    /\b(loan|mortgage|lending|financing)\b/.test(t)
+  ) return true;
+
+  // Marketing / social media / digital services pitch
+  if (
+    /\b(i('?m| am) a |im a )(social media (manager|specialist|expert)|digital marketer|marketing (consultant|specialist|expert))\b/.test(t) &&
+    /\b(help|work|reach out|interested|services?)\b/.test(t)
+  ) return true;
+  if (
+    /\b(grow your (brand|following|audience|business|page|account))\b/.test(t) &&
+    /\b(i can|i (help|offer)|services?|work together)\b/.test(t)
+  ) return true;
+  if (
+    /\b(marketing (services?|solutions?|packages?)|social media (management|marketing) (services?|packages?))\b/.test(t) &&
+    /\b(for (you|your|real estate|realtors?))\b/.test(t)
+  ) return true;
+
+  // Collaboration / partnership / business opportunity pitch
+  if (
+    /\b(business (collab(oration)?|partnership|opportunity|proposal))\b/.test(t) &&
+    /\b(i'?d love|would love|interested in|reaching out|potential)\b/.test(t)
+  ) return true;
+  if (/\b(i'?d love to collaborate|would love to collaborate|i'?d love to partner|would love to partner)\b/.test(t)) return true;
+  if (/\b(potential (collab(oration)?|partnership|business opportunity))\b/.test(t)) return true;
+
+  return false;
 }
 

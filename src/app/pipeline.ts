@@ -20,8 +20,10 @@ import {
   extractPhoneFromConversation,
 } from "./funnelDeterministic.js";
 import {
+  MARCO_BUSINESS_COLLAB_REPLY,
   MARCO_CLOSEOUT_REPLY,
   MARCO_PHONE_ASK_REPLY,
+  MARCO_PHONE_REFUSAL_APOLOGY,
   MARCO_PRICE_REPLY,
   MARCO_WAVE_REPLY,
 } from "../../config/prompts.js";
@@ -40,6 +42,7 @@ import {
   getLastUserMessageText,
   getPhoneRequestCount,
   getPhoneRequestVariation,
+  isBusinessPitchInquiry,
   isDenialOfInquiry,
   isExactDuplicateMessage,
   isLastUserMessageRepeated,
@@ -58,11 +61,13 @@ import {
   resolveCallAskBucketF,
   resolvePhoneCapturedReply,
   signalsAffirmativeBreakdownAgreement,
+  signalsExplicitPhoneRefusal,
   signalsLookingOutsideSanAntonio,
   signalsReferralAcceptance,
   signalsReferralDeclineOrWantsSanAntonio,
   threadContainsBreakdownOffer,
   threadContainsFirstTimeBuyingQuestion,
+  threadContainsPhoneRefusalApology,
   threadContainsReferralOffer,
   threadHadCallAskPath,
 } from "./conversationUtils.js";
@@ -333,6 +338,19 @@ export async function run(
       return { lead: null, reply: REALTOR_REDIRECT_REPLY };
     }
 
+    if (inboundText && isBusinessPitchInquiry(inboundText)) {
+      marcoLog("pipeline_end", {
+        requestId,
+        correlationId,
+        outcome: "business_pitch_redirect_new_contact",
+        reply_chars: MARCO_BUSINESS_COLLAB_REPLY.length,
+        reply_preview: previewText(MARCO_BUSINESS_COLLAB_REPLY),
+        phone_captured_this_turn: false,
+        email_captured_this_turn: false,
+      });
+      return { lead: null, reply: MARCO_BUSINESS_COLLAB_REPLY };
+    }
+
     const skipIntentGateTiktokManualOpener =
       Boolean(payload.marcoPreviousOutbound?.trim()) &&
       (payload.platform.toLowerCase().includes("tik") ||
@@ -463,6 +481,24 @@ export async function run(
       email_captured_this_turn: false,
     });
     return { lead, reply: REALTOR_REDIRECT_REPLY };
+  }
+
+  if (isBusinessPitchInquiry(latestLeadText)) {
+    console.log(`[pipeline] Business pitch detected for lead ${lead.id} — redirecting to assistant email`);
+    await db.appendMessage(lead.id, "assistant", MARCO_BUSINESS_COLLAB_REPLY);
+    await db.updateLead(lead);
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: "business_pitch_redirect",
+      reply_chars: MARCO_BUSINESS_COLLAB_REPLY.length,
+      reply_preview: previewText(MARCO_BUSINESS_COLLAB_REPLY),
+      funnel_state_final: lead.state,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: MARCO_BUSINESS_COLLAB_REPLY };
   }
 
   if (isSimpleAcknowledgment(latestLeadText)) {
@@ -625,6 +661,37 @@ export async function run(
       });
       return { lead, reply: bucketF.reply };
     }
+  }
+
+  /** Explicit phone refusal (first turn only) — soft apology before LLM escalates. */
+  if (
+    !hadPhone &&
+    !phoneCapturedThisTurn &&
+    signalsExplicitPhoneRefusal(latestLeadText) &&
+    !threadContainsPhoneRefusalApology(conversation)
+  ) {
+    lead = { ...lead, state: FunnelStage.PhoneRequested };
+    await db.appendMessage(lead.id, "assistant", MARCO_PHONE_REFUSAL_APOLOGY);
+    await db.updateLead(lead);
+    marcoLog("phone_refusal_apology_pinned", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      message_preview: previewText(latestLeadText),
+      funnel_state_final: lead.state,
+    });
+    marcoLog("pipeline_end", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: "phone_refusal_apology",
+      reply_chars: MARCO_PHONE_REFUSAL_APOLOGY.length,
+      reply_preview: previewText(MARCO_PHONE_REFUSAL_APOLOGY),
+      funnel_state_final: lead.state,
+      phone_captured_this_turn: false,
+      email_captured_this_turn: false,
+    });
+    return { lead, reply: MARCO_PHONE_REFUSAL_APOLOGY };
   }
 
   /** Pre-phone: lead agreed to breakdown offer — pinned phone ask (replaces LLM "perfect"). */

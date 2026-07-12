@@ -260,6 +260,18 @@ async function run(payload, log) {
             });
             return { lead: null, reply: conversationUtils_js_1.REALTOR_REDIRECT_REPLY };
         }
+        if (inboundText && (0, conversationUtils_js_1.isBusinessPitchInquiry)(inboundText)) {
+            (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+                requestId,
+                correlationId,
+                outcome: "business_pitch_redirect_new_contact",
+                reply_chars: prompts_js_1.MARCO_BUSINESS_COLLAB_REPLY.length,
+                reply_preview: (0, marcoLog_js_1.previewText)(prompts_js_1.MARCO_BUSINESS_COLLAB_REPLY),
+                phone_captured_this_turn: false,
+                email_captured_this_turn: false,
+            });
+            return { lead: null, reply: prompts_js_1.MARCO_BUSINESS_COLLAB_REPLY };
+        }
         const skipIntentGateTiktokManualOpener = Boolean(payload.marcoPreviousOutbound?.trim()) &&
             (payload.platform.toLowerCase().includes("tik") ||
                 (payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm"));
@@ -381,6 +393,23 @@ async function run(payload, log) {
             email_captured_this_turn: false,
         });
         return { lead, reply: conversationUtils_js_1.REALTOR_REDIRECT_REPLY };
+    }
+    if ((0, conversationUtils_js_1.isBusinessPitchInquiry)(latestLeadText)) {
+        console.log(`[pipeline] Business pitch detected for lead ${lead.id} — redirecting to assistant email`);
+        await db.appendMessage(lead.id, "assistant", prompts_js_1.MARCO_BUSINESS_COLLAB_REPLY);
+        await db.updateLead(lead);
+        (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+            requestId,
+            correlationId,
+            lead_id: lead.id,
+            outcome: "business_pitch_redirect",
+            reply_chars: prompts_js_1.MARCO_BUSINESS_COLLAB_REPLY.length,
+            reply_preview: (0, marcoLog_js_1.previewText)(prompts_js_1.MARCO_BUSINESS_COLLAB_REPLY),
+            funnel_state_final: lead.state,
+            phone_captured_this_turn: false,
+            email_captured_this_turn: false,
+        });
+        return { lead, reply: prompts_js_1.MARCO_BUSINESS_COLLAB_REPLY };
     }
     if ((0, conversationUtils_js_1.isSimpleAcknowledgment)(latestLeadText)) {
         const lastAgent = (0, conversationUtils_js_1.getLastAssistantMessageText)(conversation);
@@ -529,6 +558,34 @@ async function run(payload, log) {
             });
             return { lead, reply: bucketF.reply };
         }
+    }
+    /** Explicit phone refusal (first turn only) — soft apology before LLM escalates. */
+    if (!hadPhone &&
+        !phoneCapturedThisTurn &&
+        (0, conversationUtils_js_1.signalsExplicitPhoneRefusal)(latestLeadText) &&
+        !(0, conversationUtils_js_1.threadContainsPhoneRefusalApology)(conversation)) {
+        lead = { ...lead, state: state_js_1.FunnelStage.PhoneRequested };
+        await db.appendMessage(lead.id, "assistant", prompts_js_1.MARCO_PHONE_REFUSAL_APOLOGY);
+        await db.updateLead(lead);
+        (0, marcoLog_js_1.marcoLog)("phone_refusal_apology_pinned", {
+            requestId,
+            correlationId,
+            lead_id: lead.id,
+            message_preview: (0, marcoLog_js_1.previewText)(latestLeadText),
+            funnel_state_final: lead.state,
+        });
+        (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+            requestId,
+            correlationId,
+            lead_id: lead.id,
+            outcome: "phone_refusal_apology",
+            reply_chars: prompts_js_1.MARCO_PHONE_REFUSAL_APOLOGY.length,
+            reply_preview: (0, marcoLog_js_1.previewText)(prompts_js_1.MARCO_PHONE_REFUSAL_APOLOGY),
+            funnel_state_final: lead.state,
+            phone_captured_this_turn: false,
+            email_captured_this_turn: false,
+        });
+        return { lead, reply: prompts_js_1.MARCO_PHONE_REFUSAL_APOLOGY };
     }
     /** Pre-phone: lead agreed to breakdown offer — pinned phone ask (replaces LLM "perfect"). */
     if (!hadPhone &&

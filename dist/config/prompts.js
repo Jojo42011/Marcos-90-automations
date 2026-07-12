@@ -8,7 +8,7 @@
  * the current conversation as context.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.prompts = exports.GLOBAL_PREFLIGHT_RULES = exports.GLOBAL_MARCO_DM_RULES = exports.GLOBAL_CONCISE_TEXTING = exports.MARCO_CALL_NUMBER_ASK_REPLY = exports.MARCO_PHONE_CAPTURED_CALL_REPLY = exports.MARCO_CALL_ASK_GRACEFUL_EXIT = exports.MARCO_REBATE_REPLY = exports.MARCO_CALL_ASK_EMAIL_DEFLECT = exports.MARCO_CALL_ASK_INSTATE = exports.MARCO_PHONE_ASK_REPLY = exports.MARCO_PRICE_REPLY = exports.MARCO_WAVE_REPLY = exports.MARCO_CLOSEOUT_REPLY = exports.MARCO_PHONE_CAPTURED_REPLY = void 0;
+exports.prompts = exports.GLOBAL_PREFLIGHT_RULES = exports.GLOBAL_MARCO_DM_RULES = exports.GLOBAL_CONCISE_TEXTING = exports.MARCO_CALL_NUMBER_ASK_REPLY = exports.MARCO_PHONE_CAPTURED_CALL_REPLY = exports.MARCO_CALL_ASK_GRACEFUL_EXIT = exports.MARCO_REBATE_REPLY = exports.MARCO_CALL_ASK_EMAIL_DEFLECT = exports.MARCO_CALL_ASK_INSTATE = exports.MARCO_BUSINESS_COLLAB_REPLY = exports.MARCO_PHONE_REFUSAL_APOLOGY = exports.MARCO_PHONE_ASK_REPLY = exports.MARCO_PRICE_REPLY = exports.MARCO_WAVE_REPLY = exports.MARCO_CLOSEOUT_REPLY = exports.MARCO_PHONE_CAPTURED_REPLY = void 0;
 exports.getMarcoUnifiedPipelineSystem = getMarcoUnifiedPipelineSystem;
 exports.getMarcoOpeningSystem = getMarcoOpeningSystem;
 exports.getMarcoTikTokOpeningSystem = getMarcoTikTokOpeningSystem;
@@ -23,6 +23,10 @@ exports.MARCO_WAVE_REPLY = "Hey, I saw you sent a wave. Were you looking for mor
 exports.MARCO_PRICE_REPLY = "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
 /** Pre-phone only: lead agreed to receive the breakdown. Pinned number ask (no LLM "perfect"). */
 exports.MARCO_PHONE_ASK_REPLY = "Yeah, of course, is there a good number I can get that over to?";
+/** First-touch soft apology when a lead explicitly refuses to share their phone number. */
+exports.MARCO_PHONE_REFUSAL_APOLOGY = "I completely understand. My apologies, for this specific property a good number would be best.";
+/** Business pitcher (video editor, loan officer, marketer, collaborator) redirect to assistant email. */
+exports.MARCO_BUSINESS_COLLAB_REPLY = "I would definitely be open to it. For any business ideas or collaboration opportunities, please email my assistant at jamescarterpugarealestate@gmail.com.";
 /** Bucket F: lead clearly confirmed in-state (Texas / San Antonio), pre-phone. */
 exports.MARCO_CALL_ASK_INSTATE = "Would you be open to a quick call sometime this week, just so I can get a better understanding of what you're looking for?";
 /** Bucket F: lead pushed email instead of phone mid-funnel, pre-phone. */
