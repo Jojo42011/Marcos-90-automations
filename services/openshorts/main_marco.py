@@ -14,7 +14,7 @@ import take_analysis_marco
 # Visual frame analysis. Frames are read by a stronger vision model than the
 # text default (env-overridable) — Sonnet materially out-reasons Haiku on framing/
 # expression/quality judgments. Frame count is capped in frame_analysis_marco.
-VISION_MODEL = os.environ.get("VISION_MODEL", "claude-sonnet-4-20250514")
+VISION_MODEL = os.environ.get("VISION_MODEL", "claude-sonnet-4-6")
 MAX_ANALYSIS_FRAMES = int(os.environ.get("MAX_ANALYSIS_FRAMES", "16"))
 
 # Phase 4 — quality-over-volume. target_clips is now a MAXIMUM, not a quota. The

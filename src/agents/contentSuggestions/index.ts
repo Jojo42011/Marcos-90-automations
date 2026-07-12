@@ -39,7 +39,7 @@ function migrateContentSuggestionsTable(db: ReturnType<typeof getSocialDb>): voi
 export async function fetchCurrentContentTrends(): Promise<string> {
   try {
     const response = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
       max_tokens: 800,
       tools: [
         {
@@ -136,7 +136,7 @@ Exactly 3 suggestions.`;
 
   try {
     const response = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
       max_tokens: 1200,
       messages: [{ role: "user", content: prompt }],
     });

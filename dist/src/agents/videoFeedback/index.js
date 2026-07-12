@@ -126,7 +126,7 @@ Format your response EXACTLY as:
 [Where viewers likely drop off and one fix for each drop point]`;
     try {
         const response = await anthropic.messages.create({
-            model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+            model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
             max_tokens: 1200,
             system: PROFESSIONAL_EDITOR_SYSTEM_PROMPT,
             messages: [{ role: "user", content: userMessage }],
