@@ -23,7 +23,7 @@ export const MARCO_PRICE_REPLY =
   "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
 
 /** Pre-phone only: lead agreed to receive the breakdown. Pinned number ask (no LLM "perfect"). */
-export const MARCO_PHONE_ASK_REPLY = "Yeah. Is there a good number I can get that over to?";
+export const MARCO_PHONE_ASK_REPLY = "Yeah, of course, is there a good number I can get that over to?";
 
 /** Bucket F: lead clearly confirmed in-state (Texas / San Antonio), pre-phone. */
 export const MARCO_CALL_ASK_INSTATE =

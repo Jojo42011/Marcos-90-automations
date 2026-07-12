@@ -22,7 +22,7 @@ exports.MARCO_WAVE_REPLY = "Hey, I saw you sent a wave. Were you looking for mor
 /** Pre-phone only: canonical reply when the lead asks price / cost / pricing for the listing. */
 exports.MARCO_PRICE_REPLY = "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
 /** Pre-phone only: lead agreed to receive the breakdown. Pinned number ask (no LLM "perfect"). */
-exports.MARCO_PHONE_ASK_REPLY = "Yeah. Is there a good number I can get that over to?";
+exports.MARCO_PHONE_ASK_REPLY = "Yeah, of course, is there a good number I can get that over to?";
 /** Bucket F: lead clearly confirmed in-state (Texas / San Antonio), pre-phone. */
 exports.MARCO_CALL_ASK_INSTATE = "Would you be open to a quick call sometime this week, just so I can get a better understanding of what you're looking for?";
 /** Bucket F: lead pushed email instead of phone mid-funnel, pre-phone. */

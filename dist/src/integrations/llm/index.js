@@ -500,15 +500,27 @@ function getDynamicRuleReinforcement(userMessage) {
 function isNeutralDmFlow(platform, channel) {
     return isTikTokPlatform(platform) || isInstagramDm(platform, channel);
 }
-function inboundChannelBlock(channel) {
+/**
+ * hasKnownListing = Boolean(lead.adCampaign) — true only when this thread matched a
+ * known ad campaign (a real, current listing with confirmed pricing). Most comments
+ * are on posts with no such match (detectAdCampaign only recognizes specific ad
+ * copy), so the default here is NEVER invent a price for a post Marco hasn't
+ * confirmed pricing for — matches Marco's explicit rule: price only on his own
+ * listings, breakdown-by-text offer otherwise.
+ */
+function inboundChannelBlock(channel, hasKnownListing) {
     if (channel === "comment") {
+        const priceRule = hasKnownListing
+            ? "Price ballpark for this confirmed listing is fine per your rules."
+            : "Do NOT state, hint, or estimate a specific price or dollar amount for this post. You do not have confirmed pricing for it. Acknowledge the price question, then offer to send the full breakdown by text (location and pricing included) once they share a mobile number.";
         return ("CHANNEL: instagram_comment. The lead's latest line came from a COMMENT on your post (ManyChat comment automation). " +
-            "Treat it like a short public-adjacent question: answer what they asked first (price ballpark, info, location per your rules, tour, availability). " +
-            "Do not ignore 'how much', 'price', 'info', or 'where' style asks. Stay concise.\n\n");
+            "Treat it like a short public-adjacent question: answer what they asked first (info, location per your rules, tour, availability). " +
+            priceRule + " " +
+            "Do not ignore 'how much', 'price', 'info', or 'where' style asks — always respond to them, just without guessing a number. Stay concise.\n\n");
     }
     return "";
 }
-function openingContextAppendix(lastUserText, conversation, channel, platform, phoneOnFile) {
+function openingContextAppendix(lastUserText, conversation, channel, platform, phoneOnFile, hasKnownListing) {
     const lines = [];
     const assistantTurns = conversation.messages.filter((m) => m.role === "assistant").length;
     const tikTokOpenerAlreadyInThread = isTikTokPlatform(platform) &&
@@ -529,7 +541,7 @@ function openingContextAppendix(lastUserText, conversation, channel, platform, p
                 ? "CHANNEL: instagram_dm. Marco already has at least one outbound in this thread (often the manual first DM with the first-time buying question). Do NOT send another opener and do NOT ask about first-time vs experienced buyer or the buying process again. Answer LATEST_LEAD_MESSAGE in Marco's voice. Order: offer to text the full breakdown first when they have not agreed yet; ask for a mobile number only after they clearly want the packet sent, or on the next turn after they agree. Never recycle appreciation + first-time question.\n\n"
                 : "CHANNEL: instagram_dm. Use the same neutral DM flow as TikTok. If this is Marco's first line in the thread, first-time check then breakdown offer then number (after they agree to the packet) can apply; if any Marco line already exists above, skip opener scripts entirely. Never quote list price in DM.\n\n")
         : "";
-    const prefix = tikTokChannelBlock + igNeutralDmChannelBlock + inboundChannelBlock(channel);
+    const prefix = tikTokChannelBlock + igNeutralDmChannelBlock + inboundChannelBlock(channel, hasKnownListing);
     if (assistantTurns === 0 && lastUserText.trim() && !igDmNeutral && !isTikTokPlatform(platform)) {
         lines.push("FIRST_OUTBOUND_RULE: This is Marco's first reply in the thread. The lead's latest line is their opener. Answer its primary intent first (tour, showing, schedule, availability, a direct question). Do not ignore that to deliver a pricing script. Use thanks plus mid 500s plus alignment question only when their message is generic interest or price led, not when they already asked for something specific like a tour.");
     }
@@ -624,7 +636,7 @@ function fallbackOpeningReply(lead, openingStage, lastUserText, conversation, in
                 return "Yeah of course, it's west of Stone Oak. Would it help if I just sent the entire breakdown on the home you inquired about, location and pricing included?";
             }
             if ((0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(lastUserText)) {
-                return "Yeah of course, would it help if I just sent the entire breakdown of the home you inquired about, location and pricing included?";
+                return "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
             }
             if (notFirstOrExperienced) {
                 return "Ahh gotcha of course, would it help if I sent over the entire breakdown of the property you inquired about?";
@@ -694,7 +706,7 @@ function sanitizeOpeningReplyAgainstRecentMarco(reply, lead, conversation, openi
         return reply;
     const recent = (0, conversationUtils_js_1.getRecentAssistantTexts)(conversation, 5);
     if (!(0, conversationUtils_js_1.candidateMatchesRecentMarco)(reply, recent))
-        return reply;
+        return (0, conversationUtils_js_1.enforceOutboundTextRules)(reply);
     (0, marcoLog_js_1.marcoLog)("sanitize_opening", {
         requestId: log?.requestId,
         correlationId: log?.correlationId,
@@ -714,6 +726,7 @@ function sanitizeOpeningReplyAgainstRecentMarco(reply, lead, conversation, openi
                 ? "Want me to send the full breakdown on that home by text when you're ready, specs and pricing?"
                 : "What's the best number to text you the spec sheet on this house?";
     }
+    out = (0, conversationUtils_js_1.enforceOutboundTextRules)(out);
     (0, marcoLog_js_1.marcoLog)("sanitize_opening_result", {
         requestId: log?.requestId,
         correlationId: log?.correlationId,
@@ -729,7 +742,7 @@ function sanitizePipelineReplyAgainstRecentMarco(reply, lead, conversation, meta
         return reply;
     const recent = (0, conversationUtils_js_1.getRecentAssistantTexts)(conversation, 5);
     if (!(0, conversationUtils_js_1.candidateMatchesRecentMarco)(reply, recent))
-        return reply;
+        return (0, conversationUtils_js_1.enforceOutboundTextRules)(reply);
     (0, marcoLog_js_1.marcoLog)("sanitize_pipeline", {
         requestId: log?.requestId,
         correlationId: log?.correlationId,
@@ -739,7 +752,8 @@ function sanitizePipelineReplyAgainstRecentMarco(reply, lead, conversation, meta
     });
     const lastA = (0, conversationUtils_js_1.getLastAssistantMessageText)(conversation) ?? "";
     const lastU = (0, conversationUtils_js_1.getLastUserMessageText)(conversation);
-    const out = alternatePipelineReplyFallback(lead, meta, lastA, lastU, recent, lead.platform, "dm");
+    let out = alternatePipelineReplyFallback(lead, meta, lastA, lastU, recent, lead.platform, "dm");
+    out = (0, conversationUtils_js_1.enforceOutboundTextRules)(out);
     (0, marcoLog_js_1.marcoLog)("sanitize_pipeline_result", {
         requestId: log?.requestId,
         correlationId: log?.correlationId,
@@ -768,7 +782,7 @@ function fallbackMarcoPipelineReply(lead, meta, lastUser, recentMarco, platform,
         const who = greetingNameForOpening(lead);
         const hey = who !== "there" ? `Thanks for reaching out ${who}!` : "Thanks for reaching out!";
         if ((0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(lastUser)) {
-            return "Yeah of course, would it help if I just sent the entire breakdown of the home you inquired about, location and pricing included?";
+            return "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
         }
         if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUser)) {
             return `${hey} It's west of Stone Oak. Want me to text you the full breakdown on that home when you're ready, specs and all?`;
@@ -814,7 +828,7 @@ async function generateMarcoOpeningReply(input) {
     const lastUserText = (0, conversationUtils_js_1.getLastUserMessageText)(conversation);
     const lastAssistantText = (0, conversationUtils_js_1.getLastAssistantMessageText)(conversation);
     const recentMarcoOutbounds = (0, conversationUtils_js_1.getRecentAssistantTexts)(conversation, 5);
-    const contextPrefix = openingContextAppendix(lastUserText, conversation, inboundChannel, inboundPlatform, Boolean(lead.phone?.trim()));
+    const contextPrefix = openingContextAppendix(lastUserText, conversation, inboundChannel, inboundPlatform, Boolean(lead.phone?.trim()), Boolean(lead.adCampaign));
     const openingDeliveryBlock = "PHONE_ONLY_DELIVERY: Use SMS/text to their phone for breakdowns and options. Never ask phone or email, never offer email.\n\n";
     const dynamicRules = getDynamicRuleReinforcement(lastUserText);
     const userBlock = contextPrefix +
@@ -991,7 +1005,7 @@ async function generateMarcoPipelineReply(input) {
     if (meta.phoneJustCaptured) {
         postOpeningHints.push("PHONE_JUST_CAPTURED: They just shared their number this turn. One short confirm you will get the breakdown over to them. Do not add a fit check, budget question, or needs analysis.");
     }
-    const postOpeningPrefix = inboundChannelBlock(inboundChannel) +
+    const postOpeningPrefix = inboundChannelBlock(inboundChannel, Boolean(lead.adCampaign)) +
         "PHONE_ONLY_DELIVERY: Send breakdowns and listing options by text/SMS to their phone number only. Never ask phone or email, never offer email, never ask for email. If they sent an email, thank them briefly and still get a mobile number to text the packet.\n\n" +
         (postOpeningHints.length ? `${postOpeningHints.join("\n")}\n\n` : "");
     const dynamicRules = getDynamicRuleReinforcement(lastUserText);

@@ -14,6 +14,7 @@ exports.detectCommunicationStyle = detectCommunicationStyle;
 exports.getCommunicationStyleInstructions = getCommunicationStyleInstructions;
 exports.isRealtorMessage = isRealtorMessage;
 exports.isDenialOfInquiry = isDenialOfInquiry;
+exports.enforceOutboundTextRules = enforceOutboundTextRules;
 exports.normalizeForMarcoDuplicateCompare = normalizeForMarcoDuplicateCompare;
 exports.messagesAreSubstantiallyDuplicate = messagesAreSubstantiallyDuplicate;
 exports.getRecentAssistantTexts = getRecentAssistantTexts;
@@ -333,6 +334,29 @@ function isDenialOfInquiry(message) {
 }
 exports.DENIAL_OF_INQUIRY_REPLY = "My apologies for the confusion! You may have been included in an automated follow-up by mistake. Hope you have a great day, and feel free to reach out anytime if you ever have questions about real estate in San Antonio!";
 /** Strip punctuation variance and unicode noise for Marco duplicate checks. */
+/**
+ * Deterministic backstop for two house-style rules the prompt bans but the
+ * model still violates in production (confirmed live: em dash in "Yeah, of
+ * course — is there a good number", and "Great question" opener despite an
+ * explicit ban in config/prompts.ts and founderPrompt.ts). Prompt-only
+ * enforcement is not reliable enough on its own — this runs on every
+ * LLM-generated reply right before it is sent, so a violation can never
+ * reach a lead regardless of what the model draft contains.
+ *
+ * - Em dash / en dash → comma (matches "use only periods, commas, question
+ *   marks, exclamation marks, apostrophes").
+ * - Leading "Great question" opener → stripped; the rest of the sentence is
+ *   capitalized so it still reads naturally.
+ */
+function enforceOutboundTextRules(text) {
+    if (!text)
+        return text;
+    let out = text.replace(/[—–]\s*/g, ", ").replace(/\s*,\s*,/g, ",");
+    out = out.replace(/^\s*great question[.,!]?\s*/i, "");
+    out = out.replace(/^([a-z])/, (m) => m.toUpperCase());
+    out = out.replace(/\s+,/g, ",").replace(/,\s*$/, "").trim();
+    return out;
+}
 function normalizeForMarcoDuplicateCompare(text) {
     let s = text
         .trim()
@@ -594,6 +618,10 @@ function isInStateConfirmation(text) {
         return true;
     if (/^(yes|yeah)[,!.]?\s*(san antonio|\bsa\b|texas)\s*[!.]*$/.test(t))
         return true;
+    // Location-first phrasing: "In Texas, yes" / "In San Antonio, yeah" — same
+    // confirmation, just location leading with the yes/yeah trailing.
+    if (/^in\s+(texas|san antonio|\bsa\b)\s*,?\s*(yes|yeah|yep|yup)[!.]*$/.test(t))
+        return true;
     if (t.length < 72 &&
         /\b(i'?m|im|i am|we'?re|were)\s+(in|based in|located in|living in)\s+(san antonio|\bsa\b)\b/.test(t)) {
         return true;
@@ -626,15 +654,17 @@ function asksAboutCommissionRebate(text) {
     const t = text.trim().toLowerCase();
     if (!t)
         return false;
-    const rebateIntent = /\b(rebate|commission rebate|buyer agent commission|agent commission|commission back)\b/.test(t);
+    // "rebates?" (not just "rebate") — plural forms like "commission rebates"
+    // were silently failing the trailing \b against the "s", never matching.
+    const rebateIntent = /\b(rebates?|commission rebates?|buyer agent commission|agent commission|commission back)\b/.test(t);
     if (!rebateIntent)
         return false;
     const newConstruction = /\b(new construction|new build|new home|new house|builder|build from scratch|custom build|preconstruction|pre-construction|new development)\b/.test(t);
     if (newConstruction)
         return true;
-    if (/\b(rebate|commission).{0,48}\b(purchase|buy|build|construction|new)\b/.test(t))
+    if (/\b(rebates?|commission).{0,48}\b(purchase|buy|build|construction|new)\b/.test(t))
         return true;
-    if (/\b(purchase|buy|build|construction|new).{0,48}\b(rebate|commission)\b/.test(t))
+    if (/\b(purchase|buy|build|construction|new).{0,48}\b(rebates?|commission)\b/.test(t))
         return true;
     return false;
 }
@@ -934,6 +964,11 @@ function signalsEmailDeliveryRequest(text) {
     }
     if (/\b(prefer|rather)\s+(it\s+)?(by|through)\s+email\b/.test(t))
         return true;
+    // "you can share it with me on my email" / "share that to my email" — a
+    // delivery preposition (on/to/via/through) right before "email" makes this
+    // an unambiguous delivery request, not just "my email is …".
+    if (/\bshare\b.{0,40}\b(on|to|via|through)\s+(my\s+)?email\b/.test(t))
+        return true;
     return false;
 }
 /** Lead is asking for builder / developer identity (never disclose). */
@@ -1228,7 +1263,7 @@ function detectOutOfStateLead(text) {
             return { detected: true, regionLabel: ab.toUpperCase() };
         }
     }
-    const nonTxCity = /\b(los angeles|san diego|san francisco|seattle|portland|phoenix|denver|chicago|miami|orlando|atlanta|boston|nashville|charlotte|las vegas|philadelphia|detroit|minneapolis)\b/i.test(t);
+    const nonTxCity = /\b(los angeles|san diego|san francisco|bakersfield|sacramento|fresno|long beach|oakland|seattle|portland|phoenix|tucson|denver|chicago|miami|orlando|tampa|jacksonville|atlanta|boston|nashville|charlotte|raleigh|las vegas|reno|philadelphia|pittsburgh|detroit|minneapolis|st\.? louis|kansas city|indianapolis|columbus|cincinnati|cleveland|milwaukee|baltimore|new york|brooklyn|newark)\b/i.test(t);
     if (nonTxCity && locPhrase) {
         return { detected: true, regionLabel: "your area" };
     }

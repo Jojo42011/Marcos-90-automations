@@ -159,6 +159,25 @@ function resolveReferralFlow(
     return { handled: false, lead };
   }
 
+  // A lead already engaged with a specific listing (agreed to the breakdown)
+  // is mentioning their OWN current city, not asking to buy there — referring
+  // them to another agent here would derail someone already close to closing.
+  // Reassure the home's Texas/San Antonio location instead and let the normal
+  // funnel continue (coaching note added in the caller via
+  // signalsLookingOutsideSanAntonio-style handling is not needed here since
+  // this path returns handled:false and falls through to the pipeline, which
+  // applies OUT_OF_STATE_MID_THREAD below).
+  if (threadContainsBreakdownOffer(conversation)) {
+    marcoLog("out_of_state_mid_thread_no_referral", {
+      requestId: ctx.requestId,
+      correlationId: ctx.correlationId,
+      lead_id: lead.id,
+      region_label: oos.regionLabel,
+      message_preview: previewText(latestText),
+    });
+    return { handled: false, lead };
+  }
+
   marcoLog("out_of_state_detected", {
     requestId: ctx.requestId,
     correlationId: ctx.correlationId,
@@ -764,6 +783,19 @@ export async function run(
     coachingNote = [
       coachingNote,
       "TEXAS_SERVICE_AREA: The lead is looking outside San Antonio or named another Texas area. In Marco's first-person voice: say you help buyers all across Texas, one short sentence, then continue helping with their question or the listing thread. Do not imply you only serve greater San Antonio for that buyer. Never mention a dollar amount or price threshold in this line.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  // Lead mentions their OWN non-Texas city mid-thread on a specific listing
+  // they already agreed to receive the breakdown for. This is not a request
+  // to buy where they live — never offer the referral-to-another-agent flow
+  // here (that derails someone already close to the phone ask). Reassure the
+  // HOME's location and keep moving toward the number.
+  if (detectOutOfStateLead(latestLeadText).detected && threadContainsBreakdownOffer(conversation)) {
+    coachingNote = [
+      coachingNote,
+      "OUT_OF_STATE_MID_THREAD: The lead just mentioned a non-Texas city or state, but they are already engaged with a specific listing in this thread (breakdown already offered/agreed to). They are NOT asking Marco to find them a home where they live. Do NOT offer to refer them to another agent. In one short sentence, reassure that this home is in Texas, near San Antonio, then continue toward the mobile number ask or answer their actual question.",
     ]
       .filter(Boolean)
       .join(" ");
