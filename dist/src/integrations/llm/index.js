@@ -558,7 +558,7 @@ function openingContextAppendix(lastUserText, conversation, channel, platform, p
         }
     }
     if ((0, conversationUtils_js_1.signalsLookingOutsideSanAntonio)(lastUserText)) {
-        lines.push("TEXAS_SERVICE_AREA: The lead is looking outside San Antonio or named another Texas market. In Marco's first-person voice: say you help buyers all across Texas for homes above $600k (say six hundred thousand naturally if needed). Keep it one short sentence, then continue answering their message or the listing conversation.");
+        lines.push("TEXAS_SERVICE_AREA: The lead is looking outside San Antonio or named another Texas market. In Marco's first-person voice: say you help buyers all across Texas. Keep it one short sentence, then continue answering their message or the listing conversation. Never mention a dollar amount or price threshold in this line.");
     }
     if ((0, conversationUtils_js_1.signalsWantsInfoInDmOnly)(lastUserText)) {
         lines.push("DM_ONLY_REQUEST_OPENING: They want the packet or details in this Instagram or TikTok DM instead of SMS. Never promise to send the full breakdown, pricing, links, or packet inside this DM thread. Do not promise you will text them until they give a mobile number. Brief empathy in Marco's casual texting voice, one short beat on why the full sheet and links land cleaner over text, then a fresh ask for a good number. Different angle than MARCO_PREVIOUS_OUTBOUND. One or two short sentences.");
@@ -986,7 +986,7 @@ async function generateMarcoPipelineReply(input) {
         postOpeningHints.push("BREAKDOWN_URGENCY: The lead wants the full breakdown ASAP or right now. Acknowledge the rush, but do NOT agree to send it immediately. Explain briefly you have to put together the full pricing and breakdown sheet so it is accurate, and commit to sending it by the end of the day. Keep it short and human, no excuses.");
     }
     if ((0, conversationUtils_js_1.signalsLookingOutsideSanAntonio)(lastUserText)) {
-        postOpeningHints.push("TEXAS_SERVICE_AREA: Lead is searching outside San Antonio or named another Texas area. In Marco's first-person voice: you help buyers across Texas for homes above $600k. One short beat, then continue the thread.");
+        postOpeningHints.push("TEXAS_SERVICE_AREA: Lead is searching outside San Antonio or named another Texas area. In Marco's first-person voice: you help buyers across Texas. One short beat, then continue the thread. Never mention a dollar amount or price threshold in this line.");
     }
     if (meta.phoneJustCaptured) {
         postOpeningHints.push("PHONE_JUST_CAPTURED: They just shared their number this turn. One short confirm you will get the breakdown over to them. Do not add a fit check, budget question, or needs analysis.");

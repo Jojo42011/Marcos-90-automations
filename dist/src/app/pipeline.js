@@ -648,7 +648,7 @@ async function run(payload, log) {
     if ((0, conversationUtils_js_1.signalsLookingOutsideSanAntonio)(latestLeadText)) {
         coachingNote = [
             coachingNote,
-            "TEXAS_SERVICE_AREA: The lead is looking outside San Antonio or named another Texas area. In Marco's first-person voice: say you help buyers all across Texas for homes above $600k, one short sentence, then continue helping with their question or the listing thread. Do not imply you only serve greater San Antonio for that buyer.",
+            "TEXAS_SERVICE_AREA: The lead is looking outside San Antonio or named another Texas area. In Marco's first-person voice: say you help buyers all across Texas, one short sentence, then continue helping with their question or the listing thread. Do not imply you only serve greater San Antonio for that buyer. Never mention a dollar amount or price threshold in this line.",
         ]
             .filter(Boolean)
             .join(" ");

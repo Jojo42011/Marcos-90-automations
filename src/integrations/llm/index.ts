@@ -697,7 +697,7 @@ function openingContextAppendix(
   }
   if (signalsLookingOutsideSanAntonio(lastUserText)) {
     lines.push(
-      "TEXAS_SERVICE_AREA: The lead is looking outside San Antonio or named another Texas market. In Marco's first-person voice: say you help buyers all across Texas for homes above $600k (say six hundred thousand naturally if needed). Keep it one short sentence, then continue answering their message or the listing conversation.",
+      "TEXAS_SERVICE_AREA: The lead is looking outside San Antonio or named another Texas market. In Marco's first-person voice: say you help buyers all across Texas. Keep it one short sentence, then continue answering their message or the listing conversation. Never mention a dollar amount or price threshold in this line.",
     );
   }
   if (signalsWantsInfoInDmOnly(lastUserText)) {
@@ -1318,7 +1318,7 @@ export async function generateMarcoPipelineReply(input: {
   }
   if (signalsLookingOutsideSanAntonio(lastUserText)) {
     postOpeningHints.push(
-      "TEXAS_SERVICE_AREA: Lead is searching outside San Antonio or named another Texas area. In Marco's first-person voice: you help buyers across Texas for homes above $600k. One short beat, then continue the thread.",
+      "TEXAS_SERVICE_AREA: Lead is searching outside San Antonio or named another Texas area. In Marco's first-person voice: you help buyers across Texas. One short beat, then continue the thread. Never mention a dollar amount or price threshold in this line.",
     );
   }
   if (meta.phoneJustCaptured) {

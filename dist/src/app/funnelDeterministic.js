@@ -83,6 +83,61 @@ function extractPriceCap(text) {
         return null;
     return n;
 }
+/** True when the lead mentions floor plan / layout preferences (open concept, single story, etc). */
+const LAYOUT_PATTERNS = [
+    /\bfloor\s?plan\b/i,
+    /\blayout\b/i,
+    /\bopen concept\b/i,
+    /\b(single|two|one) stor(y|ey)\b/i,
+    /\bsplit level\b/i,
+    /\bmaster (down|downstairs)\b/i,
+    /\bgame room\b/i,
+    /\b(office\/study|study\/office)\b/i,
+];
+function mentionsLayout(text) {
+    return LAYOUT_PATTERNS.some((re) => re.test(text));
+}
+/** True when the lead mentions acreage / lot size (as opposed to a plain address). */
+const ACREAGE_PATTERNS = [
+    /\bacres?\b/i, // "an acre", "2 acres", "half acre"
+    /\bacreage\b/i,
+    /\b(large|big|huge) (yard|lot)\b/i,
+    /\blot size\b/i,
+];
+function mentionsAcreage(text) {
+    return ACREAGE_PATTERNS.some((re) => re.test(text));
+}
+/**
+ * Deterministic CRM notes derivation for stated preferences (Bucket I — general
+ * case). Runs alongside criteria extraction so a note is added the SAME turn a
+ * bed/bath/area/price/layout/acreage preference is first mentioned. Deduped
+ * against existing notes so nothing repeats across turns; appends with the
+ * same "Label: value" line style the out-of-state referral flow already uses
+ * for `crmNotes` (see resolveReferralFlow in pipeline.ts).
+ */
+function deriveCrmNotesFromCriteria(existingNotes, lastText, newBeds, newBaths, newArea, newPriceCap) {
+    const lines = [];
+    if (newBeds != null)
+        lines.push(`Wants ${newBeds} bed${newBeds === 1 ? "" : "s"}`);
+    if (newBaths != null)
+        lines.push(`Wants ${newBaths} bath${newBaths === 1 ? "" : "s"}`);
+    if (newArea)
+        lines.push(`Area preference: ${newArea}`);
+    if (newPriceCap != null)
+        lines.push(`Price cap mentioned: $${newPriceCap.toLocaleString()}`);
+    if (mentionsLayout(lastText))
+        lines.push("Mentioned floor plan / layout preference");
+    if (mentionsAcreage(lastText))
+        lines.push("Mentioned acreage / lot size preference");
+    if (!lines.length)
+        return existingNotes;
+    const existing = existingNotes?.trim() ?? "";
+    const existingLower = existing.toLowerCase();
+    const fresh = lines.filter((line) => !existingLower.includes(line.toLowerCase()));
+    if (!fresh.length)
+        return existingNotes;
+    return existing ? `${existing}\n${fresh.join("\n")}` : fresh.join("\n");
+}
 /** Module 06 state + criteria/email extraction only (no reply strings). */
 function applyModule06Deterministic(lead, lastText) {
     const email = lead.email ?? extractEmail(lastText);
@@ -105,16 +160,23 @@ function applyModule06Deterministic(lead, lastText) {
             area: area ?? null,
         };
     const isAffirmative = /\b(yes|that.?s the (one|house)|correct|exactly|perfect|sounds good)\b/i.test(lastText);
+    // Bucket I (general case) — note stated preferences (beds/baths/area/price/
+    // layout/acreage) the same turn they're first mentioned, deduped against
+    // whatever crmNotes already holds. Only fires for values newly extracted
+    // THIS turn (beds/baths/area/priceCap params below), not values already on
+    // file from an earlier turn — matches the "first mentioned" framing.
+    const crmNotes = deriveCrmNotesFromCriteria(lead.crmNotes, lastText, lead.criteria?.beds == null ? beds : null, lead.criteria?.baths == null ? baths : null, lead.criteria?.area == null ? area : null, lead.criteria?.priceCap == null ? priceCap : null);
     if (isAffirmative) {
         if (!email) {
-            return { ...lead, email: null, criteria, state: state_js_1.FunnelStage.CriteriaCollected };
+            return { ...lead, email: null, criteria, crmNotes, state: state_js_1.FunnelStage.CriteriaCollected };
         }
-        return { ...lead, email, criteria, state: state_js_1.FunnelStage.EmailSent };
+        return { ...lead, email, criteria, crmNotes, state: state_js_1.FunnelStage.EmailSent };
     }
     return {
         ...lead,
         email: email ?? lead.email,
         criteria,
+        crmNotes,
         state: email ? state_js_1.FunnelStage.EmailSent : state_js_1.FunnelStage.CriteriaCollected,
     };
 }
