@@ -37,8 +37,8 @@ _SLOT_WAIT_TIMEOUT_S = int(os.environ.get("OPENSHORTS_SLOT_WAIT_TIMEOUT_S", "900
 _FFMPEG_TIMEOUT_S = int(os.environ.get("OPENSHORTS_FFMPEG_TIMEOUT_S", "180"))
 # Overall wall-clock budget for one job (transcription + all clips). Bounds how
 # long a single job can hold the processing slot so one bad video can't freeze
-# the whole batch. Raise for routinely long (30min+) source videos.
-_JOB_MAX_SECONDS = int(os.environ.get("OPENSHORTS_JOB_MAX_SECONDS", "600"))
+# the whole batch. Default is 2 hours; set OPENSHORTS_JOB_MAX_SECONDS=0 to disable.
+_JOB_MAX_SECONDS = int(os.environ.get("OPENSHORTS_JOB_MAX_SECONDS", "7200"))
 
 # Generation-time automatic dead-air removal. When on, every freshly generated
 # clip has clear dead air removed and its captions re-synced, so new clips come
@@ -463,7 +463,7 @@ def process_video_job(
             # slot (and freeze the queue behind it) indefinitely. Whatever clips
             # already succeeded are kept; if none, the check below fails clearly.
             elapsed = time.monotonic() - timer.job_started_at
-            if elapsed > _JOB_MAX_SECONDS:
+            if _JOB_MAX_SECONDS > 0 and elapsed > _JOB_MAX_SECONDS:
                 print(
                     f"[openshorts] Job {job_id} hit the {_JOB_MAX_SECONDS}s budget after "
                     f"{elapsed:.0f}s — stopping with {len(output_clips)} clip(s) done, "
