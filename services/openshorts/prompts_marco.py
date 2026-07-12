@@ -24,7 +24,7 @@ WHAT MAKES A GREAT CLIP FOR MARCO:
 1. Opens with a specific number, neighborhood name, or surprising claim in the first 3 seconds
 2. Marco is direct, confident, and speaking from personal experience
 3. Contains at least one specific data point (price, rate, percentage, timeline)
-4. 30-60 seconds total duration — sweet spot for TikTok completion rate
+4. 35-65 seconds total duration — sweet spot for TikTok completion rate
 5. Ends with implicit or explicit curiosity gap that drives DM ("DM me for the full breakdown")
 
 HOOK TYPES THAT OUTPERFORM IN REAL ESTATE (find clips that match these):
@@ -126,7 +126,7 @@ the single strongest moment anyway (never an empty array).
 
 For each clip, return:
 - start_time: seconds from beginning (float)
-- end_time: seconds (float) — target 30-65 seconds per clip
+- end_time: seconds (float) — target 35-65 seconds per clip
 - viral_score: 0-100 based on hook strength, specificity, and conversion potential
 - hook_type: one of [data, personal_story, local, controversy, question, shock]
 - hook_preview: the exact words in the first 3 seconds of the clip
@@ -141,7 +141,7 @@ Sort by viral_score descending (best clip first).
 IMPORTANT:
 - Never start a clip mid-sentence. Find the natural speech boundary (use the pause
   timestamps in the vocal-delivery signals above when they are provided).
-- Minimum clip duration is 25 seconds. Maximum is 65 seconds.
+- Minimum clip duration is 35 seconds. Maximum is 65 seconds.
 - Every clip must open with a strong hook in the first 3 seconds.
 - Prefer clips where Marco mentions specific prices, neighborhoods, or market data.
 - Avoid clips where Marco says generic phrases like "reach out to me" without context.

@@ -93,29 +93,51 @@ def _probe_duration(video_path: str) -> float:
         return 0.0
 
 
-def _cut_clip(input_path: str, output_path: str, start_time: float, end_time: float) -> str:
-    """Cut a precise sub-clip with ffmpeg (re-encode for frame accuracy)."""
+def _cut_clip(
+    input_path: str,
+    output_path: str,
+    start_time: float,
+    end_time: float,
+    audio_fade_s: float = 0.0,
+) -> str:
+    """Cut a precise sub-clip with ffmpeg (re-encode for frame accuracy).
+
+    audio_fade_s: when > 0 and the segment is long enough, a tiny fade-in at
+    the start and fade-out at the end are baked in. At 0.035s they are
+    imperceptible to the ear but eliminate the audio click/pop at hard-cut
+    splice points, making multi-segment joins feel seamless.
+    """
     # Phase 4c — veryfast over fast: 3-5x faster encode for a quality delta
     # that's negligible at social-media output resolution/bitrate.
-    result = subprocess.run(
-        [
-            "ffmpeg", "-y",
-            "-ss", str(start_time),
-            "-to", str(end_time),
-            "-i", input_path,
-            # Cap height at 1080p-vertical (1920) so the downstream reframe and
-            # caption passes decode ~1080p frames instead of full 4K. Re-encoding
-            # a 4K source is what spiked ffmpeg to ~2GB RSS and tripped the OOM
-            # killer; 1920 tall is plenty for a 1080x1920 vertical output. The
-            # single quotes protect the comma in min() from ffmpeg's filtergraph
-            # parser. -threads 2 matches the 2-core machine and bounds the frame
-            # buffers each encoder thread holds.
-            "-vf", "scale=-2:'min(1920,ih)'",
-            "-threads", "2",
-            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+    dur = max(0.1, end_time - start_time)
+    cmd = [
+        "ffmpeg", "-y",
+        "-ss", str(start_time),
+        "-to", str(end_time),
+        "-i", input_path,
+        # Cap height at 1080p-vertical (1920) so the downstream reframe and
+        # caption passes decode ~1080p frames instead of full 4K. Re-encoding
+        # a 4K source is what spiked ffmpeg to ~2GB RSS and tripped the OOM
+        # killer; 1920 tall is plenty for a 1080x1920 vertical output. The
+        # single quotes protect the comma in min() from ffmpeg's filtergraph
+        # parser. -threads 2 matches the 2-core machine and bounds the frame
+        # buffers each encoder thread holds.
+        "-vf", "scale=-2:'min(1920,ih)'",
+        "-threads", "2",
+        "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+    ]
+    if audio_fade_s > 0 and dur > audio_fade_s * 4:
+        fade_out_start = max(0.0, dur - audio_fade_s)
+        cmd += [
+            "-af",
+            f"afade=t=in:st=0:d={audio_fade_s:.3f},afade=t=out:st={fade_out_start:.3f}:d={audio_fade_s:.3f}",
             "-c:a", "aac",
-            output_path,
-        ],
+        ]
+    else:
+        cmd += ["-c:a", "aac"]
+    cmd.append(output_path)
+    result = subprocess.run(
+        cmd,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         timeout=_FFMPEG_TIMEOUT_S,
@@ -809,6 +831,14 @@ async def serve_clip(job_id: str, filename: str):
 # Minimum length of a trimmed clip — anything shorter is almost certainly a
 # mis-drag and produces an unusable micro-clip.
 _MIN_TRIM_SECONDS = float(os.environ.get("OPENSHORTS_MIN_TRIM_SECONDS", "3.0"))
+# Auto-tighten floor: smart cuts (gaze/retake/dead-air) will not shorten a
+# generated clip below this. The LLM selects clips at ≥35s; after all smart
+# cuts the output must remain at least this long so story flow is preserved.
+_MIN_AUTO_TIGHTEN_S = float(os.environ.get("OPENSHORTS_MIN_AUTO_TIGHTEN_S", "25.0"))
+# Audio fade duration applied at each splice point when segments are joined.
+# 35ms is imperceptible to the ear but eliminates the hard-cut pop/click that
+# makes multi-segment edits feel jarring. Applied only when > 1 segment.
+_SPLICE_FADE_S = float(os.environ.get("OPENSHORTS_SPLICE_FADE_S", "0.035"))
 # Trim waits only briefly for the shared processing slot — if a batch job holds
 # it, fail fast with a clear "busy" instead of hanging the user's request.
 _TRIM_SLOT_WAIT_S = int(os.environ.get("OPENSHORTS_TRIM_SLOT_WAIT_S", "8"))
@@ -1192,18 +1222,23 @@ def _auto_tighten_generated_clip(
         if duration - cursor > 0.05:
             keeps.append((cursor, duration))
         total_kept = sum(e - s for s, e in keeps)
-        if not keeps or total_kept < _MIN_TRIM_SECONDS:
+        # Use the higher auto-tighten floor (not the manual-trim 3s floor) so
+        # smart cuts never shrink a generated clip below the story-flow minimum.
+        if not keeps or total_kept < _MIN_AUTO_TIGHTEN_S:
             return None  # would over-shorten — leave it alone
 
         parent = Path(base_path).parent
         stem = Path(base_path).stem
         token = uuid.uuid4().hex[:8]
 
-        # Cut + concat the kept segments from the uncaptioned base.
+        # Cut + concat the kept segments from the uncaptioned base. When there
+        # are multiple segments (i.e. something was actually cut out), apply a
+        # tiny audio fade at each boundary so the splice is inaudible.
+        fade_s = _SPLICE_FADE_S if len(keeps) > 1 else 0.0
         segs = []
         for idx, (s, e) in enumerate(keeps):
             seg = str(parent / f"{stem}_tt{idx}_{token}.mp4")
-            _cut_clip(input_path=base_path, output_path=seg, start_time=s, end_time=e)
+            _cut_clip(input_path=base_path, output_path=seg, start_time=s, end_time=e, audio_fade_s=fade_s)
             segs.append(seg)
             tmp.append(seg)
         if len(segs) == 1:

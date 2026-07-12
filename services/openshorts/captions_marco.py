@@ -36,15 +36,19 @@ CAPTION_EMOJIS = os.environ.get("CAPTION_EMOJIS", "true").lower() == "true"
 # Ordered — first match wins, so the most specific real-estate signals sit on top.
 _EMOJI_RULES: list[tuple[str, str]] = [
     (r"\b(dm|message|inbox)\b", "📩"),
+    (r"\b(zestimate|zillow|redfin|estimate[ds]?|algorithm[s]?|algorithm)\b", "🤖"),
     (r"\b(price[ds]?|prices|pricing|dollar[s]?|money|cash|paid|pay(ing|s)?|afford|budget)\b", "💰"),
     (r"\b(interest|rate[s]?|mortgage|apr)\b", "📉"),
-    (r"\b(sold|closing|closed|deal|offer[s]?)\b", "🤝"),
+    (r"\b(sold|closing|closed|deal|offer[s]?|negotiat(e|ing|ion))\b", "🤝"),
     (r"\b(key[s]?|move[- ]?in|moving)\b", "🔑"),
+    (r"\b(car[s]?|vehicle[s]?|driv(e|ing|er)|commut(e|ing)|truck[s]?|suv[s]?)\b", "🚗"),
     (r"\b(house[s]?|home[s]?|property|properties|listing[s]?|real estate|condo[s]?|townhome[s]?)\b", "🏠"),
-    (r"\b(build(er|ing)?|construction|new build)\b", "🏗️"),
+    (r"\b(pool[s]?|yard|garden|backyard|patio|outdoor)\b", "🏊"),
+    (r"\b(build(er|ing)?|construction|new build|renovat(e|ing|ion)|upgrad(e|ing))\b", "🏗️"),
     (r"\b(san antonio|stone oak|canyon lake|new braunfels|alamo heights|neighborhood|area|location)\b", "📍"),
+    (r"\b(stale|day[s]? on market|sit(ting)?|wait(ing)?|week[s]? (on|in)|dom)\b", "⏳"),
     (r"\b(up|increase[d]?|rising|jump(ed)?|grow(th|ing)?|more)\b", "📈"),
-    (r"\b(down|drop(ped|s)?|falling|lower|decrease[d]?)\b", "📉"),
+    (r"\b(down|drop(ped|s)?|falling|lower|decrease[d]?|reduc(e|ing|tion))\b", "📉"),
     (r"\b(save[d]?|saving[s]?|discount)\b", "🏦"),
     (r"\b(credit|score|loan[s]?|lender|va loan|fha)\b", "💳"),
     (r"\b(family|families|kids|children)\b", "👨‍👩‍👧"),
@@ -52,7 +56,7 @@ _EMOJI_RULES: list[tuple[str, str]] = [
     (r"\b(hot|fire|crazy|insane|huge)\b", "🔥"),
     (r"\b(warning|careful|mistake[s]?|avoid|scam)\b", "⚠️"),
     (r"\b(secret[s]?|nobody|won'?t tell)\b", "🤫"),
-    (r"\b(first[- ]time buyer[s]?|buyer[s]?|buy(ing)?)\b", "🛒"),
+    (r"\b(first[- ]time buyer[s]?|buyer[s]?|buy(ing)?|seller[s]?|sell(ing)?)\b", "🛒"),
     (r"\b(follow|subscribe)\b", "➕"),
     (r"\b(free)\b", "🎁"),
 ]
@@ -153,11 +157,12 @@ def group_words_into_lines(words: list[dict], max_chars_per_line: int) -> list[l
     return lines
 
 
-def _line_dialogue_events(line: list[dict], style_name: str) -> list[str]:
+def _line_dialogue_events(line: list[dict], style_name: str, font_size: int = 40) -> list[str]:
     # One content-matched emoji per line, appended after the last word. It is
-    # never the karaoke-highlight target — always the plain black-border style.
+    # rendered at 1.4× caption font size so it reads clearly at a glance.
     line_text = " ".join((w.get("text") or "") for w in line)
     emoji = emoji_for_text(line_text)
+    emoji_size = round(font_size * 1.4)
 
     events = []
     for i, active_word in enumerate(line):
@@ -176,7 +181,9 @@ def _line_dialogue_events(line: list[dict], style_name: str) -> list[str]:
             else:
                 parts.append(f"{{\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{text}")
         if emoji:
-            parts.append(f"{{\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{emoji}")
+            # Larger size via \fs override; reset to default after so it doesn't
+            # bleed into the next event's inherited style.
+            parts.append(f"{{\\fs{emoji_size}\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{emoji}{{\\fs{font_size}}}")
         text_field = " ".join(parts)
 
         events.append(
@@ -215,7 +222,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     events = []
     for line in lines:
-        events.extend(_line_dialogue_events(line, style_name))
+        events.extend(_line_dialogue_events(line, style_name, font_size=font_size))
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(header)
