@@ -1853,6 +1853,26 @@
     .rv-btn-ai-edit { flex: 1; height: 40px; background: rgba(37,244,238,0.1); border: 1px solid rgba(37,244,238,0.3); border-radius: var(--rv-radius-sm); font-family: var(--rv-display); font-size: 10px; letter-spacing: 2px; color: var(--accent-2, #25f4ee); cursor: pointer; transition: all var(--rv-dur-base); }
     .rv-btn-ai-edit:hover { background: rgba(37,244,238,0.18); border-color: var(--accent-2, #25f4ee); }
     .ai-edit-message { border-radius: 8px; padding: 8px 12px; font-size: 12px; }
+    /* ── Upload & Clip: enhancement settings ─────────────────────────────── */
+    .enhance-settings-row { margin: 12px 0 4px; }
+    .enhance-settings-toggle { width: 100%; display: flex; align-items: center; gap: 10px; background: var(--panel-2, #1b1f26); border: 1px solid var(--border, #262b33); border-radius: 8px; padding: 10px 14px; cursor: pointer; transition: border-color 0.15s ease; text-align: left; }
+    .enhance-settings-toggle:hover { border-color: var(--accent-2, #25f4ee); }
+    .enhance-toggle-title { font-size: 13px; font-weight: 600; color: var(--text, #e8eaed); white-space: nowrap; }
+    .enhance-toggle-summary { flex: 1; font-size: 11px; color: var(--accent-2, #25f4ee); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .enhance-toggle-arrow { color: var(--muted, #8a919c); font-size: 12px; }
+    .enhance-settings-panel { margin-top: 8px; background: var(--panel-2, #1b1f26); border: 1px solid var(--border, #262b33); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+    .enhance-toggle-item { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 8px; cursor: pointer; }
+    .enhance-toggle-item input { accent-color: var(--accent-2, #25f4ee); }
+    .enhance-item-name { font-size: 12px; font-weight: 600; color: var(--text, #e8eaed); white-space: nowrap; }
+    .enhance-item-note { font-size: 11px; color: var(--muted, #8a919c); }
+    .enhance-settings-footnote { margin: 2px 0 0; font-size: 10.5px; color: var(--muted, #8a919c); font-style: italic; }
+    /* ── Review Queue: enhancement badges ────────────────────────────────── */
+    .rv-enh-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; justify-content: center; }
+    .rv-enh-badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 600; letter-spacing: 0.03em; }
+    .rv-enh-captions { background: rgba(37,244,238,0.12); color: #25f4ee; }
+    .rv-enh-smart_cuts { background: rgba(245,196,81,0.12); color: #f5c451; }
+    .rv-enh-auto_zoom { background: rgba(167,139,250,0.14); color: #a78bfa; }
+    .rv-enh-broll { background: rgba(61,220,132,0.12); color: #3ddc84; }
   </style>
 </head>
 <body>
@@ -2119,6 +2139,33 @@
                 <span class="context-summary-label">AI will focus on:</span>
                 <span id="contextSummaryText"></span>
                 <button type="button" onclick="clearContext()" class="context-clear-link">Clear</button>
+              </div>
+            </div>
+
+            <!-- Enhancement settings — per-batch video-enhancement toggles -->
+            <div class="enhance-settings-row">
+              <button type="button" class="enhance-settings-toggle" onclick="toggleEnhanceSettings()">
+                <span class="enhance-toggle-title">✦ Enhancement settings</span>
+                <span class="enhance-toggle-summary" id="enhanceSettingsSummary">Captions · Auto-zoom · Smart cuts</span>
+                <span class="enhance-toggle-arrow" id="enhanceToggleArrow">▾</span>
+              </button>
+              <div id="enhanceSettingsPanel" class="enhance-settings-panel" style="display:none">
+                <label class="enhance-toggle-item">
+                  <input type="checkbox" id="enhanceCaptions" checked onchange="updateEnhanceSummary()" />
+                  <span class="enhance-item-name">Animated captions</span>
+                  <span class="enhance-item-note">word-by-word karaoke highlight, emojis, gold real-estate keywords</span>
+                </label>
+                <label class="enhance-toggle-item">
+                  <input type="checkbox" id="enhanceAutoZoom" checked onchange="updateEnhanceSummary()" />
+                  <span class="enhance-item-name">Auto-zoom</span>
+                  <span class="enhance-item-note">subtle zoom emphasis at the highest-energy moments</span>
+                </label>
+                <label class="enhance-toggle-item">
+                  <input type="checkbox" id="enhanceBroll" onchange="updateEnhanceSummary()" />
+                  <span class="enhance-item-name">B-roll overlay</span>
+                  <span class="enhance-item-note">topic-matched stock footage (needs PEXELS_API_KEY on the server)</span>
+                </label>
+                <p class="enhance-settings-footnote">Silence removal, look-away cuts, and repeated-take cleanup always run — they're part of the smart-cut pass.</p>
               </div>
             </div>
 
@@ -4470,7 +4517,22 @@
         hookAlts: (e.hookVariations || []).filter((h) => h !== (e.hookPrimary || v.hook)),
         trendReason: e.trendAlignmentReason || "",
         thumb: resolveClipThumbUrl(v) || "",
+        videoEnh: Array.isArray(v.videoEnhancements) ? v.videoEnhancements : [],
       };
+    }
+
+    const RV_ENH_BADGES = {
+      captions: "✦ Captions",
+      auto_zoom: "🔍 Auto-zoom",
+      broll: "🎬 B-roll",
+      smart_cuts: "✂ Smart cuts",
+    };
+    function rvEnhBadgesHtml(list) {
+      const html = (list || [])
+        .map((k) => RV_ENH_BADGES[k] ? `<span class="rv-enh-badge rv-enh-${k}">${RV_ENH_BADGES[k]}</span>` : "")
+        .filter(Boolean)
+        .join("");
+      return html ? `<div class="rv-enh-badges">${html}</div>` : "";
     }
     function rvPlatformIconsHtml(list) { return (list || []).map((p) => RV_PLATFORM_SVG[p] || "").join(""); }
 
@@ -4538,6 +4600,7 @@
           </div>
           <div class="rv-stage-title" id="rvStageTitle" contenteditable="true" spellcheck="false" data-field="title">${escapeHtml(vm.title)}</div>
           <div class="rv-platform-badges">${vm.platforms.map((p) => `<span class="rv-pbadge">${escapeHtml(p)}</span>`).join("")}</div>
+          ${rvEnhBadgesHtml(vm.videoEnh)}
           ${alts ? `<div class="rv-alts" onclick="rvToggleAlts()"><span class="rv-alts-label"><span class="rv-alts-arrow">▶</span> ${alts} ALTERNATIVE${alts > 1 ? "S" : ""}</span><span class="rv-alts-rule"></span></div>
           <div class="rv-alts-list" id="rvAltsList">${vm.hookAlts.map((h) => `<button type="button" class="rv-alt-btn" onclick="rvApplyAlt('${vm.id}','${jsStr(h)}')">${escapeHtml(h)}</button>`).join("")}</div>` : ""}
           <div class="rv-ticker">
@@ -6270,6 +6333,25 @@
       if (file) handleScriptFile(file);
     });
 
+    /* ── Enhancement settings (Upload & Clip) ───────────────────────────── */
+    function toggleEnhanceSettings() {
+      const panel = document.getElementById("enhanceSettingsPanel");
+      const arrow = document.getElementById("enhanceToggleArrow");
+      if (!panel) return;
+      const open = panel.style.display !== "none";
+      panel.style.display = open ? "none" : "block";
+      if (arrow) arrow.textContent = open ? "▾" : "▴";
+    }
+    function updateEnhanceSummary() {
+      const parts = [];
+      if (document.getElementById("enhanceCaptions")?.checked) parts.push("Captions");
+      if (document.getElementById("enhanceAutoZoom")?.checked) parts.push("Auto-zoom");
+      if (document.getElementById("enhanceBroll")?.checked) parts.push("B-roll");
+      parts.push("Smart cuts");
+      const el = document.getElementById("enhanceSettingsSummary");
+      if (el) el.textContent = parts.join(" · ");
+    }
+
     async function handleScriptFile(file) {
       const ext = file.name.split(".").pop()?.toLowerCase();
       if (!["txt", "pdf", "docx", "doc"].includes(ext || "")) {
@@ -6417,6 +6499,10 @@
         // Human direction for the clipping AI (context chat + uploaded script)
         fd.append("user_context", contextMessages.join("\n"));
         fd.append("script_text", scriptContent);
+        // Per-batch enhancement toggles
+        fd.append("enhance_captions", document.getElementById("enhanceCaptions")?.checked ? "1" : "0");
+        fd.append("enhance_auto_zoom", document.getElementById("enhanceAutoZoom")?.checked ? "1" : "0");
+        fd.append("enhance_broll", document.getElementById("enhanceBroll")?.checked ? "1" : "0");
 
         await startBatchProcessing(fd, { fileCount, pillar, pendingCard: true });
       } catch (err) {

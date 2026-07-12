@@ -743,6 +743,8 @@ function ensureBatchPipelineMigrations(database: Database.Database): void {
   // - edit_instructions is reserved for pending/queued instructions.
   addCol("cm_batch_sessions", "user_context", "TEXT");
   addCol("cm_batch_sessions", "script_text", "TEXT");
+  // Per-batch video-enhancement toggles (captions / autoZoom / broll) as JSON.
+  addCol("cm_batch_sessions", "enhance_options", "TEXT");
   addCol("content_videos", "edit_instructions", "TEXT");
   addCol("content_videos", "edit_history", "TEXT");
 }
@@ -3964,6 +3966,14 @@ export interface CmBatchSession {
   notes: string | null;
   userContext: string | null;
   scriptText: string | null;
+  /** Per-batch video-enhancement toggles; null = use server defaults. */
+  enhanceOptions: CmEnhanceOptions | null;
+}
+
+export interface CmEnhanceOptions {
+  captions?: boolean;
+  autoZoom?: boolean;
+  broll?: boolean;
 }
 
 export interface CmBatchSourceFile {
@@ -4116,6 +4126,9 @@ function rowToBatchSession(row: Record<string, unknown>): CmBatchSession {
     notes: row.notes ? String(row.notes) : null,
     userContext: row.user_context ? String(row.user_context) : null,
     scriptText: row.script_text ? String(row.script_text) : null,
+    enhanceOptions: row.enhance_options
+      ? parseJson<CmEnhanceOptions | null>(String(row.enhance_options), null)
+      : null,
   };
 }
 
@@ -4206,6 +4219,7 @@ export function createBatchSession(input: {
   notes?: string;
   userContext?: string;
   scriptText?: string;
+  enhanceOptions?: CmEnhanceOptions;
 }): CmBatchSession {
   const database = getContentDb();
   const id = randomUUID();
@@ -4214,8 +4228,9 @@ export function createBatchSession(input: {
     .prepare(
       `INSERT INTO cm_batch_sessions
        (id, session_name, pillar, filmed_by, target_clip_count, status, source_file_count,
-        clips_generated, trend_brief_id, created_at, completed_at, notes, user_context, script_text)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, ?, ?, ?)`,
+        clips_generated, trend_brief_id, created_at, completed_at, notes, user_context, script_text,
+        enhance_options)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -4229,6 +4244,7 @@ export function createBatchSession(input: {
       input.notes ?? null,
       input.userContext ?? null,
       input.scriptText ?? null,
+      input.enhanceOptions ? JSON.stringify(input.enhanceOptions) : null,
     );
   return getBatchSession(id)!;
 }
@@ -4993,7 +5009,7 @@ export function listContentVideosWithEnhancements(input?: {
   status?: ContentVideoStatus;
   batchSessionId?: string;
   limit?: number;
-}): Array<ContentVideo & { enhancement: CmClipEnhancement | null }> {
+}): Array<ContentVideo & { enhancement: CmClipEnhancement | null; videoEnhancements: string[] }> {
   const limit = input?.limit ?? 200;
   const database = getContentDb();
   let rows: Record<string, unknown>[];
@@ -5021,7 +5037,15 @@ export function listContentVideosWithEnhancements(input?: {
   return rows.map((row) => {
     const video = rowToVideo(row);
     const enhancement = getClipEnhancementByVideoId(video.id);
-    return { ...video, enhancement };
+    // Which video-enhancement passes ran on this clip (auto_zoom, captions,
+    // broll, smart_cuts...) — recorded on the source session at clip creation.
+    let videoEnhancements: string[] = [];
+    if (video.sourceSessionId) {
+      const session = getContentSession(video.sourceSessionId);
+      const applied = session?.rawInputMeta?.enhancementsApplied;
+      if (Array.isArray(applied)) videoEnhancements = applied.map(String);
+    }
+    return { ...video, enhancement, videoEnhancements };
   });
 }
 

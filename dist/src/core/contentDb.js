@@ -805,6 +805,8 @@ function ensureBatchPipelineMigrations(database) {
     // - edit_instructions is reserved for pending/queued instructions.
     addCol("cm_batch_sessions", "user_context", "TEXT");
     addCol("cm_batch_sessions", "script_text", "TEXT");
+    // Per-batch video-enhancement toggles (captions / autoZoom / broll) as JSON.
+    addCol("cm_batch_sessions", "enhance_options", "TEXT");
     addCol("content_videos", "edit_instructions", "TEXT");
     addCol("content_videos", "edit_history", "TEXT");
 }
@@ -2905,6 +2907,9 @@ function rowToBatchSession(row) {
         notes: row.notes ? String(row.notes) : null,
         userContext: row.user_context ? String(row.user_context) : null,
         scriptText: row.script_text ? String(row.script_text) : null,
+        enhanceOptions: row.enhance_options
+            ? parseJson(String(row.enhance_options), null)
+            : null,
     };
 }
 function rowToBatchSourceFile(row) {
@@ -2984,9 +2989,10 @@ function createBatchSession(input) {
     database
         .prepare(`INSERT INTO cm_batch_sessions
        (id, session_name, pillar, filmed_by, target_clip_count, status, source_file_count,
-        clips_generated, trend_brief_id, created_at, completed_at, notes, user_context, script_text)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, ?, ?, ?)`)
-        .run(id, input.sessionName ?? null, input.pillar, input.filmedBy ?? "marco", input.targetClipCount ?? null, input.status ?? "uploading", input.sourceFileCount ?? 0, now, input.notes ?? null, input.userContext ?? null, input.scriptText ?? null);
+        clips_generated, trend_brief_id, created_at, completed_at, notes, user_context, script_text,
+        enhance_options)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, ?, ?, ?, ?)`)
+        .run(id, input.sessionName ?? null, input.pillar, input.filmedBy ?? "marco", input.targetClipCount ?? null, input.status ?? "uploading", input.sourceFileCount ?? 0, now, input.notes ?? null, input.userContext ?? null, input.scriptText ?? null, input.enhanceOptions ? JSON.stringify(input.enhanceOptions) : null);
     return getBatchSession(id);
 }
 function getBatchSession(id) {
@@ -3416,7 +3422,16 @@ function listContentVideosWithEnhancements(input) {
     return rows.map((row) => {
         const video = rowToVideo(row);
         const enhancement = getClipEnhancementByVideoId(video.id);
-        return { ...video, enhancement };
+        // Which video-enhancement passes ran on this clip (auto_zoom, captions,
+        // broll, smart_cuts...) — recorded on the source session at clip creation.
+        let videoEnhancements = [];
+        if (video.sourceSessionId) {
+            const session = getContentSession(video.sourceSessionId);
+            const applied = session?.rawInputMeta?.enhancementsApplied;
+            if (Array.isArray(applied))
+                videoEnhancements = applied.map(String);
+        }
+        return { ...video, enhancement, videoEnhancements };
     });
 }
 function parseJsonArray(val) {

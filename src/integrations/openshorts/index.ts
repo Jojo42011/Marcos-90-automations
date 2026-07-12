@@ -62,6 +62,9 @@ export async function submitToOpenShorts(input: {
   trendBrief?: string;
   targetClipCount?: number;
   enableCaptions?: boolean;
+  /** undefined = sidecar env default; explicit true/false overrides per job */
+  enableAutoZoom?: boolean;
+  enableBroll?: boolean;
   userContext?: string; // what the human said to focus on — goes into the clipping prompt
   scriptText?: string; // uploaded script content, same destination
 }): Promise<{ jobId: string; status: string }> {
@@ -71,6 +74,8 @@ export async function submitToOpenShorts(input: {
     trendBrief = "",
     targetClipCount = 7,
     enableCaptions = true,
+    enableAutoZoom,
+    enableBroll,
     userContext = "",
     scriptText = "",
   } = input;
@@ -98,6 +103,9 @@ export async function submitToOpenShorts(input: {
     formData.append("trend_brief", trendBrief);
     formData.append("target_clips", String(targetClipCount));
     formData.append("enable_captions", String(enableCaptions));
+    // Only send explicit overrides — empty string means "sidecar env default".
+    if (enableAutoZoom !== undefined) formData.append("enable_auto_zoom", String(enableAutoZoom));
+    if (enableBroll !== undefined) formData.append("enable_broll", String(enableBroll));
     formData.append("user_context", userContext);
     formData.append("script_text", scriptText);
 

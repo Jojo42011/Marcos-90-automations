@@ -338,6 +338,9 @@ export async function processBatch(batchSessionId: string): Promise<void> {
           pillar: batchSession.pillar,
           trendBrief,
           targetClipCount: clipsForFile,
+          enableCaptions: batchSession.enhanceOptions?.captions ?? true,
+          enableAutoZoom: batchSession.enhanceOptions?.autoZoom,
+          enableBroll: batchSession.enhanceOptions?.broll,
           userContext: batchSession.userContext || "",
           scriptText: batchSession.scriptText || "",
         });

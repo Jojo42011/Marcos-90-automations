@@ -338,6 +338,8 @@ def process_video_job(
     enable_captions: bool = True,
     user_context: str = "",
     script_text: str = "",
+    enable_auto_zoom: Optional[bool] = None,
+    enable_broll: Optional[bool] = None,
 ):
     """
     Runs the actual video processing. This is intentionally a PLAIN (synchronous)
@@ -356,6 +358,9 @@ def process_video_job(
     """
     timer = _StageTimer(job_id)
     slot_acquired = False
+    # Per-job enhancement flags: explicit request value wins, else env default.
+    auto_zoom_on = AUTO_ZOOM if enable_auto_zoom is None else enable_auto_zoom
+    broll_on = BROLL_ENABLED if enable_broll is None else (enable_broll and broll_marco.enabled())
     try:
         # Serialize heavy jobs so concurrent ffmpeg/reframe passes don't stack up
         # and trip the OOM killer. While waiting the job stays "queued".
@@ -535,12 +540,12 @@ def process_video_job(
                         # Visual polish BEFORE captions so caption text is never
                         # scaled by zoom or covered logic-side by b-roll (it
                         # renders on top). Both best-effort, in-place.
-                        if AUTO_ZOOM and _apply_auto_zoom_pass(
+                        if auto_zoom_on and _apply_auto_zoom_pass(
                             reframed_path, transcript.get("segments", []),
                             clip["start_time"], clip["end_time"], i + 1,
                         ):
                             clip_enhancements.append("auto_zoom")
-                        if BROLL_ENABLED and broll_marco.apply_broll(
+                        if broll_on and broll_marco.apply_broll(
                             reframed_path, transcript.get("segments", []),
                             clip["start_time"], clip["end_time"], i + 1,
                         ):
@@ -779,6 +784,10 @@ async def process_video(
     trend_brief: str = Form(""),
     target_clips: int = Form(7),
     enable_captions: str = Form("true"),
+    # Per-job enhancement overrides. Empty string = use the env default
+    # (OPENSHORTS_AUTO_ZOOM / PEXELS_API_KEY presence); "true"/"false" override.
+    enable_auto_zoom: str = Form(""),
+    enable_broll: str = Form(""),
     # Human direction: what the uploader said to focus on, and any script text.
     # Both are injected into the viral-moment prompt so the AI cuts with
     # direction instead of guessing.
@@ -829,6 +838,14 @@ async def process_video(
     # that matters. BackgroundTasks runs sync callables in a worker thread,
     # keeping this event loop (and /health, /api/jobs/:id) responsive during
     # the job instead of blocking on it.
+    def _tri(v: str) -> Optional[bool]:
+        v = (v or "").strip().lower()
+        if v in ("1", "true", "yes", "on"):
+            return True
+        if v in ("0", "false", "no", "off"):
+            return False
+        return None  # absent → env default
+
     background_tasks.add_task(
         process_video_job,
         job_id=job_id,
@@ -839,6 +856,8 @@ async def process_video(
         enable_captions=(enable_captions.lower() == "true"),
         user_context=user_context,
         script_text=script_text,
+        enable_auto_zoom=_tri(enable_auto_zoom),
+        enable_broll=_tri(enable_broll),
     )
 
     return {"job_id": job_id, "status": "queued"}

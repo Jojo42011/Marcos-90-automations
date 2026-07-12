@@ -40,7 +40,7 @@ function mapClipUrlForFrontend(url) {
     return url;
 }
 async function submitToOpenShorts(input) {
-    const { filePath, pillar, trendBrief = "", targetClipCount = 7, enableCaptions = true, userContext = "", scriptText = "", } = input;
+    const { filePath, pillar, trendBrief = "", targetClipCount = 7, enableCaptions = true, enableAutoZoom, enableBroll, userContext = "", scriptText = "", } = input;
     if (!fs_1.default.existsSync(filePath)) {
         throw new Error(`Video file not found at path: ${filePath}`);
     }
@@ -60,6 +60,11 @@ async function submitToOpenShorts(input) {
         formData.append("trend_brief", trendBrief);
         formData.append("target_clips", String(targetClipCount));
         formData.append("enable_captions", String(enableCaptions));
+        // Only send explicit overrides — empty string means "sidecar env default".
+        if (enableAutoZoom !== undefined)
+            formData.append("enable_auto_zoom", String(enableAutoZoom));
+        if (enableBroll !== undefined)
+            formData.append("enable_broll", String(enableBroll));
         formData.append("user_context", userContext);
         formData.append("script_text", scriptText);
         const response = await axios_1.default.post(`${OPENSHORTS_BASE_URL}/api/process`, formData, {

@@ -3771,6 +3771,22 @@ app.post("/api/content/batch-upload", requireDiskSpaceForUpload(), trackUploadPr
     // optional script text — both flow into the sidecar's viral-moment prompt.
     const userContext = typeof req.body?.user_context === "string" ? req.body.user_context.trim().slice(0, 4000) : "";
     const scriptText = typeof req.body?.script_text === "string" ? req.body.script_text.trim().slice(0, 12000) : "";
+    // Per-batch enhancement toggles ("1"/"0" form fields). Absent fields mean
+    // "use server defaults" — only explicitly sent values are recorded.
+    const flag = (name) => {
+        const v = req.body?.[name];
+        if (v === "1" || v === "true")
+            return true;
+        if (v === "0" || v === "false")
+            return false;
+        return undefined;
+    };
+    const enhanceOptions = {
+        captions: flag("enhance_captions"),
+        autoZoom: flag("enhance_auto_zoom"),
+        broll: flag("enhance_broll"),
+    };
+    const hasEnhanceOptions = Object.values(enhanceOptions).some((v) => v !== undefined);
     const batch = (0, contentDb_js_1.createBatchSession)({
         sessionName: sessionName || null,
         pillar,
@@ -3780,6 +3796,7 @@ app.post("/api/content/batch-upload", requireDiskSpaceForUpload(), trackUploadPr
         notes: notes || null,
         userContext: userContext || undefined,
         scriptText: scriptText || undefined,
+        enhanceOptions: hasEnhanceOptions ? enhanceOptions : undefined,
     });
     for (const file of files) {
         (0, contentDb_js_1.createBatchSourceFile)({
