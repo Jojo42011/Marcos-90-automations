@@ -3201,6 +3201,13 @@ app.post("/api/content/publishing-queue/:videoId/remove", express_1.default.json
             return;
         }
         (0, contentDb_js_1.updateContentVideo)(videoId, { status: "rejected" });
+        // Late reject (pulled from the publish queue) — still a rejection signal.
+        try {
+            (0, contentDb_js_1.recordClipDecision)(videoId, "rejected");
+        }
+        catch (err) {
+            console.warn("[publishing-queue-remove] could not record clip decision:", err);
+        }
         const clipPath = resolveClipFileForVideo(video);
         if (clipPath)
             (0, diskCleanup_js_1.deleteClipFile)(clipPath);
@@ -3302,6 +3309,14 @@ app.post("/api/content/compliance/:videoId/decision", express_1.default.json(), 
         const result = (0, index_js_13.applyComplianceDecision)(videoId, decision, reason);
         // A rejected clip has no further use — reclaim its file immediately.
         if (decision === "rejected") {
+            // Record BEFORE deleting the file so the decision row captures the
+            // clip's traits (hook type, scores) for the Brain's feedback loop.
+            try {
+                (0, contentDb_js_1.recordClipDecision)(videoId, "rejected");
+            }
+            catch (err) {
+                console.warn("[compliance-decision] could not record clip decision:", err);
+            }
             const video = (0, contentDb_js_1.getContentVideo)(videoId);
             const clipPath = video ? resolveClipFileForVideo(video) : null;
             if (clipPath)
@@ -4940,6 +4955,14 @@ app.post("/api/content/clip/:clipId/send-to-publisher", express_1.default.json()
             scheduledFor,
             platformTargets: platforms,
         });
+        // Feed the human approval signal back to the Brain (what KIND of clip
+        // Marco keeps) — best-effort, never blocks the publish action.
+        try {
+            (0, contentDb_js_1.recordClipDecision)(clipId, "approved");
+        }
+        catch (err) {
+            console.warn("[send-to-publisher] could not record clip decision:", err);
+        }
         const publishEntries = [];
         for (const platform of platforms) {
             (0, contentDb_js_1.insertPublishLog)({

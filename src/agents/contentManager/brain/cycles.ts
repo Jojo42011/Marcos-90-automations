@@ -10,6 +10,7 @@ import {
   countVideosByStatus,
   countVideosPublishedOnDate,
   ensureDailyTargets,
+  getClipDecisionStats,
   getDailyStrategy,
   getDailyTargets,
   getPerformanceModel,
@@ -215,6 +216,40 @@ function updateSeasonalityModel(): void {
   upsertPerformanceModel({ seasonMultiplier: multiplier });
 }
 
+function buildClipApprovalFeedback(): string {
+  // Marco's Review Queue approve/reject decisions, aggregated — this is the
+  // signal that grades the clip selector's choices against a human's actual
+  // taste. Empty string until enough decisions exist to mean anything.
+  try {
+    const stats = getClipDecisionStats(14);
+    const total = stats.totalApproved + stats.totalRejected;
+    if (total < 3) return "";
+    const hookBits = stats.byHookType
+      .slice(0, 6)
+      .map((h) => `${h.hookType} ${h.rate}% (${h.approved}/${h.approved + h.rejected})`)
+      .join(", ");
+    const bandBits = stats.byScoreBand
+      .map((b) => `scored ${b.band}: approved ${b.rate}%`)
+      .join("; ");
+    const worstHook = [...stats.byHookType]
+      .filter((h) => h.approved + h.rejected >= 2)
+      .sort((a, b) => a.rate - b.rate)[0];
+    const signal =
+      worstHook && worstHook.rate <= 40
+        ? `Marco rejects most '${worstHook.hookType}' clips (${worstHook.rate}% approval) — deprioritize that hook type.`
+        : "No strong rejection pattern yet — keep current selection balance.";
+    return `CLIP APPROVAL FEEDBACK (last 14 days of Review Queue decisions):
+- Overall approval rate: ${stats.approvalRate}% (${stats.totalApproved} approved / ${stats.totalRejected} rejected)
+- By hook type: ${hookBits || "n/a"}
+- Score calibration: ${bandBits || "n/a"}
+- Signal: ${signal}`;
+  } catch (err) {
+    console.warn("[cm-brain] clip approval feedback unavailable:", err);
+    return "";
+  }
+}
+
+
 export async function runMorningCycle(brain: ContentManagerBrain): Promise<void> {
   // Refresh Reddit buyer-question signals once daily (cached; non-blocking —
   // a failure must never break the morning cycle).
@@ -240,6 +275,7 @@ export async function runMorningCycle(brain: ContentManagerBrain): Promise<void>
   const hookTypeSummary = getHookTypePerformanceSummary();
   const { text: seasonalityText, logNote: seasonLog } = buildSeasonalityContext();
   const momentumAdjustment = getMomentumStrategyAdjustment(momentum.streakType, momentum.streakCount);
+  const clipFeedback = buildClipApprovalFeedback();
 
   if (isMonday()) {
     await proposeWeeklyExperiment(brain);
@@ -250,6 +286,7 @@ ${gradePrompt}
 ${momentumAdjustment}
 ${seasonalityText}
 ${calibrationSuffix}
+${clipFeedback}
 Top combination patterns: ${JSON.stringify(topCombinations)}
 Combinations to avoid: ${JSON.stringify(worstCombinations)}
 Hook type performance: ${JSON.stringify(hookTypeSummary)}

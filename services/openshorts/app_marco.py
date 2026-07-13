@@ -727,6 +727,9 @@ def process_video_job(
                         # clip was auto-tightened); falls back to the source span.
                         "duration": _probe_duration(final_clip_path) or (clip["end_time"] - clip["start_time"]),
                         "viral_score": clip.get("viral_score", 50),
+                        # Four-dimensional virality scores (may be None each
+                        # when the model returned only a flat viral_score).
+                        "scores": clip.get("scores") or {},
                         "hook_type": clip.get("hook_type", "uncategorized"),
                         "hook_preview": clip.get("hook_preview", ""),
                         "transcript_segment": clip.get("why_this_clip", ""),

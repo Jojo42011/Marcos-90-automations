@@ -1894,6 +1894,14 @@
     .rv-enh-auto_zoom { background: rgba(167,139,250,0.14); color: #a78bfa; }
     .rv-enh-broll { background: rgba(61,220,132,0.12); color: #3ddc84; }
     .rv-enh-blooper_removed { background: rgba(255,90,90,0.14); color: #ff5a5a; }
+    /* ── Review Queue: 4-dimension virality score bars + AI reason ────────── */
+    .rv-dim-scores { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; max-width: 260px; margin-left: auto; margin-right: auto; }
+    .rv-dim { display: grid; grid-template-columns: 38px 1fr 24px; align-items: center; gap: 6px; }
+    .rv-dim-label { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; color: var(--muted, #8a919c); text-transform: uppercase; text-align: right; }
+    .rv-dim-track { height: 4px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+    .rv-dim-fill { display: block; height: 100%; border-radius: 999px; }
+    .rv-dim-num { font-size: 9.5px; font-weight: 700; color: var(--text, #e8eaed); }
+    .rv-clip-reason { margin-top: 6px; font-size: 10.5px; font-style: italic; color: var(--muted, #8a919c); text-align: center; max-width: 300px; margin-left: auto; margin-right: auto; line-height: 1.45; }
   </style>
 </head>
 <body>
@@ -4576,7 +4584,30 @@
         trendReason: e.trendAlignmentReason || "",
         thumb: resolveClipThumbUrl(v) || "",
         videoEnh: Array.isArray(v.videoEnhancements) ? v.videoEnhancements : [],
+        dimScores: [
+          { k: "Hook", v: v.scoreHook },
+          { k: "Flow", v: v.scoreFlow },
+          { k: "Value", v: v.scoreValue },
+          { k: "Trend", v: v.scoreTrend },
+        ].filter((d) => d.v != null),
+        clipReason: v.clipReason || "",
       };
+    }
+
+    function rvDimScoresHtml(vm) {
+      if (!vm.dimScores.length && !vm.clipReason) return "";
+      const bars = vm.dimScores.map((d) => {
+        const color = d.v >= 75 ? "var(--rv-green, #3ddc84)" : d.v >= 50 ? "var(--rv-amber, #f5c451)" : "var(--rv-red, #ff5a5a)";
+        return `<div class="rv-dim" title="${d.k}: ${d.v}/100">
+          <span class="rv-dim-label">${d.k}</span>
+          <span class="rv-dim-track"><span class="rv-dim-fill" style="width:${Math.max(2, Math.min(100, d.v))}%;background:${color}"></span></span>
+          <span class="rv-dim-num">${d.v}</span>
+        </div>`;
+      }).join("");
+      const reason = vm.clipReason
+        ? `<div class="rv-clip-reason">${escapeHtml(vm.clipReason)}</div>`
+        : "";
+      return `<div class="rv-dim-scores">${bars}</div>${reason}`;
     }
 
     const RV_ENH_BADGES = {
@@ -4660,6 +4691,7 @@
           <div class="rv-stage-title" id="rvStageTitle" contenteditable="true" spellcheck="false" data-field="title">${escapeHtml(vm.title)}</div>
           <div class="rv-platform-badges">${vm.platforms.map((p) => `<span class="rv-pbadge">${escapeHtml(p)}</span>`).join("")}</div>
           ${rvEnhBadgesHtml(vm.videoEnh)}
+          ${rvDimScoresHtml(vm)}
           ${alts ? `<div class="rv-alts" onclick="rvToggleAlts()"><span class="rv-alts-label"><span class="rv-alts-arrow">▶</span> ${alts} ALTERNATIVE${alts > 1 ? "S" : ""}</span><span class="rv-alts-rule"></span></div>
           <div class="rv-alts-list" id="rvAltsList">${vm.hookAlts.map((h) => `<button type="button" class="rv-alt-btn" onclick="rvApplyAlt('${vm.id}','${jsStr(h)}')">${escapeHtml(h)}</button>`).join("")}</div>` : ""}
           <div class="rv-ticker">

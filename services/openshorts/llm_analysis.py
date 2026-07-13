@@ -173,8 +173,43 @@ def _alias_value(clip: dict[str, Any], aliases: tuple[str, ...]) -> Any:
     return None
 
 
+# Four-dimensional virality scoring (Opus Clip-style). The weighted total is
+# recomputed HERE from the individual dimensions — LLM arithmetic is not
+# trusted. Hook weighted highest: the first 3 seconds decide the scroll.
+_SCORE_WEIGHTS = {"hook_strength": 0.35, "emotional_flow": 0.25, "perceived_value": 0.25, "trend_alignment": 0.15}
+
+
+def _coerce_score(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return max(0, min(100, round(float(value))))
+    return None
+
+
+def _normalize_scores(clip: dict[str, Any]) -> None:
+    """Attach a canonical clip["scores"] dict + derived viral_score, in place.
+
+    When the model returned the 4 dimensions, total is recomputed from the
+    weights and viral_score is overwritten with it (one source of truth).
+    When it didn't (older prompt / fallback provider), the flat viral_score
+    is kept and the dimensions stay None — downstream treats them as absent.
+    """
+    raw = clip.get("scores")
+    dims: dict[str, int | None] = {k: None for k in _SCORE_WEIGHTS}
+    if isinstance(raw, dict):
+        for k in _SCORE_WEIGHTS:
+            dims[k] = _coerce_score(raw.get(k))
+    if all(v is not None for v in dims.values()):
+        total = round(sum(_SCORE_WEIGHTS[k] * float(dims[k] or 0) for k in _SCORE_WEIGHTS))
+        clip["viral_score"] = total
+    else:
+        total = _coerce_score(clip.get("viral_score"))
+    clip["scores"] = {**dims, "total": total}
+
+
 def normalize_clips(raw_clips: list[Any]) -> tuple[list[dict[str, Any]], list[str]]:
-    """Coerce each clip to canonical start_time/end_time floats.
+    """Coerce each clip to canonical start_time/end_time floats + scores.
 
     Returns (usable_clips, issues). A clip is dropped (with a recorded issue)
     if it is not an object, lacks a recognizable start/end, has non-numeric
@@ -200,6 +235,7 @@ def normalize_clips(raw_clips: list[Any]) -> tuple[list[dict[str, Any]], list[st
         normalized = dict(clip)
         normalized["start_time"] = start
         normalized["end_time"] = end
+        _normalize_scores(normalized)
         usable.append(normalized)
     return usable, issues
 

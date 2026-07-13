@@ -189,6 +189,11 @@ async function processOpenShortsResults(
       sourceFileId: sourceFile.id,
       opusClipScore: clip.viralScore / 100,
       hookType: clip.hookType,
+      scoreHook: clip.scoreHook,
+      scoreFlow: clip.scoreFlow,
+      scoreValue: clip.scoreValue,
+      scoreTrend: clip.scoreTrend,
+      clipReason: clip.whyThisClip || null,
     });
 
     try {

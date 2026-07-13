@@ -186,6 +186,7 @@ import {
   listStyleExamples,
   deleteStyleExample,
   type CmStyleExampleKind,
+  recordClipDecision,
 } from "./core/contentDb.js";
 import { runYouTubeCompetitorAnalysis, getYouTubeIntelProgress } from "./agents/contentManager/youtubeIntel.js";
 import {
@@ -3761,6 +3762,12 @@ app.post("/api/content/publishing-queue/:videoId/remove", express.json(), (req, 
       return;
     }
     updateContentVideo(videoId, { status: "rejected" });
+    // Late reject (pulled from the publish queue) — still a rejection signal.
+    try {
+      recordClipDecision(videoId, "rejected");
+    } catch (err) {
+      console.warn("[publishing-queue-remove] could not record clip decision:", err);
+    }
     const clipPath = resolveClipFileForVideo(video);
     if (clipPath) deleteClipFile(clipPath);
     res.json({ ok: true, videoId, removed: true });
@@ -3866,6 +3873,13 @@ app.post("/api/content/compliance/:videoId/decision", express.json(), (req, res)
     const result = applyComplianceDecision(videoId, decision, reason);
     // A rejected clip has no further use — reclaim its file immediately.
     if (decision === "rejected") {
+      // Record BEFORE deleting the file so the decision row captures the
+      // clip's traits (hook type, scores) for the Brain's feedback loop.
+      try {
+        recordClipDecision(videoId, "rejected");
+      } catch (err) {
+        console.warn("[compliance-decision] could not record clip decision:", err);
+      }
       const video = getContentVideo(videoId);
       const clipPath = video ? resolveClipFileForVideo(video) : null;
       if (clipPath) deleteClipFile(clipPath);
@@ -5610,6 +5624,13 @@ app.post("/api/content/clip/:clipId/send-to-publisher", express.json(), (req, re
       scheduledFor,
       platformTargets: platforms,
     });
+    // Feed the human approval signal back to the Brain (what KIND of clip
+    // Marco keeps) — best-effort, never blocks the publish action.
+    try {
+      recordClipDecision(clipId, "approved");
+    } catch (err) {
+      console.warn("[send-to-publisher] could not record clip decision:", err);
+    }
 
     const publishEntries: Array<{ platform: string; scheduledFor: string }> = [];
     for (const platform of platforms) {

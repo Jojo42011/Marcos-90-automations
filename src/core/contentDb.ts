@@ -58,6 +58,13 @@ export interface ContentVideo {
   hookType?: string | null;
   platformTargets?: string[];
   optimalPostTime?: string | null;
+  /** Four-dimensional virality scores (null = model returned only a flat score). */
+  scoreHook?: number | null;
+  scoreFlow?: number | null;
+  scoreValue?: number | null;
+  scoreTrend?: number | null;
+  /** The AI's one-sentence reason for selecting this clip. */
+  clipReason?: string | null;
 }
 
 export interface ContentPublishLog {
@@ -446,6 +453,22 @@ export function getContentDb(): Database.Database {
         opus_completed_at TEXT,
         error_message TEXT
       );
+      CREATE TABLE IF NOT EXISTS cm_clip_decisions (
+        id TEXT PRIMARY KEY,
+        video_id TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        pillar TEXT,
+        hook_type TEXT,
+        score_total INTEGER,
+        score_hook INTEGER,
+        score_flow INTEGER,
+        score_value INTEGER,
+        score_trend INTEGER,
+        clip_reason TEXT,
+        decided_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_clip_decisions_video ON cm_clip_decisions(video_id);
+      CREATE INDEX IF NOT EXISTS idx_clip_decisions_at ON cm_clip_decisions(decided_at);
       CREATE TABLE IF NOT EXISTS cm_style_examples (
         id TEXT PRIMARY KEY,
         kind TEXT,
@@ -758,6 +781,13 @@ function ensureBatchPipelineMigrations(database: Database.Database): void {
   addCol("cm_batch_sessions", "script_text", "TEXT");
   // Per-batch video-enhancement toggles (captions / autoZoom / broll) as JSON.
   addCol("cm_batch_sessions", "enhance_options", "TEXT");
+  // Four-dimensional virality scores + the AI's stated selection reason —
+  // shown on Review Queue cards and fed into the approval-feedback loop.
+  addCol("content_videos", "score_hook", "INTEGER");
+  addCol("content_videos", "score_flow", "INTEGER");
+  addCol("content_videos", "score_value", "INTEGER");
+  addCol("content_videos", "score_trend", "INTEGER");
+  addCol("content_videos", "clip_reason", "TEXT");
   addCol("content_videos", "edit_instructions", "TEXT");
   addCol("content_videos", "edit_history", "TEXT");
 }
@@ -1109,6 +1139,11 @@ function rowToVideo(row: Record<string, unknown>): ContentVideo {
     hookType: row.hook_type ? String(row.hook_type) : null,
     platformTargets: parseJson<string[]>(String(row.platform_targets ?? "[]"), []),
     optimalPostTime: row.optimal_post_time ? String(row.optimal_post_time) : null,
+    scoreHook: row.score_hook != null ? Number(row.score_hook) : null,
+    scoreFlow: row.score_flow != null ? Number(row.score_flow) : null,
+    scoreValue: row.score_value != null ? Number(row.score_value) : null,
+    scoreTrend: row.score_trend != null ? Number(row.score_trend) : null,
+    clipReason: row.clip_reason ? String(row.clip_reason) : null,
   };
 }
 
@@ -1261,8 +1296,8 @@ export function insertContentVideo(
        (id, source_session_id, platform_target, title, caption, hook, hashtags, pillar, file_path,
         status, compliance_flagged, compliance_notes, created_at, approved_at, scheduled_for, published_at,
         batch_session_id, source_file_id, trend_alignment_score, opus_clip_score, hook_type, platform_targets,
-        optimal_post_time)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        optimal_post_time, score_hook, score_flow, score_value, score_trend, clip_reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       video.id,
@@ -1288,6 +1323,11 @@ export function insertContentVideo(
       video.hookType ?? null,
       JSON.stringify(video.platformTargets ?? []),
       video.optimalPostTime ?? null,
+      video.scoreHook ?? null,
+      video.scoreFlow ?? null,
+      video.scoreValue ?? null,
+      video.scoreTrend ?? null,
+      video.clipReason ?? null,
     );
   return getContentVideo(video.id)!;
 }
@@ -4571,6 +4611,98 @@ export function getStyleGuideText(): string {
   }
   const text = sections.join("\n\n");
   return text.length > STYLE_GUIDE_MAX_CHARS ? text.slice(0, STYLE_GUIDE_MAX_CHARS) : text;
+}
+
+// ── Clip decisions — the human approval signal the pros say matters most ────
+// Every Review Queue approve/reject is recorded with the clip's traits so the
+// Brain can learn WHAT KIND of clip Marco actually keeps (approval rate by
+// hook type / score band feeds the morning strategy prompt). One row per
+// decision; the LATEST decision per video wins in aggregation.
+
+export function recordClipDecision(videoId: string, decision: "approved" | "rejected"): void {
+  const video = getContentVideo(videoId);
+  if (!video) return;
+  getContentDb()
+    .prepare(
+      `INSERT INTO cm_clip_decisions
+       (id, video_id, decision, pillar, hook_type, score_total,
+        score_hook, score_flow, score_value, score_trend, clip_reason, decided_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      randomUUID(),
+      videoId,
+      decision,
+      video.pillar ?? null,
+      video.hookType ?? null,
+      video.opusClipScore != null ? Math.round(video.opusClipScore * 100) : null,
+      video.scoreHook ?? null,
+      video.scoreFlow ?? null,
+      video.scoreValue ?? null,
+      video.scoreTrend ?? null,
+      video.clipReason ?? null,
+      new Date().toISOString(),
+    );
+}
+
+export interface ClipDecisionStats {
+  totalApproved: number;
+  totalRejected: number;
+  approvalRate: number | null;
+  byHookType: Array<{ hookType: string; approved: number; rejected: number; rate: number }>;
+  byScoreBand: Array<{ band: string; approved: number; rejected: number; rate: number }>;
+}
+
+export function getClipDecisionStats(days = 14): ClipDecisionStats {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  // Latest decision per video inside the window — Marco can reject something
+  // he previously approved (publishing-queue remove); the final call counts.
+  const rows = getContentDb()
+    .prepare(
+      `SELECT d.* FROM cm_clip_decisions d
+       JOIN (SELECT video_id, MAX(decided_at) AS latest FROM cm_clip_decisions
+             WHERE decided_at >= ? GROUP BY video_id) m
+         ON d.video_id = m.video_id AND d.decided_at = m.latest`,
+    )
+    .all(since.toISOString()) as Array<Record<string, unknown>>;
+
+  let totalApproved = 0;
+  let totalRejected = 0;
+  const hookMap = new Map<string, { approved: number; rejected: number }>();
+  const bandMap = new Map<string, { approved: number; rejected: number }>();
+  const bandFor = (score: unknown): string => {
+    const s = typeof score === "number" ? score : null;
+    if (s == null) return "unscored";
+    if (s >= 80) return "80+";
+    if (s >= 50) return "50-79";
+    return "<50";
+  };
+  for (const r of rows) {
+    const approved = r.decision === "approved";
+    if (approved) totalApproved++;
+    else totalRejected++;
+    const hook = String(r.hook_type || "unknown");
+    const h = hookMap.get(hook) ?? { approved: 0, rejected: 0 };
+    approved ? h.approved++ : h.rejected++;
+    hookMap.set(hook, h);
+    const band = bandFor(r.score_total);
+    const b = bandMap.get(band) ?? { approved: 0, rejected: 0 };
+    approved ? b.approved++ : b.rejected++;
+    bandMap.set(band, b);
+  }
+  const total = totalApproved + totalRejected;
+  const rate = (a: number, r: number) => Math.round((a / Math.max(1, a + r)) * 100);
+  return {
+    totalApproved,
+    totalRejected,
+    approvalRate: total > 0 ? rate(totalApproved, totalRejected) : null,
+    byHookType: [...hookMap.entries()]
+      .map(([hookType, c]) => ({ hookType, ...c, rate: rate(c.approved, c.rejected) }))
+      .sort((a, b) => b.approved + b.rejected - (a.approved + a.rejected)),
+    byScoreBand: [...bandMap.entries()]
+      .map(([band, c]) => ({ band, ...c, rate: rate(c.approved, c.rejected) })),
+  };
 }
 
 export function listActiveCompetitorProfiles(): CmCompetitorProfile[] {

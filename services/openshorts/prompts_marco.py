@@ -140,27 +140,40 @@ the single strongest moment anyway (never an empty array).
 For each clip, return:
 - start_time: seconds from beginning (float)
 - end_time: seconds (float) — target 35-65 seconds per clip
-- viral_score: 0-100 based on hook strength, specificity, and conversion potential
+- scores: an object with four 0-100 dimensions plus their weighted total:
+    "hook_strength": how hard the first 3 seconds stop the scroll
+    "emotional_flow": does the clip build and PAY OFF what the hook opened
+    "perceived_value": does a viewer walk away knowing something concrete
+    "trend_alignment": fit with the current trending patterns above
+    "total": round(0.35*hook_strength + 0.25*emotional_flow + 0.25*perceived_value + 0.15*trend_alignment)
+- viral_score: same number as scores.total (kept for compatibility)
 - hook_type: one of [data, personal_story, local, controversy, question, shock]
 - hook_preview: the exact words in the first 3 seconds of the clip
 - suggested_title: internal title for the clip (not for posting)
 - suggested_caption: TikTok caption in Marco's voice (direct, first person, San Antonio specific, ends with CTA)
 - pillar: which content pillar this clip maps to
-- why_this_clip: one sentence explanation of why this moment will perform{visual_field_line}
+- why_this_clip: MANDATORY — one sentence explaining why this specific segment was chosen{visual_field_line}
 
 Return as valid JSON array only. No markdown, no explanation outside the JSON.
-Sort by viral_score descending (best clip first).
+Sort by scores.total descending (best clip first).
 
-IMPORTANT:
-- Never start a clip mid-sentence. Find the natural speech boundary (use the pause
-  timestamps in the vocal-delivery signals above when they are provided).
-- Minimum clip duration is 35 seconds. Maximum is 65 seconds.
-- Every clip must open with a strong hook in the first 3 seconds.
-- Prefer clips where Marco mentions specific prices, neighborhoods, or market data.
-- Avoid clips where Marco says generic phrases like "reach out to me" without context.
-- QUALITY GATE: only include a clip if its viral_score is {quality_floor}+. Returning
-  fewer, stronger clips is the goal — a short list of great clips beats a long list of
-  average ones. Never invent filler clips to hit a count.
+SEGMENT SELECTION RULES — NON-NEGOTIABLE:
+1. Every clip MUST begin at the start of a sentence and end at the end of a
+   sentence. A clip that starts mid-thought is a failed clip regardless of
+   content quality. Use the pause timestamps in the vocal-delivery signals
+   above to find real sentence boundaries.
+2. Every clip must be SELF-CONTAINED: a viewer with zero context must
+   understand it completely.
+3. Every clip must have a hook in its first 3 seconds — a question, a
+   surprising claim, a specific number, or a bold statement.
+4. Every clip must have a payoff — it resolves what the hook opened. A hook
+   with no payoff scores 0 on emotional_flow.
+5. Minimum clip duration is 35 seconds. Maximum is 65 seconds.
+6. Prefer clips where Marco mentions specific prices, neighborhoods, or market data.
+7. Avoid clips where Marco says generic phrases like "reach out to me" without context.
+8. QUALITY GATE: only include a clip if scores.total is {quality_floor}+. If you
+   cannot find {target_clips} segments meeting rules 1-4, return FEWER clips —
+   never pad with weak segments. The "why_this_clip" field is mandatory for every clip.
 """
 
 

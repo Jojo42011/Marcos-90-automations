@@ -22,22 +22,71 @@ import os
 import re
 import subprocess
 
+# ══════════════════════════════════════════════════════════════════════════
+# ASS TIME-UNIT WARNING — read before editing any animation tag:
+#   \k / \kf / \ko karaoke durations are in CENTISECONDS ({\k100} = 1 second)
+#   \t(...) animation times are in MILLISECONDS (\t(0,100,...) = 0.1 seconds)
+# Mixing these up is the classic ASS bug. Double-check units on every edit.
+# ══════════════════════════════════════════════════════════════════════════
+
 # Hard timeout for the caption burn-in pass — kill a hung ffmpeg instead of
 # letting it block the job (mirrors _FFMPEG_TIMEOUT_S in app_marco.py).
 _CAPTION_TIMEOUT_S = int(os.environ.get("OPENSHORTS_FFMPEG_TIMEOUT_S", "180"))
+
+
+def hex_to_ass_color(hex_color: str, alpha: int = 0) -> str:
+    """Convert #RRGGBB web hex to ASS &HAABBGGRR (alpha + BGR, reversed).
+
+    hex_to_ass_color("#25f4ee") -> "&H00EEF425" (teal)
+    hex_to_ass_color("#FFFF00") -> "&H0000FFFF" (yellow)
+    """
+    hex_color = hex_color.lstrip("#")
+    r, g, b = hex_color[0:2], hex_color[2:4], hex_color[4:6]
+    return f"&H{alpha:02X}{b}{g}{r}".upper()
 
 # Chunky bold uppercase sans (installed in the Docker image) — the reference
 # style's high-impact viral-caption look. Falls back to whatever libass finds
 # if the font isn't installed (dev boxes without the Docker image).
 FONT_NAME = os.environ.get("CAPTION_FONT", "Archivo Black")
 
-WHITE = "&H00FFFFFF"
-BLACK = "&H00000000"
+WHITE = hex_to_ass_color("#FFFFFF")
+BLACK = hex_to_ass_color("#000000")
 # Bright green / yellow accents, sampled directly from Marco's reference
 # videos (the last display line of each caption card cycles between these).
-ACCENT_GREEN = "&H002EF42E"  # ASS BGR order -> RGB(46,244,46)
-ACCENT_YELLOW = "&H0016FAFC"  # ASS BGR order -> RGB(252,250,22)
+ACCENT_GREEN = hex_to_ass_color("#2EF42E")   # &H002EF42E
+ACCENT_YELLOW = hex_to_ass_color("#FCFA16")  # &H0016FAFC
 _ACCENT_CYCLE = (ACCENT_GREEN, ACCENT_YELLOW)
+TEAL = hex_to_ass_color("#25F4EE")  # brand teal for the karaoke/pop presets
+
+# ── Caption style presets ─────────────────────────────────────────────────────
+# "marco" (default) — the reference-video card style Marco approved: static
+#   1-4 word cards, top-anchored, last display line green/yellow. This is the
+#   look measured pixel-for-pixel from his example videos; keep it the default.
+# "karaoke" — professional \k sweep: one Dialogue event per card, each word
+#   flips SecondaryColour(white) → PrimaryColour(teal) at its spoken time.
+# "pop" — Submagic-style: per-word tiled events, active word teal + 112% scale,
+#   inactive words dimmed white.
+# Selected via CAPTION_STYLE env; unknown values fall back to "marco".
+CAPTION_STYLE_PRESETS: dict[str, dict] = {
+    "marco": {"mode": "cards"},
+    "karaoke": {
+        "mode": "karaoke",
+        "inactive": WHITE,
+        "active": TEAL,
+        "max_words": 5,
+        "uppercase": True,
+    },
+    "pop": {
+        "mode": "pop",
+        "inactive": WHITE,
+        "active": TEAL,
+        "max_words": 4,
+        "uppercase": True,
+    },
+}
+CAPTION_STYLE = os.environ.get("CAPTION_STYLE", "marco").strip().lower()
+if CAPTION_STYLE not in CAPTION_STYLE_PRESETS:
+    CAPTION_STYLE = "marco"
 
 # Monochrome outline emoji font (installed in the Docker image). libass renders
 # through FreeType and cannot draw color bitmap fonts (Noto COLOR Emoji), which
@@ -169,20 +218,31 @@ def slice_words_for_clip(transcript_segments: list[dict], clip_start: float, cli
     return words
 
 
-def group_words_into_cards(words: list[dict], max_chars_per_card: int) -> list[list[dict]]:
-    """Group words into short static caption "cards" (one card at a time)."""
+def group_words_into_cards(
+    words: list[dict],
+    max_chars_per_card: int,
+    max_words: int = MAX_WORDS_PER_CARD,
+) -> list[list[dict]]:
+    """Group words into short caption "cards" (one card shown at a time).
+
+    Breaks at: word/char caps, a natural speech pause (> PAUSE_GAP_SECONDS),
+    or sentence-ending punctuation — a card should never straddle a sentence
+    boundary. Never orphans a single trailing word: if the final card would
+    be 1 word, it's pulled into the previous card instead.
+    """
     cards: list[list[dict]] = []
     current: list[dict] = []
     current_chars = 0
     prev_end = None
+    prev_ended_sentence = False
 
     for word in words:
         gap = (word["start"] - prev_end) if prev_end is not None else 0
         would_overflow_chars = current_chars + len(word["text"]) + 1 > max_chars_per_card
-        would_overflow_words = len(current) >= MAX_WORDS_PER_CARD
+        would_overflow_words = len(current) >= max_words
         natural_pause = prev_end is not None and gap > PAUSE_GAP_SECONDS
 
-        if current and (would_overflow_chars or would_overflow_words or natural_pause):
+        if current and (would_overflow_chars or would_overflow_words or natural_pause or prev_ended_sentence):
             cards.append(current)
             current = []
             current_chars = 0
@@ -190,9 +250,13 @@ def group_words_into_cards(words: list[dict], max_chars_per_card: int) -> list[l
         current.append(word)
         current_chars += len(word["text"]) + 1
         prev_end = word["end"]
+        prev_ended_sentence = word["text"].strip().endswith((".", "!", "?"))
 
     if current:
-        cards.append(current)
+        if len(current) == 1 and cards and len(cards[-1]) <= max_words:
+            cards[-1].extend(current)  # no orphaned single word
+        else:
+            cards.append(current)
 
     return cards
 
@@ -276,6 +340,102 @@ def _card_dialogue_events(
     return events
 
 
+def _card_word_timings(card: list[dict]) -> list[dict]:
+    """Per-word (text, start, end) entries for the karaoke/pop builders.
+
+    Normal path: one dict per word — pass through. The clip-editor re-sync
+    path collapses a whole line into one dict with embedded spaces and only
+    line-level timing; in that case the line's duration is spread evenly
+    across its tokens so \\k timing still exists (approximate but watchable).
+    """
+    out: list[dict] = []
+    for w in card:
+        tokens = (w.get("text") or "").split()
+        if not tokens:
+            continue
+        if len(tokens) == 1:
+            out.append({"text": tokens[0], "start": float(w["start"]), "end": float(w["end"])})
+            continue
+        span = max(0.05, float(w["end"]) - float(w["start"]))
+        step = span / len(tokens)
+        for i, tok in enumerate(tokens):
+            out.append({
+                "text": tok,
+                "start": float(w["start"]) + i * step,
+                "end": float(w["start"]) + (i + 1) * step,
+            })
+    return out
+
+
+def _karaoke_group_event(card: list[dict], style_name: str, preset: dict) -> list[str]:
+    """One Dialogue event per card using native \\k tags (CENTISECONDS).
+
+    Each word flips SecondaryColour → PrimaryColour at its spoken time; the
+    style header (see build_ass_file) carries the two colors, so the event
+    text needs only the \\k timing. A word stays lit until the NEXT word's
+    start (not its own end), so the highlight never dies inside a gap.
+    """
+    words = _card_word_timings(card)
+    if not words:
+        return []
+    group_start = words[0]["start"]
+    group_end = words[-1]["end"] + 0.08  # small tail so the last word stays lit
+
+    parts = []
+    for i, w in enumerate(words):
+        if i < len(words) - 1:
+            duration_s = words[i + 1]["start"] - w["start"]
+        else:
+            duration_s = (w["end"] - w["start"]) + 0.08
+        duration_cs = max(1, round(duration_s * 100))  # CENTISECONDS (\k unit)
+        text = _ass_escape(w["text"])
+        if preset.get("uppercase"):
+            text = text.upper()
+        parts.append(f"{{\\k{duration_cs}}}{text}")
+
+    text_line = " ".join(parts)
+    return [
+        f"Dialogue: 0,{_format_ass_time(group_start)},{_format_ass_time(group_end)},{style_name},,0,0,0,,{text_line}"
+    ]
+
+
+def _pop_word_events(card: list[dict], style_name: str, preset: dict) -> list[str]:
+    """Submagic-style pop: one Dialogue event per word window. The active word
+    renders in the accent color at 112% scale; inactive words are dimmed.
+    Windows tile exactly (each ends when the next begins) so no flicker frame
+    ever renders without a caption."""
+    words = _card_word_timings(card)
+    if not words:
+        return []
+    active_color = preset["active"]
+    inactive_color = preset["inactive"]
+
+    events = []
+    for active_idx, active_word in enumerate(words):
+        win_start = active_word["start"]
+        win_end = words[active_idx + 1]["start"] if active_idx < len(words) - 1 else active_word["end"] + 0.08
+        if win_end <= win_start:
+            win_end = win_start + 0.05
+
+        parts = []
+        for idx, w in enumerate(words):
+            text = _ass_escape(w["text"])
+            if preset.get("uppercase"):
+                text = text.upper()
+            if not text:
+                continue
+            if idx == active_idx:
+                parts.append(f"{{\\1c{active_color}&\\fscx112\\fscy112\\b1}}{text}{{\\r}}")
+            else:
+                parts.append(f"{{\\1c{inactive_color}&\\alpha&H55&}}{text}{{\\r}}")
+
+        events.append(
+            f"Dialogue: 0,{_format_ass_time(win_start)},{_format_ass_time(win_end)},{style_name},,0,0,0,,"
+            + " ".join(parts)
+        )
+    return events
+
+
 def build_ass_file(
     cards: list[list[dict]],
     video_width: int,
@@ -285,8 +445,24 @@ def build_ass_file(
     style_name = "MarcoCaption"
     layout = _layout_params(video_width, video_height)
     font_size = layout["font_size"]
-    margin_v = layout["margin_v"]
     margin_lr = layout["margin_lr"]
+    preset = CAPTION_STYLE_PRESETS[CAPTION_STYLE]
+    mode = preset["mode"]
+
+    if mode == "cards":
+        # Marco reference style: top-anchored block (Alignment 8) at a fixed
+        # point, growing downward. Primary/Secondary are both white — the
+        # per-line colors are applied inline in _card_dialogue_events.
+        primary, secondary = WHITE, WHITE
+        alignment = 8
+        margin_v = layout["margin_v"]
+    else:
+        # Karaoke/pop presets: classic bottom-third placement (Alignment 2).
+        # For karaoke, the ASS spec requires PrimaryColour = the color a word
+        # flips TO (active) and SecondaryColour = the un-highlighted state.
+        primary, secondary = preset["active"], preset["inactive"]
+        alignment = 2
+        margin_v = round(video_height * 0.17)
 
     header = f"""[Script Info]
 Title: Marco Puga Realty Captions
@@ -298,7 +474,7 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: {style_name},{FONT_NAME},{font_size},{WHITE},{WHITE},{BLACK},{BLACK},1,0,0,0,100,100,0,0,1,6,0,8,{margin_lr},{margin_lr},{margin_v},1
+Style: {style_name},{FONT_NAME},{font_size},{primary},{secondary},{BLACK},{BLACK},1,0,0,0,100,100,0,0,1,6,0,{alignment},{margin_lr},{margin_lr},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -306,7 +482,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     events = []
     for idx, card in enumerate(cards):
-        events.extend(_card_dialogue_events(card, style_name, font_size, idx, layout))
+        if mode == "karaoke":
+            events.extend(_karaoke_group_event(card, style_name, preset))
+        elif mode == "pop":
+            events.extend(_pop_word_events(card, style_name, preset))
+        else:
+            events.extend(_card_dialogue_events(card, style_name, font_size, idx, layout))
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(header)
@@ -329,7 +510,11 @@ def generate_captions_ass(
     if not words:
         return None
     layout = _layout_params(video_width, video_height)
-    cards = group_words_into_cards(words, layout["max_chars_per_line"])
+    preset = CAPTION_STYLE_PRESETS[CAPTION_STYLE]
+    cards = group_words_into_cards(
+        words, layout["max_chars_per_line"],
+        max_words=preset.get("max_words", MAX_WORDS_PER_CARD),
+    )
     if not cards:
         return None
     # Persist a card-level caption list next to the ASS so the clip editor can

@@ -136,6 +136,11 @@ async function processOpenShortsResults(sourceFile, clips, batchSession, trendRe
                 sourceFileId: sourceFile.id,
                 opusClipScore: clip.viralScore / 100,
                 hookType: clip.hookType,
+                scoreHook: clip.scoreHook,
+                scoreFlow: clip.scoreFlow,
+                scoreValue: clip.scoreValue,
+                scoreTrend: clip.scoreTrend,
+                clipReason: clip.whyThisClip || null,
             });
             try {
                 const enhancement = await (0, clipEnhancer_js_1.enhanceClip)({

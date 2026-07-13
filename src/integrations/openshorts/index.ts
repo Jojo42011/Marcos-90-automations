@@ -25,6 +25,12 @@ export interface OpenShortsClipResult {
   endTime: number;
   duration: number;
   viralScore: number;
+  /** Four-dimensional virality scores (null when the model returned only a
+   *  flat viral_score — older sidecar or fallback provider). */
+  scoreHook: number | null;
+  scoreFlow: number | null;
+  scoreValue: number | null;
+  scoreTrend: number | null;
   hookType: string;
   hookPreview: string;
   transcriptSegment: string;
@@ -463,6 +469,23 @@ export async function checkOpenShortsHealth(): Promise<{
   }
 }
 
+function extractDimensionScores(raw: Record<string, unknown>): {
+  scoreHook: number | null;
+  scoreFlow: number | null;
+  scoreValue: number | null;
+  scoreTrend: number | null;
+} {
+  const scores = (raw.scores ?? {}) as Record<string, unknown>;
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null;
+  return {
+    scoreHook: num(scores.hook_strength),
+    scoreFlow: num(scores.emotional_flow),
+    scoreValue: num(scores.perceived_value),
+    scoreTrend: num(scores.trend_alignment),
+  };
+}
+
 function normalizeClipResult(raw: Record<string, unknown>): OpenShortsClipResult {
   const clipUrl = String(raw.clip_url || raw.clipUrl || "");
   const thumbUrl = raw.thumbnail_url || raw.thumbnailUrl;
@@ -477,6 +500,7 @@ function normalizeClipResult(raw: Record<string, unknown>): OpenShortsClipResult
     endTime: Number(raw.end_time ?? raw.endTime ?? 0),
     duration: Number(raw.duration ?? 0),
     viralScore: Number(raw.viral_score ?? raw.viralScore ?? 50),
+    ...extractDimensionScores(raw),
     hookType: String(raw.hook_type || raw.hookType || "uncategorized"),
     hookPreview: String(raw.hook_preview || raw.hookPreview || ""),
     transcriptSegment: String(raw.transcript_segment || raw.transcriptSegment || ""),
@@ -518,6 +542,10 @@ export function generateMockClips(count: number): OpenShortsClipResult[] {
       endTime: i * 45 + duration,
       duration,
       viralScore: Math.round(60 + Math.random() * 35),
+      scoreHook: null,
+      scoreFlow: null,
+      scoreValue: null,
+      scoreTrend: null,
       hookType: hookTypes[i % hookTypes.length],
       hookPreview: mockHooks[i % mockHooks.length],
       transcriptSegment: mockHooks[i % mockHooks.length],

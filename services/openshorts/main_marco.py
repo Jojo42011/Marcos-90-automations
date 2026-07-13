@@ -55,6 +55,95 @@ def _apply_quality_gate(clips: list, target_clips: int) -> list:
     return kept
 
 
+# ── Sentence-boundary snapping (post-LLM validation) ─────────────────────────
+# The model's timestamps are approximate; these snap every clip's bounds onto
+# REAL sentence boundaries computed from word-level timestamps, so a clip can
+# never open mid-thought or end mid-sentence no matter what the model said.
+_SNAP_MIN_CLIP_S = float(os.environ.get("OPENSHORTS_SNAP_MIN_CLIP_S", "12"))
+_SNAP_MAX_CLIP_S = float(os.environ.get("OPENSHORTS_SNAP_MAX_CLIP_S", "90"))
+
+
+def _flat_words(segments: list) -> list[dict]:
+    words: list[dict] = []
+    for seg in segments or []:
+        for w in seg.get("words") or []:
+            text = (w.get("word") or "").strip()
+            start, end = w.get("start"), w.get("end")
+            if not text or start is None or end is None:
+                continue
+            words.append({"word": text, "start": float(start), "end": float(end)})
+    words.sort(key=lambda w: w["start"])
+    return words
+
+
+def compute_sentence_boundaries(words: list[dict]) -> list[float]:
+    """Sorted timestamps where sentences BEGIN: word 0, after a word ending in
+    . ! ?, or after a pause longer than 0.6s."""
+    if not words:
+        return []
+    boundaries = [words[0]["start"]]
+    for i in range(len(words) - 1):
+        w, nxt = words[i], words[i + 1]
+        if w["word"].endswith((".", "!", "?")) or (nxt["start"] - w["end"]) > 0.6:
+            boundaries.append(nxt["start"])
+    return boundaries
+
+
+def snap_clip_to_sentences(clip: dict, boundaries: list[float], words: list[dict]) -> dict:
+    """Snap start to the nearest sentence start; snap end to the end of the
+    last complete sentence within range (with a small breath of padding)."""
+    start = min(boundaries, key=lambda b: abs(b - clip["start_time"]))
+    later = [b for b in boundaries if b > clip["end_time"]]
+    if later:
+        next_boundary = later[0]
+        words_before = [w for w in words if w["end"] <= next_boundary]
+        end = words_before[-1]["end"] + 0.15 if words_before else clip["end_time"]
+    else:
+        end = words[-1]["end"] + 0.15 if words else clip["end_time"]
+    clip["start_time"] = round(max(0.0, start - 0.05), 2)
+    clip["end_time"] = round(end, 2)
+    return clip
+
+
+def snap_clips_to_sentence_bounds(clips: list, segments: list) -> list:
+    """Apply sentence snapping to every clip; drop any that end up outside the
+    sane duration window afterwards (logged with the reason). Best-effort:
+    with no word-level data the clips pass through untouched."""
+    words = _flat_words(segments)
+    boundaries = compute_sentence_boundaries(words)
+    if not boundaries:
+        return clips
+    kept = []
+    for clip in clips:
+        before = (clip.get("start_time"), clip.get("end_time"))
+        snapped = snap_clip_to_sentences(clip, boundaries, words)
+        dur = snapped["end_time"] - snapped["start_time"]
+        if dur < _SNAP_MIN_CLIP_S:
+            print(
+                f"[content-ai] clip rejected after sentence snap: {dur:.1f}s < {_SNAP_MIN_CLIP_S:.0f}s "
+                f"(was {before[0]}-{before[1]}, snapped {snapped['start_time']}-{snapped['end_time']})"
+            )
+            continue
+        if dur > _SNAP_MAX_CLIP_S:
+            print(
+                f"[content-ai] clip rejected after sentence snap: {dur:.1f}s > {_SNAP_MAX_CLIP_S:.0f}s "
+                f"(was {before[0]}-{before[1]}, snapped {snapped['start_time']}-{snapped['end_time']})"
+            )
+            continue
+        if (before[0], before[1]) != (snapped["start_time"], snapped["end_time"]):
+            print(
+                f"[content-ai] clip snapped to sentence bounds: "
+                f"{before[0]}-{before[1]} → {snapped['start_time']}-{snapped['end_time']}"
+            )
+        kept.append(snapped)
+    if not kept and clips:
+        # Never let snapping zero-out a batch the quality gate approved —
+        # fall back to the strongest original clip unsnapped.
+        print("[content-ai] sentence snapping rejected every clip — keeping the strongest original")
+        return clips[:1]
+    return kept
+
+
 def get_viral_clips_marco(
     transcript_result: dict,
     video_duration: float,
@@ -194,6 +283,10 @@ def get_viral_clips_marco(
         prompt, images=images, vision_model=VISION_MODEL if images else None
     )
     clips_data = _apply_quality_gate(clips_data, target_clips)
+    # LLM timestamps are approximate — snap every clip's bounds to REAL
+    # sentence boundaries from the word timestamps, so no clip ever opens
+    # mid-thought or dies mid-sentence. Best-effort: no word data → no snap.
+    clips_data = snap_clips_to_sentence_bounds(clips_data, transcript_result.get("segments", []))
 
     return {
         "clips": clips_data,
@@ -231,6 +324,32 @@ def _get_whisper_model():
     return _whisper_model
 
 
+def extract_clean_audio(video_path: str, output_wav: str) -> bool:
+    """Extract audio with cleanup for TRANSCRIPTION accuracy only:
+      - highpass at 80Hz removes rumble/handling noise (phone footage)
+      - afftdn is FFmpeg's FFT denoiser (nf=-25 = moderate noise floor)
+      - 16kHz mono WAV is exactly what Whisper wants
+    Cleaner audio tightens Whisper's word timestamps, which directly tightens
+    caption sync. The RENDERED clip always keeps the ORIGINAL audio track —
+    this WAV exists only for the transcription pass and is deleted after.
+    """
+    import subprocess  # noqa: PLC0415 — only needed on this path
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", video_path,
+                "-af", "highpass=f=80,afftdn=nf=-25",
+                "-ar", "16000", "-ac", "1",
+                "-vn", output_wav,
+            ],
+            capture_output=True, text=True, timeout=120,
+        )
+        return result.returncode == 0 and os.path.exists(output_wav) and os.path.getsize(output_wav) > 0
+    except Exception as err:  # noqa: BLE001 — cleanup is best-effort
+        print(f"[openshorts] audio cleanup failed ({type(err).__name__}: {err}) — transcribing original audio")
+        return False
+
+
 def transcribe_video_marco(video_path: str) -> dict:
     """Marco override of OpenShorts' transcribe_video() — same return shape,
     configurable/cached model instead of a hardcoded reload-per-call "base".
@@ -239,47 +358,67 @@ def transcribe_video_marco(video_path: str) -> dict:
     before the expensive AI analysis call (see assess_transcript_quality)."""
     print(f"🎙️  Transcribing video with Faster-Whisper ({WHISPER_MODEL_SIZE}, CPU int8)...")
     model = _get_whisper_model()
-    segments, info = model.transcribe(video_path, word_timestamps=True)
-    lang = getattr(info, "language", "") or ""
-    lang_prob = float(getattr(info, "language_probability", 0.0) or 0.0)
-    print(f"   Detected language '{lang}' with probability {lang_prob:.2f}")
 
-    transcript_segments = []
-    full_text = ""
-    no_speech_probs: list[float] = []
-    avg_logprobs: list[float] = []
-    for segment in segments:
-        print(f"   [{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
-        nsp = getattr(segment, "no_speech_prob", None)
-        alp = getattr(segment, "avg_logprob", None)
-        if nsp is not None:
-            no_speech_probs.append(float(nsp))
-        if alp is not None:
-            avg_logprobs.append(float(alp))
-        seg_dict = {
-            "text": segment.text,
-            "start": segment.start,
-            "end": segment.end,
-            "no_speech_prob": float(nsp) if nsp is not None else None,
-            "avg_logprob": float(alp) if alp is not None else None,
-            "words": [],
+    # Denoise pre-pass: transcribe a cleaned 16k mono WAV when extraction
+    # succeeds; fall back to the raw video path when it doesn't. Never let
+    # cleanup failure block transcription.
+    clean_wav = f"{video_path}.clean16k.wav"
+    transcribe_input = video_path
+    if extract_clean_audio(video_path, clean_wav):
+        transcribe_input = clean_wav
+        print("   Audio cleanup OK — transcribing denoised 16kHz mono track")
+    try:
+        segments, info = model.transcribe(transcribe_input, word_timestamps=True)
+        lang = getattr(info, "language", "") or ""
+        lang_prob = float(getattr(info, "language_probability", 0.0) or 0.0)
+        print(f"   Detected language '{lang}' with probability {lang_prob:.2f}")
+
+        transcript_segments = []
+        full_text = ""
+        no_speech_probs: list[float] = []
+        avg_logprobs: list[float] = []
+        for segment in segments:
+            print(f"   [{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
+            nsp = getattr(segment, "no_speech_prob", None)
+            alp = getattr(segment, "avg_logprob", None)
+            if nsp is not None:
+                no_speech_probs.append(float(nsp))
+            if alp is not None:
+                avg_logprobs.append(float(alp))
+            seg_dict = {
+                "text": segment.text,
+                "start": segment.start,
+                "end": segment.end,
+                "no_speech_prob": float(nsp) if nsp is not None else None,
+                "avg_logprob": float(alp) if alp is not None else None,
+                "words": [],
+            }
+            if segment.words:
+                for word in segment.words:
+                    seg_dict["words"].append(
+                        {"word": word.word, "start": word.start, "end": word.end, "probability": word.probability}
+                    )
+            transcript_segments.append(seg_dict)
+            full_text += segment.text + " "
+
+        return {
+            "text": full_text.strip(),
+            "segments": transcript_segments,
+            "language": lang,
+            "language_probability": lang_prob,
+            "mean_no_speech_prob": (sum(no_speech_probs) / len(no_speech_probs)) if no_speech_probs else None,
+            "mean_avg_logprob": (sum(avg_logprobs) / len(avg_logprobs)) if avg_logprobs else None,
         }
-        if segment.words:
-            for word in segment.words:
-                seg_dict["words"].append(
-                    {"word": word.word, "start": word.start, "end": word.end, "probability": word.probability}
-                )
-        transcript_segments.append(seg_dict)
-        full_text += segment.text + " "
-
-    return {
-        "text": full_text.strip(),
-        "segments": transcript_segments,
-        "language": lang,
-        "language_probability": lang_prob,
-        "mean_no_speech_prob": (sum(no_speech_probs) / len(no_speech_probs)) if no_speech_probs else None,
-        "mean_avg_logprob": (sum(avg_logprobs) / len(avg_logprobs)) if avg_logprobs else None,
-    }
+    finally:
+        # The temp WAV exists only for this transcription pass. Deleted after
+        # the segment generator is fully consumed (faster-whisper decodes the
+        # audio into memory at transcribe(), but not risking implementation
+        # details — the file goes away only once we're completely done).
+        try:
+            if os.path.exists(clean_wav):
+                os.remove(clean_wav)
+        except Exception:
+            pass
 
 
 # ── Transcript quality guard ─────────────────────────────────────────────────

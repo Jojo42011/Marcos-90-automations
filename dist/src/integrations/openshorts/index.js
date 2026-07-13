@@ -323,6 +323,16 @@ async function checkOpenShortsHealth() {
         return { running: false };
     }
 }
+function extractDimensionScores(raw) {
+    const scores = (raw.scores ?? {});
+    const num = (v) => typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null;
+    return {
+        scoreHook: num(scores.hook_strength),
+        scoreFlow: num(scores.emotional_flow),
+        scoreValue: num(scores.perceived_value),
+        scoreTrend: num(scores.trend_alignment),
+    };
+}
 function normalizeClipResult(raw) {
     const clipUrl = String(raw.clip_url || raw.clipUrl || "");
     const thumbUrl = raw.thumbnail_url || raw.thumbnailUrl;
@@ -336,6 +346,7 @@ function normalizeClipResult(raw) {
         endTime: Number(raw.end_time ?? raw.endTime ?? 0),
         duration: Number(raw.duration ?? 0),
         viralScore: Number(raw.viral_score ?? raw.viralScore ?? 50),
+        ...extractDimensionScores(raw),
         hookType: String(raw.hook_type || raw.hookType || "uncategorized"),
         hookPreview: String(raw.hook_preview || raw.hookPreview || ""),
         transcriptSegment: String(raw.transcript_segment || raw.transcriptSegment || ""),
@@ -375,6 +386,10 @@ function generateMockClips(count) {
             endTime: i * 45 + duration,
             duration,
             viralScore: Math.round(60 + Math.random() * 35),
+            scoreHook: null,
+            scoreFlow: null,
+            scoreValue: null,
+            scoreTrend: null,
             hookType: hookTypes[i % hookTypes.length],
             hookPreview: mockHooks[i % mockHooks.length],
             transcriptSegment: mockHooks[i % mockHooks.length],
