@@ -582,7 +582,7 @@ def process_video_job(
                         )
                         if ass_file:
                             captioned_path = reframed_path.replace("_vertical.mp4", "_captioned.mp4")
-                            captions_marco.burn_captions(reframed_path, ass_file, captioned_path)
+                            captions_marco.burn_captions_with_emoji(reframed_path, ass_file, captioned_path)
                             if os.path.exists(captioned_path):
                                 final_clip_path = captioned_path
                                 clip_enhancements.append("captions")
@@ -618,6 +618,15 @@ def process_video_job(
                         try:
                             if ass_path and not ass_kept and os.path.exists(ass_path):
                                 os.remove(ass_path)
+                        except Exception:
+                            pass
+                        # Emoji-overlay sidecar is only needed during the burn
+                        # above (already consumed); the editor reads lines.json,
+                        # not this, so it never needs to be persisted.
+                        try:
+                            emoji_sidecar = ass_path.replace(".ass", ".emoji.json") if ass_path else None
+                            if emoji_sidecar and os.path.exists(emoji_sidecar):
+                                os.remove(emoji_sidecar)
                         except Exception:
                             pass
 
@@ -1583,14 +1592,15 @@ def _auto_tighten_generated_clip(
         try:
             written = caption_edit.write_edited_ass(lines, keeps, cap_w, cap_h, ass_out) if lines else None
             if written:
-                captions_marco.burn_captions(tight_base, ass_out, new_captioned)
+                captions_marco.burn_captions_with_emoji(tight_base, ass_out, new_captioned)
                 burned = os.path.isfile(new_captioned)
         finally:
-            try:
-                if os.path.exists(ass_out):
-                    os.remove(ass_out)
-            except Exception:
-                pass
+            for _stale in (ass_out, ass_out.replace(".ass", ".emoji.json")):
+                try:
+                    if os.path.exists(_stale):
+                        os.remove(_stale)
+                except Exception:
+                    pass
         if not burned:
             # No caption lines survived (or burn failed) — deliver the tightened
             # video uncaptioned rather than dropping the tighten.
@@ -1886,18 +1896,19 @@ async def edit_clip(
             written = caption_edit.write_edited_ass(edit_captions, keeps, cap_w, cap_h, ass_out)
             try:
                 if written:
-                    captions_marco.burn_captions(audio_out, ass_out, new_path)
+                    captions_marco.burn_captions_with_emoji(audio_out, ass_out, new_path)
                 else:
                     # No caption lines survive the edit → keep the uncaptioned render.
                     if audio_out in tmp_files:
                         tmp_files.remove(audio_out)
                     os.replace(audio_out, new_path)
             finally:
-                try:
-                    if os.path.exists(ass_out):
-                        os.remove(ass_out)
-                except Exception:
-                    pass
+                for _stale in (ass_out, ass_out.replace(".ass", ".emoji.json")):
+                    try:
+                        if os.path.exists(_stale):
+                            os.remove(_stale)
+                    except Exception:
+                        pass
         else:
             if audio_out in tmp_files:
                 tmp_files.remove(audio_out)

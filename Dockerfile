@@ -22,13 +22,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Caption emojis: libass renders through FreeType and CANNOT draw color bitmap
-# fonts (fonts-noto-color-emoji) — emojis came out as tofu rectangles. Install
-# the MONOCHROME outline "Noto Emoji" font; captions_marco.py selects it
-# explicitly with {\fnNoto Emoji} for the emoji glyph.
-RUN mkdir -p /usr/share/fonts/truetype/noto-emoji-mono && \
-    curl -fsSL -o "/usr/share/fonts/truetype/noto-emoji-mono/NotoEmoji.ttf" \
-      "https://raw.githubusercontent.com/google/fonts/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf" && \
-    fc-cache -f
+# fonts, so emoji are NOT burned as ASS text at all — emoji_fx_marco.py
+# rasterizes them to real colorful PNG stickers with Pillow, using the
+# fonts-noto-color-emoji package installed above, and composites them as an
+# animated video overlay instead (see that module's docstring).
 
 # Caption font: chunky bold uppercase sans matching Marco's reference style
 # (heavy weight, black outline, high-impact viral-caption look). Archivo Black

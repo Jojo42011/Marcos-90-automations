@@ -17,6 +17,15 @@ the same spot a two-line card's first line does. The card's last display line
 is colored (alternating bright green / yellow across successive cards);
 earlier lines stay white. A small content-matched emoji floats near the
 upper-right, independent of the caption position.
+
+EMOJI — NOT rendered as ASS text. libass renders subtitle glyphs through
+FreeType and cannot draw color bitmap emoji fonts, so a real colorful,
+animated (pop-in / slide-in) emoji has to be composited as a video overlay
+instead (see emoji_fx_marco.py). This module's job is only to decide WHICH
+emoji goes with which caption card and WHERE/WHEN it should appear; that
+metadata is written to a `.emoji.json` sidecar next to the `.ass` file, and
+app_marco.py's burn step (captions_marco.burn_captions_with_emoji) reads it
+to build the actual overlay.
 """
 import os
 import re
@@ -56,6 +65,10 @@ BLACK = hex_to_ass_color("#000000")
 ACCENT_GREEN = hex_to_ass_color("#2EF42E")   # &H002EF42E
 ACCENT_YELLOW = hex_to_ass_color("#FCFA16")  # &H0016FAFC
 _ACCENT_CYCLE = (ACCENT_GREEN, ACCENT_YELLOW)
+# Alternates the floating emoji's entrance animation card-to-card (pop-in vs
+# slide-in-from-the-right) so a clip with several emoji doesn't feel robotic —
+# same alternation pattern as the accent color cycle above.
+_ANIM_CYCLE = ("pop", "slide")
 TEAL = hex_to_ass_color("#25F4EE")  # brand teal for the karaoke/pop presets
 
 # ── Caption style presets ─────────────────────────────────────────────────────
@@ -88,11 +101,6 @@ CAPTION_STYLE = os.environ.get("CAPTION_STYLE", "marco").strip().lower()
 if CAPTION_STYLE not in CAPTION_STYLE_PRESETS:
     CAPTION_STYLE = "marco"
 
-# Monochrome outline emoji font (installed in the Docker image). libass renders
-# through FreeType and cannot draw color bitmap fonts (Noto COLOR Emoji), which
-# is why emojis burned as tofu rectangles — select the mono font explicitly.
-EMOJI_FONT = os.environ.get("CAPTION_EMOJI_FONT", "Noto Emoji")
-
 MAX_WORDS_PER_CARD = 6
 PAUSE_GAP_SECONDS = 0.5
 AVG_CHAR_WIDTH_FACTOR = 0.62  # rough bold-sans average glyph width as a fraction of font size
@@ -102,10 +110,11 @@ AVG_CHAR_WIDTH_FACTOR = 0.62  # rough bold-sans average glyph width as a fractio
 DISPLAY_LINE_CHAR_FACTOR = 0.5
 
 # ── Content-aware caption emojis (viewer retention) ──────────────────────────
-# One emoji per caption line, picked from what the line actually says. Rendered
-# with the MONOCHROME "Noto Emoji" outline font via an explicit {\fn} override
-# (see EMOJI_FONT above) — libass cannot draw color bitmap emoji fonts. Emojis
-# must be single-codepoint (no ZWJ sequences, no U+FE0F variation selectors).
+# One emoji per caption line, picked from what the line actually says. Handed
+# off to emoji_fx_marco.py as a real colorful animated overlay (see module
+# docstring above) — NOT rendered as ASS text. Emojis must be single-codepoint
+# (no ZWJ sequences, no U+FE0F variation selectors) since the color-emoji
+# rasterizer keys its render cache on the raw character.
 # Disable with CAPTION_EMOJIS=false.
 CAPTION_EMOJIS = os.environ.get("CAPTION_EMOJIS", "true").lower() == "true"
 
@@ -289,10 +298,11 @@ def _card_dialogue_events(
     font_size: int,
     card_index: int,
     layout: dict,
-) -> list[str]:
+) -> tuple[list[str], dict | None]:
     """One static dialogue event for the whole card (no per-word reveal — the
-    card appears and holds for its full duration), plus a second event for
-    its floating content-matched emoji, if any."""
+    card appears and holds for its full duration), plus a metadata dict for
+    its floating content-matched emoji, if any (None if no emoji matched).
+    The emoji is NOT part of the returned ASS text — see module docstring."""
     # Tokens for display-wrapping: normally one dict per real word, but the
     # clip-editor's re-sync path (caption_edit.write_edited_ass) collapses a
     # whole caption line into a SINGLE dict whose text has embedded spaces —
@@ -301,7 +311,7 @@ def _card_dialogue_events(
     for w in card:
         tokens.extend((w.get("text") or "").split())
     if not tokens:
-        return []
+        return [], None
 
     start = card[0]["start"]
     end = card[-1]["end"]
@@ -319,7 +329,7 @@ def _card_dialogue_events(
         color = accent if idx == len(display_lines) - 1 else WHITE
         ass_lines.append(f"{{\\1c{color}&\\3c{BLACK}&\\bord6\\b1}}{text}")
     if not ass_lines:
-        return []
+        return [], None
 
     events = [
         f"Dialogue: 0,{_format_ass_time(start)},{_format_ass_time(end)},{style_name},,0,0,0,,"
@@ -328,16 +338,23 @@ def _card_dialogue_events(
 
     card_text = " ".join(tokens)
     emoji = emoji_for_text(card_text)
+    emoji_meta = None
     if emoji:
         # Fixed floating position (upper-right), independent of the caption
-        # block's own top-anchored alignment — \an7\pos overrides the style's
-        # normal alignment/margin for this one event.
+        # block's own top-anchored alignment — same anchor point the old
+        # \an7\pos-based glyph used, now the RESTING position an animated
+        # overlay sticker pops/slides in to (see emoji_fx_marco.py).
         ex, ey, esize = layout["emoji_x"], layout["emoji_y"], layout["emoji_size"]
-        events.append(
-            f"Dialogue: 0,{_format_ass_time(start)},{_format_ass_time(end)},{style_name},,0,0,0,,"
-            f"{{\\an7\\pos({ex},{ey})\\fn{EMOJI_FONT}\\fs{esize}\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{emoji}"
-        )
-    return events
+        emoji_meta = {
+            "emoji": emoji,
+            "start": round(start, 3),
+            "end": round(end, 3),
+            "x": ex,
+            "y": ey,
+            "size": esize,
+            "anim": _ANIM_CYCLE[card_index % len(_ANIM_CYCLE)],
+        }
+    return events, emoji_meta
 
 
 def _card_word_timings(card: list[dict]) -> list[dict]:
@@ -481,18 +498,39 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
     events = []
+    emoji_events: list[dict] = []
     for idx, card in enumerate(cards):
         if mode == "karaoke":
             events.extend(_karaoke_group_event(card, style_name, preset))
         elif mode == "pop":
             events.extend(_pop_word_events(card, style_name, preset))
         else:
-            events.extend(_card_dialogue_events(card, style_name, font_size, idx, layout))
+            card_events, emoji_meta = _card_dialogue_events(card, style_name, font_size, idx, layout)
+            events.extend(card_events)
+            if emoji_meta:
+                emoji_events.append(emoji_meta)
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(header)
         f.write("\n".join(events))
         f.write("\n")
+
+    # Sidecar for the animated emoji overlay burn (see burn_captions_with_emoji
+    # / emoji_fx_marco.py). Always write-or-clear so a re-render of the same
+    # output_path never composites a stale previous render's emoji timings.
+    emoji_sidecar = output_path.replace(".ass", ".emoji.json")
+    if emoji_events:
+        try:
+            import json as _json
+            with open(emoji_sidecar, "w", encoding="utf-8") as ef:
+                _json.dump(emoji_events, ef)
+        except Exception as err:
+            print(f"[captions] could not write emoji.json sidecar: {err}")
+    elif os.path.isfile(emoji_sidecar):
+        try:
+            os.remove(emoji_sidecar)
+        except Exception:
+            pass
 
     return output_path
 
@@ -580,3 +618,72 @@ def burn_captions(input_video: str, ass_path: str, output_video: str) -> bool:
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg caption burn failed: {result.stderr.decode()[-800:]}")
     return True
+
+
+def _load_emoji_events(ass_path: str) -> list[dict]:
+    sidecar = ass_path.replace(".ass", ".emoji.json")
+    if not os.path.isfile(sidecar):
+        return []
+    try:
+        import json
+        with open(sidecar, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _probe_duration(video_path: str) -> float:
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return 0.0
+
+
+def burn_captions_with_emoji(input_video: str, ass_path: str, output_video: str) -> bool:
+    """Like burn_captions, but also composites colorful animated emoji
+    stickers (see emoji_fx_marco.py) read from the `.emoji.json` sidecar next
+    to `ass_path`, if any. Falls back to the plain ass-only burn on any
+    failure or when there is nothing to composite — the emoji overlay must
+    never be the reason a clip fails to ship."""
+    events = _load_emoji_events(ass_path)
+    if not events:
+        return burn_captions(input_video, ass_path, output_video)
+    try:
+        import emoji_fx_marco  # noqa: PLC0415 — lazy: best-effort dep (Pillow)
+
+        duration = _probe_duration(input_video)
+        if duration <= 0:
+            return burn_captions(input_video, ass_path, output_video)
+        chain = emoji_fx_marco.build_emoji_overlay_chain(events, duration)
+        if not chain:
+            return burn_captions(input_video, ass_path, output_video)
+        escaped_ass_path = _escape_filter_path(ass_path)
+        filter_complex = f"{chain['filter']};[{chain['out_label']}]ass={escaped_ass_path}[vout]"
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", input_video,
+                *chain["inputs"],
+                "-filter_complex", filter_complex,
+                "-map", "[vout]", "-map", "0:a?",
+                "-threads", "2",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-c:a", "copy",
+                output_video,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=_CAPTION_TIMEOUT_S,
+        )
+        if result.returncode != 0:
+            print(f"[captions] emoji overlay burn failed, falling back to plain captions: {result.stderr.decode()[-500:]}")
+            return burn_captions(input_video, ass_path, output_video)
+        return True
+    except Exception as err:  # noqa: BLE001 — best-effort, never blocks a clip
+        print(f"[captions] emoji overlay pipeline failed, falling back: {type(err).__name__}: {err}")
+        return burn_captions(input_video, ass_path, output_video)
