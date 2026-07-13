@@ -633,7 +633,16 @@ def process_video_job(
                     # + inferior repeated takes, rebased to clip-local time.
                     extra_cuts: list[tuple[float, float]] = []
                     retake_cuts: list[tuple[float, float]] = []
+                    blooper_cuts: list[tuple[float, float]] = []
                     try:
+                        # Profanity/off-script removal is a content-safety
+                        # requirement, not a style preference — always on,
+                        # never gated behind GAZE_CUTS/TAKE_CUTS.
+                        blooper_cuts += take_analysis_marco.blooper_cut_candidates(
+                            clips_data.get("bloopers", {}), clip["start_time"], clip["end_time"]
+                        )
+                        if blooper_cuts:
+                            print(f"[openshorts] Clip {i + 1}: {len(blooper_cuts)} blooper span(s) flagged for mandatory removal")
                         if GAZE_CUTS:
                             raw_gaze = gaze_analysis_marco.away_cut_candidates(
                                 clips_data.get("gaze", {}), clip["start_time"], clip["end_time"]
@@ -666,8 +675,12 @@ def process_video_job(
                         print(f"[openshorts] smart-cut candidates failed for clip {i + 1}: {smart_err}")
                         extra_cuts = []
                         retake_cuts = []
+                        # blooper_cuts intentionally NOT cleared on this except —
+                        # a failure in gaze/retake candidate-gathering must not
+                        # suppress an already-computed mandatory profanity cut.
                     tightened = _auto_tighten_generated_clip(
-                        base_p, lines_p, i + 1, extra_cuts=extra_cuts, retake_cuts=retake_cuts
+                        base_p, lines_p, i + 1,
+                        extra_cuts=extra_cuts, retake_cuts=retake_cuts, blooper_cuts=blooper_cuts,
                     )
                     if tightened:
                         try:
@@ -679,9 +692,12 @@ def process_video_job(
                             if old_final != final_clip_path and os.path.exists(old_final):
                                 os.remove(old_final)
                             clip_enhancements.append("smart_cuts")
+                            if tightened.get("blooper_applied"):
+                                clip_enhancements.append("blooper_removed")
                             print(
                                 f"[openshorts] Clip {i + 1} auto-tightened: removed {tightened['removed']}s dead air "
                                 f"across {tightened['cuts']} cut(s) → {tightened['new_duration']:.1f}s"
+                                + (" [MANDATORY blooper cut applied]" if tightened.get("blooper_applied") else "")
                             )
                         except Exception as swap_err:
                             print(f"[openshorts] auto-tighten swap failed for clip {i + 1} (keeping original): {swap_err}")
@@ -1387,21 +1403,28 @@ def _auto_tighten_generated_clip(
     clip_index: int,
     extra_cuts: list[tuple[float, float]] | None = None,
     retake_cuts: list[tuple[float, float]] | None = None,
+    blooper_cuts: list[tuple[float, float]] | None = None,
 ):
     """Generation-time smart cutting for one freshly generated clip.
 
     Removes dead air (as before) PLUS any `extra_cuts` — clip-local intervals
     from the full-timeline analysis (sustained looking-away segments, inferior
     repeated takes). Visual cuts are snapped to caption-line boundaries so a
-    cut never slices a sentence in half; take cuts arrive spanning whole
-    segments already. Cuts the UNcaptioned base into keep-segments, re-syncs
-    the caption lines to the new shorter timeline, and re-burns them. Returns
-    a dict {new_captioned, tight_base, new_lines, removed, cuts, new_duration}
-    the caller swaps in — or None to mean "no change, keep the original clip".
+    cut never slices a sentence in half; take/blooper cuts arrive spanning
+    whole sentences already. Cuts the UNcaptioned base into keep-segments,
+    re-syncs the caption lines to the new shorter timeline, and re-burns them.
+    Returns a dict {new_captioned, tight_base, new_lines, removed, cuts,
+    new_duration, blooper_applied} the caller swaps in — or None to mean "no
+    change, keep the original clip". Once past the early file/memory guards
+    (which must bail out unconditionally — the video literally cannot be
+    processed safely in those states), a pending blooper_cuts span always
+    gets applied even if that means dropping every other cut and shipping a
+    shorter-than-ideal clip: profanity/off-script content must never ship,
+    full stop. Only when blooper_cuts is empty does "insufficient savings"
+    fall back to keeping the original clip untouched.
 
-    Best-effort by contract: any failure, low memory, or a saving below the
-    threshold returns None. Runs inside process_video_job, which already holds
-    the single processing slot, so it does not re-acquire it.
+    Runs inside process_video_job, which already holds the single processing
+    slot, so it does not re-acquire it.
     """
     import caption_edit
     tmp: list[str] = []
@@ -1424,9 +1447,11 @@ def _auto_tighten_generated_clip(
         deadair = edit_effects_marco.deadair_cuts_from_pauses(classified["cut"], 0.0, duration)
 
         # Snap the full-timeline analysis cuts so no caption line is ever
-        # half-cut, and clamp to the clip's bounds. Retake cuts are kept in a
-        # separate bucket: they remove DUPLICATED content, so they take
-        # priority when the length floor forces a choice.
+        # half-cut, and clamp to the clip's bounds. Retake/blooper cuts are
+        # kept in separate buckets: retake removes DUPLICATED content and
+        # blooper removes MANDATORY content (profanity/off-script) — both
+        # take priority over gaze/dead-air when the length floor forces a
+        # choice, and blooper cuts are never dropped, period.
         def _snap_list(raw_cuts) -> list[tuple[float, float]]:
             out: list[tuple[float, float]] = []
             for raw in raw_cuts or []:
@@ -1440,6 +1465,7 @@ def _auto_tighten_generated_clip(
 
         snapped_extra = _snap_list(extra_cuts)
         snapped_retake = _snap_list(retake_cuts)
+        snapped_blooper = _snap_list(blooper_cuts)
 
         def _keeps_for(cut_set: list) -> list[tuple[float, float]]:
             ks: list[tuple[float, float]] = []
@@ -1452,30 +1478,50 @@ def _auto_tighten_generated_clip(
                 ks.append((cursor, duration))
             return ks
 
-        cuts = edit_effects_marco.merge_intervals(list(deadair) + snapped_extra + snapped_retake)
+        cuts = edit_effects_marco.merge_intervals(list(deadair) + snapped_extra + snapped_retake + snapped_blooper)
         removed = sum(e - s for s, e in cuts)
-        if not cuts or (removed < _AUTO_TIGHTEN_MIN_SAVINGS and not snapped_extra and not snapped_retake):
+        has_mandatory = bool(snapped_blooper)
+        if not cuts or (
+            removed < _AUTO_TIGHTEN_MIN_SAVINGS and not snapped_extra and not snapped_retake and not has_mandatory
+        ):
             return None  # nothing worth cutting — keep the original clip
 
         keeps = _keeps_for(cuts)
         total_kept = sum(e - s for s, e in keeps)
+        blooper_applied = has_mandatory
         # Story-flow floor: the full cut set must not shrink the clip below
-        # _MIN_AUTO_TIGHTEN_S. If it would, fall back to retake cuts ONLY —
-        # a shorter clip beats one where Marco visibly repeats the same line —
-        # and if even that over-shortens, leave the clip alone.
+        # _MIN_AUTO_TIGHTEN_S. If it would, drop gaze/dead-air first and keep
+        # retake + blooper cuts (mandatory content removal beats story length).
         if not keeps or total_kept < _MIN_AUTO_TIGHTEN_S:
-            if not snapped_retake:
+            mandatory = snapped_retake + snapped_blooper
+            if not mandatory:
                 return None  # only dead-air/gaze cuts — skip, keep full length
-            cuts = edit_effects_marco.merge_intervals(list(snapped_retake))
+            cuts = edit_effects_marco.merge_intervals(list(mandatory))
             removed = sum(e - s for s, e in cuts)
             keeps = _keeps_for(cuts)
             total_kept = sum(e - s for s, e in keeps)
             if not keeps or total_kept < _MIN_TRIM_SECONDS:
-                return None
-            print(
-                f"[openshorts] Clip {clip_index}: full smart-cut set would leave "
-                f"{total_kept:.1f}s — applying retake cuts only"
-            )
+                # Even retake+blooper alone over-shortens. If there's no
+                # profanity/off-script content pending, it's safe to bail out
+                # and keep the original. If there IS, it must still be cut —
+                # a short clip beats one that ships with profanity in it.
+                if not has_mandatory:
+                    return None
+                cuts = edit_effects_marco.merge_intervals(list(snapped_blooper))
+                keeps = _keeps_for(cuts)
+                total_kept = sum(e - s for s, e in keeps)
+                if not keeps:
+                    return None  # nothing survivable at all — best-effort exhausted
+                print(
+                    f"[openshorts] Clip {clip_index}: even retake+blooper cuts leave "
+                    f"under {_MIN_TRIM_SECONDS:.0f}s — applying blooper-only cuts, "
+                    f"result will be short"
+                )
+            else:
+                print(
+                    f"[openshorts] Clip {clip_index}: full smart-cut set would leave "
+                    f"{total_kept:.1f}s — applying retake + blooper cuts only"
+                )
 
         parent = Path(base_path).parent
         stem = Path(base_path).stem
@@ -1541,6 +1587,7 @@ def _auto_tighten_generated_clip(
             "removed": round(removed, 2),
             "cuts": len(cuts),
             "new_duration": round(_probe_duration(new_captioned), 2),
+            "blooper_applied": blooper_applied,
         }
     except Exception as e:  # noqa: BLE001 — best-effort, never fail the clip
         print(f"[openshorts] auto-tighten error for clip {clip_index} (keeping original): {type(e).__name__}: {e}")

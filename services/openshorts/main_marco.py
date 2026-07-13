@@ -129,6 +129,18 @@ def get_viral_clips_marco(
         print(f"[content-ai] retake analysis skipped: {type(take_err).__name__}: {take_err}")
         retakes = {}
 
+    # Blooper/profanity map — off-script breaks and profanity must never ship
+    # in a client-facing marketing video. Detected independent of retakes so
+    # a flagged moment is caught even outside any repeated-take group.
+    bloopers: dict = {}
+    try:
+        bloopers = take_analysis_marco.detect_bloopers(transcript_result.get("segments", []))
+        if bloopers.get("available"):
+            print(f"[content-ai] blooper map: {len(bloopers['spans'])} flagged span(s) — mandatory removal")
+    except Exception as blooper_err:  # noqa: BLE001 — never fatal
+        print(f"[content-ai] blooper analysis skipped: {type(blooper_err).__name__}: {blooper_err}")
+        bloopers = {}
+
     # Visual frames — scene changes + the prosody-flagged moments (energy peaks,
     # long pauses/bloopers, fast-pace hook candidates). Best-effort: on any
     # failure `images` is empty and analysis proceeds transcript+audio-only.
@@ -155,6 +167,7 @@ def get_viral_clips_marco(
     signals_brief = prosody_brief
     signals_brief += gaze_analysis_marco.gaze_prompt_block(gaze)
     signals_brief += take_analysis_marco.retake_prompt_block(retakes)
+    signals_brief += take_analysis_marco.blooper_prompt_block(bloopers)
 
     prompt = get_viral_moment_prompt(
         transcript=transcript_text,
@@ -189,6 +202,7 @@ def get_viral_clips_marco(
         # Full-timeline maps for generation-time cutting (app_marco).
         "gaze": gaze,
         "retakes": retakes,
+        "bloopers": bloopers,
     }
 
 
