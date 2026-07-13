@@ -1253,8 +1253,14 @@ def _snap_cut_to_caption_lines(
 
     A cut that covers ≥60% of a caption line swallows the whole line (the
     away-look owns that speech); a cut that merely clips a line's edge is
-    truncated at the line boundary instead. Returns None when nothing
-    meaningful survives the adjustment.
+    truncated at the line boundary instead. A cut fully NESTED inside one
+    line (both edges inside it) also swallows the whole line regardless of
+    the coverage ratio — a short away-look often sits entirely inside one
+    caption card, and resync_caption_lines() cannot split a line's on-screen
+    text, so the only safe options are "cut the whole card" or "cut nothing";
+    silently truncating a nested cut to an inverted (s > e) span would just
+    drop it, which is exactly the failure mode this function must avoid.
+    Returns None when nothing meaningful survives the adjustment.
     """
     s, e = cut
     for ln in lines or []:
@@ -1265,7 +1271,8 @@ def _snap_cut_to_caption_lines(
         if le <= s or ls >= e or le <= ls:
             continue  # no overlap
         overlap = (min(e, le) - max(s, ls)) / (le - ls)
-        if overlap >= 0.6:
+        nested = ls <= s and e <= le
+        if overlap >= 0.6 or nested:
             s, e = min(s, ls), max(e, le)  # own the whole line
         elif ls < s < le:
             s = le  # cut starts inside a mostly-kept line — start after it
@@ -1493,8 +1500,25 @@ def _auto_tighten_generated_clip(
         total_kept = sum(e - s for s, e in keeps)
         blooper_applied = has_mandatory
         # Story-flow floor: the full cut set must not shrink the clip below
-        # _MIN_AUTO_TIGHTEN_S. If it would, drop gaze/dead-air first and keep
-        # retake + blooper cuts (mandatory content removal beats story length).
+        # _MIN_AUTO_TIGHTEN_S. If it would, drop the LEAST important cuts
+        # first. Dead-air is purely cosmetic tightening and goes first — try
+        # gaze + retake + blooper without it before giving up on gaze, since
+        # camera eye-contact (removing away-looks) is a hard product
+        # requirement, not a nice-to-have on the same tier as dead air.
+        if not keeps or total_kept < _MIN_AUTO_TIGHTEN_S:
+            no_deadair = snapped_extra + snapped_retake + snapped_blooper
+            if no_deadair:
+                cuts_nd = edit_effects_marco.merge_intervals(list(no_deadair))
+                keeps_nd = _keeps_for(cuts_nd)
+                total_kept_nd = sum(e - s for s, e in keeps_nd)
+                if keeps_nd and total_kept_nd >= _MIN_AUTO_TIGHTEN_S:
+                    cuts, keeps, total_kept = cuts_nd, keeps_nd, total_kept_nd
+                    removed = sum(e - s for s, e in cuts)
+                    print(
+                        f"[openshorts] Clip {clip_index}: dead-air cuts dropped to "
+                        f"keep gaze/retake/blooper cuts within the "
+                        f"{_MIN_AUTO_TIGHTEN_S:.0f}s story-flow floor"
+                    )
         if not keeps or total_kept < _MIN_AUTO_TIGHTEN_S:
             mandatory = snapped_retake + snapped_blooper
             if not mandatory:

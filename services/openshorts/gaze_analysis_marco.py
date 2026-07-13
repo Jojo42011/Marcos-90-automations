@@ -23,6 +23,13 @@ away-looks ≥0.8s, so nothing that matters can slip between samples; full
 native-fps scanning is available (GAZE_FPS=0) but costs ~10-18 CPU minutes on
 a 30-minute source for no additional cutting precision.
 
+Away-look detection covers BOTH axes: horizontal (yaw + horizontal iris
+offset — turning to the side) and vertical (pitch + vertical iris offset —
+looking down at a script or phone). The vertical axis matters just as much as
+the horizontal one: reading off a script held below the camera is a pitch/
+vertical-iris event, not a yaw event, and would go undetected by a
+horizontal-only check.
+
 Everything is best-effort by contract: any failure returns
 {"available": False} and the pipeline behaves exactly as before.
 """
@@ -38,6 +45,16 @@ _YAW_AWAY = float(os.environ.get("OPENSHORTS_GAZE_YAW_AWAY", "0.42"))
 # Iris offset (fraction of eye width from eye centre) that reads as eyes-averted
 # even when the head is square to camera.
 _IRIS_AWAY = float(os.environ.get("OPENSHORTS_GAZE_IRIS_AWAY", "0.30"))
+# Head-pitch beyond this ratio reads as "looking down" (chin tucked toward a
+# script/phone held below the camera). Derived from where the nose tip sits
+# between the forehead and chin landmarks: ~0 = level with camera, positive =
+# tilted down. This is deliberately more sensitive than yaw because a
+# script-reading tilt is usually subtler than a full side-turn.
+_PITCH_DOWN = float(os.environ.get("OPENSHORTS_GAZE_PITCH_DOWN", "0.28"))
+# Vertical iris offset (fraction of eye height from eye centre). Catches eyes
+# cast down while the head itself stays fairly level — the most common
+# script-reading tell.
+_IRIS_V_AWAY = float(os.environ.get("OPENSHORTS_GAZE_IRIS_V_AWAY", "0.28"))
 # Analysis sampling rate (samples/sec across the whole timeline). 0 = native fps.
 _SAMPLE_FPS = float(os.environ.get("OPENSHORTS_GAZE_FPS", "12"))
 # An away-look must persist this long before it becomes a segment; brief
@@ -58,16 +75,26 @@ _SCAN_WIDTH = 480
 # FaceMesh landmark indices (canonical MediaPipe topology).
 _L_EYE_OUTER, _L_EYE_INNER = 33, 133
 _R_EYE_INNER, _R_EYE_OUTER = 362, 263
+_L_EYE_TOP, _L_EYE_BOTTOM = 159, 145
+_R_EYE_TOP, _R_EYE_BOTTOM = 386, 374
 _NOSE_TIP = 1
+_FOREHEAD, _CHIN = 10, 152
 _L_IRIS = (468, 469, 470, 471, 472)
 _R_IRIS = (473, 474, 475, 476, 477)
+# Neutral nose-tip position between forehead and chin landmarks for a face
+# level with the camera. Empirically ~0.55 for canonical FaceMesh geometry
+# (landmark 10 sits above the true hairline, so the "face box" it spans skews
+# the raw midpoint slightly below 0.5). Only the deviation from this baseline
+# is used, so exact calibration is not critical — sustained deviation past
+# _PITCH_DOWN is what matters, not the absolute value.
+_PITCH_NEUTRAL = 0.55
 
 
 def _frame_metrics(landmarks) -> dict[str, float]:
-    """Yaw + iris-offset estimates from one FaceMesh result (all ratios, 0-centred)."""
+    """Yaw/pitch + iris-offset estimates from one FaceMesh result (all ratios, 0-centred)."""
     lx_o, lx_i = landmarks[_L_EYE_OUTER].x, landmarks[_L_EYE_INNER].x
     rx_i, rx_o = landmarks[_R_EYE_INNER].x, landmarks[_R_EYE_OUTER].x
-    nose_x = landmarks[_NOSE_TIP].x
+    nose_x, nose_y = landmarks[_NOSE_TIP].x, landmarks[_NOSE_TIP].y
 
     face_left = min(lx_o, lx_i)
     face_right = max(rx_o, rx_i)
@@ -75,19 +102,38 @@ def _frame_metrics(landmarks) -> dict[str, float]:
     # 0 = nose centred between the eyes (facing camera); ±1 = fully to one side.
     yaw = ((nose_x - face_left) / face_w - 0.5) * 2.0
 
+    # Pitch: where the nose tip sits between forehead and chin. Chin-tuck /
+    # looking down at a script pushes the nose lower in that span (positive).
+    forehead_y, chin_y = landmarks[_FOREHEAD].y, landmarks[_CHIN].y
+    face_h = max(1e-6, chin_y - forehead_y)
+    pitch = ((nose_y - forehead_y) / face_h - _PITCH_NEUTRAL) * 2.0
+
     # Iris offset within each eye (requires refine_landmarks=True).
-    def iris_offset(iris_idx, inner_x, outer_x) -> float:
+    def iris_offset_h(iris_idx, inner_x, outer_x) -> float:
         eye_l, eye_r = min(inner_x, outer_x), max(inner_x, outer_x)
         eye_w = max(1e-6, eye_r - eye_l)
         cx = sum(landmarks[i].x for i in iris_idx) / len(iris_idx)
         return ((cx - eye_l) / eye_w - 0.5) * 2.0
 
-    try:
-        iris = (iris_offset(_L_IRIS, lx_i, lx_o) + iris_offset(_R_IRIS, rx_i, rx_o)) / 2.0
-    except IndexError:  # refine_landmarks unavailable → head pose only
-        iris = 0.0
+    def iris_offset_v(iris_idx, top_y, bottom_y) -> float:
+        eye_t, eye_b = min(top_y, bottom_y), max(top_y, bottom_y)
+        eye_h = max(1e-6, eye_b - eye_t)
+        cy = sum(landmarks[i].y for i in iris_idx) / len(iris_idx)
+        return ((cy - eye_t) / eye_h - 0.5) * 2.0
 
-    return {"yaw": yaw, "iris": iris}
+    try:
+        iris_h = (
+            iris_offset_h(_L_IRIS, lx_i, lx_o) + iris_offset_h(_R_IRIS, rx_i, rx_o)
+        ) / 2.0
+        iris_v = (
+            iris_offset_v(_L_IRIS, landmarks[_L_EYE_TOP].y, landmarks[_L_EYE_BOTTOM].y)
+            + iris_offset_v(_R_IRIS, landmarks[_R_EYE_TOP].y, landmarks[_R_EYE_BOTTOM].y)
+        ) / 2.0
+    except IndexError:  # refine_landmarks unavailable → head pose only
+        iris_h = 0.0
+        iris_v = 0.0
+
+    return {"yaw": yaw, "pitch": pitch, "iris": iris_h, "iris_v": iris_v}
 
 
 def analyze_gaze(video_path: str, sample_fps: float | None = None) -> dict[str, Any]:
@@ -168,7 +214,12 @@ def analyze_gaze(video_path: str, sample_fps: float | None = None) -> dict[str, 
                 samples.append((t, "no_face"))
                 continue
             m = _frame_metrics(res.multi_face_landmarks[0].landmark)
-            away = abs(m["yaw"]) >= _YAW_AWAY or abs(m["iris"]) >= _IRIS_AWAY
+            away = (
+                abs(m["yaw"]) >= _YAW_AWAY
+                or abs(m["iris"]) >= _IRIS_AWAY
+                or m["pitch"] >= _PITCH_DOWN
+                or abs(m["iris_v"]) >= _IRIS_V_AWAY
+            )
             samples.append((t, "away" if away else "ok"))
 
         if not samples:
