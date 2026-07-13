@@ -30,6 +30,15 @@ RUN mkdir -p /usr/share/fonts/truetype/noto-emoji-mono && \
       "https://raw.githubusercontent.com/google/fonts/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf" && \
     fc-cache -f
 
+# Caption font: chunky bold uppercase sans matching Marco's reference style
+# (heavy weight, black outline, high-impact viral-caption look). Archivo Black
+# is OFL-licensed and freely redistributable; captions_marco.py selects it by
+# name in the ASS [V4+ Styles] Fontname field.
+RUN mkdir -p /usr/share/fonts/truetype/archivo-black && \
+    curl -fsSL -o "/usr/share/fonts/truetype/archivo-black/ArchivoBlack.ttf" \
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/archivoblack/ArchivoBlack-Regular.ttf" && \
+    fc-cache -f
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

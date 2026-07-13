@@ -1,5 +1,5 @@
 """
-Marco Puga Realty — burned-in karaoke caption generation.
+Marco Puga Realty — burned-in caption generation.
 
 The vendored OpenShorts engine (main.py) has no subtitle/caption support at all:
 process_video_to_vertical() takes only (input_video, final_output_video) and
@@ -7,6 +7,16 @@ transcribe_video() returns word-level timestamps that nothing downstream uses.
 This module builds an ASS subtitle file from those word timestamps and burns
 it into a clip with ffmpeg's libass-backed `ass` filter, applied AFTER vertical
 reframing so captions never get cropped by the reframe step.
+
+STYLE — matched to Marco's own reference videos (measured directly from the
+frames he provided): short static "cards" of 1-4 words (NOT word-by-word
+karaoke reveal — the whole card appears at once and holds), wrapped across up
+to 2 display lines when needed, bold uppercase, heavy black outline, anchored
+from a FIXED TOP position (~68% down the frame) so a single-line card sits at
+the same spot a two-line card's first line does. The card's last display line
+is colored (alternating bright green / yellow across successive cards);
+earlier lines stay white. A small content-matched emoji floats near the
+upper-right, independent of the caption position.
 """
 import os
 import re
@@ -16,40 +26,31 @@ import subprocess
 # letting it block the job (mirrors _FFMPEG_TIMEOUT_S in app_marco.py).
 _CAPTION_TIMEOUT_S = int(os.environ.get("OPENSHORTS_FFMPEG_TIMEOUT_S", "180"))
 
-FONT_NAME = "Liberation Sans"  # metric-compatible Arial Bold substitute; ships via apt fonts-liberation
+# Chunky bold uppercase sans (installed in the Docker image) — the reference
+# style's high-impact viral-caption look. Falls back to whatever libass finds
+# if the font isn't installed (dev boxes without the Docker image).
+FONT_NAME = os.environ.get("CAPTION_FONT", "Archivo Black")
 
 WHITE = "&H00FFFFFF"
 BLACK = "&H00000000"
-HIGHLIGHT_BG = "&H002B2BFF"  # ASS BGR order -> RGB(FF,2B,2B), bold red/orange
-KEYWORD_GOLD = "&H0000C8FF"  # ASS BGR order -> RGB(FF,C8,00), gold for RE keywords
+# Bright green / yellow accents, sampled directly from Marco's reference
+# videos (the last display line of each caption card cycles between these).
+ACCENT_GREEN = "&H002EF42E"  # ASS BGR order -> RGB(46,244,46)
+ACCENT_YELLOW = "&H0016FAFC"  # ASS BGR order -> RGB(252,250,22)
+_ACCENT_CYCLE = (ACCENT_GREEN, ACCENT_YELLOW)
 
 # Monochrome outline emoji font (installed in the Docker image). libass renders
 # through FreeType and cannot draw color bitmap fonts (Noto COLOR Emoji), which
 # is why emojis burned as tofu rectangles — select the mono font explicitly.
 EMOJI_FONT = os.environ.get("CAPTION_EMOJI_FONT", "Noto Emoji")
 
-# Real-estate keywords rendered in gold even when not the active karaoke word —
-# neighborhood names, money terms, and market data pop visually (Submagic-style
-# keyword emphasis). Matching is PER WORD (each caption token is tested alone),
-# so every alternative must be a single token. Money/percent alternatives sit
-# outside the \b group because \b cannot match before '$' or after '%'.
-_KEYWORD_RE = re.compile(
-    r"\b(san|antonio|stone|oak|canyon|lake|braunfels|alamo|boerne|helotes|"
-    r"bulverde|texas|mortgage|rate[s]?|price[ds]?|prices|pricing|equity|"
-    r"zestimate|zillow|redfin|appraisal|payment[s]?|closing|sold|listing[s]?|"
-    r"market|neighborhood|78\d{3})\b"
-    r"|\$[\d,.]+[km]?"
-    r"|\b\d+(?:\.\d+)?%",
-    re.IGNORECASE,
-)
-
-
-def _is_keyword(text: str) -> bool:
-    return bool(_KEYWORD_RE.search(text or ""))
-
-MAX_WORDS_PER_LINE = 6
+MAX_WORDS_PER_CARD = 6
 PAUSE_GAP_SECONDS = 0.5
 AVG_CHAR_WIDTH_FACTOR = 0.62  # rough bold-sans average glyph width as a fraction of font size
+# A card wraps onto a second display line above this many characters — narrower
+# than a card's own max width so short 2-4 word bursts naturally split 2+2 or
+# 1+2 the way the reference style does, instead of always fitting on one line.
+DISPLAY_LINE_CHAR_FACTOR = 0.5
 
 # ── Content-aware caption emojis (viewer retention) ──────────────────────────
 # One emoji per caption line, picked from what the line actually says. Rendered
@@ -109,15 +110,26 @@ def emoji_for_text(text: str) -> str:
 
 def _layout_params(video_width: int, video_height: int) -> dict:
     font_size = max(28, video_height // 24)
-    margin_v = round(video_height * 0.17)  # lower third, breathing room from bottom edge
+    # Fixed TOP anchor, measured from Marco's reference videos: the first
+    # display line always starts at ~68.4% down the frame, whether the card
+    # renders as one line or wraps to two — i.e. the block grows DOWNWARD
+    # from a fixed point rather than growing upward from the bottom.
+    margin_v = round(video_height * 0.684)
     margin_lr = round(video_width * 0.06)
     usable_width = max(video_width - 2 * margin_lr, font_size * 4)
-    max_chars_per_line = max(8, int(usable_width / (font_size * AVG_CHAR_WIDTH_FACTOR)))
+    max_chars_per_card = max(8, int(usable_width / (font_size * AVG_CHAR_WIDTH_FACTOR)))
+    max_chars_per_display_line = max(4, int(max_chars_per_card * DISPLAY_LINE_CHAR_FACTOR))
     return {
         "font_size": font_size,
         "margin_v": margin_v,
         "margin_lr": margin_lr,
-        "max_chars_per_line": max_chars_per_line,
+        "max_chars_per_line": max_chars_per_card,
+        "max_chars_per_display_line": max_chars_per_display_line,
+        # Floating content-matched emoji: fixed upper-right position,
+        # independent of the caption block (also measured from reference).
+        "emoji_x": round(video_width * 0.86),
+        "emoji_y": round(video_height * 0.40),
+        "emoji_size": round(font_size * 1.3),
     }
 
 
@@ -157,21 +169,21 @@ def slice_words_for_clip(transcript_segments: list[dict], clip_start: float, cli
     return words
 
 
-def group_words_into_lines(words: list[dict], max_chars_per_line: int) -> list[list[dict]]:
-    """Group words into short phrases (one line of captions at a time)."""
-    lines: list[list[dict]] = []
+def group_words_into_cards(words: list[dict], max_chars_per_card: int) -> list[list[dict]]:
+    """Group words into short static caption "cards" (one card at a time)."""
+    cards: list[list[dict]] = []
     current: list[dict] = []
     current_chars = 0
     prev_end = None
 
     for word in words:
         gap = (word["start"] - prev_end) if prev_end is not None else 0
-        would_overflow_chars = current_chars + len(word["text"]) + 1 > max_chars_per_line
-        would_overflow_words = len(current) >= MAX_WORDS_PER_LINE
+        would_overflow_chars = current_chars + len(word["text"]) + 1 > max_chars_per_card
+        would_overflow_words = len(current) >= MAX_WORDS_PER_CARD
         natural_pause = prev_end is not None and gap > PAUSE_GAP_SECONDS
 
         if current and (would_overflow_chars or would_overflow_words or natural_pause):
-            lines.append(current)
+            cards.append(current)
             current = []
             current_chars = 0
 
@@ -180,54 +192,92 @@ def group_words_into_lines(words: list[dict], max_chars_per_line: int) -> list[l
         prev_end = word["end"]
 
     if current:
-        lines.append(current)
+        cards.append(current)
 
-    return lines
+    return cards
 
 
-def _line_dialogue_events(line: list[dict], style_name: str, font_size: int = 40) -> list[str]:
-    # One content-matched emoji per line, appended after the last word. It is
-    # rendered at 1.4× caption font size so it reads clearly at a glance.
-    line_text = " ".join((w.get("text") or "") for w in line)
-    emoji = emoji_for_text(line_text)
-    emoji_size = round(font_size * 1.4)
+def _wrap_card_for_display(tokens: list[str], max_chars_per_display_line: int) -> list[list[str]]:
+    """Split a card's word tokens across up to 2 display lines.
 
-    events = []
-    for i, active_word in enumerate(line):
-        start = active_word["start"]
-        end = line[i + 1]["start"] if i + 1 < len(line) else active_word["end"]
-        if end <= start:
-            end = start + 0.05
+    Greedily fills line 1 up to the width limit, then everything remaining
+    goes on line 2 — matching the reference style's short 2-3-word-per-line
+    wrap (e.g. "PER DAY" / "THAN YOUR" from one 4-word card). A card short
+    enough to fit on one line stays on one line.
+    """
+    if not tokens:
+        return []
+    line1: list[str] = []
+    chars = 0
+    for tok in tokens:
+        added = len(tok) + (1 if line1 else 0)
+        if line1 and chars + added > max_chars_per_display_line:
+            break
+        line1.append(tok)
+        chars += added
+    remaining = tokens[len(line1):]
+    return [line1, remaining] if remaining else [line1]
 
-        parts = []
-        for word in line:
-            text = _ass_escape(word["text"]).upper()
-            if not text:
-                continue
-            if word is active_word:
-                parts.append(f"{{\\1c{WHITE}&\\3c{HIGHLIGHT_BG}&\\bord14}}{text}")
-            elif _is_keyword(word["text"]):
-                # Real-estate keyword — gold, so prices/neighborhoods pop.
-                parts.append(f"{{\\1c{KEYWORD_GOLD}&\\3c{BLACK}&\\bord5}}{text}")
-            else:
-                parts.append(f"{{\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{text}")
-        if emoji:
-            # Explicit mono emoji font (\fn): the default Liberation Sans has no
-            # emoji glyphs and libass cannot draw the color-emoji fallback font,
-            # which rendered tofu boxes. Larger \fs so it reads at a glance.
-            parts.append(
-                f"{{\\fn{EMOJI_FONT}\\fs{emoji_size}\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{emoji}"
-            )
-        text_field = " ".join(parts)
 
+def _card_dialogue_events(
+    card: list[dict],
+    style_name: str,
+    font_size: int,
+    card_index: int,
+    layout: dict,
+) -> list[str]:
+    """One static dialogue event for the whole card (no per-word reveal — the
+    card appears and holds for its full duration), plus a second event for
+    its floating content-matched emoji, if any."""
+    # Tokens for display-wrapping: normally one dict per real word, but the
+    # clip-editor's re-sync path (caption_edit.write_edited_ass) collapses a
+    # whole caption line into a SINGLE dict whose text has embedded spaces —
+    # splitting every dict's text on whitespace handles both uniformly.
+    tokens: list[str] = []
+    for w in card:
+        tokens.extend((w.get("text") or "").split())
+    if not tokens:
+        return []
+
+    start = card[0]["start"]
+    end = card[-1]["end"]
+    if end <= start:
+        end = start + 0.05
+
+    display_lines = _wrap_card_for_display(tokens, layout["max_chars_per_display_line"])
+    accent = _ACCENT_CYCLE[card_index % len(_ACCENT_CYCLE)]
+
+    ass_lines = []
+    for idx, line_tokens in enumerate(display_lines):
+        text = _ass_escape(" ".join(line_tokens)).upper()
+        if not text:
+            continue
+        color = accent if idx == len(display_lines) - 1 else WHITE
+        ass_lines.append(f"{{\\1c{color}&\\3c{BLACK}&\\bord6\\b1}}{text}")
+    if not ass_lines:
+        return []
+
+    events = [
+        f"Dialogue: 0,{_format_ass_time(start)},{_format_ass_time(end)},{style_name},,0,0,0,,"
+        + "\\N".join(ass_lines)
+    ]
+
+    card_text = " ".join(tokens)
+    emoji = emoji_for_text(card_text)
+    if emoji:
+        # Fixed floating position (upper-right), independent of the caption
+        # block's own top-anchored alignment — \an7\pos overrides the style's
+        # normal alignment/margin for this one event.
+        ex, ey, esize = layout["emoji_x"], layout["emoji_y"], layout["emoji_size"]
         events.append(
-            f"Dialogue: 0,{_format_ass_time(start)},{_format_ass_time(end)},{style_name},,0,0,0,,{text_field}"
+            f"Dialogue: 0,{_format_ass_time(start)},{_format_ass_time(end)},{style_name},,0,0,0,,"
+            f"{{\\an7\\pos({ex},{ey})\\fn{EMOJI_FONT}\\fs{esize}\\1c{WHITE}&\\3c{BLACK}&\\bord5}}{emoji}"
         )
     return events
 
 
 def build_ass_file(
-    lines: list[list[dict]],
+    cards: list[list[dict]],
     video_width: int,
     video_height: int,
     output_path: str,
@@ -248,15 +298,15 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: {style_name},{FONT_NAME},{font_size},{WHITE},{WHITE},{BLACK},{BLACK},1,0,0,0,100,100,0,0,1,5,0,2,{margin_lr},{margin_lr},{margin_v},1
+Style: {style_name},{FONT_NAME},{font_size},{WHITE},{WHITE},{BLACK},{BLACK},1,0,0,0,100,100,0,0,1,6,0,8,{margin_lr},{margin_lr},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
     events = []
-    for line in lines:
-        events.extend(_line_dialogue_events(line, style_name, font_size=font_size))
+    for idx, card in enumerate(cards):
+        events.extend(_card_dialogue_events(card, style_name, font_size, idx, layout))
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(header)
@@ -279,27 +329,27 @@ def generate_captions_ass(
     if not words:
         return None
     layout = _layout_params(video_width, video_height)
-    lines = group_words_into_lines(words, layout["max_chars_per_line"])
-    if not lines:
+    cards = group_words_into_cards(words, layout["max_chars_per_line"])
+    if not cards:
         return None
-    # Persist a line-level caption list next to the ASS so the clip editor can
-    # display + edit caption text without parsing per-word karaoke ASS events.
+    # Persist a card-level caption list next to the ASS so the clip editor can
+    # display + edit caption text without parsing the styled ASS events.
     try:
         import json as _json
         line_objs = [
             {
-                "start": round(ln[0]["start"], 2),
-                "end": round(ln[-1]["end"], 2),
-                "text": " ".join((w.get("text") or "").strip() for w in ln).strip(),
+                "start": round(c[0]["start"], 2),
+                "end": round(c[-1]["end"], 2),
+                "text": " ".join((w.get("text") or "").strip() for w in c).strip(),
             }
-            for ln in lines
-            if ln
+            for c in cards
+            if c
         ]
         with open(output_path.replace(".ass", ".lines.json"), "w", encoding="utf-8") as f:
             _json.dump(line_objs, f)
     except Exception as err:
         print(f"[captions] could not write lines.json: {err}")
-    return build_ass_file(lines, video_width, video_height, output_path)
+    return build_ass_file(cards, video_width, video_height, output_path)
 
 
 def _escape_filter_path(path: str) -> str:
