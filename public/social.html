@@ -1870,17 +1870,20 @@
     .style-examples-row { margin: 12px 0 4px; }
     .style-example-zone-pair { display: flex; gap: 12px; flex-wrap: wrap; }
     .style-example-zone { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 6px; }
-    .style-zone-label { font-size: 12px; font-weight: 600; color: var(--text, #e8eaed); }
+    .style-zone-label { font-size: 12px; font-weight: 600; color: var(--text, #e8eaed); display: flex; align-items: center; gap: 6px; }
+    .style-zone-count { font-size: 10px; font-weight: 700; color: var(--muted, #8a919c); background: var(--panel, #14171c); border: 1px solid var(--border, #262b33); border-radius: 999px; padding: 1px 7px; }
     .style-zone-sub { font-size: 10.5px; color: var(--muted, #8a919c); margin-bottom: 2px; }
     .style-drop-zone { border: 1px dashed #3a4049; border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; background: var(--panel, #14171c); }
     .style-drop-zone:hover, .style-drop-zone.drag-over { border-color: var(--accent-2, #25f4ee); background: rgba(37, 244, 238, 0.04); }
     .style-example-list { display: flex; flex-direction: column; gap: 6px; }
     .style-example-item { display: flex; align-items: center; gap: 8px; background: var(--panel, #14171c); border: 1px solid var(--border, #262b33); border-radius: 6px; padding: 6px 10px; font-size: 11px; }
     .style-example-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text, #e8eaed); }
-    .style-example-status { padding: 1px 8px; border-radius: 999px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; }
+    .style-example-status { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; }
     .style-status-processing { background: rgba(245,196,81,0.14); color: #f5c451; }
     .style-status-analyzed { background: rgba(61,220,132,0.14); color: #3ddc84; }
     .style-status-failed { background: rgba(255,90,90,0.14); color: #ff5a5a; }
+    .style-spinner { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid rgba(245,196,81,0.35); border-top-color: #f5c451; animation: style-spin 0.7s linear infinite; flex-shrink: 0; }
+    @keyframes style-spin { to { transform: rotate(360deg); } }
     .style-example-del { background: none; border: none; color: var(--muted, #8a919c); font-size: 12px; cursor: pointer; padding: 0 2px; }
     .style-example-del:hover { color: #ff5a5a; }
     /* ── Review Queue: enhancement badges ────────────────────────────────── */
@@ -2200,7 +2203,7 @@
                 </p>
                 <div class="style-example-zone-pair">
                   <div class="style-example-zone">
-                    <div class="style-zone-label">📈 Published good clips</div>
+                    <div class="style-zone-label">📈 Published good clips <span class="style-zone-count" id="styleZoneCountClip">0</span></div>
                     <div class="style-zone-sub">Finished clips that already did well — studies pacing, hook, cut rhythm</div>
                     <div class="style-drop-zone" id="styleDropZoneClip">
                       <span class="script-drop-icon">🎬</span>
@@ -2210,7 +2213,7 @@
                     <div class="style-example-list" id="styleExampleListClip"></div>
                   </div>
                   <div class="style-example-zone">
-                    <div class="style-zone-label">🎙️ Raw footage</div>
+                    <div class="style-zone-label">🎙️ Raw footage <span class="style-zone-count" id="styleZoneCountRaw">0</span></div>
                     <div class="style-zone-sub">Unedited talking — studies energy, pacing, natural pause patterns</div>
                     <div class="style-drop-zone" id="styleDropZoneRaw">
                       <span class="script-drop-icon">🎥</span>
@@ -6422,11 +6425,12 @@
 
     function styleExampleItemHtml(ex) {
       const statusLabel = { processing: "Learning…", analyzed: "Learned", failed: "Failed" }[ex.status] || ex.status;
+      const spinner = ex.status === "processing" ? '<span class="style-spinner"></span>' : "";
       const title = ex.status === "failed" && ex.errorMessage ? escapeHtml(ex.errorMessage)
         : ex.status === "analyzed" && ex.styleNotes ? escapeHtml(ex.styleNotes) : "";
       return `<div class="style-example-item" title="${title}">
         <span class="style-example-name">${escapeHtml(ex.originalFilename)}</span>
-        <span class="style-example-status style-status-${ex.status}">${statusLabel}</span>
+        <span class="style-example-status style-status-${ex.status}">${spinner}${statusLabel}</span>
         <button type="button" class="style-example-del" onclick="deleteStyleExampleUi('${ex.id}')" aria-label="Remove">✕</button>
       </div>`;
     }
@@ -6441,18 +6445,28 @@
         if (clipList) clipList.innerHTML = clips.map(styleExampleItemHtml).join("");
         if (rawList) rawList.innerHTML = raw.map(styleExampleItemHtml).join("");
 
+        // Per-zone counts, visible whether or not the panel is expanded.
+        const clipCountEl = document.getElementById("styleZoneCountClip");
+        const rawCountEl = document.getElementById("styleZoneCountRaw");
+        if (clipCountEl) clipCountEl.textContent = String(clips.length);
+        if (rawCountEl) rawCountEl.textContent = String(raw.length);
+
+        const total = (examples || []).length;
+        const processingCount = (examples || []).filter((e) => e.status === "processing").length;
         const analyzedCount = (examples || []).filter((e) => e.status === "analyzed").length;
         const summary = document.getElementById("styleExamplesSummary");
         if (summary) {
-          summary.textContent = analyzedCount > 0
-            ? `${analyzedCount} example${analyzedCount === 1 ? "" : "s"} learned — applied to every batch`
-            : "Drop example videos so future clips match your style";
+          summary.textContent = total === 0
+            ? "Drop example videos so future clips match your style"
+            : `${total} file${total === 1 ? "" : "s"} total — ${analyzedCount} learned`
+              + (processingCount ? `, ${processingCount} learning…` : "");
         }
 
+        // Keep polling while anything is still learning — even with the panel
+        // collapsed, so the header count/summary badge stays accurate without
+        // Marco needing to open it to check.
         clearTimeout(styleExamplesPollTimer);
-        const stillProcessing = (examples || []).some((e) => e.status === "processing");
-        const panelOpen = document.getElementById("styleExamplesPanel")?.style.display !== "none";
-        if (stillProcessing && panelOpen) {
+        if (processingCount > 0) {
           styleExamplesPollTimer = setTimeout(loadStyleExamples, 8000);
         }
       } catch (e) { console.warn("[style-examples] load failed", e); }
