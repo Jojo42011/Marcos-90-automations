@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Finance · Marco</title>
+  <title>Finance &middot; Marco</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg: #0a0a0a;
-      --surface: #0f1410;
-      --border: rgba(16, 185, 129, 0.25);
-      --accent: #10b981;
-      --accent-glow: rgba(16, 185, 129, 0.15);
+      --surface: #0d1219;
+      --border: rgba(0, 212, 255, 0.25);
+      --accent: #00d4ff;
+      --accent-glow: rgba(0, 212, 255, 0.15);
       --red: #ef4444;
       --amber: #f59e0b;
       --font: "Plus Jakarta Sans", system-ui, sans-serif;
@@ -80,8 +80,8 @@
     }
     .fin-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.12);
-      border-color: rgba(16, 185, 129, 0.35) !important;
+      box-shadow: 0 8px 24px rgba(0, 212, 255, 0.12);
+      border-color: rgba(0, 212, 255, 0.35) !important;
     }
     .fin-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
     .fin-stat-label { font-family: var(--mono); font-size: 10px; color: #888; letter-spacing: 1px; }
@@ -92,10 +92,10 @@
     .fin-body-text { font-size: 11px; color: #ccc; line-height: 1.6; }
     .fin-preview-text { margin-top: 10px; font-size: 12px; color: #cbd5e1; line-height: 1.65; }
     .fin-pace-sub { font-size: 10px; fill: #888; font-family: monospace; }
-    .fin-back { color: #10b981; font-size: 11px; letter-spacing: 1px; text-decoration: none; font-family: var(--mono); }
+    .fin-back { color: #00d4ff; font-size: 11px; letter-spacing: 1px; text-decoration: none; font-family: var(--mono); }
     .fin-hdr-sep { color: #888; }
     .fin-legend { font-size: 11px; color: #888; line-height: 1.6; }
-    .fin-legend strong { color: #10b981; }
+    .fin-legend strong { color: #00d4ff; }
     .fin-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--mono); }
     .fin-table th, .fin-table td { text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
     .fin-table th { color: #555; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -138,9 +138,9 @@
     }
     .fin-fresh { animation: fin-fresh-commission 2.5s ease-out; }
     @keyframes fin-fresh-commission {
-      0% { box-shadow: 0 0 0 rgba(16,185,129,0); background: rgba(16,185,129,0.08); }
-      50% { box-shadow: 0 0 20px rgba(16,185,129,0.3); }
-      100% { box-shadow: 0 0 0 rgba(16,185,129,0); background: transparent; }
+      0% { box-shadow: 0 0 0 rgba(0,212,255,0); background: rgba(0,212,255,0.08); }
+      50% { box-shadow: 0 0 20px rgba(0,212,255,0.3); }
+      100% { box-shadow: 0 0 0 rgba(0,212,255,0); background: transparent; }
     }
     @keyframes fin-fade-slide-in {
       from { opacity: 0; transform: translateY(8px); }
@@ -163,29 +163,29 @@
     #fin-pulse.on { display: inline-block !important; animation: pulse 2s infinite; }
     @keyframes pulse { 50% { opacity: 0.4; } }
     html[data-theme="light"], html[data-theme="light"] body {
-      background: #f0fdf4 !important;
+      background: #f1f5f9 !important;
       color: #0f172a !important;
       background-image: none !important;
     }
     html[data-theme="light"] .header,
     html[data-theme="light"] .fin-tabs {
       background: #ffffff !important;
-      border-bottom: 2px solid #86efac !important;
+      border-bottom: 2px solid #7dd3fc !important;
     }
     html[data-theme="light"] .fin-title { color: #0f172a !important; }
     html[data-theme="light"] .fin-muted,
     html[data-theme="light"] .fin-hdr-sep { color: #64748b !important; }
     html[data-theme="light"] .fin-meta { color: #64748b !important; }
-    html[data-theme="light"] .fin-back { color: #047857 !important; font-weight: 600 !important; }
+    html[data-theme="light"] .fin-back { color: #0369a1 !important; font-weight: 600 !important; }
     html[data-theme="light"] .tab { color: #64748b !important; }
     html[data-theme="light"] .tab.active {
-      color: #047857 !important;
-      border-bottom-color: #047857 !important;
+      color: #0369a1 !important;
+      border-bottom-color: #0369a1 !important;
       font-weight: 700 !important;
     }
     html[data-theme="light"] .fin-card {
       background: #ffffff !important;
-      border-color: #bbf7d0 !important;
+      border-color: #bae6fd !important;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
     }
     html[data-theme="light"] .fin-stat-label { color: #475569 !important; font-weight: 600 !important; }
@@ -199,57 +199,56 @@
       border-bottom-color: #e2e8f0 !important;
     }
     html[data-theme="light"] .fin-legend { color: #475569 !important; }
-    html[data-theme="light"] .fin-legend strong { color: #047857 !important; }
+    html[data-theme="light"] .fin-legend strong { color: #0369a1 !important; }
     html[data-theme="light"] .fin-bar-track { background: #e2e8f0 !important; }
-    html[data-theme="light"] .fin-bar-fill { background: #059669 !important; }
+    html[data-theme="light"] .fin-bar-fill { background: #0284c7 !important; }
     html[data-theme="light"] button.fin-btn,
     html[data-theme="light"] button[onclick*="submit"],
     html[data-theme="light"] button[onclick*="send"],
     html[data-theme="light"] button[onclick*="Send"] {
-      background: #047857 !important;
+      background: #0369a1 !important;
       color: #ffffff !important;
     }
     html[data-theme="light"] .fin-btn-ghost {
-      color: #047857 !important;
-      border-color: #86efac !important;
+      color: #0369a1 !important;
+      border-color: #7dd3fc !important;
       background: #ffffff !important;
     }
     html[data-theme="light"] .fin-table { background: #ffffff !important; color: #0f172a !important; }
     html[data-theme="light"] .fin-table th {
       color: #475569 !important;
       font-weight: 700 !important;
-      border-bottom: 2px solid #bbf7d0 !important;
+      border-bottom: 2px solid #bae6fd !important;
     }
     html[data-theme="light"] .fin-table td {
       color: #0f172a !important;
       border-bottom: 1px solid #e2e8f0 !important;
     }
-    html[data-theme="light"] .fin-table tr:hover { background: #f0fdf4 !important; }
+    html[data-theme="light"] .fin-table tr:hover { background: #f1f5f9 !important; }
     html[data-theme="light"] .fin-toast {
       background: #ffffff !important;
       color: #0f172a !important;
-      border-color: #86efac !important;
+      border-color: #7dd3fc !important;
     }
     html[data-theme="light"] #fin-pace-pct { fill: #0f172a !important; }
     html[data-theme="light"] .fin-pace-sub { fill: #64748b !important; }
-    html[data-theme="light"] #fin-pace-ring { stroke: #059669 !important; }
+    html[data-theme="light"] #fin-pace-ring { stroke: #0284c7 !important; }
     html[data-theme="light"] [style*="color:#ef4444"] { color: #dc2626 !important; }
     html[data-theme="light"] [style*="color:#f59e0b"] { color: #d97706 !important; }
-    html[data-theme="light"] [style*="color:#10b981"] { color: #047857 !important; }
+    html[data-theme="light"] [style*="color:#00d4ff"] { color: #0369a1 !important; }
     html[data-theme="light"] [style*="color:#ccc"] { color: #334155 !important; }
     html[data-theme="light"] [style*="color:#888"] { color: #64748b !important; }
     html[data-theme="light"] [style*="color:#555"] { color: #64748b !important; }
     html[data-theme="light"] [style*="color:#fff"] { color: #0f172a !important; }
-    html[data-theme="light"] [style*="background:#0f1410"] { background: #ffffff !important; }
+    html[data-theme="light"] [style*="background:#0d1219"] { background: #ffffff !important; }
     html[data-theme="light"] label { color: #475569 !important; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <a href="/dashboard" class="fin-back" onclick="goToCommandCenter(); return false;">← COMMAND CENTER</a>
-      <span class="fin-hdr-sep">|</span>
-      <span class="fin-title">Finance</span>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span aria-hidden="true" style="width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,#00d4ff,#38bdf8);flex:0 0 auto;"></span>
+      <span class="fin-title" style="font-size:15px;letter-spacing:0.01em;">Finance</span>
       <span id="fin-live-label" class="fin-muted" style="font-family:var(--mono);font-size:10px;letter-spacing:1px;">live data</span>
       <span id="fin-config-status" style="font-size:11px;letter-spacing:1px;"></span>
     </div>
@@ -257,7 +256,7 @@
       <span id="fin-last-updated" class="fin-meta"></span>
       <label class="fin-muted" style="display:flex;align-items:center;gap:6px;font-size:10px;cursor:pointer;font-family:var(--mono);">
         <input type="checkbox" id="fin-auto-refresh" onchange="toggleAutoRefresh()" />
-        Auto 30s <span id="fin-pulse" style="display:none;width:6px;height:6px;border-radius:50%;background:#10b981;"></span>
+        Auto 30s <span id="fin-pulse" style="display:none;width:6px;height:6px;border-radius:50%;background:#00d4ff;"></span>
       </label>
       <button onclick="refreshAll()" class="fin-btn-ghost" style="padding:5px 12px;font-size:10px;cursor:pointer;border-radius:2px;">Refresh</button>
       <button id="theme-toggle-btn" onclick="toggleTheme()" class="fin-btn-ghost" style="padding:5px 12px;font-size:10px;cursor:pointer;border-radius:2px;">Light mode</button>
@@ -277,8 +276,8 @@
     <section id="tab-overview" class="tab-panel active" data-tab="overview">
       <div style="display:flex;justify-content:center;padding:24px 0;">
         <svg width="180" height="180" viewBox="0 0 180 180">
-          <circle cx="90" cy="90" r="78" fill="none" stroke="rgba(16,185,129,0.1)" stroke-width="12"/>
-          <circle id="fin-pace-ring" cx="90" cy="90" r="78" fill="none" stroke="#10b981" stroke-width="12"
+          <circle cx="90" cy="90" r="78" fill="none" stroke="rgba(0,212,255,0.1)" stroke-width="12"/>
+          <circle id="fin-pace-ring" cx="90" cy="90" r="78" fill="none" stroke="#00d4ff" stroke-width="12"
             stroke-linecap="round" stroke-dasharray="490" stroke-dashoffset="490"
             transform="rotate(-90 90 90)" style="transition:stroke-dashoffset 1.2s ease-out,stroke 0.3s ease;"/>
           <text x="90" y="85" text-anchor="middle" class="fin-dollar-figure fin-pace-pct" style="font-size:28px;font-weight:700;fill:#fff;" id="fin-pace-pct">--%</text>
@@ -328,7 +327,7 @@
         </tr></thead><tbody id="fin-proj-rows"></tbody></table>
       </div>
       <div class="fin-card fin-legend" style="margin-top:16px;">
-        <strong>Stage weights:</strong> active 20% · under_contract 75% · pending 90% · closed 100%<br/>
+        <strong>Stage weights:</strong> active 20% &middot; under_contract 75% &middot; pending 90% &middot; closed 100%<br/>
         Confirm these match your actual close-rate experience.
       </div>
     </section>
@@ -338,20 +337,20 @@
         <div class="fin-card">
           <div class="fin-stat-label">WEEKLY SUMMARY (Fri 5pm)</div>
           <div id="fin-weekly-preview" class="fin-preview-text"></div>
-          <button class="fin-btn" style="margin-top:12px;" onclick="sendWeeklyNow()">📤 SEND TO MARCO NOW</button>
+          <button class="fin-btn" style="margin-top:12px;" onclick="sendWeeklyNow()">&#128228; SEND TO MARCO NOW</button>
         </div>
         <div class="fin-card">
           <div class="fin-stat-label">MONTHLY CLOSE REPORT (1st of month)</div>
           <div id="fin-monthly-preview" class="fin-preview-text"></div>
-          <button class="fin-btn" style="margin-top:12px;" onclick="sendMonthlyNow()">📤 SEND TO MARCO NOW</button>
+          <button class="fin-btn" style="margin-top:12px;" onclick="sendMonthlyNow()">&#128228; SEND TO MARCO NOW</button>
         </div>
       </div>
     </section>
 
     <section id="tab-alerts" class="tab-panel" data-tab="alerts">
       <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-        <button class="fin-btn fin-btn-ghost" onclick="runPaceCheck()">↻ CHECK PACE NOW</button>
-        <button class="fin-btn fin-btn-ghost" onclick="runSpikeCheck()">↻ CHECK EXPENSE SPIKES NOW</button>
+        <button class="fin-btn fin-btn-ghost" onclick="runPaceCheck()">&#8635; CHECK PACE NOW</button>
+        <button class="fin-btn fin-btn-ghost" onclick="runSpikeCheck()">&#8635; CHECK EXPENSE SPIKES NOW</button>
       </div>
       <div id="fin-alerts-list"></div>
     </section>
@@ -423,12 +422,12 @@
       muted.style.display = "none";
       const circumference = 490;
       const offset = circumference - (Math.min(pct, 100) / 100) * circumference;
-      ring.style.stroke = onTrack ? "#10b981" : "#ef4444";
+      ring.style.stroke = onTrack ? "#00d4ff" : "#ef4444";
       requestAnimationFrame(() => { ring.style.strokeDashoffset = offset; });
       animateCountUp(pctEl, pct, 1000, "%");
     }
 
-    function buildSparkline(values, color = "#10b981") {
+    function buildSparkline(values, color = "#00d4ff") {
       if (values.length < 2) return '<p class="fin-empty">Not enough data yet for a trend line.</p>';
       const w = 200, h = 40;
       const max = Math.max(...values), min = Math.min(...values);
@@ -631,14 +630,14 @@
     }
 
     function renderProjection(proj) {
-      const confColor = proj.confidence === "high" ? "#10b981" : proj.confidence === "medium" ? "#f59e0b" : "#888";
+      const confColor = proj.confidence === "high" ? "#00d4ff" : proj.confidence === "medium" ? "#f59e0b" : "#888";
       document.getElementById("fin-proj-summary").innerHTML = `
         <div class="fin-card"><div class="fin-stat-label">WEIGHTED GCI</div><div class="fin-stat-value fin-dollar-figure" id="fin-proj-total">$0</div></div>
         <div class="fin-card"><div class="fin-stat-label">DEALS</div><div class="fin-stat-value">${proj.dealCount}</div></div>
         <div class="fin-card"><div class="fin-stat-label">CONFIDENCE</div><div class="fin-stat-value" style="color:${confColor};text-transform:uppercase;font-size:18px;">${proj.confidence}</div></div>`;
       animateCountUp(document.getElementById("fin-proj-total"), proj.totalWeightedGCI, 700, "$");
       document.getElementById("fin-proj-rows").innerHTML = (proj.deals || []).map((d) =>
-        `<tr><td>${escapeHtml(d.address)}</td><td><span style="color:#10b981;">${escapeHtml(d.status)} · ${d.stageWeightPct}%</span></td><td>${fmtUsd(d.price)}</td><td class="fin-dollar-figure">${fmtUsd(d.weightedGCI)}</td><td>${fmtDate(d.projectedCloseDate)}</td></tr>`
+        `<tr><td>${escapeHtml(d.address)}</td><td><span style="color:#00d4ff;">${escapeHtml(d.status)} · ${d.stageWeightPct}%</span></td><td>${fmtUsd(d.price)}</td><td class="fin-dollar-figure">${fmtUsd(d.weightedGCI)}</td><td>${fmtDate(d.projectedCloseDate)}</td></tr>`
       ).join("") || '<tr><td colspan="5" class="fin-empty">No active pipeline deals</td></tr>';
     }
 
@@ -664,7 +663,7 @@
       const color = alert.alertType === "expense_spike" ? "#f59e0b" : "#ef4444";
       const icon = alert.alertType === "expense_spike" ? "📈" : "⚠️";
       const pulse = !alert.acknowledged ? "fin-alert-pulse" : "";
-      return `<div class="${pulse}" style="border-left:3px solid ${color};background:#0f1410;border-radius:4px;padding:14px 16px;margin-bottom:10px;">
+      return `<div class="${pulse}" style="border-left:3px solid ${color};background:#0d1219;border-radius:4px;padding:14px 16px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;"><div style="font-size:11px;color:${color};letter-spacing:1px;">${icon} ${alert.alertType.toUpperCase().replace("_"," ")}</div><div style="font-size:10px;color:#555;">${fmtDate(alert.sentAt)}</div></div>
         <div style="font-size:11px;color:#ccc;white-space:pre-line;margin-top:8px;">${escapeHtml(alert.message)}</div>
         ${!alert.acknowledged ? `<button onclick="acknowledgeAlert(${alert.id})" class="fin-btn-ghost" style="margin-top:8px;font-size:10px;padding:4px 10px;">Mark Reviewed</button>` : '<span style="font-size:10px;color:#555;">✓ Reviewed</span>'}
@@ -725,7 +724,7 @@
           const live = document.getElementById("fin-live-label");
           if (live) {
             live.textContent = `live · ${sync.pipelineDeals} pipeline deal(s)`;
-            live.style.color = "#10b981";
+            live.style.color = "#00d4ff";
           }
         }
         const [pace, gciR, expR, projR] = await Promise.all([

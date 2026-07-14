@@ -3,20 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Lead Nurture · Marco</title>
+  <title>Lead Nurture &middot; Marco</title>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg: #0a0a0a;
-      --surface: #111111;
-      --surface-2: #161616;
-      --border: rgba(239, 68, 68, 0.15);
-      --border-bright: rgba(239, 68, 68, 0.35);
+      --surface: #0d1219;
+      --surface-2: #121a24;
+      --border: rgba(0, 212, 255, 0.15);
+      --border-bright: rgba(0, 212, 255, 0.35);
       --text: #f1f5f9;
       --muted: #888;
-      --accent: #ef4444;
-      --accent-soft: #fca5a5;
-      --accent-glow: rgba(239, 68, 68, 0.15);
+      --accent: #00d4ff;
+      --accent-soft: #7dd3fc;
+      --accent-glow: rgba(0, 212, 255, 0.15);
+      --hot: #f43f5e;
+      --hot-glow: rgba(244, 63, 94, 0.15);
       --warm: #f97316;
       --cold: #64748b;
       --font: "Plus Jakarta Sans", system-ui, sans-serif;
@@ -90,7 +92,7 @@
       background: var(--accent);
       color: #fff;
       border-color: var(--accent);
-      box-shadow: 0 2px 12px rgba(239, 68, 68, 0.3);
+      box-shadow: 0 2px 12px rgba(0, 212, 255, 0.3);
     }
     .ln-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .ln-auto-label {
@@ -162,7 +164,7 @@
     }
     .ln-stat-value { font-size: 32px; font-weight: 800; line-height: 1; }
     .ln-stat-sub { font-size: 10px; color: var(--muted); margin-top: 6px; }
-    .ln-stat-hot .ln-stat-value { color: var(--accent); }
+    .ln-stat-hot .ln-stat-value { color: var(--hot); }
     .ln-stat-warm .ln-stat-value { color: var(--warm); }
     .ln-stat-cold .ln-stat-value { color: var(--cold); }
     .ln-stat-unscored .ln-stat-value { color: #94a3b8; }
@@ -189,7 +191,7 @@
       transition: transform 0.2s;
     }
     .ln-funnel-step:hover { transform: scale(1.03); }
-    .ln-funnel-step.hot { color: var(--accent); border-color: rgba(239,68,68,0.4); background: var(--accent-glow); }
+    .ln-funnel-step.hot { color: var(--hot); border-color: rgba(244,63,94,0.4); background: var(--hot-glow); }
     .ln-funnel-step.warm { color: var(--warm); border-color: rgba(251,146,60,0.3); background: rgba(251,146,60,0.08); }
     .ln-funnel-step.cold { color: var(--cold); border-color: rgba(148,163,184,0.3); background: rgba(148,163,184,0.08); }
     .ln-funnel-arrow { color: #444; font-size: 18px; }
@@ -226,7 +228,7 @@
     }
     .ln-lead-card:hover {
       transform: translateX(4px);
-      box-shadow: -4px 0 0 rgba(239, 68, 68, 0.4);
+      box-shadow: -4px 0 0 rgba(0, 212, 255, 0.4);
     }
     .ln-lead-card.warm { border-left-color: var(--warm); border-color: rgba(251,146,60,0.28); }
     .ln-lead-card.warm:hover { box-shadow: -4px 0 0 rgba(251, 146, 60, 0.35); }
@@ -250,7 +252,7 @@
     .ln-badge.ok { background: rgba(74,222,128,0.12); color: #86efac; border-color: rgba(74,222,128,0.3); }
     .ln-badge.warn { background: rgba(251,191,36,0.12); color: #fde047; border-color: rgba(251,191,36,0.3); }
     .ln-badge.muted { background: rgba(100,116,139,0.15); color: #94a3b8; }
-    .ln-badge.paused { background: rgba(239,68,68,0.15); color: #fca5a5; border-color: rgba(239,68,68,0.35); }
+    .ln-badge.paused { background: rgba(244,63,94,0.15); color: #fda4af; border-color: rgba(244,63,94,0.35); }
 
     .ln-suggest { margin-top: 10px; font-size: 11px; color: #ccc; }
     .ln-scored-at { font-size: 10px; color: #555; margin-top: 6px; }
@@ -265,7 +267,7 @@
       text-transform: uppercase;
       color: #555;
     }
-    .ln-table tr:hover { background: rgba(239,68,68,0.04); }
+    .ln-table tr:hover { background: rgba(0,212,255,0.04); }
 
     .ln-footer-bar {
       margin-top: 1rem;
@@ -380,7 +382,7 @@
     .ln-factor-fill {
       width: 100%;
       min-height: 22px;
-      background: linear-gradient(180deg, #f87171 0%, var(--accent) 100%);
+      background: linear-gradient(180deg, #7dd3fc 0%, var(--accent) 100%);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -448,19 +450,19 @@
     /* Light mode — red theme */
     html[data-theme="light"],
     html[data-theme="light"] body {
-      background: #fef2f2 !important;
+      background: #f1f5f9 !important;
       color: #0f172a !important;
       background-image: none !important;
     }
     html[data-theme="light"] .ln-header,
     html[data-theme="light"] .ln-tabs {
       background: #ffffff !important;
-      border-bottom-color: #fca5a5 !important;
+      border-bottom-color: #7dd3fc !important;
       color: #0f172a !important;
     }
     html[data-theme="light"] .ln-tab.active {
-      color: #b91c1c !important;
-      border-bottom-color: #b91c1c !important;
+      color: #0369a1 !important;
+      border-bottom-color: #0369a1 !important;
       font-weight: 700 !important;
     }
     html[data-theme="light"] .ln-stat-card,
@@ -469,32 +471,32 @@
     html[data-theme="light"] .ln-rule-card,
     html[data-theme="light"] .ln-funnel {
       background: #ffffff !important;
-      border-color: #fca5a5 !important;
-      box-shadow: 0 1px 3px rgba(239,68,68,0.08) !important;
+      border-color: #7dd3fc !important;
+      box-shadow: 0 1px 3px rgba(0,212,255,0.08) !important;
     }
     html[data-theme="light"] .ln-btn.primary,
     html[data-theme="light"] .ln-btn.ln-action-primary {
-      background: #b91c1c !important;
+      background: #0369a1 !important;
       color: #ffffff !important;
-      border-color: #b91c1c !important;
+      border-color: #0369a1 !important;
     }
     html[data-theme="light"] .ln-stat-hot .ln-stat-value,
     html[data-theme="light"] .ln-score-big,
     html[data-theme="light"] .ln-back,
     html[data-theme="light"] .ln-live,
-    html[data-theme="light"] .ln-section-title { color: #b91c1c !important; }
+    html[data-theme="light"] .ln-section-title { color: #0369a1 !important; }
     html[data-theme="light"] .ln-stat-warm .ln-stat-value,
     html[data-theme="light"] .ln-lead-card.warm .ln-score-big { color: #c2410c !important; }
     html[data-theme="light"] .ln-table { background: #ffffff !important; color: #0f172a !important; }
-    html[data-theme="light"] .ln-table th { color: #475569 !important; border-bottom: 2px solid #fca5a5 !important; }
-    html[data-theme="light"] .ln-table td { color: #0f172a !important; border-bottom: 1px solid #fef2f2 !important; }
-    html[data-theme="light"] .ln-table tr:hover { background: #fff5f5 !important; }
-    html[data-theme="light"] .ln-btn { color: #b91c1c !important; border-color: #fca5a5 !important; }
+    html[data-theme="light"] .ln-table th { color: #475569 !important; border-bottom: 2px solid #7dd3fc !important; }
+    html[data-theme="light"] .ln-table td { color: #0f172a !important; border-bottom: 1px solid #f1f5f9 !important; }
+    html[data-theme="light"] .ln-table tr:hover { background: #f0f9ff !important; }
+    html[data-theme="light"] .ln-btn { color: #0369a1 !important; border-color: #7dd3fc !important; }
     html[data-theme="light"] .ln-footer-bar,
-    html[data-theme="light"] .ln-hot-mini { background: #fff5f5 !important; }
+    html[data-theme="light"] .ln-hot-mini { background: #f0f9ff !important; }
     html[data-theme="light"] .ln-title { color: #0f172a !important; }
     html[data-theme="light"] .ln-tab { color: #64748b !important; }
-    html[data-theme="light"] .ln-tab.active { color: #b91c1c !important; }
+    html[data-theme="light"] .ln-tab.active { color: #0369a1 !important; }
     html[data-theme="light"] .ln-meta,
     html[data-theme="light"] .ln-auto-label { color: #64748b !important; }
     html[data-theme="light"] .ln-lead-name { color: #0f172a !important; }
@@ -512,9 +514,9 @@
     html[data-theme="light"] .ln-stat strong,
     html[data-theme="light"] .ln-stat-value { color: #0f172a !important; }
     html[data-theme="light"] .ln-stat-cold .ln-stat-value { color: #475569 !important; }
-    html[data-theme="light"] .ln-factor-real { color: #b91c1c !important; }
+    html[data-theme="light"] .ln-factor-real { color: #0369a1 !important; }
     html[data-theme="light"] .ln-badge.muted { color: #475569 !important; background: #f1f5f9 !important; }
-    html[data-theme="light"] .ln-toast { background: #ffffff !important; color: #0f172a !important; border-color: #fca5a5 !important; }
+    html[data-theme="light"] .ln-toast { background: #ffffff !important; color: #0f172a !important; border-color: #7dd3fc !important; }
     html[data-theme="light"] [style*="color:#888"] { color: #64748b !important; }
     html[data-theme="light"] [style*="color:#555"] { color: #64748b !important; }
     html[data-theme="light"] [style*="color:#444"] { color: #64748b !important; }
@@ -525,8 +527,7 @@
 <body>
   <header class="ln-header">
     <div class="ln-header-left">
-      <a href="/dashboard" class="ln-back" onclick="goToCommandCenter(); return false;">← COMMAND CENTER</a>
-      <span style="color:#444;">|</span>
+      <span aria-hidden="true" style="width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,#00d4ff,#38bdf8);flex:0 0 auto;"></span>
       <span class="ln-title">Lead Nurture</span>
       <span class="ln-live"><span class="ln-live-dot"></span> scoring live</span>
     </div>
@@ -559,8 +560,8 @@
       <div class="ln-section-title">Top hot lead factors</div>
       <div id="overview-hot-factors"></div>
       <div class="ln-actions">
-        <button type="button" class="ln-btn primary ln-action-primary" id="btn-score-all">↻ SCORE ALL LEADS NOW</button>
-        <button type="button" class="ln-btn" id="btn-rescore-cold">↻ RE-SCORE COLD LEADS</button>
+        <button type="button" class="ln-btn primary ln-action-primary" id="btn-score-all">&#8635; SCORE ALL LEADS NOW</button>
+        <button type="button" class="ln-btn" id="btn-rescore-cold">&#8635; RE-SCORE COLD LEADS</button>
       </div>
     </section>
 
@@ -571,14 +572,14 @@
     <section class="ln-panel" id="panel-warm" data-panel="warm">
       <div id="warm-list"></div>
       <div class="ln-footer-bar">
-        <span>Next weekly touch: <strong id="warm-next-monday">—</strong> (Mondays 10am Central)</span>
-        <button type="button" class="ln-btn primary ln-action-primary" id="btn-warm-touch">⚡ SEND WARM TOUCH NOW</button>
+        <span>Next weekly touch: <strong id="warm-next-monday">&mdash;</strong> (Mondays 10am Central)</span>
+        <button type="button" class="ln-btn primary ln-action-primary" id="btn-warm-touch">&#9889; SEND WARM TOUCH NOW</button>
       </div>
     </section>
 
     <section class="ln-panel" id="panel-cold" data-panel="cold">
       <div class="ln-panel-card" style="margin-bottom:12px;">
-        <strong id="cold-total-count">—</strong> cold leads
+        <strong id="cold-total-count">&mdash;</strong> cold leads
       </div>
       <div class="ln-table-wrap">
         <table class="ln-table">
@@ -592,10 +593,10 @@
       </div>
       <div class="ln-pagination" id="cold-pagination"></div>
       <div class="ln-footer-bar">
-        <span>Monthly value touch: first Monday of each month · Next: <strong id="cold-next-monday">—</strong></span>
+        <span>Monthly value touch: first Monday of each month &middot; Next: <strong id="cold-next-monday">&mdash;</strong></span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="ln-btn primary ln-action-primary" id="btn-cold-touch">⚡ SEND COLD TOUCH NOW</button>
-          <button type="button" class="ln-btn" id="btn-rescore-cold-tab">↻ RE-SCORE ALL COLD</button>
+          <button type="button" class="ln-btn primary ln-action-primary" id="btn-cold-touch">&#9889; SEND COLD TOUCH NOW</button>
+          <button type="button" class="ln-btn" id="btn-rescore-cold-tab">&#8635; RE-SCORE ALL COLD</button>
         </div>
       </div>
     </section>

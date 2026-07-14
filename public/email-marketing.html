@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Email Marketing · Marco</title>
+  <title>Email Marketing &middot; Marco</title>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg: #030308;
       --surface: #0c1018;
       --surface-2: #121826;
-      --border: rgba(120, 200, 255, 0.12);
+      --border: rgba(0, 212, 255, 0.15);
       --text: #f1f5f9;
       --muted: #94a3b8;
-      --accent: #a78bfa;
+      --accent: #00d4ff;
       --success: #4ade80;
       --danger: #f87171;
       --warn: #fbbf24;
@@ -34,7 +34,7 @@
       color: var(--text);
       min-height: 100vh;
       background-image:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(167,139,250,0.12), transparent),
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,212,255,0.12), transparent),
         radial-gradient(ellipse 60% 40% at 100% 50%, rgba(56,189,248,0.06), transparent);
     }
     .wrap { max-width: 1240px; margin: 0 auto; padding: 1.5rem; }
@@ -73,7 +73,7 @@
     .stat.clickable { cursor: pointer; }
     .stat.clickable:hover {
       transform: translateY(-3px);
-      border-color: rgba(167,139,250,0.35);
+      border-color: rgba(0,212,255,0.35);
       box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     }
     .stat label {
@@ -126,7 +126,7 @@
     }
     .email-row:last-child { border-bottom: none; }
     .email-row:hover {
-      background: rgba(167,139,250,0.06);
+      background: rgba(0,212,255,0.06);
       transform: translateX(4px);
     }
     .email-row .status-icon { font-size: 0.9rem; width: 1.2rem; flex-shrink: 0; margin-top: 0.1rem; }
@@ -173,9 +173,9 @@
       transition: background 0.15s, border-color 0.15s, transform 0.1s;
     }
     button { cursor: pointer; }
-    button:hover { border-color: rgba(167,139,250,0.4); }
+    button:hover { border-color: rgba(0,212,255,0.4); }
     button:active { transform: scale(0.98); }
-    button.primary { background: rgba(167,139,250,0.22); border-color: rgba(167,139,250,0.5); color: #e9d5ff; }
+    button.primary { background: rgba(0,212,255,0.22); border-color: rgba(0,212,255,0.5); color: #cffafe; }
     button.sync-btn { background: rgba(56,189,248,0.15); border-color: rgba(56,189,248,0.4); color: #bae6fd; }
     textarea { width: 100%; min-height: 100px; resize: vertical; font-weight: 400; }
     .compose-grid { display: grid; gap: 0.75rem; }
@@ -240,7 +240,7 @@
       border-radius: 8px;
       transition: background 0.15s;
     }
-    .modal-list .item:hover { background: rgba(167,139,250,0.06); }
+    .modal-list .item:hover { background: rgba(0,212,255,0.06); }
     .modal-list .item:last-child { border-bottom: none; }
     .drip-block {
       margin-bottom: 1.25rem;
@@ -288,9 +288,9 @@
 <body>
   <div class="wrap">
     <div class="topbar">
-      <a class="back" href="/dashboard" onclick="goToCommandCenter(); return false;">← Command Center</a>
-      <h1>Email Marketing <span>Harvey sub-agent · Live Gmail</span></h1>
-      <span id="conn-badge" class="conn bad">Gmail checking…</span>
+      <span aria-hidden="true" style="width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,#00d4ff,#38bdf8);flex:0 0 auto;"></span>
+      <h1>Email Marketing <span>Harvey sub-agent &middot; Live Gmail</span></h1>
+      <span id="conn-badge" class="conn bad">Gmail checking&hellip;</span>
       <button type="button" class="sync-btn" id="sync-gmail-btn" title="Pull from real Gmail inbox">Sync Gmail</button>
       <button type="button" id="theme-toggle-btn" title="Toggle light/dark">Theme</button>
       <label class="toolbar"><input type="checkbox" id="auto-refresh" checked /> Auto 30s</label>
@@ -298,20 +298,20 @@
     </div>
 
     <div class="stats" id="stats-row">
-      <div class="stat"><label>Sent today</label><strong id="stat-sent">—</strong></div>
-      <div class="stat"><label>Open rate</label><strong id="stat-open">—</strong></div>
-      <div class="stat clickable replies" id="stat-replies-card" title="Click to view replies"><label>Replies</label><strong id="stat-replies">—</strong></div>
-      <div class="stat clickable drips" id="stat-drips-card" title="Click to view active drips"><label>Active drips</label><strong id="stat-drips">—</strong></div>
+      <div class="stat"><label>Sent today</label><strong id="stat-sent">&mdash;</strong></div>
+      <div class="stat"><label>Open rate</label><strong id="stat-open">&mdash;</strong></div>
+      <div class="stat clickable replies" id="stat-replies-card" title="Click to view replies"><label>Replies</label><strong id="stat-replies">&mdash;</strong></div>
+      <div class="stat clickable drips" id="stat-drips-card" title="Click to view active drips"><label>Active drips</label><strong id="stat-drips">&mdash;</strong></div>
     </div>
 
     <div class="panel">
-      <h2>Sent emails <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— click to open</span></h2>
-      <div id="sent-emails"><p style="color:var(--muted)">Loading…</p></div>
+      <h2>Sent emails <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">&mdash; click to open</span></h2>
+      <div id="sent-emails"><p style="color:var(--muted)">Loading&hellip;</p></div>
     </div>
 
     <div class="panel">
-      <h2>Gmail inbox <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— live pull</span></h2>
-      <div id="gmail-inbox"><p style="color:var(--muted)">Sync Gmail to load inbox…</p></div>
+      <h2>Gmail inbox <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">&mdash; live pull</span></h2>
+      <div id="gmail-inbox"><p style="color:var(--muted)">Sync Gmail to load inbox&hellip;</p></div>
     </div>
 
     <div class="panel">
@@ -319,7 +319,7 @@
       <div style="overflow-x:auto">
         <table>
           <thead><tr><th>Lead</th><th>Type</th><th>Step</th><th>Next send</th><th></th></tr></thead>
-          <tbody id="drip-tbody"><tr><td colspan="5" style="color:var(--muted)">Loading…</td></tr></tbody>
+          <tbody id="drip-tbody"><tr><td colspan="5" style="color:var(--muted)">Loading&hellip;</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -327,7 +327,7 @@
     <div class="panel">
       <h2>Manual send (existing client flow)</h2>
       <div class="compose-grid">
-        <select id="lead-select"><option value="">Select lead…</option></select>
+        <select id="lead-select"><option value="">Select lead&hellip;</option></select>
         <div id="client-context" class="context-box">Select a lead to load CRM context.</div>
         <input id="email-subject" type="text" placeholder="Subject" />
         <textarea id="email-body" placeholder="Email body"></textarea>
@@ -341,7 +341,7 @@
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h3 id="modal-title">Email</h3>
-        <button type="button" class="modal-close" id="modal-close" aria-label="Close">×</button>
+        <button type="button" class="modal-close" id="modal-close" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body" id="modal-body"></div>
     </div>

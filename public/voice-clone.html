@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Voice Clone · Marco</title>
+  <title>Voice Clone &middot; Marco</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg: #0a0a0f;
-      --surface: #110f1a;
-      --border: rgba(168, 85, 247, 0.25);
-      --accent: #a855f7;
-      --accent-glow: rgba(168, 85, 247, 0.15);
+      --surface: #0d1219;
+      --border: rgba(0, 212, 255, 0.25);
+      --accent: #00d4ff;
+      --accent-glow: rgba(0, 212, 255, 0.15);
       --green: #10b981;
       --amber: #f59e0b;
       --red: #ef4444;
@@ -93,7 +93,7 @@
     .vc-form input, .vc-form select, .vc-form textarea {
       width: 100%;
       background: var(--bg);
-      border: 1px solid rgba(168, 85, 247, 0.2);
+      border: 1px solid rgba(0, 212, 255, 0.2);
       color: #fff;
       padding: 8px 10px;
       font-family: var(--mono);
@@ -121,26 +121,25 @@
       z-index: 100;
     }
     #vc-toast.show { opacity: 1; }
-    html[data-theme="light"], html[data-theme="light"] body { background: #faf5ff !important; color: #0f172a !important; }
-    html[data-theme="light"] .header { background: #ffffff !important; border-bottom: 2px solid #d8b4fe !important; }
-    html[data-theme="light"] .tab.active { color: #7c3aed !important; border-bottom: 2px solid #7c3aed !important; font-weight: 700 !important; }
-    html[data-theme="light"] .vc-card, html[data-theme="light"] #vc-form { background: #ffffff !important; border-color: #e9d5ff !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
-    html[data-theme="light"] textarea, html[data-theme="light"] select, html[data-theme="light"] input { background: #f5f3ff !important; color: #0f172a !important; border-color: #c4b5fd !important; }
-    html[data-theme="light"] button.vc-btn, html[data-theme="light"] button[onclick*="approve"] { background: #7c3aed !important; color: #ffffff !important; }
+    html[data-theme="light"], html[data-theme="light"] body { background: #f1f5f9 !important; color: #0f172a !important; }
+    html[data-theme="light"] .header { background: #ffffff !important; border-bottom: 2px solid #7dd3fc !important; }
+    html[data-theme="light"] .tab.active { color: #0369a1 !important; border-bottom: 2px solid #0369a1 !important; font-weight: 700 !important; }
+    html[data-theme="light"] .vc-card, html[data-theme="light"] #vc-form { background: #ffffff !important; border-color: #bae6fd !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+    html[data-theme="light"] textarea, html[data-theme="light"] select, html[data-theme="light"] input { background: #f0f9ff !important; color: #0f172a !important; border-color: #7dd3fc !important; }
+    html[data-theme="light"] button.vc-btn, html[data-theme="light"] button[onclick*="approve"] { background: #0369a1 !important; color: #ffffff !important; }
     html[data-theme="light"] table { background: #ffffff !important; color: #0f172a !important; }
-    html[data-theme="light"] [style*="color:#a855f7"] { color: #7c3aed !important; }
+    html[data-theme="light"] [style*="color:#00d4ff"] { color: #0369a1 !important; }
   </style>
 </head>
 <body>
   <header class="header">
     <div>
-      <a href="/dashboard" class="vc-back" onclick="goToCommandCenter(); return false;">← Hub</a>
-      <span style="color:#555;margin:0 8px;">|</span>
+      <span aria-hidden="true" style="display:inline-block;width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,#00d4ff,#38bdf8);vertical-align:middle;margin-right:10px;"></span>
       <strong style="font-family:'Space Grotesk',sans-serif;">Voice Clone</strong>
-      <span class="vc-muted" style="margin-left:8px;">VoxCPM2 · Marco</span>
+      <span class="vc-muted" style="margin-left:8px;">VoxCPM2 &middot; Marco</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
-      <span id="vc-service-status" class="vc-muted">Checking service…</span>
+      <span id="vc-service-status" class="vc-muted">Checking service&hellip;</span>
       <button type="button" class="vc-btn ghost" id="vc-theme-btn">Light mode</button>
       <button type="button" class="vc-btn ghost" onclick="refreshAll()">Refresh</button>
     </div>
@@ -158,10 +157,10 @@
     <section id="panel-overview" class="tab-panel active">
       <div class="vc-stat-grid" id="vc-stats"></div>
       <div class="vc-card" id="vc-form">
-        <div style="font-size:11px;color:var(--accent);letter-spacing:2px;margin-bottom:14px;">⬡ SUBMIT VOICEOVER SCRIPT</div>
+        <div style="font-size:11px;color:var(--accent);letter-spacing:2px;margin-bottom:14px;">&#11041; SUBMIT VOICEOVER SCRIPT</div>
         <div class="vc-form">
           <label class="vc-muted" style="display:block;margin-bottom:4px;">SCRIPT</label>
-          <textarea id="vc-script" rows="4" placeholder="Enter Marco's script here…"></textarea>
+          <textarea id="vc-script" rows="4" placeholder="Enter Marco's script here&hellip;"></textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px;">
             <button type="button" class="vc-btn ghost" onclick="loadTestScript('hook')">Load test hook</button>
             <button type="button" class="vc-btn ghost" onclick="loadTestScript('explainer')">Load test explainer</button>
@@ -180,9 +179,9 @@
             <div>
               <label class="vc-muted">DELIVERY STYLE</label>
               <select id="vc-style" onchange="onStyleChange()">
-                <option value="energetic_hook">Energetic — for hooks</option>
-                <option value="calm_explainer">Calm — for explainers</option>
-                <option value="warm_client">Warm — for client messages</option>
+                <option value="energetic_hook">Energetic &mdash; for hooks</option>
+                <option value="calm_explainer">Calm &mdash; for explainers</option>
+                <option value="warm_client">Warm &mdash; for client messages</option>
                 <option value="custom">Custom (describe below)</option>
               </select>
             </div>
@@ -200,8 +199,8 @@
             <input id="vc-custom-style" placeholder="e.g. slightly slower, serious tone, authoritative" />
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px;flex-wrap:wrap;">
-            <div class="vc-muted" style="max-width:520px;">Submitted scripts go to pending approval before generation — cloned voice never generates without Marco's explicit approval.</div>
-            <button type="button" class="vc-btn" onclick="submitScript()">SUBMIT FOR APPROVAL →</button>
+            <div class="vc-muted" style="max-width:520px;">Submitted scripts go to pending approval before generation &mdash; cloned voice never generates without Marco's explicit approval.</div>
+            <button type="button" class="vc-btn" onclick="submitScript()">SUBMIT FOR APPROVAL &rarr;</button>
           </div>
         </div>
       </div>
@@ -221,11 +220,11 @@
         <input id="rc-path" placeholder="Local audio path (e.g. /data/voice-clone/reference/marco1.wav)" />
         <input id="rc-transcript" placeholder="What Marco says in this clip (for Ultimate Cloning mode)" />
         <select id="rc-quality">
-          <option value="5">⭐⭐⭐⭐⭐ — Excellent clarity</option>
-          <option value="4">⭐⭐⭐⭐ — Good</option>
-          <option value="3">⭐⭐⭐ — Acceptable</option>
-          <option value="2">⭐⭐ — Noisy</option>
-          <option value="1">⭐ — Poor</option>
+          <option value="5">&#11088;&#11088;&#11088;&#11088;&#11088; &mdash; Excellent clarity</option>
+          <option value="4">&#11088;&#11088;&#11088;&#11088; &mdash; Good</option>
+          <option value="3">&#11088;&#11088;&#11088; &mdash; Acceptable</option>
+          <option value="2">&#11088;&#11088; &mdash; Noisy</option>
+          <option value="1">&#11088; &mdash; Poor</option>
         </select>
         <button type="button" class="vc-btn" onclick="addReferenceClip()">+ ADD CLIP</button>
       </div>
