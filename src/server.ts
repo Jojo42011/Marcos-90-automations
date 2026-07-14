@@ -3216,6 +3216,8 @@ app.get("/api/dm/conversations", async (req, res) => {
         platform: lead.platform || "unknown",
         userId: lead.userId,
         state: lead.state ? String(lead.state) : null,
+        phone: lead.phone?.trim() || null,
+        email: lead.email?.trim() || null,
         hasPhone: Boolean(lead.phone?.trim()),
         lastText: last?.text || "",
         lastAt: last?.at || null,
