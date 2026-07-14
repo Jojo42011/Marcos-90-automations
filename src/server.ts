@@ -3176,6 +3176,75 @@ app.post("/reset", resetCors, (_req, res) => {
   res.status(200).json({ ok: true, message: "In-memory store cleared." });
 });
 
+// ── DM Agent console ────────────────────────────────────────────────────────
+// The DM agent (/simulate, /webhook) reads inbound Instagram/SMS DMs and
+// auto-replies, persisting each thread as a lead + conversation. These two
+// read-only endpoints power the DM Agent tab's inbox. Note: DM leads often
+// have no phone, so they never appear in /api/dashboard/data (which filters to
+// phone-holding leads) — this reads the full conversation store directly.
+app.get("/api/dm/conversations", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const { listAllLeads: allLeads, getConversation: getConv } = await import("./core/db.js");
+    const leads = await allLeads();
+    const items: Array<Record<string, unknown>> = [];
+    for (const lead of leads) {
+      const conv = await getConv(lead.id);
+      const msgs = conv.messages || [];
+      if (!msgs.length) continue;
+      const last = msgs[msgs.length - 1];
+      items.push({
+        id: lead.id,
+        name: lead.name || lead.username || lead.userId || "Lead",
+        platform: lead.platform || "unknown",
+        userId: lead.userId,
+        lastText: last?.text || "",
+        lastAt: last?.at || null,
+        lastRole: last?.role || "user",
+        userMessages: msgs.filter((m) => m.role === "user").length,
+        agentMessages: msgs.filter((m) => m.role === "assistant").length,
+        total: msgs.length,
+      });
+    }
+    items.sort((a, b) => String(b.lastAt || "").localeCompare(String(a.lastAt || "")));
+    res.json({ conversations: items });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/api/dm/conversation/:leadId", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const { listAllLeads: allLeads, getConversation: getConv } = await import("./core/db.js");
+    const lead = (await allLeads()).find((l) => l.id === req.params.leadId);
+    if (!lead) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    const conv = await getConv(lead.id);
+    res.json({
+      lead: {
+        id: lead.id,
+        name: lead.name || lead.username || lead.userId || "Lead",
+        platform: lead.platform || "unknown",
+        userId: lead.userId,
+        crmStage: lead.crmStage,
+        crmIntent: lead.crmIntent,
+      },
+      messages: conv.messages || [],
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 app.post("/sinch/inbound", express.json(), async (req, res) => {
   try {
     const payload = receiveInbound(req.body);

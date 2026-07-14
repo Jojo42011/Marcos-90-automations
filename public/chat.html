@@ -8,140 +8,103 @@
     :root {
       --bg: #0a0a0a;
       --surface: #0d1219;
-      --border: rgba(0,212,255,0.22);
+      --surface-2: #0f1621;
+      --border: rgba(0,212,255,0.18);
+      --border-2: rgba(255,255,255,0.06);
       --text: #f1f5f9;
       --muted: #8b9cb3;
       --accent: #00d4ff;
-      --user: rgba(0,212,255,0.12);
-      --bot: rgba(255,255,255,0.04);
+      --accent-2: #38bdf8;
+      --user: rgba(0,212,255,0.14);
+      --bot: rgba(255,255,255,0.05);
+      --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+      --font: "Plus Jakarta Sans", system-ui, Segoe UI, sans-serif;
     }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: system-ui, Segoe UI, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: var(--font);
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden;
     }
     header {
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.75rem;
+      padding: 0.7rem 1rem; border-bottom: 1px solid var(--border);
+      background: var(--surface); display: flex; align-items: center; gap: 0.7rem;
+      flex: 0 0 auto;
     }
-    header h1 {
-      margin: 0;
-      font-size: 1rem;
-      font-weight: 600;
-    }
-    header label {
-      font-size: 0.75rem;
-      color: var(--muted);
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-    header input[type="text"] {
-      width: 12rem;
-      padding: 0.35rem 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 0.85rem;
-    }
-    #log {
-      flex: 1;
-      overflow-y: auto;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.65rem;
-      max-width: 42rem;
-      margin: 0 auto;
-      width: 100%;
-    }
-    .bubble {
-      max-width: 90%;
-      padding: 0.65rem 0.85rem;
-      border-radius: 12px;
-      line-height: 1.45;
-      font-size: 0.95rem;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .bubble.user {
-      align-self: flex-end;
-      background: var(--user);
-      border: 1px solid var(--border);
-    }
-    .bubble.bot {
-      align-self: flex-start;
-      background: var(--bot);
-      border: 1px solid var(--border);
-    }
-    .bubble.error {
-      align-self: stretch;
-      background: #3a1f1f;
-      border-color: #6b3030;
-      color: #f0b4b4;
-      font-size: 0.85rem;
-    }
-    .bubble.pending {
-      opacity: 0.7;
-      font-style: italic;
-    }
-    footer {
-      padding: 0.75rem 1rem;
-      border-top: 1px solid var(--border);
-      background: var(--surface);
-      max-width: 42rem;
-      margin: 0 auto;
-      width: 100%;
-    }
-    form {
-      display: flex;
-      gap: 0.5rem;
-    }
-    form input[type="text"] {
-      flex: 1;
-      padding: 0.6rem 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 1rem;
-    }
-    form button {
-      padding: 0.6rem 1rem;
-      border: none;
-      border-radius: 8px;
-      background: var(--accent);
-      color: #001018;
-      font-weight: 700;
-      cursor: pointer;
-      font-size: 0.95rem;
-    }
-    header .dm-mark {
-      width: 20px; height: 20px; border-radius: 6px; flex: 0 0 auto;
-      background: linear-gradient(135deg, #00d4ff, #38bdf8);
-    }
-    header .dm-title-wrap { display: flex; flex-direction: column; line-height: 1.15; }
-    header .dm-title-wrap small { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.04em; }
-    form button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .hint {
-      margin: 0.5rem 0 0;
-      font-size: 0.75rem;
-      color: var(--muted);
-    }
+    .dm-mark { width: 20px; height: 20px; border-radius: 6px; flex: 0 0 auto;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+    .dm-title-wrap { display: flex; flex-direction: column; line-height: 1.15; }
+    .dm-title-wrap h1 { margin: 0; font-size: 0.95rem; font-weight: 700; }
+    .dm-title-wrap small { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.04em; }
+    .dm-live { margin-left: auto; display: flex; align-items: center; gap: 0.4rem;
+      font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; }
+    .dm-live i { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 8px #4ade80; }
+
+    .dm-body { flex: 1; display: flex; min-height: 0; }
+
+    /* ── Conversations list ── */
+    .dm-list { flex: 0 0 300px; border-right: 1px solid var(--border-2);
+      background: var(--surface-2); display: flex; flex-direction: column; min-height: 0; }
+    .dm-list-head { padding: 0.7rem 0.85rem; display: flex; align-items: center; gap: 0.5rem;
+      border-bottom: 1px solid var(--border-2); }
+    .dm-list-head .t { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--muted); }
+    .dm-new { margin-left: auto; background: transparent; border: 1px solid var(--border);
+      color: var(--accent); font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.05em;
+      padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; }
+    .dm-new:hover { background: rgba(0,212,255,0.08); }
+    .dm-threads { flex: 1; overflow-y: auto; }
+    .dm-thread { padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--border-2); cursor: pointer;
+      display: flex; flex-direction: column; gap: 0.2rem; transition: background 0.12s; }
+    .dm-thread:hover { background: rgba(255,255,255,0.03); }
+    .dm-thread.active { background: rgba(0,212,255,0.09); box-shadow: inset 3px 0 0 var(--accent); }
+    .dm-thread-top { display: flex; align-items: center; gap: 0.4rem; }
+    .dm-thread-name { font-weight: 600; font-size: 0.85rem; flex: 1; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+    .dm-thread-time { font-size: 0.62rem; color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
+    .dm-thread-preview { font-size: 0.75rem; color: var(--muted); overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+    .dm-badge { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.05em; text-transform: uppercase;
+      padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid var(--border-2); color: var(--muted); flex: 0 0 auto; }
+    .dm-badge.instagram { color: #e879f9; border-color: rgba(232,121,249,0.4); }
+    .dm-badge.sms, .dm-badge.twilio { color: #4ade80; border-color: rgba(74,222,128,0.4); }
+    .dm-badge.tiktok { color: #25f4ee; border-color: rgba(37,244,238,0.4); }
+    .dm-badge.facebook { color: #60a5fa; border-color: rgba(96,165,250,0.4); }
+    .dm-empty { padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.8rem; line-height: 1.6; }
+
+    /* ── Conversation view ── */
+    .dm-conv { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .dm-conv-head { padding: 0.7rem 1rem; border-bottom: 1px solid var(--border-2);
+      display: flex; align-items: center; gap: 0.6rem; flex: 0 0 auto; }
+    .dm-conv-head .nm { font-weight: 700; font-size: 0.9rem; }
+    .dm-conv-head .sub { font-size: 0.68rem; color: var(--muted); font-family: var(--mono); }
+    #log { flex: 1; overflow-y: auto; padding: 1.1rem; display: flex; flex-direction: column;
+      gap: 0.55rem; max-width: 46rem; margin: 0 auto; width: 100%; }
+    .bubble { max-width: 82%; padding: 0.6rem 0.8rem; border-radius: 12px; line-height: 1.45;
+      font-size: 0.9rem; white-space: pre-wrap; word-break: break-word; }
+    .bubble .who { display: block; font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 0.2rem; font-family: var(--mono); }
+    .bubble.user { align-self: flex-end; background: var(--user); border: 1px solid var(--border); }
+    .bubble.bot { align-self: flex-start; background: var(--bot); border: 1px solid var(--border-2); }
+    .bubble.bot .who { color: var(--accent); }
+    .bubble.error { align-self: stretch; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4);
+      color: #fca5a5; font-size: 0.82rem; }
+    .bubble.pending { opacity: 0.6; font-style: italic; }
+    .dm-conv-empty { flex: 1; display: flex; align-items: center; justify-content: center;
+      text-align: center; color: var(--muted); font-size: 0.9rem; padding: 2rem; line-height: 1.6; }
+
+    footer { padding: 0.7rem 1rem; border-top: 1px solid var(--border-2); background: var(--surface);
+      flex: 0 0 auto; }
+    form { display: flex; gap: 0.5rem; max-width: 46rem; margin: 0 auto; }
+    form input[type="text"] { flex: 1; padding: 0.6rem 0.75rem; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.95rem; }
+    form input:focus { outline: none; border-color: var(--accent); }
+    form button { padding: 0.6rem 1.1rem; border: none; border-radius: 8px; background: var(--accent);
+      color: #001018; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+    form button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .hint { margin: 0.5rem auto 0; max-width: 46rem; font-size: 0.7rem; color: var(--muted); }
+    @media (max-width: 720px) { .dm-list { flex-basis: 40%; } }
   </style>
 </head>
 <body>
@@ -149,73 +112,213 @@
     <span class="dm-mark" aria-hidden="true"></span>
     <div class="dm-title-wrap">
       <h1>DM Agent</h1>
-      <small>Instagram &middot; SMS reply tester</small>
+      <small>Instagram &middot; SMS reply console</small>
     </div>
-    <label style="margin-left:auto;">
-      thread / user
-      <input type="text" id="userId" value="demo-user-1" autocomplete="off" />
-    </label>
+    <span class="dm-live"><i></i> Agent live</span>
   </header>
-  <div id="log" aria-live="polite"></div>
-  <footer>
-    <form id="f">
-      <input type="text" id="msg" placeholder="Type a message…" autocomplete="off" required />
-      <button type="submit" id="send">Send</button>
-    </form>
-    <p class="hint">Send a message as a lead to see how the DM agent replies. Keep the same thread / user id to preserve conversation state across messages.</p>
-  </footer>
+
+  <div class="dm-body">
+    <aside class="dm-list">
+      <div class="dm-list-head">
+        <span class="t">Conversations</span>
+        <button type="button" class="dm-new" id="dm-new-btn">+ New</button>
+      </div>
+      <div class="dm-threads" id="threads">
+        <div class="dm-empty">Loading…</div>
+      </div>
+    </aside>
+
+    <section class="dm-conv">
+      <div class="dm-conv-head" id="conv-head" style="display:none;">
+        <span class="nm" id="conv-name">—</span>
+        <span class="sub" id="conv-sub"></span>
+      </div>
+      <div id="log" style="display:none;"></div>
+      <div class="dm-conv-empty" id="conv-empty">
+        Select a conversation on the left, or start a new one to see how the DM agent replies.
+      </div>
+      <footer>
+        <form id="f">
+          <input type="text" id="msg" placeholder="Type a message as the lead…" autocomplete="off" required disabled />
+          <button type="submit" id="send" disabled>Send</button>
+        </form>
+        <p class="hint">Messages are sent as the lead; the DM agent replies automatically. Real inbound Instagram/SMS conversations appear here as they arrive.</p>
+      </footer>
+    </section>
+  </div>
+
   <script>
-    const log = document.getElementById("log");
+    function getToken() {
+      return new URLSearchParams(location.search).get("token") || localStorage.getItem("dashboardToken") || "";
+    }
+    function apiUrl(path) {
+      const u = new URL(path, location.origin);
+      const t = getToken();
+      if (t) u.searchParams.set("token", t);
+      return u.toString();
+    }
+    const threadsEl = document.getElementById("threads");
+    const logEl = document.getElementById("log");
+    const convEmpty = document.getElementById("conv-empty");
+    const convHead = document.getElementById("conv-head");
     const form = document.getElementById("f");
-    const msg = document.getElementById("msg");
-    const userId = document.getElementById("userId");
+    const msgInput = document.getElementById("msg");
     const sendBtn = document.getElementById("send");
 
-    function addBubble(text, cls) {
-      const el = document.createElement("div");
-      el.className = "bubble " + cls;
-      el.textContent = text;
-      log.appendChild(el);
-      log.scrollTop = log.scrollHeight;
-      return el;
+    // current selected thread: {id?, platform, userId, name}
+    let current = null;
+    let convCache = [];
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
+    function timeAgo(iso) {
+      if (!iso) return "";
+      const d = new Date(iso); if (isNaN(d)) return "";
+      const s = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (s < 60) return s + "s";
+      if (s < 3600) return Math.floor(s / 60) + "m";
+      if (s < 86400) return Math.floor(s / 3600) + "h";
+      return Math.floor(s / 86400) + "d";
+    }
+    function platClass(p) {
+      p = String(p || "").toLowerCase();
+      if (p.includes("insta")) return "instagram";
+      if (p.includes("sms") || p.includes("twilio") || p.includes("sinch")) return "sms";
+      if (p.includes("tiktok")) return "tiktok";
+      if (p.includes("face")) return "facebook";
+      return "";
+    }
+
+    async function loadConversations() {
+      try {
+        const res = await fetch(apiUrl("/api/dm/conversations"));
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        convCache = data.conversations || [];
+        renderThreads();
+      } catch (e) {
+        threadsEl.innerHTML = '<div class="dm-empty">Could not load conversations.<br>' + esc(e.message) + '</div>';
+      }
+    }
+
+    function renderThreads() {
+      if (!convCache.length) {
+        threadsEl.innerHTML = '<div class="dm-empty">No DM conversations yet.<br>Tap <b>+ New</b> to start one and preview the agent.</div>';
+        return;
+      }
+      threadsEl.innerHTML = convCache.map((c) => {
+        const active = current && current.id === c.id ? " active" : "";
+        const pc = platClass(c.platform);
+        return `<div class="dm-thread${active}" data-id="${esc(c.id)}" data-platform="${esc(c.platform)}" data-userid="${esc(c.userId)}" data-name="${esc(c.name)}">
+          <div class="dm-thread-top">
+            <span class="dm-badge ${pc}">${esc(c.platform)}</span>
+            <span class="dm-thread-name">${esc(c.name)}</span>
+            <span class="dm-thread-time">${esc(timeAgo(c.lastAt))}</span>
+          </div>
+          <div class="dm-thread-preview">${c.lastRole === "assistant" ? "↩ " : ""}${esc(c.lastText)}</div>
+        </div>`;
+      }).join("");
+      threadsEl.querySelectorAll(".dm-thread").forEach((el) => {
+        el.addEventListener("click", () => {
+          selectThread({ id: el.dataset.id, platform: el.dataset.platform, userId: el.dataset.userid, name: el.dataset.name });
+        });
+      });
+    }
+
+    function openComposer(placeholderName) {
+      msgInput.disabled = false; sendBtn.disabled = false;
+      msgInput.placeholder = "Message " + (placeholderName || "the lead") + "…";
+      convEmpty.style.display = "none";
+      logEl.style.display = "flex";
+      convHead.style.display = "flex";
+    }
+
+    function renderMessages(messages) {
+      logEl.innerHTML = (messages || []).map((m) => {
+        const cls = m.role === "assistant" ? "bot" : "user";
+        const who = m.role === "assistant" ? "DM Agent" : "Lead";
+        return `<div class="bubble ${cls}"><span class="who">${who}</span>${esc(m.text)}</div>`;
+      }).join("");
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function selectThread(t) {
+      current = t;
+      renderThreads();
+      document.getElementById("conv-name").textContent = t.name || t.userId || "New conversation";
+      document.getElementById("conv-sub").textContent = t.platform + " · " + (t.userId || "");
+      openComposer(t.name);
+      if (!t.id) { renderMessages([]); msgInput.focus(); return; }
+      try {
+        const res = await fetch(apiUrl("/api/dm/conversation/" + encodeURIComponent(t.id)));
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        renderMessages(data.messages || []);
+      } catch (e) {
+        renderMessages([]);
+      }
+      msgInput.focus();
+    }
+
+    document.getElementById("dm-new-btn").addEventListener("click", () => {
+      const handle = prompt("New conversation — enter the lead's handle / user id (e.g. an Instagram username):", "");
+      if (!handle || !handle.trim()) return;
+      const uid = handle.trim();
+      selectThread({ id: null, platform: "instagram", userId: uid, name: uid });
+    });
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const text = msg.value.trim();
-      if (!text) return;
-      const uid = userId.value.trim() || "demo-user-1";
-      addBubble(text, "user");
-      msg.value = "";
-      const pending = addBubble("…", "bot pending");
-      sendBtn.disabled = true;
+      const text = msgInput.value.trim();
+      if (!text || !current) return;
+      msgInput.value = "";
+      // optimistic lead bubble
+      const b = document.createElement("div");
+      b.className = "bubble user"; b.innerHTML = '<span class="who">Lead</span>' + esc(text);
+      logEl.style.display = "flex"; convEmpty.style.display = "none";
+      logEl.appendChild(b);
+      const pending = document.createElement("div");
+      pending.className = "bubble bot pending"; pending.innerHTML = '<span class="who">DM Agent</span>…';
+      logEl.appendChild(pending); logEl.scrollTop = logEl.scrollHeight;
+      sendBtn.disabled = true; msgInput.disabled = true;
       try {
-        const res = await fetch("/simulate", {
+        const res = await fetch(apiUrl("/simulate"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            platform: "instagram",
-            user_id: uid,
-            message: text,
-            comment_or_dm: "dm",
-          }),
+          body: JSON.stringify({ platform: current.platform || "instagram", user_id: current.userId, message: text, comment_or_dm: "dm" }),
         });
         const data = await res.json().catch(() => ({}));
         pending.remove();
         if (!res.ok) {
-          addBubble(data.error || "Request failed (" + res.status + ")", "error");
-          return;
+          const err = document.createElement("div");
+          err.className = "bubble error"; err.textContent = data.error || ("Request failed (" + res.status + ")");
+          logEl.appendChild(err);
+        } else {
+          const reply = document.createElement("div");
+          reply.className = "bubble bot";
+          reply.innerHTML = '<span class="who">DM Agent</span>' + esc(data.reply || "(no reply)");
+          logEl.appendChild(reply);
         }
-        if (data.reply) addBubble(data.reply, "bot");
-        else addBubble("(no reply)", "bot");
+        logEl.scrollTop = logEl.scrollHeight;
+        await loadConversations();
+        // the thread now exists server-side — attach its id if we can match on userId
+        if (!current.id) {
+          const match = convCache.find((c) => c.userId === current.userId && platClass(c.platform) === platClass(current.platform));
+          if (match) { current.id = match.id; current.name = match.name; renderThreads(); }
+        }
       } catch (err) {
         pending.remove();
-        addBubble(String(err.message || err), "error");
+        const el = document.createElement("div");
+        el.className = "bubble error"; el.textContent = String(err.message || err);
+        logEl.appendChild(el);
       } finally {
-        sendBtn.disabled = false;
-        msg.focus();
+        sendBtn.disabled = false; msgInput.disabled = false; msgInput.focus();
       }
     });
+
+    loadConversations();
+    setInterval(loadConversations, 8000);
   </script>
 </body>
 </html>
