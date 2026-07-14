@@ -138,6 +138,7 @@ const index_js_26 = require("./integrations/openshorts/index.js");
 const clipEditAgent_js_1 = require("./agents/contentManager/clipEditAgent.js");
 const http_proxy_middleware_1 = require("http-proxy-middleware");
 const index_js_27 = require("./integrations/voxcpm/index.js");
+const index_js_28 = require("./integrations/elevenlabsVoice/index.js");
 const safetyLock_js_1 = require("./agents/voiceClone/safetyLock.js");
 const voiceCloneStore_js_1 = require("./core/voiceCloneStore.js");
 const app = (0, express_1.default)();
@@ -7496,11 +7497,22 @@ app.get("/api/voice-clone/health", async (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const health = await (0, index_js_27.checkVoxCpmHealth)();
+    // ElevenLabs is the primary engine on this CPU-only box; VoxCPM only runs if
+    // someone stands up a GPU sidecar. Report whichever is active.
+    const elevenConfigured = (0, index_js_28.isElevenLabsConfigured)();
+    const eleven = elevenConfigured ? await (0, index_js_28.checkElevenLabsHealth)() : null;
+    const voxcpm = await (0, index_js_27.checkVoxCpmHealth)();
+    const engine = elevenConfigured ? "elevenlabs" : process.env.VOXCPM_API_URL?.trim() ? "voxcpm" : "none";
     res.json({
-        configured: !!process.env.VOXCPM_API_URL?.trim(),
+        engine,
+        configured: elevenConfigured || !!process.env.VOXCPM_API_URL?.trim(),
+        elevenlabs: { configured: elevenConfigured, service: eleven },
+        voxcpm: { configured: !!process.env.VOXCPM_API_URL?.trim(), service: voxcpm },
+        // Back-compat with the existing UI badge (expects `service`).
         apiUrl: process.env.VOXCPM_API_URL?.trim() || null,
-        service: health,
+        service: elevenConfigured
+            ? { ok: !!eleven?.ok, modelLoaded: !!eleven?.ok, cudaAvailable: false }
+            : voxcpm,
     });
 });
 app.get("/api/voice-clone/stats", (req, res) => {
@@ -7642,13 +7654,92 @@ app.post("/api/voice-clone/reference-clips", express_1.default.json(), (req, res
     });
     res.json({ clip });
 });
-app.post("/api/voice-clone/reference-clips/:id/set-primary", (req, res) => {
+// Real reference-audio upload: accept Marco's voice sample, store it under the
+// voice-clone data root, register a reference clip, and immediately create the
+// ElevenLabs clone so the UI can show "voice ready". First clip auto-primary.
+const referenceAudioUpload = (0, multer_1.default)({
+    storage: multer_1.default.diskStorage({
+        destination: (_req, _file, cb) => {
+            const dir = path_1.default.join(voiceCloneDataRoot, "reference");
+            fs_1.default.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+        },
+        filename: (_req, file, cb) => {
+            const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80);
+            cb(null, `${Date.now()}_${safe}`);
+        },
+    }),
+    limits: { fileSize: 64 * 1024 * 1024 }, // 64MB — a voice sample is short
+});
+app.post("/api/voice-clone/reference-clips/upload", referenceAudioUpload.single("audio"), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const file = req.file;
+    if (!file) {
+        res.status(400).json({ error: "No audio file uploaded (field name: audio)" });
+        return;
+    }
+    const makePrimary = (0, voiceCloneStore_js_1.getAllReferenceClips)().length === 0; // first upload becomes primary
+    const clip = (0, voiceCloneStore_js_1.createReferenceClip)({
+        sourceUrl: `upload:${file.originalname}`,
+        localAudioPath: file.path,
+        transcript: typeof req.body?.transcript === "string" ? req.body.transcript : undefined,
+        isPrimary: makePrimary,
+    });
+    if (makePrimary && clip.id)
+        (0, voiceCloneStore_js_1.setPrimaryReferenceClip)(clip.id);
+    // Create the ElevenLabs clone now (best-effort). If it fails (e.g. plan
+    // doesn't allow cloning), the clip still exists and generation will retry.
+    let cloneError;
+    if ((0, index_js_28.isElevenLabsConfigured)() && clip.id) {
+        const clone = await (0, index_js_28.createInstantVoiceClone)({
+            name: `Marco Puga (${clip.id.slice(0, 8)})`,
+            filePaths: [file.path],
+            description: "Marco Puga Realty — cloned voiceover voice",
+        });
+        if (clone.success && clone.voiceId) {
+            (0, voiceCloneStore_js_1.setReferenceClipVoiceId)(clip.id, clone.voiceId);
+            clip.elevenVoiceId = clone.voiceId;
+        }
+        else {
+            cloneError = clone.error;
+        }
+    }
+    else if (!(0, index_js_28.isElevenLabsConfigured)()) {
+        cloneError = "ELEVENLABS_API_KEY not set — clip saved; set the key to enable cloning";
+    }
+    res.json({ clip, voiceReady: !!clip.elevenVoiceId, cloneError });
+});
+app.post("/api/voice-clone/reference-clips/:id/set-primary", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
     (0, voiceCloneStore_js_1.setPrimaryReferenceClip)(req.params.id);
-    res.json({ success: true });
+    // Ensure the now-primary clip has a clone so generation is ready immediately.
+    let voiceReady = false;
+    let cloneError;
+    const clip = (0, voiceCloneStore_js_1.getReferenceClipById)(req.params.id);
+    if (clip?.elevenVoiceId) {
+        voiceReady = true;
+    }
+    else if (clip?.localAudioPath && (0, index_js_28.isElevenLabsConfigured)()) {
+        const clone = await (0, index_js_28.createInstantVoiceClone)({
+            name: `Marco Puga (${req.params.id.slice(0, 8)})`,
+            filePaths: [clip.localAudioPath],
+            description: "Marco Puga Realty — cloned voiceover voice",
+        });
+        if (clone.success && clone.voiceId) {
+            (0, voiceCloneStore_js_1.setReferenceClipVoiceId)(req.params.id, clone.voiceId);
+            voiceReady = true;
+        }
+        else {
+            cloneError = clone.error;
+        }
+    }
+    res.json({ success: true, voiceReady, cloneError });
 });
 app.get("/api/voice-clone/safety-log", (req, res) => {
     if (!dashboardTokenOk(req)) {

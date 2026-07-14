@@ -45,6 +45,14 @@ function initVoiceCloneTables(database: Database.Database): void {
   `);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_refclip_primary ON reference_clips(is_primary)`);
 
+  // Persist the ElevenLabs cloned voice_id created from this reference clip so
+  // generation reuses one clone instead of re-uploading every time. Guarded
+  // ADD COLUMN — older DBs created before the ElevenLabs backend won't have it.
+  const refCols = database.prepare(`PRAGMA table_info(reference_clips)`).all() as { name: string }[];
+  if (!refCols.some((c) => c.name === "eleven_voice_id")) {
+    database.exec(`ALTER TABLE reference_clips ADD COLUMN eleven_voice_id TEXT`);
+  }
+
   database.exec(`
     CREATE TABLE IF NOT EXISTS voiceover_requests (
       id TEXT PRIMARY KEY,
@@ -125,6 +133,8 @@ export interface ReferenceClip {
   qualityRating?: number;
   transcript?: string;
   isPrimary: boolean;
+  /** ElevenLabs voice_id cloned from this clip's audio (set once created). */
+  elevenVoiceId?: string;
   addedAt?: string;
 }
 
@@ -297,6 +307,12 @@ export function setPrimaryReferenceClip(id: string): void {
   database.prepare(`UPDATE reference_clips SET is_primary = 1 WHERE id = ?`).run(id);
 }
 
+export function setReferenceClipVoiceId(id: string, elevenVoiceId: string): void {
+  getVoiceCloneDb()
+    .prepare(`UPDATE reference_clips SET eleven_voice_id = ? WHERE id = ?`)
+    .run(elevenVoiceId, id);
+}
+
 export function logSafetyBlock(
   requestId: string,
   scriptPreview: string,
@@ -377,6 +393,7 @@ function rowToClip(row: Record<string, unknown>): ReferenceClip {
     qualityRating: row.quality_rating != null ? Number(row.quality_rating) : undefined,
     transcript: row.transcript ? String(row.transcript) : undefined,
     isPrimary: row.is_primary === 1,
+    elevenVoiceId: row.eleven_voice_id ? String(row.eleven_voice_id) : undefined,
     addedAt: String(row.added_at),
   };
 }

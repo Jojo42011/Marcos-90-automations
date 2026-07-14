@@ -215,19 +215,24 @@
 
     <section id="panel-reference" class="tab-panel">
       <div class="vc-card vc-form">
-        <div style="font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:10px;">+ ADD REFERENCE CLIP</div>
-        <input id="rc-url" placeholder="TikTok video URL (for reference)" />
-        <input id="rc-path" placeholder="Local audio path (e.g. /data/voice-clone/reference/marco1.wav)" />
-        <input id="rc-transcript" placeholder="What Marco says in this clip (for Ultimate Cloning mode)" />
-        <select id="rc-quality">
-          <option value="5">&#11088;&#11088;&#11088;&#11088;&#11088; &mdash; Excellent clarity</option>
-          <option value="4">&#11088;&#11088;&#11088;&#11088; &mdash; Good</option>
-          <option value="3">&#11088;&#11088;&#11088; &mdash; Acceptable</option>
-          <option value="2">&#11088;&#11088; &mdash; Noisy</option>
-          <option value="1">&#11088; &mdash; Poor</option>
-        </select>
-        <button type="button" class="vc-btn" onclick="addReferenceClip()">+ ADD CLIP</button>
+        <div style="font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:10px;">&#8593; UPLOAD MARCO'S VOICE SAMPLE</div>
+        <p class="vc-muted" style="margin-bottom:10px;font-size:11px;line-height:1.5;">
+          Upload 30&ndash;120s of clean audio of Marco talking (mp3, m4a, wav). The first upload becomes the
+          primary voice and is cloned automatically &mdash; every approved script is then spoken in that voice.
+        </p>
+        <input id="rc-file" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac"
+          style="color:#ccc;font-size:11px;margin-bottom:8px;" />
+        <input id="rc-transcript" placeholder="Optional: what Marco says in this sample" />
+        <button type="button" class="vc-btn" id="rc-upload-btn" onclick="uploadReferenceClip()">&#8593; UPLOAD &amp; CLONE</button>
       </div>
+      <details class="vc-card" style="margin-bottom:12px;">
+        <summary class="vc-muted" style="cursor:pointer;font-size:11px;">Advanced: register an existing server-side audio path</summary>
+        <div style="margin-top:10px;display:grid;gap:8px;">
+          <input id="rc-url" placeholder="Source URL / label (for reference)" />
+          <input id="rc-path" placeholder="Local audio path (e.g. /data/voice-clone/reference/marco1.wav)" />
+          <button type="button" class="vc-btn ghost" onclick="addReferenceClip()">+ REGISTER PATH</button>
+        </div>
+      </details>
       <div id="vc-ref-list"></div>
     </section>
 
@@ -358,7 +363,8 @@
       if (!urls.length) return "";
       return urls.map((url, i) =>
         `<div style="margin-top:8px;"><span class="vc-muted">Variation ${i + 1}</span>
-        <audio controls style="width:100%;margin-top:4px;"><source src="${escapeHtml(url)}" type="audio/wav"></audio></div>`
+        <audio controls preload="none" style="width:100%;margin-top:4px;"><source src="${escapeHtml(url)}"></audio>
+        <a href="${escapeHtml(url)}" download class="vc-muted" style="font-size:10px;text-decoration:underline;">download</a></div>`
       ).join("");
     }
 
@@ -421,13 +427,44 @@
       const data = await fetch(apiUrl("/api/voice-clone/reference-clips")).then((r) => r.json());
       const clips = data.clips || [];
       document.getElementById("vc-ref-list").innerHTML = clips.length
-        ? clips.map((c) => `<div class="vc-card ${c.isPrimary ? "vc-primary-clip" : ""}">
+        ? clips.map((c) => {
+            const voiceReady = !!c.elevenVoiceId;
+            const voiceBadge = voiceReady
+              ? '<span style="color:var(--green);">● Voice cloned &amp; ready</span>'
+              : '<span style="color:var(--amber);">○ Not cloned yet — clones on generate</span>';
+            return `<div class="vc-card ${c.isPrimary ? "vc-primary-clip" : ""}">
             <div><strong>${escapeHtml(c.sourceUrl)}</strong> ${c.isPrimary ? '<span style="color:var(--accent);">★ Primary</span>' : ""}</div>
             <div class="vc-muted">${escapeHtml(c.localAudioPath || "no path")} · ${c.qualityRating || "—"} stars · ${c.durationSeconds ? c.durationSeconds + "s" : "—"}</div>
+            <div style="margin-top:6px;font-size:11px;">${voiceBadge}</div>
             <p class="vc-muted" style="margin-top:6px;">${escapeHtml((c.transcript || "").slice(0, 120))}</p>
             ${!c.isPrimary ? `<button type="button" class="vc-btn ghost" style="margin-top:8px;" onclick="setPrimary('${c.id}')">★ Set as Primary</button>` : ""}
-          </div>`).join("")
-        : "<p class='vc-muted'>No reference clips yet. Add Marco's voice samples from TikTok audio.</p>";
+          </div>`;
+          }).join("")
+        : "<p class='vc-muted'>No reference clips yet. Upload a clean sample of Marco talking to create his voice clone.</p>";
+    }
+
+    async function uploadReferenceClip() {
+      const input = document.getElementById("rc-file");
+      const file = input.files && input.files[0];
+      if (!file) { showToast("Choose an audio file first"); return; }
+      const btn = document.getElementById("rc-upload-btn");
+      btn.disabled = true; btn.textContent = "Uploading & cloning…";
+      try {
+        const fd = new FormData();
+        fd.append("audio", file);
+        const tr = document.getElementById("rc-transcript").value.trim();
+        if (tr) fd.append("transcript", tr);
+        const r = await fetch(apiUrl("/api/voice-clone/reference-clips/upload"), { method: "POST", body: fd });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { showToast(d.error || "Upload failed"); return; }
+        showToast(d.voiceReady ? "Uploaded — voice cloned & ready" : ("Uploaded" + (d.cloneError ? " — clone pending: " + d.cloneError : "")));
+        input.value = ""; document.getElementById("rc-transcript").value = "";
+        await loadReferenceClips();
+      } catch (err) {
+        showToast("Upload error");
+      } finally {
+        btn.disabled = false; btn.textContent = "⬆ UPLOAD & CLONE";
+      }
     }
 
     async function addReferenceClip() {
@@ -460,8 +497,8 @@
               ${(req.audioUrls || []).map((url, i) => `
                 <div>
                   <div class="vc-muted">Variation ${i + 1}</div>
-                  <audio controls style="width:100%;margin-top:4px;"><source src="${escapeHtml(url)}" type="audio/wav"></audio>
-                  <button type="button" class="vc-btn ghost" style="margin-top:6px;width:100%;" onclick="showToast('Use this file in CapCut')">✓ Pick This</button>
+                  <audio controls preload="none" style="width:100%;margin-top:4px;"><source src="${escapeHtml(url)}"></audio>
+                  <a href="${escapeHtml(url)}" download class="vc-btn ghost" style="margin-top:6px;width:100%;display:block;text-align:center;text-decoration:none;">✓ Download</a>
                 </div>`).join("")}
             </div>
           </div>`).join("")
