@@ -8352,7 +8352,9 @@
               return;
             }
             if (action === "email") {
-              alert("Bulk email — connect your mailer (placeholder). Selected: " + ids.length + " leads.");
+              // Route into the real mass-email flow (template picker → /api/email/mass-send).
+              // crmMassEmailSend reads crmSelectedLeadIds, which is still populated.
+              crmOpenMassModal("crm-mass-email-modal");
               return;
             }
             if (action === "tag") {
@@ -8373,7 +8375,12 @@
               return;
             }
             if (action === "call") {
-              alert("Bulk call queue — use Calls tab or inline queue dropdown per lead. Selected: " + ids.length);
+              // Start a real power-dial session with the selected leads.
+              try {
+                await crmDialStartSession(ids);
+              } catch (err) {
+                showCrmErr(err instanceof Error ? err.message : String(err));
+              }
               return;
             }
             if (action === "status") {

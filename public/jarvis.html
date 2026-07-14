@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Harvey Â· Aethon Â· Marco Puga</title>
+  <title>Harvey · Aethon · Marco Puga</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Share+Tech+Mono&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -38,7 +38,7 @@
     }
     body { font-family: var(--font); color: var(--text); }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ Backdrops â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── Backdrops ─────── */
     .j-bg {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background:
@@ -65,7 +65,7 @@
       box-shadow: inset 0 0 180px 40px rgba(0,0,0,0.85);
     }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ Shell â€” full viewport â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── Shell — full viewport ─────── */
     :root {
       --j-strip-h: 36px;
       --j-nav-h: 38px;
@@ -152,7 +152,7 @@
     }
     .j-panel-close:hover { color: var(--cyan); }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ Main â€” full screen Harvey â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── Main — full screen Harvey ─────── */
     .j-main {
       position: fixed;
       top: var(--j-chrome-top);
@@ -238,7 +238,7 @@
     }
     .j-chip.idle { color: var(--muted-2); }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ LEFT metrics â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── LEFT metrics ─────── */
     .j-metrics { flex: 1; overflow-y: auto; padding: 0.6rem 0.7rem 1rem; }
     .j-metric-group {
       margin-bottom: 0.9rem; position: relative;
@@ -311,14 +311,14 @@
       letter-spacing: 0.2em;
     }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ CENTER â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── CENTER ─────── */
     .j-center {
       display: flex; flex-direction: column; min-height: 0;
       flex: 1; width: 100%; height: 100%;
       position: relative; overflow: hidden; background: transparent;
     }
 
-    /* Center stage â€” orb fills remaining viewport */
+    /* Center stage — orb fills remaining viewport */
     .j-stage {
       position: relative;
       flex: 1 1 auto;
@@ -400,7 +400,7 @@
     .j-core-hint::before { content: "// "; opacity: 0.55; }
     .j-core-hint::after  { content: " //"; opacity: 0.55; }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ Transcript â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── Transcript ─────── */
     .j-transcript {
       flex: 0 1 auto; min-height: 0; overflow-y: auto;
       max-height: 16vh;
@@ -430,7 +430,7 @@
       clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
     }
     .j-msg.ai::before {
-      content: "â–¸ HARVEY";
+      content: "▸ HARVEY";
       display: block;
       font-family: var(--mono); font-size: 0.5rem; letter-spacing: 0.24em;
       color: var(--cyan); opacity: 0.75; margin-bottom: 0.25rem;
@@ -445,12 +445,12 @@
     .j-msg.system::before { content: "// "; opacity: 0.55; }
     .j-msg.system::after  { content: " //"; opacity: 0.55; }
     .j-typing::after {
-      content: "â–‹"; animation: blink 0.8s step-end infinite;
+      content: "▋"; animation: blink 0.8s step-end infinite;
       color: var(--cyan); margin-left: 2px;
     }
     @keyframes blink { 50% { opacity: 0; } }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ Composer â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── Composer ─────── */
     .j-compose {
       position: fixed;
       bottom: 0; left: 0; right: 0;
@@ -496,9 +496,9 @@
       box-shadow: 0 0 18px rgba(0,212,255,0.25);
     }
     .j-send:disabled { opacity: 0.35; cursor: not-allowed; }
-    .j-send::before { content: "â–¸ "; opacity: 0.8; }
+    .j-send::before { content: "▸ "; opacity: 0.8; }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ RIGHT directives â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── RIGHT directives ─────── */
     .j-directives {
       flex: 1; overflow-y: auto;
       padding: 0.75rem 0.85rem;
@@ -553,12 +553,12 @@
     .j-dir-empty::before { content: "// "; opacity: 0.55; }
     .j-dir-empty::after  { content: " //"; opacity: 0.55; }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── Responsive ─────── */
     @media (max-width: 900px) {
       .j-col { width: min(92vw, 300px); }
     }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ Metrics strip + panels â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── Metrics strip + panels ─────── */
     #harvey-active-panel {
       display: none;
       position: fixed;
@@ -663,7 +663,7 @@
     .ms-funnel-line b { color: #00d4ff; font-weight: 400; }
     .ms-funnel-line .closing { color: #d6e4f0; text-shadow: 0 0 6px rgba(0, 212, 255, 0.4); }
 
-    /* â”€â”€â”€â”€â”€â”€â”€ Memory explorer â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── Memory explorer ─────── */
     .mem-panel[data-force-dark="true"],
     .mem-panel[data-force-dark="true"] * { color-scheme: dark; }
     .mem-panel {
@@ -734,7 +734,7 @@
       color: #d6e4f0; font-family: var(--mono); font-size: 11px; padding: 0.3rem;
     }
 
-    /* â”€â”€â”€ HARVEY LIGHT MODE â€” STRONG CONTRAST â”€â”€â”€ */
+    /* ─── HARVEY LIGHT MODE — STRONG CONTRAST ─── */
     @keyframes scanLight {
       0% { transform: translateY(-100vh); }
       100% { transform: translateY(100vh); }
@@ -902,7 +902,7 @@
       box-shadow: 0 0 8px #00ff88 !important;
     }
 
-    /* Main content area â€” transparent so shell dot-grid shows through */
+    /* Main content area — transparent so shell dot-grid shows through */
     html[data-theme="light"] #main-content,
     html[data-theme="light"] .main-content,
     html[data-theme="light"] .j-main {
@@ -953,7 +953,7 @@
       position: relative;
     }
 
-    /* Soft orb halo â€” floats without harsh blue blob */
+    /* Soft orb halo — floats without harsh blue blob */
     html[data-theme="light"] .j-core-wrap::before,
     html[data-theme="light"] #harvey-orb-container::before,
     html[data-theme="light"] [id*="orb-wrapper"]::before {
@@ -975,7 +975,7 @@
       border-radius: 50%;
     }
 
-    /* Hexagon background â€” CSS pattern on .j-hex (matches dark mode density) */
+    /* Hexagon background — CSS pattern on .j-hex (matches dark mode density) */
     html[data-theme="light"] .j-hex {
       opacity: 1 !important;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='none' stroke='rgba(0,80,160,0.14)' stroke-width='1.5' d='M28 1 L54 15 L54 43 L28 57 L2 43 L2 15 Z'/%3E%3C/svg%3E") !important;
@@ -987,7 +987,7 @@
       opacity: 0.14 !important;
     }
 
-    /* Orb canvas â€” rings visible, no center glow blob */
+    /* Orb canvas — rings visible, no center glow blob */
     html[data-theme="light"] #harvey-mic-btn,
     html[data-theme="light"] .harvey-orb,
     html[data-theme="light"] canvas {
@@ -1012,7 +1012,7 @@
       stroke-opacity: 0.55 !important;
     }
 
-    /* Mic icon overlay â€” keep cyan */
+    /* Mic icon overlay — keep cyan */
     html[data-theme="light"] .j-mic-icon svg rect {
       fill: rgba(0, 130, 200, 0.95) !important;
     }
@@ -1274,35 +1274,23 @@
         <span class="ms-strip-item ms-live"><i></i>LIVE</span>
         <span class="ms-sep">|</span>
         <span class="ms-strip-item ms-strip-section" id="strip-goal-section" data-panel="goal" title="Expand goal metrics">
-          <span class="ms-label ms-goal-pulse">$20M:</span> <span id="msGoalPct">â€”</span>
+          <span class="ms-label ms-goal-pulse">$20M:</span> <span id="msGoalPct">—</span>
         </span>
         <span class="ms-sep">|</span>
         <span class="ms-strip-item ms-strip-section" id="strip-gap-section" data-panel="goal" title="Expand goal metrics">
-          <span class="ms-label">GAP:</span> <span id="msGap">â€”</span>
+          <span class="ms-label">GAP:</span> <span id="msGap">—</span>
         </span>
         <span class="ms-sep">|</span>
         <span class="ms-strip-item ms-strip-section" id="strip-tiktok-section" data-panel="tiktok" title="Expand TikTok metrics">
-          <span class="ms-label">TIKTOK:</span> <span id="msTiktok">â€”</span>
+          <span class="ms-label">TIKTOK:</span> <span id="msTiktok">—</span>
         </span>
         <span class="ms-sep">|</span>
         <span class="ms-strip-item ms-strip-section" id="strip-mojo-section" data-panel="mojo" title="Expand Mojo metrics">
-          <span class="ms-label">MOJO:</span> <span id="msMojo">â€”</span>
+          <span class="ms-label">MOJO:</span> <span id="msMojo">—</span>
         </span>
-        <span class="ms-sep">|</span>
-        <span class="ms-strip-item"><span class="ms-label">DAILY:</span> <span id="msDaily">â€”</span></span>
-        <span class="ms-sep">|</span>
-        <span class="ms-strip-item"><span class="ms-label">AVG DEAL:</span> <span id="msAvgDeal">â€”</span></span>
-        <span class="ms-sep">|</span>
-        <span class="ms-strip-item"><span class="ms-label">BUYER:</span> <span id="msBuyer">â€”</span></span>
-        <span class="ms-sep">|</span>
-        <span class="ms-strip-item"><span class="ms-label">SELLER:</span> <span id="msSeller">â€”</span></span>
-        <span class="ms-sep ms-strip-narrow-hide">|</span>
-        <span class="ms-strip-item ms-strip-narrow-hide"><span class="ms-label">PACE:</span> <span id="msPace">â€”</span></span>
-        <span class="ms-sep ms-strip-narrow-hide">|</span>
-        <span class="ms-strip-item ms-strip-narrow-hide"><span class="ms-label">CONTACT RATE:</span> <span id="msContactRate">â€”</span></span>
       </div>
-      <span class="ms-expand ms-strip-section" id="strip-expand-btn" data-panel="all" title="Expand all metrics">
-        <span id="msExpandLbl">[EXPAND â†“]</span>
+      <span class="ms-expand ms-strip-section" id="strip-expand-btn" data-panel="all" title="Daily plan, deal size, buyer/seller targets, pace & contact rate">
+        <span id="msExpandLbl">[MORE ↓]</span>
       </span>
     </div>
 
@@ -1314,7 +1302,7 @@
       <div class="mem-head">
         <span id="memHeadTitle">// HARVEY MEMORY SYSTEM //</span>
         <button type="button" class="mem-add" id="memAddBtn">+ ADD</button>
-        <button type="button" class="mem-close" id="memCloseBtn">Ã—</button>
+        <button type="button" class="mem-close" id="memCloseBtn">×</button>
       </div>
       <div class="mem-form" id="memForm">
         <input type="text" id="memFactInput" placeholder="Fact text" />
@@ -1328,7 +1316,7 @@
         <input type="text" id="memTagsInput" placeholder="tags (comma)" />
         <button type="button" class="mem-add" id="memSaveBtn">SAVE</button>
       </div>
-      <input class="mem-search" id="memSearch" type="text" placeholder="ðŸ” Search Harvey's memory..." />
+      <input class="mem-search" id="memSearch" type="text" placeholder="🔍 Search Harvey's memory..." />
       <div class="mem-tabs">
         <button type="button" class="mem-tab active" data-tab="facts">FACTS</button>
         <button type="button" class="mem-tab" data-tab="connections">CONNECTIONS</button>
@@ -1339,11 +1327,10 @@
     </div>
 
     <header class="j-topbar">
-      <a href="/dashboard" class="j-back" onclick="goToCommandCenter(); return false;">â—‚ CRM</a>
       <button type="button" class="j-panel-toggle" id="jToggleOps">OPS</button>
       <div class="j-logo">
         <span class="j-logo-bracket">[</span>HARVEY<span class="j-logo-bracket">]</span>
-        <small>AETHON Â· MARCO PUGA</small>
+        <small>AETHON · MARCO PUGA</small>
       </div>
       <div class="j-spacer"></div>
       <button type="button" class="j-panel-toggle" id="jToggleMarket">MARKET</button>
@@ -1358,7 +1345,7 @@
         Light mode
       </button>
       <span class="j-meta" id="jSessionMeta"><span class="dot"></span>LINK STABLE</span>
-      <span class="j-meta" id="jModel">â€”</span>
+      <span class="j-meta" id="jModel">—</span>
     </header>
 
     <main class="j-main" id="jMain">
@@ -1375,7 +1362,7 @@
               <svg class="j-tick-ring" viewBox="0 0 200 200" aria-hidden="true">
                 <g id="jTickGroup" stroke="rgba(0,212,255,0.45)" stroke-linecap="round"></g>
               </svg>
-              <canvas id="harvey-mic-btn" class="harvey-orb" data-action="toggle-voice" aria-label="Harvey core â€” tap to speak"></canvas>
+              <canvas id="harvey-mic-btn" class="harvey-orb" data-action="toggle-voice" aria-label="Harvey core — tap to speak"></canvas>
               <!-- Mic icon centered over canvas -->
               <div class="j-mic-icon" id="jMicIcon">
                 <svg viewBox="0 0 48 60" fill="none" aria-hidden="true">
@@ -1411,13 +1398,13 @@
         </div>
 
         <div class="j-transcript" id="jTranscript">
-          <div class="j-msg system">Loading operator contextâ€¦</div>
+          <div class="j-msg system">Loading operator context…</div>
         </div>
 
         <form class="j-compose" id="jForm">
-          <span class="j-prompt" aria-hidden="true">â–¸</span>
+          <span class="j-prompt" aria-hidden="true">▸</span>
           <input class="j-input" id="jInput" type="text"
-            placeholder="ENTER COMMANDâ€¦" autocomplete="off" />
+            placeholder="ENTER COMMAND…" autocomplete="off" />
           <button type="submit" class="j-send" id="jSend">TRANSMIT</button>
         </form>
       </section>
@@ -1426,8 +1413,8 @@
     <aside class="j-col left side" id="jColOps">
       <div class="j-head">
         <span>LIVE OPS</span>
-        <span class="j-count" id="jNodeCount"><b>â€”</b> NODES</span>
-        <button type="button" class="j-panel-close" id="jCloseOps" aria-label="Close OPS panel">Ã—</button>
+        <span class="j-count" id="jNodeCount"><b>—</b> NODES</span>
+        <button type="button" class="j-panel-close" id="jCloseOps" aria-label="Close OPS panel">×</button>
       </div>
       <div class="j-chips" aria-hidden="true">
         <span class="j-chip live">LIVE</span>
@@ -1436,7 +1423,7 @@
         <span class="j-chip idle">IDLE</span>
       </div>
       <div class="j-metrics" id="jMetrics">
-        <div class="j-metric-group"><div class="j-metric-group-title">loadingâ€¦</div></div>
+        <div class="j-metric-group"><div class="j-metric-group-title">loading…</div></div>
       </div>
     </aside>
 
@@ -1444,14 +1431,14 @@
       <div class="j-head">
         <span>ACTIVE DIRECTIVES</span>
         <span class="j-count"><b id="jDirCount">0</b> TASKS</span>
-        <button type="button" class="j-panel-close" id="jCloseDir" aria-label="Close Directives panel">Ã—</button>
+        <button type="button" class="j-panel-close" id="jCloseDir" aria-label="Close Directives panel">×</button>
       </div>
       <div class="j-chips" aria-hidden="true">
         <span class="j-chip live">PRIORITY</span>
         <span class="j-chip idle">QUEUED</span>
       </div>
       <div class="j-directives" id="jDirectives">
-        <div class="j-dir-empty">Awaiting signalâ€¦</div>
+        <div class="j-dir-empty">Awaiting signal…</div>
       </div>
     </aside>
 
@@ -1497,7 +1484,7 @@
     }
     window.goToCommandCenter = goToCommandCenter;
 
-    // Sync theme with dashboard preference (marco_crm_theme â€” same key as dashboard.html)
+    // Sync theme with dashboard preference (marco_crm_theme — same key as dashboard.html)
     const THEME_KEY = "marco_crm_theme";
 
     function isLightTheme() {
@@ -1650,9 +1637,9 @@
       }
     });
 
-    /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-       TICK RING â€” radial marks around the core
-    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────────────────────────────────────────────
+       TICK RING — radial marks around the core
+    ───────────────────────────────────────────── */
     (function buildTicks() {
       const g = document.getElementById("jTickGroup");
       if (!g) return;
@@ -1679,9 +1666,9 @@
       updateOrbColors();
     })();
 
-    /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-       CANVAS CORE â€” dynamic orbital animation
-    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────────────────────────────────────────────
+       CANVAS CORE — dynamic orbital animation
+    ───────────────────────────────────────────── */
     (function initCanvas() {
       const canvas = document.getElementById("harvey-mic-btn");
       const wrap   = document.getElementById("jCoreWrap");
@@ -1731,7 +1718,7 @@
         layer:  i % 3,
       }));
 
-      /* Perfect concentric rings â€” radius fraction, dash pattern (px @ R=200),
+      /* Perfect concentric rings — radius fraction, dash pattern (px @ R=200),
          line width, alpha, rotation speed (px/frame via lineDashOffset),
          glow flag. dash:null = solid circle. */
       const rings = [
@@ -1887,9 +1874,9 @@
 
     })();
 
-    /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    /* ─────────────────────────────────────────────
        APP LOGIC
-    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    ───────────────────────────────────────────── */
     const token = new URLSearchParams(window.location.search).get("token");
     let sessionId = sessionStorage.getItem("harvey_session_id") || "";
     let busy = false;
@@ -1955,19 +1942,19 @@
       else setCoreVisual("idle");
     }
 
-    /* â”€â”€â”€â”€â”€â”€â”€â”€ Metric helpers â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ──────── Metric helpers ──────── */
     function fmtNum(n) {
-      if (n == null || Number.isNaN(Number(n))) return "â€”";
+      if (n == null || Number.isNaN(Number(n))) return "—";
       return Number(n).toLocaleString();
     }
     function fmtMoney(n) {
-      if (n == null || Number.isNaN(Number(n))) return "â€”";
+      if (n == null || Number.isNaN(Number(n))) return "—";
       const v = Number(n);
       if (v >= 10000) return "$" + (v / 1000).toFixed(1) + "k";
       return "$" + v.toFixed(2);
     }
     function fmtPct(n) {
-      if (n == null || Number.isNaN(Number(n))) return "â€”";
+      if (n == null || Number.isNaN(Number(n))) return "—";
       return (Math.round(Number(n) * 100) / 100) + "%";
     }
     function rowsHtml(rows) {
@@ -1979,7 +1966,7 @@
           : "";
         return `<div class="j-metric">
           <label>${esc(r.label)}</label>
-          <b class="${cls}">${esc(r.value ?? "â€”")}</b>
+          <b class="${cls}">${esc(r.value ?? "—")}</b>
           ${bar}
         </div>`;
       }).join("");
@@ -1991,13 +1978,13 @@
     /* Pretty labels for DM/AI funnel state codes */
     const FUNNEL_LABELS = {
       new: "New",
-      opening_asked_first_time: "Opening Â· asked",
-      opening_offered_details: "Opening Â· offered",
+      opening_asked_first_time: "Opening · asked",
+      opening_offered_details: "Opening · offered",
       breakdown_offered: "Breakdown sent",
       phone_just_captured: "Phone captured",
       criteria_collection: "Criteria collection",
       email_captured: "Email captured",
-      handoff_human: "Handoff Â· human",
+      handoff_human: "Handoff · human",
       closed: "Closed",
     };
     function funnelLabel(k) {
@@ -2017,7 +2004,7 @@
 
       const groups = [];
 
-      /* â”€â”€ CRM PIPELINE â”€â”€ */
+      /* ── CRM PIPELINE ── */
       groups.push({
         title: "CRM Pipeline",
         tag: tagHtml("LIVE", "live"),
@@ -2028,11 +2015,11 @@
           { label: "Emails captured", value: fmtNum(m.emailsCaptured),
             barPct: total ? (m.emailsCaptured / total) * 100 : 0 },
           { label: "Capture rate",    value: fmtPct(m.phoneCaptureRatePct) },
-          { label: "Phones Â· 24h",    value: fmtNum(m.phonesLast24h) },
+          { label: "Phones · 24h",    value: fmtNum(m.phonesLast24h) },
         ],
       });
 
-      /* â”€â”€ CRM STATUS â”€â”€ */
+      /* ── CRM STATUS ── */
       const statusRows = [
         ["Not contacted", cs.not_contacted, "warn"],
         ["Contacted",     cs.contacted,     ""],
@@ -2045,7 +2032,7 @@
         rows: statusRows,
       });
 
-      /* â”€â”€ CALL QUEUE â”€â”€ */
+      /* ── CALL QUEUE ── */
       groups.push({
         title: "Call Queue",
         tag: cq.urgent > 0 ? tagHtml("HOT", "live") : "",
@@ -2056,29 +2043,29 @@
         ],
       });
 
-      /* â”€â”€ DM AI AGENT â”€â”€ */
+      /* ── DM AI AGENT ── */
       const aiOnline = !!sys.anthropicConfigured;
       const funnelEntries = Object.entries(fd)
         .sort((a, b) => (b[1] || 0) - (a[1] || 0))
         .slice(0, 6);
       groups.push({
-        title: "DM Â· AI Agent",
+        title: "DM · AI Agent",
         tag: tagHtml(aiOnline ? "ONLINE" : "OFFLINE", aiOnline ? "live" : "off"),
         rows: funnelEntries.length
           ? funnelEntries.map(([k, v]) => ({
               label: funnelLabel(k), value: fmtNum(v),
               barPct: total ? (v / total) * 100 : 0,
             }))
-          : [{ label: "Funnel idle", value: "â€”" }],
+          : [{ label: "Funnel idle", value: "—" }],
       });
 
-      /* â”€â”€ ACTION NEEDED â”€â”€ */
+      /* ── ACTION NEEDED ── */
       groups.push({
         title: "Action Needed",
         tag: (m.hotNeedsSms || 0) + (m.noInteraction || 0) > 0
           ? tagHtml("FLAG", "live") : "",
         rows: [
-          { label: "Hot Â· needs SMS", value: fmtNum(m.hotNeedsSms),
+          { label: "Hot · needs SMS", value: fmtNum(m.hotNeedsSms),
             cls: m.hotNeedsSms > 0 ? "warn" : "",
             barPct: total ? (m.hotNeedsSms / total) * 100 : 0 },
           { label: "No interaction",  value: fmtNum(m.noInteraction),
@@ -2087,7 +2074,7 @@
         ],
       });
 
-      /* â”€â”€ PLATFORM â”€â”€ */
+      /* ── PLATFORM ── */
       const igTt = (m.instagram || 0) + (m.tiktok || 0);
       groups.push({
         title: "Platform Mix",
@@ -2100,23 +2087,23 @@
         ],
       });
 
-      /* â”€â”€ META ADS â”€â”€ */
+      /* ── META ADS ── */
       const adsOn = !!ads.configured;
       const adRows = adsOn ? [
         { label: "Spend",       value: fmtMoney(ads.spend) },
         { label: "Impressions", value: fmtNum(ads.impressions) },
         { label: "Clicks",      value: fmtNum(ads.clicks) },
-        { label: "CTR",         value: ads.ctr != null ? fmtPct(ads.ctr) : "â€”" },
-        { label: "CPL",         value: ads.cpl != null ? fmtMoney(ads.cpl) : "â€”" },
+        { label: "CTR",         value: ads.ctr != null ? fmtPct(ads.ctr) : "—" },
+        { label: "CPL",         value: ads.cpl != null ? fmtMoney(ads.cpl) : "—" },
         { label: "Ad leads",    value: fmtNum(ads.adLeads) },
-      ] : [{ label: "Upstream offline", value: "â€”" }];
+      ] : [{ label: "Upstream offline", value: "—" }];
       groups.push({
         title: "Meta Ads",
         tag: tagHtml(adsOn ? "LINKED" : "OFFLINE", adsOn ? "live" : "off"),
         rows: adRows,
       });
 
-      /* â”€â”€ AD ATTRIBUTION â”€â”€ */
+      /* ── AD ATTRIBUTION ── */
       groups.push({
         title: "Ad Attribution",
         tag: "",
@@ -2126,14 +2113,14 @@
         ],
       });
 
-      /* â”€â”€ SYSTEMS â”€â”€ */
+      /* ── SYSTEMS ── */
       groups.push({
         title: "Systems",
         tag: "",
         rows: [
           { label: "AI engine",     value: sys.anthropicConfigured ? "ONLINE" : "OFFLINE",
             cls: sys.anthropicConfigured ? "" : "danger" },
-          { label: "SMS Â· Sendblue", value: sys.sendblueConfigured ? "ONLINE" : "OFFLINE",
+          { label: "SMS · Sendblue", value: sys.sendblueConfigured ? "ONLINE" : "OFFLINE",
             cls: sys.sendblueConfigured ? "" : "warn" },
           { label: "Ads uplink",    value: sys.adsLinked ? "LINKED" : "OFFLINE",
             cls: sys.adsLinked ? "" : "warn" },
@@ -2162,7 +2149,7 @@
       const el = document.getElementById("jDirectives");
       const countEl = document.getElementById("jDirCount");
       if (!list || !list.length) {
-        el.innerHTML = '<div class="j-dir-empty">No directives â€” standing by</div>';
+        el.innerHTML = '<div class="j-dir-empty">No directives — standing by</div>';
         if (countEl) countEl.textContent = "0";
         return;
       }
@@ -2738,7 +2725,7 @@
     document.getElementById("jCloseDir").addEventListener("click", () => togglePanel("jColDir"));
     document.getElementById("jDrawerBackdrop").addEventListener("click", closeSidePanels);
 
-    /* â”€â”€â”€â”€â”€â”€â”€ Metrics strip + memory explorer â”€â”€â”€â”€â”€â”€â”€ */
+    /* ─────── Metrics strip + memory explorer ─────── */
     function getToken() {
       return token || "";
     }
@@ -2784,37 +2771,37 @@
     function renderMetricsStrip(data) {
       const dash = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
       if (!data) {
-        dash("msGoalPct", "â€” Â· â€” BANKED");
-        dash("msGap", "â€”");
-        dash("msTiktok", "â€”");
-        dash("msMojo", "â€”");
-        dash("msDaily", "â€”");
-        dash("msAvgDeal", "â€”");
-        dash("msBuyer", "â€”");
-        dash("msSeller", "â€”");
-        dash("msPace", "â€”");
-        dash("msContactRate", "â€”");
+        dash("msGoalPct", "— · — BANKED");
+        dash("msGap", "—");
+        dash("msTiktok", "—");
+        dash("msMojo", "—");
+        dash("msDaily", "—");
+        dash("msAvgDeal", "—");
+        dash("msBuyer", "—");
+        dash("msSeller", "—");
+        dash("msPace", "—");
+        dash("msContactRate", "—");
         return;
       }
       const g = data.goal;
       const tt = data.tiktok;
       const mj = data.mojo;
       const dt = data.dailyTargets || {};
-      dash("msGoalPct", `${g.percentComplete}% Â· ${fmtMoneyShort(g.banked)} BANKED`);
+      dash("msGoalPct", `${g.percentComplete}% · ${fmtMoneyShort(g.banked)} BANKED`);
       dash("msGap", fmtMoneyShort(g.gap));
-      dash("msTiktok", `${fmtCompact(tt.views)} VIEWS Â· ${tt.closings} CLOSINGS Â· ${tt.videosPerWeekCurrent} VIDS/WK`);
-      dash("msMojo", `${mj.calls.toLocaleString()} CALLS Â· ${mj.closings} CLOSINGS`);
+      dash("msTiktok", `${fmtCompact(tt.views)} VIEWS · ${tt.closings} CLOSINGS · ${tt.videosPerWeekCurrent} VIDS/WK`);
+      dash("msMojo", `${mj.calls.toLocaleString()} CALLS · ${mj.closings} CLOSINGS`);
       dash("msDaily", `${dt.videos || 7} VIDEOS + ${dt.calls || 725} CALLS`);
       dash("msAvgDeal", fmtMoneyShort(g.avgDealPrice || 425000));
       dash("msBuyer", "21 CLOSINGS NEEDED");
       dash("msSeller", "14 CLOSINGS NEEDED");
-      dash("msPace", `1 CLOSING/${tt.weeksPerClosingCurrent || 8}WKS â†’ NEED ${tt.videosPerWeekForMonthly || 10.3} VIDS/WK`);
+      dash("msPace", `1 CLOSING/${tt.weeksPerClosingCurrent || 8}WKS → NEED ${tt.videosPerWeekForMonthly || 10.3} VIDS/WK`);
       dash("msContactRate", `1 PER ${mj.callsPerContact || 32} CALLS`);
       applyMetricsStripTheme();
     }
 
     // ============================================
-    // DYNAMIC PANEL SYSTEM â€” server decides, client renders
+    // DYNAMIC PANEL SYSTEM — server decides, client renders
     // ============================================
 
     let activePanelType = null;
@@ -2876,7 +2863,7 @@
       metricsExpandOpen = true;
       metricsExpandType = panel === "metrics" ? "all" : panel;
       const expandLbl = document.getElementById("msExpandLbl");
-      if (expandLbl) expandLbl.textContent = "[COLLAPSE â†‘]";
+      if (expandLbl) expandLbl.textContent = "[COLLAPSE ↑]";
       showPanel(title, body);
     }
     window.openDynamicPanel = openDynamicPanel;
@@ -2930,7 +2917,7 @@
           <div style="display:flex; gap:12px; align-items:center;">
             <span style="font-size:9px; color:#444; font-family:monospace;" id="panel-timestamp">${new Date().toLocaleTimeString()}</span>
             <span onclick="closeActivePanel()"
-                  style="cursor:pointer; color:#00d4ff; font-size:20px; line-height:1; padding:0 4px;">Ã—</span>
+                  style="cursor:pointer; color:#00d4ff; font-size:20px; line-height:1; padding:0 4px;">×</span>
           </div>
         </div>
         <div style="padding:20px 24px;">
@@ -2952,7 +2939,7 @@
       activePanelType = null;
       metricsExpandOpen = false;
       const expandLbl = document.getElementById("msExpandLbl");
-      if (expandLbl) expandLbl.textContent = "[EXPAND â†“]";
+      if (expandLbl) expandLbl.textContent = "[EXPAND ↓]";
     }
     window.closeActivePanel = closeActivePanel;
 
@@ -2961,7 +2948,7 @@
         <div style="display:grid; grid-template-columns:auto auto 1fr; gap:16px; font-family:monospace;">
           <div style="border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px; min-width:180px;">
             <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:12px;">
-              ${esc((d.dayOfWeek || "").toUpperCase())} Â· ${esc(d.date || "")}
+              ${esc((d.dayOfWeek || "").toUpperCase())} · ${esc(d.date || "")}
             </div>
             <div style="font-size:9px; color:#555; letter-spacing:1px; margin-bottom:8px;">NON-NEGOTIABLES</div>
             <div style="display:flex; gap:20px; align-items:center;">
@@ -2991,7 +2978,7 @@
           <div style="border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
             <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:10px;">WHAT MOVES THE NEEDLE</div>
             <div style="font-size:11px; color:#fff; line-height:2; margin-bottom:14px;">
-              ${(d.needleMovers || []).map(m => `<div style="display:flex; gap:8px;"><span style="color:rgba(0,212,255,0.4);">â†’</span><span>${esc(m)}</span></div>`).join("")}
+              ${(d.needleMovers || []).map(m => `<div style="display:flex; gap:8px;"><span style="color:rgba(0,212,255,0.4);">→</span><span>${esc(m)}</span></div>`).join("")}
             </div>
             <div style="border-top:1px solid rgba(0,212,255,0.1); padding-top:12px; font-size:11px; color:#666; font-style:italic; line-height:1.6;">
               ${esc(d.motivation || "")}
@@ -3043,7 +3030,7 @@
           <button onclick="openMarketIntelPanel()"
                   style="margin-left:16px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                          color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px;
-                         letter-spacing:2px; cursor:pointer; border-radius:2px;">â†» REFRESH</button>
+                         letter-spacing:2px; cursor:pointer; border-radius:2px;">↻ REFRESH</button>
         </div>`;
     }
 
@@ -3063,7 +3050,7 @@
           <div style="font-size:11px; color:#888; line-height:1.5;">${esc(e.summary || "")}</div>
           ${e.realEstateRelevance ? `
             <div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(0,212,255,0.08);
-                        font-size:10px; color:#00d4ff;">â†’ RE IMPACT: ${esc(e.realEstateRelevance)}</div>
+                        font-size:10px; color:#00d4ff;">→ RE IMPACT: ${esc(e.realEstateRelevance)}</div>
           ` : ""}
         </div>
       `).join("") : '<div style="color:#555; font-family:monospace; font-size:11px; padding:20px 0;">No events found</div>';
@@ -3087,7 +3074,7 @@
             <button onclick="openWorldIntelPanel()"
                     style="margin-left:16px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                            color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px;
-                           letter-spacing:2px; cursor:pointer; border-radius:2px;">â†» REFRESH</button>
+                           letter-spacing:2px; cursor:pointer; border-radius:2px;">↻ REFRESH</button>
           </div>
         </div>`;
     }
@@ -3101,12 +3088,12 @@
 
       const goalHTML = `
         <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
-          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">$20M CAMPAIGN Â· ${esc(goal.deadline || "NOV 30 2026")}</div>
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">$20M CAMPAIGN · ${esc(goal.deadline || "NOV 30 2026")}</div>
           <div style="background:rgba(0,212,255,0.1); border-radius:2px; height:6px; margin-bottom:8px;">
             <div style="background:#00d4ff; width:${goal.percentComplete || 29.8}%; height:100%; border-radius:2px;"></div>
           </div>
           <div style="color:#fff; font-size:11px; line-height:1.8;">
-            <div>BANKED: <span style="color:#00d4ff;">$${(banked / 1000000).toFixed(2)}M</span> Â· ${goal.dealsCount || 0} deals</div>
+            <div>BANKED: <span style="color:#00d4ff;">$${(banked / 1000000).toFixed(2)}M</span> · ${goal.dealsCount || 0} deals</div>
             <div>GAP: <span style="color:#ff6b35;">$${(gap / 1000000).toFixed(2)}M</span></div>
             <div>AVG DEAL: $${(goal.avgDealPrice || 0).toLocaleString()}</div>
           </div>
@@ -3114,9 +3101,9 @@
 
       const tiktokHTML = `
         <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
-          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">TIKTOK ENGINE Â· ${tiktok.days || 0} DAYS Â· ${tiktok.videos || 0} VIDEOS</div>
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">TIKTOK ENGINE · ${tiktok.days || 0} DAYS · ${tiktok.videos || 0} VIDEOS</div>
           <div style="color:#fff; font-size:11px; line-height:2;">
-            <div><span style="color:#00d4ff;">${((tiktok.views || 0) / 1000).toFixed(0)}K</span> VIEWS Â· ${tiktok.closings || 0} CLOSINGS</div>
+            <div><span style="color:#00d4ff;">${((tiktok.views || 0) / 1000).toFixed(0)}K</span> VIEWS · ${tiktok.closings || 0} CLOSINGS</div>
             <div style="color:#ff6b35;">CURRENT: ${tiktok.videosPerWeekCurrent || 0} vids/wk</div>
             <div style="color:#00d4ff;">NEEDED: ${tiktok.videosPerWeekForMonthly || 0} vids/wk for monthly</div>
           </div>
@@ -3124,17 +3111,32 @@
 
       const mojoHTML = `
         <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
-          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER Â· JANâ€“MAY 2026</div>
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER · JAN–MAY 2026</div>
           <div style="color:#fff; font-size:11px; line-height:2;">
-            <div><span style="color:#00d4ff;">${(mojo.calls || 0).toLocaleString()}</span> CALLS Â· ${mojo.closings || 0} CLOSINGS</div>
+            <div><span style="color:#00d4ff;">${(mojo.calls || 0).toLocaleString()}</span> CALLS · ${mojo.closings || 0} CLOSINGS</div>
             <div style="color:#888;">1 contact per ${mojo.callsPerContact || 32} calls</div>
+          </div>
+        </div>`;
+
+      // Daily plan + buyer/seller targets + pace + contact rate — moved off the
+      // always-on strip into this expandable panel to keep the top bar clean.
+      const dt = data?.dailyTargets || {};
+      const targetsHTML = `
+        <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">DAILY PLAN &amp; TARGETS</div>
+          <div style="color:#fff; font-size:11px; line-height:2;">
+            <div>DAILY: <span style="color:#00d4ff;">${dt.videos || 7} videos + ${dt.calls || 725} calls</span></div>
+            <div>AVG DEAL: $${((goal.avgDealPrice || 425000)).toLocaleString()}</div>
+            <div>BUYER: 21 closings needed · SELLER: 14 closings needed</div>
+            <div style="color:#ff6b35;">PACE: 1 closing / ${tiktok.weeksPerClosingCurrent || 8} wks → need ${tiktok.videosPerWeekForMonthly || 10.3} vids/wk</div>
+            <div style="color:#888;">CONTACT RATE: 1 per ${mojo.callsPerContact || 32} calls</div>
           </div>
         </div>`;
 
       if (type === "goal") return `<div style="display:flex; flex-wrap:wrap; gap:24px;">${goalHTML}</div>`;
       if (type === "tiktok") return `<div style="display:flex; flex-wrap:wrap; gap:24px;">${tiktokHTML}</div>`;
       if (type === "mojo") return `<div style="display:flex; flex-wrap:wrap; gap:24px;">${mojoHTML}</div>`;
-      return `<div style="display:flex; flex-wrap:wrap; gap:24px;">${goalHTML}${tiktokHTML}${mojoHTML}</div>`;
+      return `<div style="display:flex; flex-wrap:wrap; gap:24px;">${goalHTML}${tiktokHTML}${mojoHTML}${targetsHTML}</div>`;
     }
 
     function flashStripSection(type) {
@@ -3191,10 +3193,10 @@
         needleMovers: [
           "7 videos posted today keeps the TikTok engine alive",
           "725 calls = 22 contacts at current rate = pipeline building",
-          "Every video above 7 compounds â€” 10.3/week hits monthly closing pace",
+          "Every video above 7 compounds — 10.3/week hits monthly closing pace",
           "Every 6,734 calls = 1 seller closing = $425K avg deal",
         ],
-        motivation: `${dayOfWeek}. $14M gap. ${daysLeft} days left. The only thing that moves the needle today is reps â€” videos and calls. Everything else is noise.`,
+        motivation: `${dayOfWeek}. $14M gap. ${daysLeft} days left. The only thing that moves the needle today is reps — videos and calls. Everything else is noise.`,
       });
     }
     window.expandDailyPlanPanel = expandDailyPlanPanel;
@@ -3230,7 +3232,7 @@
             <button onclick="openMarketIntelPanel()"
                     style="margin-top:14px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                            color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px; cursor:pointer;">
-              â†» RETRY
+              ↻ RETRY
             </button>
           </div>
         `);
@@ -3269,7 +3271,7 @@
             <button onclick="openWorldIntelPanel()"
                     style="margin-top:14px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                            color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px; cursor:pointer;">
-              â†» RETRY
+              ↻ RETRY
             </button>
           </div>
         `);
@@ -3289,7 +3291,7 @@
             <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER</div>
             <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px;">
               <div style="font-size:11px; color:${d.mojo?.hasApi ? "#00ff88" : "#ff6b35"};">
-                ${d.mojo?.hasApi ? "â— API AVAILABLE" : "â—‹ NO PUBLIC API"}
+                ${d.mojo?.hasApi ? "● API AVAILABLE" : "○ NO PUBLIC API"}
               </div>
               <div style="font-size:9px; color:#555; background:rgba(0,212,255,0.1); padding:2px 8px; border-radius:2px;">
                 ${String(d.mojo?.integrationComplexity || "").toUpperCase()}
@@ -3298,7 +3300,7 @@
             <div style="font-size:11px; color:#fff; line-height:1.7; margin-bottom:10px;">${esc(d.mojo?.apiDetails || "")}</div>
             <div style="font-size:10px; color:#888; margin-bottom:6px;">EXPORT OPTIONS:</div>
             <div style="font-size:11px; color:#aaa; line-height:1.6;">
-              ${(d.mojo?.exportOptions || []).map(o => `â†’ ${esc(o)}`).join("<br>")}
+              ${(d.mojo?.exportOptions || []).map(o => `→ ${esc(o)}`).join("<br>")}
             </div>
             <div style="margin-top:10px; padding:10px; background:rgba(0,212,255,0.05); border-radius:2px; border-left:2px solid #00d4ff;">
               <div style="font-size:9px; color:#00d4ff; margin-bottom:4px;">RECOMMENDATION</div>
@@ -3310,7 +3312,7 @@
             <div style="font-size:9px; color:#555; letter-spacing:2px; margin-bottom:12px;">TIKTOK ANALYTICS</div>
             <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px;">
               <div style="font-size:11px; color:${d.tiktok?.hasApi ? "#00ff88" : "#ff6b35"};">
-                ${d.tiktok?.hasApi ? "â— API AVAILABLE" : "â—‹ NO PUBLIC API"}
+                ${d.tiktok?.hasApi ? "● API AVAILABLE" : "○ NO PUBLIC API"}
               </div>
               <div style="font-size:9px; color:#555; background:rgba(0,212,255,0.1); padding:2px 8px; border-radius:2px;">
                 ${String(d.tiktok?.integrationComplexity || "").toUpperCase()}
@@ -3338,7 +3340,7 @@
           <button onclick="openMojoTiktokResearch()"
                   style="background:transparent; border:1px solid rgba(0,212,255,0.3); color:#00d4ff;
                          padding:5px 16px; font-family:monospace; font-size:9px; letter-spacing:2px; cursor:pointer; border-radius:2px;">
-            â†» REFRESH RESEARCH
+            ↻ REFRESH RESEARCH
           </button>
         </div>
       `;
@@ -3355,7 +3357,7 @@
             </div>
             <div style="font-size:13px; color:#fff; line-height:1.7; margin-bottom:12px;">${esc(note.content || "")}</div>
             ${note.leadName ? `<div style="font-size:10px; color:#888; padding-top:10px; border-top:1px solid rgba(0,212,255,0.1);">LINKED TO: ${esc(note.leadName)}</div>` : ""}
-            <div style="font-size:9px; color:#444; margin-top:8px;">SOURCE: ${String(note.source || "text").toUpperCase()} Â· SAVED TO NOTES</div>
+            <div style="font-size:9px; color:#444; margin-top:8px;">SOURCE: ${String(note.source || "text").toUpperCase()} · SAVED TO NOTES</div>
           </div>
           <div style="text-align:center; margin-top:12px;">
             <button onclick="closeActivePanel()"
@@ -3411,7 +3413,7 @@
                   <div style="font-size:9px; color:#444;">${new Date(n.createdAt).toLocaleDateString()}</div>
                 </div>
                 <div style="font-size:12px; color:#fff; line-height:1.6; margin-bottom:8px;">${esc(n.content || "")}</div>
-                ${n.leadName ? `<div style="font-size:10px; color:#888;">â†³ ${esc(n.leadName)}</div>` : ""}
+                ${n.leadName ? `<div style="font-size:10px; color:#888;">↳ ${esc(n.leadName)}</div>` : ""}
                 <div style="display:flex; gap:8px; margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,212,255,0.08);">
                   <span style="font-size:9px; color:#444;">${String(n.source || "text").toUpperCase()}</span>
                   <button onclick="deleteHarveyNote('${n.id}')"
@@ -3501,7 +3503,7 @@
             <button onclick="openMojoTiktokResearch()"
                     style="margin-top:14px; background:transparent; border:1px solid rgba(0,212,255,0.3);
                            color:#00d4ff; padding:5px 16px; font-family:monospace; font-size:9px; cursor:pointer;">
-              â†» RETRY
+              ↻ RETRY
             </button>
           </div>
         `);
@@ -3592,27 +3594,27 @@
     function renderMemoryTab() {
       const body = document.getElementById("memBody");
       const d = memDataCache;
-      if (!d) { body.innerHTML = "â€”"; return; }
+      if (!d) { body.innerHTML = "—"; return; }
       if (memActiveTab === "facts") {
         body.innerHTML = (d.semantic || []).map(s => {
           const cat = (s.category || "business").toLowerCase();
-          const dot = (s.weight || 1) >= 1.8 ? "â—" : "â—‹";
+          const dot = (s.weight || 1) >= 1.8 ? "●" : "○";
           return `<div class="mem-row"><span class="${(s.weight || 1) >= 1.8 ? "mem-dot-filled" : "mem-dot-hollow"}">${dot}</span> <span class="mem-badge ${cat}">${esc(cat.toUpperCase())}</span> ${esc(s.fact)} <span style="color:#4a5e74">weight: ${s.weight || 1}</span></div>`;
-        }).join("") || "â€”";
+        }).join("") || "—";
       } else if (memActiveTab === "connections") {
         body.innerHTML = (d.relational || []).map(r =>
-          `<div class="mem-row mem-rel">${esc(r.entity_a)} <span>â”€â”€[${esc(r.relationship)}]â”€â”€â†’</span> ${esc(r.entity_b)}</div>`
-        ).join("") || "â€”";
+          `<div class="mem-row mem-rel">${esc(r.entity_a)} <span>──[${esc(r.relationship)}]──→</span> ${esc(r.entity_b)}</div>`
+        ).join("") || "—";
       } else if (memActiveTab === "rules") {
         body.innerHTML = (d.procedural || []).map(p =>
-          `<div class="mem-row">âš¡ <span class="mem-rule-trigger">WHEN: ${esc(p.trigger_condition)}</span><br><span class="mem-rule-action">DO: ${esc(p.action)}</span></div>`
-        ).join("") || "â€”";
+          `<div class="mem-row">⚡ <span class="mem-rule-trigger">WHEN: ${esc(p.trigger_condition)}</span><br><span class="mem-rule-action">DO: ${esc(p.action)}</span></div>`
+        ).join("") || "—";
       } else {
         body.innerHTML = (d.episodes || []).map(e => {
           const w = (e.emotional_weight || "routine").toUpperCase();
-          const date = (e.timestamp || "").split("T")[0] || "â€”";
-          return `<div class="mem-row">[${date}] ${esc(e.summary)} â€” <span class="mem-badge funnel">${w}</span></div>`;
-        }).join("") || "â€”";
+          const date = (e.timestamp || "").split("T")[0] || "—";
+          return `<div class="mem-row">[${date}] ${esc(e.summary)} — <span class="mem-badge funnel">${w}</span></div>`;
+        }).join("") || "—";
       }
     }
 
@@ -3625,7 +3627,7 @@
       memDataCache = await fetchMemoryFull();
       if (memDataCache?.stats) {
         document.getElementById("memHeadTitle").textContent =
-          `// HARVEY MEMORY Â· ${memDataCache.stats.semanticCount} FACTS Â· ${memDataCache.stats.relationalCount} CONNECTIONS Â· ${memDataCache.stats.proceduralCount} RULES //`;
+          `// HARVEY MEMORY · ${memDataCache.stats.semanticCount} FACTS · ${memDataCache.stats.relationalCount} CONNECTIONS · ${memDataCache.stats.proceduralCount} RULES //`;
       }
       renderMemoryTab();
     }
@@ -3719,11 +3721,11 @@
           if (voice?.engine && voice.engine !== "none") bits.push("FLUX STT");
           else if (voice?.gemini_configured) bits.push("GEMINI");
           if (voice?.tts && voice.tts !== "none") bits.push("TTS");
-          document.getElementById("jModel").textContent = bits.join(" Â· ");
+          document.getElementById("jModel").textContent = bits.join(" · ");
         }
         if (!voice?.gemini_configured) {
           document.getElementById("harvey-mic-btn").style.cursor = "default";
-          coreHint.textContent = "VOICE OFFLINE â€” TYPE BELOW";
+          coreHint.textContent = "VOICE OFFLINE — TYPE BELOW";
         }
         await loadOps();
         await refreshMetrics();
