@@ -325,7 +325,7 @@ function isRealtorMessage(message) {
     ];
     return realtorSignals.some((signal) => normalized.includes(signal));
 }
-exports.REALTOR_REDIRECT_REPLY = "Hey! Sounds like you're in the business too, love it. For agent inquiries, feel free to reach out to Marco directly at his number and he'll get back to you as soon as possible.";
+exports.REALTOR_REDIRECT_REPLY = "Hey! Sounds like you're in the business too, love it. For agent inquiries, feel free to reach out to Marco directly at 210-801-2380 and he'll get back to you as soon as possible.";
 /** Realtor who mentions relocating to Texas — ask where they're coming from (referral opportunity). */
 exports.REALTOR_RELOCATION_REPLY = "Oh awesome, where are you relocating from? If you're not licensed in Texas, I may be able to help facilitate the transaction on the listing side.";
 /** True if the realtor message also mentions relocating to the area (potential referral situation). */
