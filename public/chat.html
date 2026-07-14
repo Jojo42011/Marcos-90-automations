@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Marco — web demo</title>
+  <title>DM Agent · Marco 90</title>
   <style>
     :root {
-      --bg: #0f1419;
-      --surface: #1a2332;
-      --border: #2d3a4d;
-      --text: #e7ecf3;
+      --bg: #0a0a0a;
+      --surface: #0d1219;
+      --border: rgba(0,212,255,0.22);
+      --text: #f1f5f9;
       --muted: #8b9cb3;
-      --accent: #3d8bfd;
-      --user: #1e3a5f;
-      --bot: #1a2f26;
+      --accent: #00d4ff;
+      --user: rgba(0,212,255,0.12);
+      --bot: rgba(255,255,255,0.04);
     }
     * { box-sizing: border-box; }
     body {
@@ -122,11 +122,17 @@
       border: none;
       border-radius: 8px;
       background: var(--accent);
-      color: #fff;
-      font-weight: 600;
+      color: #001018;
+      font-weight: 700;
       cursor: pointer;
       font-size: 0.95rem;
     }
+    header .dm-mark {
+      width: 20px; height: 20px; border-radius: 6px; flex: 0 0 auto;
+      background: linear-gradient(135deg, #00d4ff, #38bdf8);
+    }
+    header .dm-title-wrap { display: flex; flex-direction: column; line-height: 1.15; }
+    header .dm-title-wrap small { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.04em; }
     form button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -140,9 +146,13 @@
 </head>
 <body>
   <header>
-    <h1>Marco web demo</h1>
-    <label>
-      user_id
+    <span class="dm-mark" aria-hidden="true"></span>
+    <div class="dm-title-wrap">
+      <h1>DM Agent</h1>
+      <small>Instagram &middot; SMS reply tester</small>
+    </div>
+    <label style="margin-left:auto;">
+      thread / user
       <input type="text" id="userId" value="demo-user-1" autocomplete="off" />
     </label>
   </header>
@@ -152,7 +162,7 @@
       <input type="text" id="msg" placeholder="Type a message…" autocomplete="off" required />
       <button type="submit" id="send">Send</button>
     </form>
-    <p class="hint">Same host as <code>/simulate</code> — no CORS setup needed. Use a stable user_id to keep thread state.</p>
+    <p class="hint">Send a message as a lead to see how the DM agent replies. Keep the same thread / user id to preserve conversation state across messages.</p>
   </footer>
   <script>
     const log = document.getElementById("log");
