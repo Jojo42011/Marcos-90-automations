@@ -56,11 +56,11 @@
     .dm-stat.warn .num { color: #f59e0b; }
     @media (max-width: 900px) { .dm-stats { grid-template-columns: repeat(2, 1fr); } }
 
-    .dm-body { flex: 1; display: flex; min-height: 0; }
+    .dm-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
-    /* ── Conversations list ── */
-    .dm-list { flex: 0 0 300px; border-right: 1px solid var(--border-2);
-      background: var(--surface-2); display: flex; flex-direction: column; min-height: 0; }
+    /* ── Conversations list (full width) ── */
+    .dm-list { flex: 1; display: flex; flex-direction: column; min-height: 0;
+      width: 100%; max-width: 960px; margin: 0 auto; }
     .dm-list-head { padding: 0.7rem 0.85rem; display: flex; align-items: center; gap: 0.5rem;
       border-bottom: 1px solid var(--border-2); }
     .dm-list-head .t { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.16em;
@@ -94,14 +94,26 @@
     .dm-state { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.04em; text-transform: uppercase;
       color: var(--accent-2); flex: 0 0 auto; }
 
-    /* ── Conversation view ── */
-    .dm-conv { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-    .dm-conv-head { padding: 0.7rem 1rem; border-bottom: 1px solid var(--border-2);
+    .dm-thread-open { margin-left: 0.5rem; color: var(--muted); flex: 0 0 auto; }
+    .dm-thread:hover .dm-thread-open { color: var(--accent); }
+
+    /* ── Conversation popup (modal) ── */
+    .dm-modal { position: fixed; inset: 0; z-index: 100; display: none; }
+    .dm-modal.open { display: block; }
+    .dm-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.62); backdrop-filter: blur(2px); }
+    .dm-modal-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      width: min(680px, 94vw); height: min(80vh, 760px); background: var(--surface);
+      border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column;
+      overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.55); animation: dm-pop 0.16s ease-out; }
+    @keyframes dm-pop { from { opacity: 0; transform: translate(-50%,-48%) scale(0.98); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+    .dm-conv-head { padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-2);
       display: flex; align-items: center; gap: 0.6rem; flex: 0 0 auto; }
-    .dm-conv-head .nm { font-weight: 700; font-size: 0.9rem; }
-    .dm-conv-head .sub { font-size: 0.68rem; color: var(--muted); font-family: var(--mono); }
-    #log { flex: 1; overflow-y: auto; padding: 1.1rem; display: flex; flex-direction: column;
-      gap: 0.55rem; max-width: 46rem; margin: 0 auto; width: 100%; }
+    .dm-conv-head .nm { font-weight: 700; font-size: 0.95rem; }
+    .dm-conv-head .sub { font-size: 0.66rem; color: var(--muted); font-family: var(--mono); }
+    .dm-modal-close { margin-left: auto; background: transparent; border: none; color: var(--muted);
+      font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 0.15rem; }
+    .dm-modal-close:hover { color: var(--accent); }
+    #log { flex: 1; overflow-y: auto; padding: 1.1rem; display: flex; flex-direction: column; gap: 0.55rem; width: 100%; }
     .bubble { max-width: 82%; padding: 0.6rem 0.8rem; border-radius: 12px; line-height: 1.45;
       font-size: 0.9rem; white-space: pre-wrap; word-break: break-word; }
     .bubble .who { display: block; font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase;
@@ -112,20 +124,16 @@
     .bubble.error { align-self: stretch; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4);
       color: #fca5a5; font-size: 0.82rem; }
     .bubble.pending { opacity: 0.6; font-style: italic; }
-    .dm-conv-empty { flex: 1; display: flex; align-items: center; justify-content: center;
-      text-align: center; color: var(--muted); font-size: 0.9rem; padding: 2rem; line-height: 1.6; }
-
-    footer { padding: 0.7rem 1rem; border-top: 1px solid var(--border-2); background: var(--surface);
-      flex: 0 0 auto; }
-    form { display: flex; gap: 0.5rem; max-width: 46rem; margin: 0 auto; }
+    footer { padding: 0.7rem 1rem; border-top: 1px solid var(--border-2); background: var(--surface); flex: 0 0 auto; }
+    form { display: flex; gap: 0.5rem; }
     form input[type="text"] { flex: 1; padding: 0.6rem 0.75rem; border: 1px solid var(--border);
       border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.95rem; }
     form input:focus { outline: none; border-color: var(--accent); }
     form button { padding: 0.6rem 1.1rem; border: none; border-radius: 8px; background: var(--accent);
       color: #001018; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
     form button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .hint { margin: 0.5rem auto 0; max-width: 46rem; font-size: 0.7rem; color: var(--muted); }
-    @media (max-width: 720px) { .dm-list { flex-basis: 40%; } }
+    .hint { margin: 0.45rem 0 0; font-size: 0.68rem; color: var(--muted); }
+    @media (max-width: 720px) { .dm-modal-card { width: 100vw; height: 100vh; border-radius: 0; } }
   </style>
 </head>
 <body>
@@ -148,7 +156,7 @@
   </div>
 
   <div class="dm-body">
-    <aside class="dm-list">
+    <div class="dm-list">
       <div class="dm-list-head">
         <span class="t">Conversations <span id="dm-count" style="color:var(--accent);"></span></span>
         <button type="button" class="dm-new" id="dm-new-btn">+ New</button>
@@ -159,25 +167,27 @@
       <div class="dm-threads" id="threads">
         <div class="dm-empty">Loading…</div>
       </div>
-    </aside>
+    </div>
+  </div>
 
-    <section class="dm-conv">
-      <div class="dm-conv-head" id="conv-head" style="display:none;">
+  <!-- Conversation popup — opens when a conversation is clicked -->
+  <div class="dm-modal" id="dm-modal" aria-hidden="true">
+    <div class="dm-modal-backdrop" id="dm-modal-backdrop"></div>
+    <div class="dm-modal-card" role="dialog" aria-modal="true">
+      <div class="dm-conv-head">
         <span class="nm" id="conv-name">—</span>
         <span class="sub" id="conv-sub"></span>
+        <button type="button" class="dm-modal-close" id="dm-modal-close" aria-label="Close">&times;</button>
       </div>
-      <div id="log" style="display:none;"></div>
-      <div class="dm-conv-empty" id="conv-empty">
-        Select a conversation on the left, or start a new one to see how the DM agent replies.
-      </div>
+      <div id="log"></div>
       <footer>
         <form id="f">
-          <input type="text" id="msg" placeholder="Type a message as the lead…" autocomplete="off" required disabled />
-          <button type="submit" id="send" disabled>Send</button>
+          <input type="text" id="msg" placeholder="Type a message as the lead…" autocomplete="off" required />
+          <button type="submit" id="send">Send</button>
         </form>
-        <p class="hint">Messages are sent as the lead; the DM agent replies automatically. Real inbound Instagram/SMS conversations appear here as they arrive.</p>
+        <p class="hint">Messages are sent as the lead; the DM agent replies automatically.</p>
       </footer>
-    </section>
+    </div>
   </div>
 
   <script>
@@ -192,11 +202,21 @@
     }
     const threadsEl = document.getElementById("threads");
     const logEl = document.getElementById("log");
-    const convEmpty = document.getElementById("conv-empty");
-    const convHead = document.getElementById("conv-head");
+    const modal = document.getElementById("dm-modal");
     const form = document.getElementById("f");
     const msgInput = document.getElementById("msg");
     const sendBtn = document.getElementById("send");
+
+    function openModal() {
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+    }
+    function closeModal() {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+      current = null;
+      renderThreads();
+    }
 
     // current selected thread: {id?, platform, userId, name}
     let current = null;
@@ -287,29 +307,22 @@
         const active = current && current.id === c.id ? " active" : "";
         const pc = platClass(c.platform);
         const state = c.state ? `<span class="dm-state">${esc(String(c.state).replace(/_/g, " "))}</span>` : "";
-        return `<div class="dm-thread${active}" data-id="${esc(c.id)}" data-platform="${esc(c.platform)}" data-userid="${esc(c.userId)}" data-name="${esc(c.name)}">
+        return `<div class="dm-thread${active}" data-id="${esc(c.id)}" data-platform="${esc(c.platform)}" data-userid="${esc(c.userId)}" data-name="${esc(c.name)}" role="button" tabindex="0" title="Open conversation">
           <div class="dm-thread-top">
             <span class="dm-badge ${pc}">${esc(c.platform)}</span>
             <span class="dm-thread-name">${esc(c.name)}</span>
             ${state}
             <span class="dm-thread-time">${esc(timeAgo(c.lastAt))}</span>
+            <span class="dm-thread-open" aria-hidden="true">›</span>
           </div>
           <div class="dm-thread-preview">${c.lastRole === "assistant" ? "↩ " : ""}${esc(c.lastText)}</div>
         </div>`;
       }).join("");
       threadsEl.querySelectorAll(".dm-thread").forEach((el) => {
-        el.addEventListener("click", () => {
-          selectThread({ id: el.dataset.id, platform: el.dataset.platform, userId: el.dataset.userid, name: el.dataset.name });
-        });
+        const open = () => selectThread({ id: el.dataset.id, platform: el.dataset.platform, userId: el.dataset.userid, name: el.dataset.name });
+        el.addEventListener("click", open);
+        el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
       });
-    }
-
-    function openComposer(placeholderName) {
-      msgInput.disabled = false; sendBtn.disabled = false;
-      msgInput.placeholder = "Message " + (placeholderName || "the lead") + "…";
-      convEmpty.style.display = "none";
-      logEl.style.display = "flex";
-      convHead.style.display = "flex";
     }
 
     function renderMessages(messages) {
@@ -326,8 +339,11 @@
       renderThreads();
       document.getElementById("conv-name").textContent = t.name || t.userId || "New conversation";
       document.getElementById("conv-sub").textContent = t.platform + " · " + (t.userId || "");
-      openComposer(t.name);
-      if (!t.id) { renderMessages([]); msgInput.focus(); return; }
+      msgInput.placeholder = "Message " + (t.name || "the lead") + "…";
+      renderMessages([]);
+      openModal();
+      if (!t.id) { msgInput.focus(); return; }
+      logEl.innerHTML = '<div class="bubble bot pending"><span class="who">DM Agent</span>loading…</div>';
       try {
         const res = await fetch(apiUrl("/api/dm/conversation/" + encodeURIComponent(t.id)));
         if (!res.ok) throw new Error("HTTP " + res.status);
@@ -338,6 +354,11 @@
       }
       msgInput.focus();
     }
+
+    // Close the popup: X button, backdrop click, or Escape.
+    document.getElementById("dm-modal-close").addEventListener("click", closeModal);
+    document.getElementById("dm-modal-backdrop").addEventListener("click", closeModal);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && modal.classList.contains("open")) closeModal(); });
 
     document.getElementById("dm-search").addEventListener("input", (e) => {
       searchQ = e.target.value || "";
@@ -359,7 +380,6 @@
       // optimistic lead bubble
       const b = document.createElement("div");
       b.className = "bubble user"; b.innerHTML = '<span class="who">Lead</span>' + esc(text);
-      logEl.style.display = "flex"; convEmpty.style.display = "none";
       logEl.appendChild(b);
       const pending = document.createElement("div");
       pending.className = "bubble bot pending"; pending.innerHTML = '<span class="who">DM Agent</span>…';
