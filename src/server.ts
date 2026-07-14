@@ -3171,7 +3171,21 @@ app.post("/webhook", express.json(), simulateCors, (req, res) => {
 
 
 app.options("/reset", resetCors);
-app.post("/reset", resetCors, (_req, res) => {
+app.post("/reset", resetCors, (req, res) => {
+  // DANGER: this wipes EVERY lead + conversation (production holds hundreds of
+  // real DM threads). It exists for local demo/testing only — in production it
+  // must be explicitly enabled AND pass the dashboard token.
+  const allowed = process.env.ALLOW_MEMORY_RESET?.trim().toLowerCase() === "true";
+  if (!allowed) {
+    res.status(403).json({
+      error: "Reset disabled — this would erase all live leads/conversations. Set ALLOW_MEMORY_RESET=true to enable (local/testing only).",
+    });
+    return;
+  }
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
   resetMemoryStore();
   res.status(200).json({ ok: true, message: "In-memory store cleared." });
 });
@@ -3201,6 +3215,8 @@ app.get("/api/dm/conversations", async (req, res) => {
         name: lead.name || lead.username || lead.userId || "Lead",
         platform: lead.platform || "unknown",
         userId: lead.userId,
+        state: lead.state ? String(lead.state) : null,
+        hasPhone: Boolean(lead.phone?.trim()),
         lastText: last?.text || "",
         lastAt: last?.at || null,
         lastRole: last?.role || "user",
@@ -3210,7 +3226,10 @@ app.get("/api/dm/conversations", async (req, res) => {
       });
     }
     items.sort((a, b) => String(b.lastAt || "").localeCompare(String(a.lastAt || "")));
-    res.json({ conversations: items });
+    // Production has hundreds of live threads; cap the payload (newest first)
+    // and let the client ask for more. total reflects the uncapped count.
+    const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit || "300"), 10) || 300));
+    res.json({ total: items.length, conversations: items.slice(0, limit) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
@@ -3235,6 +3254,8 @@ app.get("/api/dm/conversation/:leadId", async (req, res) => {
         name: lead.name || lead.username || lead.userId || "Lead",
         platform: lead.platform || "unknown",
         userId: lead.userId,
+        state: lead.state ? String(lead.state) : null,
+        phone: lead.phone || null,
         crmStage: lead.crmStage,
         crmIntent: lead.crmIntent,
       },

@@ -72,6 +72,12 @@
     .dm-badge.tiktok { color: #25f4ee; border-color: rgba(37,244,238,0.4); }
     .dm-badge.facebook { color: #60a5fa; border-color: rgba(96,165,250,0.4); }
     .dm-empty { padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.8rem; line-height: 1.6; }
+    .dm-search-wrap { padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border-2); }
+    .dm-search-wrap input { width: 100%; padding: 0.45rem 0.6rem; border: 1px solid var(--border-2);
+      border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.78rem; }
+    .dm-search-wrap input:focus { outline: none; border-color: var(--accent); }
+    .dm-state { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.04em; text-transform: uppercase;
+      color: var(--accent-2); flex: 0 0 auto; }
 
     /* ── Conversation view ── */
     .dm-conv { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -120,8 +126,11 @@
   <div class="dm-body">
     <aside class="dm-list">
       <div class="dm-list-head">
-        <span class="t">Conversations</span>
+        <span class="t">Conversations <span id="dm-count" style="color:var(--accent);"></span></span>
         <button type="button" class="dm-new" id="dm-new-btn">+ New</button>
+      </div>
+      <div class="dm-search-wrap">
+        <input type="search" id="dm-search" placeholder="Search name or message…" autocomplete="off" />
       </div>
       <div class="dm-threads" id="threads">
         <div class="dm-empty">Loading…</div>
@@ -190,12 +199,16 @@
       return "";
     }
 
+    let searchQ = "";
+    let totalCount = 0;
+
     async function loadConversations() {
       try {
-        const res = await fetch(apiUrl("/api/dm/conversations"));
+        const res = await fetch(apiUrl("/api/dm/conversations?limit=500"));
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
         convCache = data.conversations || [];
+        totalCount = data.total ?? convCache.length;
         renderThreads();
       } catch (e) {
         threadsEl.innerHTML = '<div class="dm-empty">Could not load conversations.<br>' + esc(e.message) + '</div>';
@@ -203,17 +216,32 @@
     }
 
     function renderThreads() {
+      const countEl = document.getElementById("dm-count");
+      if (countEl) countEl.textContent = totalCount ? "· " + totalCount : "";
       if (!convCache.length) {
         threadsEl.innerHTML = '<div class="dm-empty">No DM conversations yet.<br>Tap <b>+ New</b> to start one and preview the agent.</div>';
         return;
       }
-      threadsEl.innerHTML = convCache.map((c) => {
+      const q = searchQ.trim().toLowerCase();
+      const shown = q
+        ? convCache.filter((c) =>
+            String(c.name || "").toLowerCase().includes(q) ||
+            String(c.userId || "").toLowerCase().includes(q) ||
+            String(c.lastText || "").toLowerCase().includes(q))
+        : convCache;
+      if (!shown.length) {
+        threadsEl.innerHTML = '<div class="dm-empty">No conversations match "' + esc(searchQ) + '".</div>';
+        return;
+      }
+      threadsEl.innerHTML = shown.map((c) => {
         const active = current && current.id === c.id ? " active" : "";
         const pc = platClass(c.platform);
+        const state = c.state ? `<span class="dm-state">${esc(String(c.state).replace(/_/g, " "))}</span>` : "";
         return `<div class="dm-thread${active}" data-id="${esc(c.id)}" data-platform="${esc(c.platform)}" data-userid="${esc(c.userId)}" data-name="${esc(c.name)}">
           <div class="dm-thread-top">
             <span class="dm-badge ${pc}">${esc(c.platform)}</span>
             <span class="dm-thread-name">${esc(c.name)}</span>
+            ${state}
             <span class="dm-thread-time">${esc(timeAgo(c.lastAt))}</span>
           </div>
           <div class="dm-thread-preview">${c.lastRole === "assistant" ? "↩ " : ""}${esc(c.lastText)}</div>
@@ -260,6 +288,11 @@
       }
       msgInput.focus();
     }
+
+    document.getElementById("dm-search").addEventListener("input", (e) => {
+      searchQ = e.target.value || "";
+      renderThreads();
+    });
 
     document.getElementById("dm-new-btn").addEventListener("click", () => {
       const handle = prompt("New conversation — enter the lead's handle / user id (e.g. an Instagram username):", "");
