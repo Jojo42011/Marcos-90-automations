@@ -3235,6 +3235,67 @@ app.get("/api/dm/conversations", async (req, res) => {
   }
 });
 
+// Aggregate numbers for the DM Agent tab's overview cards (Reporting-style):
+// platform split, message volume, today's activity, phone captures, and
+// threads needing Marco. Computed live from the same store the agent writes.
+app.get("/api/dm/stats", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const { listAllLeads: allLeads, getConversation: getConv } = await import("./core/db.js");
+    const leads = await allLeads();
+    const today = new Date().toISOString().slice(0, 10);
+    const byPlatform: Record<string, number> = {};
+    let conversations = 0;
+    let leadMessages = 0;
+    let agentReplies = 0;
+    let messagesToday = 0;
+    let newLeadsToday = 0;
+    let phonesCaptured = 0;
+    let flaggedForCall = 0;
+    let paused = 0;
+    let activeToday = 0;
+    for (const lead of leads) {
+      const conv = await getConv(lead.id);
+      const msgs = conv.messages || [];
+      if (!msgs.length) continue;
+      conversations++;
+      const plat = String(lead.platform || "unknown");
+      byPlatform[plat] = (byPlatform[plat] || 0) + 1;
+      let touchedToday = false;
+      for (const m of msgs) {
+        if (m.role === "user") leadMessages++;
+        else agentReplies++;
+        if (m.at && String(m.at).slice(0, 10) === today) {
+          messagesToday++;
+          touchedToday = true;
+        }
+      }
+      if (touchedToday) activeToday++;
+      if (String(lead.createdAt || "").slice(0, 10) === today) newLeadsToday++;
+      if (lead.phone?.trim()) phonesCaptured++;
+      if (String(lead.state) === "flag_for_call") flaggedForCall++;
+      if (lead.automationPaused) paused++;
+    }
+    res.json({
+      generatedAt: new Date().toISOString(),
+      conversations,
+      byPlatform,
+      messages: { fromLeads: leadMessages, agentReplies, total: leadMessages + agentReplies, today: messagesToday },
+      today: { newLeads: newLeadsToday, activeConversations: activeToday },
+      phoneCaptures: {
+        total: phonesCaptured,
+        rate: conversations ? Math.round((phonesCaptured / conversations) * 100) : 0,
+      },
+      needsMarco: { flaggedForCall, automationPaused: paused },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 app.get("/api/dm/conversation/:leadId", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized" });

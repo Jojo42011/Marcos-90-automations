@@ -41,6 +41,21 @@
       font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; }
     .dm-live i { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 8px #4ade80; }
 
+    /* ── Overview stat cards (Reporting-style) ── */
+    .dm-stats { flex: 0 0 auto; display: grid; gap: 0.6rem; padding: 0.75rem 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      border-bottom: 1px solid var(--border-2); background: rgba(255,255,255,0.015); }
+    .dm-stat { border: 1px solid var(--border-2); background: var(--surface-2);
+      border-radius: 6px; padding: 0.6rem 0.75rem; min-width: 0; }
+    .dm-stat .lbl { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.35rem; }
+    .dm-stat .num { font-size: 1.45rem; font-weight: 800; line-height: 1.1; color: #fff; }
+    .dm-stat .sub { font-size: 0.66rem; color: var(--muted); margin-top: 0.25rem; line-height: 1.5; }
+    .dm-stat .sub b { color: var(--accent); font-weight: 600; }
+    .dm-stat.warn { border-color: rgba(245,158,11,0.4); }
+    .dm-stat.warn .num { color: #f59e0b; }
+    @media (max-width: 900px) { .dm-stats { grid-template-columns: repeat(2, 1fr); } }
+
     .dm-body { flex: 1; display: flex; min-height: 0; }
 
     /* ── Conversations list ── */
@@ -123,6 +138,15 @@
     <span class="dm-live"><i></i> Agent live</span>
   </header>
 
+  <div class="dm-stats" id="dm-stats">
+    <div class="dm-stat"><div class="lbl">&#128172; Conversations</div><div class="num" id="st-conv">&mdash;</div><div class="sub" id="st-conv-sub"></div></div>
+    <div class="dm-stat"><div class="lbl">&#128248; Platforms</div><div class="num" id="st-plat">&mdash;</div><div class="sub" id="st-plat-sub"></div></div>
+    <div class="dm-stat"><div class="lbl">&#9993; Messages</div><div class="num" id="st-msgs">&mdash;</div><div class="sub" id="st-msgs-sub"></div></div>
+    <div class="dm-stat"><div class="lbl">&#127381; Today</div><div class="num" id="st-today">&mdash;</div><div class="sub" id="st-today-sub"></div></div>
+    <div class="dm-stat"><div class="lbl">&#128241; Phone Captures</div><div class="num" id="st-phones">&mdash;</div><div class="sub" id="st-phones-sub"></div></div>
+    <div class="dm-stat" id="st-marco-card"><div class="lbl">&#9888; Needs Marco</div><div class="num" id="st-marco">&mdash;</div><div class="sub" id="st-marco-sub"></div></div>
+  </div>
+
   <div class="dm-body">
     <aside class="dm-list">
       <div class="dm-list-head">
@@ -201,6 +225,32 @@
 
     let searchQ = "";
     let totalCount = 0;
+
+    function fmtNum(n) { return Number(n || 0).toLocaleString(); }
+
+    async function loadStats() {
+      try {
+        const res = await fetch(apiUrl("/api/dm/stats"));
+        if (!res.ok) return;
+        const s = await res.json();
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerHTML = v; };
+        set("st-conv", fmtNum(s.conversations));
+        set("st-conv-sub", "<b>" + fmtNum(s.today?.activeConversations) + "</b> active today");
+        const plats = Object.entries(s.byPlatform || {}).sort((a, b) => b[1] - a[1]);
+        set("st-plat", plats.length ? fmtNum(plats[0][1]) : "0");
+        set("st-plat-sub", plats.map(([p, n]) => esc(p) + ": <b>" + fmtNum(n) + "</b>").join(" &middot; ") || "no platforms yet");
+        set("st-msgs", fmtNum(s.messages?.total));
+        set("st-msgs-sub", "<b>" + fmtNum(s.messages?.fromLeads) + "</b> from leads &middot; <b>" + fmtNum(s.messages?.agentReplies) + "</b> agent replies");
+        set("st-today", fmtNum(s.today?.newLeads));
+        set("st-today-sub", "new leads &middot; <b>" + fmtNum(s.messages?.today) + "</b> messages today");
+        set("st-phones", fmtNum(s.phoneCaptures?.total));
+        set("st-phones-sub", "<b>" + (s.phoneCaptures?.rate ?? 0) + "%</b> of conversations");
+        const needs = (s.needsMarco?.flaggedForCall || 0) + (s.needsMarco?.automationPaused || 0);
+        set("st-marco", fmtNum(needs));
+        set("st-marco-sub", "<b>" + fmtNum(s.needsMarco?.flaggedForCall) + "</b> flagged for call &middot; <b>" + fmtNum(s.needsMarco?.automationPaused) + "</b> paused");
+        document.getElementById("st-marco-card")?.classList.toggle("warn", needs > 0);
+      } catch (_) { /* stats are best-effort; inbox still works */ }
+    }
 
     async function loadConversations() {
       try {
@@ -351,7 +401,9 @@
     });
 
     loadConversations();
+    loadStats();
     setInterval(loadConversations, 8000);
+    setInterval(loadStats, 30000);
   </script>
 </body>
 </html>
