@@ -1,20 +1,76 @@
 "use strict";
-/**
- * Gmail — send email via OAuth refresh token (Marco's linked account).
- */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.storeGmailRefreshToken = storeGmailRefreshToken;
+exports.recordGmailAuthError = recordGmailAuthError;
+exports.getGmailAuthInfo = getGmailAuthInfo;
 exports.isGmailConfigured = isGmailConfigured;
 exports.getMarcoEmail = getMarcoEmail;
 exports.getGmailSenderAddress = getGmailSenderAddress;
+exports.getGmailAccessToken = getGmailAccessToken;
 exports.resolveEmailRecipient = resolveEmailRecipient;
 exports.sendEmail = sendEmail;
 exports.sendPropertyEmail = sendPropertyEmail;
+/**
+ * Gmail — send email via OAuth refresh token (Marco's linked account).
+ *
+ * Token precedence: a refresh token stored in the email DB (linked through the
+ * in-app "Reconnect Gmail" OAuth flow) wins over GMAIL_REFRESH_TOKEN from the
+ * environment. The env token went stale once already (invalid_grant, June 22)
+ * and rotating a Fly secret needs CLI access — the DB path lets Marco re-link
+ * from the browser and survive deploys.
+ */
+const emailStore_js_1 = require("../../core/emailStore.js");
 let cachedAccessToken = null;
 let cachedFromAddress = null;
+const KV_REFRESH_TOKEN = "gmail_refresh_token";
+const KV_LINKED_EMAIL = "gmail_linked_email";
+const KV_LINKED_AT = "gmail_linked_at";
+const KV_AUTH_ERROR = "gmail_auth_error";
+const KV_AUTH_ERROR_AT = "gmail_auth_error_at";
+function storedRefreshToken() {
+    try {
+        return (0, emailStore_js_1.kvGet)(KV_REFRESH_TOKEN);
+    }
+    catch {
+        return null;
+    }
+}
+/** Persist a freshly minted refresh token (from the in-app OAuth relink). */
+function storeGmailRefreshToken(refreshToken, linkedEmail) {
+    (0, emailStore_js_1.kvSet)(KV_REFRESH_TOKEN, refreshToken);
+    (0, emailStore_js_1.kvSet)(KV_LINKED_AT, new Date().toISOString());
+    if (linkedEmail)
+        (0, emailStore_js_1.kvSet)(KV_LINKED_EMAIL, linkedEmail);
+    (0, emailStore_js_1.kvSet)(KV_AUTH_ERROR, "");
+    // Invalidate caches so the next call uses the new token immediately.
+    cachedAccessToken = null;
+    cachedFromAddress = linkedEmail || null;
+}
+function recordGmailAuthError(message) {
+    try {
+        (0, emailStore_js_1.kvSet)(KV_AUTH_ERROR, message);
+        (0, emailStore_js_1.kvSet)(KV_AUTH_ERROR_AT, new Date().toISOString());
+    }
+    catch {
+        /* bookkeeping only */
+    }
+}
+function getGmailAuthInfo() {
+    const db = storedRefreshToken();
+    const env = process.env.GMAIL_REFRESH_TOKEN?.trim();
+    return {
+        configured: isGmailConfigured(),
+        tokenSource: db ? "db" : env ? "env" : "none",
+        linkedEmail: (0, emailStore_js_1.kvGet)(KV_LINKED_EMAIL),
+        linkedAt: (0, emailStore_js_1.kvGet)(KV_LINKED_AT),
+        authError: (0, emailStore_js_1.kvGet)(KV_AUTH_ERROR) || null,
+        authErrorAt: (0, emailStore_js_1.kvGet)(KV_AUTH_ERROR_AT),
+    };
+}
 function isGmailConfigured() {
     return Boolean(process.env.GMAIL_CLIENT_ID?.trim() &&
         process.env.GMAIL_CLIENT_SECRET?.trim() &&
-        process.env.GMAIL_REFRESH_TOKEN?.trim());
+        (storedRefreshToken() || process.env.GMAIL_REFRESH_TOKEN?.trim()));
 }
 /** Marco's inbox — for "email me" when Harvey doesn't infer an address. */
 function getMarcoEmail() {
@@ -42,7 +98,7 @@ async function getGmailSenderAddress() {
 function getConfig() {
     const clientId = process.env.GMAIL_CLIENT_ID?.trim();
     const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim();
-    const refreshToken = process.env.GMAIL_REFRESH_TOKEN?.trim();
+    const refreshToken = storedRefreshToken() || process.env.GMAIL_REFRESH_TOKEN?.trim();
     if (!clientId || !clientSecret || !refreshToken) {
         throw new Error("Gmail OAuth not configured — set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN");
     }
@@ -70,6 +126,10 @@ async function fetchAccessToken(cfg) {
     const data = (await res.json().catch(() => ({})));
     if (!res.ok || !data.access_token) {
         const detail = data.error_description || data.error || `HTTP ${res.status}`;
+        // "invalid_grant"/"Bad Request" = the refresh token itself is dead
+        // (revoked or expired). Record it so the dashboard can show a
+        // "Reconnect Gmail" prompt instead of failing silently for weeks.
+        recordGmailAuthError(`token refresh failed: ${detail}`);
         throw new Error(`Gmail token refresh failed: ${detail}`);
     }
     const expiresIn = typeof data.expires_in === "number" && Number.isFinite(data.expires_in)
@@ -80,6 +140,10 @@ async function fetchAccessToken(cfg) {
         expiresAt: Date.now() + expiresIn * 1000,
     };
     return data.access_token;
+}
+/** Shared access token for other Gmail modules (inbox reads). */
+async function getGmailAccessToken() {
+    return fetchAccessToken(getConfig());
 }
 async function resolveFromAddress(cfg, accessToken) {
     if (cfg.fromAddress)

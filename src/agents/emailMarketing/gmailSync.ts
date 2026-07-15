@@ -9,8 +9,26 @@ import {
   getCachedGmailMessages,
   markEmailReplied,
   attachGmailMessageId,
+  kvGet,
+  kvSet,
 } from "../../core/emailStore.js";
 import { listAllLeads } from "../../core/db.js";
+
+const KV_LAST_SYNC_AT = "gmail_last_sync_at";
+const KV_LAST_SYNC_ERROR = "gmail_last_sync_error";
+const KV_LAST_SYNC_ERROR_AT = "gmail_last_sync_error_at";
+
+export function getGmailSyncStatus(): {
+  lastSyncAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
+} {
+  return {
+    lastSyncAt: kvGet(KV_LAST_SYNC_AT),
+    lastError: kvGet(KV_LAST_SYNC_ERROR) || null,
+    lastErrorAt: kvGet(KV_LAST_SYNC_ERROR_AT),
+  };
+}
 
 export async function syncGmailInbox(opts?: {
   maxResults?: number;
@@ -20,10 +38,24 @@ export async function syncGmailInbox(opts?: {
     return { synced: 0, repliesMatched: 0, messages: [] };
   }
 
-  const messages = await listGmailMessages({
-    maxResults: opts?.maxResults ?? 30,
-    query: opts?.query ?? "newer_than:14d",
-  });
+  let messages: GmailMessageSummary[];
+  try {
+    messages = await listGmailMessages({
+      maxResults: opts?.maxResults ?? 30,
+      query: opts?.query ?? "newer_than:14d",
+    });
+  } catch (err) {
+    // Record the failure so the dashboard can surface it — a dead OAuth token
+    // once left this silently broken for three weeks.
+    const message = err instanceof Error ? err.message : String(err);
+    try {
+      kvSet(KV_LAST_SYNC_ERROR, message);
+      kvSet(KV_LAST_SYNC_ERROR_AT, new Date().toISOString());
+    } catch {
+      /* bookkeeping only */
+    }
+    throw err;
+  }
 
   const leads = await listAllLeads();
   const emailToLead = new Map<string, string>();
@@ -58,6 +90,12 @@ export async function syncGmailInbox(opts?: {
     synced++;
   }
 
+  try {
+    kvSet(KV_LAST_SYNC_AT, now);
+    kvSet(KV_LAST_SYNC_ERROR, "");
+  } catch {
+    /* bookkeeping only */
+  }
   console.log(`[GmailSync] synced ${synced} messages, matched ${repliesMatched} inbound replies`);
   return { synced, repliesMatched, messages };
 }

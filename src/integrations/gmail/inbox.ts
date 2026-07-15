@@ -2,55 +2,15 @@
  * Gmail read API — inbox list, message detail, thread snippets.
  * Requires OAuth scope: https://www.googleapis.com/auth/gmail.readonly (or gmail.modify)
  */
-import { isGmailConfigured } from "./index.js";
+import { isGmailConfigured, getGmailAccessToken } from "./index.js";
 
-interface GmailConfig {
-  clientId: string;
-  clientSecret: string;
-  refreshToken: string;
-}
-
-let cachedAccessToken: { token: string; expiresAt: number } | null = null;
-
-function getConfig(): GmailConfig {
-  const clientId = process.env.GMAIL_CLIENT_ID?.trim();
-  const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim();
-  const refreshToken = process.env.GMAIL_REFRESH_TOKEN?.trim();
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error("Gmail OAuth not configured");
-  }
-  return { clientId, clientSecret, refreshToken };
-}
-
+// Token refresh is centralized in ./index.js — it prefers the DB-stored
+// refresh token (in-app relink) over the env one and records auth failures
+// for the dashboard's sync-status banner. Keeping a second copy here is how
+// the June-22 token death went unnoticed.
 async function getAccessToken(): Promise<string> {
   if (!isGmailConfigured()) throw new Error("Gmail not configured");
-  if (cachedAccessToken && cachedAccessToken.expiresAt > Date.now() + 60_000) {
-    return cachedAccessToken.token;
-  }
-  const cfg = getConfig();
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: cfg.clientId,
-      client_secret: cfg.clientSecret,
-      refresh_token: cfg.refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-  const data = (await res.json().catch(() => ({}))) as {
-    access_token?: string;
-    expires_in?: number;
-    error_description?: string;
-  };
-  if (!res.ok || !data.access_token) {
-    throw new Error(data.error_description || "Gmail token refresh failed");
-  }
-  cachedAccessToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
-  };
-  return data.access_token;
+  return getGmailAccessToken();
 }
 
 type GmailHeader = { name?: string; value?: string };

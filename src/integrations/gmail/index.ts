@@ -1,6 +1,13 @@
 /**
  * Gmail — send email via OAuth refresh token (Marco's linked account).
+ *
+ * Token precedence: a refresh token stored in the email DB (linked through the
+ * in-app "Reconnect Gmail" OAuth flow) wins over GMAIL_REFRESH_TOKEN from the
+ * environment. The env token went stale once already (invalid_grant, June 22)
+ * and rotating a Fly secret needs CLI access — the DB path lets Marco re-link
+ * from the browser and survive deploys.
  */
+import { kvGet, kvSet } from "../../core/emailStore.js";
 
 interface GmailConfig {
   clientId: string;
@@ -12,11 +19,65 @@ interface GmailConfig {
 let cachedAccessToken: { token: string; expiresAt: number } | null = null;
 let cachedFromAddress: string | null = null;
 
+const KV_REFRESH_TOKEN = "gmail_refresh_token";
+const KV_LINKED_EMAIL = "gmail_linked_email";
+const KV_LINKED_AT = "gmail_linked_at";
+const KV_AUTH_ERROR = "gmail_auth_error";
+const KV_AUTH_ERROR_AT = "gmail_auth_error_at";
+
+function storedRefreshToken(): string | null {
+  try {
+    return kvGet(KV_REFRESH_TOKEN);
+  } catch {
+    return null;
+  }
+}
+
+/** Persist a freshly minted refresh token (from the in-app OAuth relink). */
+export function storeGmailRefreshToken(refreshToken: string, linkedEmail?: string): void {
+  kvSet(KV_REFRESH_TOKEN, refreshToken);
+  kvSet(KV_LINKED_AT, new Date().toISOString());
+  if (linkedEmail) kvSet(KV_LINKED_EMAIL, linkedEmail);
+  kvSet(KV_AUTH_ERROR, "");
+  // Invalidate caches so the next call uses the new token immediately.
+  cachedAccessToken = null;
+  cachedFromAddress = linkedEmail || null;
+}
+
+export function recordGmailAuthError(message: string): void {
+  try {
+    kvSet(KV_AUTH_ERROR, message);
+    kvSet(KV_AUTH_ERROR_AT, new Date().toISOString());
+  } catch {
+    /* bookkeeping only */
+  }
+}
+
+export function getGmailAuthInfo(): {
+  configured: boolean;
+  tokenSource: "db" | "env" | "none";
+  linkedEmail: string | null;
+  linkedAt: string | null;
+  authError: string | null;
+  authErrorAt: string | null;
+} {
+  const db = storedRefreshToken();
+  const env = process.env.GMAIL_REFRESH_TOKEN?.trim();
+  return {
+    configured: isGmailConfigured(),
+    tokenSource: db ? "db" : env ? "env" : "none",
+    linkedEmail: kvGet(KV_LINKED_EMAIL),
+    linkedAt: kvGet(KV_LINKED_AT),
+    authError: kvGet(KV_AUTH_ERROR) || null,
+    authErrorAt: kvGet(KV_AUTH_ERROR_AT),
+  };
+}
+
 export function isGmailConfigured(): boolean {
   return Boolean(
     process.env.GMAIL_CLIENT_ID?.trim() &&
       process.env.GMAIL_CLIENT_SECRET?.trim() &&
-      process.env.GMAIL_REFRESH_TOKEN?.trim(),
+      (storedRefreshToken() || process.env.GMAIL_REFRESH_TOKEN?.trim()),
   );
 }
 
@@ -47,7 +108,7 @@ export async function getGmailSenderAddress(): Promise<string | null> {
 function getConfig(): GmailConfig {
   const clientId = process.env.GMAIL_CLIENT_ID?.trim();
   const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim();
-  const refreshToken = process.env.GMAIL_REFRESH_TOKEN?.trim();
+  const refreshToken = storedRefreshToken() || process.env.GMAIL_REFRESH_TOKEN?.trim();
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(
       "Gmail OAuth not configured — set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN",
@@ -86,6 +147,10 @@ async function fetchAccessToken(cfg: GmailConfig): Promise<string> {
 
   if (!res.ok || !data.access_token) {
     const detail = data.error_description || data.error || `HTTP ${res.status}`;
+    // "invalid_grant"/"Bad Request" = the refresh token itself is dead
+    // (revoked or expired). Record it so the dashboard can show a
+    // "Reconnect Gmail" prompt instead of failing silently for weeks.
+    recordGmailAuthError(`token refresh failed: ${detail}`);
     throw new Error(`Gmail token refresh failed: ${detail}`);
   }
 
@@ -98,6 +163,11 @@ async function fetchAccessToken(cfg: GmailConfig): Promise<string> {
     expiresAt: Date.now() + expiresIn * 1000,
   };
   return data.access_token;
+}
+
+/** Shared access token for other Gmail modules (inbox reads). */
+export async function getGmailAccessToken(): Promise<string> {
+  return fetchAccessToken(getConfig());
 }
 
 async function resolveFromAddress(cfg: GmailConfig, accessToken: string): Promise<string> {

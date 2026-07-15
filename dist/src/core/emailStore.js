@@ -4,6 +4,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getEmailDb = getEmailDb;
+exports.kvSet = kvSet;
+exports.kvGet = kvGet;
+exports.kvDelete = kvDelete;
 exports.logEmail = logEmail;
 exports.markEmailSent = markEmailSent;
 exports.attachGmailMessageId = attachGmailMessageId;
@@ -116,8 +119,31 @@ function getEmailDb() {
       )
     `);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_email_templates_type ON email_templates(template_type)`);
+        // Small key-value table for Gmail auth + sync bookkeeping. Lives on the
+        // /data volume, so a refresh token re-linked through the in-app OAuth flow
+        // survives deploys without touching Fly secrets.
+        db.exec(`
+      CREATE TABLE IF NOT EXISTS email_kv (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
     }
     return db;
+}
+function kvSet(key, value) {
+    getEmailDb()
+        .prepare(`INSERT INTO email_kv (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+        .run(key, value, new Date().toISOString());
+}
+function kvGet(key) {
+    const row = getEmailDb().prepare(`SELECT value FROM email_kv WHERE key = ?`).get(key);
+    return row?.value ?? null;
+}
+function kvDelete(key) {
+    getEmailDb().prepare(`DELETE FROM email_kv WHERE key = ?`).run(key);
 }
 function rowToEmail(row) {
     return {

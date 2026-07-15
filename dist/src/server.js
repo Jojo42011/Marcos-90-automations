@@ -2457,6 +2457,114 @@ app.post("/api/email/sync-gmail", async (req, res) => {
         res.status(500).json({ success: false, error: message });
     }
 });
+// ── Gmail sync health + in-app OAuth relink ────────────────────────────────
+// The env refresh token died with invalid_grant on June 22 and the sync went
+// silently stale for weeks. These endpoints (1) expose sync health so the UI
+// can show a banner, and (2) let Marco re-link Gmail from the browser — the
+// new refresh token is stored in the email DB on the /data volume, which
+// getConfig() prefers over the env var, so no Fly secrets rotation is needed.
+app.get("/api/email/sync-status", async (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const { getGmailAuthInfo } = await Promise.resolve().then(() => __importStar(require("./integrations/gmail/index.js")));
+    const { getGmailSyncStatus } = await Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/gmailSync.js")));
+    const auth = getGmailAuthInfo();
+    const sync = getGmailSyncStatus();
+    const lastOk = sync.lastSyncAt ? Date.parse(sync.lastSyncAt) : NaN;
+    const staleHours = Number.isFinite(lastOk)
+        ? Math.round((Date.now() - lastOk) / 3_600_000)
+        : null;
+    res.json({ ...auth, ...sync, staleHours });
+});
+/** Pending OAuth state values — CSRF guard for the relink callback. */
+const gmailOauthStates = new Map();
+function gmailOauthRedirectUri(req) {
+    const proto = (req.get("x-forwarded-proto") || req.protocol || "https").split(",")[0].trim();
+    return `${proto}://${req.get("host")}/api/email/gmail-oauth/callback`;
+}
+app.get("/api/email/gmail-oauth/start", (req, res) => {
+    if (!dashboardTokenOk(req))
+        return res.status(401).json({ error: "Unauthorized" });
+    const clientId = process.env.GMAIL_CLIENT_ID?.trim();
+    if (!clientId) {
+        return res
+            .status(500)
+            .send("GMAIL_CLIENT_ID is not configured — set it before linking Gmail.");
+    }
+    // Prune stale states (>10 min), then mint a fresh one.
+    const now = Date.now();
+    for (const [s, t] of gmailOauthStates)
+        if (now - t > 600_000)
+            gmailOauthStates.delete(s);
+    const state = (0, crypto_1.randomUUID)();
+    gmailOauthStates.set(state, now);
+    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", gmailOauthRedirectUri(req));
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send");
+    url.searchParams.set("access_type", "offline");
+    url.searchParams.set("prompt", "consent"); // force a NEW refresh token
+    url.searchParams.set("state", state);
+    res.redirect(url.toString());
+});
+app.get("/api/email/gmail-oauth/callback", async (req, res) => {
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    const fail = (msg) => res
+        .status(400)
+        .send(`<body style="font-family:monospace;background:#0a0e14;color:#e6e6e6;padding:40px">` +
+        `<h2 style="color:#ff5566">Gmail relink failed</h2><p>${msg}</p>` +
+        `<p><a style="color:#00d4ff" href="/api/email/gmail-oauth/start">Try again</a></p></body>`);
+    if (!code)
+        return fail(String(req.query.error || "Google returned no authorization code."));
+    if (!state || !gmailOauthStates.has(state))
+        return fail("Invalid or expired state — start over.");
+    gmailOauthStates.delete(state);
+    const clientId = process.env.GMAIL_CLIENT_ID?.trim() || "";
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim() || "";
+    try {
+        const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                code,
+                client_id: clientId,
+                client_secret: clientSecret,
+                redirect_uri: gmailOauthRedirectUri(req),
+                grant_type: "authorization_code",
+            }),
+        });
+        const tok = (await tokenRes.json().catch(() => ({})));
+        if (!tokenRes.ok || !tok.refresh_token) {
+            return fail(tok.error_description ||
+                tok.error ||
+                "No refresh token returned — remove the app's prior grant at myaccount.google.com/permissions and try again.");
+        }
+        // Resolve which account was linked (nice for the status banner).
+        let linkedEmail;
+        if (tok.access_token) {
+            const prof = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+                headers: { Authorization: `Bearer ${tok.access_token}` },
+            });
+            const pd = (await prof.json().catch(() => ({})));
+            linkedEmail = pd.emailAddress?.trim();
+        }
+        const { storeGmailRefreshToken } = await Promise.resolve().then(() => __importStar(require("./integrations/gmail/index.js")));
+        storeGmailRefreshToken(tok.refresh_token, linkedEmail);
+        // Immediately prove it works end-to-end with a real sync.
+        const { syncGmailInbox } = await Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/gmailSync.js")));
+        const result = await syncGmailInbox({ maxResults: 30 });
+        res.send(`<body style="font-family:monospace;background:#0a0e14;color:#e6e6e6;padding:40px">` +
+            `<h2 style="color:#00ff88">Gmail reconnected ✓</h2>` +
+            `<p>Linked account: <b>${linkedEmail || "unknown"}</b></p>` +
+            `<p>Synced <b>${result.synced}</b> messages just now (${result.repliesMatched} lead replies matched).</p>` +
+            `<p><a style="color:#00d4ff" href="/shell?tab=email">Back to the dashboard</a></p></body>`);
+    }
+    catch (err) {
+        return fail(err instanceof Error ? err.message : String(err));
+    }
+});
 app.get("/api/email/gmail/:messageId", async (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
@@ -8574,6 +8682,15 @@ httpServer.listen(PORT, "0.0.0.0", () => {
             void Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/gmailSync.js"))).then((g) => g.syncGmailInbox({ maxResults: 25 }).catch((err) => console.warn("[GmailSync] startup sync failed:", err instanceof Error ? err.message : err)));
         }
     });
+    // Periodic Gmail sync. Before this, the inbox only synced at boot and on
+    // manual triggers — when the OAuth token died in June the cache just froze
+    // silently. Every failure is now recorded by syncGmailInbox for the
+    // dashboard's sync-status banner, and a relink through the in-app OAuth
+    // flow is picked up on the next tick without a restart.
+    const gmailSyncEveryMs = Math.max(5 * 60_000, parseInt(process.env.GMAIL_SYNC_INTERVAL_MINUTES || "15", 10) * 60_000 || 15 * 60_000);
+    setInterval(() => {
+        void Promise.resolve().then(() => __importStar(require("./agents/emailMarketing/gmailSync.js"))).then((g) => g.syncGmailInbox({ maxResults: 30 }).catch((err) => console.warn("[GmailSync] periodic sync failed:", err instanceof Error ? err.message : err)));
+    }, gmailSyncEveryMs).unref();
     void Promise.resolve().then(() => __importStar(require("./agents/finance/index.js"))).then((m) => m.syncCommissionsFromClosedTransactions().catch((err) => console.warn("[Finance] startup commission sync failed:", err instanceof Error ? err.message : err)));
     console.log(`Health:  GET  http://localhost:${PORT}/health`);
     console.log(`Dashboard: GET http://localhost:${PORT}/ (also /dashboard)`);

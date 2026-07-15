@@ -88,8 +88,39 @@ export function getEmailDb(): Database.Database {
       )
     `);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_email_templates_type ON email_templates(template_type)`);
+
+    // Small key-value table for Gmail auth + sync bookkeeping. Lives on the
+    // /data volume, so a refresh token re-linked through the in-app OAuth flow
+    // survives deploys without touching Fly secrets.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS email_kv (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
   }
   return db;
+}
+
+export function kvSet(key: string, value: string): void {
+  getEmailDb()
+    .prepare(
+      `INSERT INTO email_kv (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    )
+    .run(key, value, new Date().toISOString());
+}
+
+export function kvGet(key: string): string | null {
+  const row = getEmailDb().prepare(`SELECT value FROM email_kv WHERE key = ?`).get(key) as
+    | { value: string }
+    | undefined;
+  return row?.value ?? null;
+}
+
+export function kvDelete(key: string): void {
+  getEmailDb().prepare(`DELETE FROM email_kv WHERE key = ?`).run(key);
 }
 
 export type EmailType =

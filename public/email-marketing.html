@@ -297,6 +297,13 @@
       <button type="button" id="refresh-btn">Refresh</button>
     </div>
 
+    <!-- Gmail sync health — hidden unless the sync is broken or stale -->
+    <div id="gmail-health-banner" style="display:none;align-items:center;gap:12px;margin:0 0 14px;padding:12px 16px;border:1px solid rgba(255,85,102,.45);border-radius:10px;background:rgba(255,85,102,.08);font-size:13px;">
+      <span style="font-size:16px;">&#9888;&#65039;</span>
+      <span id="gmail-health-text" style="flex:1;color:#ff8896;"></span>
+      <button type="button" id="gmail-reconnect-btn" style="background:linear-gradient(135deg,#00d4ff,#38bdf8);color:#04131c;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;font-size:12px;letter-spacing:.4px;">RECONNECT GMAIL</button>
+    </div>
+
     <div class="stats" id="stats-row">
       <div class="stat"><label>Sent today</label><strong id="stat-sent">&mdash;</strong></div>
       <div class="stat"><label>Open rate</label><strong id="stat-open">&mdash;</strong></div>
@@ -556,6 +563,33 @@
       }
     }
 
+    async function loadSyncHealth() {
+      const banner = document.getElementById("gmail-health-banner");
+      const text = document.getElementById("gmail-health-text");
+      try {
+        const r = await fetch(apiUrl("/api/email/sync-status"));
+        const d = await r.json();
+        let msg = "";
+        if (d.authError) {
+          msg = "Gmail authorization is broken (" + d.authError + "). Inbox sync and outbound email are down — reconnect to fix.";
+        } else if (d.lastError) {
+          msg = "Last Gmail sync failed: " + d.lastError;
+        } else if (!d.configured) {
+          msg = "Gmail is not configured — connect an account to enable inbox sync and sending.";
+        } else if (d.staleHours !== null && d.staleHours >= 24) {
+          msg = "Gmail hasn't synced in " + d.staleHours + " hours" + (d.lastSyncAt ? " (last: " + new Date(d.lastSyncAt).toLocaleString() + ")" : "") + ".";
+        }
+        if (msg) { text.textContent = msg; banner.style.display = "flex"; }
+        else banner.style.display = "none";
+      } catch { /* leave hidden on fetch failure */ }
+    }
+    document.getElementById("gmail-reconnect-btn").addEventListener("click", function () {
+      // Full-window redirect (works inside the shell iframe too — Google
+      // refuses to render its consent screen in a frame).
+      const url = apiUrl("/api/email/gmail-oauth/start");
+      try { window.top.location.href = url; } catch (_) { window.location.href = url; }
+    });
+
     function todayStartIso() {
       const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
       const y = parts.find(p => p.type === "year").value;
@@ -725,7 +759,7 @@
     });
 
     async function refreshAll() {
-      await Promise.all([loadConnection(), loadStats(), loadSent(), loadDrips(), loadGmailInbox()]);
+      await Promise.all([loadConnection(), loadStats(), loadSent(), loadDrips(), loadGmailInbox(), loadSyncHealth()]);
     }
 
     document.getElementById("refresh-btn").addEventListener("click", refreshAll);
