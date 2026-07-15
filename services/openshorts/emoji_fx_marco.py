@@ -19,11 +19,28 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
+import urllib.error
+import urllib.request
 from typing import Any
 
 _COLOR_EMOJI_FONT = os.environ.get(
     "CAPTION_EMOJI_COLOR_FONT", "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
 )
+
+# ── Animated emoji (Google Noto Emoji Animation) ─────────────────────────────
+# The Submagic look isn't just a floating sticker — the emoji glyph itself
+# animates (the flame flickers, the chart wiggles). Google renders every
+# animatable Noto emoji as a looping GIF at a stable CDN path; we fetch + cache
+# it once per emoji and composite the looping GIF instead of a static PNG. Not
+# every emoji is animated there (e.g. 💰), so anything missing (404) or any
+# failure falls straight back to the big floating static PNG below. Disable the
+# whole animated path with CAPTION_EMOJI_ANIMATED=false.
+_ANIM_ENABLED = os.environ.get("CAPTION_EMOJI_ANIMATED", "true").strip().lower() in (
+    "1", "true", "yes", "on",
+)
+_NOTO_ANIM_BASE = "https://fonts.gstatic.com/s/e/notoemoji/latest"
+_ANIM_CACHE_DIR = os.path.join(tempfile.gettempdir(), "openshorts_emoji_gif_cache")
+_ANIM_FETCH_TIMEOUT_S = 15
 # Noto Color Emoji is a CBDT bitmap font: it only has glyphs baked in at ONE
 # fixed strike size (109px in the standard build) — ImageFont.truetype()
 # raises "invalid pixel size" for any other point size. Canvas is padded a
@@ -109,6 +126,54 @@ def render_emoji_png(emoji: str) -> str | None:
         return None
 
 
+def _emoji_url_segment(emoji: str) -> str:
+    """Codepoint path segment Google uses, e.g. 🔥 -> '1f525'. Drops the
+    U+FE0F variation selector (Google's paths omit it)."""
+    return "_".join(f"{ord(c):x}" for c in emoji if c != "️")
+
+
+def fetch_animated_emoji_gif(emoji: str) -> str | None:
+    """Fetch + cache the looping Noto animation GIF for `emoji`, or None if it
+    isn't animated / can't be fetched. Best-effort: a 404 is remembered (a
+    sentinel file) so we never re-request a non-animated emoji, and any error
+    returns None so the caller falls back to the static PNG."""
+    if not _ANIM_ENABLED or not emoji:
+        return None
+    seg = _emoji_url_segment(emoji)
+    if not seg:
+        return None
+    try:
+        os.makedirs(_ANIM_CACHE_DIR, exist_ok=True)
+        gif_path = os.path.join(_ANIM_CACHE_DIR, f"{seg}.gif")
+        miss_path = os.path.join(_ANIM_CACHE_DIR, f"{seg}.none")
+        if os.path.isfile(gif_path) and os.path.getsize(gif_path) > 0:
+            return gif_path
+        if os.path.isfile(miss_path):
+            return None  # known non-animated — don't hammer the CDN
+        url = f"{_NOTO_ANIM_BASE}/{seg}/512.gif"
+        req = urllib.request.Request(url, headers={"User-Agent": "marco-openshorts/1.0"})
+        with urllib.request.urlopen(req, timeout=_ANIM_FETCH_TIMEOUT_S) as resp:
+            data = resp.read()
+        if not data:
+            open(miss_path, "w").close()
+            return None
+        tmp = f"{gif_path}.tmp{os.getpid()}"
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, gif_path)
+        return gif_path
+    except urllib.error.HTTPError as err:
+        if err.code == 404:
+            try:
+                open(os.path.join(_ANIM_CACHE_DIR, f"{seg}.none"), "w").close()
+            except Exception:
+                pass
+        return None
+    except Exception as err:  # noqa: BLE001 — best-effort, static PNG covers it
+        print(f"[emoji-fx] animated fetch failed for {emoji!r}: {type(err).__name__}: {err}")
+        return None
+
+
 def _float_size_expr(start: float, size: float) -> str:
     """Per-frame edge-length expression (px): pop-in bounce, then a continuous
     gentle breathing pulse for the rest of the time on screen (so it never
@@ -159,8 +224,11 @@ def build_emoji_overlay_chain(
     running = "0:v"
     used = 0
     for ev in events:
-        png = render_emoji_png(str(ev.get("emoji") or ""))
-        if not png:
+        emoji_char = str(ev.get("emoji") or "")
+        # Prefer the real animated glyph; fall back to a static color PNG.
+        gif = fetch_animated_emoji_gif(emoji_char)
+        png = None if gif else render_emoji_png(emoji_char)
+        if not gif and not png:
             continue
         try:
             start = max(0.0, float(ev["start"]))
@@ -178,18 +246,29 @@ def build_emoji_overlay_chain(
         cx, cy = x + size / 2.0, y + size / 2.0
         phase = (used % 4) * 1.6  # stagger the sway between successive emojis
         label = f"e{k}"
-        inputs += ["-loop", "1", "-t", f"{clip_duration:.3f}", "-i", png]
-
-        w_expr = _float_size_expr(start, size)
-        filters.append(
-            f"[{k}:v]format=rgba,scale=w='trunc({w_expr})':h='trunc({w_expr})':eval=frame,"
-            f"fade=t=in:st={start:.3f}:d={_FADE_IN_S:.3f}:alpha=1,"
-            f"fade=t=out:st={end:.3f}:d={_FADE_OUT_S:.3f}:alpha=1[{label}]"
-        )
-        # Centre on (cx,cy) — overlay_w/h track the breathing scale so it stays
-        # centred — plus the continuous drift.
+        # Both continuous swaying position; only the glyph source differs.
         x_expr = _drift_expr(f"{cx:.1f}-overlay_w/2", start, size * _DRIFT_X_FRAC, _DRIFT_X_HZ, phase)
         y_expr = _drift_expr(f"{cy:.1f}-overlay_h/2", start, size * _DRIFT_Y_FRAC, _DRIFT_Y_HZ, phase + 0.8)
+
+        if gif:
+            # Looping animated GIF, capped at the clip length so ffmpeg
+            # terminates (an uncapped -ignore_loop 0 input hangs the encode).
+            size_i = int(round(size))
+            inputs += ["-ignore_loop", "0", "-t", f"{clip_duration:.3f}", "-i", gif]
+            filters.append(
+                f"[{k}:v]scale={size_i}:{size_i}:flags=lanczos,format=rgba,"
+                f"fade=t=in:st={start:.3f}:d={_FADE_IN_S:.3f}:alpha=1,"
+                f"fade=t=out:st={end:.3f}:d={_FADE_OUT_S:.3f}:alpha=1[{label}]"
+            )
+        else:
+            # Static color PNG with a procedural pop + breathe (no glyph anim).
+            inputs += ["-loop", "1", "-t", f"{clip_duration:.3f}", "-i", png]
+            w_expr = _float_size_expr(start, size)
+            filters.append(
+                f"[{k}:v]format=rgba,scale=w='trunc({w_expr})':h='trunc({w_expr})':eval=frame,"
+                f"fade=t=in:st={start:.3f}:d={_FADE_IN_S:.3f}:alpha=1,"
+                f"fade=t=out:st={end:.3f}:d={_FADE_OUT_S:.3f}:alpha=1[{label}]"
+            )
 
         out_label = f"ov{k}"
         filters.append(f"[{running}][{label}]overlay=x='{x_expr}':y='{y_expr}'[{out_label}]")
