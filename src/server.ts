@@ -724,7 +724,19 @@ app.get("/", (_req, res) => {
   res.redirect("/shell");
 });
 
-app.get("/dashboard", (_req, res) => {
+// The shell UI is the single entry point. A direct top-level visit to the
+// legacy /dashboard link redirects into the shell and lands on its CRM tab
+// (which is exactly the dashboard's content). The shell itself still embeds
+// this page as its CRM iframe — detected via the explicit embed marker the
+// shell appends, or the browser's Sec-Fetch-Dest header for the iframe load —
+// and is served the file normally so that tab keeps working.
+app.get("/dashboard", (req, res) => {
+  const embedded =
+    req.query.embed === "1" || req.get("sec-fetch-dest") === "iframe";
+  if (!embedded) {
+    res.redirect("/shell?tab=crm");
+    return;
+  }
   res.sendFile(path.join(publicDir, "dashboard.html"));
 });
 
