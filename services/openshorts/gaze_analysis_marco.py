@@ -41,6 +41,7 @@ from typing import Any
 
 # Head-yaw beyond this ratio reads as "looking away". Derived from the nose
 # position between the eye corners: 0 = dead-centre, 1 = fully profile.
+# NOTE: used only as an absolute fallback when baseline calibration is off.
 _YAW_AWAY = float(os.environ.get("OPENSHORTS_GAZE_YAW_AWAY", "0.42"))
 # Iris offset (fraction of eye width from eye centre) that reads as eyes-averted
 # even when the head is square to camera.
@@ -55,6 +56,40 @@ _PITCH_DOWN = float(os.environ.get("OPENSHORTS_GAZE_PITCH_DOWN", "0.28"))
 # cast down while the head itself stays fairly level — the most common
 # script-reading tell.
 _IRIS_V_AWAY = float(os.environ.get("OPENSHORTS_GAZE_IRIS_V_AWAY", "0.28"))
+
+# --- Per-video baseline calibration -------------------------------------
+# Absolute thresholds assume Marco's neutral "talking to camera" pose reads as
+# yaw≈0 / pitch≈0. In real footage that is almost never true: interview and
+# podcast setups have him sitting at a 3/4 angle to the lens, so his NEUTRAL
+# pose can read as yaw≈0.6 the entire clip. Judged against an absolute zero,
+# 90% of a perfectly good take gets flagged "looking away", the real away-looks
+# drown in the false positives, and the length floor then quietly drops every
+# gaze cut. The fix: learn each clip's own neutral pose (the robust median of
+# every faced frame) and flag "away" as a sustained DEPARTURE from that
+# personal baseline, not from an idealised zero. Set OPENSHORTS_GAZE_BASELINE=0
+# to fall back to the old absolute thresholds.
+_BASELINE_ON = os.environ.get("OPENSHORTS_GAZE_BASELINE", "true").strip().lower() in ("1", "true", "yes", "on")
+# How far Marco must depart from his own baseline pose before it reads as a
+# genuine look-away. These are deltas from the per-video median, so they are
+# framing-independent — they mean "turned/looked notably further away than he
+# normally holds himself for this clip".
+_YAW_DELTA = float(os.environ.get("OPENSHORTS_GAZE_YAW_DELTA", "0.30"))
+_IRIS_DELTA = float(os.environ.get("OPENSHORTS_GAZE_IRIS_DELTA", "0.28"))
+# Pitch/vertical-iris are one-sided: only looking FURTHER DOWN than baseline
+# (toward a script/table) is a defect. Tilting up past baseline is not.
+_PITCH_DELTA = float(os.environ.get("OPENSHORTS_GAZE_PITCH_DELTA", "0.22"))
+_IRIS_V_DELTA = float(os.environ.get("OPENSHORTS_GAZE_IRIS_V_DELTA", "0.22"))
+
+
+def _median(values: list[float]) -> float:
+    """Plain median; robust to the FaceMesh landmark blips that spike a metric
+    on a single blink/frame without pulling in numpy."""
+    if not values:
+        return 0.0
+    s = sorted(values)
+    n = len(s)
+    mid = n // 2
+    return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2.0
 # Analysis sampling rate (samples/sec across the whole timeline). 0 = native fps.
 _SAMPLE_FPS = float(os.environ.get("OPENSHORTS_GAZE_FPS", "12"))
 # An away-look must persist this long before it becomes a segment; brief
@@ -186,7 +221,10 @@ def analyze_gaze(video_path: str, sample_fps: float | None = None) -> dict[str, 
 
         started = time.monotonic()
         frame_idx = 0
-        samples: list[tuple[float, str]] = []  # (t, "ok"|"away"|"no_face")
+        # Pass 1: collect raw metrics per sample (None = no face). Classifying
+        # each frame is deferred until the whole clip is scanned so it can be
+        # judged against the clip's own baseline pose, not an absolute ideal.
+        raw: list[tuple[float, dict[str, float] | None]] = []
         while True:
             if time.monotonic() - started > _SCAN_TIMEOUT_S:
                 print(f"[gaze] scan hit {_SCAN_TIMEOUT_S}s ceiling — using partial map")
@@ -211,19 +249,47 @@ def analyze_gaze(video_path: str, sample_fps: float | None = None) -> dict[str, 
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             res = mesh.process(rgb)
             if not res.multi_face_landmarks:
-                samples.append((t, "no_face"))
+                raw.append((t, None))
                 continue
-            m = _frame_metrics(res.multi_face_landmarks[0].landmark)
-            away = (
+            raw.append((t, _frame_metrics(res.multi_face_landmarks[0].landmark)))
+
+        if not raw:
+            return result
+
+        # Baseline pose for THIS clip = robust median of every faced frame. This
+        # is Marco's neutral "how he holds himself to the lens" for this footage;
+        # away-looks are departures from it. iris_v is clamped first because a
+        # blink or dropped landmark can spike it to absurd values that would
+        # poison even a median if enough frames blink together.
+        faced_metrics = [m for _, m in raw if m is not None]
+        base_yaw = _median([m["yaw"] for m in faced_metrics])
+        base_pitch = _median([m["pitch"] for m in faced_metrics])
+        base_iris = _median([m["iris"] for m in faced_metrics])
+        base_iris_v = _median([max(-2.0, min(2.0, m["iris_v"])) for m in faced_metrics])
+
+        def _is_away(m: dict[str, float]) -> bool:
+            if _BASELINE_ON:
+                iris_v = max(-2.0, min(2.0, m["iris_v"]))
+                return (
+                    abs(m["yaw"] - base_yaw) >= _YAW_DELTA
+                    or abs(m["iris"] - base_iris) >= _IRIS_DELTA
+                    # pitch/iris_v one-sided: only FURTHER DOWN than neutral.
+                    or (m["pitch"] - base_pitch) >= _PITCH_DELTA
+                    or (iris_v - base_iris_v) >= _IRIS_V_DELTA
+                )
+            # Absolute fallback (OPENSHORTS_GAZE_BASELINE=0).
+            return (
                 abs(m["yaw"]) >= _YAW_AWAY
                 or abs(m["iris"]) >= _IRIS_AWAY
                 or m["pitch"] >= _PITCH_DOWN
                 or abs(m["iris_v"]) >= _IRIS_V_AWAY
             )
-            samples.append((t, "away" if away else "ok"))
 
-        if not samples:
-            return result
+        # Pass 2: classify against the baseline.
+        samples: list[tuple[float, str]] = [
+            (t, "no_face" if m is None else ("away" if _is_away(m) else "ok"))
+            for t, m in raw
+        ]
 
         faced = sum(1 for _, s in samples if s != "no_face")
         coverage = faced / len(samples)

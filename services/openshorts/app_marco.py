@@ -1040,6 +1040,12 @@ _MIN_TRIM_SECONDS = float(os.environ.get("OPENSHORTS_MIN_TRIM_SECONDS", "3.0"))
 # generated clip below this. The LLM selects clips at ≥35s; after all smart
 # cuts the output must remain at least this long so story flow is preserved.
 _MIN_AUTO_TIGHTEN_S = float(os.environ.get("OPENSHORTS_MIN_AUTO_TIGHTEN_S", "25.0"))
+# A silence at least this long is dead weight, not a beat: a hole where nobody
+# is talking. It is removed even when doing so drops the clip below the
+# story-flow floor above — an 18s dead pause is never "story flow", and keeping
+# it to satisfy a length target is exactly the bug this guards against. Shorter
+# gaps stay floor-protected so natural pacing is preserved.
+_HARD_DEADAIR_S = float(os.environ.get("OPENSHORTS_HARD_DEADAIR_S", "1.6"))
 # Audio fade duration applied at each splice point when segments are joined.
 # 35ms is imperceptible to the ear but eliminates the hard-cut pop/click that
 # makes multi-segment edits feel jarring. Applied only when > 1 segment.
@@ -1497,67 +1503,111 @@ def _auto_tighten_generated_clip(
                 ks.append((cursor, duration))
             return ks
 
-        cuts = edit_effects_marco.merge_intervals(list(deadair) + snapped_extra + snapped_retake + snapped_blooper)
+        # All silence windows (clip-local). Used to gate away-look cuts to the
+        # user's rule: an away-look is only removed when Marco is ALSO not
+        # speaking. Talking at a 3/4 angle to the lens is natural delivery and
+        # is kept; a silent glance down at the desk between sentences is not.
+        silence = [[float(p["start"]), float(p["end"])] for p in (pauses or [])]
+
+        def _intersect(spans, windows) -> list[tuple[float, float]]:
+            """Portions of `spans` that fall inside any `windows` interval."""
+            out: list[tuple[float, float]] = []
+            for a0, a1 in spans:
+                for w0, w1 in windows:
+                    lo, hi = max(a0, w0), min(a1, w1)
+                    if hi - lo > 0.15:
+                        out.append((round(lo, 2), round(hi, 2)))
+            return out
+
+        # The user's ask, precisely: cut where SILENT *and* looking away. Only
+        # the silent slice of an away-look is a defect.
+        dead_beats = _intersect(snapped_extra, silence)
+        # Long pure silence is dead weight regardless of gaze — a hole where
+        # nobody is talking is never story flow.
+        long_silence = [tuple(c) for c in deadair if c[1] - c[0] >= _HARD_DEADAIR_S]
+        short_deadair = [tuple(c) for c in deadair if c[1] - c[0] < _HARD_DEADAIR_S]
+
+        # Floor-EXEMPT: removed even if it shortens the clip past the story-flow
+        # floor. Dead weight (dead beats + long silence) + duplicate takes +
+        # mandatory profanity/off-script. This is the crux of the fix: dead
+        # weight is NEVER kept just to hit a length target.
+        exempt = edit_effects_marco.merge_intervals(
+            [list(c) for c in dead_beats]
+            + [list(c) for c in long_silence]
+            + [list(c) for c in snapped_retake]
+            + [list(c) for c in snapped_blooper]
+        )
+        # Floor-PROTECTED soft tightening: the remaining short conversational
+        # gaps. These are the only cuts sacrificed to hold the story-flow floor.
+        soft = edit_effects_marco.merge_intervals([list(c) for c in short_deadair])
+
+        cuts = edit_effects_marco.merge_intervals(
+            [list(c) for c in exempt] + [list(c) for c in soft]
+        )
         removed = sum(e - s for s, e in cuts)
         has_mandatory = bool(snapped_blooper)
-        if not cuts or (
-            removed < _AUTO_TIGHTEN_MIN_SAVINGS and not snapped_extra and not snapped_retake and not has_mandatory
-        ):
+        if not cuts or (removed < _AUTO_TIGHTEN_MIN_SAVINGS and not exempt):
             return None  # nothing worth cutting — keep the original clip
 
         keeps = _keeps_for(cuts)
         total_kept = sum(e - s for s, e in keeps)
         blooper_applied = has_mandatory
-        # Story-flow floor: the full cut set must not shrink the clip below
-        # _MIN_AUTO_TIGHTEN_S. If it would, drop the LEAST important cuts
-        # first. Dead-air is purely cosmetic tightening and goes first — try
-        # gaze + retake + blooper without it before giving up on gaze, since
-        # camera eye-contact (removing away-looks) is a hard product
-        # requirement, not a nice-to-have on the same tier as dead air.
+        # Story-flow floor: only SOFT cuts may be dropped to stay above it.
+        # Exempt cuts are dead weight or mandatory content — always applied,
+        # even when that leaves the clip under the floor (a tight 24s clip beats
+        # a 58s one with an 18s dead hole in the middle of it).
         if not keeps or total_kept < _MIN_AUTO_TIGHTEN_S:
-            no_deadair = snapped_extra + snapped_retake + snapped_blooper
-            if no_deadair:
-                cuts_nd = edit_effects_marco.merge_intervals(list(no_deadair))
-                keeps_nd = _keeps_for(cuts_nd)
-                total_kept_nd = sum(e - s for s, e in keeps_nd)
-                if keeps_nd and total_kept_nd >= _MIN_AUTO_TIGHTEN_S:
-                    cuts, keeps, total_kept = cuts_nd, keeps_nd, total_kept_nd
+            if exempt:
+                keeps_ex = _keeps_for(exempt)
+                total_ex = sum(e - s for s, e in keeps_ex)
+                if keeps_ex and total_ex >= _MIN_TRIM_SECONDS:
+                    cuts, keeps, total_kept = exempt, keeps_ex, total_ex
                     removed = sum(e - s for s, e in cuts)
-                    print(
-                        f"[openshorts] Clip {clip_index}: dead-air cuts dropped to "
-                        f"keep gaze/retake/blooper cuts within the "
-                        f"{_MIN_AUTO_TIGHTEN_S:.0f}s story-flow floor"
+                    if total_ex < _MIN_AUTO_TIGHTEN_S:
+                        print(
+                            f"[openshorts] Clip {clip_index}: dropped soft dead-air; "
+                            f"applying dead-beat/long-silence/retake/blooper cuts "
+                            f"({total_ex:.1f}s kept — under the "
+                            f"{_MIN_AUTO_TIGHTEN_S:.0f}s floor, but dead weight is "
+                            f"never kept to pad length)"
+                        )
+                    else:
+                        print(
+                            f"[openshorts] Clip {clip_index}: soft dead-air dropped to "
+                            f"hold the {_MIN_AUTO_TIGHTEN_S:.0f}s story-flow floor"
+                        )
+                else:
+                    # Even exempt-only over-shortens past the hard minimum. Keep
+                    # only the truly mandatory (retake + blooper); bail if none.
+                    mandatory = edit_effects_marco.merge_intervals(
+                        [list(c) for c in snapped_retake] + [list(c) for c in snapped_blooper]
                     )
-        if not keeps or total_kept < _MIN_AUTO_TIGHTEN_S:
-            mandatory = snapped_retake + snapped_blooper
-            if not mandatory:
-                return None  # only dead-air/gaze cuts — skip, keep full length
-            cuts = edit_effects_marco.merge_intervals(list(mandatory))
-            removed = sum(e - s for s, e in cuts)
-            keeps = _keeps_for(cuts)
-            total_kept = sum(e - s for s, e in keeps)
-            if not keeps or total_kept < _MIN_TRIM_SECONDS:
-                # Even retake+blooper alone over-shortens. If there's no
-                # profanity/off-script content pending, it's safe to bail out
-                # and keep the original. If there IS, it must still be cut —
-                # a short clip beats one that ships with profanity in it.
-                if not has_mandatory:
-                    return None
-                cuts = edit_effects_marco.merge_intervals(list(snapped_blooper))
-                keeps = _keeps_for(cuts)
-                total_kept = sum(e - s for s, e in keeps)
-                if not keeps:
-                    return None  # nothing survivable at all — best-effort exhausted
-                print(
-                    f"[openshorts] Clip {clip_index}: even retake+blooper cuts leave "
-                    f"under {_MIN_TRIM_SECONDS:.0f}s — applying blooper-only cuts, "
-                    f"result will be short"
-                )
+                    if not mandatory:
+                        return None  # only dead-air/gaze — skip, keep full length
+                    cuts = mandatory
+                    removed = sum(e - s for s, e in cuts)
+                    keeps = _keeps_for(cuts)
+                    total_kept = sum(e - s for s, e in keeps)
+                    if not keeps or total_kept < _MIN_TRIM_SECONDS:
+                        if not has_mandatory:
+                            return None
+                        cuts = edit_effects_marco.merge_intervals([list(c) for c in snapped_blooper])
+                        keeps = _keeps_for(cuts)
+                        total_kept = sum(e - s for s, e in keeps)
+                        if not keeps:
+                            return None  # nothing survivable — best-effort exhausted
+                        print(
+                            f"[openshorts] Clip {clip_index}: even retake+blooper cuts "
+                            f"leave under {_MIN_TRIM_SECONDS:.0f}s — applying "
+                            f"blooper-only cuts, result will be short"
+                        )
+                    else:
+                        print(
+                            f"[openshorts] Clip {clip_index}: smart-cut set would leave "
+                            f"{total_kept:.1f}s — applying retake + blooper cuts only"
+                        )
             else:
-                print(
-                    f"[openshorts] Clip {clip_index}: full smart-cut set would leave "
-                    f"{total_kept:.1f}s — applying retake + blooper cuts only"
-                )
+                return None  # only soft dead-air and it over-tightens — keep full
 
         parent = Path(base_path).parent
         stem = Path(base_path).stem
