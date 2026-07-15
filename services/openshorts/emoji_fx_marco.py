@@ -36,12 +36,19 @@ _CACHE_DIR = os.path.join(tempfile.gettempdir(), "openshorts_emoji_png_cache")
 
 # Animation timing (all in seconds, clip-local — same clock as the caption
 # card's own start/end).
-_POP_GROW_S = 0.16      # 0 -> overshoot peak
-_POP_SETTLE_S = 0.10    # overshoot peak -> resting size
-_POP_PEAK_SCALE = 1.18  # overshoot amount, matches the caption "pop" preset
-_SLIDE_IN_S = 0.24
-_FADE_IN_S = 0.08
-_FADE_OUT_S = 0.15
+_POP_GROW_S = 0.16       # 0 -> overshoot peak
+_POP_SETTLE_S = 0.10     # overshoot peak -> resting size
+_POP_PEAK_SCALE = 1.18   # overshoot amount on entrance
+_FADE_IN_S = 0.10
+_FADE_OUT_S = 0.18
+# Continuous "float" so the emoji keeps moving the whole time it's on screen
+# (the Submagic look) instead of popping once and freezing. All gentle:
+_BREATHE_AMP = 0.055     # ±5.5% size pulse
+_BREATHE_HZ = 0.85       # pulses per second
+_DRIFT_X_FRAC = 0.10     # horizontal sway amplitude as a fraction of size
+_DRIFT_Y_FRAC = 0.13     # vertical bob amplitude as a fraction of size
+_DRIFT_X_HZ = 0.42
+_DRIFT_Y_HZ = 0.60
 
 
 def render_emoji_png(emoji: str) -> str | None:
@@ -56,7 +63,8 @@ def render_emoji_png(emoji: str) -> str | None:
         return None
     try:
         os.makedirs(_CACHE_DIR, exist_ok=True)
-        key = hashlib.sha1(emoji.encode("utf-8")).hexdigest()[:16]
+        # Version suffix ("v2") invalidates older uncropped cache entries.
+        key = "v2_" + hashlib.sha1(emoji.encode("utf-8")).hexdigest()[:16]
         path = os.path.join(_CACHE_DIR, f"{key}.png")
         if os.path.isfile(path) and os.path.getsize(path) > 0:
             return path
@@ -81,6 +89,17 @@ def render_emoji_png(emoji: str) -> str | None:
         cx = (_RENDER_SIZE - w) / 2 - bbox[0]
         cy = (_RENDER_SIZE - h) / 2 - bbox[1]
         draw.text((cx, cy), emoji, font=font, embedded_color=True)
+        # Crop to the glyph's actual pixels (+ tiny pad) so the on-screen size
+        # equals the requested px size — the strike glyph doesn't fill the
+        # canvas, and leftover transparent margin made emojis render smaller
+        # than intended.
+        content = canvas.getbbox()
+        if content:
+            pad = 4
+            canvas = canvas.crop((
+                max(0, content[0] - pad), max(0, content[1] - pad),
+                min(_RENDER_SIZE, content[2] + pad), min(_RENDER_SIZE, content[3] + pad),
+            ))
         tmp_path = f"{path}.tmp{os.getpid()}.png"
         canvas.save(tmp_path, format="PNG")
         os.replace(tmp_path, path)
@@ -90,37 +109,32 @@ def render_emoji_png(emoji: str) -> str | None:
         return None
 
 
-def _pop_scale_expr(start: float, size: float) -> str:
-    """Per-frame edge-length expression (px) for the pop-in bounce.
-
-    2px (not 0 — the scale filter rejects a zero dimension) until `start`,
-    eased grow to an overshoot peak, settle back to the resting `size`, hold.
+def _float_size_expr(start: float, size: float) -> str:
+    """Per-frame edge-length expression (px): pop-in bounce, then a continuous
+    gentle breathing pulse for the rest of the time on screen (so it never
+    freezes). 2px floor because scale rejects a zero dimension.
     """
     peak = size * _POP_PEAK_SCALE
     grow_end = start + _POP_GROW_S
     settle_end = grow_end + _POP_SETTLE_S
     grow = f"2+({peak:.2f}-2)*pow(max(0,(t-{start:.3f}))/{_POP_GROW_S:.3f},0.5)"
     settle = f"({peak:.2f}-({peak:.2f}-{size:.2f})*(t-{grow_end:.3f})/{_POP_SETTLE_S:.3f})"
+    # breathing pulse (applied after the entrance settles)
+    breathe = f"({size:.2f}*(1+{_BREATHE_AMP}*sin(2*PI*(t-{settle_end:.3f})*{_BREATHE_HZ})))"
     return (
         f"if(lt(t,{start:.3f}),2,"
         f"if(lt(t,{grow_end:.3f}),{grow},"
-        f"if(lt(t,{settle_end:.3f}),{settle},{size:.2f})))"
+        f"if(lt(t,{settle_end:.3f}),{settle},{breathe})))"
     )
 
 
-def _slide_x_expr(start: float, cx: float) -> str:
-    """Per-frame overlay-x expression (px) for the slide-in-from-the-right.
-
-    Parked fully off the right edge (main_w) until `start`, eased slide to
-    the resting centered position, hold.
-    """
-    target = f"({cx:.1f}-overlay_w/2)"
-    slide_end = start + _SLIDE_IN_S
+def _drift_expr(center: str, start: float, amp: float, hz: float, phase: float) -> str:
+    """Overlay position expression: resting `center` (a px expr string) plus a
+    slow sine sway that only kicks in after `start` (0 before, so it doesn't
+    yank on appearance)."""
     return (
-        f"if(lt(t,{start:.3f}),main_w,"
-        f"if(lt(t,{slide_end:.3f}),"
-        f"main_w+({target}-main_w)*pow((t-{start:.3f})/{_SLIDE_IN_S:.3f},0.5),"
-        f"{target}))"
+        f"({center})+if(lt(t,{start:.3f}),0,"
+        f"{amp:.1f}*sin(2*PI*(t-{start:.3f})*{hz}+{phase:.3f}))"
     )
 
 
@@ -129,14 +143,16 @@ def build_emoji_overlay_chain(
     clip_duration: float,
 ) -> dict[str, Any] | None:
     """Build the ffmpeg extra-inputs + filter_complex fragment that composites
-    every emoji event onto `[0:v]` with a pop/slide-in animation.
+    every emoji event onto `[0:v]` with a Submagic-style floating animation:
+    a pop-in entrance, then a continuous gentle bob + horizontal sway + size
+    breathe for the whole time it is on screen, and a fade out. Each emoji
+    gets a different sway phase so a run of them doesn't look mechanical.
 
-    Each event: {"emoji","start","end","x","y","size","anim"} — x/y are the
-    resting TOP-LEFT position in pixels (the same anchor the old \\pos-based
-    glyph used), size is the resting edge length in pixels, anim is "pop" or
-    "slide". Returns {"inputs": [...ffmpeg -i args...], "filter": "...",
-    "out_label": "..."} for the caller to chain the `ass=` burn onto, or None
-    if nothing is renderable — callers must fall back to a plain caption burn.
+    Each event: {"emoji","start","end","x","y","size"} — x/y are the resting
+    TOP-LEFT position in pixels, size is the resting edge length in pixels.
+    Returns {"inputs": [...ffmpeg -i args...], "filter": "...", "out_label":
+    "..."} for the caller to chain the `ass=` burn onto, or None if nothing is
+    renderable — callers must fall back to a plain caption burn.
     """
     inputs: list[str] = []
     filters: list[str] = []
@@ -159,28 +175,21 @@ def build_emoji_overlay_chain(
         end = min(end, clip_duration)
         used += 1
         k = used
-        anim = ev.get("anim") if ev.get("anim") in ("pop", "slide") else "pop"
         cx, cy = x + size / 2.0, y + size / 2.0
+        phase = (used % 4) * 1.6  # stagger the sway between successive emojis
         label = f"e{k}"
         inputs += ["-loop", "1", "-t", f"{clip_duration:.3f}", "-i", png]
 
-        if anim == "slide":
-            size_i = int(round(size))
-            filters.append(
-                f"[{k}:v]format=rgba,scale=w={size_i}:h={size_i},"
-                f"fade=t=out:st={end:.3f}:d={_FADE_OUT_S:.3f}:alpha=1[{label}]"
-            )
-            x_expr = _slide_x_expr(start, cx)
-            y_expr = f"({cy:.1f}-overlay_h/2)"
-        else:
-            w_expr = _pop_scale_expr(start, size)
-            filters.append(
-                f"[{k}:v]format=rgba,scale=w='trunc({w_expr})':h='trunc({w_expr})':eval=frame,"
-                f"fade=t=in:st={start:.3f}:d={_FADE_IN_S:.3f}:alpha=1,"
-                f"fade=t=out:st={end:.3f}:d={_FADE_OUT_S:.3f}:alpha=1[{label}]"
-            )
-            x_expr = f"({cx:.1f}-overlay_w/2)"
-            y_expr = f"({cy:.1f}-overlay_h/2)"
+        w_expr = _float_size_expr(start, size)
+        filters.append(
+            f"[{k}:v]format=rgba,scale=w='trunc({w_expr})':h='trunc({w_expr})':eval=frame,"
+            f"fade=t=in:st={start:.3f}:d={_FADE_IN_S:.3f}:alpha=1,"
+            f"fade=t=out:st={end:.3f}:d={_FADE_OUT_S:.3f}:alpha=1[{label}]"
+        )
+        # Centre on (cx,cy) — overlay_w/h track the breathing scale so it stays
+        # centred — plus the continuous drift.
+        x_expr = _drift_expr(f"{cx:.1f}-overlay_w/2", start, size * _DRIFT_X_FRAC, _DRIFT_X_HZ, phase)
+        y_expr = _drift_expr(f"{cy:.1f}-overlay_h/2", start, size * _DRIFT_Y_FRAC, _DRIFT_Y_HZ, phase + 0.8)
 
         out_label = f"ov{k}"
         filters.append(f"[{running}][{label}]overlay=x='{x_expr}':y='{y_expr}'[{out_label}]")

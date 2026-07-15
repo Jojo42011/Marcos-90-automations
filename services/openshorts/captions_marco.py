@@ -64,7 +64,18 @@ BLACK = hex_to_ass_color("#000000")
 # videos (the last display line of each caption card cycles between these).
 ACCENT_GREEN = hex_to_ass_color("#2EF42E")   # &H002EF42E
 ACCENT_YELLOW = hex_to_ass_color("#FCFA16")  # &H0016FAFC
-_ACCENT_CYCLE = (ACCENT_GREEN, ACCENT_YELLOW)
+ACCENT_RED = hex_to_ass_color("#FF2E4C")     # vivid red, matches the Submagic rotation
+# The colored (last) display line rotates through this palette per caption card
+# — green → yellow → red → … — so the highlight visibly "changes after each
+# take" like Submagic, instead of just flipping between two colors.
+# Override the set with CAPTION_ACCENT_CYCLE (comma-separated #hex).
+_ACCENT_CYCLE = (ACCENT_GREEN, ACCENT_YELLOW, ACCENT_RED)
+_env_cycle = os.environ.get("CAPTION_ACCENT_CYCLE", "").strip()
+if _env_cycle:
+    try:
+        _ACCENT_CYCLE = tuple(hex_to_ass_color(c.strip()) for c in _env_cycle.split(",") if c.strip())
+    except Exception:
+        _ACCENT_CYCLE = (ACCENT_GREEN, ACCENT_YELLOW, ACCENT_RED)
 # Alternates the floating emoji's entrance animation card-to-card (pop-in vs
 # slide-in-from-the-right) so a clip with several emoji doesn't feel robotic —
 # same alternation pattern as the accent color cycle above.
@@ -183,11 +194,14 @@ def _layout_params(video_width: int, video_height: int) -> dict:
         "margin_lr": margin_lr,
         "max_chars_per_line": max_chars_per_card,
         "max_chars_per_display_line": max_chars_per_display_line,
-        # Floating content-matched emoji: fixed upper-right position,
-        # independent of the caption block (also measured from reference).
-        "emoji_x": round(video_width * 0.86),
-        "emoji_y": round(video_height * 0.40),
-        "emoji_size": round(font_size * 1.3),
+        # Floating content-matched emoji (Submagic-style): big, in the upper
+        # third, and animated by emoji_fx_marco (pop-in + continuous float).
+        # emoji_x/y are the resting TOP-LEFT anchor; size ~16% of frame width
+        # matches the reference. Kept safely on-screen (x + size < width) with
+        # room for the horizontal sway.
+        "emoji_size": round(video_width * 0.16),
+        "emoji_x": round(video_width * 0.66),
+        "emoji_y": round(video_height * 0.24),
     }
 
 
