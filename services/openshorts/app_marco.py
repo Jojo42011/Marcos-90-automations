@@ -1069,9 +1069,18 @@ def process_reel_job(job_id: str, url: str, note: str) -> None:
             return
 
         reel_jobs[job_id]["status"] = "transcribing"
-        transcript = openshorts_main.transcribe_video(video_path)
-        video_duration = transcript.get("duration") or _probe_duration(video_path)
-        transcript_text = " ".join(seg.get("text", "") for seg in transcript.get("segments", []))
+        # Transcription must never sink the whole analysis: a music-only reel, a
+        # download with no/again-odd audio track, or a Whisper hiccup should still
+        # yield a visual + caption + metadata breakdown, not a hard error. Fall
+        # back to an empty transcript on any failure.
+        transcript_text = ""
+        video_duration = _probe_duration(video_path)
+        try:
+            transcript = openshorts_main.transcribe_video(video_path)
+            video_duration = transcript.get("duration") or video_duration
+            transcript_text = " ".join(seg.get("text", "") for seg in transcript.get("segments", []))
+        except Exception as tx_err:  # noqa: BLE001 — best-effort, keep going on frames+meta
+            print(f"[reel] transcription failed ({type(tx_err).__name__}: {tx_err}) — analyzing from frames + metadata only")
 
         reel_jobs[job_id]["status"] = "analyzing"
         images: list = []

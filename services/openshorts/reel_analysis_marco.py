@@ -85,10 +85,14 @@ def download_reel(url: str, dest_dir: str | None = None) -> dict[str, Any]:
         "--no-warnings",
         "--quiet",
         "--max-filesize", _MAX_FILESIZE,
-        # Prefer a single already-muxed file (no separate video+audio download +
-        # ffmpeg remux step, which is the slowest part). <=720p is ample for
-        # transcription and reading on-screen text from keyframes.
-        "-f", "b[height<=720][ext=mp4]/b[ext=mp4]/b",
+        # Format priority, fastest-that-still-has-audio first:
+        #   1) a single already-muxed <=720p mp4 that HAS an audio track
+        #      (no remux step — the fast path for TikTok/IG),
+        #   2) any muxed file with audio,
+        #   3) merge best video+audio (guarantees audio even when only separate
+        #      streams exist — otherwise Whisper gets a silent file and blows up).
+        # <=720p is ample for transcription and reading on-screen keyframe text.
+        "-f", "b[height<=720][ext=mp4][acodec!=none]/b[acodec!=none]/bv*[height<=1080]+ba/b",
         "--write-info-json",
         "-o", out_tmpl,
     ]
