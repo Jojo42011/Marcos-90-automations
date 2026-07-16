@@ -484,6 +484,7 @@ async function analyzeReelViaOpenShorts(url, note) {
                 return {
                     status: "complete",
                     analysis: String(data.analysis || ""),
+                    spoken: String(data.spoken || ""),
                     transcript: String(data.transcript || ""),
                     model: String(data.model || ""),
                     metadata: data.metadata || {},

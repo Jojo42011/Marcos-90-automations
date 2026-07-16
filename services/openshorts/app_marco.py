@@ -1089,10 +1089,12 @@ def process_reel_job(job_id: str, url: str, note: str) -> None:
         analysis_text, model = llm_analysis.analyze_style(
             prompt, images=images, vision_model=main_marco.VISION_MODEL if images else None
         )
+        written, spoken = reel_analysis_marco.split_spoken_summary(analysis_text)
 
         reel_jobs[job_id].update(
             status="complete",
-            analysis=analysis_text,
+            analysis=written,
+            spoken=spoken,
             transcript=transcript_text[:4000],
             model=model,
             duration=video_duration,

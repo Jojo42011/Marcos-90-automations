@@ -1841,6 +1841,7 @@ app.post("/api/jarvis/chat", express.json(), async (req, res) => {
 interface ReelChatJob {
   status: "queued" | "downloading" | "analyzing" | "complete" | "failed";
   analysis?: string;
+  spoken?: string;
   metadata?: Record<string, unknown>;
   error?: string;
   createdAt: number;
@@ -1877,6 +1878,7 @@ app.post("/api/jarvis/analyze-reel", express.json(), async (req, res) => {
       if (result.status === "complete") {
         job.status = "complete";
         job.analysis = result.analysis || "";
+        job.spoken = result.spoken || "";
         job.metadata = result.metadata || {};
       } else {
         job.status = "failed";

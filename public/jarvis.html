@@ -2662,8 +2662,12 @@
       document.getElementById("jSend").disabled = true;
       addMsg("user", fullText);
       const note = fullText.replace(url, "").trim();
+      // Instant, spoken acknowledgement — no fake time promise (a real read of a
+      // reel is download + transcribe + watch, ~30-90s).
+      const ackText = "Got it — let me pull that reel up and break it down for you. This takes a bit, watching the whole thing now…";
       const ack = addMsg("ai", "", true);
-      await typeText(ack, "Got it — pulling that reel up and analyzing it now. Give me ~30 seconds…");
+      void playGeminiTts(ackText);           // talk while working
+      await typeText(ack, ackText);
       try {
         const start = await fetch(apiUrl("/api/jarvis/analyze-reel"), {
           method: "POST",
@@ -2683,11 +2687,19 @@
         if (!result) throw new Error("The analysis took too long and timed out.");
 
         setStatus("RESPONDING", true);
+        // Speak the short spoken summary (or a plain-text fallback) while the
+        // full written breakdown types out on screen.
+        const spoken = (result.spoken && result.spoken.trim())
+          ? result.spoken.trim()
+          : plainSpeech(result.analysis || "");
         const el = addMsg("ai", "", true);
+        void playGeminiTts(spoken);
         await typeText(el, result.analysis || "(no analysis returned)");
         setStatus("STANDBY", false);
       } catch (e) {
-        addMsg("system", "Reel analysis error: " + (e.message || e));
+        const msg = "Reel analysis error: " + (e.message || e);
+        addMsg("system", msg);
+        void playGeminiTts("I couldn't finish analyzing that reel. " + (e.message || ""));
         setStatus("STANDBY", false);
       } finally {
         busy = false;
@@ -2695,11 +2707,23 @@
       }
     }
 
+    // Collapse a markdown breakdown into a short, TTS-friendly line for the
+    // fallback case where the model didn't return an explicit spoken summary.
+    function plainSpeech(md) {
+      const bottom = md.match(/bottom line[^:]*:?\s*([^\n]+)/i);
+      let s = bottom ? bottom[1] : md;
+      s = s.replace(/[#*`_|>-]/g, " ").replace(/\s+/g, " ").trim();
+      return s.slice(0, 320);
+    }
+
     async function sendMessage(text) {
       if (busy || !text.trim()) return;
-      if (window.isGeminiLiveActive?.()) return;
+      // A pasted reel link is handled even while voice mode is live — Marco can
+      // drop a link mid-conversation and Harvey breaks it down without leaving
+      // the voice session.
       const reel = text.match(REEL_URL_RE);
       if (reel) { void analyzeReelInChat(text.trim(), reel[1]); return; }
+      if (window.isGeminiLiveActive?.()) return;
       busy = true;
       setStatus("PROCESSING", true);
       document.getElementById("jSend").disabled = true;

@@ -615,6 +615,7 @@ export async function pollStyleAnalysisJob(jobId: string): Promise<OpenShortsSty
 export interface ReelAnalysisResult {
   status: "complete" | "failed";
   analysis?: string;
+  spoken?: string;
   transcript?: string;
   model?: string;
   metadata?: Record<string, unknown>;
@@ -670,6 +671,7 @@ export async function analyzeReelViaOpenShorts(
         return {
           status: "complete",
           analysis: String(data.analysis || ""),
+          spoken: String(data.spoken || ""),
           transcript: String(data.transcript || ""),
           model: String(data.model || ""),
           metadata: (data.metadata as Record<string, unknown>) || {},

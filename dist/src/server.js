@@ -1414,6 +1414,7 @@ app.post("/api/jarvis/analyze-reel", express_1.default.json(), async (req, res) 
         if (result.status === "complete") {
             job.status = "complete";
             job.analysis = result.analysis || "";
+            job.spoken = result.spoken || "";
             job.metadata = result.metadata || {};
         }
         else {

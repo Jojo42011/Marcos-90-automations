@@ -215,5 +215,27 @@ def build_reel_analysis_prompt(
         "4. WHY IT WORKS (or doesn't) — the actual reason it earns watch-time and saves.\n"
         "5. STEAL THIS FOR MARCO — 2–3 specific, copyable takeaways he can apply to his own "
         "real-estate content this week.\n"
-        "Keep it tight and skimmable. Use short labeled sections, not a wall of text. Speak to Marco directly."
+        "Keep it tight and skimmable. Use short labeled sections, not a wall of text. Speak to Marco directly.\n"
+        "\nAfter the written breakdown, add ONE final line in exactly this format, for a voice summary:\n"
+        "SPOKEN_SUMMARY: <3–4 sentences of plain conversational speech — NO markdown, symbols, headers, "
+        "or lists — the way you'd verbally sum up this reel and the single biggest thing Marco should take "
+        "from it, said out loud to him.>"
     )
+
+
+def split_spoken_summary(analysis_text: str) -> tuple[str, str]:
+    """Separate the written breakdown from the SPOKEN_SUMMARY line so the UI can
+    display the full breakdown while Harvey speaks the short summary aloud.
+    Returns (written_breakdown, spoken_summary)."""
+    text = analysis_text or ""
+    marker = "SPOKEN_SUMMARY:"
+    idx = text.rfind(marker)
+    if idx == -1:
+        return text.strip(), ""
+    written = text[:idx].rstrip().rstrip("-").rstrip()
+    spoken = text[idx + len(marker):].strip()
+    # Strip any stray markdown the model may have left in the spoken line.
+    for ch in ("**", "*", "#", "`", "_"):
+        spoken = spoken.replace(ch, "")
+    spoken = " ".join(spoken.split())
+    return written.strip(), spoken.strip()
