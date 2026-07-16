@@ -1270,35 +1270,6 @@
   <div class="j-vignette" aria-hidden="true"></div>
 
   <div class="j-shell" id="harvey-shell">
-    <div class="ms-strip" id="msStrip">
-      <div class="ms-strip-content" id="msStripContent">
-        <span class="ms-strip-item ms-live"><i></i>LIVE</span>
-        <span class="ms-sep">|</span>
-        <span class="ms-strip-item ms-strip-section" id="strip-goal-section" data-panel="goal" title="Expand goal metrics">
-          <span class="ms-label ms-goal-pulse">$20M:</span> <span id="msGoalPct">—</span>
-        </span>
-        <span class="ms-sep">|</span>
-        <span class="ms-strip-item ms-strip-section" id="strip-gap-section" data-panel="goal" title="Expand goal metrics">
-          <span class="ms-label">GAP:</span> <span id="msGap">—</span>
-        </span>
-        <span class="ms-sep">|</span>
-        <span class="ms-strip-item ms-strip-section" id="strip-tiktok-section" data-panel="tiktok" title="Expand TikTok metrics">
-          <span class="ms-label">TIKTOK:</span> <span id="msTiktok">—</span>
-        </span>
-        <span class="ms-sep">|</span>
-        <span class="ms-strip-item ms-strip-section" id="strip-mojo-section" data-panel="mojo" title="Expand Mojo metrics">
-          <span class="ms-label">MOJO:</span> <span id="msMojo">—</span>
-        </span>
-      </div>
-      <span class="ms-expand ms-strip-section" id="strip-expand-btn" data-panel="all" title="Daily plan, deal size, buyer/seller targets, pace & contact rate">
-        <span id="msExpandLbl">[MORE ↓]</span>
-      </span>
-    </div>
-
-    <div class="ms-expand-wrap" id="msExpandWrap">
-      <div class="ms-expand-inner" id="msExpandInner"></div>
-    </div>
-
     <div class="mem-panel" id="memPanel" data-force-dark="true" aria-hidden="true">
       <div class="mem-head">
         <span id="memHeadTitle">// HARVEY MEMORY SYSTEM //</span>
@@ -1334,11 +1305,6 @@
         <small>AETHON · MARCO PUGA</small>
       </div>
       <div class="j-spacer"></div>
-      <button type="button" class="j-panel-toggle" id="jToggleMarket">MARKET</button>
-      <button type="button" class="j-panel-toggle" id="jToggleWorld">WORLD</button>
-      <button type="button" class="j-panel-toggle" id="jToggleNotes">NOTES</button>
-      <button type="button" class="j-panel-toggle" id="jToggleResearch">RESEARCH</button>
-      <button type="button" class="j-panel-toggle" id="jToggleDir">DIRECTIVES</button>
       <button id="theme-toggle-btn" type="button" onclick="toggleTheme()"
         style="background:transparent; border:1px solid rgba(0,212,255,0.3);
                color:#00d4ff; padding:5px 12px; font-family:monospace;
@@ -2791,8 +2757,8 @@
       syncDrawerUi();
     }
 
-    document.getElementById("jToggleOps").addEventListener("click", () => togglePanel("jColOps"));
-    document.getElementById("jToggleDir").addEventListener("click", () => togglePanel("jColDir"));
+    document.getElementById("jToggleOps")?.addEventListener("click", () => togglePanel("jColOps"));
+    document.getElementById("jToggleDir")?.addEventListener("click", () => togglePanel("jColDir"));
     document.getElementById("jCloseOps").addEventListener("click", () => togglePanel("jColOps"));
     document.getElementById("jCloseDir").addEventListener("click", () => togglePanel("jColDir"));
     document.getElementById("jDrawerBackdrop").addEventListener("click", closeSidePanels);
