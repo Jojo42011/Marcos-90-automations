@@ -416,6 +416,7 @@
       font-size: 0.82rem; line-height: 1.45;
       position: relative;
       border-radius: 2px;
+      white-space: pre-wrap; word-break: break-word; /* keep reel breakdown line breaks + wrap long URLs */
     }
     .j-msg.user {
       align-self: flex-end;
@@ -2649,9 +2650,56 @@
       }
     }
 
+    // Instagram / TikTok / YouTube reel or short link.
+    const REEL_URL_RE = /(https?:\/\/[^\s]*(?:instagram\.com|tiktok\.com|youtube\.com\/shorts|youtu\.be)[^\s]*)/i;
+
+    // Dedicated reel flow: acknowledge instantly, then download+transcribe+read
+    // the video via an async job (polled), so there's no long feedback-less
+    // hang and no chance of the request timing out mid-analysis.
+    async function analyzeReelInChat(fullText, url) {
+      busy = true;
+      setStatus("PROCESSING", true);
+      document.getElementById("jSend").disabled = true;
+      addMsg("user", fullText);
+      const note = fullText.replace(url, "").trim();
+      const ack = addMsg("ai", "", true);
+      await typeText(ack, "Got it — pulling that reel up and analyzing it now. Give me ~30 seconds…");
+      try {
+        const start = await fetch(apiUrl("/api/jarvis/analyze-reel"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, note }),
+        }).then(r => r.json());
+        if (!start.jobId) throw new Error(start.error || "Could not start the analysis.");
+
+        let result = null;
+        for (let i = 0; i < 120; i++) {           // ~6 min client budget
+          await new Promise(r => setTimeout(r, 3000));
+          const job = await fetch(apiUrl("/api/jarvis/analyze-reel/" + start.jobId)).then(r => r.json());
+          if (job.status === "complete") { result = job; break; }
+          if (job.status === "failed") { throw new Error(job.error || "Analysis failed."); }
+          setStatus("ANALYZING REEL", true);
+        }
+        if (!result) throw new Error("The analysis took too long and timed out.");
+
+        setStatus("RESPONDING", true);
+        const el = addMsg("ai", "", true);
+        await typeText(el, result.analysis || "(no analysis returned)");
+        setStatus("STANDBY", false);
+      } catch (e) {
+        addMsg("system", "Reel analysis error: " + (e.message || e));
+        setStatus("STANDBY", false);
+      } finally {
+        busy = false;
+        document.getElementById("jSend").disabled = false;
+      }
+    }
+
     async function sendMessage(text) {
       if (busy || !text.trim()) return;
       if (window.isGeminiLiveActive?.()) return;
+      const reel = text.match(REEL_URL_RE);
+      if (reel) { void analyzeReelInChat(text.trim(), reel[1]); return; }
       busy = true;
       setStatus("PROCESSING", true);
       document.getElementById("jSend").disabled = true;

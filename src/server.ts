@@ -451,6 +451,7 @@ import {
   mapClipUrlForFrontend,
   trimClipViaOpenShorts,
   editClipViaOpenShorts,
+  analyzeReelViaOpenShorts,
 } from "./integrations/openshorts/index.js";
 import { runClipEditChat, type ClipEditContext } from "./agents/contentManager/clipEditAgent.js";
 import { createProxyMiddleware } from "http-proxy-middleware";
@@ -1829,6 +1830,81 @@ app.post("/api/jarvis/chat", express.json(), async (req, res) => {
     console.error("[jarvis/chat]", msg);
     res.status(500).json({ error: msg });
   }
+});
+
+// ── Pasted-reel analysis (async job) ───────────────────────────────────────
+// A reel analysis takes 30-90s (download + transcribe + vision read). Running
+// that INSIDE the /api/jarvis/chat request meant a long, feedback-less hang
+// that could trip an idle/proxy timeout — the "he doesn't see it" symptom. So
+// the chat UI detects a reel link, posts it here to get a job id immediately
+// (letting it show "analyzing now…" at once), and polls for the result.
+interface ReelChatJob {
+  status: "queued" | "downloading" | "analyzing" | "complete" | "failed";
+  analysis?: string;
+  metadata?: Record<string, unknown>;
+  error?: string;
+  createdAt: number;
+}
+const reelChatJobs = new Map<string, ReelChatJob>();
+
+function pruneReelChatJobs(): void {
+  const cutoff = Date.now() - 30 * 60_000; // keep 30 min
+  for (const [id, job] of reelChatJobs) {
+    if (job.createdAt < cutoff) reelChatJobs.delete(id);
+  }
+}
+
+app.post("/api/jarvis/analyze-reel", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const url = typeof req.body?.url === "string" ? req.body.url.trim() : "";
+  const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+  if (!/^https?:\/\//i.test(url)) {
+    res.status(400).json({ error: "A full reel/short URL (http…) is required." });
+    return;
+  }
+  pruneReelChatJobs();
+  const jobId = randomUUID();
+  reelChatJobs.set(jobId, { status: "downloading", createdAt: Date.now() });
+  // Kick off the (already self-polling) sidecar analysis in the background and
+  // stash the result; the client polls GET below rather than holding a socket.
+  void analyzeReelViaOpenShorts(url, note)
+    .then((result) => {
+      const job = reelChatJobs.get(jobId);
+      if (!job) return;
+      if (result.status === "complete") {
+        job.status = "complete";
+        job.analysis = result.analysis || "";
+        job.metadata = result.metadata || {};
+      } else {
+        job.status = "failed";
+        job.error = result.error || "Reel analysis failed.";
+        job.metadata = result.metadata || {};
+      }
+    })
+    .catch((err) => {
+      const job = reelChatJobs.get(jobId);
+      if (job) {
+        job.status = "failed";
+        job.error = err instanceof Error ? err.message : String(err);
+      }
+    });
+  res.json({ jobId, status: "started" });
+});
+
+app.get("/api/jarvis/analyze-reel/:jobId", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const job = reelChatJobs.get(String(req.params.jobId || ""));
+  if (!job) {
+    res.status(404).json({ error: "Job not found or expired" });
+    return;
+  }
+  res.json(job);
 });
 
 /** Aethon voice command — Claude brain (not Gemini Live). */
