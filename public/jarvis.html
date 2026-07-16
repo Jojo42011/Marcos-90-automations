@@ -1367,13 +1367,6 @@
         <div class="j-transcript" id="jTranscript">
           <div class="j-msg system">Loading operator context…</div>
         </div>
-
-        <form class="j-compose" id="jForm">
-          <span class="j-prompt" aria-hidden="true">▸</span>
-          <input class="j-input" id="jInput" type="text"
-            placeholder="ENTER COMMAND OR PASTE A REEL LINK…" autocomplete="off" />
-          <button type="submit" class="j-send" id="jSend">TRANSMIT</button>
-        </form>
       </section>
     </main>
 
@@ -2714,7 +2707,10 @@
       }
     }
 
-    document.getElementById("jForm").addEventListener("submit", e => {
+    // The typed command bar now lives in the "Chat with Harvey" tab (hull-chat),
+    // including reel-link analysis. Harvey's dashboard is voice-first, so the
+    // compose form is optional here — guard in case it isn't rendered.
+    document.getElementById("jForm")?.addEventListener("submit", e => {
       e.preventDefault();
       const input = document.getElementById("jInput");
       const t = input.value;

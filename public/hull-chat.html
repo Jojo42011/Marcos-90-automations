@@ -408,6 +408,41 @@ const CONFIG = AGENTS[AGENT_KEY] || AGENTS.harvey;
     thread.querySelectorAll(".chip").forEach(ch => ch.addEventListener("click", () => { send(ch.textContent); }));
   }
 
+  /* ---------- reel-link analysis (Harvey only) ----------
+     If the message contains an Instagram/TikTok/YouTube-Shorts link, Harvey
+     downloads and watches the reel, then reports back. This mirrors the main
+     Harvey command bar, but text-only (no TTS) since this is a chat surface. */
+  const REEL_URL_RE = /(https?:\/\/[^\s]*(?:instagram\.com|tiktok\.com|youtube\.com\/shorts|youtu\.be)[^\s]*)/i;
+
+  async function analyzeReel(bubble, url, note){
+    // instant acknowledgement so it never feels like nothing happened
+    await typeInto(bubble, "Got it, pulling that reel up and analyzing it now. This takes a bit, I'm watching the whole thing…");
+    const working = addAI();
+    try {
+      const res = await fetch(withToken("/api/jarvis/analyze-reel"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, note: note || "" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.jobId) throw new Error(data.error || ("Couldn't start the analysis (" + res.status + ")"));
+
+      let analysis = "";
+      for (let i = 0; i < 120; i++){
+        await new Promise(r => setTimeout(r, 3000));
+        const pr = await fetch(withToken("/api/jarvis/analyze-reel/" + encodeURIComponent(data.jobId)));
+        const pd = await pr.json().catch(() => ({}));
+        if (pd.status === "complete"){ analysis = pd.analysis || pd.spoken || "(no analysis returned)"; break; }
+        if (pd.status === "failed"){ throw new Error(pd.error || "The analysis failed while processing the reel."); }
+      }
+      if (!analysis) throw new Error("That reel took too long to analyze. Try again in a moment.");
+      await typeInto(working, analysis);
+      history.push({ role:"assistant", content: analysis });
+    } catch (e) {
+      working.innerHTML = '<span class="err">⚠ ' + esc(e.message || "Couldn't analyze that reel.") + '</span>';
+    }
+  }
+
   /* ---------- send flow ---------- */
   async function send(text){
     text = (text || "").trim();
@@ -419,10 +454,15 @@ const CONFIG = AGENTS[AGENT_KEY] || AGENTS.harvey;
     input.value = ""; autosize();
     const bubble = addAI();
     try {
-      const out = await C.send({ message:text, sessionId, history });
-      const reply = (out && out.text) || "(no response)";
-      await typeInto(bubble, reply, out && out.note);
-      history.push({ role:"assistant", content:reply });
+      const reelMatch = (AGENT_KEY === "harvey") ? text.match(REEL_URL_RE) : null;
+      if (reelMatch){
+        await analyzeReel(bubble, reelMatch[1], text.replace(REEL_URL_RE, "").trim());
+      } else {
+        const out = await C.send({ message:text, sessionId, history });
+        const reply = (out && out.text) || "(no response)";
+        await typeInto(bubble, reply, out && out.note);
+        history.push({ role:"assistant", content:reply });
+      }
     } catch (e) {
       bubble.innerHTML = '<span class="err">⚠ ' + esc(e.message || "Something went wrong.") + '</span>';
     } finally {
