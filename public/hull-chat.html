@@ -1,0 +1,468 @@
+<!-- ============================================================================
+     hull-chat — a clean, self-contained chat UI (the JARVIS/ChatGPT feel).
+     No build step, no dependencies. Everything you touch is the CONFIG block
+     right below. The engine underneath it you can leave alone.
+
+     Two agents ship configured here: Harvey (default) and Arlo. The page picks
+     one from ?agent=harvey | ?agent=arlo (defaults to harvey). To point Arlo at
+     a real backend, set AGENTS.arlo.send() to hit your endpoint.
+     ============================================================================ -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Chat</title>
+
+<script>
+/* ========================= CONFIG ==========================================
+   One object per agent. `send()` is the ONLY thing that must talk to a server;
+   everything else is cosmetic. Return { text, note? } or throw for an inline
+   error. You get { message, sessionId, history } for free.
+   =========================================================================== */
+
+function dashToken(){
+  try { return new URLSearchParams(location.search).get("token") || localStorage.getItem("dashboardToken") || ""; }
+  catch(_) { return ""; }
+}
+function withToken(path){
+  const t = dashToken(); if(!t) return path;
+  return path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(t);
+}
+
+const AGENTS = {
+  harvey: {
+    brand: "Harvey",
+    tagline: "AI Assistant",
+    accent: "#00d4ff",
+    column: "720px",
+    emptyTitle: "How can I help, Marco?",
+    emptySub: "Ask about leads, your numbers, or drop a reel link to break it down.",
+    placeholder: "Message Harvey…",
+    chips: [
+      "How many hot leads do I have?",
+      "What's my pace to $20M?",
+      "Summarize today's DMs",
+      "Draft a follow-up to my newest lead",
+    ],
+    navLinks: [],            // e.g. [{ label:"Full console", href:"/jarvis" }]
+    footnote: "Harvey can make mistakes. Double-check anything important.",
+    async send({ message, sessionId }) {
+      const res = await fetch(withToken("/api/jarvis/chat"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, sessionId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ("Request failed (" + res.status + ")"));
+      return { text: data.speech || data.reply || data.text || data.message || "(no response)", note: "" };
+    },
+  },
+
+  arlo: {
+    brand: "Arlo",
+    tagline: "Operator",
+    accent: "#8b7dff",
+    column: "720px",
+    emptyTitle: "What do you need, boss?",
+    emptySub: "Arlo runs the ops. Ask a question or hand off a task.",
+    placeholder: "Message Arlo…",
+    chips: [
+      "What's on my plate today?",
+      "Status of the open tasks",
+      "Kick off the morning scan",
+    ],
+    navLinks: [],
+    footnote: "Arlo can make mistakes. Double-check anything important.",
+    // TODO: point this at Arlo's backend. Mirrors the Harvey shape.
+    async send({ message, sessionId }) {
+      const res = await fetch(withToken("/api/arlo/chat"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, sessionId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ("Arlo isn't wired up yet (" + res.status + ")"));
+      return { text: data.speech || data.reply || data.text || data.message || "(no response)", note: "" };
+    },
+  },
+};
+
+// Optional upload sheet (the ＋ button + slide-up paste/drop panel). Off by default.
+const UPLOAD = {
+  enabled: false,
+  async submit({ title, text }) {
+    // implement to accept a pasted script / dropped file
+    console.log("upload", title, text);
+  },
+};
+
+// Which agent this page is. ?agent=arlo → Arlo, otherwise Harvey.
+const AGENT_KEY = (new URLSearchParams(location.search).get("agent") || "harvey").toLowerCase();
+const CONFIG = AGENTS[AGENT_KEY] || AGENTS.harvey;
+</script>
+
+<style>
+  :root{
+    --accent:#00d4ff;
+    --bg:#0a0f18;
+    --bg-soft:#0f1826;
+    --line:rgba(255,255,255,.08);
+    --line-2:rgba(255,255,255,.14);
+    --ink:#e8eef6;
+    --muted:#8ba0b8;
+    --user-bubble:#16233a;
+    --column:720px;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:
+      radial-gradient(900px 500px at 50% -8%, var(--bg-soft), var(--bg) 65%);
+    color:var(--ink); font-family:var(--sans);
+    display:flex; flex-direction:column; height:100dvh; overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* header */
+  header{
+    display:flex; align-items:center; gap:12px;
+    padding:14px max(18px, env(safe-area-inset-left)) 14px max(18px, env(safe-area-inset-right));
+    border-bottom:1px solid var(--line); flex:0 0 auto;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .av{
+    width:26px; height:26px; border-radius:50%; flex:0 0 auto;
+    background:radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--accent) 85%, #fff 0%), color-mix(in srgb, var(--accent) 12%, transparent) 72%);
+    box-shadow:0 0 16px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  .brand b{ font-size:15px; font-weight:700; letter-spacing:.2px; }
+  .brand small{ color:var(--muted); font-size:11px; font-family:var(--mono); letter-spacing:1px; text-transform:uppercase; margin-left:2px; }
+  .hspace{ flex:1 }
+  .hbtn{
+    background:transparent; border:1px solid var(--line-2); color:var(--muted);
+    font-size:12px; padding:7px 12px; border-radius:9px; cursor:pointer; font-family:var(--sans);
+    display:inline-flex; align-items:center; gap:6px; text-decoration:none;
+  }
+  .hbtn:hover{ color:var(--ink); border-color:var(--accent); }
+
+  /* messages */
+  main{ flex:1; overflow-y:auto; overflow-x:hidden; scroll-behavior:smooth; }
+  .col{ max-width:var(--column); margin:0 auto; padding:26px 18px 8px; }
+
+  .msg{ display:flex; gap:13px; margin:20px 0; align-items:flex-start; }
+  .msg.user{ justify-content:flex-end; }
+  .msg .av{
+    width:26px; height:26px; border-radius:50%; flex:0 0 auto; margin-top:2px;
+    background:radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--accent) 85%, #fff 0%), color-mix(in srgb, var(--accent) 10%, transparent) 72%);
+    box-shadow:0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .msg.user .av{ display:none; }
+  .bubble{ font-size:15.5px; line-height:1.62; max-width:100%; }
+  .msg.ai .bubble{ color:var(--ink); }
+  .msg.user .bubble{
+    background:var(--user-bubble); border:1px solid var(--line);
+    padding:11px 15px; border-radius:16px 16px 4px 16px; max-width:78%; color:#eaf1fb;
+  }
+  .bubble p{ margin:0 0 10px; } .bubble p:last-child{ margin-bottom:0; }
+  .bubble ul{ margin:8px 0; padding-left:20px; } .bubble li{ margin:4px 0; }
+  .bubble strong{ color:#fff; font-weight:700; }
+  .bubble code{ font-family:var(--mono); font-size:.88em; background:rgba(255,255,255,.08); padding:1px 6px; border-radius:5px; }
+  .bubble pre{ background:#0b1422; border:1px solid var(--line); border-radius:10px; padding:12px 14px; overflow-x:auto; margin:10px 0; }
+  .bubble pre code{ background:none; padding:0; font-size:12.5px; line-height:1.55; color:#cfe4ff; }
+  .caret{ display:inline-block; width:7px; height:1.05em; vertical-align:-2px; margin-left:1px;
+    background:var(--accent); border-radius:1px; animation:blink 1s steps(2) infinite; }
+  @keyframes blink{ 50%{ opacity:0 } }
+  .note{ margin-top:6px; font-size:12px; color:var(--muted); font-family:var(--mono); }
+  .err{ color:#ff8ea0; font-size:14px; }
+
+  /* typing dots */
+  .dots{ display:inline-flex; gap:5px; padding:6px 2px; }
+  .dots i{ width:7px; height:7px; border-radius:50%; background:var(--muted); animation:bob 1.2s ease-in-out infinite; }
+  .dots i:nth-child(2){ animation-delay:.15s } .dots i:nth-child(3){ animation-delay:.3s }
+  @keyframes bob{ 0%,60%,100%{ transform:translateY(0); opacity:.4 } 30%{ transform:translateY(-5px); opacity:1 } }
+
+  /* empty state */
+  .empty{ text-align:center; padding:8vh 10px 20px; }
+  .empty .av-lg{
+    width:52px; height:52px; border-radius:50%; margin:0 auto 18px;
+    background:radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--accent) 88%, #fff 0%), color-mix(in srgb, var(--accent) 10%, transparent) 72%);
+    box-shadow:0 0 34px color-mix(in srgb, var(--accent) 50%, transparent);
+  }
+  .empty h1{ font-size:23px; font-weight:700; margin:0 0 8px; letter-spacing:.2px; }
+  .empty p{ color:var(--muted); font-size:15px; margin:0 auto; max-width:440px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:9px; justify-content:center; margin-top:24px; }
+  .chip{
+    background:var(--bg-soft); border:1px solid var(--line-2); color:var(--ink);
+    font-size:13.5px; padding:9px 14px; border-radius:12px; cursor:pointer; font-family:var(--sans);
+    transition:.15s; text-align:left;
+  }
+  .chip:hover{ border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, var(--bg-soft)); }
+
+  /* composer */
+  footer{ flex:0 0 auto; padding:8px 0 max(14px, env(safe-area-inset-bottom)); }
+  .composer{ max-width:var(--column); margin:0 auto; padding:0 18px; }
+  .pill{
+    display:flex; align-items:flex-end; gap:8px;
+    background:var(--bg-soft); border:1px solid var(--line-2); border-radius:26px;
+    padding:7px 7px 7px 8px; transition:border-color .15s;
+  }
+  .pill:focus-within{ border-color:var(--accent); }
+  .plus{
+    width:38px; height:38px; flex:0 0 auto; border-radius:50%; border:1px solid var(--line-2);
+    background:transparent; color:var(--muted); font-size:20px; cursor:pointer; line-height:1;
+  }
+  .plus:hover{ color:var(--ink); border-color:var(--accent); }
+  textarea{
+    flex:1; resize:none; border:none; outline:none; background:transparent; color:var(--ink);
+    font-family:var(--sans); font-size:15.5px; line-height:1.5; padding:9px 4px; max-height:180px; min-height:22px;
+  }
+  textarea::placeholder{ color:var(--muted); }
+  .send{
+    width:38px; height:38px; flex:0 0 auto; border-radius:50%; border:none; cursor:pointer;
+    background:var(--accent); color:#04131f; display:grid; place-items:center; transition:.15s;
+  }
+  .send svg{ width:18px; height:18px; }
+  .send:disabled{ background:var(--line-2); color:var(--muted); cursor:default; }
+  .foot-note{ text-align:center; color:var(--muted); font-size:11px; margin-top:9px; }
+
+  /* upload sheet */
+  .scrim{ position:fixed; inset:0; background:rgba(3,7,12,.6); backdrop-filter:blur(2px); display:none; z-index:40; }
+  .scrim.on{ display:block; }
+  .sheet{
+    position:fixed; left:50%; bottom:0; transform:translate(-50%, 100%);
+    width:min(var(--column), 100%); background:var(--bg-soft); border:1px solid var(--line-2);
+    border-radius:18px 18px 0 0; padding:18px; z-index:41; transition:transform .28s cubic-bezier(.2,.8,.2,1);
+  }
+  .sheet.on{ transform:translate(-50%, 0); }
+  .sheet h3{ margin:0 0 12px; font-size:15px; }
+  .sheet input, .sheet textarea.up{ width:100%; background:var(--bg); border:1px solid var(--line-2); color:var(--ink);
+    border-radius:10px; padding:10px 12px; font-family:var(--sans); font-size:14px; margin-bottom:10px; }
+  .sheet .drop{ border:1.5px dashed var(--line-2); border-radius:12px; padding:22px; text-align:center; color:var(--muted); font-size:13px; margin-bottom:12px; }
+  .sheet .row{ display:flex; gap:10px; justify-content:flex-end; }
+
+  @media (max-width:560px){
+    .empty h1{ font-size:20px } .bubble{ font-size:15px }
+  }
+</style>
+
+<header>
+  <div class="brand">
+    <span class="av"></span>
+    <b id="hBrand">Harvey</b><small id="hTag">AI Assistant</small>
+  </div>
+  <div class="hspace"></div>
+  <span id="hNav"></span>
+  <button class="hbtn" id="newChat" title="Start a new chat">✚ New chat</button>
+</header>
+
+<main id="main">
+  <div class="col" id="thread"></div>
+</main>
+
+<footer>
+  <div class="composer">
+    <div class="pill">
+      <button class="plus" id="plusBtn" title="Attach" style="display:none">＋</button>
+      <textarea id="input" rows="1" placeholder="Message…"></textarea>
+      <button class="send" id="sendBtn" disabled title="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+      </button>
+    </div>
+    <div class="foot-note" id="footNote"></div>
+  </div>
+</footer>
+
+<!-- upload sheet -->
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet">
+  <h3>Add context</h3>
+  <input id="upTitle" placeholder="Title (optional)" />
+  <textarea class="up" id="upText" rows="4" placeholder="Paste a script or notes…"></textarea>
+  <div class="drop" id="drop">Drop a file here, or paste above</div>
+  <div class="row">
+    <button class="hbtn" id="upCancel">Cancel</button>
+    <button class="hbtn" id="upSend" style="border-color:var(--accent);color:var(--ink)">Add</button>
+  </div>
+</div>
+
+<script>
+/* ============================= ENGINE ======================================
+   You shouldn't need to edit below this line.
+   =========================================================================== */
+(function(){
+  "use strict";
+  const C = CONFIG;
+  document.documentElement.style.setProperty("--accent", C.accent || "#00d4ff");
+  document.documentElement.style.setProperty("--column", C.column || "720px");
+  document.title = "Chat · " + (C.brand || "Assistant");
+
+  const $ = (id) => document.getElementById(id);
+  const thread = $("thread"), main = $("main"), input = $("input"), sendBtn = $("sendBtn");
+  $("hBrand").textContent = C.brand || "Assistant";
+  $("hTag").textContent = C.tagline || "";
+  input.placeholder = C.placeholder || "Message…";
+  $("footNote").textContent = C.footnote || "";
+  if (Array.isArray(C.navLinks) && C.navLinks.length){
+    $("hNav").innerHTML = C.navLinks.map(l => '<a class="hbtn" href="'+esc(l.href)+'" target="_top">'+esc(l.label)+'</a>').join(" ");
+  }
+  if (UPLOAD.enabled) $("plusBtn").style.display = "";
+
+  // session + history
+  const SKEY = "hullchat_sid_" + (AGENT_KEY);
+  let sessionId = sessionStorage.getItem(SKEY);
+  if (!sessionId){ sessionId = "s_" + Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem(SKEY, sessionId); }
+  let history = [];
+  let busy = false;
+
+  /* ---------- markdown-lite (HTML-escaped first → XSS-safe) ---------- */
+  function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+  function mdInline(s){
+    return s
+      .replace(/`([^`]+)`/g, (_,x)=>"<code>"+x+"</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  }
+  function renderMarkdown(raw){
+    // split out fenced code blocks first so their contents aren't touched
+    const parts = String(raw).split(/```/);
+    let out = "";
+    for (let i=0;i<parts.length;i++){
+      if (i % 2 === 1){ // inside a code fence
+        const body = parts[i].replace(/^[a-zA-Z0-9]*\n/, ""); // strip lang hint
+        out += "<pre><code>" + esc(body).replace(/\n$/,"") + "</code></pre>";
+        continue;
+      }
+      const block = parts[i];
+      const lines = block.split(/\n/);
+      let html = "", listOpen = false;
+      const closeList = () => { if (listOpen){ html += "</ul>"; listOpen = false; } };
+      let para = [];
+      const flushPara = () => { if (para.length){ html += "<p>" + mdInline(esc(para.join(" "))) + "</p>"; para = []; } };
+      for (const ln of lines){
+        if (/^\s*[-*]\s+/.test(ln)){
+          flushPara();
+          if (!listOpen){ html += "<ul>"; listOpen = true; }
+          html += "<li>" + mdInline(esc(ln.replace(/^\s*[-*]\s+/, ""))) + "</li>";
+        } else if (ln.trim() === ""){
+          flushPara(); closeList();
+        } else {
+          para.push(ln.trim());
+        }
+      }
+      flushPara(); closeList();
+      out += html;
+    }
+    return out;
+  }
+
+  /* ---------- message rendering ---------- */
+  function scrollDown(){ main.scrollTop = main.scrollHeight; }
+  function addUser(text){
+    const el = document.createElement("div"); el.className = "msg user";
+    el.innerHTML = '<div class="bubble"></div>';
+    el.querySelector(".bubble").textContent = text;
+    thread.appendChild(el); scrollDown();
+  }
+  function addAI(){
+    const el = document.createElement("div"); el.className = "msg ai";
+    el.innerHTML = '<div class="av"></div><div class="bubble"><span class="dots"><i></i><i></i><i></i></span></div>';
+    thread.appendChild(el); scrollDown();
+    return el.querySelector(".bubble");
+  }
+
+  // typewriter reveal, capped so long replies aren't slow (~1.5s total)
+  function typeInto(bubble, text, note){
+    return new Promise(resolve => {
+      const total = 1500, minStep = 8;
+      const chars = text.length;
+      const step = Math.max(1, Math.ceil(chars / (total / minStep)));
+      let i = 0;
+      bubble.innerHTML = "";
+      const span = document.createElement("span"); bubble.appendChild(span);
+      const caret = document.createElement("span"); caret.className = "caret"; bubble.appendChild(caret);
+      const tick = () => {
+        i = Math.min(chars, i + step);
+        span.innerHTML = renderMarkdown(text.slice(0, i));
+        scrollDown();
+        if (i < chars){ setTimeout(tick, minStep); }
+        else {
+          caret.remove();
+          span.innerHTML = renderMarkdown(text);
+          if (note){ const n = document.createElement("div"); n.className = "note"; n.textContent = note; bubble.appendChild(n); }
+          scrollDown(); resolve();
+        }
+      };
+      tick();
+    });
+  }
+
+  /* ---------- empty state ---------- */
+  function showEmpty(){
+    thread.innerHTML =
+      '<div class="empty"><div class="av-lg"></div>' +
+      '<h1>' + esc(C.emptyTitle || "How can I help?") + '</h1>' +
+      '<p>' + esc(C.emptySub || "") + '</p>' +
+      '<div class="chips">' + (C.chips||[]).map(c => '<button class="chip">'+esc(c)+'</button>').join("") + '</div></div>';
+    thread.querySelectorAll(".chip").forEach(ch => ch.addEventListener("click", () => { send(ch.textContent); }));
+  }
+
+  /* ---------- send flow ---------- */
+  async function send(text){
+    text = (text || "").trim();
+    if (!text || busy) return;
+    busy = true; sendBtn.disabled = true;
+    const empty = thread.querySelector(".empty"); if (empty) thread.innerHTML = "";
+    addUser(text);
+    history.push({ role:"user", content:text });
+    input.value = ""; autosize();
+    const bubble = addAI();
+    try {
+      const out = await C.send({ message:text, sessionId, history });
+      const reply = (out && out.text) || "(no response)";
+      await typeInto(bubble, reply, out && out.note);
+      history.push({ role:"assistant", content:reply });
+    } catch (e) {
+      bubble.innerHTML = '<span class="err">⚠ ' + esc(e.message || "Something went wrong.") + '</span>';
+    } finally {
+      busy = false; sendBtn.disabled = input.value.trim() === ""; input.focus();
+    }
+  }
+
+  /* ---------- composer behaviour ---------- */
+  function autosize(){ input.style.height = "auto"; input.style.height = Math.min(180, input.scrollHeight) + "px"; }
+  input.addEventListener("input", () => { autosize(); sendBtn.disabled = input.value.trim() === "" || busy; });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); send(input.value); }
+  });
+  sendBtn.addEventListener("click", () => send(input.value));
+  $("newChat").addEventListener("click", () => {
+    history = [];
+    sessionId = "s_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sessionStorage.setItem(SKEY, sessionId);
+    showEmpty(); input.focus();
+  });
+
+  /* ---------- optional upload sheet ---------- */
+  if (UPLOAD.enabled){
+    const scrim = $("scrim"), sheet = $("sheet");
+    const open = () => { scrim.classList.add("on"); sheet.classList.add("on"); };
+    const close = () => { scrim.classList.remove("on"); sheet.classList.remove("on"); };
+    $("plusBtn").addEventListener("click", open);
+    scrim.addEventListener("click", close);
+    $("upCancel").addEventListener("click", close);
+    $("upSend").addEventListener("click", async () => {
+      try { await UPLOAD.submit({ title: $("upTitle").value.trim(), text: $("upText").value.trim() }); } catch(_){}
+      $("upTitle").value = ""; $("upText").value = ""; close();
+    });
+    const drop = $("drop");
+    ["dragover"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); }));
+    document.addEventListener("drop", e => {
+      e.preventDefault(); const f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return;
+      open(); const r = new FileReader(); r.onload = () => { $("upText").value = r.result; if(!$("upTitle").value) $("upTitle").value = f.name; }; r.readAsText(f);
+    });
+  }
+
+  showEmpty();
+  input.focus();
+})();
+</script>

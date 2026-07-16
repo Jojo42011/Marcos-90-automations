@@ -788,6 +788,12 @@ app.get("/how-to", (_req, res) => {
   res.sendFile(path.join(publicDir, "how-to.html"));
 });
 
+// Clean single-column chat UI (Harvey by default, ?agent=arlo for Arlo).
+// Self-contained page — talks to /api/jarvis/chat.
+app.get("/hull-chat", (_req, res) => {
+  res.sendFile(path.join(publicDir, "hull-chat.html"));
+});
+
 const voiceCloneDataRoot = resolveVoiceCloneDataRoot();
 app.use("/voice-clone-files", express.static(voiceCloneDataRoot));
 

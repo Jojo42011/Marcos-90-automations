@@ -405,6 +405,11 @@ app.get("/voice-clone", (_req, res) => {
 app.get("/how-to", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "how-to.html"));
 });
+// Clean single-column chat UI (Harvey by default, ?agent=arlo for Arlo).
+// Self-contained page — talks to /api/jarvis/chat.
+app.get("/hull-chat", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "hull-chat.html"));
+});
 const voiceCloneDataRoot = (0, voiceCloneStore_js_1.resolveVoiceCloneDataRoot)();
 app.use("/voice-clone-files", express_1.default.static(voiceCloneDataRoot));
 function mapVoiceCloneFileUrl(filePath, voxcpmApiUrl) {
