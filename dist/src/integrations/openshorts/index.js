@@ -13,6 +13,7 @@ exports.checkOpenShortsHealth = checkOpenShortsHealth;
 exports.generateMockClips = generateMockClips;
 exports.submitStyleAnalysis = submitStyleAnalysis;
 exports.pollStyleAnalysisJob = pollStyleAnalysisJob;
+exports.analyzeReelViaOpenShorts = analyzeReelViaOpenShorts;
 /**
  * OpenShorts integration for Marco Puga Realty
  * Replaces OpusClip. Communicates with the local OpenShorts Python sidecar at port 8000.
@@ -438,4 +439,64 @@ async function pollStyleAnalysisJob(jobId) {
         await sleep(POLL_INTERVAL_MS);
     }
     return { status: "failed", error: `Style analysis timed out after ${MAX_POLL_ATTEMPTS} poll attempts` };
+}
+// Download + transcribe + vision-read a reel are network- and CPU-bound; a
+// reel is short so this cap (~8 min) is generous. Kept separate from the
+// full-render MAX_POLL_ATTEMPTS.
+const REEL_MAX_POLL_ATTEMPTS = Number(process.env.OPENSHORTS_REEL_POLL_ATTEMPTS) || 60;
+/**
+ * Follow a pasted Instagram/TikTok/YouTube-Short link, download it, and return
+ * a short-form strategist's read (topic, hook, structure, takeaways) plus the
+ * transcript and public metadata. One call: submits the job and polls it out.
+ */
+async function analyzeReelViaOpenShorts(url, note) {
+    const health = await checkOpenShortsHealth();
+    if (!health.running) {
+        return { status: "failed", error: "The video analysis service is offline right now — try again shortly." };
+    }
+    const formData = new form_data_1.default();
+    formData.append("url", url);
+    if (note && note.trim())
+        formData.append("note", note.trim());
+    let jobId;
+    try {
+        const submit = await axios_1.default.post(`${OPENSHORTS_BASE_URL}/api/reel/analyze`, formData, {
+            headers: formData.getHeaders(),
+            timeout: 30000,
+        });
+        jobId = String(submit.data.job_id || "");
+    }
+    catch (err) {
+        const detail = (axios_1.default.isAxiosError(err) && err.response?.data?.detail) ||
+            (err instanceof Error ? err.message : String(err));
+        return { status: "failed", error: `Couldn't start the reel analysis: ${detail}` };
+    }
+    if (!jobId)
+        return { status: "failed", error: "Reel analysis did not start (no job id returned)." };
+    for (let attempt = 0; attempt < REEL_MAX_POLL_ATTEMPTS; attempt++) {
+        try {
+            const response = await axios_1.default.get(`${OPENSHORTS_BASE_URL}/api/reel/jobs/${jobId}`, {
+                timeout: STATUS_CHECK_TIMEOUT_MS,
+            });
+            const data = response.data;
+            const status = String(data.status || "queued");
+            if (status === "complete") {
+                return {
+                    status: "complete",
+                    analysis: String(data.analysis || ""),
+                    transcript: String(data.transcript || ""),
+                    model: String(data.model || ""),
+                    metadata: data.metadata || {},
+                };
+            }
+            if (status === "failed") {
+                return { status: "failed", error: String(data.error || "Reel analysis failed"), metadata: data.metadata || {} };
+            }
+        }
+        catch {
+            // Transient status-check hiccup — keep polling.
+        }
+        await sleep(POLL_INTERVAL_MS);
+    }
+    return { status: "failed", error: "The reel analysis took too long and timed out." };
 }

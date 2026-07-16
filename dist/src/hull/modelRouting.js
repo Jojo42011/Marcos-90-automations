@@ -39,6 +39,8 @@ const SONNET_TRIGGERS = [
     "lead",
     "tiktok",
     "instagram",
+    "reel",
+    "http", // any pasted link (reel/short/video) → Sonnet + tools so analyze_reel can fire
     "funnel",
     "mojo",
     "brivity",

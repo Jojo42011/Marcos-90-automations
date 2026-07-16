@@ -80,6 +80,7 @@ import take_analysis_marco
 import broll_marco
 import frame_analysis_marco
 import prompts_marco
+import reel_analysis_marco
 import llm_analysis
 from llm_analysis import any_llm_configured, configured_llm_summary, NoUsableClipsError
 
@@ -1023,6 +1024,129 @@ async def get_style_job_status(job_id: str):
     if job_id not in style_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     return style_jobs[job_id]
+
+
+# ── Pasted-reel analysis — Harvey follows a link and reads the reel ─────────
+# A user pastes an Instagram/TikTok/YouTube-Short link into Harvey's chat; the
+# analyze_reel tool calls here. This downloads the reel (yt-dlp) and then reuses
+# the SAME transcribe → keyframe → vision-LLM path as style analysis, with a
+# short-form-strategist prompt. Separate job dict so it never collides with
+# batch/style IDs, same processing slot so a 2-core box stays responsive.
+reel_jobs: dict = {}
+_MAX_REEL_ANALYSIS_FRAMES = 8
+
+
+def process_reel_job(job_id: str, url: str, note: str) -> None:
+    """Synchronous (runs in a BackgroundTasks worker thread — see
+    process_style_job's docstring). Download → transcribe → frames → analyze."""
+    slot_acquired = False
+    video_path = None
+    try:
+        if openshorts_main is None:
+            raise RuntimeError("OpenShorts not installed — run setup-openshorts.sh")
+
+        # Download happens BEFORE the slot is taken — it is network-bound, not
+        # CPU-bound, so it need not block a concurrent encode.
+        reel_jobs[job_id]["status"] = "downloading"
+        try:
+            dl = reel_analysis_marco.download_reel(url)
+        except reel_analysis_marco.ReelDownloadError as derr:
+            reel_jobs[job_id].update(status="failed", error=str(derr))
+            return
+        video_path = dl["path"]
+        metadata = dl.get("metadata", {})
+        reel_jobs[job_id]["metadata"] = metadata
+
+        if not _PROCESS_SLOT.acquire(timeout=_SLOT_WAIT_TIMEOUT_S):
+            reel_jobs[job_id].update(status="failed", error="Timed out waiting for a free processing slot")
+            return
+        slot_acquired = True
+
+        if not validate_video_file(video_path):
+            reel_jobs[job_id].update(status="failed", error="The downloaded reel could not be read.")
+            return
+
+        reel_jobs[job_id]["status"] = "transcribing"
+        transcript = openshorts_main.transcribe_video(video_path)
+        video_duration = transcript.get("duration") or _probe_duration(video_path)
+        transcript_text = " ".join(seg.get("text", "") for seg in transcript.get("segments", []))
+
+        reel_jobs[job_id]["status"] = "analyzing"
+        images: list = []
+        try:
+            images = frame_analysis_marco.extract_analysis_frames(
+                video_path, flagged_timestamps=[0.3], max_frames=_MAX_REEL_ANALYSIS_FRAMES
+            )
+        except Exception as frame_err:  # noqa: BLE001 — best-effort
+            print(f"[reel] frame extraction skipped: {frame_err}")
+
+        prompt = reel_analysis_marco.build_reel_analysis_prompt(
+            transcript=transcript_text,
+            metadata=metadata,
+            note=note,
+            has_frames=bool(images),
+        )
+        analysis_text, model = llm_analysis.analyze_style(
+            prompt, images=images, vision_model=main_marco.VISION_MODEL if images else None
+        )
+
+        reel_jobs[job_id].update(
+            status="complete",
+            analysis=analysis_text,
+            transcript=transcript_text[:4000],
+            model=model,
+            duration=video_duration,
+        )
+    except Exception as err:  # noqa: BLE001 — best-effort job, never crash the worker
+        print(f"[reel] job {job_id} failed: {type(err).__name__}: {err}")
+        traceback.print_exc()
+        reel_jobs[job_id].update(status="failed", error=f"{type(err).__name__}: {err}")
+    finally:
+        if slot_acquired:
+            _PROCESS_SLOT.release()
+        # The downloaded reel isn't needed once analyzed.
+        try:
+            if video_path and os.path.isfile(video_path):
+                os.remove(video_path)
+        except Exception:
+            pass
+
+
+@app.post("/api/reel/analyze")
+async def analyze_reel_endpoint(
+    background_tasks: BackgroundTasks,
+    url: str = Form(...),
+    note: str = Form(""),
+):
+    if not any_llm_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="LLM API key required — set ANTHROPIC_API_KEY (sk-ant-…) or OPENAI_API_KEY",
+        )
+    clean_url = reel_analysis_marco.looks_like_reel_url(url) or url.strip()
+    if not clean_url.startswith("http"):
+        raise HTTPException(status_code=400, detail="Provide a full http(s) reel URL")
+
+    job_id = str(uuid.uuid4())
+    reel_jobs[job_id] = {
+        "status": "queued",
+        "url": clean_url,
+        "analysis": None,
+        "transcript": None,
+        "metadata": None,
+        "model": None,
+        "error": None,
+        "created_at": time.time(),
+    }
+    background_tasks.add_task(process_reel_job, job_id=job_id, url=clean_url, note=note or "")
+    return {"job_id": job_id, "status": "queued"}
+
+
+@app.get("/api/reel/jobs/{job_id}")
+async def get_reel_job_status(job_id: str):
+    if job_id not in reel_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return reel_jobs[job_id]
 
 
 @app.get("/clips/{job_id}/{filename}")
