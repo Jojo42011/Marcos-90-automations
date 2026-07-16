@@ -1033,7 +1033,9 @@ async def get_style_job_status(job_id: str):
 # short-form-strategist prompt. Separate job dict so it never collides with
 # batch/style IDs, same processing slot so a 2-core box stays responsive.
 reel_jobs: dict = {}
-_MAX_REEL_ANALYSIS_FRAMES = 8
+# Fewer frames = faster keyframe extraction AND a faster vision call. 5 evenly
+# covers a short reel without much marginal insight from more.
+_MAX_REEL_ANALYSIS_FRAMES = 5
 
 
 def process_reel_job(job_id: str, url: str, note: str) -> None:

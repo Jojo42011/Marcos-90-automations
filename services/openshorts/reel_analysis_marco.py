@@ -85,8 +85,10 @@ def download_reel(url: str, dest_dir: str | None = None) -> dict[str, Any]:
         "--no-warnings",
         "--quiet",
         "--max-filesize", _MAX_FILESIZE,
-        # Prefer a <=1080p mp4 with audio; degrade gracefully to any best format.
-        "-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080]/b",
+        # Prefer a single already-muxed file (no separate video+audio download +
+        # ffmpeg remux step, which is the slowest part). <=720p is ample for
+        # transcription and reading on-screen text from keyframes.
+        "-f", "b[height<=720][ext=mp4]/b[ext=mp4]/b",
         "--write-info-json",
         "-o", out_tmpl,
     ]
@@ -208,18 +210,17 @@ def build_reel_analysis_prompt(
         f"{caption_line}"
         f"\n{frames_line}"
         f"\nTRANSCRIPT (what is said):\n{transcript.strip() or '(no speech detected — likely music/text-only)'}\n"
-        "\nGive Marco:\n"
-        "1. WHAT IT IS — one or two sentences: the topic, format, and who made it.\n"
-        "2. THE HOOK — quote/describe the first 1–3 seconds and why it does or doesn't stop the scroll.\n"
-        "3. STRUCTURE & PACING — how it's built (hook → value → CTA), edit style, energy.\n"
-        "4. WHY IT WORKS (or doesn't) — the actual reason it earns watch-time and saves.\n"
-        "5. STEAL THIS FOR MARCO — 2–3 specific, copyable takeaways he can apply to his own "
-        "real-estate content this week.\n"
-        "Keep it tight and skimmable. Use short labeled sections, not a wall of text. Speak to Marco directly.\n"
-        "\nAfter the written breakdown, add ONE final line in exactly this format, for a voice summary:\n"
-        "SPOKEN_SUMMARY: <3–4 sentences of plain conversational speech — NO markdown, symbols, headers, "
-        "or lists — the way you'd verbally sum up this reel and the single biggest thing Marco should take "
-        "from it, said out loud to him.>"
+        "\nWrite your breakdown as a few flowing PARAGRAPHS of plain prose, the way you'd explain it out "
+        "loud to Marco — NOT as headers, bullet lists, tables, or numbered sections. Do NOT use any "
+        "markdown formatting (no #, *, -, |, backticks, or bold). Just clean sentences and paragraphs.\n"
+        "Cover, woven naturally into the prose: what the reel is and who made it; the exact hook in the "
+        "first couple seconds and whether it stops the scroll; how it's built and paced; the real reason "
+        "it works or falls flat; and — most important — two or three specific, copyable moves Marco should "
+        "steal for his own real-estate content. Keep it tight: about 3 to 5 short paragraphs, no filler. "
+        "Talk straight to Marco.\n"
+        "\nAfter the paragraphs, add ONE final line in exactly this format, for a voice summary:\n"
+        "SPOKEN_SUMMARY: <3–4 sentences of plain conversational speech — the way you'd verbally sum up this "
+        "reel and the single biggest thing Marco should take from it, said out loud to him.>"
     )
 
 
