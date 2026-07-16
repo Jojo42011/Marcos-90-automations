@@ -1353,14 +1353,6 @@
             </div>
 
             <p class="j-core-hint" id="jCoreHint">TAP CORE TO SPEAK</p>
-            <div id="harvey-voice-status" style="font-size: 11px; color: #888; margin-top: 4px; text-align: center;">Voice: Not started</div>
-            <div id="harvey-voice-error" style="color: #ff4444; font-size: 12px; margin-top: 8px; display: none; text-align: center;"></div>
-            <label style="display:flex; align-items:center; justify-content:center; gap:8px; font-size:11px; color:#888; cursor:pointer; font-family:monospace; margin-top:8px;">
-              <input type="checkbox" id="wake-word-toggle" onchange="toggleWakeWordListening()">
-              <span>Listen for "Harvey"</span>
-              <span id="wake-word-indicator" style="width:8px; height:8px; border-radius:50%; background:#555; transition:background 0.2s ease;"></span>
-            </label>
-            <div id="wake-word-message" style="display:none; font-size:10px; color:#f59e0b; margin-top:4px; text-align:center;"></div>
           </div>
         </div>
 
@@ -3751,7 +3743,7 @@
         }
         if (!voice?.gemini_configured) {
           document.getElementById("harvey-mic-btn").style.cursor = "default";
-          coreHint.textContent = "VOICE OFFLINE — TYPE BELOW";
+          coreHint.textContent = "VOICE OFFLINE — USE CHAT WITH HARVEY";
         }
         await loadOps();
         await refreshMetrics();
