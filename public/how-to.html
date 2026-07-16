@@ -44,7 +44,12 @@
   .body{ display:grid; grid-template-columns:1.15fr 1fr; gap:22px; align-items:center; min-height:290px; }
   @media (max-width:760px){ .body{ grid-template-columns:1fr; } .mock{ order:2 } }
 
-  /* ---- schematic device mockup ---- */
+  /* ---- real screenshot + callout pins ---- */
+  .shot{ position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--line2); box-shadow:0 12px 40px -18px rgba(0,0,0,.7); }
+  .shot img{ width:100%; display:block; }
+  .shot .pin{ position:absolute; transform:translate(-50%,-50%); }
+
+  /* ---- schematic device mockup (legacy, unused) ---- */
   .mock{ position:relative; }
   .scr{ position:relative; border:1px solid var(--line2); border-radius:12px; background:#081120;
     padding:10px; height:260px; display:flex; gap:8px; overflow:hidden; }
@@ -155,156 +160,94 @@ var ICON = {
   help:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
 };
 
-// build a schematic screen; `nav` = index (0-based) of the highlighted sidebar item
-function screen(navIdx, mainHTML){
-  var nav='';
-  for(var i=0;i<7;i++){ nav += '<div class="dotnav'+(i===navIdx?' on':'')+'"></div>'; }
-  return '<div class="scr"><div class="scr-side">'+nav+'</div><div class="scr-main">'+mainHTML+'</div>';
+// real screenshot + numbered callout pins (each pin = [top%, left%] over the image)
+function shotHTML(key, pins){
+  var p = (pins||[]).map(function(a,idx){
+    return '<div class="pin" style="top:'+a[0]+';left:'+a[1]+'">'+(idx+1)+'</div>';
+  }).join('');
+  return '<div class="shot"><img src="/htguide/'+key+'.jpg" alt="'+key+' screen" loading="eager"/>'+p+'</div>';
 }
-function pin(n,top,left){ return '<div class="pin" style="top:'+top+';left:'+left+'">'+n+'</div>'; }
 
 var STEPS = [
   { hero:true, mark:'👋', icon:ICON.help, name:'Welcome — here’s how it all works', tag:'Guided tour',
     heroTitle:'A quick tour of your command center',
-    heroBody:'This walks through every tab in the sidebar and exactly what to do in each one. It takes about a minute. Use the arrows, swipe, or Next — and you can skip anytime.' },
+    heroBody:'These are real screenshots of every tab in your sidebar, with the key spots numbered. It takes about a minute. Use the arrows, swipe, or Next — and you can skip anytime.' },
 
   { icon:ICON.harvey, name:'Harvey', tag:'AI Assistant · your home base',
-    mock:screen(0,
-      '<div class="scr-top"><b>HARVEY</b><div class="fill"></div><span class="chip" style="background:rgba(0,212,255,.12);color:var(--cyan-soft)">Light</span></div>'+
-      '<div class="orb"></div>'+
-      '<div class="fill"></div>'+
-      '<div class="cmd">Type or paste a link…</div></div>'+
-      pin(1,'214px','30%')+pin(2,'120px','50%')+pin(3,'214px','68%')),
+    shot:'harvey', pins:[['93%','28%'],['52%','50%'],['93%','66%']],
     how:[
-      'Type any question in the command bar at the bottom — about leads, your numbers, "email this client" — then hit Transmit.',
-      'Tap the glowing orb (or switch on "Listen") to just talk to Harvey hands-free.',
-      'Paste an Instagram or TikTok link and Harvey watches the reel and breaks it down for you.'
+      'Type any command in the bar at the bottom — about leads, your numbers, anything — and hit Transmit.',
+      'Tap the core (or tick “Listen for Harvey”) to talk to him hands-free.',
+      'Paste an Instagram or TikTok link right here and Harvey breaks the reel down for you.'
     ] },
 
   { icon:ICON.crm, name:'CRM', tag:'Leads · Deals · Tasks',
-    mock:screen(1,
-      '<div class="scr-top"><b>CRM</b><div class="fill"></div><div class="cmd" style="height:14px;width:90px">Search…</div></div>'+
-      '<div class="blk" style="height:20px"></div>'+
-      '<div class="blk" style="flex:1;padding:8px;display:flex;flex-direction:column;gap:7px">'+
-        '<div class="rowline m"></div><div class="rowline s"></div><div class="rowline m"></div><div class="rowline s"></div></div>'+
-      '<div class="blk" style="height:22px;border-color:var(--line2)"></div></div>'+
-      pin(1,'20px','78%')+pin(2,'120px','40%')+pin(3,'222px','50%')),
+    shot:'crm', pins:[['4%','31%'],['42%','56%'],['12%','86%']],
     how:[
-      'Search or scroll to find any lead in your database.',
-      'Click a lead to open their full profile and entire conversation history.',
-      'Tick several leads to email or call them all at once from the bulk bar.'
+      'Search any lead by name, phone, @handle, or status up top.',
+      'Click a lead to open their full profile and conversation history.',
+      'Filter by status, intent, or stage to focus the list.'
     ] },
 
   { icon:ICON.dm, name:'DM Agent', tag:'Instagram · SMS · Replies',
-    mock:screen(2,
-      '<div class="scr-top"><b>DM AGENT</b></div>'+
-      '<div style="display:flex;gap:6px">'+
-        '<div class="tile" style="flex:1"><div class="k">CONVOS</div><div class="v">702</div></div>'+
-        '<div class="tile" style="flex:1"><div class="k">CAPTURED</div><div class="v">211</div></div>'+
-        '<div class="tile" style="flex:1"><div class="k">TODAY</div><div class="v">18</div></div></div>'+
-      '<div class="blk" style="flex:1;padding:8px;display:flex;flex-direction:column;gap:7px">'+
-        '<div class="rowline m"></div><div class="rowline s"></div><div class="rowline m"></div></div></div>'+
-      pin(1,'44px','24%')+pin(2,'150px','50%')+pin(3,'150px','86%')),
+    shot:'dm', pins:[['6%','14%'],['13%','40%'],['6%','66%']],
     how:[
-      'The tiles up top show live totals — conversations, phone numbers captured, new today.',
-      'Click any conversation to read the full back-and-forth in a pop-up.',
-      'Each card shows the client’s captured phone number right on it.'
+      'The tiles up top show live totals — conversations, messages, new today.',
+      'Click any conversation to read the full thread in a pop-up.',
+      'The Phone Captures tile tracks every number the agent has collected.'
     ] },
 
   { icon:ICON.content, name:'Content Manager', tag:'TikTok · Scores · Brain',
-    mock:screen(3,
-      '<div class="scr-top"><b>CONTENT</b></div>'+
-      '<div class="blk" style="height:40px;border-style:dashed;border-color:var(--line2);display:grid;place-items:center;font-family:var(--mono);font-size:9px;color:var(--muted)">⬆ Drop a raw video</div>'+
-      '<div style="display:flex;gap:6px;flex:1">'+
-        '<div class="tile" style="flex:1;display:flex;flex-direction:column;justify-content:space-between"><div class="rowline s"></div><div class="v">92</div></div>'+
-        '<div class="tile" style="flex:1;display:flex;flex-direction:column;justify-content:space-between"><div class="rowline s"></div><div class="v">78</div></div>'+
-        '<div class="tile" style="flex:1;display:flex;flex-direction:column;justify-content:space-between"><div class="rowline s"></div><div class="v">61</div></div></div>'+
-      '<div class="blk" style="height:22px;border-color:var(--line2)"></div></div>'+
-      pin(1,'40px','52%')+pin(2,'130px','30%')+pin(3,'224px','50%')),
+    shot:'content', pins:[['36%','8%'],['17%','48%'],['42%','8%']],
     how:[
-      'Drop in a raw video — the system cuts it into ready-to-post vertical clips with captions.',
-      'Every clip gets a viral score, so you post the strongest ones first.',
-      'Approve or reject clips in the Review Queue — that teaches Harvey your taste over time.'
+      'Drop a raw video into Upload & Clip — it becomes ready-to-post vertical clips.',
+      'Track videos, pipeline status, and weekly progress across the top.',
+      'Approve or reject clips in the Review Queue — that teaches Harvey your taste.'
     ] },
 
   { icon:ICON.leads, name:'Lead Nurture', tag:'Scoring · Hot · Cold',
-    mock:screen(4,
-      '<div class="scr-top"><b>LEAD NURTURE</b></div>'+
-      '<div style="display:flex;gap:6px;flex:1">'+
-        '<div class="blk" style="flex:1;padding:7px"><span class="chip" style="background:rgba(255,77,109,.18);color:#ff8ea0">HOT</span><div style="height:7px"></div><div class="rowline s"></div><div style="height:5px"></div><div class="rowline m"></div></div>'+
-        '<div class="blk" style="flex:1;padding:7px"><span class="chip" style="background:rgba(245,158,11,.18);color:#fbbf24">WARM</span><div style="height:7px"></div><div class="rowline m"></div></div>'+
-        '<div class="blk" style="flex:1;padding:7px"><span class="chip" style="background:rgba(148,163,184,.18);color:#cbd5e1">COLD</span><div style="height:7px"></div><div class="rowline s"></div></div></div>'+
-      '<div class="blk" style="height:20px"></div></div>'+
-      pin(1,'150px','20%')+pin(2,'222px','50%')+pin(3,'44px','20%')),
+    shot:'leads', pins:[['12%','50%'],['7%','24%'],['26%','38%']],
     how:[
-      'Every lead is scored and sorted into Hot, Warm, or Cold automatically.',
-      'Follow-up drips send themselves, so no lead ever goes quiet.',
-      'Spend your day on the Hot column — those are ready to move.'
+      'Every lead is auto-sorted Hot, Warm, or Cold.',
+      'The tiles show how many sit in each tier right now.',
+      'Re-score anytime — follow-up drips then run themselves.'
     ] },
 
   { icon:ICON.reporting, name:'Reporting', tag:'Digest · KPIs · Anomalies',
-    mock:screen(5,
-      '<div class="scr-top"><b>REPORTING</b></div>'+
-      '<div class="blk" style="height:34px;padding:7px"><div class="rowline m"></div><div style="height:5px"></div><div class="rowline s"></div></div>'+
-      '<div style="display:flex;gap:6px">'+
-        '<div class="tile" style="flex:1"><div class="k">VIEWS</div><div class="v">739K</div></div>'+
-        '<div class="tile" style="flex:1"><div class="k">CALLS</div><div class="v">26.9K</div></div>'+
-        '<div class="tile" style="flex:1"><div class="k">CLOSED</div><div class="v">4</div></div></div>'+
-      '<div class="blk" style="flex:1;display:grid;place-items:center;font-family:var(--mono);font-size:9px;color:var(--warn)">⚠ anomaly flagged</div></div>'+
-      pin(1,'40px','50%')+pin(2,'96px','24%')+pin(3,'210px','50%')),
+    shot:'reporting', pins:[['40%','50%'],['9%','22%'],['46%','7%']],
     how:[
-      'The daily digest sums up everything that happened while you were out.',
-      'KPI tiles track views, calls, and closings at a glance.',
-      'Anomaly flags warn you the moment a number moves the wrong way.'
+      'The daily digest recaps everything — it auto-runs at 7am Central.',
+      'Weekly KPIs and anomaly flags live in these tabs.',
+      'Need it now? Generate a digest on demand with this button.'
     ] },
 
   { icon:ICON.finance, name:'Finance', tag:'GCI · Expenses · Pace',
-    mock:screen(6,
-      '<div class="scr-top"><b>FINANCE</b></div>'+
-      '<div class="blk" style="height:40px;padding:8px"><div class="k" style="font-family:var(--mono);font-size:9px;color:var(--muted)">BANKED vs $20M</div>'+
-        '<div style="height:8px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:7px;overflow:hidden"><i style="display:block;height:100%;width:30%;background:linear-gradient(90deg,var(--cyan),#38bdf8)"></i></div></div>'+
-      '<div style="display:flex;gap:6px">'+
-        '<div class="tile" style="flex:1"><div class="k">EXPENSES</div><div class="v">$1.2M</div></div>'+
-        '<div class="tile" style="flex:1"><div class="k">PACE</div><div class="v" style="color:var(--good)">ON</div></div></div>'+
-      '<div class="fill"></div><div class="blk" style="height:20px"></div></div>'+
-      pin(1,'48px','52%')+pin(2,'120px','30%')+pin(3,'120px','74%')),
+    shot:'finance', pins:[['44%','50%'],['53%','24%'],['62%','24%']],
     how:[
-      'See commission banked versus your $20M goal at the top.',
-      'Track expenses against the income coming in.',
-      'The pace meter tells you if you’re on track to hit the number.'
+      'The dial shows commission banked versus your monthly goal.',
+      'KPI tiles track MTD gross/net, pipeline, and YTD at a glance.',
+      'Expenses are tracked right below so you always see the net.'
     ] },
 
   { icon:ICON.email, name:'Email', tag:'Drip · Templates · Stats',
-    mock:screen(7,
-      '<div class="scr-top"><b>EMAIL</b><div class="fill"></div><span class="chip" style="background:rgba(255,77,109,.16);color:#ff8ea0">⚠ Reconnect Gmail</span></div>'+
-      '<div style="display:flex;gap:6px;flex:1">'+
-        '<div class="blk" style="width:38%;padding:7px;display:flex;flex-direction:column;gap:6px"><div class="rowline m"></div><div class="rowline s"></div><div class="rowline m"></div></div>'+
-        '<div class="blk" style="flex:1;padding:7px"><div class="rowline m"></div><div style="height:6px"></div><div class="rowline s"></div></div></div>'+
-      '<div class="blk" style="height:20px;border-color:var(--line2)"></div></div>'+
-      pin(1,'110px','24%')+pin(2,'110px','66%')+pin(3,'32px','82%')),
+    shot:'email', pins:[['5%','82%'],['74%','24%'],['30%','25%']],
     how:[
-      'Build and save reusable email templates for common situations.',
-      'Automated drip campaigns nurture your leads for you.',
-      'If a red banner appears, tap Reconnect Gmail so sending and inbox sync stay live.'
+      'If a red banner shows, tap Reconnect Gmail so sending + inbox sync stay live.',
+      'Automated drip sequences nurture your leads — they’re listed here.',
+      'Track sent, open rate, replies, and active drips across the top.'
     ] },
 
   { icon:ICON.tasks, name:'Tasks', tag:'Command Center',
-    mock:screen(6,
-      '<div class="scr-top"><b>TASKS</b><div class="fill"></div><span class="chip" style="background:rgba(0,212,255,.12);color:var(--cyan-soft)">+ Add</span></div>'+
-      '<div style="display:flex;gap:6px;flex:1">'+
-        '<div class="blk" style="flex:1;padding:7px"><div class="k" style="font-family:var(--mono);font-size:8px;color:var(--muted)">TODAY</div><div style="height:6px"></div><div class="rowline m"></div><div style="height:5px"></div><div class="rowline s"></div></div>'+
-        '<div class="blk" style="flex:1;padding:7px"><div class="k" style="font-family:var(--mono);font-size:8px;color:var(--muted)">WEEK</div><div style="height:6px"></div><div class="rowline s"></div></div>'+
-        '<div class="blk" style="flex:1;padding:7px"><div class="k" style="font-family:var(--mono);font-size:8px;color:var(--muted)">MONTH</div><div style="height:6px"></div><div class="rowline m"></div></div></div></div>'+
-      pin(1,'150px','20%')+pin(2,'32px','86%')+pin(3,'150px','52%')),
+    shot:'tasks', pins:[['22%','10%'],['3%','94%'],['41%','30%']],
     how:[
-      'Tasks are grouped by urgency — today, this week, this month.',
-      'Hit Add to create a task and assign it to you, Marco, or Harvey.',
-      'Check items off as they get done to keep the board clean.'
+      'Tasks are grouped by urgency — Urgent, Today, Tomorrow, Week, Month.',
+      'Add one from the top bar (or the quick-add line under it).',
+      'Hit Mark Done as you finish each card to keep the board clean.'
     ] },
 
   { hero:true, mark:'✅', icon:ICON.help, name:'You’re all set', tag:'Tour complete',
     heroTitle:'That’s the whole system',
-    heroBody:'Open any tab from the sidebar on the left. Harvey is always one message away — just type or talk. You can reopen this tour anytime from the "How to Use" tab.',
+    heroBody:'Open any tab from the sidebar on the left. Harvey is always one message away — just type or talk. You can reopen this tour anytime from the “How to Use” tab.',
     fine:'Note: Voice Clone moved out of the sidebar but still works — open /voice-clone directly or ask Harvey.' }
 ];
 
@@ -342,7 +285,7 @@ function render(){
       return '<li><span class="n">'+(idx+1)+'</span><span>'+t+'</span></li>';
     }).join('');
     bodyEl.innerHTML =
-      '<div class="mock">'+s.mock+'</div>'+
+      '<div class="mock">'+shotHTML(s.shot, s.pins)+'</div>'+
       '<div class="how"><h4>How to use it</h4><ul class="steps">'+lis+'</ul></div>';
   }
 
