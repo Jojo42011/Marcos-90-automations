@@ -1,0 +1,385 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>How to Use — Marco Puga Command Center</title>
+<style>
+  :root{
+    --bg:#060b14; --bg2:#0a1424; --card:#0d1a2e; --line:rgba(0,212,255,.18);
+    --line2:rgba(0,212,255,.32); --cyan:#00d4ff; --cyan-soft:#7dd3fc;
+    --ink:#e6f0fb; --muted:#8fa6c0; --good:#22c55e; --warn:#f59e0b; --hot:#ff4d6d;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:
+      radial-gradient(1200px 600px at 50% -10%, #0e2038 0%, var(--bg) 60%);
+    color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:18px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ width:min(980px,100%); }
+
+  /* top row: progress + skip */
+  .top{ display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+  .step-count{ font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--cyan-soft); text-transform:uppercase; }
+  .bar{ flex:1; height:4px; border-radius:99px; background:rgba(255,255,255,.07); overflow:hidden; }
+  .bar > i{ display:block; height:100%; width:0; background:linear-gradient(90deg,var(--cyan),#38bdf8); transition:width .35s ease; }
+  .skip{ background:transparent; border:1px solid var(--line2); color:var(--cyan-soft);
+    font-family:var(--mono); font-size:11px; letter-spacing:1px; padding:6px 12px; border-radius:8px; cursor:pointer; }
+  .skip:hover{ background:rgba(0,212,255,.08); }
+
+  /* card */
+  .card{ background:linear-gradient(180deg,var(--card),#0a1526); border:1px solid var(--line);
+    border-radius:18px; padding:26px 26px 20px; box-shadow:0 30px 80px -30px rgba(0,0,0,.8); position:relative; overflow:hidden; }
+  .card::before{ content:""; position:absolute; inset:0 0 auto 0; height:2px;
+    background:linear-gradient(90deg,transparent,var(--cyan),transparent); opacity:.5; }
+
+  .head{ display:flex; align-items:center; gap:14px; margin-bottom:18px; }
+  .badge{ width:46px; height:46px; flex:0 0 auto; border-radius:12px; display:grid; place-items:center;
+    background:rgba(0,212,255,.1); border:1px solid var(--line2); color:var(--cyan); }
+  .badge svg{ width:24px; height:24px; }
+  .htitle{ font-size:19px; font-weight:800; letter-spacing:.2px; }
+  .htag{ font-family:var(--mono); font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-top:2px; }
+
+  .body{ display:grid; grid-template-columns:1.15fr 1fr; gap:22px; align-items:center; min-height:290px; }
+  @media (max-width:760px){ .body{ grid-template-columns:1fr; } .mock{ order:2 } }
+
+  /* ---- schematic device mockup ---- */
+  .mock{ position:relative; }
+  .scr{ position:relative; border:1px solid var(--line2); border-radius:12px; background:#081120;
+    padding:10px; height:260px; display:flex; gap:8px; overflow:hidden; }
+  .scr-side{ width:34px; flex:0 0 auto; border-radius:8px; background:#0b1830; border:1px solid rgba(255,255,255,.05);
+    display:flex; flex-direction:column; align-items:center; gap:7px; padding-top:9px; }
+  .dotnav{ width:15px; height:15px; border-radius:4px; background:rgba(255,255,255,.08); }
+  .dotnav.on{ background:rgba(0,212,255,.55); }
+  .scr-main{ flex:1; display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .scr-top{ height:22px; border-radius:6px; background:#0b1830; border:1px solid rgba(255,255,255,.05);
+    display:flex; align-items:center; padding:0 8px; gap:6px; }
+  .scr-top b{ font-family:var(--mono); font-size:9px; letter-spacing:1px; color:var(--cyan-soft); }
+  .fill{ flex:1 }
+  .blk{ border-radius:7px; background:#0b1830; border:1px solid rgba(255,255,255,.06); }
+  .rowline{ height:12px; border-radius:4px; background:rgba(255,255,255,.06); }
+  .rowline.s{ width:60% } .rowline.m{ width:80% }
+  .tile{ border-radius:7px; background:#0b1830; border:1px solid rgba(255,255,255,.06); padding:7px; }
+  .tile .k{ font-family:var(--mono); font-size:8px; color:var(--muted); }
+  .tile .v{ font-family:var(--mono); font-size:13px; color:var(--cyan); font-weight:700; }
+  .chip{ border-radius:99px; padding:3px 8px; font-family:var(--mono); font-size:8px; }
+  .orb{ width:74px; height:74px; border-radius:50%; margin:6px auto; align-self:center;
+    background:radial-gradient(circle at 50% 40%, rgba(0,212,255,.55), rgba(0,212,255,.06) 70%);
+    border:1px solid var(--line2); box-shadow:0 0 26px rgba(0,212,255,.35); }
+  .cmd{ height:24px; border-radius:99px; background:#0b1830; border:1px solid var(--line2);
+    display:flex; align-items:center; padding:0 10px; font-family:var(--mono); font-size:9px; color:var(--muted); }
+
+  /* numbered callout pins */
+  .pin{ position:absolute; width:24px; height:24px; border-radius:50%; display:grid; place-items:center;
+    background:var(--cyan); color:#04131f; font-weight:800; font-size:12px; font-family:var(--mono);
+    border:2px solid #eaf9ff; box-shadow:0 0 0 4px rgba(0,212,255,.18); z-index:3; }
+  .pin::after{ content:""; position:absolute; inset:-4px; border-radius:50%;
+    border:2px solid var(--cyan); opacity:.6; animation:ping 1.8s ease-out infinite; }
+  @keyframes ping{ 0%{transform:scale(1); opacity:.6} 100%{transform:scale(2.1); opacity:0} }
+
+  /* ---- how-to steps ---- */
+  .how h4{ margin:0 0 12px; font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--cyan);
+    text-transform:uppercase; }
+  .steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
+  .steps li{ display:flex; gap:11px; align-items:flex-start; font-size:14px; line-height:1.45; color:var(--ink); }
+  .steps li .n{ flex:0 0 auto; width:22px; height:22px; border-radius:50%; display:grid; place-items:center;
+    background:rgba(0,212,255,.12); border:1px solid var(--line2); color:var(--cyan);
+    font-family:var(--mono); font-size:11px; font-weight:700; margin-top:1px; }
+
+  /* hero (intro/outro) */
+  .hero{ grid-column:1 / -1; text-align:center; padding:14px 6px; }
+  .hero .big{ font-size:26px; font-weight:800; margin-bottom:10px; letter-spacing:.2px; }
+  .hero p{ color:var(--muted); font-size:15px; line-height:1.6; max-width:560px; margin:0 auto; }
+  .hero .mark{ font-size:40px; margin-bottom:8px; }
+  .fine{ margin-top:16px; font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:.3px; }
+
+  /* footer nav */
+  .foot{ display:flex; align-items:center; gap:14px; margin-top:20px; }
+  .dots{ display:flex; gap:6px; flex:1; flex-wrap:wrap; }
+  .dot{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.16); cursor:pointer; transition:.2s; }
+  .dot.on{ background:var(--cyan); transform:scale(1.3); }
+  .nav{ display:flex; gap:10px; }
+  button.b{ font-family:var(--mono); font-size:12px; letter-spacing:1px; padding:9px 16px; border-radius:9px; cursor:pointer;
+    border:1px solid var(--line2); background:transparent; color:var(--ink); }
+  button.b:hover{ background:rgba(255,255,255,.05) }
+  button.b:disabled{ opacity:.3; cursor:default }
+  button.b.primary{ background:linear-gradient(135deg,var(--cyan),#38bdf8); color:#04131f; border:none; font-weight:800; }
+  .kbd{ font-family:var(--mono); font-size:10px; color:var(--muted); margin-top:10px; text-align:center; }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <span class="step-count" id="stepCount">STEP 1 / 1</span>
+    <div class="bar"><i id="barFill"></i></div>
+    <button class="skip" id="skipBtn">Skip tour ✕</button>
+  </div>
+
+  <div class="card">
+    <div class="head" id="head">
+      <div class="badge" id="badge"></div>
+      <div>
+        <div class="htitle" id="htitle"></div>
+        <div class="htag" id="htag"></div>
+      </div>
+    </div>
+    <div class="body" id="bodyEl"></div>
+  </div>
+
+  <div class="foot">
+    <div class="dots" id="dots"></div>
+    <div class="nav">
+      <button class="b" id="backBtn">◀ Back</button>
+      <button class="b primary" id="nextBtn">Next ▶</button>
+    </div>
+  </div>
+  <div class="kbd">Use ← → arrows, swipe, or the buttons · Esc to skip</div>
+</div>
+
+<script>
+/* ============================================================
+   Guided tour. One slide per tab, plus an intro + outro.
+   Mockups are lightweight schematics with numbered callout pins
+   that line up 1:1 with the numbered "how to use" steps.
+   ============================================================ */
+var ICON = {
+  harvey:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
+  crm:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  dm:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+  content:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 10l4.553-2.069A1 1 0 0121 8.845v6.31a1 1 0 01-1.447.894L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>',
+  leads:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>',
+  reporting:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+  finance:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>',
+  email:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
+  tasks:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
+  help:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+};
+
+// build a schematic screen; `nav` = index (0-based) of the highlighted sidebar item
+function screen(navIdx, mainHTML){
+  var nav='';
+  for(var i=0;i<7;i++){ nav += '<div class="dotnav'+(i===navIdx?' on':'')+'"></div>'; }
+  return '<div class="scr"><div class="scr-side">'+nav+'</div><div class="scr-main">'+mainHTML+'</div>';
+}
+function pin(n,top,left){ return '<div class="pin" style="top:'+top+';left:'+left+'">'+n+'</div>'; }
+
+var STEPS = [
+  { hero:true, mark:'👋', icon:ICON.help, name:'Welcome — here’s how it all works', tag:'Guided tour',
+    heroTitle:'A quick tour of your command center',
+    heroBody:'This walks through every tab in the sidebar and exactly what to do in each one. It takes about a minute. Use the arrows, swipe, or Next — and you can skip anytime.' },
+
+  { icon:ICON.harvey, name:'Harvey', tag:'AI Assistant · your home base',
+    mock:screen(0,
+      '<div class="scr-top"><b>HARVEY</b><div class="fill"></div><span class="chip" style="background:rgba(0,212,255,.12);color:var(--cyan-soft)">Light</span></div>'+
+      '<div class="orb"></div>'+
+      '<div class="fill"></div>'+
+      '<div class="cmd">Type or paste a link…</div></div>'+
+      pin(1,'214px','30%')+pin(2,'120px','50%')+pin(3,'214px','68%')),
+    how:[
+      'Type any question in the command bar at the bottom — about leads, your numbers, "email this client" — then hit Transmit.',
+      'Tap the glowing orb (or switch on "Listen") to just talk to Harvey hands-free.',
+      'Paste an Instagram or TikTok link and Harvey watches the reel and breaks it down for you.'
+    ] },
+
+  { icon:ICON.crm, name:'CRM', tag:'Leads · Deals · Tasks',
+    mock:screen(1,
+      '<div class="scr-top"><b>CRM</b><div class="fill"></div><div class="cmd" style="height:14px;width:90px">Search…</div></div>'+
+      '<div class="blk" style="height:20px"></div>'+
+      '<div class="blk" style="flex:1;padding:8px;display:flex;flex-direction:column;gap:7px">'+
+        '<div class="rowline m"></div><div class="rowline s"></div><div class="rowline m"></div><div class="rowline s"></div></div>'+
+      '<div class="blk" style="height:22px;border-color:var(--line2)"></div></div>'+
+      pin(1,'20px','78%')+pin(2,'120px','40%')+pin(3,'222px','50%')),
+    how:[
+      'Search or scroll to find any lead in your database.',
+      'Click a lead to open their full profile and entire conversation history.',
+      'Tick several leads to email or call them all at once from the bulk bar.'
+    ] },
+
+  { icon:ICON.dm, name:'DM Agent', tag:'Instagram · SMS · Replies',
+    mock:screen(2,
+      '<div class="scr-top"><b>DM AGENT</b></div>'+
+      '<div style="display:flex;gap:6px">'+
+        '<div class="tile" style="flex:1"><div class="k">CONVOS</div><div class="v">702</div></div>'+
+        '<div class="tile" style="flex:1"><div class="k">CAPTURED</div><div class="v">211</div></div>'+
+        '<div class="tile" style="flex:1"><div class="k">TODAY</div><div class="v">18</div></div></div>'+
+      '<div class="blk" style="flex:1;padding:8px;display:flex;flex-direction:column;gap:7px">'+
+        '<div class="rowline m"></div><div class="rowline s"></div><div class="rowline m"></div></div></div>'+
+      pin(1,'44px','24%')+pin(2,'150px','50%')+pin(3,'150px','86%')),
+    how:[
+      'The tiles up top show live totals — conversations, phone numbers captured, new today.',
+      'Click any conversation to read the full back-and-forth in a pop-up.',
+      'Each card shows the client’s captured phone number right on it.'
+    ] },
+
+  { icon:ICON.content, name:'Content Manager', tag:'TikTok · Scores · Brain',
+    mock:screen(3,
+      '<div class="scr-top"><b>CONTENT</b></div>'+
+      '<div class="blk" style="height:40px;border-style:dashed;border-color:var(--line2);display:grid;place-items:center;font-family:var(--mono);font-size:9px;color:var(--muted)">⬆ Drop a raw video</div>'+
+      '<div style="display:flex;gap:6px;flex:1">'+
+        '<div class="tile" style="flex:1;display:flex;flex-direction:column;justify-content:space-between"><div class="rowline s"></div><div class="v">92</div></div>'+
+        '<div class="tile" style="flex:1;display:flex;flex-direction:column;justify-content:space-between"><div class="rowline s"></div><div class="v">78</div></div>'+
+        '<div class="tile" style="flex:1;display:flex;flex-direction:column;justify-content:space-between"><div class="rowline s"></div><div class="v">61</div></div></div>'+
+      '<div class="blk" style="height:22px;border-color:var(--line2)"></div></div>'+
+      pin(1,'40px','52%')+pin(2,'130px','30%')+pin(3,'224px','50%')),
+    how:[
+      'Drop in a raw video — the system cuts it into ready-to-post vertical clips with captions.',
+      'Every clip gets a viral score, so you post the strongest ones first.',
+      'Approve or reject clips in the Review Queue — that teaches Harvey your taste over time.'
+    ] },
+
+  { icon:ICON.leads, name:'Lead Nurture', tag:'Scoring · Hot · Cold',
+    mock:screen(4,
+      '<div class="scr-top"><b>LEAD NURTURE</b></div>'+
+      '<div style="display:flex;gap:6px;flex:1">'+
+        '<div class="blk" style="flex:1;padding:7px"><span class="chip" style="background:rgba(255,77,109,.18);color:#ff8ea0">HOT</span><div style="height:7px"></div><div class="rowline s"></div><div style="height:5px"></div><div class="rowline m"></div></div>'+
+        '<div class="blk" style="flex:1;padding:7px"><span class="chip" style="background:rgba(245,158,11,.18);color:#fbbf24">WARM</span><div style="height:7px"></div><div class="rowline m"></div></div>'+
+        '<div class="blk" style="flex:1;padding:7px"><span class="chip" style="background:rgba(148,163,184,.18);color:#cbd5e1">COLD</span><div style="height:7px"></div><div class="rowline s"></div></div></div>'+
+      '<div class="blk" style="height:20px"></div></div>'+
+      pin(1,'150px','20%')+pin(2,'222px','50%')+pin(3,'44px','20%')),
+    how:[
+      'Every lead is scored and sorted into Hot, Warm, or Cold automatically.',
+      'Follow-up drips send themselves, so no lead ever goes quiet.',
+      'Spend your day on the Hot column — those are ready to move.'
+    ] },
+
+  { icon:ICON.reporting, name:'Reporting', tag:'Digest · KPIs · Anomalies',
+    mock:screen(5,
+      '<div class="scr-top"><b>REPORTING</b></div>'+
+      '<div class="blk" style="height:34px;padding:7px"><div class="rowline m"></div><div style="height:5px"></div><div class="rowline s"></div></div>'+
+      '<div style="display:flex;gap:6px">'+
+        '<div class="tile" style="flex:1"><div class="k">VIEWS</div><div class="v">739K</div></div>'+
+        '<div class="tile" style="flex:1"><div class="k">CALLS</div><div class="v">26.9K</div></div>'+
+        '<div class="tile" style="flex:1"><div class="k">CLOSED</div><div class="v">4</div></div></div>'+
+      '<div class="blk" style="flex:1;display:grid;place-items:center;font-family:var(--mono);font-size:9px;color:var(--warn)">⚠ anomaly flagged</div></div>'+
+      pin(1,'40px','50%')+pin(2,'96px','24%')+pin(3,'210px','50%')),
+    how:[
+      'The daily digest sums up everything that happened while you were out.',
+      'KPI tiles track views, calls, and closings at a glance.',
+      'Anomaly flags warn you the moment a number moves the wrong way.'
+    ] },
+
+  { icon:ICON.finance, name:'Finance', tag:'GCI · Expenses · Pace',
+    mock:screen(6,
+      '<div class="scr-top"><b>FINANCE</b></div>'+
+      '<div class="blk" style="height:40px;padding:8px"><div class="k" style="font-family:var(--mono);font-size:9px;color:var(--muted)">BANKED vs $20M</div>'+
+        '<div style="height:8px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:7px;overflow:hidden"><i style="display:block;height:100%;width:30%;background:linear-gradient(90deg,var(--cyan),#38bdf8)"></i></div></div>'+
+      '<div style="display:flex;gap:6px">'+
+        '<div class="tile" style="flex:1"><div class="k">EXPENSES</div><div class="v">$1.2M</div></div>'+
+        '<div class="tile" style="flex:1"><div class="k">PACE</div><div class="v" style="color:var(--good)">ON</div></div></div>'+
+      '<div class="fill"></div><div class="blk" style="height:20px"></div></div>'+
+      pin(1,'48px','52%')+pin(2,'120px','30%')+pin(3,'120px','74%')),
+    how:[
+      'See commission banked versus your $20M goal at the top.',
+      'Track expenses against the income coming in.',
+      'The pace meter tells you if you’re on track to hit the number.'
+    ] },
+
+  { icon:ICON.email, name:'Email', tag:'Drip · Templates · Stats',
+    mock:screen(7,
+      '<div class="scr-top"><b>EMAIL</b><div class="fill"></div><span class="chip" style="background:rgba(255,77,109,.16);color:#ff8ea0">⚠ Reconnect Gmail</span></div>'+
+      '<div style="display:flex;gap:6px;flex:1">'+
+        '<div class="blk" style="width:38%;padding:7px;display:flex;flex-direction:column;gap:6px"><div class="rowline m"></div><div class="rowline s"></div><div class="rowline m"></div></div>'+
+        '<div class="blk" style="flex:1;padding:7px"><div class="rowline m"></div><div style="height:6px"></div><div class="rowline s"></div></div></div>'+
+      '<div class="blk" style="height:20px;border-color:var(--line2)"></div></div>'+
+      pin(1,'110px','24%')+pin(2,'110px','66%')+pin(3,'32px','82%')),
+    how:[
+      'Build and save reusable email templates for common situations.',
+      'Automated drip campaigns nurture your leads for you.',
+      'If a red banner appears, tap Reconnect Gmail so sending and inbox sync stay live.'
+    ] },
+
+  { icon:ICON.tasks, name:'Tasks', tag:'Command Center',
+    mock:screen(6,
+      '<div class="scr-top"><b>TASKS</b><div class="fill"></div><span class="chip" style="background:rgba(0,212,255,.12);color:var(--cyan-soft)">+ Add</span></div>'+
+      '<div style="display:flex;gap:6px;flex:1">'+
+        '<div class="blk" style="flex:1;padding:7px"><div class="k" style="font-family:var(--mono);font-size:8px;color:var(--muted)">TODAY</div><div style="height:6px"></div><div class="rowline m"></div><div style="height:5px"></div><div class="rowline s"></div></div>'+
+        '<div class="blk" style="flex:1;padding:7px"><div class="k" style="font-family:var(--mono);font-size:8px;color:var(--muted)">WEEK</div><div style="height:6px"></div><div class="rowline s"></div></div>'+
+        '<div class="blk" style="flex:1;padding:7px"><div class="k" style="font-family:var(--mono);font-size:8px;color:var(--muted)">MONTH</div><div style="height:6px"></div><div class="rowline m"></div></div></div></div>'+
+      pin(1,'150px','20%')+pin(2,'32px','86%')+pin(3,'150px','52%')),
+    how:[
+      'Tasks are grouped by urgency — today, this week, this month.',
+      'Hit Add to create a task and assign it to you, Marco, or Harvey.',
+      'Check items off as they get done to keep the board clean.'
+    ] },
+
+  { hero:true, mark:'✅', icon:ICON.help, name:'You’re all set', tag:'Tour complete',
+    heroTitle:'That’s the whole system',
+    heroBody:'Open any tab from the sidebar on the left. Harvey is always one message away — just type or talk. You can reopen this tour anytime from the "How to Use" tab.',
+    fine:'Note: Voice Clone moved out of the sidebar but still works — open /voice-clone directly or ask Harvey.' }
+];
+
+var i = 0;
+var bodyEl = document.getElementById('bodyEl');
+var dotsEl = document.getElementById('dots');
+var backBtn = document.getElementById('backBtn');
+var nextBtn = document.getElementById('nextBtn');
+
+function finish(){
+  try{
+    if (window.parent && window.parent !== window){
+      window.parent.postMessage({ type:'app-navigate', tab:'harvey' }, '*');
+      return;
+    }
+  }catch(_){}
+  window.location.href = '/shell?tab=harvey';
+}
+
+function render(){
+  var s = STEPS[i];
+  document.getElementById('badge').innerHTML = s.icon;
+  document.getElementById('htitle').textContent = s.name;
+  document.getElementById('htag').textContent = s.tag;
+  document.getElementById('stepCount').textContent = 'STEP ' + (i+1) + ' / ' + STEPS.length;
+  document.getElementById('barFill').style.width = ((i+1)/STEPS.length*100) + '%';
+
+  if (s.hero){
+    bodyEl.innerHTML =
+      '<div class="hero"><div class="mark">'+s.mark+'</div>'+
+      '<div class="big">'+s.heroTitle+'</div><p>'+s.heroBody+'</p>'+
+      (s.fine ? '<div class="fine">'+s.fine+'</div>' : '')+'</div>';
+  } else {
+    var lis = s.how.map(function(t,idx){
+      return '<li><span class="n">'+(idx+1)+'</span><span>'+t+'</span></li>';
+    }).join('');
+    bodyEl.innerHTML =
+      '<div class="mock">'+s.mock+'</div>'+
+      '<div class="how"><h4>How to use it</h4><ul class="steps">'+lis+'</ul></div>';
+  }
+
+  // dots
+  dotsEl.innerHTML = STEPS.map(function(_,d){
+    return '<span class="dot'+(d===i?' on':'')+'" data-i="'+d+'"></span>';
+  }).join('');
+
+  backBtn.disabled = (i===0);
+  var last = (i===STEPS.length-1);
+  nextBtn.textContent = last ? 'Got it — go to Harvey' : 'Next ▶';
+}
+
+function go(n){ if(n<0||n>=STEPS.length) return; i=n; render(); }
+function next(){ if(i===STEPS.length-1){ finish(); } else { go(i+1); } }
+function back(){ go(i-1); }
+
+nextBtn.onclick = next;
+backBtn.onclick = back;
+document.getElementById('skipBtn').onclick = finish;
+dotsEl.onclick = function(e){ var d=e.target.closest('.dot'); if(d) go(+d.dataset.i); };
+
+document.addEventListener('keydown', function(e){
+  if(e.key==='ArrowRight') next();
+  else if(e.key==='ArrowLeft') back();
+  else if(e.key==='Escape') finish();
+});
+
+// swipe
+var sx=null;
+document.addEventListener('touchstart', function(e){ sx=e.touches[0].clientX; }, {passive:true});
+document.addEventListener('touchend', function(e){
+  if(sx===null) return;
+  var dx = e.changedTouches[0].clientX - sx; sx=null;
+  if(Math.abs(dx)<45) return;
+  if(dx<0) next(); else back();
+}, {passive:true});
+
+render();
+</script>

@@ -782,6 +782,12 @@ app.get("/voice-clone", (_req, res) => {
   res.sendFile(path.join(publicDir, "voice-clone.html"));
 });
 
+// Guided how-to tour (replaced the Voice Clone sidebar tab; /voice-clone above
+// still works, so the voice-clone functionality is untouched — just untabbed).
+app.get("/how-to", (_req, res) => {
+  res.sendFile(path.join(publicDir, "how-to.html"));
+});
+
 const voiceCloneDataRoot = resolveVoiceCloneDataRoot();
 app.use("/voice-clone-files", express.static(voiceCloneDataRoot));
 

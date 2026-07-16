@@ -400,6 +400,11 @@ app.get("/finance", (_req, res) => {
 app.get("/voice-clone", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "voice-clone.html"));
 });
+// Guided how-to tour (replaced the Voice Clone sidebar tab; /voice-clone above
+// still works, so the voice-clone functionality is untouched — just untabbed).
+app.get("/how-to", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "how-to.html"));
+});
 const voiceCloneDataRoot = (0, voiceCloneStore_js_1.resolveVoiceCloneDataRoot)();
 app.use("/voice-clone-files", express_1.default.static(voiceCloneDataRoot));
 function mapVoiceCloneFileUrl(filePath, voxcpmApiUrl) {
