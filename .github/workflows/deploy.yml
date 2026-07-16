@@ -13,11 +13,33 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      # Build the image on the GitHub runner (Docker is preinstalled) and push
-      # to Fly, instead of Fly's --remote-only builder, which was repeatedly
-      # unavailable/crashing mid-build (failed to list workers / rpc EOF).
-      - name: Deploy marco-90-automation
-        run: flyctl deploy --local-only -c fly.toml
+      # Buildx enables the cross-run layer cache below. Without it every deploy
+      # reinstalled torch + mediapipe + whisper from scratch (~5 min) even for a
+      # one-line source change.
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Fly registry
+        run: flyctl auth docker
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # Build on the runner and push to Fly's registry WITH a GitHub Actions
+      # layer cache that persists between runs. Combined with the Dockerfile's
+      # deps-before-source ordering, a source-only deploy reuses every heavy
+      # dependency layer and only rebuilds the cheap tail. Fly's --remote-only
+      # builder is intentionally avoided (it was repeatedly crashing mid-build:
+      # failed to list workers / rpc EOF).
+      - name: Build & push image (cross-run layer cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: registry.fly.io/marco-90-automation:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy prebuilt image to Fly
+        run: flyctl deploy --image registry.fly.io/marco-90-automation:${{ github.sha }} -c fly.toml
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 

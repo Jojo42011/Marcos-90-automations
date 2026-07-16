@@ -1,5 +1,12 @@
 # Marco Puga Realty — Automation System
 # Multi-service: Node.js (port 3000) + OpenShorts Python sidecar (port 8000)
+#
+# LAYER ORDER IS DELIBERATE FOR DEPLOY SPEED. Everything that does NOT depend on
+# app source — apt packages, npm deps, the heavy torch/mediapipe/whisper pip
+# installs, the OpenShorts + CapCut clones — is installed FIRST, before any app
+# source is copied in. So a normal source-only deploy (a Python/TS/HTML change)
+# reuses all those cached layers and only re-runs the cheap tail, turning a
+# ~9-minute cold build into a ~1-2 minute one. KEEP SOURCE COPYs AT THE BOTTOM.
 
 FROM node:20-bookworm-slim
 
@@ -36,18 +43,13 @@ RUN mkdir -p /usr/share/fonts/truetype/archivo-black && \
       "https://raw.githubusercontent.com/google/fonts/main/ofl/archivoblack/ArchivoBlack-Regular.ttf" && \
     fc-cache -f
 
+# ── Node dependencies (cached unless package*.json changes) ────────────────
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
-COPY tsconfig.json ./
-COPY src ./src
-COPY config ./config
-COPY public ./public
-COPY services ./services
-COPY scripts ./scripts
-COPY supervisord.conf ./supervisord.conf
-RUN npm run build && npm prune --omit=dev && npm cache clean --force && rm -rf /root/.npm
 
+# ── OpenShorts engine clone + Python deps (cached unless requirements change) ─
+# Source-independent, so these stay cached across every source-only deploy.
 WORKDIR /app/services/openshorts
 
 RUN if [ ! -f "app.py" ]; then \
@@ -84,17 +86,10 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -r /tmp/requir
 RUN python3 -c "import main; print('OpenShorts main import OK:', main.__file__)"
 RUN python3 -c "from youtube_transcript_api import YouTubeTranscriptApi; print('youtube-transcript-api import OK')"
 
-COPY services/openshorts/prompts_marco.py ./prompts_marco.py
-COPY services/openshorts/llm_analysis.py ./llm_analysis.py
-COPY services/openshorts/main_marco.py ./main_marco.py
-COPY services/openshorts/captions_marco.py ./captions_marco.py
-COPY services/openshorts/gaze_analysis_marco.py ./gaze_analysis_marco.py
-COPY services/openshorts/take_analysis_marco.py ./take_analysis_marco.py
-COPY services/openshorts/app_marco.py ./app_marco.py
-
 # ── CapCut draft-export service (ashreo/CapCutAPI, pinned commit) ──────────
 # Generates CapCut DRAFT projects (clip + captions) the user opens in the
-# CapCut desktop app; it renders nothing itself. See services/capcutapi-marco.
+# CapCut desktop app; it renders nothing itself. Clone + deps are source-
+# independent, so they cache too.
 WORKDIR /app/services
 RUN git clone https://github.com/ashreo/CapCutAPI.git capcutapi \
     && cd capcutapi \
@@ -103,14 +98,37 @@ WORKDIR /app/services/capcutapi
 # Explicit dep list on purpose: upstream requirements.txt pulls oss2 (native
 # builds, cloud-upload only) which the oss.py override below removes the need for.
 RUN python3 -m pip install --no-cache-dir --break-system-packages flask requests imageio psutil
-COPY services/capcutapi-marco/config.json ./config.json
-COPY services/capcutapi-marco/oss.py ./oss.py
+
+# ════════════════════════════════════════════════════════════════════════════
+# APP SOURCE — everything below changes often and is intentionally LAST so a
+# source-only deploy reuses every cached layer above. Nothing heavy here.
+# ════════════════════════════════════════════════════════════════════════════
+WORKDIR /app
+COPY tsconfig.json ./
+COPY config ./config
+COPY src ./src
+RUN npm run build && npm prune --omit=dev && npm cache clean --force && rm -rf /root/.npm
+COPY public ./public
+COPY scripts ./scripts
+COPY supervisord.conf ./supervisord.conf
+
+# Marco source overrides — the whole services tree over the clones. COPY merges:
+# the cloned OpenShorts/CapCut engine files stay, marco *.py modules and the
+# capcutapi-marco assets are added on top. This is the single catch-all that
+# guarantees every marco module (reel_analysis, gaze, emoji_fx, …) is present.
+COPY services ./services
+
+# Apply the CapCut overrides + text_segment shim onto the cloned engine.
+COPY services/capcutapi-marco/config.json /app/services/capcutapi/config.json
+COPY services/capcutapi-marco/oss.py /app/services/capcutapi/oss.py
 COPY services/capcutapi-marco/text_segment_shim.py /tmp/text_segment_shim.py
-RUN printf '\n\n' >> pyJianYingDraft/text_segment.py \
-    && cat /tmp/text_segment_shim.py >> pyJianYingDraft/text_segment.py \
+RUN printf '\n\n' >> /app/services/capcutapi/pyJianYingDraft/text_segment.py \
+    && cat /tmp/text_segment_shim.py >> /app/services/capcutapi/pyJianYingDraft/text_segment.py \
     && rm /tmp/text_segment_shim.py
-# Fail the image build if the service can't even import (missing dep / broken patch).
-RUN python3 -c "import capcut_server; print('CapCutAPI import OK')"
+
+# Fail the image build if the sidecar services can't import after overrides.
+RUN cd /app/services/openshorts && python3 -c "import main; print('OpenShorts engine OK')"
+RUN cd /app/services/capcutapi && python3 -c "import capcut_server; print('CapCutAPI import OK')"
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
