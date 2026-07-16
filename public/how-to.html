@@ -1,6 +1,6 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>How to Use — Marco Puga Command Center</title>
+<title>How to Use · Marco Puga Command Center</title>
 <style>
   :root{
     --bg:#060b14; --bg2:#0a1424; --card:#0d1a2e; --line:rgba(0,212,255,.18);
@@ -169,14 +169,14 @@ function shotHTML(key, pins){
 }
 
 var STEPS = [
-  { hero:true, mark:'👋', icon:ICON.help, name:'Welcome — here’s how it all works', tag:'Guided tour',
+  { hero:true, mark:'👋', icon:ICON.help, name:'Welcome, here’s how it all works', tag:'Guided tour',
     heroTitle:'A quick tour of your command center',
-    heroBody:'These are real screenshots of every tab in your sidebar, with the key spots numbered. It takes about a minute. Use the arrows, swipe, or Next — and you can skip anytime.' },
+    heroBody:'These are real screenshots of every tab in your sidebar, with the key spots numbered. It takes about a minute. Use the arrows, swipe, or Next, and you can skip anytime.' },
 
   { icon:ICON.harvey, name:'Harvey', tag:'AI Assistant · your home base',
     shot:'harvey', pins:[['93%','28%'],['52%','50%'],['93%','66%']],
     how:[
-      'Type any command in the bar at the bottom — about leads, your numbers, anything — and hit Transmit.',
+      'Type any command in the bar at the bottom (about leads, your numbers, anything) and hit Transmit.',
       'Tap the core (or tick “Listen for Harvey”) to talk to him hands-free.',
       'Paste an Instagram or TikTok link right here and Harvey breaks the reel down for you.'
     ] },
@@ -192,7 +192,7 @@ var STEPS = [
   { icon:ICON.dm, name:'DM Agent', tag:'Instagram · SMS · Replies',
     shot:'dm', pins:[['6%','14%'],['13%','40%'],['6%','66%']],
     how:[
-      'The tiles up top show live totals — conversations, messages, new today.',
+      'The tiles up top show live totals: conversations, messages, new today.',
       'Click any conversation to read the full thread in a pop-up.',
       'The Phone Captures tile tracks every number the agent has collected.'
     ] },
@@ -200,9 +200,9 @@ var STEPS = [
   { icon:ICON.content, name:'Content Manager', tag:'TikTok · Scores · Brain',
     shot:'content', pins:[['36%','8%'],['17%','48%'],['42%','8%']],
     how:[
-      'Drop a raw video into Upload & Clip — it becomes ready-to-post vertical clips.',
+      'Drop a raw video into Upload & Clip and it becomes ready-to-post vertical clips.',
       'Track videos, pipeline status, and weekly progress across the top.',
-      'Approve or reject clips in the Review Queue — that teaches Harvey your taste.'
+      'Approve or reject clips in the Review Queue, which teaches Harvey your taste.'
     ] },
 
   { icon:ICON.leads, name:'Lead Nurture', tag:'Scoring · Hot · Cold',
@@ -210,13 +210,13 @@ var STEPS = [
     how:[
       'Every lead is auto-sorted Hot, Warm, or Cold.',
       'The tiles show how many sit in each tier right now.',
-      'Re-score anytime — follow-up drips then run themselves.'
+      'Re-score anytime, and follow-up drips run themselves.'
     ] },
 
   { icon:ICON.reporting, name:'Reporting', tag:'Digest · KPIs · Anomalies',
     shot:'reporting', pins:[['40%','50%'],['9%','22%'],['46%','7%']],
     how:[
-      'The daily digest recaps everything — it auto-runs at 7am Central.',
+      'The daily digest recaps everything and auto-runs at 7am Central.',
       'Weekly KPIs and anomaly flags live in these tabs.',
       'Need it now? Generate a digest on demand with this button.'
     ] },
@@ -233,22 +233,22 @@ var STEPS = [
     shot:'email', pins:[['5%','82%'],['74%','24%'],['30%','25%']],
     how:[
       'If a red banner shows, tap Reconnect Gmail so sending + inbox sync stay live.',
-      'Automated drip sequences nurture your leads — they’re listed here.',
+      'Automated drip sequences nurture your leads, and they’re listed here.',
       'Track sent, open rate, replies, and active drips across the top.'
     ] },
 
   { icon:ICON.tasks, name:'Tasks', tag:'Command Center',
     shot:'tasks', pins:[['22%','10%'],['3%','94%'],['41%','30%']],
     how:[
-      'Tasks are grouped by urgency — Urgent, Today, Tomorrow, Week, Month.',
+      'Tasks are grouped by urgency: Urgent, Today, Tomorrow, Week, Month.',
       'Add one from the top bar (or the quick-add line under it).',
       'Hit Mark Done as you finish each card to keep the board clean.'
     ] },
 
   { hero:true, mark:'✅', icon:ICON.help, name:'You’re all set', tag:'Tour complete',
     heroTitle:'That’s the whole system',
-    heroBody:'Open any tab from the sidebar on the left. Harvey is always one message away — just type or talk. You can reopen this tour anytime from the “How to Use” tab.',
-    fine:'Note: Voice Clone moved out of the sidebar but still works — open /voice-clone directly or ask Harvey.' }
+    heroBody:'Open any tab from the sidebar on the left. Harvey is always one message away, just type or talk. You can reopen this tour anytime from the “How to Use” tab.',
+    fine:'Note: Voice Clone moved out of the sidebar but still works; open /voice-clone directly or ask Harvey.' }
 ];
 
 var i = 0;
@@ -296,7 +296,7 @@ function render(){
 
   backBtn.disabled = (i===0);
   var last = (i===STEPS.length-1);
-  nextBtn.textContent = last ? 'Got it — go to Harvey' : 'Next ▶';
+  nextBtn.textContent = last ? 'Got it, go to Harvey' : 'Next ▶';
 }
 
 function go(n){ if(n<0||n>=STEPS.length) return; i=n; render(); }
