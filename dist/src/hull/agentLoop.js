@@ -103,13 +103,15 @@ async function runAgentLoop(opts) {
             system += `\n\n${opts.channelContext}`;
         }
     }
-    const model = opts.fastMode
-        ? (0, modelRouting_js_1.getHaikuModel)()
-        : opts.voiceMode
+    const model = opts.fullMode
+        ? (0, modelRouting_js_1.getAethonModel)()
+        : opts.fastMode
             ? (0, modelRouting_js_1.getHaikuModel)()
-            : (0, modelRouting_js_1.needsSonnet)(opts.message)
-                ? (0, modelRouting_js_1.getAethonModel)()
-                : (0, modelRouting_js_1.getHaikuModel)();
+            : opts.voiceMode
+                ? (0, modelRouting_js_1.getHaikuModel)()
+                : (0, modelRouting_js_1.needsSonnet)(opts.message)
+                    ? (0, modelRouting_js_1.getAethonModel)()
+                    : (0, modelRouting_js_1.getHaikuModel)();
     const messages = [...(opts.history || []), { role: "user", content: opts.message }];
     const hullTools = (0, tools_js_1.getHullToolDefinitions)({ whatsappSend: opts.ownerMode });
     const sonnetTools = !opts.fastMode && model === (0, modelRouting_js_1.getAethonModel)();
@@ -122,7 +124,7 @@ async function runAgentLoop(opts) {
     const gmailTools = (0, index_js_2.isGmailConfigured)() &&
         (sonnetTools || ownerWhatsAppTools || voiceTools || emailIntent || opts.ownerMode);
     const nurtureTools = sonnetTools || ownerWhatsAppTools || voiceTools || nurtureIntent || opts.ownerMode;
-    const toolsEnabled = sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools;
+    const toolsEnabled = Boolean(opts.fullMode) || sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools;
     if (gmailTools) {
         system +=
             "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send with recipient, subject, and body before replying. For Marco's inbox use to=\"marco\" or his full email if you know it. NEVER say an email was sent unless gmail_send returned ok:true with a messageId — if the tool returns error, report that error to Marco.";

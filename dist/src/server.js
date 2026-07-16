@@ -1378,11 +1378,15 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
         return;
     }
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
+    // The dedicated Harvey chat (hull-chat) sends full:true so Harvey always runs
+    // the smartest path with every business/memory tool available.
+    const fullMode = req.body?.full === true || req.body?.full === "true";
     try {
         const result = await (0, index_js_21.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
+            fullMode,
         });
         res.status(200).json(result);
     }

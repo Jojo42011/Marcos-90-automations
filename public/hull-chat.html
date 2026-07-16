@@ -34,13 +34,13 @@ const AGENTS = {
     accent: "#00d4ff",
     column: "720px",
     emptyTitle: "How can I help, Marco?",
-    emptySub: "Ask about leads, your numbers, or drop a reel link to break it down.",
+    emptySub: "I have full view of your whole system — leads, finance, DMs, content, tasks, and everything I've learned. Ask me anything.",
     placeholder: "Message Harvey…",
     chips: [
       "How many hot leads do I have?",
       "What's my pace to $20M?",
       "Summarize today's DMs",
-      "Draft a follow-up to my newest lead",
+      "Which of my videos are performing best?",
     ],
     navLinks: [],            // e.g. [{ label:"Full console", href:"/jarvis" }]
     footnote: "Harvey can make mistakes. Double-check anything important.",
@@ -48,7 +48,9 @@ const AGENTS = {
       const res = await fetch(withToken("/api/jarvis/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, sessionId }),
+        // full:true → Harvey always runs the smartest path with every tool, so
+        // he has full live knowledge of the system on every message.
+        body: JSON.stringify({ message, sessionId, full: true }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || ("Request failed (" + res.status + ")"));

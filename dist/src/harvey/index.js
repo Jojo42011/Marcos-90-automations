@@ -65,6 +65,7 @@ async function runHarveyChat(input) {
                 message: trimmed,
                 history: sessionMemory,
                 voiceMode: input.voiceMode,
+                fullMode: input.fullMode,
                 onToken: input.onToken,
             });
             speech = result.speech;

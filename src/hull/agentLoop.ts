@@ -42,6 +42,10 @@ export interface AgentLoopOptions {
   ownerMode?: boolean;
   /** Per-contact context line (e.g. Jahan DM). */
   channelContext?: string;
+  /** Force the smartest path: Sonnet + every business/memory tool, regardless
+   *  of keyword triggers — used by the dedicated Harvey chat so it always has
+   *  full knowledge of the system (leads, finance, DMs, content, memory…). */
+  fullMode?: boolean;
   onToken?: (token: string) => void;
 }
 
@@ -124,7 +128,9 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     }
   }
 
-  const model = opts.fastMode
+  const model = opts.fullMode
+    ? getAethonModel()
+    : opts.fastMode
     ? getHaikuModel()
     : opts.voiceMode
       ? getHaikuModel()
@@ -149,7 +155,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     (sonnetTools || ownerWhatsAppTools || voiceTools || emailIntent || opts.ownerMode);
   const nurtureTools =
     sonnetTools || ownerWhatsAppTools || voiceTools || nurtureIntent || opts.ownerMode;
-  const toolsEnabled = sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools;
+  const toolsEnabled = Boolean(opts.fullMode) || sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools;
   if (gmailTools) {
     system +=
       "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send with recipient, subject, and body before replying. For Marco's inbox use to=\"marco\" or his full email if you know it. NEVER say an email was sent unless gmail_send returned ok:true with a messageId — if the tool returns error, report that error to Marco.";

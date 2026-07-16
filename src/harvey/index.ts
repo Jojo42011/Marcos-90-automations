@@ -38,6 +38,8 @@ export async function runHarveyChat(input: {
   sessionId?: string;
   deps?: PerceptionDeps;
   voiceMode?: boolean;
+  /** Dedicated Harvey chat: always run the smartest path with full tools. */
+  fullMode?: boolean;
   onToken?: (token: string) => void;
 }): Promise<HarveyChatResponse> {
   const sessionId = getOrCreateSessionId(input.sessionId);
@@ -77,6 +79,7 @@ export async function runHarveyChat(input: {
         message: trimmed,
         history: sessionMemory,
         voiceMode: input.voiceMode,
+        fullMode: input.fullMode,
         onToken: input.onToken,
       });
       speech = result.speech;
