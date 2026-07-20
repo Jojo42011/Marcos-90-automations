@@ -167,16 +167,36 @@
   .leads-top h1 small{font-size:15px;color:var(--muted);margin-left:4px}
   .leads-top .acts{display:flex;gap:10px}
   .tbl-scroll{overflow-x:auto;flex:1}
-  table.leads{border-collapse:collapse;width:100%;min-width:1150px;font-size:13px}
-  table.leads th{text-align:left;color:#98a1aa;font-size:11.5px;font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:#fff}
+  table.leads{border-collapse:collapse;width:100%;min-width:1720px;font-size:13px}
+  table.leads th{text-align:left;color:#98a1aa;font-size:11.5px;font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:#fff;z-index:2}
   table.leads td{padding:14px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle;white-space:nowrap}
-  .lead-name{color:#5b6570;font-size:14px;font-weight:500}
+  .sarr{color:#c2cad1;font-size:11px;margin-left:2px}
+  /* Frozen first two columns (checkbox + Name) — stay put while scrolling wide. */
+  .fx{position:sticky;background:#fff}
+  .fx1{left:0;z-index:3}
+  th.fx1{z-index:4}
+  .fx2{left:44px;z-index:3;box-shadow:1px 0 0 var(--line-2)}
+  th.fx2{z-index:4}
+  .lead-name{color:#5b6570;font-size:14px;font-weight:500;cursor:pointer}
   .intent{width:22px;height:22px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:1.5px solid}
   .intent.b{color:#4a90d9;border-color:#bcd8f2}
   .intent.s{color:#c99a34;border-color:#eeddb4}
-  .status{display:inline-flex;align-items:center;gap:6px;color:#fff;border-radius:15px;padding:5px 12px;font-size:11px;font-weight:700;letter-spacing:.03em}
-  .stage{color:#7b8590;font-weight:600;font-size:12px;display:inline-flex;align-items:center;gap:5px}
-  .stage svg{color:#b3bbc3}
+  .status{display:inline-flex;align-items:center;justify-content:center;gap:6px;color:#fff;border-radius:999px;min-width:120px;height:24px;padding:0 12px;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+  /* Brivity stage = neutral gray rounded-full pill (not colored). */
+  .stage{background:#edf0f2;color:#5b6570;font-weight:700;font-size:11px;text-transform:uppercase;border-radius:999px;height:24px;padding:0 12px;display:inline-flex;align-items:center;gap:5px}
+  .stage svg{color:#9aa5b1}
+  .pa{display:flex;align-items:center;gap:8px;color:#5b6570}
+  .pa .agav{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#7f93c9,#5b6fae);flex:0 0 auto}
+  .mut-cell{color:#8a939d;font-size:12.5px}
+  /* filter chip bar */
+  .filter-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:0 22px 12px}
+  .fb-label{color:#98a1aa;font-size:12px;font-style:italic;margin-right:2px}
+  .fchip{display:inline-flex;align-items:center;gap:7px;background:#eef7f5;color:var(--teal-strong);border:1px solid #cfe9e5;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600}
+  .fchip .x{color:#8fb9b3;cursor:pointer;font-size:13px}
+  .fb-link{color:var(--teal);font-size:12px;font-weight:600;margin-left:4px}
+  .sf-list{background:#fafbfc;border-top:1px solid var(--line-2)}
+  .sf-list .sf{padding:8px 18px 8px 30px;color:#7b8590;font-size:12.5px;white-space:normal;line-height:1.3}
+  .sf-list .sf:hover{background:#f2f6f5;color:var(--teal)}
   .aicons{display:flex;gap:6px}
   .ai{width:28px;height:28px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center}
   .ai.mut{background:#d7ecea;color:#9fd2cb}
@@ -395,23 +415,52 @@
         <div class="h"><b>Leads</b><span class="add">+</span></div>
         <a class="on">All Leads <span class="c" id="lnAll">0</span></a>
         <a>Valuations <span class="c">0</span></a>
-        <a>Site Leads <span class="c">0</span></a>
-        <a>Website IDX <span class="c" id="lnIdx">0</span></a>
+        <a>Brivity Leads <span class="c">0</span></a>
+        <a>Brivity IDX <span class="c" id="lnIdx">0</span></a>
+        <a>Kwkly <span class="c">0</span></a>
         <a>Zillow <span class="c">1</span></a>
         <a>Lead Ponds <span class="c">›</span></a>
-        <a>Smart Filters <span class="c">12 ›</span></a>
+        <a id="smartFiltersToggle">Smart Filters <span class="c">12 ›</span></a>
+        <div id="smartFiltersList" class="sf-list" style="display:none">
+          <a class="sf">Buyers with email and no Listing Alert</a>
+          <a class="sf">Has Market Report, no task, no outreach 30 days</a>
+          <a class="sf">Hot leads (buy/sell in 3 months)</a>
+          <a class="sf">Last 30 days: site visit, no task/contact</a>
+          <a class="sf">No Auto Plan</a>
+          <a class="sf">No Market Report — Contacts w/ Email + Address</a>
+          <a class="sf">Overdue Tasks</a>
+          <a class="sf">Partial Leads</a>
+          <a class="sf">Past clients, no task/outreach 30 days</a>
+          <a class="sf">This week: site visit, no task/contact</a>
+          <a class="sf">Today: site visit, no task/contact</a>
+          <a class="sf">Watch/Nurture, no task/contact 30 days</a>
+        </div>
       </div>
       <div class="leads-main">
         <div class="leads-top">
           <h1>Leads <small id="ltCount"></small></h1>
-          <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn ghost">FILTER</button></div>
+          <div class="acts"><button class="pill-btn ghost">ACTIONS ▾</button><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button></div>
+        </div>
+        <div class="filter-bar">
+          <span class="fb-label">filtered</span>
+          <span class="fchip">Status: Inactive <span class="x">×</span></span>
+          <span class="fchip">Status: Archived <span class="x">×</span></span>
+          <span class="fchip">Status: Trash <span class="x">×</span></span>
+          <a class="fb-link">Save Filter</a>
+          <a class="fb-link">Clear All</a>
         </div>
         <div class="tbl-scroll">
           <table class="leads">
             <thead><tr>
-              <th><input type="checkbox" class="cb"></th><th>Name</th><th>Intent</th><th>Status</th><th>Stage</th>
+              <th class="fx fx1"><input type="checkbox" class="cb"></th>
+              <th class="fx fx2">Name <span class="sarr">⇅</span></th>
+              <th>Intent</th>
+              <th>Status <span class="sarr">⇅</span></th>
+              <th>Stage <span class="sarr">⇅</span></th>
               <th>Email</th><th>Phone</th><th>SMS</th><th>Appt.</th><th>Mail</th><th>Other</th>
               <th>Address</th><th>Last Interaction</th><th>Next Due Tasks</th>
+              <th>Primary Agent</th><th>Auto Plans</th><th>Birthdate</th><th>Home Anniversary</th>
+              <th>Source</th><th>Registered</th>
             </tr></thead>
             <tbody id="leadRows"></tbody>
           </table>
@@ -761,16 +810,23 @@ function renderLeads(){
   document.getElementById("leadRows").innerHTML=rows.map(l=>{
     const sm=STATUS_META[l.statusDisp]||STATUS_META.nurture;
     const noEmail=!l.email;
+    const reg=l.createdAt?new Date(l.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"—";
     return '<tr>'+
-      '<td><input type="checkbox" class="cb"></td>'+
-      '<td><span class="lead-name ldlink" data-lid="'+esc(l.id)+'">'+esc(l.name)+'</span></td>'+
+      '<td class="fx fx1"><input type="checkbox" class="cb"></td>'+
+      '<td class="fx fx2"><span class="lead-name ldlink" data-lid="'+esc(l.id)+'">'+esc(l.name)+'</span></td>'+
       '<td><span class="intent '+(l.intent==="buyer"?"b":"s")+'">'+(l.intent==="buyer"?"B":"S")+'</span></td>'+
       '<td><span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
       '<td><span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
       '<td>'+actIcon("email",noEmail)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!l.address)+'</td><td>'+actIcon("other")+'</td>'+
       '<td>'+(l.address?'<div class="addr">'+esc(l.address)+'</div>':'<span style="color:#c2cad1">—</span>')+'</td>'+
-      '<td><div class="li"><div class="lab">'+esc(l.lastLabel)+'</div><div class="tm">'+relTime(l.lastActivity)+'</div></div></td>'+
+      '<td><div class="li"><span class="lab">'+esc(l.lastLabel)+'</span> <span class="tm">'+relTime(l.lastActivity)+'</span></div></td>'+
       '<td><div class="due '+(l.due.label==="Due Today"?"today":"up")+'">'+l.due.label+'<span class="d">'+l.due.date+'</span></div></td>'+
+      '<td><div class="pa"><span class="agav has-marco-photo"></span><span>Marco Puga</span></div></td>'+
+      '<td class="mut-cell">'+(l.autoPlan?esc(l.autoPlan):"—")+'</td>'+
+      '<td class="mut-cell">—</td>'+
+      '<td class="mut-cell">—</td>'+
+      '<td class="mut-cell">'+esc(l.source||"—")+'</td>'+
+      '<td class="mut-cell">'+esc(reg)+'</td>'+
     '</tr>';
   }).join("");
   // pager
@@ -838,6 +894,10 @@ document.querySelectorAll('.leads-nav a[data-bucket]').forEach(a=>a.addEventList
   document.querySelectorAll('.leads-nav a[data-bucket]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
   pBucket=a.getAttribute("data-bucket");pPage=1;renderPeople();
 }));
+
+// Smart Filters expand/collapse in the Leads sidebar.
+(function(){var t=document.getElementById("smartFiltersToggle"),l=document.getElementById("smartFiltersList");
+  if(t&&l)t.addEventListener("click",function(){l.style.display=l.style.display==="none"?"block":"none";});})();
 
 /* ===== Opportunities ===== */
 const OPP_TYPE={Expired:{c:"var(--st-new)"},FSBO:{c:"#4a90d9"},"Pre-Foreclosure":{c:"var(--st-nurture)"}};
