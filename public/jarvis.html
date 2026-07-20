@@ -352,11 +352,13 @@
       text-shadow: 0 0 18px rgba(245,158,11,0.6);
     }
 
-    /* radial tick mark ring around core */
+    /* radial tick mark ring around core — hidden: the plasma core is the whole
+       visual now (matches the reference animation, no HUD chrome around it). */
     .j-tick-ring {
       position: absolute; inset: 0;
       pointer-events: none; z-index: 1;
       opacity: 0.55;
+      display: none;
     }
 
     /* Canvas core / orb */
@@ -380,11 +382,14 @@
       z-index: 0;
     }
 
-    /* Mic icon overlay */
+    /* Mic icon overlay — hidden: the plasma core stands alone (tap it to speak,
+       per the hint below). Kept in the DOM so state code that references it
+       doesn't need changing. */
     .j-mic-icon {
       position: absolute;
       width: 14%; height: 14%;
-      display: flex; align-items: center; justify-content: center;
+      display: none;
+      align-items: center; justify-content: center;
       pointer-events: none; z-index: 2;
       transition: transform 0.4s ease, filter 0.25s;
     }
@@ -1454,10 +1459,10 @@
 
       const orbCanvas = document.getElementById("harvey-mic-btn");
       if (orbCanvas) {
-        orbCanvas.style.filter = isDark
-          ? ""
-          : "saturate(1.8) brightness(0.72) contrast(1.2)";
-        orbCanvas.style.opacity = isDark ? "" : "1";
+        // The plasma core handles its own theming (dark stage disc), so no CSS
+        // filter — a brightness filter here would just dim the glow.
+        orbCanvas.style.filter = "";
+        orbCanvas.style.opacity = "";
         orbCanvas.style.boxShadow = "";
       }
 
@@ -1616,206 +1621,195 @@
     (function initCanvas() {
       const canvas = document.getElementById("harvey-mic-btn");
       const wrap   = document.getElementById("jCoreWrap");
-      const ctx    = canvas.getContext("2d");
+      if (!canvas || !wrap) return;
+      const ctx = canvas.getContext("2d");
 
-      let W, H, cx, cy, R;
-      let raf;
+      // Offscreen trail buffer — the plasma accumulates here (additive) and is
+      // faded toward transparent each frame, which is what makes the wispy,
+      // smoky filaments. Composited onto a soft dark stage disc so it glows the
+      // same on dark or light backgrounds. No per-particle shadowBlur anywhere
+      // (that was the old orb's perf killer) — glow is additive overlap + a
+      // couple of pre-rendered soft sprites.
+      const buf  = document.createElement("canvas");
+      const bctx = buf.getContext("2d");
 
-      function orbCyan(alpha) {
-        if (isLightTheme()) return `rgba(0,130,200,${Math.min(1, alpha * 1.45)})`;
-        return `rgba(0,212,255,${alpha})`;
+      let W, H, cx, cy, R, dpr, N;
+      let raf, t0 = null, last = 0;
+
+      function isLight(){ return document.documentElement.getAttribute("data-theme") === "light"; }
+
+      function makeSprite(size, inner){
+        const c = document.createElement("canvas"); c.width = c.height = size;
+        const g = c.getContext("2d");
+        const grd = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+        grd.addColorStop(0,    inner);
+        grd.addColorStop(0.45, "rgba(90,200,255,0.32)");
+        grd.addColorStop(1,    "rgba(90,200,255,0)");
+        g.fillStyle = grd; g.fillRect(0, 0, size, size);
+        return c;
+      }
+      const dotSprite  = makeSprite(48,  "rgba(220,248,255,0.95)");
+      const glowSprite = makeSprite(256, "rgba(120,215,255,0.55)");
+
+      // Pre-render the dark "stage" disc once per theme (scaled on draw) so we
+      // don't rebuild a radial gradient every frame.
+      function makeDisc(a){
+        const size = 512, c = document.createElement("canvas"); c.width = c.height = size;
+        const g = c.getContext("2d");
+        const grd = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+        grd.addColorStop(0,    "rgba(3,9,16," + a + ")");
+        grd.addColorStop(0.62, "rgba(3,9,16," + (a * 0.6) + ")");
+        grd.addColorStop(1,    "rgba(3,9,16,0)");
+        g.fillStyle = grd; g.fillRect(0, 0, size, size);
+        return c;
+      }
+      const discDark = makeDisc(0.5), discLight = makeDisc(0.93);
+
+      let P = [];
+      function rand(a, b){ return a + Math.random() * (b - a); }
+      function spawn(p){
+        // uniform-ish point on a sphere shell, then pushed to a preferred radius
+        const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.max(0, 1 - u * u));
+        const tr = rand(0.7, 1.12);
+        p.x = r * Math.cos(th) * tr;
+        p.y = u * tr;
+        p.z = r * Math.sin(th) * tr;
+        p.tr   = tr;
+        p.seed = Math.random() * 6.283;
+        p.kind = Math.random() < 0.58 ? 1 : 0;   // 1 = filament streak, 0 = haze dot
+        p.br   = rand(0.45, 1);
+        p.energy = 0;
+        p.px = p.py = null;
+        return p;
+      }
+      function buildParticles(){ P = new Array(N); for (let i = 0; i < N; i++) P[i] = spawn({}); }
+
+      function resize(){
+        const css = Math.max(120, wrap.offsetWidth || 480);
+        dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        canvas.width  = buf.width  = Math.round(css * dpr);
+        canvas.height = buf.height = Math.round(css * dpr);
+        canvas.style.width = canvas.style.height = css + "px";
+        W = canvas.width; H = canvas.height; cx = W / 2; cy = H / 2;
+        R = W * 0.32;
+        N = Math.round(Math.min(640, Math.max(400, css * 1.1)));
+        buildParticles();
+        bctx.clearRect(0, 0, W, H);
       }
 
-      function orbGlowColor() {
-        return isLightTheme() ? "#0082c8" : "#00d4ff";
+      // Smoothed params driven by coreState (idle / listening / busy).
+      const P_IDLE   = { spin: 0.32, turb: 0.14, fade: 0.07, bright: 1.30, glow: 0.20, breath: 0.03 };
+      const P_LISTEN = { spin: 0.52, turb: 0.24, fade: 0.09, bright: 1.60, glow: 0.30, breath: 0.05 };
+      const P_BUSY   = { spin: 1.00, turb: 0.36, fade: 0.12, bright: 1.90, glow: 0.40, breath: 0.09 };
+      const cur = Object.assign({}, P_IDLE);
+      function targetFor(s){
+        if (s === "busy" || s === "processing" || s === "responding") return P_BUSY;
+        if (s === "listening") return P_LISTEN;
+        return P_IDLE;
       }
 
-      function orbSoftCyan(alpha) {
-        if (isLightTheme()) return `rgba(75,180,230,${Math.min(1, alpha * 1.35)})`;
-        return `rgba(75,224,255,${alpha})`;
-      }
+      function step(dt, t){
+        const tgt = targetFor(window.coreState || "idle");
+        const k = 1 - Math.pow(0.0015, dt);            // frame-rate-independent easing
+        for (const key in cur) cur[key] += (tgt[key] - cur[key]) * k;
 
-      function orbCoreWhite(alpha) {
-        if (isLightTheme()) return `rgba(100,200,240,${Math.min(1, alpha * 1.15)})`;
-        return `rgba(180,245,255,${alpha})`;
-      }
-
-      function resize() {
-        const s = wrap.offsetWidth;
-        canvas.width  = s * devicePixelRatio;
-        canvas.height = s * devicePixelRatio;
-        canvas.style.width  = s + "px";
-        canvas.style.height = s + "px";
-        W = H = canvas.width;
-        cx = cy = W / 2;
-        R = W / 2;
-      }
-
-      /* Particles orbiting at different radii */
-      const NUM_PARTICLES = 48;
-      const particles = Array.from({ length: NUM_PARTICLES }, (_, i) => ({
-        angle:  Math.random() * Math.PI * 2,
-        radius: 0.32 + Math.random() * 0.58,
-        speed:  (0.0003 + Math.random() * 0.0008) * (Math.random() < 0.5 ? 1 : -1),
-        size:   0.8 + Math.random() * 2.2,
-        alpha:  0.25 + Math.random() * 0.55,
-        layer:  i % 3,
-      }));
-
-      /* Perfect concentric rings — radius fraction, dash pattern (px @ R=200),
-         line width, alpha, rotation speed (px/frame via lineDashOffset),
-         glow flag. dash:null = solid circle. */
-      const rings = [
-        { rf: 0.96, dash: null,              lw: 0.6, alpha: 0.16, spd: 0,     glow: false },
-        { rf: 0.87, dash: [42, 16],          lw: 1.0, alpha: 0.34, spd: 0.22,  glow: false },
-        { rf: 0.76, dash: null,              lw: 0.8, alpha: 0.22, spd: 0,     glow: false },
-        { rf: 0.64, dash: [80, 28, 12, 28],  lw: 1.3, alpha: 0.48, spd: -0.30, glow: true  },
-        { rf: 0.52, dash: [130, 70],         lw: 1.7, alpha: 0.6,  spd: 0.16,  glow: true  },
-        { rf: 0.40, dash: [6, 14],           lw: 0.9, alpha: 0.4,  spd: -0.5,  glow: false },
-      ];
-      const ringOffsets = rings.map(() => 0);
-
-      function drawRing(ring, offset) {
-        const r     = ring.rf * R * 0.97;
-        const scale = R / 200;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        if (ring.dash) ctx.setLineDash(ring.dash.map(d => d * scale));
-        else           ctx.setLineDash([]);
-        ctx.lineDashOffset = offset;
-        const ringAlpha = isLightTheme() ? Math.min(1, ring.alpha * 1.5) : ring.alpha;
-        ctx.strokeStyle = orbCyan(ringAlpha);
-        ctx.lineWidth   = (isLightTheme() ? ring.lw * 1.15 : ring.lw) * scale;
-        if (ring.glow && !isLightTheme()) { ctx.shadowColor = orbGlowColor(); ctx.shadowBlur = 8 * scale; }
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.setLineDash([]);
-      }
-
-      function drawBloom(t, busyMode) {
-        const pulse = 0.88 + 0.12 * Math.sin(t * (busyMode ? 3.5 : 1.2));
-        const innerR = R * 0.22 * pulse;
-        const light = isLightTheme();
-
-        if (!light) {
-          let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.72);
-          g.addColorStop(0,   orbCyan(busyMode ? 0.14 : 0.09));
-          g.addColorStop(0.4, orbCyan(busyMode ? 0.06 : 0.04));
-          g.addColorStop(1,   "transparent");
-          ctx.fillStyle = g;
-          ctx.beginPath(); ctx.arc(cx, cy, R * 0.72, 0, Math.PI * 2); ctx.fill();
-
-          g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.42 * pulse);
-          g.addColorStop(0,   orbCyan(busyMode ? 0.30 : 0.18));
-          g.addColorStop(0.5, orbCyan(busyMode ? 0.12 : 0.07));
-          g.addColorStop(1,   "transparent");
-          ctx.fillStyle = g;
-          ctx.beginPath(); ctx.arc(cx, cy, R * 0.42 * pulse, 0, Math.PI * 2); ctx.fill();
-
-          g = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR);
-          g.addColorStop(0,   orbCoreWhite(busyMode ? 0.9 : 0.7));
-          g.addColorStop(0.35, orbCyan(busyMode ? 0.55 : 0.38));
-          g.addColorStop(1,   "transparent");
-          ctx.fillStyle = g;
-          ctx.beginPath(); ctx.arc(cx, cy, innerR, 0, Math.PI * 2); ctx.fill();
+        const dθ = cur.spin * dt, cosd = Math.cos(dθ), sind = Math.sin(dθ);
+        const F = 2.1, F2 = 4.3, ta = cur.turb;
+        for (let i = 0; i < N; i++){
+          const p = P[i];
+          // spin around the vertical axis → filaments wrap horizontally
+          const nx = p.x * cosd - p.z * sind;
+          const nz = p.x * sind + p.z * cosd;
+          p.x = nx; p.z = nz;
+          // swirling turbulence (two octaves) → churn + escaping wisps
+          const tx = Math.sin(p.y * F + t * 1.3 + p.seed) + 0.5 * Math.sin(p.z * F2 - t * 1.7);
+          const ty = Math.sin(p.z * F + t * 1.1)          + 0.5 * Math.sin(p.x * F2 + t * 1.9 + p.seed);
+          const tz = Math.sin(p.x * F - t * 1.5)          + 0.5 * Math.sin(p.y * F2 + t * 1.2);
+          p.x += tx * ta * dt; p.y += ty * ta * dt; p.z += tz * ta * dt;
+          // relax back toward preferred radius (spring vs turbulence = wisps)
+          const d = Math.hypot(p.x, p.y, p.z) || 1e-4;
+          const trg = p.tr * (1 + 0.05 * Math.sin(t * 0.6 + p.seed));
+          const nd = d + (trg - d) * Math.min(1, 2.2 * dt);
+          const f = nd / d; p.x *= f; p.y *= f; p.z *= f;
+          p.energy = Math.min(1, (Math.abs(tx) + Math.abs(ty) + Math.abs(tz)) / 3);
+          if (nd > 1.9) spawn(p);
         }
-
-        ctx.beginPath();
-        ctx.arc(cx, cy, innerR * 0.72, 0, Math.PI * 2);
-        ctx.strokeStyle = orbCyan(light ? (busyMode ? 0.55 : 0.4) : (busyMode ? 0.95 : 0.75));
-        ctx.lineWidth = light ? 1.5 : 1.5;
-        ctx.stroke();
-
-        const scanA = t * 1.4;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.56, scanA, scanA + 0.55);
-        ctx.strokeStyle = orbCyan(busyMode ? 0.85 : 0.55);
-        ctx.lineWidth = 2.5;
-        if (!light) {
-          ctx.shadowColor = orbGlowColor();
-          ctx.shadowBlur  = 12;
-        }
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        /* counter-scanning thinner arc */
-        const scanB = -t * 0.9 + Math.PI;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.66, scanB, scanB + 0.32);
-        ctx.strokeStyle = orbSoftCyan(busyMode ? 0.7 : 0.35);
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
       }
 
-      function drawCrosshair() {
-        ctx.setLineDash([3, 9]);
-        ctx.strokeStyle = orbCyan(isLightTheme() ? 0.18 : 0.07);
-        ctx.lineWidth = isLightTheme() ? 1.2 : 1;
-        ctx.beginPath();
-        ctx.moveTo(cx, 0); ctx.lineTo(cx, H);
-        ctx.moveTo(0, cy); ctx.lineTo(W, cy);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
+      function render(t){
+        // fade trail buffer toward transparent (keeps canvas see-through)
+        bctx.globalCompositeOperation = "destination-out";
+        bctx.fillStyle = "rgba(0,0,0," + cur.fade + ")";
+        bctx.fillRect(0, 0, W, H);
 
-      function drawParticles(t, busyMode) {
-        particles.forEach(p => {
-          p.angle += p.speed * (busyMode ? 2.2 : 1);
-          const pr = p.radius * R;
-          const x = cx + Math.cos(p.angle) * pr;
-          const y = cy + Math.sin(p.angle) * pr;
-          const flicker = p.alpha * (0.7 + 0.3 * Math.sin(t * 2.5 + p.angle * 3));
-          const particleAlpha = isLightTheme() ? Math.min(1, flicker * 1.4) : flicker;
-
-          ctx.beginPath();
-          ctx.arc(x, y, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = orbCyan(particleAlpha);
-          if (!isLightTheme()) {
-            ctx.shadowColor = orbGlowColor();
-            ctx.shadowBlur  = p.size * 4;
+        bctx.globalCompositeOperation = "lighter";
+        const camZ = 3.2, breath = 1 + cur.breath * Math.sin(t * 0.8);
+        for (let i = 0; i < N; i++){
+          const p = P[i];
+          const persp = camZ / (camZ - p.z);
+          const sx = cx + p.x * R * persp * breath;
+          const sy = cy - p.y * R * persp * breath;
+          const depth = Math.max(0, Math.min(1, (p.z + 1.3) / 2.6));
+          const en = 0.35 + 0.65 * p.energy;
+          const a = cur.bright * p.br * (0.25 + 0.75 * depth) * en;
+          if (p.kind === 1){
+            if (p.px != null){
+              const dx = sx - p.px, dy = sy - p.py;
+              if (dx * dx + dy * dy < (R * 0.5) * (R * 0.5)){   // skip the jump on respawn
+                const hot = Math.min(1, en * depth * 1.2);
+                bctx.strokeStyle = "rgba(" +
+                  Math.round(85 + 160 * hot) + "," +
+                  Math.round(195 + 60 * hot) + ",255," + a.toFixed(3) + ")";
+                bctx.lineWidth = (0.7 + 1.35 * persp) * dpr * 0.6;
+                bctx.beginPath(); bctx.moveTo(p.px, p.py); bctx.lineTo(sx, sy); bctx.stroke();
+              }
+            }
+          } else {
+            const r = (1.6 + 2.6 * persp) * dpr;
+            bctx.globalAlpha = Math.min(1, a * 0.85);
+            bctx.drawImage(dotSprite, sx - r, sy - r, r * 2, r * 2);
+            bctx.globalAlpha = 1;
           }
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        });
-      }
+          p.px = sx; p.py = sy;
+        }
 
-      let t0 = null;
-      function draw(now) {
-        if (!t0) t0 = now;
-        const t = (now - t0) / 1000;
-        const busyMode = window.coreState === "busy";
-
+        // Composite: soft dark stage disc, ambient glow, then the plasma buffer.
         ctx.clearRect(0, 0, W, H);
+        ctx.globalCompositeOperation = "source-over";
+        const Rd = R * 1.7;
+        ctx.drawImage(isLight() ? discLight : discDark, cx - Rd, cy - Rd, Rd * 2, Rd * 2);
 
-        rings.forEach((ring, i) => {
-          ringOffsets[i] += ring.spd * (busyMode ? 1.8 : 1);
-        });
-
-        drawCrosshair();
-        drawBloom(t, busyMode);
-        rings.forEach((ring, i) => drawRing(ring, ringOffsets[i]));
-        drawParticles(t, busyMode);
-
-        raf = requestAnimationFrame(draw);
+        ctx.globalCompositeOperation = "lighter";
+        // broad ambient bloom + a softer inner fill so the sphere reads as a
+        // solid glowing volume rather than see-through
+        let gr = R * 1.7;
+        ctx.globalAlpha = cur.glow * 0.75;
+        ctx.drawImage(glowSprite, cx - gr, cy - gr, gr * 2, gr * 2);
+        gr = R * 1.02;
+        ctx.globalAlpha = cur.glow * 0.55;
+        ctx.drawImage(glowSprite, cx - gr, cy - gr, gr * 2, gr * 2);
+        ctx.globalAlpha = 1;
+        ctx.drawImage(buf, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
       }
 
-      function start() {
-        resize();
-        raf = requestAnimationFrame(draw);
+      function frame(now){
+        if (!t0){ t0 = now; last = now; }
+        let dt = (now - last) / 1000; last = now;
+        if (dt > 0.05) dt = 0.05;                 // clamp after tab-away
+        const t = (now - t0) / 1000;
+        step(dt, t);
+        render(t);
+        raf = requestAnimationFrame(frame);
       }
-
-      window.addEventListener("resize", () => {
-        cancelAnimationFrame(raf);
-        resize();
-        raf = requestAnimationFrame(draw);
-      });
 
       window.coreState = "idle";
-      window.setCoreState = (s) => { window.coreState = s; };
+      window.setCoreState = (s) => { window.coreState = s || "idle"; };
 
-      start();
-      updateOrbColors();
-
+      resize();
+      window.addEventListener("resize", () => { cancelAnimationFrame(raf); resize(); raf = requestAnimationFrame(frame); });
+      raf = requestAnimationFrame(frame);
     })();
 
     /* ─────────────────────────────────────────────
@@ -1844,7 +1838,9 @@
     const micIcon      = document.getElementById("jMicIcon");
 
     function setCoreVisual(mode) {
-      window.setCoreState?.(mode === "busy" || mode === "processing" || mode === "responding" ? "busy" : "idle");
+      // Pass the full mode through so the plasma core can react per-state
+      // (listening = livelier, processing/responding = fully energized).
+      window.setCoreState?.(mode || "idle");
       coreHint.classList.remove("lit");
       if (mode === "listening") {
         coreHint.textContent = "LISTENING";
