@@ -511,7 +511,14 @@
       <div class="leads-main">
         <div class="leads-top">
           <h1 id="pTitle">All People <small id="pCount"></small></h1>
-          <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn ghost">FILTER</button></div>
+          <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn" id="pFilterBtn">FILTERED</button></div>
+        </div>
+        <div class="filter-bar" id="pChipBar" style="display:none">
+          <span class="fchip">Status: Past Client <span class="x">×</span></span>
+          <span class="fchip">Status: Active Client <span class="x">×</span></span>
+          <span class="fchip">Status: Prospective Client <span class="x">×</span></span>
+          <a class="fb-link">Save Filter</a>
+          <a class="fb-link">Clear All</a>
         </div>
         <div class="tbl-scroll">
           <table class="leads">
@@ -893,7 +900,7 @@ let PEOPLE=[];
 for(let i=0;i<40;i++){
   const name=FIRST[(i*5+3)%FIRST.length]+" "+LAST[(i*3+2)%LAST.length];
   const cat=P_CATS[i%P_CATS.length];
-  const status = cat==="client" ? (i%3===0?"past_client":"client") : cat;
+  const status = cat==="client" ? (i%3===0?"past_client":i%3===1?"active_client":"prospective_client") : cat;
   const hasAddr=i%4!==2;
   PEOPLE.push({id:"P"+i,name,cat,status,showInLeads:i%3!==0,
     intent:(i%2===0)?"buyer":"seller", stageLabel:(cat==="client"?"MET WITH":"No Stage"),
@@ -907,6 +914,16 @@ function peopleFor(b){return b==="all"?PEOPLE:b==="client"?PEOPLE.filter(p=>p.ca
 function eyeIcon(on){return on
   ? '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.6"/></svg>'
   : '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#c2cad1" stroke-width="1.8"><path d="M3 3l18 18"/><path d="M10.6 6.1A9.7 9.7 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.3 3.9M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.5 9.5 0 0 0 3.9-.8"/></svg>';}
+// Brivity client-status pills: ACTIVE CLIENT = coral outline, PROSPECTIVE =
+// teal outline, PAST CLIENT = gray filled. Others (collaborator/team/…) filled.
+function personStatusPill(status){
+  const outline={active_client:["ACTIVE CLIENT","#e0644a"],prospective_client:["PROSPECTIVE CLIENT","#59c4c4"]};
+  if(outline[status]){const[l,c]=outline[status];
+    return '<span class="status" style="background:#fff;color:'+c+';border:1px solid '+c+'">'+l+'</span>';}
+  if(status==="past_client") return '<span class="status" style="background:#edf0f2;color:#5b6570">PAST CLIENT ▾</span>';
+  const sm=P_STATUS[status]||{l:String(status||"").toUpperCase(),c:"var(--st-watch)"};
+  return '<span class="status" style="background:'+sm.c+'">'+sm.l+' ▾</span>';
+}
 function renderPeople(){
   document.getElementById("pnAll").textContent=PEOPLE.length;
   document.getElementById("pnClient").textContent=PEOPLE.filter(p=>p.cat==="client").length;
@@ -916,15 +933,15 @@ function renderPeople(){
   const list=sortRows(peopleFor(pBucket).filter(hitRow));
   const titleMap={all:"All People",client:"Clients",collaborator:"Collaborators",team:"Team",archived:"Archived"};
   document.getElementById("pTitle").innerHTML=titleMap[pBucket]+' <small>('+list.length+')</small>';
+  const pcb=document.getElementById("pChipBar"); if(pcb) pcb.style.display=pBucket==="client"?"flex":"none";
   const pages=Math.max(1,Math.ceil(list.length/PER));
   const rows=list.slice((pPage-1)*PER,pPage*PER);
   document.getElementById("peopleRows").innerHTML=rows.map(p=>{
-    const sm=P_STATUS[p.status];
     return '<tr><td><input type="checkbox" class="cb"></td>'+
       '<td><span class="lead-name ldlink" data-lid="'+esc(p.id)+'">'+esc(p.name)+'</span></td>'+
       '<td style="text-align:center">'+eyeIcon(p.showInLeads)+'</td>'+
       '<td><span class="intent '+(p.intent==="buyer"?"b":"s")+'">'+(p.intent==="buyer"?"B":"S")+'</span></td>'+
-      '<td><span class="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
+      '<td>'+personStatusPill(p.status)+'</td>'+
       '<td><span class="stage">'+esc(p.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
       '<td>'+actIcon("email",!p.email)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!p.address)+'</td><td>'+actIcon("other")+'</td>'+
       '<td>'+(p.address?'<div class="addr">'+esc(p.address)+'</div>':'<span style="color:#c2cad1">—</span>')+'</td>'+
