@@ -532,7 +532,7 @@ const STAGE_LABEL={new_lead:"NEW LEAD",attempted_contact:"ATTEMPTED CONTACT",spo
 const STATUS_META={new:{l:"NEW",c:"var(--st-new)"},hot:{l:"HOT",c:"var(--st-hot)"},nurture:{l:"NURTURE",c:"var(--st-nurture)"},unqualified:{l:"UNQUALIFIED",c:"var(--st-unq)"},watch:{l:"WATCH",c:"var(--st-watch)"}};
 const LASTLAB=["Texted","Call Logged","Emailed","Text Received","Appointment"];
 const N=54;
-const LEADS=[];
+let LEADS=[];
 for(let i=0;i<N;i++){
   const name=FIRST[i%FIRST.length]+" "+LAST[(i*7)%LAST.length];
   const hasAddr=i%3!==1;
@@ -562,7 +562,7 @@ for(let i=0;i<N;i++){
 }
 
 /* conversations */
-const CONVOS=[
+let CONVOS=[
   {names:["Marco Puga","Raymond Hamelin"], at:ago(21), msgs:[
     {me:false,t:"Hi Marco, are we still on for the walkthrough this weekend?",at:ago(80)},
     {me:true,t:"Hi Raymond, thank you for speaking with me earlier. Yes — Saturday at 10am works great. I'll send the address shortly.",at:ago(21)}]},
@@ -688,8 +688,9 @@ function renderLeads(){
 
 /* ===== People ===== */
 const P_CATS=["client","client","collaborator","team","archived","client","collaborator","archived"];
-const P_STATUS={past_client:{l:"PAST CLIENT",c:"var(--st-unq)"},client:{l:"CLIENT",c:"var(--teal)"},collaborator:{l:"COLLABORATOR",c:"var(--st-watch)"},team:{l:"TEAM",c:"#4a90d9"},archived:{l:"ARCHIVED",c:"#aab2ba"}};
-const PEOPLE=[];
+const P_STATUS={past_client:{l:"PAST CLIENT",c:"var(--st-unq)"},client:{l:"CLIENT",c:"var(--teal)"},collaborator:{l:"COLLABORATOR",c:"var(--st-watch)"},team:{l:"TEAM",c:"#4a90d9"},archived:{l:"ARCHIVED",c:"#aab2ba"},
+  new:{l:"NEW",c:"var(--st-new)"},hot:{l:"HOT",c:"var(--st-hot)"},nurture:{l:"NURTURE",c:"var(--st-nurture)"},watch:{l:"WATCH",c:"var(--st-watch)"},unqualified:{l:"UNQUALIFIED",c:"var(--st-unq)"}};
+let PEOPLE=[];
 for(let i=0;i<40;i++){
   const name=FIRST[(i*5+3)%FIRST.length]+" "+LAST[(i*3+2)%LAST.length];
   const cat=P_CATS[i%P_CATS.length];
@@ -781,7 +782,7 @@ document.querySelectorAll('#oppTabs button[data-otype]').forEach(b=>b.addEventLi
 const TX_STATUS={active:{l:"ACTIVE",c:"var(--teal)"},pending:{l:"PENDING",c:"var(--st-nurture)"},closed:{l:"CLOSED",c:"#3fae86"},withdrawn:{l:"WITHDRAWN",c:"#3a444e"},canceled:{l:"CANCELED",c:"#3a444e"},draft:{l:"DRAFT",c:"#aab2ba"},coming_soon:{l:"COMING SOON",c:"#4a90d9"},expired:{l:"EXPIRED",c:"var(--st-new)"},pipeline:{l:"PIPELINE",c:"#7c8b98"},archived:{l:"ARCHIVED",c:"#aab2ba"}};
 const TX_DIST=[].concat(Array(19).fill("closed"),Array(4).fill("active"),Array(2).fill("pending"),["withdrawn"],Array(4).fill("canceled"),["draft","draft"],["pipeline"]);
 const AGENTS_TX=["Marco Puga","James Carter"];
-const TX=[];
+let TX=[];
 for(let i=0;i<TX_DIST.length;i++){
   const status=TX_DIST[i];
   const listP=290000+((i*23700)%420000);
@@ -899,7 +900,7 @@ document.querySelectorAll('.rep-nav a[data-rep]').forEach(a=>a.addEventListener(
 
 /* ===== Calendar ===== */
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
-const CAL_EVENTS=[
+let CAL_EVENTS=[
   {date:"2026-07-22",label:"1222 Los Mochis Avenue Converse, TX",color:"#e08a3e"},
   {date:"2026-07-23",label:"616 Valley Garden New Braunfels, TX",color:"var(--teal)"},
   {date:"2026-07-25",label:"1397 Canyon Lake Dr Canyon Lake, TX",color:"#e08a3e"},
@@ -991,5 +992,92 @@ document.getElementById("taRange").addEventListener("change",renderTakeAction);
 document.getElementById("loadMore").addEventListener("click",()=>{shown+=8;renderFeed();});
 document.getElementById("feedCount").textContent=String(Math.min(LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length,99));
 
+/* ===== LIVE DATA ===== */
+/* The views default to the demo dataset above; on load we pull the real CRM
+   snapshot (/api/dashboard/data) and, when it has data, swap Leads, People,
+   Messages, Transactions, Dashboard and Calendar over to live records. Opps and
+   Email stay demo (no live source yet). Falls back to demo on any failure. */
+function crmToken(){ try { return new URLSearchParams(location.search).get("token") || localStorage.getItem("dashboardToken") || ""; } catch(_){ return ""; } }
+function crmApi(path){ const t=crmToken(); return path + (t ? (path.includes("?")?"&":"?")+"token="+encodeURIComponent(t) : ""); }
+const STATUS_MAP={new:"new",hot:"hot",nurture:"nurture",watch:"watch",dead:"unqualified",unresponsive:"unqualified",not_contacted:"new",contacted:"nurture"};
+const STAGE_MAP={new:"NEW LEAD",hot:"ATTEMPTED CONTACT",warm:"ATTEMPTED CONTACT",cold:"ATTEMPTED CONTACT",pending:"PENDING",appointment_set:"APPOINTMENT SET",showing_set:"SHOWING SET",under_contract:"UNDER CONTRACT",closed:"CLOSED"};
+const DEAL_STATUS_MAP={prospect:"pipeline",active:"active",under_contract:"pending",closed:"closed",fallen_through:"canceled"};
+function fmtMDY(iso){ if(!iso) return ""; const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso); return m?(m[2]+"-"+m[3]+"-"+m[1]):""; }
+function lastLabelFor(l){
+  const a=l.activity||[];
+  if(a.length){const t=String(a[a.length-1].type||"").toLowerCase();
+    if(t.includes("call"))return"Call Logged"; if(t.includes("text")||t.includes("sms"))return"Texted";
+    if(t.includes("email"))return"Emailed"; if(t.includes("appoint")||t.includes("showing"))return"Appointment";}
+  if(l.lastMessageAt)return"Text Received";
+  return"New Lead";
+}
+function mapLeadRow(l){
+  const c=l.criteria||{};
+  const loc=c.location||c.address||l.propertyInquired||"";
+  return {
+    id:l.id, name:l.name||l.username||"Unknown",
+    intent:(l.crmIntent==="seller")?"seller":"buyer",
+    crmStatus:l.crmStatus, statusDisp:STATUS_MAP[l.crmStatus]||"nurture",
+    stage:l.crmStage, stageLabel:STAGE_MAP[l.crmStage]||"NEW LEAD",
+    phone:l.phone||"", email:l.email||null, source:l.source||"",
+    address:loc, criteria:c, beds:c.beds!=null?c.beds:null, baths:c.baths!=null?c.baths:null, sqft:c.sqft!=null?c.sqft:null,
+    lastLabel:lastLabelFor(l), lastActivity:l.lastActivity||l.lastMessageAt||l.updatedAt||l.createdAt,
+    createdAt:l.createdAt, due:{label:(l.crmCallQueue==="urgent")?"Due Today":"Upcoming", date:""},
+    activity:l.activity||[], alerts:l.alerts||0, reports:l.reports||0,
+    autoPlanEnrollments:l.autoPlanEnrollments||[], crmCallQueue:l.crmCallQueue,
+    propertyInquired:l.propertyInquired||null, _msgs:l.messages||[], _lastMsgAt:l.lastMessageAt,
+  };
+}
+function deriveConvosLive(leads){
+  return leads.filter(l=>(l.messages||[]).length)
+    .slice().sort((a,b)=>String(b.lastMessageAt||"").localeCompare(String(a.lastMessageAt||"")))
+    .slice(0,50)
+    .map(l=>({names:[l.name||l.username||"Lead","Marco Puga"], at:l.lastMessageAt||l.updatedAt,
+      msgs:(l.messages||[]).slice(-40).map(m=>({me:m.role==="assistant", t:m.text||"", at:m.at}))}))
+    .filter(c=>c.msgs.some(m=>m.t));
+}
+function mapPeopleLive(rows){
+  return rows.map(r=>{
+    let cat="lead", status=r.statusDisp;
+    if(r.crmStatus==="dead"||r.crmStatus==="unresponsive"){cat="archived";status="archived";}
+    else if(r.stage==="closed"){cat="client";status="past_client";}
+    else if(r.stage==="under_contract"){cat="client";status="client";}
+    return {id:r.id,name:r.name,cat,status,showInLeads:cat!=="archived",intent:r.intent,
+      stageLabel:r.stageLabel,email:r.email,phone:r.phone,address:r.address,
+      lastLabel:r.lastLabel,lastActivity:r.lastActivity,due:r.due};
+  });
+}
+function mapDealTx(d){
+  const closed=d.status==="closed";
+  return {id:d.id, address:d.propertyAddress||"—", city:"", type:(d.dealType==="buyer")?"B":"S",
+    status:DEAL_STATUS_MAP[d.status]||"active", mls:"", agent:d.assignedTo||"Marco Puga",
+    dateListed:fmtMDY(d.openedDate), listPrice:d.salePrice||0, expiration:fmtMDY(d.closeDate),
+    closePrice:closed?(d.salePrice||0):0, gci:d.estimatedGCI||0, draft:false};
+}
+async function loadLive(){
+  let body;
+  try{ const res=await fetch(crmApi("/api/dashboard/data")); if(!res.ok) return; body=await res.json(); }
+  catch(_){ return; }
+  const rawLeads=(body&&Array.isArray(body.leads))?body.leads.filter(l=>l&&(l.name||l.phone)):[];
+  if(rawLeads.length<3) return;   // too sparse — keep the demo set
+
+  LEADS=rawLeads.map(mapLeadRow);
+  PEOPLE=mapPeopleLive(LEADS);
+  const convos=deriveConvosLive(rawLeads); if(convos.length) CONVOS=convos;
+  const deals=(body.deals||[]).filter(d=>d&&d.propertyAddress);
+  if(deals.length) TX=deals.map(mapDealTx);
+  const evs=deals.filter(d=>d.closeDate).map(d=>({date:String(d.closeDate).slice(0,10),label:(d.propertyAddress||d.leadName||"Closing"),color:"var(--teal)"}));
+  if(evs.length){ CAL_EVENTS=evs; const first=evs.slice().sort((a,b)=>a.date.localeCompare(b.date))[0].date; const m=/^(\d{4})-(\d{2})/.exec(first); if(m){ calY=+m[1]; calM=+m[2]-1; } }
+
+  // reset paging + re-render everything that now has live data
+  page=1; pPage=1; txBucket="all"; shown=8;
+  renderTakeAction(); renderFeed(); renderTracking(); renderConvos(); renderLeads(); renderPeople(); renderTx(); renderCal();
+  const feedN=LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length;
+  document.getElementById("feedCount").textContent=String(Math.min(feedN,99));
+  const tag=document.querySelector(".demo-tag");
+  if(tag) tag.textContent="Live data · "+LEADS.length+" leads"+(deals.length?" · "+deals.length+" transactions":"");
+}
+
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");
+loadLive();
 </script>
