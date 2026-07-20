@@ -251,6 +251,49 @@
   .dd-menu .sw{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
   .crm-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#2c3540;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;z-index:90;opacity:0;transition:opacity .2s;pointer-events:none}
   .crm-toast.on{opacity:1}
+  .ldlink{cursor:pointer}.ldlink:hover{color:var(--teal)}
+  /* lead detail */
+  .ld-back{display:inline-flex;align-items:center;gap:6px;color:var(--teal);font-weight:600;font-size:13px;margin-bottom:16px;background:none;border:none;cursor:pointer}
+  .ld-grid{display:grid;grid-template-columns:340px 1fr 320px;gap:20px;align-items:start}
+  @media(max-width:1180px){.ld-grid{grid-template-columns:1fr}}
+  .ld-card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:20px 22px;position:relative}
+  .ld-editbtn{position:absolute;top:16px;right:16px;display:flex}
+  .ld-editbtn button{border:1px solid var(--teal);background:var(--teal-pill);color:#fff;font-size:11px;font-weight:700;padding:6px 12px}
+  .ld-editbtn button:first-child{border-radius:14px 0 0 14px}.ld-editbtn button:last-child{border-radius:0 14px 14px 0;border-left:1px solid rgba(255,255,255,.4);padding:6px 8px}
+  .ld-nav{position:absolute;top:78px;width:34px;height:34px;border-radius:50%;background:var(--teal-soft);color:var(--teal);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px}
+  .ld-nav.l{left:18px}.ld-nav.r{right:18px}
+  .ld-av{width:104px;height:104px;border-radius:50%;background:#e6eaee;color:#aeb7c0;display:flex;align-items:center;justify-content:center;margin:8px auto 12px;font-size:32px;font-weight:600}
+  .ld-name{font-size:22px;font-weight:700;color:#3a444e;text-align:center}
+  .ld-sub{color:var(--muted);font-size:12.5px;margin-top:8px;text-align:center}.ld-sub b{color:#6b7480}
+  .ld-field{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--line-2);font-size:13px}
+  .ld-field .k{color:#98a1aa;font-size:10.5px;letter-spacing:.05em;font-weight:600}
+  .ld-field .v{color:#5b6570}
+  .ld-intent{border:1px solid #eeddb4;color:#c99a34;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer}
+  .ld-sec-h{color:#6b7480;font-size:14px;font-weight:600;margin:8px 0 2px;display:flex;align-items:center;gap:8px}
+  .ai-panel{border:1px solid var(--line);border-radius:12px;padding:18px 20px;background:#fff;margin-bottom:18px}
+  .ai-panel h4{margin:0 0 6px;color:#7b5cf0;font-size:15px;display:flex;align-items:center;gap:7px}
+  .ai-tabs{display:flex;gap:10px;margin:6px 0 12px}
+  .ai-tabs button{font-size:12px;border:1px solid var(--line);background:#fff;color:#8b95a0;border-radius:14px;padding:5px 12px}
+  .ai-tabs button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+  .ai-panel ul{margin:0;padding-left:18px;color:#5b6570;font-size:13.5px;line-height:1.65}
+  .ld-tabs{display:flex;gap:24px;border-bottom:1px solid var(--line);margin-top:4px}
+  .ld-tabs button{background:none;border:none;padding:14px 2px;font-size:12px;font-weight:700;letter-spacing:.06em;color:#aab2ba;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer}
+  .ld-tabs button.on{color:var(--teal);border-bottom-color:var(--teal)}
+  .ld-tab-body{padding:18px 0 4px}
+  .ld-input,.ld-note{width:100%;border:1px solid var(--line);border-radius:8px;padding:11px 12px;font-family:inherit;font-size:13px;outline:none}
+  .ld-note{min-height:120px;resize:vertical}
+  .outcome{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .outcome button{border:1px solid var(--line);background:#fff;color:#6b7480;border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer}
+  .outcome button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+  .rblock{margin-bottom:20px}
+  .rblock h5{font-size:14px;color:#6b7480;font-weight:600;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+  .rbtn{border:1px solid var(--teal);color:var(--teal);background:#fff;border-radius:8px;padding:12px;width:100%;font-weight:700;font-size:12px;letter-spacing:.05em;margin-bottom:10px;cursor:pointer}
+  .rbtn:hover{background:var(--teal-soft)}
+  .assign-row{display:flex;align-items:center;gap:10px;margin-top:6px}
+  .assign-row .av{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#7f93c9,#5b6fae)}
+  .tl{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line-2)}
+  .tl .dot{width:30px;height:30px;border-radius:50%;background:var(--teal-soft);color:var(--teal);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .tl .tt{color:#5b6570;font-size:13px}.tl .tm{color:#aab2ba;font-size:11.5px;margin-top:2px}
 </style>
 
 <header class="topbar">
@@ -498,6 +541,9 @@
       <div class="leads-main"><div style="padding:22px 26px 60px" id="emBody"></div></div>
     </div>
   </section>
+
+  <!-- LEAD DETAIL -->
+  <section class="view" id="view-lead"><div class="pad" id="leadDetail"></div></section>
 </main>
 
 <!-- Calendar filter modal -->
@@ -698,7 +744,7 @@ function renderLeads(){
     const noEmail=!l.email;
     return '<tr>'+
       '<td><input type="checkbox" class="cb"></td>'+
-      '<td><span class="lead-name">'+esc(l.name)+'</span></td>'+
+      '<td><span class="lead-name ldlink" data-lid="'+esc(l.id)+'">'+esc(l.name)+'</span></td>'+
       '<td><span class="intent '+(l.intent==="buyer"?"b":"s")+'">'+(l.intent==="buyer"?"B":"S")+'</span></td>'+
       '<td><span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
       '<td><span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
@@ -753,7 +799,7 @@ function renderPeople(){
   document.getElementById("peopleRows").innerHTML=rows.map(p=>{
     const sm=P_STATUS[p.status];
     return '<tr><td><input type="checkbox" class="cb"></td>'+
-      '<td><span class="lead-name">'+esc(p.name)+'</span></td>'+
+      '<td><span class="lead-name ldlink" data-lid="'+esc(p.id)+'">'+esc(p.name)+'</span></td>'+
       '<td style="text-align:center">'+eyeIcon(p.showInLeads)+'</td>'+
       '<td><span class="intent '+(p.intent==="buyer"?"b":"s")+'">'+(p.intent==="buyer"?"B":"S")+'</span></td>'+
       '<td><span class="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
@@ -1182,27 +1228,136 @@ const STAGE_OPTIONS=[["new","New Lead"],["hot","Hot"],["warm","Warm"],["cold","C
 const ddMenu=document.getElementById("ddMenu");
 function closeDD(){ ddMenu.classList.remove("on"); }
 function crmToast(msg){ const t=document.getElementById("crmToast"); t.textContent=msg; t.classList.add("on"); clearTimeout(window.__tt); window.__tt=setTimeout(()=>t.classList.remove("on"),1700); }
+const INTENT_OPTIONS=[["buyer","Buyer"],["seller","Seller"],["buyer_seller","Buyer & Seller"]];
 function setLeadField(id,kind,val){
   const l=LEADS.find(x=>x.id===id); if(!l) return;
-  if(kind==="status"){ l.crmStatus=val; l.statusDisp=STATUS_MAP[val]||"nurture"; }
-  else { l.stage=val; l.stageLabel=STAGE_MAP[val]||"NEW LEAD"; }
-  renderLeads(); renderTakeAction(); renderFeed();
-  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(id)),{method:"PATCH",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(kind==="status"?{crmStatus:val}:{crmStage:val})})
-    .then(r=>crmToast(r&&r.ok?"Saved":"Updated (not saved to server)"))
-    .catch(()=>crmToast("Updated locally"));
+  let payload;
+  if(kind==="status"){ l.crmStatus=val; l.statusDisp=STATUS_MAP[val]||"nurture"; payload={crmStatus:val}; }
+  else if(kind==="stage"){ l.stage=val; l.stageLabel=STAGE_MAP[val]||"NEW LEAD"; payload={crmStage:val}; }
+  else { l.intent=(val==="seller")?"seller":"buyer"; l._intentRaw=val; payload={crmIntent:val}; }
+  renderLeads(); renderTakeAction(); renderFeed(); renderPeople();
+  if(document.getElementById("view-lead").classList.contains("on")) renderLead();
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(id)),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+    .then(r=>crmToast(r&&r.ok?"Saved":"Updated (not saved to server)")).catch(()=>crmToast("Updated locally"));
 }
-document.getElementById("leadRows").addEventListener("click",e=>{
-  const el=e.target.closest(".editable"); if(!el) return; e.stopPropagation();
+function openEditMenu(el){
   const id=el.getAttribute("data-lid"), kind=el.getAttribute("data-kind");
-  const opts=kind==="status"?STATUS_OPTIONS:STAGE_OPTIONS;
+  const opts=kind==="status"?STATUS_OPTIONS:kind==="stage"?STAGE_OPTIONS:INTENT_OPTIONS;
   ddMenu.innerHTML=opts.map(o=>'<button data-v="'+o[0]+'">'+(kind==="status"?'<span class="sw" style="background:'+o[2]+'"></span>':'')+esc(o[1])+'</button>').join("");
   ddMenu.querySelectorAll("button").forEach(b=>b.addEventListener("click",ev=>{ ev.stopPropagation(); setLeadField(id,kind,b.getAttribute("data-v")); closeDD(); }));
   const r=el.getBoundingClientRect();
   ddMenu.style.left=Math.max(8,Math.min(r.left,window.innerWidth-190))+"px";
   ddMenu.style.top=(r.bottom+4)+"px";
   ddMenu.classList.add("on");
-});
+}
+function bindTableClicks(rowsId){
+  document.getElementById(rowsId).addEventListener("click",e=>{
+    const ed=e.target.closest(".editable"); if(ed){ e.stopPropagation(); openEditMenu(ed); return; }
+    const lk=e.target.closest(".ldlink"); if(lk){ openLead(lk.getAttribute("data-lid")); }
+  });
+}
+bindTableClicks("leadRows"); bindTableClicks("peopleRows");
+document.getElementById("leadDetail").addEventListener("click",e=>{ const ed=e.target.closest(".editable"); if(ed){ e.stopPropagation(); openEditMenu(ed); } });
+
+/* ---- lead detail ---- */
+let currentLeadId=null, ldTab="note", ldOutcome=null;
+function fmtReg(iso){ const d=new Date(iso); if(isNaN(d))return"—"; return MONTHS[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear(); }
+function fieldRow(k,v){ return '<div class="ld-field"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
+function leadInsights(l){
+  const out=[]; const c=l.criteria||{};
+  out.push((l.intent==="seller"?"Seller":"Buyer")+" lead"+(l.stageLabel?", currently "+l.stageLabel.toLowerCase():"")+(l.source?", sourced from "+l.source:"")+".");
+  if(c.location||l.propertyInquired) out.push("Interested in "+(c.location||l.propertyInquired)+((c.beds!=null||c.baths!=null)?" ("+(c.beds!=null?c.beds+" bed":"")+(c.baths!=null?" / "+c.baths+" bath":"")+(c.sqft!=null?" / "+c.sqft+" sqft":"")+")":"")+".");
+  if((l.activity||[]).length) out.push("Logged activity: "+l.activity.length+" touch"+(l.activity.length>1?"es":"")+" on record.");
+  if(l._msgs&&l._msgs.length) out.push(l._msgs.length+" message"+(l._msgs.length>1?"s":"")+" exchanged so far.");
+  if(l.crmCallQueue==="urgent") out.push("Flagged urgent — a task is due today.");
+  if(!out.length) out.push("New lead — no activity yet. Reach out to get the conversation started.");
+  return out;
+}
+function openLead(id){ const l=LEADS.find(x=>x.id===id); if(!l)return; currentLeadId=id; ldTab="note"; ldOutcome=null;
+  document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-lead").classList.add("on"); window.scrollTo(0,0); renderLead(); }
+function backToLeads(){ document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-leads").classList.add("on");
+  document.querySelectorAll(".rail .r").forEach(x=>x.classList.remove("on")); document.querySelectorAll('.rail .r[data-view="leads"]').forEach(x=>x.classList.add("on")); }
+function stepLead(dir){ const list=sortRows(LEADS.filter(hitRow)); const i=list.findIndex(x=>x.id===currentLeadId); const n=list[i+dir]; if(n) openLead(n.id); }
+function renderLead(){
+  const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
+  const sm=STATUS_META[l.statusDisp]||STATUS_META.nurture;
+  const intentLabel=l.intent==="seller"?"SELLER":"BUYER";
+  document.getElementById("leadDetail").innerHTML=
+    '<button class="ld-back" id="ldBack">‹ Back to Leads</button>'+
+    '<div class="ld-grid">'+
+      '<div class="ld-card ld-prof">'+
+        '<div class="ld-editbtn"><button id="ldEdit">✎ EDIT</button><button>▾</button></div>'+
+        '<button class="ld-nav l" id="ldPrev">‹</button><button class="ld-nav r" id="ldNext">›</button>'+
+        '<div class="ld-av">'+esc(initials(l.name))+'</div><div class="ld-name">'+esc(l.name)+'</div>'+
+        '<div class="ld-sub">SOURCE: <b>'+esc(l.source||"—")+'</b></div>'+
+        '<div class="ld-sub" style="margin-top:4px">Registered '+esc(fmtReg(l.createdAt))+'</div>'+
+        '<div style="margin-top:16px">'+
+          fieldRow("LAST INTERACTION",'<span class="v">'+(relTime(l.lastActivity)||"—")+'</span>')+
+          fieldRow("STAGE",'<span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' ▾</span>')+
+          fieldRow("STATUS",'<span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span>')+
+          fieldRow("INTENT",'<span class="ld-intent editable" data-lid="'+esc(l.id)+'" data-kind="intent">'+intentLabel+' ▾</span>')+
+          fieldRow("PERSON TYPE","Lead")+
+        '</div>'+
+        '<label style="display:flex;align-items:center;gap:8px;margin:14px 0;font-size:13px;color:#6b7480;cursor:pointer"><input type="checkbox" checked style="accent-color:var(--teal)"> Show in Leads Index?</label>'+
+        '<div class="ld-sec-h" style="border-top:1px solid var(--line-2);padding-top:16px">Contact Info</div>'+
+        '<div class="ld-field"><span class="k">EMAIL</span><span class="v">'+(l.email?esc(l.email):'<a class="addlink">Add Email Address</a>')+'</span></div>'+
+        '<div class="ld-field"><span class="k">PHONE</span><span class="v" style="display:flex;align-items:center;gap:8px">'+actIcon("phone")+actIcon("sms")+esc(l.phone||"—")+'</span></div>'+
+        (l.address?'<div class="ld-field"><span class="k">ADDRESS</span><span class="v" style="max-width:180px;text-align:right">'+esc(l.address)+'</span></div>':'')+
+      '</div>'+
+      '<div>'+
+        '<div class="ai-panel"><h4>✦ Harvey AI</h4><div class="ai-tabs"><button class="on">About This Lead</button><button style="pointer-events:none;opacity:.55">Recommends</button></div><ul>'+leadInsights(l).map(i=>'<li>'+esc(i)+'</li>').join("")+'</ul></div>'+
+        '<div class="ld-card" style="padding:0 22px 18px"><div class="ld-tabs" id="ldTabs">'+["note","email","call","text","appointment","other"].map(t=>'<button class="'+(t===ldTab?"on":"")+'" data-t="'+t+'">'+t.toUpperCase()+'</button>').join("")+'</div><div class="ld-tab-body" id="ldTabBody"></div></div>'+
+        '<div class="ld-card" style="margin-top:18px"><div class="ld-sec-h">Activity</div><div id="ldTimeline"></div></div>'+
+      '</div>'+
+      '<div><div class="ld-card">'+
+        '<div class="rblock"><h5>Assigned To: <button class="mini-pill">MANAGE</button></h5><div class="assign-row"><div class="av"></div><div><div style="font-weight:700;color:#4a5560">Marco Puga</div><div style="color:var(--muted);font-size:12px">Primary Agent</div></div></div></div>'+
+        '<div class="rblock"><h5>Web Activity <button class="mini-pill">VIEW</button></h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5">See when this contact visits your site and which homes they view.</div></div>'+
+        '<div class="rblock"><h5>Agreements</h5><button class="rbtn">+ BUYER</button><button class="rbtn">+ SELLER</button><button class="rbtn">+ REFERRAL</button></div>'+
+        '<div class="rblock"><h5>Appointments <button class="mini-pill">+ ADD</button></h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5">Create an appointment for this contact and assign it to yourself or a teammate.</div></div>'+
+        '<div class="rblock" style="margin-bottom:0"><h5>Marketing</h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5;margin-bottom:12px">Send postcards, bifolds, trifolds, and snap packs.</div><button class="rbtn" style="background:var(--teal-pill);color:#fff;border-color:var(--teal-pill)">✉ SEND MAIL</button></div>'+
+      '</div></div>'+
+    '</div>';
+  document.getElementById("ldBack").addEventListener("click",backToLeads);
+  document.getElementById("ldPrev").addEventListener("click",()=>stepLead(-1));
+  document.getElementById("ldNext").addEventListener("click",()=>stepLead(1));
+  document.querySelectorAll("#ldTabs button[data-t]").forEach(b=>b.addEventListener("click",()=>{ldTab=b.getAttribute("data-t");document.querySelectorAll("#ldTabs button").forEach(x=>x.classList.toggle("on",x.getAttribute("data-t")===ldTab));renderLeadTab();}));
+  renderLeadTab(); renderTimeline();
+}
+function logActivity(type,text){ const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
+  (l.activity=l.activity||[]).push({type,note:text||"",at:new Date().toISOString()}); l.lastActivity=new Date().toISOString();
+  l.lastLabel=(type==="call"?"Call Logged":type==="text"?"Texted":type==="email"?"Emailed":type==="appointment"?"Appointment":"Note");
+  renderTimeline(); renderLeads(); renderTakeAction(); renderFeed(); crmToast("Logged"); }
+function renderLeadTab(){
+  const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return; const body=document.getElementById("ldTabBody");
+  if(ldTab==="note"){
+    body.innerHTML='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="mini-pill" style="background:#fff;border:1px solid var(--line);color:var(--teal)">✦ AI: Help Me Write</button></div><textarea class="ld-note" id="ldNote" placeholder="Write a note or use @ to notify someone on your team">'+esc(l.crmNotes||"")+'</textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSaveNote">SAVE NOTE</button></div>';
+    document.getElementById("ldSaveNote").addEventListener("click",()=>{ l.crmNotes=document.getElementById("ldNote").value; logActivity("note","Note updated");
+      fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({crmNotes:l.crmNotes})}).catch(()=>{}); });
+  } else if(ldTab==="call"){
+    const outs=["Talked","Left Message","Busy","Failed","No Answer","Wrong Number"];
+    body.innerHTML='<div style="color:var(--label);font-size:13px;font-weight:600;margin-bottom:10px">Call Outcome</div><div class="outcome" id="ldOut">'+outs.map(o=>'<button class="'+(o===ldOutcome?"on":"")+'" data-o="'+o+'">'+o+'</button>').join("")+'</div><textarea class="ld-note" id="ldCallNote" placeholder="Call notes…" style="min-height:90px"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldLogCall">LOG CALL</button></div>';
+    document.querySelectorAll("#ldOut button").forEach(b=>b.addEventListener("click",()=>{ldOutcome=b.getAttribute("data-o");document.querySelectorAll("#ldOut button").forEach(x=>x.classList.toggle("on",x===b));}));
+    document.getElementById("ldLogCall").addEventListener("click",()=>logActivity("call",(ldOutcome||"Call")+(document.getElementById("ldCallNote").value?": "+document.getElementById("ldCallNote").value:"")));
+  } else if(ldTab==="text"){
+    body.innerHTML='<textarea class="ld-note" id="ldTxt" placeholder="Type a text message…" style="min-height:90px"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSendTxt">SEND TEXT</button></div>';
+    document.getElementById("ldSendTxt").addEventListener("click",()=>{const v=document.getElementById("ldTxt").value.trim();if(v)logActivity("text",v);});
+  } else if(ldTab==="email"){
+    body.innerHTML='<input class="ld-input" id="ldSubj" placeholder="Subject" style="margin-bottom:10px"><textarea class="ld-note" id="ldMail" placeholder="Write your email…"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSendMail">SEND EMAIL</button></div>';
+    document.getElementById("ldSendMail").addEventListener("click",()=>logActivity("email",document.getElementById("ldSubj").value||"Email"));
+  } else if(ldTab==="appointment"){
+    body.innerHTML='<div style="display:flex;gap:10px;margin-bottom:10px"><input class="ld-input" type="date" id="ldDate"><input class="ld-input" type="time" id="ldTime"></div><input class="ld-input" id="ldTitle" placeholder="Appointment title (e.g. Showing at…)"><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSched">SCHEDULE</button></div>';
+    document.getElementById("ldSched").addEventListener("click",()=>logActivity("appointment",document.getElementById("ldTitle").value||"Appointment"));
+  } else {
+    body.innerHTML='<input class="ld-input" id="ldOtherTitle" placeholder="Log an activity…"><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldLogOther">LOG</button></div>';
+    document.getElementById("ldLogOther").addEventListener("click",()=>logActivity("other",document.getElementById("ldOtherTitle").value||"Activity"));
+  }
+}
+function renderTimeline(){
+  const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
+  const items=(l.activity||[]).slice().reverse().slice(0,12);
+  const icon=t=>t==="call"?"☎":t==="text"?"✉":t==="email"?"@":t==="appointment"?"◷":t==="note"?"✎":"•";
+  document.getElementById("ldTimeline").innerHTML=items.length?items.map(a=>'<div class="tl"><div class="dot">'+icon(a.type)+'</div><div><div class="tt">'+esc((a.type||"activity").charAt(0).toUpperCase()+(a.type||"activity").slice(1))+(a.note?" — "+esc(a.note):"")+'</div><div class="tm">'+(a.at?relTime(a.at):"")+'</div></div></div>').join(""):'<div class="empty" style="padding:16px 0">No activity logged yet.</div>';
+}
 document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")) closeDD(); });
 window.addEventListener("scroll",closeDD,true);
 window.addEventListener("resize",closeDD);
