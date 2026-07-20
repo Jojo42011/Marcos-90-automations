@@ -188,6 +188,8 @@
   <button class="r on" data-view="dashboard" title="Dashboard"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-3"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
   <button class="r" data-view="messages" title="Messages"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H8l-4 4z"/></svg></button>
   <button class="r" data-view="leads" title="Leads"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg></button>
+  <button class="r" data-view="people" title="People"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.2 2.7-5.5 6-5.5S15 16.8 15 20"/><path d="M16 5.5a3 3 0 0 1 0 5.6M22 20c0-2.6-1.7-4.6-4-5.2"/></svg></button>
+  <button class="r" data-view="opps" title="Opportunities"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="2.6"/></svg></button>
   <span class="sp"></span>
   <button class="r" data-view="dashboard" title="Home"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
 </nav>
@@ -265,6 +267,56 @@
       </div>
     </div>
   </section>
+
+  <!-- PEOPLE -->
+  <section class="view" id="view-people">
+    <div class="leads-wrap">
+      <div class="leads-nav">
+        <div class="h"><b>People</b><span class="add">+</span></div>
+        <a class="on" data-bucket="all">All People <span class="c" id="pnAll">0</span></a>
+        <a data-bucket="client">Clients <span class="c" id="pnClient">0</span></a>
+        <a data-bucket="collaborator">Collaborators <span class="c" id="pnCollab">0</span></a>
+        <a data-bucket="team">Team <span class="c" id="pnTeam">0</span></a>
+        <a data-bucket="archived">Archived <span class="c" id="pnArch">0</span></a>
+        <a>Smart Filters <span class="c">12 ›</span></a>
+      </div>
+      <div class="leads-main">
+        <div class="leads-top">
+          <h1 id="pTitle">All People <small id="pCount"></small></h1>
+          <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn ghost">FILTER</button></div>
+        </div>
+        <div class="tbl-scroll">
+          <table class="leads">
+            <thead><tr>
+              <th><input type="checkbox" class="cb"></th><th>Name</th><th>Show in Leads</th><th>Intent</th><th>Status</th><th>Stage</th>
+              <th>Email</th><th>Phone</th><th>SMS</th><th>Appt.</th><th>Mail</th><th>Other</th>
+              <th>Address</th><th>Last Interaction</th><th>Next Due Tasks</th>
+            </tr></thead>
+            <tbody id="peopleRows"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="pPager"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPPORTUNITIES -->
+  <section class="view" id="view-opps"><div class="pad">
+    <div class="page-head"><h1>Opportunities <small id="oCount"></small></h1><button class="pill-btn">+ ADD TO PIPELINE</button></div>
+    <div class="tabs" id="oppTabs" style="margin-bottom:16px">
+      <button class="on" data-otype="all">ALL</button>
+      <button data-otype="Expired">EXPIRED</button>
+      <button data-otype="FSBO">FSBO</button>
+      <button data-otype="Pre-Foreclosure">PRE-FORECLOSURE</button>
+      <span style="flex:1"></span><span class="chip">UPDATED DAILY</span>
+    </div>
+    <div class="card"><div class="tbl-scroll">
+      <table class="leads" style="min-width:1000px">
+        <thead><tr><th><input type="checkbox" class="cb"></th><th>Property</th><th>Type</th><th>Est. Value</th><th>Days on Market</th><th>Owner</th><th>Phone</th><th>Contact</th><th>Status</th></tr></thead>
+        <tbody id="oppRows"></tbody>
+      </table>
+    </div></div>
+  </div></section>
 </main>
 
 <div class="demo-tag">Demo data · swaps to live clients on finalize</div>
@@ -444,6 +496,97 @@ function renderLeads(){
   document.querySelectorAll("#pager button[data-p]").forEach(b=>b.addEventListener("click",()=>{const p=+b.dataset.p;if(p>=1&&p<=pages){page=p;renderLeads();document.querySelector(".tbl-scroll").scrollTop=0;}}));
 }
 
+/* ===== People ===== */
+const P_CATS=["client","client","collaborator","team","archived","client","collaborator","archived"];
+const P_STATUS={past_client:{l:"PAST CLIENT",c:"var(--st-unq)"},client:{l:"CLIENT",c:"var(--teal)"},collaborator:{l:"COLLABORATOR",c:"var(--st-watch)"},team:{l:"TEAM",c:"#4a90d9"},archived:{l:"ARCHIVED",c:"#aab2ba"}};
+const PEOPLE=[];
+for(let i=0;i<40;i++){
+  const name=FIRST[(i*5+3)%FIRST.length]+" "+LAST[(i*3+2)%LAST.length];
+  const cat=P_CATS[i%P_CATS.length];
+  const status = cat==="client" ? (i%3===0?"past_client":"client") : cat;
+  const hasAddr=i%4!==2;
+  PEOPLE.push({id:"P"+i,name,cat,status,showInLeads:i%3!==0,
+    intent:(i%2===0)?"buyer":"seller", stageLabel:(cat==="client"?"MET WITH":"No Stage"),
+    email:(i%5===2)?null:name.toLowerCase().replace(/\s/g,".")+"@gmail.com", phone:"(210) 555-0"+(200+i),
+    address:hasAddr? STREETS[(i*2)%STREETS.length]+", "+CITIES[(i*3)%CITIES.length]:"",
+    lastLabel:LASTLAB[i%LASTLAB.length], lastActivity: (i%6===0)? null : ago(60*(1+i)),
+    due:{label:i%4===0?"Due Today":"Upcoming",date:i%4===0?"07-20-2026":"08-0"+(1+i%9)+"-2026"}});
+}
+let pBucket="all",pPage=1;
+function peopleFor(b){return b==="all"?PEOPLE:b==="client"?PEOPLE.filter(p=>p.cat==="client"):PEOPLE.filter(p=>p.cat===b);}
+function eyeIcon(on){return on
+  ? '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.6"/></svg>'
+  : '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#c2cad1" stroke-width="1.8"><path d="M3 3l18 18"/><path d="M10.6 6.1A9.7 9.7 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.3 3.9M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.5 9.5 0 0 0 3.9-.8"/></svg>';}
+function renderPeople(){
+  document.getElementById("pnAll").textContent=PEOPLE.length;
+  document.getElementById("pnClient").textContent=PEOPLE.filter(p=>p.cat==="client").length;
+  document.getElementById("pnCollab").textContent=PEOPLE.filter(p=>p.cat==="collaborator").length;
+  document.getElementById("pnTeam").textContent=PEOPLE.filter(p=>p.cat==="team").length;
+  document.getElementById("pnArch").textContent=PEOPLE.filter(p=>p.cat==="archived").length;
+  const list=peopleFor(pBucket);
+  const titleMap={all:"All People",client:"Clients",collaborator:"Collaborators",team:"Team",archived:"Archived"};
+  document.getElementById("pTitle").innerHTML=titleMap[pBucket]+' <small>('+list.length+')</small>';
+  const pages=Math.max(1,Math.ceil(list.length/PER));
+  const rows=list.slice((pPage-1)*PER,pPage*PER);
+  document.getElementById("peopleRows").innerHTML=rows.map(p=>{
+    const sm=P_STATUS[p.status];
+    return '<tr><td><input type="checkbox" class="cb"></td>'+
+      '<td><span class="lead-name">'+esc(p.name)+'</span></td>'+
+      '<td style="text-align:center">'+eyeIcon(p.showInLeads)+'</td>'+
+      '<td><span class="intent '+(p.intent==="buyer"?"b":"s")+'">'+(p.intent==="buyer"?"B":"S")+'</span></td>'+
+      '<td><span class="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
+      '<td><span class="stage">'+esc(p.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
+      '<td>'+actIcon("email",!p.email)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!p.address)+'</td><td>'+actIcon("other")+'</td>'+
+      '<td>'+(p.address?'<div class="addr">'+esc(p.address)+'</div>':'<span style="color:#c2cad1">—</span>')+'</td>'+
+      '<td>'+(p.lastActivity?'<div class="li"><div class="lab">'+esc(p.lastLabel)+'</div><div class="tm">'+relTime(p.lastActivity)+'</div></div>':'<span style="color:#c2cad1">—</span>')+'</td>'+
+      '<td><div class="due '+(p.due.label==="Due Today"?"today":"up")+'">'+p.due.label+'<span class="d">'+p.due.date+'</span></div></td></tr>';
+  }).join("");
+  let pg='<button '+(pPage<=1?'disabled':'')+' data-p="'+(pPage-1)+'">‹</button>';
+  for(let p=1;p<=Math.min(5,pages);p++)pg+='<button class="'+(p===pPage?"on":"")+'" data-p="'+p+'">'+p+'</button>';
+  pg+='<button '+(pPage>=pages?'disabled':'')+' data-p="'+(pPage+1)+'">›</button>';
+  document.getElementById("pPager").innerHTML=pg;
+  document.querySelectorAll("#pPager button[data-p]").forEach(b=>b.addEventListener("click",()=>{const p=+b.dataset.p;if(p>=1&&p<=pages){pPage=p;renderPeople();}}));
+}
+document.querySelectorAll('.leads-nav a[data-bucket]').forEach(a=>a.addEventListener("click",()=>{
+  document.querySelectorAll('.leads-nav a[data-bucket]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
+  pBucket=a.getAttribute("data-bucket");pPage=1;renderPeople();
+}));
+
+/* ===== Opportunities ===== */
+const OPP_TYPE={Expired:{c:"var(--st-new)"},FSBO:{c:"#4a90d9"},"Pre-Foreclosure":{c:"var(--st-nurture)"}};
+const OPP_OWNERS=["Gary Whitfield","Deloris Pruitt","Sam Okafor","Rhonda Beltran","Curtis Yang","Meredith Cole","Ismael Farah","Bonnie Trask","Wade Ferris","Kim Alvarado","Nate Dorsey","Priya Menon","Ray Colton","Estela Nunez","Hank Boone","Lucia Reyna"];
+const OPPS=[];
+const OTYPES=["Expired","FSBO","Pre-Foreclosure"];
+for(let i=0;i<16;i++){
+  OPPS.push({id:"O"+i, property:STREETS[(i*4)%STREETS.length]+", "+CITIES[(i*5)%CITIES.length],
+    type:OTYPES[i%3], value:280000+((i*17300)%320000), dom:5+((i*11)%120),
+    owner:OPP_OWNERS[i%OPP_OWNERS.length], phone:"(210) 555-0"+(300+i),
+    status:["New","Contacted","Working"][i%3]});
+}
+let oType="all";
+function money(n){return "$"+n.toLocaleString();}
+function renderOpps(){
+  const list=oType==="all"?OPPS:OPPS.filter(o=>o.type===oType);
+  document.getElementById("oCount").textContent="("+list.length+")";
+  document.getElementById("oppRows").innerHTML=list.map(o=>{
+    const tm=OPP_TYPE[o.type];
+    const stC=o.status==="New"?"var(--teal)":o.status==="Contacted"?"var(--st-nurture)":"var(--st-watch)";
+    return '<tr><td><input type="checkbox" class="cb"></td>'+
+      '<td><span class="lead-name">'+esc(o.property)+'</span></td>'+
+      '<td><span class="status" style="background:'+tm.c+'">'+o.type+'</span></td>'+
+      '<td style="color:#5b6570;font-weight:600">'+money(o.value)+'</td>'+
+      '<td style="color:#6b7480">'+o.dom+' days</td>'+
+      '<td style="color:#5b6570">'+esc(o.owner)+'</td>'+
+      '<td style="color:#6b7480">'+esc(o.phone)+'</td>'+
+      '<td><div class="aicons">'+actIcon("phone")+actIcon("sms")+actIcon("other")+'</div></td>'+
+      '<td><span class="status" style="background:'+stC+'">'+o.status+'</span></td></tr>';
+  }).join("");
+}
+document.querySelectorAll('#oppTabs button[data-otype]').forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll('#oppTabs button[data-otype]').forEach(x=>x.classList.remove("on"));b.classList.add("on");
+  oType=b.getAttribute("data-otype");renderOpps();
+}));
+
 /* view switching */
 document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("click",()=>{
   const v=b.getAttribute("data-view");
@@ -457,5 +600,5 @@ document.getElementById("taRange").addEventListener("change",renderTakeAction);
 document.getElementById("loadMore").addEventListener("click",()=>{shown+=8;renderFeed();});
 document.getElementById("feedCount").textContent=String(Math.min(LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length,99));
 
-renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();
+renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();
 </script>
