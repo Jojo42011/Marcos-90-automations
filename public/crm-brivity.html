@@ -172,6 +172,33 @@
   .pager button:disabled{opacity:.4}
   .cb{width:16px;height:16px;accent-color:var(--teal)}
   .demo-tag{position:fixed;bottom:12px;left:66px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--muted);box-shadow:var(--shadow);z-index:50}
+  /* transactions */
+  .txchip{display:inline-flex;align-items:center;gap:8px;background:#f1f3f5;border-radius:16px;padding:5px 12px;font-size:12px;color:#5b6570;font-weight:600}
+  .txchip b{font-weight:700}.txchip .x{color:#aab2ba;cursor:pointer}
+  .vtoggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .vtoggle button{width:36px;height:34px;border:none;background:#fff;color:#aab2ba}.vtoggle button.on{background:#eef7f5;color:var(--teal)}
+  .thumb{width:38px;height:38px;border-radius:6px;background:#eef1f3;color:#c2cad1;display:flex;align-items:center;justify-content:center}
+  .agav{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#7f93c9,#5b6fae)}
+  .tot-row td{background:#f6f7f9;font-weight:700;color:#5b6570;border-top:2px solid var(--line)}
+  .addlink{color:var(--teal);font-weight:600}
+  /* reporting */
+  .kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+  .kpi{padding:16px 18px;border-right:1px solid var(--line-2)}.kpi:last-child{border-right:none}
+  .kpi .l{color:var(--muted);font-size:11.5px;margin-bottom:8px}.kpi .n{color:#5b6570;font-size:22px;font-weight:600}
+  .snap-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:0}
+  .snap{padding:6px 14px;border-right:1px solid var(--line-2)}.snap:last-child{border-right:none}
+  .snap .st{color:#8a939d;font-size:12.5px;margin-bottom:8px}.snap .big{font-size:26px;font-weight:600;color:var(--teal);margin-bottom:8px}
+  .snap .sub{color:var(--muted);font-size:11px;line-height:1.5;margin:0}.snap .sub b{color:#7b8590}
+  .funnel{display:flex;align-items:center;gap:0;flex-wrap:wrap}
+  .fstep{text-align:center;min-width:96px}
+  .fcirc{width:78px;height:78px;border-radius:50%;border:2px solid var(--teal-soft);display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto}
+  .fcirc .n{font-size:18px;font-weight:700;color:#5b6570}.fcirc .g{font-size:9px;color:var(--teal);font-weight:700;letter-spacing:.04em}
+  .fstep .cap{font-size:11px;color:var(--muted);margin-top:7px}
+  .fpct{color:#aab2ba;font-size:14px;font-weight:600;padding:0 6px}
+  .rep-nav a{display:block;padding:8px 18px;color:#6b7480;font-size:13px}.rep-nav a:hover{background:#fafbfc}.rep-nav a.on{background:var(--teal-soft);color:var(--teal);font-weight:600}
+  .rep-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .rep-head h1{font-weight:400;color:var(--title);font-size:26px;margin:0}
+  .sec-title{font-size:16px;font-weight:600;color:var(--label);margin:26px 0 12px}
 </style>
 
 <header class="topbar">
@@ -190,6 +217,8 @@
   <button class="r" data-view="leads" title="Leads"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg></button>
   <button class="r" data-view="people" title="People"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.2 2.7-5.5 6-5.5S15 16.8 15 20"/><path d="M16 5.5a3 3 0 0 1 0 5.6M22 20c0-2.6-1.7-4.6-4-5.2"/></svg></button>
   <button class="r" data-view="opps" title="Opportunities"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="2.6"/></svg></button>
+  <button class="r" data-view="tx" title="Transactions"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+  <button class="r" data-view="reporting" title="Reporting"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
   <span class="sp"></span>
   <button class="r" data-view="dashboard" title="Home"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
 </nav>
@@ -317,6 +346,63 @@
       </table>
     </div></div>
   </div></section>
+
+  <!-- TRANSACTIONS -->
+  <section class="view" id="view-tx">
+    <div class="leads-wrap">
+      <div class="leads-nav">
+        <div class="h"><b>Transactions</b><span class="add">+</span></div>
+        <a class="on" data-txb="all">All <span class="c" id="txAll">0</span></a>
+        <a data-txb="draft">Drafts <span class="c" id="txDraft">0</span></a>
+        <a data-txb="pipeline">Pipeline <span class="c" id="txPipe">0</span></a>
+        <a data-txb="coming_soon">Coming Soon <span class="c" id="txCs">0</span></a>
+        <a data-txb="active">Active <span class="c" id="txActive">0</span></a>
+        <a data-txb="pending">Pending <span class="c" id="txPend">0</span></a>
+        <a data-txb="closed">Closed <span class="c" id="txClosed">0</span></a>
+        <a data-txb="referral">Referrals <span class="c">0</span></a>
+        <a data-txb="expired">Expired <span class="c">0</span></a>
+        <a data-txb="withdrawn">Withdrawn <span class="c" id="txWd">0</span></a>
+        <a data-txb="canceled">Canceled <span class="c" id="txCan">0</span></a>
+        <a data-txb="archived">Archived <span class="c">1</span></a>
+        <a>Smart Filters <span class="c">›</span></a>
+      </div>
+      <div class="leads-main">
+        <div class="leads-top">
+          <h1>Transactions</h1>
+          <div class="acts"><div class="vtoggle"><button class="on"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button><button><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button></div><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY: ADDRESS / TITLE ASC ▾</button><button class="pill-btn">FILTER</button></div>
+        </div>
+        <div id="txChipBar" style="padding:0 22px 8px;display:none"><span class="txchip"><b>Status:</b> <span id="txChipLabel"></span> <span class="x" id="txChipX">✕</span></span> <a class="addlink" style="margin-left:10px;font-size:12px">Save Filter</a> <a style="color:#9aa5b1;margin-left:8px;font-size:12px" id="txClear">Clear all</a></div>
+        <div class="tbl-scroll">
+          <table class="leads" style="min-width:1180px">
+            <thead><tr><th>Photo</th><th>Address / Title</th><th>Type</th><th>Status</th><th>MLS#</th><th>Agent</th><th>Date Listed</th><th>Listing Price</th><th>Expiration</th><th>Close Price</th><th>GCI</th></tr></thead>
+            <tbody id="txRows"></tbody>
+            <tfoot id="txTotals"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORTING -->
+  <section class="view" id="view-reporting">
+    <div class="leads-wrap">
+      <div class="leads-nav rep-nav" style="padding-top:16px">
+        <div class="h"><b>Reporting</b></div>
+        <a class="on" data-rep="business">Business Dashboard</a>
+        <a data-rep="sales_funnel">Sales Funnel Dashboard</a>
+        <a data-rep="agent_dash">Agent Dashboard</a>
+        <a data-rep="leaderboards">Leaderboards</a>
+        <a data-rep="open_house">Open House Dashboard</a>
+        <a data-rep="agent_activity">Agent Activity</a>
+        <a data-rep="call_activity">Call Activity</a>
+        <a data-rep="text_activity">Text Activity</a>
+        <a data-rep="tasks">Tasks</a>
+        <a data-rep="appointments">Appointments</a>
+        <a data-rep="lead_source">Lead Source</a>
+      </div>
+      <div class="leads-main"><div style="padding:22px 26px 60px" id="repBody"></div></div>
+    </div>
+  </section>
 </main>
 
 <div class="demo-tag">Demo data · swaps to live clients on finalize</div>
@@ -587,6 +673,126 @@ document.querySelectorAll('#oppTabs button[data-otype]').forEach(b=>b.addEventLi
   oType=b.getAttribute("data-otype");renderOpps();
 }));
 
+/* ===== Transactions ===== */
+const TX_STATUS={active:{l:"ACTIVE",c:"var(--teal)"},pending:{l:"PENDING",c:"var(--st-nurture)"},closed:{l:"CLOSED",c:"#3fae86"},withdrawn:{l:"WITHDRAWN",c:"#3a444e"},canceled:{l:"CANCELED",c:"#3a444e"},draft:{l:"DRAFT",c:"#aab2ba"},coming_soon:{l:"COMING SOON",c:"#4a90d9"},expired:{l:"EXPIRED",c:"var(--st-new)"},pipeline:{l:"PIPELINE",c:"#7c8b98"},archived:{l:"ARCHIVED",c:"#aab2ba"}};
+const TX_DIST=[].concat(Array(19).fill("closed"),Array(4).fill("active"),Array(2).fill("pending"),["withdrawn"],Array(4).fill("canceled"),["draft","draft"],["pipeline"]);
+const AGENTS_TX=["Marco Puga","James Carter"];
+const TX=[];
+for(let i=0;i<TX_DIST.length;i++){
+  const status=TX_DIST[i];
+  const listP=290000+((i*23700)%420000);
+  const closed=status==="closed";
+  const closeP=closed?(listP-((i*3100)%40000)):0;
+  TX.push({id:"T"+i, address:STREETS[i%STREETS.length], city:CITIES[i%CITIES.length], type:"S",
+    status, mls:(1900000+i*937).toString(), agent:AGENTS_TX[i%2],
+    dateListed:["11-21-2025","10-28-2025","12-04-2025","01-13-2026","04-23-2026","03-09-2026"][i%6],
+    listPrice:listP, expiration:closed?"":["02-21-2026","07-23-2026","02-02-2026"][i%3],
+    closePrice:closeP, gci:closed?Math.round(closeP*0.03):0, draft:status==="draft"});
+}
+let txBucket="all";
+function txFor(b){return b==="all"?TX:b==="draft"?TX.filter(t=>t.draft):TX.filter(t=>t.status===b);}
+function usd(n){return n?("$"+n.toLocaleString()):"$0";}
+function renderTx(){
+  const byS=s=>TX.filter(t=>t.status===s).length;
+  document.getElementById("txAll").textContent=TX.length;
+  document.getElementById("txDraft").textContent=TX.filter(t=>t.draft).length;
+  document.getElementById("txPipe").textContent=byS("pipeline");
+  document.getElementById("txCs").textContent=byS("coming_soon");
+  document.getElementById("txActive").textContent=byS("active");
+  document.getElementById("txPend").textContent=byS("pending");
+  document.getElementById("txClosed").textContent=byS("closed");
+  document.getElementById("txWd").textContent=byS("withdrawn");
+  document.getElementById("txCan").textContent=byS("canceled");
+  const list=txFor(txBucket);
+  document.getElementById("txRows").innerHTML=list.map(t=>{
+    const sm=TX_STATUS[t.status];
+    return '<tr>'+
+      '<td><div class="thumb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></div></td>'+
+      '<td><div class="lead-name">'+esc(t.address)+'</div><div class="addr" style="max-width:none">'+esc(t.city)+'</div></td>'+
+      '<td><span class="intent s">S</span></td>'+
+      '<td><span class="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
+      '<td style="color:#6b7480">'+t.mls+'</td>'+
+      '<td><div class="agav" title="'+esc(t.agent)+'"></div></td>'+
+      '<td style="color:#6b7480">'+t.dateListed+'</td>'+
+      '<td style="color:#5b6570;font-weight:600">'+usd(t.listPrice)+'</td>'+
+      '<td style="color:#6b7480">'+(t.expiration||'<span class="addlink">Add</span>')+'</td>'+
+      '<td style="color:#5b6570;font-weight:600">'+usd(t.closePrice)+'</td>'+
+      '<td style="color:#5b6570;font-weight:600">'+usd(t.gci)+'</td></tr>';
+  }).join("");
+  const sumL=list.reduce((a,t)=>a+t.listPrice,0),sumC=list.reduce((a,t)=>a+t.closePrice,0),sumG=list.reduce((a,t)=>a+t.gci,0);
+  document.getElementById("txTotals").innerHTML='<tr class="tot-row"><td colspan="7">Totals: '+list.length+' &#9683;</td><td>'+usd(sumL)+'</td><td></td><td>'+usd(sumC)+'</td><td>'+usd(sumG)+'</td></tr>';
+  const chip=document.getElementById("txChipBar");
+  if(txBucket==="all"){chip.style.display="none";}else{chip.style.display="block";document.getElementById("txChipLabel").textContent=(TX_STATUS[txBucket]||{l:txBucket}).l;}
+}
+document.querySelectorAll('.leads-nav a[data-txb]').forEach(a=>a.addEventListener("click",()=>{
+  document.querySelectorAll('.leads-nav a[data-txb]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
+  txBucket=a.getAttribute("data-txb");renderTx();
+}));
+document.getElementById("txClear").addEventListener("click",()=>{txBucket="all";document.querySelectorAll('.leads-nav a[data-txb]').forEach(x=>x.classList.remove("on"));document.querySelector('.leads-nav a[data-txb="all"]').classList.add("on");renderTx();});
+document.getElementById("txChipX").addEventListener("click",()=>document.getElementById("txClear").click());
+
+/* ===== Reporting ===== */
+function kpiRow(items){return '<div class="kpi-row">'+items.map(k=>'<div class="kpi"><div class="l">'+k[0]+'</div><div class="n">'+k[1]+'</div></div>').join("")+'</div>';}
+function funnelHTML(steps){
+  let h='<div class="funnel">';
+  steps.forEach((s,i)=>{h+='<div class="fstep"><div class="fcirc"><div class="n">'+s.n+'</div><div class="g">SET GOAL</div></div><div class="cap">'+s.l+'</div></div>';
+    if(s.pct!=null)h+='<div class="fpct">'+s.pct+'</div>';});
+  return h+'</div>';
+}
+function activityTable(cols){
+  const agents=[{n:"Marco Puga"},{n:"James Carter"}];
+  const rnd=(seed)=>((seed*97)%40);
+  let h='<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:900px"><thead><tr><th>Agent</th>'+cols.map(c=>'<th>'+c+'</th>').join("")+'</tr></thead><tbody>';
+  const totals=cols.map(()=>0);
+  agents.forEach((a,ai)=>{h+='<tr><td><div style="display:flex;align-items:center;gap:9px"><div class="agav"></div><span class="lead-name">'+a.n+'</span></div></td>'+
+    cols.map((c,ci)=>{const v=rnd(ai+ci+2);totals[ci]+=v;return '<td style="color:#5b6570">'+v+'</td>';}).join("")+'</tr>';});
+  h+='</tbody><tfoot><tr class="tot-row"><td>Totals</td>'+totals.map(t=>'<td>'+t+'</td>').join("")+'</tr></tfoot></table></div></div>';
+  return h;
+}
+function leadSourceHTML(){
+  const cols=["New","Unqualified","Watch","Nurture","Hot","Past","Inactive","Archived","Trash","Total Leads"];
+  const srcs=[["TikTok",[0,2,0,0,3,0,0,2,0,7]],["Mojo",[0,3,1,7,0,0,0,0,0,11]],["Call In",[0,0,0,0,0,0,0,7,0,7]],["Inbound",[0,0,0,0,0,0,0,1,0,1]]];
+  const tot=cols.map((_,i)=>srcs.reduce((a,s)=>a+s[1][i],0));
+  let h='<div class="rep-head"><h1>Lead Source</h1></div>'+
+    '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:13px"><span>Track the number of leads and status pipeline of all your leads.</span><span style="flex:1"></span>Filter by user <select class="select"><option>All Active Users</option><option>Marco Puga</option></select><select class="select"><option>Last 7 days</option><option>This Month</option></select></div>'+
+    '<div class="sec-title" style="margin-top:0">Other Sources</div><div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:900px"><thead><tr><th>Source</th>'+cols.map(c=>'<th>'+c+'</th>').join("")+'</tr></thead><tbody>'+
+    srcs.map(s=>'<tr><td><span class="addlink">'+s[0]+'</span></td>'+s[1].map(v=>'<td style="color:#6b7480">'+v+'</td>').join("")+'</tr>').join("")+
+    '</tbody><tfoot><tr class="tot-row"><td>Totals</td>'+tot.map(v=>'<td>'+v+'</td>').join("")+'</tr></tfoot></table></div></div>';
+  return h;
+}
+function businessHTML(){
+  return '<div class="rep-head"><h1>Business Dashboard <span style="font-size:15px;color:var(--muted)">2026 ▾</span></h1><button class="pill-btn ghost">SETTINGS</button></div>'+
+    kpiRow([["YTD Pending to Closed Ratio","183%"],["Avg. YTD Sale Price","$404,542.73"],["Avg. MTD Sale Price","$0.00"],["Avg. YTD Commission","$12,683.91"],["Est. Total GCI","$194,893.25"],["YTD Company Dollar","$126,567.09"]])+
+    '<div class="sec-title">Transaction Snapshot</div>'+
+    '<div class="tabs" style="margin-bottom:14px"><button class="on">Buyer &amp; Seller</button><button style="pointer-events:none;opacity:.5">All</button><button style="pointer-events:none;opacity:.5">Tenant &amp; Landlord</button><button style="pointer-events:none;opacity:.5">Referral</button></div>'+
+    '<div class="card"><div class="snap-grid">'+[
+      ["YTD Closed","11","$4,449,970.00","$136,839.10"],["MTD Closed","0","$0.00","$0.00"],["Pending","2","$1,055,530.00","$31,665.90"],
+      ["Active","4","$1,069,000.00","$11,070.00"],["Coming Soon","0","$0.00","$0.00"],["Pipeline","1","$0.00","$0.00"]
+    ].map(s=>'<div class="snap"><div class="st">'+s[0]+'</div><div class="big">'+s[1]+'</div><p class="sub"><b>Volume</b><br>'+s[2]+'</p><p class="sub" style="margin-top:6px"><b>GCI</b><br>'+s[3]+'</p></div>').join("")+'</div></div>'+
+    '<div class="sec-title">Sales Funnel</div>'+
+    '<div class="card card-pad">'+funnelHTML([
+      {l:"Called",n:"6,378",pct:"22%"},{l:"Contacted",n:"1,435",pct:"9%"},{l:"Appt. Set",n:"127",pct:"57%"},{l:"Appt. Held",n:"72",pct:"58%"},{l:"Signed",n:"42",pct:"14%"},{l:"Pended",n:"6",pct:"183%"},{l:"Closed",n:"11"}
+    ])+'</div>';
+}
+const REPORTS={
+  business:businessHTML,
+  sales_funnel:()=>'<div class="rep-head"><h1>Sales Funnel Dashboard</h1><select class="select"><option>This Year</option></select></div><div class="card card-pad">'+funnelHTML([{l:"Called",n:"6,378",pct:"22%"},{l:"Contacted",n:"1,435",pct:"9%"},{l:"Appt. Set",n:"127",pct:"57%"},{l:"Appt. Held",n:"72",pct:"58%"},{l:"Signed",n:"42",pct:"14%"},{l:"Pended",n:"6",pct:"183%"},{l:"Closed",n:"11"}])+'</div>',
+  agent_dash:()=>'<div class="rep-head"><h1>Agent Dashboard</h1><select class="select"><option>Marco Puga</option><option>James Carter</option></select></div>'+kpiRow([["New Leads","42"],["Contacts","1,435"],["Appts Set","127"],["Under Contract","6"],["Closed YTD","11"],["GCI YTD","$136,839"]]),
+  leaderboards:()=>'<div class="rep-head"><h1>Activity Leaderboard</h1><select class="select"><option>This Month</option></select></div>'+activityTable(["Calls","Texts","Emails","Appts Set","Contacts"]),
+  open_house:()=>'<div class="rep-head"><h1>Open House Dashboard</h1><select class="select"><option>This Year</option></select></div>'+kpiRow([["Open Houses","0"],["Attendees","0"],["Leads","0"],["Avg. Leads","0.00"],["Follow-ups","0"],["Converted","0"]]),
+  agent_activity:()=>'<div class="rep-head"><h1>Agent Activity</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Dials","Contacts","Conversations","Appts Set","Emails","Texts"]),
+  call_activity:()=>'<div class="rep-head"><h1>Call Activity</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Dials","Answered","Voicemail","Conversations","Appts Set"]),
+  text_activity:()=>'<div class="rep-head"><h1>Text Activity</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Sent","Received","Conversations","Appts Set"]),
+  tasks:()=>'<div class="rep-head"><h1>Tasks</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Assigned Tasks","Completed Tasks","Completed On Time","Overdue"]),
+  appointments:()=>'<div class="rep-head"><h1>Appointment Tracking</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Set","Held","Cancelled","No Show","Signed"]),
+  lead_source:leadSourceHTML,
+};
+function renderReport(key){document.getElementById("repBody").innerHTML=(REPORTS[key]||REPORTS.business)();}
+document.querySelectorAll('.rep-nav a[data-rep]').forEach(a=>a.addEventListener("click",()=>{
+  document.querySelectorAll('.rep-nav a[data-rep]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
+  renderReport(a.getAttribute("data-rep"));
+}));
+
 /* view switching */
 document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("click",()=>{
   const v=b.getAttribute("data-view");
@@ -600,5 +806,5 @@ document.getElementById("taRange").addEventListener("change",renderTakeAction);
 document.getElementById("loadMore").addEventListener("click",()=>{shown+=8;renderFeed();});
 document.getElementById("feedCount").textContent=String(Math.min(LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length,99));
 
-renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();
+renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");
 </script>
