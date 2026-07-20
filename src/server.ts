@@ -794,6 +794,11 @@ app.get("/hull-chat", (_req, res) => {
   res.sendFile(path.join(publicDir, "hull-chat.html"));
 });
 
+// Brivity-style CRM front end (staged rebuild: dashboard → messages → leads).
+app.get("/crm", (_req, res) => {
+  res.sendFile(path.join(publicDir, "crm-brivity.html"));
+});
+
 const voiceCloneDataRoot = resolveVoiceCloneDataRoot();
 app.use("/voice-clone-files", express.static(voiceCloneDataRoot));
 
