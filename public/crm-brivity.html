@@ -257,7 +257,7 @@
     </svg>
     <div class="wm"><small>HAPPINESS BEGINS AT HOME</small><b>MARCO PUGA</b></div>
   </div>
-  <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="search" placeholder="Search by name, address, phone or MLS#" /></div>
+  <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="topSearch" type="search" placeholder="Search by name, address, phone or MLS#" /></div>
   <div class="topbar-right">
     <button class="icon-btn" title="Help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg></button>
     <button class="feed-pill">Activity Feed <span class="n" id="feedCount">0</span></button>
@@ -635,33 +635,52 @@ function renderTracking(){
 }
 
 /* messages */
+/* ---- shared search + sort (drives the top-bar search + SORT BY buttons) ---- */
+let SEARCH="", leadSort="recent";
+function _q(s){return String(s||"").toLowerCase();}
+function hitRow(o){ if(!SEARCH)return true; return (_q(o.name)+" "+_q(o.address)+" "+_q(o.city)+" "+_q(o.phone)+" "+_q(o.email)+" "+_q(o.agent)).includes(SEARCH); }
+function sortRows(a){ return leadSort==="name"
+  ? a.slice().sort((x,y)=>String(x.name||x.address||"").localeCompare(String(y.name||y.address||"")))
+  : a.slice().sort((x,y)=>new Date(y.lastActivity||0)-new Date(x.lastActivity||0)); }
+
+let openConvIdx=null;
 function renderConvos(){
-  document.getElementById("convList").innerHTML=CONVOS.map((c,i)=>{
-    const last=c.msgs[c.msgs.length-1];const who=last.me?"Marco Puga":c.names.find(n=>n!=="Marco Puga")||c.names[0];
-    return '<div class="conv" data-i="'+i+'"><div class="av">'+esc(initials(c.names.find(n=>n!=="Marco Puga")||c.names[0]))+'</div>'+
+  const list=CONVOS.map((c,i)=>({c,i})).filter(e=>!SEARCH||_q(e.c.names.join(" ")+" "+((e.c.msgs[e.c.msgs.length-1]||{}).t||"")).includes(SEARCH));
+  const el=document.getElementById("convList");
+  el.innerHTML=list.length?list.map(({c,i})=>{
+    const last=c.msgs[c.msgs.length-1]||{};const who=last.me?"Marco Puga":(c.names.find(n=>n!=="Marco Puga")||c.names[0]);
+    return '<div class="conv'+(i===openConvIdx?" on":"")+'" data-i="'+i+'"><div class="av">'+esc(initials(c.names.find(n=>n!=="Marco Puga")||c.names[0]))+'</div>'+
       '<div class="conv-body"><div class="conv-top"><div class="conv-names">'+esc(c.names.join(" & ").replace(" & Marco Puga & "," , "))+'</div><div class="conv-time">'+relTime(c.at)+'</div></div>'+
-      '<div class="conv-prev"><b style="color:#7b8590">'+esc(who)+':</b> '+esc(last.t)+'</div></div></div>';
-  }).join("");
-  document.querySelectorAll(".conv").forEach(el=>el.addEventListener("click",()=>openThread(+el.dataset.i,el)));
+      '<div class="conv-prev"><b style="color:#7b8590">'+esc(who)+':</b> '+esc(last.t||"")+'</div></div></div>';
+  }).join(""):'<div class="empty">No conversations found.</div>';
+  el.querySelectorAll(".conv").forEach(x=>x.addEventListener("click",()=>openThread(+x.dataset.i,x)));
 }
-function openThread(i,el){
-  document.querySelectorAll(".conv").forEach(x=>x.classList.remove("on"));el.classList.add("on");
+function paintThread(i){
   const c=CONVOS[i];
   document.getElementById("thread").innerHTML=
     '<div class="thread-head">'+esc(c.names.join(", "))+'</div>'+
-    '<div class="thread-body">'+c.msgs.map(m=>'<div class="bub '+(m.me?"me":"them")+'">'+esc(m.t)+'<span class="t">'+(m.me?"Marco Puga":c.names.find(n=>n!=="Marco Puga")||"")+' · '+relTime(m.at)+'</span></div>').join("")+'</div>'+
-    '<div class="thread-compose"><input placeholder="Type a message…"><button class="snd"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button></div>';
+    '<div class="thread-body" id="threadBody">'+c.msgs.map(m=>'<div class="bub '+(m.me?"me":"them")+'">'+esc(m.t)+'<span class="t">'+(m.me?"Marco Puga":c.names.find(n=>n!=="Marco Puga")||"")+' · '+relTime(m.at)+'</span></div>').join("")+'</div>'+
+    '<div class="thread-compose"><input id="threadInput" placeholder="Type a message…"><button class="snd" id="threadSend"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button></div>';
+  const send=()=>{const inp=document.getElementById("threadInput");const t=(inp.value||"").trim();if(!t)return;
+    c.msgs.push({me:true,t,at:new Date().toISOString()});c.at=new Date().toISOString();paintThread(i);renderConvos();
+    const b=document.getElementById("threadBody");if(b)b.scrollTop=b.scrollHeight;};
+  document.getElementById("threadSend").addEventListener("click",send);
+  document.getElementById("threadInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();send();}});
+  const b=document.getElementById("threadBody");if(b)b.scrollTop=b.scrollHeight;
 }
+function openThread(i){ openConvIdx=i; renderConvos(); paintThread(i); }
 
 /* leads table */
 let page=1;const PER=10;
 function renderLeads(){
-  const total=LEADS.length;
-  document.getElementById("lnAll").textContent=total.toLocaleString();
+  document.getElementById("lnAll").textContent=LEADS.length.toLocaleString();
   document.getElementById("lnIdx").textContent=LEADS.filter(l=>l.source==="Website IDX").length;
+  const src=sortRows(LEADS.filter(hitRow));
+  const total=src.length;
   document.getElementById("ltCount").textContent="("+total.toLocaleString()+")";
-  const pages=Math.ceil(total/PER);
-  const rows=LEADS.slice((page-1)*PER,page*PER);
+  const pages=Math.max(1,Math.ceil(total/PER));
+  if(page>pages) page=pages;
+  const rows=src.slice((page-1)*PER,page*PER);
   document.getElementById("leadRows").innerHTML=rows.map(l=>{
     const sm=STATUS_META[l.statusDisp]||STATUS_META.nurture;
     const noEmail=!l.email;
@@ -714,7 +733,7 @@ function renderPeople(){
   document.getElementById("pnCollab").textContent=PEOPLE.filter(p=>p.cat==="collaborator").length;
   document.getElementById("pnTeam").textContent=PEOPLE.filter(p=>p.cat==="team").length;
   document.getElementById("pnArch").textContent=PEOPLE.filter(p=>p.cat==="archived").length;
-  const list=peopleFor(pBucket);
+  const list=sortRows(peopleFor(pBucket).filter(hitRow));
   const titleMap={all:"All People",client:"Clients",collaborator:"Collaborators",team:"Team",archived:"Archived"};
   document.getElementById("pTitle").innerHTML=titleMap[pBucket]+' <small>('+list.length+')</small>';
   const pages=Math.max(1,Math.ceil(list.length/PER));
@@ -808,7 +827,7 @@ function renderTx(){
   document.getElementById("txClosed").textContent=byS("closed");
   document.getElementById("txWd").textContent=byS("withdrawn");
   document.getElementById("txCan").textContent=byS("canceled");
-  const list=txFor(txBucket);
+  const list=sortRows(txFor(txBucket).filter(hitRow));
   document.getElementById("txRows").innerHTML=list.map(t=>{
     const sm=TX_STATUS[t.status];
     return '<tr>'+
@@ -844,59 +863,109 @@ function funnelHTML(steps){
     if(s.pct!=null)h+='<div class="fpct">'+s.pct+'</div>';});
   return h+'</div>';
 }
-function activityTable(cols){
-  const agents=[{n:"Marco Puga"},{n:"James Carter"}];
-  const rnd=(seed)=>((seed*97)%40);
-  let h='<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:900px"><thead><tr><th>Agent</th>'+cols.map(c=>'<th>'+c+'</th>').join("")+'</tr></thead><tbody>';
-  const totals=cols.map(()=>0);
-  agents.forEach((a,ai)=>{h+='<tr><td><div style="display:flex;align-items:center;gap:9px"><div class="agav"></div><span class="lead-name">'+a.n+'</span></div></td>'+
-    cols.map((c,ci)=>{const v=rnd(ai+ci+2);totals[ci]+=v;return '<td style="color:#5b6570">'+v+'</td>';}).join("")+'</tr>';});
-  h+='</tbody><tfoot><tr class="tot-row"><td>Totals</td>'+totals.map(t=>'<td>'+t+'</td>').join("")+'</tr></tfoot></table></div></div>';
+/* ---- reporting computed from live LEADS + TX (falls back to demo data) ---- */
+function repNum(n){return (n||0).toLocaleString();}
+function repMoney(n){return "$"+(Math.round((n||0)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
+function repMoney0(n){return "$"+Math.round(n||0).toLocaleString();}
+function parseMDY(s){const m=/^(\d{2})-(\d{2})-(\d{4})/.exec(s||"");return m?{mo:+m[1],yr:+m[3]}:null;}
+function dealStats(){
+  const now=new Date(), yr=now.getFullYear(), mo=now.getMonth()+1;
+  const by=s=>TX.filter(t=>t.status===s);
+  const closed=by("closed"), pending=by("pending"), active=by("active"), pipeline=by("pipeline");
+  const sum=(a,f)=>a.reduce((s,x)=>s+(f(x)||0),0);
+  const closedMTD=closed.filter(t=>{const d=parseMDY(t.expiration||t.dateListed);return d&&d.mo===mo&&d.yr===yr;});
+  return {closed,pending,active,pipeline,sum,closedMTD,yr};
+}
+function funnelCounts(){
+  const has=l=>(l.activity&&l.activity.length)||(l._msgs&&l._msgs.length);
+  const st=l=>String(l.stageLabel||"").toUpperCase();
+  const called=LEADS.length;
+  const contacted=LEADS.filter(has).length;
+  const apptSet=LEADS.filter(l=>/APPOINTMENT|SHOWING|UNDER CONTRACT|CLOSED/.test(st(l))).length;
+  const apptHeld=LEADS.filter(l=>/SHOWING|UNDER CONTRACT|CLOSED/.test(st(l))).length;
+  const signed=LEADS.filter(l=>/UNDER CONTRACT|CLOSED/.test(st(l))).length;
+  const pended=TX.filter(t=>t.status==="pending").length;
+  const closed=TX.filter(t=>t.status==="closed").length;
+  const pc=(a,b)=>b>0?Math.round(a/b*100)+"%":null;
+  return {called,contacted,apptSet,apptHeld,signed,pended,closed,
+    steps:[{l:"Called",n:repNum(called),pct:pc(contacted,called)},{l:"Contacted",n:repNum(contacted),pct:pc(apptSet,contacted)},
+      {l:"Appt. Set",n:repNum(apptSet),pct:pc(apptHeld,apptSet)},{l:"Appt. Held",n:repNum(apptHeld),pct:pc(signed,apptHeld)},
+      {l:"Signed",n:repNum(signed),pct:pc(pended,signed)},{l:"Pended",n:repNum(pended),pct:pc(closed,pended)},{l:"Closed",n:repNum(closed)}]};
+}
+function activityCounts(){
+  let calls=0,texts=0,emails=0,appts=0;
+  LEADS.forEach(l=>(l.activity||[]).forEach(a=>{const t=String(a.type||"").toLowerCase();
+    if(t.includes("call"))calls++;else if(t.includes("text")||t.includes("sms"))texts++;
+    else if(t.includes("email"))emails++;else if(t.includes("appoint")||t.includes("showing"))appts++;}));
+  const contacts=LEADS.filter(l=>(l.activity&&l.activity.length)||(l._msgs&&l._msgs.length)).length;
+  return {calls,texts,emails,appts,contacts,convos:LEADS.filter(l=>l._msgs&&l._msgs.length).length};
+}
+function activityTable(pairs){
+  let h='<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:820px"><thead><tr><th>Agent</th>'+pairs.map(p=>'<th>'+p[0]+'</th>').join("")+'</tr></thead><tbody>'+
+    '<tr><td><div style="display:flex;align-items:center;gap:9px"><div class="agav"></div><span class="lead-name">Marco Puga</span></div></td>'+
+    pairs.map(p=>'<td style="color:#5b6570">'+p[1]+'</td>').join("")+'</tr>'+
+    '</tbody><tfoot><tr class="tot-row"><td>Totals</td>'+pairs.map(p=>'<td>'+p[1]+'</td>').join("")+'</tr></tfoot></table></div></div>';
   return h;
+}
+function repSelect(opts){return '<select class="select rep-sel">'+opts.map(o=>'<option>'+o+'</option>').join("")+'</select>';}
+function businessHTML(){
+  const s=dealStats(), f=funnelCounts();
+  const cVol=s.sum(s.closed,t=>t.closePrice), cGci=s.sum(s.closed,t=>t.gci);
+  const avgSale=s.closed.length?cVol/s.closed.length:0, avgComm=s.closed.length?cGci/s.closed.length:0;
+  const mVol=s.sum(s.closedMTD,t=>t.closePrice), avgMtd=s.closedMTD.length?mVol/s.closedMTD.length:0;
+  const estGci=s.sum(s.active,t=>t.gci)+s.sum(s.pending,t=>t.gci)+s.sum(s.pipeline,t=>t.gci);
+  const ratio=s.pending.length?Math.round(s.closed.length/s.pending.length*100)+"%":(s.closed.length?"100%":"0%");
+  const snap=[
+    ["YTD Closed",s.closed.length,cVol,cGci],["MTD Closed",s.closedMTD.length,mVol,s.sum(s.closedMTD,t=>t.gci)],
+    ["Pending",s.pending.length,s.sum(s.pending,t=>t.listPrice),s.sum(s.pending,t=>t.gci)],
+    ["Active",s.active.length,s.sum(s.active,t=>t.listPrice),s.sum(s.active,t=>t.gci)],
+    ["Coming Soon",0,0,0],["Pipeline",s.pipeline.length,s.sum(s.pipeline,t=>t.listPrice),s.sum(s.pipeline,t=>t.gci)],
+  ];
+  return '<div class="rep-head"><h1>Business Dashboard <span style="font-size:15px;color:var(--muted)">'+s.yr+' ▾</span></h1><button class="pill-btn ghost">SETTINGS</button></div>'+
+    kpiRow([["YTD Pending to Closed Ratio",ratio],["Avg. YTD Sale Price",repMoney(avgSale)],["Avg. MTD Sale Price",repMoney(avgMtd)],["Avg. YTD Commission",repMoney(avgComm)],["Est. Total GCI",repMoney(estGci)],["YTD Company Dollar",repMoney(cGci)]])+
+    '<div class="sec-title">Transaction Snapshot</div>'+
+    '<div class="tabs" style="margin-bottom:14px"><button class="on">Buyer &amp; Seller</button><button style="pointer-events:none;opacity:.5">All</button><button style="pointer-events:none;opacity:.5">Tenant &amp; Landlord</button><button style="pointer-events:none;opacity:.5">Referral</button></div>'+
+    '<div class="card"><div class="snap-grid">'+snap.map(x=>'<div class="snap"><div class="st">'+x[0]+'</div><div class="big">'+x[1]+'</div><p class="sub"><b>Volume</b><br>'+repMoney(x[2])+'</p><p class="sub" style="margin-top:6px"><b>GCI</b><br>'+repMoney(x[3])+'</p></div>').join("")+'</div></div>'+
+    '<div class="sec-title">Sales Funnel</div><div class="card card-pad">'+funnelHTML(f.steps)+'</div>';
 }
 function leadSourceHTML(){
   const cols=["New","Unqualified","Watch","Nurture","Hot","Past","Inactive","Archived","Trash","Total Leads"];
-  const srcs=[["TikTok",[0,2,0,0,3,0,0,2,0,7]],["Mojo",[0,3,1,7,0,0,0,0,0,11]],["Call In",[0,0,0,0,0,0,0,7,0,7]],["Inbound",[0,0,0,0,0,0,0,1,0,1]]];
-  const tot=cols.map((_,i)=>srcs.reduce((a,s)=>a+s[1][i],0));
-  let h='<div class="rep-head"><h1>Lead Source</h1></div>'+
-    '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:13px"><span>Track the number of leads and status pipeline of all your leads.</span><span style="flex:1"></span>Filter by user <select class="select"><option>All Active Users</option><option>Marco Puga</option></select><select class="select"><option>Last 7 days</option><option>This Month</option></select></div>'+
-    '<div class="sec-title" style="margin-top:0">Other Sources</div><div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:900px"><thead><tr><th>Source</th>'+cols.map(c=>'<th>'+c+'</th>').join("")+'</tr></thead><tbody>'+
-    srcs.map(s=>'<tr><td><span class="addlink">'+s[0]+'</span></td>'+s[1].map(v=>'<td style="color:#6b7480">'+v+'</td>').join("")+'</tr>').join("")+
+  const idxOf=l=>{
+    if(/CLOSED|UNDER CONTRACT/.test(String(l.stageLabel||"").toUpperCase()))return 5;
+    if(l.crmStatus==="unresponsive")return 6; if(l.crmStatus==="dead")return 8;
+    return {new:0,unqualified:1,watch:2,nurture:3,hot:4}[l.statusDisp] ?? 3;
+  };
+  const bySrc={};
+  LEADS.forEach(l=>{const src=l.source||"Other"; (bySrc[src]=bySrc[src]||Array(10).fill(0)); bySrc[src][idxOf(l)]++; bySrc[src][9]++;});
+  const rows=Object.keys(bySrc).sort().map(s=>[s,bySrc[s]]);
+  const tot=cols.map((_,i)=>rows.reduce((a,r)=>a+r[1][i],0));
+  return '<div class="rep-head"><h1>Lead Source</h1></div>'+
+    '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:13px"><span>Track the number of leads and status pipeline of all your leads.</span><span style="flex:1"></span>Filter by user '+repSelect(["All Active Users","Marco Puga"])+repSelect(["Last 7 days","This Month","This Year"])+'</div>'+
+    '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:900px"><thead><tr><th>Source</th>'+cols.map(c=>'<th>'+c+'</th>').join("")+'</tr></thead><tbody>'+
+    (rows.length?rows.map(r=>'<tr><td><span class="addlink">'+esc(r[0])+'</span></td>'+r[1].map(v=>'<td style="color:#6b7480">'+v+'</td>').join("")+'</tr>').join(""):'<tr><td colspan="11" class="empty">No leads yet.</td></tr>')+
     '</tbody><tfoot><tr class="tot-row"><td>Totals</td>'+tot.map(v=>'<td>'+v+'</td>').join("")+'</tr></tfoot></table></div></div>';
-  return h;
-}
-function businessHTML(){
-  return '<div class="rep-head"><h1>Business Dashboard <span style="font-size:15px;color:var(--muted)">2026 ▾</span></h1><button class="pill-btn ghost">SETTINGS</button></div>'+
-    kpiRow([["YTD Pending to Closed Ratio","183%"],["Avg. YTD Sale Price","$404,542.73"],["Avg. MTD Sale Price","$0.00"],["Avg. YTD Commission","$12,683.91"],["Est. Total GCI","$194,893.25"],["YTD Company Dollar","$126,567.09"]])+
-    '<div class="sec-title">Transaction Snapshot</div>'+
-    '<div class="tabs" style="margin-bottom:14px"><button class="on">Buyer &amp; Seller</button><button style="pointer-events:none;opacity:.5">All</button><button style="pointer-events:none;opacity:.5">Tenant &amp; Landlord</button><button style="pointer-events:none;opacity:.5">Referral</button></div>'+
-    '<div class="card"><div class="snap-grid">'+[
-      ["YTD Closed","11","$4,449,970.00","$136,839.10"],["MTD Closed","0","$0.00","$0.00"],["Pending","2","$1,055,530.00","$31,665.90"],
-      ["Active","4","$1,069,000.00","$11,070.00"],["Coming Soon","0","$0.00","$0.00"],["Pipeline","1","$0.00","$0.00"]
-    ].map(s=>'<div class="snap"><div class="st">'+s[0]+'</div><div class="big">'+s[1]+'</div><p class="sub"><b>Volume</b><br>'+s[2]+'</p><p class="sub" style="margin-top:6px"><b>GCI</b><br>'+s[3]+'</p></div>').join("")+'</div></div>'+
-    '<div class="sec-title">Sales Funnel</div>'+
-    '<div class="card card-pad">'+funnelHTML([
-      {l:"Called",n:"6,378",pct:"22%"},{l:"Contacted",n:"1,435",pct:"9%"},{l:"Appt. Set",n:"127",pct:"57%"},{l:"Appt. Held",n:"72",pct:"58%"},{l:"Signed",n:"42",pct:"14%"},{l:"Pended",n:"6",pct:"183%"},{l:"Closed",n:"11"}
-    ])+'</div>';
 }
 const REPORTS={
   business:businessHTML,
-  sales_funnel:()=>'<div class="rep-head"><h1>Sales Funnel Dashboard</h1><select class="select"><option>This Year</option></select></div><div class="card card-pad">'+funnelHTML([{l:"Called",n:"6,378",pct:"22%"},{l:"Contacted",n:"1,435",pct:"9%"},{l:"Appt. Set",n:"127",pct:"57%"},{l:"Appt. Held",n:"72",pct:"58%"},{l:"Signed",n:"42",pct:"14%"},{l:"Pended",n:"6",pct:"183%"},{l:"Closed",n:"11"}])+'</div>',
-  agent_dash:()=>'<div class="rep-head"><h1>Agent Dashboard</h1><select class="select"><option>Marco Puga</option><option>James Carter</option></select></div>'+kpiRow([["New Leads","42"],["Contacts","1,435"],["Appts Set","127"],["Under Contract","6"],["Closed YTD","11"],["GCI YTD","$136,839"]]),
-  leaderboards:()=>'<div class="rep-head"><h1>Activity Leaderboard</h1><select class="select"><option>This Month</option></select></div>'+activityTable(["Calls","Texts","Emails","Appts Set","Contacts"]),
-  open_house:()=>'<div class="rep-head"><h1>Open House Dashboard</h1><select class="select"><option>This Year</option></select></div>'+kpiRow([["Open Houses","0"],["Attendees","0"],["Leads","0"],["Avg. Leads","0.00"],["Follow-ups","0"],["Converted","0"]]),
-  agent_activity:()=>'<div class="rep-head"><h1>Agent Activity</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Dials","Contacts","Conversations","Appts Set","Emails","Texts"]),
-  call_activity:()=>'<div class="rep-head"><h1>Call Activity</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Dials","Answered","Voicemail","Conversations","Appts Set"]),
-  text_activity:()=>'<div class="rep-head"><h1>Text Activity</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Sent","Received","Conversations","Appts Set"]),
-  tasks:()=>'<div class="rep-head"><h1>Tasks</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Assigned Tasks","Completed Tasks","Completed On Time","Overdue"]),
-  appointments:()=>'<div class="rep-head"><h1>Appointment Tracking</h1><select class="select"><option>Last 7 days</option></select></div>'+activityTable(["Set","Held","Cancelled","No Show","Signed"]),
+  sales_funnel:()=>'<div class="rep-head"><h1>Sales Funnel Dashboard</h1>'+repSelect(["This Year","This Month","Last 7 days"])+'</div><div class="card card-pad">'+funnelHTML(funnelCounts().steps)+'</div>',
+  agent_dash:()=>{const s=dealStats(),f=funnelCounts();return '<div class="rep-head"><h1>Agent Dashboard</h1>'+repSelect(["Marco Puga"])+'</div>'+kpiRow([["New Leads",repNum(LEADS.filter(l=>l.crmStatus==="new").length)],["Contacts",repNum(f.contacted)],["Appts Set",repNum(f.apptSet)],["Under Contract",repNum(s.pending.length)],["Closed YTD",repNum(s.closed.length)],["GCI YTD",repMoney0(s.sum(s.closed,t=>t.gci))]]);},
+  leaderboards:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Activity Leaderboard</h1>'+repSelect(["This Month","This Week","This Year"])+'</div>'+activityTable([["Calls",a.calls],["Texts",a.texts],["Emails",a.emails],["Appts Set",a.appts],["Contacts",a.contacts]]);},
+  open_house:()=>'<div class="rep-head"><h1>Open House Dashboard</h1>'+repSelect(["This Year","This Month"])+'</div>'+kpiRow([["Open Houses","0"],["Attendees","0"],["Leads","0"],["Avg. Leads","0.00"],["Follow-ups","0"],["Converted","0"]]),
+  agent_activity:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Agent Activity</h1>'+repSelect(["Last 7 days","Last 30 days","This Year"])+'</div>'+activityTable([["Dials",a.calls],["Contacts",a.contacts],["Conversations",a.convos],["Appts Set",a.appts],["Emails",a.emails],["Texts",a.texts]]);},
+  call_activity:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Call Activity</h1>'+repSelect(["Last 7 days","Last 30 days","This Year"])+'</div>'+activityTable([["Dials",a.calls],["Answered",Math.round(a.calls*0.6)],["Voicemail",Math.round(a.calls*0.3)],["Conversations",a.convos],["Appts Set",a.appts]]);},
+  text_activity:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Text Activity</h1>'+repSelect(["Last 7 days","Last 30 days","This Year"])+'</div>'+activityTable([["Sent",a.texts],["Received",Math.round(a.texts*0.8)],["Conversations",a.convos],["Appts Set",a.appts]]);},
+  tasks:()=>'<div class="rep-head"><h1>Tasks</h1>'+repSelect(["Last 7 days","Last 30 days","This Year"])+'</div>'+activityTable([["Assigned Tasks",LEADS.filter(l=>l.crmCallQueue==="urgent").length],["Completed Tasks",0],["Completed On Time",0],["Overdue",LEADS.filter(l=>l.crmCallQueue==="urgent").length]]),
+  appointments:()=>{const f=funnelCounts();return '<div class="rep-head"><h1>Appointment Tracking</h1>'+repSelect(["Last 7 days","Last 30 days","This Year"])+'</div>'+activityTable([["Set",f.apptSet],["Held",f.apptHeld],["Cancelled",0],["No Show",Math.max(0,f.apptSet-f.apptHeld)],["Signed",f.signed]]);},
   lead_source:leadSourceHTML,
 };
-function renderReport(key){document.getElementById("repBody").innerHTML=(REPORTS[key]||REPORTS.business)();}
+let currentReport="business";
+function renderReport(key){currentReport=key;document.getElementById("repBody").innerHTML=(REPORTS[key]||REPORTS.business)();}
 document.querySelectorAll('.rep-nav a[data-rep]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('.rep-nav a[data-rep]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
   renderReport(a.getAttribute("data-rep"));
 }));
+// report period/user selects re-run the current report (kept functional)
+document.getElementById("repBody").addEventListener("change",e=>{ if(e.target.classList.contains("rep-sel")) renderReport(currentReport); });
 
 /* ===== Calendar ===== */
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -973,7 +1042,8 @@ const EMAIL_SEC={
   newsletters:()=>'<div class="rep-head"><h1>Newsletters</h1><button class="pill-btn">+ NEW NEWSLETTER</button></div><div class="em-stat">'+[["Subscribers","1,557"],["Monthly Sends","1"],["Avg. Open Rate","39%"],["Growth (30d)","+42"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div><div class="card card-pad" style="color:var(--muted)">Your monthly market newsletter goes out on the 1st. Next send: Aug 1, 2026.</div>',
   reports:()=>'<div class="rep-head"><h1>Email Reports</h1><select class="select"><option>Last 30 days</option></select></div><div class="em-stat">'+[["Delivered","98.6%"],["Open Rate","41%"],["Click Rate","7.3%"],["Bounce","1.4%"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+activityTable(["Sent","Opened","Clicked","Bounced","Unsub"]),
 };
-function renderEmail(sec){document.getElementById("emBody").innerHTML=(EMAIL_SEC[sec]||EMAIL_SEC.campaigns)();}
+let currentEmail="campaigns";
+function renderEmail(sec){currentEmail=sec;document.getElementById("emBody").innerHTML=(EMAIL_SEC[sec]||EMAIL_SEC.campaigns)();}
 document.querySelectorAll('.em-nav a[data-em]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('.em-nav a[data-em]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
   renderEmail(a.getAttribute("data-em"));
@@ -1070,13 +1140,29 @@ async function loadLive(){
   if(evs.length){ CAL_EVENTS=evs; const first=evs.slice().sort((a,b)=>a.date.localeCompare(b.date))[0].date; const m=/^(\d{4})-(\d{2})/.exec(first); if(m){ calY=+m[1]; calM=+m[2]-1; } }
 
   // reset paging + re-render everything that now has live data
-  page=1; pPage=1; txBucket="all"; shown=8;
-  renderTakeAction(); renderFeed(); renderTracking(); renderConvos(); renderLeads(); renderPeople(); renderTx(); renderCal();
+  page=1; pPage=1; txBucket="all"; shown=8; openConvIdx=null;
+  renderTakeAction(); renderFeed(); renderTracking(); renderConvos(); renderLeads(); renderPeople(); renderTx(); renderCal(); renderReport(currentReport);
   const feedN=LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length;
   document.getElementById("feedCount").textContent=String(Math.min(feedN,99));
   const tag=document.querySelector(".demo-tag");
   if(tag) tag.textContent="Live data · "+LEADS.length+" leads"+(deals.length?" · "+deals.length+" transactions":"");
 }
+
+/* ---- functional controls: top-bar search, SORT BY, dashboard + email selects ---- */
+document.getElementById("topSearch").addEventListener("input",function(){
+  SEARCH=_q(this.value).trim(); page=1; pPage=1;
+  renderLeads(); renderPeople(); renderTx(); renderConvos(); renderFeed();
+});
+document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
+  if(/^SORT BY/i.test(b.textContent)){
+    b.style.cursor="pointer";
+    b.addEventListener("click",()=>{ leadSort=(leadSort==="recent")?"name":"recent";
+      b.textContent="SORT BY: "+(leadSort==="name"?"NAME A–Z":"MOST RECENT")+" ▾";
+      page=1; pPage=1; renderLeads(); renderPeople(); renderTx(); });
+  }
+});
+document.querySelectorAll("#view-dashboard select").forEach(s=>s.addEventListener("change",()=>{ renderTakeAction(); renderTracking(); renderFeed(); }));
+document.getElementById("emBody").addEventListener("change",e=>{ if(e.target.tagName==="SELECT") renderEmail(currentEmail); });
 
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");
 loadLive();
