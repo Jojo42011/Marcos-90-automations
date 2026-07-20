@@ -242,6 +242,15 @@
   .em-stat{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
   .em-card{border:1px solid var(--line);border-radius:10px;padding:16px 18px}
   .em-card .l{color:var(--muted);font-size:12px}.em-card .n{color:var(--teal);font-size:24px;font-weight:600;margin-top:6px}
+  /* editable status/stage dropdowns */
+  .editable{cursor:pointer}
+  .dd-menu{position:fixed;z-index:80;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px rgba(16,24,40,.18);padding:6px;min-width:160px;display:none;max-height:280px;overflow:auto}
+  .dd-menu.on{display:block}
+  .dd-menu button{display:flex;align-items:center;gap:9px;width:100%;border:none;background:none;padding:8px 10px;border-radius:6px;font-size:13px;color:#5b6570;text-align:left;cursor:pointer}
+  .dd-menu button:hover{background:var(--teal-soft)}
+  .dd-menu .sw{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  .crm-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#2c3540;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;z-index:90;opacity:0;transition:opacity .2s;pointer-events:none}
+  .crm-toast.on{opacity:1}
 </style>
 
 <header class="topbar">
@@ -509,6 +518,9 @@
   <div class="modal-foot"><button class="btn-plain" id="calCancel">CANCEL</button><button class="pill-btn" id="calApply">FILTER</button></div>
 </div></div>
 
+<div class="dd-menu" id="ddMenu"></div>
+<div class="crm-toast" id="crmToast"></div>
+
 <div class="demo-tag">Demo data · swaps to live clients on finalize</div>
 
 <script>
@@ -688,8 +700,8 @@ function renderLeads(){
       '<td><input type="checkbox" class="cb"></td>'+
       '<td><span class="lead-name">'+esc(l.name)+'</span></td>'+
       '<td><span class="intent '+(l.intent==="buyer"?"b":"s")+'">'+(l.intent==="buyer"?"B":"S")+'</span></td>'+
-      '<td><span class="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
-      '<td><span class="stage">'+esc(l.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
+      '<td><span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
+      '<td><span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
       '<td>'+actIcon("email",noEmail)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!l.address)+'</td><td>'+actIcon("other")+'</td>'+
       '<td>'+(l.address?'<div class="addr">'+esc(l.address)+'</div>':'<span style="color:#c2cad1">—</span>')+'</td>'+
       '<td><div class="li"><div class="lab">'+esc(l.lastLabel)+'</div><div class="tm">'+relTime(l.lastActivity)+'</div></div></td>'+
@@ -1163,6 +1175,37 @@ document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
 });
 document.querySelectorAll("#view-dashboard select").forEach(s=>s.addEventListener("change",()=>{ renderTakeAction(); renderTracking(); renderFeed(); }));
 document.getElementById("emBody").addEventListener("change",e=>{ if(e.target.tagName==="SELECT") renderEmail(currentEmail); });
+
+/* ---- editable status/stage dropdowns → persist to /api/crm/lead/:id ---- */
+const STATUS_OPTIONS=[["new","NEW","var(--st-new)"],["hot","HOT","var(--st-hot)"],["nurture","NURTURE","var(--st-nurture)"],["watch","WATCH","var(--st-watch)"],["dead","UNQUALIFIED","var(--st-unq)"],["unresponsive","INACTIVE","#aab2ba"]];
+const STAGE_OPTIONS=[["new","New Lead"],["hot","Hot"],["warm","Warm"],["cold","Cold"],["pending","Pending"],["appointment_set","Appointment Set"],["showing_set","Showing Set"],["under_contract","Under Contract"],["closed","Closed"]];
+const ddMenu=document.getElementById("ddMenu");
+function closeDD(){ ddMenu.classList.remove("on"); }
+function crmToast(msg){ const t=document.getElementById("crmToast"); t.textContent=msg; t.classList.add("on"); clearTimeout(window.__tt); window.__tt=setTimeout(()=>t.classList.remove("on"),1700); }
+function setLeadField(id,kind,val){
+  const l=LEADS.find(x=>x.id===id); if(!l) return;
+  if(kind==="status"){ l.crmStatus=val; l.statusDisp=STATUS_MAP[val]||"nurture"; }
+  else { l.stage=val; l.stageLabel=STAGE_MAP[val]||"NEW LEAD"; }
+  renderLeads(); renderTakeAction(); renderFeed();
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(id)),{method:"PATCH",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(kind==="status"?{crmStatus:val}:{crmStage:val})})
+    .then(r=>crmToast(r&&r.ok?"Saved":"Updated (not saved to server)"))
+    .catch(()=>crmToast("Updated locally"));
+}
+document.getElementById("leadRows").addEventListener("click",e=>{
+  const el=e.target.closest(".editable"); if(!el) return; e.stopPropagation();
+  const id=el.getAttribute("data-lid"), kind=el.getAttribute("data-kind");
+  const opts=kind==="status"?STATUS_OPTIONS:STAGE_OPTIONS;
+  ddMenu.innerHTML=opts.map(o=>'<button data-v="'+o[0]+'">'+(kind==="status"?'<span class="sw" style="background:'+o[2]+'"></span>':'')+esc(o[1])+'</button>').join("");
+  ddMenu.querySelectorAll("button").forEach(b=>b.addEventListener("click",ev=>{ ev.stopPropagation(); setLeadField(id,kind,b.getAttribute("data-v")); closeDD(); }));
+  const r=el.getBoundingClientRect();
+  ddMenu.style.left=Math.max(8,Math.min(r.left,window.innerWidth-190))+"px";
+  ddMenu.style.top=(r.bottom+4)+"px";
+  ddMenu.classList.add("on");
+});
+document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")) closeDD(); });
+window.addEventListener("scroll",closeDD,true);
+window.addEventListener("resize",closeDD);
 
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");
 loadLive();
