@@ -1122,6 +1122,28 @@ function activityTable(pairs){
   return h;
 }
 function repSelect(opts){return '<select class="select rep-sel">'+opts.map(o=>'<option>'+o+'</option>').join("")+'</select>';}
+// Brivity "Closings Breakdown" — closed deals split by type, computed from TX.
+function closingsBreakdownHTML(){
+  const closed=TX.filter(t=>t.status==="closed");
+  const total=closed.length||1;
+  const rows=[["Seller","seller"],["Buyer","buyer"],["Landlord","landlord"],["Tenant","tenant"],["Referral","referral"]];
+  let tVol=0,tGci=0,tCnt=0;
+  const body=rows.map(([label,key])=>{
+    const d=closed.filter(t=>t.type===key);
+    const vol=d.reduce((a,t)=>a+(t.closePrice||0),0), gci=d.reduce((a,t)=>a+(t.gci||0),0);
+    const cnt=d.length, pct=Math.round(cnt/total*1000)/10;
+    const avgClose=cnt?vol/cnt:0, avgComm=cnt?gci/cnt:0, commPct=vol?Math.round(gci/vol*1000)/10:0;
+    tVol+=vol; tGci+=gci; tCnt+=cnt;
+    return '<tr><td style="font-weight:600;color:#5b6570">'+label+'</td><td>'+cnt+' ('+pct+'%)</td>'+
+      '<td>'+(vol?repMoney(vol):"—")+'</td><td>'+repMoney(gci)+'</td><td>'+repMoney(avgClose)+'</td>'+
+      '<td>'+repMoney(avgComm)+' ('+commPct+'%)</td></tr>';
+  }).join("");
+  return '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:760px">'+
+    '<thead><tr><th>Type</th><th>Count</th><th>Volume</th><th>GCI</th><th>Avg. Close Price</th><th>Avg. Commission</th></tr></thead>'+
+    '<tbody>'+body+'</tbody>'+
+    '<tfoot><tr class="tot-row"><td>Total</td><td>'+tCnt+'</td><td>'+repMoney(tVol)+'</td><td>'+repMoney(tGci)+'</td><td></td><td></td></tr></tfoot>'+
+    '</table></div></div>';
+}
 function businessHTML(){
   const s=dealStats(), f=funnelCounts();
   const cVol=s.sum(s.closed,t=>t.closePrice), cGci=s.sum(s.closed,t=>t.gci);
@@ -1140,6 +1162,7 @@ function businessHTML(){
     '<div class="sec-title">Transaction Snapshot</div>'+
     '<div class="tabs" style="margin-bottom:14px"><button class="on">Buyer &amp; Seller</button><button style="pointer-events:none;opacity:.5">All</button><button style="pointer-events:none;opacity:.5">Tenant &amp; Landlord</button><button style="pointer-events:none;opacity:.5">Referral</button></div>'+
     '<div class="card"><div class="snap-grid">'+snap.map(x=>'<div class="snap"><div class="st">'+x[0]+'</div><div class="big">'+x[1]+'</div><p class="sub"><b>Volume</b><br>'+repMoney(x[2])+'</p><p class="sub" style="margin-top:6px"><b>GCI</b><br>'+repMoney(x[3])+'</p></div>').join("")+'</div></div>'+
+    '<div class="sec-title">Closings Breakdown</div>'+closingsBreakdownHTML()+
     '<div class="sec-title">Sales Funnel</div><div class="card card-pad">'+funnelHTML(f.steps)+'</div>';
 }
 function leadSourceHTML(){
