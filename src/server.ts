@@ -7393,6 +7393,27 @@ function parseRecurringInterval(raw: unknown): CommandTaskRecurringInterval | un
     : undefined;
 }
 
+/** Validate a "HH:MM" 24-hour time-of-day; returns undefined if malformed/empty. */
+function parseDueTime(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(raw.trim());
+  if (!m) return undefined;
+  return `${m[1].padStart(2, "0")}:${m[2]}`;
+}
+
+/** Normalize a reminder-offsets array to sorted unique minutes (0–1440). */
+function parseReminderMinutes(raw: unknown): number[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const mins = Array.from(
+    new Set(
+      raw
+        .map((n) => Math.round(Number(n)))
+        .filter((n) => Number.isFinite(n) && n >= 0 && n <= 1440),
+    ),
+  ).sort((a, b) => a - b);
+  return mins.length ? mins : [];
+}
+
 function commandTaskCounts() {
   const all = getCommandTasks();
   const active = all.filter((t) => t.status !== "done");
@@ -7468,6 +7489,8 @@ app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
     recurringInterval: parseRecurringInterval(body.recurringInterval),
     assignedTo: typeof body.assignedTo === "string" ? body.assignedTo : "carlos",
     dueDate: typeof body.dueDate === "string" ? body.dueDate.slice(0, 10) : undefined,
+    dueTime: parseDueTime(body.dueTime),
+    reminderMinutes: parseReminderMinutes(body.reminderMinutes),
     tags: Array.isArray(body.tags)
       ? body.tags.filter((t): t is string => typeof t === "string")
       : undefined,
@@ -7496,6 +7519,8 @@ app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
   }
   if (typeof body.assignedTo === "string") updates.assignedTo = body.assignedTo;
   if (typeof body.dueDate === "string") updates.dueDate = body.dueDate.slice(0, 10);
+  if ("dueTime" in body) updates.dueTime = parseDueTime(body.dueTime);
+  if ("reminderMinutes" in body) updates.reminderMinutes = parseReminderMinutes(body.reminderMinutes);
   if (Array.isArray(body.tags)) {
     updates.tags = body.tags.filter((t): t is string => typeof t === "string");
   }

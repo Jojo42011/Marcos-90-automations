@@ -638,6 +638,13 @@
                font-size:10px; letter-spacing:1px; cursor:pointer; border-radius:2px;">
         Light mode
       </button>
+      <button id="notify-btn" type="button" onclick="enableNotifications()"
+        title="Turn on phone/desktop reminders for tasks that have a due time"
+        style="background:transparent; border:1px solid rgba(0,212,255,0.3);
+               color:#00d4ff; padding:5px 12px; font-family:monospace;
+               font-size:10px; letter-spacing:1px; cursor:pointer; border-radius:2px;">
+        🔔 Reminders: off
+      </button>
       <div class="filter-toggles">
         <button type="button" id="filter-undone" class="filter-toggle" onclick="setFilter('undone')"
           style="background:rgba(0,212,255,0.2); border-color:#00d4ff; color:#00d4ff;">
@@ -785,7 +792,22 @@
             </div>
           </div>
         </div>
-        <div class="field"><label>Due date</label><input id="m-due" type="date" /></div>
+        <div style="display:flex; gap:10px;">
+          <div class="field" style="flex:1;"><label>Due date</label><input id="m-due" type="date" /></div>
+          <div class="field" style="flex:1;"><label>Due time</label><input id="m-time" type="time" /></div>
+        </div>
+        <div class="field" id="reminder-field">
+          <label>Phone reminders <span style="color:#4a5a6a;">(needs a due time)</span></label>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; padding:6px 2px 2px;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text); letter-spacing:0.3px; cursor:pointer; text-transform:none;">
+              <input type="checkbox" id="m-remind-10" value="10" style="accent-color:#00d4ff; width:14px; height:14px;"> 10 min before
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text); letter-spacing:0.3px; cursor:pointer; text-transform:none;">
+              <input type="checkbox" id="m-remind-5" value="5" style="accent-color:#00d4ff; width:14px; height:14px;"> 5 min before
+            </label>
+            <span style="font-size:10px; color:#4a5a6a; align-self:center;">+ one at due time</span>
+          </div>
+        </div>
         <div class="field"><label>Tags (comma-separated)</label><input id="m-tags" type="text" /></div>
       </div>
       <div class="modal-foot">
@@ -1198,20 +1220,38 @@
     }
     window.handleDrop = handleDrop;
 
-    function buildDueDateHTML(dueDateStr) {
-      if (!dueDateStr) return "";
+    function fmtTime12(hhmm) {
+      const m = /^(\d{2}):(\d{2})$/.exec(String(hhmm || ""));
+      if (!m) return "";
+      let h = Number(m[1]);
+      const min = m[2];
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12; if (h === 0) h = 12;
+      return `${h}:${min} ${ampm}`;
+    }
 
-      const due = new Date(dueDateStr.includes("T") ? dueDateStr : dueDateStr + "T12:00:00");
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      due.setHours(0, 0, 0, 0);
+    function buildDueDateHTML(dueDateStr, dueTime, reminderMinutes) {
+      if (!dueDateStr && !dueTime) return "";
 
-      const isOverdue = due < today;
+      let isOverdue = false;
+      if (dueDateStr) {
+        const due = new Date(dueDateStr.includes("T") ? dueDateStr : dueDateStr + "T12:00:00");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        due.setHours(0, 0, 0, 0);
+        isOverdue = due < today;
+      }
+
       const color = isOverdue ? "#ff2d55" : "rgba(0,212,255,0.5)";
       const prefix = isOverdue ? "⚠ OVERDUE · " : "Due ";
+      const datePart = dueDateStr ? escapeHtml(formatDate(dueDateStr)) : "";
+      const timePart = dueTime ? `<span style="opacity:0.85;">${datePart ? " · " : ""}${escapeHtml(fmtTime12(dueTime))}</span>` : "";
+      const bell = (dueTime && Array.isArray(reminderMinutes) && reminderMinutes.length)
+        ? ` <span title="Reminders: ${reminderMinutes.map(m => m + " min").join(", ")} before" style="opacity:0.8;">🔔</span>`
+        : "";
 
       return `<div class="task-due" style="color:${color}; margin-top:4px;">
-        ${prefix}${escapeHtml(formatDate(dueDateStr))}
+        ${prefix}${datePart}${timePart}${bell}
       </div>`;
     }
 
@@ -1248,7 +1288,7 @@
                               background:${TASK_DOT_COLORS[task.color] || TASK_DOT_COLORS.blue};
                               display:inline-block; margin-right:4px;"></span>`;
 
-      const dueDateStr = buildDueDateHTML(task.dueDate);
+      const dueDateStr = buildDueDateHTML(task.dueDate, task.dueTime, task.reminderMinutes);
       const recurringIcon = task.recurring
         ? `<span style="color:rgba(0,212,255,0.5); font-size:11px;" title="Repeats ${escapeHtml(formatInterval(task.recurringInterval))}">↻</span>`
         : "";
@@ -1765,6 +1805,10 @@
         selectInterval("weekly");
       }
       document.getElementById("m-due").value = task && task.dueDate ? task.dueDate.slice(0, 10) : "";
+      document.getElementById("m-time").value = task && task.dueTime ? task.dueTime : "";
+      const rm = (task && Array.isArray(task.reminderMinutes)) ? task.reminderMinutes : [10, 5];
+      document.getElementById("m-remind-10").checked = rm.indexOf(10) !== -1;
+      document.getElementById("m-remind-5").checked = rm.indexOf(5) !== -1;
       document.getElementById("m-tags").value = task && task.tags ? task.tags.join(", ") : "";
       buildColorSwatches();
       modalEl.classList.add("open");
@@ -1787,6 +1831,11 @@
         color: selectedColor,
         assignedTo: document.getElementById("m-assigned").value,
         dueDate: document.getElementById("m-due").value || undefined,
+        dueTime: document.getElementById("m-time").value || "",
+        reminderMinutes: [
+          document.getElementById("m-remind-10").checked ? 10 : null,
+          document.getElementById("m-remind-5").checked ? 5 : null,
+        ].filter(v => v !== null),
         tags: document.getElementById("m-tags").value.split(",").map(s => s.trim()).filter(Boolean),
         recurring: isRecurring,
         recurringInterval: isRecurring ? selectedInterval : undefined,
@@ -1996,6 +2045,175 @@
     setInterval(reRollAndRender, 10 * 60 * 1000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) reRollAndRender(); });
 
+    /* ——— Phone / desktop reminders ———
+       Browser notifications for tasks that carry a due time. Fires the selected
+       early reminders (10 / 5 min) plus one at the due moment. Works while the
+       task center is open in a browser tab or added to a phone home screen —
+       grant permission once with the 🔔 button up top. Checked on a 20s tick. */
+    const NOTIFY_PERM_KEY = "marcoTaskNotify";
+    const REMINDERS_FIRED_KEY = "marcoTaskRemindersFired";
+
+    function notifySupported() { return typeof Notification !== "undefined"; }
+
+    function updateNotifyBtn() {
+      const btn = document.getElementById("notify-btn");
+      if (!btn) return;
+      if (!notifySupported()) { btn.textContent = "🔔 N/A"; btn.disabled = true; return; }
+      const p = Notification.permission;
+      if (p === "granted") {
+        btn.textContent = "🔔 Reminders: on";
+        btn.style.borderColor = "#10b981"; btn.style.color = "#10b981";
+      } else if (p === "denied") {
+        btn.textContent = "🔔 Blocked";
+        btn.style.borderColor = "#ff2d55"; btn.style.color = "#ff2d55";
+      } else {
+        btn.textContent = "🔔 Reminders: off";
+        btn.style.borderColor = "rgba(0,212,255,0.3)"; btn.style.color = "#00d4ff";
+      }
+    }
+
+    async function enableNotifications() {
+      if (!notifySupported()) { showToast("Notifications aren't supported on this browser", "error"); return; }
+      if (Notification.permission === "denied") {
+        showToast("Notifications are blocked — turn them on in your browser's site settings", "error");
+        return;
+      }
+      try {
+        const perm = await Notification.requestPermission();
+        updateNotifyBtn();
+        if (perm === "granted") {
+          try { localStorage.setItem(NOTIFY_PERM_KEY, "1"); } catch (_) {}
+          showToast("🔔 Reminders on — you'll be alerted before timed tasks", "success");
+          try {
+            new Notification("Task reminders enabled", {
+              body: "You'll get a heads-up before any task that has a due time.",
+              tag: "marco-task-test",
+            });
+          } catch (_) {}
+        } else {
+          showToast("Reminders not enabled", "error");
+        }
+      } catch (_) { showToast("Could not enable notifications", "error"); }
+    }
+    window.enableNotifications = enableNotifications;
+
+    function loadFiredSet() {
+      try { return new Set(JSON.parse(localStorage.getItem(REMINDERS_FIRED_KEY) || "[]")); }
+      catch (_) { return new Set(); }
+    }
+    function saveFiredSet(set) {
+      try {
+        // Cap so the ledger can't grow without bound — keep the most recent 400.
+        localStorage.setItem(REMINDERS_FIRED_KEY, JSON.stringify(Array.from(set).slice(-400)));
+      } catch (_) {}
+    }
+
+    function taskDueEpoch(task) {
+      if (!task.dueDate || !task.dueTime) return null;
+      const d = parseDueLocal(task.dueDate);
+      if (!d) return null;
+      const m = /^(\d{2}):(\d{2})$/.exec(task.dueTime);
+      if (!m) return null;
+      d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+      return d.getTime();
+    }
+
+    function fireTaskNotification(task, minutesBefore) {
+      const timeLabel = fmtTime12(task.dueTime);
+      const title = minutesBefore === 0
+        ? "⏰ Task due now"
+        : "⏰ Task due in " + minutesBefore + " min";
+      const body = task.title + (timeLabel ? " — due " + timeLabel : "");
+      try {
+        const n = new Notification(title, {
+          body,
+          tag: "marco-task-" + task.id + "-" + minutesBefore,
+          requireInteraction: minutesBefore === 0,
+        });
+        n.onclick = () => {
+          window.focus();
+          try { openEditModal(task.id); } catch (_) {}
+          n.close();
+        };
+      } catch (_) {}
+    }
+
+    // Reminders follow the same visibility as the board: you're alerted for the
+    // tasks you can see (your own + your paired teammate's; "everyone" = all).
+    function passesAssignedForReminders(task) {
+      const assigned = currentView();
+      if (assigned === "everyone") return true;
+      const allowed = TASK_GROUPS[assigned] || [assigned];
+      return allowed.indexOf(task.assignedTo) !== -1;
+    }
+
+    function checkReminders() {
+      updateNotifyBtn();
+      if (!notifySupported() || Notification.permission !== "granted") return;
+      const now = Date.now();
+      const fired = loadFiredSet();
+      let changed = false;
+      const WINDOW = 95 * 1000; // tolerate the 20–30s tick jitter
+
+      for (const t of tasks) {
+        if (!t || t.status === "done" || t.status === "on_hold") continue;
+        if (!passesAssignedForReminders(t)) continue;
+        const dueEpoch = taskDueEpoch(t);
+        if (dueEpoch == null) continue;
+
+        // Selected early reminders + always one at the due moment (offset 0).
+        const offsets = Array.isArray(t.reminderMinutes) ? t.reminderMinutes.slice() : [];
+        if (offsets.indexOf(0) === -1) offsets.push(0);
+
+        for (const off of offsets) {
+          const target = dueEpoch - off * 60000;
+          const key = t.id + "|" + dueEpoch + "|" + off;
+          if (fired.has(key)) continue;
+          if (now >= target && now < target + WINDOW) {
+            fireTaskNotification(t, off);
+            fired.add(key); changed = true;
+          } else if (now >= target + WINDOW) {
+            // Missed while the page was closed — mark handled so it won't pop late.
+            fired.add(key); changed = true;
+          }
+        }
+      }
+      if (changed) saveFiredSet(fired);
+    }
+
+    /* ——— Auto-refresh every 30s ———
+       Pull the latest board so tasks added by a teammate, Harvey, or an
+       automation show up on their own. Re-renders only when something actually
+       changed, and never while a modal is open or a card is mid-drag. */
+    let lastTasksSig = "";
+    function tasksSignature(list) {
+      return list
+        .map(t => t.id + ":" + t.status + ":" + t.column + ":" + (t.updatedAt || "") + ":" + (t.dueTime || ""))
+        .sort()
+        .join("|");
+    }
+    async function refreshTasks() {
+      if (document.hidden) return;
+      if (isModalOpen()) return;
+      if (draggedTaskId) return;
+      if (document.getElementById("user-gate").classList.contains("open")) return;
+      try {
+        const data = await apiFetch("/api/tasks");
+        tasks = data.tasks || [];
+        await autoRollTasks();
+        const sig = tasksSignature(tasks);
+        if (sig !== lastTasksSig) {
+          lastTasksSig = sig;
+          renderAllColumns();
+          applyFiltersToCards();
+        }
+        checkReminders();
+      } catch (_) { /* transient — retry next tick */ }
+    }
+    setInterval(refreshTasks, 30 * 1000);
+    setInterval(checkReminders, 20 * 1000);
+    updateNotifyBtn();
+
     buildColorSwatches();
     buildBoardSkeleton();
     setFilter("undone");
@@ -2014,6 +2232,8 @@
       .then(() => {
         applyFilter();
         applyFiltersToCards();
+        lastTasksSig = tasksSignature(tasks);
+        checkReminders();
         quickInput.focus();
       })
       .catch(err => {

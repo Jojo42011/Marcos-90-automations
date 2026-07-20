@@ -596,6 +596,10 @@ export interface CommandTask {
   createdBy?: string;
   assignedTo?: string;
   dueDate?: string;
+  /** Time of day the task is due, "HH:MM" 24h local, paired with dueDate. */
+  dueTime?: string;
+  /** Minutes-before-due to fire early reminders, e.g. [10, 5]. */
+  reminderMinutes?: number[];
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
