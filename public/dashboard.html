@@ -3942,6 +3942,7 @@
         <div class="crm-logo">Marco · CRM</div>
         <button type="button" class="crm-side-btn active" data-crm-section="dashboard">Overview <span class="crm-count" id="crm-count-dashboard">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="leads">Leads <span class="crm-count" id="crm-count-leads">0</span><span id="unseen-phone-badge"></span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="nurture">Lead Nurture <span class="crm-count">—</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="calls">Calls <span class="crm-count" id="crm-count-calls" title="Urgent / follow-up in queue">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="deals">Deals <span class="crm-count" id="crm-count-deals">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="text">Text <span class="crm-count" id="crm-count-text">—</span></button>
@@ -10658,6 +10659,7 @@
       const titleMap = {
         dashboard: "Overview",
         leads: "Leads",
+        nurture: "Lead Nurture",
         calls: "Calls",
         chats: "Chats",
         deals: "Deals & Transactions",
@@ -10743,12 +10745,23 @@
         }
       }
 
-      if (allLeads.length === 0 && section !== "reports" && section !== "text" && section !== "dashboard" && section !== "calls" && section !== "chats" && section !== "deals" && section !== "templates" && section !== "plans" && section !== "followup" && section !== "tasks" && section !== "marco-tasks" && section !== "knowledge" && section !== "users") {
+      if (allLeads.length === 0 && section !== "reports" && section !== "text" && section !== "dashboard" && section !== "calls" && section !== "chats" && section !== "deals" && section !== "templates" && section !== "plans" && section !== "followup" && section !== "tasks" && section !== "marco-tasks" && section !== "knowledge" && section !== "users" && section !== "nurture") {
         content.innerHTML = "";
         empty.style.display = "block";
         return;
       }
       empty.style.display = "none";
+
+      /* ——— LEAD NURTURE (folded into the CRM; embeds the scoring/tiers page) ——— */
+      if (section === "nurture") {
+        if (!content.querySelector("iframe[data-nurture]")) {
+          const src = "/lead-nurture" + (token ? "?token=" + encodeURIComponent(token) : "");
+          content.innerHTML =
+            '<iframe data-nurture src="' + src + '" title="Lead Nurture" ' +
+            'style="width:100%;height:calc(100vh - 170px);min-height:600px;border:0;border-radius:10px;background:transparent;"></iframe>';
+        }
+        return;
+      }
 
       /* ——— OVERVIEW (v4 · transcript-driven, pipeline-first) ——— */
       if (section === "dashboard") {

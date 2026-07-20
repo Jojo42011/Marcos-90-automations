@@ -643,11 +643,15 @@
         <option value="today">SHOW: TODAY</option>
         <option value="this_week">SHOW: THIS WEEK</option>
       </select>
-      <select id="filter-assigned">
-        <option value="both">ASSIGNED: BOTH</option>
-        <option value="carlos">ASSIGNED: CARLOS</option>
-        <option value="marco">ASSIGNED: MARCO</option>
+      <select id="filter-assigned" title="Whose task center you're viewing">
+        <option value="everyone">VIEW: EVERYONE</option>
+        <option value="marco">VIEW: MARCO</option>
+        <option value="wesley">VIEW: WESLEY</option>
+        <option value="kendrick">VIEW: KENDRICK</option>
+        <option value="carlos">VIEW: CARLOS</option>
       </select>
+      <button type="button" class="add-btn" id="switch-user" title="Switch who you are"
+        style="background:transparent;border:1px solid rgba(0,212,255,0.3);color:#00d4ff;">WHO'S ON</button>
       <button type="button" class="add-btn" id="open-modal">+ ADD TASK</button>
     </div>
   </header>
@@ -670,6 +674,28 @@
 
   <main class="board" id="board"></main>
 
+  <!-- "Who's on?" identity gate — each teammate picks their name to open their
+       own task center (only their tasks). Switchable anytime from the VIEW menu
+       or the WHO'S ON button. Persisted per-device in localStorage. -->
+  <div id="user-gate" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" style="max-width:420px;">
+      <div class="modal-head">
+        <h2 id="modal-title">// WHO'S ON? //</h2>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:12px;color:#8ba0b8;margin:0 0 14px;line-height:1.55;">
+          Pick your name to open your own task center. You'll only see the tasks assigned to you,
+          and anything you add goes to you by default. You can switch anytime from the VIEW menu up top.
+        </p>
+        <div id="user-gate-buttons" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <button type="button" id="user-gate-everyone"
+          style="margin-top:14px;background:none;border:1px solid rgba(0,212,255,0.2);color:#8ba0b8;
+                 padding:9px;font-family:monospace;font-size:11px;letter-spacing:1px;cursor:pointer;
+                 border-radius:4px;width:100%;">VIEW EVERYONE (TEAM)</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog">
       <div class="modal-head">
@@ -689,7 +715,12 @@
           </select>
         </div>
         <div class="field"><label>Assigned to</label>
-          <select id="m-assigned"><option value="carlos">Carlos</option><option value="marco">Marco</option></select>
+          <select id="m-assigned">
+            <option value="marco">Marco</option>
+            <option value="wesley">Wesley</option>
+            <option value="kendrick">Kendrick</option>
+            <option value="carlos">Carlos</option>
+          </select>
         </div>
         <div class="field"><label>Color</label>
           <div class="color-row" id="m-colors"></div>
@@ -903,7 +934,7 @@
       const assigned = document.getElementById("filter-assigned").value;
       const q = (document.getElementById("search").value || "").toLowerCase().trim();
       if (show !== "all" && task.column !== show) return false;
-      if (assigned !== "both" && task.assignedTo !== assigned) return false;
+      if (assigned !== "everyone" && task.assignedTo !== assigned) return false;
       if (q) {
         const hay = ((task.title || "") + " " + (task.description || "")).toLowerCase();
         if (!hay.includes(q)) return false;
@@ -1458,8 +1489,8 @@
             column: parsed.column,
             color: "blue",
             status: "pending",
-            assignedTo: "carlos",
-            createdBy: "carlos",
+            assignedTo: activePerson(),
+            createdBy: activePerson(),
           }),
         });
 
@@ -1691,7 +1722,7 @@
       document.getElementById("m-title").value = task ? task.title : "";
       document.getElementById("m-desc").value = task ? (task.description || "") : "";
       document.getElementById("m-column").value = task ? task.column : "today";
-      document.getElementById("m-assigned").value = task ? (task.assignedTo || "carlos") : "carlos";
+      document.getElementById("m-assigned").value = task ? (task.assignedTo || "marco") : activePerson();
       selectedColor = task ? task.color : "blue";
       const recurringCheckbox = document.getElementById("modal-recurring");
       recurringCheckbox.checked = !!(task && task.recurring);
@@ -1730,7 +1761,7 @@
       };
       if (!editId) {
         payload.status = "pending";
-        payload.createdBy = "carlos";
+        payload.createdBy = activePerson();
       }
 
       try {
@@ -1801,13 +1832,85 @@
       }
     });
 
+    /* ——— Per-person task centers ———
+       Everyone shares one board on the backend, but each teammate views only
+       their own tasks by "logging in" (picking their name — persisted to this
+       device). "Everyone" is the team/oversight view. */
+    var TASK_PEOPLE = [
+      { id: "marco", label: "Marco" },
+      { id: "wesley", label: "Wesley" },
+      { id: "kendrick", label: "Kendrick" },
+      { id: "carlos", label: "Carlos" },
+    ];
+    var TASK_USER_KEY = "marcoTaskUser";
+
+    function getStoredTaskUser() {
+      try { return localStorage.getItem(TASK_USER_KEY) || ""; } catch (_) { return ""; }
+    }
+    function currentView() {
+      return document.getElementById("filter-assigned").value || "everyone";
+    }
+    // Who new tasks belong to. In the team ("everyone") view, default to Marco.
+    function activePerson() {
+      const v = currentView();
+      return v === "everyone" ? "marco" : v;
+    }
+    function updateTaskUserUi() {
+      const v = currentView();
+      const p = TASK_PEOPLE.find(x => x.id === v);
+      const titleEl = document.querySelector(".title");
+      if (titleEl) {
+        titleEl.textContent = p
+          ? "// " + p.label.toUpperCase() + " · TASK CENTER //"
+          : "// TEAM · TASK COMMAND CENTER //";
+      }
+    }
+    function setTaskUser(v) {
+      try { localStorage.setItem(TASK_USER_KEY, v); } catch (_) {}
+      document.getElementById("filter-assigned").value = v;
+      updateTaskUserUi();
+      applyFiltersToCards();
+    }
+    function buildUserGate() {
+      const wrap = document.getElementById("user-gate-buttons");
+      if (wrap) {
+        wrap.innerHTML = TASK_PEOPLE.map(p =>
+          '<button type="button" class="add-btn" data-user="' + p.id + '" style="width:100%;">' + p.label + '</button>'
+        ).join("");
+        wrap.querySelectorAll("button[data-user]").forEach(b => {
+          b.addEventListener("click", () => { closeUserGate(); setTaskUser(b.getAttribute("data-user")); });
+        });
+      }
+      const ev = document.getElementById("user-gate-everyone");
+      if (ev) ev.addEventListener("click", () => { closeUserGate(); setTaskUser("everyone"); });
+    }
+    function openUserGate() { document.getElementById("user-gate").classList.add("open"); }
+    function closeUserGate() { document.getElementById("user-gate").classList.remove("open"); }
+
+    document.getElementById("switch-user").addEventListener("click", openUserGate);
+    document.getElementById("filter-assigned").addEventListener("change", function () {
+      try { localStorage.setItem(TASK_USER_KEY, this.value); } catch (_) {}
+      updateTaskUserUi();
+    });
+
     buildColorSwatches();
     buildBoardSkeleton();
     setFilter("undone");
+    buildUserGate();
+
+    const storedTaskUser = getStoredTaskUser();
+    if (storedTaskUser) {
+      document.getElementById("filter-assigned").value = storedTaskUser;
+    }
+    updateTaskUserUi();
+    // First visit on this device: ask who's on so they land in their own center.
+    // Independent of task loading so it always shows.
+    if (!storedTaskUser) openUserGate();
 
     loadTasks()
       .then(() => {
         applyFilter();
+        applyFiltersToCards();
         quickInput.focus();
       })
       .catch(err => {
