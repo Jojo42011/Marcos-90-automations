@@ -307,7 +307,13 @@
   .ld-intent{border:1px solid #eeddb4;color:#c99a34;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer}
   .ld-sec-h{color:#6b7480;font-size:14px;font-weight:600;margin:8px 0 2px;display:flex;align-items:center;gap:8px}
   .ai-panel{border:1px solid var(--line);border-radius:12px;padding:18px 20px;background:#fff;margin-bottom:18px}
-  .ai-panel h4{margin:0 0 6px;color:#7b5cf0;font-size:15px;display:flex;align-items:center;gap:7px}
+  .ai-panel h4{margin:0;color:#7b5cf0;font-size:15px;display:flex;align-items:center;gap:7px}
+  .ai-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .ai-upd{color:#aab2ba;font-size:12px}
+  .ld-flabel{color:#5b6570;font-size:13px;font-weight:600;margin-bottom:6px}
+  .prio{display:flex;flex-wrap:wrap;gap:14px}
+  .prio label{display:flex;align-items:center;gap:5px;color:#6b7480;font-size:13px;cursor:pointer}
+  .prio input{accent-color:var(--teal)}
   .ai-tabs{display:flex;gap:10px;margin:6px 0 12px}
   .ai-tabs button{font-size:12px;border:1px solid var(--line);background:#fff;color:#8b95a0;border-radius:14px;padding:5px 12px}
   .ai-tabs button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
@@ -1341,6 +1347,7 @@ document.getElementById("leadDetail").addEventListener("click",e=>{ const ed=e.t
 /* ---- lead detail ---- */
 let currentLeadId=null, ldTab="note", ldOutcome=null;
 function fmtReg(iso){ const d=new Date(iso); if(isNaN(d))return"—"; return MONTHS[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear(); }
+function fmtUpdated(iso){ const d=iso?new Date(iso):new Date(); if(isNaN(d))return"just now"; let h=d.getHours(),ap=h>=12?"pm":"am"; h=h%12||12; return d.getDate()+" "+MONTHS[d.getMonth()]+", "+h+":"+String(d.getMinutes()).padStart(2,"0")+" "+ap; }
 function fieldRow(k,v){ return '<div class="ld-field"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
 function leadInsights(l){
   const out=[]; const c=l.criteria||{};
@@ -1384,7 +1391,7 @@ function renderLead(){
         (l.address?'<div class="ld-field"><span class="k">ADDRESS</span><span class="v" style="max-width:180px;text-align:right">'+esc(l.address)+'</span></div>':'')+
       '</div>'+
       '<div>'+
-        '<div class="ai-panel"><h4>✦ Harvey AI</h4><div class="ai-tabs"><button class="on">About This Lead</button><button style="pointer-events:none;opacity:.55">Recommends</button></div><ul>'+leadInsights(l).map(i=>'<li>'+esc(i)+'</li>').join("")+'</ul></div>'+
+        '<div class="ai-panel"><div class="ai-top"><h4>✦ Harvey AI ▾</h4><span class="ai-upd">↻ Updated: '+esc(fmtUpdated(l.lastActivity||l.updatedAt))+'</span></div><div class="ai-tabs"><button style="pointer-events:none;opacity:.55">Harvey Recommends</button><button class="on">About This Lead</button></div><ul>'+leadInsights(l).map(i=>'<li>'+esc(i)+'</li>').join("")+'</ul></div>'+
         '<div class="ld-card" style="padding:0 22px 18px"><div class="ld-tabs" id="ldTabs">'+["note","email","call","text","appointment","other"].map(t=>'<button class="'+(t===ldTab?"on":"")+'" data-t="'+t+'">'+t.toUpperCase()+'</button>').join("")+'</div><div class="ld-tab-body" id="ldTabBody"></div></div>'+
         '<div class="ld-card" style="margin-top:18px"><div class="ld-sec-h">Activity</div><div id="ldTimeline"></div></div>'+
       '</div>'+
@@ -1424,8 +1431,26 @@ function renderLeadTab(){
     body.innerHTML='<input class="ld-input" id="ldSubj" placeholder="Subject" style="margin-bottom:10px"><textarea class="ld-note" id="ldMail" placeholder="Write your email…"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSendMail">SEND EMAIL</button></div>';
     document.getElementById("ldSendMail").addEventListener("click",()=>logActivity("email",document.getElementById("ldSubj").value||"Email"));
   } else if(ldTab==="appointment"){
-    body.innerHTML='<div style="display:flex;gap:10px;margin-bottom:10px"><input class="ld-input" type="date" id="ldDate"><input class="ld-input" type="time" id="ldTime"></div><input class="ld-input" id="ldTitle" placeholder="Appointment title (e.g. Showing at…)"><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSched">SCHEDULE</button></div>';
-    document.getElementById("ldSched").addEventListener("click",()=>logActivity("appointment",document.getElementById("ldTitle").value||"Appointment"));
+    body.innerHTML=
+      '<div class="ld-flabel">Task Details (max 255 characters) <span style="color:#e05a45">*</span></div>'+
+      '<textarea class="ld-note" id="ldApptTask" maxlength="255" placeholder="" style="min-height:60px"></textarea>'+
+      '<div style="display:flex;gap:10px;margin:10px 0"><button class="rbtn" style="width:auto;padding:6px 14px">ADD INSTRUCTIONS +</button><button class="rbtn" style="width:auto;padding:6px 14px">ADD NOTES +</button></div>'+
+      '<div class="ld-flabel">Priority (1: highest, 9: lowest) <span style="color:#e05a45">*</span></div>'+
+      '<div class="prio" id="ldPrio">'+[1,2,3,4,5,6,7,8,9].map(n=>'<label><input type="radio" name="ldprio" value="'+n+'"'+(n===9?" checked":"")+'> '+n+'</label>').join("")+'</div>'+
+      '<div class="ld-flabel" style="margin-top:12px">Appointment Type <span style="color:#e05a45">*</span></div>'+
+      '<select class="ld-input"><option>Select</option><option>Buyer Consultation</option><option>Listing Presentation</option><option>Showing</option><option>Closing</option><option>Follow-up Call</option></select>'+
+      '<div class="ld-flabel" style="margin-top:12px">Assigned To</div>'+
+      '<select class="ld-input"><option>Marco Puga</option><option>James Carter</option></select>'+
+      '<div class="ld-flabel" style="margin-top:12px">Location</div>'+
+      '<input class="ld-input" id="ldApptLoc" placeholder="Address or place">'+
+      '<div class="ld-flabel" style="margin-top:12px">Date &amp; time</div>'+
+      '<div style="display:flex;gap:10px"><input class="ld-input" type="date" id="ldDate"><input class="ld-input" type="time" id="ldTime"></div>'+
+      '<div style="margin-top:12px;text-align:right"><button class="pill-btn" id="ldSched">SCHEDULE</button></div>';
+    document.getElementById("ldSched").addEventListener("click",()=>{
+      const task=document.getElementById("ldApptTask").value.trim();
+      const loc=document.getElementById("ldApptLoc").value.trim();
+      logActivity("appointment",(task||"Appointment")+(loc?" @ "+loc:""));
+    });
   } else {
     body.innerHTML='<input class="ld-input" id="ldOtherTitle" placeholder="Log an activity…"><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldLogOther">LOG</button></div>';
     document.getElementById("ldLogOther").addEventListener("click",()=>logActivity("other",document.getElementById("ldOtherTitle").value||"Activity"));
