@@ -542,6 +542,16 @@
       font-weight: 500 !important;
     }
 
+    /* The open native dropdown options don't inherit the control's color, so in
+       light mode they render nearly invisible. Style the <option>s explicitly. */
+    html[data-theme="light"] .topbar select option,
+    html[data-theme="light"] .modal select option,
+    html[data-theme="light"] .field select option {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      font-weight: 600 !important;
+    }
+
     html[data-theme="light"] .task-modal label,
     html[data-theme="light"] #task-modal label,
     html[data-theme="light"] .field label {
@@ -1453,6 +1463,7 @@
       buildBoardSkeleton();
       const data = await apiFetch("/api/tasks");
       tasks = data.tasks || [];
+      await autoRollTasks();   // roll any dated tasks into today's correct column
       renderAllColumns();
     }
 
@@ -1480,6 +1491,15 @@
       const parsed = parseTaskInput(quickInput.value);
       if (!parsed) return;
 
+      // Give the single-day columns a due date so they auto-roll on the calendar
+      // (a "tomorrow" task becomes a "today" task when tomorrow arrives).
+      const offset = { today: 0, tomorrow: 1 };
+      let impliedDue;
+      if (parsed.column in offset) {
+        const d = localToday(); d.setDate(d.getDate() + offset[parsed.column]);
+        impliedDue = fmtLocalDate(d);
+      }
+
       try {
         const { task } = await apiFetch("/api/tasks", {
           method: "POST",
@@ -1491,6 +1511,7 @@
             status: "pending",
             assignedTo: activePerson(),
             createdBy: activePerson(),
+            dueDate: impliedDue,
           }),
         });
 
@@ -1759,6 +1780,13 @@
         recurring: isRecurring,
         recurringInterval: isRecurring ? selectedInterval : undefined,
       };
+      // Calendar-driven: when a due date is set, it decides the column (so a
+      // task due in two days lands in This Week and rolls forward on its own).
+      // Urgent stays a manual override.
+      if (payload.dueDate && payload.column !== "urgent") {
+        const derived = columnForDueDate(payload.dueDate);
+        if (derived) payload.column = derived;
+      }
       if (!editId) {
         payload.status = "pending";
         payload.createdBy = activePerson();
@@ -1892,6 +1920,62 @@
       try { localStorage.setItem(TASK_USER_KEY, this.value); } catch (_) {}
       updateTaskUserUi();
     });
+
+    /* ——— Calendar-driven auto-move ———
+       A task with a due date lives in the column that matches how far off that
+       date is, and rolls forward on its own as days pass: this_month →
+       this_week → tomorrow → today. Urgent is a manual priority so it's left
+       alone; done tasks don't move. */
+    function localToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+    function fmtLocalDate(d) {
+      return d.getFullYear() + "-" +
+        String(d.getMonth() + 1).padStart(2, "0") + "-" +
+        String(d.getDate()).padStart(2, "0");
+    }
+    function parseDueLocal(due) {
+      // Parse "YYYY-MM-DD" as a LOCAL date so there's no UTC off-by-one.
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(due || ""));
+      if (!m) return null;
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      d.setHours(0, 0, 0, 0);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    function columnForDueDate(due) {
+      const d = parseDueLocal(due);
+      if (!d) return null;
+      const diff = Math.round((d - localToday()) / 86400000);
+      if (diff <= 0) return "today";        // due today or overdue
+      if (diff === 1) return "tomorrow";
+      if (diff <= 7) return "this_week";
+      return "this_month";
+    }
+    async function autoRollTasks() {
+      const moved = [];
+      for (const t of tasks) {
+        if (!t || !t.dueDate || t.status === "done") continue;
+        if (t.column === "urgent") continue;   // urgent is a manual priority
+        const target = columnForDueDate(t.dueDate);
+        if (target && target !== t.column) { t.column = target; moved.push(t); }
+      }
+      if (!moved.length) return false;
+      // Persist each move so the CRM / Harvey views stay in sync (best-effort).
+      await Promise.all(moved.map(t =>
+        apiFetch("/api/tasks/" + encodeURIComponent(t.id), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ column: t.column }),
+        }).catch(() => {})
+      ));
+      return true;
+    }
+    function reRollAndRender() {
+      autoRollTasks().then(changed => {
+        if (changed) { renderAllColumns(); applyFiltersToCards(); }
+      }).catch(() => {});
+    }
+    // Keep an open board current across a midnight boundary without a refresh.
+    setInterval(reRollAndRender, 10 * 60 * 1000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) reRollAndRender(); });
 
     buildColorSwatches();
     buildBoardSkeleton();
