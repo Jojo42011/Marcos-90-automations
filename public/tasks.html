@@ -950,7 +950,12 @@
       const assigned = document.getElementById("filter-assigned").value;
       const q = (document.getElementById("search").value || "").toLowerCase().trim();
       if (show !== "all" && task.column !== show) return false;
-      if (assigned !== "everyone" && task.assignedTo !== assigned) return false;
+      // Paired visibility: each person sees their own tasks + their partner's
+      // (Marco ↔ Carlos, Wesley ↔ Kendrick). "Everyone" sees all.
+      if (assigned !== "everyone") {
+        const allowed = TASK_GROUPS[assigned] || [assigned];
+        if (allowed.indexOf(task.assignedTo) === -1) return false;
+      }
       if (q) {
         const hay = ((task.title || "") + " " + (task.description || "")).toLowerCase();
         if (!hay.includes(q)) return false;
@@ -1876,6 +1881,14 @@
       { id: "kendrick", label: "Kendrick" },
       { id: "carlos", label: "Carlos" },
     ];
+    // Paired visibility: an agent + their assistant see each other's tasks.
+    // Marco ↔ Carlos (Carlos is Marco's assistant); Wesley ↔ Kendrick.
+    var TASK_GROUPS = {
+      marco:    ["marco", "carlos"],
+      carlos:   ["marco", "carlos"],
+      wesley:   ["wesley", "kendrick"],
+      kendrick: ["wesley", "kendrick"],
+    };
     var TASK_USER_KEY = "marcoTaskUser";
 
     function getStoredTaskUser() {
