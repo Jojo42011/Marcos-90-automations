@@ -3898,7 +3898,8 @@
 
     function toggleWakeWordListening() {
       wakeWordEnabled = !wakeWordEnabled;
-      localStorage.setItem('wakeWordEnabled', wakeWordEnabled ? 'true' : 'false');
+      // Session-only on purpose: persisting this made the mic auto-arm on every
+      // page load, which is never acceptable.
       updateWakeWordToggleUI(wakeWordEnabled);
 
       if (wakeWordEnabled) {
@@ -3910,19 +3911,14 @@
     }
 
     function initWakeWordFeature() {
-      if (!isWakeWordSupported()) {
-        const toggle = document.getElementById('wake-word-toggle');
-        if (toggle) {
-          toggle.disabled = true;
-          toggle.title = 'Wake word detection requires Chrome or Edge';
-        }
-        return;
-      }
-
-      const saved = localStorage.getItem('wakeWordEnabled') === 'true';
-      wakeWordEnabled = saved;
-      updateWakeWordToggleUI(saved);
-      if (saved) startWakeWordListening();
+      // The mic must NEVER turn on by itself when the page opens. A previously
+      // saved "listen for Harvey" preference used to re-arm SpeechRecognition on
+      // every load, so each new tab grabbed the mic and multiple Harveys fought
+      // each other. Clear the stale flag; wake-word now only runs if explicitly
+      // toggled on within the current session (tap the core to talk instead).
+      try { localStorage.removeItem('wakeWordEnabled'); } catch (_) {}
+      wakeWordEnabled = false;
+      updateWakeWordToggleUI(false);
     }
 
     window.onHarveyVoiceSessionStart = function () {

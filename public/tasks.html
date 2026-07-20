@@ -20,6 +20,12 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.5; overflow: hidden; }
     button, input, select, textarea { font-family: inherit; }
+    /* Native <select> dropdown lists don't inherit the control's styling — the
+       browser paints them per color-scheme. Declare it so the open list matches
+       the theme, and style the options explicitly for both themes. */
+    :root { color-scheme: dark; }
+    html[data-theme="light"] { color-scheme: light; }
+    select option { background: #050a0f; color: var(--text); }
     a { color: var(--cyan); text-decoration: none; }
     a:hover { text-decoration: underline; }
 

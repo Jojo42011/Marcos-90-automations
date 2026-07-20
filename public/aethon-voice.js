@@ -695,7 +695,25 @@
     };
   }
 
+  // Only one Harvey tab may run voice at a time. When a session starts here we
+  // tell every other tab to stand down; a tab hearing that while live stops its
+  // own session, so two open Harveys can't fight over the mic.
+  const VOICE_TAB_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  let voiceChannel = null;
+  try {
+    voiceChannel = new BroadcastChannel("harvey-voice");
+    voiceChannel.onmessage = (ev) => {
+      const msg = ev && ev.data;
+      if (msg && msg.type === "voice-started" && msg.tab !== VOICE_TAB_ID && voiceActive) {
+        stopAethonVoice();
+        document.getElementById("harvey-mic-btn")?.classList.remove("active");
+        showVoiceError("Voice moved to another Harvey tab — this one went quiet.");
+      }
+    };
+  } catch (_) {}
+
   async function startAethonVoice() {
+    try { voiceChannel?.postMessage({ type: "voice-started", tab: VOICE_TAB_ID }); } catch (_) {}
     if (typeof window.onHarveyVoiceSessionStart === "function") {
       window.onHarveyVoiceSessionStart();
     }
