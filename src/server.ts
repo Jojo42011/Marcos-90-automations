@@ -80,6 +80,12 @@ import {
   getUnreadNotifications,
   markNotificationRead,
 } from "./core/crmNotificationStore.js";
+import {
+  initPush,
+  getVapidPublicKey,
+  addSubscription,
+  removeSubscription,
+} from "./core/pushStore.js";
 import { handleWebsiteVisit } from "./agents/reEngagement/index.js";
 import { handleListingStatusUpdate } from "./agents/listingStatusAutomation/index.js";
 import {
@@ -7544,6 +7550,44 @@ app.delete("/api/tasks/:id", (req, res) => {
   res.json({ success: true });
 });
 
+/* ——— Web Push: always-on task reminders ———
+   The browser subscribes with the VAPID public key; the server delivers push
+   notifications at each task's reminder moments even when the app is closed. */
+app.get("/api/push/public-key", (_req, res) => {
+  try {
+    res.json({ publicKey: getVapidPublicKey() });
+  } catch (err) {
+    console.error("[push] public-key error:", err);
+    res.status(500).json({ error: "push unavailable" });
+  }
+});
+
+app.post("/api/push/subscribe", express.json({ limit: "64kb" }), (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const sub = (body.subscription && typeof body.subscription === "object"
+    ? body.subscription
+    : body) as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
+  const person = typeof body.person === "string" ? body.person.toLowerCase() : "everyone";
+  const ok = addSubscription(sub, person);
+  if (!ok) {
+    res.status(400).json({ error: "Invalid subscription" });
+    return;
+  }
+  console.log("[push] subscribed:", person);
+  res.json({ success: true });
+});
+
+app.post("/api/push/unsubscribe", express.json({ limit: "64kb" }), (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+  if (!endpoint) {
+    res.status(400).json({ error: "endpoint required" });
+    return;
+  }
+  removeSubscription(endpoint);
+  res.json({ success: true });
+});
+
 /** CRM lead follow-up tasks (tasks.json) — separate from command-center board. */
 app.get("/api/crm-tasks", (req, res) => {
   if (!dashboardTokenOk(req)) {
@@ -9697,6 +9741,11 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     initHull();
   } catch (err) {
     console.error("[hull] init failed:", err);
+  }
+  try {
+    initPush();
+  } catch (err) {
+    console.error("[push] init failed:", err);
   }
   if (!process.env.ELEVENLABS_API_KEY?.trim()) {
     console.warn("[Harvey] ELEVENLABS_API_KEY not set — Scribe v2 Realtime STT will not work");

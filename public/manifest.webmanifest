@@ -1,0 +1,14 @@
+{
+  "name": "Marco · Task Command Center",
+  "short_name": "Tasks",
+  "description": "Marco Puga team task center with timed phone reminders.",
+  "start_url": "/tasks",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#020810",
+  "theme_color": "#00d4ff",
+  "icons": [
+    { "src": "/assets/marco.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any" },
+    { "src": "/assets/marco.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" }
+  ]
+}

@@ -68,6 +68,7 @@ const index_js_9 = require("./agents/escalations/index.js");
 const index_js_10 = require("./agents/harveyContentDigest/index.js");
 const db_js_1 = require("./core/db.js");
 const crmNotificationStore_js_1 = require("./core/crmNotificationStore.js");
+const pushStore_js_1 = require("./core/pushStore.js");
 const index_js_11 = require("./agents/reEngagement/index.js");
 const index_js_12 = require("./agents/listingStatusAutomation/index.js");
 const index_js_13 = require("./agents/contentManager/index.js");
@@ -409,6 +410,10 @@ app.get("/how-to", (_req, res) => {
 // Self-contained page — talks to /api/jarvis/chat.
 app.get("/hull-chat", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "hull-chat.html"));
+});
+// Brivity-style CRM front end (staged rebuild: dashboard → messages → leads).
+app.get("/crm", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "crm-brivity.html"));
 });
 const voiceCloneDataRoot = (0, voiceCloneStore_js_1.resolveVoiceCloneDataRoot)();
 app.use("/voice-clone-files", express_1.default.static(voiceCloneDataRoot));
@@ -6612,6 +6617,24 @@ function parseRecurringInterval(raw) {
         ? raw
         : undefined;
 }
+/** Validate a "HH:MM" 24-hour time-of-day; returns undefined if malformed/empty. */
+function parseDueTime(raw) {
+    if (typeof raw !== "string")
+        return undefined;
+    const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(raw.trim());
+    if (!m)
+        return undefined;
+    return `${m[1].padStart(2, "0")}:${m[2]}`;
+}
+/** Normalize a reminder-offsets array to sorted unique minutes (0–1440). */
+function parseReminderMinutes(raw) {
+    if (!Array.isArray(raw))
+        return undefined;
+    const mins = Array.from(new Set(raw
+        .map((n) => Math.round(Number(n)))
+        .filter((n) => Number.isFinite(n) && n >= 0 && n <= 1440))).sort((a, b) => a - b);
+    return mins.length ? mins : [];
+}
 function commandTaskCounts() {
     const all = (0, db_js_1.getCommandTasks)();
     const active = all.filter((t) => t.status !== "done");
@@ -6682,6 +6705,8 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
         recurringInterval: parseRecurringInterval(body.recurringInterval),
         assignedTo: typeof body.assignedTo === "string" ? body.assignedTo : "carlos",
         dueDate: typeof body.dueDate === "string" ? body.dueDate.slice(0, 10) : undefined,
+        dueTime: parseDueTime(body.dueTime),
+        reminderMinutes: parseReminderMinutes(body.reminderMinutes),
         tags: Array.isArray(body.tags)
             ? body.tags.filter((t) => typeof t === "string")
             : undefined,
@@ -6716,6 +6741,10 @@ app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res)
         updates.assignedTo = body.assignedTo;
     if (typeof body.dueDate === "string")
         updates.dueDate = body.dueDate.slice(0, 10);
+    if ("dueTime" in body)
+        updates.dueTime = parseDueTime(body.dueTime);
+    if ("reminderMinutes" in body)
+        updates.reminderMinutes = parseReminderMinutes(body.reminderMinutes);
     if (Array.isArray(body.tags)) {
         updates.tags = body.tags.filter((t) => typeof t === "string");
     }
@@ -6735,6 +6764,42 @@ app.delete("/api/tasks/:id", (req, res) => {
         return;
     }
     console.log("[Tasks] Deleted:", id);
+    res.json({ success: true });
+});
+/* ——— Web Push: always-on task reminders ———
+   The browser subscribes with the VAPID public key; the server delivers push
+   notifications at each task's reminder moments even when the app is closed. */
+app.get("/api/push/public-key", (_req, res) => {
+    try {
+        res.json({ publicKey: (0, pushStore_js_1.getVapidPublicKey)() });
+    }
+    catch (err) {
+        console.error("[push] public-key error:", err);
+        res.status(500).json({ error: "push unavailable" });
+    }
+});
+app.post("/api/push/subscribe", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const sub = (body.subscription && typeof body.subscription === "object"
+        ? body.subscription
+        : body);
+    const person = typeof body.person === "string" ? body.person.toLowerCase() : "everyone";
+    const ok = (0, pushStore_js_1.addSubscription)(sub, person);
+    if (!ok) {
+        res.status(400).json({ error: "Invalid subscription" });
+        return;
+    }
+    console.log("[push] subscribed:", person);
+    res.json({ success: true });
+});
+app.post("/api/push/unsubscribe", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+    if (!endpoint) {
+        res.status(400).json({ error: "endpoint required" });
+        return;
+    }
+    (0, pushStore_js_1.removeSubscription)(endpoint);
     res.json({ success: true });
 });
 /** CRM lead follow-up tasks (tasks.json) — separate from command-center board. */
@@ -8727,6 +8792,12 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     }
     catch (err) {
         console.error("[hull] init failed:", err);
+    }
+    try {
+        (0, pushStore_js_1.initPush)();
+    }
+    catch (err) {
+        console.error("[push] init failed:", err);
     }
     if (!process.env.ELEVENLABS_API_KEY?.trim()) {
         console.warn("[Harvey] ELEVENLABS_API_KEY not set — Scribe v2 Realtime STT will not work");

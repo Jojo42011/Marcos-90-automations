@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Marco · Task Command Center</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#020810" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Tasks" />
+  <link rel="apple-touch-icon" href="/assets/marco.jpg" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -1966,6 +1972,10 @@
       document.getElementById("filter-assigned").value = v;
       updateTaskUserUi();
       applyFiltersToCards();
+      // Keep push targeting aligned with who's logged in on this device.
+      if (typeof subscribeToPush === "function" && notifySupported() && Notification.permission === "granted") {
+        subscribeToPush(v);
+      }
     }
     function buildUserGate() {
       const wrap = document.getElementById("user-gate-buttons");
@@ -2054,6 +2064,62 @@
     const REMINDERS_FIRED_KEY = "marcoTaskRemindersFired";
 
     function notifySupported() { return typeof Notification !== "undefined"; }
+    function pushSupported() {
+      return "serviceWorker" in navigator && "PushManager" in window && notifySupported();
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const raw = atob(base64);
+      const out = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+      return out;
+    }
+
+    let swRegistration = null;
+    async function registerServiceWorker() {
+      if (!pushSupported()) return null;
+      if (swRegistration) return swRegistration;
+      try {
+        swRegistration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+        await navigator.serviceWorker.ready;
+        return swRegistration;
+      } catch (err) {
+        console.warn("[push] SW register failed:", err);
+        return null;
+      }
+    }
+
+    /* Subscribe this device for always-on push, tagged with who's logged in so
+       the server knows whose task reminders to deliver here. Safe to call again
+       to update the person after switching users. */
+    async function subscribeToPush(person) {
+      if (!pushSupported() || Notification.permission !== "granted") return false;
+      const reg = await registerServiceWorker();
+      if (!reg) return false;
+      try {
+        const keyRes = await fetch("/api/push/public-key");
+        const { publicKey } = await keyRes.json();
+        if (!publicKey) return false;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
+        }
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscription: sub.toJSON(), person: person || currentView() }),
+        });
+        return true;
+      } catch (err) {
+        console.warn("[push] subscribe failed:", err);
+        return false;
+      }
+    }
 
     function updateNotifyBtn() {
       const btn = document.getElementById("notify-btn");
@@ -2083,10 +2149,19 @@
         updateNotifyBtn();
         if (perm === "granted") {
           try { localStorage.setItem(NOTIFY_PERM_KEY, "1"); } catch (_) {}
-          showToast("🔔 Reminders on — you'll be alerted before timed tasks", "success");
+          // Register for always-on push so reminders fire even when closed.
+          const pushed = await subscribeToPush(currentView());
+          showToast(
+            pushed
+              ? "🔔 Always-on reminders on — even when the app is closed"
+              : "🔔 Reminders on while the task center is open",
+            "success",
+          );
           try {
             new Notification("Task reminders enabled", {
-              body: "You'll get a heads-up before any task that has a due time.",
+              body: pushed
+                ? "You'll be alerted before timed tasks — even with the app closed."
+                : "You'll get a heads-up before any task that has a due time.",
               tag: "marco-task-test",
             });
           } catch (_) {}
@@ -2213,6 +2288,11 @@
     setInterval(refreshTasks, 30 * 1000);
     setInterval(checkReminders, 20 * 1000);
     updateNotifyBtn();
+    // Already granted on a prior visit? Make sure the server still has an
+    // up-to-date push subscription for this device + current person.
+    if (pushSupported() && Notification.permission === "granted") {
+      subscribeToPush(currentView());
+    }
 
     buildColorSwatches();
     buildBoardSkeleton();
