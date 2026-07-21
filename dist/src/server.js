@@ -390,6 +390,10 @@ app.get("/memory", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "memory.html"));
 });
 app.get("/tasks", (_req, res) => {
+    // The team Task Command Center replaced the classic board (kept at /tasks-classic).
+    res.redirect("/team-tasks");
+});
+app.get("/tasks-classic", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "tasks.html"));
 });
 app.get("/social", (_req, res) => {
