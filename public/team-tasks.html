@@ -24,12 +24,12 @@
   --r:14px; --r-sm:10px;
   --ease:cubic-bezier(.32,.72,.28,1);
   /* light theme */
-  --bg:#f6f8f9; --card:#ffffff; --line:#e8ecee; --ink:#2f3438; --muted:#8a949c;
+  --bg:#f6f8f9; --card:#ffffff; --line:#e8ecee; --ink:#2f3438; --muted:#5f6b78;
   --soft:#f2f6f6; --shadow:0 1px 3px rgba(16,24,40,.07),0 1px 2px rgba(16,24,40,.05);
   --glass:rgba(255,255,255,.55); --glass-line:rgba(255,255,255,.65); --glass-tint:rgba(89,196,196,.10);
 }
 html[data-theme="dark"]{
-  --bg:#0f1418; --card:#171d24; --line:#242c35; --ink:#e6ebef; --muted:#7d8893;
+  --bg:#0f1418; --card:#171d24; --line:#242c35; --ink:#e6ebef; --muted:#93a0ac;
   --soft:#1c242c; --shadow:0 1px 3px rgba(0,0,0,.4);
   --glass:rgba(23,29,36,.55); --glass-line:rgba(255,255,255,.09); --glass-tint:rgba(89,196,196,.07);
 }
@@ -119,7 +119,7 @@ input,select,textarea{font-family:inherit;color:var(--ink)}
 .task[draggable="true"]{cursor:grab}
 .task.dragging{opacity:.45;transform:rotate(1deg)}
 .task.urgent{border-left:4px solid var(--urgent)}
-.task .grip{color:var(--line);font-size:14px;padding-top:2px;user-select:none}
+.task .grip{color:var(--muted);opacity:.55;font-size:14px;padding-top:2px;user-select:none}
 .task .body{flex:1;min-width:0}
 .task .t{font-size:14.5px;font-weight:600;color:var(--ink);line-height:1.4;cursor:pointer}
 .task .t:hover{color:var(--teal-strong)}
@@ -237,7 +237,7 @@ html[data-theme="dark"] .bcell{background:rgba(255,255,255,.05)}
 .popcard b{font-size:13.5px}
 .popcard p{font-size:12.5px;color:var(--muted);margin-top:3px}
 .popcard .x{position:absolute;top:8px;right:9px;border:none;background:none;color:var(--muted);font-size:14px}
-.popcard .bar{position:absolute;left:0;bottom:0;height:3px;background:var(--teal);border-radius:0 0 0 14px;animation:shrink 15s linear forwards}
+.popcard .pbar{position:absolute;left:0;bottom:0;height:3px;padding:0;background:var(--teal);border-radius:0 0 0 14px;animation:shrink 15s linear forwards}
 @keyframes shrink{from{width:100%}to{width:0}}
 
 /* Modal */
@@ -931,7 +931,7 @@ function popNote(n){
   var ic=noteIcon(n);
   var el=document.createElement("div");
   el.className="popcard";el.style.borderLeftColor=ic[1];
-  el.innerHTML='<b>'+ic[0]+' '+esc(n.title)+'</b><p>'+esc(n.body)+'</p><button class="x">✕</button><span class="bar"></span>';
+  el.innerHTML='<b>'+ic[0]+' '+esc(n.title)+'</b><p>'+esc(n.body)+'</p><button class="x">✕</button><span class="pbar"></span>';
   el.querySelector(".x").onclick=function(e){e.stopPropagation();el.remove();};
   el.onclick=function(){el.remove();followNote(n.taskId||"",n.chatWith||"");};
   document.getElementById("pops").appendChild(el);
