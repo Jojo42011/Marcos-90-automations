@@ -377,6 +377,10 @@ app.get("/chat", (_req, res) => {
 app.get("/jarvis", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "jarvis.html"));
 });
+// New blue particle-orb Harvey screen (reuses Harvey's existing voice pipeline).
+app.get("/operator", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "operator.html"));
+});
 app.get("/memory", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "memory.html"));
 });
