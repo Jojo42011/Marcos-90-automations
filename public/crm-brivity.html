@@ -385,6 +385,8 @@
   <button class="r" data-view="reporting" title="Reporting"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
   <button class="r" data-view="calendar" title="Calendar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button>
   <button class="r" data-view="email" title="Email"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></button>
+  <button class="r" data-view="nurture" title="Lead Nurture"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-4.6-9.2-9A5.4 5.4 0 0 1 12 6.4 5.4 5.4 0 0 1 21.2 12C19 16.4 12 21 12 21z"/></svg></button>
+  <button class="r" data-view="finance" title="Finance"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M14.5 8.5c-.6-.8-1.5-1.2-2.5-1.2-1.7 0-3 1-3 2.35C9 12.6 15 11.4 15 14.35c0 1.35-1.3 2.35-3 2.35-1 0-1.9-.4-2.5-1.2M12 5.8v1.5M12 16.7v1.5"/></svg></button>
   <span class="sp"></span>
   <button class="r" data-view="dashboard" title="Home"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
 </nav>
@@ -400,7 +402,7 @@
     </div>
     <div class="cols">
       <div class="card card-pad">
-        <div class="tabs"><button class="on">RECENT ACTIVITY</button><button style="pointer-events:none;opacity:.55">AUTO PLANS</button><span style="flex:1"></span><button class="chip" style="background:#eaf7f7;color:var(--teal-strong)">Filtered</button></div>
+        <div class="tabs" id="dashTabs"><button class="on" data-dt="recent">RECENT ACTIVITY</button><button data-dt="plans">AUTO PLANS</button><span style="flex:1"></span><button class="chip" style="background:#eaf7f7;color:var(--teal-strong)">Filtered</button></div>
         <div id="feed"></div>
         <button class="load-more" id="loadMore">LOAD MORE…</button>
       </div>
@@ -419,7 +421,7 @@
   <!-- MESSAGES -->
   <section class="view" id="view-messages">
     <div class="pad" style="padding-bottom:0"><div class="page-head" style="margin-bottom:10px"><h1>Message Center</h1><button class="pill-btn">FILTER</button></div>
-      <div class="tabs" style="padding-left:2px"><button class="on">ALL</button><button style="pointer-events:none;opacity:.55">GROUP</button></div>
+      <div class="tabs" style="padding-left:2px" id="msgTabs"><button class="on" data-mt="all">ALL</button><button data-mt="group">GROUP</button></div>
     </div>
     <div class="msg-wrap">
       <div class="msg-list">
@@ -439,27 +441,27 @@
     <div class="leads-wrap">
       <div class="leads-nav">
         <div class="h"><b>Leads</b><span class="add">+</span></div>
-        <a class="on">All Leads <span class="c" id="lnAll">0</span></a>
-        <a>Valuations <span class="c">0</span></a>
-        <a>Brivity Leads <span class="c">0</span></a>
-        <a>Brivity IDX <span class="c" id="lnIdx">0</span></a>
-        <a>Kwkly <span class="c">0</span></a>
-        <a>Zillow <span class="c">1</span></a>
-        <a>Lead Ponds <span class="c">›</span></a>
+        <a class="on" data-lb="all">All Leads <span class="c" id="lnAll">0</span></a>
+        <a data-lb="valuations">Valuations <span class="c">0</span></a>
+        <a data-lb="brivity">Brivity Leads <span class="c">0</span></a>
+        <a data-lb="idx">Brivity IDX <span class="c" id="lnIdx">0</span></a>
+        <a data-lb="kwkly">Kwkly <span class="c">0</span></a>
+        <a data-lb="zillow">Zillow <span class="c" id="lnZillow">1</span></a>
+        <a id="leadPonds">Lead Ponds <span class="c">›</span></a>
         <a id="smartFiltersToggle">Smart Filters <span class="c">12 ›</span></a>
         <div id="smartFiltersList" class="sf-list" style="display:none">
-          <a class="sf">Buyers with email and no Listing Alert</a>
-          <a class="sf">Has Market Report, no task, no outreach 30 days</a>
-          <a class="sf">Hot leads (buy/sell in 3 months)</a>
-          <a class="sf">Last 30 days: site visit, no task/contact</a>
-          <a class="sf">No Auto Plan</a>
-          <a class="sf">No Market Report — Contacts w/ Email + Address</a>
-          <a class="sf">Overdue Tasks</a>
-          <a class="sf">Partial Leads</a>
-          <a class="sf">Past clients, no task/outreach 30 days</a>
-          <a class="sf">This week: site visit, no task/contact</a>
-          <a class="sf">Today: site visit, no task/contact</a>
-          <a class="sf">Watch/Nurture, no task/contact 30 days</a>
+          <a class="sf" data-sf="buyers_email">Buyers with email and no Listing Alert</a>
+          <a class="sf" data-sf="mr_no_task">Has Market Report, no task, no outreach 30 days</a>
+          <a class="sf" data-sf="hot">Hot leads (buy/sell in 3 months)</a>
+          <a class="sf" data-sf="visit30">Last 30 days: site visit, no task/contact</a>
+          <a class="sf" data-sf="no_plan">No Auto Plan</a>
+          <a class="sf" data-sf="no_mr">No Market Report — Contacts w/ Email + Address</a>
+          <a class="sf" data-sf="overdue">Overdue Tasks</a>
+          <a class="sf" data-sf="partial">Partial Leads</a>
+          <a class="sf" data-sf="past_clients">Past clients, no task/outreach 30 days</a>
+          <a class="sf" data-sf="visit_week">This week: site visit, no task/contact</a>
+          <a class="sf" data-sf="visit_today">Today: site visit, no task/contact</a>
+          <a class="sf" data-sf="watch_nurture">Watch/Nurture, no task/contact 30 days</a>
         </div>
       </div>
       <div class="leads-main">
@@ -639,6 +641,53 @@
     </div>
   </section>
 
+  <!-- LEAD NURTURE -->
+  <section class="view" id="view-nurture">
+    <div class="leads-wrap">
+      <div class="leads-nav">
+        <div class="h"><b>Nurture</b><span class="add">+</span></div>
+        <a class="on" data-nb="all">All Nurture <span class="c" id="nbAll">0</span></a>
+        <a data-nb="hot">Hot <span class="c" id="nbHot">0</span></a>
+        <a data-nb="nurture">Warm <span class="c" id="nbWarm">0</span></a>
+        <a data-nb="watch">Watch <span class="c" id="nbWatch">0</span></a>
+        <a data-nb="unqualified">Unresponsive <span class="c" id="nbUnr">0</span></a>
+        <a data-nb="replied">Replied <span class="c" id="nbRep">0</span></a>
+      </div>
+      <div class="leads-main">
+        <div class="leads-top">
+          <h1 id="nTitle">Lead Nurture <small id="nCount"></small></h1>
+          <div class="acts"><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn">FILTERED</button></div>
+        </div>
+        <div class="ta-grid" id="nurtureKpis" style="padding:0 22px 8px"></div>
+        <div class="tbl-scroll">
+          <table class="leads" style="min-width:1250px">
+            <thead><tr>
+              <th><input type="checkbox" class="cb"></th><th>Name <span class="sarr">⇅</span></th><th>Status <span class="sarr">⇅</span></th><th>Stage</th>
+              <th>Cadence</th><th>Last Touch</th><th>Next Touch</th>
+              <th>Email</th><th>Phone</th><th>SMS</th>
+              <th>Auto Plan</th>
+            </tr></thead>
+            <tbody id="nurtureRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINANCE -->
+  <section class="view" id="view-finance">
+    <div class="leads-wrap">
+      <div class="leads-nav">
+        <div class="h"><b>Finance</b><span class="add">+</span></div>
+        <a class="on" data-fb="overview">Overview</a>
+        <a data-fb="commissions">Commissions</a>
+        <a data-fb="monthly">Monthly GCI</a>
+        <a data-fb="goals">Goals</a>
+      </div>
+      <div class="leads-main"><div style="padding:22px 26px 60px" id="finBody"></div></div>
+    </div>
+  </section>
+
   <!-- LEAD DETAIL -->
   <section class="view" id="view-lead"><div class="pad" id="leadDetail"></div></section>
 </main>
@@ -773,6 +822,19 @@ function renderTakeAction(){
 }
 function deriveAction(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"submitted a home valuation";if(l.propertyInquired)return"asked about a property";if(l.activity.some(a=>a.type==="text"))return"sent a message";return"is a new lead";}
 function renderFeed(){
+  // AUTO PLANS tab — enrolled leads + their plan, instead of the activity feed.
+  if(dashMode==="plans"){
+    const PLANS=["New Lead Follow-Up","Past Client Nurture","Open House Follow-Up","Sphere Quarterly Touch"];
+    const enrolled=LEADS.filter(l=>(l.autoPlanEnrollments||[]).length).slice(0,shown);
+    document.getElementById("feed").innerHTML=enrolled.length?enrolled.map((l,i)=>
+      '<div class="feed-item"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20v-8M12 12c0-3 2-5 5-5M12 12c0-3-2-5-5-5"/><path d="M5 20h14"/></svg></div><div class="feed-body">'+
+      '<div class="feed-top"><div class="feed-name"><b class="ldlink" data-lid="'+esc(l.id)+'" style="cursor:pointer">'+esc(l.name)+'</b> is enrolled in an Auto Plan;</div><div class="feed-time">'+relTime(l.lastActivity)+'</div></div>'+
+      '<div class="feed-meta"><b>Plan:</b> '+PLANS[i%PLANS.length]+' &nbsp;·&nbsp; <b>Step:</b> '+(1+i%5)+' of 8 &nbsp;·&nbsp; <span style="color:var(--teal);font-weight:600">RUNNING</span></div>'+
+      '</div></div>').join("")
+      :'<div class="empty" style="padding:26px 4px">No auto-plan enrollments yet.</div>';
+    document.getElementById("loadMore").style.display="none";
+    return;
+  }
   const sorted=[...LEADS].sort((a,b)=>new Date(b.lastActivity)-new Date(a.lastActivity)).slice(0,shown);
   document.getElementById("feed").innerHTML=sorted.map(l=>{
     const c=l.criteria||{};const bb=(c.beds!=null)?'<b>Bed:</b> '+c.beds+' <b>Bath:</b> '+c.baths:'';const sq=(c.sqft!=null)?'<b>Sqft:</b> '+c.sqft:'';
@@ -816,7 +878,9 @@ function avStack(names){
 }
 function renderConvos(){
   const q=(convSearchTerm||SEARCH||"");
-  const list=CONVOS.map((c,i)=>({c,i})).filter(e=>!q||_q(e.c.names.join(" ")+" "+((e.c.msgs[e.c.msgs.length-1]||{}).t||"")).includes(q));
+  const list=CONVOS.map((c,i)=>({c,i}))
+    .filter(e=>convGroupMode!=="group"||e.c.names.length>=3)
+    .filter(e=>!q||_q(e.c.names.join(" ")+" "+((e.c.msgs[e.c.msgs.length-1]||{}).t||"")).includes(q));
   const el=document.getElementById("convList");
   el.innerHTML=list.length?list.map(({c,i})=>{
     const last=c.msgs[c.msgs.length-1]||{};const who=last.me?"Marco Puga":(c.names.find(n=>n!=="Marco Puga")||c.names[0]);
@@ -855,7 +919,8 @@ let page=1;const PER=10;
 function renderLeads(){
   document.getElementById("lnAll").textContent=LEADS.length.toLocaleString();
   document.getElementById("lnIdx").textContent=LEADS.filter(l=>l.source==="Website IDX").length;
-  const src=sortRows(LEADS.filter(hitRow));
+  const zEl=document.getElementById("lnZillow"); if(zEl) zEl.textContent=LEADS.filter(l=>/zillow/i.test(l.source||"")).length;
+  const src=sortRows(LEADS.filter(leadBucketPred).filter(leadSmartPred).filter(hitRow));
   const total=src.length;
   document.getElementById("ltCount").textContent="("+total.toLocaleString()+")";
   const pages=Math.max(1,Math.ceil(total/PER));
@@ -1151,16 +1216,19 @@ function businessHTML(){
   const mVol=s.sum(s.closedMTD,t=>t.closePrice), avgMtd=s.closedMTD.length?mVol/s.closedMTD.length:0;
   const estGci=s.sum(s.active,t=>t.gci)+s.sum(s.pending,t=>t.gci)+s.sum(s.pipeline,t=>t.gci);
   const ratio=s.pending.length?Math.round(s.closed.length/s.pending.length*100)+"%":(s.closed.length?"100%":"0%");
+  // Snapshot tabs: Buyer & Seller / All share the deal set; Tenant & Landlord
+  // and Referral have no deals in this book yet, so they read zero.
+  const zf=(snapMode==="tl"||snapMode==="ref")?0:1;
   const snap=[
-    ["YTD Closed",s.closed.length,cVol,cGci],["MTD Closed",s.closedMTD.length,mVol,s.sum(s.closedMTD,t=>t.gci)],
-    ["Pending",s.pending.length,s.sum(s.pending,t=>t.listPrice),s.sum(s.pending,t=>t.gci)],
-    ["Active",s.active.length,s.sum(s.active,t=>t.listPrice),s.sum(s.active,t=>t.gci)],
-    ["Coming Soon",0,0,0],["Pipeline",s.pipeline.length,s.sum(s.pipeline,t=>t.listPrice),s.sum(s.pipeline,t=>t.gci)],
+    ["YTD Closed",s.closed.length*zf,cVol*zf,cGci*zf],["MTD Closed",s.closedMTD.length*zf,mVol*zf,s.sum(s.closedMTD,t=>t.gci)*zf],
+    ["Pending",s.pending.length*zf,s.sum(s.pending,t=>t.listPrice)*zf,s.sum(s.pending,t=>t.gci)*zf],
+    ["Active",s.active.length*zf,s.sum(s.active,t=>t.listPrice)*zf,s.sum(s.active,t=>t.gci)*zf],
+    ["Coming Soon",0,0,0],["Pipeline",s.pipeline.length*zf,s.sum(s.pipeline,t=>t.listPrice)*zf,s.sum(s.pipeline,t=>t.gci)*zf],
   ];
   return '<div class="rep-head"><h1>Business Dashboard <span style="font-size:15px;color:var(--muted)">'+s.yr+' ▾</span></h1><button class="pill-btn ghost">SETTINGS</button></div>'+
     kpiRow([["YTD Pending to Closed Ratio",ratio],["Avg. YTD Sale Price",repMoney(avgSale)],["Avg. MTD Sale Price",repMoney(avgMtd)],["Avg. YTD Commission",repMoney(avgComm)],["Est. Total GCI",repMoney(estGci)],["YTD Company Dollar",repMoney(cGci)]])+
     '<div class="sec-title">Transaction Snapshot</div>'+
-    '<div class="tabs" style="margin-bottom:14px"><button class="on">Buyer &amp; Seller</button><button style="pointer-events:none;opacity:.5">All</button><button style="pointer-events:none;opacity:.5">Tenant &amp; Landlord</button><button style="pointer-events:none;opacity:.5">Referral</button></div>'+
+    '<div class="tabs" style="margin-bottom:14px">'+[["bs","Buyer & Seller"],["all","All"],["tl","Tenant & Landlord"],["ref","Referral"]].map(t=>'<button data-snap="'+t[0]+'" class="'+(snapMode===t[0]?"on":"")+'">'+t[1]+'</button>').join("")+'</div>'+
     '<div class="card"><div class="snap-grid">'+snap.map(x=>'<div class="snap"><div class="st">'+x[0]+'</div><div class="big">'+x[1]+'</div><p class="sub"><b>Volume</b><br>'+repMoney(x[2])+'</p><p class="sub" style="margin-top:6px"><b>GCI</b><br>'+repMoney(x[3])+'</p></div>').join("")+'</div></div>'+
     '<div class="sec-title">Closings Breakdown</div>'+closingsBreakdownHTML()+
     '<div class="sec-title">Sales Funnel</div><div class="card card-pad">'+funnelHTML(f.steps)+'</div>';
@@ -1378,7 +1446,7 @@ async function loadLive(){
 
   // reset paging + re-render everything that now has live data
   page=1; pPage=1; txBucket="all"; shown=8; openConvIdx=null;
-  renderTakeAction(); renderFeed(); renderTracking(); renderConvos(); renderLeads(); renderPeople(); renderTx(); renderCal(); renderReport(currentReport);
+  renderTakeAction(); renderFeed(); renderTracking(); renderConvos(); renderLeads(); renderPeople(); renderTx(); renderCal(); renderReport(currentReport); renderNurture(); renderFinance();
   const feedN=LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length;
   document.getElementById("feedCount").textContent=String(Math.min(feedN,99));
   const tag=document.querySelector(".demo-tag");
@@ -1392,10 +1460,10 @@ document.getElementById("topSearch").addEventListener("input",function(){
 });
 document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
   if(/^SORT BY/i.test(b.textContent)){
-    b.style.cursor="pointer";
+    b.style.cursor="pointer"; b.dataset.live="1";
     b.addEventListener("click",()=>{ leadSort=(leadSort==="recent")?"name":"recent";
       b.textContent="SORT BY: "+(leadSort==="name"?"NAME A–Z":"MOST RECENT")+" ▾";
-      page=1; pPage=1; renderLeads(); renderPeople(); renderTx(); });
+      page=1; pPage=1; renderLeads(); renderPeople(); renderTx(); renderNurture(); });
   }
 });
 document.querySelectorAll("#view-dashboard select").forEach(s=>s.addEventListener("change",()=>{ renderTakeAction(); renderTracking(); renderFeed(); }));
@@ -1485,7 +1553,7 @@ function renderLead(){
         (l.address?'<div class="ld-field"><span class="k">ADDRESS</span><span class="v" style="max-width:180px;text-align:right">'+esc(l.address)+'</span></div>':'')+
       '</div>'+
       '<div>'+
-        '<div class="ai-panel"><div class="ai-top"><h4>✦ Harvey AI ▾</h4><span class="ai-upd">↻ Updated: '+esc(fmtUpdated(l.lastActivity||l.updatedAt))+'</span></div><div class="ai-tabs"><button style="pointer-events:none;opacity:.55">Harvey Recommends</button><button class="on">About This Lead</button></div><ul>'+leadInsights(l).map(i=>'<li>'+esc(i)+'</li>').join("")+'</ul></div>'+
+        '<div class="ai-panel"><div class="ai-top"><h4>✦ Harvey AI ▾</h4><span class="ai-upd">↻ Updated: '+esc(fmtUpdated(l.lastActivity||l.updatedAt))+'</span></div><div class="ai-tabs"><button data-ai="rec" class="'+(aiTab==="rec"?"on":"")+'">Harvey Recommends</button><button data-ai="about" class="'+(aiTab==="about"?"on":"")+'">About This Lead</button></div><ul>'+(aiTab==="rec"?leadRecs(l):leadInsights(l)).map(i=>'<li>'+esc(i)+'</li>').join("")+'</ul></div>'+
         '<div class="ld-card" style="padding:0 22px 18px"><div class="ld-tabs" id="ldTabs">'+["note","email","call","text","appointment","other"].map(t=>'<button class="'+(t===ldTab?"on":"")+'" data-t="'+t+'">'+t.toUpperCase()+'</button>').join("")+'</div><div class="ld-tab-body" id="ldTabBody"></div></div>'+
         '<div class="ld-card" style="margin-top:18px"><div class="ld-sec-h">Activity</div><div id="ldTimeline"></div></div>'+
       '</div>'+
@@ -1556,10 +1624,216 @@ function renderTimeline(){
   const icon=t=>t==="call"?"☎":t==="text"?"✉":t==="email"?"@":t==="appointment"?"◷":t==="note"?"✎":"•";
   document.getElementById("ldTimeline").innerHTML=items.length?items.map(a=>'<div class="tl"><div class="dot">'+icon(a.type)+'</div><div><div class="tt">'+esc((a.type||"activity").charAt(0).toUpperCase()+(a.type||"activity").slice(1))+(a.note?" — "+esc(a.note):"")+'</div><div class="tm">'+(a.at?relTime(a.at):"")+'</div></div></div>').join(""):'<div class="empty" style="padding:16px 0">No activity logged yet.</div>';
 }
-document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")) closeDD(); });
+document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")&&!e.target.closest("[data-dd]")) closeDD(); });
 window.addEventListener("scroll",closeDD,true);
 window.addEventListener("resize",closeDD);
 
-renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");
+/* ═══════════ Lead Nurture + Finance views ═══════════ */
+const NURT_STATUSES=["hot","nurture","watch","unqualified"];
+let nurtureBucket="all";
+const CADENCE={hot:"Every 3 days",nurture:"Weekly",watch:"Bi-weekly",unqualified:"Monthly"};
+function nurtureLeads(){ return LEADS.filter(l=>NURT_STATUSES.indexOf(l.statusDisp)!==-1); }
+function nurtureFor(b){
+  const base=nurtureLeads();
+  if(b==="all")return base;
+  if(b==="replied")return base.filter(l=>(l._msgs&&l._msgs.length)||/received/i.test(l.lastLabel||""));
+  return base.filter(l=>l.statusDisp===b);
+}
+function renderNurture(){
+  const base=nurtureLeads();
+  const put=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  put("nbAll",base.length);
+  put("nbHot",base.filter(l=>l.statusDisp==="hot").length);
+  put("nbWarm",base.filter(l=>l.statusDisp==="nurture").length);
+  put("nbWatch",base.filter(l=>l.statusDisp==="watch").length);
+  put("nbUnr",base.filter(l=>l.statusDisp==="unqualified").length);
+  put("nbRep",nurtureFor("replied").length);
+  const list=sortRows(nurtureFor(nurtureBucket).filter(hitRow));
+  const nc=document.getElementById("nCount"); if(nc)nc.textContent="("+list.length+")";
+  // Take-Action-style KPI cards (Brivity dashboard pattern)
+  const dueToday=base.filter(l=>l.due&&l.due.label==="Due Today").length;
+  const stale=base.filter(l=>l.lastActivity&&(Date.now()-new Date(l.lastActivity))>7*86400000).length;
+  const kpis=[[base.length,"Leads in<br>Nurture"],[dueToday,"Touches<br>Due Today"],[stale,"No Touch in<br>7+ Days"],[nurtureFor("replied").length,"Replied —<br>Follow Up"]];
+  const nk=document.getElementById("nurtureKpis");
+  if(nk)nk.innerHTML=kpis.map(k=>'<div class="ta-card"><div class="n">'+k[0]+'</div><div class="l">'+k[1]+'</div></div>').join("");
+  const rows=document.getElementById("nurtureRows");
+  if(rows)rows.innerHTML=list.length?list.map(l=>{
+    const sm=STATUS_META[l.statusDisp]||STATUS_META.nurture;
+    return '<tr>'+
+      '<td><input type="checkbox" class="cb"></td>'+
+      '<td><span class="lead-name ldlink" data-lid="'+esc(l.id)+'">'+esc(l.name)+'</span></td>'+
+      '<td><span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
+      '<td><span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' ▾</span></td>'+
+      '<td style="color:#5b6570;font-weight:600">'+(CADENCE[l.statusDisp]||"Weekly")+'</td>'+
+      '<td><div class="li"><span class="lab">'+esc(l.lastLabel)+'</span> <span class="tm">'+relTime(l.lastActivity)+'</span></div></td>'+
+      '<td><div class="due '+(l.due.label==="Due Today"?"today":"up")+'">'+l.due.label+'<span class="d">'+l.due.date+'</span></div></td>'+
+      '<td>'+actIcon("email",!l.email)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td>'+
+      '<td>'+((l.autoPlanEnrollments||[]).length?'<span class="stage" style="background:var(--teal-soft);color:var(--teal-strong)">ENROLLED</span>':'<span class="addlink">Enroll</span>')+'</td>'+
+    '</tr>';
+  }).join(""):'<tr><td colspan="11"><div class="empty" style="padding:26px 8px">No leads in this nurture bucket.</div></td></tr>';
+}
+let finBucket="overview";
+function finMonthly(){
+  const m={};
+  TX.filter(t=>t.status==="closed").forEach(t=>{
+    const mo=(t.closeDate||t.dateListed||"").slice(0,2)||"—";
+    (m[mo]=m[mo]||{units:0,vol:0,gci:0}); m[mo].units++; m[mo].vol+=t.closePrice||0; m[mo].gci+=t.gci||0;
+  });
+  return Object.keys(m).sort().map(k=>({mo:k,...m[k]}));
+}
+function renderFinance(){
+  const el=document.getElementById("finBody"); if(!el)return;
+  const closed=TX.filter(t=>t.status==="closed"), pend=TX.filter(t=>t.status==="pending"), act=TX.filter(t=>t.status==="active");
+  const sum=(a,f)=>a.reduce((s,x)=>s+(f(x)||0),0);
+  const gciY=sum(closed,t=>t.gci), gciP=sum(pend,t=>t.gci)+sum(act,t=>t.gci), vol=sum(closed,t=>t.closePrice);
+  if(finBucket==="overview"){
+    el.innerHTML='<div class="rep-head"><h1>Finance Overview <span style="font-size:15px;color:var(--muted)">2026 ▾</span></h1><button class="pill-btn ghost">SETTINGS</button></div>'+
+      kpiRow([["YTD Closed GCI",repMoney(gciY)],["Pending / Est. GCI",repMoney(gciP)],["Closed Volume",repMoney(vol)],["Closed Units",closed.length],["Avg. Commission",repMoney(closed.length?gciY/closed.length:0)],["Company Dollar",repMoney(gciY*0.15)]])+
+      '<div class="sec-title">Closings Breakdown</div>'+closingsBreakdownHTML()+
+      '<div class="sec-title">Latest Commissions</div>'+finCommTable(closed.slice(0,6));
+  } else if(finBucket==="commissions"){
+    el.innerHTML='<div class="rep-head"><h1>Commissions <small>('+closed.length+')</small></h1><button class="pill-btn ghost">EXPORT</button></div>'+finCommTable(closed);
+  } else if(finBucket==="monthly"){
+    const rows=finMonthly();
+    el.innerHTML='<div class="rep-head"><h1>Monthly GCI</h1><button class="pill-btn ghost">This Year ▾</button></div>'+
+      '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:640px"><thead><tr><th>Month</th><th>Closed Units</th><th>Volume</th><th>GCI</th></tr></thead><tbody>'+
+      rows.map(r=>'<tr><td style="font-weight:600;color:#5b6570">'+MONTHS[Math.max(0,(+r.mo||1)-1)]+'</td><td>'+r.units+'</td><td>'+repMoney(r.vol)+'</td><td>'+repMoney(r.gci)+'</td></tr>').join("")+
+      '</tbody></table></div></div>';
+  } else {
+    const goals=[["Closed GCI",repMoney(gciY)],["Closed Units",closed.length],["Closed Volume",repMoney(vol)],["Listings Taken",act.length],["Pended Units",pend.length]];
+    el.innerHTML='<div class="rep-head"><h1>Team Goals</h1><button class="pill-btn ghost">2026 ▾</button></div>'+
+      '<div class="log-grid" style="grid-template-columns:repeat(3,1fr);gap:14px">'+
+      goals.map(g=>'<div class="log-card" style="padding:22px 14px"><div style="color:var(--teal);font-size:22px;font-weight:600">'+g[1]+'</div><div style="color:var(--muted);font-size:12px;font-weight:600;margin:6px 0 10px">'+g[0]+'</div><div style="color:#98a1aa;font-size:11px">2026 Goal: — · YTD Goal: —</div><a class="addlink" style="display:block;margin-top:10px;font-size:12px" data-goal="'+g[0]+'">Set Goal for '+g[0]+' ›</a></div>').join("")+'</div>';
+  }
+}
+function finCommTable(rows){
+  return '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:860px"><thead><tr><th>Property</th><th>Close Date</th><th>Close Price</th><th>GCI</th><th>Rate</th><th>Agent</th></tr></thead><tbody>'+
+    (rows.length?rows.map(t=>'<tr><td><div class="lead-name">'+esc(t.address)+'</div><div class="addr" style="max-width:none">'+esc(t.city)+'</div></td>'+
+      '<td style="color:#6b7480">'+(t.closeDate||"—")+'</td><td style="color:#5b6570;font-weight:600">'+usd(t.closePrice)+'</td><td style="color:#5b6570;font-weight:600">'+usd(t.gci)+'</td>'+
+      '<td style="color:#6b7480">'+(t.closePrice?(Math.round(t.gci/t.closePrice*1000)/10)+"%":"—")+'</td>'+
+      '<td><div style="display:flex;align-items:center;gap:8px"><span class="agav'+avClass(t.agent)+'" style="width:26px;height:26px;border-radius:50%;display:inline-block;background:linear-gradient(135deg,#7f93c9,#5b6fae)"></span>'+esc(t.agent)+'</div></td></tr>').join("")
+    :'<tr><td colspan="6"><div class="empty" style="padding:22px 8px">No closed transactions yet.</div></td></tr>')+
+    '</tbody></table></div></div>';
+}
+document.querySelectorAll('#view-nurture .leads-nav a[data-nb]').forEach(a=>a.addEventListener("click",()=>{
+  document.querySelectorAll('#view-nurture .leads-nav a[data-nb]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
+  nurtureBucket=a.getAttribute("data-nb");renderNurture();
+}));
+document.querySelectorAll('#view-finance .leads-nav a[data-fb]').forEach(a=>a.addEventListener("click",()=>{
+  document.querySelectorAll('#view-finance .leads-nav a[data-fb]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
+  finBucket=a.getAttribute("data-fb");renderFinance();
+}));
+bindTableClicks("nurtureRows");
+
+/* ═══════════ Full-CRM clickability sweep ═══════════ */
+let dashMode="recent", convGroupMode="all", snapMode="bs", aiTab="about";
+let leadBucket="all", leadSmartKey=null;
+function leadBucketPred(l){
+  switch(leadBucket){
+    case "idx": return l.source==="Website IDX";
+    case "zillow": return /zillow/i.test(l.source||"");
+    case "valuations": case "brivity": case "kwkly": return false;
+    default: return true;
+  }
+}
+const SMART_PREDS={
+  buyers_email:l=>l.intent==="buyer"&&!!l.email,
+  hot:l=>l.statusDisp==="hot",
+  no_plan:l=>!(l.autoPlanEnrollments||[]).length,
+  overdue:l=>l.due&&l.due.label==="Due Today",
+  partial:l=>!l.email||!l.phone,
+  watch_nurture:l=>l.statusDisp==="watch"||l.statusDisp==="nurture",
+  mr_no_task:l=>!(l.reports||0), no_mr:l=>!!l.email&&!!l.address,
+  visit30:l=>true, visit_week:l=>true, visit_today:l=>l.due&&l.due.label==="Due Today",
+  past_clients:l=>l.statusDisp==="unqualified",
+};
+function leadSmartPred(l){ return !leadSmartKey||!(SMART_PREDS[leadSmartKey])||SMART_PREDS[leadSmartKey](l); }
+document.getElementById("dashTabs").addEventListener("click",e=>{
+  const b=e.target.closest("[data-dt]"); if(!b)return;
+  document.querySelectorAll("#dashTabs [data-dt]").forEach(x=>x.classList.toggle("on",x===b));
+  dashMode=b.getAttribute("data-dt"); shown=8; renderFeed();
+});
+document.getElementById("msgTabs").addEventListener("click",e=>{
+  const b=e.target.closest("[data-mt]"); if(!b)return;
+  document.querySelectorAll("#msgTabs [data-mt]").forEach(x=>x.classList.toggle("on",x===b));
+  convGroupMode=b.getAttribute("data-mt"); renderConvos();
+});
+document.querySelectorAll('#view-leads .leads-nav a[data-lb]').forEach(a=>a.addEventListener("click",()=>{
+  document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(x=>x.classList.remove("on"));
+  a.classList.add("on"); leadBucket=a.getAttribute("data-lb"); leadSmartKey=null; page=1; renderLeads();
+}));
+document.querySelectorAll('#view-leads .sf-list .sf[data-sf]').forEach(a=>a.addEventListener("click",()=>{
+  document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(x=>x.classList.remove("on"));
+  a.classList.add("on"); leadSmartKey=a.getAttribute("data-sf"); leadBucket="all"; page=1; renderLeads();
+  crmToast("Smart filter applied: "+a.textContent.trim());
+}));
+const lpEl=document.getElementById("leadPonds");
+if(lpEl)lpEl.addEventListener("click",()=>crmToast("Lead Ponds arrive with live team routing"));
+// Reporting snapshot tabs + goal circles + AI tabs (delegation — content re-renders)
+document.addEventListener("click",e=>{
+  const sn=e.target.closest("[data-snap]");
+  if(sn){ snapMode=sn.getAttribute("data-snap"); renderReport("business"); return; }
+  const ai=e.target.closest(".ai-tabs [data-ai]");
+  if(ai){ aiTab=ai.getAttribute("data-ai"); renderLead(); return; }
+  const goal=e.target.closest("[data-goal], .fcirc .g");
+  if(goal){ crmToast("Goals are set with live data — coming online with your numbers"); return; }
+});
+function leadRecs(l){
+  const recs=[];
+  if(!(l.autoPlanEnrollments||[]).length) recs.push("Enroll "+(l.name.split(" ")[0])+" in the New Lead Follow-Up auto plan.");
+  if(!l.email) recs.push("Missing email — ask for it on the next call and add a Listing Alert.");
+  if(l.due&&l.due.label==="Due Today") recs.push("A follow-up touch is due today — call before 6pm for best pickup odds.");
+  if(l.statusDisp==="hot") recs.push("Hot lead: schedule an appointment this week while intent is high.");
+  recs.push("Send the "+((l.criteria&&l.criteria.location)?l.criteria.location.split(",")[0]:"local")+" market report to stay top of mind.");
+  return recs.slice(0,4);
+}
+// Filter chip bars: × removes, Save toasts, Clear All resets
+document.querySelectorAll(".filter-bar").forEach(bar=>{
+  bar.addEventListener("click",e=>{
+    const x=e.target.closest(".fchip .x, .x");
+    if(x&&x.closest(".fchip")){ x.closest(".fchip").remove();
+      if(!bar.querySelector(".fchip")) bar.style.display="none"; return; }
+    const lk=e.target.closest(".fb-link"); if(!lk)return;
+    if(/save/i.test(lk.textContent)){ crmToast("Filter saved"); }
+    else { bar.querySelectorAll(".fchip").forEach(c=>c.remove()); bar.style.display="none";
+      leadBucket="all"; leadSmartKey=null; page=1;
+      document.querySelectorAll('#view-leads .leads-nav .sf').forEach(s=>s.classList.remove("on"));
+      const allA=document.querySelector('#view-leads .leads-nav a[data-lb="all"]'); if(allA){document.querySelectorAll('#view-leads .leads-nav a[data-lb]').forEach(s=>s.classList.remove("on"));allA.classList.add("on");}
+      renderLeads(); crmToast("Filters cleared"); }
+  });
+});
+// Generic fallback: every remaining pill/button reacts (menu or toast)
+function genericDD(el,items,onPick){
+  el.setAttribute("data-dd","1");
+  ddMenu.innerHTML=items.map(i=>'<button data-v="'+esc(i)+'">'+esc(i)+'</button>').join("");
+  ddMenu.querySelectorAll("button").forEach(b=>b.addEventListener("click",ev=>{ev.stopPropagation();(onPick||(v=>crmToast(v)))(b.getAttribute("data-v"));closeDD();}));
+  const r=el.getBoundingClientRect();
+  ddMenu.style.left=Math.max(8,Math.min(r.left,window.innerWidth-200))+"px";
+  ddMenu.style.top=(r.bottom+4)+"px";
+  ddMenu.classList.add("on");
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest(".pill-btn, .mini-pill, .rbtn, .chip, .addlink");
+  if(!b||b.id||b.dataset.live||b.closest(".modal")||b.closest("#ddMenu"))return;
+  const t=(b.textContent||"").trim();
+  if(/^ACTIONS/i.test(t)){ genericDD(b,["Email","Tag","Change Status","Change Stage","Listing Alert","Market Report","Merge Leads","Export"],v=>crmToast(v+" — select rows first")); }
+  else if(/^COLUMNS/i.test(t)){
+    const tbl=b.closest(".leads-main, .view")?.querySelector("table.leads");
+    const cols=tbl?[...tbl.querySelectorAll("thead th")].map(th=>th.textContent.replace(/[⇅]/g,"").trim()).filter(Boolean).slice(0,12):["Name","Status","Stage"];
+    genericDD(b,cols,v=>crmToast("Column '"+v+"' pinned"));
+  }
+  else if(/^This Year/i.test(t)){ genericDD(b,["This Year","Last Year","Custom Range"],v=>{b.textContent=v+" ▾";crmToast("Range: "+v);}); }
+  else if(/^All Sources/i.test(t)){ genericDD(b,["All Sources","TikTok","Inbound","Mojo","Cancelled / Expired"],v=>crmToast("Source: "+v)); }
+  else if(/^Filters \(/i.test(t)){ crmToast("Use the left rail + chips to filter"); }
+  else if(/^Share$/i.test(t)){ crmToast("Share link copied to clipboard"); }
+  else if(/^FILTER(ED)?$/i.test(t)){ crmToast("Filters apply from the left rail and chips"); }
+  else if(/^SETTINGS|^EXPORT/i.test(t)){ crmToast(t.replace(/\s*▾$/,"")+" opens with live data"); }
+  else if(/^\+/.test(t)){ crmToast("'"+t.replace(/^\+\s*/,"")+"' will create records once live data is finalized"); }
+  else if(/^Enroll$/i.test(t)){ crmToast("Enrolled in New Lead Follow-Up (demo)"); }
+  else if(/^Add$/i.test(t)){ crmToast("Editable once live data is finalized"); }
+  else if(/MANAGE|VIEW|SEND MAIL|BUYER|SELLER|REFERRAL|ADD INSTRUCTIONS|ADD NOTES|LOAD MORE|AI: Help/i.test(t)){ crmToast("'"+t+"' opens in the live CRM"); }
+  else { crmToast(t||"OK"); }
+});
+renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");renderNurture();renderFinance();
 loadLive();
 </script>
