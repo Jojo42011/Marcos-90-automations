@@ -1903,6 +1903,20 @@
     .rv-dim-num { font-size: 9.5px; font-weight: 700; color: var(--text, #e8eaed); }
     .rv-clip-reason { margin-top: 6px; font-size: 10.5px; font-style: italic; color: var(--muted, #8a919c); text-align: center; max-width: 300px; margin-left: auto; margin-right: auto; line-height: 1.45; }
   </style>
+    <style id="brivity-skin">
+      /* Brivity retint — remap the light theme's cyan-blue accent to Brivity
+         teal and calm the neon so Content Manager matches the system. */
+      html[data-theme="light"]{
+        --teal:#59c4c4 !important; --teal-bright:#4ca7a7 !important;
+        --teal-dim:rgba(89,196,196,0.15) !important; --teal-glow:rgba(89,196,196,0.10) !important;
+        --teal-border:rgba(89,196,196,0.25) !important; --teal-border-strong:rgba(89,196,196,0.45) !important;
+        --bg-0:#f4f6f8 !important; --bg-1:#f9fbfb !important; --bg-2:#ffffff !important;
+        --shadow-teal:0 1px 3px rgba(16,24,40,0.08) !important;
+      }
+      /* Drop the Orbitron sci-fi display face for the clean Brivity sans. */
+      html[data-theme="light"] *{ --font-display:"Helvetica Neue",Helvetica,Arial,system-ui,sans-serif !important; }
+      html[data-theme="light"] body{ background:#f9fbfb !important; }
+    </style>
 </head>
 <body>
   <div class="page-bg"></div>
@@ -2512,7 +2526,8 @@
 
   <script>
     function initTheme() {
-      const saved = localStorage.getItem("theme") || "dark";
+      // Brivity default: open in the white/teal light theme (system-wide look).
+      const saved = "light";
       document.documentElement.setAttribute("data-theme", saved);
       document.body.classList.toggle("light-mode", saved === "light");
     }

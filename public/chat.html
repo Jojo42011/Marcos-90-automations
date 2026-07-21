@@ -141,6 +141,20 @@
     .hint { margin: 0.45rem 0 0; font-size: 0.68rem; color: var(--muted); }
     @media (max-width: 720px) { .dm-modal-card { width: 100vw; height: 100vh; border-radius: 0; } }
   </style>
+    <style id="brivity-skin">
+      /* Brivity theme — white + teal, matching the CRM/shell. */
+      :root{
+        --bg:#f9fbfb; --surface:#ffffff; --surface-2:#ffffff; --border:#edf0f0; --border-2:#edf0f0;
+        --text:#333333; --muted:#98a1aa; --accent:#59c4c4;
+        --user:rgba(89,196,196,0.12); --bot:#ffffff;
+      }
+      body{ background:#f9fbfb !important; color:#333 !important; }
+      /* KPI stat cards: white surface + dark numbers (they hard-coded #fff) */
+      .dm-stat{ background:#ffffff !important; box-shadow:0 1px 3px rgba(16,24,40,.06); }
+      .dm-stat .num{ color:#333333 !important; }
+      .dm-thread.active,.dm-new:hover{ background:rgba(89,196,196,0.10) !important; }
+      *{ scrollbar-color:rgba(89,196,196,.4) transparent; }
+    </style>
 </head>
 <body>
   <header>

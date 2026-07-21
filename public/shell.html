@@ -128,7 +128,6 @@
 
    <div id="main">
      <div id="frames"></div>
-     <div id="dock"><span class="p"></span><span class="dt"><b>Harvey</b> is here <span>· tap to return</span></span></div>
      <div id="toast"></div>
    </div>
  </div>
@@ -197,13 +196,6 @@ var TABS = [
    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>'
  },
  {
-   key: "finance",
-   label: "Finance",
-   sub: "GCI · Expenses · Pace",
-   src: "/crm?view=finance",
-   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>'
- },
- {
    key: "howto",
    label: "How to Use",
    sub: "Guided tour of every tab",
@@ -221,7 +213,6 @@ var SECTIONS = {
  dm:        null,
  content:   'Growth',
  tasks:     null,
- finance:   'Revenue',
  howto:     'Help'
 };
 
@@ -240,7 +231,7 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
  var home = (TABS.find(function(t){return t.home;}) || TABS[0]).key;
  var current = home;
  var nav = document.getElementById("nav"), frames = document.getElementById("frames");
- var dock = document.getElementById("dock"), toastEl = document.getElementById("toast"), shell = document.getElementById("shell");
+ var toastEl = document.getElementById("toast"), shell = document.getElementById("shell");
 
 
  nav.innerHTML = TABS.map(function(t,i){
@@ -268,7 +259,6 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
      var ni = nav.querySelector('.nav-item[data-key="'+t.key+'"]'); if(ni) ni.classList.toggle("active", t.key===key);
    });
    current = key;
-   dock.classList.toggle("show", key!==home);   // home tab stays loaded+live in the background
    if(programmatic && key!==home) toast('Opened <b>'+byKey[key].label+'</b>');
  }
 

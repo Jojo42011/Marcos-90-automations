@@ -631,6 +631,31 @@
 
     html[data-theme="light"] a { color: #0369a1 !important; font-weight: 600 !important; }
 
+  /* ─── BRIVITY TEAL RETINT (light mode) — swap the slate-blue accents to teal
+       so Tasks matches the Brivity theme used across the system. ─── */
+  html[data-theme="light"] .input-prefix,
+  html[data-theme="light"] .col-title,
+  html[data-theme="light"] .task-due,
+  html[data-theme="light"] a,
+  html[data-theme="light"] .back-btn,
+  html[data-theme="light"] #back-btn,
+  html[data-theme="light"] .modal-head h2 { color:#4ca7a7 !important; border-color:#4ca7a7 !important; }
+  html[data-theme="light"] .add-btn,
+  html[data-theme="light"] .quick-add,
+  html[data-theme="light"] #add-task-btn,
+  html[data-theme="light"] .btn-save,
+  html[data-theme="light"] #modal-save,
+  html[data-theme="light"] #notify-btn.on { background:#59c4c4 !important; border-color:#4ca7a7 !important; color:#fff !important; }
+  html[data-theme="light"] #filter-undone[style*="rgba(0,212,255"],
+  html[data-theme="light"] #filter-done[style*="rgba(0,212,255"],
+  html[data-theme="light"] #filter-both[style*="rgba(0,212,255"] { background:#59c4c4 !important; border-color:#4ca7a7 !important; color:#fff !important; }
+  html[data-theme="light"] .topbar select,
+  html[data-theme="light"] .search-input,
+  html[data-theme="light"] .quick-input:focus { border-color:#bfe4e4 !important; }
+  html[data-theme="light"] .task-card { border-left-color:#59c4c4; }
+  html[data-theme="light"] #task-toast { background:#eef7f7 !important; border-color:#4ca7a7 !important; color:#4ca7a7 !important; }
+  html[data-theme="light"] body, html[data-theme="light"] .board { background:#f9fbfb !important; }
+  html[data-theme="light"] input[type="checkbox"], html[data-theme="light"] .cb { accent-color:#59c4c4; }
   </style>
 </head>
 <body>
@@ -828,7 +853,9 @@
     const THEME_KEY = "marco_crm_theme";
 
     function initTheme() {
-      const saved = localStorage.getItem(THEME_KEY) || "dark";
+      // Brivity default: this tab always opens in the white/teal light theme
+      // (part of the system-wide Brivity look; Harvey stays dark).
+      const saved = "light";
       if (saved === "light") {
         document.documentElement.setAttribute("data-theme", "light");
         document.body.classList.add("light-mode");
