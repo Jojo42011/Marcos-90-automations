@@ -301,6 +301,24 @@
   .dd-menu button{display:flex;align-items:center;gap:9px;width:100%;border:none;background:none;padding:8px 10px;border-radius:6px;font-size:13px;color:#5b6570;text-align:left;cursor:pointer}
   .dd-menu button:hover{background:var(--teal-soft)}
   .dd-menu .sw{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  /* Brivity-style select panel (screenshot look): roomier rows, gray text,
+     pale hover, thin scrollbar; checkbox variant for the user filter. */
+  .dd-menu.sel{padding:4px 0;border-radius:4px;max-height:330px}
+  .dd-menu.sel button{border-radius:0;padding:10px 16px;font-size:14px;color:#54595f}
+  .dd-menu.sel button:hover{background:#f5f7f7}
+  .dd-menu.sel button.cur{background:#f2f4f4}
+  .dd-menu.sel::-webkit-scrollbar{width:8px}
+  .dd-menu.sel::-webkit-scrollbar-thumb{background:#d5dbdb;border-radius:8px}
+  .dd-menu.sel .chk{width:15px;height:15px;border:1.5px solid #c4cccc;border-radius:3px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px;line-height:1}
+  .dd-menu.sel button.on .chk{background:var(--teal);border-color:var(--teal)}
+  /* New Activity modal fields */
+  .na-x{border:none;background:#f2f4f4;color:#8b95a0;width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer}
+  .na-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;margin-top:10px}
+  .na-label{color:#9aa5b1;font-size:13px;margin-bottom:7px}
+  .na-label i{color:#e05a45;font-style:normal}
+  .na-in{width:100%;height:40px;border:1px solid var(--line);border-radius:4px;background:#fafbfb;color:#54595f;font-size:14px;padding:0 12px;outline:none;font-family:inherit}
+  select.na-in{padding-right:34px}
+  textarea.na-in{height:auto}
   .crm-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#2c3540;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;z-index:90;opacity:0;transition:opacity .2s;pointer-events:none}
   .crm-toast.on{opacity:1}
   .ldlink{cursor:pointer}.ldlink:hover{color:var(--teal)}
@@ -394,10 +412,10 @@
 <main class="main">
   <!-- DASHBOARD -->
   <section class="view on" id="view-dashboard"><div class="pad">
-    <div class="page-head"><h1>Dashboard</h1><select class="select"><option>All Active Users</option><option>Marco Puga</option></select></div>
+    <div class="page-head"><h1>Dashboard</h1><button class="select" id="userFilter" style="min-width:170px;text-align:left;cursor:pointer">All Active Users</button></div>
     <div class="card card-pad">
       <div class="ta-head"><h2>Take Action <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c2cad1" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></h2>
-        <select class="select" id="taRange"><option value="7">Last 7 Days</option><option value="30">Last 30 Days</option><option value="90">Last 90 Days</option><option value="9999">All Time</option></select></div>
+        <select class="select" id="taRange"><option value="7">Last 7 Days</option><option value="14">Last 14 Days</option><option value="30">Last 30 Days</option><option value="tm">This Month</option><option value="lm">Last Month</option><option value="ty">This Year</option><option value="ly">Last Year</option><option value="all">All Time</option></select></div>
       <div class="ta-grid" id="taGrid"></div>
     </div>
     <div class="cols">
@@ -408,11 +426,11 @@
       </div>
       <div class="card card-pad">
         <div class="at-head"><h3>Activity Tracking</h3><a href="#" style="font-size:12px;color:#b8c0c8">Goal Settings ›</a></div>
-        <select class="select" style="width:100%"><option>This Week (Mon - Sun)</option><option>This Month</option></select>
+        <select class="select" id="atRange" style="width:100%"><option value="tw">This Week (Mon - Sun)</option><option value="lw">Last Week (Mon - Sun)</option><option value="tm">This Month</option><option value="lm">Last Month</option><option value="tq">This Quarter</option><option value="lq">Last Quarter</option><option value="ty">This Year</option><option value="ly">Last Year</option><option value="custom">Custom</option></select>
         <div class="sub">Brivity Activities</div>
         <div class="stat-grid" id="atStats"></div>
         <div class="hr"></div>
-        <div class="at-head"><div class="sub" style="margin:0">Logged Activities</div><button class="link-btn">+ LOG</button></div>
+        <div class="at-head"><div class="sub" style="margin:0">Logged Activities</div><button class="link-btn" id="logBtn">+ LOG</button></div>
         <div class="log-grid" id="logGrid"></div>
       </div>
     </div>
@@ -693,6 +711,37 @@
 </main>
 
 <!-- Calendar filter modal -->
+<!-- New Activity modal (Brivity-style) — logs an activity for a teammate -->
+<div class="scrim" id="actScrim"><div class="modal" style="width:560px">
+  <div class="modal-h"><h3 style="font-size:22px;font-weight:400;color:#54595f">New Activity</h3><button class="na-x" id="actClose">✕</button></div>
+  <div class="na-grid">
+    <div><div class="na-label">Type <i>*</i></div>
+      <select class="select na-in" id="actType"><option value="">Select</option>
+        <option>Calls</option><option>Contacts</option><option>Texts Sent</option><option>Emails Sent</option>
+        <option>Appointments Set</option><option>Appointments Held</option><option>Signings</option><option>Open Houses</option>
+        <option>Door Knocking</option><option>Networking Events</option><option>Circle Prospecting Calls</option>
+        <option>Canceled/Expired Calls</option><option>For Sale By Owner Calls</option><option>Non-CRM Contacts</option>
+      </select></div>
+    <div><div class="na-label">For User</div>
+      <select class="select na-in" id="actUser"><option>Marco Puga</option><option>Wesley</option><option>Kendrick</option><option>Carlos</option></select></div>
+    <div><div class="na-label">Date <i>*</i></div><input type="date" class="na-in" id="actDate"></div>
+    <div><div class="na-label"># <i>*</i></div><input type="number" class="na-in" id="actCount" value="1" min="1"></div>
+  </div>
+  <div class="na-label" style="margin-top:14px">Notes</div>
+  <textarea class="na-in" id="actNotes" style="width:100%;min-height:74px;resize:vertical;padding:10px 12px"></textarea>
+  <div class="modal-foot"><button class="btn-plain" id="actCancel">CANCEL</button><button class="pill-btn" id="actSave">SAVE</button></div>
+</div></div>
+
+<!-- Custom date range (Activity Tracking → Custom) -->
+<div class="scrim" id="rangeScrim"><div class="modal" style="width:420px">
+  <div class="modal-h"><h3 style="font-size:20px;font-weight:400;color:#54595f">Custom Range</h3><button class="na-x" id="rangeClose">✕</button></div>
+  <div class="na-grid">
+    <div><div class="na-label">From <i>*</i></div><input type="date" class="na-in" id="rangeFrom"></div>
+    <div><div class="na-label">To <i>*</i></div><input type="date" class="na-in" id="rangeTo"></div>
+  </div>
+  <div class="modal-foot"><button class="btn-plain" id="rangeCancel">CANCEL</button><button class="pill-btn" id="rangeApply">APPLY</button></div>
+</div></div>
+
 <div class="scrim" id="calScrim"><div class="modal">
   <div class="modal-h"><h3>Filter Events</h3><a href="#" id="calClearFilters">Clear all Filters</a></div>
   <div class="mlabel">Primary Agent</div>
@@ -810,14 +859,15 @@ function actIcon(kind,mut){const paths={
 let shown=8;
 function withinDays(iso,days){if(days>=9999)return true;return (Date.now()-new Date(iso))<=days*86400000;}
 function renderTakeAction(){
-  const days=parseInt(document.getElementById("taRange").value,10)||7;
+  const tok=document.getElementById("taRange").value||"7";
+  const L=dashLeads();
   const c=[
-    [LEADS.filter(l=>withinDays(l.createdAt,days)).length,"New Leads in<br>Date Range"],
-    [LEADS.filter(l=>!l.activity.length).length,"Leads with no<br>Communication"],
-    [LEADS.filter(l=>!(l.alerts>0)).length,"Leads with no<br>Listing Alerts"],
-    [LEADS.filter(l=>!(l.reports>0)).length,"Leads with no<br>Market Reports"],
-    [LEADS.filter(l=>l.crmCallQueue==="urgent").length,"Leads with<br>Overdue Tasks"],
-    [LEADS.filter(l=>!l.autoPlanEnrollments.length).length,"Leads with no<br>Auto Plans"]];
+    [L.filter(l=>inRange(l.createdAt,tok)).length,"New Leads in<br>Date Range"],
+    [L.filter(l=>!l.activity.length).length,"Leads with no<br>Communication"],
+    [L.filter(l=>!(l.alerts>0)).length,"Leads with no<br>Listing Alerts"],
+    [L.filter(l=>!(l.reports>0)).length,"Leads with no<br>Market Reports"],
+    [L.filter(l=>l.crmCallQueue==="urgent").length,"Leads with<br>Overdue Tasks"],
+    [L.filter(l=>!l.autoPlanEnrollments.length).length,"Leads with no<br>Auto Plans"]];
   document.getElementById("taGrid").innerHTML=c.map(x=>'<div class="ta-card"><div class="n">'+x[0]+'</div><div class="l">'+x[1]+'</div></div>').join("");
 }
 function deriveAction(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"submitted a home valuation";if(l.propertyInquired)return"asked about a property";if(l.activity.some(a=>a.type==="text"))return"sent a message";return"is a new lead";}
@@ -825,7 +875,7 @@ function renderFeed(){
   // AUTO PLANS tab — enrolled leads + their plan, instead of the activity feed.
   if(dashMode==="plans"){
     const PLANS=["New Lead Follow-Up","Past Client Nurture","Open House Follow-Up","Sphere Quarterly Touch"];
-    const enrolled=LEADS.filter(l=>(l.autoPlanEnrollments||[]).length).slice(0,shown);
+    const enrolled=dashLeads().filter(l=>(l.autoPlanEnrollments||[]).length).slice(0,shown);
     document.getElementById("feed").innerHTML=enrolled.length?enrolled.map((l,i)=>
       '<div class="feed-item"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20v-8M12 12c0-3 2-5 5-5M12 12c0-3-2-5-5-5"/><path d="M5 20h14"/></svg></div><div class="feed-body">'+
       '<div class="feed-top"><div class="feed-name"><b class="ldlink" data-lid="'+esc(l.id)+'" style="cursor:pointer">'+esc(l.name)+'</b> is enrolled in an Auto Plan;</div><div class="feed-time">'+relTime(l.lastActivity)+'</div></div>'+
@@ -835,7 +885,7 @@ function renderFeed(){
     document.getElementById("loadMore").style.display="none";
     return;
   }
-  const sorted=[...LEADS].sort((a,b)=>new Date(b.lastActivity)-new Date(a.lastActivity)).slice(0,shown);
+  const sorted=[...dashLeads()].sort((a,b)=>new Date(b.lastActivity)-new Date(a.lastActivity)).slice(0,shown);
   document.getElementById("feed").innerHTML=sorted.map(l=>{
     const c=l.criteria||{};const bb=(c.beds!=null)?'<b>Bed:</b> '+c.beds+' <b>Bath:</b> '+c.baths:'';const sq=(c.sqft!=null)?'<b>Sqft:</b> '+c.sqft:'';
     return '<div class="feed-item"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="feed-body">'+
@@ -844,14 +894,24 @@ function renderFeed(){
       (c.location?'<div class="feed-meta"><b>Address:</b> '+esc(c.location)+'<a class="lk">See home value estimate</a>'+bb+(bb&&sq?'<br>':'')+sq+'</div>':'<div class="feed-meta">'+esc(l.phone)+'  ·  '+esc(l.source)+'</div>')+
       '</div></div>';
   }).join("");
-  document.getElementById("loadMore").style.display=shown<LEADS.length?"block":"none";
+  document.getElementById("loadMore").style.display=shown<dashLeads().length?"block":"none";
 }
 function renderTracking(){
-  let calls=0,texts=0,emails=0;LEADS.forEach(l=>l.activity.forEach(a=>{if(a.type==="call")calls++;else if(a.type==="text")texts++;else if(a.type==="email")emails++;}));
-  const stats=[[calls,"Calls"],[Math.round(calls*1.4),"Contacts"],[texts,"Texts Sent"],[emails,"Emails Sent"],[Math.round(calls/3),"Appointments Set"],[Math.round(calls/5),"Appointments Held"]];
-  document.getElementById("atStats").innerHTML=stats.map(s=>'<div class="stat"><div class="n">'+s[0]+' / '+(s[0]?Math.max(10,s[0]):20)+'</div><div class="l">'+s[1]+'</div></div>').join("");
+  const tok=(document.getElementById("atRange")||{value:"tw"}).value||"tw";
+  const L=dashLeads();
+  let calls=0,texts=0,emails=0,appts=0;
+  L.forEach(l=>(l.activity||[]).forEach(a=>{ if(a.at&&!inRange(a.at,tok))return;
+    if(a.type==="call")calls++;else if(a.type==="text")texts++;else if(a.type==="email")emails++;
+    else if(a.type==="appointment"||a.type==="showing")appts++;}));
+  const contacts=L.filter(l=>(l.activity||[]).some(a=>!a.at||inRange(a.at,tok))).length;
+  const lg=loggedTotals(tok);
+  const stats=[[calls+(lg["Calls"]||0),"Calls"],[contacts+(lg["Contacts"]||0),"Contacts"],
+    [texts+(lg["Texts Sent"]||0),"Texts Sent"],[emails+(lg["Emails Sent"]||0),"Emails Sent"],
+    [appts+(lg["Appointments Set"]||0),"Appointments Set"],[(lg["Appointments Held"]||0),"Appointments Held"],
+    [(lg["Signings"]||0),"Signings"],[(lg["Open Houses"]||0),"Open Houses"]];
+  document.getElementById("atStats").innerHTML=stats.map(s=>'<div class="stat"><div class="n">'+s[0]+' <span style="color:var(--muted);font-weight:600">/ 0</span></div><div class="l">'+s[1]+'</div></div>').join("");
   const logs=["Door Knocking","Networking Events","Circle Prospecting Calls","Canceled/Expired Calls","For Sale By Owner Calls","Non-CRM Contacts"];
-  document.getElementById("logGrid").innerHTML=logs.map(l=>'<div class="log-card"><div class="n">0 / 0</div><div class="l">'+l+'</div></div>').join("");
+  document.getElementById("logGrid").innerHTML=logs.map(l=>'<div class="log-card"><div class="n">'+(lg[l]||0)+' / 0</div><div class="l">'+l+'</div></div>').join("");
 }
 
 /* messages */
@@ -1066,7 +1126,7 @@ document.querySelectorAll('#oppTabs button[data-otype]').forEach(b=>b.addEventLi
 /* ===== Transactions ===== */
 const TX_STATUS={active:{l:"ACTIVE",c:"var(--teal)"},pending:{l:"PENDING",c:"var(--st-nurture)"},closed:{l:"CLOSED",c:"#3fae86"},withdrawn:{l:"WITHDRAWN",c:"#3a444e"},canceled:{l:"CANCELED",c:"#3a444e"},draft:{l:"DRAFT",c:"#aab2ba"},coming_soon:{l:"COMING SOON",c:"#4a90d9"},expired:{l:"EXPIRED",c:"var(--st-new)"},pipeline:{l:"PIPELINE",c:"#7c8b98"},archived:{l:"ARCHIVED",c:"#aab2ba"}};
 const TX_DIST=[].concat(Array(19).fill("closed"),Array(4).fill("active"),Array(2).fill("pending"),["withdrawn"],Array(4).fill("canceled"),["draft","draft"],["pipeline"]);
-const AGENTS_TX=["Marco Puga","James Carter"];
+const AGENTS_TX=["Marco Puga","Wesley","Kendrick","Carlos"];
 let TX=[];
 for(let i=0;i<TX_DIST.length;i++){
   const status=TX_DIST[i];
@@ -1074,7 +1134,7 @@ for(let i=0;i<TX_DIST.length;i++){
   const closed=status==="closed";
   const closeP=closed?(listP-((i*3100)%40000)):0;
   TX.push({id:"T"+i, address:STREETS[i%STREETS.length], city:CITIES[i%CITIES.length], type:(i%3===0?"buyer":"seller"),
-    status, mls:(i%4===0?"":(1900000+i*937).toString()), agent:AGENTS_TX[i%2],
+    status, mls:(i%4===0?"":(1900000+i*937).toString()), agent:AGENTS_TX[i%AGENTS_TX.length],
     dateListed:["11-21-2025","10-28-2025","12-04-2025","01-13-2026","04-23-2026","03-09-2026"][i%6],
     listPrice:listP, expiration:closed?"":["02-21-2026","07-23-2026","02-02-2026"][i%3],
     closePrice:closeP, gci:closed?Math.round(closeP*0.03):0, draft:status==="draft",
@@ -1245,7 +1305,7 @@ function leadSourceHTML(){
   const rows=Object.keys(bySrc).sort().map(s=>[s,bySrc[s]]);
   const tot=cols.map((_,i)=>rows.reduce((a,r)=>a+r[1][i],0));
   return '<div class="rep-head"><h1>Lead Source</h1></div>'+
-    '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:13px"><span>Track the number of leads and status pipeline of all your leads.</span><span style="flex:1"></span>Filter by user '+repSelect(["All Active Users","Marco Puga"])+repSelect(["Last 7 days","This Month","This Year"])+'</div>'+
+    '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:13px"><span>Track the number of leads and status pipeline of all your leads.</span><span style="flex:1"></span>Filter by user '+repSelect(["All Active Users","Marco Puga","Wesley","Kendrick","Carlos"])+repSelect(["Last 7 days","This Month","This Year"])+'</div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:900px"><thead><tr><th>Source</th>'+cols.map(c=>'<th>'+c+'</th>').join("")+'</tr></thead><tbody>'+
     (rows.length?rows.map(r=>'<tr><td><span class="addlink">'+esc(r[0])+'</span></td>'+r[1].map(v=>'<td style="color:#6b7480">'+v+'</td>').join("")+'</tr>').join(""):'<tr><td colspan="11" class="empty">No leads yet.</td></tr>')+
     '</tbody><tfoot><tr class="tot-row"><td>Totals</td>'+tot.map(v=>'<td>'+v+'</td>').join("")+'</tr></tfoot></table></div></div>';
@@ -1253,7 +1313,7 @@ function leadSourceHTML(){
 const REPORTS={
   business:businessHTML,
   sales_funnel:()=>'<div class="rep-head"><h1>Sales Funnel Dashboard</h1>'+repSelect(["This Year","This Month","Last 7 days"])+'</div><div class="card card-pad">'+funnelHTML(funnelCounts().steps)+'</div>',
-  agent_dash:()=>{const s=dealStats(),f=funnelCounts();return '<div class="rep-head"><h1>Agent Dashboard</h1>'+repSelect(["Marco Puga"])+'</div>'+kpiRow([["New Leads",repNum(LEADS.filter(l=>l.crmStatus==="new").length)],["Contacts",repNum(f.contacted)],["Appts Set",repNum(f.apptSet)],["Under Contract",repNum(s.pending.length)],["Closed YTD",repNum(s.closed.length)],["GCI YTD",repMoney0(s.sum(s.closed,t=>t.gci))]]);},
+  agent_dash:()=>{const s=dealStats(),f=funnelCounts();return '<div class="rep-head"><h1>Agent Dashboard</h1>'+repSelect(["Marco Puga","Wesley","Kendrick","Carlos"])+'</div>'+kpiRow([["New Leads",repNum(LEADS.filter(l=>l.crmStatus==="new").length)],["Contacts",repNum(f.contacted)],["Appts Set",repNum(f.apptSet)],["Under Contract",repNum(s.pending.length)],["Closed YTD",repNum(s.closed.length)],["GCI YTD",repMoney0(s.sum(s.closed,t=>t.gci))]]);},
   leaderboards:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Activity Leaderboard</h1>'+repSelect(["This Month","This Week","This Year"])+'</div>'+activityTable([["Calls",a.calls],["Texts",a.texts],["Emails",a.emails],["Appts Set",a.appts],["Contacts",a.contacts]]);},
   open_house:()=>'<div class="rep-head"><h1>Open House Dashboard</h1>'+repSelect(["This Year","This Month"])+'</div>'+kpiRow([["Open Houses","0"],["Attendees","0"],["Leads","0"],["Avg. Leads","0.00"],["Follow-ups","0"],["Converted","0"]]),
   agent_activity:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Agent Activity</h1>'+repSelect(["Last 7 days","Last 30 days","This Year"])+'</div>'+activityTable([["Dials",a.calls],["Contacts",a.contacts],["Conversations",a.convos],["Appts Set",a.appts],["Emails",a.emails],["Texts",a.texts]]);},
@@ -1482,7 +1542,7 @@ document.getElementById("emBody").addEventListener("change",e=>{ if(e.target.tag
 const STATUS_OPTIONS=[["new","NEW","var(--st-new)"],["hot","HOT","var(--st-hot)"],["nurture","NURTURE","var(--st-nurture)"],["watch","WATCH","var(--st-watch)"],["dead","UNQUALIFIED","var(--st-unq)"],["unresponsive","INACTIVE","#aab2ba"]];
 const STAGE_OPTIONS=[["new","New Lead"],["hot","Hot"],["warm","Warm"],["cold","Cold"],["pending","Pending"],["appointment_set","Appointment Set"],["showing_set","Showing Set"],["under_contract","Under Contract"],["closed","Closed"]];
 const ddMenu=document.getElementById("ddMenu");
-function closeDD(){ ddMenu.classList.remove("on"); }
+function closeDD(){ ddMenu.className="dd-menu"; ddMenu.style.bottom="auto"; ddMenu.style.minWidth=""; }
 function crmToast(msg){ const t=document.getElementById("crmToast"); t.textContent=msg; t.classList.add("on"); clearTimeout(window.__tt); window.__tt=setTimeout(()=>t.classList.remove("on"),1700); }
 const INTENT_OPTIONS=[["buyer","Buyer"],["seller","Seller"],["buyer_seller","Buyer & Seller"]];
 function setLeadField(id,kind,val){
@@ -1611,7 +1671,7 @@ function renderLeadTab(){
       '<div class="ld-flabel" style="margin-top:12px">Appointment Type <span style="color:#e05a45">*</span></div>'+
       '<select class="ld-input"><option>Select</option><option>Buyer Consultation</option><option>Listing Presentation</option><option>Showing</option><option>Closing</option><option>Follow-up Call</option></select>'+
       '<div class="ld-flabel" style="margin-top:12px">Assigned To</div>'+
-      '<select class="ld-input"><option>Marco Puga</option><option>James Carter</option></select>'+
+      '<select class="ld-input"><option>Marco Puga</option><option>Wesley</option><option>Kendrick</option><option>Carlos</option></select>'+
       '<div class="ld-flabel" style="margin-top:12px">Location</div>'+
       '<input class="ld-input" id="ldApptLoc" placeholder="Address or place">'+
       '<div class="ld-flabel" style="margin-top:12px">Date &amp; time</div>'+
@@ -1633,7 +1693,7 @@ function renderTimeline(){
   const icon=t=>t==="call"?"☎":t==="text"?"✉":t==="email"?"@":t==="appointment"?"◷":t==="note"?"✎":"•";
   document.getElementById("ldTimeline").innerHTML=items.length?items.map(a=>'<div class="tl"><div class="dot">'+icon(a.type)+'</div><div><div class="tt">'+esc((a.type||"activity").charAt(0).toUpperCase()+(a.type||"activity").slice(1))+(a.note?" — "+esc(a.note):"")+'</div><div class="tm">'+(a.at?relTime(a.at):"")+'</div></div></div>').join(""):'<div class="empty" style="padding:16px 0">No activity logged yet.</div>';
 }
-document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")&&!e.target.closest("[data-dd]")) closeDD(); });
+document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")&&!e.target.closest("[data-dd]")&&!e.target.closest("select")&&!e.target.closest("#userFilter")) closeDD(); });
 window.addEventListener("scroll",closeDD,true);
 window.addEventListener("resize",closeDD);
 
@@ -1843,6 +1903,127 @@ document.addEventListener("click",e=>{
   else if(/MANAGE|VIEW|SEND MAIL|BUYER|SELLER|REFERRAL|ADD INSTRUCTIONS|ADD NOTES|LOAD MORE|AI: Help/i.test(t)){ crmToast("'"+t+"' opens in the live CRM"); }
   else { crmToast(t||"OK"); }
 });
+/* ===== Team, user filter, date ranges, Brivity dropdowns, activity logging ===== */
+const TEAM=["Marco Puga","Wesley","Kendrick","Carlos"];
+let USER_FILTER=[];           // empty = All Active Users
+let CUSTOM_FROM="",CUSTOM_TO="";
+function dashLeads(){ return USER_FILTER.length? LEADS.filter(l=>USER_FILTER.includes(l.assignedTo||"Marco Puga")) : LEADS; }
+
+function rangeBounds(tok){
+  const now=new Date();
+  const D=n=>new Date(Date.now()-n*86400000);
+  switch(String(tok)){
+    case"7":return[D(7),now]; case"14":return[D(14),now]; case"30":return[D(30),now];
+    case"tm":return[new Date(now.getFullYear(),now.getMonth(),1),now];
+    case"lm":return[new Date(now.getFullYear(),now.getMonth()-1,1),new Date(now.getFullYear(),now.getMonth(),0,23,59,59)];
+    case"ty":return[new Date(now.getFullYear(),0,1),now];
+    case"ly":return[new Date(now.getFullYear()-1,0,1),new Date(now.getFullYear()-1,11,31,23,59,59)];
+    case"tw":{const d=(now.getDay()+6)%7;return[new Date(now.getFullYear(),now.getMonth(),now.getDate()-d),now];}
+    case"lw":{const d=(now.getDay()+6)%7;const mon=new Date(now.getFullYear(),now.getMonth(),now.getDate()-d-7);
+      const sun=new Date(mon);sun.setDate(mon.getDate()+6);sun.setHours(23,59,59);return[mon,sun];}
+    case"tq":{const q=Math.floor(now.getMonth()/3)*3;return[new Date(now.getFullYear(),q,1),now];}
+    case"lq":{const q=Math.floor(now.getMonth()/3)*3-3;return[new Date(now.getFullYear(),q,1),new Date(now.getFullYear(),q+3,0,23,59,59)];}
+    case"custom":return[CUSTOM_FROM?new Date(CUSTOM_FROM):new Date(0),CUSTOM_TO?new Date(CUSTOM_TO+"T23:59:59"):now];
+    default:return[new Date(0),now];
+  }
+}
+function inRange(iso,tok){ if(!iso)return false; const t=new Date(iso); if(isNaN(t))return false; const b=rangeBounds(tok); return t>=b[0]&&t<=b[1]; }
+
+/* Logged activities (New Activity modal) — persisted locally, summed per type */
+function loggedEntries(){ try{ return JSON.parse(localStorage.getItem("crmLoggedActivities")||"[]"); }catch(_){ return []; } }
+function loggedTotals(tok){
+  const out={};
+  loggedEntries().forEach(e=>{
+    if(USER_FILTER.length&&!USER_FILTER.includes(e.user))return;
+    if(!inRange(e.date+"T12:00:00",tok))return;
+    out[e.type]=(out[e.type]||0)+(Number(e.count)||1);
+  });
+  return out;
+}
+
+/* ---- Brivity-styled dropdowns for every native <select> ----
+   Intercept the native picker and show a dd-menu panel that matches the
+   Brivity screenshots. Picking sets the value and fires 'change', so all
+   existing handlers keep working. */
+function openSelectDD(sel){
+  const r=sel.getBoundingClientRect();
+  ddMenu.className="dd-menu sel";
+  ddMenu.innerHTML=[...sel.options].map((o,i)=>'<button data-i="'+i+'" class="'+(i===sel.selectedIndex?"cur":"")+'">'+esc(o.text)+'</button>').join("");
+  ddMenu.querySelectorAll("button").forEach(b=>b.addEventListener("click",ev=>{ ev.stopPropagation();
+    sel.selectedIndex=+b.dataset.i; sel.dispatchEvent(new Event("change",{bubbles:true})); closeDD(); ddMenu._for=null; }));
+  const w=Math.max(r.width,180);
+  ddMenu.style.minWidth=w+"px";
+  ddMenu.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+"px";
+  const up=r.bottom+340>innerHeight&&r.top>340;
+  ddMenu.style.top=up?"auto":(r.bottom+4)+"px";
+  ddMenu.style.bottom=up?(innerHeight-r.top+4)+"px":"auto";
+  ddMenu.classList.add("on"); ddMenu._for=sel;
+}
+document.addEventListener("mousedown",e=>{
+  const s=e.target.closest("select");
+  if(!s)return;
+  e.preventDefault();
+  if(ddMenu.classList.contains("on")&&ddMenu._for===s){ closeDD(); ddMenu._for=null; return; }
+  openSelectDD(s);
+},true);
+
+/* ---- User filter (checkbox multi-select, like Brivity) ---- */
+function userLabel(){ return USER_FILTER.length?(USER_FILTER.length===1?USER_FILTER[0]:USER_FILTER.length+" Users"):"All Active Users"; }
+function paintUserMenu(){
+  const rows=[["__all","All Active Users",!USER_FILTER.length]].concat(TEAM.map(n=>[n,n,USER_FILTER.includes(n)]));
+  ddMenu.innerHTML=rows.map(x=>'<button data-u="'+esc(x[0])+'" class="'+(x[2]?"on":"")+'"><span class="chk">'+(x[2]?"✓":"")+'</span>'+esc(x[1])+'</button>').join("");
+  ddMenu.querySelectorAll("button").forEach(b=>b.addEventListener("click",ev=>{ ev.stopPropagation();
+    const u=b.getAttribute("data-u");
+    if(u==="__all") USER_FILTER=[];
+    else { const i=USER_FILTER.indexOf(u); i>=0?USER_FILTER.splice(i,1):USER_FILTER.push(u); }
+    document.getElementById("userFilter").textContent=userLabel();
+    paintUserMenu(); renderTakeAction(); renderFeed(); renderTracking();
+  }));
+}
+document.getElementById("userFilter").addEventListener("click",e=>{
+  e.stopPropagation();
+  if(ddMenu.classList.contains("on")&&ddMenu._for==="userFilter"){ closeDD(); ddMenu._for=null; return; }
+  const r=e.currentTarget.getBoundingClientRect();
+  ddMenu.className="dd-menu sel"; paintUserMenu();
+  ddMenu.style.minWidth=Math.max(r.width,200)+"px";
+  ddMenu.style.left=Math.max(8,Math.min(r.left,innerWidth-210))+"px";
+  ddMenu.style.top=(r.bottom+4)+"px"; ddMenu.style.bottom="auto";
+  ddMenu.classList.add("on"); ddMenu._for="userFilter";
+});
+
+/* ---- Activity Tracking range + Custom ---- */
+document.getElementById("atRange").addEventListener("change",function(){
+  if(this.value==="custom"){ document.getElementById("rangeScrim").classList.add("on"); return; }
+  renderTracking();
+});
+document.getElementById("rangeApply").addEventListener("click",()=>{
+  CUSTOM_FROM=document.getElementById("rangeFrom").value; CUSTOM_TO=document.getElementById("rangeTo").value;
+  document.getElementById("rangeScrim").classList.remove("on"); renderTracking();
+});
+["rangeCancel","rangeClose"].forEach(id=>document.getElementById(id).addEventListener("click",()=>document.getElementById("rangeScrim").classList.remove("on")));
+
+/* ---- New Activity modal (+ LOG) ---- */
+function openActModal(){
+  const d=new Date(),p=n=>String(n).padStart(2,"0");
+  document.getElementById("actDate").value=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+  document.getElementById("actType").value=""; document.getElementById("actCount").value=1; document.getElementById("actNotes").value="";
+  document.getElementById("actScrim").classList.add("on");
+}
+document.getElementById("logBtn").addEventListener("click",openActModal);
+["actCancel","actClose"].forEach(id=>document.getElementById(id).addEventListener("click",()=>document.getElementById("actScrim").classList.remove("on")));
+document.getElementById("actSave").addEventListener("click",()=>{
+  const type=document.getElementById("actType").value;
+  const date=document.getElementById("actDate").value;
+  if(!type||!date){ crmToast("Type and Date are required"); return; }
+  const entries=loggedEntries();
+  entries.push({ type, user:document.getElementById("actUser").value, date,
+    count:Math.max(1,Number(document.getElementById("actCount").value)||1),
+    notes:document.getElementById("actNotes").value.trim(), at:new Date().toISOString() });
+  try{ localStorage.setItem("crmLoggedActivities",JSON.stringify(entries)); }catch(_){}
+  document.getElementById("actScrim").classList.remove("on");
+  renderTracking(); crmToast("Activity logged");
+});
+
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");renderNurture();renderFinance();
 loadLive();
 </script>
