@@ -853,7 +853,21 @@ function actIcon(kind,mut){const paths={
   appt:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   mail:'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
   other:'<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>'};
-  return '<span class="ai'+(mut?' mut':'')+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+paths[kind]+'</svg></span>';}
+  const titles={email:"Email",phone:"Log a call",sms:"Text",appt:"Set appointment",mail:"Send mail",other:"Log activity"};
+  return '<span class="ai'+(mut?' mut':'')+'" data-act="'+kind+'" title="'+titles[kind]+'" style="cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+paths[kind]+'</svg></span>';}
+/* Contact-action icons → open the lead profile on the matching tab (Brivity
+   behavior). Works in the feed and any table row that carries a lead id. */
+const ACT_TAB={email:"email",phone:"call",sms:"text",appt:"appointment",mail:"other",other:"other"};
+document.addEventListener("click",e=>{
+  const ic=e.target.closest(".ai[data-act]"); if(!ic)return;
+  const host=ic.closest("[data-lid]")||(ic.closest("tr")&&ic.closest("tr").querySelector("[data-lid]"));
+  const lid=host&&(host.getAttribute("data-lid")||host.querySelector&&host.querySelector("[data-lid]")?.getAttribute("data-lid"));
+  if(!lid)return;
+  if(!LEADS.find(x=>x.id===lid)){ crmToast("Profile actions are available for leads"); return; }
+  if(ic.classList.contains("mut")){ crmToast(ic.dataset.act==="email"?"No email on file for this lead":"Not available for this lead"); return; }
+  e.stopPropagation();
+  openLead(lid, ACT_TAB[ic.dataset.act]||"note");
+});
 
 /* dashboard */
 let shown=8;
@@ -888,8 +902,8 @@ function renderFeed(){
   const sorted=[...dashLeads()].sort((a,b)=>new Date(b.lastActivity)-new Date(a.lastActivity)).slice(0,shown);
   document.getElementById("feed").innerHTML=sorted.map(l=>{
     const c=l.criteria||{};const bb=(c.beds!=null)?'<b>Bed:</b> '+c.beds+' <b>Bath:</b> '+c.baths:'';const sq=(c.sqft!=null)?'<b>Sqft:</b> '+c.sqft:'';
-    return '<div class="feed-item"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="feed-body">'+
-      '<div class="feed-top"><div class="feed-name"><b>'+esc(l.name)+'</b> '+deriveAction(l)+';</div><div class="feed-time">'+relTime(l.lastActivity)+'</div></div>'+
+    return '<div class="feed-item" data-lid="'+esc(l.id)+'"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="feed-body">'+
+      '<div class="feed-top"><div class="feed-name"><b class="ldlink" data-lid="'+esc(l.id)+'" style="cursor:pointer">'+esc(l.name)+'</b> '+deriveAction(l)+';</div><div class="feed-time">'+relTime(l.lastActivity)+'</div></div>'+
       '<div class="act-row">'+actIcon("email",!l.email)+actIcon("phone")+actIcon("sms",l.activity.every(a=>a.type!=="text"))+actIcon("appt")+actIcon("other")+'</div>'+
       (c.location?'<div class="feed-meta"><b>Address:</b> '+esc(c.location)+'<a class="lk">See home value estimate</a>'+bb+(bb&&sq?'<br>':'')+sq+'</div>':'<div class="feed-meta">'+esc(l.phone)+'  ·  '+esc(l.source)+'</div>')+
       '</div></div>';
@@ -1590,7 +1604,7 @@ function leadInsights(l){
   if(!out.length) out.push("New lead — no activity yet. Reach out to get the conversation started.");
   return out;
 }
-function openLead(id){ const l=LEADS.find(x=>x.id===id); if(!l)return; currentLeadId=id; ldTab="note"; ldOutcome=null;
+function openLead(id, tab){ const l=LEADS.find(x=>x.id===id); if(!l)return; currentLeadId=id; ldTab=tab||"note"; ldOutcome=null;
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-lead").classList.add("on"); window.scrollTo(0,0); renderLead(); }
 function backToLeads(){ document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-leads").classList.add("on");
   document.querySelectorAll(".rail .r").forEach(x=>x.classList.remove("on")); document.querySelectorAll('.rail .r[data-view="leads"]').forEach(x=>x.classList.add("on")); }
