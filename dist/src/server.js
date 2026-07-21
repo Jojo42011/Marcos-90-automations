@@ -69,6 +69,7 @@ const index_js_10 = require("./agents/harveyContentDigest/index.js");
 const db_js_1 = require("./core/db.js");
 const crmNotificationStore_js_1 = require("./core/crmNotificationStore.js");
 const pushStore_js_1 = require("./core/pushStore.js");
+const teamStore_js_1 = require("./core/teamStore.js");
 const index_js_11 = require("./agents/reEngagement/index.js");
 const index_js_12 = require("./agents/listingStatusAutomation/index.js");
 const index_js_13 = require("./agents/contentManager/index.js");
@@ -380,6 +381,10 @@ app.get("/jarvis", (_req, res) => {
 // New blue particle-orb Harvey screen (reuses Harvey's existing voice pipeline).
 app.get("/operator", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "operator.html"));
+});
+// Team Task Command Center (design-spec rebuild; classic board stays at /tasks).
+app.get("/team-tasks", (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "team-tasks.html"));
 });
 app.get("/memory", (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "memory.html"));
@@ -6655,9 +6660,10 @@ function commandTaskCounts() {
 const COMMAND_STATUS_SORT = {
     overdue: 0,
     due_soon: 1,
-    pending: 2,
-    on_hold: 3,
-    done: 4,
+    in_progress: 2,
+    pending: 3,
+    on_hold: 4,
+    done: 5,
 };
 /** Carlos command-center task board (db.json). */
 app.get("/api/tasks", (req, res) => {
@@ -6703,7 +6709,9 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
         title,
         description: typeof body.description === "string" ? body.description : undefined,
         column: column,
-        status: "pending",
+        status: COMMAND_STATUS_SET.has(body.status)
+            ? body.status
+            : "pending",
         color,
         recurring: body.recurring === true,
         recurringInterval: parseRecurringInterval(body.recurringInterval),
@@ -6715,7 +6723,24 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
             ? body.tags.filter((t) => typeof t === "string")
             : undefined,
         createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
+        sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : undefined,
     });
+    // Assigning someone else's task notifies them (Notifications tab + popup).
+    if (task.assignedTo && task.createdBy && task.assignedTo !== task.createdBy) {
+        try {
+            (0, teamStore_js_1.addNotification)({
+                user: task.assignedTo,
+                type: "assignment",
+                title: `${task.createdBy} assigned you a task`,
+                body: task.title + (task.dueDate ? ` — due ${task.dueDate}${task.dueTime ? " " + task.dueTime : ""}` : ""),
+                taskId: task.id,
+                from: task.createdBy,
+            });
+        }
+        catch (err) {
+            console.error("[team] assignment notification failed:", err);
+        }
+    }
     console.log("[Tasks] Created:", task.title, "column:", task.column);
     res.json({ task });
 });
@@ -6749,13 +6774,33 @@ app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res)
         updates.dueTime = parseDueTime(body.dueTime);
     if ("reminderMinutes" in body)
         updates.reminderMinutes = parseReminderMinutes(body.reminderMinutes);
+    if (Number.isFinite(Number(body.sortOrder))) {
+        updates.sortOrder = Number(body.sortOrder);
+    }
     if (Array.isArray(body.tags)) {
         updates.tags = body.tags.filter((t) => typeof t === "string");
     }
+    const prevAssignee = (0, db_js_1.getCommandTasks)().find((t) => t.id === id)?.assignedTo;
     const task = (0, db_js_1.updateCommandTask)(id, updates);
     if (!task) {
         res.status(404).json({ error: "Task not found" });
         return;
+    }
+    // Reassignment notifies the new assignee.
+    if (updates.assignedTo && updates.assignedTo !== prevAssignee && task.createdBy !== updates.assignedTo) {
+        try {
+            (0, teamStore_js_1.addNotification)({
+                user: updates.assignedTo,
+                type: "assignment",
+                title: `${task.createdBy || "A teammate"} assigned you a task`,
+                body: task.title + (task.dueDate ? ` — due ${task.dueDate}${task.dueTime ? " " + task.dueTime : ""}` : ""),
+                taskId: task.id,
+                from: task.createdBy,
+            });
+        }
+        catch (err) {
+            console.error("[team] reassignment notification failed:", err);
+        }
     }
     console.log("[Tasks] Updated:", task.title, "status:", task.status, "column:", task.column);
     res.json({ task });
@@ -6805,6 +6850,54 @@ app.post("/api/push/unsubscribe", express_1.default.json({ limit: "64kb" }), (re
     }
     (0, pushStore_js_1.removeSubscription)(endpoint);
     res.json({ success: true });
+});
+/* ——— Team collaboration: notifications, chat, presence (task command center) ——— */
+app.get("/api/team/notifications", (req, res) => {
+    const user = String(req.query.user || "").toLowerCase();
+    if (!user) {
+        res.status(400).json({ error: "user required" });
+        return;
+    }
+    (0, teamStore_js_1.touchPresence)(user);
+    res.json({ notifications: (0, teamStore_js_1.getNotifications)(user), presence: (0, teamStore_js_1.getPresence)(), unreadChats: (0, teamStore_js_1.chatUnreadCounts)(user) });
+});
+app.post("/api/team/notifications/read", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    const body = (req.body || {});
+    if (!body.user) {
+        res.status(400).json({ error: "user required" });
+        return;
+    }
+    res.json({ marked: (0, teamStore_js_1.markNotificationsRead)(body.user, body.ids) });
+});
+app.get("/api/team/chat", (req, res) => {
+    const me = String(req.query.me || "").toLowerCase();
+    const withUser = String(req.query.with || "").toLowerCase();
+    if (!me || !withUser) {
+        res.status(400).json({ error: "me and with required" });
+        return;
+    }
+    (0, teamStore_js_1.touchPresence)(me);
+    res.json({ messages: (0, teamStore_js_1.getChat)(me, withUser) });
+});
+app.post("/api/team/chat", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    const body = (req.body || {});
+    if (!body.from || !body.to || !String(body.text || "").trim()) {
+        res.status(400).json({ error: "from, to, text required" });
+        return;
+    }
+    (0, teamStore_js_1.touchPresence)(body.from);
+    res.json({ message: (0, teamStore_js_1.addChatMessage)(body.from, body.to, String(body.text).trim()) });
+});
+app.post("/api/team/chat/read", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    const body = (req.body || {});
+    if (!body.me || !body.with) {
+        res.status(400).json({ error: "me and with required" });
+        return;
+    }
+    res.json({ marked: (0, teamStore_js_1.markChatRead)(body.me, body.with) });
+});
+app.get("/api/team/presence", (_req, res) => {
+    res.json({ presence: (0, teamStore_js_1.getPresence)() });
 });
 /** CRM lead follow-up tasks (tasks.json) — separate from command-center board. */
 app.get("/api/crm-tasks", (req, res) => {
@@ -8802,6 +8895,12 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     }
     catch (err) {
         console.error("[push] init failed:", err);
+    }
+    try {
+        (0, teamStore_js_1.initTeamStore)();
+    }
+    catch (err) {
+        console.error("[team] init failed:", err);
     }
     if (!process.env.ELEVENLABS_API_KEY?.trim()) {
         console.warn("[Harvey] ELEVENLABS_API_KEY not set — Scribe v2 Realtime STT will not work");

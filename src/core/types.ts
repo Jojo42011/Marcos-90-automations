@@ -563,10 +563,11 @@ export interface TasksSummary {
 /** Carlos command-center task board (stored in db.json `commandTasks`). */
 export type CommandTaskColumn = "urgent" | "today" | "tomorrow" | "this_week" | "this_month";
 
-export type CommandTaskStatus = "pending" | "on_hold" | "due_soon" | "overdue" | "done";
+export type CommandTaskStatus = "pending" | "in_progress" | "on_hold" | "due_soon" | "overdue" | "done";
 
 export const COMMAND_TASK_STATUSES: CommandTaskStatus[] = [
   "pending",
+  "in_progress",
   "on_hold",
   "due_soon",
   "overdue",
@@ -600,6 +601,8 @@ export interface CommandTask {
   dueTime?: string;
   /** Minutes-before-due to fire early reminders, e.g. [10, 5]. */
   reminderMinutes?: number[];
+  /** Manual drag-and-drop position within a task bar (lower = higher). */
+  sortOrder?: number;
   completedAt?: string;
   createdAt: string;
   updatedAt: string;

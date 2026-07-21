@@ -75,6 +75,7 @@ exports.CRM_TASK_STATUSES = [
 ];
 exports.COMMAND_TASK_STATUSES = [
     "pending",
+    "in_progress",
     "on_hold",
     "due_soon",
     "overdue",
