@@ -1363,6 +1363,15 @@ document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("
   document.getElementById("view-"+v).classList.add("on");
 }));
 
+/* Deep link: /crm?view=finance opens straight to that view (used by the
+   shell's Finance tab so it lands on the Brivity finance, not the old page). */
+(function(){
+  try{
+    const v=new URLSearchParams(location.search).get("view");
+    if(v){ const b=document.querySelector('.rail .r[data-view="'+v+'"]'); if(b) b.click(); }
+  }catch(_){}
+})();
+
 document.getElementById("taRange").addEventListener("change",renderTakeAction);
 document.getElementById("loadMore").addEventListener("click",()=>{shown+=8;renderFeed();});
 document.getElementById("feedCount").textContent=String(Math.min(LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length,99));

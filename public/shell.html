@@ -11,18 +11,21 @@
     THEME: override the CSS variables below. Everything is driven
     off --accent / --bg / --line — change those and it re-skins.
     ============================================================ */
+ /* Brivity theme — white chrome, teal accent (matches the CRM). Harvey's own
+    screen stays dark inside its iframe; this only skins the shell. */
  :root {
-   --bg:       #0a0a0a;
-   --panel:    rgba(255,255,255,0.03);
-   --text:     #ededed;
-   --muted:    #666;
-   --line:     rgba(255,255,255,0.08);
-   --line-2:   rgba(0,212,255,0.25);
-   --accent:   #00d4ff;
-   --accent-2: #38bdf8;
+   --bg:       #f9fbfb;
+   --panel:    #ffffff;
+   --text:     #333333;
+   --muted:    #98a1aa;
+   --line:     #edf0f0;
+   --line-2:   rgba(89,196,196,0.5);
+   --accent:   #59c4c4;
+   --accent-2: #4ca7a7;
+   --soft:     #eef7f7;
    --ok:       #10b981;
    --w:        240px;
-   --font:     ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+   --font:     "Helvetica Neue",Helvetica,Arial,-apple-system,"Segoe UI",Roboto,sans-serif;
    --mono:     ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
  }
  * { box-sizing:border-box; margin:0; padding:0; }
@@ -33,42 +36,44 @@
  /* ── Sidebar ── */
  #side {
    position:relative; flex:0 0 var(--w); width:var(--w);
-   background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
-   border-right:1px solid var(--line); backdrop-filter:blur(8px);
+   background:var(--panel);
+   border-right:1px solid var(--line); box-shadow:1px 0 3px rgba(16,24,40,.04);
    display:flex; flex-direction:column; z-index:20;
    transition:margin-left .34s cubic-bezier(.4,0,.2,1), opacity .3s;
  }
  #shell.collapsed #side { margin-left:calc(-1 * var(--w)); opacity:0; }
 
 
- #side-head { display:flex; align-items:center; justify-content:space-between; padding:18px 14px 14px 18px; }
- #brand { display:flex; align-items:center; gap:10px; }
- #brand .mark { width:22px; height:22px; border-radius:6px; background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
- #brand .t { font-size:12px; letter-spacing:0.22em; text-transform:uppercase; color:var(--text); font-weight:600; }
- #collapse { width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--accent); cursor:pointer; display:flex; align-items:center; justify-content:center; }
- #collapse:hover { border-color:var(--line-2); background:rgba(255,255,255,0.04); }
+ #side-head { display:flex; align-items:center; justify-content:space-between; padding:16px 14px 12px 16px; border-bottom:1px solid var(--line); }
+ #brand { display:flex; align-items:center; gap:9px; }
+ #brand .wm { display:flex; flex-direction:column; line-height:1; font-family:Georgia,"Times New Roman",serif; }
+ #brand .wm small { font-size:5.6px; letter-spacing:.18em; color:#c23b3b; margin-bottom:2px; white-space:nowrap; }
+ #brand .wm b { font-weight:700; font-size:13px; letter-spacing:.06em; color:#3a3f45; }
+ #collapse { width:28px; height:28px; border-radius:50%; border:1px solid var(--line); background:#fff; color:#8b95a0; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+ #collapse:hover { border-color:var(--line-2); color:var(--accent); background:var(--soft); }
 
 
  #nav { flex:1; overflow-y:auto; padding:6px 12px; }
  #nav::-webkit-scrollbar { width:0; }
- .nav-sep { font-family:var(--mono); font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted); padding:14px 10px 8px; }
- .nav-item { position:relative; display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:11px; cursor:pointer; margin-bottom:3px; border:1px solid transparent; transition:background .16s, border-color .16s, transform .1s; }
- .nav-item:hover { background:rgba(255,255,255,0.04); transform:translateX(2px); }
- .nav-item.active { background:rgba(255,255,255,0.06); border-color:var(--line-2); }
+ .nav-sep { font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--muted); padding:14px 10px 8px; font-weight:600; }
+ .nav-item { position:relative; display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:8px; cursor:pointer; margin-bottom:3px; border:1px solid transparent; transition:background .16s, border-color .16s, transform .1s; }
+ .nav-item:hover { background:#f6f8f8; transform:translateX(2px); }
+ .nav-item.active { background:var(--soft); border-color:rgba(89,196,196,0.35); }
  .nav-item.active::before { content:""; position:absolute; left:-12px; top:50%; transform:translateY(-50%); width:3px; height:22px; border-radius:2px; background:var(--accent); }
- .nav-item .ic { flex:0 0 auto; width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); color:var(--accent); }
+ .nav-item .ic { flex:0 0 auto; width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); color:var(--accent); background:#fff; }
  .nav-item .ic svg { width:18px; height:18px; }
- .nav-item .tx .l { font-size:14px; font-weight:600; color:var(--text); }
- .nav-item .tx .s { font-family:var(--mono); font-size:10.5px; color:var(--muted); margin-top:1px; }
- #side-foot { padding:14px 18px; border-top:1px solid var(--line); font-family:var(--mono); font-size:9px; letter-spacing:0.14em; color:var(--muted); text-transform:uppercase; display:flex; align-items:center; gap:8px; }
+ .nav-item.active .ic { border-color:rgba(89,196,196,0.45); }
+ .nav-item .tx .l { font-size:13.5px; font-weight:600; color:var(--text); }
+ .nav-item .tx .s { font-size:11px; color:var(--muted); margin-top:1px; }
+ #side-foot { padding:14px 18px; border-top:1px solid var(--line); font-size:9.5px; letter-spacing:0.14em; color:var(--muted); text-transform:uppercase; display:flex; align-items:center; gap:8px; }
  .dot { width:6px; height:6px; border-radius:50%; background:var(--ok); }
 
 
- /* ── Floating reopen (when collapsed) ── */
- #reopen { position:fixed; top:16px; left:16px; z-index:60; display:none; align-items:center; gap:9px; padding:8px 12px 8px 8px; border-radius:40px; background:var(--bg); border:1px solid var(--line-2); cursor:pointer; }
+ /* ── Floating reopen (when collapsed): a small, unobtrusive arrow that sits
+       just below where the logo lives, out of the way of page headers. ── */
+ #reopen { position:fixed; top:54px; left:8px; z-index:60; display:none; width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,0.94); border:1px solid var(--line); box-shadow:0 1px 4px rgba(16,24,40,.14); cursor:pointer; align-items:center; justify-content:center; color:#8b95a0; opacity:.8; transition:opacity .15s, color .15s; }
+ #reopen:hover { opacity:1; color:var(--accent); border-color:var(--line-2); }
  #shell.collapsed #reopen { display:flex; }
- #reopen .mark { width:20px; height:20px; border-radius:6px; background:linear-gradient(135deg,var(--accent),var(--accent-2)); }
- #reopen .rl { font-family:var(--mono); font-size:10px; letter-spacing:0.2em; color:var(--accent); text-transform:uppercase; }
 
 
  /* ── Main + iframe views ── */
@@ -96,18 +101,29 @@
  <div id="shell">
    <aside id="side">
      <div id="side-head">
-       <div id="brand"><span class="mark"></span><span class="t">Marco 90</span></div>
+       <div id="brand">
+         <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
+           <defs><linearGradient id="mpr" x1="0" y1="2" x2="0" y2="46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f4695b"/><stop offset="1" stop-color="#bd1e2b"/></linearGradient></defs>
+           <path d="M24 4 44 24 24 44 4 24Z" stroke="url(#mpr)" stroke-width="2.2"/>
+           <path d="M24 9 39 24 24 39 9 24Z" stroke="url(#mpr)" stroke-width="1" opacity=".55"/>
+           <path d="M14.5 22 24 12.5 33.5 22" stroke="url(#mpr)" stroke-width="1.9" stroke-linejoin="round"/>
+           <g fill="url(#mpr)"><rect x="21" y="15.4" width="2.3" height="2.3" rx=".4"/><rect x="24.7" y="15.4" width="2.3" height="2.3" rx=".4"/><rect x="21" y="18.3" width="2.3" height="2.3" rx=".4"/><rect x="24.7" y="18.3" width="2.3" height="2.3" rx=".4"/></g>
+           <text x="24" y="33.5" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-weight="700" font-size="14.5" fill="url(#mpr)">M</text>
+           <g stroke="url(#mpr)" stroke-width="1.5" stroke-linecap="round"><line x1="17" y1="34.5" x2="17" y2="41"/><line x1="20.4" y1="35.5" x2="20.4" y2="41"/><line x1="27.6" y1="35.5" x2="27.6" y2="41"/><line x1="31" y1="34.5" x2="31" y2="41"/></g>
+         </svg>
+         <span class="wm"><small>HAPPINESS BEGINS AT HOME</small><b>MARCO PUGA</b></span>
+       </div>
        <button id="collapse" title="Collapse (Ctrl/⌘ + \)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
      </div>
      <nav id="nav"></nav>
      <div id="side-foot">
        <span class="dot"></span>
-       <span style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;">Marco 90 · Live</span>
+       <span style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;">Marco Puga · Live</span>
      </div>
    </aside>
 
 
-   <div id="reopen"><span class="mark"></span><span class="rl">Menu</span></div>
+   <div id="reopen" title="Open menu"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
 
 
    <div id="main">
@@ -184,7 +200,7 @@ var TABS = [
    key: "finance",
    label: "Finance",
    sub: "GCI · Expenses · Pace",
-   src: "/finance",
+   src: "/crm?view=finance",
    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>'
  },
  {
@@ -295,33 +311,10 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
    'light'/'dark') — see dashboard.html/jarvis.html. The shell chrome mirrors
    it (falling back to the generic 'theme' key). Defaults to dark; re-applies
    when a tab flips it (storage event). */
-var SHELL_THEME_KEY = 'marco_crm_theme';
-function initShellTheme() {
- var saved = localStorage.getItem(SHELL_THEME_KEY) || localStorage.getItem('theme') || 'dark';
- var root = document.documentElement;
- if (saved === 'light') {
-   root.style.setProperty('--bg', '#f1f5f9');
-   root.style.setProperty('--panel', 'rgba(0,0,0,0.03)');
-   root.style.setProperty('--text', '#0f172a');
-   root.style.setProperty('--muted', '#64748b');
-   root.style.setProperty('--line', 'rgba(0,0,0,0.08)');
-   root.style.setProperty('--line-2', 'rgba(3,105,161,0.3)');
-   root.style.setProperty('--accent', '#0369a1');
-   root.style.setProperty('--accent-2', '#0284c7');
- } else {
-   // Restore dark defaults (in case a light tab set them earlier this session).
-   root.style.removeProperty('--bg');
-   root.style.removeProperty('--panel');
-   root.style.removeProperty('--text');
-   root.style.removeProperty('--muted');
-   root.style.removeProperty('--line');
-   root.style.removeProperty('--line-2');
-   root.style.removeProperty('--accent');
-   root.style.removeProperty('--accent-2');
- }
-}
-initShellTheme();
-window.addEventListener('storage', function(e){ if (e.key === SHELL_THEME_KEY || e.key === 'theme') initShellTheme(); });
+/* The shell chrome is now permanently Brivity-themed (white + teal) — the
+   single source is the :root block above. We intentionally no longer swap the
+   shell palette from the old dark/light preference; individual tab pages keep
+   their own theming inside their iframes (Harvey stays dark). */
 </script>
 </body>
 </html>
