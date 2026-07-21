@@ -1916,6 +1916,10 @@
       /* Drop the Orbitron sci-fi display face for the clean Brivity sans. */
       html[data-theme="light"] *{ --font-display:"Helvetica Neue",Helvetica,Arial,system-ui,sans-serif !important; }
       html[data-theme="light"] body{ background:#f9fbfb !important; }
+      /* Kill the sci-fi scanline overlays — invisible on dark, but they show as
+         faint horizontal lines across the white Brivity background. */
+      html[data-theme="light"] body::before,
+      html[data-theme="light"] .cm-review-redesign::before{ display:none !important; content:none !important; }
     </style>
 </head>
 <body>
