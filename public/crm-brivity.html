@@ -1513,10 +1513,24 @@ function mapDealTx(d){
     closePrice:closed?(d.salePrice||0):0, gci:d.estimatedGCI||0, draft:false};
 }
 async function loadLive(){
-  let body;
-  try{ const res=await fetch(crmApi("/api/dashboard/data")); if(!res.ok) return; body=await res.json(); }
-  catch(_){ return; }
-  const rawLeads=(body&&Array.isArray(body.leads))?body.leads.filter(l=>l&&(l.name||l.phone)):[];
+  // Pull the automation snapshot and the live Brivity import in parallel;
+  // either source alone is enough to switch off the demo data.
+  const [body,brv]=await Promise.all([
+    fetch(crmApi("/api/dashboard/data")).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(crmApi("/api/brivity/people")).then(r=>r.ok?r.json():null).catch(()=>null)
+  ]);
+  let rawLeads=(body&&Array.isArray(body.leads))?body.leads.filter(l=>l&&(l.name||l.phone)):[];
+  const brvPeople=(brv&&brv.ok&&Array.isArray(brv.people))?brv.people.filter(l=>l&&(l.name||l.phone||l.email)):[];
+  if(brvPeople.length){
+    // dedupe: skip Brivity rows whose phone or email already exists locally
+    const seen=new Set();
+    rawLeads.forEach(l=>{ const p=String(l.phone||"").replace(/\D/g,""); if(p)seen.add("p"+p.slice(-10));
+      const e=String(l.email||"").toLowerCase().trim(); if(e)seen.add("e"+e); });
+    const fresh=brvPeople.filter(l=>{ const p=String(l.phone||"").replace(/\D/g,"");
+      const e=String(l.email||"").toLowerCase().trim();
+      if(p&&seen.has("p"+p.slice(-10)))return false; if(e&&seen.has("e"+e))return false; return true; });
+    rawLeads=rawLeads.concat(fresh);
+  }
   if(rawLeads.length<3) return;   // too sparse — keep the demo set
 
   LEADS=rawLeads.map(mapLeadRow);
@@ -1533,7 +1547,7 @@ async function loadLive(){
   const feedN=LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length;
   document.getElementById("feedCount").textContent=String(Math.min(feedN,99));
   const tag=document.querySelector(".demo-tag");
-  if(tag) tag.textContent="Live data · "+LEADS.length+" leads"+(deals.length?" · "+deals.length+" transactions":"");
+  if(tag) tag.textContent="Live data · "+LEADS.length+" leads"+(brvPeople.length?" · "+brvPeople.length+" from Brivity":"")+(deals.length?" · "+deals.length+" transactions":"");
 }
 
 /* ---- functional controls: top-bar search, SORT BY, dashboard + email selects ---- */

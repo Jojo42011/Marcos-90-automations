@@ -98,6 +98,7 @@ import {
   markChatRead,
   chatUnreadCounts,
 } from "./core/teamStore.js";
+import { getBrivityPeople, getBrivityImportStatus } from "./core/brivityPeople.js";
 import { handleWebsiteVisit } from "./agents/reEngagement/index.js";
 import { handleListingStatusUpdate } from "./agents/listingStatusAutomation/index.js";
 import {
@@ -904,6 +905,29 @@ app.get("/api/dashboard/data", async (req, res) => {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
   }
+});
+
+/* ── Brivity live import — real CRM contacts for the new /crm UI ── */
+app.get("/api/brivity/people", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  try {
+    const people = await getBrivityPeople(req.query.refresh === "1");
+    res.status(200).json({ ok: true, ...getBrivityImportStatus(), count: people.length, people });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(502).json({ ok: false, error: message, ...getBrivityImportStatus() });
+  }
+});
+
+app.get("/api/brivity/status", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  res.status(200).json(getBrivityImportStatus());
 });
 
 app.get("/api/social/data", (req, res) => {
