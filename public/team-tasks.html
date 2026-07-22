@@ -182,13 +182,13 @@ html[data-theme="dark"] .dcell{background:rgba(255,255,255,.045)}
 #calBigCard{width:min(1080px,94vw);max-height:92vh;overflow:auto;border-radius:18px;border:1px solid var(--glass-line);
   background:linear-gradient(145deg,var(--glass-tint),transparent 55%),var(--glass);
   backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);padding:18px}
-#calBigGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:10px}
-.bcell{min-height:104px;border:1px solid var(--glass-line);border-radius:12px;background:rgba(255,255,255,.25);padding:7px;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+#calBigGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:10px}
+.bcell{min-width:0;min-height:104px;border:1px solid var(--glass-line);border-radius:12px;background:rgba(255,255,255,.25);padding:7px;cursor:pointer;display:flex;flex-direction:column;gap:4px;overflow:hidden}
 html[data-theme="dark"] .bcell{background:rgba(255,255,255,.05)}
 .bcell .dn{font-size:11.5px;font-weight:800;color:var(--muted)}
 .bcell.today{outline:2px solid var(--teal);outline-offset:-2px}
 .bcell.sel .dn{color:var(--teal-strong)}
-.chip{font-size:10.5px;font-weight:700;color:#fff;border-radius:6px;padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:block;max-width:100%;font-size:10.5px;font-weight:700;color:#fff;border-radius:6px;padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .morex{font-size:10.5px;font-weight:800;color:var(--teal-strong);cursor:pointer}
 
 /* Team card */
