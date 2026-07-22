@@ -70,6 +70,7 @@ const db_js_1 = require("./core/db.js");
 const crmNotificationStore_js_1 = require("./core/crmNotificationStore.js");
 const pushStore_js_1 = require("./core/pushStore.js");
 const teamStore_js_1 = require("./core/teamStore.js");
+const brivityPeople_js_1 = require("./core/brivityPeople.js");
 const index_js_11 = require("./agents/reEngagement/index.js");
 const index_js_12 = require("./agents/listingStatusAutomation/index.js");
 const index_js_13 = require("./agents/contentManager/index.js");
@@ -499,6 +500,28 @@ app.get("/api/dashboard/data", async (req, res) => {
         const message = err instanceof Error ? err.message : String(err);
         res.status(500).json({ error: message });
     }
+});
+/* ── Brivity live import — real CRM contacts for the new /crm UI ── */
+app.get("/api/brivity/people", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+        return;
+    }
+    try {
+        const people = await (0, brivityPeople_js_1.getBrivityPeople)(req.query.refresh === "1");
+        res.status(200).json({ ok: true, ...(0, brivityPeople_js_1.getBrivityImportStatus)(), count: people.length, people });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(502).json({ ok: false, error: message, ...(0, brivityPeople_js_1.getBrivityImportStatus)() });
+    }
+});
+app.get("/api/brivity/status", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    res.status(200).json((0, brivityPeople_js_1.getBrivityImportStatus)());
 });
 app.get("/api/social/data", (req, res) => {
     if (!dashboardTokenOk(req)) {
