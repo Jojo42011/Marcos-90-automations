@@ -51,7 +51,10 @@
   .search input::placeholder{color:#7d8893}
   .search svg{position:absolute;left:12px;top:9px;color:#838d97}
   .topbar-right{display:flex;align-items:center;gap:14px;min-width:150px;justify-content:flex-end}
-  .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#8b95a0;display:flex;align-items:center;justify-content:center}
+  .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#8b95a0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color .15s,border-color .15s}
+  .icon-btn:hover{color:var(--teal-strong);border-color:var(--teal)}
+  #crmRefresh.spinning svg{animation:crmspin .8s linear infinite}
+  @keyframes crmspin{to{transform:rotate(360deg)}}
   .feed-pill{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 14px;color:#7b8590;font-size:12px;font-weight:600;background:#fff}
   .feed-pill .n{background:var(--teal-pill);color:#fff;border-radius:50%;min-width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px}
   .me{display:flex;align-items:center;gap:8px}
@@ -387,6 +390,7 @@
   </div>
   <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="topSearch" type="search" placeholder="Search by name, address, phone or MLS#" /></div>
   <div class="topbar-right">
+    <button class="icon-btn" id="crmRefresh" title="Refresh data from Brivity"><svg id="crmRefreshIco" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/></svg></button>
     <button class="icon-btn" title="Help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg></button>
     <button class="feed-pill">Activity Feed <span class="n" id="feedCount">0</span></button>
     <div class="me"><span class="av has-marco-photo">MP</span><b>Marco</b></div>
@@ -1512,13 +1516,16 @@ function mapDealTx(d){
     dateListed:fmtMDY(d.openedDate), listPrice:d.salePrice||0, expiration:fmtMDY(d.closeDate),
     closePrice:closed?(d.salePrice||0):0, gci:d.estimatedGCI||0, draft:false};
 }
-async function loadLive(){
+async function loadLive(opts){
+  opts=opts||{};
   // Pull the automation snapshot and the live Brivity import in parallel;
   // either source alone is enough to switch off the demo data.
+  const brvUrl="/api/brivity/people"+(opts.refresh?"?refresh=1":"");
   const [body,brv]=await Promise.all([
     fetch(crmApi("/api/dashboard/data")).then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(crmApi("/api/brivity/people")).then(r=>r.ok?r.json():null).catch(()=>null)
+    fetch(crmApi(brvUrl)).then(r=>r.ok?r.json():null).catch(()=>null)
   ]);
+  window.__brivity=(brv&&typeof brv==="object")?{configured:brv.configured,count:brv.count,lastError:brv.lastError,fetchedAt:brv.fetchedAt}:null;
   let rawLeads=(body&&Array.isArray(body.leads))?body.leads.filter(l=>l&&(l.name||l.phone)):[];
   const brvPeople=(brv&&brv.ok&&Array.isArray(brv.people))?brv.people.filter(l=>l&&(l.name||l.phone||l.email)):[];
   if(brvPeople.length){
@@ -1565,6 +1572,176 @@ document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
 });
 document.querySelectorAll("#view-dashboard select").forEach(s=>s.addEventListener("change",()=>{ renderTakeAction(); renderTracking(); renderFeed(); }));
 document.getElementById("emBody").addEventListener("change",e=>{ if(e.target.tagName==="SELECT") renderEmail(currentEmail); });
+
+/* ---- Refresh button → re-pull the live Brivity import ---- */
+(function(){
+  var btn=document.getElementById("crmRefresh"); if(!btn) return;
+  btn.addEventListener("click",function(){
+    if(btn.classList.contains("spinning")) return;
+    btn.classList.add("spinning");
+    loadLive({refresh:true}).then(function(){
+      var b=window.__brivity;
+      if(b&&b.lastError) crmToast("Brivity refresh failed: "+String(b.lastError).slice(0,80));
+      else if(b&&b.configured) crmToast("Refreshed · "+(b.count||LEADS.length)+" Brivity contacts");
+      else crmToast("Refreshed · "+LEADS.length+" leads");
+    }).catch(function(){ crmToast("Refresh failed — check connection"); })
+    .finally(function(){ setTimeout(function(){btn.classList.remove("spinning");},450); });
+  });
+})();
+
+/* ---- Generic toolbar dropdown (ACTIONS / COLUMNS / date + source filters) ----
+   Renders a dd-menu of items; each item {label, check?, fn}. Returning true
+   from fn keeps the menu open (used for multi-toggle column menus). ---- */
+function openActionMenu(anchor,items){
+  var hasCheck=items.some(function(it){return it.check!=null;});
+  ddMenu.className="dd-menu"+(hasCheck?" sel":"");
+  ddMenu.innerHTML=items.map(function(it,i){
+    return '<button data-i="'+i+'" class="'+(it.cur?"cur":"")+'">'+
+      (it.check!=null?'<span class="chk">'+(it.check?"✓":"")+'</span>':(hasCheck?'<span class="chk"></span>':''))+
+      esc(it.label)+'</button>';
+  }).join("");
+  ddMenu.querySelectorAll("button").forEach(function(b){
+    b.addEventListener("click",function(ev){ ev.stopPropagation();
+      var it=items[+b.dataset.i]; var keep=it.fn?it.fn():false; if(!keep) closeDD(); });
+  });
+  var r=anchor.getBoundingClientRect();
+  var w=Math.max(r.width,190);
+  ddMenu.style.minWidth=w+"px";
+  ddMenu.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+"px";
+  ddMenu.style.top=(r.bottom+4)+"px";
+  ddMenu.classList.add("on"); ddMenu._for=anchor;
+}
+/* Column show/hide: toggles the Nth <th>/<td> across a table. */
+var HIDDEN_COLS={};   // tableId -> Set of hidden column indexes (as object)
+function applyColHidden(table){
+  var id=table.id||table.dataset.colid||"tbl";
+  var hidden=HIDDEN_COLS[id]||{};
+  var heads=table.querySelectorAll("thead th");
+  heads.forEach(function(th,i){ th.style.display=hidden[i]?"none":""; });
+  table.querySelectorAll("tbody tr").forEach(function(tr){
+    var cells=tr.children;
+    for(var i=0;i<cells.length;i++) cells[i].style.display=hidden[i]?"none":"";
+  });
+}
+function openColumnsMenu(anchor,table){
+  if(!table){ crmToast("No table here"); return; }
+  var id=table.id||(table.dataset.colid="cols-"+Math.random().toString(36).slice(2,7));
+  HIDDEN_COLS[id]=HIDDEN_COLS[id]||{};
+  var hidden=HIDDEN_COLS[id];
+  var heads=[].slice.call(table.querySelectorAll("thead th"));
+  var items=heads.map(function(th,i){
+    var name=(th.textContent||("Column "+(i+1))).replace(/[⇅▾]/g,"").trim()||("Column "+(i+1));
+    return {label:name,check:!hidden[i],fn:function(){ hidden[i]=!!(!hidden[i]?1:0); if(!hidden[i])delete hidden[i]; applyColHidden(table); openColumnsMenu(anchor,table); return true; }};
+  });
+  openActionMenu(anchor,items);
+}
+function leadsToCsv(rows){
+  var cols=["name","statusDisp","stageLabel","phone","email","source","address","lastLabel"];
+  var head=["Name","Status","Stage","Phone","Email","Source","Address","Last Interaction"];
+  var esc2=function(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  var lines=[head.join(",")].concat(rows.map(function(r){return cols.map(function(c){return esc2(r[c]);}).join(",");}));
+  return lines.join("\n");
+}
+function currentLeadRows(){
+  var rows=LEADS.filter(function(l){return l.showInLeads!==false;});
+  if(typeof hitRow==="function") rows=rows.filter(hitRow);
+  return rows;
+}
+function downloadCsv(name,text){
+  var blob=new Blob([text],{type:"text/csv"});
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},400);
+}
+/* tx filters */
+var txDateRange="all", txSource="all";
+function txYearOf(t){ var m=/(\d{4})/.exec(String(t.dateListed||t.closeDate||"")); return m?+m[1]:null; }
+function txSources(){ var s={}; TX.forEach(function(t){ if(t.source) s[t.source]=1; }); return Object.keys(s); }
+function txDateItems(anchor){
+  var now=new Date(), y=now.getFullYear();
+  var ranges=[["all","All Time"],["this_year","This Year"],["last_year","Last Year"],["2y","Last 2 Years"]];
+  return ranges.map(function(rg){ return {label:rg[1],cur:txDateRange===rg[0],fn:function(){
+    txDateRange=rg[0]; anchor.textContent=rg[1]+" ▾"; applyTxFilters(); }};});
+}
+function applyTxFilters(){
+  // re-render then hide rows failing the date/source filters (renderTx rebuilds tbody)
+  renderTx();
+  var now=new Date(), y=now.getFullYear();
+  var rows=document.querySelectorAll("#txRows tr");
+  var list=(typeof sortRows==="function"?sortRows(txFor(txBucket).filter(hitRow)):txFor(txBucket).filter(hitRow));
+  list.forEach(function(t,i){
+    var tr=rows[i]; if(!tr) return; var show=true;
+    if(txDateRange!=="all"){ var ty=txYearOf(t);
+      if(txDateRange==="this_year") show=ty===y;
+      else if(txDateRange==="last_year") show=ty===y-1;
+      else if(txDateRange==="2y") show=ty!=null&&ty>=y-1; }
+    if(show&&txSource!=="all") show=(t.source||"")===txSource;
+    tr.style.display=show?"":"none";
+  });
+}
+
+/* Wire every ▾ toolbar pill that isn't already handled (ACTIONS, COLUMNS, date, sources). */
+function wireToolbarDropdowns(){
+  document.querySelectorAll(".pill-btn.ghost").forEach(function(b){
+    if(b.dataset.ddwired) return;
+    var t=b.textContent.trim().toUpperCase();
+    var view=b.closest('[id^="view-"]');
+    var table=view?view.querySelector("table.leads, table"):null;
+    if(/^ACTIONS/.test(t)){
+      b.dataset.ddwired="1"; b.dataset.dd="1"; b.style.cursor="pointer";
+      b.addEventListener("click",function(e){e.stopPropagation();openActionMenu(b,[
+        {label:"⭳ Export current view (CSV)",fn:function(){downloadCsv("leads.csv",leadsToCsv(currentLeadRows()));crmToast("Exported "+currentLeadRows().length+" leads");}},
+        {label:"↻ Refresh from Brivity",fn:function(){document.getElementById("crmRefresh").click();}},
+        {label:"✕ Clear search & filters",fn:function(){SEARCH="";var s=document.getElementById("topSearch");if(s)s.value="";page=1;pPage=1;renderLeads();renderPeople();renderTx();crmToast("Filters cleared");}}
+      ]);});
+    } else if(/^COLUMNS/.test(t)){
+      b.dataset.ddwired="1"; b.dataset.dd="1"; b.style.cursor="pointer";
+      b.addEventListener("click",function(e){e.stopPropagation();
+        var tb=view?view.querySelector("table.leads")||view.querySelector("table"):null; openColumnsMenu(b,tb);});
+    } else if(/(THIS YEAR|THIS QUARTER|LAST YEAR)/.test(t)&&view&&view.id==="view-tx"){
+      b.dataset.ddwired="1"; b.dataset.dd="1"; b.style.cursor="pointer";
+      b.addEventListener("click",function(e){e.stopPropagation();openActionMenu(b,txDateItems(b));});
+    } else if(/ALL SOURCES/.test(t)&&view&&view.id==="view-tx"){
+      b.dataset.ddwired="1"; b.dataset.dd="1"; b.style.cursor="pointer";
+      b.addEventListener("click",function(e){e.stopPropagation();
+        var srcs=txSources(); var items=[{label:"All Sources",cur:txSource==="all",fn:function(){txSource="all";b.textContent="All Sources ("+srcs.length+") ▾";applyTxFilters();}}]
+          .concat(srcs.map(function(s){return {label:s,cur:txSource===s,fn:function(){txSource=s;b.textContent=s+" ▾";applyTxFilters();}};}));
+        if(srcs.length===0) items=[{label:"No source data on transactions",fn:function(){}}];
+        openActionMenu(b,items);});
+    } else if(/FILTERS?\s*\(/.test(t)||/^FILTER$/.test(t)){
+      b.dataset.ddwired="1"; b.dataset.dd="1"; b.style.cursor="pointer";
+      b.addEventListener("click",function(e){e.stopPropagation();openActionMenu(b,[
+        {label:"Show all",fn:function(){SEARCH="";var s=document.getElementById("topSearch");if(s)s.value="";page=1;pPage=1;renderLeads();renderPeople();renderTx();renderConvos();crmToast("Showing all");}},
+        {label:"Hot leads only",fn:function(){SEARCH="";leadSort="recent";page=1;renderLeads();crmToast("Tip: use Status column to filter");}}
+      ]);});
+    }
+  });
+}
+/* Year picker for the reporting & finance headers (dynamically re-rendered,
+   so handled via delegation). */
+var REPORT_YEAR=(new Date()).getFullYear();
+function yearMenuItems(anchor,onPick){
+  var y=(new Date()).getFullYear(); var out=[];
+  for(var yy=y;yy>=y-3;yy--){ (function(yr){ out.push({label:String(yr),cur:REPORT_YEAR===yr,fn:function(){
+    REPORT_YEAR=yr; if(anchor.tagName==="SPAN") anchor.textContent=yr+" ▾"; else anchor.textContent="Year "+yr+" ▾";
+    onPick&&onPick(yr); crmToast("Showing "+yr); }}); })(yy); }
+  return out;
+}
+document.addEventListener("click",function(e){
+  // Reporting "YYYY ▾" year span in the business dashboard header.
+  var span=e.target.closest(".rep-head h1 span");
+  if(span&&/▾/.test(span.textContent)){ e.stopPropagation();
+    // Defer so the global outside-click close handler (which runs after this)
+    // doesn't immediately collapse the menu we just opened.
+    setTimeout(function(){ openActionMenu(span,yearMenuItems(span,null)); },0);
+    return;
+  }
+  // Finance "This Year ▾" (Monthly GCI header).
+  var fb=e.target.closest("#view-finance .pill-btn.ghost");
+  if(fb&&/YEAR/i.test(fb.textContent)&&/▾/.test(fb.textContent)){ e.stopPropagation();
+    setTimeout(function(){ openActionMenu(fb,yearMenuItems(fb,null)); },0);
+    return;
+  }
+});
 
 /* ---- editable status/stage dropdowns → persist to /api/crm/lead/:id ---- */
 const STATUS_OPTIONS=[["new","NEW","var(--st-new)"],["hot","HOT","var(--st-hot)"],["nurture","NURTURE","var(--st-nurture)"],["watch","WATCH","var(--st-watch)"],["dead","UNQUALIFIED","var(--st-unq)"],["unresponsive","INACTIVE","#aab2ba"]];
@@ -2053,5 +2230,6 @@ document.getElementById("actSave").addEventListener("click",()=>{
 });
 
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");renderNurture();renderFinance();
+wireToolbarDropdowns();
 loadLive();
 </script>
