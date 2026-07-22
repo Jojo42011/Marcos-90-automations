@@ -127,7 +127,8 @@
   .link-btn{border:1px solid var(--line);background:#fff;color:var(--teal);border-radius:16px;padding:4px 12px;font-size:11px;font-weight:700}
 
   /* ---- Message Center ---- */
-  .msg-wrap{display:flex;min-height:calc(100vh - var(--topbar));background:#fff}
+  #view-messages.on{display:flex;flex-direction:column;height:calc(100vh - var(--topbar));overflow:hidden}
+  .msg-wrap{display:flex;flex:1;min-height:0;overflow:hidden;background:#fff}
   .msg-list{flex:1 1 auto;min-width:240px;max-width:640px;border-right:2px solid var(--line);display:flex;flex-direction:column;min-height:0}
   .msg-list-head{display:flex;gap:10px;padding:14px 18px;align-items:center;border-bottom:1px solid var(--line-2)}
   .msg-search{flex:1;height:34px;border:1px solid var(--line);border-radius:18px;padding:0 14px;font-size:13px;color:var(--ink);outline:none;background:#fbfcfd}
@@ -190,6 +191,11 @@
   table.leads th{text-align:left;color:#6b7580;font-size:11.5px;font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:#fff;z-index:2}
   table.leads td{padding:14px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle;white-space:nowrap}
   .sarr{color:#c2cad1;font-size:11px;margin-left:2px}
+  th.sortcol{cursor:pointer;user-select:none}
+  th.sortcol:hover{color:var(--teal-strong)}
+  th.sortcol:hover .sarr{color:var(--teal)}
+  th.sortcol.sorted{color:var(--teal-strong)}
+  th.sortcol.sorted .sarr{color:var(--teal-strong)}
   /* Frozen first two columns (checkbox + Name) — stay put while scrolling wide. */
   .fx{position:sticky;background:#fff}
   .fx1{left:0;z-index:3}
@@ -503,12 +509,12 @@
           <table class="leads">
             <thead><tr>
               <th class="fx fx1"><input type="checkbox" class="cb"></th>
-              <th class="fx fx2">Name <span class="sarr">⇅</span></th>
+              <th class="fx fx2 sortcol" data-sortk="name">Name <span class="sarr">⇅</span></th>
               <th>Intent</th>
-              <th>Status <span class="sarr">⇅</span></th>
-              <th>Stage <span class="sarr">⇅</span></th>
+              <th class="sortcol" data-sortk="status">Status <span class="sarr">⇅</span></th>
+              <th class="sortcol" data-sortk="stage">Stage <span class="sarr">⇅</span></th>
               <th>Email</th><th>Phone</th><th>SMS</th><th>Appt.</th><th>Mail</th><th>Other</th>
-              <th>Address</th><th>Last Interaction</th><th>Next Due Tasks</th>
+              <th class="sortcol" data-sortk="address">Address</th><th class="sortcol" data-sortk="last">Last Interaction</th><th>Next Due Tasks</th>
               <th>Primary Agent</th><th>Auto Plans</th><th>Birthdate</th><th>Home Anniversary</th>
               <th>Source</th><th>Registered</th>
             </tr></thead>
@@ -937,9 +943,45 @@ function renderTracking(){
 let SEARCH="", leadSort="recent";
 function _q(s){return String(s||"").toLowerCase();}
 function hitRow(o){ if(!SEARCH)return true; return (_q(o.name)+" "+_q(o.address)+" "+_q(o.city)+" "+_q(o.phone)+" "+_q(o.email)+" "+_q(o.agent)).includes(SEARCH); }
-function sortRows(a){ return leadSort==="name"
-  ? a.slice().sort((x,y)=>String(x.name||x.address||"").localeCompare(String(y.name||y.address||"")))
-  : a.slice().sort((x,y)=>new Date(y.lastActivity||0)-new Date(x.lastActivity||0)); }
+/* Column sort — set by clicking a table header (Brivity-style ▲/▼). When no
+   column is chosen, fall back to the SORT BY pill (recent / name A–Z). */
+var leadSortCol=null, leadSortDir=1;
+var STATUS_ORDER={new:0,hot:1,nurture:2,watch:3,unqualified:4,dead:4,unresponsive:5,past_client:6,archived:7};
+var STAGE_ORDER={"NEW LEAD":0,"ATTEMPTED CONTACT":1,"APPOINTMENT SET":2,"SHOWING SET":3,"PENDING":4,"UNDER CONTRACT":5,"CLOSED":6};
+function sortKeyVal(l,k){
+  if(k==="name")return String(l.name||l.address||"").toLowerCase();
+  if(k==="status")return STATUS_ORDER[l.statusDisp||l.crmStatus]!=null?STATUS_ORDER[l.statusDisp||l.crmStatus]:99;
+  if(k==="stage")return STAGE_ORDER[l.stageLabel]!=null?STAGE_ORDER[l.stageLabel]:99;
+  if(k==="address")return String(l.address||"").toLowerCase();
+  if(k==="last")return new Date(l.lastActivity||0).getTime();
+  return 0;
+}
+function sortRows(a){
+  if(leadSortCol){
+    var k=leadSortCol,d=leadSortDir;
+    return a.slice().sort(function(x,y){
+      var vx=sortKeyVal(x,k),vy=sortKeyVal(y,k);
+      if(vx<vy)return -1*d; if(vx>vy)return 1*d; return 0;
+    });
+  }
+  return leadSort==="name"
+    ? a.slice().sort((x,y)=>String(x.name||x.address||"").localeCompare(String(y.name||y.address||"")))
+    : a.slice().sort((x,y)=>new Date(y.lastActivity||0)-new Date(x.lastActivity||0));
+}
+function paintSortArrows(){
+  document.querySelectorAll('#view-leads th.sortcol').forEach(function(th){
+    var k=th.getAttribute("data-sortk"); var arr=th.querySelector(".sarr");
+    if(!arr){arr=document.createElement("span");arr.className="sarr";th.appendChild(document.createTextNode(" "));th.appendChild(arr);}
+    if(leadSortCol===k){ arr.textContent=leadSortDir>0?"▲":"▼"; th.classList.add("sorted"); }
+    else { arr.textContent="⇅"; th.classList.remove("sorted"); }
+  });
+}
+document.addEventListener("click",function(e){
+  var th=e.target.closest('#view-leads th.sortcol'); if(!th)return;
+  var k=th.getAttribute("data-sortk");
+  if(leadSortCol===k){ leadSortDir=-leadSortDir; } else { leadSortCol=k; leadSortDir=1; }
+  page=1; renderLeads(); paintSortArrows();
+});
 
 let openConvIdx=null;
 let convSearchTerm="";
@@ -1565,9 +1607,9 @@ document.getElementById("topSearch").addEventListener("input",function(){
 document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
   if(/^SORT BY/i.test(b.textContent)){
     b.style.cursor="pointer"; b.dataset.live="1";
-    b.addEventListener("click",()=>{ leadSort=(leadSort==="recent")?"name":"recent";
+    b.addEventListener("click",()=>{ leadSort=(leadSort==="recent")?"name":"recent"; leadSortCol=null;
       b.textContent="SORT BY: "+(leadSort==="name"?"NAME A–Z":"MOST RECENT")+" ▾";
-      page=1; pPage=1; renderLeads(); renderPeople(); renderTx(); renderNurture(); });
+      page=1; pPage=1; renderLeads(); renderPeople(); renderTx(); renderNurture(); if(typeof paintSortArrows==="function")paintSortArrows(); });
   }
 });
 document.querySelectorAll("#view-dashboard select").forEach(s=>s.addEventListener("change",()=>{ renderTakeAction(); renderTracking(); renderFeed(); }));
@@ -2231,5 +2273,6 @@ document.getElementById("actSave").addEventListener("click",()=>{
 
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");renderNurture();renderFinance();
 wireToolbarDropdowns();
+if(typeof paintSortArrows==="function")paintSortArrows();
 loadLive();
 </script>
