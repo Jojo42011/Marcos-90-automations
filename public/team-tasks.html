@@ -723,8 +723,14 @@ function openStatusMenu(anchor,taskId){
   pop.innerHTML=STATUSES.map(function(s){return '<button data-v="'+s.id+'"><span class="sw" style="background:'+s.c+'"></span>'+s.label+'</button>';}).join("");
   pop.querySelectorAll("button").forEach(function(b){b.onclick=function(e){e.stopPropagation();setStatus(taskId,b.getAttribute("data-v"));pop.classList.remove("on");};});
   pop.style.left=Math.max(8,Math.min(r.left,innerWidth-190))+"px";
-  pop.style.top=(r.bottom+6)+"px";
-  pop.classList.add("on");
+  // Open upward when there isn't room below (e.g. task card near the bottom
+  // of the screen) so every option stays clickable; clamp inside viewport.
+  pop.style.visibility="hidden";pop.classList.add("on");
+  var mh=pop.offsetHeight||200;
+  var below=innerHeight-r.bottom-6, above=r.top-6;
+  var top=(below>=mh||below>=above)?(r.bottom+6):(r.top-mh-6);
+  pop.style.top=Math.max(8,Math.min(top,innerHeight-mh-8))+"px";
+  pop.style.visibility="";
 }
 document.addEventListener("click",function(e){if(!e.target.closest("#pop"))pop.classList.remove("on");});
 
