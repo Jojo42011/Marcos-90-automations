@@ -1728,6 +1728,9 @@ let DRIPS=[
   {name:"Past Client - Yearly Touch",enrolled:340,active:340,emails:12,status:"Running"},
   {name:"Cold Lead Re-engage",enrolled:512,active:120,emails:5,status:"Paused"},
 ];
+let NEWSLETTERS=[
+  {name:"Monthly Market Update",aud:"All Leads",status:"Scheduled",sent:0,opens:"-",date:"08-01-2026"},
+];
 let EMAIL_TEMPLATES=["New Listing Announcement","Just Sold","Open House Invite","Price Improvement","Market Update","Buyer Welcome","Seller Welcome","Closing Congrats","Holiday Greeting"];
 // Merge any user-created items saved from a prior session.
 (function(){try{
@@ -1735,6 +1738,7 @@ let EMAIL_TEMPLATES=["New Listing Announcement","Just Sold","Open House Invite",
   if(Array.isArray(a.templates))a.templates.forEach(function(t){if(EMAIL_TEMPLATES.indexOf(t)<0)EMAIL_TEMPLATES.unshift(t);});
   if(Array.isArray(a.drips))a.drips.forEach(function(d){DRIPS.unshift(d);});
   if(Array.isArray(a.campaigns))a.campaigns.forEach(function(c){CAMPAIGNS.unshift(c);});
+  if(Array.isArray(a.newsletters))a.newsletters.forEach(function(n){NEWSLETTERS.unshift(n);});
 }catch(_){}})();
 function saveEmailAdd(){try{
   var cur=JSON.parse(localStorage.getItem("marcoEmailAdd")||"{}")||{}; localStorage.setItem("marcoEmailAdd",JSON.stringify(cur));
@@ -1742,24 +1746,103 @@ function saveEmailAdd(){try{
 function emailAddPush(kind,item){try{
   var a=JSON.parse(localStorage.getItem("marcoEmailAdd")||"{}")||{}; a[kind]=a[kind]||[]; a[kind].unshift(item); localStorage.setItem("marcoEmailAdd",JSON.stringify(a));
 }catch(_){}}
+function emailAddRemove(kind,matchName){try{
+  var a=JSON.parse(localStorage.getItem("marcoEmailAdd")||"{}")||{};
+  if(Array.isArray(a[kind])){ a[kind]=a[kind].filter(function(x){return (x&&x.name?x.name:x)!==matchName;}); localStorage.setItem("marcoEmailAdd",JSON.stringify(a)); }
+}catch(_){}}
+/* Resolve an audience label to real recipient emails from live LEADS data. */
+function audienceEmails(aud){
+  var a=(aud||"").toLowerCase();
+  var pool=LEADS.filter(function(l){return !!l.email;});
+  if(/buyer/.test(a)) pool=pool.filter(function(l){return l.intent==="buyer";});
+  else if(/seller/.test(a)) pool=pool.filter(function(l){return l.intent==="seller";});
+  else if(/past client|closed/.test(a)) pool=pool.filter(function(l){return l.statusDisp==="closed"||/closed/i.test(l.stageLabel||"");});
+  else if(/nurture|watch/.test(a)) pool=pool.filter(function(l){return l.statusDisp==="nurture"||l.statusDisp==="watch";});
+  // "All Leads" / anything else → every lead with a real email address.
+  var seen={}; var out=[];
+  pool.forEach(function(l){var e=String(l.email).trim().toLowerCase(); if(e&&!seen[e]){seen[e]=1;out.push(e);}});
+  return out;
+}
 function emStatusPill(s){const c=s==="Sent"?"#3fae86":s==="Scheduled"?"var(--st-nurture)":s==="Running"?"var(--teal)":s==="Paused"?"#aab2ba":"#aab2ba";return '<span class="status" style="background:'+c+'">'+s+'</span>';}
+/* ---- Real Gmail connection status (same OAuth link Harvey's inbox uses) ---- */
+let EMAIL_CONN={loaded:false,configured:false,verified:false};
+function emailConnBadge(){
+  if(!EMAIL_CONN.loaded) return '<span class="status" style="background:#aab2ba">CHECKING…</span>';
+  if(EMAIL_CONN.verified) return '<span class="status" style="background:#3fae86" title="Real emails send through Marco\'s connected Gmail">✓ GMAIL CONNECTED</span>';
+  return '<span class="status" style="background:var(--st-new)" title="Set GMAIL_CLIENT_ID/SECRET + link Gmail to send real email">GMAIL NOT CONNECTED</span>';
+}
+function refreshEmailConn(){
+  fetch(crmApi("/api/email/connection-status")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    EMAIL_CONN={loaded:true,configured:!!(d&&d.configured),verified:!!(d&&d.verified)};
+    if(document.getElementById("view-email")&&document.getElementById("view-email").classList.contains("on")) renderEmail(currentEmail);
+  }).catch(function(){ EMAIL_CONN={loaded:true,configured:false,verified:false}; });
+}
+var EM_ACT='padding:5px 11px;font-size:10.5px;border-radius:14px;margin-right:6px';
+var EM_DEL='width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#c0616a;font-size:12px;line-height:1;cursor:pointer;vertical-align:middle';
+function emailBodyFor(name,aud){
+  return '<p>Hi there,</p><p>This is <strong>'+esc(name)+'</strong> from Marco Puga Realty'+(aud?(' &mdash; '+esc(aud)):'')+'.</p><p>[Add your content here before sending.]</p><p>&mdash; Marco Puga</p>';
+}
 const EMAIL_SEC={
-  campaigns:()=>'<div class="rep-head"><h1>Campaigns</h1><button class="pill-btn" id="newCampaignBtn">+ NEW CAMPAIGN</button></div>'+
+  campaigns:()=>'<div class="rep-head"><h1>Campaigns</h1><div style="display:flex;align-items:center;gap:10px">'+emailConnBadge()+'<button class="pill-btn" id="newCampaignBtn">+ NEW CAMPAIGN</button></div></div>'+
     '<div class="em-stat">'+[["Emails Sent","1,970"],["Avg. Open Rate","41%"],["Avg. Click Rate","7.3%"],["Unsubscribes","4"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+
-    '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:820px"><thead><tr><th>Campaign</th><th>Audience</th><th>Status</th><th>Sent</th><th>Opens</th><th>Clicks</th><th>Date</th></tr></thead><tbody>'+
-    CAMPAIGNS.map(c=>'<tr><td><span class="lead-name">'+esc(c.name)+'</span></td><td style="color:#6b7480">'+esc(c.aud)+'</td><td>'+emStatusPill(c.status)+'</td><td style="color:#6b7480">'+(c.sent||"-")+'</td><td style="color:#6b7480">'+c.opens+'</td><td style="color:#6b7480">'+c.clicks+'</td><td style="color:#7a8590">'+c.date+'</td></tr>').join("")+
+    '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:940px"><thead><tr><th>Campaign</th><th>Audience</th><th>Status</th><th>Sent</th><th>Opens</th><th>Clicks</th><th>Date</th><th></th></tr></thead><tbody>'+
+    CAMPAIGNS.map((c,i)=>'<tr><td><span class="lead-name">'+esc(c.name)+'</span></td><td style="color:#6b7480">'+esc(c.aud)+'</td><td>'+emStatusPill(c.status)+'</td><td style="color:#6b7480">'+(c.sent||"-")+'</td><td style="color:#6b7480">'+c.opens+'</td><td style="color:#6b7480">'+c.clicks+'</td><td style="color:#7a8590">'+c.date+'</td>'+
+      '<td style="white-space:nowrap"><button class="pill-btn ghost" style="'+EM_ACT+'" data-emtest="campaigns:'+i+'">SEND TEST</button><button class="pill-btn" style="'+EM_ACT+'" data-emsend="campaigns:'+i+'">SEND NOW</button><button data-emdel="campaigns:'+i+'" title="Delete" style="'+EM_DEL+'">✕</button></td></tr>').join("")+
+    (CAMPAIGNS.length?"":'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:22px">No campaigns yet — click + NEW CAMPAIGN to create one.</td></tr>')+
     '</tbody></table></div></div>',
-  drips:()=>'<div class="rep-head"><h1>Drip Campaigns</h1><button class="pill-btn" id="newDripBtn">+ NEW DRIP</button></div>'+
-    '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:720px"><thead><tr><th>Drip Campaign</th><th>Enrolled</th><th>Active</th><th>Emails</th><th>Status</th></tr></thead><tbody>'+
-    DRIPS.map(d=>'<tr><td><span class="lead-name">'+esc(d.name)+'</span></td><td style="color:#6b7480">'+d.enrolled+'</td><td style="color:#6b7480">'+d.active+'</td><td style="color:#6b7480">'+d.emails+'</td><td>'+emStatusPill(d.status)+'</td></tr>').join("")+
+  drips:()=>'<div class="rep-head"><h1>Drip Campaigns</h1><div style="display:flex;align-items:center;gap:10px">'+emailConnBadge()+'<button class="pill-btn" id="newDripBtn">+ NEW DRIP</button></div></div>'+
+    '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:820px"><thead><tr><th>Drip Campaign</th><th>Enrolled</th><th>Active</th><th>Emails</th><th>Status</th><th></th></tr></thead><tbody>'+
+    DRIPS.map((d,i)=>'<tr><td><span class="lead-name">'+esc(d.name)+'</span></td><td style="color:#6b7480">'+d.enrolled+'</td><td style="color:#6b7480">'+d.active+'</td><td style="color:#6b7480">'+d.emails+'</td><td>'+emStatusPill(d.status)+'</td>'+
+      '<td style="white-space:nowrap"><button class="pill-btn ghost" style="'+EM_ACT+'" data-emtest="drips:'+i+'">SEND TEST</button><button class="pill-btn ghost" style="'+EM_ACT+'" data-diptoggle="'+i+'">'+(d.status==="Paused"?"▶ RESUME":"⏸ PAUSE")+'</button><button data-emdel="drips:'+i+'" title="Delete" style="'+EM_DEL+'">✕</button></td></tr>').join("")+
+    (DRIPS.length?"":'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:22px">No drip campaigns yet — click + NEW DRIP to create one.</td></tr>')+
     '</tbody></table></div></div>',
   templates:()=>'<div class="rep-head"><h1>Templates</h1><button class="pill-btn" id="newTemplateBtn">+ NEW TEMPLATE</button></div><div class="log-grid" style="grid-template-columns:repeat(3,1fr)">'+
     EMAIL_TEMPLATES.map((t,i)=>'<div class="em-card" style="position:relative"><button class="tmpldel" data-tmpldel="'+i+'" title="Delete" style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#c0616a;font-size:12px;line-height:1;cursor:pointer">✕</button><div style="height:60px;background:var(--teal-soft);border-radius:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div><div style="color:#5b6570;font-weight:600;font-size:13px">'+esc(t)+'</div></div>').join("")+'</div>',
-  newsletters:()=>'<div class="rep-head"><h1>Newsletters</h1><button class="pill-btn" id="newNewsletterBtn">+ NEW NEWSLETTER</button></div><div class="em-stat">'+[["Subscribers","1,557"],["Monthly Sends","1"],["Avg. Open Rate","39%"],["Growth (30d)","+42"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div><div class="card card-pad" style="color:var(--muted)">Your monthly market newsletter goes out on the 1st. Next send: Aug 1, 2026.</div>',
-  reports:()=>'<div class="rep-head"><h1>Email Reports</h1><select class="select"><option>Last 30 days</option></select></div><div class="em-stat">'+[["Delivered","98.6%"],["Open Rate","41%"],["Click Rate","7.3%"],["Bounce","1.4%"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+activityTable(["Sent","Opened","Clicked","Bounced","Unsub"]),
+  newsletters:()=>'<div class="rep-head"><h1>Newsletters</h1><div style="display:flex;align-items:center;gap:10px">'+emailConnBadge()+'<button class="pill-btn" id="newNewsletterBtn">+ NEW NEWSLETTER</button></div></div>'+
+    '<div class="em-stat">'+[["Subscribers","1,557"],["Monthly Sends",String(NEWSLETTERS.length)],["Avg. Open Rate","39%"],["Growth (30d)","+42"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+
+    '<div class="card card-pad" style="color:var(--muted);margin-bottom:18px">Your monthly market newsletter goes out on the 1st. Next send: Aug 1, 2026.</div>'+
+    '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:820px"><thead><tr><th>Newsletter</th><th>Audience</th><th>Status</th><th>Sent</th><th>Opens</th><th>Date</th><th></th></tr></thead><tbody>'+
+    NEWSLETTERS.map((n,i)=>'<tr><td><span class="lead-name">'+esc(n.name)+'</span></td><td style="color:#6b7480">'+esc(n.aud)+'</td><td>'+emStatusPill(n.status)+'</td><td style="color:#6b7480">'+(n.sent||"-")+'</td><td style="color:#6b7480">'+n.opens+'</td><td style="color:#7a8590">'+esc(n.date)+'</td>'+
+      '<td style="white-space:nowrap"><button class="pill-btn ghost" style="'+EM_ACT+'" data-emtest="newsletters:'+i+'">SEND TEST</button><button class="pill-btn" style="'+EM_ACT+'" data-emsend="newsletters:'+i+'">SEND NOW</button><button data-emdel="newsletters:'+i+'" title="Delete" style="'+EM_DEL+'">✕</button></td></tr>').join("")+
+    (NEWSLETTERS.length?"":'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:22px">No newsletters yet — click + NEW NEWSLETTER to create one.</td></tr>')+
+    '</tbody></table></div></div>',
+  reports:()=>'<div class="rep-head"><h1>Email Reports</h1><select class="select" id="emReportRange"><option>Last 7 days</option><option selected>Last 30 days</option><option>Last 90 days</option><option>This Year</option></select></div><div class="em-stat">'+[["Delivered","98.6%"],["Open Rate","41%"],["Click Rate","7.3%"],["Bounce","1.4%"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+activityTable(["Sent","Opened","Clicked","Bounced","Unsub"]),
 };
 let currentEmail="campaigns";
 function renderEmail(sec){currentEmail=sec;document.getElementById("emBody").innerHTML=(EMAIL_SEC[sec]||EMAIL_SEC.campaigns)();bindEmail();}
+/* Send one real test email (to Marco's own inbox) via the connected Gmail account. */
+function emailSendTest(name,aud,btn){
+  if(btn){btn.disabled=true;var old=btn.textContent;btn.textContent="SENDING…";}
+  fetch(crmApi("/api/crm/email/send-test"),{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({subject:name,html:emailBodyFor(name,aud)})})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      if(res.ok&&res.d&&res.d.ok) crmToast("Test email sent to "+res.d.to);
+      else crmToast("Send failed: "+((res.d&&res.d.error)||"Gmail not connected"));
+    })
+    .catch(function(){crmToast("Send failed — check connection");})
+    .finally(function(){ if(btn){btn.disabled=false;btn.textContent=old;} });
+}
+/* Send a real blast to every lead matching the item's audience, via Gmail. */
+function emailSendNow(item,onSent,btn){
+  var recipients=audienceEmails(item.aud);
+  if(!recipients.length){ crmToast('No leads with an email address match "'+item.aud+'"'); return; }
+  if(!confirm('Send "'+item.name+'" to '+recipients.length+' recipient'+(recipients.length===1?"":"s")+' ('+item.aud+') right now?\n\nThis sends real email through Marco\'s connected Gmail account.'))return;
+  if(btn){btn.disabled=true;var old=btn.textContent;btn.textContent="SENDING…";}
+  fetch(crmApi("/api/crm/email/send"),{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({subject:item.name,html:emailBodyFor(item.name,item.aud),to:recipients})})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      if(res.ok&&res.d){
+        onSent(res.d.sent||0);
+        crmToast('Sent "'+item.name+'": '+(res.d.sent||0)+' delivered'+(res.d.failed?(", "+res.d.failed+" failed"):""));
+      } else {
+        crmToast("Send failed: "+((res.d&&res.d.error)||"Gmail not connected"));
+      }
+    })
+    .catch(function(){crmToast("Send failed — check connection");})
+    .finally(function(){ if(btn){btn.disabled=false;btn.textContent=old;} renderEmail(currentEmail); });
+}
 function bindEmail(){
   var b=document.getElementById("emBody"); if(!b)return;
   var nt=b.querySelector("#newTemplateBtn"); if(nt)nt.onclick=function(){
@@ -1776,17 +1859,43 @@ function bindEmail(){
   var nd=b.querySelector("#newDripBtn"); if(nd)nd.onclick=function(){
     var name=prompt("Drip campaign name:"); if(!name||!name.trim())return; name=name.trim();
     var em=parseInt(prompt("How many emails in this drip?","5"),10)||0;
-    var d={name:name,enrolled:0,active:0,emails:em,status:"Draft"}; DRIPS.unshift(d); emailAddPush("drips",d); renderEmail("drips"); crmToast("Drip campaign created");
+    var d={name:name,enrolled:0,active:0,emails:em,status:"Draft",aud:"All Leads"}; DRIPS.unshift(d); emailAddPush("drips",d); renderEmail("drips"); crmToast("Drip campaign created");
   };
   var nc=b.querySelector("#newCampaignBtn"); if(nc)nc.onclick=function(){
     var name=prompt("Campaign name:"); if(!name||!name.trim())return; name=name.trim();
-    var aud=prompt("Audience (e.g. All Leads, Buyers, Past Clients):","All Leads")||"All Leads";
+    var aud=prompt("Audience (e.g. All Leads, Buyers, Sellers, Past Clients, Nurture):","All Leads")||"All Leads";
     var c={name:name,aud:aud,status:"Draft",sent:0,opens:"-",clicks:"-",date:"-"}; CAMPAIGNS.unshift(c); emailAddPush("campaigns",c); renderEmail("campaigns"); crmToast("Campaign created");
   };
   var nn=b.querySelector("#newNewsletterBtn"); if(nn)nn.onclick=function(){
-    var name=prompt("Newsletter name:"); if(!name||!name.trim())return;
-    crmToast('Newsletter "'+name.trim()+'" scheduled');
+    var name=prompt("Newsletter name:"); if(!name||!name.trim())return; name=name.trim();
+    var aud=prompt("Audience (e.g. All Leads, Buyers, Sellers, Past Clients, Nurture):","All Leads")||"All Leads";
+    var n={name:name,aud:aud,status:"Draft",sent:0,opens:"-",date:"-"};
+    NEWSLETTERS.unshift(n); emailAddPush("newsletters",n); renderEmail("newsletters"); crmToast('Newsletter "'+name+'" created');
   };
+  b.querySelectorAll("[data-diptoggle]").forEach(function(x){x.onclick=function(e){e.stopPropagation();
+    var i=+x.getAttribute("data-diptoggle"); var d=DRIPS[i]; if(!d)return;
+    d.status=(d.status==="Paused")?"Running":"Paused";
+    renderEmail("drips"); crmToast(d.name+" "+(d.status==="Paused"?"paused":"resumed"));
+  };});
+  b.querySelectorAll("[data-emtest]").forEach(function(x){x.onclick=function(e){e.stopPropagation();
+    var parts=x.getAttribute("data-emtest").split(":"); var arr=({campaigns:CAMPAIGNS,drips:DRIPS,newsletters:NEWSLETTERS})[parts[0]]; var item=arr&&arr[+parts[1]]; if(!item)return;
+    emailSendTest(item.name,item.aud,x);
+  };});
+  b.querySelectorAll("[data-emsend]").forEach(function(x){x.onclick=function(e){e.stopPropagation();
+    var parts=x.getAttribute("data-emsend").split(":"); var arr=({campaigns:CAMPAIGNS,newsletters:NEWSLETTERS})[parts[0]]; var item=arr&&arr[+parts[1]]; if(!item)return;
+    emailSendNow(item,function(sentCount){
+      item.status="Sent"; item.sent=sentCount; item.opens="-"; if("clicks" in item)item.clicks="-";
+      var p=n=>String(n).padStart(2,"0"); var dt=new Date(); item.date=p(dt.getMonth()+1)+"-"+p(dt.getDate())+"-"+dt.getFullYear();
+    },x);
+  };});
+  b.querySelectorAll("[data-emdel]").forEach(function(x){x.onclick=function(e){e.stopPropagation();
+    var parts=x.getAttribute("data-emdel").split(":"); var kind=parts[0]; var idx=+parts[1];
+    var arr=({campaigns:CAMPAIGNS,drips:DRIPS,newsletters:NEWSLETTERS})[kind]; var item=arr&&arr[idx]; if(!item)return;
+    if(!confirm('Delete "'+item.name+'"?'))return;
+    arr.splice(idx,1); emailAddRemove(kind,item.name);
+    renderEmail(kind); crmToast("Deleted");
+  };});
+  var rr=b.querySelector("#emReportRange"); if(rr)rr.addEventListener("change",function(){crmToast("Showing "+rr.value.toLowerCase());});
 }
 document.querySelectorAll('.em-nav a[data-em]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('.em-nav a[data-em]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
@@ -2767,6 +2876,7 @@ document.getElementById("actSave").addEventListener("click",()=>{
 });
 
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");renderNurture();renderFinance();
+refreshEmailConn();
 wireToolbarDropdowns();
 if(typeof paintSortArrows==="function")paintSortArrows();
 

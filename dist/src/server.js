@@ -2471,6 +2471,76 @@ app.get("/api/email/connection-status", async (_req, res) => {
     const verified = configured ? await verifyEmailConnection() : false;
     res.json({ configured, verified });
 });
+// ── CRM Email Marketing: real Gmail sends for newsletters/campaigns ───────
+// Uses the same Gmail OAuth connection (GMAIL_CLIENT_ID/SECRET + stored
+// refresh token) already wired up for Harvey's inbox sync/send.
+app.post("/api/crm/email/send-test", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const subject = String(req.body?.subject || "").trim();
+    const html = String(req.body?.html || req.body?.body || "").trim();
+    if (!subject || !html) {
+        res.status(400).json({ error: "subject and html are required" });
+        return;
+    }
+    try {
+        const { sendEmail } = await Promise.resolve().then(() => __importStar(require("./integrations/gmail/index.js")));
+        const result = await sendEmail({ to: "me", subject: `[TEST] ${subject}`, body: html, html: true });
+        res.json({ ok: true, to: result.to, messageId: result.messageId });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ ok: false, error: message });
+    }
+});
+app.post("/api/crm/email/send", express_1.default.json({ limit: "2mb" }), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const subject = String(req.body?.subject || "").trim();
+    const html = String(req.body?.html || req.body?.body || "").trim();
+    const rawTo = req.body?.to;
+    if (!subject || !html) {
+        res.status(400).json({ error: "subject and html are required" });
+        return;
+    }
+    if (!Array.isArray(rawTo) || rawTo.length === 0) {
+        res.status(400).json({ error: "to (array of recipient emails) is required" });
+        return;
+    }
+    const MAX_RECIPIENTS = 500;
+    const to = Array.from(new Set(rawTo
+        .map((v) => String(v || "").trim().toLowerCase())
+        .filter((v) => v && /\S+@\S+\.\S+/.test(v))));
+    if (!to.length) {
+        res.status(400).json({ error: "No valid recipient emails provided" });
+        return;
+    }
+    if (to.length > MAX_RECIPIENTS) {
+        res.status(400).json({
+            error: `Too many recipients (${to.length}); max ${MAX_RECIPIENTS} per send — split into batches.`,
+        });
+        return;
+    }
+    const { sendEmail } = await Promise.resolve().then(() => __importStar(require("./integrations/gmail/index.js")));
+    const results = [];
+    for (const recipient of to) {
+        try {
+            await sendEmail({ to: recipient, subject, body: html, html: true });
+            results.push({ to: recipient, ok: true });
+        }
+        catch (err) {
+            results.push({ to: recipient, ok: false, error: err instanceof Error ? err.message : String(err) });
+        }
+        // Gentle pacing so a large batch doesn't trip Gmail send-rate limits.
+        await new Promise((r) => setTimeout(r, 120));
+    }
+    const sent = results.filter((r) => r.ok).length;
+    res.json({ sent, failed: results.length - sent, total: results.length, results: results.slice(0, 50) });
+});
 app.post("/api/email/process-buyer-drips-now", async (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
