@@ -191,6 +191,11 @@
   .tbl-scroll::-webkit-scrollbar-track{background:#eef1f3;border-radius:8px}
   .tbl-scroll::-webkit-scrollbar-thumb{background:#9aa6b2;border-radius:8px;border:2px solid #eef1f3;background-clip:padding-box}
   .tbl-scroll::-webkit-scrollbar-thumb:hover{background:#7c8894;background-clip:padding-box}
+  /* Nurture: bound the view height so the horizontal sliding bar stays pinned
+     to the bottom of the table (not floating far below it) and is always visible. */
+  #view-nurture .leads-wrap{height:calc(100vh - var(--topbar));min-height:0}
+  #view-nurture .leads-main{min-height:0}
+  #view-nurture .tbl-scroll{flex:1 1 auto;min-height:0;overflow:auto}
   table.leads{border-collapse:collapse;width:100%;min-width:1720px;font-size:13px}
   table.leads th{text-align:left;color:#6b7580;font-size:11.5px;font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:#fff;z-index:2}
   table.leads td{padding:14px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle;white-space:nowrap}
