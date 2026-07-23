@@ -186,7 +186,7 @@
   .leads-top h1{font-weight:400;color:var(--title);font-size:28px;margin:0}
   .leads-top h1 small{font-size:15px;color:var(--muted);margin-left:4px}
   .leads-top .acts{display:flex;gap:10px}
-  .tbl-scroll{overflow-x:auto;flex:1;scrollbar-color:#9aa6b2 #eef1f3}
+  .tbl-scroll{overflow-x:scroll;flex:1;scrollbar-color:#9aa6b2 #eef1f3}
   .tbl-scroll::-webkit-scrollbar{height:13px;width:11px}
   .tbl-scroll::-webkit-scrollbar-track{background:#eef1f3;border-radius:8px}
   .tbl-scroll::-webkit-scrollbar-thumb{background:#9aa6b2;border-radius:8px;border:2px solid #eef1f3;background-clip:padding-box}
@@ -1532,37 +1532,79 @@ document.querySelectorAll("#calScrim .fchip").forEach(c=>c.addEventListener("cli
 document.getElementById("calClearFilters").addEventListener("click",e=>{e.preventDefault();document.querySelectorAll("#calScrim .fchip").forEach(c=>c.classList.remove("on"));});
 
 /* ===== Email ===== */
-const CAMPAIGNS=[
+let CAMPAIGNS=[
   {name:"July Market Update",aud:"All Leads",status:"Sent",sent:1240,opens:"38%",clicks:"6.2%",date:"07-12-2026"},
   {name:"New Listing — 616 Valley Garden",aud:"Buyers · Active",status:"Sent",sent:410,opens:"44%",clicks:"9.1%",date:"07-08-2026"},
   {name:"Just Sold — Cantura Mills",aud:"Past Clients",status:"Sent",sent:320,opens:"52%",clicks:"7.7%",date:"06-29-2026"},
   {name:"Summer Buyer Guide",aud:"Nurture",status:"Scheduled",sent:0,opens:"—",clicks:"—",date:"07-24-2026"},
   {name:"Price Improvement — Fort Concho",aud:"Watchers",status:"Draft",sent:0,opens:"—",clicks:"—",date:"—"},
 ];
-const DRIPS=[
+let DRIPS=[
   {name:"New Buyer Lead — 30 Day",enrolled:214,active:63,emails:8,status:"Running"},
   {name:"Seller Valuation Follow-up",enrolled:88,active:22,emails:6,status:"Running"},
   {name:"Past Client — Yearly Touch",enrolled:340,active:340,emails:12,status:"Running"},
   {name:"Cold Lead Re-engage",enrolled:512,active:120,emails:5,status:"Paused"},
 ];
+let EMAIL_TEMPLATES=["New Listing Announcement","Just Sold","Open House Invite","Price Improvement","Market Update","Buyer Welcome","Seller Welcome","Closing Congrats","Holiday Greeting"];
+// Merge any user-created items saved from a prior session.
+(function(){try{
+  var a=JSON.parse(localStorage.getItem("marcoEmailAdd")||"{}")||{};
+  if(Array.isArray(a.templates))a.templates.forEach(function(t){if(EMAIL_TEMPLATES.indexOf(t)<0)EMAIL_TEMPLATES.unshift(t);});
+  if(Array.isArray(a.drips))a.drips.forEach(function(d){DRIPS.unshift(d);});
+  if(Array.isArray(a.campaigns))a.campaigns.forEach(function(c){CAMPAIGNS.unshift(c);});
+}catch(_){}})();
+function saveEmailAdd(){try{
+  var cur=JSON.parse(localStorage.getItem("marcoEmailAdd")||"{}")||{}; localStorage.setItem("marcoEmailAdd",JSON.stringify(cur));
+}catch(_){}}
+function emailAddPush(kind,item){try{
+  var a=JSON.parse(localStorage.getItem("marcoEmailAdd")||"{}")||{}; a[kind]=a[kind]||[]; a[kind].unshift(item); localStorage.setItem("marcoEmailAdd",JSON.stringify(a));
+}catch(_){}}
 function emStatusPill(s){const c=s==="Sent"?"#3fae86":s==="Scheduled"?"var(--st-nurture)":s==="Running"?"var(--teal)":s==="Paused"?"#aab2ba":"#aab2ba";return '<span class="status" style="background:'+c+'">'+s+'</span>';}
 const EMAIL_SEC={
-  campaigns:()=>'<div class="rep-head"><h1>Campaigns</h1><button class="pill-btn">+ NEW CAMPAIGN</button></div>'+
+  campaigns:()=>'<div class="rep-head"><h1>Campaigns</h1><button class="pill-btn" id="newCampaignBtn">+ NEW CAMPAIGN</button></div>'+
     '<div class="em-stat">'+[["Emails Sent","1,970"],["Avg. Open Rate","41%"],["Avg. Click Rate","7.3%"],["Unsubscribes","4"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:820px"><thead><tr><th>Campaign</th><th>Audience</th><th>Status</th><th>Sent</th><th>Opens</th><th>Clicks</th><th>Date</th></tr></thead><tbody>'+
     CAMPAIGNS.map(c=>'<tr><td><span class="lead-name">'+esc(c.name)+'</span></td><td style="color:#6b7480">'+esc(c.aud)+'</td><td>'+emStatusPill(c.status)+'</td><td style="color:#6b7480">'+(c.sent||"—")+'</td><td style="color:#6b7480">'+c.opens+'</td><td style="color:#6b7480">'+c.clicks+'</td><td style="color:#7a8590">'+c.date+'</td></tr>').join("")+
     '</tbody></table></div></div>',
-  drips:()=>'<div class="rep-head"><h1>Drip Campaigns</h1><button class="pill-btn">+ NEW DRIP</button></div>'+
+  drips:()=>'<div class="rep-head"><h1>Drip Campaigns</h1><button class="pill-btn" id="newDripBtn">+ NEW DRIP</button></div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:720px"><thead><tr><th>Drip Campaign</th><th>Enrolled</th><th>Active</th><th>Emails</th><th>Status</th></tr></thead><tbody>'+
     DRIPS.map(d=>'<tr><td><span class="lead-name">'+esc(d.name)+'</span></td><td style="color:#6b7480">'+d.enrolled+'</td><td style="color:#6b7480">'+d.active+'</td><td style="color:#6b7480">'+d.emails+'</td><td>'+emStatusPill(d.status)+'</td></tr>').join("")+
     '</tbody></table></div></div>',
-  templates:()=>'<div class="rep-head"><h1>Templates</h1><button class="pill-btn">+ NEW TEMPLATE</button></div><div class="log-grid" style="grid-template-columns:repeat(3,1fr)">'+
-    ["New Listing Announcement","Just Sold","Open House Invite","Price Improvement","Market Update","Buyer Welcome","Seller Welcome","Closing Congrats","Holiday Greeting"].map(t=>'<div class="em-card"><div style="height:60px;background:var(--teal-soft);border-radius:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div><div style="color:#5b6570;font-weight:600;font-size:13px">'+t+'</div></div>').join("")+'</div>',
-  newsletters:()=>'<div class="rep-head"><h1>Newsletters</h1><button class="pill-btn">+ NEW NEWSLETTER</button></div><div class="em-stat">'+[["Subscribers","1,557"],["Monthly Sends","1"],["Avg. Open Rate","39%"],["Growth (30d)","+42"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div><div class="card card-pad" style="color:var(--muted)">Your monthly market newsletter goes out on the 1st. Next send: Aug 1, 2026.</div>',
+  templates:()=>'<div class="rep-head"><h1>Templates</h1><button class="pill-btn" id="newTemplateBtn">+ NEW TEMPLATE</button></div><div class="log-grid" style="grid-template-columns:repeat(3,1fr)">'+
+    EMAIL_TEMPLATES.map((t,i)=>'<div class="em-card" style="position:relative"><button class="tmpldel" data-tmpldel="'+i+'" title="Delete" style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#c0616a;font-size:12px;line-height:1;cursor:pointer">✕</button><div style="height:60px;background:var(--teal-soft);border-radius:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div><div style="color:#5b6570;font-weight:600;font-size:13px">'+esc(t)+'</div></div>').join("")+'</div>',
+  newsletters:()=>'<div class="rep-head"><h1>Newsletters</h1><button class="pill-btn" id="newNewsletterBtn">+ NEW NEWSLETTER</button></div><div class="em-stat">'+[["Subscribers","1,557"],["Monthly Sends","1"],["Avg. Open Rate","39%"],["Growth (30d)","+42"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div><div class="card card-pad" style="color:var(--muted)">Your monthly market newsletter goes out on the 1st. Next send: Aug 1, 2026.</div>',
   reports:()=>'<div class="rep-head"><h1>Email Reports</h1><select class="select"><option>Last 30 days</option></select></div><div class="em-stat">'+[["Delivered","98.6%"],["Open Rate","41%"],["Click Rate","7.3%"],["Bounce","1.4%"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+activityTable(["Sent","Opened","Clicked","Bounced","Unsub"]),
 };
 let currentEmail="campaigns";
-function renderEmail(sec){currentEmail=sec;document.getElementById("emBody").innerHTML=(EMAIL_SEC[sec]||EMAIL_SEC.campaigns)();}
+function renderEmail(sec){currentEmail=sec;document.getElementById("emBody").innerHTML=(EMAIL_SEC[sec]||EMAIL_SEC.campaigns)();bindEmail();}
+function bindEmail(){
+  var b=document.getElementById("emBody"); if(!b)return;
+  var nt=b.querySelector("#newTemplateBtn"); if(nt)nt.onclick=function(){
+    var name=prompt("Template name:"); if(!name||!name.trim())return; name=name.trim();
+    EMAIL_TEMPLATES.unshift(name); emailAddPush("templates",name); renderEmail("templates"); crmToast("Template created");
+  };
+  b.querySelectorAll("[data-tmpldel]").forEach(function(x){x.onclick=function(e){e.stopPropagation();
+    var i=+x.getAttribute("data-tmpldel"); var nm=EMAIL_TEMPLATES[i];
+    if(!confirm("Delete template \""+nm+"\"?"))return;
+    EMAIL_TEMPLATES.splice(i,1);
+    try{var a=JSON.parse(localStorage.getItem("marcoEmailAdd")||"{}")||{};if(Array.isArray(a.templates)){a.templates=a.templates.filter(function(t){return t!==nm;});localStorage.setItem("marcoEmailAdd",JSON.stringify(a));}}catch(_){}
+    renderEmail("templates"); crmToast("Template deleted");
+  };});
+  var nd=b.querySelector("#newDripBtn"); if(nd)nd.onclick=function(){
+    var name=prompt("Drip campaign name:"); if(!name||!name.trim())return; name=name.trim();
+    var em=parseInt(prompt("How many emails in this drip?","5"),10)||0;
+    var d={name:name,enrolled:0,active:0,emails:em,status:"Draft"}; DRIPS.unshift(d); emailAddPush("drips",d); renderEmail("drips"); crmToast("Drip campaign created");
+  };
+  var nc=b.querySelector("#newCampaignBtn"); if(nc)nc.onclick=function(){
+    var name=prompt("Campaign name:"); if(!name||!name.trim())return; name=name.trim();
+    var aud=prompt("Audience (e.g. All Leads, Buyers, Past Clients):","All Leads")||"All Leads";
+    var c={name:name,aud:aud,status:"Draft",sent:0,opens:"—",clicks:"—",date:"—"}; CAMPAIGNS.unshift(c); emailAddPush("campaigns",c); renderEmail("campaigns"); crmToast("Campaign created");
+  };
+  var nn=b.querySelector("#newNewsletterBtn"); if(nn)nn.onclick=function(){
+    var name=prompt("Newsletter name:"); if(!name||!name.trim())return;
+    crmToast('Newsletter "'+name.trim()+'" scheduled');
+  };
+}
 document.querySelectorAll('.em-nav a[data-em]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('.em-nav a[data-em]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
   renderEmail(a.getAttribute("data-em"));
@@ -2215,6 +2257,14 @@ function bindFinance(){
     FIN_GOALS[name]={custom:true,value:card.querySelector('[data-nk="value"]').value.trim()||"—",annual:card.querySelector('[data-nk="annual"]').value.trim(),ytd:card.querySelector('[data-nk="ytd"]').value.trim()};
     saveFinGoals(); finGoalEditing=null; renderFinance(); crmToast("Team goal added");
   };
+  // Delete a commission (removes the transaction + the deal)
+  root.querySelectorAll("[data-commdel]").forEach(function(b){b.onclick=function(e){e.stopPropagation();
+    var id=b.getAttribute("data-commdel");
+    if(!confirm("Delete this commission?"))return;
+    var i=TX.findIndex(function(x){return String(x.id)===String(id);}); if(i>=0)TX.splice(i,1);
+    fetch(crmApi("/api/deals/"+encodeURIComponent(id)),{method:"DELETE"}).catch(function(){});
+    renderFinance(); renderTx(); renderReport(currentReport); crmToast("Commission deleted");
+  };});
   // Commission cells -> edit underlying transaction
   root.querySelectorAll(".fcell").forEach(function(el){el.onclick=function(e){e.stopPropagation();
     var id=el.getAttribute("data-txid"), f=el.getAttribute("data-f"), money=el.getAttribute("data-money")==="1";
@@ -2251,12 +2301,13 @@ function bindFinance(){
   };});
 }
 function finCommTable(rows){
-  return '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:860px"><thead><tr><th>Property</th><th>Close Date</th><th>Close Price</th><th>GCI</th><th>Rate</th><th>Agent</th></tr></thead><tbody>'+
+  return '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:900px"><thead><tr><th>Property</th><th>Close Date</th><th>Close Price</th><th>GCI</th><th>Rate</th><th>Agent</th><th></th></tr></thead><tbody>'+
     (rows.length?rows.map(t=>'<tr><td><div class="lead-name">'+fCell(t.address,t.id,"address",false)+'</div><div class="addr" style="max-width:none">'+esc(t.city)+'</div></td>'+
       '<td style="color:#6b7480">'+fCell(t.closeDate,t.id,"closeDate",false)+'</td><td style="color:#5b6570;font-weight:600">'+fCell(t.closePrice,t.id,"closePrice",true)+'</td><td style="color:#5b6570;font-weight:600">'+fCell(t.gci,t.id,"gci",true)+'</td>'+
       '<td style="color:#6b7480"><span class="fcell" data-txid="'+esc(t.id)+'" data-f="rate">'+(t.closePrice?(Math.round(t.gci/t.closePrice*1000)/10)+"%":'<span class="addlink">Add</span>')+'</span></td>'+
-      '<td><div style="display:flex;align-items:center;gap:8px"><span class="agav'+avClass(t.agent)+'" style="width:26px;height:26px;border-radius:50%;display:inline-block;background:linear-gradient(135deg,#7f93c9,#5b6fae)"></span>'+fCell(t.agent,t.id,"agent",false)+'</div></td></tr>').join("")
-    :'<tr><td colspan="6"><div class="empty" style="padding:22px 8px">No closed transactions yet.</div></td></tr>')+
+      '<td><div style="display:flex;align-items:center;gap:8px"><span class="agav'+avClass(t.agent)+'" style="width:26px;height:26px;border-radius:50%;display:inline-block;background:linear-gradient(135deg,#7f93c9,#5b6fae)"></span>'+fCell(t.agent,t.id,"agent",false)+'</div></td>'+
+      '<td><button class="commdel" data-commdel="'+esc(t.id)+'" title="Delete commission" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#c0616a;cursor:pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></td></tr>').join("")
+    :'<tr><td colspan="7"><div class="empty" style="padding:22px 8px">No closed transactions yet.</div></td></tr>')+
     '</tbody></table></div></div>';
 }
 document.querySelectorAll('#view-nurture .leads-nav a[data-nb]').forEach(a=>a.addEventListener("click",()=>{
