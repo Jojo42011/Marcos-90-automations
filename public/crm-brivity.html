@@ -2082,6 +2082,18 @@ function finMonthly(){
   });
   return Object.keys(m).sort().map(k=>({mo:k,...m[k]}));
 }
+/* ── Finance: goals + monthly overrides are user-editable and persisted to
+      localStorage (no server model for them); commission edits flow into the
+      underlying transaction (and PATCH the deal like the Transactions view). ── */
+var FIN_GOALS={}; try{FIN_GOALS=JSON.parse(localStorage.getItem("marcoFinGoals")||"{}")||{};}catch(_){FIN_GOALS={};}
+function saveFinGoals(){try{localStorage.setItem("marcoFinGoals",JSON.stringify(FIN_GOALS));}catch(_){}}
+var FIN_MONTHLY={}; try{FIN_MONTHLY=JSON.parse(localStorage.getItem("marcoFinMonthly")||"{}")||{};}catch(_){FIN_MONTHLY={};}
+function saveFinMonthly(){try{localStorage.setItem("marcoFinMonthly",JSON.stringify(FIN_MONTHLY));}catch(_){}}
+var finGoalEditing=null; // metric name being edited, or "__new__"
+function fCell(val,txid,f,money){
+  var disp=(val===0||val==null||val==="")?'<span class="addlink">Add</span>':(money?usd(val):esc(String(val)));
+  return '<span class="fcell" data-txid="'+esc(txid)+'" data-f="'+f+'"'+(money?' data-money="1"':'')+'>'+disp+'</span>';
+}
 function renderFinance(){
   const el=document.getElementById("finBody"); if(!el)return;
   const closed=TX.filter(t=>t.status==="closed"), pend=TX.filter(t=>t.status==="pending"), act=TX.filter(t=>t.status==="active");
@@ -2095,24 +2107,110 @@ function renderFinance(){
   } else if(finBucket==="commissions"){
     el.innerHTML='<div class="rep-head"><h1>Commissions <small>('+closed.length+')</small></h1><button class="pill-btn ghost">EXPORT</button></div>'+finCommTable(closed);
   } else if(finBucket==="monthly"){
-    const rows=finMonthly();
+    const rows=finMonthly().map(function(r){var o=FIN_MONTHLY[r.mo]||{};return {mo:r.mo,units:o.units!=null?o.units:r.units,vol:o.vol!=null?o.vol:r.vol,gci:o.gci!=null?o.gci:r.gci};});
     el.innerHTML='<div class="rep-head"><h1>Monthly GCI</h1><button class="pill-btn ghost">This Year ▾</button></div>'+
       '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:640px"><thead><tr><th>Month</th><th>Closed Units</th><th>Volume</th><th>GCI</th></tr></thead><tbody>'+
-      rows.map(r=>'<tr><td style="font-weight:600;color:#5b6570">'+MONTHS[Math.max(0,(+r.mo||1)-1)]+'</td><td>'+r.units+'</td><td>'+repMoney(r.vol)+'</td><td>'+repMoney(r.gci)+'</td></tr>').join("")+
+      (rows.length?rows.map(r=>'<tr><td style="font-weight:600;color:#5b6570">'+MONTHS[Math.max(0,(+r.mo||1)-1)]+'</td>'+
+        '<td><span class="mocell" data-mo="'+esc(r.mo)+'" data-f="units">'+r.units+'</span></td>'+
+        '<td style="font-weight:600;color:#5b6570"><span class="mocell" data-mo="'+esc(r.mo)+'" data-f="vol" data-money="1">'+repMoney(r.vol)+'</span></td>'+
+        '<td style="font-weight:600;color:#5b6570"><span class="mocell" data-mo="'+esc(r.mo)+'" data-f="gci" data-money="1">'+repMoney(r.gci)+'</span></td></tr>').join("")
+        :'<tr><td colspan="4"><div class="empty" style="padding:22px 8px">No monthly data yet.</div></td></tr>')+
       '</tbody></table></div></div>';
   } else {
-    const goals=[["Closed GCI",repMoney(gciY)],["Closed Units",closed.length],["Closed Volume",repMoney(vol)],["Listings Taken",act.length],["Pended Units",pend.length]];
-    el.innerHTML='<div class="rep-head"><h1>Team Goals</h1><button class="pill-btn ghost">2026 ▾</button></div>'+
-      '<div class="log-grid" style="grid-template-columns:repeat(3,1fr);gap:14px">'+
-      goals.map(g=>'<div class="log-card" style="padding:22px 14px"><div style="color:var(--teal);font-size:22px;font-weight:600">'+g[1]+'</div><div style="color:var(--muted);font-size:12px;font-weight:600;margin:6px 0 10px">'+g[0]+'</div><div style="color:#6b7580;font-size:11px">2026 Goal: — · YTD Goal: —</div><a class="addlink" style="display:block;margin-top:10px;font-size:12px" data-goal="'+g[0]+'">Set Goal for '+g[0]+' ›</a></div>').join("")+'</div>';
+    const builtins=[["Closed GCI",repMoney(gciY)],["Closed Units",String(closed.length)],["Closed Volume",repMoney(vol)],["Listings Taken",String(act.length)],["Pended Units",String(pend.length)]];
+    const customNames=Object.keys(FIN_GOALS).filter(n=>FIN_GOALS[n]&&FIN_GOALS[n].custom);
+    let cards=builtins.map(g=>goalCard(g[0],g[1],false)).join("")+customNames.map(n=>goalCard(n,(FIN_GOALS[n].value||"—"),true)).join("");
+    if(finGoalEditing==="__new__")cards+=newGoalCard();
+    el.innerHTML='<div class="rep-head"><h1>Team Goals</h1><button class="pill-btn" id="addGoalBtn">+ Add Team Goal</button></div>'+
+      '<div class="log-grid" style="grid-template-columns:repeat(3,1fr);gap:14px">'+cards+'</div>';
   }
+  bindFinance();
+}
+function goalCard(name,value,isCustom){
+  var g=FIN_GOALS[name]||{};
+  var editing=finGoalEditing===name;
+  var body;
+  if(editing){
+    body='<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">'+
+      '<input class="goal-in" data-gk="annual" placeholder="2026 Goal" value="'+esc(g.annual||"")+'" style="height:30px;border:1px solid var(--teal);border-radius:6px;padding:0 9px;font-size:12px">'+
+      '<input class="goal-in" data-gk="ytd" placeholder="YTD Goal" value="'+esc(g.ytd||"")+'" style="height:30px;border:1px solid var(--teal);border-radius:6px;padding:0 9px;font-size:12px">'+
+      '<div style="display:flex;gap:6px"><button class="pill-btn" data-goalsave="'+esc(name)+'" style="padding:6px 12px;font-size:11px">SAVE</button><button class="pill-btn ghost" data-goalcancel="1" style="padding:6px 12px;font-size:11px">CANCEL</button></div></div>';
+  } else {
+    body='<div style="color:#6b7580;font-size:11px">2026 Goal: '+(g.annual?esc(g.annual):"—")+' · YTD Goal: '+(g.ytd?esc(g.ytd):"—")+'</div>'+
+      '<a class="addlink" style="display:block;margin-top:10px;font-size:12px" data-goal="'+esc(name)+'">Set Goal for '+esc(name)+' ›</a>'+
+      (isCustom?'<a class="addlink" data-goaldel="'+esc(name)+'" style="display:block;margin-top:4px;font-size:11px;color:var(--st-new)">Remove</a>':"");
+  }
+  return '<div class="log-card" style="padding:22px 14px"><div style="color:var(--teal);font-size:22px;font-weight:600">'+esc(String(value))+'</div><div style="color:var(--muted);font-size:12px;font-weight:600;margin:6px 0 10px">'+esc(name)+'</div>'+body+'</div>';
+}
+function newGoalCard(){
+  return '<div class="log-card" style="padding:22px 14px;border:1px dashed var(--teal)">'+
+    '<div style="display:flex;flex-direction:column;gap:6px">'+
+    '<input class="ng-in" data-nk="name" placeholder="Goal name (e.g. Buyer Appts)" style="height:30px;border:1px solid var(--teal);border-radius:6px;padding:0 9px;font-size:12px">'+
+    '<input class="ng-in" data-nk="value" placeholder="Current value (e.g. 12)" style="height:30px;border:1px solid var(--line);border-radius:6px;padding:0 9px;font-size:12px">'+
+    '<input class="ng-in" data-nk="annual" placeholder="2026 Goal" style="height:30px;border:1px solid var(--line);border-radius:6px;padding:0 9px;font-size:12px">'+
+    '<input class="ng-in" data-nk="ytd" placeholder="YTD Goal" style="height:30px;border:1px solid var(--line);border-radius:6px;padding:0 9px;font-size:12px">'+
+    '<div style="display:flex;gap:6px"><button class="pill-btn" id="newGoalSave" style="padding:6px 12px;font-size:11px">ADD GOAL</button><button class="pill-btn ghost" data-goalcancel="1" style="padding:6px 12px;font-size:11px">CANCEL</button></div></div></div>';
+}
+function bindFinance(){
+  var root=document.getElementById("finBody"); if(!root)return;
+  // Goals: set / add / remove / save
+  var addBtn=root.querySelector("#addGoalBtn"); if(addBtn)addBtn.onclick=function(){finGoalEditing="__new__";renderFinance();};
+  root.querySelectorAll("[data-goal]").forEach(function(a){a.onclick=function(e){e.preventDefault();finGoalEditing=a.getAttribute("data-goal");renderFinance();};});
+  root.querySelectorAll("[data-goalcancel]").forEach(function(b){b.onclick=function(){finGoalEditing=null;renderFinance();};});
+  root.querySelectorAll("[data-goalsave]").forEach(function(b){b.onclick=function(){
+    var name=b.getAttribute("data-goalsave"); var card=b.closest(".log-card");
+    var annual=card.querySelector('[data-gk="annual"]').value.trim(), ytd=card.querySelector('[data-gk="ytd"]').value.trim();
+    FIN_GOALS[name]=Object.assign({},FIN_GOALS[name]||{},{annual:annual,ytd:ytd}); saveFinGoals();
+    finGoalEditing=null; renderFinance(); crmToast("Goal saved for "+name);
+  };});
+  root.querySelectorAll("[data-goaldel]").forEach(function(a){a.onclick=function(e){e.preventDefault();var n=a.getAttribute("data-goaldel");delete FIN_GOALS[n];saveFinGoals();renderFinance();crmToast("Goal removed");};});
+  var ngSave=root.querySelector("#newGoalSave"); if(ngSave)ngSave.onclick=function(){
+    var card=ngSave.closest(".log-card");
+    var name=card.querySelector('[data-nk="name"]').value.trim(); if(!name){crmToast("Enter a goal name");return;}
+    FIN_GOALS[name]={custom:true,value:card.querySelector('[data-nk="value"]').value.trim()||"—",annual:card.querySelector('[data-nk="annual"]').value.trim(),ytd:card.querySelector('[data-nk="ytd"]').value.trim()};
+    saveFinGoals(); finGoalEditing=null; renderFinance(); crmToast("Team goal added");
+  };
+  // Commission cells -> edit underlying transaction
+  root.querySelectorAll(".fcell").forEach(function(el){el.onclick=function(e){e.stopPropagation();
+    var id=el.getAttribute("data-txid"), f=el.getAttribute("data-f"), money=el.getAttribute("data-money")==="1";
+    var t=TX.find(function(x){return String(x.id)===String(id);}); if(!t)return;
+    var cur=(f==="rate")?(t.closePrice?(Math.round(t.gci/t.closePrice*1000)/10):""):((t[f]===0||t[f]==null)?"":t[f]);
+    var inp=document.createElement("input"); inp.value=String(cur);
+    inp.style.cssText="width:100%;min-width:70px;height:28px;border:1px solid var(--teal);border-radius:6px;padding:0 8px;font-size:12.5px";
+    el.replaceWith(inp); inp.focus();
+    var doneF=false;
+    function commit(){ if(doneF)return; doneF=true;
+      if(f==="rate"){var pct=parseFloat(String(inp.value).replace(/[^0-9.]/g,""))||0; t.gci=Math.round((t.closePrice||0)*pct/100);}
+      else if(f==="agent"){t.agent=inp.value.trim();}
+      else if(f==="address"){t.address=inp.value.trim();}
+      else {t[f]=money?txMoney(inp.value):inp.value.trim(); if(f==="closePrice"&&t.closePrice&&!t.gci)t.gci=Math.round(t.closePrice*0.03);}
+      txPersist(t,{propertyAddress:t.address,salePrice:(t.closePrice||0),closeDate:t.closeDate||""});
+      renderFinance(); renderTx(); renderReport(currentReport);
+    }
+    inp.addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();commit();}else if(ev.key==="Escape"){doneF=true;renderFinance();}});
+    inp.addEventListener("blur",commit);
+  };});
+  // Monthly cells -> localStorage override
+  root.querySelectorAll(".mocell").forEach(function(el){el.onclick=function(e){e.stopPropagation();
+    var mo=el.getAttribute("data-mo"), f=el.getAttribute("data-f"), money=el.getAttribute("data-money")==="1";
+    var inp=document.createElement("input"); inp.value=el.textContent.replace(/[^0-9.]/g,"");
+    inp.style.cssText="width:100%;min-width:70px;height:28px;border:1px solid var(--teal);border-radius:6px;padding:0 8px;font-size:12.5px";
+    el.replaceWith(inp); inp.focus();
+    var doneM=false;
+    function commit(){ if(doneM)return; doneM=true;
+      FIN_MONTHLY[mo]=FIN_MONTHLY[mo]||{}; FIN_MONTHLY[mo][f]=money?txMoney(inp.value):(parseInt(inp.value,10)||0); saveFinMonthly();
+      renderFinance(); crmToast("Updated "+MONTHS[Math.max(0,(+mo||1)-1)]);
+    }
+    inp.addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();commit();}else if(ev.key==="Escape"){doneM=true;renderFinance();}});
+    inp.addEventListener("blur",commit);
+  };});
 }
 function finCommTable(rows){
   return '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:860px"><thead><tr><th>Property</th><th>Close Date</th><th>Close Price</th><th>GCI</th><th>Rate</th><th>Agent</th></tr></thead><tbody>'+
-    (rows.length?rows.map(t=>'<tr><td><div class="lead-name">'+esc(t.address)+'</div><div class="addr" style="max-width:none">'+esc(t.city)+'</div></td>'+
-      '<td style="color:#6b7480">'+(t.closeDate||"—")+'</td><td style="color:#5b6570;font-weight:600">'+usd(t.closePrice)+'</td><td style="color:#5b6570;font-weight:600">'+usd(t.gci)+'</td>'+
-      '<td style="color:#6b7480">'+(t.closePrice?(Math.round(t.gci/t.closePrice*1000)/10)+"%":"—")+'</td>'+
-      '<td><div style="display:flex;align-items:center;gap:8px"><span class="agav'+avClass(t.agent)+'" style="width:26px;height:26px;border-radius:50%;display:inline-block;background:linear-gradient(135deg,#7f93c9,#5b6fae)"></span>'+esc(t.agent)+'</div></td></tr>').join("")
+    (rows.length?rows.map(t=>'<tr><td><div class="lead-name">'+fCell(t.address,t.id,"address",false)+'</div><div class="addr" style="max-width:none">'+esc(t.city)+'</div></td>'+
+      '<td style="color:#6b7480">'+fCell(t.closeDate,t.id,"closeDate",false)+'</td><td style="color:#5b6570;font-weight:600">'+fCell(t.closePrice,t.id,"closePrice",true)+'</td><td style="color:#5b6570;font-weight:600">'+fCell(t.gci,t.id,"gci",true)+'</td>'+
+      '<td style="color:#6b7480"><span class="fcell" data-txid="'+esc(t.id)+'" data-f="rate">'+(t.closePrice?(Math.round(t.gci/t.closePrice*1000)/10)+"%":'<span class="addlink">Add</span>')+'</span></td>'+
+      '<td><div style="display:flex;align-items:center;gap:8px"><span class="agav'+avClass(t.agent)+'" style="width:26px;height:26px;border-radius:50%;display:inline-block;background:linear-gradient(135deg,#7f93c9,#5b6fae)"></span>'+fCell(t.agent,t.id,"agent",false)+'</div></td></tr>').join("")
     :'<tr><td colspan="6"><div class="empty" style="padding:22px 8px">No closed transactions yet.</div></td></tr>')+
     '</tbody></table></div></div>';
 }
