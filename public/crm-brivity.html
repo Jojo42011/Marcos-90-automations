@@ -783,10 +783,18 @@
 /* ========================= MOCK DATA ========================= */
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function ago(min){return new Date(Date.now()-min*60000).toISOString();}
-function relTime(iso){const d=new Date(iso);const s=Math.floor((Date.now()-d)/1000);
+function relTime(iso){
+  if(!iso)return"—";
+  const d=new Date(iso);
+  // Guard against missing/invalid/epoch-0 timestamps (which rendered as
+  // absurd values like "688 months ago" on imported leads).
+  if(isNaN(d.getTime())||d.getTime()<=0||d.getFullYear()<2000)return"—";
+  const s=Math.floor((Date.now()-d)/1000);
+  if(s<0)return"just now";
   if(s<60)return"a few seconds ago";const m=(s/60)|0;if(m<60)return m+" minute"+(m>1?"s":"")+" ago";
   const h=(m/60)|0;if(h<24)return h+" hour"+(h>1?"s":"")+" ago";const dd=(h/24)|0;if(dd<30)return dd+" day"+(dd>1?"s":"")+" ago";
-  const mo=(dd/30)|0;return mo+" month"+(mo>1?"s":"")+" ago";}
+  const mo=(dd/30)|0;if(mo<12)return mo+" month"+(mo>1?"s":"")+" ago";
+  const y=(dd/365)|0;return y+" year"+(y>1?"s":"")+" ago";}
 function initials(n){const p=String(n).trim().split(/\s+/);return((p[0]||"")[0]||"")+((p[1]||"")[0]||"");}
 // Marco's own profile → show his headshot on the avatar (see .has-marco-photo).
 function isMarco(n){return /^\s*marco(\s+puga)?\s*$/i.test(String(n||""));}
