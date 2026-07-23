@@ -507,6 +507,21 @@ function stampFmt(iso){var d=new Date(iso);if(isNaN(d))return"";var h=d.getHours
   return MONTHS[d.getMonth()].slice(0,3)+" "+d.getDate()+", "+d.getFullYear()+" at "+h+":"+pad(d.getMinutes())+" "+ap;}
 function relTime(iso){var s=(Date.now()-new Date(iso))/1000;if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";return Math.floor(s/86400)+"d ago";}
 function taskDate(t){return (t.dueDate||String(t.createdAt||"").slice(0,10));}
+function ymdPlus(n){var d=new Date();d.setDate(d.getDate()+n);return ymd(d);}
+/* Deadline label computed from the VIEWER's local date so it's correct for
+   whoever's looking, regardless of the server's timezone. A task is only
+   "overdue" once its due date is actually before today; due today/tomorrow
+   show a softer heads-up. */
+function deadlineState(t){
+  if(!t||t.status==="done")return "";
+  var due=taskDate(t); if(!due)return "";
+  due=String(due).slice(0,10);
+  var today=ymd(new Date());
+  if(due<today)return "overdue";
+  if(due===today)return "due_today";
+  if(due===ymdPlus(1))return "due_soon";
+  return "";
+}
 function recurLabel(t){if(!t.recurring)return"";var iv=t.recurringInterval||"weekly";return {daily:"Repeats daily",every_3_days:"Every 3 days",every_5_days:"Every 5 days",weekly:"Repeats weekly",monthly:"Repeats monthly"}[iv]||"Recurring";}
 
 /* ================= state ================= */
@@ -577,11 +592,12 @@ function readOnlyView(){ return viewingPage && viewingPage!==ME; }
 function statusMeta(id){return STATUSES.find(function(s){return s.id===id;})||STATUSES[0];}
 function taskCard(t){
   var m=member(t.assignedTo);
-  var st=statusMeta(t.status==="due_soon"||t.status==="overdue"?"pending":t.status);
+  var st=statusMeta((t.status==="due_soon"||t.status==="overdue")?(t.previousStatus||"pending"):t.status);
   var editable=canEdit(t)&&!readOnlyView()||(canEdit(t)&&readOnlyView());
   var ro=readOnlyView()&&!canEdit(t);
   var urgent=t.column==="urgent";
   var when=taskDate(t);
+  var dstate=deadlineState(t);
   var recC=t.recurring?(REC_COLORS[t.recurringInterval]||"#7C3AED"):null;
   return '<div class="task'+(urgent?' urgent':'')+'" data-id="'+esc(t.id)+'" '+(ro?'':'draggable="true"')+'>'+
     '<span class="grip">⋮⋮</span>'+
@@ -592,8 +608,9 @@ function taskCard(t){
         '<span class="mchip">📅 '+esc(longDate(when))+(t.dueTime?' · '+time12(t.dueTime):'')+'</span>'+
         (t.recurring?'<span class="mchip rec" style="color:'+recC+';border-color:'+recC+'55">↻ '+recurLabel(t)+'</span>':'')+
         (urgent?'<span class="mchip" style="color:var(--urgent);border-color:var(--urgent)">⚠ URGENT</span>':'')+
-        (t.status==="overdue"?'<span class="mchip" style="color:var(--urgent);border-color:var(--urgent)">OVERDUE</span>':'')+
-        (t.status==="due_soon"?'<span class="mchip" style="color:#F59E0B;border-color:#F59E0B">DUE SOON</span>':'')+
+        (dstate==="overdue"?'<span class="mchip" style="color:var(--urgent);border-color:var(--urgent)">OVERDUE</span>':'')+
+        (dstate==="due_today"?'<span class="mchip" style="color:#F59E0B;border-color:#F59E0B">DUE TODAY</span>':'')+
+        (dstate==="due_soon"?'<span class="mchip" style="color:#F59E0B;border-color:#F59E0B">DUE SOON</span>':'')+
         (m?'<span class="who" style="background:'+m.color+'"><span class="mini">'+m.name[0]+'</span>'+m.name+'</span>':'')+
       '</div>'+
       (t.status==="done"&&t.completedAt?'<div class="done-stamp">✓ Completed: '+esc(stampFmt(t.completedAt))+'</div>':'')+
@@ -996,7 +1013,7 @@ function openTaskModal(t,presetTitle,opts){
   var preWho=(t?t.assignedTo:(opts.who||ME))||ME;
   who.innerHTML=TEAM.map(function(m){return '<option value="'+m.id+'"'+(preWho===m.id?" selected":"")+'>'+m.name+' — '+m.role+'</option>';}).join("");
   selUrgent=t?t.column==="urgent":false;
-  selStatus=t?(t.status==="due_soon"||t.status==="overdue"?"pending":t.status):"pending";
+  selStatus=t?((t.status==="due_soon"||t.status==="overdue")?(t.previousStatus||"pending"):t.status):"pending";
   selInterval=t&&t.recurring?(t.recurringInterval||"weekly"):(opts.rec?"weekly":"");
   paintUrg();paintStatusPick();paintRec();
   document.getElementById("taskScrim").classList.add("on");
