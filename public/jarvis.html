@@ -65,9 +65,9 @@
       box-shadow: inset 0 0 180px 40px rgba(0,0,0,0.85);
     }
 
-    /* ─────── Shell — full viewport ─────── */
+    /* ─────── Shell - full viewport ─────── */
     :root {
-      --j-strip-h: 0px;   /* metrics ribbon removed — no reserved top space, so the topbar sits flush and the dashboard fills the gap */
+      --j-strip-h: 0px;   /* metrics ribbon removed - no reserved top space, so the topbar sits flush and the dashboard fills the gap */
       --j-nav-h: 38px;
       --j-compose-h: 54px;
       --j-chrome-top: calc(var(--j-strip-h) + var(--j-nav-h));
@@ -152,7 +152,7 @@
     }
     .j-panel-close:hover { color: var(--cyan); }
 
-    /* ─────── Main — full screen Harvey ─────── */
+    /* ─────── Main - full screen Harvey ─────── */
     .j-main {
       position: fixed;
       top: var(--j-chrome-top);
@@ -318,7 +318,7 @@
       position: relative; overflow: hidden; background: transparent;
     }
 
-    /* Center stage — orb fills remaining viewport */
+    /* Center stage - orb fills remaining viewport */
     .j-stage {
       position: relative;
       flex: 1 1 auto;
@@ -352,7 +352,7 @@
       text-shadow: 0 0 18px rgba(245,158,11,0.6);
     }
 
-    /* radial tick mark ring around core — hidden: the plasma core is the whole
+    /* radial tick mark ring around core - hidden: the plasma core is the whole
        visual now (matches the reference animation, no HUD chrome around it). */
     .j-tick-ring {
       position: absolute; inset: 0;
@@ -382,7 +382,7 @@
       z-index: 0;
     }
 
-    /* Mic icon overlay — hidden: the plasma core stands alone (tap it to speak,
+    /* Mic icon overlay - hidden: the plasma core stands alone (tap it to speak,
        per the hint below). Kept in the DOM so state code that references it
        doesn't need changing. */
     .j-mic-icon {
@@ -740,7 +740,7 @@
       color: #d6e4f0; font-family: var(--mono); font-size: 11px; padding: 0.3rem;
     }
 
-    /* ─── HARVEY LIGHT MODE — STRONG CONTRAST ─── */
+    /* ─── HARVEY LIGHT MODE - STRONG CONTRAST ─── */
     @keyframes scanLight {
       0% { transform: translateY(-100vh); }
       100% { transform: translateY(100vh); }
@@ -908,7 +908,7 @@
       box-shadow: 0 0 8px #00ff88 !important;
     }
 
-    /* Main content area — transparent so shell dot-grid shows through */
+    /* Main content area - transparent so shell dot-grid shows through */
     html[data-theme="light"] #main-content,
     html[data-theme="light"] .main-content,
     html[data-theme="light"] .j-main {
@@ -959,7 +959,7 @@
       position: relative;
     }
 
-    /* Soft orb halo — floats without harsh blue blob */
+    /* Soft orb halo - floats without harsh blue blob */
     html[data-theme="light"] .j-core-wrap::before,
     html[data-theme="light"] #harvey-orb-container::before,
     html[data-theme="light"] [id*="orb-wrapper"]::before {
@@ -981,7 +981,7 @@
       border-radius: 50%;
     }
 
-    /* Hexagon background — CSS pattern on .j-hex (matches dark mode density) */
+    /* Hexagon background - CSS pattern on .j-hex (matches dark mode density) */
     html[data-theme="light"] .j-hex {
       opacity: 1 !important;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='none' stroke='rgba(0,80,160,0.14)' stroke-width='1.5' d='M28 1 L54 15 L54 43 L28 57 L2 43 L2 15 Z'/%3E%3C/svg%3E") !important;
@@ -993,7 +993,7 @@
       opacity: 0.14 !important;
     }
 
-    /* Orb canvas — rings visible, no center glow blob */
+    /* Orb canvas - rings visible, no center glow blob */
     html[data-theme="light"] #harvey-mic-btn,
     html[data-theme="light"] .harvey-orb,
     html[data-theme="light"] canvas {
@@ -1018,7 +1018,7 @@
       stroke-opacity: 0.55 !important;
     }
 
-    /* Mic icon overlay — keep cyan */
+    /* Mic icon overlay - keep cyan */
     html[data-theme="light"] .j-mic-icon svg rect {
       fill: rgba(0, 130, 200, 0.95) !important;
     }
@@ -1317,7 +1317,7 @@
         Light mode
       </button>
       <span class="j-meta" id="jSessionMeta"><span class="dot"></span>LINK STABLE</span>
-      <span class="j-meta" id="jModel">—</span>
+      <span class="j-meta" id="jModel">-</span>
     </header>
 
     <main class="j-main" id="jMain">
@@ -1334,7 +1334,7 @@
               <svg class="j-tick-ring" viewBox="0 0 200 200" aria-hidden="true">
                 <g id="jTickGroup" stroke="rgba(0,212,255,0.45)" stroke-linecap="round"></g>
               </svg>
-              <canvas id="harvey-mic-btn" class="harvey-orb" data-action="toggle-voice" aria-label="Harvey core — tap to speak"></canvas>
+              <canvas id="harvey-mic-btn" class="harvey-orb" data-action="toggle-voice" aria-label="Harvey core - tap to speak"></canvas>
               <!-- Mic icon centered over canvas -->
               <div class="j-mic-icon" id="jMicIcon">
                 <svg viewBox="0 0 48 60" fill="none" aria-hidden="true">
@@ -1370,7 +1370,7 @@
     <aside class="j-col left side" id="jColOps">
       <div class="j-head">
         <span>LIVE OPS</span>
-        <span class="j-count" id="jNodeCount"><b>—</b> NODES</span>
+        <span class="j-count" id="jNodeCount"><b>-</b> NODES</span>
         <button type="button" class="j-panel-close" id="jCloseOps" aria-label="Close OPS panel">×</button>
       </div>
       <div class="j-chips" aria-hidden="true">
@@ -1414,7 +1414,7 @@
         if (!tab) return;
         try {
           (window.parent || window).postMessage({ type: NAV_MESSAGE_TYPE, tab: String(tab).toLowerCase() }, "*");
-        } catch (e) { /* not embedded / blocked — ignore */ }
+        } catch (e) { /* not embedded / blocked - ignore */ }
       }
       function handle(evt) {
         if (evt && evt.type === "navigate" && evt.tab) go(evt.tab);
@@ -1433,7 +1433,7 @@
     }
     window.goToCommandCenter = goToCommandCenter;
 
-    // Sync theme with dashboard preference (marco_crm_theme — same key as dashboard.html)
+    // Sync theme with dashboard preference (marco_crm_theme - same key as dashboard.html)
     const THEME_KEY = "marco_crm_theme";
 
     function isLightTheme() {
@@ -1460,7 +1460,7 @@
       const orbCanvas = document.getElementById("harvey-mic-btn");
       if (orbCanvas) {
         // The plasma core handles its own theming (dark stage disc), so no CSS
-        // filter — a brightness filter here would just dim the glow.
+        // filter - a brightness filter here would just dim the glow.
         orbCanvas.style.filter = "";
         orbCanvas.style.opacity = "";
         orbCanvas.style.boxShadow = "";
@@ -1587,7 +1587,7 @@
     });
 
     /* ─────────────────────────────────────────────
-       TICK RING — radial marks around the core
+       TICK RING - radial marks around the core
     ───────────────────────────────────────────── */
     (function buildTicks() {
       const g = document.getElementById("jTickGroup");
@@ -1616,7 +1616,7 @@
     })();
 
     /* ─────────────────────────────────────────────
-       CANVAS CORE — dynamic orbital animation
+       CANVAS CORE - dynamic orbital animation
     ───────────────────────────────────────────── */
     (function initCanvas() {
       const canvas = document.getElementById("harvey-mic-btn");
@@ -1624,11 +1624,11 @@
       if (!canvas || !wrap) return;
       const ctx = canvas.getContext("2d");
 
-      // Offscreen trail buffer — the plasma accumulates here (additive) and is
+      // Offscreen trail buffer - the plasma accumulates here (additive) and is
       // faded toward transparent each frame, which is what makes the wispy,
       // smoky filaments. Composited onto a soft dark stage disc so it glows the
       // same on dark or light backgrounds. No per-particle shadowBlur anywhere
-      // (that was the old orb's perf killer) — glow is additive overlap + a
+      // (that was the old orb's perf killer) - glow is additive overlap + a
       // couple of pre-rendered soft sprites.
       const buf  = document.createElement("canvas");
       const bctx = buf.getContext("2d");
@@ -1884,17 +1884,17 @@
 
     /* ──────── Metric helpers ──────── */
     function fmtNum(n) {
-      if (n == null || Number.isNaN(Number(n))) return "—";
+      if (n == null || Number.isNaN(Number(n))) return "-";
       return Number(n).toLocaleString();
     }
     function fmtMoney(n) {
-      if (n == null || Number.isNaN(Number(n))) return "—";
+      if (n == null || Number.isNaN(Number(n))) return "-";
       const v = Number(n);
       if (v >= 10000) return "$" + (v / 1000).toFixed(1) + "k";
       return "$" + v.toFixed(2);
     }
     function fmtPct(n) {
-      if (n == null || Number.isNaN(Number(n))) return "—";
+      if (n == null || Number.isNaN(Number(n))) return "-";
       return (Math.round(Number(n) * 100) / 100) + "%";
     }
     function rowsHtml(rows) {
@@ -1906,7 +1906,7 @@
           : "";
         return `<div class="j-metric">
           <label>${esc(r.label)}</label>
-          <b class="${cls}">${esc(r.value ?? "—")}</b>
+          <b class="${cls}">${esc(r.value ?? "-")}</b>
           ${bar}
         </div>`;
       }).join("");
@@ -1996,7 +1996,7 @@
               label: funnelLabel(k), value: fmtNum(v),
               barPct: total ? (v / total) * 100 : 0,
             }))
-          : [{ label: "Funnel idle", value: "—" }],
+          : [{ label: "Funnel idle", value: "-" }],
       });
 
       /* ── ACTION NEEDED ── */
@@ -2033,10 +2033,10 @@
         { label: "Spend",       value: fmtMoney(ads.spend) },
         { label: "Impressions", value: fmtNum(ads.impressions) },
         { label: "Clicks",      value: fmtNum(ads.clicks) },
-        { label: "CTR",         value: ads.ctr != null ? fmtPct(ads.ctr) : "—" },
-        { label: "CPL",         value: ads.cpl != null ? fmtMoney(ads.cpl) : "—" },
+        { label: "CTR",         value: ads.ctr != null ? fmtPct(ads.ctr) : "-" },
+        { label: "CPL",         value: ads.cpl != null ? fmtMoney(ads.cpl) : "-" },
         { label: "Ad leads",    value: fmtNum(ads.adLeads) },
-      ] : [{ label: "Upstream offline", value: "—" }];
+      ] : [{ label: "Upstream offline", value: "-" }];
       groups.push({
         title: "Meta Ads",
         tag: tagHtml(adsOn ? "LINKED" : "OFFLINE", adsOn ? "live" : "off"),
@@ -2089,7 +2089,7 @@
       const el = document.getElementById("jDirectives");
       const countEl = document.getElementById("jDirCount");
       if (!list || !list.length) {
-        el.innerHTML = '<div class="j-dir-empty">No directives — standing by</div>';
+        el.innerHTML = '<div class="j-dir-empty">No directives - standing by</div>';
         if (countEl) countEl.textContent = "0";
         return;
       }
@@ -2183,9 +2183,9 @@
           .trim();
       }
 
-      /** ~1–2s of speech — keeps first Gemini TTS call fast (~2s vs 7s+). */
+      /** ~1-2s of speech - keeps first Gemini TTS call fast (~2s vs 7s+). */
       const FIRST_CHUNK_MAX = 85;
-      /** ~2–4s per subsequent chunk — gapless chain, smaller API payloads. */
+      /** ~2-4s per subsequent chunk - gapless chain, smaller API payloads. */
       const CHUNK_MAX = 130;
 
       function splitToMaxLen(segment, maxLen) {
@@ -2194,7 +2194,7 @@
         if (t.length <= maxLen) return [t];
 
         const pieces = [];
-        const clauses = t.split(/(?<=[,;])\s+|(?:\s+—\s+)|(?:\s+-\s+)/);
+        const clauses = t.split(/(?<=[,;])\s+|(?:\s+-\s+)|(?:\s+-\s+)/);
         let buf = "";
 
         for (const clause of clauses) {
@@ -2356,7 +2356,7 @@
             "[TTS Stream] Generated in",
             elapsed + "ms for:",
             text.substring(0, 40),
-            "—",
+            "-",
             rate,
             "Hz,",
             buf.byteLength,
@@ -2389,7 +2389,7 @@
           console.log(
             "[TTS Stream] Sentence",
             chunkNum + "/" + total,
-            "— playing",
+            "- playing",
             audioBuffer.duration.toFixed(2) + "s:",
             text.substring(0, 50),
           );
@@ -2469,7 +2469,7 @@
         const endCb = wasAborted ? null : s.options?.onEnd;
         speakSession = null;
         if (!wasAborted) {
-          console.log("[Harvey] TTS queue empty — all audio done, re-enabling mic");
+          console.log("[Harvey] TTS queue empty - all audio done, re-enabling mic");
         }
         finishSpeak(endCb, !wasAborted);
       }
@@ -2487,7 +2487,7 @@
         console.log(
           "[TTS Stream] Splitting into",
           chunks.length,
-          "chunks — firing parallel pre-generation for first 1",
+          "chunks - firing parallel pre-generation for first 1",
         );
 
         ttsIsPlaying = true;
@@ -2601,9 +2601,9 @@
       document.getElementById("jSend").disabled = true;
       addMsg("user", fullText);
       const note = fullText.replace(url, "").trim();
-      // Instant, spoken acknowledgement — no fake time promise (a real read of a
+      // Instant, spoken acknowledgement - no fake time promise (a real read of a
       // reel is download + transcribe + watch, ~30-90s).
-      const ackText = "Got it — let me pull that reel up and break it down for you. This takes a bit, watching the whole thing now…";
+      const ackText = "Got it - let me pull that reel up and break it down for you. This takes a bit, watching the whole thing now…";
       const ack = addMsg("ai", "", true);
       void playGeminiTts(ackText);           // talk while working
       await typeText(ack, ackText);
@@ -2657,7 +2657,7 @@
 
     async function sendMessage(text) {
       if (busy || !text.trim()) return;
-      // A pasted reel link is handled even while voice mode is live — Marco can
+      // A pasted reel link is handled even while voice mode is live - Marco can
       // drop a link mid-conversation and Harvey breaks it down without leaving
       // the voice session.
       const reel = text.match(REEL_URL_RE);
@@ -2697,7 +2697,7 @@
 
     // The typed command bar now lives in the "Chat with Harvey" tab (hull-chat),
     // including reel-link analysis. Harvey's dashboard is voice-first, so the
-    // compose form is optional here — guard in case it isn't rendered.
+    // compose form is optional here - guard in case it isn't rendered.
     document.getElementById("jForm")?.addEventListener("submit", e => {
       e.preventDefault();
       const input = document.getElementById("jInput");
@@ -2785,16 +2785,16 @@
     function renderMetricsStrip(data) {
       const dash = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
       if (!data) {
-        dash("msGoalPct", "— · — BANKED");
-        dash("msGap", "—");
-        dash("msTiktok", "—");
-        dash("msMojo", "—");
-        dash("msDaily", "—");
-        dash("msAvgDeal", "—");
-        dash("msBuyer", "—");
-        dash("msSeller", "—");
-        dash("msPace", "—");
-        dash("msContactRate", "—");
+        dash("msGoalPct", "- · - BANKED");
+        dash("msGap", "-");
+        dash("msTiktok", "-");
+        dash("msMojo", "-");
+        dash("msDaily", "-");
+        dash("msAvgDeal", "-");
+        dash("msBuyer", "-");
+        dash("msSeller", "-");
+        dash("msPace", "-");
+        dash("msContactRate", "-");
         return;
       }
       const g = data.goal;
@@ -2815,7 +2815,7 @@
     }
 
     // ============================================
-    // DYNAMIC PANEL SYSTEM — server decides, client renders
+    // DYNAMIC PANEL SYSTEM - server decides, client renders
     // ============================================
 
     let activePanelType = null;
@@ -3125,14 +3125,14 @@
 
       const mojoHTML = `
         <div style="flex:1; min-width:280px; border:1px solid rgba(0,212,255,0.2); padding:16px; border-radius:4px;">
-          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER · JAN–MAY 2026</div>
+          <div style="color:#00d4ff; font-size:10px; letter-spacing:2px; margin-bottom:12px;">MOJO DIALER · JAN-MAY 2026</div>
           <div style="color:#fff; font-size:11px; line-height:2;">
             <div><span style="color:#00d4ff;">${(mojo.calls || 0).toLocaleString()}</span> CALLS · ${mojo.closings || 0} CLOSINGS</div>
             <div style="color:#888;">1 contact per ${mojo.callsPerContact || 32} calls</div>
           </div>
         </div>`;
 
-      // Daily plan + buyer/seller targets + pace + contact rate — moved off the
+      // Daily plan + buyer/seller targets + pace + contact rate - moved off the
       // always-on strip into this expandable panel to keep the top bar clean.
       const dt = data?.dailyTargets || {};
       const targetsHTML = `
@@ -3207,10 +3207,10 @@
         needleMovers: [
           "7 videos posted today keeps the TikTok engine alive",
           "725 calls = 22 contacts at current rate = pipeline building",
-          "Every video above 7 compounds — 10.3/week hits monthly closing pace",
+          "Every video above 7 compounds - 10.3/week hits monthly closing pace",
           "Every 6,734 calls = 1 seller closing = $425K avg deal",
         ],
-        motivation: `${dayOfWeek}. $14M gap. ${daysLeft} days left. The only thing that moves the needle today is reps — videos and calls. Everything else is noise.`,
+        motivation: `${dayOfWeek}. $14M gap. ${daysLeft} days left. The only thing that moves the needle today is reps - videos and calls. Everything else is noise.`,
       });
     }
     window.expandDailyPlanPanel = expandDailyPlanPanel;
@@ -3608,27 +3608,27 @@
     function renderMemoryTab() {
       const body = document.getElementById("memBody");
       const d = memDataCache;
-      if (!d) { body.innerHTML = "—"; return; }
+      if (!d) { body.innerHTML = "-"; return; }
       if (memActiveTab === "facts") {
         body.innerHTML = (d.semantic || []).map(s => {
           const cat = (s.category || "business").toLowerCase();
           const dot = (s.weight || 1) >= 1.8 ? "●" : "○";
           return `<div class="mem-row"><span class="${(s.weight || 1) >= 1.8 ? "mem-dot-filled" : "mem-dot-hollow"}">${dot}</span> <span class="mem-badge ${cat}">${esc(cat.toUpperCase())}</span> ${esc(s.fact)} <span style="color:#4a5e74">weight: ${s.weight || 1}</span></div>`;
-        }).join("") || "—";
+        }).join("") || "-";
       } else if (memActiveTab === "connections") {
         body.innerHTML = (d.relational || []).map(r =>
           `<div class="mem-row mem-rel">${esc(r.entity_a)} <span>──[${esc(r.relationship)}]──→</span> ${esc(r.entity_b)}</div>`
-        ).join("") || "—";
+        ).join("") || "-";
       } else if (memActiveTab === "rules") {
         body.innerHTML = (d.procedural || []).map(p =>
           `<div class="mem-row">⚡ <span class="mem-rule-trigger">WHEN: ${esc(p.trigger_condition)}</span><br><span class="mem-rule-action">DO: ${esc(p.action)}</span></div>`
-        ).join("") || "—";
+        ).join("") || "-";
       } else {
         body.innerHTML = (d.episodes || []).map(e => {
           const w = (e.emotional_weight || "routine").toUpperCase();
-          const date = (e.timestamp || "").split("T")[0] || "—";
-          return `<div class="mem-row">[${date}] ${esc(e.summary)} — <span class="mem-badge funnel">${w}</span></div>`;
-        }).join("") || "—";
+          const date = (e.timestamp || "").split("T")[0] || "-";
+          return `<div class="mem-row">[${date}] ${esc(e.summary)} - <span class="mem-badge funnel">${w}</span></div>`;
+        }).join("") || "-";
       }
     }
 
@@ -3739,7 +3739,7 @@
         }
         if (!voice?.gemini_configured) {
           document.getElementById("harvey-mic-btn").style.cursor = "default";
-          coreHint.textContent = "VOICE OFFLINE — USE CHAT WITH HARVEY";
+          coreHint.textContent = "VOICE OFFLINE - USE CHAT WITH HARVEY";
         }
         await loadOps();
         await refreshMetrics();
@@ -3815,7 +3815,7 @@
         return;
       }
       if (conversationActive) {
-        console.log('[WakeWord] Conversation active — not starting wake word listener');
+        console.log('[WakeWord] Conversation active - not starting wake word listener');
         return;
       }
 
@@ -3840,7 +3840,7 @@
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
           wakeWordEnabled = false;
           updateWakeWordToggleUI(false);
-          showWakeWordMessage('Microphone permission denied — wake word listening disabled.');
+          showWakeWordMessage('Microphone permission denied - wake word listening disabled.');
         }
       };
 
@@ -3874,7 +3874,7 @@
       if (now - lastWakeWordTriggerAt < WAKE_WORD_DEBOUNCE_MS) return;
       lastWakeWordTriggerAt = now;
 
-      console.log('[WakeWord] "Harvey" detected — starting conversation');
+      console.log('[WakeWord] "Harvey" detected - starting conversation');
       setWakeWordIndicator('triggered');
 
       stopWakeWordListening();

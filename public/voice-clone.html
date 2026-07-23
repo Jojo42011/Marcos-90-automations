@@ -179,9 +179,9 @@
             <div>
               <label class="vc-muted">DELIVERY STYLE</label>
               <select id="vc-style" onchange="onStyleChange()">
-                <option value="energetic_hook">Energetic &mdash; for hooks</option>
-                <option value="calm_explainer">Calm &mdash; for explainers</option>
-                <option value="warm_client">Warm &mdash; for client messages</option>
+                <option value="energetic_hook">Energetic - for hooks</option>
+                <option value="calm_explainer">Calm - for explainers</option>
+                <option value="warm_client">Warm - for client messages</option>
                 <option value="custom">Custom (describe below)</option>
               </select>
             </div>
@@ -199,7 +199,7 @@
             <input id="vc-custom-style" placeholder="e.g. slightly slower, serious tone, authoritative" />
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px;flex-wrap:wrap;">
-            <div class="vc-muted" style="max-width:520px;">Submitted scripts go to pending approval before generation &mdash; cloned voice never generates without Marco's explicit approval.</div>
+            <div class="vc-muted" style="max-width:520px;">Submitted scripts go to pending approval before generation - cloned voice never generates without Marco's explicit approval.</div>
             <button type="button" class="vc-btn" onclick="submitScript()">SUBMIT FOR APPROVAL &rarr;</button>
           </div>
         </div>
@@ -217,8 +217,8 @@
       <div class="vc-card vc-form">
         <div style="font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:10px;">&#8593; UPLOAD MARCO'S VOICE SAMPLE</div>
         <p class="vc-muted" style="margin-bottom:10px;font-size:11px;line-height:1.5;">
-          Upload 30&ndash;120s of clean audio of Marco talking (mp3, m4a, wav). The first upload becomes the
-          primary voice and is cloned automatically &mdash; every approved script is then spoken in that voice.
+          Upload 30-120s of clean audio of Marco talking (mp3, m4a, wav). The first upload becomes the
+          primary voice and is cloned automatically - every approved script is then spoken in that voice.
         </p>
         <input id="rc-file" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac"
           style="color:#ccc;font-size:11px;margin-bottom:8px;" />
@@ -294,19 +294,19 @@
 
     const TEST_SCRIPTS = {
       hook: {
-        script: "Four hundred twelve thousand dollars. That is what a three-bed in Stone Oak actually costs right now — not what TikTok told you. I walked two listings last week and the numbers surprised even me. DM me if you want the full breakdown for your price range.",
+        script: "Four hundred twelve thousand dollars. That is what a three-bed in Stone Oak actually costs right now - not what TikTok told you. I walked two listings last week and the numbers surprised even me. DM me if you want the full breakdown for your price range.",
         format: "hook",
         style: "energetic_hook",
         variations: 3,
       },
       explainer: {
-        script: "A lot of first-time buyers think they need twenty percent down. You do not. On a three hundred fifty thousand dollar home in San Antonio, FHA can get you in with about three and a half percent. That is roughly twelve thousand dollars — not seventy thousand. Rates are not perfect, but waiting for a perfect rate has cost more people a home than bad timing ever did.",
+        script: "A lot of first-time buyers think they need twenty percent down. You do not. On a three hundred fifty thousand dollar home in San Antonio, FHA can get you in with about three and a half percent. That is roughly twelve thousand dollars - not seventy thousand. Rates are not perfect, but waiting for a perfect rate has cost more people a home than bad timing ever did.",
         format: "explainer",
         style: "calm_explainer",
         variations: 1,
       },
       client: {
-        script: "Hey — quick update on your search. I found two homes in Canyon Lake that match what you told me: under four hundred K, good schools, and room for a boat. One just hit the market this morning. I want to get you in before the weekend crowd. Call me when you have five minutes.",
+        script: "Hey - quick update on your search. I found two homes in Canyon Lake that match what you told me: under four hundred K, good schools, and room for a boat. One just hit the market this morning. I want to get you in before the weekend crowd. Call me when you have five minutes.",
         format: "client_message",
         style: "warm_client",
         variations: 1,
@@ -322,7 +322,7 @@
       document.getElementById("vc-custom-style").value = "";
       onFormatChange();
       onStyleChange();
-      showToast("Test script loaded — click Submit for Approval");
+      showToast("Test script loaded - click Submit for Approval");
     }
 
     async function submitScript() {
@@ -347,7 +347,7 @@
       const r = await fetch(apiUrl(`/api/voice-clone/requests/${id}/approve`), { method: "POST", headers: authHeaders() });
       const data = await r.json();
       if (!r.ok) { showToast(data.error || "Approve failed"); return; }
-      showToast("Approved — queued for generation");
+      showToast("Approved - queued for generation");
       await refreshAll();
     }
 
@@ -370,7 +370,7 @@
 
     function statusBadge(req) {
       if (req.approvalStatus === "pending") return `<span style="color:var(--amber);">Pending approval</span>`;
-      if (req.generationStatus === "queued") return `<span style="color:var(--accent);">Queued — will generate within 30s</span>`;
+      if (req.generationStatus === "queued") return `<span style="color:var(--accent);">Queued - will generate within 30s</span>`;
       if (req.generationStatus === "generating") return `<span class="vc-pulse" style="color:var(--accent);">Generating…</span>`;
       if (req.generationStatus === "complete") return `<span style="color:var(--green);">Complete</span>`;
       if (req.approvalStatus === "blocked") return `<span style="color:var(--red);">Blocked</span>`;
@@ -431,10 +431,10 @@
             const voiceReady = !!c.elevenVoiceId;
             const voiceBadge = voiceReady
               ? '<span style="color:var(--green);">● Voice cloned &amp; ready</span>'
-              : '<span style="color:var(--amber);">○ Not cloned yet — clones on generate</span>';
+              : '<span style="color:var(--amber);">○ Not cloned yet - clones on generate</span>';
             return `<div class="vc-card ${c.isPrimary ? "vc-primary-clip" : ""}">
             <div><strong>${escapeHtml(c.sourceUrl)}</strong> ${c.isPrimary ? '<span style="color:var(--accent);">★ Primary</span>' : ""}</div>
-            <div class="vc-muted">${escapeHtml(c.localAudioPath || "no path")} · ${c.qualityRating || "—"} stars · ${c.durationSeconds ? c.durationSeconds + "s" : "—"}</div>
+            <div class="vc-muted">${escapeHtml(c.localAudioPath || "no path")} · ${c.qualityRating || "-"} stars · ${c.durationSeconds ? c.durationSeconds + "s" : "-"}</div>
             <div style="margin-top:6px;font-size:11px;">${voiceBadge}</div>
             <p class="vc-muted" style="margin-top:6px;">${escapeHtml((c.transcript || "").slice(0, 120))}</p>
             ${!c.isPrimary ? `<button type="button" class="vc-btn ghost" style="margin-top:8px;" onclick="setPrimary('${c.id}')">★ Set as Primary</button>` : ""}
@@ -457,7 +457,7 @@
         const r = await fetch(apiUrl("/api/voice-clone/reference-clips/upload"), { method: "POST", body: fd });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { showToast(d.error || "Upload failed"); return; }
-        showToast(d.voiceReady ? "Uploaded — voice cloned & ready" : ("Uploaded" + (d.cloneError ? " — clone pending: " + d.cloneError : "")));
+        showToast(d.voiceReady ? "Uploaded - voice cloned & ready" : ("Uploaded" + (d.cloneError ? " - clone pending: " + d.cloneError : "")));
         input.value = ""; document.getElementById("rc-transcript").value = "";
         await loadReferenceClips();
       } catch (err) {
@@ -510,7 +510,7 @@
       const entries = data.entries || [];
       document.getElementById("vc-safety-list").innerHTML = entries.length
         ? entries.map((e) => `<div class="vc-card vc-blocked-card">
-            <div class="vc-muted">${escapeHtml(e.flaggedAt)} · ${escapeHtml(e.requestedBy || "—")}</div>
+            <div class="vc-muted">${escapeHtml(e.flaggedAt)} · ${escapeHtml(e.requestedBy || "-")}</div>
             <p style="margin:6px 0;"><strong>${escapeHtml(e.reason)}</strong></p>
             <p class="vc-muted">${escapeHtml(e.scriptPreview)}</p>
           </div>`).join("")

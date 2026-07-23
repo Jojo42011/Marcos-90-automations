@@ -26,7 +26,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.5; overflow: hidden; }
     button, input, select, textarea { font-family: inherit; }
-    /* Native <select> dropdown lists don't inherit the control's styling — the
+    /* Native <select> dropdown lists don't inherit the control's styling - the
        browser paints them per color-scheme. Declare it so the open list matches
        the theme, and style the options explicitly for both themes. */
     :root { color-scheme: dark; }
@@ -248,7 +248,7 @@
     .btn-cancel { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 8px 16px; cursor: pointer; font-size: 10px; }
     .btn-save { border: 1px solid rgba(0,212,255,0.4); background: rgba(0,212,255,0.12); color: var(--cyan); padding: 8px 16px; cursor: pointer; font-size: 10px; }
 
-    /* ─── TASKS LIGHT MODE — STRONG CONTRAST ─── */
+    /* ─── TASKS LIGHT MODE - STRONG CONTRAST ─── */
     html[data-theme="light"],
     html[data-theme="light"] body {
       background: #f1f5f9 !important;
@@ -341,7 +341,7 @@
 
     html[data-theme="light"] .board { background: #f1f5f9 !important; }
 
-    /* Column layout — preserve colored left borders from dark mode */
+    /* Column layout - preserve colored left borders from dark mode */
     html[data-theme="light"] .task-column,
     html[data-theme="light"] .column {
       background: #f8fafc !important;
@@ -631,7 +631,7 @@
 
     html[data-theme="light"] a { color: #0369a1 !important; font-weight: 600 !important; }
 
-  /* ─── BRIVITY TEAL RETINT (light mode) — swap the slate-blue accents to teal
+  /* ─── BRIVITY TEAL RETINT (light mode) - swap the slate-blue accents to teal
        so Tasks matches the Brivity theme used across the system. ─── */
   html[data-theme="light"] .input-prefix,
   html[data-theme="light"] .col-title,
@@ -728,7 +728,7 @@
 
   <main class="board" id="board"></main>
 
-  <!-- "Who's on?" identity gate — each teammate picks their name to open their
+  <!-- "Who's on?" identity gate - each teammate picks their name to open their
        own task center (only their tasks). Switchable anytime from the VIEW menu
        or the WHO'S ON button. Persisted per-device in localStorage. -->
   <div id="user-gate" class="modal-overlay" aria-hidden="true">
@@ -849,7 +849,7 @@
   </div>
 
   <script>
-    // Sync theme with dashboard preference (marco_crm_theme — same key as dashboard.html)
+    // Sync theme with dashboard preference (marco_crm_theme - same key as dashboard.html)
     const THEME_KEY = "marco_crm_theme";
 
     function initTheme() {
@@ -1240,7 +1240,7 @@
         console.log("[Tasks] Column updated on server:", targetColumn);
       } catch (err) {
         console.error("[Tasks] Failed to update column on server:", err);
-        showToast("Failed to save — try again", "error");
+        showToast("Failed to save - try again", "error");
 
         const sourceColBody = document.getElementById("col-body-" + sourceColumn);
         if (sourceColBody) sourceColBody.insertBefore(card, sourceColBody.firstChild);
@@ -1791,7 +1791,7 @@
           applyFilter();
         }
 
-        showToast("↻ Recurring task rescheduled — due " + formatDate(nextDue.toISOString()), "success");
+        showToast("↻ Recurring task rescheduled - due " + formatDate(nextDue.toISOString()), "success");
       } catch (err) {
         console.error("[Tasks] Recurring create failed:", err);
         showToast("Failed to reschedule recurring task", "error");
@@ -1953,9 +1953,9 @@
       }
     });
 
-    /* ——— Per-person task centers ———
+    /* --- Per-person task centers ---
        Everyone shares one board on the backend, but each teammate views only
-       their own tasks by "logging in" (picking their name — persisted to this
+       their own tasks by "logging in" (picking their name - persisted to this
        device). "Everyone" is the team/oversight view. */
     var TASK_PEOPLE = [
       { id: "marco", label: "Marco" },
@@ -2026,7 +2026,7 @@
       updateTaskUserUi();
     });
 
-    /* ——— Calendar-driven auto-move ———
+    /* --- Calendar-driven auto-move ---
        A task with a due date lives in the column that matches how far off that
        date is, and rolls forward on its own as days pass: this_month →
        this_week → tomorrow → today. Urgent is a manual priority so it's left
@@ -2082,10 +2082,10 @@
     setInterval(reRollAndRender, 10 * 60 * 1000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) reRollAndRender(); });
 
-    /* ——— Phone / desktop reminders ———
+    /* --- Phone / desktop reminders ---
        Browser notifications for tasks that carry a due time. Fires the selected
        early reminders (10 / 5 min) plus one at the due moment. Works while the
-       task center is open in a browser tab or added to a phone home screen —
+       task center is open in a browser tab or added to a phone home screen -
        grant permission once with the 🔔 button up top. Checked on a 20s tick. */
     const NOTIFY_PERM_KEY = "marcoTaskNotify";
     const REMINDERS_FIRED_KEY = "marcoTaskRemindersFired";
@@ -2168,7 +2168,7 @@
     async function enableNotifications() {
       if (!notifySupported()) { showToast("Notifications aren't supported on this browser", "error"); return; }
       if (Notification.permission === "denied") {
-        showToast("Notifications are blocked — turn them on in your browser's site settings", "error");
+        showToast("Notifications are blocked - turn them on in your browser's site settings", "error");
         return;
       }
       try {
@@ -2180,14 +2180,14 @@
           const pushed = await subscribeToPush(currentView());
           showToast(
             pushed
-              ? "🔔 Always-on reminders on — even when the app is closed"
+              ? "🔔 Always-on reminders on - even when the app is closed"
               : "🔔 Reminders on while the task center is open",
             "success",
           );
           try {
             new Notification("Task reminders enabled", {
               body: pushed
-                ? "You'll be alerted before timed tasks — even with the app closed."
+                ? "You'll be alerted before timed tasks - even with the app closed."
                 : "You'll get a heads-up before any task that has a due time.",
               tag: "marco-task-test",
             });
@@ -2205,7 +2205,7 @@
     }
     function saveFiredSet(set) {
       try {
-        // Cap so the ledger can't grow without bound — keep the most recent 400.
+        // Cap so the ledger can't grow without bound - keep the most recent 400.
         localStorage.setItem(REMINDERS_FIRED_KEY, JSON.stringify(Array.from(set).slice(-400)));
       } catch (_) {}
     }
@@ -2225,7 +2225,7 @@
       const title = minutesBefore === 0
         ? "⏰ Task due now"
         : "⏰ Task due in " + minutesBefore + " min";
-      const body = task.title + (timeLabel ? " — due " + timeLabel : "");
+      const body = task.title + (timeLabel ? " - due " + timeLabel : "");
       try {
         const n = new Notification(title, {
           body,
@@ -2255,7 +2255,7 @@
       const now = Date.now();
       const fired = loadFiredSet();
       let changed = false;
-      const WINDOW = 95 * 1000; // tolerate the 20–30s tick jitter
+      const WINDOW = 95 * 1000; // tolerate the 20-30s tick jitter
 
       for (const t of tasks) {
         if (!t || t.status === "done" || t.status === "on_hold") continue;
@@ -2275,7 +2275,7 @@
             fireTaskNotification(t, off);
             fired.add(key); changed = true;
           } else if (now >= target + WINDOW) {
-            // Missed while the page was closed — mark handled so it won't pop late.
+            // Missed while the page was closed - mark handled so it won't pop late.
             fired.add(key); changed = true;
           }
         }
@@ -2283,7 +2283,7 @@
       if (changed) saveFiredSet(fired);
     }
 
-    /* ——— Auto-refresh every 30s ———
+    /* --- Auto-refresh every 30s ---
        Pull the latest board so tasks added by a teammate, Harvey, or an
        automation show up on their own. Re-renders only when something actually
        changed, and never while a modal is open or a card is mid-drag. */
@@ -2310,7 +2310,7 @@
           applyFiltersToCards();
         }
         checkReminders();
-      } catch (_) { /* transient — retry next tick */ }
+      } catch (_) { /* transient - retry next tick */ }
     }
     setInterval(refreshTasks, 30 * 1000);
     setInterval(checkReminders, 20 * 1000);

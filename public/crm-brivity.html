@@ -1139,8 +1139,8 @@ function renderPeople(){
       '<td><span class="lead-name ldlink" data-lid="'+esc(p.id)+'">'+esc(p.name)+'</span></td>'+
       '<td style="text-align:center">'+eyeIcon(p.showInLeads)+'</td>'+
       '<td><span class="intent '+(p.intent==="buyer"?"b":"s")+'">'+(p.intent==="buyer"?"B":"S")+'</span></td>'+
-      '<td>'+personStatusPill(p.status)+'</td>'+
-      '<td><span class="stage">'+esc(p.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
+      '<td>'+personStatusPill(p.status).replace('class="status"','class="status editable" data-lid="'+esc(p.id)+'" data-kind="status"')+'</td>'+
+      '<td><span class="stage editable" data-lid="'+esc(p.id)+'" data-kind="stage">'+esc(p.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
       '<td>'+actIcon("email",!p.email)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!p.address)+'</td><td>'+actIcon("other")+'</td>'+
       '<td>'+(p.address?'<div class="addr">'+esc(p.address)+'</div>':'<span style="color:#c2cad1">-</span>')+'</td>'+
       '<td>'+(p.lastActivity?'<div class="li"><div class="lab">'+esc(p.lastLabel)+'</div><div class="tm">'+relTime(p.lastActivity)+'</div></div>':'<span style="color:#c2cad1">-</span>')+'</td>'+
@@ -1934,6 +1934,9 @@ function setLeadField(id,kind,val){
   if(kind==="status"){ l.crmStatus=val; l.statusDisp=STATUS_MAP[val]||"nurture"; payload={crmStatus:val}; }
   else if(kind==="stage"){ l.stage=val; l.stageLabel=STAGE_MAP[val]||"NEW LEAD"; payload={crmStage:val}; }
   else { l.intent=(val==="seller")?"seller":"buyer"; l._intentRaw=val; payload={crmIntent:val}; }
+  // keep the People-tab row in sync (People are derived from leads)
+  var pe=PEOPLE.find(x=>x.id===id);
+  if(pe){ if(kind==="status")pe.status=l.statusDisp; else if(kind==="stage")pe.stageLabel=l.stageLabel; else pe.intent=l.intent; }
   renderLeads(); renderTakeAction(); renderFeed(); renderPeople();
   if(document.getElementById("view-lead").classList.contains("on")) renderLead();
   fetch(crmApi("/api/crm/lead/"+encodeURIComponent(id)),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})

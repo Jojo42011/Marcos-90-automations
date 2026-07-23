@@ -447,7 +447,7 @@
     @keyframes fadeSlideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes cardIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
 
-    /* Light mode — red theme */
+    /* Light mode - red theme */
     html[data-theme="light"],
     html[data-theme="light"] body {
       background: #f1f5f9 !important;
@@ -572,14 +572,14 @@
     <section class="ln-panel" id="panel-warm" data-panel="warm">
       <div id="warm-list"></div>
       <div class="ln-footer-bar">
-        <span>Next weekly touch: <strong id="warm-next-monday">&mdash;</strong> (Mondays 10am Central)</span>
+        <span>Next weekly touch: <strong id="warm-next-monday">-</strong> (Mondays 10am Central)</span>
         <button type="button" class="ln-btn primary ln-action-primary" id="btn-warm-touch">&#9889; SEND WARM TOUCH NOW</button>
       </div>
     </section>
 
     <section class="ln-panel" id="panel-cold" data-panel="cold">
       <div class="ln-panel-card" style="margin-bottom:12px;">
-        <strong id="cold-total-count">&mdash;</strong> cold leads
+        <strong id="cold-total-count">-</strong> cold leads
       </div>
       <div class="ln-table-wrap">
         <table class="ln-table">
@@ -593,7 +593,7 @@
       </div>
       <div class="ln-pagination" id="cold-pagination"></div>
       <div class="ln-footer-bar">
-        <span>Monthly value touch: first Monday of each month &middot; Next: <strong id="cold-next-monday">&mdash;</strong></span>
+        <span>Monthly value touch: first Monday of each month &middot; Next: <strong id="cold-next-monday">-</strong></span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button type="button" class="ln-btn primary ln-action-primary" id="btn-cold-touch">&#9889; SEND COLD TOUCH NOW</button>
           <button type="button" class="ln-btn" id="btn-rescore-cold-tab">&#8635; RE-SCORE ALL COLD</button>
@@ -668,7 +668,7 @@
     }
 
     function factorRealLabel(key, lead) {
-      if (!lead) return "—";
+      if (!lead) return "-";
       if (key === "timeline") {
         const t = lead.timeline || lead.criteria?.timeline;
         return t ? String(t).slice(0, 32) : "Timeline not set";
@@ -688,7 +688,7 @@
         const st = ap.confirmationStatus || "pending";
         return st === "confirmed" ? "Showing confirmed" : `${st} showing`;
       }
-      return "—";
+      return "-";
     }
 
     function factorShortWord(key, val, maxVal) {
@@ -740,10 +740,10 @@
 
     function suggestNextStep(lead) {
       const factors = lead.scoringFactors || {};
-      if (!lead.showingAppointment) return "Schedule a showing — high intent, no showing booked yet.";
+      if (!lead.showingAppointment) return "Schedule a showing - high intent, no showing booked yet.";
       if (lead.showingAppointment.confirmationStatus === "pending") return "Follow up on showing confirmation.";
-      if ((factors.preApproval ?? 0) < 25) return "Confirm pre-approval status — could be the missing piece.";
-      return "Personal call recommended — this lead is ready to move.";
+      if ((factors.preApproval ?? 0) < 25) return "Confirm pre-approval status - could be the missing piece.";
+      return "Personal call recommended - this lead is ready to move.";
     }
 
     function getNextMondayTouch() {
@@ -778,7 +778,7 @@
         <div class="ln-lead-top">
           <div>
             <div class="ln-lead-name">${escapeHtml(lead.name)}</div>
-            <div class="ln-lead-meta">${escapeHtml(lead.source || "unknown")} · ${escapeHtml(lead.crmIntent || "—")} · ${escapeHtml(lead.phone || "no phone")}</div>
+            <div class="ln-lead-meta">${escapeHtml(lead.source || "unknown")} · ${escapeHtml(lead.crmIntent || "-")} · ${escapeHtml(lead.phone || "no phone")}</div>
           </div>
           <div>
             <div class="ln-score-big">${lead.score}</div>
@@ -788,7 +788,7 @@
         <div style="margin-top:10px;">${buildScoreFactorBars(lead.scoringFactors, lead)}</div>
         <div class="ln-badges">${badges}</div>
         <div class="ln-suggest"><span style="color:#555;">Suggested:</span> ${escapeHtml(suggestNextStep(lead))}</div>
-        <div class="ln-scored-at">Scored: ${lead.scoreDate ? new Date(lead.scoreDate).toLocaleString() : "—"}</div>
+        <div class="ln-scored-at">Scored: ${lead.scoreDate ? new Date(lead.scoreDate).toLocaleString() : "-"}</div>
       </div>`;
     }
 
@@ -806,7 +806,7 @@
         <div class="ln-stat-card ln-stat-warm clickable" data-goto="warm">
           <div class="ln-stat-label">🌡️ WARM LEADS</div>
           <div class="ln-stat-value" id="stat-warm">0</div>
-          <div class="ln-stat-sub">score 40–79</div>
+          <div class="ln-stat-sub">score 40-79</div>
         </div>
         <div class="ln-stat-card ln-stat-cold clickable" data-goto="cold">
           <div class="ln-stat-label">❄️ COLD LEADS</div>
@@ -829,11 +829,11 @@
       });
 
       document.getElementById("overview-funnel").innerHTML = `
-        <div class="ln-funnel-step hot">🔥 HOT — ${d.hotCount || 0}</div>
+        <div class="ln-funnel-step hot">🔥 HOT - ${d.hotCount || 0}</div>
         <span class="ln-funnel-arrow">››</span>
-        <div class="ln-funnel-step warm">🌡️ WARM — ${d.warmCount || 0}</div>
+        <div class="ln-funnel-step warm">🌡️ WARM - ${d.warmCount || 0}</div>
         <span class="ln-funnel-arrow">››</span>
-        <div class="ln-funnel-step cold">❄️ COLD — ${d.coldCount || 0}</div>`;
+        <div class="ln-funnel-step cold">❄️ COLD - ${d.coldCount || 0}</div>`;
 
       const changes = d.recentScoreChanges || [];
       document.getElementById("overview-changes").innerHTML = changes.length
@@ -852,11 +852,11 @@
       const top = (d.leads || []).slice(0, 3);
       const box = document.getElementById("overview-hot-factors");
       if (!top.length) {
-        box.innerHTML = '<p class="ln-empty">No hot leads yet — run Score All or wait for the daily score job.</p>';
+        box.innerHTML = '<p class="ln-empty">No hot leads yet - run Score All or wait for the daily score job.</p>';
         return;
       }
       box.innerHTML = top.map(l => `<div class="ln-hot-mini">
-        <h4>${escapeHtml(l.name)} — ${l.score}/100</h4>
+        <h4>${escapeHtml(l.name)} - ${l.score}/100</h4>
         ${buildScoreFactorBars(l.scoringFactors, l)}
       </div>`).join("");
     }
@@ -879,11 +879,11 @@
       const tbody = document.getElementById("cold-tbody");
       tbody.innerHTML = slice.map(l => `<tr>
         <td><strong>${escapeHtml(l.name)}</strong></td>
-        <td>${escapeHtml(l.source || "—")}</td>
+        <td>${escapeHtml(l.source || "-")}</td>
         <td style="color:var(--cold);font-weight:700;">${l.score}</td>
-        <td>${l.scoreDate ? new Date(l.scoreDate).toLocaleDateString() : "—"}</td>
-        <td>${escapeHtml(l.timeline || "—")}</td>
-        <td>${escapeHtml(l.preApprovalStatus || "—")}</td>
+        <td>${l.scoreDate ? new Date(l.scoreDate).toLocaleDateString() : "-"}</td>
+        <td>${escapeHtml(l.timeline || "-")}</td>
+        <td>${escapeHtml(l.preApprovalStatus || "-")}</td>
       </tr>`).join("") || '<tr><td colspan="6" class="ln-empty">No cold leads.</td></tr>';
 
       document.getElementById("cold-total-count").textContent = coldLeadsCache.length;
@@ -946,7 +946,7 @@
       feed.innerHTML = d.routed.map(item => `<div class="ln-feed-item">
         <div>
           <strong>${escapeHtml(item.name)}</strong>
-          <span style="color:#888;margin-left:8px;font-size:11px;">${escapeHtml(item.source || "—")} · ${escapeHtml(item.phone || "no phone")}</span>
+          <span style="color:#888;margin-left:8px;font-size:11px;">${escapeHtml(item.source || "-")} · ${escapeHtml(item.phone || "no phone")}</span>
           <div style="font-size:10px;color:#555;margin-top:2px;">${item.routedAt ? new Date(item.routedAt).toLocaleString() : ""}</div>
         </div>
         <button type="button" class="ln-btn" data-reroute="${item.leadId}">Re-route</button>
@@ -966,7 +966,7 @@
     function switchTab(name) {
       document.querySelectorAll(".ln-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
       document.querySelectorAll(".ln-panel").forEach(p => p.classList.toggle("active", p.dataset.panel === name));
-      if (name === "hot") loadTier("hot", "hot-list", "No hot leads yet — run Score All or wait for the daily score job.");
+      if (name === "hot") loadTier("hot", "hot-list", "No hot leads yet - run Score All or wait for the daily score job.");
       if (name === "warm") {
         loadTier("warm", "warm-list", "No warm leads in nurture queue.");
         document.getElementById("warm-next-monday").textContent = getNextMondayTouch();
@@ -1005,9 +1005,9 @@
         const r = await fetch(apiUrl(url), { method: "POST", headers: authHeaders() });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || "Request failed");
-        const detail = d.sent != null ? ` — ${d.sent} sent, ${d.skipped || 0} skipped` :
-          d.scored != null ? ` — ${d.scored} scored (${d.hot} hot, ${d.warm} warm, ${d.cold} cold)` :
-          d.rescored != null ? ` — ${d.rescored} re-scored, ${d.promoted} promoted` : "";
+        const detail = d.sent != null ? ` - ${d.sent} sent, ${d.skipped || 0} skipped` :
+          d.scored != null ? ` - ${d.scored} scored (${d.hot} hot, ${d.warm} warm, ${d.cold} cold)` :
+          d.rescored != null ? ` - ${d.rescored} re-scored, ${d.promoted} promoted` : "";
         showToast(label + detail);
         await refreshAll();
       } catch (err) {

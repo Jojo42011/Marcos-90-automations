@@ -36,7 +36,7 @@
     .view { display: none; min-height: 100vh; }
     .view.active { display: block; }
 
-    /* ——— Home hub ——— */
+    /* --- Home hub --- */
     .hub {
       position: relative;
       min-height: 100vh;
@@ -213,7 +213,7 @@
       margin-top: 0.75rem;
     }
 
-    /* ——— Agent view ——— */
+    /* --- Agent view --- */
     .wrap {
       max-width: 1280px;
       margin: 0 auto;
@@ -407,7 +407,7 @@
       color: var(--muted);
       text-transform: lowercase;
     }
-    /* ——— CRM workspace (dark glass, matches command center) ——— */
+    /* --- CRM workspace (dark glass, matches command center) --- */
     .crm-shell {
       min-height: 100vh;
       display: grid;
@@ -762,7 +762,7 @@
     }
     .crm-kpi .crm-muted { font-size: 0.72rem; margin-top: 0.25rem; color: var(--muted); }
 
-    /* ——— Overview command dashboard ——— */
+    /* --- Overview command dashboard --- */
     .crm-dash {
       position: relative;
       border-radius: calc(var(--radius) + 6px);
@@ -1107,7 +1107,7 @@
       background: linear-gradient(90deg, rgba(248, 113, 113, 0.95), rgba(248, 113, 113, 0.25));
     }
 
-    /* ——— Overview v4: transcript-driven, pipeline-first, minimal ——— */
+    /* --- Overview v4: transcript-driven, pipeline-first, minimal --- */
     .crm-ov { display: flex; flex-direction: column; gap: 0.9rem; }
 
     /* Funnel panel (buyer or seller) */
@@ -1255,7 +1255,7 @@
     .crm-rev-ring .c b { font-family: var(--mono); font-size: 0.78rem; color: #fff; }
     .crm-rev-ring .c span { font-size: 0.52rem; color: rgba(248, 250, 252, 0.5); text-transform: uppercase; letter-spacing: 0.04em; }
 
-    /* Bottom cards grid — 3 columns: revenue | sources | overdue */
+    /* Bottom cards grid - 3 columns: revenue | sources | overdue */
     .crm-ov-bottom {
       display: grid;
       grid-template-columns: minmax(200px, 260px) 1fr minmax(200px, 1fr);
@@ -1610,7 +1610,7 @@
       font-size: 0.76rem;
     }
     .crm-notes { width: 100%; min-width: 160px; }
-    /* Kanban pipeline — responsive grid, no horizontal scroll */
+    /* Kanban pipeline - responsive grid, no horizontal scroll */
     .crm-kanban {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -3152,7 +3152,7 @@
     html[data-theme="light"] .crm-timeline-item { background: #fff; border-color: rgba(15, 23, 42, 0.08); }
     html[data-theme="light"] .crm-timeline-title { color: #0f172a; }
 
-    /* Light theme — Command center hub & workspace cards */
+    /* Light theme - Command center hub & workspace cards */
     html[data-theme="light"] .hub-greeting {
       background: none;
       background-clip: border-box;
@@ -3172,7 +3172,7 @@
     html[data-theme="light"] .module-desc { color: #334155; }
     html[data-theme="light"] .module-arrow { color: var(--cyan); }
 
-    /* Light theme — CRM / leads tables (override dark-only text colors) */
+    /* Light theme - CRM / leads tables (override dark-only text colors) */
     html[data-theme="light"] .crm-shell,
     html[data-theme="light"] .crm-main,
     html[data-theme="light"] .crm-page { color: var(--text); }
@@ -3447,7 +3447,7 @@
       color: var(--muted);
     }
 
-    /* Light theme — CRM overview: Today & Overdue + Volume & GCI */
+    /* Light theme - CRM overview: Today & Overdue + Volume & GCI */
     html[data-theme="light"] .crm-ov-card { background: #fff; border-color: var(--border); }
     html[data-theme="light"] .crm-ov-card h3 { color: #111; }
     html[data-theme="light"] .crm-ov-card h3 .sub { color: #64748b; }
@@ -3467,7 +3467,7 @@
     html[data-theme="light"] .crm-rev-ring-wrap > div { color: #475569 !important; }
     html[data-theme="light"] .crm-rev-ring-wrap strong { color: #92400e !important; }
 
-    /* Light theme — Lead sources (donuts, legends, labels) */
+    /* Light theme - Lead sources (donuts, legends, labels) */
     html[data-theme="light"] .crm-src-label { color: #1a1a1a; }
     html[data-theme="light"] .crm-donut .center b { color: #111; }
     html[data-theme="light"] .crm-donut .center span { color: #475569; }
@@ -3475,7 +3475,7 @@
     html[data-theme="light"] .crm-donut-legend .n { color: #334155; }
 
     /* ===================================================================
-       Light theme — lead profile drawer, modals, chats & remaining tabs.
+       Light theme - lead profile drawer, modals, chats & remaining tabs.
        Rule: every text element must be dark (#111 / #1a1a1a / #222) on
        a light surface. Inline color:#fff in JS markup is beaten with
        !important; dark-mode appearance is untouched.
@@ -3498,7 +3498,7 @@
     html[data-theme="light"] .crm-profile-section h4,
     html[data-theme="light"] .crm-profile-timeline-wrap h4 { color: #475569 !important; }
     html[data-theme="light"] .crm-drawer-field label { color: #334155 !important; }
-    /* Drawer / property inputs — dark text on white with visible border */
+    /* Drawer / property inputs - dark text on white with visible border */
     html[data-theme="light"] .crm-drawer-field input,
     html[data-theme="light"] .crm-drawer-field select,
     html[data-theme="light"] .crm-drawer-field textarea {
@@ -3571,7 +3571,7 @@
     html[data-theme="light"] .crm-stage-badge[data-stage="showing_set"] { color: #6d28d9; background: rgba(124,58,237,0.12); }
     html[data-theme="light"] .crm-stage-badge[data-stage="under_contract"] { color: #047857; background: rgba(5,150,105,0.12); }
     html[data-theme="light"] .crm-stage-badge[data-stage="closed"] { color: #15803d; background: rgba(34,197,94,0.12); }
-    /* Contact-card status pill — cover statuses lacking explicit light color */
+    /* Contact-card status pill - cover statuses lacking explicit light color */
     html[data-theme="light"] .crm-pill.watch { color: #a16207; }
     html[data-theme="light"] .crm-pill.unresponsive { color: #475569; }
     html[data-theme="light"] .crm-pill.dead { color: #6b7280; }
@@ -3606,7 +3606,7 @@
     html[data-theme="light"] .crm-template-block h3 { color: #111; }
     html[data-theme="light"] .crm-template-item { color: #1a1a1a; }
     html[data-theme="light"] .crm-template-item small { color: #64748b; }
-    /* Steps 1–4 — mass bar, selection, alerts, listing menu, toasts */
+    /* Steps 1-4 - mass bar, selection, alerts, listing menu, toasts */
     html[data-theme="light"] .crm-mass-bar { background: rgba(255,255,255,0.97); border-color: #cbd5e1; box-shadow: 0 18px 48px rgba(15,23,42,0.15); }
     html[data-theme="light"] .crm-mass-count { color: #0e7490; }
     html[data-theme="light"] .crm-mass-btn { color: #1a1a1a; background: #fff; border-color: #cbd5e1; }
@@ -3777,7 +3777,7 @@
     <div class="hub-grid" aria-hidden="true"></div>
     <div class="hub-inner">
       <div class="hub-status">Operations console</div>
-      <h1 class="hub-greeting">Hey Marco — what do you want to take a look at today?</h1>
+      <h1 class="hub-greeting">Hey Marco - what do you want to take a look at today?</h1>
       <p class="hub-sub">Select a workspace. Live data syncs from your automation pipeline.</p>
       <p class="hub-section-label">Dashboards</p>
       <div class="hub-search-wrap">
@@ -3786,7 +3786,7 @@
           type="search"
           id="hub-dashboard-search"
           class="hub-search"
-          placeholder="Search dashboards — DM, CRM, email, nurture, tasks, Harvey…"
+          placeholder="Search dashboards - DM, CRM, email, nurture, tasks, Harvey…"
           autocomplete="off"
           spellcheck="false"
         />
@@ -3813,7 +3813,7 @@
             <span class="module-title">Email Marketing</span>
             <span class="module-badge" style="background:rgba(167,139,250,0.15);border-color:rgba(167,139,250,0.4);color:#a78bfa;">Gmail</span>
           </div>
-          <p class="module-desc">Drip sequences, auto-replies, past-client quarterly touches, and send tracking — powered by Marco's Gmail OAuth.</p>
+          <p class="module-desc">Drip sequences, auto-replies, past-client quarterly touches, and send tracking - powered by Marco's Gmail OAuth.</p>
           <div class="module-arrow">Open workspace →</div>
         </a>
         <a href="/lead-nurture" class="module-card" id="open-lead-nurture" data-hub-search="lead nurture scoring hot warm cold drip routing" aria-label="Open Lead Nurture dashboard" style="text-decoration:none;color:inherit;">
@@ -3821,7 +3821,7 @@
             <span class="module-title">Lead Nurture</span>
             <span class="module-badge" id="hub-nurture-badge" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.4);color:#ef4444;">Live</span>
           </div>
-          <p class="module-desc">Lead scoring, hot/warm/cold nurture flows, source routing, and auto re-score — powered by the nurture sub-agent.</p>
+          <p class="module-desc">Lead scoring, hot/warm/cold nurture flows, source routing, and auto re-score - powered by the nurture sub-agent.</p>
           <div class="module-arrow">Open workspace →</div>
         </a>
         <a href="/reporting" class="module-card" id="open-reporting" data-hub-search="reporting daily digest weekly kpi anomalies harvey scorecard" aria-label="Open Reporting dashboard" style="text-decoration:none;color:inherit;border-color:rgba(0,212,255,0.25);">
@@ -3856,7 +3856,7 @@
             <span class="module-title">Ad numbers</span>
             <span class="module-badge">Meta</span>
           </div>
-          <p class="module-desc">Spend, reach, and lead metrics from your linked ad dashboard — same totals as the internal Aethon ads workspace, without the advisor tools.</p>
+          <p class="module-desc">Spend, reach, and lead metrics from your linked ad dashboard - same totals as the internal Aethon ads workspace, without the advisor tools.</p>
           <div class="module-arrow">Open workspace →</div>
         </button>
         <button type="button" class="module-card" id="open-crm" data-hub-search="crm pipeline leads board stages lite" aria-label="Open CRM dashboard">
@@ -3864,7 +3864,7 @@
             <span class="module-title">CRM</span>
             <span class="module-badge">Lite</span>
           </div>
-          <p class="module-desc">Pipeline board, lead stages, and live numbers — phone-captured leads, synced with your DM automation.</p>
+          <p class="module-desc">Pipeline board, lead stages, and live numbers - phone-captured leads, synced with your DM automation.</p>
           <div class="module-arrow">Open workspace →</div>
         </button>
         <a href="/jarvis" class="module-card" id="open-jarvis" data-hub-search="harvey jarvis ai assistant voice operator" aria-label="Open Harvey assistant" style="text-decoration:none;color:inherit;">
@@ -3880,7 +3880,7 @@
             <span class="module-title">Task Center</span>
             <span class="module-badge" id="hub-tasks-badge" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#fbbf24;">Ops</span>
           </div>
-          <p class="module-desc">Carlos's operational task board — urgent, today, tomorrow, week, and month columns. Replaces the Google Doc task list.</p>
+          <p class="module-desc">Carlos's operational task board - urgent, today, tomorrow, week, and month columns. Replaces the Google Doc task list.</p>
           <div class="module-arrow">Open tasks →</div>
         </a>
       </div>
@@ -3942,17 +3942,17 @@
         <div class="crm-logo">Marco · CRM</div>
         <button type="button" class="crm-side-btn active" data-crm-section="dashboard">Overview <span class="crm-count" id="crm-count-dashboard">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="leads">Leads <span class="crm-count" id="crm-count-leads">0</span><span id="unseen-phone-badge"></span></button>
-        <button type="button" class="crm-side-btn" data-crm-section="nurture">Lead Nurture <span class="crm-count">—</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="nurture">Lead Nurture <span class="crm-count">-</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="calls">Calls <span class="crm-count" id="crm-count-calls" title="Urgent / follow-up in queue">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="deals">Deals <span class="crm-count" id="crm-count-deals">0</span></button>
-        <button type="button" class="crm-side-btn" data-crm-section="text">Text <span class="crm-count" id="crm-count-text">—</span></button>
-        <button type="button" class="crm-side-btn" data-crm-section="reports">Reports <span class="crm-count" id="crm-count-reports">—</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="text">Text <span class="crm-count" id="crm-count-text">-</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="reports">Reports <span class="crm-count" id="crm-count-reports">-</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="tasks">Tasks <span class="crm-count crm-count-alert" id="crm-count-tasks">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="marco-tasks">Marco's Tasks <span class="crm-count crm-count-alert" id="crm-count-marco-tasks">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="followup">Follow-up Plans <span class="crm-count" id="crm-count-followup">0</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="plans">Auto Plans <span class="crm-count" id="crm-count-plans">0</span></button>
-        <button type="button" class="crm-side-btn" data-crm-section="templates">Templates <span class="crm-count">—</span></button>
-        <button type="button" class="crm-side-btn" data-crm-section="knowledge">Knowledge Center <span class="crm-count">—</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="templates">Templates <span class="crm-count">-</span></button>
+        <button type="button" class="crm-side-btn" data-crm-section="knowledge">Knowledge Center <span class="crm-count">-</span></button>
         <button type="button" class="crm-side-btn" data-crm-section="users" data-require-admin>Users <span class="crm-count" id="crm-count-users">0</span></button>
         <button type="button" class="crm-side-btn" id="back-home-crm" style="margin-top:1rem;">Command center <span>←</span></button>
       </aside>
@@ -4301,7 +4301,7 @@
           <div class="crm-form-field" style="margin-bottom:0.7rem;">
             <label>Select template</label>
             <select id="crm-mass-email-template-select" onchange="previewMassEmailTemplate(this.value)">
-              <option value="">— choose a template —</option>
+              <option value="">- choose a template -</option>
             </select>
           </div>
           <div id="crm-mass-email-preview" style="display:none;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:12px;margin-bottom:12px;font-size:0.78rem;">
@@ -4395,7 +4395,7 @@
         <h3 style="font-size:0.85rem;margin:1rem 0 0.5rem;">Details</h3>
         <div class="crm-row2">
           <div class="crm-form-field"><label>Status</label><select id="crm-deal-status"><option value="prospect">Prospect</option><option value="active">Active</option><option value="under_contract">Under Contract</option><option value="closed">Closed</option><option value="fallen_through">Fallen Through</option></select></div>
-          <div class="crm-form-field"><label>Assigned to</label><select id="crm-deal-assigned"><option value="">—</option></select></div>
+          <div class="crm-form-field"><label>Assigned to</label><select id="crm-deal-assigned"><option value="">-</option></select></div>
         </div>
         <div class="crm-form-field"><label>Notes</label><textarea id="crm-deal-notes" rows="3"></textarea></div>
         <input type="hidden" id="crm-deal-prefill-lead-id" value="" />
@@ -4544,7 +4544,7 @@
     </div>
   </div>
 
-  <script src="/crm-followup-tasks.js" onerror="console.error('[crm] Failed to load /crm-followup-tasks.js — Follow-up Plans and Tasks tabs will not work.')"></script>
+  <script src="/crm-followup-tasks.js" onerror="console.error('[crm] Failed to load /crm-followup-tasks.js - Follow-up Plans and Tasks tabs will not work.')"></script>
   <script>
     const token = new URLSearchParams(window.location.search).get("token");
     function apiUrl() {
@@ -4558,7 +4558,7 @@
       return u.toString();
     }
     function fmtDate(iso) {
-      if (!iso) return "—";
+      if (!iso) return "-";
       try {
         return new Date(iso).toLocaleString(undefined, {
           month: "short",
@@ -4656,7 +4656,7 @@
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
           let m = body.error || res.statusText || "Request failed";
-          if (body.hint) m += " — " + body.hint;
+          if (body.hint) m += " - " + body.hint;
           showErr(m);
           return;
         }
@@ -4699,9 +4699,9 @@
       empty.style.display = "none";
       tbody.innerHTML = leads
         .map((row) => {
-          const name = [row.name, row.username ? "@" + row.username : null].filter(Boolean).join(" · ") || "—";
-          const phone = row.phone ? `<span class="mono phone">${escapeHtml(row.phone)}</span>` : "—";
-          const email = row.email ? `<span class="mono">${escapeHtml(row.email)}</span>` : "—";
+          const name = [row.name, row.username ? "@" + row.username : null].filter(Boolean).join(" · ") || "-";
+          const phone = row.phone ? `<span class="mono phone">${escapeHtml(row.phone)}</span>` : "-";
+          const email = row.email ? `<span class="mono">${escapeHtml(row.email)}</span>` : "-";
           const crit = fmtCriteria(row.criteria);
           const crm = [
             row.crmStatus ? "Status: " + escapeHtml(row.crmStatus) : "",
@@ -4725,9 +4725,9 @@
             <td>${phone}</td>
             <td>${email}</td>
             <td><span class="state-pill">${escapeHtml(row.state)}</span></td>
-            <td style="max-width:220px;font-size:0.75rem;color:var(--muted);">${crm || "—"}</td>
+            <td style="max-width:220px;font-size:0.75rem;color:var(--muted);">${crm || "-"}</td>
             <td class="mono" title="${escapeHtml(row.userId)}">${escapeHtml(row.userId.length > 14 ? row.userId.slice(0, 12) + "…" : row.userId)}</td>
-            <td style="max-width:280px;font-size:0.75rem;color:var(--muted);">${extra || "—"}</td>
+            <td style="max-width:280px;font-size:0.75rem;color:var(--muted);">${extra || "-"}</td>
           </tr>`;
         })
         .join("");
@@ -4772,13 +4772,13 @@
       if (!wrap) return;
       wrap.innerHTML = `
         <div class="dm-agent-recent-col">
-          <div class="dm-agent-recent-heading">RECENT — INSTAGRAM</div>
+          <div class="dm-agent-recent-heading">RECENT - INSTAGRAM</div>
           <div class="dm-agent-recent-list" id="dm-agent-ig-list">
             ${igLeads.length > 0 ? igLeads.map((l) => buildLeadItem(l, !dmPreviousIgIds.has(l.id) && dmPreviousIgIds.size > 0)).join("") : '<div class="dm-agent-recent-empty">No captures yet</div>'}
           </div>
         </div>
         <div class="dm-agent-recent-col">
-          <div class="dm-agent-recent-heading">RECENT — TIKTOK</div>
+          <div class="dm-agent-recent-heading">RECENT - TIKTOK</div>
           <div class="dm-agent-recent-list" id="dm-agent-tt-list">
             ${ttLeads.length > 0 ? ttLeads.map((l) => buildLeadItem(l, !dmPreviousTtIds.has(l.id) && dmPreviousTtIds.size > 0)).join("") : '<div class="dm-agent-recent-empty">No captures yet</div>'}
           </div>
@@ -4793,19 +4793,19 @@
       return d.innerHTML;
     }
     function fmtMoney(n) {
-      if (n == null || n === "") return "—";
+      if (n == null || n === "") return "-";
       const x = Number(n);
       if (Number.isNaN(x)) return String(n);
       return "$" + x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     function fmtPct(n) {
-      if (n == null || n === "") return "—";
+      if (n == null || n === "") return "-";
       const x = Number(n);
       if (Number.isNaN(x)) return String(n);
       return x.toLocaleString(undefined, { maximumFractionDigits: 2 }) + "%";
     }
     function fmtInt(n) {
-      if (n == null || n === "") return "—";
+      if (n == null || n === "") return "-";
       const x = Number(n);
       if (Number.isNaN(x)) return String(n);
       return x.toLocaleString();
@@ -4824,7 +4824,7 @@
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
           let m = body.error || res.statusText || "Request failed";
-          if (body.hint) m += " — " + body.hint;
+          if (body.hint) m += " - " + body.hint;
           showAdsErr(m);
           document.getElementById("ads-stats").innerHTML = "";
           document.getElementById("ads-tbody").innerHTML = "";
@@ -4850,7 +4850,7 @@
       return id || "";
     }
     function crmAdCampaignBadge(adCampaign) {
-      if (!adCampaign) return '<span class="crm-muted">—</span>';
+      if (!adCampaign) return '<span class="crm-muted">-</span>';
       const cls = escapeHtml(adCampaign);
       return `<span class="crm-campaign-badge ${cls}">${escapeHtml(crmAdCampaignLabel(adCampaign))}</span>`;
     }
@@ -4890,7 +4890,7 @@
         </div>`;
     }
     function renderAds(data) {
-      const gen = data.generatedAt ? fmtDate(data.generatedAt) : "—";
+      const gen = data.generatedAt ? fmtDate(data.generatedAt) : "-";
       const preset = data.datePreset ? String(data.datePreset).replace(/_/g, " ") : "";
       document.getElementById("ads-generated").textContent =
         "Snapshot " + gen + (preset ? " · " + preset : "");
@@ -4907,7 +4907,7 @@
         { k: "Clicks", v: fmtInt(clicks), s: "link clicks" },
         { k: "Ad leads", v: fmtInt(leads), s: "from ads" },
         { k: "CTR", v: fmtPct(ctr), s: "click-through rate" },
-        { k: "CPL", v: cpl != null && cpl !== "" ? fmtMoney(cpl) : "—", s: "cost per lead" },
+        { k: "CPL", v: cpl != null && cpl !== "" ? fmtMoney(cpl) : "-", s: "cost per lead" },
       ]
         .map(
           (x) =>
@@ -4920,7 +4920,7 @@
             <td class="mono">${escapeHtml(fmtInt(r.clicks))}</td>
             <td class="mono">${escapeHtml(fmtInt(r.leads))}</td>
             <td class="mono">${escapeHtml(fmtPct(r.ctr))}</td>
-            <td class="mono">${escapeHtml(r.cpl != null && r.cpl !== "" ? fmtMoney(r.cpl) : "—")}</td>`;
+            <td class="mono">${escapeHtml(r.cpl != null && r.cpl !== "" ? fmtMoney(r.cpl) : "-")}</td>`;
       }
       const campaigns = data.campaigns || [];
       const tbody = document.getElementById("ads-tbody");
@@ -4933,7 +4933,7 @@
         tbody.innerHTML = campaigns
           .map((row) => {
             const r = row && typeof row === "object" ? row : {};
-            const name = r.name != null ? String(r.name) : "—";
+            const name = r.name != null ? String(r.name) : "-";
             return `<tr>
             <td>${escapeHtml(name)}</td>
             ${adsMetricRowCells(r)}
@@ -4953,8 +4953,8 @@
           adsetsBody.innerHTML = adsets
             .map((row) => {
               const r = row && typeof row === "object" ? row : {};
-              const campaign = r.campaign != null ? String(r.campaign) : "—";
-              const name = r.name != null ? String(r.name) : "—";
+              const campaign = r.campaign != null ? String(r.campaign) : "-";
+              const name = r.name != null ? String(r.name) : "-";
               return `<tr>
             <td>${escapeHtml(campaign)}</td>
             <td>${escapeHtml(name)}</td>
@@ -5218,7 +5218,7 @@
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         let m = body.error || res.statusText || "Request failed";
-        if (body.hint) m += " — " + body.hint;
+        if (body.hint) m += " - " + body.hint;
         throw new Error(m);
       }
       return body;
@@ -5312,7 +5312,7 @@
               const last = row.lastActivity || row.lastMessageAt || row.updatedAt;
               return `<label class="crm-dial-picker-row" data-dial-pick="${escapeHtml(id)}">
                 <input type="checkbox" data-dial-cb="${escapeHtml(id)}"${checked} onclick="event.stopPropagation()" />
-                <div><b>${escapeHtml(name)}</b><div class="sub">${escapeHtml(row.phone || "")} · ${escapeHtml(crmNormalizeStatus(row.crmStatus))} · ${last ? escapeHtml(fmtDate(last)) : "—"}</div></div>
+                <div><b>${escapeHtml(name)}</b><div class="sub">${escapeHtml(row.phone || "")} · ${escapeHtml(crmNormalizeStatus(row.crmStatus))} · ${last ? escapeHtml(fmtDate(last)) : "-"}</div></div>
                 <span class="crm-pill ${escapeHtml(crmNormalizeStatus(row.crmStatus))}">${escapeHtml(crmNormalizeStatus(row.crmStatus))}</span>
               </label>`;
             })
@@ -5447,7 +5447,7 @@
           }
         }
       } catch (e) {
-        accumulated = "• Unable to load suggestions — " + (e.message || String(e));
+        accumulated = "• Unable to load suggestions - " + (e.message || String(e));
       }
       card.text = accumulated || card.text;
       card.streaming = false;
@@ -5505,9 +5505,9 @@
         <details class="crm-dial-context" open>
           <summary>Lead context</summary>
           <p class="crm-muted" style="font-size:0.78rem;margin:0.5rem 0 0;">${escapeHtml(hist || "No conversation yet.")}</p>
-          <p style="font-size:0.78rem;margin:0.35rem 0;"><strong>Criteria:</strong> ${escapeHtml(critStr || "—")}</p>
-          <p style="font-size:0.78rem;margin:0.35rem 0;"><strong>Notes:</strong> ${escapeHtml(row.crmNotes || "—")}</p>
-          <p style="font-size:0.78rem;margin:0.35rem 0;"><strong>Tags:</strong> ${escapeHtml((row.tags || []).join(", ") || "—")}</p>
+          <p style="font-size:0.78rem;margin:0.35rem 0;"><strong>Criteria:</strong> ${escapeHtml(critStr || "-")}</p>
+          <p style="font-size:0.78rem;margin:0.35rem 0;"><strong>Notes:</strong> ${escapeHtml(row.crmNotes || "-")}</p>
+          <p style="font-size:0.78rem;margin:0.35rem 0;"><strong>Tags:</strong> ${escapeHtml((row.tags || []).join(", ") || "-")}</p>
         </details>`;
     }
 
@@ -5701,7 +5701,7 @@
       document.getElementById("crm-dial-complete-list").innerHTML =
         "<ul>" +
         session.leads
-          .map((l) => "<li>" + escapeHtml(l.name) + " — " + escapeHtml(l.outcome || l.status) + "</li>")
+          .map((l) => "<li>" + escapeHtml(l.name) + " - " + escapeHtml(l.outcome || l.status) + "</li>")
           .join("") +
         "</ul>";
     }
@@ -5834,7 +5834,7 @@
           { id: "e2", name: "Listing follow-up", body: "Thanks for your interest in [address]. I'd love to answer any questions." },
         ],
         plan: [
-          { id: "p1", name: "New lead — 3 touch", body: "Day 0 text · Day 2 call · Day 5 listings" },
+          { id: "p1", name: "New lead - 3 touch", body: "Day 0 text · Day 2 call · Day 5 listings" },
           { id: "p2", name: "Nurture weekly", body: "Market ping every 7 days" },
         ],
       };
@@ -5974,7 +5974,7 @@
         crmMassEmailTemplatesCache = body.templates || [];
         if (!crmMassEmailTemplatesCache.length) {
           list.innerHTML =
-            `<p class="crm-muted" style="font-size:0.78rem;">No server templates yet — create one above. These are used by Mass Email on the Leads tab.</p>`;
+            `<p class="crm-muted" style="font-size:0.78rem;">No server templates yet - create one above. These are used by Mass Email on the Leads tab.</p>`;
           return;
         }
         list.innerHTML = crmMassEmailTemplatesCache
@@ -6114,7 +6114,7 @@
         if (!res.ok) throw new Error(body.error || "Failed to load templates");
         const templates = body.templates || [];
         if (!templates.length) {
-          crmToast("No mass email templates — create one in Templates first", "error");
+          crmToast("No mass email templates - create one in Templates first", "error");
           return;
         }
         crmMassEmailSelectedIds = selectedIds;
@@ -6136,16 +6136,16 @@
           withEmail +
           " with email will receive this send (" +
           (selectedIds.length - withEmail) +
-          " skipped — no email).";
+          " skipped - no email).";
       }
       const sel = document.getElementById("crm-mass-email-template-select");
       if (sel) {
         sel.innerHTML =
-          "<option value=\"\">— choose a template —</option>" +
+          "<option value=\"\">- choose a template -</option>" +
           templates
             .map(
               (t) =>
-                `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)} — "${escapeHtml(t.subject.substring(0, 50))}"</option>`,
+                `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)} - "${escapeHtml(t.subject.substring(0, 50))}"</option>`,
             )
             .join("");
       }
@@ -6236,7 +6236,7 @@
     function crmSimulateCallRecording(leadLabel) {
       const transcript =
         "Agent: Hi, this is Marco returning your message about the property.\n" +
-        "Lead: Yes, we're still interested — mostly looking at payment options.\n" +
+        "Lead: Yes, we're still interested - mostly looking at payment options.\n" +
         "Agent: Perfect. I'll text you the full breakdown and we can schedule a quick call.";
       const summary =
         "Lead is interested and asked about payment options. Marco committed to sending a breakdown by text and scheduling a follow-up call.";
@@ -6336,7 +6336,7 @@
         <div class="crm-muted" style="font-size:0.68rem;">${escapeHtml(d.propertyAddress)}</div>
         <div style="margin-top:0.35rem;display:flex;justify-content:space-between;align-items:center;">
           <span class="crm-deal-type-badge">${escapeHtml(crmDealTypeLabel(d.dealType))}</span>
-          <span class="crm-deal-gci">${d.estimatedGCI ? crmFmtMoney(d.estimatedGCI) : "—"}</span>
+          <span class="crm-deal-gci">${d.estimatedGCI ? crmFmtMoney(d.estimatedGCI) : "-"}</span>
         </div>
         ${d.closeDate ? `<div class="crm-muted" style="font-size:0.65rem;margin-top:0.25rem;">Close ${escapeHtml(fmtDate(d.closeDate))}</div>` : ""}
         <div class="crm-muted" style="font-size:0.62rem;margin-top:0.2rem;">${escapeHtml(initials)}</div>
@@ -6359,9 +6359,9 @@
             .map(
               (d) => `<tr data-deal-id="${escapeHtml(d.id)}">
             <td><b>${escapeHtml(d.leadName)}</b></td><td>${escapeHtml(d.propertyAddress)}</td><td>${escapeHtml(crmDealTypeLabel(d.dealType))}</td>
-            <td>${escapeHtml(crmDealStatusLabel(d.status))}</td><td>${d.salePrice ? crmFmtMoney(d.salePrice) : "—"}</td>
-            <td class="crm-deal-gci">${d.estimatedGCI ? crmFmtMoney(d.estimatedGCI) : "—"}</td>
-            <td>${d.closeDate ? escapeHtml(fmtDate(d.closeDate)) : "—"}</td><td>${escapeHtml(d.assignedTo || "—")}</td>
+            <td>${escapeHtml(crmDealStatusLabel(d.status))}</td><td>${d.salePrice ? crmFmtMoney(d.salePrice) : "-"}</td>
+            <td class="crm-deal-gci">${d.estimatedGCI ? crmFmtMoney(d.estimatedGCI) : "-"}</td>
+            <td>${d.closeDate ? escapeHtml(fmtDate(d.closeDate)) : "-"}</td><td>${escapeHtml(d.assignedTo || "-")}</td>
             <td><button type="button" class="crm-light-btn" data-deal-open="${escapeHtml(d.id)}">Open</button></td></tr>`,
             )
             .join("")
@@ -6390,7 +6390,7 @@
     function crmPopulateDealAssignedSelect(sel) {
       if (!sel) return;
       const cur = sel.value;
-      sel.innerHTML = '<option value="">—</option>' + crmUsers.filter((u) => u.active).map((u) => `<option value="${escapeHtml(u.name)}">${escapeHtml(u.name)}</option>`).join("");
+      sel.innerHTML = '<option value="">-</option>' + crmUsers.filter((u) => u.active).map((u) => `<option value="${escapeHtml(u.name)}">${escapeHtml(u.name)}</option>`).join("");
       if (cur) sel.value = cur;
     }
 
@@ -6460,7 +6460,7 @@
         viewLead.onclick = () => { if (d.leadId) { crmCloseDealDetail(); crmOpenLeadDrawer(d.leadId); } };
       }
       const log = (d.activityLog || [])
-        .map((a) => `<div class="crm-muted" style="font-size:0.72rem;margin-bottom:0.35rem;">${escapeHtml(fmtDate(a.timestamp))} — ${escapeHtml(a.description)}</div>`)
+        .map((a) => `<div class="crm-muted" style="font-size:0.72rem;margin-bottom:0.35rem;">${escapeHtml(fmtDate(a.timestamp))} - ${escapeHtml(a.description)}</div>`)
         .join("") || '<span class="crm-muted">No activity yet.</span>';
       document.getElementById("crm-deal-detail-body").innerHTML = `
         <div class="crm-form-field"><label>Lead name</label><input id="crm-dd-lead-name" value="${escapeHtml(d.leadName)}" /></div>
@@ -6947,7 +6947,7 @@
       const planTag = document.getElementById("crm-plan-tag");
       if (planTag && crmPlanBuilder) {
         const cur = planTag.value;
-        planTag.innerHTML = '<option value="">— None —</option>' + crmTagTemplates
+        planTag.innerHTML = '<option value="">- None -</option>' + crmTagTemplates
           .map((t) => `<option value="${escapeHtml(t.name)}" ${cur === t.name ? "selected" : ""}>${escapeHtml(t.name)}</option>`)
           .join("");
       }
@@ -7010,7 +7010,7 @@
 
     function crmTagsBadgesHtml(row, removable) {
       const list = row.tags || [];
-      if (!list.length && !removable) return '<span class="crm-muted">—</span>';
+      if (!list.length && !removable) return '<span class="crm-muted">-</span>';
       if (!list.length) return "";
       return `<div class="crm-tags-wrap">${list.map((t) => crmTagBadgeHtml(t, row.id, removable)).join("")}</div>`;
     }
@@ -7248,7 +7248,7 @@
       items.push({
         type: "dm",
         title: "DM conversation (Instagram / TikTok)",
-        meta: `Inbound ${row.userMessageCount || 0} · Outbound ${row.assistantMessageCount || 0} · ${row.platform || "—"}`,
+        meta: `Inbound ${row.userMessageCount || 0} · Outbound ${row.assistantMessageCount || 0} · ${row.platform || "-"}`,
         body:
           (row.totalMessages || 0) > 0
             ? "Thread synced from automation webhook. Open Text tab to send SMS follow-up."
@@ -7269,7 +7269,7 @@
         type: "email",
         title: "Email",
         meta: row.email || "No email on file",
-        body: "Email sync not connected — placeholder until inbox integration is added.",
+        body: "Email sync not connected - placeholder until inbox integration is added.",
         when: null,
         placeholder: true,
       });
@@ -7285,7 +7285,7 @@
         items.push({
           type: "note",
           title: "Notes",
-          meta: "—",
+          meta: "-",
           body: "Add notes in the profile sidebar. They will show on this timeline.",
           when: null,
           placeholder: true,
@@ -7390,7 +7390,7 @@
           if (dismissed.has(key)) continue;
           let message = a.description || "";
           if (a.type === "re_engagement") {
-            message = name + " returned to your page after 30+ days — reach out to see if they are open to buying or selling";
+            message = name + " returned to your page after 30+ days - reach out to see if they are open to buying or selling";
           }
           out.push({
             key,
@@ -7530,7 +7530,7 @@
         const result = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(result.error || res.statusText);
         crmToast(
-          result.triggered ? "Re-engagement triggered" : `Not triggered: ${result.reason || "—"}`,
+          result.triggered ? "Re-engagement triggered" : `Not triggered: ${result.reason || "-"}`,
           result.triggered ? "success" : "error",
         );
         await loadCrm();
@@ -7563,7 +7563,7 @@
         const result = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(result.error || res.statusText);
         crmToast(
-          result.triggered ? `Triggered: ${result.action}` : `No action: ${result.action || "—"}`,
+          result.triggered ? `Triggered: ${result.action}` : `No action: ${result.action || "-"}`,
           result.triggered ? "success" : "error",
         );
         await loadCrm();
@@ -8002,7 +8002,7 @@
                 result.skipped +
                   " lead" +
                   (result.skipped !== 1 ? "s" : "") +
-                  " skipped — no email address on file",
+                  " skipped - no email address on file",
                 "error",
               );
             }, 1500);
@@ -8112,7 +8112,7 @@
       const n = selectedIds.length;
       const confirmed = confirm(
         `Delete ${n} lead${n > 1 ? "s" : ""}? ` +
-          `This cannot be undone — all conversation history, notes, and CRM data for ${n > 1 ? "these leads" : "this lead"} will be permanently removed.`,
+          `This cannot be undone - all conversation history, notes, and CRM data for ${n > 1 ? "these leads" : "this lead"} will be permanently removed.`,
       );
       if (!confirmed) return;
       void crmPerformMassDelete(selectedIds);
@@ -8451,9 +8451,9 @@
             <span class="crm-intent-badge ${intentCls}" id="crm-drawer-intent-badge">${escapeHtml(crmIntentLabel(intent))}</span>
           </div>
           <div class="crm-contact-meta">
-            <div><span class="k">Source</span><span class="v">${escapeHtml(row.source || "—")}</span></div>
-            <div><span class="k">Registered</span><span class="v">${row.createdAt ? escapeHtml(fmtDate(row.createdAt)) : "—"}</span></div>
-            <div><span class="k">Last interaction</span><span class="v">${row.updatedAt ? escapeHtml(fmtDate(row.updatedAt)) : "—"}</span></div>
+            <div><span class="k">Source</span><span class="v">${escapeHtml(row.source || "-")}</span></div>
+            <div><span class="k">Registered</span><span class="v">${row.createdAt ? escapeHtml(fmtDate(row.createdAt)) : "-"}</span></div>
+            <div><span class="k">Last interaction</span><span class="v">${row.updatedAt ? escapeHtml(fmtDate(row.updatedAt)) : "-"}</span></div>
           </div>
         </div>
         <div class="crm-drawer-section">
@@ -8507,7 +8507,7 @@
           </div>
           <div class="crm-drawer-field"><label for="pf-assigned">Assigned to</label>
             <select id="pf-assigned">
-              <option value="">— Unassigned —</option>
+              <option value="">- Unassigned -</option>
               ${crmUsers.filter((u) => u.active).map((u) => `<option value="${escapeHtml(u.id)}" data-name="${escapeHtml(u.name)}" ${row.assignedUserId === u.id ? "selected" : ""}>${escapeHtml(u.name)}</option>`).join("")}
             </select>
           </div>
@@ -8823,7 +8823,7 @@
             .join("")}</ul>`
         : '<div class="crm-muted" style="font-size:0.78rem;">No documents yet.</div>';
       return `
-        <div class="crm-docs-note">Auto-signing integration coming soon — use <b>Mark as Signed</b> to manually confirm after receiving signed documents.</div>
+        <div class="crm-docs-note">Auto-signing integration coming soon - use <b>Mark as Signed</b> to manually confirm after receiving signed documents.</div>
         ${list}
         <button type="button" class="crm-btn-primary crm-doc-send-open" id="crm-doc-send-open" style="margin-top:0.6rem;">Send for Signing</button>`;
     }
@@ -9041,7 +9041,7 @@
       crmDealLeadId = row.id;
       const d = row.deal || {};
       const firstName = (row.name || row.username || "").split(" ")[0] || "";
-      document.getElementById("deal-name").value = d.name || (firstName ? firstName + " — deal" : (row.name || "Deal"));
+      document.getElementById("deal-name").value = d.name || (firstName ? firstName + " - deal" : (row.name || "Deal"));
       document.getElementById("deal-address").value = d.address || row.propertyInquired || "";
       document.getElementById("deal-value").value = d.value != null ? d.value : "";
       document.getElementById("deal-stage").value = d.stage || "prospect";
@@ -9085,7 +9085,7 @@
     }
 
     const CRM_PROFILE_TEMPLATES = [
-      { name: "Intro text", type: "Text", content: "Hey [name], this is Marco with the team — thanks for reaching out! I'd love to help you find the right home. What area are you focused on?" },
+      { name: "Intro text", type: "Text", content: "Hey [name], this is Marco with the team - thanks for reaching out! I'd love to help you find the right home. What area are you focused on?" },
       { name: "Follow up email", type: "Email", content: "Hi [name],\n\nJust following up on our last conversation. I want to make sure you have everything you need. Are there any properties you'd like to take a closer look at this week?\n\nTalk soon,\nMarco" },
       { name: "Market update email", type: "Email", content: "Hi [name],\n\nHere's a quick update on what's happening in your area: inventory has shifted and a few new listings just hit the market that match what you're looking for. Want me to send over the details?\n\nBest,\nMarco" },
       { name: "Check in text", type: "Text", content: "Hey [name], just checking in! Still thinking about making a move this year? Happy to answer any questions whenever you're ready." },
@@ -9499,7 +9499,7 @@
       const name = row.assignedUserName || "";
       const uid = row.assignedUserId || "";
       const u = uid ? crmUsers.find((x) => x.id === uid) : null;
-      const initials = u ? u.avatarInitials : name ? name.slice(0, 2).toUpperCase() : "—";
+      const initials = u ? u.avatarInitials : name ? name.slice(0, 2).toUpperCase() : "-";
       const color = u ? u.avatarColor : "#64748b";
       const fg = crmTagContrastText(color);
       const title = name || "Unassigned";
@@ -9574,7 +9574,7 @@
       return leads.find((l) => l.id === leadId) || null;
     }
 
-    /* ——— Auto Plans: drawer enrollment section ——— */
+    /* --- Auto Plans: drawer enrollment section --- */
     function crmDrawerAutoPlansHtml(row) {
       const enrollments = row.autoPlanEnrollments || [];
       const enrolledIds = enrollments.map((e) => e.planId);
@@ -9591,7 +9591,7 @@
         ? `<div class="crm-drawer-field" style="margin-top:0.5rem;">
             <label for="pf-plan-enroll">Enroll in plan</label>
             <select id="pf-plan-enroll">
-              <option value="">— Select plan —</option>
+              <option value="">- Select plan -</option>
               ${available.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}${p.tag ? " (" + escapeHtml(p.tag) + ")" : ""}</option>`).join("")}
             </select>
           </div>`
@@ -9678,7 +9678,7 @@
       if (!wrap) return;
       const el = document.createElement("div");
       el.className = "crm-toast crm-toast-action";
-      el.innerHTML = `<div class="crm-toast-msg">Auto Plan available for <b>${escapeHtml(tag)}</b> tag — enroll ${escapeHtml(leadName)}?</div>
+      el.innerHTML = `<div class="crm-toast-msg">Auto Plan available for <b>${escapeHtml(tag)}</b> tag - enroll ${escapeHtml(leadName)}?</div>
         <div class="crm-toast-btns">
           <button type="button" class="crm-toast-enroll">Enroll</button>
           <button type="button" class="crm-toast-dismiss">Dismiss</button>
@@ -9691,7 +9691,7 @@
       setTimeout(close, 12000);
     }
 
-    /* ——— Auto Plans: list view ——— */
+    /* --- Auto Plans: list view --- */
     function crmRenderPlansList(content) {
       const cards = crmAutoPlans
         .map((p) => {
@@ -9795,7 +9795,7 @@
       });
     }
 
-    /* ——— Auto Plans: builder view ——— */
+    /* --- Auto Plans: builder view --- */
     function crmRenderPlanBuilder(content) {
       const b = crmPlanBuilder;
       const isNew = !b.id;
@@ -9813,7 +9813,7 @@
         <div class="crm-plan-builder">
           <div class="crm-plan-builder-row">
             <div class="crm-form-field" style="flex:1;"><label>Plan name</label><input id="crm-plan-name" type="text" value="${escapeHtml(b.name || "")}" placeholder="e.g. Watch plan" /></div>
-            <div class="crm-form-field" style="width:200px;"><label>Trigger tag</label><select id="crm-plan-tag"><option value="">— None —</option>${tagOpts}</select></div>
+            <div class="crm-form-field" style="width:200px;"><label>Trigger tag</label><select id="crm-plan-tag"><option value="">- None -</option>${tagOpts}</select></div>
             <div class="crm-form-field" style="width:auto;"><label>Active</label>
               <label class="crm-switch" style="margin-top:0.35rem;"><input type="checkbox" id="crm-plan-active" ${b.active ? "checked" : ""} /><span class="crm-switch-slider"></span></label>
             </div>
@@ -9866,7 +9866,7 @@
       crmBindPlanStepControls(content);
     }
 
-    /* ——— Knowledge Center ——— */
+    /* --- Knowledge Center --- */
     const CRM_KC_EXPAND = {
       "How the DM pipeline works":
         "When a lead comments on Marco's Instagram or TikTok, ManyChat captures it and sends the message to this system. Claude Haiku reads the message, figures out where the lead is in the funnel, and generates the next reply automatically. The goal is to capture a phone number within 2 messages. Once captured, the lead is saved here in the CRM and a breakdown is sent via SMS.",
@@ -9917,7 +9917,7 @@
           title: "Getting Started",
           cards: [
             ["How the DM pipeline works", "Walk through how inbound Instagram and TikTok DMs flow from first comment to a qualified lead in the CRM."],
-            ["Understanding lead stages", "Learn what each stage means — New, Hot, Nurture, Watch — and when leads should move between them."],
+            ["Understanding lead stages", "Learn what each stage means - New, Hot, Nurture, Watch - and when leads should move between them."],
           ],
         },
         {
@@ -10055,7 +10055,7 @@
     function crmCallQueueSelectHtml(leadId, selected) {
       const sel = selected === "urgent" || selected === "routine" ? selected : "none";
       const opts = [
-        ["none", "—"],
+        ["none", "-"],
         ["urgent", "Urgent"],
         ["routine", "Follow-up"],
       ];
@@ -10093,7 +10093,7 @@
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
           let m = body.error || res.statusText || "Request failed";
-          if (body.hint) m += " — " + body.hint;
+          if (body.hint) m += " - " + body.hint;
           showCrmErr(m);
           return;
         }
@@ -10122,7 +10122,7 @@
         not_contacted: "New",
         contacted: "Hot",
       };
-      return map[n] || map[s] || s || "—";
+      return map[n] || map[s] || s || "-";
     }
     function stageLabel(s) {
       const map = {
@@ -10136,7 +10136,7 @@
         under_contract: "Under contract",
         closed: "Closed",
       };
-      return map[s] || s || "—";
+      return map[s] || s || "-";
     }
     function crmInitial(row) {
       const s = row.name || row.username || row.platform || "?";
@@ -10200,11 +10200,11 @@
       const status = crmNormalizeStatus(row.crmStatus);
       const daysSince = row.updatedAt ? Math.floor((Date.now() - new Date(row.updatedAt).getTime()) / 86400000) : 0;
 
-      if (status === "new") return { action: "First outreach — call or text introduction", urgency: "today", days: 0 };
+      if (status === "new") return { action: "First outreach - call or text introduction", urgency: "today", days: 0 };
       if (status === "dead" || status === "unresponsive") return { action: "No follow-up scheduled", urgency: "none", days: -1 };
       if (status === "watch") {
-        if (daysSince > 14) return { action: "Light check-in — market update or listing alert", urgency: "overdue", days: 14 };
-        return { action: "Monitor — touch base when timing improves", urgency: "upcoming", days: 14 - daysSince };
+        if (daysSince > 14) return { action: "Light check-in - market update or listing alert", urgency: "overdue", days: 14 };
+        return { action: "Monitor - touch base when timing improves", urgency: "upcoming", days: 14 - daysSince };
       }
 
       if (stage === "appointment_set") return { action: "Confirm appointment details and send prep info", urgency: "today", days: 0 };
@@ -10215,10 +10215,10 @@
 
       if (status === "nurture") {
         if (daysSince > 7) return { action: "Send check-in with updated listings and market info", urgency: "overdue", days: 7 };
-        return { action: "Nurture touch — updated options or market snapshot", urgency: "upcoming", days: 7 - daysSince };
+        return { action: "Nurture touch - updated options or market snapshot", urgency: "upcoming", days: 7 - daysSince };
       }
       if (status === "hot") {
-        if (daysSince > 3) return { action: "Follow up — re-engage on property interest", urgency: "overdue", days: 3 };
+        if (daysSince > 3) return { action: "Follow up - re-engage on property interest", urgency: "overdue", days: 3 };
         return { action: "Wait for response, follow up if no reply in 3 days", urgency: "upcoming", days: 3 - daysSince };
       }
       return { action: "Review lead and decide next step", urgency: "upcoming", days: 2 };
@@ -10383,7 +10383,7 @@
       crmUserEditor = null;
     }
 
-    /* ===================== Marco Tasks (operational — not lead tasks) ===================== */
+    /* ===================== Marco Tasks (operational - not lead tasks) ===================== */
     let marcoTasksCache = [];
     let marcoTasksSummary = { pending: 0, inProgress: 0, done: 0, highPriority: 0, overdue: 0 };
     let marcoTasksUi = { status: "all", priority: "all", sort: "dueDate" };
@@ -10548,7 +10548,7 @@
         <div class="marco-tasks-header">
           <div>
             <div class="crm-section-head">Marco's Tasks</div>
-            <div class="marco-tasks-sub">Operational tasks from Carlos — not linked to leads</div>
+            <div class="marco-tasks-sub">Operational tasks from Carlos - not linked to leads</div>
           </div>
           <button type="button" class="marco-btn-teal" id="marco-add-task-btn">+ Add Task</button>
         </div>
@@ -10696,7 +10696,7 @@
       const totalMsgsAll = typeof totals.totalMessages === "number" ? totals.totalMessages : totalUserMsgs + totalAsstMsgs;
 
       function pct(num, den) {
-        if (typeof den !== "number" || den <= 0) return "—";
+        if (typeof den !== "number" || den <= 0) return "-";
         return ((100 * num) / den).toFixed(1) + "%";
       }
 
@@ -10752,7 +10752,7 @@
       }
       empty.style.display = "none";
 
-      /* ——— LEAD NURTURE (folded into the CRM; embeds the scoring/tiers page) ——— */
+      /* --- LEAD NURTURE (folded into the CRM; embeds the scoring/tiers page) --- */
       if (section === "nurture") {
         if (!content.querySelector("iframe[data-nurture]")) {
           const src = "/lead-nurture" + (token ? "?token=" + encodeURIComponent(token) : "");
@@ -10763,7 +10763,7 @@
         return;
       }
 
-      /* ——— OVERVIEW (v4 · transcript-driven, pipeline-first) ——— */
+      /* --- OVERVIEW (v4 · transcript-driven, pipeline-first) --- */
       if (section === "dashboard") {
         const buyers = allLeads.filter((l) => crmIntentInBuyerPipeline(crmEffectiveIntent(l)));
         const sellers = allLeads.filter((l) => crmIntentInSellerPipeline(crmEffectiveIntent(l)));
@@ -10864,7 +10864,7 @@
           { label: "Closed", count: sClosed.length },
         ];
 
-        // Revenue / $20M — CRM estimate from list prices until MLS
+        // Revenue / $20M - CRM estimate from list prices until MLS
         const GOAL_VOL = 20_000_000;
         const sumVol = (rows) =>
           rows.reduce((s, r) => {
@@ -10962,7 +10962,7 @@
               .map((row) => {
                 const plan = crmFollowUpPlan(row);
                 return `<tr class="crm-dash-row-lead" data-lead-profile="${escapeHtml(row.id)}">
-                <td><b>${escapeHtml(row.name || row.username || row.phone || "—")}</b></td>
+                <td><b>${escapeHtml(row.name || row.username || row.phone || "-")}</b></td>
                 <td><span class="crm-plan-due ${plan.urgency}" style="font-size:0.64rem;">${plan.urgency === "today" ? "Today" : "Overdue"}</span></td>
                 <td style="color:rgba(248,250,252,0.7);font-size:0.72rem;">${escapeHtml(plan.action)}</td>
               </tr>`;
@@ -11048,7 +11048,7 @@
         return;
       }
 
-      /* ——— CALLS (power dialer + queues) ——— */
+      /* --- CALLS (power dialer + queues) --- */
       if (section === "calls") {
         void crmDialFetchHistory().then(() => {
           const el = document.getElementById("crm-dial-recent-list");
@@ -11070,14 +11070,14 @@
         const canStart = crmDialCanStart();
         function callTaskRows(rows) {
           if (!rows.length) {
-            return `<tr><td colspan="4" style="text-align:center;padding:1.5rem;color:rgba(248,250,252,0.5);">Nobody here yet — assign from the Leads table or a lead profile.</td></tr>`;
+            return `<tr><td colspan="4" style="text-align:center;padding:1.5rem;color:rgba(248,250,252,0.5);">Nobody here yet - assign from the Leads table or a lead profile.</td></tr>`;
           }
           return rows
             .map((row) => {
-              const display = row.name || (row.username ? "@" + row.username : null) || row.phone || "—";
+              const display = row.name || (row.username ? "@" + row.username : null) || row.phone || "-";
               const plan = crmFollowUpPlan(row);
               const due =
-                plan.urgency === "today" ? "Today" : plan.urgency === "overdue" ? "Overdue" : plan.days >= 0 ? "In " + plan.days + "d" : "—";
+                plan.urgency === "today" ? "Today" : plan.urgency === "overdue" ? "Overdue" : plan.days >= 0 ? "In " + plan.days + "d" : "-";
               return `<tr class="crm-lead-row" data-lead-profile="${escapeHtml(row.id)}">
               <td><b>${escapeHtml(display)}</b><br/><span class="crm-muted mono">${escapeHtml(row.phone || "")}</span></td>
               <td>${escapeHtml(stageLabel(row.crmStage || "new"))}</td>
@@ -11143,7 +11143,7 @@
         return;
       }
 
-      /* ——— DEALS ——— */
+      /* --- DEALS --- */
       if (section === "deals") {
         const dm = crmDealMetrics(crmDeals);
         const kanbanActive = crmDealsViewMode === "kanban";
@@ -11175,13 +11175,13 @@
         return;
       }
 
-      /* ——— CHATS (iMessage-style) ——— */
+      /* --- CHATS (iMessage-style) --- */
       if (section === "chats") {
         crmRenderChats(content, allLeads);
         return;
       }
 
-      /* ——— REPORTS ——— */
+      /* --- REPORTS --- */
       if (section === "reports") {
         const avgPrice = allLeads.reduce((s, l) => s + (l.criteria?.priceCap || 0), 0);
         const leadsWithPrice = allLeads.filter((l) => l.criteria?.priceCap).length;
@@ -11201,7 +11201,7 @@
                 Your leads are searching at an average price of <strong>${avgPriceStr}</strong> across <strong>${leadsWithPrice}</strong> leads with price criteria.
                 ${sortedAreas.length ? `<br/>Top areas: ${sortedAreas.map(([a, c]) => `<strong>${escapeHtml(a)}</strong> (${c})`).join(", ")}` : ""}
               </div>
-              <button type="button" class="crm-report-btn" onclick="alert('Market snapshot generated — export coming soon.')">Generate snapshot</button>
+              <button type="button" class="crm-report-btn" onclick="alert('Market snapshot generated - export coming soon.')">Generate snapshot</button>
             </div>
             <div class="crm-report-card">
               <div class="crm-report-icon">🏠</div>
@@ -11220,7 +11220,7 @@
                 <strong>${pct(texting, withPhoneTotal)}</strong> Phone→Active,
                 <strong>${pct(contracts, allLeads.length)}</strong> to contract.
               </div>
-              <button type="button" class="crm-report-btn" onclick="alert('Pipeline performance report generated — export coming soon.')">Generate report</button>
+              <button type="button" class="crm-report-btn" onclick="alert('Pipeline performance report generated - export coming soon.')">Generate report</button>
             </div>
             <div class="crm-report-card">
               <div class="crm-report-icon">📋</div>
@@ -11228,7 +11228,7 @@
               <div class="crm-report-desc">
                 Comparative Market Analysis template pre-filled with your lead's criteria. Share with clients to support pricing discussions.
               </div>
-              <button type="button" class="crm-report-btn" onclick="alert('CMA template — coming soon with MLS integration.')">Create CMA</button>
+              <button type="button" class="crm-report-btn" onclick="alert('CMA template - coming soon with MLS integration.')">Create CMA</button>
             </div>
             <div class="crm-report-card">
               <div class="crm-report-icon">🗺️</div>
@@ -11237,7 +11237,7 @@
                 Area-by-area breakdown of where your leads are searching. Useful for targeting content and farming.
                 ${sortedAreas.length > 0 ? `Most interest: <strong>${escapeHtml(sortedAreas[0][0])}</strong>.` : "No area data yet."}
               </div>
-              <button type="button" class="crm-report-btn" onclick="alert('Neighborhood analysis — coming soon.')">Analyze areas</button>
+              <button type="button" class="crm-report-btn" onclick="alert('Neighborhood analysis - coming soon.')">Analyze areas</button>
             </div>
             <div class="crm-report-card">
               <div class="crm-report-icon">📤</div>
@@ -11270,7 +11270,7 @@
         return;
       }
 
-      /* ——— FOLLOW-UP PLANS ——— */
+      /* --- FOLLOW-UP PLANS --- */
       if (section === "followup") {
         try {
           if (typeof crmRenderFollowupSection !== "function") {
@@ -11295,7 +11295,7 @@
         return;
       }
 
-      /* ——— MARCO TASKS ——— */
+      /* --- MARCO TASKS --- */
       if (section === "marco-tasks") {
         void crmRenderMarcoTasksSection(content).catch((err) => {
           console.error("[crm] Marco Tasks render failed:", err);
@@ -11307,7 +11307,7 @@
         return;
       }
 
-      /* ——— TASKS ——— */
+      /* --- TASKS --- */
       if (section === "tasks") {
         try {
           if (typeof crmRenderTasksSection !== "function") {
@@ -11332,7 +11332,7 @@
         return;
       }
 
-      /* ——— AUTO PLANS ——— */
+      /* --- AUTO PLANS --- */
       if (section === "plans") {
         try {
           if (crmPlanBuilder) crmRenderPlanBuilder(content);
@@ -11344,7 +11344,7 @@
         return;
       }
 
-      /* ——— TEXT (SMS) ——— */
+      /* --- TEXT (SMS) --- */
       if (section === "text") {
         const pickId = crmTextPrefillLeadId;
         crmTextPrefillLeadId = null;
@@ -11361,7 +11361,7 @@
         ].join("");
         content.innerHTML = `
           <div class="crm-section-head">SMS · Twilio</div>
-          <div class="crm-section-sub">Compose the full message here — breakdowns, links, follow-ups. Pick a saved lead or enter any number.</div>
+          <div class="crm-section-sub">Compose the full message here - breakdowns, links, follow-ups. Pick a saved lead or enter any number.</div>
           <section class="crm-card crm-text-panel">
             <div class="crm-field">
               <label for="crm-text-lead">Lead (optional)</label>
@@ -11425,11 +11425,11 @@
             const body = await res.json().catch(() => ({}));
             if (!res.ok) {
               let m = body.error || res.statusText || "Send failed";
-              if (body.hint) m += " — " + body.hint;
+              if (body.hint) m += " - " + body.hint;
               throw new Error(m);
             }
             statusEl.textContent = body.threadAttached === false
-              ? "Sent (no matching lead thread — message not saved to CRM)."
+              ? "Sent (no matching lead thread - message not saved to CRM)."
               : "Sent.";
             statusEl.classList.add("ok");
             bodyTa.value = "";
@@ -11441,19 +11441,19 @@
         return;
       }
 
-      /* ——— TEMPLATES ——— */
+      /* --- TEMPLATES --- */
       if (section === "templates") {
         crmRenderTemplatesSection(content);
         return;
       }
 
-      /* ——— KNOWLEDGE CENTER ——— */
+      /* --- KNOWLEDGE CENTER --- */
       if (section === "knowledge") {
         crmRenderKnowledgeCenter(content);
         return;
       }
 
-      /* ——— USERS ——— */
+      /* --- USERS --- */
       if (section === "users") {
         if (!crmCan("canAccessSettings")) {
           content.innerHTML = '<p class="crm-muted" style="padding:1rem;">You do not have permission to manage users.</p>';
@@ -11463,7 +11463,7 @@
         return;
       }
 
-      /* ——— LEADS ——— */
+      /* --- LEADS --- */
       if (section === "leads") {
         const filteredLeads = leads;
         const totalPages = Math.max(1, Math.ceil(filteredLeads.length / LEADS_PER_PAGE));
@@ -11503,12 +11503,12 @@
             <th onclick="event.stopPropagation()"><input type="checkbox" id="crm-leads-check-all-th" aria-label="Select all visible leads" /></th><th>Name</th><th>Deals</th><th>Tags</th><th>Intent</th><th>Assigned</th><th>Ad campaign</th><th>Alerts</th><th>Source</th><th>Status</th><th>Stage</th><th>Calls</th><th>Phone</th><th>Text</th><th>Follow-up</th><th>Last</th><th></th>
           </tr></thead><tbody>
           ${pageLeads.length ? pageLeads.map((row) => {
-            const display = row.name || (row.username ? "@" + row.username : null) || row.phone || "—";
+            const display = row.name || (row.username ? "@" + row.username : null) || row.phone || "-";
             const hasUnseenPhone = row.phone && row.phoneNumberSeen === false;
             const unseenDot = hasUnseenPhone
               ? `<span class="unseen-phone-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%;
                   background:#0a84ff; margin-right:6px; box-shadow:0 0 4px rgba(10,132,255,0.6);"
-                  title="New phone number — not yet viewed"></span>`
+                  title="New phone number - not yet viewed"></span>`
               : "";
             const plan = crmFollowUpPlan(row);
             const intent = crmEffectiveIntent(row);
@@ -11525,7 +11525,7 @@
             const skipIco = traced ? ' <span title="Skip traced">🔍</span>' : needsSkip ? ' <span class="crm-skip-needs" title="Skip trace recommended">?</span>' : "";
             const dealCell = dealN > 0
               ? `<span class="crm-lead-deals-badge" data-lead-deals="${escapeHtml(row.id)}">${dealN}</span>`
-              : "—";
+              : "-";
             return `<tr class="crm-lead-row ${intentCls}${isSel ? " selected" : ""}" data-lead-profile="${escapeHtml(row.id)}" data-lead-id="${escapeHtml(row.id)}">
               <td onclick="event.stopPropagation()"><input type="checkbox" class="crm-lead-check" data-lead-check="${escapeHtml(row.id)}"${checked} /></td>
               <td>${unseenDot}<b>${escapeHtml(display)}</b>${planIco}${skipIco}<br/><span class="crm-muted">${escapeHtml(row.username ? "@" + row.username : "")}</span></td>
@@ -11535,13 +11535,13 @@
               <td onclick="event.stopPropagation()">${crmAssignedAvatarHtml(row)}</td>
               <td>${crmAdCampaignBadge(row.adCampaign)}</td>
               <td><div class="crm-row-badges"><span class="crm-count-badge">Alerts <b>${alerts}</b></span><span class="crm-count-badge">Reports <b>${reports}</b></span></div></td>
-              <td>${escapeHtml(row.platform || "—")}</td>
+              <td>${escapeHtml(row.platform || "-")}</td>
               <td onclick="event.stopPropagation()">${crmStatusSelectHtml(row.id, row.crmStatus || "new")}</td>
               <td onclick="event.stopPropagation()">${crmStageSelectHtml(row.id, row.crmStage || "new")}</td>
               <td onclick="event.stopPropagation()">${crmCallQueueSelectHtml(row.id, crmEffectiveCallQueue(row))}</td>
               <td><span class="mono phone">${escapeHtml(row.phone)}</span></td>
               <td><button type="button" class="crm-light-btn" style="padding:0.35rem 0.55rem;font-size:0.7rem;" data-crm-compose-text="${escapeHtml(row.id)}" onclick="event.stopPropagation()">Compose</button></td>
-              <td><span class="crm-plan-due ${plan.urgency}" style="font-size:0.72rem;">${escapeHtml(plan.urgency === "today" ? "Today" : plan.urgency === "overdue" ? "Overdue" : plan.days >= 0 ? "In " + plan.days + "d" : "—")}</span></td>
+              <td><span class="crm-plan-due ${plan.urgency}" style="font-size:0.72rem;">${escapeHtml(plan.urgency === "today" ? "Today" : plan.urgency === "overdue" ? "Overdue" : plan.days >= 0 ? "In " + plan.days + "d" : "-")}</span></td>
               <td>${fmtDate(row.lastMessageAt || row.updatedAt)}</td>
               <td><button type="button" class="crm-light-btn" style="padding:0.35rem 0.55rem;font-size:0.7rem;" data-crm-profile="${escapeHtml(row.id)}" onclick="event.stopPropagation()">Profile</button></td>
             </tr>`;
@@ -11796,7 +11796,7 @@
 
     /* Deep-link into the CRM workspace: /dashboard?section=leads (used by the
        shell's CRM tab) opens the CRM view directly to a section instead of the
-       default hub overview (view-home has class "active" by default — this
+       default hub overview (view-home has class "active" by default - this
        bypasses it). Also accepts ?view=crm (opens CRM to its Overview). Invalid
        or absent params leave the normal hub landing untouched. */
     (function initCrmSectionDeepLink() {
@@ -11818,9 +11818,9 @@
      (as the CRM tab), its hub module-cards link to other sub-agents (/tasks,
      /social, …). A plain anchor would navigate THIS iframe; instead switch the
      shell tab so the sub-agent opens in its own tab (Harvey stays live). Runs
-     only when embedded — standalone the links work exactly as before. */
+     only when embedded - standalone the links work exactly as before. */
   (function () {
-    if (window.parent === window) return; // standalone — leave links untouched
+    if (window.parent === window) return; // standalone - leave links untouched
     var ROUTE_TO_TAB = {
       "/jarvis": "harvey", "/dashboard": "crm", "/social": "content",
       "/lead-nurture": "leads", "/reporting": "reporting", "/finance": "finance",

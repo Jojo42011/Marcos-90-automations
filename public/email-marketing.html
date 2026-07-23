@@ -297,7 +297,7 @@
       <button type="button" id="refresh-btn">Refresh</button>
     </div>
 
-    <!-- Gmail sync health — hidden unless the sync is broken or stale -->
+    <!-- Gmail sync health - hidden unless the sync is broken or stale -->
     <div id="gmail-health-banner" style="display:none;align-items:center;gap:12px;margin:0 0 14px;padding:12px 16px;border:1px solid rgba(255,85,102,.45);border-radius:10px;background:rgba(255,85,102,.08);font-size:13px;">
       <span style="font-size:16px;">&#9888;&#65039;</span>
       <span id="gmail-health-text" style="flex:1;color:#ff8896;"></span>
@@ -305,19 +305,19 @@
     </div>
 
     <div class="stats" id="stats-row">
-      <div class="stat"><label>Sent today</label><strong id="stat-sent">&mdash;</strong></div>
-      <div class="stat"><label>Open rate</label><strong id="stat-open">&mdash;</strong></div>
-      <div class="stat clickable replies" id="stat-replies-card" title="Click to view replies"><label>Replies</label><strong id="stat-replies">&mdash;</strong></div>
-      <div class="stat clickable drips" id="stat-drips-card" title="Click to view active drips"><label>Active drips</label><strong id="stat-drips">&mdash;</strong></div>
+      <div class="stat"><label>Sent today</label><strong id="stat-sent">-</strong></div>
+      <div class="stat"><label>Open rate</label><strong id="stat-open">-</strong></div>
+      <div class="stat clickable replies" id="stat-replies-card" title="Click to view replies"><label>Replies</label><strong id="stat-replies">-</strong></div>
+      <div class="stat clickable drips" id="stat-drips-card" title="Click to view active drips"><label>Active drips</label><strong id="stat-drips">-</strong></div>
     </div>
 
     <div class="panel">
-      <h2>Sent emails <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">&mdash; click to open</span></h2>
+      <h2>Sent emails <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">- click to open</span></h2>
       <div id="sent-emails"><p style="color:var(--muted)">Loading&hellip;</p></div>
     </div>
 
     <div class="panel">
-      <h2>Gmail inbox <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">&mdash; live pull</span></h2>
+      <h2>Gmail inbox <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">- live pull</span></h2>
       <div id="gmail-inbox"><p style="color:var(--muted)">Sync Gmail to load inbox&hellip;</p></div>
     </div>
 
@@ -509,7 +509,7 @@
         const emails = (s.emailsSent || []).map(em => `
           <div class="drip-email-mini">
             ${badgeHtml(em.emailType)}
-            <span>Step ${em.sequenceStep ?? "—"}</span>
+            <span>Step ${em.sequenceStep ?? "-"}</span>
             <span style="flex:1">${escapeHtml(em.subject)}</span>
             <span style="color:var(--muted)">${em.sentAt ? new Date(em.sentAt).toLocaleDateString() : ""}</span>
           </div>
@@ -517,7 +517,7 @@
         return `
           <div class="drip-block">
             <h4>${escapeHtml(s.leadName)}</h4>
-            <div class="sub">${badgeHtml(s.sequenceType)} · Step ${s.currentStep} / ${total} · Next: ${s.nextSendDate ? new Date(s.nextSendDate).toLocaleString() : "—"}</div>
+            <div class="sub">${badgeHtml(s.sequenceType)} · Step ${s.currentStep} / ${total} · Next: ${s.nextSendDate ? new Date(s.nextSendDate).toLocaleString() : "-"}</div>
             ${emails}
           </div>
         `;
@@ -571,11 +571,11 @@
         const d = await r.json();
         let msg = "";
         if (d.authError) {
-          msg = "Gmail authorization is broken (" + d.authError + "). Inbox sync and outbound email are down — reconnect to fix.";
+          msg = "Gmail authorization is broken (" + d.authError + "). Inbox sync and outbound email are down - reconnect to fix.";
         } else if (d.lastError) {
           msg = "Last Gmail sync failed: " + d.lastError;
         } else if (!d.configured) {
-          msg = "Gmail is not configured — connect an account to enable inbox sync and sending.";
+          msg = "Gmail is not configured - connect an account to enable inbox sync and sending.";
         } else if (d.staleHours !== null && d.staleHours >= 24) {
           msg = "Gmail hasn't synced in " + d.staleHours + " hours" + (d.lastSyncAt ? " (last: " + new Date(d.lastSyncAt).toLocaleString() + ")" : "") + ".";
         }
@@ -584,7 +584,7 @@
       } catch { /* leave hidden on fetch failure */ }
     }
     document.getElementById("gmail-reconnect-btn").addEventListener("click", function () {
-      // Full-window redirect (works inside the shell iframe too — Google
+      // Full-window redirect (works inside the shell iframe too - Google
       // refuses to render its consent screen in a frame).
       const url = apiUrl("/api/email/gmail-oauth/start");
       try { window.top.location.href = url; } catch (_) { window.location.href = url; }
@@ -603,7 +603,7 @@
       const r = await fetch(apiUrl("/api/email/stats?since=" + encodeURIComponent(since)));
       const d = await r.json();
       document.getElementById("stat-sent").textContent = d.sent ?? 0;
-      document.getElementById("stat-open").textContent = d.sent > 0 ? Math.round((d.opened / d.sent) * 100) + "%" : "—";
+      document.getElementById("stat-open").textContent = d.sent > 0 ? Math.round((d.opened / d.sent) * 100) + "%" : "-";
       document.getElementById("stat-replies").textContent = d.replied ?? 0;
       document.getElementById("stat-drips").textContent = d.activeSequences ?? 0;
     }
@@ -638,7 +638,7 @@
         const r = await fetch(apiUrl("/api/email/inbox?limit=20"));
         const d = await r.json();
         if (!d.messages?.length) {
-          box.innerHTML = '<p style="color:var(--muted)">No cached inbox — click <strong>Sync Gmail</strong> to pull real emails.</p>';
+          box.innerHTML = '<p style="color:var(--muted)">No cached inbox - click <strong>Sync Gmail</strong> to pull real emails.</p>';
           return;
         }
         box.innerHTML = d.messages.map(m => `
@@ -675,7 +675,7 @@
       } catch (err) {
         el.textContent = "Sync failed";
         el.className = "conn bad";
-        alert(err.message || "Gmail sync failed — check OAuth scopes include gmail.readonly");
+        alert(err.message || "Gmail sync failed - check OAuth scopes include gmail.readonly");
       } finally {
         btn.disabled = false;
         setTimeout(loadConnection, 3000);
@@ -694,13 +694,13 @@
       }
       const totals = { buyer_drip: 6, seller_drip: 5 };
       tbody.innerHTML = d.sequences.map(s => {
-        const total = totals[s.sequenceType] || "—";
+        const total = totals[s.sequenceType] || "-";
         const typeBadge = s.sequenceType === "buyer_drip" ? "buyer_drip" : s.sequenceType === "seller_drip" ? "seller_drip" : "manual";
         return `<tr class="drip-row" data-open-drips="1">
           <td><strong>${escapeHtml(s.leadName || s.leadId)}</strong></td>
           <td>${badgeHtml(typeBadge, s.sequenceType)}</td>
           <td>${s.currentStep} / ${total}</td>
-          <td>${s.nextSendDate ? new Date(s.nextSendDate).toLocaleString() : "—"}</td>
+          <td>${s.nextSendDate ? new Date(s.nextSendDate).toLocaleString() : "-"}</td>
           <td><button type="button" data-pause="${s.id}" onclick="event.stopPropagation()">Pause</button></td>
         </tr>`;
       }).join("");
@@ -726,7 +726,7 @@
       const sel = document.getElementById("lead-select");
       const withEmail = (d.leads || []).filter(l => l.email);
       sel.innerHTML = '<option value="">Select lead…</option>' + withEmail.map(l =>
-        `<option value="${l.id}">${l.name || l.username || l.id} — ${l.email}</option>`
+        `<option value="${l.id}">${l.name || l.username || l.id} - ${l.email}</option>`
       ).join("");
     }
 

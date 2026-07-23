@@ -286,11 +286,11 @@
 
   <main class="rpt-main">
     <div id="tab-today" class="tab-panel active" data-tab="today">
-      <div id="rpt-today-empty" class="rpt-empty" style="display:none;">No digest yet — runs daily at 7am Central, or generate manually below.</div>
+      <div id="rpt-today-empty" class="rpt-empty" style="display:none;">No digest yet - runs daily at 7am Central, or generate manually below.</div>
       <div id="rpt-today-content" style="display:none;">
         <div class="rpt-banner" style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border:1px solid rgba(0,212,255,0.2); border-radius:4px; margin-bottom:16px; background:#111;">
           <div>
-            <div style="font-size:11px; color:#888;">Generated <span id="rpt-generated-at">—</span> · snapshot <span id="rpt-snapshot-date">—</span> · <span id="rpt-sms-status"></span> · <span id="rpt-harvey-status"></span></div>
+            <div style="font-size:11px; color:#888;">Generated <span id="rpt-generated-at">-</span> · snapshot <span id="rpt-snapshot-date">-</span> · <span id="rpt-sms-status"></span> · <span id="rpt-harvey-status"></span></div>
             <div id="rpt-data-line" style="font-size:9px; color:#555; margin-top:5px; font-family:var(--mono); letter-spacing:0.04em;">Live sources: TikTok/social · Gmail · SMS · CRM pipeline · transactions</div>
           </div>
           <button onclick="generateDigestNow()" style="background:#00d4ff; color:#000; border:none; padding:6px 14px; font-family:monospace; font-size:10px; font-weight:700; border-radius:2px; cursor:pointer;">↻ GENERATE NOW</button>
@@ -311,7 +311,7 @@
       <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
         <button onclick="generateWeeklyKPINow()" style="background:#00d4ff; color:#000; border:none; padding:6px 14px; font-family:monospace; font-size:10px; font-weight:700; border-radius:2px; cursor:pointer;">↻ GENERATE WEEKLY KPI NOW</button>
       </div>
-      <div id="rpt-kpi-empty" class="rpt-empty">No weekly KPI yet — runs every Friday at 5pm Central, or generate manually above.</div>
+      <div id="rpt-kpi-empty" class="rpt-empty">No weekly KPI yet - runs every Friday at 5pm Central, or generate manually above.</div>
       <div id="rpt-kpi-content" style="display:none; background:#111; border:1px solid rgba(0,212,255,0.15); border-radius:4px; overflow:hidden;">
         <div style="padding:10px 16px; font-size:10px; color:#555; font-family:var(--mono); border-bottom:1px solid rgba(255,255,255,0.05);">Week of <span id="rpt-kpi-week"></span></div>
         <div id="rpt-kpi-rows"></div>
@@ -378,11 +378,11 @@
       return "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
     }
     function fmtPctDecimal(v) {
-      if (v === null || v === undefined) return "—";
+      if (v === null || v === undefined) return "-";
       return Math.round(Number(v) * 100) + "%";
     }
     function fmtDate(iso) {
-      if (!iso) return "—";
+      if (!iso) return "-";
       try {
         return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
       } catch { return iso; }
@@ -442,7 +442,7 @@
     function buildKpiRow(label, metric, formatValue) {
       const wow = metric.weekOverWeek;
       const trendColor = wow === null ? "#555" : wow >= 0 ? "#10b981" : "#ef4444";
-      const trendArrow = wow === null ? "—" : wow >= 0 ? "▲" : "▼";
+      const trendArrow = wow === null ? "-" : wow >= 0 ? "▲" : "▼";
       const trendText = wow === null ? "no prior data" : `${Math.abs(wow)}% ${wow >= 0 ? "up" : "down"}`;
       const val = formatValue ? formatValue(metric.value) : metric.value.toLocaleString();
       return `
@@ -570,7 +570,7 @@
     }
 
     function renderSectionDetail(key, data) {
-      if (!data) return '<div class="rpt-empty">No digest data — generate a digest first.</div>';
+      if (!data) return '<div class="rpt-empty">No digest data - generate a digest first.</div>';
       let html = '<div class="rpt-detail-card">';
       if (key === "social") {
         const s = data.social;
@@ -582,7 +582,7 @@
           html += detailRow("Top post views", s.topPost.views.toLocaleString());
           html += detailRow("Top post score", String(s.topPost.score));
         } else {
-          html += detailRow("Top post", "—");
+          html += detailRow("Top post", "-");
         }
         html += detailRow("New DM leads", String(s.newDmLeads));
         html += detailRow("Lead intent flags", String(s.leadIntentFlags));
@@ -721,7 +721,7 @@
 
       if (snap) {
         document.getElementById("rpt-generated-at").textContent = fmtDate(snap.generatedAt);
-        document.getElementById("rpt-snapshot-date").textContent = snap.snapshotDate || "—";
+        document.getElementById("rpt-snapshot-date").textContent = snap.snapshotDate || "-";
         const smsEl = document.getElementById("rpt-sms-status");
         smsEl.textContent = snap.deliveredSms ? "✓ SMS delivered" : "SMS pending";
         smsEl.style.color = snap.deliveredSms ? "#10b981" : "#888";
@@ -749,7 +749,7 @@
       }
       empty.style.display = "none";
       content.style.display = "block";
-      document.getElementById("rpt-kpi-week").textContent = snap.data.weekOf || snap.snapshotDate || "—";
+      document.getElementById("rpt-kpi-week").textContent = snap.data.weekOf || snap.snapshotDate || "-";
       const m = snap.data.metrics;
       document.getElementById("rpt-kpi-rows").innerHTML = [
         buildKpiRow("New leads", m.newLeads),

@@ -381,7 +381,7 @@
     }
     function fmtUsd(n) { return "$" + Math.round(Number(n) || 0).toLocaleString("en-US"); }
     function fmtDate(iso) {
-      if (!iso) return "—";
+      if (!iso) return "-";
       try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
       catch { return iso; }
     }
@@ -415,7 +415,7 @@
       if (!configured) {
         ring.style.stroke = "#555";
         ring.style.strokeDashoffset = "490";
-        pctEl.textContent = "—";
+        pctEl.textContent = "-";
         muted.style.display = "block";
         return;
       }
@@ -555,7 +555,7 @@
 
       const big = expenses.biggestThisWeek;
       document.getElementById("fin-expense-minis").innerHTML = `
-        <div class="fin-card"><div class="fin-stat-label">BIGGEST THIS WEEK</div><div class="fin-stat-value fin-dollar-figure">${big ? fmtUsd(big.amount) : "—"}</div><div style="font-size:10px;color:#888;margin-top:4px;">${big ? escapeHtml(big.vendor || big.category) : "No expenses"}</div></div>
+        <div class="fin-card"><div class="fin-stat-label">BIGGEST THIS WEEK</div><div class="fin-stat-value fin-dollar-figure">${big ? fmtUsd(big.amount) : "-"}</div><div style="font-size:10px;color:#888;margin-top:4px;">${big ? escapeHtml(big.vendor || big.category) : "No expenses"}</div></div>
         <div class="fin-card"><div class="fin-stat-label">MTD EXPENSES</div><div class="fin-stat-value fin-dollar-figure" id="fin-mtd-exp">$0</div></div>`;
       animateCountUp(document.getElementById("fin-mtd-exp"), expenses.mtdTotal, 700, "$");
     }
@@ -588,7 +588,7 @@
         return gciSort.asc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
       });
       document.querySelector("#fin-gci-table tbody").innerHTML = sorted.map((c) =>
-        `<tr><td>${escapeHtml(c.address)}</td><td>${fmtUsd(c.grossCommissionAmount)}</td><td class="fin-dollar-figure">${fmtUsd(c.netCommission)}</td><td>${escapeHtml(c.leadSource || "—")}</td><td>${fmtDate(c.closedAt)}</td></tr>`
+        `<tr><td>${escapeHtml(c.address)}</td><td>${fmtUsd(c.grossCommissionAmount)}</td><td class="fin-dollar-figure">${fmtUsd(c.netCommission)}</td><td>${escapeHtml(c.leadSource || "-")}</td><td>${fmtDate(c.closedAt)}</td></tr>`
       ).join("") || '<tr><td colspan="5" class="fin-empty">No commissions</td></tr>';
     }
     document.querySelectorAll("#fin-gci-table th[data-sort]").forEach((th) => {
@@ -614,13 +614,13 @@
       const cpc = Object.entries(summary.costPerClosedBySource || {});
       document.getElementById("fin-cost-tables").innerHTML = `
         <div class="fin-card"><div class="fin-stat-label">COST PER LEAD</div><table class="fin-table"><tr><th>Source</th><th>Spend</th><th>Leads</th><th>CPL</th></tr>
-        ${cpl.map(([s, v]) => `<tr><td>${escapeHtml(s)}</td><td>${fmtUsd(v.spend)}</td><td>${v.leads}</td><td>${v.costPerLead != null ? fmtUsd(v.costPerLead) : "—"}</td></tr>`).join("") || '<tr><td colspan="4">—</td></tr>'}</table></div>
+        ${cpl.map(([s, v]) => `<tr><td>${escapeHtml(s)}</td><td>${fmtUsd(v.spend)}</td><td>${v.leads}</td><td>${v.costPerLead != null ? fmtUsd(v.costPerLead) : "-"}</td></tr>`).join("") || '<tr><td colspan="4">-</td></tr>'}</table></div>
         <div class="fin-card"><div class="fin-stat-label">COST PER CLOSED</div><table class="fin-table"><tr><th>Source</th><th>Spend</th><th>Closed</th><th>CPD</th></tr>
-        ${cpc.map(([s, v]) => `<tr><td>${escapeHtml(s)}</td><td>${fmtUsd(v.spend)}</td><td>${v.closings}</td><td>${v.costPerClose != null ? fmtUsd(v.costPerClose) : "—"}</td></tr>`).join("") || '<tr><td colspan="4">—</td></tr>'}</table></div>`;
+        ${cpc.map(([s, v]) => `<tr><td>${escapeHtml(s)}</td><td>${fmtUsd(v.spend)}</td><td>${v.closings}</td><td>${v.costPerClose != null ? fmtUsd(v.costPerClose) : "-"}</td></tr>`).join("") || '<tr><td colspan="4">-</td></tr>'}</table></div>`;
       const all = summary.recent || [];
       const slice = all.slice(expensePage * EXP_PAGE, (expensePage + 1) * EXP_PAGE);
       document.getElementById("fin-expense-rows").innerHTML = slice.map((e) =>
-        `<tr><td>${escapeHtml(e.expenseDate)}</td><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.vendor || "—")}</td><td>${fmtUsd(e.amount)}</td><td>${escapeHtml(e.leadSource || "—")}</td></tr>`
+        `<tr><td>${escapeHtml(e.expenseDate)}</td><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.vendor || "-")}</td><td>${fmtUsd(e.amount)}</td><td>${escapeHtml(e.leadSource || "-")}</td></tr>`
       ).join("") || '<tr><td colspan="5" class="fin-empty">No expenses</td></tr>';
       const pages = Math.ceil(all.length / EXP_PAGE) || 1;
       document.getElementById("fin-expense-pager").innerHTML = expensePage > 0
@@ -691,13 +691,13 @@
     }
 
     async function sendWeeklyNow() {
-      if (!confirm("This will text Marco right now — continue?")) return;
+      if (!confirm("This will text Marco right now - continue?")) return;
       const r = await fetch(apiUrl("/api/finance/weekly-summary-now"), { method: "POST", headers: authHeaders() });
       const body = await r.json();
       showToast(body.sent ? "Weekly summary sent" : "Summary generated (no SMS number)");
     }
     async function sendMonthlyNow() {
-      if (!confirm("This will text Marco right now — continue?")) return;
+      if (!confirm("This will text Marco right now - continue?")) return;
       const r = await fetch(apiUrl("/api/finance/monthly-report-now"), { method: "POST", headers: authHeaders() });
       const body = await r.json();
       showToast(body.sent ? "Monthly report sent" : "Report generated (no SMS number)");
@@ -705,7 +705,7 @@
     async function runPaceCheck() {
       const r = await fetch(apiUrl("/api/finance/pace-check-now"), { method: "POST", headers: authHeaders() });
       const body = await r.json();
-      showToast(body.alerted ? "Pace alert sent" : "On track — no alert");
+      showToast(body.alerted ? "Pace alert sent" : "On track - no alert");
       await loadAlerts();
     }
     async function runSpikeCheck() {
