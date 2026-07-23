@@ -609,7 +609,8 @@
       <div class="leads-main">
         <div class="leads-top">
           <h1>Transactions</h1>
-          <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY: ADDRESS / TITLE ASC ▾</button><button class="pill-btn ghost">This Year ▾</button><button class="pill-btn ghost">All Sources (4) ▾</button><button class="pill-btn ghost">Filters (0)</button><button class="pill-btn">Share</button></div>
+          <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY: ADDRESS / TITLE ASC ▾</button><button class="pill-btn ghost">This Year ▾</button><button class="pill-btn ghost">All Sources (4) ▾</button><button class="pill-btn ghost">Filters (0)</button><button class="pill-btn" id="txImportBtn">⭱ Import CSV</button><button class="pill-btn">Share</button></div>
+        <input type="file" id="txCsvInput" accept=".csv,text/csv" style="display:none">
         </div>
         <div id="txChipBar" style="padding:0 22px 8px;display:none"><span class="txchip"><b>Status:</b> <span id="txChipLabel"></span> <span class="x" id="txChipX">✕</span></span> <a class="addlink" style="margin-left:10px;font-size:12px">Save Filter</a> <a style="color:#6e7986;margin-left:8px;font-size:12px" id="txClear">Clear all</a></div>
         <div class="tbl-scroll">
@@ -1347,6 +1348,139 @@ document.querySelectorAll('.leads-nav a[data-txb]').forEach(a=>a.addEventListene
 }));
 document.getElementById("txClear").addEventListener("click",()=>{txBucket="all";document.querySelectorAll('.leads-nav a[data-txb]').forEach(x=>x.classList.remove("on"));document.querySelector('.leads-nav a[data-txb="all"]').classList.add("on");renderTx();});
 document.getElementById("txChipX").addEventListener("click",()=>document.getElementById("txClear").click());
+
+/* ===== Transactions CSV import =====
+   Parses a Brivity (or generic) CSV export and adds transactions to the board.
+   Handles quoted fields, embedded commas/newlines, and flexible column headers. */
+function parseCsv(text){
+  text=String(text||"").replace(/^﻿/,"").replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+  var rows=[],row=[],cur="",q=false;
+  for(var i=0;i<text.length;i++){
+    var ch=text[i];
+    if(q){
+      if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else {q=false;} }
+      else cur+=ch;
+    }else{
+      if(ch==='"')q=true;
+      else if(ch===","){row.push(cur);cur="";}
+      else if(ch==="\n"){row.push(cur);rows.push(row);row=[];cur="";}
+      else cur+=ch;
+    }
+  }
+  if(cur!==""||row.length){row.push(cur);rows.push(row);}
+  return rows.filter(function(r){return r.some(function(c){return String(c).trim()!=="";});});
+}
+/* find a column index by matching any of the candidate header names (case/space insensitive) */
+function csvCol(headers,cands){
+  var norm=function(s){return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");};
+  var H=headers.map(norm);
+  for(var c=0;c<cands.length;c++){
+    var want=norm(cands[c]);
+    for(var h=0;h<H.length;h++){ if(H[h]===want) return h; }
+  }
+  // fall back to "contains" match
+  for(var c2=0;c2<cands.length;c2++){
+    var want2=norm(cands[c2]);
+    for(var h2=0;h2<H.length;h2++){ if(H[h2]&&(H[h2].indexOf(want2)>=0||want2.indexOf(H[h2])>=0)) return h2; }
+  }
+  return -1;
+}
+function csvStatus(v){
+  var s=String(v||"").toLowerCase();
+  if(/clos|sold/.test(s))return"closed";
+  if(/pend|under.?contract|escrow|mutual/.test(s))return"pending";
+  if(/coming/.test(s))return"coming_soon";
+  if(/active|list/.test(s))return"active";
+  if(/withdraw/.test(s))return"withdrawn";
+  if(/cancel/.test(s))return"canceled";
+  if(/expire/.test(s))return"expired";
+  if(/pipe|prospect/.test(s))return"pipeline";
+  if(/draft/.test(s))return"draft";
+  return s?"active":"pipeline";
+}
+function csvSide(v){ return /buy|purchase/i.test(String(v||""))?"buyer":"seller"; }
+function csvDate(v){
+  v=String(v||"").trim(); if(!v)return"";
+  var m=v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);            // 2026-07-23
+  if(m)return String(m[2]).padStart(2,"0")+"-"+String(m[3]).padStart(2,"0")+"-"+m[1];
+  m=v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);    // 07/23/2026 or 7-23-26
+  if(m){var y=m[3].length===2?("20"+m[3]):m[3];return String(m[1]).padStart(2,"0")+"-"+String(m[2]).padStart(2,"0")+"-"+y;}
+  return v;
+}
+function importTxCsv(text){
+  var rows=parseCsv(text);
+  if(rows.length<2){crmToast("No rows found in CSV");return;}
+  var headers=rows[0];
+  var ix={
+    addr:csvCol(headers,["Address","Property Address","Property","Street Address","Full Address","Listing Address","Title"]),
+    city:csvCol(headers,["City","City State Zip","Area"]),
+    side:csvCol(headers,["Type","Side","Representation","Transaction Type","Deal Type","Role"]),
+    status:csvCol(headers,["Status","Transaction Status","Listing Status","Stage","Deal Status"]),
+    mls:csvCol(headers,["MLS","MLS #","MLS Number","MLS ID"]),
+    agent:csvCol(headers,["Agent","Listing Agent","Assigned Agent","Owner","Team Member"]),
+    listDate:csvCol(headers,["List Date","Date Listed","Listing Date","Start Date"]),
+    listPrice:csvCol(headers,["List Price","Listing Price","Original Price","Asking Price"]),
+    closePrice:csvCol(headers,["Close Price","Sale Price","Sold Price","Selling Price","Final Price","Purchase Price"]),
+    gci:csvCol(headers,["GCI","Commission","Gross Commission","Commission Amount","Total Commission"]),
+    closeDate:csvCol(headers,["Close Date","Closing Date","Sold Date","Settlement Date","COE"]),
+    source:csvCol(headers,["Source","Lead Source"]),
+    expiration:csvCol(headers,["Expiration","Expiration Date","Expire Date"])
+  };
+  if(ix.addr<0){crmToast("Could not find an Address/Property column");return;}
+  var get=function(r,k){return ix[k]>=0?String(r[ix[k]]||"").trim():"";};
+  var money=function(v){var n=Number(String(v||"").replace(/[^0-9.]/g,""));return Number.isFinite(n)?Math.round(n):0;};
+  var existing={};
+  TX.forEach(function(t){existing[(String(t.address||"")+"|"+String(t.mls||"")).toLowerCase()]=true;});
+  var added=0,skipped=0,toPost=[];
+  for(var i=1;i<rows.length;i++){
+    var r=rows[i];
+    var addr=get(r,"addr"); if(!addr)continue;
+    var mls=get(r,"mls");
+    var key=(addr+"|"+mls).toLowerCase();
+    if(existing[key]){skipped++;continue;}
+    existing[key]=true;
+    var status=csvStatus(get(r,"status"));
+    var listP=money(get(r,"listPrice"));
+    var closeP=money(get(r,"closePrice"));
+    var gci=money(get(r,"gci"));
+    if(status==="closed"&&!closeP&&listP)closeP=listP;
+    if(status==="closed"&&!gci&&closeP)gci=Math.round(closeP*0.03);
+    var nt={
+      id:"csv-"+i+"-"+addr.slice(0,8).replace(/\W/g,""),
+      address:addr, city:get(r,"city"), type:csvSide(get(r,"side")), status:status,
+      mls:mls, agent:get(r,"agent")||"Marco Puga",
+      dateListed:csvDate(get(r,"listDate")), listPrice:listP,
+      expiration:csvDate(get(r,"expiration")), closePrice:closeP, gci:gci,
+      closeDate:csvDate(get(r,"closeDate")), dom:"", dateCanceled:status==="canceled"?csvDate(get(r,"closeDate")):"",
+      mutualAccept:"", lastUpdated:"", source:get(r,"source")||"CSV Import",
+      statusChangedAt:"", draft:status==="draft"
+    };
+    TX.unshift(nt); added++; toPost.push(nt);
+  }
+  renderTx(); renderReport(currentReport); renderFinance();
+  crmToast("Imported "+added+" transaction"+(added===1?"":"s")+(skipped?(" · "+skipped+" duplicate"+(skipped===1?"":"s")+" skipped"):""));
+  // best-effort persistence to the server (so a refresh keeps them)
+  toPost.forEach(function(nt){
+    fetch(crmApi("/api/deals"),{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({propertyAddress:nt.address,dealType:nt.type,status:(TX_TO_DEAL[nt.status]||"active"),
+        salePrice:(nt.closePrice||nt.listPrice||0),commissionPercent:3,closeDate:nt.closeDate||"",assignedTo:nt.agent})})
+      .then(function(r){return r.ok?r.json():null;}).then(function(res){if(res&&res.deal&&res.deal.id)nt.id=res.deal.id;}).catch(function(){});
+  });
+}
+(function(){
+  var btn=document.getElementById("txImportBtn"),inp=document.getElementById("txCsvInput");
+  if(btn&&inp){
+    btn.addEventListener("click",function(){inp.click();});
+    inp.addEventListener("change",function(){
+      var f=inp.files&&inp.files[0]; if(!f)return;
+      crmToast("Reading "+f.name+" …");
+      var fr=new FileReader();
+      fr.onload=function(){try{importTxCsv(String(fr.result||""));}catch(e){crmToast("Could not read CSV");}inp.value="";};
+      fr.onerror=function(){crmToast("Could not read file");inp.value="";};
+      fr.readAsText(f);
+    });
+  }
+})();
 
 /* ===== Reporting ===== */
 function kpiRow(items){return '<div class="kpi-row">'+items.map(k=>'<div class="kpi"><div class="l">'+k[0]+'</div><div class="n">'+k[1]+'</div></div>').join("")+'</div>';}
