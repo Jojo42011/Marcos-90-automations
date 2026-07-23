@@ -1,5 +1,5 @@
 <!-- ============================================================================
-     CRM — Brivity-style front end for Marco Puga Realty.
+     CRM - Brivity-style front end for Marco Puga Realty.
      Replicates Brivity's layout/visual language (white background, teal accent,
      left icon rail, Dashboard + Message Center + Leads) using Marco's own
      branding. Currently populated with realistic MOCK data so the look can be
@@ -85,7 +85,7 @@
   .card{background:var(--card);border-radius:8px;box-shadow:var(--shadow)}
   .card-pad{padding:20px}
 
-  /* take action — horizontal-scrolling row of fixed-width stat cards (Brivity) */
+  /* take action - horizontal-scrolling row of fixed-width stat cards (Brivity) */
   .ta-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .ta-head h2{font-size:18px;font-weight:400;color:var(--ink);margin:0;display:flex;align-items:center;gap:8px}
   .ta-grid{display:flex;gap:0;overflow-x:auto;padding-bottom:5px}
@@ -200,7 +200,7 @@
   th.sortcol:hover .sarr{color:var(--teal)}
   th.sortcol.sorted{color:var(--teal-strong)}
   th.sortcol.sorted .sarr{color:var(--teal-strong)}
-  /* Frozen first two columns (checkbox + Name) — stay put while scrolling wide. */
+  /* Frozen first two columns (checkbox + Name) - stay put while scrolling wide. */
   .fx{position:sticky;background:#fff}
   .fx1{left:0;z-index:3}
   th.fx1{z-index:4}
@@ -487,7 +487,7 @@
           <a class="sf" data-sf="hot">Hot leads (buy/sell in 3 months)</a>
           <a class="sf" data-sf="visit30">Last 30 days: site visit, no task/contact</a>
           <a class="sf" data-sf="no_plan">No Auto Plan</a>
-          <a class="sf" data-sf="no_mr">No Market Report — Contacts w/ Email + Address</a>
+          <a class="sf" data-sf="no_mr">No Market Report - Contacts w/ Email + Address</a>
           <a class="sf" data-sf="overdue">Overdue Tasks</a>
           <a class="sf" data-sf="partial">Partial Leads</a>
           <a class="sf" data-sf="past_clients">Past clients, no task/outreach 30 days</a>
@@ -726,7 +726,7 @@
 </main>
 
 <!-- Calendar filter modal -->
-<!-- New Activity modal (Brivity-style) — logs an activity for a teammate -->
+<!-- New Activity modal (Brivity-style) - logs an activity for a teammate -->
 <div class="scrim" id="actScrim"><div class="modal" style="width:560px">
   <div class="modal-h"><h3 style="font-size:22px;font-weight:400;color:#54595f">New Activity</h3><button class="na-x" id="actClose">✕</button></div>
   <div class="na-grid">
@@ -784,11 +784,11 @@
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function ago(min){return new Date(Date.now()-min*60000).toISOString();}
 function relTime(iso){
-  if(!iso)return"—";
+  if(!iso)return"-";
   const d=new Date(iso);
   // Guard against missing/invalid/epoch-0 timestamps (which rendered as
   // absurd values like "688 months ago" on imported leads).
-  if(isNaN(d.getTime())||d.getTime()<=0||d.getFullYear()<2000)return"—";
+  if(isNaN(d.getTime())||d.getTime()<=0||d.getFullYear()<2000)return"-";
   const s=Math.floor((Date.now()-d)/1000);
   if(s<0)return"just now";
   if(s<60)return"a few seconds ago";const m=(s/60)|0;if(m<60)return m+" minute"+(m>1?"s":"")+" ago";
@@ -844,12 +844,12 @@ for(let i=0;i<N;i++){
 let CONVOS=[
   {names:["Marco Puga","Raymond Hamelin"], at:ago(21), msgs:[
     {me:false,t:"Hi Marco, are we still on for the walkthrough this weekend?",at:ago(80)},
-    {me:true,t:"Hi Raymond, thank you for speaking with me earlier. Yes — Saturday at 10am works great. I'll send the address shortly.",at:ago(21)}]},
+    {me:true,t:"Hi Raymond, thank you for speaking with me earlier. Yes - Saturday at 10am works great. I'll send the address shortly.",at:ago(21)}]},
   {names:["Marco Puga","Michael Angelo Santacruz"], at:ago(60), msgs:[
     {me:true,t:"Congrats again on closing! It was a pleasure helping you find the home.",at:ago(120)},
     {me:false,t:"Thank you again god bless to you as well. We love the house!",at:ago(60)}]},
   {names:["Lewis Taylor","Marco Puga"], at:ago(62), msgs:[
-    {me:true,t:"Hey Mr. Taylor, just giving you an update — two new listings hit the market in your price range this morning.",at:ago(62)}]},
+    {me:true,t:"Hey Mr. Taylor, just giving you an update - two new listings hit the market in your price range this morning.",at:ago(62)}]},
   {names:["Carlos Soria","Jacob Garcia","Marco Puga"], at:ago(64), msgs:[
     {me:true,t:"Sending over the disclosure docs now, let me know if anything looks off.",at:ago(90)},
     {me:false,t:"Okay thank you",at:ago(64)}]},
@@ -858,10 +858,10 @@ let CONVOS=[
     {me:false,t:"👍 to “Good morning guys! Just a...”",at:ago(66)}]},
   {names:["Ginger Mashburn","Marco Puga"], at:ago(15*60), msgs:[
     {me:false,t:"Did you see that house on Blanco go pending already?",at:ago(15*60+30)},
-    {me:true,t:"Hey Ginger! I saw that too. Honestly they're moving fast right now — let's get you in to see the next one quick.",at:ago(15*60)}]},
+    {me:true,t:"Hey Ginger! I saw that too. Honestly they're moving fast right now - let's get you in to see the next one quick.",at:ago(15*60)}]},
   {names:["Marco Puga","Michial Cebe"], at:ago(15*60), msgs:[
     {me:false,t:"Appreciate you sending the comps over.",at:ago(16*60)},
-    {me:true,t:"Thank you, Michial. I appreciate it — happy to help anytime.",at:ago(15*60)}]},
+    {me:true,t:"Thank you, Michial. I appreciate it - happy to help anytime.",at:ago(15*60)}]},
   {names:["Joshua Rangel","Marco Puga","Pa Rangel"], at:ago(17*60), msgs:[
     {me:false,t:"We are on our way home now",at:ago(17*60)}]},
   {names:["Jonathan Torres","Marco Puga"], at:ago(17*60), msgs:[
@@ -909,7 +909,7 @@ function renderTakeAction(){
 }
 function deriveAction(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"submitted a home valuation";if(l.propertyInquired)return"asked about a property";if(l.activity.some(a=>a.type==="text"))return"sent a message";return"is a new lead";}
 function renderFeed(){
-  // AUTO PLANS tab — enrolled leads + their plan, instead of the activity feed.
+  // AUTO PLANS tab - enrolled leads + their plan, instead of the activity feed.
   if(dashMode==="plans"){
     const PLANS=["New Lead Follow-Up","Past Client Nurture","Open House Follow-Up","Sphere Quarterly Touch"];
     const enrolled=dashLeads().filter(l=>(l.autoPlanEnrollments||[]).length).slice(0,shown);
@@ -956,8 +956,8 @@ function renderTracking(){
 let SEARCH="", leadSort="recent";
 function _q(s){return String(s||"").toLowerCase();}
 function hitRow(o){ if(!SEARCH)return true; return (_q(o.name)+" "+_q(o.address)+" "+_q(o.city)+" "+_q(o.phone)+" "+_q(o.email)+" "+_q(o.agent)).includes(SEARCH); }
-/* Column sort — set by clicking a table header (Brivity-style ▲/▼). When no
-   column is chosen, fall back to the SORT BY pill (recent / name A–Z). */
+/* Column sort - set by clicking a table header (Brivity-style ▲/▼). When no
+   column is chosen, fall back to the SORT BY pill (recent / name A-Z). */
 var leadSortCol=null, leadSortDir=1;
 var STATUS_ORDER={new:0,hot:1,nurture:2,watch:3,unqualified:4,dead:4,unresponsive:5,past_client:6,archived:7};
 var STAGE_ORDER={"NEW LEAD":0,"ATTEMPTED CONTACT":1,"APPOINTMENT SET":2,"SHOWING SET":3,"PENDING":4,"UNDER CONTRACT":5,"CLOSED":6};
@@ -1004,7 +1004,7 @@ let convSearchTerm="";
 function convTitle(names){ return names.length===2?names.join(" & "):names.join(", "); }
 // A conversation reads as unread when the latest message came from someone else.
 function convUnread(c){ const last=c.msgs[c.msgs.length-1]||{}; return last.me===false; }
-// Overlapping avatar stack — one 26px circle per participant (Marco = his photo).
+// Overlapping avatar stack - one 26px circle per participant (Marco = his photo).
 function avStack(names){
   return '<div class="av-stack">'+names.slice(0,3).map(n=>
     '<span class="av'+avClass(n)+'">'+esc(initials(n))+'</span>').join("")+'</div>';
@@ -1062,7 +1062,7 @@ function renderLeads(){
   document.getElementById("leadRows").innerHTML=rows.map(l=>{
     const sm=STATUS_META[l.statusDisp]||STATUS_META.nurture;
     const noEmail=!l.email;
-    const reg=l.createdAt?new Date(l.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"—";
+    const reg=l.createdAt?new Date(l.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"-";
     return '<tr>'+
       '<td class="fx fx1"><input type="checkbox" class="cb"></td>'+
       '<td class="fx fx2"><span class="lead-name ldlink" data-lid="'+esc(l.id)+'">'+esc(l.name)+'</span></td>'+
@@ -1070,14 +1070,14 @@ function renderLeads(){
       '<td><span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
       '<td><span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
       '<td>'+actIcon("email",noEmail)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!l.address)+'</td><td>'+actIcon("other")+'</td>'+
-      '<td>'+(l.address?'<div class="addr">'+esc(l.address)+'</div>':'<span style="color:#c2cad1">—</span>')+'</td>'+
+      '<td>'+(l.address?'<div class="addr">'+esc(l.address)+'</div>':'<span style="color:#c2cad1">-</span>')+'</td>'+
       '<td><div class="li"><span class="lab">'+esc(l.lastLabel)+'</span> <span class="tm">'+relTime(l.lastActivity)+'</span></div></td>'+
       '<td><div class="due '+(l.due.label==="Due Today"?"today":"up")+'">'+l.due.label+'<span class="d">'+l.due.date+'</span></div></td>'+
       '<td><div class="pa"><span class="agav has-marco-photo"></span><span>Marco Puga</span></div></td>'+
-      '<td class="mut-cell">'+(l.autoPlan?esc(l.autoPlan):"—")+'</td>'+
-      '<td class="mut-cell">—</td>'+
-      '<td class="mut-cell">—</td>'+
-      '<td class="mut-cell">'+esc(l.source||"—")+'</td>'+
+      '<td class="mut-cell">'+(l.autoPlan?esc(l.autoPlan):"-")+'</td>'+
+      '<td class="mut-cell">-</td>'+
+      '<td class="mut-cell">-</td>'+
+      '<td class="mut-cell">'+esc(l.source||"-")+'</td>'+
       '<td class="mut-cell">'+esc(reg)+'</td>'+
     '</tr>';
   }).join("");
@@ -1142,8 +1142,8 @@ function renderPeople(){
       '<td>'+personStatusPill(p.status)+'</td>'+
       '<td><span class="stage">'+esc(p.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
       '<td>'+actIcon("email",!p.email)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!p.address)+'</td><td>'+actIcon("other")+'</td>'+
-      '<td>'+(p.address?'<div class="addr">'+esc(p.address)+'</div>':'<span style="color:#c2cad1">—</span>')+'</td>'+
-      '<td>'+(p.lastActivity?'<div class="li"><div class="lab">'+esc(p.lastLabel)+'</div><div class="tm">'+relTime(p.lastActivity)+'</div></div>':'<span style="color:#c2cad1">—</span>')+'</td>'+
+      '<td>'+(p.address?'<div class="addr">'+esc(p.address)+'</div>':'<span style="color:#c2cad1">-</span>')+'</td>'+
+      '<td>'+(p.lastActivity?'<div class="li"><div class="lab">'+esc(p.lastLabel)+'</div><div class="tm">'+relTime(p.lastActivity)+'</div></div>':'<span style="color:#c2cad1">-</span>')+'</td>'+
       '<td><div class="due '+(p.due.label==="Due Today"?"today":"up")+'">'+p.due.label+'<span class="d">'+p.due.date+'</span></div></td></tr>';
   }).join("");
   let pg='<button '+(pPage<=1?'disabled':'')+' data-p="'+(pPage-1)+'">‹</button>';
@@ -1252,7 +1252,7 @@ function txCell(t,f){
 }
 function txRowHTML(t){
   const sm=TX_STATUS[t.status]||TX_STATUS.pipeline;
-  const dash='<span style="color:#c2cad1">—</span>';
+  const dash='<span style="color:#c2cad1">-</span>';
   const isBuyer=t.type==="buyer";
   const editing=txEditId===t.id;
   const nameCell = editing
@@ -1279,7 +1279,7 @@ function txRowHTML(t){
     txCell(t,"dateCanceled")+
     '<td style="color:#6b7480">'+(t.mutualAccept||dash)+'</td>'+
     '<td style="color:#6b7480">'+(t.lastUpdated||dash)+'</td>'+
-    '<td style="color:#6b7480">'+esc(t.source||"—")+'</td>'+
+    '<td style="color:#6b7480">'+esc(t.source||"-")+'</td>'+
     '<td style="color:#6b7480">'+(t.statusChangedAt||dash)+'</td>'+
     editCol+
   '</tr>';
@@ -1401,7 +1401,7 @@ function activityTable(pairs){
   return h;
 }
 function repSelect(opts){return '<select class="select rep-sel">'+opts.map(o=>'<option>'+o+'</option>').join("")+'</select>';}
-// Brivity "Closings Breakdown" — closed deals split by type, computed from TX.
+// Brivity "Closings Breakdown" - closed deals split by type, computed from TX.
 function closingsBreakdownHTML(){
   const closed=TX.filter(t=>t.status==="closed");
   const total=closed.length||1;
@@ -1414,7 +1414,7 @@ function closingsBreakdownHTML(){
     const avgClose=cnt?vol/cnt:0, avgComm=cnt?gci/cnt:0, commPct=vol?Math.round(gci/vol*1000)/10:0;
     tVol+=vol; tGci+=gci; tCnt+=cnt;
     return '<tr><td style="font-weight:600;color:#5b6570">'+label+'</td><td>'+cnt+' ('+pct+'%)</td>'+
-      '<td>'+(vol?repMoney(vol):"—")+'</td><td>'+repMoney(gci)+'</td><td>'+repMoney(avgClose)+'</td>'+
+      '<td>'+(vol?repMoney(vol):"-")+'</td><td>'+repMoney(gci)+'</td><td>'+repMoney(avgClose)+'</td>'+
       '<td>'+repMoney(avgComm)+' ('+commPct+'%)</td></tr>';
   }).join("");
   return '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:760px">'+
@@ -1534,15 +1534,15 @@ document.getElementById("calClearFilters").addEventListener("click",e=>{e.preven
 /* ===== Email ===== */
 let CAMPAIGNS=[
   {name:"July Market Update",aud:"All Leads",status:"Sent",sent:1240,opens:"38%",clicks:"6.2%",date:"07-12-2026"},
-  {name:"New Listing — 616 Valley Garden",aud:"Buyers · Active",status:"Sent",sent:410,opens:"44%",clicks:"9.1%",date:"07-08-2026"},
-  {name:"Just Sold — Cantura Mills",aud:"Past Clients",status:"Sent",sent:320,opens:"52%",clicks:"7.7%",date:"06-29-2026"},
-  {name:"Summer Buyer Guide",aud:"Nurture",status:"Scheduled",sent:0,opens:"—",clicks:"—",date:"07-24-2026"},
-  {name:"Price Improvement — Fort Concho",aud:"Watchers",status:"Draft",sent:0,opens:"—",clicks:"—",date:"—"},
+  {name:"New Listing - 616 Valley Garden",aud:"Buyers · Active",status:"Sent",sent:410,opens:"44%",clicks:"9.1%",date:"07-08-2026"},
+  {name:"Just Sold - Cantura Mills",aud:"Past Clients",status:"Sent",sent:320,opens:"52%",clicks:"7.7%",date:"06-29-2026"},
+  {name:"Summer Buyer Guide",aud:"Nurture",status:"Scheduled",sent:0,opens:"-",clicks:"-",date:"07-24-2026"},
+  {name:"Price Improvement - Fort Concho",aud:"Watchers",status:"Draft",sent:0,opens:"-",clicks:"-",date:"-"},
 ];
 let DRIPS=[
-  {name:"New Buyer Lead — 30 Day",enrolled:214,active:63,emails:8,status:"Running"},
+  {name:"New Buyer Lead - 30 Day",enrolled:214,active:63,emails:8,status:"Running"},
   {name:"Seller Valuation Follow-up",enrolled:88,active:22,emails:6,status:"Running"},
-  {name:"Past Client — Yearly Touch",enrolled:340,active:340,emails:12,status:"Running"},
+  {name:"Past Client - Yearly Touch",enrolled:340,active:340,emails:12,status:"Running"},
   {name:"Cold Lead Re-engage",enrolled:512,active:120,emails:5,status:"Paused"},
 ];
 let EMAIL_TEMPLATES=["New Listing Announcement","Just Sold","Open House Invite","Price Improvement","Market Update","Buyer Welcome","Seller Welcome","Closing Congrats","Holiday Greeting"];
@@ -1564,7 +1564,7 @@ const EMAIL_SEC={
   campaigns:()=>'<div class="rep-head"><h1>Campaigns</h1><button class="pill-btn" id="newCampaignBtn">+ NEW CAMPAIGN</button></div>'+
     '<div class="em-stat">'+[["Emails Sent","1,970"],["Avg. Open Rate","41%"],["Avg. Click Rate","7.3%"],["Unsubscribes","4"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:820px"><thead><tr><th>Campaign</th><th>Audience</th><th>Status</th><th>Sent</th><th>Opens</th><th>Clicks</th><th>Date</th></tr></thead><tbody>'+
-    CAMPAIGNS.map(c=>'<tr><td><span class="lead-name">'+esc(c.name)+'</span></td><td style="color:#6b7480">'+esc(c.aud)+'</td><td>'+emStatusPill(c.status)+'</td><td style="color:#6b7480">'+(c.sent||"—")+'</td><td style="color:#6b7480">'+c.opens+'</td><td style="color:#6b7480">'+c.clicks+'</td><td style="color:#7a8590">'+c.date+'</td></tr>').join("")+
+    CAMPAIGNS.map(c=>'<tr><td><span class="lead-name">'+esc(c.name)+'</span></td><td style="color:#6b7480">'+esc(c.aud)+'</td><td>'+emStatusPill(c.status)+'</td><td style="color:#6b7480">'+(c.sent||"-")+'</td><td style="color:#6b7480">'+c.opens+'</td><td style="color:#6b7480">'+c.clicks+'</td><td style="color:#7a8590">'+c.date+'</td></tr>').join("")+
     '</tbody></table></div></div>',
   drips:()=>'<div class="rep-head"><h1>Drip Campaigns</h1><button class="pill-btn" id="newDripBtn">+ NEW DRIP</button></div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:720px"><thead><tr><th>Drip Campaign</th><th>Enrolled</th><th>Active</th><th>Emails</th><th>Status</th></tr></thead><tbody>'+
@@ -1598,7 +1598,7 @@ function bindEmail(){
   var nc=b.querySelector("#newCampaignBtn"); if(nc)nc.onclick=function(){
     var name=prompt("Campaign name:"); if(!name||!name.trim())return; name=name.trim();
     var aud=prompt("Audience (e.g. All Leads, Buyers, Past Clients):","All Leads")||"All Leads";
-    var c={name:name,aud:aud,status:"Draft",sent:0,opens:"—",clicks:"—",date:"—"}; CAMPAIGNS.unshift(c); emailAddPush("campaigns",c); renderEmail("campaigns"); crmToast("Campaign created");
+    var c={name:name,aud:aud,status:"Draft",sent:0,opens:"-",clicks:"-",date:"-"}; CAMPAIGNS.unshift(c); emailAddPush("campaigns",c); renderEmail("campaigns"); crmToast("Campaign created");
   };
   var nn=b.querySelector("#newNewsletterBtn"); if(nn)nn.onclick=function(){
     var name=prompt("Newsletter name:"); if(!name||!name.trim())return;
@@ -1689,7 +1689,7 @@ function mapPeopleLive(rows){
 }
 function mapDealTx(d){
   const closed=d.status==="closed";
-  return {id:d.id, address:d.propertyAddress||"—", city:"", type:(d.dealType==="buyer")?"B":"S",
+  return {id:d.id, address:d.propertyAddress||"-", city:"", type:(d.dealType==="buyer")?"B":"S",
     status:DEAL_STATUS_MAP[d.status]||"active", mls:"", agent:d.assignedTo||"Marco Puga",
     dateListed:fmtMDY(d.openedDate), listPrice:d.salePrice||0, expiration:fmtMDY(d.closeDate),
     closePrice:closed?(d.salePrice||0):0, gci:d.estimatedGCI||0, draft:false};
@@ -1716,7 +1716,7 @@ async function loadLive(opts){
       if(p&&seen.has("p"+p.slice(-10)))return false; if(e&&seen.has("e"+e))return false; return true; });
     rawLeads=rawLeads.concat(fresh);
   }
-  if(rawLeads.length<3) return;   // too sparse — keep the demo set
+  if(rawLeads.length<3) return;   // too sparse - keep the demo set
 
   LEADS=rawLeads.map(mapLeadRow);
   PEOPLE=mapPeopleLive(LEADS);
@@ -1744,7 +1744,7 @@ document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
   if(/^SORT BY/i.test(b.textContent)){
     b.style.cursor="pointer"; b.dataset.live="1";
     b.addEventListener("click",()=>{ leadSort=(leadSort==="recent")?"name":"recent"; leadSortCol=null;
-      b.textContent="SORT BY: "+(leadSort==="name"?"NAME A–Z":"MOST RECENT")+" ▾";
+      b.textContent="SORT BY: "+(leadSort==="name"?"NAME A-Z":"MOST RECENT")+" ▾";
       page=1; pPage=1; renderLeads(); renderPeople(); renderTx(); renderNurture(); if(typeof paintSortArrows==="function")paintSortArrows(); });
   }
 });
@@ -1762,7 +1762,7 @@ document.getElementById("emBody").addEventListener("change",e=>{ if(e.target.tag
       if(b&&b.lastError) crmToast("Brivity refresh failed: "+String(b.lastError).slice(0,80));
       else if(b&&b.configured) crmToast("Refreshed · "+(b.count||LEADS.length)+" Brivity contacts");
       else crmToast("Refreshed · "+LEADS.length+" leads");
-    }).catch(function(){ crmToast("Refresh failed — check connection"); })
+    }).catch(function(){ crmToast("Refresh failed - check connection"); })
     .finally(function(){ setTimeout(function(){btn.classList.remove("spinning");},450); });
   });
 })();
@@ -1960,7 +1960,7 @@ document.getElementById("leadDetail").addEventListener("click",e=>{ const ed=e.t
 
 /* ---- lead detail ---- */
 let currentLeadId=null, ldTab="note", ldOutcome=null;
-function fmtReg(iso){ const d=new Date(iso); if(isNaN(d))return"—"; return MONTHS[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear(); }
+function fmtReg(iso){ const d=new Date(iso); if(isNaN(d))return"-"; return MONTHS[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear(); }
 function fmtUpdated(iso){ const d=iso?new Date(iso):new Date(); if(isNaN(d))return"just now"; let h=d.getHours(),ap=h>=12?"pm":"am"; h=h%12||12; return d.getDate()+" "+MONTHS[d.getMonth()]+", "+h+":"+String(d.getMinutes()).padStart(2,"0")+" "+ap; }
 function fieldRow(k,v){ return '<div class="ld-field"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
 function leadInsights(l){
@@ -1969,8 +1969,8 @@ function leadInsights(l){
   if(c.location||l.propertyInquired) out.push("Interested in "+(c.location||l.propertyInquired)+((c.beds!=null||c.baths!=null)?" ("+(c.beds!=null?c.beds+" bed":"")+(c.baths!=null?" / "+c.baths+" bath":"")+(c.sqft!=null?" / "+c.sqft+" sqft":"")+")":"")+".");
   if((l.activity||[]).length) out.push("Logged activity: "+l.activity.length+" touch"+(l.activity.length>1?"es":"")+" on record.");
   if(l._msgs&&l._msgs.length) out.push(l._msgs.length+" message"+(l._msgs.length>1?"s":"")+" exchanged so far.");
-  if(l.crmCallQueue==="urgent") out.push("Flagged urgent — a task is due today.");
-  if(!out.length) out.push("New lead — no activity yet. Reach out to get the conversation started.");
+  if(l.crmCallQueue==="urgent") out.push("Flagged urgent - a task is due today.");
+  if(!out.length) out.push("New lead - no activity yet. Reach out to get the conversation started.");
   return out;
 }
 function openLead(id, tab){ const l=LEADS.find(x=>x.id===id); if(!l)return; currentLeadId=id; ldTab=tab||"note"; ldOutcome=null;
@@ -1989,10 +1989,10 @@ function renderLead(){
         '<div class="ld-editbtn"><button id="ldEdit">✎ EDIT</button><button>▾</button></div>'+
         '<button class="ld-nav l" id="ldPrev">‹</button><button class="ld-nav r" id="ldNext">›</button>'+
         '<div class="ld-av'+avClass(l.name)+'">'+esc(initials(l.name))+'</div><div class="ld-name">'+esc(l.name)+'</div>'+
-        '<div class="ld-sub">SOURCE: <b>'+esc(l.source||"—")+'</b></div>'+
+        '<div class="ld-sub">SOURCE: <b>'+esc(l.source||"-")+'</b></div>'+
         '<div class="ld-sub" style="margin-top:4px">Registered '+esc(fmtReg(l.createdAt))+'</div>'+
         '<div style="margin-top:16px">'+
-          fieldRow("LAST INTERACTION",'<span class="v">'+(relTime(l.lastActivity)||"—")+'</span>')+
+          fieldRow("LAST INTERACTION",'<span class="v">'+(relTime(l.lastActivity)||"-")+'</span>')+
           fieldRow("STAGE",'<span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' ▾</span>')+
           fieldRow("STATUS",'<span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span>')+
           fieldRow("INTENT",'<span class="ld-intent editable" data-lid="'+esc(l.id)+'" data-kind="intent">'+intentLabel+' ▾</span>')+
@@ -2001,7 +2001,7 @@ function renderLead(){
         '<label style="display:flex;align-items:center;gap:8px;margin:14px 0;font-size:13px;color:#6b7480;cursor:pointer"><input type="checkbox" checked style="accent-color:var(--teal)"> Show in Leads Index?</label>'+
         '<div class="ld-sec-h" style="border-top:1px solid var(--line-2);padding-top:16px">Contact Info</div>'+
         '<div class="ld-field"><span class="k">EMAIL</span><span class="v">'+(l.email?esc(l.email):'<a class="addlink">Add Email Address</a>')+'</span></div>'+
-        '<div class="ld-field"><span class="k">PHONE</span><span class="v" style="display:flex;align-items:center;gap:8px">'+actIcon("phone")+actIcon("sms")+esc(l.phone||"—")+'</span></div>'+
+        '<div class="ld-field"><span class="k">PHONE</span><span class="v" style="display:flex;align-items:center;gap:8px">'+actIcon("phone")+actIcon("sms")+esc(l.phone||"-")+'</span></div>'+
         (l.address?'<div class="ld-field"><span class="k">ADDRESS</span><span class="v" style="max-width:180px;text-align:right">'+esc(l.address)+'</span></div>':'')+
       '</div>'+
       '<div>'+
@@ -2074,7 +2074,7 @@ function renderTimeline(){
   const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
   const items=(l.activity||[]).slice().reverse().slice(0,12);
   const icon=t=>t==="call"?"☎":t==="text"?"✉":t==="email"?"@":t==="appointment"?"◷":t==="note"?"✎":"•";
-  document.getElementById("ldTimeline").innerHTML=items.length?items.map(a=>'<div class="tl"><div class="dot">'+icon(a.type)+'</div><div><div class="tt">'+esc((a.type||"activity").charAt(0).toUpperCase()+(a.type||"activity").slice(1))+(a.note?" — "+esc(a.note):"")+'</div><div class="tm">'+(a.at?relTime(a.at):"")+'</div></div></div>').join(""):'<div class="empty" style="padding:16px 0">No activity logged yet.</div>';
+  document.getElementById("ldTimeline").innerHTML=items.length?items.map(a=>'<div class="tl"><div class="dot">'+icon(a.type)+'</div><div><div class="tt">'+esc((a.type||"activity").charAt(0).toUpperCase()+(a.type||"activity").slice(1))+(a.note?" - "+esc(a.note):"")+'</div><div class="tm">'+(a.at?relTime(a.at):"")+'</div></div></div>').join(""):'<div class="empty" style="padding:16px 0">No activity logged yet.</div>';
 }
 document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")&&!e.target.closest("[data-dd]")&&!e.target.closest("select")&&!e.target.closest("#userFilter")) closeDD(); });
 window.addEventListener("scroll",closeDD,true);
@@ -2102,14 +2102,14 @@ function renderNurture(){
   put("nbRep",nurtureFor("replied").length);
   const full=sortRows(nurtureFor(nurtureBucket).filter(hitRow));
   const nc=document.getElementById("nCount"); if(nc)nc.textContent="("+full.length.toLocaleString()+")";
-  // Paginate — rendering all ~2,600 rows at once was the slowdown.
+  // Paginate - rendering all ~2,600 rows at once was the slowdown.
   const nPages=Math.max(1,Math.ceil(full.length/NPER));
   if(nPage>nPages)nPage=nPages;
   const list=full.slice((nPage-1)*NPER,nPage*NPER);
   // Take-Action-style KPI cards (Brivity dashboard pattern)
   const dueToday=base.filter(l=>l.due&&l.due.label==="Due Today").length;
   const stale=base.filter(l=>l.lastActivity&&(Date.now()-new Date(l.lastActivity))>7*86400000).length;
-  const kpis=[[base.length,"Leads in<br>Nurture"],[dueToday,"Touches<br>Due Today"],[stale,"No Touch in<br>7+ Days"],[nurtureFor("replied").length,"Replied —<br>Follow Up"]];
+  const kpis=[[base.length,"Leads in<br>Nurture"],[dueToday,"Touches<br>Due Today"],[stale,"No Touch in<br>7+ Days"],[nurtureFor("replied").length,"Replied -<br>Follow Up"]];
   const nk=document.getElementById("nurtureKpis");
   if(nk)nk.innerHTML=kpis.map(k=>'<div class="ta-card"><div class="n">'+k[0]+'</div><div class="l">'+k[1]+'</div></div>').join("");
   const rows=document.getElementById("nurtureRows");
@@ -2145,7 +2145,7 @@ let finBucket="overview";
 function finMonthly(){
   const m={};
   TX.filter(t=>t.status==="closed").forEach(t=>{
-    const mo=(t.closeDate||t.dateListed||"").slice(0,2)||"—";
+    const mo=(t.closeDate||t.dateListed||"").slice(0,2)||"-";
     (m[mo]=m[mo]||{units:0,vol:0,gci:0}); m[mo].units++; m[mo].vol+=t.closePrice||0; m[mo].gci+=t.gci||0;
   });
   return Object.keys(m).sort().map(k=>({mo:k,...m[k]}));
@@ -2187,7 +2187,7 @@ function renderFinance(){
   } else {
     const builtins=[["Closed GCI",repMoney(gciY)],["Closed Units",String(closed.length)],["Closed Volume",repMoney(vol)],["Listings Taken",String(act.length)],["Pended Units",String(pend.length)]];
     const customNames=Object.keys(FIN_GOALS).filter(n=>FIN_GOALS[n]&&FIN_GOALS[n].custom);
-    let cards=builtins.map(g=>goalCard(g[0],g[1],false)).join("")+customNames.map(n=>goalCard(n,(FIN_GOALS[n].value||"—"),true)).join("");
+    let cards=builtins.map(g=>goalCard(g[0],g[1],false)).join("")+customNames.map(n=>goalCard(n,(FIN_GOALS[n].value||"-"),true)).join("");
     if(finGoalEditing==="__new__")cards+=newGoalCard();
     el.innerHTML='<div class="rep-head"><h1>Team Goals</h1><button class="pill-btn" id="addGoalBtn">+ Add Team Goal</button></div>'+
       '<div class="log-grid" style="grid-template-columns:repeat(3,1fr);gap:14px">'+cards+'</div>';
@@ -2204,7 +2204,7 @@ function goalCard(name,value,isCustom){
       '<input class="goal-in" data-gk="ytd" placeholder="YTD Goal" value="'+esc(g.ytd||"")+'" style="height:30px;border:1px solid var(--teal);border-radius:6px;padding:0 9px;font-size:12px">'+
       '<div style="display:flex;gap:6px"><button class="pill-btn" data-goalsave="'+esc(name)+'" style="padding:6px 12px;font-size:11px">SAVE</button><button class="pill-btn ghost" data-goalcancel="1" style="padding:6px 12px;font-size:11px">CANCEL</button></div></div>';
   } else {
-    body='<div style="color:#6b7580;font-size:11px">2026 Goal: '+(g.annual?esc(g.annual):"—")+' · YTD Goal: '+(g.ytd?esc(g.ytd):"—")+'</div>'+
+    body='<div style="color:#6b7580;font-size:11px">2026 Goal: '+(g.annual?esc(g.annual):"-")+' · YTD Goal: '+(g.ytd?esc(g.ytd):"-")+'</div>'+
       '<a class="addlink" style="display:block;margin-top:10px;font-size:12px" data-goal="'+esc(name)+'">Set Goal for '+esc(name)+' ›</a>'+
       (isCustom?'<a class="addlink" data-goaldel="'+esc(name)+'" style="display:block;margin-top:4px;font-size:11px;color:var(--st-new)">Remove</a>':"");
   }
@@ -2228,7 +2228,7 @@ function bindFinance(){
     var today=p(d.getMonth()+1)+"-"+p(d.getDate())+"-"+d.getFullYear();
     var nt={id:"new-"+d.getTime(),address:"New Commission",city:"",type:"seller",status:"closed",
       listPrice:0,closePrice:0,gci:0,agent:"Marco Puga",closeDate:today,dateListed:today,draft:false};
-    TX.unshift(nt); renderFinance(); renderTx(); crmToast("Commission added — click any cell to edit");
+    TX.unshift(nt); renderFinance(); renderTx(); crmToast("Commission added - click any cell to edit");
     fetch(crmApi("/api/deals"),{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({propertyAddress:nt.address,dealType:"seller",status:"closed",salePrice:0,commissionPercent:3,closeDate:today,assignedTo:"Marco Puga"})})
       .then(function(r){return r.ok?r.json():null;}).then(function(res){if(res&&res.deal&&res.deal.id){nt.id=res.deal.id;}}).catch(function(){});
@@ -2254,7 +2254,7 @@ function bindFinance(){
   var ngSave=root.querySelector("#newGoalSave"); if(ngSave)ngSave.onclick=function(){
     var card=ngSave.closest(".log-card");
     var name=card.querySelector('[data-nk="name"]').value.trim(); if(!name){crmToast("Enter a goal name");return;}
-    FIN_GOALS[name]={custom:true,value:card.querySelector('[data-nk="value"]').value.trim()||"—",annual:card.querySelector('[data-nk="annual"]').value.trim(),ytd:card.querySelector('[data-nk="ytd"]').value.trim()};
+    FIN_GOALS[name]={custom:true,value:card.querySelector('[data-nk="value"]').value.trim()||"-",annual:card.querySelector('[data-nk="annual"]').value.trim(),ytd:card.querySelector('[data-nk="ytd"]').value.trim()};
     saveFinGoals(); finGoalEditing=null; renderFinance(); crmToast("Team goal added");
   };
   // Delete a commission (removes the transaction + the deal)
@@ -2364,20 +2364,20 @@ document.querySelectorAll('#view-leads .sf-list .sf[data-sf]').forEach(a=>a.addE
 }));
 const lpEl=document.getElementById("leadPonds");
 if(lpEl)lpEl.addEventListener("click",()=>crmToast("Lead Ponds arrive with live team routing"));
-// Reporting snapshot tabs + goal circles + AI tabs (delegation — content re-renders)
+// Reporting snapshot tabs + goal circles + AI tabs (delegation - content re-renders)
 document.addEventListener("click",e=>{
   const sn=e.target.closest("[data-snap]");
   if(sn){ snapMode=sn.getAttribute("data-snap"); renderReport("business"); return; }
   const ai=e.target.closest(".ai-tabs [data-ai]");
   if(ai){ aiTab=ai.getAttribute("data-ai"); renderLead(); return; }
   const goal=e.target.closest("[data-goal], .fcirc .g");
-  if(goal){ crmToast("Goals are set with live data — coming online with your numbers"); return; }
+  if(goal){ crmToast("Goals are set with live data - coming online with your numbers"); return; }
 });
 function leadRecs(l){
   const recs=[];
   if(!(l.autoPlanEnrollments||[]).length) recs.push("Enroll "+(l.name.split(" ")[0])+" in the New Lead Follow-Up auto plan.");
-  if(!l.email) recs.push("Missing email — ask for it on the next call and add a Listing Alert.");
-  if(l.due&&l.due.label==="Due Today") recs.push("A follow-up touch is due today — call before 6pm for best pickup odds.");
+  if(!l.email) recs.push("Missing email - ask for it on the next call and add a Listing Alert.");
+  if(l.due&&l.due.label==="Due Today") recs.push("A follow-up touch is due today - call before 6pm for best pickup odds.");
   if(l.statusDisp==="hot") recs.push("Hot lead: schedule an appointment this week while intent is high.");
   recs.push("Send the "+((l.criteria&&l.criteria.location)?l.criteria.location.split(",")[0]:"local")+" market report to stay top of mind.");
   return recs.slice(0,4);
@@ -2411,7 +2411,7 @@ document.addEventListener("click",e=>{
   const b=e.target.closest(".pill-btn, .mini-pill, .rbtn, .chip, .addlink");
   if(!b||b.id||b.dataset.live||b.closest(".modal")||b.closest("#ddMenu"))return;
   const t=(b.textContent||"").trim();
-  if(/^ACTIONS/i.test(t)){ genericDD(b,["Email","Tag","Change Status","Change Stage","Listing Alert","Market Report","Merge Leads","Export"],v=>crmToast(v+" — select rows first")); }
+  if(/^ACTIONS/i.test(t)){ genericDD(b,["Email","Tag","Change Status","Change Stage","Listing Alert","Market Report","Merge Leads","Export"],v=>crmToast(v+" - select rows first")); }
   else if(/^COLUMNS/i.test(t)){
     const tbl=b.closest(".leads-main, .view")?.querySelector("table.leads");
     const cols=tbl?[...tbl.querySelectorAll("thead th")].map(th=>th.textContent.replace(/[⇅]/g,"").trim()).filter(Boolean).slice(0,12):["Name","Status","Stage"];
@@ -2455,7 +2455,7 @@ function rangeBounds(tok){
 }
 function inRange(iso,tok){ if(!iso)return false; const t=new Date(iso); if(isNaN(t))return false; const b=rangeBounds(tok); return t>=b[0]&&t<=b[1]; }
 
-/* Logged activities (New Activity modal) — persisted locally, summed per type */
+/* Logged activities (New Activity modal) - persisted locally, summed per type */
 function loggedEntries(){ try{ return JSON.parse(localStorage.getItem("crmLoggedActivities")||"[]"); }catch(_){ return []; } }
 function loggedTotals(tok){
   const out={};

@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Orbitron:wght@400;600;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     /* ===================================================================
-       CONTENT MANAGER — PREMIUM DESIGN SYSTEM
+       CONTENT MANAGER - PREMIUM DESIGN SYSTEM
        Token-driven theming. Dark = default, Light = [data-theme="light"].
        Component class names are preserved 1:1 for app JS compatibility.
        =================================================================== */
@@ -70,7 +70,7 @@
     }
 
     html[data-theme="light"] {
-      /* new tokens — light values; the legacy aliases resolve through these */
+      /* new tokens - light values; the legacy aliases resolve through these */
       --bg-0: #e6eaf2; --bg-1: #eef1f7; --bg-2: #ffffff; --bg-3: #f4f7fb; --bg-4: #eaeef5;
       --teal: #0891b2; --teal-bright: #0aa5c9;
       --teal-dim: rgba(8, 145, 178, 0.12); --teal-glow: rgba(8, 145, 178, 0.07);
@@ -1067,7 +1067,7 @@
     .score-graph-val { font-size: 0.66rem; font-weight: 700; font-family: ui-monospace, Menlo, monospace; }
     .score-graph-label { font-size: 0.52rem; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
     .improvement-item { font-size: 0.7rem; color: var(--text-dim); margin-bottom: 0.32rem; line-height: 1.45; }
-    /* Shared collapsible expander — used across every tab for long content */
+    /* Shared collapsible expander - used across every tab for long content */
     .cm-exp { margin-top: 0.5rem; }
     .cm-exp-head { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: transparent; border: none; color: var(--muted); font-size: 0.66rem; letter-spacing: 0.06em; cursor: pointer; padding: 4px 0; font-weight: 600; text-transform: uppercase; }
     .cm-exp-head:hover { color: var(--cyan); }
@@ -1076,7 +1076,7 @@
     .cm-exp-body { max-height: 0; overflow: hidden; transition: max-height 320ms ease; }
     .cm-exp.open .cm-exp-body { max-height: 1400px; }
     .cm-exp-inner { padding-top: 6px; }
-    /* Clear Storage (Upload & Clip) — secondary/outline with a warning tone */
+    /* Clear Storage (Upload & Clip) - secondary/outline with a warning tone */
     .cm-clear-storage-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
     .cm-btn-clear-storage { font-size: 0.72rem; padding: 0.4rem 0.8rem; border-radius: 6px; background: transparent; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); cursor: pointer; transition: background 0.2s, border-color 0.2s; }
     .cm-btn-clear-storage:hover { background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: var(--warn); }
@@ -1091,19 +1091,19 @@
     .strategy-rec-hooks { list-style: none; margin: 0.35rem 0; padding-left: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.76rem; }
     .strategy-rec-hooks li { position: relative; padding-left: 0.95rem; line-height: 1.45; }
     .strategy-rec-hooks li::before { content: "•"; position: absolute; left: 0.1rem; top: 0; color: var(--dimmer); }
-    /* Strategy reasoning — structured into readable lines, priority line emphasized */
+    /* Strategy reasoning - structured into readable lines, priority line emphasized */
     .strategy-reason { color: var(--text); font-size: 0.8125rem; }
     .strategy-reason .reason-line { margin: 0 0 0.6rem; line-height: 1.65; }
     .strategy-reason .reason-line:last-child { margin-bottom: 0; }
     .strategy-reason .reason-priority { color: var(--cyan); font-weight: 600; }
-    /* Recommendation card — action headline vs secondary reasoning */
+    /* Recommendation card - action headline vs secondary reasoning */
     .rec-action { margin: 0.5rem 0 0.25rem; font-size: 0.84rem; font-weight: 600; color: var(--text); line-height: 1.45; }
     .rec-reason { margin: 0; color: var(--text-dim); font-size: 0.75rem; font-style: italic; line-height: 1.5; }
-    /* Recording Plan "Details" expander body — readable in light + dark */
+    /* Recording Plan "Details" expander body - readable in light + dark */
     .rec-detail-meta { margin: 0 0 0.5rem; color: var(--text-dim); font-size: 0.75rem; }
     .rec-detail-notes { margin: 0 0 0.5rem; padding: 0 0 0 0.75rem; border-left: 2px solid var(--border-bright); color: var(--text); font-size: 0.8rem; line-height: 1.55; }
     .rec-detail-reason { margin: 0; color: var(--cyan); font-style: italic; font-size: 0.75rem; line-height: 1.5; }
-    /* Publishing queue actions — Publish Now (primary teal) vs Remove (destructive), kept visually distinct */
+    /* Publishing queue actions - Publish Now (primary teal) vs Remove (destructive), kept visually distinct */
     .cm-btn-publish-now { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.42rem 0.95rem; border-radius: 6px; border: none; background: var(--cyan); color: #001014; cursor: pointer; }
     .cm-btn-publish-now:hover:not(:disabled) { filter: brightness(1.08); }
     .cm-btn-publish-now:disabled { background: transparent; color: var(--muted); border: 1px dashed var(--border-strong); cursor: not-allowed; font-weight: 600; }
@@ -1123,7 +1123,7 @@
     .trend-badge { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.08em; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); padding: 0.18rem 0.5rem; border-radius: 5px; flex-shrink: 0; font-weight: 700; }
     .suggestion-detail { font-size: 0.76rem; color: var(--text-dim); margin-top: 0.5rem; line-height: 1.55; }
     .suggestion-detail strong { color: var(--text); font-weight: 600; }
-    /* Readable trend prose — bright text, breathing room, sentence separation */
+    /* Readable trend prose - bright text, breathing room, sentence separation */
     .trend-prose { color: var(--text); font-size: 0.82rem; line-height: 1.7; }
     .trend-prose .trend-line { margin: 0 0 0.65rem; }
     .trend-prose .trend-line:last-child { margin-bottom: 0; }
@@ -1183,13 +1183,13 @@
     .strategy-rec-card p, .strategy-rec-card li, .strategy-rec-card blockquote, .strategy-rec-title { overflow-wrap:anywhere; word-break:break-word; white-space:normal; }
     .strategy-rec-card ol { list-style-position:outside; }
     .strategy-rec-card ol li, .strategy-rec-hooks li { overflow-wrap:anywhere; }
-    /* Overview — active operational blocker banner (only real, actionable blockers) */
+    /* Overview - active operational blocker banner (only real, actionable blockers) */
     .cm-blocker-banner { display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem; padding:0.85rem 1rem; border:1px solid var(--danger); border-left:3px solid var(--danger); border-radius:var(--radius-sm); background:color-mix(in srgb, var(--danger) 10%, transparent); }
     .cm-blocker-icon { font-size:1.1rem; color:var(--danger); }
     .cm-blocker-text { flex:1; min-width:220px; font-size:0.82rem; line-height:1.45; color:var(--text); }
     .cm-blocker-btn { border:1px solid var(--danger); background:transparent; color:var(--danger); font-weight:600; padding:0.4rem 0.8rem; border-radius:var(--radius-xs); cursor:pointer; font-size:0.78rem; }
     .cm-blocker-btn:hover { background:var(--danger); color:#fff; }
-    /* Recording Plan — step-by-step filming walkthrough */
+    /* Recording Plan - step-by-step filming walkthrough */
     .rec-walk-header { margin-bottom:1rem; }
     .rec-walk-title { font-size:0.95rem; color:var(--text); }
     .rec-walk-list { display:flex; flex-direction:column; gap:0.85rem; }
@@ -1207,7 +1207,7 @@
     .rec-step-meta { display:flex; flex-wrap:wrap; gap:1.25rem; margin:0.6rem 0; font-size:0.78rem; color:var(--text); }
     .rec-step-hashtags { margin:0.5rem 0; display:flex; flex-wrap:wrap; align-items:center; gap:0.3rem; }
     .rec-step-actions { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.75rem; }
-    /* Competitor Analysis — scannable cards (matches YouTube Intel quality bar) */
+    /* Competitor Analysis - scannable cards (matches YouTube Intel quality bar) */
     .ca-wrap { display:flex; flex-direction:column; gap:14px; }
     .ca-topline { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
     .ca-pills { display:flex; flex-wrap:wrap; gap:6px; }
@@ -1361,12 +1361,12 @@
     }
 
     /* ====================================================================
-       REVIEW QUEUE — AETHON REDESIGN (scoped to .cm-review-redesign)
+       REVIEW QUEUE - AETHON REDESIGN (scoped to .cm-review-redesign)
        Cyan-mapped token system. Does not affect any other CM section.
        ==================================================================== */
     /* Light mode: Review Queue defined its own dark-only --rv-* palette with no
        light override, so its main panel stayed dark. Remap just the color
-       tokens for light — scoped to .cm-review-redesign, so no other page and no
+       tokens for light - scoped to .cm-review-redesign, so no other page and no
        dark-mode styling is affected. */
     html[data-theme="light"] .cm-review-redesign {
       --rv-bg-0: #e6eaf2; --rv-bg-1: #eef1f7; --rv-bg-2: #ffffff; --rv-bg-3: #f4f7fb;
@@ -1617,9 +1617,9 @@
     }
 
     /* ====================================================================
-       AETHON OVERHAUL — Phase 4 (top bar), 5 (cards), 6 (stat cards)
+       AETHON OVERHAUL - Phase 4 (top bar), 5 (cards), 6 (stat cards)
        ==================================================================== */
-    /* Phase 4 — top bar */
+    /* Phase 4 - top bar */
     .crm-topbar {
       height: 56px; min-height: 56px;
       background: var(--bg-0);
@@ -1657,7 +1657,7 @@
     html[data-theme="light"] #theme-toggle-btn::before { content: "LIGHT"; left: auto; right: 11px; }
     html[data-theme="light"] #theme-toggle-btn::after { right: auto; left: 4px; }
 
-    /* Phase 5 — shared card + section header (also refreshes existing .cm-panel) */
+    /* Phase 5 - shared card + section header (also refreshes existing .cm-panel) */
     .cm-card, .cm-panel {
       background: var(--bg-2);
       border: 1px solid var(--dimmest);
@@ -1673,7 +1673,7 @@
     .cm-panel h3 { margin-bottom: var(--space-4); }
     .cm-panel h3::before { content: none; }
 
-    /* Phase 6 — stat cards with radial arc + count-up */
+    /* Phase 6 - stat cards with radial arc + count-up */
     .cm-stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
     .cm-statc { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5); min-height: 104px; }
     .cm-statc-arc { position: relative; width: 64px; height: 64px; flex: 0 0 64px; }
@@ -1689,12 +1689,12 @@
     @keyframes statBreathe { 0%, 100% { box-shadow: none; } 50% { box-shadow: 0 0 12px var(--teal-glow); } }
     .cm-statc.is-complete .cm-statc-arc { filter: drop-shadow(0 0 8px var(--teal)); }
 
-    /* Phase 11 (partial) — card entrance on section activate */
+    /* Phase 11 (partial) - card entrance on section activate */
     @keyframes cardIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
     .cm-section.active .cm-anim-in { animation: cardIn 400ms var(--ease-out) both; }
     @keyframes radarPingTeal { 0% { box-shadow: 0 0 0 0 rgba(45, 212, 238, 0.45); } 100% { box-shadow: 0 0 0 6px rgba(45, 212, 238, 0); } }
 
-    /* Phase 7 — pipeline flow diagram */
+    /* Phase 7 - pipeline flow diagram */
     .pf-wrap { position: relative; padding: var(--space-4) 0 var(--space-2); }
     .pf-row { display: flex; align-items: flex-start; }
     .pf-node { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; flex: 0 0 auto; }
@@ -1716,7 +1716,7 @@
     .pf-node.reject.on .pf-count { color: var(--red); }
     .pf-node.reject:hover .pf-circle { border-color: var(--red); }
 
-    /* Phase 8 — review alert states */
+    /* Phase 8 - review alert states */
     .rq-alert { position: relative; display: flex; align-items: center; gap: 14px; padding: 16px 16px 16px 22px; border-radius: var(--radius-md); }
     .rq-accent { position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; }
     .rq-alert.clear { background: var(--green-dim); border: 1px solid var(--green-border); }
@@ -1734,7 +1734,7 @@
     .rq-btn:hover { box-shadow: 0 0 16px rgba(255, 179, 64, 0.4); }
     .rq-btn:active { transform: scale(0.96); }
 
-    /* Phase 9 — weekly chart */
+    /* Phase 9 - weekly chart */
     .wk-chart { position: relative; display: flex; align-items: flex-end; gap: 10px; height: 178px; }
     .wk-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; position: relative; }
     .wk-bar { width: 100%; max-width: 46px; height: 150px; display: flex; align-items: flex-end; }
@@ -1761,7 +1761,7 @@
     .wk-target span { position: absolute; right: 0; top: -13px; font-family: var(--font-mono); font-size: 9px; color: var(--dimmer); }
     .wk-summary { font-family: var(--font-mono); font-size: 10px; color: var(--dimmer); margin-top: 12px; }
 
-    /* Phase 10 — autonomous agent hero */
+    /* Phase 10 - autonomous agent hero */
     #agent-status-bar { border: 1px solid var(--teal-border); border-radius: var(--radius-lg); padding: 18px 22px; margin-top: var(--space-4); display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); background: radial-gradient(ellipse at center, rgba(45, 212, 238, 0.05) 0%, transparent 70%), var(--bg-2); }
     #agent-status-bar .agent-status-label { font-family: var(--font-display); font-size: 8px; letter-spacing: 3px; color: var(--dimmer); margin-bottom: 6px; }
     #agent-status-bar .agent-last-run { font-size: 12px; color: var(--dim); }
@@ -1771,12 +1771,12 @@
     .agent-live b { font-family: var(--font-mono); font-size: 9px; color: var(--teal); letter-spacing: 1px; font-weight: 600; }
     #agent-countdown { font-family: var(--font-mono); font-size: 28px; color: var(--teal); font-weight: 600; line-height: 1.1; letter-spacing: 0.02em; }
 
-    /* Phase 11 — content-area entrance on navigation */
+    /* Phase 11 - content-area entrance on navigation */
     @keyframes contentIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .cm-section.cm-entering { animation: contentIn 300ms var(--ease-out) both; }
 
     /* ====================================================================
-       Phase 12/13 — apply the language to all sections + micro-details
+       Phase 12/13 - apply the language to all sections + micro-details
        ==================================================================== */
     /* Button interactions everywhere */
     .cm-btn, button.primary, .btn-secondary, .cm-subtab, .trend-badge, .rq-btn {
@@ -1801,7 +1801,7 @@
     .cm-content table tbody tr { transition: background var(--t-fast) var(--ease-smooth); }
     .cm-content table tbody tr:hover { background: var(--bg-2); }
 
-    /* Upload & Clip — drop zone glow + border pulse */
+    /* Upload & Clip - drop zone glow + border pulse */
     .upload-zone { position: relative; transition: border-color var(--t-base) var(--ease-smooth), background var(--t-base) var(--ease-smooth), transform var(--t-base) var(--ease-spring); }
     .upload-zone:hover, .upload-zone.dragover { border-color: var(--teal-border-strong); background: radial-gradient(ellipse at center, var(--teal-glow), transparent 72%); transform: translateY(-2px); animation: dropPulse 1.6s var(--ease-smooth) infinite; }
     @keyframes dropPulse { 0%, 100% { border-color: var(--teal-border); } 50% { border-color: var(--teal-border-strong); } }
@@ -1810,7 +1810,7 @@
     /* Prominent FAILED badge */
     .status-badge.failed, .fstatus.failed { background: var(--red-dim); border: 1px solid var(--red-border); color: var(--red); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 
-    /* Strategy / Content Suggestions — AI cards */
+    /* Strategy / Content Suggestions - AI cards */
     .suggestion-card { position: relative; background: var(--bg-2); border: 1px solid var(--dimmest); border-radius: var(--radius-lg); transition: border-color var(--t-base) var(--ease-smooth), box-shadow var(--t-base) var(--ease-smooth), transform var(--t-base) var(--ease-spring); }
     .suggestion-card:hover { border-color: var(--teal-border); box-shadow: var(--shadow-teal); transform: translateY(-2px); }
     .suggestion-card-header { padding-right: 44px; }
@@ -1904,7 +1904,7 @@
     .rv-clip-reason { margin-top: 6px; font-size: 10.5px; font-style: italic; color: var(--muted, #8a919c); text-align: center; max-width: 300px; margin-left: auto; margin-right: auto; line-height: 1.45; }
   </style>
     <style id="brivity-skin">
-      /* Brivity retint — remap the light theme's cyan-blue accent to Brivity
+      /* Brivity retint - remap the light theme's cyan-blue accent to Brivity
          teal and calm the neon so Content Manager matches the system. */
       html[data-theme="light"]{
         --teal:#59c4c4 !important; --teal-bright:#4ca7a7 !important;
@@ -1918,10 +1918,33 @@
       /* Drop the Orbitron sci-fi display face for the clean Brivity sans. */
       html[data-theme="light"] *{ --font-display:"Helvetica Neue",Helvetica,Arial,system-ui,sans-serif !important; }
       html[data-theme="light"] body{ background:#f9fbfb !important; }
-      /* Kill the sci-fi scanline overlays — invisible on dark, but they show as
+      /* Kill the sci-fi scanline overlays - invisible on dark, but they show as
          faint horizontal lines across the white Brivity background. */
       html[data-theme="light"] body::before,
       html[data-theme="light"] .cm-review-redesign::before{ display:none !important; content:none !important; }
+      /* Upload panel: the dark drop-zones / inputs / setting bars kept their
+         near-black backgrounds in light mode (washed-out look). Re-skin them
+         white with dark text and Brivity borders. */
+      html[data-theme="light"] .script-drop-zone,
+      html[data-theme="light"] .style-drop-zone,
+      html[data-theme="light"] .context-chat-input,
+      html[data-theme="light"] .enhance-settings-toggle,
+      html[data-theme="light"] .enhance-settings-panel,
+      html[data-theme="light"] .context-chat-messages,
+      html[data-theme="light"] .script-preview,
+      html[data-theme="light"] .context-summary{
+        background:#ffffff !important; border-color:#e2e7ea !important; color:#2f3438 !important;
+      }
+      html[data-theme="light"] .script-drop-zone,
+      html[data-theme="light"] .style-drop-zone{ border-style:dashed !important; border-color:#c9d2d6 !important; }
+      html[data-theme="light"] .context-chat-input{ border:1px solid #d7dde0 !important; }
+      html[data-theme="light"] .context-chat-input::placeholder{ color:#8a949c !important; }
+      html[data-theme="light"] .script-drop-text,
+      html[data-theme="light"] .enhance-toggle-summary,
+      html[data-theme="light"] .context-label-sub{ color:#5f6b78 !important; }
+      html[data-theme="light"] .context-suggestion{ background:#f2f6f6 !important; border-color:#dbe3e5 !important; color:#3a444e !important; }
+      html[data-theme="light"] .context-suggestion:hover{ background:#e8f6f6 !important; border-color:#59c4c4 !important; }
+      html[data-theme="light"] .enhance-toggle-title{ color:#2f3438 !important; }
     </style>
 </head>
 <body>
@@ -1953,7 +1976,7 @@
     </div>
   </div>
 
-  <!-- Trim editor — re-cut an already-generated clip to a new start/end range -->
+  <!-- Trim editor - re-cut an already-generated clip to a new start/end range -->
   <div id="trimModal" style="display:none" class="trim-modal-overlay">
     <div class="trim-modal-box" onclick="event.stopPropagation()">
       <div class="trim-head">
@@ -1969,7 +1992,7 @@
         </div>
         <div id="trimNoVideo" class="trim-no-video" style="display:none;"></div>
         <div id="trimControls">
-          <div class="trim-range-label">Trim range — drag either teal handle to seek</div>
+          <div class="trim-range-label">Trim range - drag either teal handle to seek</div>
           <div class="trim-slider" id="trimSlider">
             <div class="trim-track"></div>
             <div class="trim-cut-band" id="trimCutBand" style="display:none;"></div>
@@ -2018,7 +2041,7 @@
     </div>
   </div>
 
-  <!-- Chat-based clip editing — conversational alternative to the manual editor -->
+  <!-- Chat-based clip editing - conversational alternative to the manual editor -->
   <div id="chatEditModal" style="display:none" class="trim-modal-overlay">
     <div class="trim-modal-box" onclick="event.stopPropagation()" style="max-width:480px;">
       <div class="trim-head">
@@ -2041,13 +2064,13 @@
     <aside class="crm-sidebar" aria-label="Content Manager navigation">
       <div class="crm-logo">Content Manager</div>
       <button type="button" class="crm-side-btn active" data-cm-section="overview">Overview <span class="crm-count" id="cm-count-overview">0/7</span></button>
-      <button type="button" class="crm-side-btn" data-cm-section="brain">Content Manager <span class="crm-count" id="cm-count-brain">—</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="brain">Content Manager <span class="crm-count" id="cm-count-brain">-</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="recording">Recording Plan <span class="crm-count" id="cm-count-recording">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="strategy">Strategy <span class="crm-count" id="cm-count-strategy">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="upload">Upload &amp; Clip <span class="crm-count" id="cm-count-upload">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="review">Review Queue <span class="crm-count crm-count-danger" id="cm-count-review">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="publishing">Publishing <span class="crm-count" id="cm-count-publishing">0</span></button>
-      <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">—</span></button>
+      <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">-</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="calendar">Calendar <span class="crm-count" id="cm-count-calendar">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="activity">Activity Log <span class="crm-count" id="cm-count-activity">0</span></button>
       <a href="/dashboard" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;" onclick="goToCommandCenter(); return false;">Command center <span>←</span></a>
@@ -2061,7 +2084,7 @@
         </div>
         <div class="tb-status">
           <span class="dot" id="statusDot"></span>
-          <span id="lastUpdated" class="tb-updated">Last updated —</span>
+          <span id="lastUpdated" class="tb-updated">Last updated -</span>
         </div>
         <div class="tb-controls">
           <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" title="Toggle theme">Light mode</button>
@@ -2146,11 +2169,11 @@
               <input type="file" id="video-file-input" accept=".mp4,.mov,.avi,.mkv,.webm,video/*" multiple hidden />
             </div>
 
-            <!-- Script upload (optional) — extracted text rides into the clipping prompt -->
+            <!-- Script upload (optional) - extracted text rides into the clipping prompt -->
             <div class="script-upload-section">
               <div class="script-section-label">
                 <span class="script-label-text">📄 Script or notes (optional)</span>
-                <span class="script-label-sub">Drop a .txt or .pdf — helps the AI find the best moments faster</span>
+                <span class="script-label-sub">Drop a .txt or .pdf - helps the AI find the best moments faster</span>
               </div>
               <div id="scriptDropZone" class="script-drop-zone">
                 <span class="script-drop-icon">📋</span>
@@ -2166,7 +2189,7 @@
               </div>
             </div>
 
-            <!-- Context chat — tell the AI what to focus on in this footage -->
+            <!-- Context chat - tell the AI what to focus on in this footage -->
             <div class="context-chat-section">
               <div class="context-chat-label">
                 <span class="context-label-text">💬 Tell the AI what to focus on</span>
@@ -2181,7 +2204,7 @@
                 </div>
               </div>
               <div class="context-chat-input-row">
-                <textarea id="contextInput" class="context-chat-input" placeholder="Tell the AI what to look for… (e.g. 'At the 3 minute mark I walk through Canyon Lake pricing — that's the most important part')" rows="3"></textarea>
+                <textarea id="contextInput" class="context-chat-input" placeholder="Tell the AI what to look for… (e.g. 'At the 3 minute mark I walk through Canyon Lake pricing - that's the most important part')" rows="3"></textarea>
                 <button type="button" id="addContextBtn" onclick="submitContextMessage()" class="context-add-btn">Add</button>
               </div>
               <div id="contextSummary" style="display:none" class="context-summary">
@@ -2191,7 +2214,7 @@
               </div>
             </div>
 
-            <!-- Enhancement settings — per-batch video-enhancement toggles -->
+            <!-- Enhancement settings - per-batch video-enhancement toggles -->
             <div class="enhance-settings-row">
               <button type="button" class="enhance-settings-toggle" onclick="toggleEnhanceSettings()">
                 <span class="enhance-toggle-title">✦ Enhancement settings</span>
@@ -2202,7 +2225,7 @@
                 <label class="enhance-toggle-item">
                   <input type="checkbox" id="enhanceCaptions" checked onchange="updateEnhanceSummary()" />
                   <span class="enhance-item-name">Animated captions</span>
-                  <span class="enhance-item-note">word-by-word karaoke highlight, emojis, gold real-estate keywords — smart cuts ride on this pass, so turning it off also disables them</span>
+                  <span class="enhance-item-note">word-by-word karaoke highlight, emojis, gold real-estate keywords - smart cuts ride on this pass, so turning it off also disables them</span>
                 </label>
                 <label class="enhance-toggle-item">
                   <input type="checkbox" id="enhanceAutoZoom" checked onchange="updateEnhanceSummary()" />
@@ -2218,7 +2241,7 @@
               </div>
             </div>
 
-            <!-- Style examples — teach the clipper how Marco films and edits -->
+            <!-- Style examples - teach the clipper how Marco films and edits -->
             <div class="style-examples-row">
               <button type="button" class="enhance-settings-toggle" onclick="toggleStyleExamples()">
                 <span class="enhance-toggle-title">🎓 Teach the clipper your style</span>
@@ -2228,12 +2251,12 @@
               <div id="styleExamplesPanel" class="enhance-settings-panel" style="display:none">
                 <p class="enhance-settings-footnote" style="margin:0 0 4px;">
                   Every video dropped here is watched once, then its style notes are automatically
-                  applied to every future batch — no per-batch setup needed.
+                  applied to every future batch - no per-batch setup needed.
                 </p>
                 <div class="style-example-zone-pair">
                   <div class="style-example-zone">
                     <div class="style-zone-label">📈 Published good clips <span class="style-zone-count" id="styleZoneCountClip">0</span></div>
-                    <div class="style-zone-sub">Finished clips that already did well — studies pacing, hook, cut rhythm</div>
+                    <div class="style-zone-sub">Finished clips that already did well - studies pacing, hook, cut rhythm</div>
                     <div class="style-drop-zone" id="styleDropZoneClip">
                       <span class="script-drop-icon">🎬</span>
                       <span class="script-drop-text">Drop clips or <span class="script-browse-link">browse</span></span>
@@ -2243,7 +2266,7 @@
                   </div>
                   <div class="style-example-zone">
                     <div class="style-zone-label">🎙️ Raw footage <span class="style-zone-count" id="styleZoneCountRaw">0</span></div>
-                    <div class="style-zone-sub">Unedited talking — studies energy, pacing, natural pause patterns</div>
+                    <div class="style-zone-sub">Unedited talking - studies energy, pacing, natural pause patterns</div>
                     <div class="style-drop-zone" id="styleDropZoneRaw">
                       <span class="script-drop-icon">🎥</span>
                       <span class="script-drop-text">Drop footage or <span class="script-browse-link">browse</span></span>
@@ -2259,7 +2282,7 @@
               <thead><tr><th>Filename</th><th>Size</th><th>Duration</th><th>Status</th><th></th></tr></thead>
               <tbody id="batch-file-tbody"></tbody>
             </table>
-            <button type="button" class="primary" id="batch-process-btn" style="margin-top:1rem;width:100%;padding:0.75rem;" disabled>Process videos — Target 7 clips</button>
+            <button type="button" class="primary" id="batch-process-btn" style="margin-top:1rem;width:100%;padding:0.75rem;" disabled>Process videos - Target 7 clips</button>
             <p id="processBtnHint" style="text-align:center;font-size:12px;color:#8a919c;margin-top:6px;display:none;">
               Add at least one video file to enable processing.
             </p>
@@ -2312,13 +2335,13 @@
           </div>
         </section>
 
-        <!-- REVIEW QUEUE (Aethon redesign — master/detail) -->
+        <!-- REVIEW QUEUE (Aethon redesign - master/detail) -->
         <section id="cm-section-review" class="cm-section">
           <div class="cm-review-redesign" id="reviewRoot">
             <header class="rv-topbar">
               <div class="rv-topbar-left">
                 <div class="rv-title">REVIEW QUEUE</div>
-                <div class="rv-batch-id" id="rvBatchId">—</div>
+                <div class="rv-batch-id" id="rvBatchId">-</div>
               </div>
               <div class="rv-topbar-center">
                 <div class="rv-progress-pct" id="rvProgressPct">0%</div>
@@ -2448,7 +2471,7 @@
           </div>
         </section>
 
-        <!-- RECORDING PLAN (top-level) — only what Marco needs to film -->
+        <!-- RECORDING PLAN (top-level) - only what Marco needs to film -->
         <section id="cm-section-recording" class="cm-section">
           <h2 class="section-title">Recording Plan <span>step-by-step filming walkthrough</span></h2>
           <div style="margin:0.75rem 0 1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -2486,7 +2509,7 @@
         <!-- CONTENT MANAGER (strategy + chat) -->
         <section id="cm-section-brain" class="cm-section">
           <h2 class="section-title">Content Manager <span>strategy chat · CM</span></h2>
-          <p class="cm-muted" style="margin:0 0 1rem;font-size:0.8rem;">Today's strategy runs silently in the background and powers the Recording Plan. Ask for it here — try "What's today's strategy?"</p>
+          <p class="cm-muted" style="margin:0 0 1rem;font-size:0.8rem;">Today's strategy runs silently in the background and powers the Recording Plan. Ask for it here - try "What's today's strategy?"</p>
           <div class="cm-chat-shell" style="height:calc(100vh - 320px);min-height:420px;">
             <div class="cm-chat-header">
               <div><strong>Ask the Content Manager</strong> <span class="cm-brain-badge">CM</span></div>
@@ -2500,7 +2523,7 @@
               <div class="cm-chat-empty" id="cm-chat-empty">
                 <div style="font-size:2rem;color:var(--cyan);">🎬</div>
                 <h3>Your content strategist.</h3>
-                <p class="cm-muted">Ask about performance, competitors, hooks, what to film, or sprint status. Not Harvey — the dedicated content brain.</p>
+                <p class="cm-muted">Ask about performance, competitors, hooks, what to film, or sprint status. Not Harvey - the dedicated content brain.</p>
                 <div class="cm-chat-suggestions" id="cm-chat-suggestions"></div>
               </div>
             </div>
@@ -2587,19 +2610,19 @@
     }
 
     function fmt(n) {
-      if (n == null || Number.isNaN(n)) return "—";
+      if (n == null || Number.isNaN(n)) return "-";
       return Number(n).toLocaleString("en-US");
     }
 
     function fmtDate(iso) {
-      if (!iso) return "—";
+      if (!iso) return "-";
       const d = new Date(iso);
       if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
       return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     }
 
     function fmtUpdated(iso) {
-      if (!iso) return "Last updated —";
+      if (!iso) return "Last updated -";
       const d = new Date(iso);
       return "Last updated " + d.toLocaleString();
     }
@@ -2654,7 +2677,7 @@
 
     function resolveClipThumbUrl(v) {
       // Only real image files belong in an <img src>. filePath/clipUrl are the
-      // clip's VIDEO (.mp4) paths — pointing an <img> at those renders a
+      // clip's VIDEO (.mp4) paths - pointing an <img> at those renders a
       // broken-image box, so they are intentionally excluded. When no genuine
       // image thumbnail exists this returns null and callers render their
       // placeholder instead (no <img> element is emitted at all).
@@ -2804,7 +2827,7 @@
       if (ev.key === "Escape") { closeClipPlayer(); if (typeof closeTrimEditor === "function") closeTrimEditor(); if (typeof closeChatEdit === "function") closeChatEdit(); }
     });
 
-    /* ── Trim editor — re-cut an already-generated clip to a new range ── */
+    /* ── Trim editor - re-cut an already-generated clip to a new range ── */
     const MIN_TRIM_SECONDS = 3;
     let trimState = null; // { clipId, title, duration, start, end }
 
@@ -2884,7 +2907,7 @@
           trimState.captions = data.captions.map((c) => ({ start: Number(c.start) || 0, end: Number(c.end) || 0, text: String(c.text || "") }));
           trimState.captionsEditable = true;
           trimState.captionsDirty = false;
-          if (hint) hint.textContent = "— edit text, re-burned on apply";
+          if (hint) hint.textContent = "- edit text, re-burned on apply";
           renderCaptionEditor();
           section.style.display = "block";
         } else {
@@ -2905,7 +2928,7 @@
       }
       list.innerHTML = trimState.captions.map((c, i) =>
         `<div class="trim-cap-row">
-          <span class="trim-cap-time">${fmtClipTime(c.start)}–${fmtClipTime(c.end)}</span>
+          <span class="trim-cap-time">${fmtClipTime(c.start)}-${fmtClipTime(c.end)}</span>
           <input type="text" class="trim-cap-text" data-cap-idx="${i}" value="${escapeHtml(c.text)}" />
         </div>`).join("");
       list.querySelectorAll(".trim-cap-text").forEach((inp) => {
@@ -3037,7 +3060,7 @@
       const ro = document.getElementById("trimCutReadout");
       if (ro) {
         ro.textContent = (cut.start != null && cut.end != null)
-          ? `${fmtClipTime(cut.start)}–${fmtClipTime(cut.end)}`
+          ? `${fmtClipTime(cut.start)}-${fmtClipTime(cut.end)}`
           : cut.start != null ? `start ${fmtClipTime(cut.start)} · set end` : `set start`;
       }
       renderTrimUI();
@@ -3135,7 +3158,7 @@
       const audioChanged = trimState.audio && trimState.audio !== "keep";
       const captionsChanged = trimState.captionsEditable && trimState.captionsDirty;
       if (!trimmed && !cut && !audioChanged && !captionsChanged) {
-        if (err) { err.style.display = "block"; err.textContent = "No edits to apply — trim, mark a cut, change the audio, or edit a caption first."; }
+        if (err) { err.style.display = "block"; err.textContent = "No edits to apply - trim, mark a cut, change the audio, or edit a caption first."; }
         return;
       }
       if (trimState.audio === "replace" && !trimState.audioReplacePath) {
@@ -3153,7 +3176,7 @@
         cuts: cut ? [[cut.start, cut.end]] : [],
         audio: trimState.audio || "keep",
         ...(trimState.audio === "replace" ? { audioReplacePath: trimState.audioReplacePath } : {}),
-        // Only send captions when the user edited them — otherwise the original
+        // Only send captions when the user edited them - otherwise the original
         // burned captions are preserved (render stays off the base).
         ...(captionsChanged ? { captions: trimState.captions } : {}),
       };
@@ -3165,19 +3188,19 @@
           method: "POST",
           body: JSON.stringify(spec),
         });
-        // Success — swap the preview to the freshly rendered clip; loadedmetadata
+        // Success - swap the preview to the freshly rendered clip; loadedmetadata
         // resets the handles + clears the cut against the new (shorter) timeline.
         const video = document.getElementById("trimVideo");
         if (video && resp.videoUrl) { video.src = apiUrl(resp.videoUrl); video.load(); }
         showToast("Clip edited ✓");
-        // A prior version was just retained — revert is now available.
+        // A prior version was just retained - revert is now available.
         const revertBtn = document.getElementById("trimRevertBtn");
         if (revertBtn) revertBtn.style.display = "inline-block";
         void loadReviewQueue();
         if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Edits"; }
       } catch (e) {
-        // Original clip untouched — surface the real error, keep the UI usable.
-        if (err) { err.style.display = "block"; err.textContent = e.message || "Edit failed — the original clip is unchanged."; }
+        // Original clip untouched - surface the real error, keep the UI usable.
+        if (err) { err.style.display = "block"; err.textContent = e.message || "Edit failed - the original clip is unchanged."; }
         if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = "Apply Edits"; }
       }
     }
@@ -3255,7 +3278,7 @@
         if (data.messages && data.messages.length) {
           data.messages.forEach((m) => appendChatMsg(m.role, m.content));
         } else {
-          appendChatMsg("assistant", "Tell me what to change — the hook, caption, hashtags, or the video (trim, cut a fumble, mute/replace audio).");
+          appendChatMsg("assistant", "Tell me what to change - the hook, caption, hashtags, or the video (trim, cut a fumble, mute/replace audio).");
         }
       } catch (e) {
         if (body) body.innerHTML = "";
@@ -3311,11 +3334,11 @@
           method: "POST", body: JSON.stringify(chatEditState.pendingSpec),
         });
         hideChatProposal();
-        appendChatMsg("assistant", `Done — re-rendered${resp.newDuration ? ` (${Math.round(resp.newDuration)}s)` : ""}. If it's not right, open ✂ Edit Clip and hit Revert.`);
+        appendChatMsg("assistant", `Done - re-rendered${resp.newDuration ? ` (${Math.round(resp.newDuration)}s)` : ""}. If it's not right, open ✂ Edit Clip and hit Revert.`);
         showToast("Clip edited ✓");
         void loadReviewQueue();
       } catch (e) {
-        if (p) p.innerHTML = `<p style="color:var(--danger)">${escapeHtml(e.message || "Render failed — original clip is unchanged.")}</p>
+        if (p) p.innerHTML = `<p style="color:var(--danger)">${escapeHtml(e.message || "Render failed - original clip is unchanged.")}</p>
           <div class="row"><button type="button" class="cm-btn" onclick="hideChatProposal()">Dismiss</button></div>`;
       }
     }
@@ -3339,7 +3362,7 @@
     }
 
     function fmtDateTime(iso) {
-      if (!iso) return "—";
+      if (!iso) return "-";
       const d = new Date(iso);
       if (Number.isNaN(d.getTime())) return iso;
       return d.toLocaleString("en-US", {
@@ -3395,7 +3418,7 @@
         const status = await res.json();
 
         if (lastRunEl) {
-          const base = status.lastRunAt ? fmtDateTime(status.lastRunAt) : "Never yet — first cycle pending";
+          const base = status.lastRunAt ? fmtDateTime(status.lastRunAt) : "Never yet - first cycle pending";
           lastRunEl.textContent = status.summary && status.lastRunAt ? `${base} · ${status.summary}` : base;
         }
         if (topLu && status.lastRunAt) topLu.textContent = "Last updated " + fmtDateTime(status.lastRunAt);
@@ -3411,7 +3434,7 @@
         }, 1000);
       } catch (e) {
         console.warn("[AgentStatus] Failed to load:", e);
-        // Don't leave stale dashes — show an honest unknown state.
+        // Don't leave stale dashes - show an honest unknown state.
         if (lastRunEl && lastRunEl.textContent.trim() === "--") lastRunEl.textContent = "Status unavailable";
         setAgentHealth("amber");
       }
@@ -3439,7 +3462,7 @@
       return "pillar-brand";
     }
 
-    /* Phase 6 — stat cards with SVG radial arc + count-up */
+    /* Phase 6 - stat cards with SVG radial arc + count-up */
     function renderStatCards(t, animate) {
       const el = document.getElementById("cm-overview-stats");
       if (!el) return;
@@ -3547,7 +3570,7 @@
       el("cm-count-community", String(dmGap));
     }
 
-    // Surface only a GENUINELY active operational blocker — a clip that is
+    // Surface only a GENUINELY active operational blocker - a clip that is
     // compliance-flagged AND still pending review, which blocks publishing.
     // Driven by the real reviewFlagged count (content_videos pending_review +
     // compliance_flagged), never generic strategic caution.
@@ -3573,7 +3596,7 @@
     async function loadCmOverview(animate = true) {
       // Stat cards render from the daily report on their own, so a failure in
       // the weekly/compliance fetches can never blank the cards (they used to
-      // share one Promise.all — one rejection wiped everything).
+      // share one Promise.all - one rejection wiped everything).
       cmFetch("/api/content/stats")
         .then((s) => { cmStatsCache = s; renderBlockerBanner(s?.reviewFlagged || 0); })
         .catch(() => renderBlockerBanner(cmStatsCache?.reviewFlagged || 0));
@@ -3606,7 +3629,7 @@
       switchCmSection(status === "pending_review" ? "review" : status === "published" || status === "scheduled" || status === "submitted" ? "publishing" : "upload");
     }
 
-    /* Phase 7 — pipeline flow diagram */
+    /* Phase 7 - pipeline flow diagram */
     function renderPipelineFlow(sc) {
       const stages = [
         { k: "pending_review", label: "PENDING" },
@@ -3632,7 +3655,7 @@
         <div class="pf-branch"><span class="pf-branch-line"></span>${node({ k: "rejected", label: "REJECTED" }, "reject")}</div></div>`;
     }
 
-    /* Phase 8 — review queue alert */
+    /* Phase 8 - review queue alert */
     function renderReviewAlert(count) {
       if (count > 0) {
         return `<div class="rq-alert waiting"><span class="rq-accent"></span>
@@ -3645,7 +3668,7 @@
         <div><div class="rq-title">ALL CLEAR</div><div class="rq-sub">Nothing waiting for review.</div></div></div>`;
     }
 
-    /* Phase 9 — weekly progress chart */
+    /* Phase 9 - weekly progress chart */
     function renderWeeklyChart(days, total) {
       const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
       const target = 7, barH = 150, labelSpace = 27;
@@ -3796,12 +3819,12 @@
       btn.style.cursor = hasFiles ? "pointer" : "not-allowed";
 
       if (hasFiles) {
-        const label = `Process ${batchFiles.length} video${batchFiles.length !== 1 ? "s" : ""} — Target ${targetClips} clips`;
+        const label = `Process ${batchFiles.length} video${batchFiles.length !== 1 ? "s" : ""} - Target ${targetClips} clips`;
         btn.textContent = label;
         processBtnDefaultLabel = label;
       } else {
-        btn.textContent = "Process videos — Target 7 clips";
-        processBtnDefaultLabel = "Process videos — Target 7 clips";
+        btn.textContent = "Process videos - Target 7 clips";
+        processBtnDefaultLabel = "Process videos - Target 7 clips";
       }
 
       if (hint) hint.style.display = hasFiles ? "none" : "block";
@@ -3822,7 +3845,7 @@
         const badgeLabel = statusBadgeLabel(st, 0);
         return `<tr class="batch-file-row" data-filename="${escapeHtml(f.name)}">
           <td class="file-name-cell">${escapeHtml(f.name)}</td>
-          <td>${formatFileSize(f.size)}</td><td>—</td>
+          <td>${formatFileSize(f.size)}</td><td>-</td>
           <td class="file-status-cell"><span class="status-badge ${escapeHtml(st)}">${escapeHtml(badgeLabel)}</span></td>
           <td><button type="button" class="cm-btn" onclick="removeBatchFile(${i})">Remove</button></td></tr>`;
       }).join("");
@@ -4231,7 +4254,7 @@
       void loadActivePipeline();
       void loadReviewQueue();
       activeBatchId = null;
-      showToast("Batch complete — clips ready for review");
+      showToast("Batch complete - clips ready for review");
     }
 
     function showProcessingError(message) {
@@ -4262,7 +4285,7 @@
       if (uploadProgressTimer) { clearInterval(uploadProgressTimer); uploadProgressTimer = null; }
     }
 
-    // Phase 3e — polls the server-tracked byte count for a large upload so the
+    // Phase 3e - polls the server-tracked byte count for a large upload so the
     // bar reflects real progress instead of sitting at a placeholder % (or a
     // bare spinner) for however many minutes a 4GB file takes to stream in.
     // Mapped into the 2-20% slice of the overall bar; processing stages after
@@ -4281,7 +4304,7 @@
           : "Uploading files...";
         updateProgressBar(pct, label);
       } catch (_) {
-        // best-effort — a missed poll just skips one UI tick, upload continues regardless
+        // best-effort - a missed poll just skips one UI tick, upload continues regardless
       }
     }
 
@@ -4343,7 +4366,7 @@
         if (osStatus?.running) {
           indicator.innerHTML = `<span style="color:var(--success)">● OpenShorts online</span> <span class="cm-muted" style="font-size:11px">${escapeHtml(osStatus.model || "gemini")} · ${osStatus.active_jobs || 0} active jobs</span>`;
         } else {
-          indicator.innerHTML = `<span style="color:#f5c451">● OpenShorts offline</span> <span class="cm-muted" style="font-size:11px">Using mock clips — start Python sidecar for real processing</span>`;
+          indicator.innerHTML = `<span style="color:#f5c451">● OpenShorts offline</span> <span class="cm-muted" style="font-size:11px">Using mock clips - start Python sidecar for real processing</span>`;
         }
       } catch (_) { /* ignore */ }
     }
@@ -4568,7 +4591,7 @@
     }
 
     /* ==================================================================
-       REVIEW QUEUE — AETHON REDESIGN (rv-*) render + interaction layer.
+       REVIEW QUEUE - AETHON REDESIGN (rv-*) render + interaction layer.
        Reuses existing helpers (cmFetch, playClip, resolveClip*Url,
        showToast, refresh*Badge, loadPublishing, loadCmStats) so every
        API call is identical to the prior implementation.
@@ -4666,7 +4689,7 @@
 
     function rvQueueCardHtml(vm) {
       const color = RV_TIER_COLOR[clipTrendClass(vm.score)];
-      // Queue rows carry no thumbnail — the clip preview lives in the detail
+      // Queue rows carry no thumbnail - the clip preview lives in the detail
       // panel. Each row shows only title, platform icons, and score.
       return `<div class="rv-queue-card${vm.id === rvSelectedId ? " selected" : ""}" data-id="${vm.id}" tabindex="0" role="button" aria-label="${escapeHtml(vm.title)}">
         <div class="rv-qc-center">
@@ -4931,7 +4954,7 @@
       const body = vm && vm.flagged ? { override_compliance: true, override_reason: "human reviewed" } : { scheduled_for: null, platforms: null };
       try {
         // Persist any unsaved title/hook/caption edits before publishing (the
-        // SAVE button is gone — auto-save covers blur, this covers "type → publish").
+        // SAVE button is gone - auto-save covers blur, this covers "type → publish").
         try { await rvSave(id, true); } catch (_) { /* publish anyway */ }
         await cmFetch(`/api/content/clip/${id}/send-to-publisher`, { method: "POST", body: JSON.stringify(body) });
         rvRemoveCardAnimated(id, false, () => {
@@ -4943,7 +4966,7 @@
       } catch (err) { showToast(`Failed to send: ${err.message || "error"}`); }
     }
 
-    /* ── CAPCUT DRAFT export — assemble clip+captions into a CapCut project ── */
+    /* ── CAPCUT DRAFT export - assemble clip+captions into a CapCut project ── */
     async function exportCapcutDraft(clipId, btn) {
       // Optional: Marco's CapCut drafts folder path. If provided once, the draft's
       // internal asset paths are baked for his machine so it opens perfectly.
@@ -4961,7 +4984,7 @@
       }
       const prevLabel = btn ? btn.textContent : "";
       if (btn) { btn.disabled = true; btn.textContent = "BUILDING DRAFT…"; }
-      showToast("Building CapCut draft — this takes ~15-30s…");
+      showToast("Building CapCut draft - this takes ~15-30s…");
       try {
         const res = await fetch(apiUrl(`/api/content/clip/${clipId}/export-capcut`), {
           method: "POST",
@@ -4990,13 +5013,13 @@
     }
     window.exportCapcutDraft = exportCapcutDraft;
 
-    /* ── AI EDIT modal — natural-language clip edits (FFmpeg via sidecar) ── */
+    /* ── AI EDIT modal - natural-language clip edits (FFmpeg via sidecar) ── */
     let activeEditClipId = null;
 
     function openAiEdit(clipId, clipTitle) {
       activeEditClipId = clipId;
       const titleEl = document.getElementById("aiEditTitle");
-      if (titleEl) titleEl.textContent = `AI Edit — ${clipTitle || "Clip"}`;
+      if (titleEl) titleEl.textContent = `AI Edit - ${clipTitle || "Clip"}`;
       const thread = document.getElementById("aiEditThread");
       thread?.querySelectorAll(".ai-edit-message").forEach((el) => el.remove());
       const emptyState = document.getElementById("aiEditEmptyState");
@@ -5056,7 +5079,7 @@
       aiEditThreadMessage("user", instruction);
       if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "Editing…"; }
       if (statusEl) statusEl.style.display = "flex";
-      if (statusText) statusText.textContent = "AI is processing your edit — rendering can take a minute…";
+      if (statusText) statusText.textContent = "AI is processing your edit - rendering can take a minute…";
       if (input) input.value = "";
 
       try {
@@ -5065,7 +5088,7 @@
           body: JSON.stringify({ instruction }),
         });
         const dur = data.new_duration_seconds ? `New duration: ${Math.round(data.new_duration_seconds)}s` : "Clip updated";
-        aiEditThreadMessage("ok", `✓ ${data.description || instruction} — ${dur}`);
+        aiEditThreadMessage("ok", `✓ ${data.description || instruction} - ${dur}`);
         showToast("Clip edited ✓");
         setTimeout(() => { if (typeof loadReviewQueue === "function") void loadReviewQueue(); }, 800);
       } catch (err) {
@@ -5077,7 +5100,7 @@
     }
     window.submitAiEdit = submitAiEdit;
 
-    // The modal markup sits near the end of <body>, after this script runs —
+    // The modal markup sits near the end of <body>, after this script runs -
     // bind its listeners once the DOM is fully parsed.
     document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("aiEditModal")?.addEventListener("click", function (e) {
@@ -5198,7 +5221,7 @@
             ).join(" ")
           : `<span class="cm-pill">${escapeHtml(v.platformTarget || "tiktok")}</span>`;
         const statusLabel = v.status === "published" ? "Published"
-          : v.status === "submitted" ? "Submitted — awaiting confirmation"
+          : v.status === "submitted" ? "Submitted - awaiting confirmation"
           : v.status === "scheduled" ? "Scheduled" : "Approved";
         return `<div class="cm-review-card">
           <strong>${title}</strong>
@@ -5233,7 +5256,7 @@
     // of the platforms tagged on this clip so Marco chooses which to publish to.
     function publishButton(v, entries) {
       if (!socialsConnected()) {
-        return `<button type="button" class="cm-btn-publish-now" disabled title="Publishing isn't connected yet — connect accounts in Upload-Post and set UPLOAD_POST_API_KEY.">PUBLISH · Not connected</button>`;
+        return `<button type="button" class="cm-btn-publish-now" disabled title="Publishing isn't connected yet - connect accounts in Upload-Post and set UPLOAD_POST_API_KEY.">PUBLISH · Not connected</button>`;
       }
       const ps = clipPlatforms(v, entries);
       const boxes = ps.map((p) =>
@@ -5256,7 +5279,7 @@
     function publishConnNote(v, entries) {
       const ps = clipPlatforms(v, entries);
       if (!socialsConnected()) {
-        return `<div class="cm-publish-note">⚠ Publishing isn't connected yet — connect the accounts in Upload-Post and set UPLOAD_POST_API_KEY. This clip won't be sent until then.</div>`;
+        return `<div class="cm-publish-note">⚠ Publishing isn't connected yet - connect the accounts in Upload-Post and set UPLOAD_POST_API_KEY. This clip won't be sent until then.</div>`;
       }
       return `<div class="cm-publish-note">🔴 Publishes LIVE to Marco's selected account(s) via Upload-Post (${escapeHtml(ps.join(", "))}).</div>`;
     }
@@ -5367,7 +5390,7 @@
     let cmBrainSessionId = null;
 
     async function loadBrainSection() {
-      // The static "Today's Strategy" display was removed — the underlying
+      // The static "Today's Strategy" display was removed - the underlying
       // strategy still generates on the morning cycle and is injected into this
       // chat's context (buildContextSnapshot.today_strategy), so the agent
       // answers strategy questions directly, and the Recording Plan uses it to
@@ -5394,12 +5417,12 @@
       if (card.style.display !== "none") { card.style.display = "none"; return; }
       const data = await cmFetch("/api/content-brain/self-evaluation").catch(() => ({ evaluations: [] }));
       const ev = (data.evaluations || [])[0];
-      if (!ev) { card.innerHTML = "<p class='cm-muted'>No self-evaluation yet — runs Sunday night.</p>"; }
+      if (!ev) { card.innerHTML = "<p class='cm-muted'>No self-evaluation yet - runs Sunday night.</p>"; }
       else {
         card.innerHTML = `<p><strong>What worked:</strong> ${escapeHtml(ev.whatWorked || "")}</p>
           <p><strong>What failed:</strong> ${escapeHtml(ev.whatFailed || "")}</p>
           <p><strong>One change:</strong> ${escapeHtml(ev.oneChange || "")}</p>
-          <p><strong>Benchmark:</strong> ${escapeHtml(ev.benchmarkAssessment || "—")}</p>`;
+          <p><strong>Benchmark:</strong> ${escapeHtml(ev.benchmarkAssessment || "-")}</p>`;
       }
       card.style.display = "block";
     });
@@ -5411,8 +5434,8 @@
       const exps = data.experiments || [];
       const current = exps.find((e) => e.status === "running" || e.status === "proposed");
       const completed = exps.find((e) => e.status === "complete");
-      card.innerHTML = `<p><strong>Current:</strong> ${current ? `${escapeHtml(current.status)} — ${escapeHtml(current.hypothesis || "")}` : "None active"}</p>
-        <p><strong>Last completed:</strong> ${completed ? `${escapeHtml(completed.result || "")} — ${escapeHtml(completed.conclusion || "")}` : "None yet"}</p>`;
+      card.innerHTML = `<p><strong>Current:</strong> ${current ? `${escapeHtml(current.status)} - ${escapeHtml(current.hypothesis || "")}` : "None active"}</p>
+        <p><strong>Last completed:</strong> ${completed ? `${escapeHtml(completed.result || "")} - ${escapeHtml(completed.conclusion || "")}` : "None yet"}</p>`;
       card.style.display = "block";
     });
 
@@ -5455,8 +5478,12 @@
       return html;
     }
 
+    // Replace em/en dashes with a spaced hyphen (they read as AI-generated and
+    // the team wants them gone from all displayed content).
+    function deEmDash(s){ return String(s == null ? "" : s).replace(/\s*[\u2014\u2013]\s*/g, " - "); }
     function extractSituationSummary(md) {
       if (!md) return "No analysis yet.";
+      md = deEmDash(md);
       const m = md.match(/SITUATION SUMMARY[\s\S]*?(?=\n[A-Z][A-Z ]|$)/i);
       if (!m) return md.slice(0, 400);
       return m[0].replace(/SITUATION SUMMARY\s*/i, "").trim().slice(0, 500);
@@ -5500,7 +5527,7 @@
     // for older records that used the previous long-form section headers.
     function parseCompetitiveSections(md) {
       const out = { headline: "", working: [], gap: [], actions: [] };
-      const text = String(md || "").replace(/\r/g, "");
+      const text = deEmDash(String(md || "").replace(/\r/g, ""));
       const hl = text.match(/HEADLINE:\s*(.+)/i);
       if (hl) out.headline = hl[1].trim();
       const HEADERS = "HEADLINE|WHAT'S WORKING|WHAT MARCO IS DOING RIGHT|THE GAP|WHAT COMPETITORS ARE WINNING[A-Z ']*|THE SINGLE BIGGEST OPPORTUNITY|SITUATION SUMMARY|DO THIS NEXT|THIS WEEK'S STRATEGIC PRIORITIES";
@@ -5541,8 +5568,8 @@
             <div class="ca-headline-stat ${vsClass}">${sign}${pct.toFixed(1)}% vs field · ${Math.round(analysis.marcoAvgViews).toLocaleString()} vs ${Math.round(analysis.competitorAvgViews).toLocaleString()} avg views</div>
           </div>
           <div class="ca-grid">
-            <div class="yt-card"><div class="yt-card-title">✅ WHAT'S WORKING</div><ul class="yt-list">${li(working) || "<li class='cm-muted'>—</li>"}</ul></div>
-            <div class="yt-card"><div class="yt-card-title">⚠️ THE GAP</div><ul class="yt-list">${li(gap) || "<li class='cm-muted'>—</li>"}</ul></div>
+            <div class="yt-card"><div class="yt-card-title">✅ WHAT'S WORKING</div><ul class="yt-list">${li(working) || "<li class='cm-muted'>-</li>"}</ul></div>
+            <div class="yt-card"><div class="yt-card-title">⚠️ THE GAP</div><ul class="yt-list">${li(gap) || "<li class='cm-muted'>-</li>"}</ul></div>
           </div>
           <div class="ca-actions">
             <div class="ca-actions-title">🎯 DO THIS NEXT</div>
@@ -5651,11 +5678,11 @@
       void updateStrategyBadges();
     }
 
-    // Recording Plan is its own top-level sidebar section now — a clean, scannable
+    // Recording Plan is its own top-level sidebar section now - a clean, scannable
     // list of only what Marco needs to film (no recommendations/analysis clutter).
     // Recording Plan = an ordered, strategy-driven filming walkthrough.
     // Steps are sequenced by TODAY'S strategy: pillar balance first (a task's
-    // pillar rank in strategy.pillarPriority — so an over-indexed pillar sorts
+    // pillar rank in strategy.pillarPriority - so an over-indexed pillar sorts
     // later), then priority tag, then due date. Platform + hashtags per step are
     // DERIVED from the same daily strategy (tasks don't store them); the hook
     // and filming notes are the task's own real fields.
@@ -5696,7 +5723,7 @@
         String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
 
       if (!all.length) {
-        list.innerHTML = "<p class='cm-muted'>Nothing queued to film right now — pipeline healthy.</p>";
+        list.innerHTML = "<p class='cm-muted'>Nothing queued to film right now - pipeline healthy.</p>";
         void updateStrategyBadges();
         return;
       }
@@ -5767,7 +5794,7 @@
       const btn = document.getElementById("strategy-run-analysis-btn");
       if (btn) { btn.disabled = true; btn.textContent = "Running…"; }
       await cmFetch("/api/content/competitive-analysis/run", { method: "POST" });
-      showToast("Analysis running — polling…");
+      showToast("Analysis running - polling…");
       for (let i = 0; i < 24; i++) {
         await new Promise((r) => setTimeout(r, 5000));
         const data = await cmFetch("/api/content/competitive-analysis/latest").catch(() => null);
@@ -5884,7 +5911,7 @@
       if (ch) {
         if (p.channelsTotal && p.currentChannel) {
           const idx = Math.min(p.channelsComplete + 1, p.channelsTotal);
-          ch.textContent = `Channel ${idx}/${p.channelsTotal} — ${p.currentChannel}`;
+          ch.textContent = `Channel ${idx}/${p.channelsTotal} - ${p.currentChannel}`;
         } else if (p.channelsTotal) {
           ch.textContent = `${p.channelsComplete}/${p.channelsTotal} channels`;
         } else {
@@ -5930,7 +5957,7 @@
           const msg = document.getElementById("ytProgressMsg");
           if (msg) {
             msg.textContent = p.suggestionsGenerated > 0
-              ? `Analysis complete — ${p.suggestionsGenerated} suggestions generated`
+              ? `Analysis complete - ${p.suggestionsGenerated} suggestions generated`
               : (p.message || "Analysis complete");
           }
           await loadYouTubeIntelPanel();
@@ -5954,7 +5981,7 @@
           method: "POST",
           body: JSON.stringify({ youtube_channel_url: url.trim(), channel_name: name.trim(), profile_type: "competitor" }),
         });
-        showToast("Channel added — it will be analyzed on the next run.");
+        showToast("Channel added - it will be analyzed on the next run.");
       } catch (err) {
         showToast(err.message || "Failed to add channel");
       }
@@ -5964,7 +5991,7 @@
       try {
         const res = await cmFetch(`/api/content/strategy-recommendations/${id}/create-recording-task`, { method: "POST" });
         showToast(`Task created for ${res.task?.dueDate || "calendar"}`);
-        // Recording Plan is its own sidebar section now — jump to it and briefly
+        // Recording Plan is its own sidebar section now - jump to it and briefly
         // highlight the list so the newly-created filming task is obvious.
         switchCmSection("recording");
         await loadRecordingSection();
@@ -6123,7 +6150,7 @@
       // Reset the panel to its empty/welcome state, then re-init.
       const box = document.getElementById("cm-chat-messages");
       if (box) {
-        box.innerHTML = `<div class="cm-chat-empty" id="cm-chat-empty"><div style="font-size:2rem;color:var(--cyan);">🎬</div><h3>Your content strategist.</h3><p class="cm-muted">Ask about performance, competitors, hooks, what to film, or sprint status. Not Harvey — the dedicated content brain.</p><div class="cm-chat-suggestions" id="cm-chat-suggestions"></div></div>`;
+        box.innerHTML = `<div class="cm-chat-empty" id="cm-chat-empty"><div style="font-size:2rem;color:var(--cyan);">🎬</div><h3>Your content strategist.</h3><p class="cm-muted">Ask about performance, competitors, hooks, what to film, or sprint status. Not Harvey - the dedicated content brain.</p><div class="cm-chat-suggestions" id="cm-chat-suggestions"></div></div>`;
       }
       await loadBrainSection();
       showToast("Chat cleared");
@@ -6142,7 +6169,7 @@
       let startPad = (first.getDay() + 6) % 7;
       for (let i = 0; i < startPad; i++) html += `<div></div>`;
       (data.days || []).forEach((day) => {
-        // One dot per pillar actually publishing that day — no empty padding.
+        // One dot per pillar actually publishing that day - no empty padding.
         const pillars = (day.pillarsPublishing || []).slice(0, 7);
         const dots = pillars
           .map((p) => `<span class="calendar-dot ${escapeHtml(p)}"></span>`)
@@ -6215,7 +6242,7 @@
         : "";
 
       // Scheduled clips (primary OR bonus) get the SAME publish flow as the
-      // Publishing queue — a platform picker that posts via Upload-Post. Honest
+      // Publishing queue - a platform picker that posts via Upload-Post. Honest
       // status is inherited (Submitted → Published only on real confirmation).
       let action = "";
       if (clip.kind === "scheduled" && clip.videoId) {
@@ -6278,7 +6305,7 @@
         const filled = clips.length;
         summary.textContent = filled >= DAILY_VIDEO_TARGET
           ? `${filled} / ${DAILY_VIDEO_TARGET} recording slots filled${filled > DAILY_VIDEO_TARGET ? ` (+${filled - DAILY_VIDEO_TARGET} bonus)` : ""}`
-          : `${filled} / ${DAILY_VIDEO_TARGET} recording slots — quality-gated, so fewer strong clips is fine`;
+          : `${filled} / ${DAILY_VIDEO_TARGET} recording slots - quality-gated, so fewer strong clips is fine`;
       }
 
       // Always render exactly 7 target slots: fill with real clips, then label
@@ -6371,7 +6398,7 @@
         const gb = (r.freedGB != null ? r.freedGB : (r.freedBytes || 0) / 1073741824).toFixed(2);
         const beforeGB = r.freeBeforeMB != null ? (r.freeBeforeMB / 1024).toFixed(1) : "?";
         const afterGB = r.freeAfterMB != null ? (r.freeAfterMB / 1024).toFixed(1) : "?";
-        if (out) out.textContent = `Cleared ${r.deleted} files — ${gb} GB freed · free space ${beforeGB}GB → ${afterGB}GB`;
+        if (out) out.textContent = `Cleared ${r.deleted} files - ${gb} GB freed · free space ${beforeGB}GB → ${afterGB}GB`;
         showToast(`Cleared ${r.deleted} files, ${gb} GB freed`);
       } catch (e) {
         if (out) out.textContent = `Failed: ${e.message || "error"}`;
@@ -6400,7 +6427,7 @@
         loadCommunityPanel(btn.getAttribute("data-community-tab"));
       });
     });
-    /* Upload zone — batch */
+    /* Upload zone - batch */
     const uploadZone = document.getElementById("upload-zone");
     const fileInput = document.getElementById("video-file-input");
     uploadZone?.addEventListener("click", () => fileInput?.click());
@@ -6513,11 +6540,11 @@
         if (summary) {
           summary.textContent = total === 0
             ? "Drop example videos so future clips match your style"
-            : `${total} file${total === 1 ? "" : "s"} total — ${analyzedCount} learned`
+            : `${total} file${total === 1 ? "" : "s"} total - ${analyzedCount} learned`
               + (processingCount ? `, ${processingCount} learning…` : "");
         }
 
-        // Keep polling while anything is still learning — even with the panel
+        // Keep polling while anything is still learning - even with the panel
         // collapsed, so the header count/summary badge stays accurate without
         // Marco needing to open it to check.
         clearTimeout(styleExamplesPollTimer);
@@ -6582,7 +6609,7 @@
         showScriptPreview(file.name, text.slice(0, 500));
         return;
       }
-      // PDF/docx — extract text server-side. apiUrl carries the token; do NOT
+      // PDF/docx - extract text server-side. apiUrl carries the token; do NOT
       // set a JSON content-type on multipart (browser sets the boundary).
       const fd = new FormData();
       fd.append("file", file);
@@ -6595,7 +6622,7 @@
       } catch (err) {
         console.warn("[script-upload] extract failed:", err);
         scriptContent = `Script file: ${file.name}`;
-        showScriptPreview(file.name, "(Text could not be extracted — paste key lines into the context box below)");
+        showScriptPreview(file.name, "(Text could not be extracted - paste key lines into the context box below)");
       }
     }
 
@@ -6643,7 +6670,7 @@
       const bubble = document.createElement("div");
       bubble.className = "context-message-bubble";
       const span = document.createElement("span");
-      span.textContent = text; // textContent — never inject user text as HTML
+      span.textContent = text; // textContent - never inject user text as HTML
       const remove = document.createElement("button");
       remove.type = "button";
       remove.textContent = "✕";
@@ -6952,7 +6979,7 @@
     }
 
     async function generateAllImprovements() {
-      showToast("Generating feedback for all videos — this may take a minute…");
+      showToast("Generating feedback for all videos - this may take a minute…");
       try {
         const res = await fetch(apiUrl("/api/social/video-improvements/generate-all"), { method: "POST", headers: apiHeaders() });
         if (!res.ok) throw new Error("Batch generation failed");
@@ -6965,10 +6992,10 @@
     }
 
     async function rescoreVideosNow() {
-      showToast("Rescoring videos from Apify — this may take a minute…");
+      showToast("Rescoring videos from Apify - this may take a minute…");
       try {
         await refreshData();
-        showToast("Rescore complete — reloading scores");
+        showToast("Rescore complete - reloading scores");
         await loadVideoScoresTab();
       } catch (e) {
         showToast(e.message || "Rescore failed");
@@ -6984,7 +7011,7 @@
 
       if (!result) {
         status.className = "loading";
-        status.textContent = "No morning scan yet — run a scan to check overnight comments.";
+        status.textContent = "No morning scan yet - run a scan to check overnight comments.";
         flagsEl.innerHTML = "";
         return;
       }
@@ -7005,18 +7032,18 @@
 
       const flags = result.leadIntentFlags || [];
       if (result.newComments === 0) {
-        flagsEl.innerHTML = '<p class="empty" style="padding:1rem 0;">No new comments overnight — all quiet.</p>';
+        flagsEl.innerHTML = '<p class="empty" style="padding:1rem 0;">No new comments overnight - all quiet.</p>';
         return;
       }
       if (!flags.length) {
-        flagsEl.innerHTML = '<p class="empty" style="padding:1rem 0;">Comments scanned — no lead-intent signals detected.</p>';
+        flagsEl.innerHTML = '<p class="empty" style="padding:1rem 0;">Comments scanned - no lead-intent signals detected.</p>';
         return;
       }
       flagsEl.innerHTML = flags.map((f) => {
         const text = escapeHtml(f.text || "");
         const signals = (f.intentSignals || []).join(", ");
         return `<div class="intent-flag">
-          <strong>@${escapeHtml(f.authorUsername || "unknown")}</strong> — ${text}
+          <strong>@${escapeHtml(f.authorUsername || "unknown")}</strong> - ${text}
           <div class="signals">${escapeHtml(signals)}</div>
         </div>`;
       }).join("");
@@ -7028,7 +7055,7 @@
       const snapshot = data?.result;
       const result = snapshot?.data ?? snapshot;
       if (!result) {
-        status.textContent = "No evening pull yet — run one to score the last 7 days.";
+        status.textContent = "No evening pull yet - run one to score the last 7 days.";
         details.innerHTML = "";
         return;
       }
@@ -7039,11 +7066,11 @@
       const under = result.underperformers || [];
       let html = "";
       if (top) {
-        html += `<div class="intent-flag"><strong>Top performer</strong> — "${escapeHtml(top.description)}" · score ${top.score}/100 · ${fmt(top.views)} views</div>`;
+        html += `<div class="intent-flag"><strong>Top performer</strong> - "${escapeHtml(top.description)}" · score ${top.score}/100 · ${fmt(top.views)} views</div>`;
       }
       if (under.length) {
         html += under.map((u) =>
-          `<div class="intent-flag"><strong>Underperformer</strong> — "${escapeHtml(u.description)}" · score ${u.score}/100 · ${fmt(u.views)} views</div>`
+          `<div class="intent-flag"><strong>Underperformer</strong> - "${escapeHtml(u.description)}" · score ${u.score}/100 · ${fmt(u.views)} views</div>`
         ).join("");
       }
       if (!html) {
@@ -7075,7 +7102,7 @@
       const status = document.getElementById("commentRepliesStatus");
       const list = document.getElementById("commentRepliesList");
       if (!replies || !replies.length) {
-        status.textContent = "No pending replies — all caught up.";
+        status.textContent = "No pending replies - all caught up.";
         list.innerHTML = "";
         return;
       }
@@ -7150,7 +7177,7 @@
     }
 
     async function generateContentSuggestions() {
-      showToast("Generating content ideas — searching trends and analyzing your data…");
+      showToast("Generating content ideas - searching trends and analyzing your data…");
       try {
         const res = await fetch(apiUrl("/api/content-suggestions/generate"), {
           method: "POST",
@@ -7255,7 +7282,7 @@
         console.log("[MorningScan] Manual run result:", data);
         renderMorningScan(data);
         const r = data.result || {};
-        showToast(`Scan complete — ${r.newComments ?? 0} comments, ${(r.leadIntentFlags || []).length} lead-intent flags`);
+        showToast(`Scan complete - ${r.newComments ?? 0} comments, ${(r.leadIntentFlags || []).length} lead-intent flags`);
         await loadPendingReplies();
       } catch (e) {
         showToast("Scan failed: " + (e.message || "unknown"));
@@ -7280,7 +7307,7 @@
       const btn = document.getElementById("runEveningPullBtn");
       btn.disabled = true;
       btn.textContent = "PULLING…";
-      showToast("Running evening pull — refreshing Apify data and scoring last 7 days…");
+      showToast("Running evening pull - refreshing Apify data and scoring last 7 days…");
       try {
         const res = await fetch(apiUrl("/api/evening-pull/run"), { method: "POST", headers: apiHeaders() });
         if (!res.ok) {
@@ -7467,7 +7494,7 @@
 
     // These bind to controls that some UI overhauls removed (morning-scan,
     // evening-pull, escalations, comment-replies). getElementById returns null
-    // for the missing ones, and an unguarded .addEventListener threw here —
+    // for the missing ones, and an unguarded .addEventListener threw here -
     // which aborted the REST of init (loadCmStats/switchCmSection/overview),
     // leaving the whole Overview on placeholder dashes. Optional-chain them so
     // a missing control is a harmless no-op instead of a fatal init crash.
@@ -7547,7 +7574,7 @@
   window.goToCommandCenter = goToCommandCenter;
   </script>
 
-  <!-- ════ AI EDIT — describe a change in plain English, FFmpeg applies it ════ -->
+  <!-- ════ AI EDIT - describe a change in plain English, FFmpeg applies it ════ -->
   <div id="aiEditModal" style="display:none" class="clip-modal-overlay">
     <div class="clip-modal-box" style="max-width:580px">
       <div class="clip-modal-header">
@@ -7567,7 +7594,7 @@
 
       <div id="aiEditThread" style="padding:14px 18px;min-height:80px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:10px">
         <div style="font-size:12px;color:var(--muted);text-align:center;padding:20px 0" id="aiEditEmptyState">
-          Describe what you'd like changed in this clip. Be specific — times work best ("remove the first 8 seconds", "cut from 0:30 to 0:40").
+          Describe what you'd like changed in this clip. Be specific - times work best ("remove the first 8 seconds", "cut from 0:30 to 0:40").
         </div>
       </div>
 
@@ -7583,7 +7610,7 @@
     </div>
   </div>
 
-  <!-- ════ EDIT CLIP — open OpenReel (free browser editor), round-trip the export ════ -->
+  <!-- ════ EDIT CLIP - open OpenReel (free browser editor), round-trip the export ════ -->
   <div id="clipEditorModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); justify-content:center; padding:32px 14px; overflow-y:auto;">
     <div style="background:var(--card-bg,#0d0f14); border:1px solid rgba(0,212,255,0.25); border-radius:8px; max-width:560px; width:100%; height:fit-content; padding:20px; font-family:monospace;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -7591,7 +7618,7 @@
         <button onclick="closeClipEditor()" style="background:transparent; border:none; color:var(--text-dim,#888); cursor:pointer; font-size:18px;">✕</button>
       </div>
       <p style="font-size:11px; color:var(--text-dim,#888); line-height:1.6; margin-bottom:16px;">
-        The <strong style="color:var(--text,#fff);">OpenReel editor</strong> opens automatically in a new tab <strong style="color:var(--text,#fff);">with this clip already loaded on the timeline</strong> — a free, private editor that runs in your browser. Edit, export, then bring the result back here.
+        The <strong style="color:var(--text,#fff);">OpenReel editor</strong> opens automatically in a new tab <strong style="color:var(--text,#fff);">with this clip already loaded on the timeline</strong> - a free, private editor that runs in your browser. Edit, export, then bring the result back here.
       </p>
 
       <div style="display:flex; flex-direction:column; gap:12px;">
@@ -7657,10 +7684,10 @@
     if (status) status.textContent = 'Uploading + replacing…';
     try {
       // apiUrl adds the token; apiHeaders sets JSON content-type which must NOT be
-      // set for multipart — so use apiUrl only and let the browser set the boundary.
+      // set for multipart - so use apiUrl only and let the browser set the boundary.
       var res = await fetch(apiUrl('/api/content/clip/' + clipEditorId + '/replace-upload'), { method: 'POST', body: fd });
       if (!res.ok) { var e = await res.json().catch(function(){return {};}); throw new Error(e.error || ('HTTP ' + res.status)); }
-      if (status) status.textContent = 'Done ✓ — clip replaced with your edit.';
+      if (status) status.textContent = 'Done ✓ - clip replaced with your edit.';
       if (typeof showToast === 'function') showToast('Clip replaced with your edit ✓');
       setTimeout(function(){ closeClipEditor(); if (typeof loadReviewQueue === 'function') loadReviewQueue(); else location.reload(); }, 1200);
     } catch (err) {
@@ -7672,7 +7699,7 @@
   window.uploadClipEdit = uploadClipEdit;
   </script>
 
-  <!-- ════ EDIT PLAN — 4-step guided CapCut planning workflow ════ -->
+  <!-- ════ EDIT PLAN - 4-step guided CapCut planning workflow ════ -->
   <div id="editPlanModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); justify-content:center; padding:32px 14px; overflow-y:auto;">
     <div style="background:var(--card-bg,#0d0f14); border:1px solid rgba(0,212,255,0.25); border-radius:8px; max-width:640px; width:100%; height:fit-content; padding:20px; font-family:monospace;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -7702,7 +7729,7 @@
 
         <!-- STEP 1: Hook -->
         <div id="edit-step-1" class="edit-step-content">
-          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">HOOK — FIRST 3 SECONDS</div>
+          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">HOOK - FIRST 3 SECONDS</div>
           <p style="font-size:11px; color:var(--text-dim,#888); margin-bottom:16px;">The hook determines whether anyone watches the rest. Get this right before anything else.</p>
           <div style="margin-bottom:12px;">
             <label style="font-size:10px; color:var(--text-dim,#555); letter-spacing:1px; display:block; margin-bottom:6px;">HOOK TYPE</label>
@@ -7723,7 +7750,7 @@
 
         <!-- STEP 2: Structure -->
         <div id="edit-step-2" class="edit-step-content" style="display:none;">
-          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">STRUCTURE — SCENE ORDER</div>
+          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">STRUCTURE - SCENE ORDER</div>
           <p style="font-size:11px; color:var(--text-dim,#888); margin-bottom:16px;">Map out your scenes in order. Each scene should earn the next one.</p>
           <div id="scene-list" style="margin-bottom:12px;"></div>
           <button onclick="addScene()" style="background:transparent; border:1px dashed rgba(0,212,255,0.3); color:#00d4ff; padding:6px 12px; font-family:monospace; font-size:10px; border-radius:2px; cursor:pointer; width:100%;">+ ADD SCENE</button>
@@ -7739,11 +7766,11 @@
 
         <!-- STEP 3: Transitions -->
         <div id="edit-step-3" class="edit-step-content" style="display:none;">
-          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">TRANSITIONS — BETWEEN SCENES</div>
-          <p style="font-size:11px; color:var(--text-dim,#888); margin-bottom:16px;">Pick a transition for each scene cut. CapCut names listed — open CapCut alongside this.</p>
+          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">TRANSITIONS - BETWEEN SCENES</div>
+          <p style="font-size:11px; color:var(--text-dim,#888); margin-bottom:16px;">Pick a transition for each scene cut. CapCut names listed - open CapCut alongside this.</p>
           <div id="transition-assignments" style="margin-bottom:16px;"></div>
           <div style="background:rgba(0,212,255,0.03); border:1px solid rgba(0,212,255,0.1); border-radius:4px; padding:12px; margin-bottom:12px;">
-            <div style="font-size:9px; color:var(--text-dim,#555); letter-spacing:1px; margin-bottom:8px;">TRANSITION GUIDE — REAL ESTATE</div>
+            <div style="font-size:9px; color:var(--text-dim,#555); letter-spacing:1px; margin-bottom:8px;">TRANSITION GUIDE - REAL ESTATE</div>
             <div id="transition-reference-list"></div>
           </div>
           <div style="display:flex; gap:8px; margin-top:16px;">
@@ -7754,7 +7781,7 @@
 
         <!-- STEP 4: Export -->
         <div id="edit-step-4" class="edit-step-content" style="display:none;">
-          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">EXPORT — CAPCUT CHECKLIST</div>
+          <div style="font-size:11px; color:#00d4ff; letter-spacing:2px; margin-bottom:12px;">EXPORT - CAPCUT CHECKLIST</div>
           <div style="background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.2); border-radius:4px; padding:12px; margin-bottom:16px;">
             <div style="font-size:9px; color:#10b981; letter-spacing:1px; margin-bottom:6px;">EXPORT SETTINGS FOR TIKTOK</div>
             <div style="font-size:11px; color:var(--text,#ccc); line-height:1.8;">
@@ -7770,7 +7797,7 @@
   </div>
 
   <script>
-  /* ═══ EDIT PLAN — guided CapCut planning workflow (Hook→Structure→Transitions→Export) ═══
+  /* ═══ EDIT PLAN - guided CapCut planning workflow (Hook→Structure→Transitions→Export) ═══
      A planning/guidance tool: it produces a CapCut checklist, separate from the
      render-based ✂ Clip Editor (which is preserved). Uses the app's apiUrl/apiHeaders. */
   var editState = { step: 1, hookType: null, hookText: '', scenes: [], transitionAssignments: {}, videoId: null, videoTitle: '' };
@@ -7908,7 +7935,7 @@
   function generateEditSummary(){
     var hook = HOOK_TYPES.find(function(h){ return h.id === editState.hookType; });
     var lines = [
-      '═══════════════════════════════', '  EDIT SUMMARY — CAPCUT GUIDE', '═══════════════════════════════', '',
+      '═══════════════════════════════', '  EDIT SUMMARY - CAPCUT GUIDE', '═══════════════════════════════', '',
       'CLIP: ' + (editState.videoTitle || editState.videoId || 'untitled'), '',
       'HOOK TYPE: ' + (hook ? hook.label : 'Not set'),
       'OPENING LINE: "' + (editState.hookText || 'Not set') + '"',

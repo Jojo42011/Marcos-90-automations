@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-<title>Harvey — Marco 90</title>
+<title>Harvey - Marco 90</title>
 <style>
  /* ============================================================
-    NEUTRAL UI SHELL — collapsible sidebar + tabbed iframe views
+    NEUTRAL UI SHELL - collapsible sidebar + tabbed iframe views
     + programmatic ("voice") navigation. No brand, no colors.
     THEME: override the CSS variables below. Everything is driven
-    off --accent / --bg / --line — change those and it re-skins.
+    off --accent / --bg / --line - change those and it re-skins.
     ============================================================ */
- /* Brivity theme — white chrome, teal accent (matches the CRM). Harvey's own
+ /* Brivity theme - white chrome, teal accent (matches the CRM). Harvey's own
     screen stays dark inside its iframe; this only skins the shell. */
  :root {
    --bg:       #f9fbfb;
@@ -130,7 +130,7 @@
 
 <script>
 /* ================================================================
-  CONFIG — edit this. Each tab is one iframe view.
+  CONFIG - edit this. Each tab is one iframe view.
   - key:   unique id, used by programmatic navigation
   - label / sub: sidebar text
   - src:   the page/app to embed (same-origin recommended so
@@ -193,7 +193,7 @@ var TABS = [
 ];
 
 
-/* Section separators — a label is rendered before the tab whose key is listed
+/* Section separators - a label is rendered before the tab whose key is listed
    here (null = no separator before that item). Configured, not core logic. */
 var SECTIONS = {
  harvey:    null,
@@ -285,10 +285,10 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 
 /* ── Marco 90 addition: respect the existing dark/light theme preference ──
    The sub-agent pages persist their theme under 'marco_crm_theme' (values
-   'light'/'dark') — see dashboard.html/jarvis.html. The shell chrome mirrors
+   'light'/'dark') - see dashboard.html/jarvis.html. The shell chrome mirrors
    it (falling back to the generic 'theme' key). Defaults to dark; re-applies
    when a tab flips it (storage event). */
-/* The shell chrome is now permanently Brivity-themed (white + teal) — the
+/* The shell chrome is now permanently Brivity-themed (white + teal) - the
    single source is the :root block above. We intentionally no longer swap the
    shell palette from the old dark/light preference; individual tab pages keep
    their own theming inside their iframes (Harvey stays dark). */

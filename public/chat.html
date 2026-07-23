@@ -142,7 +142,7 @@
     @media (max-width: 720px) { .dm-modal-card { width: 100vw; height: 100vh; border-radius: 0; } }
   </style>
     <style id="brivity-skin">
-      /* Brivity theme — white + teal, matching the CRM/shell. */
+      /* Brivity theme - white + teal, matching the CRM/shell. */
       :root{
         --bg:#f9fbfb; --surface:#ffffff; --surface-2:#ffffff; --border:#edf0f0; --border-2:#edf0f0;
         --text:#333333; --muted:#5f6b78; --accent:#59c4c4;
@@ -167,12 +167,12 @@
   </header>
 
   <div class="dm-stats" id="dm-stats">
-    <div class="dm-stat"><div class="lbl">&#128172; Conversations</div><div class="num" id="st-conv">&mdash;</div><div class="sub" id="st-conv-sub"></div></div>
-    <div class="dm-stat"><div class="lbl">&#128248; Platforms</div><div class="num" id="st-plat">&mdash;</div><div class="sub" id="st-plat-sub"></div></div>
-    <div class="dm-stat"><div class="lbl">&#9993; Messages</div><div class="num" id="st-msgs">&mdash;</div><div class="sub" id="st-msgs-sub"></div></div>
-    <div class="dm-stat"><div class="lbl">&#127381; Today</div><div class="num" id="st-today">&mdash;</div><div class="sub" id="st-today-sub"></div></div>
-    <div class="dm-stat"><div class="lbl">&#128241; Phone Captures</div><div class="num" id="st-phones">&mdash;</div><div class="sub" id="st-phones-sub"></div></div>
-    <div class="dm-stat" id="st-marco-card"><div class="lbl">&#9888; Needs Marco</div><div class="num" id="st-marco">&mdash;</div><div class="sub" id="st-marco-sub"></div></div>
+    <div class="dm-stat"><div class="lbl">&#128172; Conversations</div><div class="num" id="st-conv">-</div><div class="sub" id="st-conv-sub"></div></div>
+    <div class="dm-stat"><div class="lbl">&#128248; Platforms</div><div class="num" id="st-plat">-</div><div class="sub" id="st-plat-sub"></div></div>
+    <div class="dm-stat"><div class="lbl">&#9993; Messages</div><div class="num" id="st-msgs">-</div><div class="sub" id="st-msgs-sub"></div></div>
+    <div class="dm-stat"><div class="lbl">&#127381; Today</div><div class="num" id="st-today">-</div><div class="sub" id="st-today-sub"></div></div>
+    <div class="dm-stat"><div class="lbl">&#128241; Phone Captures</div><div class="num" id="st-phones">-</div><div class="sub" id="st-phones-sub"></div></div>
+    <div class="dm-stat" id="st-marco-card"><div class="lbl">&#9888; Needs Marco</div><div class="num" id="st-marco">-</div><div class="sub" id="st-marco-sub"></div></div>
   </div>
 
   <div class="dm-body">
@@ -190,12 +190,12 @@
     </div>
   </div>
 
-  <!-- Conversation popup — opens when a conversation is clicked -->
+  <!-- Conversation popup - opens when a conversation is clicked -->
   <div class="dm-modal" id="dm-modal" aria-hidden="true">
     <div class="dm-modal-backdrop" id="dm-modal-backdrop"></div>
     <div class="dm-modal-card" role="dialog" aria-modal="true">
       <div class="dm-conv-head">
-        <span class="nm" id="conv-name">—</span>
+        <span class="nm" id="conv-name">-</span>
         <span class="sub" id="conv-sub"></span>
         <button type="button" class="dm-modal-close" id="dm-modal-close" aria-label="Close">&times;</button>
       </div>
@@ -328,7 +328,7 @@
         const pc = platClass(c.platform);
         const state = c.state ? `<span class="dm-state">${esc(String(c.state).replace(/_/g, " "))}</span>` : "";
         const phone = c.phone
-          ? `<a class="dm-phone" href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" title="Captured number — tap to call">📞 ${esc(c.phone)}</a>`
+          ? `<a class="dm-phone" href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" title="Captured number - tap to call">📞 ${esc(c.phone)}</a>`
           : `<span class="dm-phone-none">no number yet</span>`;
         return `<div class="dm-thread${active}" data-id="${esc(c.id)}" data-platform="${esc(c.platform)}" data-userid="${esc(c.userId)}" data-name="${esc(c.name)}" data-phone="${esc(c.phone || "")}" role="button" tabindex="0" title="Open conversation">
           <div class="dm-thread-top">
@@ -400,7 +400,7 @@
     });
 
     document.getElementById("dm-new-btn").addEventListener("click", () => {
-      const handle = prompt("New conversation — enter the lead's handle / user id (e.g. an Instagram username):", "");
+      const handle = prompt("New conversation - enter the lead's handle / user id (e.g. an Instagram username):", "");
       if (!handle || !handle.trim()) return;
       const uid = handle.trim();
       selectThread({ id: null, platform: "instagram", userId: uid, name: uid });
@@ -439,7 +439,7 @@
         }
         logEl.scrollTop = logEl.scrollHeight;
         await loadConversations();
-        // the thread now exists server-side — attach its id if we can match on userId
+        // the thread now exists server-side - attach its id if we can match on userId
         if (!current.id) {
           const match = convCache.find((c) => c.userId === current.userId && platClass(c.platform) === platClass(current.platform));
           if (match) { current.id = match.id; current.name = match.name; renderThreads(); }

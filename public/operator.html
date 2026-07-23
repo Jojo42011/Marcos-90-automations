@@ -6,7 +6,7 @@
 <title>HARVEY</title>
 <style>
   :root {
-    /* THEME — BLUE. Single source for the accent; canvas colors mirror these
+    /* THEME - BLUE. Single source for the accent; canvas colors mirror these
        in the orb script's THEME block below. */
     --bg: #0a0a0a;
     --accent:        #1C6DD0;
@@ -117,7 +117,7 @@
       if (t === "RESPONDING") return "RESPONDING";
       return "STANDBY";
     }
-    // Harvey's pipeline drives state through these globals — route them to the orb.
+    // Harvey's pipeline drives state through these globals - route them to the orb.
     window.setStatus = function (t, on) { if (window.__orbSetState) window.__orbSetState(__mapOrbState(t)); };
     window.setCoreState = function (mode) { if (window.__orbSetState) window.__orbSetState(__mapOrbState(mode)); };
   </script>

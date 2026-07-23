@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,600&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   TASK COMMAND CENTER — design-spec rebuild.
+   TASK COMMAND CENTER - design-spec rebuild.
    Rounded-square geometry, Marco brand (crimson diamond + serif)
    over the Brivity teal system. Light + Dark themes. The Calendar
    card alone uses the iOS frosted-glass treatment.
@@ -274,7 +274,7 @@ textarea.fin{height:auto;min-height:64px;padding:10px 12px;resize:vertical}
 .viewing-note{display:flex;align-items:center;gap:8px;margin:0 14px;padding:9px 12px;border-radius:10px;background:var(--soft);border:1px dashed var(--line);font-size:12px;color:var(--muted)}
 
 /* ============================================================
-   REFINEMENT PASS — crisp type + fluid motion, full-bleed layout
+   REFINEMENT PASS - crisp type + fluid motion, full-bleed layout
    ============================================================ */
 .brand .wm small{font-size:6.4px;letter-spacing:.17em}
 .brand .wm b{font-size:14px}
@@ -362,12 +362,12 @@ html{scroll-behavior:smooth}
     </svg>
     <span class="wm"><small>HAPPINESS BEGINS AT HOME</small><b>MARCO PUGA</b><i>TASK COMMAND</i></span>
   </div>
-  <div id="dateHead">Tasks for <b id="dateHeadDate">—</b></div>
+  <div id="dateHead">Tasks for <b id="dateHeadDate">-</b></div>
   <button class="tbtn" id="themeBtn">◐ Theme</button>
   <div id="bellWrap">
     <button class="tbtn" id="bellBtn">🔔<span id="bellBadge">0</span></button>
   </div>
-  <div class="me-chip" id="meChip" title="Switch user"><span class="av" id="meAv">?</span><b id="meName">—</b></div>
+  <div class="me-chip" id="meChip" title="Switch user"><span class="av" id="meAv">?</span><b id="meName">-</b></div>
 </header>
 
 <div id="wrap">
@@ -394,7 +394,7 @@ html{scroll-behavior:smooth}
     </div>
     <div class="board anim" id="bars"></div>
 
-    <!-- Calendar tab — the one frosted-glass surface -->
+    <!-- Calendar tab - the one frosted-glass surface -->
     <div id="calView" style="display:none">
       <div style="display:flex;align-items:center;gap:10px;padding:2px 2px 10px">
         <h2 style="font-family:var(--serif);font-size:20px;flex:1" id="calBigTitle">Month</h2>
@@ -434,7 +434,7 @@ html{scroll-behavior:smooth}
 <aside id="chat">
   <div id="chatHead">
     <span class="av big" id="chatAv">?</span>
-    <div><b id="chatName">—</b><div style="font-size:11px;color:var(--muted)" id="chatStatus">offline</div></div>
+    <div><b id="chatName">-</b><div style="font-size:11px;color:var(--muted)" id="chatStatus">offline</div></div>
     <button class="icobtn x" id="chatClose">✕</button>
   </div>
   <div id="chatBody"></div>
@@ -469,7 +469,7 @@ html{scroll-behavior:smooth}
 <!-- who's on -->
 <div class="scrim" id="gate"><div class="modal" style="width:420px">
   <h3>Who’s on?</h3>
-  <p style="font-size:12.5px;color:var(--muted);margin:6px 0 14px">Pick your name — your tasks, notifications and chats load for you.</p>
+  <p style="font-size:12.5px;color:var(--muted);margin:6px 0 14px">Pick your name - your tasks, notifications and chats load for you.</p>
   <div id="gateBtns"></div>
 </div></div>
 
@@ -501,7 +501,7 @@ function pad(n){return String(n).padStart(2,"0");}
 function ymd(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
 function parseLocal(s){var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(s||""));return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
 var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
-function longDate(s){var d=parseLocal(s);return d?MONTHS[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear():"—";}
+function longDate(s){var d=parseLocal(s);return d?MONTHS[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear():"-";}
 function time12(hhmm){var m=/^(\d{2}):(\d{2})$/.exec(hhmm||"");if(!m)return"";var h=+m[1],ap=h>=12?"PM":"AM";h=h%12||12;return h+":"+m[2]+" "+ap;}
 function stampFmt(iso){var d=new Date(iso);if(isNaN(d))return"";var h=d.getHours(),ap=h>=12?"PM":"AM";h=h%12||12;
   return MONTHS[d.getMonth()].slice(0,3)+" "+d.getDate()+", "+d.getFullYear()+" at "+h+":"+pad(d.getMinutes())+" "+ap;}
@@ -645,7 +645,7 @@ function renderBars(){
   var note=document.getElementById("viewingNote");
   if(readOnlyView()){var vm=member(viewingPage);
     note.style.display="flex";
-    note.innerHTML='👁 Viewing <b style="color:'+vm.color+'">'+esc(vm.name)+'&rsquo;s</b>&nbsp;task page &mdash; read-only (you can edit only tasks you assigned). '+
+    note.innerHTML='👁 Viewing <b style="color:'+vm.color+'">'+esc(vm.name)+'&rsquo;s</b>&nbsp;task page - read-only (you can edit only tasks you assigned). '+
       '<button id="exitPage" style="margin-left:auto;border:none;background:none;color:var(--brand2);font-weight:800;cursor:pointer">EXIT</button>';
     document.getElementById("exitPage").onclick=function(){viewingPage="";renderAll();};
   } else note.style.display="none";
@@ -661,7 +661,7 @@ function renderBars(){
     var scope=(who==="all")?TASKS:TASKS.filter(function(t){return visibleFor(t,who);});
     var done=scope.filter(function(t){return t.status==="done"&&String(t.completedAt||t.updatedAt||"").slice(0,10)===selDate;});
     var list=sortTasks(done.filter(function(t){return doneSub==="today"?!t.recurring:!!t.recurring;}));
-    el.innerHTML='<div style="padding:2px"><div class="bar-h"><h3>'+(doneSub==="today"?"Completed":"Completed Recurring")+' — '+dateLbl+'</h3><span class="cnt">'+list.length+'</span></div>'+
+    el.innerHTML='<div style="padding:2px"><div class="bar-h"><h3>'+(doneSub==="today"?"Completed":"Completed Recurring")+' - '+dateLbl+'</h3><span class="cnt">'+list.length+'</span></div>'+
       (list.length?list.map(taskCard).join(""):'<div class="empty">Nothing completed this day yet.</div>')+'</div>';
     bindCards();return;
   }
@@ -670,17 +670,17 @@ function renderBars(){
   var cols=[];
   if(readOnlyView()){
     var vp=viewingPage;var vpm=member(vp);
-    cols.push(colHTML({key:"today",title:vpm.name+"’s Tasks — "+dateLbl,tint:vpm.color,member:vp,list:todaysOf(vp),empty:"No tasks this day.",canAdd:true,addWho:vp}));
+    cols.push(colHTML({key:"today",title:vpm.name+"’s Tasks - "+dateLbl,tint:vpm.color,member:vp,list:todaysOf(vp),empty:"No tasks this day.",canAdd:true,addWho:vp}));
     cols.push(colHTML({key:"recurring",title:vpm.name+"’s Recurring",tint:vpm.color,member:vp,list:recsOf(vp),empty:"No recurring tasks.",canAdd:false}));
   } else if(who==="all"){
-    cols.push(colHTML({key:"today",title:"Today’s Tasks — "+((member(ME)||{}).name||"Me"),member:ME,tint:(member(ME)||{}).color,list:todaysOf(ME),empty:"No tasks for this day.",canAdd:true,addWho:ME}));
+    cols.push(colHTML({key:"today",title:"Today’s Tasks - "+((member(ME)||{}).name||"Me"),member:ME,tint:(member(ME)||{}).color,list:todaysOf(ME),empty:"No tasks for this day.",canAdd:true,addWho:ME}));
     cols.push(colHTML({key:"recurring",title:"Recurring Tasks",list:recsOf(ME),empty:"No recurring tasks.",canAdd:true,addWho:ME,addRec:true}));
     TEAM.forEach(function(m){ if(m.id===ME)return;
       cols.push(colHTML({key:"today",title:m.name+"’s Tasks",tint:m.color,member:m.id,list:todaysOf(m.id),empty:"Nothing for this day.",canAdd:true,addWho:m.id}));
     });
   } else {
     var u=(who===""?ME:who); var um=member(u)||{name:"My",color:"var(--teal)"};
-    cols.push(colHTML({key:"today",title:(u===ME?"Today’s Tasks":um.name+"’s Tasks")+" — "+dateLbl,tint:um.color,member:u,list:todaysOf(u),empty:"No tasks for this day.",canAdd:true,addWho:u}));
+    cols.push(colHTML({key:"today",title:(u===ME?"Today’s Tasks":um.name+"’s Tasks")+" - "+dateLbl,tint:um.color,member:u,list:todaysOf(u),empty:"No tasks for this day.",canAdd:true,addWho:u}));
     cols.push(colHTML({key:"recurring",title:(u===ME?"Recurring Tasks":um.name+"’s Recurring"),tint:um.color,member:u,list:recsOf(u),empty:"No recurring tasks.",canAdd:u===ME,addWho:u,addRec:true}));
   }
   el.innerHTML=cols.join("");
@@ -1011,7 +1011,7 @@ function openTaskModal(t,presetTitle,opts){
   document.getElementById("tTime").value=t?(t.dueTime||""):"";
   var who=document.getElementById("tWho");
   var preWho=(t?t.assignedTo:(opts.who||ME))||ME;
-  who.innerHTML=TEAM.map(function(m){return '<option value="'+m.id+'"'+(preWho===m.id?" selected":"")+'>'+m.name+' — '+m.role+'</option>';}).join("");
+  who.innerHTML=TEAM.map(function(m){return '<option value="'+m.id+'"'+(preWho===m.id?" selected":"")+'>'+m.name+' - '+m.role+'</option>';}).join("");
   selUrgent=t?t.column==="urgent":false;
   selStatus=t?((t.status==="due_soon"||t.status==="overdue")?(t.previousStatus||"pending"):t.status):"pending";
   selInterval=t&&t.recurring?(t.recurringInterval||"weekly"):(opts.rec?"weekly":"");
@@ -1050,7 +1050,7 @@ document.getElementById("tmSave").onclick=function(){
     if(editId){var i=TASKS.findIndex(function(x){return x.id===editId;});if(i>=0)TASKS[i]=d.task;}
     else TASKS.push(d.task);
     document.getElementById("taskScrim").classList.remove("on");
-    if(!editId&&payload.assignedTo!==ME){toast("Task assigned to "+((member(payload.assignedTo)||{}).name||payload.assignedTo)+" — they've been notified");}
+    if(!editId&&payload.assignedTo!==ME){toast("Task assigned to "+((member(payload.assignedTo)||{}).name||payload.assignedTo)+" - they've been notified");}
     else toast(editId?"Task updated":"Task added");
     renderAll();
   }).catch(function(){toast("Save failed");});
