@@ -196,6 +196,17 @@
   #view-nurture .leads-wrap{height:calc(100vh - var(--topbar));min-height:0}
   #view-nurture .leads-main{min-height:0}
   #view-nurture .tbl-scroll{flex:1 1 auto;min-height:0;overflow:auto}
+  /* Always-visible top horizontal scrollbar (mirrors the table's bottom bar,
+     Brivity-style). Auto-injected above every .tbl-scroll by JS. */
+  .xscroll-top{overflow-x:scroll;overflow-y:hidden;height:14px;background:#f4f6f8;
+    border-bottom:1px solid var(--line);scrollbar-color:#9aa6b2 #eef1f3;scrollbar-width:thin}
+  .xscroll-top::-webkit-scrollbar{height:13px}
+  .xscroll-top::-webkit-scrollbar-track{background:#eef1f3;border-radius:8px}
+  .xscroll-top::-webkit-scrollbar-thumb{background:#9aa6b2;border-radius:8px;border:2px solid #eef1f3;background-clip:padding-box}
+  .xscroll-top::-webkit-scrollbar-thumb:hover{background:#7c8894;background-clip:padding-box}
+  .xscroll-sp{height:1px}
+  /* Force the bottom bars to always render a visible track too */
+  .tbl-scroll{scrollbar-width:thin}
   table.leads{border-collapse:collapse;width:100%;min-width:1720px;font-size:13px}
   table.leads th{text-align:left;color:#6b7580;font-size:11.5px;font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:#fff;z-index:2}
   table.leads td{padding:14px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle;white-space:nowrap}
@@ -2695,5 +2706,40 @@ document.getElementById("actSave").addEventListener("click",()=>{
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");renderNurture();renderFinance();
 wireToolbarDropdowns();
 if(typeof paintSortArrows==="function")paintSortArrows();
+
+/* ===== Always-visible top scrollbar (mirrors each table's bottom bar) =====
+   Adds a synced horizontal scrollbar above every .tbl-scroll, and keeps it
+   attached through dynamic re-renders. Both bars scroll together. */
+(function(){
+  function widthOf(sc){var t=sc.querySelector("table")||sc.firstElementChild;return t?t.scrollWidth:sc.scrollWidth;}
+  function attach(sc){
+    if(!sc||sc.__xtop||!sc.classList||!sc.classList.contains("tbl-scroll"))return;
+    var top=document.createElement("div"); top.className="xscroll-top";
+    var sp=document.createElement("div"); sp.className="xscroll-sp"; top.appendChild(sp);
+    sc.parentNode.insertBefore(top,sc); sc.__xtop=top;
+    var lock=false;
+    function sync(){ sp.style.width=widthOf(sc)+"px"; }
+    sync();
+    top.addEventListener("scroll",function(){if(lock)return;lock=true;sc.scrollLeft=top.scrollLeft;lock=false;});
+    sc.addEventListener("scroll",function(){if(lock)return;lock=true;top.scrollLeft=sc.scrollLeft;lock=false;});
+    if(window.ResizeObserver){var ro=new ResizeObserver(sync);ro.observe(sc);var t=sc.querySelector("table");if(t)ro.observe(t);}
+    window.addEventListener("resize",sync);
+    setTimeout(sync,200); setTimeout(sync,800);
+  }
+  function scan(){document.querySelectorAll(".tbl-scroll").forEach(attach);}
+  scan();
+  if(window.MutationObserver){
+    var pending=false;
+    var mo=new MutationObserver(function(muts){
+      if(pending)return;
+      for(var i=0;i<muts.length;i++){var a=muts[i].addedNodes;for(var j=0;j<a.length;j++){var n=a[j];
+        if(n.nodeType===1&&((n.classList&&n.classList.contains("tbl-scroll"))||(n.querySelector&&n.querySelector(".tbl-scroll")))){pending=true;break;}}
+        if(pending)break;}
+      if(pending){requestAnimationFrame(function(){pending=false;scan();});}
+    });
+    mo.observe(document.body,{childList:true,subtree:true});
+  }
+})();
+
 loadLive();
 </script>
