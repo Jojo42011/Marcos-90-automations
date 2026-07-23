@@ -702,6 +702,7 @@
             <tbody id="nurtureRows"></tbody>
           </table>
         </div>
+        <div class="pager" id="nPager"></div>
       </div>
     </div>
   </section>
@@ -2031,7 +2032,7 @@ window.addEventListener("resize",closeDD);
 
 /* ═══════════ Lead Nurture + Finance views ═══════════ */
 const NURT_STATUSES=["hot","nurture","watch","unqualified"];
-let nurtureBucket="all";
+let nurtureBucket="all", nPage=1; const NPER=25;
 const CADENCE={hot:"Every 3 days",nurture:"Weekly",watch:"Bi-weekly",unqualified:"Monthly"};
 function nurtureLeads(){ return LEADS.filter(l=>NURT_STATUSES.indexOf(l.statusDisp)!==-1); }
 function nurtureFor(b){
@@ -2049,8 +2050,12 @@ function renderNurture(){
   put("nbWatch",base.filter(l=>l.statusDisp==="watch").length);
   put("nbUnr",base.filter(l=>l.statusDisp==="unqualified").length);
   put("nbRep",nurtureFor("replied").length);
-  const list=sortRows(nurtureFor(nurtureBucket).filter(hitRow));
-  const nc=document.getElementById("nCount"); if(nc)nc.textContent="("+list.length+")";
+  const full=sortRows(nurtureFor(nurtureBucket).filter(hitRow));
+  const nc=document.getElementById("nCount"); if(nc)nc.textContent="("+full.length.toLocaleString()+")";
+  // Paginate — rendering all ~2,600 rows at once was the slowdown.
+  const nPages=Math.max(1,Math.ceil(full.length/NPER));
+  if(nPage>nPages)nPage=nPages;
+  const list=full.slice((nPage-1)*NPER,nPage*NPER);
   // Take-Action-style KPI cards (Brivity dashboard pattern)
   const dueToday=base.filter(l=>l.due&&l.due.label==="Due Today").length;
   const stale=base.filter(l=>l.lastActivity&&(Date.now()-new Date(l.lastActivity))>7*86400000).length;
@@ -2072,6 +2077,19 @@ function renderNurture(){
       '<td>'+((l.autoPlanEnrollments||[]).length?'<span class="stage" style="background:var(--teal-soft);color:var(--teal-strong)">ENROLLED</span>':'<span class="addlink">Enroll</span>')+'</td>'+
     '</tr>';
   }).join(""):'<tr><td colspan="11"><div class="empty" style="padding:26px 8px">No leads in this nurture bucket.</div></td></tr>';
+  // pager
+  var np=document.getElementById("nPager");
+  if(np){
+    if(nPages<=1){np.innerHTML="";}
+    else{
+      var h='<button '+(nPage<=1?'disabled':'')+' data-np="'+(nPage-1)+'">‹</button>';
+      var nums=[];for(var p=1;p<=Math.min(5,nPages);p++)nums.push(p);if(nPages>5){nums.push("…");nums.push(nPages);}
+      h+=nums.map(function(p){return p==="…"?'<span style="padding:0 4px;color:#7a8590">…</span>':'<button class="'+(p===nPage?"on":"")+'" data-np="'+p+'">'+p+'</button>';}).join("");
+      h+='<button '+(nPage>=nPages?'disabled':'')+' data-np="'+(nPage+1)+'">›</button>';
+      np.innerHTML=h;
+      np.querySelectorAll("button[data-np]").forEach(function(b){b.onclick=function(){var p=+b.getAttribute("data-np");if(p>=1&&p<=nPages){nPage=p;renderNurture();var s=document.querySelector('#view-nurture .tbl-scroll');if(s)s.scrollTop=0;}};});
+    }
+  }
 }
 let finBucket="overview";
 function finMonthly(){
@@ -2105,7 +2123,7 @@ function renderFinance(){
       '<div class="sec-title">Closings Breakdown</div>'+closingsBreakdownHTML()+
       '<div class="sec-title">Latest Commissions</div>'+finCommTable(closed.slice(0,6));
   } else if(finBucket==="commissions"){
-    el.innerHTML='<div class="rep-head"><h1>Commissions <small>('+closed.length+')</small></h1><button class="pill-btn ghost">EXPORT</button></div>'+finCommTable(closed);
+    el.innerHTML='<div class="rep-head"><h1>Commissions <small>('+closed.length+')</small></h1><div style="display:flex;gap:8px"><button class="pill-btn" id="addCommBtn">+ Add Commission</button><button class="pill-btn ghost" id="expCommBtn">EXPORT</button></div></div>'+finCommTable(closed);
   } else if(finBucket==="monthly"){
     const rows=finMonthly().map(function(r){var o=FIN_MONTHLY[r.mo]||{};return {mo:r.mo,units:o.units!=null?o.units:r.units,vol:o.vol!=null?o.vol:r.vol,gci:o.gci!=null?o.gci:r.gci};});
     el.innerHTML='<div class="rep-head"><h1>Monthly GCI</h1><button class="pill-btn ghost">This Year ▾</button></div>'+
@@ -2153,6 +2171,25 @@ function newGoalCard(){
 }
 function bindFinance(){
   var root=document.getElementById("finBody"); if(!root)return;
+  // Add Commission (+): create a new closed transaction, persist as a deal,
+  // and drop it at the top of the table with editable cells.
+  var addComm=root.querySelector("#addCommBtn"); if(addComm)addComm.onclick=function(){
+    var p=n=>String(n).padStart(2,"0"); var d=new Date();
+    var today=p(d.getMonth()+1)+"-"+p(d.getDate())+"-"+d.getFullYear();
+    var nt={id:"new-"+d.getTime(),address:"New Commission",city:"",type:"seller",status:"closed",
+      listPrice:0,closePrice:0,gci:0,agent:"Marco Puga",closeDate:today,dateListed:today,draft:false};
+    TX.unshift(nt); renderFinance(); renderTx(); crmToast("Commission added — click any cell to edit");
+    fetch(crmApi("/api/deals"),{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({propertyAddress:nt.address,dealType:"seller",status:"closed",salePrice:0,commissionPercent:3,closeDate:today,assignedTo:"Marco Puga"})})
+      .then(function(r){return r.ok?r.json():null;}).then(function(res){if(res&&res.deal&&res.deal.id){nt.id=res.deal.id;}}).catch(function(){});
+  };
+  var expComm=root.querySelector("#expCommBtn"); if(expComm)expComm.onclick=function(){
+    var closed=TX.filter(function(t){return t.status==="closed";});
+    var head=["Property","City","Close Date","Close Price","GCI","Rate","Agent"];
+    var esc2=function(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    var lines=[head.join(",")].concat(closed.map(function(t){return [t.address,t.city,t.closeDate,t.closePrice,t.gci,(t.closePrice?(Math.round(t.gci/t.closePrice*1000)/10)+"%":""),t.agent].map(esc2).join(",");}));
+    downloadCsv("commissions.csv",lines.join("\n")); crmToast("Exported "+closed.length+" commissions");
+  };
   // Goals: set / add / remove / save
   var addBtn=root.querySelector("#addGoalBtn"); if(addBtn)addBtn.onclick=function(){finGoalEditing="__new__";renderFinance();};
   root.querySelectorAll("[data-goal]").forEach(function(a){a.onclick=function(e){e.preventDefault();finGoalEditing=a.getAttribute("data-goal");renderFinance();};});
@@ -2216,7 +2253,7 @@ function finCommTable(rows){
 }
 document.querySelectorAll('#view-nurture .leads-nav a[data-nb]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('#view-nurture .leads-nav a[data-nb]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
-  nurtureBucket=a.getAttribute("data-nb");renderNurture();
+  nurtureBucket=a.getAttribute("data-nb");nPage=1;renderNurture();
 }));
 document.querySelectorAll('#view-finance .leads-nav a[data-fb]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('#view-finance .leads-nav a[data-fb]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
