@@ -114,7 +114,7 @@
      <div id="side-foot">
        <span class="dot"></span>
        <span id="whoLabel" style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;flex:1">Marco Puga &middot; Live</span>
-       <button id="logoutBtn" title="Sign out" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;display:flex;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+       <button id="logoutBtn" title="Sign out" style="display:none;background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
      </div>
    </aside>
 
@@ -290,8 +290,12 @@ fetch("/api/auth/me", { credentials: "same-origin" })
   .then(function(d){
     var user = d && d.user;
     var who = document.getElementById("whoLabel");
+    // No user (either nobody's signed in, or the login gate is currently
+    // switched off in the backend) - leave the default "Marco Puga · Live"
+    // label alone rather than showing a confusing "Not signed in".
     if (user) {
       if (who) who.textContent = user.name + " · " + user.role;
+      var lo = document.getElementById("logoutBtn"); if (lo) lo.style.display = "flex";
       if (user.role === "admin") {
         TABS.push({
           key: "team", label: "Team & Activity", sub: "Accounts · logins · audit", src: "/team",
@@ -299,8 +303,6 @@ fetch("/api/auth/me", { credentials: "same-origin" })
         });
         SECTIONS.team = null;
       }
-    } else if (who) {
-      who.textContent = "Not signed in";
     }
   })
   .catch(function(){})

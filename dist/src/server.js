@@ -523,8 +523,19 @@ async function currentSessionUser(req) {
         return null;
     return user;
 }
+// Kill switch: the whole login system stays fully built (sessions, audit log,
+// Team page, /login) but is only *enforced* when this is explicitly "1". Flip
+// it on later with `fly secrets set SITE_LOGIN_ENABLED=1` — no code changes,
+// no redeploy of this logic needed.
+function siteLoginEnabled() {
+    return process.env.SITE_LOGIN_ENABLED === "1";
+}
 /** Gate a page route: redirect to /login (preserving the destination) if not signed in. */
 function requireAuthPage(req, res, next) {
+    if (!siteLoginEnabled()) {
+        next();
+        return;
+    }
     void currentSessionUser(req).then((user) => {
         if (!user) {
             res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
@@ -536,6 +547,10 @@ function requireAuthPage(req, res, next) {
 }
 /** Gate an admin-only page: bounce non-admins back to the shell. */
 function requireAuthAdminPage(req, res, next) {
+    if (!siteLoginEnabled()) {
+        next();
+        return;
+    }
     void currentSessionUser(req).then((user) => {
         if (!user) {
             res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
@@ -551,6 +566,10 @@ function requireAuthAdminPage(req, res, next) {
 }
 /** Gate an admin-only API route: JSON 401/403 instead of a redirect. */
 function requireAuthAdminApi(req, res, next) {
+    if (!siteLoginEnabled()) {
+        next();
+        return;
+    }
     void currentSessionUser(req).then((user) => {
         if (!user) {
             res.status(401).json({ error: "Sign in required" });
