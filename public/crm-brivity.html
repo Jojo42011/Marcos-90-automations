@@ -206,7 +206,7 @@
   #view-nurture .tbl-scroll{flex:1 1 auto;min-height:0;overflow:auto}
   /* Always-visible top horizontal scrollbar (mirrors the table's bottom bar,
      Brivity-style). Auto-injected above every .tbl-scroll by JS. */
-  .xscroll-top{overflow-x:scroll;overflow-y:hidden;height:14px;background:#f4f6f8;
+  .xscroll-top{overflow-x:scroll;overflow-y:hidden;height:14px;flex:0 0 14px;background:#f4f6f8;
     border-bottom:1px solid var(--line);scrollbar-color:#9aa6b2 #eef1f3;scrollbar-width:thin}
   .xscroll-top::-webkit-scrollbar{height:13px}
   .xscroll-top::-webkit-scrollbar-track{background:#eef1f3;border-radius:8px}
@@ -426,7 +426,7 @@
   <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="topSearch" type="search" placeholder="Search by name, address, phone or MLS#" /></div>
   <div class="topbar-right">
     <button class="icon-btn" id="crmRefresh" title="Refresh data from Brivity"><svg id="crmRefreshIco" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/></svg></button>
-    <button class="icon-btn" title="Help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg></button>
+    <button class="icon-btn" id="crmHelp" title="Help &amp; how-to guide"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg></button>
     <button class="feed-pill">Activity Feed <span class="n" id="feedCount">0</span></button>
     <div class="me"><span class="av has-marco-photo">MP</span><b>Marco</b></div>
   </div>
@@ -718,12 +718,12 @@
         </div>
         <div class="ta-grid" id="nurtureKpis" style="padding:0 22px 8px"></div>
         <div class="tbl-scroll">
-          <table class="leads" style="min-width:1250px">
+          <table class="leads" style="min-width:1470px">
             <thead><tr>
               <th><input type="checkbox" class="cb"></th><th>Name <span class="sarr">⇅</span></th><th>Status <span class="sarr">⇅</span></th><th>Stage</th>
               <th>Cadence</th><th>Last Touch</th><th>Next Touch</th>
               <th>Email</th><th>Phone</th><th>SMS</th>
-              <th>Auto Plan</th>
+              <th>Auto Plan</th><th>Birthdate</th><th>Home Anniversary</th>
             </tr></thead>
             <tbody id="nurtureRows"></tbody>
           </table>
@@ -1125,8 +1125,8 @@ function renderLeads(){
       '<td><div class="due '+(l.due.label==="Due Today"?"today":"up")+'">'+l.due.label+'<span class="d">'+l.due.date+'</span></div></td>'+
       '<td><div class="pa"><span class="agav has-marco-photo"></span><span>Marco Puga</span></div></td>'+
       '<td class="mut-cell">'+(l.autoPlan?esc(l.autoPlan):"-")+'</td>'+
-      '<td class="mut-cell">-</td>'+
-      '<td class="mut-cell">-</td>'+
+      dtCell(l,"birthdate")+
+      dtCell(l,"anniversary")+
       '<td class="mut-cell">'+esc(l.source||"-")+'</td>'+
       '<td class="mut-cell">'+esc(reg)+'</td>'+
     '</tr>';
@@ -1777,6 +1777,9 @@ function refreshEmailConn(){
     if(document.getElementById("view-email")&&document.getElementById("view-email").classList.contains("on")) renderEmail(currentEmail);
   }).catch(function(){ EMAIL_CONN={loaded:true,configured:false,verified:false}; });
 }
+/* System-wide search (top bar) also filters Email Marketing lists by name/audience. */
+function emHit(item){ if(!SEARCH) return true; return (_q(item.name)+" "+_q(item.aud||"")).includes(SEARCH); }
+function emIndexed(arr){ return arr.map(function(item,i){return {item:item,i:i};}).filter(function(e){return emHit(e.item);}); }
 var EM_ACT='padding:5px 11px;font-size:10.5px;border-radius:14px;margin-right:6px';
 var EM_DEL='width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#c0616a;font-size:12px;line-height:1;cursor:pointer;vertical-align:middle';
 function emailBodyFor(name,aud){
@@ -1786,15 +1789,15 @@ const EMAIL_SEC={
   campaigns:()=>'<div class="rep-head"><h1>Campaigns</h1><div style="display:flex;align-items:center;gap:10px">'+emailConnBadge()+'<button class="pill-btn" id="newCampaignBtn">+ NEW CAMPAIGN</button></div></div>'+
     '<div class="em-stat">'+[["Emails Sent","1,970"],["Avg. Open Rate","41%"],["Avg. Click Rate","7.3%"],["Unsubscribes","4"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:940px"><thead><tr><th>Campaign</th><th>Audience</th><th>Status</th><th>Sent</th><th>Opens</th><th>Clicks</th><th>Date</th><th></th></tr></thead><tbody>'+
-    CAMPAIGNS.map((c,i)=>'<tr><td><span class="lead-name">'+esc(c.name)+'</span></td><td style="color:#6b7480">'+esc(c.aud)+'</td><td>'+emStatusPill(c.status)+'</td><td style="color:#6b7480">'+(c.sent||"-")+'</td><td style="color:#6b7480">'+c.opens+'</td><td style="color:#6b7480">'+c.clicks+'</td><td style="color:#7a8590">'+c.date+'</td>'+
-      '<td style="white-space:nowrap"><button class="pill-btn ghost" style="'+EM_ACT+'" data-emtest="campaigns:'+i+'">SEND TEST</button><button class="pill-btn" style="'+EM_ACT+'" data-emsend="campaigns:'+i+'">SEND NOW</button><button data-emdel="campaigns:'+i+'" title="Delete" style="'+EM_DEL+'">✕</button></td></tr>').join("")+
-    (CAMPAIGNS.length?"":'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:22px">No campaigns yet — click + NEW CAMPAIGN to create one.</td></tr>')+
+    (function(){var rows=emIndexed(CAMPAIGNS); return rows.map(function(e){var c=e.item,i=e.i; return '<tr><td><span class="lead-name">'+esc(c.name)+'</span></td><td style="color:#6b7480">'+esc(c.aud)+'</td><td>'+emStatusPill(c.status)+'</td><td style="color:#6b7480">'+(c.sent||"-")+'</td><td style="color:#6b7480">'+c.opens+'</td><td style="color:#6b7480">'+c.clicks+'</td><td style="color:#7a8590">'+c.date+'</td>'+
+      '<td style="white-space:nowrap"><button class="pill-btn ghost" style="'+EM_ACT+'" data-emtest="campaigns:'+i+'">SEND TEST</button><button class="pill-btn" style="'+EM_ACT+'" data-emsend="campaigns:'+i+'">SEND NOW</button><button data-emdel="campaigns:'+i+'" title="Delete" style="'+EM_DEL+'">✕</button></td></tr>';}).join("")+
+    (rows.length?"":'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:22px">'+(SEARCH?"No campaigns match your search.":"No campaigns yet — click + NEW CAMPAIGN to create one.")+'</td></tr>');})()+
     '</tbody></table></div></div>',
   drips:()=>'<div class="rep-head"><h1>Drip Campaigns</h1><div style="display:flex;align-items:center;gap:10px">'+emailConnBadge()+'<button class="pill-btn" id="newDripBtn">+ NEW DRIP</button></div></div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:820px"><thead><tr><th>Drip Campaign</th><th>Enrolled</th><th>Active</th><th>Emails</th><th>Status</th><th></th></tr></thead><tbody>'+
-    DRIPS.map((d,i)=>'<tr><td><span class="lead-name">'+esc(d.name)+'</span></td><td style="color:#6b7480">'+d.enrolled+'</td><td style="color:#6b7480">'+d.active+'</td><td style="color:#6b7480">'+d.emails+'</td><td>'+emStatusPill(d.status)+'</td>'+
-      '<td style="white-space:nowrap"><button class="pill-btn ghost" style="'+EM_ACT+'" data-emtest="drips:'+i+'">SEND TEST</button><button class="pill-btn ghost" style="'+EM_ACT+'" data-diptoggle="'+i+'">'+(d.status==="Paused"?"▶ RESUME":"⏸ PAUSE")+'</button><button data-emdel="drips:'+i+'" title="Delete" style="'+EM_DEL+'">✕</button></td></tr>').join("")+
-    (DRIPS.length?"":'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:22px">No drip campaigns yet — click + NEW DRIP to create one.</td></tr>')+
+    (function(){var rows=emIndexed(DRIPS); return rows.map(function(e){var d=e.item,i=e.i; return '<tr><td><span class="lead-name">'+esc(d.name)+'</span></td><td style="color:#6b7480">'+d.enrolled+'</td><td style="color:#6b7480">'+d.active+'</td><td style="color:#6b7480">'+d.emails+'</td><td>'+emStatusPill(d.status)+'</td>'+
+      '<td style="white-space:nowrap"><button class="pill-btn ghost" style="'+EM_ACT+'" data-emtest="drips:'+i+'">SEND TEST</button><button class="pill-btn ghost" style="'+EM_ACT+'" data-diptoggle="'+i+'">'+(d.status==="Paused"?"▶ RESUME":"⏸ PAUSE")+'</button><button data-emdel="drips:'+i+'" title="Delete" style="'+EM_DEL+'">✕</button></td></tr>';}).join("")+
+    (rows.length?"":'<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:22px">'+(SEARCH?"No drip campaigns match your search.":"No drip campaigns yet — click + NEW DRIP to create one.")+'</td></tr>');})()+
     '</tbody></table></div></div>',
   templates:()=>'<div class="rep-head"><h1>Templates</h1><button class="pill-btn" id="newTemplateBtn">+ NEW TEMPLATE</button></div><div class="log-grid" style="grid-template-columns:repeat(3,1fr)">'+
     EMAIL_TEMPLATES.map((t,i)=>'<div class="em-card" style="position:relative"><button class="tmpldel" data-tmpldel="'+i+'" title="Delete" style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#c0616a;font-size:12px;line-height:1;cursor:pointer">✕</button><div style="height:60px;background:var(--teal-soft);border-radius:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div><div style="color:#5b6570;font-weight:600;font-size:13px">'+esc(t)+'</div></div>').join("")+'</div>',
@@ -1802,9 +1805,9 @@ const EMAIL_SEC={
     '<div class="em-stat">'+[["Subscribers","1,557"],["Monthly Sends",String(NEWSLETTERS.length)],["Avg. Open Rate","39%"],["Growth (30d)","+42"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+
     '<div class="card card-pad" style="color:var(--muted);margin-bottom:18px">Your monthly market newsletter goes out on the 1st. Next send: Aug 1, 2026.</div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:820px"><thead><tr><th>Newsletter</th><th>Audience</th><th>Status</th><th>Sent</th><th>Opens</th><th>Date</th><th></th></tr></thead><tbody>'+
-    NEWSLETTERS.map((n,i)=>'<tr><td><span class="lead-name">'+esc(n.name)+'</span></td><td style="color:#6b7480">'+esc(n.aud)+'</td><td>'+emStatusPill(n.status)+'</td><td style="color:#6b7480">'+(n.sent||"-")+'</td><td style="color:#6b7480">'+n.opens+'</td><td style="color:#7a8590">'+esc(n.date)+'</td>'+
-      '<td style="white-space:nowrap"><button class="pill-btn ghost" style="'+EM_ACT+'" data-emtest="newsletters:'+i+'">SEND TEST</button><button class="pill-btn" style="'+EM_ACT+'" data-emsend="newsletters:'+i+'">SEND NOW</button><button data-emdel="newsletters:'+i+'" title="Delete" style="'+EM_DEL+'">✕</button></td></tr>').join("")+
-    (NEWSLETTERS.length?"":'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:22px">No newsletters yet — click + NEW NEWSLETTER to create one.</td></tr>')+
+    (function(){var rows=emIndexed(NEWSLETTERS); return rows.map(function(e){var n=e.item,i=e.i; return '<tr><td><span class="lead-name">'+esc(n.name)+'</span></td><td style="color:#6b7480">'+esc(n.aud)+'</td><td>'+emStatusPill(n.status)+'</td><td style="color:#6b7480">'+(n.sent||"-")+'</td><td style="color:#6b7480">'+n.opens+'</td><td style="color:#7a8590">'+esc(n.date)+'</td>'+
+      '<td style="white-space:nowrap"><button class="pill-btn ghost" style="'+EM_ACT+'" data-emtest="newsletters:'+i+'">SEND TEST</button><button class="pill-btn" style="'+EM_ACT+'" data-emsend="newsletters:'+i+'">SEND NOW</button><button data-emdel="newsletters:'+i+'" title="Delete" style="'+EM_DEL+'">✕</button></td></tr>';}).join("")+
+    (rows.length?"":'<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:22px">'+(SEARCH?"No newsletters match your search.":"No newsletters yet — click + NEW NEWSLETTER to create one.")+'</td></tr>');})()+
     '</tbody></table></div></div>',
   reports:()=>'<div class="rep-head"><h1>Email Reports</h1><select class="select" id="emReportRange"><option>Last 7 days</option><option selected>Last 30 days</option><option>Last 90 days</option><option>This Year</option></select></div><div class="em-stat">'+[["Delivered","98.6%"],["Open Rate","41%"],["Click Rate","7.3%"],["Bounce","1.4%"]].map(s=>'<div class="em-card"><div class="l">'+s[0]+'</div><div class="n">'+s[1]+'</div></div>').join("")+'</div>'+activityTable(["Sent","Opened","Clicked","Bounced","Unsub"]),
 };
@@ -2029,8 +2032,9 @@ async function loadLive(opts){
 
 /* ---- functional controls: top-bar search, SORT BY, dashboard + email selects ---- */
 document.getElementById("topSearch").addEventListener("input",function(){
-  SEARCH=_q(this.value).trim(); page=1; pPage=1;
-  renderLeads(); renderPeople(); renderTx(); renderConvos(); renderFeed();
+  SEARCH=_q(this.value).trim(); page=1; pPage=1; nPage=1;
+  renderLeads(); renderPeople(); renderTx(); renderConvos(); renderFeed(); renderNurture();
+  if(document.getElementById("view-email")&&document.getElementById("view-email").classList.contains("on")) renderEmail(currentEmail);
 });
 document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
   if(/^SORT BY/i.test(b.textContent)){
@@ -2042,6 +2046,12 @@ document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
 });
 document.querySelectorAll("#view-dashboard select").forEach(s=>s.addEventListener("change",()=>{ renderTakeAction(); renderTracking(); renderFeed(); }));
 document.getElementById("emBody").addEventListener("change",e=>{ if(e.target.tagName==="SELECT") renderEmail(currentEmail); });
+
+/* ---- Help button → the guided how-to tour, in a new tab ---- */
+(function(){
+  var btn=document.getElementById("crmHelp"); if(!btn) return;
+  btn.addEventListener("click",function(){ window.open("/how-to","_blank","noopener"); });
+})();
 
 /* ---- Refresh button → re-pull the live Brivity import ---- */
 (function(){
@@ -2244,9 +2254,36 @@ function openEditMenu(el){
   ddMenu.style.top=(r.bottom+4)+"px";
   ddMenu.classList.add("on");
 }
+/* Birthdate / Home Anniversary — click-to-edit date cells (Brivity-style
+   nurture triggers). No dedicated server field for these yet, so they
+   persist client-side + sync onto the People-tab row, same as Address. */
+function dtCell(l,kind){
+  var v=l[kind];
+  return '<td><span class="dtcell" data-lid="'+esc(l.id)+'" data-kind="'+kind+'">'+(v?esc(v):'<span class="addlink">Add</span>')+'</span></td>';
+}
+function startDateEdit(el){
+  var lid=el.getAttribute("data-lid"), kind=el.getAttribute("data-kind");
+  var l=LEADS.find(function(x){return x.id===lid;}); if(!l)return;
+  var cur=l[kind]||"";
+  var inp=document.createElement("input");
+  inp.value=cur; inp.placeholder="MM/DD/YYYY";
+  inp.style.cssText="width:104px;height:26px;border:1px solid var(--teal);border-radius:6px;padding:0 8px;font-size:12px";
+  el.replaceWith(inp); inp.focus();
+  var done=false;
+  function commit(){
+    if(done)return; done=true;
+    var v=inp.value.trim(); l[kind]=v;
+    var pe=PEOPLE.find(function(x){return x.id===lid;}); if(pe)pe[kind]=v;
+    renderLeads(); renderPeople(); renderNurture();
+    crmToast((kind==="birthdate"?"Birthdate":"Home anniversary")+" updated");
+  }
+  inp.addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();commit();}else if(ev.key==="Escape"){done=true;renderLeads();renderPeople();renderNurture();}});
+  inp.addEventListener("blur",commit);
+}
 function bindTableClicks(rowsId){
   document.getElementById(rowsId).addEventListener("click",e=>{
     const ed=e.target.closest(".editable"); if(ed){ e.stopPropagation(); openEditMenu(ed); return; }
+    const dt=e.target.closest(".dtcell"); if(dt){ e.stopPropagation(); startDateEdit(dt); return; }
     const lk=e.target.closest(".ldlink"); if(lk){ openLead(lk.getAttribute("data-lid")); }
   });
 }
@@ -2450,8 +2487,9 @@ function renderNurture(){
       '<td><div class="due '+(l.due.label==="Due Today"?"today":"up")+'">'+l.due.label+'<span class="d">'+l.due.date+'</span></div></td>'+
       '<td>'+actIcon("email",!l.email)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td>'+
       '<td>'+((l.autoPlanEnrollments||[]).length?'<span class="stage" style="background:var(--teal-soft);color:var(--teal-strong)">ENROLLED</span>':'<span class="addlink">Enroll</span>')+'</td>'+
+      dtCell(l,"birthdate")+dtCell(l,"anniversary")+
     '</tr>';
-  }).join(""):'<tr><td colspan="11"><div class="empty" style="padding:26px 8px">No leads in this nurture bucket.</div></td></tr>';
+  }).join(""):'<tr><td colspan="13"><div class="empty" style="padding:26px 8px">No leads in this nurture bucket.</div></td></tr>';
   // pager
   var np=document.getElementById("nPager");
   if(np){
