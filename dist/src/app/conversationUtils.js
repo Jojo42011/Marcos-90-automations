@@ -42,6 +42,7 @@ exports.lastTwoAssistantMessagesAreDuplicate = lastTwoAssistantMessagesAreDuplic
 exports.latestAssistantEchoesEarlierInThread = latestAssistantEchoesEarlierInThread;
 exports.threadContainsAgentQuestion = threadContainsAgentQuestion;
 exports.threadContainsFirstTimeBuyingQuestion = threadContainsFirstTimeBuyingQuestion;
+exports.isFirstTimeBuyingOpener = isFirstTimeBuyingOpener;
 exports.leadThreadSignalsExperiencedBuyer = leadThreadSignalsExperiencedBuyer;
 exports.messageAsksPropertyPriceOrCost = messageAsksPropertyPriceOrCost;
 exports.signalsWantsInfoInDmOnly = signalsWantsInfoInDmOnly;
@@ -66,6 +67,11 @@ exports.isShortDuplicateUserPair = isShortDuplicateUserPair;
 exports.signalsExplicitPhoneRefusal = signalsExplicitPhoneRefusal;
 exports.threadContainsPhoneRefusalApology = threadContainsPhoneRefusalApology;
 exports.isBusinessPitchInquiry = isBusinessPitchInquiry;
+exports.signalsBuyingConfusion = signalsBuyingConfusion;
+exports.resolveBuyingConfusionReply = resolveBuyingConfusionReply;
+exports.claimsAlreadySentNumber = claimsAlreadySentNumber;
+exports.countNumberNotReceivedReplies = countNumberNotReceivedReplies;
+exports.resolveNumberNotReceivedReply = resolveNumberNotReceivedReply;
 const prompts_js_1 = require("../../config/prompts.js");
 /**
  * Map first inbound message phrases to internal ad campaign ids (Instagram ad attribution).
@@ -838,16 +844,18 @@ function threadContainsAgentQuestion(conversation) {
  * (manual DM or AI). Used to block repeating that opener in later turns.
  */
 function threadContainsFirstTimeBuyingQuestion(conversation) {
-    return conversation.messages.some((m) => {
-        if (m.role !== "assistant" || !m.text?.trim())
-            return false;
-        const t = m.text;
-        if (!/\bfirst\s*time\b/i.test(t) && !/\bfirst-time\b/i.test(t))
-            return false;
-        if (!/\b(buying|buy)\b/i.test(t))
-            return false;
-        return /\bprocess\b/i.test(t) || /\bgoing\s+through\b/i.test(t);
-    });
+    return conversation.messages.some((m) => m.role === "assistant" && isFirstTimeBuyingOpener(m.text ?? ""));
+}
+/** A single Marco line is the first-time-through-the-buying-process opener. */
+function isFirstTimeBuyingOpener(text) {
+    const t = text?.trim();
+    if (!t)
+        return false;
+    if (!/\bfirst\s*time\b/i.test(t) && !/\bfirst-time\b/i.test(t))
+        return false;
+    if (!/\b(buying|buy)\b/i.test(t))
+        return false;
+    return /\bprocess\b/i.test(t) || /\bgoing\s+through\b/i.test(t);
 }
 /** Lead already indicated they are not a first-time buyer (thread-wide). */
 function leadThreadSignalsExperiencedBuyer(conversation) {
@@ -1475,4 +1483,85 @@ function isBusinessPitchInquiry(text) {
     if (/\b(potential (collab(oration)?|partnership|business opportunity))\b/.test(t))
         return true;
     return false;
+}
+/**
+ * Lead is confused about what the first-time-buying opener referred to.
+ * Marco often sends that opener manually with no property context, so a lead who never
+ * mentioned buying replies "Buying of what?" / "buy what?" / "what do you mean?".
+ * Only meaningful directly after that opener (see resolveBuyingConfusionReply).
+ */
+function signalsBuyingConfusion(text) {
+    const t = text.trim().toLowerCase().replace(/[?!.]+$/, "").trim();
+    if (!t)
+        return false;
+    if (t.length > 60)
+        return false;
+    // "buying of what", "buying what", "buy what", "purchasing what"
+    if (/\b(buying|buy|purchas(e|ing))\b\s*(of\s+)?\bwhat\b/.test(t))
+        return true;
+    if (/^what\s+(am\s+i|are\s+we|are\s+you)\s+(buying|purchasing)\b/.test(t))
+        return true;
+    // bare confusion right after the opener
+    if (/^(what|huh|wdym|what'?s this (about|regarding))$/.test(t))
+        return true;
+    if (/^what\s+do\s+you\s+mean\b/.test(t))
+        return true;
+    if (/^(what|which)\s+(process|house|home|property)\b/.test(t))
+        return true;
+    // Outright denials ("I didn't inquire", "wrong person") are not confusion: isDenialOfInquiry
+    // owns those earlier in the pipeline and sends the goodbye reply instead.
+    return false;
+}
+/**
+ * Marco's most recent line was the first-time-buying opener and the lead came back confused.
+ * Returns the re-anchor reply, or null when this turn is not that situation.
+ */
+function resolveBuyingConfusionReply(conversation, latestLeadText) {
+    if (!signalsBuyingConfusion(latestLeadText))
+        return null;
+    const lastAssistant = getLastAssistantMessageText(conversation);
+    if (!lastAssistant || !isFirstTimeBuyingOpener(lastAssistant))
+        return null;
+    // Only re-anchor once; if we already apologized, let the LLM carry it forward.
+    const alreadySent = conversation.messages.some((m) => m.role === "assistant" && m.text?.trim() &&
+        messagesAreSubstantiallyDuplicate(m.text, prompts_js_1.MARCO_BUYING_CONFUSION_REPLY));
+    if (alreadySent)
+        return null;
+    return prompts_js_1.MARCO_BUYING_CONFUSION_REPLY;
+}
+/**
+ * Lead asserts they already sent their number ("I just gave them to you").
+ * Distinct from resistance: they think they complied, so re-asking cold reads as not listening.
+ */
+function claimsAlreadySentNumber(text) {
+    const t = text.trim().toLowerCase();
+    if (!t)
+        return false;
+    if (!/\b(number|digits|phone|it|them|that)\b/.test(t))
+        return false;
+    if (/\b(just|already)\s+(gave|sent|texted|typed|put|shared|posted)\b/.test(t))
+        return true;
+    if (/\bi\s+(gave|sent|shared)\s+(it|them|you|that|my number|the number)\b/.test(t))
+        return true;
+    if (/\b(sent|gave)\s+(it|them|that|my number|the number)\s+(to you|already|above|earlier)\b/.test(t))
+        return true;
+    if (/\b(it'?s|its|thats|that'?s)\s+(right\s+)?(there|above|up there)\b/.test(t))
+        return true;
+    if (/\b(did|didn'?t)\s+you\s+(get|see)\s+(it|them|my number|the number)\b/.test(t))
+        return true;
+    return false;
+}
+/** Count of number-not-received recovery lines already sent in this thread. */
+function countNumberNotReceivedReplies(conversation) {
+    return countAssistantMessagesMatchingAny(conversation, [...prompts_js_1.MARCO_NUMBER_NOT_RECEIVED_REPLIES]);
+}
+/**
+ * Lead says they already sent a number but nothing was captured. Alternates Carlos's two
+ * phrasings, then returns null so the thread falls through to the LLM instead of looping.
+ */
+function resolveNumberNotReceivedReply(conversation) {
+    const sent = countNumberNotReceivedReplies(conversation);
+    if (sent >= prompts_js_1.MARCO_NUMBER_NOT_RECEIVED_REPLIES.length)
+        return null;
+    return prompts_js_1.MARCO_NUMBER_NOT_RECEIVED_REPLIES[sent];
 }

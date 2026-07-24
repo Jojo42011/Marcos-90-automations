@@ -43,6 +43,7 @@ import {
   getLastUserMessageText,
   getPhoneRequestCount,
   getPhoneRequestVariation,
+  claimsAlreadySentNumber,
   isBusinessPitchInquiry,
   isDenialOfInquiry,
   isExactDuplicateMessage,
@@ -62,7 +63,9 @@ import {
   messageAsksWhatCity,
   REFERRAL_AREA_FOLLOW_UP,
   resolveAcknowledgmentCloseoutTurn,
+  resolveBuyingConfusionReply,
   resolveCallAskBucketF,
+  resolveNumberNotReceivedReply,
   resolvePhoneCapturedReply,
   signalsAffirmativeBreakdownAgreement,
   signalsExplicitPhoneRefusal,
@@ -631,8 +634,76 @@ export async function run(
     return { lead, reply: MARCO_WAVE_REPLY };
   }
 
+  /**
+   * Lead came back confused at the first-time-buying opener ("Buying of what?").
+   * Marco sends that opener manually with no property context, so apologize and re-anchor
+   * to the listing instead of asking them to dig up a screenshot.
+   */
+  if (!hadPhone) {
+    const confusionReply = resolveBuyingConfusionReply(conversation, latestLeadText);
+    if (confusionReply) {
+      if (lead.state === FunnelStage.New) {
+        lead = { ...lead, state: FunnelStage.OpeningAskedFirstTime };
+      }
+      await db.appendMessage(lead.id, "assistant", confusionReply);
+      await db.updateLead(lead);
+      marcoLog("buying_confusion_pinned", {
+        requestId,
+        correlationId,
+        lead_id: lead.id,
+        message_preview: previewText(latestLeadText),
+        funnel_state_final: lead.state,
+      });
+      marcoLog("pipeline_end", {
+        requestId,
+        correlationId,
+        lead_id: lead.id,
+        outcome: "buying_confusion_pinned",
+        reply_chars: confusionReply.length,
+        reply_preview: previewText(confusionReply),
+        funnel_state_final: lead.state,
+        phone_captured_this_turn: false,
+        email_captured_this_turn: false,
+      });
+      return { lead, reply: confusionReply };
+    }
+  }
+
   const phoneInThreadEarly = lead.phone ?? extractPhoneFromConversation(conversation);
   const phoneCapturedThisTurn = !hadPhone && Boolean(phoneInThreadEarly);
+
+  /**
+   * Lead insists they already sent their number but nothing was captured (e.g. it came in
+   * as a quoted/reply bubble we never received as message text). Never re-ask cold or
+   * open with "Got it" here, that reads as not listening. Acknowledge the miss, ask again.
+   */
+  if (!hadPhone && !phoneCapturedThisTurn && claimsAlreadySentNumber(latestLeadText)) {
+    const notReceivedReply = resolveNumberNotReceivedReply(conversation);
+    if (notReceivedReply) {
+      lead = { ...lead, state: FunnelStage.PhoneRequested };
+      await db.appendMessage(lead.id, "assistant", notReceivedReply);
+      await db.updateLead(lead);
+      marcoLog("number_not_received_pinned", {
+        requestId,
+        correlationId,
+        lead_id: lead.id,
+        message_preview: previewText(latestLeadText),
+        funnel_state_final: lead.state,
+      });
+      marcoLog("pipeline_end", {
+        requestId,
+        correlationId,
+        lead_id: lead.id,
+        outcome: "number_not_received_pinned",
+        reply_chars: notReceivedReply.length,
+        reply_preview: previewText(notReceivedReply),
+        funnel_state_final: lead.state,
+        phone_captured_this_turn: false,
+        email_captured_this_turn: false,
+      });
+      return { lead, reply: notReceivedReply };
+    }
+  }
 
   if (
     !hadPhone &&

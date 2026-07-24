@@ -526,8 +526,74 @@ async function run(payload, log) {
         });
         return { lead, reply: prompts_js_1.MARCO_WAVE_REPLY };
     }
+    /**
+     * Lead came back confused at the first-time-buying opener ("Buying of what?").
+     * Marco sends that opener manually with no property context, so apologize and re-anchor
+     * to the listing instead of asking them to dig up a screenshot.
+     */
+    if (!hadPhone) {
+        const confusionReply = (0, conversationUtils_js_1.resolveBuyingConfusionReply)(conversation, latestLeadText);
+        if (confusionReply) {
+            if (lead.state === state_js_1.FunnelStage.New) {
+                lead = { ...lead, state: state_js_1.FunnelStage.OpeningAskedFirstTime };
+            }
+            await db.appendMessage(lead.id, "assistant", confusionReply);
+            await db.updateLead(lead);
+            (0, marcoLog_js_1.marcoLog)("buying_confusion_pinned", {
+                requestId,
+                correlationId,
+                lead_id: lead.id,
+                message_preview: (0, marcoLog_js_1.previewText)(latestLeadText),
+                funnel_state_final: lead.state,
+            });
+            (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+                requestId,
+                correlationId,
+                lead_id: lead.id,
+                outcome: "buying_confusion_pinned",
+                reply_chars: confusionReply.length,
+                reply_preview: (0, marcoLog_js_1.previewText)(confusionReply),
+                funnel_state_final: lead.state,
+                phone_captured_this_turn: false,
+                email_captured_this_turn: false,
+            });
+            return { lead, reply: confusionReply };
+        }
+    }
     const phoneInThreadEarly = lead.phone ?? (0, funnelDeterministic_js_1.extractPhoneFromConversation)(conversation);
     const phoneCapturedThisTurn = !hadPhone && Boolean(phoneInThreadEarly);
+    /**
+     * Lead insists they already sent their number but nothing was captured (e.g. it came in
+     * as a quoted/reply bubble we never received as message text). Never re-ask cold or
+     * open with "Got it" here, that reads as not listening. Acknowledge the miss, ask again.
+     */
+    if (!hadPhone && !phoneCapturedThisTurn && (0, conversationUtils_js_1.claimsAlreadySentNumber)(latestLeadText)) {
+        const notReceivedReply = (0, conversationUtils_js_1.resolveNumberNotReceivedReply)(conversation);
+        if (notReceivedReply) {
+            lead = { ...lead, state: state_js_1.FunnelStage.PhoneRequested };
+            await db.appendMessage(lead.id, "assistant", notReceivedReply);
+            await db.updateLead(lead);
+            (0, marcoLog_js_1.marcoLog)("number_not_received_pinned", {
+                requestId,
+                correlationId,
+                lead_id: lead.id,
+                message_preview: (0, marcoLog_js_1.previewText)(latestLeadText),
+                funnel_state_final: lead.state,
+            });
+            (0, marcoLog_js_1.marcoLog)("pipeline_end", {
+                requestId,
+                correlationId,
+                lead_id: lead.id,
+                outcome: "number_not_received_pinned",
+                reply_chars: notReceivedReply.length,
+                reply_preview: (0, marcoLog_js_1.previewText)(notReceivedReply),
+                funnel_state_final: lead.state,
+                phone_captured_this_turn: false,
+                email_captured_this_turn: false,
+            });
+            return { lead, reply: notReceivedReply };
+        }
+    }
     if (!hadPhone &&
         !phoneCapturedThisTurn &&
         (0, conversationUtils_js_1.messageAsksWhatCity)(latestLeadText)) {
