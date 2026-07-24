@@ -255,6 +255,15 @@
   .sf-list{background:#fafbfc;border-top:1px solid var(--line-2)}
   .sf-list .sf{padding:8px 18px 8px 30px;color:#7b8590;font-size:12.5px;white-space:normal;line-height:1.3}
   .sf-list .sf:hover{background:#f2f6f5;color:var(--teal)}
+  .sf-list .sf.on{background:#eaf3f2;color:var(--teal-strong);font-weight:600}
+  /* Filters whose source data (website visit tracking) is not connected yet. */
+  .sf-list .sf.sf-nodata{color:#b3bcc4;cursor:help}
+  .sf-list .sf.sf-nodata:hover{background:#f7f8f9;color:#9aa4ae}
+  .sf-search{position:relative;padding:8px 10px 8px 12px;border-bottom:1px solid var(--line-2)}
+  .sf-search input{width:100%;height:28px;border:1px solid var(--line);border-radius:5px;background:#fff;padding:0 26px 0 9px;font-size:12.5px;color:var(--ink);outline:none}
+  .sf-search input:focus{border-color:var(--teal)}
+  .sf-search svg{position:absolute;right:18px;top:14px}
+  .sf-empty{padding:10px 30px;color:#b3bcc4;font-size:12px}
   .aicons{display:flex;gap:6px}
   .ai{width:28px;height:28px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center}
   .ai.mut{background:#d7ecea;color:#9fd2cb}
@@ -573,7 +582,11 @@
         <a data-bucket="collaborator">Collaborators <span class="c" id="pnCollab">0</span></a>
         <a data-bucket="team">Team <span class="c" id="pnTeam">0</span></a>
         <a data-bucket="archived">Archived <span class="c" id="pnArch">0</span></a>
-        <a>Smart Filters <span class="c">12 ›</span></a>
+        <a id="pSmartToggle">Smart Filters <span class="c" id="pSmartCount">12 ›</span></a>
+        <div id="pSmartList" class="sf-list" style="display:none">
+          <div class="sf-search"><input type="text" id="pSmartSearch" placeholder="Search filters"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa4ae" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg></div>
+          <div id="pSmartItems"></div>
+        </div>
       </div>
       <div class="leads-main">
         <div class="leads-top">
@@ -1219,10 +1232,95 @@ for(let i=0;i<40;i++){
     email:(i%5===2)?null:name.toLowerCase().replace(/\s/g,".")+"@gmail.com", phone:"(210) 555-0"+(200+i),
     address:hasAddr? STREETS[(i*2)%STREETS.length]+", "+CITIES[(i*3)%CITIES.length]:"",
     lastLabel:LASTLAB[i%LASTLAB.length], lastActivity: (i%6===0)? null : ago(60*(1+i)),
-    due:{label:i%4===0?"Due Today":"Upcoming",date:i%4===0?"07-20-2026":"08-0"+(1+i%9)+"-2026"}});
+    due:{label:i%4===0?"Due Today":"Upcoming",date:i%4===0?"07-20-2026":"08-0"+(1+i%9)+"-2026"},
+    // Same fields mapPeopleLive carries, so smart filters behave the same on demo data.
+    statusDisp:["hot","nurture","watch","new"][i%4], alerts:(i%3===0)?0:1, reports:(i%5===0)?0:2,
+    autoPlanEnrollments:(i%3===0)?[]:["New Lead Follow-Up"], activity:[]});
 }
-let pBucket="all",pPage=1;
-function peopleFor(b){return b==="all"?PEOPLE:b==="client"?PEOPLE.filter(p=>p.cat==="client"):PEOPLE.filter(p=>p.cat===b);}
+let pBucket="all",pPage=1,pSmartKey=null;
+
+/* ===== People smart filters =====
+   Brivity's People > Smart Filters list. `pred` runs against a PEOPLE row.
+   `nodata: true` marks filters whose source (website visit tracking) is not wired
+   up, so they are shown for parity but never silently return every row. */
+function pDaysSince(iso){ if(!iso) return Infinity; const d=(Date.now()-new Date(iso))/86400000; return isFinite(d)?d:Infinity; }
+function pNoTask(p){ return !(p.due&&p.due.label==="Due Today"); }
+function pNoOutreach(p,days){ return pDaysSince(p.lastActivity)>days; }
+const PEOPLE_SMART_FILTERS=[
+  {key:"buyers_email",label:"Buyers with email and no Listing Alert",
+   pred:p=>p.intent==="buyer"&&!!p.email&&!(p.alerts>0)},
+  {key:"mr_no_task",label:"Has Market Report, no task, no outreach in 30 days",
+   pred:p=>(p.reports>0)&&pNoTask(p)&&pNoOutreach(p,30)},
+  {key:"hot",label:"Hot leads (expect buy or sell in 3 months)",
+   pred:p=>p.statusDisp==="hot"},
+  {key:"visit30",label:"LAST 30 DAYS: site visit, no task/no contact by agent",nodata:true},
+  {key:"no_plan",label:"No Auto Plan",
+   pred:p=>!(p.autoPlanEnrollments||[]).length},
+  {key:"no_mr",label:"No Market Report - Contacts with Email and Address",
+   pred:p=>!(p.reports>0)&&!!p.email&&!!p.address},
+  {key:"overdue",label:"Overdue Tasks",
+   pred:p=>!!(p.due&&p.due.label==="Due Today")},
+  {key:"partial",label:"Partial Leads",
+   pred:p=>!p.email||!p.phone},
+  {key:"past_clients",label:"Past clients, no task no outreach for 30 days",
+   pred:p=>p.status==="past_client"&&pNoTask(p)&&pNoOutreach(p,30)},
+  {key:"visit_week",label:"THIS WEEK: site visit, no task/no contact by agent",nodata:true},
+  {key:"visit_today",label:"TODAY: site visit, no task/no contact by agent",nodata:true},
+  {key:"watch_nurture",label:"Watch/Nurture, no task, no contact for 30 days",
+   pred:p=>(p.statusDisp==="watch"||p.statusDisp==="nurture")&&pNoTask(p)&&pNoOutreach(p,30)},
+];
+function pSmartPred(p){
+  if(!pSmartKey) return true;
+  const f=PEOPLE_SMART_FILTERS.find(x=>x.key===pSmartKey);
+  return (f&&f.pred)?f.pred(p):true;
+}
+function renderPeopleSmartList(){
+  const box=document.getElementById("pSmartItems"); if(!box)return;
+  const q=(document.getElementById("pSmartSearch")||{value:""}).value.trim().toLowerCase();
+  const shown=PEOPLE_SMART_FILTERS.filter(f=>!q||f.label.toLowerCase().includes(q));
+  box.innerHTML=shown.length
+    ? shown.map(f=>'<a class="sf'+(f.nodata?" sf-nodata":"")+(pSmartKey===f.key?" on":"")+'" data-psf="'+f.key+'"'+
+        (f.nodata?' title="Website visit tracking is not connected yet, so this filter has no data to run on."':'')+
+        '>'+esc(f.label)+'</a>').join("")
+    : '<div class="sf-empty">No filters match "'+esc(q)+'"</div>';
+}
+function applyPeopleSmartFilter(key){
+  const f=PEOPLE_SMART_FILTERS.find(x=>x.key===key); if(!f)return;
+  if(f.nodata){
+    crmToast("Site visit tracking isn't connected yet, so this filter has no data to run on.");
+    return;   // leave the table alone rather than pretend it filtered
+  }
+  pSmartKey=(pSmartKey===key)?null:key;   // clicking the active filter clears it
+  pBucket="all"; pPage=1;
+  document.querySelectorAll('#view-people .leads-nav a[data-bucket]').forEach(x=>x.classList.toggle("on",pSmartKey?false:x.getAttribute("data-bucket")==="all"));
+  renderPeopleSmartList(); renderPeople();
+  crmToast(pSmartKey?("Smart filter applied: "+f.label):"Smart filter cleared");
+}
+(function(){
+  const t=document.getElementById("pSmartToggle"),l=document.getElementById("pSmartList");
+  if(!t||!l)return;
+  t.addEventListener("click",function(){
+    const open=l.style.display!=="none";
+    l.style.display=open?"none":"block";
+    if(!open){ renderPeopleSmartList(); const s=document.getElementById("pSmartSearch"); if(s)s.focus(); }
+  });
+  l.addEventListener("click",function(e){
+    const a=e.target.closest("a[data-psf]"); if(!a)return;
+    applyPeopleSmartFilter(a.getAttribute("data-psf"));
+  });
+  const s=document.getElementById("pSmartSearch");
+  if(s){
+    s.addEventListener("input",renderPeopleSmartList);
+    s.addEventListener("click",function(e){e.stopPropagation();});
+  }
+  const c=document.getElementById("pSmartCount");
+  if(c)c.textContent=PEOPLE_SMART_FILTERS.length+" ›";
+})();
+
+function peopleFor(b){
+  const base=b==="all"?PEOPLE:b==="client"?PEOPLE.filter(p=>p.cat==="client"):PEOPLE.filter(p=>p.cat===b);
+  return pSmartKey?base.filter(pSmartPred):base;
+}
 function eyeIcon(on){return on
   ? '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.6"/></svg>'
   : '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#c2cad1" stroke-width="1.8"><path d="M3 3l18 18"/><path d="M10.6 6.1A9.7 9.7 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.3 3.9M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.5 9.5 0 0 0 3.9-.8"/></svg>';}
@@ -1244,7 +1342,8 @@ function renderPeople(){
   document.getElementById("pnArch").textContent=PEOPLE.filter(p=>p.cat==="archived").length;
   const list=sortRows(peopleFor(pBucket).filter(hitRow));
   const titleMap={all:"All People",client:"Clients",collaborator:"Collaborators",team:"Team",archived:"Archived"};
-  document.getElementById("pTitle").innerHTML=titleMap[pBucket]+' <small>('+list.length+')</small>';
+  const smartActive=pSmartKey?PEOPLE_SMART_FILTERS.find(f=>f.key===pSmartKey):null;
+  document.getElementById("pTitle").innerHTML=(smartActive?esc(smartActive.label):titleMap[pBucket])+' <small>('+list.length+')</small>';
   const pcb=document.getElementById("pChipBar"); if(pcb) pcb.style.display=pBucket==="client"?"flex":"none";
   const pages=Math.max(1,Math.ceil(list.length/PER));
   const rows=list.slice((pPage-1)*PER,pPage*PER);
@@ -1268,7 +1367,9 @@ function renderPeople(){
 }
 document.querySelectorAll('.leads-nav a[data-bucket]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('.leads-nav a[data-bucket]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
-  pBucket=a.getAttribute("data-bucket");pPage=1;renderPeople();
+  pBucket=a.getAttribute("data-bucket");pPage=1;
+  pSmartKey=null; renderPeopleSmartList();   // picking a bucket clears any smart filter
+  renderPeople();
 }));
 
 // Smart Filters expand/collapse in the Leads sidebar.
@@ -2083,7 +2184,11 @@ function mapPeopleLive(rows){
     else if(r.stage==="under_contract"){cat="client";status="client";}
     return {id:r.id,name:r.name,cat,status,showInLeads:cat!=="archived",intent:r.intent,
       stageLabel:r.stageLabel,email:r.email,phone:r.phone,address:r.address,
-      lastLabel:r.lastLabel,lastActivity:r.lastActivity,due:r.due};
+      lastLabel:r.lastLabel,lastActivity:r.lastActivity,due:r.due,
+      // Carried through so the People smart filters can actually evaluate. Without
+      // these, filters like "No Auto Plan" silently matched every row.
+      statusDisp:r.statusDisp,crmStatus:r.crmStatus,alerts:r.alerts||0,reports:r.reports||0,
+      autoPlanEnrollments:r.autoPlanEnrollments||[],activity:r.activity||[]};
   });
 }
 function mapDealTx(d){
@@ -2806,9 +2911,11 @@ const SMART_PREDS={
   partial:l=>!l.email||!l.phone,
   watch_nurture:l=>l.statusDisp==="watch"||l.statusDisp==="nurture",
   mr_no_task:l=>!(l.reports||0), no_mr:l=>!!l.email&&!!l.address,
-  visit30:l=>true, visit_week:l=>true, visit_today:l=>l.due&&l.due.label==="Due Today",
   past_clients:l=>l.statusDisp==="unqualified",
 };
+/* Site-visit filters have no source data (website visit tracking is not wired up).
+   These used to be `l=>true`, which returned every lead while looking like a filter. */
+const SMART_NODATA={visit30:1,visit_week:1,visit_today:1};
 function leadSmartPred(l){ return !leadSmartKey||!(SMART_PREDS[leadSmartKey])||SMART_PREDS[leadSmartKey](l); }
 document.getElementById("dashTabs").addEventListener("click",e=>{
   const b=e.target.closest("[data-dt]"); if(!b)return;
@@ -2824,11 +2931,22 @@ document.querySelectorAll('#view-leads .leads-nav a[data-lb]').forEach(a=>a.addE
   document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(x=>x.classList.remove("on"));
   a.classList.add("on"); leadBucket=a.getAttribute("data-lb"); leadSmartKey=null; page=1; renderLeads();
 }));
-document.querySelectorAll('#view-leads .sf-list .sf[data-sf]').forEach(a=>a.addEventListener("click",()=>{
-  document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(x=>x.classList.remove("on"));
-  a.classList.add("on"); leadSmartKey=a.getAttribute("data-sf"); leadBucket="all"; page=1; renderLeads();
-  crmToast("Smart filter applied: "+a.textContent.trim());
-}));
+document.querySelectorAll('#view-leads .sf-list .sf[data-sf]').forEach(a=>{
+  const key=a.getAttribute("data-sf");
+  if(SMART_NODATA[key]){
+    a.classList.add("sf-nodata");
+    a.title="Website visit tracking is not connected yet, so this filter has no data to run on.";
+  }
+  a.addEventListener("click",()=>{
+    if(SMART_NODATA[key]){
+      crmToast("Site visit tracking isn't connected yet, so this filter has no data to run on.");
+      return;
+    }
+    document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(x=>x.classList.remove("on"));
+    a.classList.add("on"); leadSmartKey=key; leadBucket="all"; page=1; renderLeads();
+    crmToast("Smart filter applied: "+a.textContent.trim());
+  });
+});
 const lpEl=document.getElementById("leadPonds");
 if(lpEl)lpEl.addEventListener("click",()=>crmToast("Lead Ponds arrive with live team routing"));
 // Reporting snapshot tabs + goal circles + AI tabs (delegation - content re-renders)
