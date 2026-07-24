@@ -736,7 +736,7 @@ app.get("/v1/sessions/:sessionId", async (req, res) => {
 // Unified UI shell — the new entry point. Every sub-agent page loads as a tab
 // inside it (Harvey is the persistent home tab). The individual routes below are
 // kept intact so each page still works standalone (they're loaded via iframe).
-app.get("/shell", (_req, res) => {
+app.get("/shell", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "shell.html"));
 });
 
@@ -750,7 +750,7 @@ app.get("/", (_req, res) => {
 // this page as its CRM iframe — detected via the explicit embed marker the
 // shell appends, or the browser's Sec-Fetch-Dest header for the iframe load —
 // and is served the file normally so that tab keeps working.
-app.get("/dashboard", (req, res) => {
+app.get("/dashboard", requireAuthPage, (req, res) => {
   const embedded =
     req.query.embed === "1" || req.get("sec-fetch-dest") === "iframe";
   if (!embedded) {
@@ -761,25 +761,25 @@ app.get("/dashboard", (req, res) => {
 });
 
 /** Legacy DM simulator */
-app.get("/chat", (_req, res) => {
+app.get("/chat", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "chat.html"));
 });
 
-app.get("/jarvis", (_req, res) => {
+app.get("/jarvis", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "jarvis.html"));
 });
 
 // New blue particle-orb Harvey screen (reuses Harvey's existing voice pipeline).
-app.get("/operator", (_req, res) => {
+app.get("/operator", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "operator.html"));
 });
 
 // Team Task Command Center (design-spec rebuild; classic board stays at /tasks).
-app.get("/team-tasks", (_req, res) => {
+app.get("/team-tasks", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "team-tasks.html"));
 });
 
-app.get("/memory", (_req, res) => {
+app.get("/memory", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "memory.html"));
 });
 
@@ -788,48 +788,48 @@ app.get("/tasks", (_req, res) => {
   res.redirect("/team-tasks");
 });
 
-app.get("/tasks-classic", (_req, res) => {
+app.get("/tasks-classic", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "tasks.html"));
 });
 
-app.get("/social", (_req, res) => {
+app.get("/social", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "social.html"));
 });
 
-app.get("/email-marketing", (_req, res) => {
+app.get("/email-marketing", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "email-marketing.html"));
 });
 
-app.get("/lead-nurture", (_req, res) => {
+app.get("/lead-nurture", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "lead-nurture.html"));
 });
 
-app.get("/reporting", (_req, res) => {
+app.get("/reporting", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "reporting.html"));
 });
 
-app.get("/finance", (_req, res) => {
+app.get("/finance", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "finance.html"));
 });
 
-app.get("/voice-clone", (_req, res) => {
+app.get("/voice-clone", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "voice-clone.html"));
 });
 
 // Guided how-to tour (replaced the Voice Clone sidebar tab; /voice-clone above
 // still works, so the voice-clone functionality is untouched — just untabbed).
-app.get("/how-to", (_req, res) => {
+app.get("/how-to", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "how-to.html"));
 });
 
 // Clean single-column chat UI (Harvey by default, ?agent=arlo for Arlo).
 // Self-contained page — talks to /api/jarvis/chat.
-app.get("/hull-chat", (_req, res) => {
+app.get("/hull-chat", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "hull-chat.html"));
 });
 
 // Brivity-style CRM front end (staged rebuild: dashboard → messages → leads).
-app.get("/crm", (_req, res) => {
+app.get("/crm", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "crm-brivity.html"));
 });
 
@@ -892,6 +892,261 @@ function dashboardTokenOkIncoming(req: IncomingMessage | express.Request): boole
       : "";
   return q === expected || bearer === expected;
 }
+
+// ── Site login (accounts + sessions + audit trail) ─────────────────────────
+const SESSION_COOKIE = "mp_sid";
+
+function getCookieValue(req: express.Request, name: string): string {
+  const raw = req.headers.cookie;
+  if (!raw) return "";
+  for (const part of raw.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    const k = part.slice(0, idx).trim();
+    if (k === name) {
+      try {
+        return decodeURIComponent(part.slice(idx + 1).trim());
+      } catch {
+        return part.slice(idx + 1).trim();
+      }
+    }
+  }
+  return "";
+}
+
+async function currentSessionUser(req: express.Request): Promise<import("./core/types.js").CRMUser | null> {
+  const token = getCookieValue(req, SESSION_COOKIE);
+  if (!token) return null;
+  const { getSession } = await import("./core/authStore.js");
+  const session = getSession(token);
+  if (!session) return null;
+  const { getUserById } = await import("./core/users.js");
+  const user = getUserById(session.userId);
+  if (!user || user.active === false) return null;
+  return user;
+}
+
+/** Gate a page route: redirect to /login (preserving the destination) if not signed in. */
+function requireAuthPage(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  void currentSessionUser(req).then((user) => {
+    if (!user) {
+      res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
+      return;
+    }
+    (req as express.Request & { crmUser?: import("./core/types.js").CRMUser }).crmUser = user;
+    next();
+  });
+}
+
+/** Gate an admin-only page: bounce non-admins back to the shell. */
+function requireAuthAdminPage(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  void currentSessionUser(req).then((user) => {
+    if (!user) {
+      res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
+      return;
+    }
+    if (user.role !== "admin") {
+      res.status(403).send("Admins only.");
+      return;
+    }
+    (req as express.Request & { crmUser?: import("./core/types.js").CRMUser }).crmUser = user;
+    next();
+  });
+}
+
+/** Gate an admin-only API route: JSON 401/403 instead of a redirect. */
+function requireAuthAdminApi(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  void currentSessionUser(req).then((user) => {
+    if (!user) {
+      res.status(401).json({ error: "Sign in required" });
+      return;
+    }
+    if (user.role !== "admin") {
+      res.status(403).json({ error: "Admins only" });
+      return;
+    }
+    (req as express.Request & { crmUser?: import("./core/types.js").CRMUser }).crmUser = user;
+    next();
+  });
+}
+
+// The login page itself must never be gated (that would be an infinite redirect loop).
+app.get("/login", (req, res) => {
+  void currentSessionUser(req).then((user) => {
+    if (user) {
+      res.redirect("/shell");
+      return;
+    }
+    res.sendFile(path.join(publicDir, "login.html"));
+  });
+});
+
+app.post("/api/auth/login", express.json(), async (req, res) => {
+  const email = String(req.body?.email || "").trim();
+  const password = String(req.body?.password || "");
+  if (!email || !password) {
+    res.status(400).json({ error: "Email and password are required" });
+    return;
+  }
+  const { getUserByEmail } = await import("./core/users.js");
+  const { verifyPassword, createSession, recordLogin, pruneExpiredSessions } = await import("./core/authStore.js");
+  const user = getUserByEmail(email);
+  const ok = !!user && user.active !== false && verifyPassword(password, user.passwordHash);
+  recordLogin({ userId: user?.id || null, email, success: ok, reason: ok ? undefined : "bad_credentials", req });
+  if (!ok) {
+    res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
+  pruneExpiredSessions();
+  const token = createSession(user!.id, req);
+  const { updateUser } = await import("./core/users.js");
+  updateUser(user!.id, { lastLogin: new Date().toISOString() });
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: req.protocol === "https",
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    path: "/",
+  });
+  res.json({ ok: true });
+});
+
+app.post("/api/auth/logout", async (req, res) => {
+  const token = getCookieValue(req, SESSION_COOKIE);
+  if (token) {
+    const { destroySession } = await import("./core/authStore.js");
+    destroySession(token);
+  }
+  res.clearCookie(SESSION_COOKIE, { path: "/" });
+  res.json({ ok: true });
+});
+
+app.get("/api/auth/me", async (req, res) => {
+  const user = await currentSessionUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Not signed in" });
+    return;
+  }
+  const { passwordHash, ...safe } = user;
+  void passwordHash;
+  res.json({ user: safe });
+});
+
+app.get("/api/auth/login-history", requireAuthAdminApi, async (_req, res) => {
+  const { getLoginHistory } = await import("./core/authStore.js");
+  res.json({ rows: getLoginHistory(150) });
+});
+
+app.get("/api/auth/audit-log", requireAuthAdminApi, async (_req, res) => {
+  const { getAuditLog } = await import("./core/authStore.js");
+  res.json({ rows: getAuditLog(250) });
+});
+
+app.post("/api/auth/team", express.json(), requireAuthAdminApi, async (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  const email = String(req.body?.email || "").trim();
+  const role = req.body?.role;
+  const roleOk = role === "admin" || role === "agent" || role === "isa" || role === "custom";
+  if (!name || !email) {
+    res.status(400).json({ error: "Name and email are required" });
+    return;
+  }
+  const { getUserByEmail, createUser } = await import("./core/users.js");
+  const { ROLE_PERMISSIONS } = await import("./core/types.js");
+  if (getUserByEmail(email)) {
+    res.status(409).json({ error: "A team member with that email already exists" });
+    return;
+  }
+  const { hashPassword, genTempPassword, recordAudit } = await import("./core/authStore.js");
+  const tempPassword = genTempPassword();
+  const finalRole = roleOk ? role : "agent";
+  const created = createUser({
+    name,
+    email,
+    role: finalRole,
+    permissions: { ...ROLE_PERMISSIONS[finalRole] },
+    active: true,
+    avatarInitials: undefined!,
+    avatarColor: "#64748b",
+    passwordHash: hashPassword(tempPassword),
+    mustChangePassword: true,
+  });
+  const actor = (req as express.Request & { crmUser?: import("./core/types.js").CRMUser }).crmUser;
+  recordAudit({ userId: actor?.id, userName: actor?.name, action: "team.create", detail: `Created ${name} (${email}, ${finalRole})`, req });
+  const { passwordHash, ...safe } = created;
+  void passwordHash;
+  res.status(201).json({ ok: true, user: safe, tempPassword });
+});
+
+app.post("/api/auth/team/:id/reset-password", requireAuthAdminApi, async (req, res) => {
+  const id = String(req.params.id || "").trim();
+  const { getUserById, updateUser } = await import("./core/users.js");
+  const target = getUserById(id);
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  const { hashPassword, genTempPassword, destroyAllSessionsForUser, recordAudit } = await import("./core/authStore.js");
+  const tempPassword = genTempPassword();
+  updateUser(id, { passwordHash: hashPassword(tempPassword), mustChangePassword: true });
+  destroyAllSessionsForUser(id);
+  const actor = (req as express.Request & { crmUser?: import("./core/types.js").CRMUser }).crmUser;
+  recordAudit({ userId: actor?.id, userName: actor?.name, action: "team.reset_password", detail: `Reset password for ${target.name}`, req });
+  res.json({ ok: true, tempPassword });
+});
+
+app.post("/api/auth/change-password", express.json(), async (req, res) => {
+  const user = await currentSessionUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Sign in required" });
+    return;
+  }
+  const currentPassword = String(req.body?.currentPassword || "");
+  const newPassword = String(req.body?.newPassword || "");
+  const { verifyPassword, hashPassword, recordAudit } = await import("./core/authStore.js");
+  if (!verifyPassword(currentPassword, user.passwordHash)) {
+    res.status(401).json({ error: "Current password is incorrect" });
+    return;
+  }
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: "New password must be at least 8 characters" });
+    return;
+  }
+  const { updateUser } = await import("./core/users.js");
+  updateUser(user.id, { passwordHash: hashPassword(newPassword), mustChangePassword: false });
+  recordAudit({ userId: user.id, userName: user.name, action: "account.change_password", detail: undefined, req });
+  res.json({ ok: true });
+});
+
+app.get("/team", requireAuthAdminPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "team.html"));
+});
+
+// One-time setup: sets the very first password on a matching admin account.
+// Permanently refuses once ANY user in the system already has a password set,
+// so it can never be replayed as a backdoor after initial setup.
+app.post("/api/auth/bootstrap", express.json(), async (req, res) => {
+  const { getUsers, getUserByEmail, updateUser } = await import("./core/users.js");
+  const users = getUsers();
+  if (users.some((u) => !!u.passwordHash)) {
+    res.status(403).json({ error: "Setup already complete — use the normal login/reset-password flow." });
+    return;
+  }
+  const email = String(req.body?.email || "").trim();
+  const password = String(req.body?.password || "");
+  if (!email || password.length < 8) {
+    res.status(400).json({ error: "email and a password of at least 8 characters are required" });
+    return;
+  }
+  const target = getUserByEmail(email);
+  if (!target) {
+    res.status(404).json({ error: `No seeded account found for ${email}` });
+    return;
+  }
+  const { hashPassword } = await import("./core/authStore.js");
+  updateUser(target.id, { passwordHash: hashPassword(password), mustChangePassword: false });
+  res.json({ ok: true });
+});
 
 app.get("/api/dashboard/data", async (req, res) => {
   if (!dashboardTokenOk(req)) {
@@ -1564,6 +1819,9 @@ async function handleMassDeleteLeads(
   try {
     const deleted = await deleteLeads(ids);
     console.log("[MassDelete] Deleted", deleted, "of", ids.length, "requested leads");
+    const actor = await currentSessionUser(req);
+    const { recordAudit } = await import("./core/authStore.js");
+    recordAudit({ userId: actor?.id, userName: actor?.name, action: "lead.delete", detail: `${deleted} lead(s)`, req });
     res.json({ deleted, requested: ids.length });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -3046,6 +3304,9 @@ app.post("/api/crm/email/send-test", express.json(), async (req, res) => {
   try {
     const { sendEmail } = await import("./integrations/gmail/index.js");
     const result = await sendEmail({ to: "me", subject: `[TEST] ${subject}`, body: html, html: true });
+    const actor = await currentSessionUser(req);
+    const { recordAudit } = await import("./core/authStore.js");
+    recordAudit({ userId: actor?.id, userName: actor?.name, action: "email.send_test", detail: subject, req });
     res.json({ ok: true, to: result.to, messageId: result.messageId });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -3100,6 +3361,15 @@ app.post("/api/crm/email/send", express.json({ limit: "2mb" }), async (req, res)
     await new Promise((r) => setTimeout(r, 120));
   }
   const sent = results.filter((r) => r.ok).length;
+  const actor = await currentSessionUser(req);
+  const { recordAudit } = await import("./core/authStore.js");
+  recordAudit({
+    userId: actor?.id,
+    userName: actor?.name,
+    action: "email.send",
+    detail: `"${subject}" to ${sent}/${to.length} recipients`,
+    req,
+  });
   res.json({ sent, failed: results.length - sent, total: results.length, results: results.slice(0, 50) });
 });
 
@@ -7127,6 +7397,12 @@ app.patch("/api/users/:id", express.json(), (req, res) => {
     res.status(404).json({ error: "User not found" });
     return;
   }
+  void currentSessionUser(req).then((actor) => {
+    void import("./core/authStore.js").then(({ recordAudit }) => {
+      const change = updates.active !== undefined ? (updates.active ? "reactivated" : "deactivated") : "updated";
+      recordAudit({ userId: actor?.id, userName: actor?.name, action: "team." + change, detail: updated.name, req });
+    });
+  });
   res.status(200).json({ ok: true, user: updated });
 });
 
@@ -7136,11 +7412,17 @@ app.delete("/api/users/:id", (req, res) => {
     return;
   }
   const id = String(req.params.id || "").trim();
+  const target = getUserById(id);
   const ok = deleteUser(id);
   if (!ok) {
     res.status(404).json({ error: "User not found" });
     return;
   }
+  void currentSessionUser(req).then((actor) => {
+    void import("./core/authStore.js").then(({ recordAudit }) => {
+      recordAudit({ userId: actor?.id, userName: actor?.name, action: "team.delete", detail: target?.name, req });
+    });
+  });
   res.status(200).json({ ok: true });
 });
 
@@ -8009,11 +8291,15 @@ app.delete("/api/deals/:id", async (req, res) => {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
   }
-  const ok = deleteDeal(String(req.params.id || "").trim());
+  const dealId = String(req.params.id || "").trim();
+  const ok = deleteDeal(dealId);
   if (!ok) {
     res.status(404).json({ error: "Deal not found" });
     return;
   }
+  const actor = await currentSessionUser(req);
+  const { recordAudit } = await import("./core/authStore.js");
+  recordAudit({ userId: actor?.id, userName: actor?.name, action: "deal.delete", detail: dealId, req });
   res.status(200).json({ ok: true });
 });
 

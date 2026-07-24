@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUsers = getUsers;
 exports.saveUsers = saveUsers;
 exports.getUserById = getUserById;
+exports.getUserByEmail = getUserByEmail;
 exports.createUser = createUser;
 exports.updateUser = updateUser;
 exports.deleteUser = deleteUser;
@@ -87,6 +88,8 @@ function normalizeUser(raw) {
         avatarColor: typeof raw.avatarColor === "string" && /^#[0-9a-fA-F]{6}$/.test(raw.avatarColor)
             ? raw.avatarColor
             : "#64748b",
+        passwordHash: typeof raw.passwordHash === "string" && raw.passwordHash ? raw.passwordHash : undefined,
+        mustChangePassword: raw.mustChangePassword === true,
     };
 }
 function getUsers() {
@@ -133,6 +136,10 @@ function saveUsers(users) {
 function getUserById(id) {
     return getUsers().find((u) => u.id === id) ?? null;
 }
+function getUserByEmail(email) {
+    const e = email.trim().toLowerCase();
+    return getUsers().find((u) => u.email.trim().toLowerCase() === e) ?? null;
+}
 function createUser(data) {
     const users = getUsers();
     const name = data.name.trim() || "User";
@@ -149,6 +156,8 @@ function createUser(data) {
         lastLogin: data.lastLogin,
         avatarInitials: data.avatarInitials || avatarInitialsFromName(name),
         avatarColor: data.avatarColor || "#64748b",
+        passwordHash: data.passwordHash,
+        mustChangePassword: data.mustChangePassword,
     };
     users.push(created);
     saveUsers(users);

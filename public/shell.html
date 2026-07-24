@@ -113,7 +113,8 @@
      <nav id="nav"></nav>
      <div id="side-foot">
        <span class="dot"></span>
-       <span style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;">Marco Puga · Live</span>
+       <span id="whoLabel" style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;flex:1">Marco Puga &middot; Live</span>
+       <button id="logoutBtn" title="Sign out" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;display:flex;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
      </div>
    </aside>
 
@@ -213,7 +214,7 @@ var NAV_MESSAGE_TYPE = "app-navigate";
 var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg>';
 
 
-(function(){
+function initShell(){
  "use strict";
  var byKey = {}; TABS.forEach(function(t){ byKey[t.key]=t; });
  var home = (TABS.find(function(t){return t.home;}) || TABS[0]).key;
@@ -280,7 +281,36 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 
  /* Expose a tiny API in case you want to drive it from this window too. */
  window.AppShell = { open:function(k){ activate(k, true); }, collapse:setCollapsed, tabs:TABS };
-})();
+}
+
+/* Who's signed in — fetched before building the nav so an admin's Team tab
+   can be added; also wires the sidebar's sign-out button. */
+fetch("/api/auth/me", { credentials: "same-origin" })
+  .then(function(r){ return r.ok ? r.json() : null; })
+  .then(function(d){
+    var user = d && d.user;
+    var who = document.getElementById("whoLabel");
+    if (user) {
+      if (who) who.textContent = user.name + " · " + user.role;
+      if (user.role === "admin") {
+        TABS.push({
+          key: "team", label: "Team & Activity", sub: "Accounts · logins · audit", src: "/team",
+          icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+        });
+        SECTIONS.team = null;
+      }
+    } else if (who) {
+      who.textContent = "Not signed in";
+    }
+  })
+  .catch(function(){})
+  .then(function(){ initShell(); });
+
+document.getElementById("logoutBtn").addEventListener("click", function(){
+  fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" })
+    .catch(function(){})
+    .then(function(){ location.href = "/login"; });
+});
 
 
 /* ── Marco 90 addition: respect the existing dark/light theme preference ──

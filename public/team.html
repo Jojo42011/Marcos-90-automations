@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Team &amp; Activity · Marco Puga</title>
+<style>
+  :root{
+    --bg:#f9fbfb; --panel:#ffffff; --text:#333; --muted:#5f6b78; --line:#edf0f0; --line-2:#e3e8e8;
+    --teal:#59c4c4; --teal-2:#4ca7a7; --soft:#eef7f7; --bad:#c0616a; --ok:#3fae86; --warn:#d99a3d;
+    --font:"Helvetica Neue",Helvetica,Arial,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:var(--bg);color:var(--text)}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 26px 60px}
+  h1{font-size:26px;font-weight:400;color:#3a3f45}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px}
+  .tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+  .tabs button{background:none;border:none;padding:10px 4px;margin-right:22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+  .tabs button.on{color:var(--teal-2);border-color:var(--teal)}
+  .pill-btn{border:1px solid var(--teal);color:#fff;background:linear-gradient(135deg,var(--teal),var(--teal-2));border-radius:20px;padding:9px 18px;font-weight:700;letter-spacing:.02em;font-size:12.5px;cursor:pointer}
+  .pill-btn.ghost{background:#fff;color:var(--teal-2)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:12px 16px;border-bottom:1px solid var(--line)}
+  td{padding:12px 16px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .name{font-weight:700;color:#3a3f45}
+  .muted{color:var(--muted)}
+  .badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#fff}
+  .badge.admin{background:#3a444e}
+  .badge.agent{background:var(--teal)}
+  .badge.isa{background:var(--warn)}
+  .badge.custom{background:#9aa6b2}
+  .badge.active{background:var(--ok)}
+  .badge.inactive{background:#c2cad1}
+  .badge.ok{background:var(--ok)}
+  .badge.fail{background:var(--bad)}
+  .act{background:#fff;border:1px solid var(--line);border-radius:14px;padding:5px 12px;font-size:11px;font-weight:600;color:var(--teal-2);cursor:pointer;margin-right:6px}
+  .act:hover{background:var(--soft)}
+  .act.danger{color:var(--bad)}
+  .empty{padding:30px;text-align:center;color:var(--muted);font-size:13px}
+  .modal-scrim{position:fixed;inset:0;background:rgba(20,26,32,.4);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal-scrim.on{display:flex}
+  .modal{background:#fff;border-radius:14px;padding:26px;width:100%;max-width:380px;box-shadow:0 30px 80px -30px rgba(0,0,0,.4)}
+  .modal h3{font-size:16px;margin-bottom:16px;color:#3a3f45}
+  .modal label{display:block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .modal input, .modal select{width:100%;height:38px;border:1px solid var(--line);border-radius:8px;padding:0 12px;font-size:13px;margin-bottom:14px}
+  .modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:6px}
+  .credbox{background:var(--soft);border:1px solid rgba(89,196,196,.3);border-radius:8px;padding:12px 14px;font-size:13px;margin-top:6px}
+  .credbox b{display:block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;margin-top:4px;color:#2a5555}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 26px;border-bottom:1px solid var(--line);background:#fff}
+  .topbar a{color:var(--teal-2);text-decoration:none;font-size:13px;font-weight:600}
+  .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-24px);background:#26313a;color:#fff;font-size:13px;padding:11px 18px;border-radius:11px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:99}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+  <div class="topbar"><a href="/shell">&larr; Back to command center</a><span class="muted" id="whoami" style="font-size:12px"></span></div>
+  <div class="wrap">
+    <div class="head">
+      <div><h1>Team &amp; Activity</h1><div class="sub">Accounts, logins, and an audit trail of who did what.</div></div>
+      <button class="pill-btn" id="addBtn">+ ADD TEAM MEMBER</button>
+    </div>
+    <div class="tabs">
+      <button class="on" data-t="team">Team</button>
+      <button data-t="logins">Login History</button>
+      <button data-t="audit">Activity Log</button>
+    </div>
+    <div id="body"></div>
+  </div>
+
+  <div class="modal-scrim" id="addScrim">
+    <div class="modal">
+      <h3>Add team member</h3>
+      <div id="addForm">
+        <label>Name</label><input id="mName" placeholder="Jane Doe">
+        <label>Email</label><input id="mEmail" type="email" placeholder="jane@marcopugarealty.com">
+        <label>Role</label>
+        <select id="mRole">
+          <option value="agent">Agent</option>
+          <option value="isa">ISA</option>
+          <option value="admin">Admin</option>
+          <option value="custom">Custom</option>
+        </select>
+        <div class="row"><button class="pill-btn ghost" id="addCancel" type="button">Cancel</button><button class="pill-btn" id="addSave" type="button">Create</button></div>
+      </div>
+      <div id="addResult" style="display:none">
+        <div class="credbox">Temporary password for <b id="rEmail"></b><b id="rPass"></b></div>
+        <div class="row" style="margin-top:16px"><button class="pill-btn" id="addDone" type="button">Done</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+<script>
+var ME=null, USERS=[], LOGINS=[], AUDIT=[], TAB="team";
+function toast(m){ var t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(function(){t.classList.remove("show");},2200); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function fmtDate(iso){ if(!iso) return "Never"; var d=new Date(iso); if(isNaN(d)) return "-"; return d.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}); }
+
+function api(path,opts){ return fetch(path, Object.assign({credentials:"same-origin"}, opts||{})); }
+
+function loadAll(){
+  return Promise.all([
+    api("/api/auth/me").then(function(r){return r.ok?r.json():null;}),
+    api("/api/users").then(function(r){return r.ok?r.json():{users:[]};}),
+    api("/api/auth/login-history").then(function(r){return r.ok?r.json():{rows:[]};}),
+    api("/api/auth/audit-log").then(function(r){return r.ok?r.json():{rows:[]};}),
+  ]).then(function(res){
+    ME=res[0]&&res[0].user; USERS=res[1].users||[]; LOGINS=res[2].rows||[]; AUDIT=res[3].rows||[];
+    if(ME) document.getElementById("whoami").textContent="Signed in as "+ME.name+" ("+ME.role+")";
+    render();
+  });
+}
+
+function render(){
+  var b=document.getElementById("body");
+  if(TAB==="team") b.innerHTML=renderTeam();
+  else if(TAB==="logins") b.innerHTML=renderLogins();
+  else b.innerHTML=renderAudit();
+  bind();
+}
+
+function renderTeam(){
+  if(!USERS.length) return '<div class="card"><div class="empty">No team members yet.</div></div>';
+  return '<div class="card"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead><tbody>'+
+    USERS.map(function(u){
+      return '<tr><td><span class="name">'+esc(u.name)+'</span></td><td class="muted">'+esc(u.email)+'</td>'+
+        '<td><span class="badge '+u.role+'">'+u.role+'</span></td>'+
+        '<td><span class="badge '+(u.active?"active":"inactive")+'">'+(u.active?"Active":"Inactive")+'</span></td>'+
+        '<td class="muted">'+fmtDate(u.lastLogin)+'</td>'+
+        '<td style="white-space:nowrap">'+
+          '<button class="act" data-reset="'+u.id+'">Reset password</button>'+
+          '<button class="act'+(u.active?" danger":"")+'" data-toggle="'+u.id+'">'+(u.active?"Deactivate":"Reactivate")+'</button>'+
+        '</td></tr>';
+    }).join("")+
+    '</tbody></table></div>';
+}
+
+function renderLogins(){
+  if(!LOGINS.length) return '<div class="card"><div class="empty">No login attempts recorded yet.</div></div>';
+  return '<div class="card"><table><thead><tr><th>Email</th><th>Result</th><th>IP</th><th>When</th></tr></thead><tbody>'+
+    LOGINS.map(function(l){
+      return '<tr><td class="name">'+esc(l.email)+'</td><td><span class="badge '+(l.success?"ok":"fail")+'">'+(l.success?"Success":"Failed")+'</span></td>'+
+        '<td class="muted">'+esc(l.ip||"-")+'</td><td class="muted">'+fmtDate(l.at)+'</td></tr>';
+    }).join("")+
+    '</tbody></table></div>';
+}
+
+function renderAudit(){
+  if(!AUDIT.length) return '<div class="card"><div class="empty">No activity recorded yet.</div></div>';
+  return '<div class="card"><table><thead><tr><th>Who</th><th>Action</th><th>Detail</th><th>When</th></tr></thead><tbody>'+
+    AUDIT.map(function(a){
+      return '<tr><td class="name">'+esc(a.userName||"System")+'</td><td class="muted">'+esc(a.action)+'</td>'+
+        '<td class="muted">'+esc(a.detail||"-")+'</td><td class="muted">'+fmtDate(a.at)+'</td></tr>';
+    }).join("")+
+    '</tbody></table></div>';
+}
+
+function bind(){
+  document.querySelectorAll("[data-reset]").forEach(function(b){
+    b.onclick=function(){
+      var id=b.getAttribute("data-reset"); var u=USERS.find(function(x){return x.id===id;}); if(!u)return;
+      if(!confirm('Reset password for '+u.name+'? Their current password stops working immediately.'))return;
+      api("/api/auth/team/"+encodeURIComponent(id)+"/reset-password",{method:"POST"})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d&&d.ok){ showCreds(u.email, d.tempPassword); loadAll(); }
+          else toast("Reset failed");
+        }).catch(function(){toast("Reset failed");});
+    };
+  });
+  document.querySelectorAll("[data-toggle]").forEach(function(b){
+    b.onclick=function(){
+      var id=b.getAttribute("data-toggle"); var u=USERS.find(function(x){return x.id===id;}); if(!u)return;
+      api("/api/users/"+encodeURIComponent(id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:!u.active})})
+        .then(function(r){return r.json();})
+        .then(function(){ toast(u.active?"Deactivated "+u.name:"Reactivated "+u.name); loadAll(); })
+        .catch(function(){toast("Update failed");});
+    };
+  });
+}
+
+document.querySelectorAll(".tabs button").forEach(function(b){
+  b.addEventListener("click",function(){
+    document.querySelectorAll(".tabs button").forEach(function(x){x.classList.remove("on");});
+    b.classList.add("on"); TAB=b.getAttribute("data-t"); render();
+  });
+});
+
+function showCreds(email, pass){
+  document.getElementById("addForm").style.display="none";
+  document.getElementById("addResult").style.display="block";
+  document.getElementById("rEmail").textContent=email;
+  document.getElementById("rPass").textContent=pass;
+  document.getElementById("addScrim").classList.add("on");
+}
+function closeAdd(){
+  document.getElementById("addScrim").classList.remove("on");
+  document.getElementById("addForm").style.display="block";
+  document.getElementById("addResult").style.display="none";
+  document.getElementById("mName").value=""; document.getElementById("mEmail").value=""; document.getElementById("mRole").value="agent";
+}
+document.getElementById("addBtn").addEventListener("click",function(){ document.getElementById("addScrim").classList.add("on"); });
+document.getElementById("addCancel").addEventListener("click",closeAdd);
+document.getElementById("addDone").addEventListener("click",function(){ closeAdd(); loadAll(); });
+document.getElementById("addScrim").addEventListener("click",function(e){ if(e.target===document.getElementById("addScrim")) closeAdd(); });
+document.getElementById("addSave").addEventListener("click",function(){
+  var name=document.getElementById("mName").value.trim();
+  var email=document.getElementById("mEmail").value.trim();
+  var role=document.getElementById("mRole").value;
+  if(!name||!email){ toast("Name and email are required"); return; }
+  api("/api/auth/team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,email:email,role:role})})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      if(res.ok&&res.d&&res.d.ok){ showCreds(res.d.user.email, res.d.tempPassword); }
+      else toast((res.d&&res.d.error)||"Couldn't create account");
+    }).catch(function(){toast("Couldn't create account");});
+});
+
+loadAll();
+</script>
+</body>
+</html>

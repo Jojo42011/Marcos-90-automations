@@ -87,6 +87,8 @@ function normalizeUser(raw: Record<string, unknown>): CRMUser | null {
     avatarColor: typeof raw.avatarColor === "string" && /^#[0-9a-fA-F]{6}$/.test(raw.avatarColor)
       ? raw.avatarColor
       : "#64748b",
+    passwordHash: typeof raw.passwordHash === "string" && raw.passwordHash ? raw.passwordHash : undefined,
+    mustChangePassword: raw.mustChangePassword === true,
   };
 }
 
@@ -130,6 +132,11 @@ export function getUserById(id: string): CRMUser | null {
   return getUsers().find((u) => u.id === id) ?? null;
 }
 
+export function getUserByEmail(email: string): CRMUser | null {
+  const e = email.trim().toLowerCase();
+  return getUsers().find((u) => u.email.trim().toLowerCase() === e) ?? null;
+}
+
 export function createUser(data: Omit<CRMUser, "id" | "createdAt">): CRMUser {
   const users = getUsers();
   const name = data.name.trim() || "User";
@@ -146,6 +153,8 @@ export function createUser(data: Omit<CRMUser, "id" | "createdAt">): CRMUser {
     lastLogin: data.lastLogin,
     avatarInitials: data.avatarInitials || avatarInitialsFromName(name),
     avatarColor: data.avatarColor || "#64748b",
+    passwordHash: data.passwordHash,
+    mustChangePassword: data.mustChangePassword,
   };
   users.push(created);
   saveUsers(users);

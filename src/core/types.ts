@@ -129,6 +129,10 @@ export interface CRMUser {
   lastLogin?: string;
   avatarInitials: string;
   avatarColor: string;
+  /** scrypt hash, format "salt:hash" (hex). Absent until a password is set. */
+  passwordHash?: string;
+  /** true if the account still needs to change its (temp, admin-issued) password. */
+  mustChangePassword?: boolean;
 }
 
 /** Customizable tag template (badge color + label). */

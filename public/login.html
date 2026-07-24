@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign in · Marco Puga</title>
+<style>
+  :root{
+    --bg:#f9fbfb; --panel:#ffffff; --text:#333; --muted:#5f6b78; --line:#edf0f0;
+    --accent:#59c4c4; --accent-2:#4ca7a7; --soft:#eef7f7; --bad:#c0616a;
+    --font:"Helvetica Neue",Helvetica,Arial,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--font); background:var(--bg); color:var(--text);
+    display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;
+  }
+  .card{
+    width:100%; max-width:380px; background:var(--panel); border:1px solid var(--line);
+    border-radius:16px; padding:34px 32px 30px; box-shadow:0 20px 60px -30px rgba(16,24,40,.25);
+  }
+  .brand{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:22px}
+  .brand .wm{display:flex;flex-direction:column;align-items:center;line-height:1;font-family:Georgia,"Times New Roman",serif}
+  .brand .wm small{font-size:9px;letter-spacing:.18em;color:#c23b3b;margin-bottom:4px}
+  .brand .wm b{font-weight:700;font-size:17px;letter-spacing:.06em;color:#3a3f45}
+  h1{font-size:16px;font-weight:600;color:var(--text);text-align:center;margin-bottom:4px}
+  .sub{font-size:12.5px;color:var(--muted);text-align:center;margin-bottom:24px}
+  label{display:block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .field{margin-bottom:16px}
+  input{
+    width:100%;height:42px;border:1px solid var(--line);border-radius:9px;padding:0 13px;
+    font-size:14px;color:var(--text);outline:none;background:#fbfcfd;transition:border-color .15s;
+  }
+  input:focus{border-color:var(--accent)}
+  .btn{
+    width:100%;height:44px;border:none;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#fff;font-weight:700;font-size:14px;letter-spacing:.02em;cursor:pointer;margin-top:6px;
+    transition:opacity .15s;
+  }
+  .btn:hover{opacity:.92}
+  .btn:disabled{opacity:.55;cursor:default}
+  .err{
+    background:#fdf1f1;border:1px solid rgba(192,97,106,.3);color:var(--bad);font-size:12.5px;
+    border-radius:8px;padding:9px 12px;margin-bottom:16px;display:none;
+  }
+  .err.show{display:block}
+  .foot{margin-top:22px;text-align:center;font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+        <defs><linearGradient id="mpr" x1="0" y1="2" x2="0" y2="46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f4695b"/><stop offset="1" stop-color="#bd1e2b"/></linearGradient></defs>
+        <path d="M24 4 44 24 24 44 4 24Z" stroke="url(#mpr)" stroke-width="2.2"/>
+        <path d="M24 9 39 24 24 39 9 24Z" stroke="url(#mpr)" stroke-width="1" opacity=".55"/>
+        <path d="M14.5 22 24 12.5 33.5 22" stroke="url(#mpr)" stroke-width="1.9" stroke-linejoin="round"/>
+        <g fill="url(#mpr)"><rect x="21" y="15.4" width="2.3" height="2.3" rx=".4"/><rect x="24.7" y="15.4" width="2.3" height="2.3" rx=".4"/><rect x="21" y="18.3" width="2.3" height="2.3" rx=".4"/><rect x="24.7" y="18.3" width="2.3" height="2.3" rx=".4"/></g>
+        <text x="24" y="33.5" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-weight="700" font-size="14.5" fill="url(#mpr)">M</text>
+        <g stroke="url(#mpr)" stroke-width="1.5" stroke-linecap="round"><line x1="17" y1="34.5" x2="17" y2="41"/><line x1="20.4" y1="35.5" x2="20.4" y2="41"/><line x1="27.6" y1="35.5" x2="27.6" y2="41"/><line x1="31" y1="34.5" x2="31" y2="41"/></g>
+      </svg>
+      <span class="wm"><small>HAPPINESS BEGINS AT HOME</small><b>MARCO PUGA</b></span>
+    </div>
+    <h1>Sign in</h1>
+    <div class="sub">Team command center &middot; authorized access only</div>
+    <div class="err" id="err"></div>
+    <form id="loginForm">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username" placeholder="you@marcopugarealty.com" required />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+      </div>
+      <button class="btn" id="submitBtn" type="submit">Sign in</button>
+    </form>
+    <div class="foot">Trouble signing in? Ask your admin to reset your password.</div>
+  </div>
+<script>
+  var form=document.getElementById("loginForm");
+  var errEl=document.getElementById("err");
+  var btn=document.getElementById("submitBtn");
+  function showErr(msg){ errEl.textContent=msg; errEl.classList.add("show"); }
+  form.addEventListener("submit",function(e){
+    e.preventDefault();
+    errEl.classList.remove("show");
+    var email=document.getElementById("email").value.trim();
+    var password=document.getElementById("password").value;
+    if(!email||!password) return;
+    btn.disabled=true; btn.textContent="Signing in…";
+    fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,password:password})})
+      .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+      .then(function(res){
+        if(res.ok && res.d && res.d.ok){
+          var params=new URLSearchParams(location.search);
+          var next=params.get("next");
+          location.href = (next && next.startsWith("/")) ? next : "/shell";
+        } else {
+          showErr((res.d && res.d.error) || "Invalid email or password.");
+          btn.disabled=false; btn.textContent="Sign in";
+        }
+      })
+      .catch(function(){ showErr("Couldn't reach the server — try again."); btn.disabled=false; btn.textContent="Sign in"; });
+  });
+</script>
+</body>
+</html>
