@@ -2141,6 +2141,152 @@ app.get("/api/ads/summary", async (req, res) => {
   }
 });
 
+// ── Ad Manager: connection status + local campaign planner ─────────────────
+// Real spend/impressions/campaigns come from the existing AD_DASHBOARD_BASE_URL
+// proxy above (GET /api/ads/summary) when that upstream Flask app is reachable.
+// There's no write-capable Meta Marketing API integration in this codebase, so
+// campaign creation here is a genuinely functional local planner (SQLite,
+// survives restarts, fully CRUD) rather than a fake "creates a real Facebook
+// ad" button — status moves Draft → Pending Review → Active as Marco's team
+// actually pushes it live in Ads Manager.
+app.get("/api/ads/connection-status", async (_req, res) => {
+  if (!AD_DASHBOARD_BASE_URL) {
+    res.json({ configured: false, reachable: false });
+    return;
+  }
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (AD_DASHBOARD_API_KEY) headers.Authorization = `Bearer ${AD_DASHBOARD_API_KEY}`;
+    const r = await fetch(`${AD_DASHBOARD_BASE_URL}/api/latest`, { headers, signal: ctrl.signal });
+    clearTimeout(t);
+    res.json({ configured: true, reachable: r.ok });
+  } catch {
+    res.json({ configured: true, reachable: false });
+  }
+});
+
+app.get("/api/ads/campaigns", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { getAdCampaigns } = await import("./core/adsStore.js");
+  res.json({ campaigns: getAdCampaigns() });
+});
+
+app.post("/api/ads/campaigns", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const name = typeof b.name === "string" ? b.name.trim() : "";
+  if (!name) {
+    res.status(400).json({ error: "name is required" });
+    return;
+  }
+  const platform = b.platform === "facebook" || b.platform === "instagram" ? b.platform : "both";
+  const objective =
+    b.objective === "traffic" || b.objective === "awareness" || b.objective === "engagement" || b.objective === "messages"
+      ? b.objective
+      : "leads";
+  const { createAdCampaign } = await import("./core/adsStore.js");
+  const actor = await currentSessionUser(req);
+  const campaign = createAdCampaign({
+    name,
+    platform,
+    objective,
+    dailyBudget: Number(b.dailyBudget) || 0,
+    totalBudget: Number(b.totalBudget) || 0,
+    startDate: typeof b.startDate === "string" ? b.startDate : "",
+    endDate: typeof b.endDate === "string" ? b.endDate : "",
+    audience: typeof b.audience === "string" ? b.audience : "",
+    creativeNotes: typeof b.creativeNotes === "string" ? b.creativeNotes : "",
+    linkedPostId: typeof b.linkedPostId === "string" ? b.linkedPostId : null,
+    linkedPostCaption: typeof b.linkedPostCaption === "string" ? b.linkedPostCaption : null,
+    linkedPostCoverUrl: typeof b.linkedPostCoverUrl === "string" ? b.linkedPostCoverUrl : null,
+    createdBy: actor?.name || null,
+  });
+  const { recordAudit } = await import("./core/authStore.js");
+  recordAudit({ userId: actor?.id, userName: actor?.name, action: "ads.campaign_create", detail: name, req });
+  res.status(201).json({ ok: true, campaign });
+});
+
+app.patch("/api/ads/campaigns/:id", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const updates: Record<string, unknown> = {};
+  if (typeof b.name === "string") updates.name = b.name;
+  if (b.platform === "facebook" || b.platform === "instagram" || b.platform === "both") updates.platform = b.platform;
+  if (["leads", "traffic", "awareness", "engagement", "messages"].includes(String(b.objective))) updates.objective = b.objective;
+  if (["draft", "pending_review", "active", "paused", "completed"].includes(String(b.status))) updates.status = b.status;
+  if (b.dailyBudget !== undefined) updates.dailyBudget = Number(b.dailyBudget) || 0;
+  if (b.totalBudget !== undefined) updates.totalBudget = Number(b.totalBudget) || 0;
+  if (typeof b.startDate === "string") updates.startDate = b.startDate;
+  if (typeof b.endDate === "string") updates.endDate = b.endDate;
+  if (typeof b.audience === "string") updates.audience = b.audience;
+  if (typeof b.creativeNotes === "string") updates.creativeNotes = b.creativeNotes;
+  const { updateAdCampaign } = await import("./core/adsStore.js");
+  const updated = updateAdCampaign(id, updates as Parameters<typeof updateAdCampaign>[1]);
+  if (!updated) {
+    res.status(404).json({ error: "Campaign not found" });
+    return;
+  }
+  const actor = await currentSessionUser(req);
+  const { recordAudit } = await import("./core/authStore.js");
+  recordAudit({
+    userId: actor?.id,
+    userName: actor?.name,
+    action: "ads.campaign_update",
+    detail: updates.status ? `${updated.name} → ${updates.status}` : updated.name,
+    req,
+  });
+  res.json({ ok: true, campaign: updated });
+});
+
+app.delete("/api/ads/campaigns/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const { getAdCampaignById, deleteAdCampaign } = await import("./core/adsStore.js");
+  const target = getAdCampaignById(id);
+  const ok = deleteAdCampaign(id);
+  if (!ok) {
+    res.status(404).json({ error: "Campaign not found" });
+    return;
+  }
+  const actor = await currentSessionUser(req);
+  const { recordAudit } = await import("./core/authStore.js");
+  recordAudit({ userId: actor?.id, userName: actor?.name, action: "ads.campaign_delete", detail: target?.name, req });
+  res.json({ ok: true });
+});
+
+app.get("/api/ads/boost-candidates", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { getSocialVideos } = await import("./core/socialStore.js");
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit || "12"), 10) || 12, 1), 50);
+  try {
+    res.json({ posts: getSocialVideos({ limit }) });
+  } catch (err) {
+    res.json({ posts: [], error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/ads", requireAuthPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "ads.html"));
+});
+
 /** Harvey ops snapshot (perception + judgment, no LLM). */
 app.get("/api/jarvis/ops", async (req, res) => {
   if (!dashboardTokenOk(req)) {

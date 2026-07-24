@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ad Manager · Marco Puga</title>
+<style>
+  :root{
+    --bg:#f9fbfb; --panel:#ffffff; --text:#333; --muted:#5f6b78; --line:#edf0f0; --line-2:#e3e8e8;
+    --teal:#59c4c4; --teal-2:#4ca7a7; --soft:#eef7f7; --bad:#c0616a; --ok:#3fae86; --warn:#d99a3d;
+    --fb:#1877f2; --ig1:#f58529; --ig2:#dd2a7b; --ig3:#8134af;
+    --font:"Helvetica Neue",Helvetica,Arial,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:var(--bg);color:var(--text)}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 26px;border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:10}
+  .topbar a{color:var(--teal-2);text-decoration:none;font-size:13px;font-weight:600}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 26px 60px}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+  h1{font-size:26px;font-weight:400;color:#3a3f45}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:14px;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#fff}
+  .badge.ok{background:var(--ok)}
+  .badge.warn{background:var(--warn)}
+  .badge.off{background:#aab2ba}
+  .pill-btn{border:1px solid var(--teal);color:#fff;background:linear-gradient(135deg,var(--teal),var(--teal-2));border-radius:20px;padding:9px 18px;font-weight:700;letter-spacing:.02em;font-size:12.5px;cursor:pointer}
+  .pill-btn.ghost{background:#fff;color:var(--teal-2)}
+  .pill-btn.sm{padding:6px 13px;font-size:11px}
+  .kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px}
+  @media (max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .kpi .l{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .kpi .n{font-size:20px;font-weight:700;color:var(--teal-2);margin-top:4px}
+  .tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+  .tabs button{background:none;border:none;padding:10px 4px;margin-right:22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+  .tabs button.on{color:var(--teal-2);border-color:var(--teal)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px}
+  .card-pad{padding:16px 18px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:12px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:12px 16px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .name{font-weight:700;color:#3a3f45}
+  .muted{color:var(--muted)}
+  .tbl-scroll{overflow-x:auto}
+  .plat{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:11px;font-size:10.5px;font-weight:700;color:#fff}
+  .plat.facebook{background:var(--fb)}
+  .plat.instagram{background:linear-gradient(135deg,var(--ig1),var(--ig2),var(--ig3))}
+  .plat.both{background:linear-gradient(90deg,var(--fb) 50%,var(--ig2) 50%)}
+  .status-pill{display:inline-block;padding:4px 11px;border-radius:12px;font-size:10.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:#fff;cursor:pointer}
+  .status-pill.draft{background:#aab2ba}
+  .status-pill.pending_review{background:var(--warn)}
+  .status-pill.active{background:var(--ok)}
+  .status-pill.paused{background:#7c8b98}
+  .status-pill.completed{background:#3a444e}
+  .empty{padding:36px;text-align:center;color:var(--muted);font-size:13px}
+  .act{background:#fff;border:1px solid var(--line);border-radius:14px;padding:5px 12px;font-size:11px;font-weight:600;color:var(--teal-2);cursor:pointer;margin-right:6px}
+  .act:hover{background:var(--soft)}
+  .act.danger{color:var(--bad)}
+  .boost-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;padding:16px 18px}
+  .boost-card{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+  .boost-thumb{width:100%;aspect-ratio:9/16;background:#e9edf0 center/cover no-repeat;position:relative}
+  .boost-tier{position:absolute;top:8px;left:8px;padding:3px 8px;border-radius:9px;font-size:9.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:#fff;background:rgba(0,0,0,.55)}
+  .boost-body{padding:10px 12px}
+  .boost-cap{font-size:11.5px;color:#4a5560;line-height:1.4;max-height:48px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+  .boost-stats{display:flex;gap:10px;margin-top:8px;font-size:10.5px;color:var(--muted)}
+  .boost-stats b{color:#3a3f45}
+  .modal-scrim{position:fixed;inset:0;background:rgba(20,26,32,.4);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal-scrim.on{display:flex}
+  .modal{background:#fff;border-radius:14px;padding:26px;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;box-shadow:0 30px 80px -30px rgba(0,0,0,.4)}
+  .modal h3{font-size:16px;margin-bottom:16px;color:#3a3f45}
+  .modal label{display:block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .modal input,.modal select,.modal textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:14px;font-family:inherit}
+  .modal input,.modal select{height:38px}
+  .modal textarea{min-height:64px;resize:vertical}
+  .modal .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:6px}
+  .linked-post{display:flex;gap:10px;align-items:center;background:var(--soft);border:1px solid rgba(89,196,196,.3);border-radius:8px;padding:8px 10px;margin-bottom:14px;font-size:12px}
+  .linked-post img{width:34px;height:60px;object-fit:cover;border-radius:5px;flex:0 0 auto}
+  .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-24px);background:#26313a;color:#fff;font-size:13px;padding:11px 18px;border-radius:11px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:99}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5;padding:14px 18px}
+</style>
+</head>
+<body>
+  <div class="topbar"><a href="/shell">&larr; Back to command center</a><span id="connBadge"></span></div>
+  <div class="wrap">
+    <div class="head">
+      <div><h1>Ad Manager</h1><div class="sub">Instagram &amp; Facebook campaigns, reporting, and a boost-post picker.</div></div>
+      <button class="pill-btn" id="newCampaignBtn">+ NEW CAMPAIGN</button>
+    </div>
+
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="tabs">
+      <button class="on" data-t="planner">Planner</button>
+      <button data-t="live">Live Campaigns</button>
+      <button data-t="boost">Boost Ideas</button>
+    </div>
+    <div id="body"></div>
+  </div>
+
+  <div class="modal-scrim" id="modalScrim">
+    <div class="modal">
+      <h3 id="modalTitle">New campaign</h3>
+      <div id="linkedPostBox"></div>
+      <label>Name</label><input id="fName" placeholder="Open House — 12507 Bemused Ln">
+      <div class="row2">
+        <div><label>Platform</label>
+          <select id="fPlatform"><option value="both">Facebook + Instagram</option><option value="facebook">Facebook only</option><option value="instagram">Instagram only</option></select>
+        </div>
+        <div><label>Objective</label>
+          <select id="fObjective"><option value="leads">Leads</option><option value="traffic">Traffic</option><option value="awareness">Awareness</option><option value="engagement">Engagement</option><option value="messages">Messages</option></select>
+        </div>
+      </div>
+      <div class="row2">
+        <div><label>Daily budget ($)</label><input id="fDaily" type="number" min="0" placeholder="25"></div>
+        <div><label>Total budget ($)</label><input id="fTotal" type="number" min="0" placeholder="350"></div>
+      </div>
+      <div class="row2">
+        <div><label>Start date</label><input id="fStart" type="date"></div>
+        <div><label>End date</label><input id="fEnd" type="date"></div>
+      </div>
+      <label>Audience</label><textarea id="fAudience" placeholder="e.g. 25-55, 15mi radius of Universal City TX, homeowners + renters, interest: real estate"></textarea>
+      <label>Creative notes</label><textarea id="fCreative" placeholder="Which photos/video, headline, CTA button..."></textarea>
+      <div class="row"><button class="pill-btn ghost" id="modalCancel" type="button">Cancel</button><button class="pill-btn" id="modalSave" type="button">Save</button></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+<script>
+var TAB="planner", CAMPAIGNS=[], BOOST=[], CONN={configured:false,reachable:false}, EDIT_ID=null, LINK_POST=null;
+var LIVE={totals:{},campaigns:[],adsets:[],generatedAt:null};
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function toast(m){ var t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(function(){t.classList.remove("show");},2400); }
+function api(path,opts){ return fetch(path, Object.assign({credentials:"same-origin"}, opts||{})); }
+function money(n){ n=Number(n)||0; return "$"+n.toLocaleString(undefined,{maximumFractionDigits:0}); }
+function fmtDate(iso){ if(!iso) return "-"; var d=new Date(iso); if(isNaN(d)) return iso; return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); }
+var STATUS_LABEL={draft:"Draft",pending_review:"Pending Review",active:"Active",paused:"Paused",completed:"Completed"};
+var PLATFORM_LABEL={facebook:"Facebook",instagram:"Instagram",both:"FB + IG"};
+
+function renderConnBadge(){
+  var el=document.getElementById("connBadge");
+  if(!CONN.configured){ el.innerHTML='<span class="badge off">Ad reporting not configured</span>'; return; }
+  if(CONN.reachable){ el.innerHTML='<span class="badge ok">&#10003; Live ad data connected</span>'; }
+  else { el.innerHTML='<span class="badge warn" title="AD_DASHBOARD_BASE_URL is set but the reporting app isn’t reachable right now">Ad dashboard unreachable</span>'; }
+}
+
+function num(v){ var n=Number(v); return Number.isFinite(n)?n:null; }
+function pickTotal(t,keys){ for(var i=0;i<keys.length;i++){ var v=num(t[keys[i]]); if(v!=null) return v; } return null; }
+
+function renderKpis(){
+  var t=LIVE.totals||{};
+  var spend=pickTotal(t,["spend","amount_spent","cost"]);
+  var impressions=pickTotal(t,["impressions"]);
+  var clicks=pickTotal(t,["clicks"]);
+  var leads=pickTotal(t,["leads","results"]);
+  var ctr=pickTotal(t,["ctr"]);
+  var cpl=pickTotal(t,["cpl","cost_per_lead"]);
+  var cards=[
+    ["Spend", spend!=null?money(spend):"—"],
+    ["Impressions", impressions!=null?impressions.toLocaleString():"—"],
+    ["Clicks", clicks!=null?clicks.toLocaleString():"—"],
+    ["Leads", leads!=null?leads.toLocaleString():"—"],
+    ["CTR", ctr!=null?(ctr.toFixed(2)+"%"):"—"],
+    ["Cost / Lead", cpl!=null?money(cpl):"—"],
+  ];
+  document.getElementById("kpiRow").innerHTML=cards.map(function(c){return '<div class="kpi"><div class="l">'+c[0]+'</div><div class="n">'+c[1]+'</div></div>';}).join("");
+}
+
+function loadLive(){
+  return api("/api/ads/connection-status").then(function(r){return r.json();}).then(function(d){
+    CONN=d; renderConnBadge();
+    if(!CONN.reachable) return null;
+    return api("/api/ads/summary").then(function(r){return r.ok?r.json():null;});
+  }).then(function(d){
+    if(d){ LIVE={totals:d.totals||{},campaigns:d.campaigns||[],adsets:d.adsets||[],generatedAt:d.generatedAt}; }
+    renderKpis();
+  }).catch(function(){ renderKpis(); });
+}
+
+function loadCampaigns(){ return api("/api/ads/campaigns").then(function(r){return r.json();}).then(function(d){ CAMPAIGNS=d.campaigns||[]; }); }
+function loadBoost(){ return api("/api/ads/boost-candidates?limit=12").then(function(r){return r.json();}).then(function(d){ BOOST=d.posts||[]; }); }
+
+function render(){
+  var b=document.getElementById("body");
+  if(TAB==="planner") b.innerHTML=renderPlanner();
+  else if(TAB==="live") b.innerHTML=renderLiveCampaigns();
+  else b.innerHTML=renderBoost();
+  bind();
+}
+
+function renderPlanner(){
+  if(!CAMPAIGNS.length){
+    return '<div class="card"><div class="empty">No campaigns yet. Click + NEW CAMPAIGN, or pick a post from Boost Ideas to turn into one.</div></div>';
+  }
+  return '<div class="card"><div class="tbl-scroll"><table><thead><tr><th>Campaign</th><th>Platform</th><th>Objective</th><th>Status</th><th>Daily</th><th>Total</th><th>Dates</th><th></th></tr></thead><tbody>'+
+    CAMPAIGNS.map(function(c){
+      return '<tr><td><span class="name">'+esc(c.name)+'</span>'+(c.linkedPostId?'<div class="muted" style="font-size:11px;margin-top:2px">&#128279; from boosted post</div>':'')+'</td>'+
+        '<td><span class="plat '+c.platform+'">'+PLATFORM_LABEL[c.platform]+'</span></td>'+
+        '<td class="muted" style="text-transform:capitalize">'+esc(c.objective)+'</td>'+
+        '<td><span class="status-pill '+c.status+'" data-statuspick="'+c.id+'">'+STATUS_LABEL[c.status]+' &#9662;</span></td>'+
+        '<td class="muted">'+money(c.dailyBudget)+'</td><td class="muted">'+money(c.totalBudget)+'</td>'+
+        '<td class="muted" style="font-size:11.5px">'+fmtDate(c.startDate)+(c.endDate?(' &ndash; '+fmtDate(c.endDate)):'')+'</td>'+
+        '<td style="white-space:nowrap"><button class="act" data-edit="'+c.id+'">Edit</button><button class="act danger" data-del="'+c.id+'">Delete</button></td></tr>';
+    }).join("")+
+    '</tbody></table></div></div>';
+}
+
+function genericVal(o,keys){ for(var i=0;i<keys.length;i++){ if(o[keys[i]]!=null && o[keys[i]]!=="") return o[keys[i]]; } return null; }
+function renderLiveCampaigns(){
+  if(!CONN.configured){
+    return '<div class="card"><div class="hint">Live campaign reporting isn’t configured yet. Set <code>AD_DASHBOARD_BASE_URL</code> (and <code>AD_DASHBOARD_API_KEY</code> if needed) to the Meta ads reporting service, and this tab will populate automatically — no further changes needed here.</div></div>';
+  }
+  if(!CONN.reachable){
+    return '<div class="card"><div class="hint">The ad reporting service is configured but not reachable right now (it may be asleep or restarting). This page will show real campaigns/spend automatically once it responds — try refreshing in a bit.</div></div>';
+  }
+  if(!LIVE.campaigns.length){
+    return '<div class="card"><div class="empty">Connected, but no campaigns returned for the current date range.</div></div>';
+  }
+  return '<div class="card"><div class="tbl-scroll"><table><thead><tr><th>Campaign</th><th>Status</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>Results</th></tr></thead><tbody>'+
+    LIVE.campaigns.map(function(c){
+      var name=genericVal(c,["name","campaign_name","title"])||"(unnamed)";
+      var status=genericVal(c,["status","effective_status"])||"-";
+      var spend=genericVal(c,["spend","amount_spent","cost"]);
+      var impr=genericVal(c,["impressions"]);
+      var clicks=genericVal(c,["clicks"]);
+      var results=genericVal(c,["results","leads","conversions"]);
+      return '<tr><td class="name">'+esc(String(name))+'</td><td class="muted" style="text-transform:capitalize">'+esc(String(status).toLowerCase())+'</td>'+
+        '<td class="muted">'+(spend!=null?money(spend):"-")+'</td><td class="muted">'+(impr!=null?Number(impr).toLocaleString():"-")+'</td>'+
+        '<td class="muted">'+(clicks!=null?Number(clicks).toLocaleString():"-")+'</td><td class="muted">'+(results!=null?results:"-")+'</td></tr>';
+    }).join("")+
+    '</tbody></table></div></div>'+
+    (LIVE.generatedAt?'<div class="hint">Last updated '+esc(LIVE.generatedAt)+'</div>':'');
+}
+
+function renderBoost(){
+  if(!BOOST.length) return '<div class="card"><div class="empty">No scored clips yet — Content Manager needs to pull &amp; score some TikTok videos first, then your top performers show up here to repurpose as Meta ad creative.</div></div>';
+  return '<div class="hint" style="padding:0 0 12px">Your best-performing TikTok clips (scored by Content Manager), ready to repurpose as Instagram/Facebook ad creative.</div><div class="card"><div class="boost-grid">'+
+    BOOST.map(function(p){
+      var img=p.coverUrl?('background-image:url(\''+p.coverUrl.replace(/'/g,"%27")+'\')'):'';
+      return '<div class="boost-card">'+
+        '<div class="boost-thumb" style="'+img+'"><span class="boost-tier">'+esc(p.tier||"")+(p.viral?" &#9889;":"")+'</span></div>'+
+        '<div class="boost-body"><div class="boost-cap">'+esc(p.caption||"(no caption)")+'</div>'+
+        '<div class="boost-stats"><span><b>'+(p.views||0).toLocaleString()+'</b> views</span><span><b>'+(p.likes||0).toLocaleString()+'</b> likes</span></div>'+
+        '<button class="pill-btn sm" style="width:100%;margin-top:10px" data-boost="'+esc(p.id)+'">Turn into ad</button></div></div>';
+    }).join("")+
+    '</div></div>';
+}
+
+function openModal(edit){
+  EDIT_ID=edit?edit.id:null;
+  document.getElementById("modalTitle").textContent=edit?"Edit campaign":"New campaign";
+  document.getElementById("fName").value=edit?edit.name:(LINK_POST?("Boost: "+(LINK_POST.caption||"").slice(0,40)):"");
+  document.getElementById("fPlatform").value=edit?edit.platform:"both";
+  document.getElementById("fObjective").value=edit?edit.objective:"leads";
+  document.getElementById("fDaily").value=edit?edit.dailyBudget||"":"";
+  document.getElementById("fTotal").value=edit?edit.totalBudget||"":"";
+  document.getElementById("fStart").value=edit?edit.startDate||"":"";
+  document.getElementById("fEnd").value=edit?edit.endDate||"":"";
+  document.getElementById("fAudience").value=edit?edit.audience||"":"";
+  document.getElementById("fCreative").value=edit?edit.creativeNotes||"":"";
+  var lb=document.getElementById("linkedPostBox");
+  var post=edit?{caption:edit.linkedPostCaption,coverUrl:edit.linkedPostCoverUrl}:LINK_POST;
+  if(post&&(post.caption||post.coverUrl)){
+    lb.innerHTML='<div class="linked-post">'+(post.coverUrl?'<img src="'+esc(post.coverUrl)+'">':'')+'<div>Boosting: '+esc((post.caption||"").slice(0,80))+'</div></div>';
+  } else lb.innerHTML="";
+  document.getElementById("modalScrim").classList.add("on");
+}
+function closeModal(){ document.getElementById("modalScrim").classList.remove("on"); EDIT_ID=null; LINK_POST=null; }
+
+function bind(){
+  document.querySelectorAll("[data-edit]").forEach(function(b){
+    b.onclick=function(){ var c=CAMPAIGNS.find(function(x){return x.id===b.getAttribute("data-edit");}); if(c) openModal(c); };
+  });
+  document.querySelectorAll("[data-del]").forEach(function(b){
+    b.onclick=function(){
+      var id=b.getAttribute("data-del"); var c=CAMPAIGNS.find(function(x){return x.id===id;}); if(!c)return;
+      if(!confirm('Delete "'+c.name+'"?'))return;
+      api("/api/ads/campaigns/"+encodeURIComponent(id),{method:"DELETE"}).then(function(){ toast("Campaign deleted"); return loadCampaigns(); }).then(render);
+    };
+  });
+  document.querySelectorAll("[data-statuspick]").forEach(function(el){
+    el.onclick=function(e){ e.stopPropagation();
+      var id=el.getAttribute("data-statuspick"); var c=CAMPAIGNS.find(function(x){return x.id===id;}); if(!c)return;
+      var order=["draft","pending_review","active","paused","completed"];
+      var next=order[(order.indexOf(c.status)+1)%order.length];
+      api("/api/ads/campaigns/"+encodeURIComponent(id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:next})})
+        .then(function(){ toast("Status → "+STATUS_LABEL[next]); return loadCampaigns(); }).then(render);
+    };
+  });
+  document.querySelectorAll("[data-boost]").forEach(function(b){
+    b.onclick=function(){
+      var id=b.getAttribute("data-boost"); var p=BOOST.find(function(x){return x.id===id;}); if(!p)return;
+      LINK_POST=p; openModal(null);
+      // stash for save handler
+      document.getElementById("modalScrim").setAttribute("data-linkpost",id);
+    };
+  });
+}
+
+document.querySelectorAll(".tabs button").forEach(function(b){
+  b.addEventListener("click",function(){
+    document.querySelectorAll(".tabs button").forEach(function(x){x.classList.remove("on");});
+    b.classList.add("on"); TAB=b.getAttribute("data-t"); render();
+  });
+});
+
+document.getElementById("newCampaignBtn").addEventListener("click",function(){ LINK_POST=null; openModal(null); });
+document.getElementById("modalCancel").addEventListener("click",closeModal);
+document.getElementById("modalScrim").addEventListener("click",function(e){ if(e.target===document.getElementById("modalScrim")) closeModal(); });
+document.getElementById("modalSave").addEventListener("click",function(){
+  var name=document.getElementById("fName").value.trim();
+  if(!name){ toast("Name is required"); return; }
+  var payload={
+    name: name,
+    platform: document.getElementById("fPlatform").value,
+    objective: document.getElementById("fObjective").value,
+    dailyBudget: parseFloat(document.getElementById("fDaily").value)||0,
+    totalBudget: parseFloat(document.getElementById("fTotal").value)||0,
+    startDate: document.getElementById("fStart").value,
+    endDate: document.getElementById("fEnd").value,
+    audience: document.getElementById("fAudience").value,
+    creativeNotes: document.getElementById("fCreative").value,
+  };
+  var linkId=document.getElementById("modalScrim").getAttribute("data-linkpost");
+  if(linkId && LINK_POST){
+    payload.linkedPostId=LINK_POST.id; payload.linkedPostCaption=LINK_POST.caption||""; payload.linkedPostCoverUrl=LINK_POST.coverUrl||"";
+  }
+  var req = EDIT_ID
+    ? api("/api/ads/campaigns/"+encodeURIComponent(EDIT_ID),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+    : api("/api/ads/campaigns",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  req.then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});}).then(function(res){
+    if(res.ok){ toast(EDIT_ID?"Campaign updated":"Campaign created"); document.getElementById("modalScrim").removeAttribute("data-linkpost"); closeModal(); return loadCampaigns(); }
+    else toast((res.d&&res.d.error)||"Couldn't save");
+  }).then(function(){ if(TAB==="planner") render(); }).catch(function(){ toast("Couldn't save"); });
+});
+
+Promise.all([loadLive(), loadCampaigns(), loadBoost()]).then(render);
+</script>
+</body>
+</html>
