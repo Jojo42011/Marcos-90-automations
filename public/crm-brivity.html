@@ -484,8 +484,8 @@
       <div class="msg-list">
         <div class="msg-list-head">
           <input class="msg-search" id="convSearch" type="search" placeholder="Search by name or phone number" />
-          <button class="rb" title="Clear"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-          <button class="rb tl" title="New message"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+          <button class="rb" id="convClearBtn" title="Clear"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <button class="rb tl" id="convNewBtn" title="New message"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
         </div>
         <div class="msg-scroll" id="convList"></div>
       </div>
@@ -1026,6 +1026,16 @@ let openConvIdx=null;
 let convSearchTerm="";
 {const cs=document.getElementById("convSearch");
  if(cs)cs.addEventListener("input",()=>{convSearchTerm=(cs.value||"").toLowerCase().trim();renderConvos();});}
+document.getElementById("convClearBtn").addEventListener("click",()=>{
+  const cs=document.getElementById("convSearch"); if(cs)cs.value="";
+  convSearchTerm=""; renderConvos(); if(cs)cs.focus();
+});
+document.getElementById("convNewBtn").addEventListener("click",()=>{
+  const name=prompt("Start a new conversation with (name):"); if(!name||!name.trim())return;
+  const phone=prompt("Phone number (optional):","")||"";
+  const c={names:[name.trim(),"Marco Puga"],phone:phone.trim(),at:new Date().toISOString(),msgs:[]};
+  CONVOS.unshift(c); renderConvos(); openThread(0); crmToast("Conversation started with "+name.trim());
+});
 // Brivity joins names with "&" for a pair, commas for 3+, keeping all names.
 function convTitle(names){ return names.length===2?names.join(" & "):names.join(", "); }
 // A conversation reads as unread when the latest message came from someone else.
@@ -1035,11 +1045,22 @@ function avStack(names){
   return '<div class="av-stack">'+names.slice(0,3).map(n=>
     '<span class="av'+avClass(n)+'">'+esc(initials(n))+'</span>').join("")+'</div>';
 }
+function convHit(c,q){
+  if(!q) return true;
+  const hay=_q(c.names.join(" ")+" "+(c.phone||"")+" "+((c.msgs[c.msgs.length-1]||{}).t||""));
+  if(hay.includes(q)) return true;
+  const qDigits=q.replace(/\D/g,"");
+  if(qDigits.length>=3){
+    const phoneDigits=(c.phone||"").replace(/\D/g,"");
+    if(phoneDigits.includes(qDigits)) return true;
+  }
+  return false;
+}
 function renderConvos(){
   const q=(convSearchTerm||SEARCH||"");
   const list=CONVOS.map((c,i)=>({c,i}))
     .filter(e=>convGroupMode!=="group"||e.c.names.length>=3)
-    .filter(e=>!q||_q(e.c.names.join(" ")+" "+((e.c.msgs[e.c.msgs.length-1]||{}).t||"")).includes(q));
+    .filter(e=>convHit(e.c,q));
   const el=document.getElementById("convList");
   el.innerHTML=list.length?list.map(({c,i})=>{
     const last=c.msgs[c.msgs.length-1]||{};const who=last.me?"Marco Puga":(c.names.find(n=>n!=="Marco Puga")||c.names[0]);
