@@ -53,7 +53,7 @@
   .topbar-right{display:flex;align-items:center;gap:14px;min-width:150px;justify-content:flex-end}
   .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#8b95a0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color .15s,border-color .15s}
   .icon-btn:hover{color:var(--teal-strong);border-color:var(--teal)}
-  #crmRefresh.spinning svg{animation:crmspin .8s linear infinite}
+  #crmRefresh.spinning svg,.rb.spinning svg{animation:crmspin .8s linear infinite}
   @keyframes crmspin{to{transform:rotate(360deg)}}
   .feed-pill{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:20px;padding:5px 6px 5px 14px;color:#7b8590;font-size:12px;font-weight:600;background:#fff}
   .feed-pill .n{background:var(--teal-pill);color:#fff;border-radius:50%;min-width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px}
@@ -88,6 +88,8 @@
   /* take action - horizontal-scrolling row of fixed-width stat cards (Brivity) */
   .ta-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .ta-head h2{font-size:18px;font-weight:400;color:var(--ink);margin:0;display:flex;align-items:center;gap:8px}
+  .ta-head .rb{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+  .ta-head .rb:hover{border-color:var(--teal)}
   .ta-grid{display:flex;gap:0;overflow-x:auto;padding-bottom:5px}
   .ta-card{flex:1 0 auto;min-width:16rem;height:137px;border-radius:10px;padding:20px 20px;margin:5px 10px 0;text-align:center;background:#fff;box-shadow:var(--shadow);transition:background .15s;display:flex;flex-direction:column;justify-content:center}
   .ta-card:hover{background:#f3fdfd;cursor:pointer}
@@ -309,8 +311,11 @@
   .cal-cell .dn{color:#5b6570;font-size:15px}
   .cal-cell.out .dn{color:#c8cfd6}
   .cal-cell.today{outline:2px solid var(--teal);outline-offset:-2px;border-radius:4px}
-  .cal-ev{display:flex;align-items:center;gap:5px;margin-top:8px;font-size:11.5px;color:#6b7480;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cal-ev{display:flex;align-items:center;gap:5px;margin-top:8px;font-size:11.5px;color:#6b7480;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;border-radius:4px}
+  .cal-ev:hover{background:var(--teal-soft);color:var(--teal-strong)}
   .cal-ev .h{flex:0 0 auto}
+  @keyframes txflash{0%{background:var(--teal-soft)}100%{background:transparent}}
+  tr.flash-row{animation:txflash 1.6s ease-out}
   /* modal */
   .scrim{position:fixed;inset:0;background:rgba(20,28,38,.35);z-index:60;display:none;align-items:flex-start;justify-content:center}
   .scrim.on{display:flex}
@@ -456,13 +461,13 @@
   <section class="view on" id="view-dashboard"><div class="pad">
     <div class="page-head"><h1>Dashboard</h1><button class="select" id="userFilter" style="min-width:170px;text-align:left;cursor:pointer">All Active Users</button></div>
     <div class="card card-pad">
-      <div class="ta-head"><h2>Take Action <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c2cad1" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></h2>
+      <div class="ta-head"><h2>Take Action <button class="rb" id="taRefreshBtn" title="Refresh"><svg id="taRefreshIco" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c2cad1" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button></h2>
         <select class="select" id="taRange"><option value="7">Last 7 Days</option><option value="14">Last 14 Days</option><option value="30">Last 30 Days</option><option value="tm">This Month</option><option value="lm">Last Month</option><option value="ty">This Year</option><option value="ly">Last Year</option><option value="all">All Time</option></select></div>
       <div class="ta-grid" id="taGrid"></div>
     </div>
     <div class="cols">
       <div class="card card-pad">
-        <div class="tabs" id="dashTabs"><button class="on" data-dt="recent">RECENT ACTIVITY</button><button data-dt="plans">AUTO PLANS</button><span style="flex:1"></span><button class="chip" style="background:#eaf7f7;color:var(--teal-strong)">Filtered</button></div>
+        <div class="tabs" id="dashTabs"><button class="on" data-dt="recent">RECENT ACTIVITY</button><button data-dt="plans">AUTO PLANS</button><span style="flex:1"></span><button class="chip" id="feedFilterBtn" style="background:#eaf7f7;color:var(--teal-strong)">Filtered</button></div>
         <div id="feed"></div>
         <button class="load-more" id="loadMore">LOAD MORE…</button>
       </div>
@@ -937,6 +942,28 @@ function renderTakeAction(){
   document.getElementById("taGrid").innerHTML=c.map(x=>'<div class="ta-card"><div class="n">'+x[0]+'</div><div class="l">'+x[1]+'</div></div>').join("");
 }
 function deriveAction(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"submitted a home valuation";if(l.propertyInquired)return"asked about a property";if(l.activity.some(a=>a.type==="text"))return"sent a message";return"is a new lead";}
+/* Canonical feed-item type key, mirrors deriveAction's wording - used by the Timeline Filter popup. */
+function feedTypeOf(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"valuation";if(l.propertyInquired)return"inquiry";if(l.activity.some(a=>a.type==="text"))return"message";return"new";}
+const FEED_TYPES=[["valuation","Home valuation"],["inquiry","Property inquiry"],["message","Sent a message"],["new","New lead"]];
+var FEED_FILTER_HIDDEN={};
+function feedFilterActive(){ return Object.keys(FEED_FILTER_HIDDEN).length>0; }
+function updateFeedFilterChip(){
+  var b=document.getElementById("feedFilterBtn"); if(!b)return;
+  var n=Object.keys(FEED_FILTER_HIDDEN).length;
+  b.textContent=n?("Filtered ("+n+")"):"Filtered";
+  b.style.background=n?"var(--teal)":"#eaf7f7"; b.style.color=n?"#fff":"var(--teal-strong)";
+}
+function openFeedFilterMenu(anchor){
+  var items=FEED_TYPES.map(function(ft){
+    var key=ft[0],label=ft[1];
+    return {label:label,check:!FEED_FILTER_HIDDEN[key],fn:function(){
+      if(FEED_FILTER_HIDDEN[key])delete FEED_FILTER_HIDDEN[key]; else FEED_FILTER_HIDDEN[key]=1;
+      shown=8; renderFeed(); updateFeedFilterChip(); openFeedFilterMenu(anchor); return true;
+    }};
+  });
+  openActionMenu(anchor,items);
+}
+document.getElementById("feedFilterBtn").addEventListener("click",function(e){ e.stopPropagation(); openFeedFilterMenu(e.currentTarget); });
 function renderFeed(){
   // AUTO PLANS tab - enrolled leads + their plan, instead of the activity feed.
   if(dashMode==="plans"){
@@ -951,16 +978,17 @@ function renderFeed(){
     document.getElementById("loadMore").style.display="none";
     return;
   }
-  const sorted=[...dashLeads()].sort((a,b)=>new Date(b.lastActivity)-new Date(a.lastActivity)).slice(0,shown);
-  document.getElementById("feed").innerHTML=sorted.map(l=>{
+  const visible=dashLeads().filter(l=>!FEED_FILTER_HIDDEN[feedTypeOf(l)]);
+  const sorted=[...visible].sort((a,b)=>new Date(b.lastActivity)-new Date(a.lastActivity)).slice(0,shown);
+  document.getElementById("feed").innerHTML=sorted.length?sorted.map(l=>{
     const c=l.criteria||{};const bb=(c.beds!=null)?'<b>Bed:</b> '+c.beds+' <b>Bath:</b> '+c.baths:'';const sq=(c.sqft!=null)?'<b>Sqft:</b> '+c.sqft:'';
     return '<div class="feed-item" data-lid="'+esc(l.id)+'"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="feed-body">'+
       '<div class="feed-top"><div class="feed-name"><b class="ldlink" data-lid="'+esc(l.id)+'" style="cursor:pointer">'+esc(l.name)+'</b> '+deriveAction(l)+';</div><div class="feed-time">'+relTime(l.lastActivity)+'</div></div>'+
       '<div class="act-row">'+actIcon("email",!l.email)+actIcon("phone")+actIcon("sms",l.activity.every(a=>a.type!=="text"))+actIcon("appt")+actIcon("other")+'</div>'+
       (c.location?'<div class="feed-meta"><b>Address:</b> '+esc(c.location)+'<a class="lk">See home value estimate</a>'+bb+(bb&&sq?'<br>':'')+sq+'</div>':'<div class="feed-meta">'+esc(l.phone)+'  ·  '+esc(l.source)+'</div>')+
       '</div></div>';
-  }).join("");
-  document.getElementById("loadMore").style.display=shown<dashLeads().length?"block":"none";
+  }).join(""):'<div class="empty" style="padding:26px 4px">No activity matches the current filter.</div>';
+  document.getElementById("loadMore").style.display=shown<visible.length?"block":"none";
 }
 function renderTracking(){
   const tok=(document.getElementById("atRange")||{value:"tw"}).value||"tw";
@@ -1707,16 +1735,40 @@ document.getElementById("repBody").addEventListener("change",e=>{ if(e.target.cl
 
 /* ===== Calendar ===== */
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
-let CAL_EVENTS=[
-  {date:"2026-07-22",label:"1222 Los Mochis Avenue Converse, TX",color:"#e08a3e"},
-  {date:"2026-07-23",label:"616 Valley Garden New Braunfels, TX",color:"var(--teal)"},
-  {date:"2026-07-25",label:"1397 Canyon Lake Dr Canyon Lake, TX",color:"#e08a3e"},
-];
+function mdyToIso(s){const m=/^(\d{2})-(\d{2})-(\d{4})/.exec(s||"");return m?(m[3]+"-"+m[1]+"-"+m[2]):null;}
+/* Calendar events are transaction expirations - so clicking one has a real
+   transaction (with a matching TX.id) behind it, in both demo and live data. */
+function calEventsFromTx(){
+  return TX.filter(t=>t.expiration).map(t=>({
+    date:mdyToIso(t.expiration), label:(t.address||"")+(t.city?", "+t.city:""),
+    color:(TX_STATUS[t.status]||{}).c||"var(--teal)", id:t.id,
+  })).filter(e=>e.date);
+}
+let CAL_EVENTS=calEventsFromTx();
 const CAL_TODAY="2026-07-20";
 let calY=2026,calM=6;
+(function(){
+  if(CAL_EVENTS.length){
+    const first=CAL_EVENTS.slice().sort((a,b)=>a.date.localeCompare(b.date))[0].date;
+    const m=/^(\d{4})-(\d{2})/.exec(first); if(m){calY=+m[1];calM=+m[2]-1;}
+  }
+})();
 function pad2(n){return (n<10?"0":"")+n;}
 function dkey(y,m,d){return y+"-"+pad2(m+1)+"-"+pad2(d);}
 function houseSvg(c){return '<svg class="h" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="'+c+'" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>';}
+/* Clicking a calendar event takes you to that transaction, like Brivity. */
+function openCalEvent(dealId){
+  const t=TX.find(x=>String(x.id)===String(dealId));
+  const txBtn=document.querySelector('.rail .r[data-view="tx"]'); if(txBtn) txBtn.click();
+  if(!t){ crmToast("Transaction not found"); return; }
+  txBucket="all"; txEditId=null;
+  document.querySelectorAll('#view-tx .leads-nav a[data-txb]').forEach(x=>x.classList.toggle("on",x.getAttribute("data-txb")==="all"));
+  renderTx();
+  requestAnimationFrame(function(){
+    const row=document.querySelector('#txRows tr[data-txid="'+CSS.escape(String(dealId))+'"]');
+    if(row){ row.scrollIntoView({block:"center",behavior:"smooth"}); row.classList.add("flash-row"); setTimeout(function(){row.classList.remove("flash-row");},1600); }
+  });
+}
 function renderCal(){
   document.getElementById("calLabel").textContent=MONTHS[calM]+" "+calY;
   const first=new Date(calY,calM,1).getDay();
@@ -1737,9 +1789,13 @@ function renderCal(){
     const evs=CAL_EVENTS.filter(e=>e.date===key);
     const label=(c.m===calM&&c.d===1)?("Jul "+c.d):(c.m!==calM&&c.d===1?MONTHS[c.m].slice(0,3)+" 1":String(c.d));
     return '<div class="cal-cell'+(c.out?" out":"")+(key===CAL_TODAY?" today":"")+'"><div class="dn">'+((c.d===1)?(MONTHS[c.m].slice(0,3)+" 1"):c.d)+'</div>'+
-      evs.map(e=>'<div class="cal-ev">'+houseSvg(e.color)+'<span>'+esc(e.label)+'</span></div>').join("")+'</div>';
+      evs.map(e=>'<div class="cal-ev" data-dealid="'+esc(e.id)+'" title="Open transaction">'+houseSvg(e.color)+'<span>'+esc(e.label)+'</span></div>').join("")+'</div>';
   }).join("");
 }
+document.getElementById("calWeeks").addEventListener("click",function(e){
+  const ev=e.target.closest(".cal-ev[data-dealid]"); if(!ev)return;
+  openCalEvent(ev.getAttribute("data-dealid"));
+});
 document.getElementById("calPrev").addEventListener("click",()=>{calM--;if(calM<0){calM=11;calY--;}renderCal();});
 document.getElementById("calNext").addEventListener("click",()=>{calM++;if(calM>11){calM=0;calY++;}renderCal();});
 const calScrim=document.getElementById("calScrim");
@@ -1963,6 +2019,17 @@ document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("
 document.getElementById("taRange").addEventListener("change",renderTakeAction);
 document.getElementById("loadMore").addEventListener("click",()=>{shown+=8;renderFeed();});
 document.getElementById("feedCount").textContent=String(Math.min(LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length,99));
+updateFeedFilterChip();
+document.getElementById("taRefreshBtn").addEventListener("click",function(e){
+  e.stopPropagation();
+  var btn=e.currentTarget; if(btn.classList.contains("spinning"))return;
+  btn.classList.add("spinning");
+  setTimeout(function(){
+    renderTakeAction(); renderFeed(); renderTracking();
+    btn.classList.remove("spinning");
+    crmToast("Dashboard refreshed");
+  },450);
+});
 
 /* ===== LIVE DATA ===== */
 /* The views default to the demo dataset above; on load we pull the real CRM
@@ -2055,7 +2122,7 @@ async function loadLive(opts){
   const convos=deriveConvosLive(rawLeads); if(convos.length) CONVOS=convos;
   const deals=(body.deals||[]).filter(d=>d&&d.propertyAddress);
   if(deals.length) TX=deals.map(mapDealTx);
-  const evs=deals.filter(d=>d.closeDate).map(d=>({date:String(d.closeDate).slice(0,10),label:(d.propertyAddress||d.leadName||"Closing"),color:"var(--teal)"}));
+  const evs=calEventsFromTx();
   if(evs.length){ CAL_EVENTS=evs; const first=evs.slice().sort((a,b)=>a.date.localeCompare(b.date))[0].date; const m=/^(\d{4})-(\d{2})/.exec(first); if(m){ calY=+m[1]; calM=+m[2]-1; } }
 
   // reset paging + re-render everything that now has live data
