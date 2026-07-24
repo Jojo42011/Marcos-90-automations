@@ -1912,6 +1912,7 @@ document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("
   document.querySelectorAll('.rail .r[data-view="'+v+'"]').forEach(x=>x.classList.add("on"));
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("on"));
   document.getElementById("view-"+v).classList.add("on");
+  if(v==="email") renderEmail(currentEmail); // refresh the Gmail-connected badge, which may have resolved while off-screen
 }));
 
 /* Deep link: /crm?view=finance opens straight to that view (used by the

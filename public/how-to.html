@@ -171,7 +171,7 @@ function shotHTML(key, pins){
 var STEPS = [
   { hero:true, mark:'👋', icon:ICON.help, name:'Welcome, here’s how it all works', tag:'Guided tour',
     heroTitle:'A quick tour of your command center',
-    heroBody:'These are real screenshots of every tab in your sidebar, with the key spots numbered. It takes about a minute. Use the arrows, swipe, or Next, and you can skip anytime.' },
+    heroBody:'These are real screenshots of every tab in your sidebar — plus a closer look inside the Brivity-style CRM (Transactions, Finance, Email, Nurture) — with the key spots numbered. Takes about a minute. Use the arrows, swipe, or Next, and you can skip anytime.' },
 
   { icon:ICON.harvey, name:'Harvey', tag:'AI Assistant · your home base',
     shot:'harvey', pins:[['50%','50%'],['91%','50%']],
@@ -181,12 +181,44 @@ var STEPS = [
       'To type instead, or to paste an Instagram or TikTok link for Harvey to break down, open the “Chat with Harvey” tab in the sidebar.'
     ] },
 
-  { icon:ICON.crm, name:'CRM', tag:'Leads · Deals · Tasks',
-    shot:'crm', pins:[['4%','31%'],['42%','56%'],['12%','86%']],
+  { icon:ICON.crm, name:'CRM', tag:'Brivity-style · Leads · People · Deals',
+    shot:'crm', pins:[['4%','31%'],['16%','5%'],['39%','50%']],
     how:[
-      'Search any lead by name, phone, @handle, or status up top.',
-      'Click a lead to open their full profile and conversation history.',
-      'Filter by status, intent, or stage to focus the list.'
+      'Search any lead by name, address, phone, or MLS# right from the top bar — it filters every tab, including Nurture and Email.',
+      'The left rail is your whole CRM: Leads, People, Opportunities, Transactions, Calendar, Email, Nurture, and Finance all live in here now.',
+      'Click STATUS or STAGE on any row to change it inline — every dropdown in the CRM is fully clickable.'
+    ] },
+
+  { icon:ICON.crm, name:'Transactions', tag:'Pipeline · Closings · CSV Import',
+    shot:'transactions', pins:[['15%','87%'],['34%','60%'],['34%','95%']],
+    how:[
+      'Import CSV pulls a Brivity transaction export straight in — it maps addresses, prices, dates, and commissions automatically.',
+      'Click STATUS to move a deal through Pipeline → Active → Pending → Closed.',
+      'Click any price, date, or MLS# cell to edit it directly in the table.'
+    ] },
+
+  { icon:ICON.finance, name:'Finance', tag:'GCI · Commissions · Goals',
+    shot:'finance', pins:[['15%','86%'],['31%','59%'],['39%','8%']],
+    how:[
+      '+ Add Commission drops a new closed deal in, ready to fill out.',
+      'Click any Close Price, GCI, or Rate cell to edit it — the numbers recalculate live.',
+      'Set Goal (under Goals) lets you edit annual/YTD targets, and Monthly GCI tracks pace against them.'
+    ] },
+
+  { icon:ICON.email, name:'Email Marketing', tag:'Real Gmail Sending',
+    shot:'email', pins:[['14%','80%'],['46%','84%'],['46%','91%']],
+    how:[
+      'GMAIL CONNECTED means sends go out through your real, linked Gmail account — not a simulation.',
+      'SEND TEST fires a real email to your own inbox first, so you can check it before it goes wide.',
+      'SEND NOW asks you to confirm the exact recipient count, then sends to every lead matching that campaign’s audience.'
+    ] },
+
+  { icon:ICON.leads, name:'Lead Nurture', tag:'Hot · Warm · Watch · Birthdays',
+    shot:'leads', pins:[['26%','38%'],['40%','47%'],['31%','99%']],
+    how:[
+      'Every lead auto-sorts into Hot, Warm, Watch, Unresponsive, or Replied — the tiles show live counts.',
+      'Click STATUS or STAGE right in the table to move a lead, no need to open their profile.',
+      'Scroll right to Birthdate and Home Anniversary — click either to add a date and set up milestone touches.'
     ] },
 
   { icon:ICON.dm, name:'DM Agent', tag:'Instagram · SMS · Replies',
@@ -203,38 +235,6 @@ var STEPS = [
       'Drop a raw video into Upload & Clip and it becomes ready-to-post vertical clips.',
       'Track videos, pipeline status, and weekly progress across the top.',
       'Approve or reject clips in the Review Queue, which teaches Harvey your taste.'
-    ] },
-
-  { icon:ICON.leads, name:'Lead Nurture', tag:'Scoring · Hot · Cold',
-    shot:'leads', pins:[['12%','50%'],['7%','24%'],['26%','38%']],
-    how:[
-      'Every lead is auto-sorted Hot, Warm, or Cold.',
-      'The tiles show how many sit in each tier right now.',
-      'Re-score anytime, and follow-up drips run themselves.'
-    ] },
-
-  { icon:ICON.reporting, name:'Reporting', tag:'Digest · KPIs · Anomalies',
-    shot:'reporting', pins:[['40%','50%'],['9%','22%'],['46%','7%']],
-    how:[
-      'The daily digest recaps everything and auto-runs at 7am Central.',
-      'Weekly KPIs and anomaly flags live in these tabs.',
-      'Need it now? Generate a digest on demand with this button.'
-    ] },
-
-  { icon:ICON.finance, name:'Finance', tag:'GCI · Expenses · Pace',
-    shot:'finance', pins:[['44%','50%'],['53%','24%'],['62%','24%']],
-    how:[
-      'The dial shows commission banked versus your monthly goal.',
-      'KPI tiles track MTD gross/net, pipeline, and YTD at a glance.',
-      'Expenses are tracked right below so you always see the net.'
-    ] },
-
-  { icon:ICON.email, name:'Email', tag:'Drip · Templates · Stats',
-    shot:'email', pins:[['5%','82%'],['74%','24%'],['30%','25%']],
-    how:[
-      'If a red banner shows, tap Reconnect Gmail so sending + inbox sync stay live.',
-      'Automated drip sequences nurture your leads, and they’re listed here.',
-      'Track sent, open rate, replies, and active drips across the top.'
     ] },
 
   { icon:ICON.tasks, name:'Tasks', tag:'Command Center',
