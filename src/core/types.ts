@@ -587,10 +587,19 @@ export type CommandTaskRecurringInterval =
   | "weekly"
   | "monthly";
 
+/** One row of a task's "Details / Notes" checklist. */
+export interface CommandTaskChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface CommandTask {
   id: string;
   title: string;
   description?: string;
+  /** Optional checkbox list kept alongside the free-text notes. */
+  checklist?: CommandTaskChecklistItem[];
   column: CommandTaskColumn;
   status: CommandTaskStatus;
   /** Status before automatic due_soon/overdue move (for reversal). */

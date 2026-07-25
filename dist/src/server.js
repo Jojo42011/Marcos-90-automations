@@ -7182,6 +7182,28 @@ function parseReminderMinutes(raw) {
         .filter((n) => Number.isFinite(n) && n >= 0 && n <= 1440))).sort((a, b) => a - b);
     return mins.length ? mins : [];
 }
+/** Normalize a task checklist from client JSON: capped, trimmed, ids guaranteed. */
+function parseChecklist(raw) {
+    if (!Array.isArray(raw))
+        return undefined;
+    const items = [];
+    for (const entry of raw) {
+        if (!entry || typeof entry !== "object")
+            continue;
+        const e = entry;
+        const text = typeof e.text === "string" ? e.text.trim().slice(0, 500) : "";
+        if (!text)
+            continue;
+        items.push({
+            id: typeof e.id === "string" && e.id.trim() ? e.id.trim().slice(0, 64) : `ck_${items.length}_${Date.now().toString(36)}`,
+            text,
+            done: e.done === true,
+        });
+        if (items.length >= 100)
+            break;
+    }
+    return items;
+}
 function commandTaskCounts() {
     const all = (0, db_js_1.getCommandTasks)();
     const active = all.filter((t) => t.status !== "done");
@@ -7246,6 +7268,7 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
     const task = (0, db_js_1.createCommandTask)({
         title,
         description: typeof body.description === "string" ? body.description : undefined,
+        checklist: parseChecklist(body.checklist),
         column: column,
         status: COMMAND_STATUS_SET.has(body.status)
             ? body.status
@@ -7290,6 +7313,8 @@ app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res)
         updates.title = body.title.trim();
     if (typeof body.description === "string")
         updates.description = body.description;
+    if ("checklist" in body)
+        updates.checklist = parseChecklist(body.checklist);
     if (body.column && COMMAND_COLUMNS.has(body.column))
         updates.column = body.column;
     if (body.status && COMMAND_STATUS_SET.has(body.status)) {

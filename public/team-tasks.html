@@ -27,12 +27,20 @@
   --bg:#f6f8f9; --card:#ffffff; --line:#e8ecee; --ink:#2f3438; --muted:#5f6b78;
   --soft:#f2f6f6; --shadow:0 1px 3px rgba(16,24,40,.07),0 1px 2px rgba(16,24,40,.05);
   --glass:rgba(255,255,255,.55); --glass-line:rgba(255,255,255,.65); --glass-tint:rgba(89,196,196,.10);
+  /* Tell the browser which palette native controls should use. Without this the
+     <select> popup, date/time pickers and scrollbars keep their light defaults,
+     which is what made the month dropdown render near-white text on white. */
+  color-scheme: light;
 }
 html[data-theme="dark"]{
   --bg:#0f1418; --card:#171d24; --line:#242c35; --ink:#e6ebef; --muted:#93a0ac;
   --soft:#1c242c; --shadow:0 1px 3px rgba(0,0,0,.4);
   --glass:rgba(23,29,36,.55); --glass-line:rgba(255,255,255,.09); --glass-tint:rgba(89,196,196,.07);
+  color-scheme: dark;
 }
+/* Native dropdown lists are painted by the OS, so the popup needs solid colors of
+   its own, not the transparent background the closed control uses. */
+select option, select optgroup{background:var(--card);color:var(--ink)}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
@@ -168,7 +176,7 @@ html[data-theme="dark"] #calCard::before{background:linear-gradient(160deg,rgba(
 #calHead{display:flex;align-items:center;gap:8px;padding:14px 14px 6px;position:relative}
 #calHead h2{font-family:var(--serif);font-size:16px;flex:1}
 .calnav{width:30px;height:30px;border-radius:9px;border:1px solid var(--glass-line);background:transparent;color:var(--ink);font-size:14px}
-#calMY{border:1px solid var(--glass-line);background:transparent;color:var(--ink);border-radius:9px;height:30px;padding:0 9px;font-weight:700;font-size:12.5px}
+#calMY{border:1px solid var(--glass-line);background:var(--card);color:var(--ink);border-radius:9px;height:30px;padding:0 9px;font-weight:700;font-size:12.5px}
 #calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:8px 14px 14px;position:relative}
 .dow{text-align:center;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--muted)}
 .dcell{aspect-ratio:1;border:1px solid var(--glass-line);border-radius:11px;background:rgba(255,255,255,.22);
@@ -255,8 +263,39 @@ html[data-theme="dark"] .bcell{background:rgba(255,255,255,.05)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin-top:10px}
 .fld label{display:block;font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:6px}
 .fld label i{color:var(--urgent);font-style:normal}
-.fin{width:100%;height:40px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:0 12px;font-size:13.5px;outline:none}
+.fin{width:100%;height:40px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:0 12px;font-size:13.5px;outline:none}
 textarea.fin{height:auto;min-height:64px;padding:10px 12px;resize:vertical}
+/* Auto-growing fields: wrap and expand downward instead of scrolling sideways. */
+textarea.fin.grow{min-height:42px;max-height:260px;overflow-y:auto;resize:none;line-height:1.45;
+  white-space:pre-wrap;overflow-wrap:anywhere}
+#tTitle{font-weight:600}
+/* Details / Notes checklist */
+.ckwrap{margin-top:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:8px 10px}
+.ckhead{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.ckcount{margin-left:auto;font-weight:700;letter-spacing:0;text-transform:none;color:var(--teal-strong)}
+.ckitem{display:flex;align-items:flex-start;gap:9px;padding:5px 2px;border-radius:7px}
+.ckitem:hover{background:var(--soft)}
+.ckitem input[type=checkbox]{width:16px;height:16px;margin-top:2px;flex:0 0 auto;accent-color:var(--teal);cursor:pointer}
+.ckitem .cktext{flex:1;font-size:13px;color:var(--ink);line-height:1.4;overflow-wrap:anywhere;
+  border:none;background:transparent;outline:none;padding:0;font-family:inherit;resize:none}
+.ckitem.done .cktext{text-decoration:line-through;color:var(--muted)}
+.ckitem .ckdel{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;
+  line-height:1;padding:2px 4px;border-radius:6px;opacity:0;flex:0 0 auto}
+.ckitem:hover .ckdel{opacity:1}
+.ckitem .ckdel:hover{color:#e0644a;background:var(--card)}
+.ckadd{display:flex;gap:7px;margin-top:6px}
+.ckadd input{flex:1;height:32px;border:1px dashed var(--line);border-radius:8px;background:transparent;
+  color:var(--ink);padding:0 10px;font-size:12.5px;outline:none}
+.ckadd input:focus{border-style:solid;border-color:var(--teal)}
+.ckadd button{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:8px;
+  padding:0 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.ckadd button:hover{border-color:var(--teal);color:var(--teal-strong)}
+.ckempty{font-size:12px;color:var(--muted);padding:3px 2px}
+/* Checklist progress chip on the task card */
+.ckchip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+.ckchip.alldone{color:var(--teal-strong);border-color:var(--teal)}
 .pillrow{display:flex;gap:7px;flex-wrap:wrap}
 .pill{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:6px 13px;font-size:12px;font-weight:700}
 .pill.on{border-color:var(--teal);color:var(--teal-strong);background:var(--soft)}
@@ -399,7 +438,7 @@ html{scroll-behavior:smooth}
       <div style="display:flex;align-items:center;gap:10px;padding:2px 2px 10px">
         <h2 style="font-family:var(--serif);font-size:20px;flex:1" id="calBigTitle">Month</h2>
         <button class="calnav" id="calBigPrev">‹</button>
-        <select id="calBigMY" style="border:1px solid var(--glass-line);background:transparent;color:var(--ink);border-radius:9px;height:32px;padding:0 10px;font-weight:700"></select>
+        <select id="calBigMY" style="border:1px solid var(--glass-line);background:var(--card);color:var(--ink);border-radius:9px;height:32px;padding:0 10px;font-weight:700"></select>
         <button class="calnav" id="calBigNext">›</button>
         <button class="tbtn" id="calBigToday">↺ Today</button>
       </div>
@@ -444,8 +483,14 @@ html{scroll-behavior:smooth}
 <!-- add/edit modal -->
 <div class="scrim" id="taskScrim"><div class="modal">
   <div style="display:flex;align-items:flex-start"><h3 id="tmTitle">New Task</h3><button class="icobtn" id="tmClose" style="margin-left:auto">✕</button></div>
-  <div class="fld" style="margin-top:8px"><label>Task Description <i>*</i></label><input class="fin" id="tTitle" maxlength="255"></div>
-  <div class="fld" style="margin-top:12px"><label>Details / Notes</label><textarea class="fin" id="tDesc"></textarea></div>
+  <div class="fld" style="margin-top:8px"><label>Task Description <i>*</i></label><textarea class="fin grow" id="tTitle" maxlength="255" rows="1" placeholder="What needs to get done?"></textarea></div>
+  <div class="fld" style="margin-top:12px"><label>Details / Notes</label><textarea class="fin grow" id="tDesc" rows="3"></textarea>
+    <div class="ckwrap">
+      <div class="ckhead"><span>Checklist</span><span class="ckcount" id="ckCount"></span></div>
+      <div id="ckList"></div>
+      <div class="ckadd"><input id="ckNew" placeholder="Add a checklist item, then press Enter" maxlength="500"><button type="button" id="ckAdd">+ Add</button></div>
+    </div>
+  </div>
   <div class="grid2">
     <div class="fld"><label>Date <i>*</i></label><input type="date" class="fin" id="tDate"></div>
     <div class="fld"><label>Time</label><input type="time" class="fin" id="tTime"></div>
@@ -605,6 +650,7 @@ function taskCard(t){
       '<div class="t" data-open="'+esc(t.id)+'">'+esc(t.title)+'</div>'+
       (t.description?'<div class="desc">'+esc(t.description)+'</div>':'')+
       '<div class="meta">'+
+        ckChip(t)+
         '<span class="mchip">📅 '+esc(longDate(when))+(t.dueTime?' · '+time12(t.dueTime):'')+'</span>'+
         (t.recurring?'<span class="mchip rec" style="color:'+recC+';border-color:'+recC+'55">↻ '+recurLabel(t)+'</span>':'')+
         (urgent?'<span class="mchip" style="color:var(--urgent);border-color:var(--urgent)">⚠ URGENT</span>':'')+
@@ -1001,6 +1047,69 @@ document.getElementById("uNorm").onclick=function(){selUrgent=false;paintUrg();}
 document.getElementById("uUrg").onclick=function(){selUrgent=true;paintUrg();};
 function paintUrg(){document.getElementById("uNorm").classList.toggle("on",!selUrgent);
   var u=document.getElementById("uUrg");u.classList.toggle("u-on",selUrgent);u.classList.toggle("on",false);}
+
+/* Checklist progress chip shown on the task card. */
+function ckChip(t){
+  var c=Array.isArray(t.checklist)?t.checklist:[];
+  if(!c.length)return "";
+  var done=c.filter(function(i){return i.done;}).length;
+  return '<span class="ckchip'+(done===c.length?" alldone":"")+'">'+
+    (done===c.length?"\u2611":"\u2610")+' '+done+'/'+c.length+'</span>';
+}
+
+/* ===== Details / Notes checklist =====
+   Held in CK while the modal is open, saved with the task as `checklist`. */
+var CK=[];
+function ckUid(){return "ck_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,6);}
+function renderChecklist(){
+  var list=document.getElementById("ckList"); if(!list)return;
+  list.innerHTML=CK.length?CK.map(function(it,i){
+    return '<div class="ckitem'+(it.done?" done":"")+'" data-i="'+i+'">'+
+      '<input type="checkbox" data-ck="'+i+'"'+(it.done?" checked":"")+'>'+
+      '<textarea class="cktext grow-ck" data-cktext="'+i+'" rows="1">'+esc(it.text)+'</textarea>'+
+      '<button type="button" class="ckdel" data-ckdel="'+i+'" title="Remove">x</button>'+
+    '</div>';
+  }).join(""):'<div class="ckempty">No items yet.</div>';
+  var done=CK.filter(function(i){return i.done;}).length;
+  var c=document.getElementById("ckCount");
+  if(c)c.textContent=CK.length?(done+"/"+CK.length+" done"):"";
+  list.querySelectorAll("[data-ck]").forEach(function(cb){
+    cb.onchange=function(){CK[+cb.getAttribute("data-ck")].done=cb.checked;renderChecklist();};
+  });
+  list.querySelectorAll("[data-ckdel]").forEach(function(b){
+    b.onclick=function(){CK.splice(+b.getAttribute("data-ckdel"),1);renderChecklist();};
+  });
+  list.querySelectorAll("[data-cktext]").forEach(function(ta){
+    autoGrow(ta);
+    ta.oninput=function(){CK[+ta.getAttribute("data-cktext")].text=ta.value;autoGrow(ta);};
+    ta.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();ta.blur();document.getElementById("ckNew").focus();}};
+  });
+}
+function ckAddItem(){
+  var inp=document.getElementById("ckNew"); if(!inp)return;
+  var v=inp.value.trim(); if(!v)return;
+  CK.push({id:ckUid(),text:v,done:false});
+  inp.value=""; renderChecklist(); inp.focus();
+}
+/* Grow a textarea to fit its content instead of scrolling one line sideways. */
+function autoGrow(el){ if(!el)return; el.style.height="auto"; el.style.height=Math.min(el.scrollHeight,260)+"px"; }
+function bindAutoGrow(id){
+  var el=document.getElementById(id); if(!el)return;
+  el.addEventListener("input",function(){autoGrow(el);});
+}
+bindAutoGrow("tTitle"); bindAutoGrow("tDesc");
+(function(){
+  var add=document.getElementById("ckAdd"), nw=document.getElementById("ckNew");
+  if(add)add.onclick=ckAddItem;
+  if(nw)nw.addEventListener("keydown",function(e){ if(e.key==="Enter"){e.preventDefault();ckAddItem();} });
+  // Title is one logical line, so Enter saves rather than inserting a newline
+  // that would be stripped on save anyway.
+  var ti=document.getElementById("tTitle");
+  if(ti)ti.addEventListener("keydown",function(e){
+    if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();document.getElementById("tmSave").click();}
+  });
+})();
+
 function openTaskModal(t,presetTitle,opts){
   opts=opts||{};
   editId=t?t.id:null;
@@ -1016,8 +1125,16 @@ function openTaskModal(t,presetTitle,opts){
   selStatus=t?((t.status==="due_soon"||t.status==="overdue")?(t.previousStatus||"pending"):t.status):"pending";
   selInterval=t&&t.recurring?(t.recurringInterval||"weekly"):(opts.rec?"weekly":"");
   paintUrg();paintStatusPick();paintRec();
+  CK=(t&&Array.isArray(t.checklist))?t.checklist.map(function(i){return {id:i.id||ckUid(),text:i.text||"",done:!!i.done};}):[];
+  renderChecklist();
+  var nw=document.getElementById("ckNew"); if(nw)nw.value="";
   document.getElementById("taskScrim").classList.add("on");
-  setTimeout(function(){document.getElementById("tTitle").focus();},60);
+  // Size after the modal is visible; scrollHeight is 0 while display:none.
+  setTimeout(function(){
+    autoGrow(document.getElementById("tTitle"));
+    autoGrow(document.getElementById("tDesc"));
+    document.getElementById("tTitle").focus();
+  },60);
 }
 ["tmClose","tmCancel"].forEach(function(id){document.getElementById(id).onclick=function(){document.getElementById("taskScrim").classList.remove("on");};});
 function colForDate(ds){
@@ -1027,12 +1144,15 @@ function colForDate(ds){
   if(diff<=0)return"today";if(diff===1)return"tomorrow";if(diff<=7)return"this_week";return"this_month";
 }
 document.getElementById("tmSave").onclick=function(){
-  var title=document.getElementById("tTitle").value.trim();
+  var title=document.getElementById("tTitle").value.replace(/\s*\n+\s*/g," ").trim();
   var date=document.getElementById("tDate").value;
   if(!title||!date){toast("Description and date are required");return;}
+  var cleanCk=CK.map(function(i){return {id:i.id||ckUid(),text:(i.text||"").trim(),done:!!i.done};})
+                .filter(function(i){return i.text;});
   var payload={
     title:title,
     description:document.getElementById("tDesc").value.trim()||undefined,
+    checklist:cleanCk,
     column:selUrgent?"urgent":colForDate(date),
     dueDate:date,
     dueTime:document.getElementById("tTime").value||"",
