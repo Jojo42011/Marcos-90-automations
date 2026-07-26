@@ -124,6 +124,9 @@ html[data-theme="dark"] #barsScrollThumb:hover{background:#6e7a87}
 #calCard .bcell .chip{font-size:10px;padding:2px 5px;border-radius:6px;line-height:1.3}
 #calCard .bcell .morex{font-size:9.5px;line-height:1.25}
 /* Checklist on the task card */
+.task{cursor:pointer}
+.task .ckrow,.task .acts,.task .grip{cursor:default}
+.task .ckrow,.task .ckrow *{cursor:pointer}
 .ckcard{margin-top:7px;display:flex;flex-direction:column;gap:2px}
 .ckrow{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:var(--ink);line-height:1.35;
   padding:2px 3px;border-radius:6px;cursor:pointer}
@@ -1074,11 +1077,24 @@ function bindCards(root){
     });
   });
   el.querySelectorAll("[data-open]").forEach(function(b){b.onclick=function(){var t=TASKS.find(function(x){return x.id===b.getAttribute("data-open");});if(t&&canEdit(t)&&!readOnlyView())openTaskModal(t);};});
+  /* The whole card opens the task, not just the title text. Clicking a card and
+     getting nothing was why the checklist felt missing: the only way in was a
+     precise hit on the title. Interactive bits still handle their own clicks. */
+  el.querySelectorAll(".task").forEach(function(card){
+    card.addEventListener("click",function(e){
+      if(e.target.closest("button, input, label, a, select, textarea, .acts, .grip"))return;
+      if(card.dataset.justDragged==="1"){card.dataset.justDragged="";return;}
+      if(window.getSelection && String(window.getSelection())) return;  // let text selection be
+      var t=TASKS.find(function(x){return x.id===card.getAttribute("data-id");});
+      if(t&&canEdit(t)&&!readOnlyView())openTaskModal(t);
+    });
+  });
   // drag: reorder within a bar + drag across member bars to reassign
   var dragged=null;
   el.querySelectorAll('.task[draggable="true"]').forEach(function(card){
     card.addEventListener("dragstart",function(){dragged=card;card.classList.add("dragging");});
     card.addEventListener("dragend",function(){card.classList.remove("dragging");dragged=null;
+      card.dataset.justDragged="1";setTimeout(function(){card.dataset.justDragged="";},200);
       el.querySelectorAll(".col").forEach(function(c){c.classList.remove("dropover");});});
     card.addEventListener("dragover",function(e){e.preventDefault();
       if(!dragged||dragged===card)return;
