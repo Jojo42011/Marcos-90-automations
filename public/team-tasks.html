@@ -87,6 +87,29 @@ html[data-theme="dark"] *{scrollbar-color:#4a5560 transparent}
   /* leave room for the fixed header so both panes fit without scrolling the page */
   max-height:calc(100vh - 100px)}
 @media(max-width:1080px){#rightcol{position:static;max-height:none}}
+/* Left pane fills the same height as the right column, and the task board keeps a
+   permanently visible horizontal scrollbar since member columns overflow sideways. */
+#left{display:flex;flex-direction:column;height:calc(100vh - 100px);min-height:520px}
+@media(max-width:1080px){#left{height:auto;min-height:0}}
+#bars{flex:1 1 auto;min-height:0;align-items:stretch;overflow-x:auto;overflow-y:hidden}
+/* Native bar hidden: it is overlay-only on some platforms and disappears when idle.
+   #barsScroll below is always visible and drives the same scrollLeft. */
+#bars{scrollbar-width:none;-ms-overflow-style:none}
+#bars::-webkit-scrollbar{height:0;display:none}
+#barsScroll{flex:0 0 auto;height:12px;margin:0 14px 12px;border-radius:8px;
+  background:rgba(127,140,155,.16);position:relative;cursor:pointer;display:none}
+#barsScroll.on{display:block}
+#barsScrollThumb{position:absolute;top:0;left:0;height:100%;min-width:36px;border-radius:8px;
+  background:#7c8894;cursor:grab}
+#barsScrollThumb:hover{background:#6a7682}
+#barsScrollThumb.drag{cursor:grabbing;background:#5f6b77}
+html[data-theme="dark"] #barsScroll{background:rgba(255,255,255,.07)}
+html[data-theme="dark"] #barsScrollThumb{background:#5c6875}
+html[data-theme="dark"] #barsScrollThumb:hover{background:#6e7a87}
+/* Columns stretch to the board instead of being capped, so no dead space below;
+   each column's own body scrolls when its list is long. */
+#bars .col{max-height:100%;min-height:0}
+
 #calCard{padding:14px 14px 12px;flex:0 0 auto}
 /* The month grid was sized for a full-width tab; in the sidebar the cells need to
    be much shorter so the Completed pane below stays on screen. */
@@ -448,6 +471,7 @@ html{scroll-behavior:smooth}
     </div>
     <div id="viewingNote" class="viewing-note" style="display:none"></div>
     <div class="board anim" id="bars"></div>
+    <div id="barsScroll"><div id="barsScrollThumb"></div></div>
   </section>
 
   <!-- RIGHT: calendar on top, completed tasks underneath. Both always visible,
@@ -1203,7 +1227,47 @@ document.getElementById("openAdd").onclick=function(){openTaskModal(null,documen
 document.getElementById("quickTitle").addEventListener("keydown",function(e){if(e.key==="Enter"&&this.value.trim()){openTaskModal(null,this.value.trim());this.value="";}});
 
 /* ================= boot ================= */
-function renderAll(){renderMemberChips();renderBars();renderDone();renderBig();renderTeam();}
+/* Always-visible horizontal scrollbar for the task board. */
+(function(){
+  var bar=document.getElementById("barsScroll"),thumb=document.getElementById("barsScrollThumb"),
+      bars=document.getElementById("bars");
+  if(!bar||!thumb||!bars)return;
+  var dragging=false,startX=0,startLeft=0;
+  window.syncBarsScroll=function(){
+    var max=bars.scrollWidth-bars.clientWidth;
+    if(max<=1){bar.classList.remove("on");return;}
+    bar.classList.add("on");
+    var track=bar.clientWidth;
+    var w=Math.max(36,Math.round(track*(bars.clientWidth/bars.scrollWidth)));
+    thumb.style.width=w+"px";
+    thumb.style.left=Math.round((track-w)*(bars.scrollLeft/max))+"px";
+  };
+  bars.addEventListener("scroll",function(){ if(!dragging)syncBarsScroll(); });
+  window.addEventListener("resize",syncBarsScroll);
+  thumb.addEventListener("mousedown",function(e){
+    dragging=true;startX=e.clientX;startLeft=bars.scrollLeft;
+    thumb.classList.add("drag");e.preventDefault();
+  });
+  document.addEventListener("mousemove",function(e){
+    if(!dragging)return;
+    var track=bar.clientWidth,w=thumb.offsetWidth;
+    var max=bars.scrollWidth-bars.clientWidth;
+    var ratio=max/Math.max(1,(track-w));
+    bars.scrollLeft=startLeft+(e.clientX-startX)*ratio;
+    syncBarsScroll();
+  });
+  document.addEventListener("mouseup",function(){ if(dragging){dragging=false;thumb.classList.remove("drag");} });
+  // click the track to jump
+  bar.addEventListener("mousedown",function(e){
+    if(e.target===thumb)return;
+    var r=bar.getBoundingClientRect(),w=thumb.offsetWidth;
+    var max=bars.scrollWidth-bars.clientWidth;
+    bars.scrollLeft=((e.clientX-r.left-w/2)/Math.max(1,(bar.clientWidth-w)))*max;
+    syncBarsScroll();
+  });
+})();
+function renderAll(){renderMemberChips();renderBars();renderDone();renderBig();renderTeam();
+  if(window.syncBarsScroll)requestAnimationFrame(window.syncBarsScroll);}
 initCal();
 paintMe();
 if(!ME)openGate();
