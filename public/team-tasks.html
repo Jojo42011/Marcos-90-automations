@@ -77,9 +77,39 @@ html[data-theme="dark"] *{scrollbar-color:#4a5560 transparent}
 .av .unread{position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:var(--urgent);border:2px solid var(--card)}
 
 /* ── Layout ── */
-#wrap{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:16px;padding:16px 20px 22px;width:100%;margin:0}
-@media(min-width:1900px){#wrap{grid-template-columns:minmax(0,1fr) 430px}}
+/* Dashboard layout: active tasks on the left, calendar + completed stacked on the
+   right. Sized so all three panes are usable at once rather than tabbed. */
+#wrap{display:grid;grid-template-columns:minmax(0,1fr) clamp(520px,48%,900px);gap:16px;
+  padding:16px 20px 22px;width:100%;margin:0;align-items:start}
+@media(max-width:1280px){#wrap{grid-template-columns:minmax(0,1fr) 440px}}
 @media(max-width:1080px){#wrap{grid-template-columns:1fr}}
+#rightcol{display:flex;flex-direction:column;gap:16px;min-width:0;position:sticky;top:16px;
+  /* leave room for the fixed header so both panes fit without scrolling the page */
+  max-height:calc(100vh - 100px)}
+@media(max-width:1080px){#rightcol{position:static;max-height:none}}
+#calCard{padding:14px 14px 12px;flex:0 0 auto}
+/* The month grid was sized for a full-width tab; in the sidebar the cells need to
+   be much shorter so the Completed pane below stays on screen. */
+#calCard #calBigGrid{gap:6px;margin-top:9px}
+#calCard .bcell{min-height:80px;padding:7px;gap:3px;border-radius:10px}
+#calCard .bcell .dn{font-size:11.5px}
+#calCard .bcell .chip{font-size:10px;padding:2px 5px;border-radius:6px;line-height:1.3}
+#calCard .bcell .morex{font-size:9.5px;line-height:1.25}
+#doneCard{padding:14px;flex:1 1 auto;min-height:180px;display:flex;flex-direction:column;overflow:hidden}
+#doneCard .card-h{flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#doneCard .subtabs{margin-left:auto}
+#doneBars{flex:1 1 auto;overflow-y:auto;min-height:0;margin-top:8px}
+#doneBars .empty{padding:14px 2px}
+/* Team popover, opened from the profile chip in the header. */
+#teamPop{position:fixed;inset:0;background:rgba(8,12,16,.28);display:none;z-index:70}
+#teamPop.on{display:block}
+#teamPanel{position:absolute;top:60px;right:20px;width:370px;max-width:calc(100vw - 32px);
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 18px 50px rgba(8,12,16,.4);
+  padding:14px;max-height:calc(100vh - 90px);overflow-y:auto}
+#switchUserBtn{margin-top:10px;width:100%;height:36px;border:1px solid var(--line);background:var(--bg);
+  color:var(--muted);border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer}
+#switchUserBtn:hover{border-color:var(--teal);color:var(--teal-strong)}
+.me-chip{cursor:pointer}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
 .card-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
 .card-h h2{font-family:var(--serif);font-size:16px;font-weight:700;color:var(--ink);flex:1}
@@ -120,10 +150,6 @@ html[data-theme="dark"] *{scrollbar-color:#4a5560 transparent}
 .col-body{overflow-y:auto;flex:1;min-height:60px}
 .col.dropover{border-color:var(--teal);box-shadow:0 0 0 3px rgba(89,196,196,.25)}
 /* Calendar tab = the frosted glass surface */
-#calView{margin:12px 14px 16px;padding:16px;border-radius:var(--r);border:1px solid var(--glass-line);
-  background:linear-gradient(145deg,var(--glass-tint),transparent 55%),var(--glass);
-  backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);
-  box-shadow:0 8px 30px rgba(16,24,40,.12)}
 
 /* Bars & task cards */
 .bar{padding:6px 14px 14px}
@@ -378,7 +404,6 @@ html[data-theme="dark"] .task:hover{box-shadow:0 6px 18px rgba(0,0,0,.45)}
 #quickTitle:focus,.fin:focus,#chatInput:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(89,196,196,.18)}
 
 /* calendar cells */
-#calView{animation:pageIn .32s var(--ease) both}
 #calBigGrid .bcell{animation:cardIn .3s var(--ease) both}
 .dcell{transition:background .18s var(--ease),border-color .18s,transform .16s var(--ease)}
 .dcell:hover{transform:scale(1.06)}
@@ -416,45 +441,47 @@ html{scroll-behavior:smooth}
       <input id="quickTitle" placeholder="Add a task for the selected day…" autocomplete="off" />
       <button class="add-btn" id="openAdd">+ Add Task</button>
     </div>
-    <div class="tabs" id="mainTabs">
-      <button class="on" data-tab="active">Active Tasks</button>
-      <button data-tab="done">Completed Tasks</button>
-      <button data-tab="cal">Calendar</button>
-    </div>
     <div id="filterRow">
       <span style="font-size:11.5px;color:var(--muted);font-weight:700">TEAM MEMBER:</span>
       <div id="memberChips"></div>
       <button id="clearFilter">✕ Clear Filter</button>
     </div>
     <div id="viewingNote" class="viewing-note" style="display:none"></div>
-    <div class="subtabs" id="doneSubs" style="display:none">
-      <button class="on" data-sub="today">Today’s Tasks</button>
-      <button data-sub="recurring">Recurring</button>
-    </div>
     <div class="board anim" id="bars"></div>
+  </section>
 
-    <!-- Calendar tab - the one frosted-glass surface -->
-    <div id="calView" style="display:none">
+  <!-- RIGHT: calendar on top, completed tasks underneath. Both always visible,
+       so the page reads as one dashboard instead of three tabbed views. -->
+  <aside id="rightcol">
+    <div class="card" id="calCard">
       <div style="display:flex;align-items:center;gap:10px;padding:2px 2px 10px">
-        <h2 style="font-family:var(--serif);font-size:20px;flex:1" id="calBigTitle">Month</h2>
+        <h2 style="font-family:var(--serif);font-size:19px;flex:1" id="calBigTitle">Month</h2>
         <button class="calnav" id="calBigPrev">‹</button>
-        <select id="calBigMY" style="border:1px solid var(--glass-line);background:var(--card);color:var(--ink);border-radius:9px;height:32px;padding:0 10px;font-weight:700"></select>
+        <select id="calBigMY" style="border:1px solid var(--glass-line);background:var(--card);color:var(--ink);border-radius:9px;height:30px;padding:0 8px;font-weight:700;font-size:12.5px"></select>
         <button class="calnav" id="calBigNext">›</button>
         <button class="tbtn" id="calBigToday">↺ Today</button>
       </div>
-      <p style="font-size:12px;color:var(--muted);margin:0 2px 10px">Click any date to load that day across every task bar.</p>
+      <p style="font-size:11.5px;color:var(--muted);margin:0 2px 10px">Click any date to load that day across every task bar.</p>
       <div id="calBigGrid"></div>
     </div>
-  </section>
-
-  <!-- RIGHT: team -->
-  <aside style="display:flex;flex-direction:column;gap:16px">
-    <div class="card" id="teamCard">
-      <div class="card-h"><h2>Team</h2><span class="sub">chat · pages · workload</span></div>
-      <div id="teamList"></div>
+    <div class="card" id="doneCard">
+      <div class="card-h"><h2>Completed Tasks</h2>
+        <div class="subtabs" id="doneSubs">
+          <button class="on" data-sub="today">Today’s</button>
+          <button data-sub="recurring">Recurring</button>
+        </div>
+      </div>
+      <div class="board list" id="doneBars"></div>
     </div>
   </aside>
 </div>
+
+<!-- Team moved off the dashboard: opens from the profile chip. -->
+<div id="teamPop"><div id="teamPanel">
+  <div class="card-h"><h2>Team</h2><span class="sub">chat · pages · workload</span></div>
+  <div id="teamList"></div>
+  <button id="switchUserBtn">Switch user</button>
+</div></div>
 
 <!-- notifications -->
 <div id="noteWrap"><div id="notePanel">
@@ -601,7 +628,18 @@ function openGate(){
   w.querySelectorAll("button").forEach(function(b){b.onclick=function(){ME=b.getAttribute("data-u");localStorage.setItem(USER_KEY,ME);document.getElementById("gate").classList.remove("on");paintMe();renderAll();pollNotes();};});
   document.getElementById("gate").classList.add("on");
 }
-document.getElementById("meChip").onclick=openGate;
+function closeTeamPop(){var p=document.getElementById("teamPop");if(p)p.classList.remove("on");}
+document.getElementById("meChip").onclick=function(e){
+  e.stopPropagation();
+  var p=document.getElementById("teamPop");
+  if(!p)return;
+  var opening=!p.classList.contains("on");
+  p.classList.toggle("on",opening);
+  if(opening)renderTeam();
+};
+document.getElementById("teamPop").addEventListener("click",function(e){ if(e.target.id==="teamPop")closeTeamPop(); });
+document.getElementById("switchUserBtn").onclick=function(){closeTeamPop();openGate();};
+document.addEventListener("keydown",function(e){ if(e.key==="Escape")closeTeamPop(); });
 
 /* ================= data ================= */
 function loadTasks(){return api("/api/tasks").then(function(d){TASKS=d.tasks||[];renderAll();});}
@@ -684,10 +722,6 @@ function renderBars(){
   var el=document.getElementById("bars");
   var dateLbl=longDate(selDate);
   document.getElementById("dateHeadDate").textContent=dateLbl;
-  document.getElementById("doneSubs").style.display=mainTab==="done"?"flex":"none";
-  document.getElementById("filterRow").style.display=(mainTab==="cal")?"none":"flex";
-  document.getElementById("calView").style.display=(mainTab==="cal")?"block":"none";
-  el.style.display=(mainTab==="cal")?"none":"";
   var note=document.getElementById("viewingNote");
   if(readOnlyView()){var vm=member(viewingPage);
     note.style.display="flex";
@@ -695,24 +729,12 @@ function renderBars(){
       '<button id="exitPage" style="margin-left:auto;border:none;background:none;color:var(--brand2);font-weight:800;cursor:pointer">EXIT</button>';
     document.getElementById("exitPage").onclick=function(){viewingPage="";renderAll();};
   } else note.style.display="none";
-  document.getElementById("addbar").style.display=(readOnlyView()||mainTab==="cal")?"none":"flex";
-  if(mainTab==="cal"){renderBig();return;}
+  document.getElementById("addbar").style.display=readOnlyView()?"none":"flex";
 
   var act=TASKS.filter(function(t){return t.status!=="done";});
   function todaysOf(u){return sortTasks(act.filter(function(t){return (t.assignedTo||"").toLowerCase()===u&&!t.recurring&&taskDate(t)===selDate;}));}
   function recsOf(u){return sortTasks(act.filter(function(t){return (t.assignedTo||"").toLowerCase()===u&&t.recurring;}));}
 
-  if(mainTab==="done"){
-    el.classList.add("list");
-    var scope=(who==="all")?TASKS:TASKS.filter(function(t){return visibleFor(t,who);});
-    var done=scope.filter(function(t){return t.status==="done"&&String(t.completedAt||t.updatedAt||"").slice(0,10)===selDate;});
-    var list=sortTasks(done.filter(function(t){return doneSub==="today"?!t.recurring:!!t.recurring;}));
-    el.innerHTML='<div style="padding:2px"><div class="bar-h"><h3>'+(doneSub==="today"?"Completed":"Completed Recurring")+' - '+dateLbl+'</h3><span class="cnt">'+list.length+'</span></div>'+
-      (list.length?list.map(taskCard).join(""):'<div class="empty">Nothing completed this day yet.</div>')+'</div>';
-    bindCards();return;
-  }
-
-  el.classList.remove("list");
   var cols=[];
   if(readOnlyView()){
     var vp=viewingPage;var vpm=member(vp);
@@ -735,8 +757,20 @@ function renderBars(){
   });
   bindCards();
 }
-function bindCards(){
-  var el=document.getElementById("bars");
+/* Completed tasks now live in their own pane on the right, always visible. */
+function renderDone(){
+  var el=document.getElementById("doneBars"); if(!el)return;
+  var who=whoseBar();
+  var dateLbl=longDate(selDate);
+  var scope=(who==="all")?TASKS:TASKS.filter(function(t){return visibleFor(t,who);});
+  var done=scope.filter(function(t){return t.status==="done"&&String(t.completedAt||t.updatedAt||"").slice(0,10)===selDate;});
+  var list=sortTasks(done.filter(function(t){return doneSub==="today"?!t.recurring:!!t.recurring;}));
+  el.innerHTML='<div class="bar-h" style="padding:0 2px"><h3>'+(doneSub==="today"?"Completed":"Completed Recurring")+' - '+esc(dateLbl)+'</h3><span class="cnt">'+list.length+'</span></div>'+
+    (list.length?list.map(taskCard).join(""):'<div class="empty">Nothing completed this day yet.</div>');
+  bindCards(el);
+}
+function bindCards(root){
+  var el=root||document.getElementById("bars");
   el.querySelectorAll("[data-st]").forEach(function(b){b.onclick=function(e){e.stopPropagation();openStatusMenu(b,b.getAttribute("data-st"));};});
   el.querySelectorAll("[data-edit]").forEach(function(b){b.onclick=function(){openTaskModal(TASKS.find(function(t){return t.id===b.getAttribute("data-edit");}));};});
   el.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){delTask(b.getAttribute("data-del"));};});
@@ -824,15 +858,10 @@ function delTask(id){
 }
 
 /* ================= tabs & filters ================= */
-document.getElementById("mainTabs").querySelectorAll("button").forEach(function(b){
-  b.onclick=function(){mainTab=b.getAttribute("data-tab");
-    document.getElementById("mainTabs").querySelectorAll("button").forEach(function(x){x.classList.toggle("on",x===b);});
-    renderBars();};
-});
 document.getElementById("doneSubs").querySelectorAll("button").forEach(function(b){
   b.onclick=function(){doneSub=b.getAttribute("data-sub");
     document.getElementById("doneSubs").querySelectorAll("button").forEach(function(x){x.classList.toggle("on",x===b);});
-    renderBars();};
+    renderDone();};
 });
 function renderMemberChips(){
   var w=document.getElementById("memberChips");
@@ -860,8 +889,6 @@ function fillMY(sel,y,m){
   sel.innerHTML=opts.join("");
 }
 function selectDate(ds){selDate=ds;var d=parseLocal(ds);calY=d.getFullYear();calM=d.getMonth();bigY=calY;bigM=calM;
-  if(mainTab==="cal"){mainTab="active";
-    document.getElementById("mainTabs").querySelectorAll("button").forEach(function(x){x.classList.toggle("on",x.getAttribute("data-tab")==="active");});}
   renderAll();}
 
 /* monthly grid (frosted tab) */
@@ -904,9 +931,8 @@ function renderTeam(){
     '</div>';
   }).join("");
   w.querySelectorAll("[data-chat]").forEach(function(b){b.onclick=function(){openChat(b.getAttribute("data-chat"));};});
-  w.querySelectorAll("[data-page]").forEach(function(b){b.onclick=function(){viewingPage=b.getAttribute("data-page");memberFilter="";mainTab="active";
-    document.getElementById("mainTabs").querySelectorAll("button").forEach(function(x){x.classList.toggle("on",x.getAttribute("data-tab")==="active");});
-    renderAll();window.scrollTo({top:0,behavior:"smooth"});};});
+  w.querySelectorAll("[data-page]").forEach(function(b){b.onclick=function(){viewingPage=b.getAttribute("data-page");memberFilter="";
+    closeTeamPop();renderAll();window.scrollTo({top:0,behavior:"smooth"});};});
 }
 
 /* ================= chat ================= */
@@ -976,8 +1002,6 @@ function followNote(taskId,chatW){
   if(taskId){
     var t=TASKS.find(function(x){return x.id===taskId;});
     if(t){viewingPage="";memberFilter=(t.assignedTo===ME)?"":(t.assignedTo||"all");
-      mainTab=t.status==="done"?"done":"active";
-      document.getElementById("mainTabs").querySelectorAll("button").forEach(function(x){x.classList.toggle("on",x.getAttribute("data-tab")===mainTab);});
       selectDate(taskDate(t));
       setTimeout(function(){var c=document.querySelector('.task[data-id="'+taskId+'"]');
         if(c){c.scrollIntoView({behavior:"smooth",block:"center"});c.classList.add("flash");setTimeout(function(){c.classList.remove("flash");},1800);}},150);
@@ -1179,7 +1203,7 @@ document.getElementById("openAdd").onclick=function(){openTaskModal(null,documen
 document.getElementById("quickTitle").addEventListener("keydown",function(e){if(e.key==="Enter"&&this.value.trim()){openTaskModal(null,this.value.trim());this.value="";}});
 
 /* ================= boot ================= */
-function renderAll(){renderMemberChips();renderBars();renderTeam();}
+function renderAll(){renderMemberChips();renderBars();renderDone();renderBig();renderTeam();}
 initCal();
 paintMe();
 if(!ME)openGate();
