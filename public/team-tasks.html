@@ -83,10 +83,11 @@ html[data-theme="dark"] *{scrollbar-color:#4a5560 transparent}
   padding:16px 20px 22px;width:100%;margin:0;align-items:start}
 @media(max-width:1280px){#wrap{grid-template-columns:minmax(0,1fr) 440px}}
 @media(max-width:1080px){#wrap{grid-template-columns:1fr}}
+/* Real height, not just a cap: with max-height alone the flex column collapsed to
+   its content and left dead space under the calendar. */
 #rightcol{display:flex;flex-direction:column;gap:16px;min-width:0;position:sticky;top:16px;
-  /* leave room for the fixed header so both panes fit without scrolling the page */
-  max-height:calc(100vh - 100px)}
-@media(max-width:1080px){#rightcol{position:static;max-height:none}}
+  height:calc(100vh - 100px);min-height:520px}
+@media(max-width:1080px){#rightcol{position:static;height:auto;min-height:0}}
 /* Left pane fills the same height as the right column, and the task board keeps a
    permanently visible horizontal scrollbar since member columns overflow sideways. */
 #left{display:flex;flex-direction:column;height:calc(100vh - 100px);min-height:520px}
