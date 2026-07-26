@@ -148,6 +148,33 @@ html[data-theme="dark"] #barsScrollThumb:hover{background:#6e7a87}
   background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   box-shadow:0 18px 50px rgba(8,12,16,.4);padding:14px;max-height:70vh;overflow-y:auto}
 
+/* Resizable split between the task list and the calendar. */
+#wrap{position:relative}
+#splitter{position:absolute;top:0;bottom:0;width:14px;margin-left:-7px;cursor:col-resize;z-index:5;
+  display:flex;align-items:center;justify-content:center}
+#splitter::after{content:"";width:3px;height:52px;border-radius:3px;background:var(--line);transition:background .15s}
+#splitter:hover::after,#splitter.drag::after{background:var(--teal)}
+body.splitting{cursor:col-resize;user-select:none}
+@media(max-width:1080px){#splitter{display:none}}
+.layrow{display:flex;gap:7px}
+.layrow button{flex:1;height:30px;border:1px solid var(--line);background:var(--card);color:var(--muted);
+  border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer}
+.layrow button:hover{border-color:var(--teal);color:var(--teal-strong)}
+
+/* Time zone control in the profile popover */
+.tzbox{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.tzrow{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink)}
+.tzrow span{margin-left:auto;font-weight:800;color:var(--teal-strong)}
+.tzbox p{margin:6px 0 8px;font-size:11.5px;color:var(--muted);line-height:1.4}
+.tzbox select{width:100%;height:34px;border:1px solid var(--line);border-radius:8px;
+  background:var(--card);color:var(--ink);padding:0 8px;font-size:12.5px}
+
+/* Rolled-over task: pinned to the top of today with a loud banner. */
+.task.missed{border-color:var(--urgent);box-shadow:0 0 0 1px var(--urgent) inset}
+.missed-banner{display:flex;align-items:center;gap:7px;margin:-2px 0 7px;padding:5px 9px;border-radius:8px;
+  background:var(--urgent);color:#fff;font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase}
+.missed-banner .late{font-weight:600;text-transform:none;letter-spacing:0;opacity:.92}
+
 /* Team popover, opened from the profile chip in the header. */
 #teamPop{position:fixed;inset:0;background:rgba(8,12,16,.28);display:none;z-index:70}
 #teamPop.on{display:block}
@@ -525,6 +552,7 @@ html{scroll-behavior:smooth}
       <button id="msgBtn">💬 Messages<span id="msgUnread"></span></button>
     </div>
   </aside>
+  <div id="splitter" title="Drag to resize · double-click to reset"></div>
 </div>
 
 <!-- Pick who to message; opens the existing chat drawer. -->
@@ -537,6 +565,20 @@ html{scroll-behavior:smooth}
 <div id="teamPop"><div id="teamPanel">
   <div class="card-h"><h2>Team</h2><span class="sub">chat · pages · workload</span></div>
   <div id="teamList"></div>
+  <div class="tzbox">
+    <div class="tzrow"><b>Dashboard layout</b></div>
+    <p>Drag the divider between the panes to resize. Your layout is remembered on this device.</p>
+    <div class="layrow">
+      <button id="swapSidesBtn">⇄ Swap sides</button>
+      <button id="resetLayoutBtn">↺ Reset</button>
+    </div>
+  </div>
+  <div class="tzbox">
+    <div class="tzrow"><b>Command time zone</b><span id="tzLabel">-</span></div>
+    <p>Deadlines, "due today" and task rollover are all judged in this zone, so the
+       whole team sees the same day no matter where they are.</p>
+    <select id="tzSelect"></select>
+  </div>
   <button id="switchUserBtn">Switch user</button>
 </div></div>
 
@@ -636,7 +678,36 @@ function stampFmt(iso){var d=new Date(iso);if(isNaN(d))return"";var h=d.getHours
   return MONTHS[d.getMonth()].slice(0,3)+" "+d.getDate()+", "+d.getFullYear()+" at "+h+":"+pad(d.getMinutes())+" "+ap;}
 function relTime(iso){var s=(Date.now()-new Date(iso))/1000;if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";return Math.floor(s/86400)+"d ago";}
 function taskDate(t){return (t.dueDate||String(t.createdAt||"").slice(0,10));}
-function ymdPlus(n){var d=new Date();d.setDate(d.getDate()+n);return ymd(d);}
+
+/* ===== Command time zone =====
+   Day boundaries used to come from whoever's laptop was open, so Marco and
+   Wesley disagreed about which day a task was due. Everything that asks "what
+   day is it" goes through here instead, against one team-wide zone. */
+var CMD_TZ = "America/Chicago";
+function tzToday(){
+  try { return new Intl.DateTimeFormat("en-CA",{timeZone:CMD_TZ}).format(new Date()); }
+  catch(_){ return ymd(new Date()); }
+}
+function tzDatePlus(n,from){
+  var base=from||tzToday();
+  var p=base.split("-").map(Number);
+  var d=new Date(Date.UTC(p[0],p[1]-1,p[2]));
+  d.setUTCDate(d.getUTCDate()+n);
+  return d.toISOString().slice(0,10);
+}
+/* Whole days between two YYYY-MM-DD strings (b - a). */
+function tzDaysBetween(a,b){
+  var pa=a.split("-").map(Number), pb=b.split("-").map(Number);
+  return Math.round((Date.UTC(pb[0],pb[1]-1,pb[2])-Date.UTC(pa[0],pa[1]-1,pa[2]))/86400000);
+}
+function tzShortLabel(){
+  try{
+    var parts=new Intl.DateTimeFormat("en-US",{timeZone:CMD_TZ,timeZoneName:"short"}).formatToParts(new Date());
+    var z=parts.find(function(x){return x.type==="timeZoneName";});
+    return z?z.value:CMD_TZ;
+  }catch(_){ return CMD_TZ; }
+}
+function ymdPlus(n){return tzDatePlus(n);}
 /* Deadline label computed from the VIEWER's local date so it's correct for
    whoever's looking, regardless of the server's timezone. A task is only
    "overdue" once its due date is actually before today; due today/tomorrow
@@ -645,18 +716,35 @@ function deadlineState(t){
   if(!t||t.status==="done")return "";
   var due=taskDate(t); if(!due)return "";
   due=String(due).slice(0,10);
-  var today=ymd(new Date());
+  var today=tzToday();
   if(due<today)return "overdue";
   if(due===today)return "due_today";
   if(due===ymdPlus(1))return "due_soon";
   return "";
+}
+/* ===== Automated rollover =====
+   Rather than rewriting dueDate (which would lose when it was actually due and
+   double-move on every pass), an open task whose day has passed simply carries
+   forward: it shows at the top of today with a Missed banner and keeps its real
+   due date. Self-correcting, and browsing a past day still shows that day. */
+function isMissed(t){
+  if(!t||t.status==="done"||t.recurring)return false;
+  var due=String(taskDate(t)||"").slice(0,10);
+  return !!due && due < tzToday();
+}
+function missedDaysLate(t){ return tzDaysBetween(String(taskDate(t)).slice(0,10), tzToday()); }
+function missedBanner(t){
+  if(!isMissed(t))return "";
+  var n=missedDaysLate(t);
+  return '<div class="missed-banner">⚠ Missed Task'+
+    '<span class="late">rolled over from '+esc(longDate(taskDate(t)))+' · '+n+' day'+(n===1?"":"s")+' late</span></div>';
 }
 function recurLabel(t){if(!t.recurring)return"";var iv=t.recurringInterval||"weekly";return {daily:"Repeats daily",every_3_days:"Every 3 days",every_5_days:"Every 5 days",weekly:"Repeats weekly",monthly:"Repeats monthly"}[iv]||"Recurring";}
 
 /* ================= state ================= */
 var ME=localStorage.getItem(USER_KEY)||"";
 var TASKS=[];
-var selDate=ymd(new Date());
+var selDate=tzToday();
 var calY,calM;             // compact calendar month
 var bigY,bigM;             // expanded month
 var mainTab="active", doneSub="today";
@@ -682,7 +770,7 @@ function paintMe(){
 function openGate(){
   var w=document.getElementById("gateBtns");
   w.innerHTML=TEAM.map(function(m){return '<button class="gatebtn" data-u="'+m.id+'"><span class="av" style="background:'+m.color+'">'+m.name[0]+'</span>'+m.name+' <span style="color:var(--muted);font-weight:600;font-size:11.5px">· '+m.role+'</span></button>';}).join("");
-  w.querySelectorAll("button").forEach(function(b){b.onclick=function(){ME=b.getAttribute("data-u");localStorage.setItem(USER_KEY,ME);document.getElementById("gate").classList.remove("on");paintMe();renderAll();pollNotes();};});
+  w.querySelectorAll("button").forEach(function(b){b.onclick=function(){ME=b.getAttribute("data-u");localStorage.setItem(USER_KEY,ME);document.getElementById("gate").classList.remove("on");paintMe();loadLayout();renderAll();pollNotes();};});
   document.getElementById("gate").classList.add("on");
 }
 /* Messages: same member list, but every row opens the chat drawer. */
@@ -716,6 +804,94 @@ function closeMsgPop(){var p=document.getElementById("msgPop");if(p)p.classList.
   pop.addEventListener("click",function(e){ if(e.target.id==="msgPop")closeMsgPop(); });
   document.addEventListener("keydown",function(e){ if(e.key==="Escape")closeMsgPop(); });
 })();
+/* ===== Dashboard layout =====
+   Drag the divider to resize the panes, or swap which side the calendar sits on.
+   Saved per user on this device. */
+var LAY_KEY="marcoTaskLayout:"+(ME||"anon");
+var LAYOUT={rightPct:48,swapped:false};
+function loadLayout(){
+  try{
+    LAY_KEY="marcoTaskLayout:"+(ME||"anon");
+    var raw=JSON.parse(localStorage.getItem(LAY_KEY)||"null");
+    if(raw&&typeof raw==="object"){
+      if(typeof raw.rightPct==="number")LAYOUT.rightPct=Math.min(70,Math.max(26,raw.rightPct));
+      LAYOUT.swapped=!!raw.swapped;
+    }
+  }catch(_){}
+  applyLayout();
+}
+function saveLayout(){ try{localStorage.setItem(LAY_KEY,JSON.stringify(LAYOUT));}catch(_){} }
+function applyLayout(){
+  var wrap=document.getElementById("wrap"),left=document.getElementById("left"),
+      right=document.getElementById("rightcol"),sp=document.getElementById("splitter");
+  if(!wrap||!left||!right)return;
+  var r=LAYOUT.rightPct;
+  wrap.style.gridTemplateColumns=LAYOUT.swapped
+    ? r+"% minmax(0,1fr)"
+    : "minmax(0,1fr) "+r+"%";
+  left.style.order=LAYOUT.swapped?2:1;
+  right.style.order=LAYOUT.swapped?1:2;
+  if(sp){
+    // Position from the real pane edge, not a percentage guess: #wrap has padding
+    // and a gap, so a naive % lands the handle off the seam.
+    requestAnimationFrame(function(){
+      var second=LAYOUT.swapped?left:right;
+      sp.style.left=(second.offsetLeft-8)+"px";
+    });
+  }
+  if(window.syncBarsScroll)requestAnimationFrame(window.syncBarsScroll);
+}
+(function(){
+  var sp=document.getElementById("splitter"); if(!sp)return;
+  var dragging=false;
+  function pctFromX(x){
+    var wrap=document.getElementById("wrap").getBoundingClientRect();
+    var frac=(x-wrap.left)/wrap.width*100;
+    var right=LAYOUT.swapped?frac:100-frac;
+    return Math.min(70,Math.max(26,right));
+  }
+  sp.addEventListener("mousedown",function(e){dragging=true;sp.classList.add("drag");
+    document.body.classList.add("splitting");e.preventDefault();});
+  document.addEventListener("mousemove",function(e){ if(!dragging)return;
+    LAYOUT.rightPct=pctFromX(e.clientX); applyLayout(); });
+  document.addEventListener("mouseup",function(){ if(!dragging)return;
+    dragging=false;sp.classList.remove("drag");document.body.classList.remove("splitting");saveLayout(); });
+  sp.addEventListener("dblclick",function(){LAYOUT.rightPct=48;applyLayout();saveLayout();});
+  window.addEventListener("resize",function(){ if(window.syncBarsScroll)window.syncBarsScroll(); });
+})();
+function initLayoutControls(){
+  var sw=document.getElementById("swapSidesBtn"),rs=document.getElementById("resetLayoutBtn");
+  if(sw)sw.onclick=function(){LAYOUT.swapped=!LAYOUT.swapped;applyLayout();saveLayout();
+    toast(LAYOUT.swapped?"Calendar moved left":"Calendar moved right");};
+  if(rs)rs.onclick=function(){LAYOUT={rightPct:48,swapped:false};applyLayout();saveLayout();toast("Layout reset");};
+}
+
+/* Time zone picker. Zones the team actually spans, plus whatever is already set. */
+var TZ_CHOICES=["America/New_York","America/Chicago","America/Denver","America/Phoenix",
+  "America/Los_Angeles","America/Anchorage","Pacific/Honolulu","America/Mexico_City",
+  "America/Bogota","UTC","Europe/London","Europe/Madrid","Asia/Manila","Asia/Kolkata"];
+function initTzPicker(){
+  var sel=document.getElementById("tzSelect"); if(!sel)return;
+  var list=TZ_CHOICES.slice();
+  if(list.indexOf(CMD_TZ)<0)list.unshift(CMD_TZ);
+  sel.innerHTML=list.map(function(z){
+    var now="";
+    try{now=new Intl.DateTimeFormat("en-US",{timeZone:z,hour:"numeric",minute:"2-digit"}).format(new Date());}catch(_){}
+    return '<option value="'+esc(z)+'"'+(z===CMD_TZ?" selected":"")+'>'+esc(z.replace(/_/g," "))+(now?" — "+now:"")+'</option>';
+  }).join("");
+  sel.onchange=function(){
+    var tz=sel.value, prev=CMD_TZ;
+    fetch("/api/settings/command",{method:"PUT",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({timeZone:tz,updatedBy:ME})})
+      .then(function(r){return r.ok?r.json():Promise.reject();})
+      .then(function(d){
+        applyCmdTz(d.settings.timeZone);
+        selDate=tzToday(); initCal(); renderAll();
+        toast("Command time zone set to "+d.settings.timeZone);
+      })
+      .catch(function(){ applyCmdTz(prev); toast("Could not save the time zone"); });
+  };
+}
 function closeTeamPop(){var p=document.getElementById("teamPop");if(p)p.classList.remove("on");}
 document.getElementById("meChip").onclick=function(e){
   e.stopPropagation();
@@ -723,7 +899,7 @@ document.getElementById("meChip").onclick=function(e){
   if(!p)return;
   var opening=!p.classList.contains("on");
   p.classList.toggle("on",opening);
-  if(opening)renderTeam();
+  if(opening){renderTeam();initTzPicker();initLayoutControls();}
 };
 document.getElementById("teamPop").addEventListener("click",function(e){ if(e.target.id==="teamPop")closeTeamPop(); });
 document.getElementById("switchUserBtn").onclick=function(){closeTeamPop();openGate();};
@@ -770,9 +946,11 @@ function taskCard(t){
   var when=taskDate(t);
   var dstate=deadlineState(t);
   var recC=t.recurring?(REC_COLORS[t.recurringInterval]||"#7C3AED"):null;
-  return '<div class="task'+(urgent?' urgent':'')+'" data-id="'+esc(t.id)+'" '+(ro?'':'draggable="true"')+'>'+
+  var missed=isMissed(t);
+  return '<div class="task'+(urgent?' urgent':'')+(missed?' missed':'')+'" data-id="'+esc(t.id)+'" '+(ro?'':'draggable="true"')+'>'+
     '<span class="grip">⋮⋮</span>'+
     '<div class="body">'+
+      missedBanner(t)+
       '<div class="t" data-open="'+esc(t.id)+'">'+esc(t.title)+'</div>'+
       (t.description?'<div class="desc">'+esc(t.description)+'</div>':'')+
       '<div class="meta">'+
@@ -822,7 +1000,18 @@ function renderBars(){
   document.getElementById("addbar").style.display=(readOnlyView()||mainTab==="done")?"none":"flex";
 
   var act=TASKS.filter(function(t){return t.status!=="done";});
-  function todaysOf(u){return sortTasks(act.filter(function(t){return (t.assignedTo||"").toLowerCase()===u&&!t.recurring&&taskDate(t)===selDate;}));}
+  var viewingToday=(selDate===tzToday());
+  function todaysOf(u){
+    var mine=act.filter(function(t){return (t.assignedTo||"").toLowerCase()===u&&!t.recurring;});
+    var onDay=sortTasks(mine.filter(function(t){return taskDate(t)===selDate;}));
+    if(!viewingToday)return onDay;
+    // Only today absorbs the backlog; past days keep showing what they held.
+    var carried=mine.filter(isMissed).sort(function(a,b){
+      var da=String(taskDate(a)).slice(0,10), db=String(taskDate(b)).slice(0,10);
+      return da<db?-1:da>db?1:0;   // oldest miss first
+    });
+    return carried.concat(onDay);
+  }
   function recsOf(u){return sortTasks(act.filter(function(t){return (t.assignedTo||"").toLowerCase()===u&&t.recurring;}));}
 
   if(mainTab==="done"){
@@ -1013,7 +1202,7 @@ function renderBig(){
   var g=document.getElementById("calBigGrid");
   var first=new Date(bigY,bigM,1);var startDow=(first.getDay()+6)%7;
   var days=new Date(bigY,bigM+1,0).getDate();
-  var today=ymd(new Date());
+  var today=tzToday();
   var html=["MON","TUE","WED","THU","FRI","SAT","SUN"].map(function(d){return '<div class="dow">'+d+'</div>';}).join("");
   for(var i=0;i<startDow;i++)html+='<div></div>';
   for(var day=1;day<=days;day++){
@@ -1030,7 +1219,7 @@ function renderBig(){
 document.getElementById("calBigPrev").onclick=function(){bigM--;if(bigM<0){bigM=11;bigY--;}renderBig();};
 document.getElementById("calBigNext").onclick=function(){bigM++;if(bigM>11){bigM=0;bigY++;}renderBig();};
 document.getElementById("calBigMY").onchange=function(){var p=this.value.split("-");bigY=+p[0];bigM=+p[1];renderBig();};
-document.getElementById("calBigToday").onclick=function(){selectDate(ymd(new Date()));};
+document.getElementById("calBigToday").onclick=function(){selectDate(tzToday());};
 
 /* ================= team card ================= */
 function renderTeam(){
@@ -1372,10 +1561,29 @@ document.getElementById("quickTitle").addEventListener("keydown",function(e){if(
 })();
 function renderAll(){renderMemberChips();renderBars();renderBig();renderTeam();updateMsgBadge();
   if(window.syncBarsScroll)requestAnimationFrame(window.syncBarsScroll);}
+/* Pull the team-wide zone before anything renders, then re-render with it. */
+function applyCmdTz(tz){
+  if(!tz)return;
+  CMD_TZ=tz;
+  var lbl=document.getElementById("tzLabel");
+  if(lbl)lbl.textContent=tzShortLabel();
+  var sel=document.getElementById("tzSelect");
+  if(sel)sel.value=tz;
+}
+function loadCmdSettings(){
+  return api("/api/settings/command").then(function(d){
+    if(d&&d.settings&&d.settings.timeZone){
+      applyCmdTz(d.settings.timeZone);
+      selDate=tzToday(); initCal();
+      renderAll();
+    }
+  }).catch(function(){});
+}
 initCal();
 paintMe();
+loadLayout();
 if(!ME)openGate();
-loadTasks().catch(function(){toast("Failed to load tasks");});
+loadCmdSettings().then(function(){return loadTasks();}).catch(function(){toast("Failed to load tasks");});
 pollNotes();
 setInterval(function(){api("/api/tasks").then(function(d){
   var sig=JSON.stringify((d.tasks||[]).map(function(t){return t.id+t.status+(t.updatedAt||"");}));

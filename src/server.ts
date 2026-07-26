@@ -290,6 +290,12 @@ import {
   searchNotes,
   updateNote,
 } from "./core/harveyNotes.js";
+import {
+  getCommandSettings,
+  setCommandTimeZone,
+  isValidTimeZone,
+} from "./core/commandSettings.js";
+
 import type {
   CommandTask,
   CommandTaskChecklistItem,
@@ -8062,6 +8068,37 @@ app.get("/api/tasks", (req, res) => {
   });
 
   res.json({ tasks, counts: commandTaskCounts() });
+});
+
+/**
+ * Command time zone. One zone for the whole team so day boundaries, deadline
+ * labels and task rollover agree no matter where the viewer is sitting.
+ */
+app.get("/api/settings/command", (_req, res) => {
+  res.json({ ok: true, settings: getCommandSettings() });
+});
+
+app.put("/api/settings/command", express.json({ limit: "16kb" }), async (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const tz = typeof body.timeZone === "string" ? body.timeZone.trim() : "";
+  if (!isValidTimeZone(tz)) {
+    res.status(400).json({ ok: false, error: "Unknown or missing time zone" });
+    return;
+  }
+  const by = typeof body.updatedBy === "string" ? body.updatedBy : undefined;
+  const settings = setCommandTimeZone(tz, by);
+  try {
+    const { recordAudit } = await import("./core/authStore.js");
+    recordAudit({
+      userName: by,
+      action: "command.timezone.set",
+      detail: `Command time zone set to ${settings.timeZone}`,
+      req,
+    });
+  } catch {
+    /* audit is best-effort; the setting is already saved */
+  }
+  res.json({ ok: true, settings });
 });
 
 app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {

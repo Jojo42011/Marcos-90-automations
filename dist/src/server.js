@@ -98,6 +98,7 @@ const types_js_2 = require("./core/types.js");
 const tasks_js_1 = require("./core/tasks.js");
 const marcoTasks_js_1 = require("./core/marcoTasks.js");
 const harveyNotes_js_1 = require("./core/harveyNotes.js");
+const commandSettings_js_1 = require("./core/commandSettings.js");
 const deals_js_1 = require("./core/deals.js");
 const transactionsStore_js_1 = require("./core/transactionsStore.js");
 const documentFill_js_1 = require("./core/documentFill.js");
@@ -7249,6 +7250,36 @@ app.get("/api/tasks", (req, res) => {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
     res.json({ tasks, counts: commandTaskCounts() });
+});
+/**
+ * Command time zone. One zone for the whole team so day boundaries, deadline
+ * labels and task rollover agree no matter where the viewer is sitting.
+ */
+app.get("/api/settings/command", (_req, res) => {
+    res.json({ ok: true, settings: (0, commandSettings_js_1.getCommandSettings)() });
+});
+app.put("/api/settings/command", express_1.default.json({ limit: "16kb" }), async (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const tz = typeof body.timeZone === "string" ? body.timeZone.trim() : "";
+    if (!(0, commandSettings_js_1.isValidTimeZone)(tz)) {
+        res.status(400).json({ ok: false, error: "Unknown or missing time zone" });
+        return;
+    }
+    const by = typeof body.updatedBy === "string" ? body.updatedBy : undefined;
+    const settings = (0, commandSettings_js_1.setCommandTimeZone)(tz, by);
+    try {
+        const { recordAudit } = await Promise.resolve().then(() => __importStar(require("./core/authStore.js")));
+        recordAudit({
+            userName: by,
+            action: "command.timezone.set",
+            detail: `Command time zone set to ${settings.timeZone}`,
+            req,
+        });
+    }
+    catch {
+        /* audit is best-effort; the setting is already saved */
+    }
+    res.json({ ok: true, settings });
 });
 app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
     const body = (req.body && typeof req.body === "object" ? req.body : {});
