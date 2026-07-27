@@ -253,6 +253,10 @@ html[data-theme="dark"] .danger:hover{background:#3b1a1a}
 </header>
 
 <div id="filters">
+  <span class="flabel">SHOW</span>
+  <button class="chip" id="fContact" title="Hide people with no phone and no email">
+    <span class="cdot" style="background:#0891B2"></span><span id="fContactLabel">Contactable only</span>
+  </button>
   <span class="flabel">STATUS</span>
   <div class="chips" id="statusChips"></div>
   <span class="flabel">SOURCE</span>
@@ -316,7 +320,12 @@ var STALE_DAYS = 14;
 var SIDE   = "buyer";          // which pipeline the board is showing
 var SCHEMA = {statuses:[], buyerStages:[], sellerStages:[]};
 var RECORDS = [];              // everything, unfiltered
-var FILTER  = {status:{}, source:"", assigned:"", from:"", to:"", q:""};
+var FILTER  = {status:{}, source:"", assigned:"", from:"", to:"", q:"", contactable:false};
+/* Most of the imported book is Instagram/TikTok handles with no phone or email.
+   The preference sticks, because someone who only ever works the reachable
+   people should not have to re-hide the rest on every visit. */
+var CONTACT_KEY="trackerContactableOnly";
+try{ FILTER.contactable = localStorage.getItem(CONTACT_KEY)==="1"; }catch(_){}
 var CUR = null;                // record open in the drawer
 var CK  = [];                  // drawer checklist working copy
 var DIRTY = false;
@@ -355,8 +364,12 @@ document.getElementById("themeBtn").onclick=function(){
    Done client-side: the whole tracker is small enough to hold in memory, and it
    keeps the board responsive while typing instead of firing a request per key. */
 function anyStatusOn(){return Object.keys(FILTER.status).some(function(k){return FILTER.status[k];});}
+/* "Contactable" means there is a way to actually reach them. A social handle is
+   not one — the DM agent owns that conversation until they hand over a number. */
+function contactable(rec){return !!((rec.phone||"").trim()||(rec.email||"").trim());}
 function passes(rec){
   if(!(rec.sides||[]).length || (rec.sides||[]).indexOf(SIDE)<0) return false;
+  if(FILTER.contactable && !contactable(rec)) return false;
   if(anyStatusOn() && !FILTER.status[rec.status]) return false;
   if(FILTER.source && (rec.source||"").trim().toLowerCase()!==FILTER.source) return false;
   if(FILTER.assigned && (rec.assignedTo||"").trim().toLowerCase()!==FILTER.assigned) return false;
@@ -442,9 +455,14 @@ function renderBoard(){
     '</section>';
   }).join("");
 
-  var total=RECORDS.filter(function(r){return (r.sides||[]).indexOf(SIDE)>=0;}).length;
+  var onSide=RECORDS.filter(function(r){return (r.sides||[]).indexOf(SIDE)>=0;});
+  var total=onSide.length;
+  /* Say plainly how many are hidden for having no phone or email, rather than
+     letting the total quietly shrink. */
+  var hidden=FILTER.contactable?onSide.filter(function(r){return !contactable(r);}).length:0;
   document.getElementById("countLine").innerHTML=
     '<b>'+list.length+'</b> of '+total+' '+(SIDE==="buyer"?"buyers":"sellers")+
+    (hidden?' · <span title="No phone or email on file">'+hidden+' hidden with no contact info</span>':'')+
     (RECORDS.length!==total?' · '+RECORDS.length+' total in tracker':'');
 
   var none=RECORDS.length===0;
@@ -586,13 +604,28 @@ function paintSelectFilters(){
   fill(document.getElementById("fSource"),srcs,"All",FILTER.source);
   fill(document.getElementById("fAssigned"),asg,"Anyone",FILTER.assigned);
 }
+function paintContactChip(){
+  var b=document.getElementById("fContact");
+  b.classList.toggle("on",FILTER.contactable);
+  b.style.background=FILTER.contactable?"#0891B2":"";
+  b.querySelector(".cdot").style.background=FILTER.contactable?"rgba(255,255,255,.85)":"#0891B2";
+  document.getElementById("fContactLabel").textContent=
+    FILTER.contactable?"Contactable only":"Everyone";
+}
+document.getElementById("fContact").onclick=function(){
+  FILTER.contactable=!FILTER.contactable;
+  try{ localStorage.setItem(CONTACT_KEY,FILTER.contactable?"1":"0"); }catch(_){}
+  paintContactChip();renderBoard();
+};
 document.getElementById("fSource").onchange=function(){FILTER.source=this.value;renderBoard();};
 document.getElementById("fAssigned").onchange=function(){FILTER.assigned=this.value;renderBoard();};
 document.getElementById("fFrom").onchange=function(){FILTER.from=this.value;renderBoard();};
 document.getElementById("fTo").onchange=function(){FILTER.to=this.value;renderBoard();};
 document.getElementById("search").oninput=function(){FILTER.q=this.value.trim();renderBoard();};
 document.getElementById("clearF").onclick=function(){
-  FILTER={status:{},source:"",assigned:"",from:"",to:"",q:""};
+  FILTER={status:{},source:"",assigned:"",from:"",to:"",q:"",contactable:false};
+  try{ localStorage.setItem(CONTACT_KEY,"0"); }catch(_){}
+  paintContactChip();
   document.getElementById("fSource").value="";document.getElementById("fAssigned").value="";
   document.getElementById("fFrom").value="";document.getElementById("fTo").value="";
   document.getElementById("search").value="";
@@ -865,7 +898,7 @@ function load(announce){
     .then(function(res){
       SCHEMA={statuses:res[0].statuses||[],buyerStages:res[0].buyerStages||[],sellerStages:res[0].sellerStages||[]};
       RECORDS=res[1].records||[];
-      paintStatusChips();paintSelectFilters();renderBoard();
+      paintStatusChips();paintContactChip();paintSelectFilters();renderBoard();
       if(announce)toast("Refreshed — "+RECORDS.length+" in tracker");
     })
     .catch(function(e){
