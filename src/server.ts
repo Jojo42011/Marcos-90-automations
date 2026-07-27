@@ -804,6 +804,11 @@ app.get("/team-tasks", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "team-tasks.html"));
 });
 
+// Buyers & Sellers Tracker — the two-pipeline board over /api/tracker/*.
+app.get("/tracker", requireAuthPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "tracker.html"));
+});
+
 app.get("/memory", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "memory.html"));
 });

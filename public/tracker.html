@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Buyers &amp; Sellers Tracker · Marco Puga</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,500;0,8..60,600;0,8..60,700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   BUYERS & SELLERS TRACKER
+   Same design system as Task Command (rounded-square geometry,
+   Marco crimson + Brivity teal, light/dark). The pipeline board
+   is a horizontally scrolling column per stage.
+
+   Side colours are deliberately OUTSIDE the task-status palette
+   (slate / blue / amber / green / red) so a buyer banner can
+   never be misread as a task state: buyer = indigo, seller =
+   orange, both = split.
+   ============================================================ */
+:root{
+  --brand1:#f4695b; --brand2:#bd1e2b;
+  --teal:#59c4c4; --teal-strong:#4ca7a7;
+  --buyer:#4F46E5; --seller:#EA580C;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --sans:"Inter",-apple-system,"Segoe UI","Helvetica Neue",Helvetica,Arial,Roboto,sans-serif;
+  --r:14px; --r-sm:10px;
+  --ease:cubic-bezier(.32,.72,.28,1);
+  --bg:#f6f8f9; --card:#ffffff; --line:#e8ecee; --ink:#2f3438; --muted:#5f6b78;
+  --soft:#f2f6f6; --shadow:0 1px 3px rgba(16,24,40,.07),0 1px 2px rgba(16,24,40,.05);
+  color-scheme: light;
+}
+html[data-theme="dark"]{
+  --bg:#0f1418; --card:#171d24; --line:#242c35; --ink:#e6ebef; --muted:#93a0ac;
+  --soft:#1c242c; --shadow:0 1px 3px rgba(0,0,0,.4);
+  --buyer:#8189F0; --seller:#FB8B4C;
+  color-scheme: dark;
+}
+/* Native dropdown lists are painted by the OS, so the popup needs solid colours
+   of its own and not the transparent background the closed control uses. */
+select option, select optgroup{background:var(--card);color:var(--ink)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;
+  font-optical-sizing:auto;font-feature-settings:"cv02","cv03","cv04";
+  display:flex;flex-direction:column;overflow:hidden}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;color:var(--ink)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#9aa6b2;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:#7c8894;background-clip:padding-box}
+::-webkit-scrollbar-track{background:transparent}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-clip:padding-box}
+*{scrollbar-color:#9aa6b2 transparent}
+html[data-theme="dark"] *{scrollbar-color:#4a5560 transparent}
+
+/* ── Topbar ── */
+#top{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--card);
+  border-bottom:1px solid var(--line);box-shadow:var(--shadow);z-index:40}
+.brand{display:flex;align-items:center;gap:9px}
+.brand .wm{display:flex;flex-direction:column;line-height:1;font-family:var(--serif)}
+.brand .wm small{font-size:5.6px;letter-spacing:.18em;color:#c23b3b;margin-bottom:2px;white-space:nowrap}
+.brand .wm b{font-size:13px;letter-spacing:.06em;color:var(--ink)}
+.brand .wm i{font-style:normal;font-size:9px;letter-spacing:.3em;color:var(--muted);margin-top:3px}
+.tbtn{height:36px;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:10px;
+  padding:0 13px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.tbtn:hover{color:var(--teal-strong);border-color:var(--teal)}
+.tbtn.primary{background:linear-gradient(180deg,var(--brand1),var(--brand2));border-color:transparent;color:#fff}
+.tbtn.primary:hover{color:#fff;filter:brightness(1.05)}
+#search{flex:1;max-width:340px;height:36px;border:1px solid var(--line);border-radius:10px;background:var(--card);
+  padding:0 12px;font-size:13px}
+#search:focus{outline:none;border-color:var(--teal)}
+
+/* Side switch — the one control that changes which pipeline you are looking at. */
+#sideSwitch{display:flex;background:var(--soft);border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px}
+#sideSwitch button{border:0;background:transparent;color:var(--muted);border-radius:8px;height:30px;padding:0 15px;
+  font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+#sideSwitch button .dot{width:8px;height:8px;border-radius:50%}
+#sideSwitch button[data-side="buyer"] .dot{background:var(--buyer)}
+#sideSwitch button[data-side="seller"] .dot{background:var(--seller)}
+#sideSwitch button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+
+/* ── Filter bar ── */
+#filters{flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 20px;
+  background:var(--card);border-bottom:1px solid var(--line)}
+.flabel{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;height:28px;
+  padding:0 11px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
+.chip .cdot{width:7px;height:7px;border-radius:50%}
+.chip.on{color:#fff;border-color:transparent}
+.chip.on .cdot{background:rgba(255,255,255,.85)}
+.fsel{height:28px;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:0 8px;
+  font-size:12px;font-weight:600;max-width:170px}
+.fdate{height:28px;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:0 8px;font-size:12px}
+#clearF{border:0;background:transparent;color:var(--muted);font-size:12px;font-weight:700;text-decoration:underline}
+#clearF:hover{color:var(--brand2)}
+#countLine{margin-left:auto;font-size:12px;color:var(--muted);font-weight:600}
+#countLine b{color:var(--ink)}
+
+/* ── Board ── */
+#boardWrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:14px 20px 0}
+#board{flex:1 1 auto;min-height:0;display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;align-items:stretch;
+  padding-bottom:4px}
+/* Native horizontal bar is overlay-only on some platforms and vanishes when idle;
+   #boardScroll below is always visible and drives the same scrollLeft. */
+#board{scrollbar-width:none;-ms-overflow-style:none}
+#board::-webkit-scrollbar{height:0;display:none}
+#boardScroll{flex:0 0 auto;height:12px;margin:8px 0 12px;border-radius:8px;background:rgba(127,140,155,.16);
+  position:relative;cursor:pointer;display:none}
+#boardScroll.on{display:block}
+#boardThumb{position:absolute;top:0;left:0;height:100%;min-width:40px;border-radius:8px;background:#7c8894;cursor:grab}
+#boardThumb:hover{background:#6a7682}
+#boardThumb.drag{cursor:grabbing;background:#5f6b77}
+html[data-theme="dark"] #boardScroll{background:rgba(255,255,255,.07)}
+html[data-theme="dark"] #boardThumb{background:#5c6875}
+
+.col{flex:0 0 268px;display:flex;flex-direction:column;min-height:0;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;transition:border-color .12s var(--ease)}
+.col.drop{border-color:var(--teal);box-shadow:0 0 0 2px rgba(89,196,196,.25),var(--shadow)}
+.colhead{flex:0 0 auto;padding:11px 12px 9px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.colhead .cbar{width:3px;height:16px;border-radius:2px;flex:0 0 auto}
+.colhead h3{font-size:12.5px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.colhead .cnt{font-size:11px;font-weight:800;color:var(--muted);background:var(--soft);border-radius:999px;
+  padding:2px 8px;flex:0 0 auto}
+.colbody{flex:1 1 auto;min-height:0;overflow-y:auto;padding:9px;display:flex;flex-direction:column;gap:9px}
+.colempty{font-size:11.5px;color:var(--muted);text-align:center;padding:14px 6px;border:1px dashed var(--line);
+  border-radius:var(--r-sm)}
+
+/* ── Card ── */
+.rec{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 11px 10px 13px;
+  cursor:pointer;transition:box-shadow .14s var(--ease),transform .14s var(--ease);overflow:hidden}
+.rec:hover{box-shadow:0 5px 16px rgba(16,24,40,.12);transform:translateY(-1px)}
+html[data-theme="dark"] .rec:hover{box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.rec.dragging{opacity:.45}
+/* Side banner: the left edge stripe. Two-sided records get both colours. */
+.rec::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
+.rec.side-buyer::before{background:var(--buyer)}
+.rec.side-seller::before{background:var(--seller)}
+.rec.side-both::before{background:linear-gradient(180deg,var(--buyer) 0 50%,var(--seller) 50% 100%)}
+.rec .rtop{display:flex;align-items:flex-start;gap:7px}
+.rec .rname{font-weight:700;font-size:13.5px;flex:1;min-width:0;line-height:1.3}
+.pill{font-size:10px;font-weight:800;letter-spacing:.03em;color:#fff;border-radius:999px;padding:2px 7px;
+  flex:0 0 auto;text-transform:uppercase}
+.rec .rmeta{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}
+.tag{font-size:10.5px;font-weight:600;color:var(--muted);background:var(--soft);border-radius:6px;padding:2px 6px;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag.sidetag{color:#fff}
+.tag.sidetag.b{background:var(--buyer)}
+.tag.sidetag.s{background:var(--seller)}
+.ckchip{font-size:10.5px;font-weight:700;color:var(--muted);background:var(--soft);border-radius:6px;padding:2px 6px}
+.ckchip.alldone{color:#fff;background:#059669}
+.rec .rfoot{margin-top:7px;font-size:10.5px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.rec .stale{color:#DC2626;font-weight:700}
+
+/* ── Drawer ── */
+#scrim{position:fixed;inset:0;background:rgba(15,20,24,.42);opacity:0;pointer-events:none;
+  transition:opacity .18s var(--ease);z-index:50}
+#scrim.on{opacity:1;pointer-events:auto}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--card);border-left:1px solid var(--line);
+  transform:translateX(100%);transition:transform .22s var(--ease);z-index:51;display:flex;flex-direction:column}
+#drawer.on{transform:none}
+#dHead{flex:0 0 auto;padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:10px}
+#dHead h2{font-family:var(--serif);font-size:20px;flex:1;min-width:0;line-height:1.25}
+#dBody{flex:1 1 auto;overflow-y:auto;padding:16px 18px 26px;display:flex;flex-direction:column;gap:16px}
+#dFoot{flex:0 0 auto;padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:9px;align-items:center}
+.sect{border:1px solid var(--line);border-radius:var(--r);padding:13px}
+.sect > h4{font-size:11px;font-weight:800;letter-spacing:.07em;color:var(--muted);margin-bottom:10px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.f{display:flex;flex-direction:column;gap:4px}
+.f.full{grid-column:1/-1}
+.f label{font-size:11px;font-weight:700;color:var(--muted)}
+.f input,.f select,.f textarea{height:34px;border:1px solid var(--line);background:var(--card);border-radius:9px;
+  padding:0 9px;font-size:13px}
+.f textarea{height:auto;min-height:74px;padding:8px 9px;resize:vertical;line-height:1.45}
+.f input:focus,.f select:focus,.f textarea:focus{outline:none;border-color:var(--teal)}
+.sidepick{display:flex;gap:8px}
+.sidepick label{flex:1;display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:9px;
+  padding:8px 10px;font-size:12.5px;font-weight:700;cursor:pointer}
+.sidepick label.on{border-color:transparent;color:#fff}
+.sidepick label.on.b{background:var(--buyer)}
+.sidepick label.on.s{background:var(--seller)}
+.sidepick input{display:none}
+
+/* Stage rail — the pipeline as a vertical list so the current step is obvious. */
+.rail{display:flex;flex-direction:column;gap:2px}
+.rail button{display:flex;align-items:center;gap:9px;border:0;background:transparent;border-radius:8px;
+  padding:6px 8px;font-size:12.5px;font-weight:600;color:var(--muted);text-align:left;width:100%}
+.rail button:hover{background:var(--soft);color:var(--ink)}
+.rail button .rdot{width:11px;height:11px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto}
+.rail button.done .rdot{background:var(--line);border-color:var(--line)}
+.rail button.cur{color:#fff;font-weight:800}
+.rail button.cur .rdot{background:#fff;border-color:#fff}
+.rail.b button.cur{background:var(--buyer)}
+.rail.s button.cur{background:var(--seller)}
+.rail button .rwhen{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.85}
+.railnote{font-size:11px;color:var(--muted);margin-top:8px}
+
+/* Checklist — same interaction as the task modal. */
+.ckitem{display:flex;align-items:flex-start;gap:8px;padding:5px 0}
+.ckitem input[type=checkbox]{width:16px;height:16px;margin-top:2px;flex:0 0 auto;accent-color:var(--teal-strong)}
+.ckitem .cktext{flex:1;border:0;background:transparent;font-size:13px;line-height:1.4;resize:none;overflow:hidden;padding:0}
+.ckitem .cktext:focus{outline:none}
+.ckitem.done .cktext{text-decoration:line-through;color:var(--muted)}
+.ckdel{border:0;background:transparent;color:var(--muted);font-size:14px;line-height:1;padding:2px 4px}
+.ckdel:hover{color:#DC2626}
+.ckempty{font-size:12px;color:var(--muted);padding:4px 0}
+#ckNew{height:32px;border:1px dashed var(--line);background:transparent;border-radius:8px;padding:0 9px;
+  font-size:12.5px;width:100%;margin-top:6px}
+#ckNew:focus{outline:none;border-color:var(--teal);border-style:solid}
+.danger{border-color:#f2c2c2;color:#DC2626}
+.danger:hover{background:#fee2e2;border-color:#DC2626;color:#DC2626}
+html[data-theme="dark"] .danger{border-color:#5b2626}
+html[data-theme="dark"] .danger:hover{background:#3b1a1a}
+
+#empty{flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);
+  text-align:center;padding:40px 20px}
+#empty h3{font-family:var(--serif);font-size:20px;color:var(--ink)}
+#empty p{font-size:13px;max-width:440px;line-height:1.5}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);background:#1f2937;color:#fff;
+  padding:10px 16px;border-radius:11px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;
+  transition:all .2s var(--ease);z-index:70;box-shadow:0 8px 24px rgba(0,0,0,.28)}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<header id="top">
+  <div class="brand">
+    <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
+      <defs><linearGradient id="mp" x1="0" y1="2" x2="0" y2="46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f4695b"/><stop offset="1" stop-color="#bd1e2b"/></linearGradient></defs>
+      <path d="M24 4 44 24 24 44 4 24Z" stroke="url(#mp)" stroke-width="2.2"/>
+      <path d="M14.5 22 24 12.5 33.5 22" stroke="url(#mp)" stroke-width="1.9" stroke-linejoin="round"/>
+      <text x="24" y="33.5" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="14.5" fill="url(#mp)">M</text>
+    </svg>
+    <span class="wm"><small>HAPPINESS BEGINS AT HOME</small><b>MARCO PUGA</b><i>TRACKER</i></span>
+  </div>
+  <div id="sideSwitch">
+    <button data-side="buyer" class="on"><span class="dot"></span>Buyers</button>
+    <button data-side="seller"><span class="dot"></span>Sellers</button>
+  </div>
+  <input id="search" placeholder="Search name, phone, email, address…" autocomplete="off" />
+  <button class="tbtn" id="themeBtn">◐ Theme</button>
+  <button class="tbtn" id="refreshBtn">↺ Refresh</button>
+  <button class="tbtn primary" id="addBtn">+ Add Person</button>
+</header>
+
+<div id="filters">
+  <span class="flabel">STATUS</span>
+  <div class="chips" id="statusChips"></div>
+  <span class="flabel">SOURCE</span>
+  <select class="fsel" id="fSource"><option value="">All</option></select>
+  <span class="flabel">ASSIGNED</span>
+  <select class="fsel" id="fAssigned"><option value="">Anyone</option></select>
+  <span class="flabel">ADDED</span>
+  <input class="fdate" type="date" id="fFrom" title="Added on or after" />
+  <span style="color:var(--muted)">–</span>
+  <input class="fdate" type="date" id="fTo" title="Added on or before" />
+  <button id="clearF">Clear</button>
+  <div id="countLine"></div>
+</div>
+
+<div id="boardWrap">
+  <div id="board"></div>
+  <div id="boardScroll"><div id="boardThumb"></div></div>
+</div>
+<div id="empty">
+  <h3>Nothing in this pipeline yet</h3>
+  <p id="emptyMsg">Add a person with “+ Add Person”, or drop an existing one into a stage.</p>
+</div>
+
+<div id="scrim"></div>
+<aside id="drawer" aria-hidden="true">
+  <div id="dHead">
+    <h2 id="dName">—</h2>
+    <button class="tbtn" id="dClose">✕</button>
+  </div>
+  <div id="dBody"></div>
+  <div id="dFoot">
+    <button class="tbtn danger" id="dDelete">Delete</button>
+    <div style="flex:1"></div>
+    <span id="dSaved" style="font-size:11.5px;color:var(--muted)"></span>
+    <button class="tbtn primary" id="dSave">Save</button>
+  </div>
+</aside>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ================= constants ================= */
+/* Status colours are picked to stay clear of the two side colours (indigo /
+   orange) so a card never reads as "buyer" when it means "hot". */
+var STATUS_META = {
+  new:         {label:"New",         c:"#64748B"},
+  unqualified: {label:"Unqualified", c:"#94A3B8"},
+  watch:       {label:"Watch",       c:"#0891B2"},
+  nurture:     {label:"Nurture",     c:"#7C3AED"},
+  hot:         {label:"Hot",         c:"#DC2626"},
+  pending:     {label:"Pending",     c:"#059669"}
+};
+var SIDE_COLOR = {buyer:"#4F46E5", seller:"#EA580C"};
+/* Stage at which the tracker asks for a timeline date (per the spec). */
+var TIMELINE_STAGE = {buyer:"qualified", seller:"cma_requested"};
+var STALE_DAYS = 14;
+
+/* ================= state ================= */
+var SIDE   = "buyer";          // which pipeline the board is showing
+var SCHEMA = {statuses:[], buyerStages:[], sellerStages:[]};
+var RECORDS = [];              // everything, unfiltered
+var FILTER  = {status:{}, source:"", assigned:"", from:"", to:"", q:""};
+var CUR = null;                // record open in the drawer
+var CK  = [];                  // drawer checklist working copy
+var DIRTY = false;
+
+/* ================= helpers ================= */
+function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML;}
+function toast(m){var t=document.getElementById("toast");t.textContent=m;t.classList.add("on");
+  clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove("on");},2200);}
+function api(p,opts){return fetch(p,opts).then(function(r){
+  if(!r.ok)return r.json().catch(function(){return{};}).then(function(j){
+    throw new Error(j.error||("HTTP "+r.status));});
+  return r.json();});}
+function jsonReq(method,body){return {method:method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)};}
+function stages(side){return side==="seller"?SCHEMA.sellerStages:SCHEMA.buyerStages;}
+function stageOf(rec,side){return side==="seller"?(rec.sellerStage||null):(rec.buyerStage||null);}
+function stageLabel(side,key){var s=stages(side).find(function(x){return x.key===key;});return s?s.label:key;}
+function sideClass(rec){var s=rec.sides||[];
+  if(s.indexOf("buyer")>=0&&s.indexOf("seller")>=0)return "side-both";
+  return s.indexOf("seller")>=0?"side-seller":"side-buyer";}
+function uid(p){return p+"_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,6);}
+var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function shortDate(iso){var d=new Date(iso);if(isNaN(d))return"";
+  return MONTHS[d.getMonth()]+" "+d.getDate()+(d.getFullYear()!==new Date().getFullYear()?", "+d.getFullYear():"");}
+function daysSince(iso){var d=new Date(iso);if(isNaN(d))return null;
+  return Math.floor((Date.now()-d.getTime())/86400000);}
+function ymdOf(iso){return String(iso||"").slice(0,10);}
+
+/* ================= theme ================= */
+function applyTheme(t){document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");
+  localStorage.setItem("teamTasksTheme",t);}
+applyTheme(localStorage.getItem("teamTasksTheme")||"light");
+document.getElementById("themeBtn").onclick=function(){
+  applyTheme(document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark");};
+
+/* ================= filtering =================
+   Done client-side: the whole tracker is small enough to hold in memory, and it
+   keeps the board responsive while typing instead of firing a request per key. */
+function anyStatusOn(){return Object.keys(FILTER.status).some(function(k){return FILTER.status[k];});}
+function passes(rec){
+  if(!(rec.sides||[]).length || (rec.sides||[]).indexOf(SIDE)<0) return false;
+  if(anyStatusOn() && !FILTER.status[rec.status]) return false;
+  if(FILTER.source && (rec.source||"")!==FILTER.source) return false;
+  if(FILTER.assigned && (rec.assignedTo||"")!==FILTER.assigned) return false;
+  if(FILTER.from && ymdOf(rec.addedAt) < FILTER.from) return false;
+  if(FILTER.to   && ymdOf(rec.addedAt) > FILTER.to)   return false;
+  if(FILTER.q){
+    var q=FILTER.q.toLowerCase();
+    var hay=[rec.name,rec.phone,rec.email,rec.address,rec.source,rec.notes]
+      .filter(Boolean).join(" ").toLowerCase();
+    var digits=String(rec.phone||"").replace(/\D/g,"");
+    if(hay.indexOf(q)<0 && !(/\d/.test(q)&&digits.indexOf(q.replace(/\D/g,""))>=0)) return false;
+  }
+  return true;
+}
+function visible(){return RECORDS.filter(passes);}
+
+/* ================= board ================= */
+function cardHtml(rec){
+  var st=STATUS_META[rec.status]||STATUS_META.new;
+  var bits=[];
+  if(rec.phone)   bits.push('<span class="tag">'+esc(rec.phone)+'</span>');
+  if(rec.address) bits.push('<span class="tag">'+esc(rec.address)+'</span>');
+  if(rec.source)  bits.push('<span class="tag">'+esc(rec.source)+'</span>');
+  /* A two-sided person shows where they sit on the OTHER pipeline, so working the
+     buyer board never hides the fact that they are also selling. */
+  var other = SIDE==="buyer"?"seller":"buyer";
+  if((rec.sides||[]).indexOf(other)>=0){
+    var os=stageOf(rec,other);
+    bits.push('<span class="tag sidetag '+(other==="buyer"?"b":"s")+'">'+
+      (other==="buyer"?"Buying":"Selling")+(os?" · "+esc(stageLabel(other,os)):"")+'</span>');
+  }
+  var ck=Array.isArray(rec.checklist)?rec.checklist:[];
+  if(ck.length){
+    var done=ck.filter(function(i){return i.done;}).length;
+    bits.push('<span class="ckchip'+(done===ck.length?" alldone":"")+'">'+
+      (done===ck.length?"☑":"☐")+" "+done+"/"+ck.length+'</span>');
+  }
+  /* Only ever reported from a real logged contact. Falling back to updatedAt made
+     every untouched record claim "Contacted today", which is the opposite of what
+     this line is for. */
+  var d=rec.lastInteractionAt?daysSince(rec.lastInteractionAt):null;
+  var foot = d===null
+    ? '<span style="opacity:.7">No contact logged</span>'
+    : (d>=STALE_DAYS
+        ? '<span class="stale">● '+d+'d since contact</span>'
+        : '<span>'+(d<=0?"Contacted today":d+"d since contact")+'</span>');
+  return '<article class="rec '+sideClass(rec)+'" draggable="true" data-id="'+esc(rec.id)+'">'+
+    '<div class="rtop"><div class="rname">'+esc(rec.name)+'</div>'+
+      '<span class="pill" style="background:'+st.c+'">'+esc(st.label)+'</span></div>'+
+    (bits.length?'<div class="rmeta">'+bits.join("")+'</div>':'')+
+    '<div class="rfoot">'+foot+'</div>'+
+  '</article>';
+}
+
+function renderBoard(){
+  var board=document.getElementById("board");
+  var list=visible();
+  var st=stages(SIDE);
+  var byStage={}; st.forEach(function(s){byStage[s.key]=[];});
+  var unstaged=[];
+  list.forEach(function(r){
+    var k=stageOf(r,SIDE);
+    if(k&&byStage[k])byStage[k].push(r); else unstaged.push(r);
+  });
+
+  var cols=[];
+  /* Unstaged is a real column, not a hidden bucket: after the CRM import every
+     record lands here, and a person you cannot see is a person you never work. */
+  cols.push({key:"",label:"Unstaged",items:unstaged,muted:true});
+  st.forEach(function(s){cols.push({key:s.key,label:s.label,items:byStage[s.key]});});
+
+  board.innerHTML=cols.map(function(c){
+    return '<section class="col" data-stage="'+esc(c.key)+'">'+
+      '<div class="colhead">'+
+        '<span class="cbar" style="background:'+(c.muted?"var(--line)":SIDE_COLOR[SIDE])+'"></span>'+
+        '<h3'+(c.muted?' style="color:var(--muted)"':'')+'>'+esc(c.label)+'</h3>'+
+        '<span class="cnt">'+c.items.length+'</span>'+
+      '</div>'+
+      '<div class="colbody">'+
+        (c.items.length?c.items.map(cardHtml).join("")
+          :'<div class="colempty">'+(c.muted?"Everyone is staged":"Drop someone here")+'</div>')+
+      '</div>'+
+    '</section>';
+  }).join("");
+
+  var total=RECORDS.filter(function(r){return (r.sides||[]).indexOf(SIDE)>=0;}).length;
+  document.getElementById("countLine").innerHTML=
+    '<b>'+list.length+'</b> of '+total+' '+(SIDE==="buyer"?"buyers":"sellers")+
+    (RECORDS.length!==total?' · '+RECORDS.length+' total in tracker':'');
+
+  var none=RECORDS.length===0;
+  document.getElementById("empty").style.display=none?"flex":"none";
+  document.getElementById("boardWrap").style.display=none?"none":"flex";
+
+  bindCards();
+  syncScrollbar();
+}
+
+/* ================= drag between stages ================= */
+var dragId=null;
+function bindCards(){
+  document.querySelectorAll(".rec").forEach(function(el){
+    el.onclick=function(){openDrawer(el.getAttribute("data-id"));};
+    el.ondragstart=function(e){dragId=el.getAttribute("data-id");el.classList.add("dragging");
+      e.dataTransfer.effectAllowed="move";
+      try{e.dataTransfer.setData("text/plain",dragId);}catch(_){}};
+    el.ondragend=function(){el.classList.remove("dragging");dragId=null;
+      document.querySelectorAll(".col.drop").forEach(function(c){c.classList.remove("drop");});};
+  });
+  document.querySelectorAll(".col").forEach(function(col){
+    col.ondragover=function(e){if(!dragId)return;e.preventDefault();e.dataTransfer.dropEffect="move";col.classList.add("drop");};
+    col.ondragleave=function(){col.classList.remove("drop");};
+    col.ondrop=function(e){
+      e.preventDefault();col.classList.remove("drop");
+      var id=dragId||e.dataTransfer.getData("text/plain");
+      if(!id)return;
+      moveStage(id,col.getAttribute("data-stage")||null);
+    };
+  });
+}
+
+function moveStage(id,stageKey){
+  var rec=RECORDS.find(function(r){return r.id===id;});
+  if(!rec)return;
+  if(stageOf(rec,SIDE)===(stageKey||null))return;
+  var meta={};
+  /* The spec asks for a timeline date at Qualified (buyers) / CMA Requested
+     (sellers). Ask once, on entry, rather than burying it in the drawer. */
+  if(stageKey===TIMELINE_STAGE[SIDE]){
+    var prev=(rec.stageMeta&&rec.stageMeta[SIDE+":"+stageKey]&&rec.stageMeta[SIDE+":"+stageKey].timelineDate)||"";
+    var ans=prompt("Timeline for "+rec.name+" — when are they looking to "+
+      (SIDE==="buyer"?"buy":"list")+"? (YYYY-MM-DD, or leave blank)",prev);
+    if(ans===null)return;                       // cancelled: leave the card put
+    if(ans.trim())meta.timelineDate=ans.trim();
+  }
+  api("/api/tracker/records/"+encodeURIComponent(id)+"/stage",
+      jsonReq("POST",{side:SIDE,stage:stageKey,meta:meta}))
+    .then(function(j){
+      replaceRecord(j.record);
+      renderBoard();
+      if(CUR&&CUR.id===id){CUR=j.record;paintDrawer();}
+      toast(rec.name+" → "+(stageKey?stageLabel(SIDE,stageKey):"Unstaged"));
+    })
+    .catch(function(e){toast("Could not move: "+e.message);});
+}
+
+function replaceRecord(rec){
+  var i=RECORDS.findIndex(function(r){return r.id===rec.id;});
+  if(i>=0)RECORDS[i]=rec; else RECORDS.push(rec);
+}
+
+/* ================= synthetic horizontal scrollbar =================
+   Native overlay bars fade out and are unverifiable in a headless pass, so the
+   board drives a visible one of its own. */
+function syncScrollbar(){
+  var b=document.getElementById("board"), bar=document.getElementById("boardScroll"),
+      th=document.getElementById("boardThumb");
+  var need=b.scrollWidth>b.clientWidth+2;
+  bar.classList.toggle("on",need);
+  if(!need)return;
+  var ratio=b.clientWidth/b.scrollWidth;
+  var w=Math.max(40,bar.clientWidth*ratio);
+  th.style.width=w+"px";
+  var maxLeft=bar.clientWidth-w, maxScroll=b.scrollWidth-b.clientWidth;
+  th.style.left=(maxScroll?(b.scrollLeft/maxScroll)*maxLeft:0)+"px";
+}
+(function bindScrollbar(){
+  var b=document.getElementById("board"), bar=document.getElementById("boardScroll"),
+      th=document.getElementById("boardThumb");
+  b.addEventListener("scroll",syncScrollbar);
+  window.addEventListener("resize",syncScrollbar);
+  var drag=false,startX=0,startLeft=0;
+  th.addEventListener("mousedown",function(e){drag=true;startX=e.clientX;
+    startLeft=parseFloat(th.style.left||"0");th.classList.add("drag");e.preventDefault();});
+  document.addEventListener("mousemove",function(e){
+    if(!drag)return;
+    var maxLeft=bar.clientWidth-th.offsetWidth, maxScroll=b.scrollWidth-b.clientWidth;
+    var left=Math.max(0,Math.min(maxLeft,startLeft+(e.clientX-startX)));
+    th.style.left=left+"px";
+    b.scrollLeft=maxLeft?(left/maxLeft)*maxScroll:0;
+  });
+  document.addEventListener("mouseup",function(){drag=false;th.classList.remove("drag");});
+  bar.addEventListener("mousedown",function(e){
+    if(e.target===th)return;
+    var maxLeft=bar.clientWidth-th.offsetWidth, maxScroll=b.scrollWidth-b.clientWidth;
+    var left=Math.max(0,Math.min(maxLeft,e.offsetX-th.offsetWidth/2));
+    th.style.left=left+"px";
+    b.scrollLeft=maxLeft?(left/maxLeft)*maxScroll:0;
+  });
+})();
+
+/* ================= filters UI ================= */
+function paintStatusChips(){
+  var wrap=document.getElementById("statusChips");
+  wrap.innerHTML=(SCHEMA.statuses||[]).map(function(s){
+    var m=STATUS_META[s]||{label:s,c:"#64748B"};
+    var on=!!FILTER.status[s];
+    return '<button class="chip'+(on?" on":"")+'" data-st="'+esc(s)+'"'+
+      (on?' style="background:'+m.c+'"':'')+'>'+
+      '<span class="cdot" style="background:'+(on?"rgba(255,255,255,.85)":m.c)+'"></span>'+esc(m.label)+'</button>';
+  }).join("");
+  wrap.querySelectorAll("[data-st]").forEach(function(b){
+    b.onclick=function(){var k=b.getAttribute("data-st");
+      FILTER.status[k]=!FILTER.status[k];paintStatusChips();renderBoard();};
+  });
+}
+function paintSelectFilters(){
+  var srcs={},asg={};
+  RECORDS.forEach(function(r){if(r.source)srcs[r.source]=1;if(r.assignedTo)asg[r.assignedTo]=1;});
+  function fill(sel,vals,all,cur){
+    sel.innerHTML='<option value="">'+all+'</option>'+
+      Object.keys(vals).sort().map(function(v){
+        return '<option value="'+esc(v)+'"'+(v===cur?" selected":"")+'>'+esc(v)+'</option>';}).join("");
+  }
+  fill(document.getElementById("fSource"),srcs,"All",FILTER.source);
+  fill(document.getElementById("fAssigned"),asg,"Anyone",FILTER.assigned);
+}
+document.getElementById("fSource").onchange=function(){FILTER.source=this.value;renderBoard();};
+document.getElementById("fAssigned").onchange=function(){FILTER.assigned=this.value;renderBoard();};
+document.getElementById("fFrom").onchange=function(){FILTER.from=this.value;renderBoard();};
+document.getElementById("fTo").onchange=function(){FILTER.to=this.value;renderBoard();};
+document.getElementById("search").oninput=function(){FILTER.q=this.value.trim();renderBoard();};
+document.getElementById("clearF").onclick=function(){
+  FILTER={status:{},source:"",assigned:"",from:"",to:"",q:""};
+  document.getElementById("fSource").value="";document.getElementById("fAssigned").value="";
+  document.getElementById("fFrom").value="";document.getElementById("fTo").value="";
+  document.getElementById("search").value="";
+  paintStatusChips();renderBoard();
+};
+document.querySelectorAll("#sideSwitch button").forEach(function(b){
+  b.onclick=function(){
+    SIDE=b.getAttribute("data-side");
+    document.querySelectorAll("#sideSwitch button").forEach(function(x){x.classList.toggle("on",x===b);});
+    document.getElementById("emptyMsg").textContent=
+      "Add a person with “+ Add Person”, or drop an existing one into a stage.";
+    renderBoard();
+    document.getElementById("board").scrollLeft=0;
+  };
+});
+document.getElementById("refreshBtn").onclick=function(){load(true);};
+
+/* ================= drawer ================= */
+function openDrawer(id){
+  var rec=RECORDS.find(function(r){return r.id===id;});
+  if(!rec)return;
+  CUR=rec;
+  CK=(Array.isArray(rec.checklist)?rec.checklist:[]).map(function(i){
+    return {id:i.id||uid("ck"),text:i.text||"",done:!!i.done};});
+  DIRTY=false;
+  paintDrawer();
+  document.getElementById("drawer").classList.add("on");
+  document.getElementById("drawer").setAttribute("aria-hidden","false");
+  document.getElementById("scrim").classList.add("on");
+}
+function closeDrawer(){
+  if(DIRTY && !confirm("Close without saving your changes?"))return;
+  CUR=null;DIRTY=false;
+  document.getElementById("drawer").classList.remove("on");
+  document.getElementById("drawer").setAttribute("aria-hidden","true");
+  document.getElementById("scrim").classList.remove("on");
+}
+document.getElementById("dClose").onclick=closeDrawer;
+document.getElementById("scrim").onclick=closeDrawer;
+
+function railHtml(side){
+  if(!CUR||(CUR.sides||[]).indexOf(side)<0)return "";
+  var st=stages(side), cur=stageOf(CUR,side);
+  var curIdx=st.findIndex(function(s){return s.key===cur;});
+  return '<div class="sect"><h4>'+(side==="buyer"?"BUYER PIPELINE":"SELLER PIPELINE")+'</h4>'+
+    '<div class="rail '+(side==="buyer"?"b":"s")+'" data-rail="'+side+'">'+
+      st.map(function(s,i){
+        var meta=(CUR.stageMeta||{})[side+":"+s.key]||{};
+        var when=meta.timelineDate?("→ "+meta.timelineDate)
+                :(meta.enteredAt?shortDate(meta.enteredAt):"");
+        return '<button data-stage="'+esc(s.key)+'" class="'+
+          (s.key===cur?"cur":(curIdx>=0&&i<curIdx?"done":""))+'">'+
+          '<span class="rdot"></span><span>'+esc(s.label)+'</span>'+
+          (when?'<span class="rwhen">'+esc(when)+'</span>':'')+'</button>';
+      }).join("")+
+    '</div>'+
+    (cur?'<button class="tbtn" style="margin-top:9px" data-clear="'+side+'">Move back to Unstaged</button>':'')+
+    '<div class="railnote">Clicking a stage moves '+esc(CUR.name.split(" ")[0])+
+      ' there immediately — it saves on its own, not with the Save button.</div>'+
+  '</div>';
+}
+
+function paintDrawer(){
+  if(!CUR)return;
+  var r=CUR;
+  document.getElementById("dName").textContent=r.name;
+  var sides=r.sides||[];
+  document.getElementById("dBody").innerHTML=
+    '<div class="sect"><h4>WORKING AS</h4>'+
+      '<div class="sidepick">'+
+        '<label class="'+(sides.indexOf("buyer")>=0?"on b":"")+'" data-sidebox="buyer">'+
+          '<input type="checkbox" '+(sides.indexOf("buyer")>=0?"checked":"")+'>Buyer</label>'+
+        '<label class="'+(sides.indexOf("seller")>=0?"on s":"")+'" data-sidebox="seller">'+
+          '<input type="checkbox" '+(sides.indexOf("seller")>=0?"checked":"")+'>Seller</label>'+
+      '</div>'+
+      '<div class="railnote">Someone selling one house and buying the next can be both; each pipeline moves on its own.</div>'+
+    '</div>'+
+    '<div class="sect"><h4>DETAILS</h4><div class="fgrid">'+
+      '<div class="f full"><label>Name</label><input id="eName" value="'+esc(r.name)+'"></div>'+
+      '<div class="f"><label>Phone</label><input id="ePhone" value="'+esc(r.phone||"")+'"></div>'+
+      '<div class="f"><label>Email</label><input id="eEmail" value="'+esc(r.email||"")+'"></div>'+
+      '<div class="f full"><label>Address / area</label><input id="eAddr" value="'+esc(r.address||"")+'"></div>'+
+      '<div class="f"><label>Source</label><input id="eSource" value="'+esc(r.source||"")+'"></div>'+
+      '<div class="f"><label>Assigned to</label><input id="eAssigned" value="'+esc(r.assignedTo||"")+'"></div>'+
+      '<div class="f"><label>Status</label><select id="eStatus">'+
+        (SCHEMA.statuses||[]).map(function(s){
+          return '<option value="'+esc(s)+'"'+(s===r.status?" selected":"")+'>'+
+            esc((STATUS_META[s]||{label:s}).label)+'</option>';}).join("")+
+      '</select></div>'+
+      '<div class="f"><label>Last contact</label><input type="date" id="eLast" value="'+
+        esc(ymdOf(r.lastInteractionAt))+'"></div>'+
+    '</div></div>'+
+    railHtml("buyer")+railHtml("seller")+
+    '<div class="sect"><h4>NOTES</h4>'+
+      '<div class="f"><textarea id="eNotes" placeholder="What matters about this person…">'+
+        esc(r.notes||"")+'</textarea></div></div>'+
+    '<div class="sect"><h4>CHECKLIST <span id="ckCount" style="float:right;font-weight:700"></span></h4>'+
+      '<div id="ckList"></div>'+
+      '<input id="ckNew" placeholder="Add an item and press Enter…">'+
+    '</div>'+
+    '<div class="sect"><h4>RECORD</h4>'+
+      '<div style="font-size:12px;color:var(--muted);line-height:1.7">'+
+        'Added '+esc(shortDate(r.addedAt)||"—")+'<br>'+
+        'Updated '+esc(shortDate(r.updatedAt)||"—")+
+        (r.legacyStage?'<br>Imported from CRM stage <b>'+esc(r.legacyStage)+'</b>':'')+
+        (r.leadId?'<br>Linked lead <code>'+esc(r.leadId)+'</code>':'')+
+      '</div></div>';
+  bindDrawer();
+  renderChecklist();
+}
+
+function bindDrawer(){
+  ["eName","ePhone","eEmail","eAddr","eSource","eAssigned","eNotes","eStatus","eLast"].forEach(function(id){
+    var el=document.getElementById(id); if(!el)return;
+    el.oninput=function(){DIRTY=true;};
+    el.onchange=function(){DIRTY=true;};
+  });
+  document.querySelectorAll("[data-sidebox]").forEach(function(lab){
+    lab.onclick=function(e){
+      e.preventDefault();
+      var side=lab.getAttribute("data-sidebox");
+      var sides=(CUR.sides||[]).slice();
+      var i=sides.indexOf(side);
+      if(i>=0){
+        if(sides.length===1){toast("Someone has to be a buyer or a seller.");return;}
+        sides.splice(i,1);
+      } else sides.push(side);
+      saveSides(sides);
+    };
+  });
+  document.querySelectorAll("[data-rail] [data-stage]").forEach(function(b){
+    b.onclick=function(){
+      var side=b.closest("[data-rail]").getAttribute("data-rail");
+      setStageFor(CUR.id,side,b.getAttribute("data-stage"));
+    };
+  });
+  document.querySelectorAll("[data-clear]").forEach(function(b){
+    b.onclick=function(){setStageFor(CUR.id,b.getAttribute("data-clear"),null);};
+  });
+}
+
+/* Stage moves save on their own — a pipeline move is the single most common
+   action here and making it wait behind Save would lose it constantly. */
+function setStageFor(id,side,stageKey){
+  var rec=RECORDS.find(function(r){return r.id===id;});
+  if(!rec)return;
+  var meta={};
+  if(stageKey===TIMELINE_STAGE[side]){
+    var prev=(rec.stageMeta&&rec.stageMeta[side+":"+stageKey]&&rec.stageMeta[side+":"+stageKey].timelineDate)||"";
+    var ans=prompt("Timeline for "+rec.name+" — when are they looking to "+
+      (side==="buyer"?"buy":"list")+"? (YYYY-MM-DD, or leave blank)",prev);
+    if(ans===null)return;
+    if(ans.trim())meta.timelineDate=ans.trim();
+  }
+  api("/api/tracker/records/"+encodeURIComponent(id)+"/stage",
+      jsonReq("POST",{side:side,stage:stageKey,meta:meta}))
+    .then(function(j){
+      replaceRecord(j.record);
+      if(CUR&&CUR.id===id){CUR=j.record;paintDrawer();}
+      renderBoard();
+      toast(stageKey?("Moved to "+stageLabel(side,stageKey)):"Moved to Unstaged");
+    })
+    .catch(function(e){toast("Could not move: "+e.message);});
+}
+
+function saveSides(sides){
+  api("/api/tracker/records/"+encodeURIComponent(CUR.id),jsonReq("PATCH",{sides:sides}))
+    .then(function(j){
+      replaceRecord(j.record);CUR=j.record;paintDrawer();renderBoard();
+    })
+    .catch(function(e){toast("Could not update: "+e.message);});
+}
+
+/* ================= checklist ================= */
+function autoGrow(ta){ta.style.height="auto";ta.style.height=Math.max(18,ta.scrollHeight)+"px";}
+function renderChecklist(){
+  var list=document.getElementById("ckList"); if(!list)return;
+  list.innerHTML=CK.length?CK.map(function(it,i){
+    return '<div class="ckitem'+(it.done?" done":"")+'">'+
+      '<input type="checkbox" data-ck="'+i+'"'+(it.done?" checked":"")+'>'+
+      '<textarea class="cktext" data-cktext="'+i+'" rows="1">'+esc(it.text)+'</textarea>'+
+      '<button type="button" class="ckdel" data-ckdel="'+i+'" title="Remove">✕</button>'+
+    '</div>';
+  }).join(""):'<div class="ckempty">No items yet.</div>';
+  var done=CK.filter(function(i){return i.done;}).length;
+  var c=document.getElementById("ckCount");
+  if(c)c.textContent=CK.length?(done+"/"+CK.length+" done"):"";
+  list.querySelectorAll("[data-ck]").forEach(function(cb){
+    cb.onchange=function(){CK[+cb.getAttribute("data-ck")].done=cb.checked;DIRTY=true;renderChecklist();};
+  });
+  list.querySelectorAll("[data-ckdel]").forEach(function(b){
+    b.onclick=function(){CK.splice(+b.getAttribute("data-ckdel"),1);DIRTY=true;renderChecklist();};
+  });
+  list.querySelectorAll("[data-cktext]").forEach(function(ta){
+    autoGrow(ta);
+    ta.oninput=function(){CK[+ta.getAttribute("data-cktext")].text=ta.value;DIRTY=true;autoGrow(ta);};
+    ta.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();ta.blur();
+      document.getElementById("ckNew").focus();}};
+  });
+  var n=document.getElementById("ckNew");
+  if(n)n.onkeydown=function(e){
+    if(e.key!=="Enter")return;
+    e.preventDefault();
+    var v=n.value.trim(); if(!v)return;
+    CK.push({id:uid("ck"),text:v,done:false});
+    n.value="";DIRTY=true;renderChecklist();
+    document.getElementById("ckNew").focus();
+  };
+}
+
+/* ================= save / delete ================= */
+document.getElementById("dSave").onclick=function(){
+  if(!CUR)return;
+  var name=document.getElementById("eName").value.trim();
+  if(!name){toast("A name is required.");return;}
+  var last=document.getElementById("eLast").value;
+  var payload={
+    name:name,
+    phone:document.getElementById("ePhone").value.trim(),
+    email:document.getElementById("eEmail").value.trim(),
+    address:document.getElementById("eAddr").value.trim(),
+    source:document.getElementById("eSource").value.trim(),
+    assignedTo:document.getElementById("eAssigned").value.trim(),
+    status:document.getElementById("eStatus").value,
+    notes:document.getElementById("eNotes").value,
+    checklist:CK.filter(function(i){return i.text.trim();}),
+    lastInteractionAt: last?new Date(last+"T12:00:00").toISOString():""
+  };
+  api("/api/tracker/records/"+encodeURIComponent(CUR.id),jsonReq("PATCH",payload))
+    .then(function(j){
+      replaceRecord(j.record);CUR=j.record;DIRTY=false;
+      paintSelectFilters();renderBoard();
+      var s=document.getElementById("dSaved");
+      s.textContent="Saved";setTimeout(function(){s.textContent="";},1800);
+    })
+    .catch(function(e){toast("Save failed: "+e.message);});
+};
+
+document.getElementById("dDelete").onclick=function(){
+  if(!CUR)return;
+  if(!confirm("Delete "+CUR.name+" from the tracker? This does not touch their CRM lead."))return;
+  var id=CUR.id;
+  api("/api/tracker/records/"+encodeURIComponent(id),{method:"DELETE"})
+    .then(function(){
+      RECORDS=RECORDS.filter(function(r){return r.id!==id;});
+      DIRTY=false;closeDrawer();paintSelectFilters();renderBoard();toast("Deleted");
+    })
+    .catch(function(e){toast("Delete failed: "+e.message);});
+};
+
+/* ================= add ================= */
+document.getElementById("addBtn").onclick=function(){
+  var name=prompt("Name of the "+(SIDE==="buyer"?"buyer":"seller")+"?");
+  if(name===null)return;
+  name=name.trim();
+  if(!name){toast("A name is required.");return;}
+  api("/api/tracker/records",jsonReq("POST",{name:name,sides:[SIDE],status:"new"}))
+    .then(function(j){
+      RECORDS.push(j.record);
+      paintSelectFilters();renderBoard();
+      openDrawer(j.record.id);
+      toast("Added — fill in the rest here.");
+    })
+    .catch(function(e){toast("Could not add: "+e.message);});
+};
+
+/* ================= boot ================= */
+function load(announce){
+  return Promise.all([api("/api/tracker/schema"),api("/api/tracker/records")])
+    .then(function(res){
+      SCHEMA={statuses:res[0].statuses||[],buyerStages:res[0].buyerStages||[],sellerStages:res[0].sellerStages||[]};
+      RECORDS=res[1].records||[];
+      paintStatusChips();paintSelectFilters();renderBoard();
+      if(announce)toast("Refreshed — "+RECORDS.length+" in tracker");
+    })
+    .catch(function(e){
+      document.getElementById("empty").style.display="flex";
+      document.getElementById("boardWrap").style.display="none";
+      document.getElementById("emptyMsg").textContent="Could not load the tracker: "+e.message;
+    });
+}
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"&&document.getElementById("drawer").classList.contains("on"))closeDrawer();
+});
+load(false);
+</script>
+</body>
+</html>
