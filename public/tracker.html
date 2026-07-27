@@ -139,6 +139,12 @@ html[data-theme="dark"] #boardThumb{background:#5c6875}
 .rec:hover{box-shadow:0 5px 16px rgba(16,24,40,.12);transform:translateY(-1px)}
 html[data-theme="dark"] .rec:hover{box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .rec.dragging{opacity:.45}
+/* Select mode: a checkbox on every card, dragging suspended so a click always
+   means "select" and never an accidental stage move. */
+.rec .rsel{display:none;position:absolute;top:8px;right:8px;width:16px;height:16px;z-index:2}
+body.selecting .rec{padding-right:28px}
+body.selecting .rec .rsel{display:block}
+.rec.picked{box-shadow:0 0 0 2px var(--teal),0 5px 16px rgba(16,24,40,.12);background:var(--glass-tint,var(--soft))}
 /* Side banner: the left edge stripe. Two-sided records get both colours. */
 .rec::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
 .rec.side-buyer::before{background:var(--buyer)}
@@ -241,6 +247,17 @@ html[data-theme="dark"] .danger:hover{background:#3b1a1a}
   padding:10px 16px;border-radius:11px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;
   transition:all .2s var(--ease);z-index:70;box-shadow:0 8px 24px rgba(0,0,0,.28)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ── Bulk stage bar ── hidden unless select mode is on. */
+#bulkBar{display:none;align-items:center;gap:9px;padding:9px 20px;background:var(--card);
+  border-bottom:1px solid var(--teal);flex-wrap:wrap}
+body.selecting #bulkBar{display:flex}
+#selectModeBtn.on{background:var(--teal);border-color:var(--teal);color:#fff}
+#bulkCount{font-size:12.5px;font-weight:800;color:var(--ink);min-width:82px}
+.bulkDivider{width:1px;height:22px;background:var(--line)}
+#bulkStageSel{max-width:220px}
+#bulkEngageBtn{border-color:var(--teal);color:var(--teal-strong)}
+#bulkEngageBtn:hover{background:var(--glass-tint,var(--soft))}
 </style>
 </head>
 <body>
@@ -262,6 +279,7 @@ html[data-theme="dark"] .danger:hover{background:#3b1a1a}
   <input id="search" placeholder="Search name, phone, email, address…" autocomplete="off" />
   <button class="tbtn" id="themeBtn">◐ Theme</button>
   <button class="tbtn" id="refreshBtn">↺ Refresh</button>
+  <button class="tbtn" id="selectModeBtn">☐ Select</button>
   <button class="tbtn primary" id="addBtn">+ Add Person</button>
 </header>
 
@@ -282,6 +300,23 @@ html[data-theme="dark"] .danger:hover{background:#3b1a1a}
   <input class="fdate" type="date" id="fTo" title="Added on or before" />
   <button id="clearF">Clear</button>
   <div id="countLine"></div>
+</div>
+
+<!-- Bulk-stage bar: appears in select mode. Most of the tracker has no automatic
+     signal to stage from — this is how the team actually advances the board. -->
+<div id="bulkBar">
+  <span id="bulkCount">0 selected</span>
+  <button class="tbtn" id="bulkSelectPage">Select all shown</button>
+  <button class="tbtn" id="bulkClearSel">Clear</button>
+  <span class="bulkDivider"></span>
+  <select class="fsel" id="bulkStageSel"><option value="">Move to stage…</option></select>
+  <button class="tbtn primary" id="bulkApplyBtn" disabled>Apply</button>
+  <span class="bulkDivider"></span>
+  <button class="tbtn" id="bulkEngageBtn" title="Stage anyone with a real DM conversation to Contacted">
+    ✨ Auto-stage from conversations
+  </button>
+  <div style="flex:1"></div>
+  <button class="tbtn" id="bulkDoneBtn">Done</button>
 </div>
 
 <div id="boardWrap">
@@ -339,6 +374,12 @@ var FILTER  = {status:{}, source:"", assigned:"", from:"", to:"", q:"", contacta
    people should not have to re-hide the rest on every visit. */
 var CONTACT_KEY="trackerContactableOnly";
 try{ FILTER.contactable = localStorage.getItem(CONTACT_KEY)==="1"; }catch(_){}
+/* Select mode: most of the tracker has no automatic signal to stage from, so
+   moving many people at once by hand is the real daily lever. SELECTED is
+   keyed by id rather than an array so toggling and lookup are both O(1) and
+   survive a re-render (drag/filter change) without losing the picks. */
+var SELECTING = false;
+var SELECTED = {};
 var CUR = null;                // record open in the drawer
 var CK  = [];                  // drawer checklist working copy
 var TASKS = {};                // taskId -> live Task Manager state for CUR
@@ -430,7 +471,9 @@ function cardHtml(rec){
     : (d>=STALE_DAYS
         ? '<span class="stale">● '+d+'d since contact</span>'
         : '<span>'+(d<=0?"Contacted today":d+"d since contact")+'</span>');
-  return '<article class="rec '+sideClass(rec)+'" draggable="true" data-id="'+esc(rec.id)+'">'+
+  return '<article class="rec '+sideClass(rec)+(SELECTED[rec.id]?" picked":"")+
+    '" draggable="'+(SELECTING?"false":"true")+'" data-id="'+esc(rec.id)+'">'+
+    '<input type="checkbox" class="rsel" data-selid="'+esc(rec.id)+'"'+(SELECTED[rec.id]?" checked":"")+'>'+
     '<div class="rtop"><div class="rname">'+esc(rec.name)+'</div>'+
       '<span class="pill" style="background:'+st.c+'">'+esc(st.label)+'</span></div>'+
     (bits.length?'<div class="rmeta">'+bits.join("")+'</div>':'')+
@@ -483,6 +526,7 @@ function renderBoard(){
   document.getElementById("empty").style.display=none?"flex":"none";
   document.getElementById("boardWrap").style.display=none?"none":"flex";
 
+  if(SELECTING)updateBulkBar();
   bindCards();
   syncScrollbar();
 }
@@ -491,12 +535,24 @@ function renderBoard(){
 var dragId=null;
 function bindCards(){
   document.querySelectorAll(".rec").forEach(function(el){
-    el.onclick=function(){openDrawer(el.getAttribute("data-id"));};
-    el.ondragstart=function(e){dragId=el.getAttribute("data-id");el.classList.add("dragging");
+    var id=el.getAttribute("data-id");
+    el.onclick=function(e){
+      /* In select mode a card click toggles selection instead of opening the
+         drawer — the whole point is picking many people without a detour
+         through each one's detail view. */
+      if(SELECTING){ if(e.target.tagName!=="INPUT") toggleSelect(id); return; }
+      openDrawer(id);
+    };
+    el.ondragstart=function(e){
+      if(SELECTING){e.preventDefault();return;}
+      dragId=id;el.classList.add("dragging");
       e.dataTransfer.effectAllowed="move";
       try{e.dataTransfer.setData("text/plain",dragId);}catch(_){}};
     el.ondragend=function(){el.classList.remove("dragging");dragId=null;
       document.querySelectorAll(".col.drop").forEach(function(c){c.classList.remove("drop");});};
+  });
+  document.querySelectorAll("[data-selid]").forEach(function(cb){
+    cb.onclick=function(e){e.stopPropagation();toggleSelect(cb.getAttribute("data-selid"));};
   });
   document.querySelectorAll(".col").forEach(function(col){
     col.ondragover=function(e){if(!dragId)return;e.preventDefault();e.dataTransfer.dropEffect="move";col.classList.add("drop");};
@@ -651,11 +707,101 @@ document.querySelectorAll("#sideSwitch button").forEach(function(b){
     document.querySelectorAll("#sideSwitch button").forEach(function(x){x.classList.toggle("on",x===b);});
     document.getElementById("emptyMsg").textContent=
       "Add a person with “+ Add Person”, or drop an existing one into a stage.";
+    clearSelection();          // stage keys belong to the OTHER pipeline now
+    paintBulkStageOptions();
     renderBoard();
     document.getElementById("board").scrollLeft=0;
   };
 });
 document.getElementById("refreshBtn").onclick=function(){load(true);};
+
+/* ================= bulk select + stage ================= */
+function toggleSelect(id){
+  if(SELECTED[id])delete SELECTED[id]; else SELECTED[id]=true;
+  var el=document.querySelector('.rec[data-id="'+CSS.escape(id)+'"]');
+  if(el){
+    el.classList.toggle("picked",!!SELECTED[id]);
+    var cb=el.querySelector("[data-selid]"); if(cb)cb.checked=!!SELECTED[id];
+  }
+  updateBulkBar();
+}
+function clearSelection(){SELECTED={};updateBulkBar();
+  document.querySelectorAll(".rec.picked").forEach(function(e){e.classList.remove("picked");});
+  document.querySelectorAll("[data-selid]").forEach(function(cb){cb.checked=false;});}
+function selectedIds(){return Object.keys(SELECTED);}
+function updateBulkBar(){
+  var n=selectedIds().length;
+  document.getElementById("bulkCount").textContent=n+" selected";
+  var sel=document.getElementById("bulkStageSel");
+  document.getElementById("bulkApplyBtn").disabled=!(n>0 && sel.selectedIndex>0);
+}
+function paintBulkStageOptions(){
+  var sel=document.getElementById("bulkStageSel");
+  var opts=stages(SIDE).map(function(s){return '<option value="'+esc(s.key)+'">'+esc(s.label)+'</option>';}).join("");
+  sel.innerHTML='<option value="__none__" selected>Move to stage…</option>'+
+    '<option value="">— Unstaged —</option>'+opts;
+}
+document.getElementById("selectModeBtn").onclick=function(){
+  SELECTING=!SELECTING;
+  document.body.classList.toggle("selecting",SELECTING);
+  this.classList.toggle("on",SELECTING);
+  this.textContent=SELECTING?"☑ Select":"☐ Select";
+  if(SELECTING)paintBulkStageOptions();
+  if(!SELECTING)clearSelection();
+  renderBoard();
+};
+document.getElementById("bulkDoneBtn").onclick=function(){document.getElementById("selectModeBtn").click();};
+document.getElementById("bulkClearSel").onclick=clearSelection;
+document.getElementById("bulkSelectPage").onclick=function(){
+  visible().forEach(function(r){SELECTED[r.id]=true;});
+  renderBoard();updateBulkBar();
+};
+document.getElementById("bulkStageSel").onchange=updateBulkBar;
+document.getElementById("bulkApplyBtn").onclick=function(){
+  var ids=selectedIds();
+  var sel=document.getElementById("bulkStageSel");
+  if(!ids.length||sel.selectedIndex<=0)return;
+  var stage=sel.value;
+  var label=sel.options[sel.selectedIndex].textContent;
+  var btn=this;btn.disabled=true;var was=btn.textContent;btn.textContent="Moving…";
+  api("/api/tracker/records/bulk-stage",jsonReq("POST",{ids:ids,side:SIDE,stage:stage||null}))
+    .then(function(j){
+      toast("Moved "+j.moved+" to "+label+(j.notFound?(" ("+j.notFound+" not found)"):""));
+      clearSelection();
+      return load(false);
+    })
+    .catch(function(e){toast("Bulk move failed: "+e.message);})
+    .then(function(){btn.disabled=false;btn.textContent=was;});
+};
+document.getElementById("bulkEngageBtn").onclick=function(){
+  var btn=this;btn.disabled=true;var was=btn.textContent;btn.textContent="Checking…";
+  api("/api/tracker/stage-from-engagement",jsonReq("POST",{}))
+    .then(function(plan){
+      if(!plan.changes.length){
+        toast("Nothing to stage — every record with a real conversation is already staged.");
+        return null;
+      }
+      var people={};
+      plan.changes.forEach(function(c){people[c.recordId]=true;});
+      var n=Object.keys(people).length;
+      var msg="Move "+n+" "+(n===1?"person":"people")+" from Unstaged to Contacted?\n\n"+
+        "Only people who actually exchanged messages with the DM agent — a phone or "+
+        "criteria was collected, or a property breakdown was sent. Nothing past Contacted is "+
+        "ever guessed; anything further needs a real call.\n\n"+
+        "This never touches a stage you've already set by hand.";
+      if(!confirm(msg))return null;
+      return api("/api/tracker/stage-from-engagement",jsonReq("POST",{apply:true}));
+    })
+    .then(function(result){
+      if(!result)return;
+      var people={};
+      result.changes.forEach(function(c){people[c.recordId]=true;});
+      toast("Staged "+Object.keys(people).length+" people to Contacted from real conversations");
+      return load(false);
+    })
+    .catch(function(e){toast("Could not auto-stage: "+e.message);})
+    .then(function(){btn.disabled=false;btn.textContent=was;});
+};
 
 /* ================= drawer ================= */
 function adoptRecord(rec,tasks){
@@ -995,7 +1141,7 @@ function load(announce){
     .then(function(res){
       SCHEMA={statuses:res[0].statuses||[],buyerStages:res[0].buyerStages||[],sellerStages:res[0].sellerStages||[]};
       RECORDS=res[1].records||[];
-      paintStatusChips();paintContactChip();paintSelectFilters();renderBoard();
+      paintStatusChips();paintContactChip();paintSelectFilters();paintBulkStageOptions();renderBoard();
       if(announce)toast("Refreshed — "+RECORDS.length+" in tracker");
     })
     .catch(function(e){

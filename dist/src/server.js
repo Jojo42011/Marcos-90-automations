@@ -7564,6 +7564,33 @@ app.post("/api/tracker/records/:id/stage", express_1.default.json({ limit: "16kb
     }
     res.json({ ok: true, record: rec });
 });
+/**
+ * Move many records to the same stage at once — the bulk lever for the
+ * ~991 records real DM signal cannot reach, and for advancing anyone past
+ * Contacted (which needs an actual call/showing, so it is a manual decision).
+ */
+app.post("/api/tracker/records/bulk-stage", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const ids = Array.isArray(body.ids)
+        ? body.ids.filter((x) => typeof x === "string").slice(0, 500)
+        : [];
+    const side = body.side === "seller" ? "seller" : "buyer";
+    const stage = body.stage === null ? null : String(body.stage || "");
+    if (!ids.length) {
+        res.status(400).json({ ok: false, error: "ids is required" });
+        return;
+    }
+    const moved = [];
+    const notFound = [];
+    for (const id of ids) {
+        const rec = (0, trackerStore_js_1.setTrackerStage)(id, side, stage);
+        if (rec)
+            moved.push(id);
+        else
+            notFound.push(id);
+    }
+    res.json({ ok: true, moved: moved.length, notFound: notFound.length, movedIds: moved });
+});
 app.delete("/api/tracker/records/:id", (req, res) => {
     res.json({ ok: true, deleted: (0, trackerStore_js_1.deleteTrackerRecord)(String(req.params.id)) });
 });
@@ -7579,6 +7606,24 @@ app.post("/api/tracker/backfill", express_1.default.json({ limit: "16kb" }), asy
         const result = (0, trackerMigration_js_1.backfillTrackerFromLeads)(leads, !apply, {
             refreshIdentity: body.refreshIdentity === true,
         });
+        res.json({ ok: true, ...result });
+    }
+    catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+/**
+ * Stage the tracker from real DM engagement (see core/trackerEngagement.ts).
+ * Only moves Unstaged -> Contacted, and only where a lead's own funnel state
+ * shows a genuine two-way exchange happened. Dry-run by default.
+ */
+app.post("/api/tracker/stage-from-engagement", express_1.default.json({ limit: "16kb" }), async (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const apply = body.apply === true;
+    try {
+        const { stageTrackerFromEngagement } = await Promise.resolve().then(() => __importStar(require("./core/trackerEngagement.js")));
+        const leads = await (0, db_js_1.listAllLeads)();
+        const result = stageTrackerFromEngagement(leads, { dryRun: !apply });
         res.json({ ok: true, ...result });
     }
     catch (err) {
