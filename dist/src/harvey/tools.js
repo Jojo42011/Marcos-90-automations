@@ -523,6 +523,8 @@ exports.HARVEY_TOOL_DEFINITIONS = [
     },
     // Tracker, Task Command, team and settings — see platformTools.ts.
     ...platformTools_js_1.PLATFORM_TOOL_DEFINITIONS,
+    // Workspace files + background jobs.
+    ...platformTools_js_1.WORKSPACE_TOOL_DEFINITIONS,
 ];
 exports.HARVEY_GEMINI_TOOLS = {
     functionDeclarations: [
@@ -986,6 +988,8 @@ async function executeHarveyTool(name, input) {
     // Platform surfaces (tracker / tasks / team / settings) live in their own module.
     if (platformTools_js_1.PLATFORM_TOOL_NAMES.has(name))
         return (0, platformTools_js_1.executePlatformTool)(name, normalized);
+    if (platformTools_js_1.WORKSPACE_TOOL_NAMES.has(name))
+        return (0, platformTools_js_1.executeWorkspaceTool)(name, normalized);
     switch (name) {
         case "get_lead_summary":
             return getLeadSummary();

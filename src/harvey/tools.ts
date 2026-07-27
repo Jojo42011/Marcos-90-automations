@@ -5,7 +5,10 @@
 import {
   PLATFORM_TOOL_DEFINITIONS,
   PLATFORM_TOOL_NAMES,
+  WORKSPACE_TOOL_DEFINITIONS,
+  WORKSPACE_TOOL_NAMES,
   executePlatformTool,
+  executeWorkspaceTool,
 } from "./platformTools.js";
 import { getThreadForLead } from "../core/smsStore.js";
 import { getConversation, listAllLeads, getLeadById } from "../core/db.js";
@@ -560,6 +563,8 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
   },
   // Tracker, Task Command, team and settings — see platformTools.ts.
   ...PLATFORM_TOOL_DEFINITIONS,
+  // Workspace files + background jobs.
+  ...WORKSPACE_TOOL_DEFINITIONS,
 ];
 
 export const HARVEY_GEMINI_TOOLS = {
@@ -1054,6 +1059,7 @@ export async function executeHarveyTool(
   const normalized = normalizeHarveyToolInput(input);
   // Platform surfaces (tracker / tasks / team / settings) live in their own module.
   if (PLATFORM_TOOL_NAMES.has(name)) return executePlatformTool(name, normalized);
+  if (WORKSPACE_TOOL_NAMES.has(name)) return executeWorkspaceTool(name, normalized);
   switch (name) {
     case "get_lead_summary":
       return getLeadSummary();

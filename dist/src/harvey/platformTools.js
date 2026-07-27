@@ -1,7 +1,41 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PLATFORM_TOOL_NAMES = exports.PLATFORM_TOOL_DEFINITIONS = void 0;
+exports.WORKSPACE_TOOL_NAMES = exports.WORKSPACE_TOOL_DEFINITIONS = exports.PLATFORM_TOOL_NAMES = exports.PLATFORM_TOOL_DEFINITIONS = void 0;
 exports.executePlatformTool = executePlatformTool;
+exports.executeWorkspaceTool = executeWorkspaceTool;
 const types_js_1 = require("../core/types.js");
 const trackerStore_js_1 = require("../core/trackerStore.js");
 const trackerTasks_js_1 = require("../core/trackerTasks.js");
@@ -435,5 +469,173 @@ async function executePlatformTool(name, input) {
         }
         default:
             return { error: `Unknown platform tool: ${name}` };
+    }
+}
+/* ===================== Workspace files + background jobs =====================
+   Harvey could read everything and produce nothing durable, and could not run
+   anything longer than 8 tool rounds inside one HTTP request. These close both. */
+exports.WORKSPACE_TOOL_DEFINITIONS = [
+    {
+        name: "list_files",
+        description: "List files in Harvey's workspace — the durable scratch space where drafts, reports, exports and notes live. Optionally filter by a path prefix like 'reports/'.",
+        input_schema: {
+            type: "object",
+            properties: { prefix: { type: "string", description: "Optional folder prefix." } },
+            required: [],
+        },
+    },
+    {
+        name: "read_file",
+        description: "Read a file from the workspace.",
+        input_schema: {
+            type: "object",
+            properties: { path: { type: "string", description: "Relative path, e.g. 'reports/hot-sellers.md'." } },
+            required: ["path"],
+        },
+    },
+    {
+        name: "write_file",
+        description: "Create or overwrite a workspace file. Use for drafts, reports, exports, call lists, notes — anything that should outlive the conversation. Paths are relative and folders are created as needed. Allowed types: .md .txt .csv .json .html .yaml .log .tsv .xml .sql .ics",
+        input_schema: {
+            type: "object",
+            properties: {
+                path: { type: "string" },
+                content: { type: "string" },
+                append: { type: "boolean", description: "Append instead of overwriting." },
+            },
+            required: ["path", "content"],
+        },
+    },
+    {
+        name: "edit_file",
+        description: "Replace an exact snippet in a workspace file. Fails if the snippet is missing or appears more than once (unless replaceAll), so a partial match can never rewrite the wrong line.",
+        input_schema: {
+            type: "object",
+            properties: {
+                path: { type: "string" },
+                find: { type: "string", description: "Exact text to replace." },
+                replace: { type: "string" },
+                replaceAll: { type: "boolean" },
+            },
+            required: ["path", "find", "replace"],
+        },
+    },
+    {
+        name: "delete_file",
+        description: "Delete a workspace file.",
+        input_schema: {
+            type: "object",
+            properties: { path: { type: "string" } },
+            required: ["path"],
+        },
+    },
+    {
+        name: "start_background_job",
+        description: "Hand a long task to a background worker that runs to completion on its own — many tool calls, minutes of work, no further prompting. Use when the task is too big to finish in this reply (e.g. 'go through every hot seller and draft a follow-up'). Returns a job id immediately; check it with get_job. Do NOT use for quick questions you can answer directly.",
+        input_schema: {
+            type: "object",
+            properties: {
+                task: {
+                    type: "string",
+                    description: "Complete, self-contained instructions. The worker cannot ask questions.",
+                },
+            },
+            required: ["task"],
+        },
+    },
+    {
+        name: "get_job",
+        description: "Status, steps taken and result of a background job.",
+        input_schema: {
+            type: "object",
+            properties: { id: { type: "string" } },
+            required: ["id"],
+        },
+    },
+    {
+        name: "list_jobs",
+        description: "Recent background jobs and their status.",
+        input_schema: {
+            type: "object",
+            properties: { limit: { type: "number", description: "Default 10." } },
+            required: [],
+        },
+    },
+];
+exports.WORKSPACE_TOOL_NAMES = new Set(exports.WORKSPACE_TOOL_DEFINITIONS.map((t) => t.name));
+async function executeWorkspaceTool(name, input) {
+    const ws = await Promise.resolve().then(() => __importStar(require("../core/workspace.js")));
+    const jobs = await Promise.resolve().then(() => __importStar(require("../core/jobStore.js")));
+    try {
+        switch (name) {
+            case "list_files": {
+                const files = await ws.listFiles(str(input.prefix) || undefined);
+                return { count: files.length, files: files.slice(0, 200) };
+            }
+            case "read_file":
+                return await ws.readFile(str(input.path));
+            case "write_file": {
+                const f = await ws.writeFile(str(input.path), String(input.content ?? ""), {
+                    append: input.append === true,
+                });
+                return { ok: true, ...f };
+            }
+            case "edit_file":
+                return {
+                    ok: true,
+                    ...(await ws.editFile(str(input.path), String(input.find ?? ""), String(input.replace ?? ""), input.replaceAll === true)),
+                };
+            case "delete_file": {
+                const gone = await ws.deleteFile(str(input.path));
+                return gone ? { ok: true, deleted: str(input.path) } : { error: "No such file." };
+            }
+            case "start_background_job": {
+                const task = str(input.task);
+                if (!task)
+                    return { error: "task is required." };
+                const { startJob } = await Promise.resolve().then(() => __importStar(require("../hull/jobRunner.js")));
+                const job = startJob(task, "harvey");
+                return {
+                    ok: true,
+                    id: job.id,
+                    status: job.status,
+                    note: "Running in the background. Check it with get_job.",
+                };
+            }
+            case "get_job": {
+                const j = jobs.getJob(str(input.id));
+                if (!j)
+                    return { error: "No job with that id." };
+                return {
+                    id: j.id,
+                    status: j.status,
+                    prompt: j.prompt,
+                    toolCalls: j.toolCalls,
+                    steps: j.steps.length,
+                    result: j.result,
+                    error: j.error,
+                    startedAt: j.startedAt,
+                    finishedAt: j.finishedAt,
+                    recentSteps: j.steps.slice(-8).map((s) => ({ n: s.n, kind: s.kind, tool: s.tool ?? null })),
+                };
+            }
+            case "list_jobs":
+                return {
+                    jobs: jobs.listJobs(Math.min(50, Math.max(1, num(input.limit, 10)))).map((j) => ({
+                        id: j.id,
+                        status: j.status,
+                        prompt: j.prompt.slice(0, 120),
+                        toolCalls: j.toolCalls,
+                        createdAt: j.createdAt,
+                    })),
+                };
+            default:
+                return { error: `Unknown workspace tool: ${name}` };
+        }
+    }
+    catch (err) {
+        // Workspace errors are meaningful to the model (bad path, missing file,
+        // ambiguous edit) — surface them rather than throwing the job away.
+        return { error: err instanceof Error ? err.message : String(err) };
     }
 }

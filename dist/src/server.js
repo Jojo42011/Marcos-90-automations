@@ -852,6 +852,82 @@ app.post("/api/brivity/import/apply", express_1.default.json({ limit: "16kb" }),
         res.status(502).json({ ok: false, error: err.message });
     }
 });
+/* ===================== Harvey jobs + workspace =====================
+   A job runs the agent loop to completion detached from this request, so work
+   that needs dozens of tool calls and minutes of wall time can be delegated. */
+app.post("/api/harvey/jobs", express_1.default.json({ limit: "64kb" }), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const prompt = typeof body.task === "string" ? body.task.trim() : "";
+    if (!prompt) {
+        res.status(400).json({ ok: false, error: "task is required" });
+        return;
+    }
+    try {
+        const { startJob, isAnthropicConfigured } = await Promise.resolve().then(() => __importStar(require("./hull/jobRunner.js")));
+        if (!isAnthropicConfigured()) {
+            res.status(503).json({ ok: false, error: "ANTHROPIC_API_KEY is not set." });
+            return;
+        }
+        const job = startJob(prompt, typeof body.createdBy === "string" ? body.createdBy : "marco");
+        res.status(202).json({ ok: true, job });
+    }
+    catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+app.get("/api/harvey/jobs", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { listJobs, jobCounts } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+    res.json({ ok: true, counts: jobCounts(), jobs: listJobs(limit) });
+});
+app.get("/api/harvey/jobs/:id", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { getJob } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
+    const job = getJob(String(req.params.id));
+    if (!job) {
+        res.status(404).json({ ok: false, error: "No such job" });
+        return;
+    }
+    res.json({ ok: true, job });
+});
+app.post("/api/harvey/jobs/:id/cancel", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { requestCancel, getJob } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
+    const ok = requestCancel(String(req.params.id));
+    res.json({ ok, job: getJob(String(req.params.id)) });
+});
+app.get("/api/harvey/workspace", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const ws = await Promise.resolve().then(() => __importStar(require("./core/workspace.js")));
+    try {
+        const path = typeof req.query.path === "string" ? req.query.path : "";
+        if (path) {
+            res.json({ ok: true, file: await ws.readFile(path) });
+            return;
+        }
+        res.json({ ok: true, files: await ws.listFiles(String(req.query.prefix || "")) });
+    }
+    catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
 app.get("/api/brivity/status", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
@@ -9749,6 +9825,20 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     catch (err) {
         console.error("[team] init failed:", err);
     }
+    // A job left 'running' when the process died is not running — nothing resumes
+    // it. Mark those interrupted so the UI shows the truth, not a phantom job.
+    void (async () => {
+        try {
+            const { reconcileOrphanedJobs, initJobSchema } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
+            initJobSchema();
+            const n = reconcileOrphanedJobs();
+            if (n)
+                console.log(`[HarveyJobs] marked ${n} interrupted job(s) from the previous run`);
+        }
+        catch (err) {
+            console.error("[HarveyJobs] init failed:", err);
+        }
+    })();
     if (!process.env.ELEVENLABS_API_KEY?.trim()) {
         console.warn("[Harvey] ELEVENLABS_API_KEY not set — Scribe v2 Realtime STT will not work");
     }
