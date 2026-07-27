@@ -305,6 +305,14 @@ import {
   updateTrackerRecord,
   type TrackerFilter,
 } from "./core/trackerStore.js";
+import {
+  applyTaskState,
+  applyTaskStateAll,
+  linkedTasks,
+  pushChecklistToTasks,
+  syncChecklistToTasks,
+  unlinkChecklistItem,
+} from "./core/trackerTasks.js";
 import { backfillTrackerFromLeads } from "./core/trackerMigration.js";
 import {
   getCommandSettings,
@@ -8036,6 +8044,8 @@ function parseChecklist(raw: unknown): CommandTaskChecklistItem[] | undefined {
       id: typeof e.id === "string" && e.id.trim() ? e.id.trim().slice(0, 64) : `ck_${items.length}_${Date.now().toString(36)}`,
       text,
       done: e.done === true,
+      // Preserved so a save from either UI does not sever the tracker↔task link.
+      taskId: typeof e.taskId === "string" && e.taskId.trim() ? e.taskId.trim().slice(0, 64) : undefined,
     });
     if (items.length >= 100) break;
   }
@@ -8154,7 +8164,9 @@ app.get("/api/tracker/records", (req, res) => {
     interactionFrom: q.interactionFrom || undefined,
     interactionTo: q.interactionTo || undefined,
   };
-  res.json({ ok: true, records: listTrackerRecords(filter) });
+  // Linked tasks are the source of truth for those checklist items, so reflect
+  // their current state rather than serving a stale copy.
+  res.json({ ok: true, records: applyTaskStateAll(listTrackerRecords(filter)) });
 });
 
 app.get("/api/tracker/counts", (_req, res) => {
@@ -8162,9 +8174,10 @@ app.get("/api/tracker/counts", (_req, res) => {
 });
 
 app.get("/api/tracker/records/:id", (req, res) => {
-  const rec = getTrackerRecord(String(req.params.id));
-  if (!rec) { res.status(404).json({ ok: false, error: "Not found" }); return; }
-  res.json({ ok: true, record: rec });
+  const raw = getTrackerRecord(String(req.params.id));
+  if (!raw) { res.status(404).json({ ok: false, error: "Not found" }); return; }
+  const rec = applyTaskState(raw);
+  res.json({ ok: true, record: rec, tasks: linkedTasks(rec) });
 });
 
 app.post("/api/tracker/records", express.json({ limit: "256kb" }), (req, res) => {
@@ -8175,10 +8188,48 @@ app.post("/api/tracker/records", express.json({ limit: "256kb" }), (req, res) =>
 });
 
 app.patch("/api/tracker/records/:id", express.json({ limit: "256kb" }), (req, res) => {
-  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  const rec = updateTrackerRecord(String(req.params.id), body as never);
+  const body = { ...(req.body && typeof req.body === "object" ? req.body : {}) } as Record<string, unknown>;
+  const id = String(req.params.id);
+  const before = getTrackerRecord(id);
+  if (!before) { res.status(404).json({ ok: false, error: "Not found" }); return; }
+  // Sanitise here too, so a client cannot write arbitrary shapes into the
+  // checklist column — and so taskId survives the round trip.
+  if ("checklist" in body) body.checklist = parseChecklist(body.checklist) ?? [];
+  const rec = updateTrackerRecord(id, body as never);
   if (!rec) { res.status(404).json({ ok: false, error: "Not found" }); return; }
-  res.json({ ok: true, record: rec });
+  // Ticking an item that has a task completes the task, not just the checkbox.
+  const synced = "checklist" in body ? syncChecklistToTasks(before.checklist, rec.checklist) : 0;
+  const fresh = applyTaskState(rec);
+  // Return the linked-task state alongside, so the drawer's chips do not sit
+  // stale showing "open" for a task the save just completed.
+  res.json({ ok: true, record: fresh, tasks: linkedTasks(fresh), tasksUpdated: synced });
+});
+
+/** Push checklist items onto the Task Command board as real tasks. */
+app.post("/api/tracker/records/:id/tasks", express.json({ limit: "16kb" }), (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const itemIds = Array.isArray(body.itemIds)
+    ? body.itemIds.filter((x): x is string => typeof x === "string")
+    : undefined;
+  const column = COMMAND_COLUMNS.has(body.column as CommandTaskColumn)
+    ? (body.column as CommandTaskColumn)
+    : "today";
+  const out = pushChecklistToTasks(String(req.params.id), itemIds, column);
+  if (!out) { res.status(404).json({ ok: false, error: "Not found" }); return; }
+  res.json({
+    ok: true,
+    record: applyTaskState(out.record),
+    tasks: linkedTasks(out.record),
+    created: out.created.length,
+    alreadyLinked: out.skipped,
+  });
+});
+
+/** Break the link without deleting the task. */
+app.delete("/api/tracker/records/:id/tasks/:itemId", (req, res) => {
+  const rec = unlinkChecklistItem(String(req.params.id), String(req.params.itemId));
+  if (!rec) { res.status(404).json({ ok: false, error: "Not found" }); return; }
+  res.json({ ok: true, record: applyTaskState(rec), tasks: linkedTasks(rec) });
 });
 
 /** Move one side of a record along its pipeline. */

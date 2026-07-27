@@ -100,6 +100,7 @@ const marcoTasks_js_1 = require("./core/marcoTasks.js");
 const harveyNotes_js_1 = require("./core/harveyNotes.js");
 const types_js_3 = require("./core/types.js");
 const trackerStore_js_1 = require("./core/trackerStore.js");
+const trackerTasks_js_1 = require("./core/trackerTasks.js");
 const trackerMigration_js_1 = require("./core/trackerMigration.js");
 const commandSettings_js_1 = require("./core/commandSettings.js");
 const deals_js_1 = require("./core/deals.js");
@@ -7206,6 +7207,8 @@ function parseChecklist(raw) {
             id: typeof e.id === "string" && e.id.trim() ? e.id.trim().slice(0, 64) : `ck_${items.length}_${Date.now().toString(36)}`,
             text,
             done: e.done === true,
+            // Preserved so a save from either UI does not sever the tracker↔task link.
+            taskId: typeof e.taskId === "string" && e.taskId.trim() ? e.taskId.trim().slice(0, 64) : undefined,
         });
         if (items.length >= 100)
             break;
@@ -7315,18 +7318,21 @@ app.get("/api/tracker/records", (req, res) => {
         interactionFrom: q.interactionFrom || undefined,
         interactionTo: q.interactionTo || undefined,
     };
-    res.json({ ok: true, records: (0, trackerStore_js_1.listTrackerRecords)(filter) });
+    // Linked tasks are the source of truth for those checklist items, so reflect
+    // their current state rather than serving a stale copy.
+    res.json({ ok: true, records: (0, trackerTasks_js_1.applyTaskStateAll)((0, trackerStore_js_1.listTrackerRecords)(filter)) });
 });
 app.get("/api/tracker/counts", (_req, res) => {
     res.json({ ok: true, counts: (0, trackerStore_js_1.trackerCounts)() });
 });
 app.get("/api/tracker/records/:id", (req, res) => {
-    const rec = (0, trackerStore_js_1.getTrackerRecord)(String(req.params.id));
-    if (!rec) {
+    const raw = (0, trackerStore_js_1.getTrackerRecord)(String(req.params.id));
+    if (!raw) {
         res.status(404).json({ ok: false, error: "Not found" });
         return;
     }
-    res.json({ ok: true, record: rec });
+    const rec = (0, trackerTasks_js_1.applyTaskState)(raw);
+    res.json({ ok: true, record: rec, tasks: (0, trackerTasks_js_1.linkedTasks)(rec) });
 });
 app.post("/api/tracker/records", express_1.default.json({ limit: "256kb" }), (req, res) => {
     const body = (req.body && typeof req.body === "object" ? req.body : {});
@@ -7338,13 +7344,59 @@ app.post("/api/tracker/records", express_1.default.json({ limit: "256kb" }), (re
     res.json({ ok: true, record: (0, trackerStore_js_1.createTrackerRecord)({ ...body, name }) });
 });
 app.patch("/api/tracker/records/:id", express_1.default.json({ limit: "256kb" }), (req, res) => {
-    const body = (req.body && typeof req.body === "object" ? req.body : {});
-    const rec = (0, trackerStore_js_1.updateTrackerRecord)(String(req.params.id), body);
+    const body = { ...(req.body && typeof req.body === "object" ? req.body : {}) };
+    const id = String(req.params.id);
+    const before = (0, trackerStore_js_1.getTrackerRecord)(id);
+    if (!before) {
+        res.status(404).json({ ok: false, error: "Not found" });
+        return;
+    }
+    // Sanitise here too, so a client cannot write arbitrary shapes into the
+    // checklist column — and so taskId survives the round trip.
+    if ("checklist" in body)
+        body.checklist = parseChecklist(body.checklist) ?? [];
+    const rec = (0, trackerStore_js_1.updateTrackerRecord)(id, body);
     if (!rec) {
         res.status(404).json({ ok: false, error: "Not found" });
         return;
     }
-    res.json({ ok: true, record: rec });
+    // Ticking an item that has a task completes the task, not just the checkbox.
+    const synced = "checklist" in body ? (0, trackerTasks_js_1.syncChecklistToTasks)(before.checklist, rec.checklist) : 0;
+    const fresh = (0, trackerTasks_js_1.applyTaskState)(rec);
+    // Return the linked-task state alongside, so the drawer's chips do not sit
+    // stale showing "open" for a task the save just completed.
+    res.json({ ok: true, record: fresh, tasks: (0, trackerTasks_js_1.linkedTasks)(fresh), tasksUpdated: synced });
+});
+/** Push checklist items onto the Task Command board as real tasks. */
+app.post("/api/tracker/records/:id/tasks", express_1.default.json({ limit: "16kb" }), (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const itemIds = Array.isArray(body.itemIds)
+        ? body.itemIds.filter((x) => typeof x === "string")
+        : undefined;
+    const column = COMMAND_COLUMNS.has(body.column)
+        ? body.column
+        : "today";
+    const out = (0, trackerTasks_js_1.pushChecklistToTasks)(String(req.params.id), itemIds, column);
+    if (!out) {
+        res.status(404).json({ ok: false, error: "Not found" });
+        return;
+    }
+    res.json({
+        ok: true,
+        record: (0, trackerTasks_js_1.applyTaskState)(out.record),
+        tasks: (0, trackerTasks_js_1.linkedTasks)(out.record),
+        created: out.created.length,
+        alreadyLinked: out.skipped,
+    });
+});
+/** Break the link without deleting the task. */
+app.delete("/api/tracker/records/:id/tasks/:itemId", (req, res) => {
+    const rec = (0, trackerTasks_js_1.unlinkChecklistItem)(String(req.params.id), String(req.params.itemId));
+    if (!rec) {
+        res.status(404).json({ ok: false, error: "Not found" });
+        return;
+    }
+    res.json({ ok: true, record: (0, trackerTasks_js_1.applyTaskState)(rec), tasks: (0, trackerTasks_js_1.linkedTasks)(rec) });
 });
 /** Move one side of a record along its pipeline. */
 app.post("/api/tracker/records/:id/stage", express_1.default.json({ limit: "16kb" }), (req, res) => {

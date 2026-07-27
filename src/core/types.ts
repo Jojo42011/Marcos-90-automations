@@ -714,6 +714,11 @@ export interface CommandTaskChecklistItem {
   id: string;
   text: string;
   done: boolean;
+  /**
+   * Set when a tracker checklist item has been pushed to the Task Manager as a
+   * real CommandTask. Completion then travels both ways between the two.
+   */
+  taskId?: string;
 }
 
 export interface CommandTask {
