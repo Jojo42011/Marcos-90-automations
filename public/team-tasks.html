@@ -159,6 +159,17 @@ html[data-theme="dark"] #barsScrollThumb:hover{background:#6e7a87}
 #splitter:hover::after,#splitter.drag::after{background:var(--teal)}
 body.splitting{cursor:col-resize;user-select:none}
 @media(max-width:1080px){#splitter{display:none}}
+/* Horizontal drag handles: calendar vs messages, and the task list's height. */
+.hsplit{flex:0 0 auto;height:14px;margin:-4px 0;cursor:row-resize;display:flex;align-items:center;justify-content:center}
+.hsplit::after{content:"";height:3px;width:56px;border-radius:3px;background:var(--line);transition:background .15s}
+.hsplit:hover::after,.hsplit.drag::after{background:var(--teal)}
+body.rowsizing{cursor:row-resize;user-select:none}
+@media(max-width:1080px){.hsplit{display:none}}
+#msgBar{display:flex;flex-direction:column;gap:8px;min-height:44px;overflow:hidden}
+#msgInline{flex:1 1 auto;overflow-y:auto;min-height:0;display:none}
+#msgBar.expanded #msgInline{display:block}
+#msgInline .member{cursor:pointer}
+
 .layrow{display:flex;gap:7px}
 .layrow button{flex:1;height:30px;border:1px solid var(--line);background:var(--card);color:var(--muted);
   border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer}
@@ -535,6 +546,7 @@ html{scroll-behavior:smooth}
     <div id="viewingNote" class="viewing-note" style="display:none"></div>
     <div class="board anim" id="bars"></div>
     <div id="barsScroll"><div id="barsScrollThumb"></div></div>
+    <div class="hsplit" id="leftSplit" title="Drag to resize the task list · double-click to reset"></div>
   </section>
 
   <!-- RIGHT: calendar on top, completed tasks underneath. Both always visible,
@@ -551,8 +563,10 @@ html{scroll-behavior:smooth}
       <p style="font-size:11.5px;color:var(--muted);margin:0 2px 10px">Click any date to load that day across every task bar.</p>
       <div id="calBigGrid"></div>
     </div>
+    <div class="hsplit" id="calSplit" title="Drag to resize · double-click to reset"></div>
     <div id="msgBar">
       <button id="msgBtn">💬 Messages<span id="msgUnread"></span></button>
+      <div id="msgInline"></div>
     </div>
   </aside>
   <div id="splitter" title="Drag to resize · double-click to reset"></div>
@@ -790,6 +804,19 @@ function renderMsgList(){
     r.onclick=function(){ closeMsgPop(); openChat(r.getAttribute("data-msg")); };
   });
 }
+function renderMsgInline(){
+  var w=document.getElementById("msgInline"); if(!w)return;
+  w.innerHTML=TEAM.filter(function(m){return m.id!==ME;}).map(function(m){
+    var un=UNREAD_CHAT[m.id]||0, on=(PRESENCE[m.id]||{}).online;
+    return '<div class="member" data-msgi="'+m.id+'">'+
+      '<span class="av big" style="background:'+m.color+'">'+m.name[0]+(on?'<span class="on"></span>':'')+'</span>'+
+      '<div class="nm"><b>'+m.name+(un?' <span class="badge-n">'+un+'</span>':'')+'</b><span>'+m.role+' · '+(on?'online':'offline')+'</span></div>'+
+      '<button class="icobtn" title="Chat">💬</button></div>';
+  }).join("");
+  w.querySelectorAll("[data-msgi]").forEach(function(r){
+    r.onclick=function(){ openChat(r.getAttribute("data-msgi")); };
+  });
+}
 function updateMsgBadge(){
   var b=document.getElementById("msgUnread"); if(!b)return;
   var n=Object.keys(UNREAD_CHAT).reduce(function(a,k){return a+(UNREAD_CHAT[k]||0);},0);
@@ -811,13 +838,15 @@ function closeMsgPop(){var p=document.getElementById("msgPop");if(p)p.classList.
    Drag the divider to resize the panes, or swap which side the calendar sits on.
    Saved per user on this device. */
 var LAY_KEY="marcoTaskLayout:"+(ME||"anon");
-var LAYOUT={rightPct:48,swapped:false};
+var LAYOUT={rightPct:48,swapped:false,calPct:78,leftPct:100};
 function loadLayout(){
   try{
     LAY_KEY="marcoTaskLayout:"+(ME||"anon");
     var raw=JSON.parse(localStorage.getItem(LAY_KEY)||"null");
     if(raw&&typeof raw==="object"){
       if(typeof raw.rightPct==="number")LAYOUT.rightPct=Math.min(70,Math.max(26,raw.rightPct));
+      if(typeof raw.calPct==="number")LAYOUT.calPct=Math.min(92,Math.max(30,raw.calPct));
+      if(typeof raw.leftPct==="number")LAYOUT.leftPct=Math.min(100,Math.max(40,raw.leftPct));
       LAYOUT.swapped=!!raw.swapped;
     }
   }catch(_){}
@@ -842,6 +871,20 @@ function applyLayout(){
       sp.style.left=(second.offsetLeft-8)+"px";
     });
   }
+  // Calendar vs messages inside the right column.
+  var cal=document.getElementById("calCard"), mb=document.getElementById("msgBar");
+  if(cal&&mb){
+    cal.style.flex="0 0 "+LAYOUT.calPct+"%";
+    mb.style.flex="1 1 auto";
+    // Only show the inline teammate list once there is room for it.
+    requestAnimationFrame(function(){
+      var tall=mb.getBoundingClientRect().height>96;
+      mb.classList.toggle("expanded",tall);
+      if(tall)renderMsgInline();
+    });
+  }
+  // Task list height.
+  left.style.height=(LAYOUT.leftPct>=100?"calc(100vh - 100px)":"calc((100vh - 100px) * "+(LAYOUT.leftPct/100)+")");
   if(window.syncBarsScroll)requestAnimationFrame(window.syncBarsScroll);
 }
 (function(){
@@ -862,11 +905,35 @@ function applyLayout(){
   sp.addEventListener("dblclick",function(){LAYOUT.rightPct=48;applyLayout();saveLayout();});
   window.addEventListener("resize",function(){ if(window.syncBarsScroll)window.syncBarsScroll(); });
 })();
+/* Horizontal handles: calendar/messages split, and the task list's height. */
+(function(){
+  function bindRow(id,onDrag,onReset){
+    var h=document.getElementById(id); if(!h)return;
+    var dragging=false;
+    h.addEventListener("mousedown",function(e){dragging=true;h.classList.add("drag");
+      document.body.classList.add("rowsizing");e.preventDefault();});
+    document.addEventListener("mousemove",function(e){ if(!dragging)return; onDrag(e.clientY); applyLayout(); });
+    document.addEventListener("mouseup",function(){ if(!dragging)return;
+      dragging=false;h.classList.remove("drag");document.body.classList.remove("rowsizing");saveLayout(); });
+    h.addEventListener("dblclick",function(){onReset();applyLayout();saveLayout();});
+  }
+  bindRow("calSplit",function(y){
+    var col=document.getElementById("rightcol"); if(!col)return;
+    var r=col.getBoundingClientRect();
+    LAYOUT.calPct=Math.min(92,Math.max(30,(y-r.top)/r.height*100));
+  },function(){LAYOUT.calPct=78;});
+  bindRow("leftSplit",function(y){
+    var col=document.getElementById("left"); if(!col)return;
+    var r=col.getBoundingClientRect();
+    var avail=window.innerHeight-100;
+    LAYOUT.leftPct=Math.min(100,Math.max(40,(y-r.top)/avail*100));
+  },function(){LAYOUT.leftPct=100;});
+})();
 function initLayoutControls(){
   var sw=document.getElementById("swapSidesBtn"),rs=document.getElementById("resetLayoutBtn");
   if(sw)sw.onclick=function(){LAYOUT.swapped=!LAYOUT.swapped;applyLayout();saveLayout();
     toast(LAYOUT.swapped?"Calendar moved left":"Calendar moved right");};
-  if(rs)rs.onclick=function(){LAYOUT={rightPct:48,swapped:false};applyLayout();saveLayout();toast("Layout reset");};
+  if(rs)rs.onclick=function(){LAYOUT={rightPct:48,swapped:false,calPct:78,leftPct:100};applyLayout();saveLayout();toast("Layout reset");};
 }
 
 /* Time zone picker. Zones the team actually spans, plus whatever is already set. */
