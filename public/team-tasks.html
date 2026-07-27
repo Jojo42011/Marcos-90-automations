@@ -1129,25 +1129,36 @@ function bindGridInteractions(){
   });
   window.addEventListener("resize",paintGrid);
 }
-function saveGrid(){
+/* Saving a layout also records that this user wants the custom dashboard, so the
+   arrangement they built is what they get from then on, on any machine. */
+function saveGrid(gridOn){
   try{localStorage.setItem("marcoTaskGrid:"+(ME||"anon"),JSON.stringify(GRID_LAYOUT));}catch(_){}
   if(!ME)return;
+  var body={user:ME,layout:GRID_LAYOUT};
+  body.gridOn=(typeof gridOn==="boolean")?gridOn:true;   // editing a layout means you want it
   fetch("/api/settings/layout",{method:"PUT",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({user:ME,layout:GRID_LAYOUT})}).catch(function(){});
+    body:JSON.stringify(body)}).catch(function(){});
 }
 function loadGrid(){
   var local=null;
   try{local=JSON.parse(localStorage.getItem("marcoTaskGrid:"+(ME||"anon"))||"null");}catch(_){}
   GRID_LAYOUT=(Array.isArray(local)&&local.length)?local:defaultGridLayout();
-  // server copy wins so a layout follows you between machines
-  if(ME)api("/api/settings/layout?user="+encodeURIComponent(ME)).then(function(d){
-    if(d&&Array.isArray(d.layout)&&d.layout.length){ GRID_LAYOUT=d.layout; if(GRID_ON)paintGrid(); }
+  if(!ME)return;
+  // The server copy is authoritative: it carries both the arrangement and whether
+  // this user has adopted the custom dashboard, so both follow between machines.
+  api("/api/settings/layout?user="+encodeURIComponent(ME)).then(function(d){
+    if(!d)return;
+    if(Array.isArray(d.layout)&&d.layout.length){ GRID_LAYOUT=d.layout; if(GRID_ON)paintGrid(); }
+    if(d.gridOn===true&&!GRID_ON) setGridMode(true,true,true);
+    else if(d.gridOn===false&&GRID_ON) setGridMode(false,true,true);
   }).catch(function(){});
 }
-function setGridMode(on,quiet){
+function setGridMode(on,quiet,skipSave){
   GRID_ON=!!on;
   document.body.classList.toggle("gridmode",GRID_ON);
   try{localStorage.setItem("marcoTaskGridOn:"+(ME||"anon"),GRID_ON?"1":"0");}catch(_){}
+  // Remember the choice server-side too, so turning it off stays off elsewhere.
+  if(!skipSave&&ME)saveGrid(GRID_ON);
   if(GRID_ON){ if(!GRID_LAYOUT.length)GRID_LAYOUT=defaultGridLayout(); buildFrames(); paintGrid(); }
   else restoreFrames();
   var b=document.getElementById("gridModeBtn");
@@ -1187,7 +1198,7 @@ function bootGrid(){
   loadGrid();
   try{
     if(localStorage.getItem("marcoTaskGridOn:"+(ME||"anon"))==="1")
-      setTimeout(function(){setGridMode(true,true);},60);
+      setTimeout(function(){setGridMode(true,true,true);},60);
   }catch(_){}
 }
 function initLayoutControls(){

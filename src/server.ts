@@ -8107,7 +8107,8 @@ app.put("/api/settings/command", express.json({ limit: "16kb" }), async (req, re
 app.get("/api/settings/layout", (req, res) => {
   const user = String(req.query.user || "").trim();
   if (!user) { res.status(400).json({ ok: false, error: "user required" }); return; }
-  res.json({ ok: true, layout: getUserLayout(user) });
+  const { layout, gridOn } = getUserLayout(user);
+  res.json({ ok: true, layout, gridOn });
 });
 
 app.put("/api/settings/layout", express.json({ limit: "64kb" }), (req, res) => {
@@ -8115,8 +8116,9 @@ app.put("/api/settings/layout", express.json({ limit: "64kb" }), (req, res) => {
   const user = typeof body.user === "string" ? body.user.trim() : "";
   if (!user) { res.status(400).json({ ok: false, error: "user required" }); return; }
   try {
-    const layout = setUserLayout(user, body.layout);
-    res.json({ ok: true, layout });
+    const gridOn = typeof body.gridOn === "boolean" ? body.gridOn : undefined;
+    const saved = setUserLayout(user, body.layout, gridOn);
+    res.json({ ok: true, ...saved });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }

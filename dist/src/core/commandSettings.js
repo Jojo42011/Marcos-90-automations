@@ -33,7 +33,7 @@ function isValidTimeZone(tz) {
     }
 }
 function defaults() {
-    return { timeZone: DEFAULT_TIME_ZONE, layouts: {}, updatedAt: new Date().toISOString() };
+    return { timeZone: DEFAULT_TIME_ZONE, layouts: {}, gridOn: {}, updatedAt: new Date().toISOString() };
 }
 /** Keep stored placements sane: whole numbers, on-grid, bounded size. */
 function sanitizeLayout(raw) {
@@ -77,6 +77,10 @@ function getCommandSettings() {
                     .slice(0, 50)
                     .map(([k, v]) => [k, sanitizeLayout(v)]))
                 : {},
+            gridOn: raw?.gridOn && typeof raw.gridOn === "object"
+                ? Object.fromEntries(Object.entries(raw.gridOn)
+                    .slice(0, 50).map(([k, v]) => [k, v === true]))
+                : {},
             updatedBy: typeof raw?.updatedBy === "string" ? raw.updatedBy : undefined,
         };
     }
@@ -110,23 +114,36 @@ function commandDatePlus(days, at = new Date(), tz = getCommandSettings().timeZo
     return shifted.toISOString().slice(0, 10);
 }
 /** Save one user's dashboard arrangement without touching anyone else's. */
-function setUserLayout(userId, layout) {
+function setUserLayout(userId, layout, gridOn) {
     const uid = String(userId || "").trim().slice(0, 60);
     if (!uid)
         throw new Error("userId required");
     const current = getCommandSettings();
     const layouts = { ...(current.layouts || {}) };
+    const flags = { ...(current.gridOn || {}) };
     const clean = sanitizeLayout(layout);
     if (clean.length)
         layouts[uid] = clean;
     else
         delete layouts[uid];
-    const next = { ...current, layouts, updatedAt: new Date().toISOString() };
+    if (typeof gridOn === "boolean")
+        flags[uid] = gridOn;
+    const next = { ...current, layouts, gridOn: flags, updatedAt: new Date().toISOString() };
     (0, fs_1.mkdirSync)((0, path_1.dirname)(SETTINGS_PATH), { recursive: true });
     (0, fs_1.writeFileSync)(SETTINGS_PATH, JSON.stringify(next, null, 2));
-    return clean;
+    return { layout: clean, gridOn: resolveGridOn(next, uid) };
+}
+function resolveGridOn(settings, uid) {
+    const explicit = (settings.gridOn || {})[uid];
+    if (typeof explicit === "boolean")
+        return explicit;
+    return ((settings.layouts || {})[uid] || []).length > 0;
 }
 function getUserLayout(userId) {
     const uid = String(userId || "").trim();
-    return (getCommandSettings().layouts || {})[uid] || [];
+    const settings = getCommandSettings();
+    return {
+        layout: (settings.layouts || {})[uid] || [],
+        gridOn: resolveGridOn(settings, uid),
+    };
 }

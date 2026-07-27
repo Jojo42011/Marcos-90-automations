@@ -24,6 +24,12 @@ export interface CommandSettings {
   timeZone: string;
   /** Per-user dashboard layouts, keyed by user id, so they follow between machines. */
   layouts?: Record<string, WidgetPlacement[]>;
+  /**
+   * Explicit per-user custom-layout preference. Undefined means "not stated", in
+   * which case simply having a saved layout is taken as wanting it, so a layout
+   * someone built becomes their default everywhere without a second opt-in.
+   */
+  gridOn?: Record<string, boolean>;
   updatedAt: string;
   updatedBy?: string;
 }
@@ -53,7 +59,7 @@ export function isValidTimeZone(tz: unknown): tz is string {
 }
 
 function defaults(): CommandSettings {
-  return { timeZone: DEFAULT_TIME_ZONE, layouts: {}, updatedAt: new Date().toISOString() };
+  return { timeZone: DEFAULT_TIME_ZONE, layouts: {}, gridOn: {}, updatedAt: new Date().toISOString() };
 }
 
 /** Keep stored placements sane: whole numbers, on-grid, bounded size. */
@@ -94,6 +100,10 @@ export function getCommandSettings(): CommandSettings {
             .slice(0, 50)
             .map(([k, v]) => [k, sanitizeLayout(v)]))
         : {},
+      gridOn: raw?.gridOn && typeof raw.gridOn === "object"
+        ? Object.fromEntries(Object.entries(raw.gridOn as Record<string, unknown>)
+            .slice(0, 50).map(([k, v]) => [k, v === true]))
+        : {},
       updatedBy: typeof raw?.updatedBy === "string" ? raw.updatedBy : undefined,
     };
   } catch {
@@ -130,21 +140,37 @@ export function commandDatePlus(days: number, at: Date = new Date(), tz = getCom
 }
 
 /** Save one user's dashboard arrangement without touching anyone else's. */
-export function setUserLayout(userId: string, layout: unknown): WidgetPlacement[] {
+export function setUserLayout(
+  userId: string,
+  layout: unknown,
+  gridOn?: boolean,
+): { layout: WidgetPlacement[]; gridOn: boolean } {
   const uid = String(userId || "").trim().slice(0, 60);
   if (!uid) throw new Error("userId required");
   const current = getCommandSettings();
   const layouts = { ...(current.layouts || {}) };
+  const flags = { ...(current.gridOn || {}) };
   const clean = sanitizeLayout(layout);
   if (clean.length) layouts[uid] = clean;
   else delete layouts[uid];
-  const next: CommandSettings = { ...current, layouts, updatedAt: new Date().toISOString() };
+  if (typeof gridOn === "boolean") flags[uid] = gridOn;
+  const next: CommandSettings = { ...current, layouts, gridOn: flags, updatedAt: new Date().toISOString() };
   mkdirSync(dirname(SETTINGS_PATH), { recursive: true });
   writeFileSync(SETTINGS_PATH, JSON.stringify(next, null, 2));
-  return clean;
+  return { layout: clean, gridOn: resolveGridOn(next, uid) };
 }
 
-export function getUserLayout(userId: string): WidgetPlacement[] {
+function resolveGridOn(settings: CommandSettings, uid: string): boolean {
+  const explicit = (settings.gridOn || {})[uid];
+  if (typeof explicit === "boolean") return explicit;
+  return ((settings.layouts || {})[uid] || []).length > 0;
+}
+
+export function getUserLayout(userId: string): { layout: WidgetPlacement[]; gridOn: boolean } {
   const uid = String(userId || "").trim();
-  return (getCommandSettings().layouts || {})[uid] || [];
+  const settings = getCommandSettings();
+  return {
+    layout: (settings.layouts || {})[uid] || [],
+    gridOn: resolveGridOn(settings, uid),
+  };
 }

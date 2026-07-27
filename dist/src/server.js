@@ -7288,7 +7288,8 @@ app.get("/api/settings/layout", (req, res) => {
         res.status(400).json({ ok: false, error: "user required" });
         return;
     }
-    res.json({ ok: true, layout: (0, commandSettings_js_1.getUserLayout)(user) });
+    const { layout, gridOn } = (0, commandSettings_js_1.getUserLayout)(user);
+    res.json({ ok: true, layout, gridOn });
 });
 app.put("/api/settings/layout", express_1.default.json({ limit: "64kb" }), (req, res) => {
     const body = (req.body && typeof req.body === "object" ? req.body : {});
@@ -7298,8 +7299,9 @@ app.put("/api/settings/layout", express_1.default.json({ limit: "64kb" }), (req,
         return;
     }
     try {
-        const layout = (0, commandSettings_js_1.setUserLayout)(user, body.layout);
-        res.json({ ok: true, layout });
+        const gridOn = typeof body.gridOn === "boolean" ? body.gridOn : undefined;
+        const saved = (0, commandSettings_js_1.setUserLayout)(user, body.layout, gridOn);
+        res.json({ ok: true, ...saved });
     }
     catch (err) {
         res.status(400).json({ ok: false, error: err.message });
