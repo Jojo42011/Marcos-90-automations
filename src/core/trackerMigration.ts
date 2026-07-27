@@ -91,6 +91,16 @@ function bump(map: Record<string, number>, key: string): void {
 const BEST_GUESS_LEGACY = new Set<CrmStage>(["appointment_set", "showing_set", "pending"]);
 
 /**
+ * ManyChat merge fields that never resolved come through as literal
+ * `{{full_name}}`. That is not a name — treating it as one imported 44 nameless,
+ * phoneless rows on the first production run. Anything left is a real name.
+ */
+function cleanName(raw: string | undefined): string {
+  const s = String(raw || "").replace(/\{\{[^}]*\}\}/g, "").trim();
+  return s;
+}
+
+/**
  * @param leads   every CRM lead
  * @param dryRun  when true, nothing is written; the caller sees what would happen
  */
@@ -107,7 +117,7 @@ export function backfillTrackerFromLeads(leads: Lead[], dryRun = false): Tracker
 
   for (const lead of leads) {
     out.scanned++;
-    const name = (lead.name || lead.username || "").trim();
+    const name = cleanName(lead.name) || cleanName(lead.username);
     // A record with no name and no way to reach them is not worth a tracker row.
     if (!name && !lead.phone && !lead.email) {
       out.skipped++;

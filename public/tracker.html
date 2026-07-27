@@ -358,8 +358,8 @@ function anyStatusOn(){return Object.keys(FILTER.status).some(function(k){return
 function passes(rec){
   if(!(rec.sides||[]).length || (rec.sides||[]).indexOf(SIDE)<0) return false;
   if(anyStatusOn() && !FILTER.status[rec.status]) return false;
-  if(FILTER.source && (rec.source||"")!==FILTER.source) return false;
-  if(FILTER.assigned && (rec.assignedTo||"")!==FILTER.assigned) return false;
+  if(FILTER.source && (rec.source||"").trim().toLowerCase()!==FILTER.source) return false;
+  if(FILTER.assigned && (rec.assignedTo||"").trim().toLowerCase()!==FILTER.assigned) return false;
   if(FILTER.from && ymdOf(rec.addedAt) < FILTER.from) return false;
   if(FILTER.to   && ymdOf(rec.addedAt) > FILTER.to)   return false;
   if(FILTER.q){
@@ -563,13 +563,25 @@ function paintStatusChips(){
       FILTER.status[k]=!FILTER.status[k];paintStatusChips();renderBoard();};
   });
 }
+/* Sources arrive from several intake paths with inconsistent casing ("instagram"
+   and "Instagram" both exist in the live data), so group case-insensitively and
+   show one tidy option instead of two that each match half the records. */
+var SOURCE_LABELS={instagram:"Instagram",tiktok:"TikTok",facebook:"Facebook",zillow:"Zillow",
+  manychat:"ManyChat",manual:"Manual",referral:"Referral"};
+function titleish(s){
+  var k=s.toLowerCase();
+  return SOURCE_LABELS[k]||(s.charAt(0).toUpperCase()+s.slice(1));
+}
 function paintSelectFilters(){
   var srcs={},asg={};
-  RECORDS.forEach(function(r){if(r.source)srcs[r.source]=1;if(r.assignedTo)asg[r.assignedTo]=1;});
+  RECORDS.forEach(function(r){
+    if(r.source){var k=r.source.trim().toLowerCase(); if(!srcs[k])srcs[k]=titleish(r.source.trim());}
+    if(r.assignedTo){var a=r.assignedTo.trim().toLowerCase(); if(!asg[a])asg[a]=r.assignedTo.trim();}
+  });
   function fill(sel,vals,all,cur){
     sel.innerHTML='<option value="">'+all+'</option>'+
       Object.keys(vals).sort().map(function(v){
-        return '<option value="'+esc(v)+'"'+(v===cur?" selected":"")+'>'+esc(v)+'</option>';}).join("");
+        return '<option value="'+esc(v)+'"'+(v===cur?" selected":"")+'>'+esc(vals[v])+'</option>';}).join("");
   }
   fill(document.getElementById("fSource"),srcs,"All",FILTER.source);
   fill(document.getElementById("fAssigned"),asg,"Anyone",FILTER.assigned);
