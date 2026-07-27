@@ -102,14 +102,30 @@ function personToRow(p) {
         autoPlanEnrollments: [],
     };
 }
+/**
+ * Pulling all ~2,600 people takes 27-30s, so the original 30s timeout sat right
+ * on the edge and failed intermittently — which mattered once an import started
+ * depending on it. Generous ceiling plus one retry.
+ */
+const FETCH_TIMEOUT_MS = 90_000;
+async function fetchOnce(key) {
+    return fetch(`${CORE_BASE}/api/people?limit=${FETCH_LIMIT}`, {
+        headers: { Authorization: `Token token=${key}`, Accept: "application/json" },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+}
 async function fetchFromBrivity() {
     const key = apiKey();
     if (!key)
         throw new Error("BRIVITY_API_KEY not set");
-    const res = await fetch(`${CORE_BASE}/api/people?limit=${FETCH_LIMIT}`, {
-        headers: { Authorization: `Token token=${key}`, Accept: "application/json" },
-        signal: AbortSignal.timeout(30000),
-    });
+    let res;
+    try {
+        res = await fetchOnce(key);
+    }
+    catch (err) {
+        console.warn("[Brivity] people fetch failed, retrying once:", err.message);
+        res = await fetchOnce(key);
+    }
     if (!res.ok) {
         throw new Error(`Brivity API ${res.status}: ${(await res.text()).slice(0, 200)}`);
     }
