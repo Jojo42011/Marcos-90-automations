@@ -74,17 +74,14 @@ function cleanName(raw) {
     const s = String(raw || "").replace(/\{\{[^}]*\}\}/g, "").trim();
     return s;
 }
-/**
- * @param leads   every CRM lead
- * @param dryRun  when true, nothing is written; the caller sees what would happen
- */
-function backfillTrackerFromLeads(leads, dryRun = false) {
+function backfillTrackerFromLeads(leads, dryRun = false, options = {}) {
     const out = {
         scanned: 0,
         created: 0,
         updated: 0,
         skipped: 0,
         needsReview: [],
+        refreshed: 0,
         breakdown: { legacyStage: {}, sides: {}, status: {}, buyerStage: {}, sellerStage: {} },
         dryRun,
     };
@@ -115,6 +112,21 @@ function backfillTrackerFromLeads(leads, dryRun = false) {
                 patch.sellerStage = sellerStage;
             if (!existing.legacyStage)
                 patch.legacyStage = legacy;
+            // Gap-fill contact details always; only overwrite when explicitly asked.
+            if (!existing.phone && lead.phone)
+                patch.phone = lead.phone;
+            if (!existing.email && lead.email)
+                patch.email = lead.email;
+            if (options.refreshIdentity) {
+                if (name && name !== existing.name) {
+                    patch.name = name;
+                    out.refreshed++;
+                }
+                if (lead.phone && lead.phone !== existing.phone)
+                    patch.phone = lead.phone;
+                if (lead.email && lead.email !== existing.email)
+                    patch.email = lead.email;
+            }
             if (Object.keys(patch).length) {
                 if (!dryRun)
                     (0, trackerStore_js_1.updateTrackerRecord)(existing.id, patch);

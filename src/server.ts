@@ -8323,7 +8323,9 @@ app.post("/api/tracker/backfill", express.json({ limit: "16kb" }), async (req, r
   const apply = body.apply === true;
   try {
     const leads = await listAllLeads();
-    const result = backfillTrackerFromLeads(leads, !apply);
+    const result = backfillTrackerFromLeads(leads, !apply, {
+      refreshIdentity: body.refreshIdentity === true,
+    });
     res.json({ ok: true, ...result });
   } catch (err) {
     res.status(500).json({ ok: false, error: (err as Error).message });

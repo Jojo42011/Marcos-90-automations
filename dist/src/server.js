@@ -7496,7 +7496,9 @@ app.post("/api/tracker/backfill", express_1.default.json({ limit: "16kb" }), asy
     const apply = body.apply === true;
     try {
         const leads = await (0, db_js_1.listAllLeads)();
-        const result = (0, trackerMigration_js_1.backfillTrackerFromLeads)(leads, !apply);
+        const result = (0, trackerMigration_js_1.backfillTrackerFromLeads)(leads, !apply, {
+            refreshIdentity: body.refreshIdentity === true,
+        });
         res.json({ ok: true, ...result });
     }
     catch (err) {

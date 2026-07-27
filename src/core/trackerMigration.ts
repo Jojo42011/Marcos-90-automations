@@ -69,6 +69,8 @@ export interface TrackerBackfillResult {
   skipped: number;
   /** Records whose stage came from a BEST-GUESS mapping and deserve review. */
   needsReview: Array<{ id: string; name: string; legacyStage: string; mappedTo: string }>;
+  /** Existing tracker records whose name was refreshed from the lead. */
+  refreshed: number;
   /**
    * What the run would actually produce, so a dry run shows shape and not just
    * a total. `buyerStage.none` counting most of the set means the source data
@@ -104,13 +106,29 @@ function cleanName(raw: string | undefined): string {
  * @param leads   every CRM lead
  * @param dryRun  when true, nothing is written; the caller sees what would happen
  */
-export function backfillTrackerFromLeads(leads: Lead[], dryRun = false): TrackerBackfillResult {
+export interface TrackerBackfillOptions {
+  /**
+   * Also pull name / phone / email down from the lead onto tracker records that
+   * already exist. Off by default so a routine re-run can never overwrite
+   * something edited by hand in the tracker; turn it on after the lead store
+   * gains better data (the Brivity import replaced 159 social handles with real
+   * names, and the tracker was still showing "purple kitty 22").
+   */
+  refreshIdentity?: boolean;
+}
+
+export function backfillTrackerFromLeads(
+  leads: Lead[],
+  dryRun = false,
+  options: TrackerBackfillOptions = {},
+): TrackerBackfillResult {
   const out: TrackerBackfillResult = {
     scanned: 0,
     created: 0,
     updated: 0,
     skipped: 0,
     needsReview: [],
+    refreshed: 0,
     breakdown: { legacyStage: {}, sides: {}, status: {}, buyerStage: {}, sellerStage: {} },
     dryRun,
   };
@@ -142,6 +160,14 @@ export function backfillTrackerFromLeads(leads: Lead[], dryRun = false): Tracker
       if (!existing.buyerStage && buyerStage) patch.buyerStage = buyerStage;
       if (!existing.sellerStage && sellerStage) patch.sellerStage = sellerStage;
       if (!existing.legacyStage) patch.legacyStage = legacy;
+      // Gap-fill contact details always; only overwrite when explicitly asked.
+      if (!existing.phone && lead.phone) patch.phone = lead.phone;
+      if (!existing.email && lead.email) patch.email = lead.email;
+      if (options.refreshIdentity) {
+        if (name && name !== existing.name) { patch.name = name; out.refreshed++; }
+        if (lead.phone && lead.phone !== existing.phone) patch.phone = lead.phone;
+        if (lead.email && lead.email !== existing.email) patch.email = lead.email;
+      }
       if (Object.keys(patch).length) {
         if (!dryRun) updateTrackerRecord(existing.id, patch);
         out.updated++;
