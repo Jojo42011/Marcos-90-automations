@@ -61,6 +61,9 @@ function sidesFromIntent(intent) {
         return ["buyer", "seller"];
     return ["buyer"];
 }
+function bump(map, key) {
+    map[key] = (map[key] || 0) + 1;
+}
 const BEST_GUESS_LEGACY = new Set(["appointment_set", "showing_set", "pending"]);
 /**
  * @param leads   every CRM lead
@@ -73,6 +76,7 @@ function backfillTrackerFromLeads(leads, dryRun = false) {
         updated: 0,
         skipped: 0,
         needsReview: [],
+        breakdown: { legacyStage: {}, sides: {}, status: {}, buyerStage: {}, sellerStage: {} },
         dryRun,
     };
     for (const lead of leads) {
@@ -87,6 +91,11 @@ function backfillTrackerFromLeads(leads, dryRun = false) {
         const sides = sidesFromIntent(lead.crmIntent);
         const buyerStage = sides.includes("buyer") ? BUYER_FROM_LEGACY[legacy] : undefined;
         const sellerStage = sides.includes("seller") ? SELLER_FROM_LEGACY[legacy] : undefined;
+        bump(out.breakdown.legacyStage, legacy);
+        bump(out.breakdown.sides, sides.join("+"));
+        bump(out.breakdown.status, statusFromLead(lead));
+        bump(out.breakdown.buyerStage, buyerStage || (sides.includes("buyer") ? "none" : "n/a"));
+        bump(out.breakdown.sellerStage, sellerStage || (sides.includes("seller") ? "none" : "n/a"));
         const existing = (0, trackerStore_js_1.getTrackerRecordByLead)(lead.id);
         if (existing) {
             // Never clobber work done in the tracker: only fill gaps.

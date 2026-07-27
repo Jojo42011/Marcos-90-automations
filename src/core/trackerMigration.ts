@@ -69,7 +69,23 @@ export interface TrackerBackfillResult {
   skipped: number;
   /** Records whose stage came from a BEST-GUESS mapping and deserve review. */
   needsReview: Array<{ id: string; name: string; legacyStage: string; mappedTo: string }>;
+  /**
+   * What the run would actually produce, so a dry run shows shape and not just
+   * a total. `buyerStage.none` counting most of the set means the source data
+   * has no pipeline information to carry over — worth knowing before applying.
+   */
+  breakdown: {
+    legacyStage: Record<string, number>;
+    sides: Record<string, number>;
+    status: Record<string, number>;
+    buyerStage: Record<string, number>;
+    sellerStage: Record<string, number>;
+  };
   dryRun: boolean;
+}
+
+function bump(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] || 0) + 1;
 }
 
 const BEST_GUESS_LEGACY = new Set<CrmStage>(["appointment_set", "showing_set", "pending"]);
@@ -85,6 +101,7 @@ export function backfillTrackerFromLeads(leads: Lead[], dryRun = false): Tracker
     updated: 0,
     skipped: 0,
     needsReview: [],
+    breakdown: { legacyStage: {}, sides: {}, status: {}, buyerStage: {}, sellerStage: {} },
     dryRun,
   };
 
@@ -101,6 +118,12 @@ export function backfillTrackerFromLeads(leads: Lead[], dryRun = false): Tracker
     const sides = sidesFromIntent(lead.crmIntent);
     const buyerStage = sides.includes("buyer") ? BUYER_FROM_LEGACY[legacy] : undefined;
     const sellerStage = sides.includes("seller") ? SELLER_FROM_LEGACY[legacy] : undefined;
+
+    bump(out.breakdown.legacyStage, legacy);
+    bump(out.breakdown.sides, sides.join("+"));
+    bump(out.breakdown.status, statusFromLead(lead));
+    bump(out.breakdown.buyerStage, buyerStage || (sides.includes("buyer") ? "none" : "n/a"));
+    bump(out.breakdown.sellerStage, sellerStage || (sides.includes("seller") ? "none" : "n/a"));
 
     const existing = getTrackerRecordByLead(lead.id);
     if (existing) {
