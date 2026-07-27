@@ -524,6 +524,39 @@ export async function createLead(lead: Omit<Lead, "id" | "createdAt" | "updatedA
   return routed;
 }
 
+/**
+ * Insert or update a lead with NO outbound side effects.
+ *
+ * `createLead` deliberately fires automations when a lead arrives: a phone
+ * texts Marco and Carlos via Twilio, an email schedules a marketing auto-reply
+ * and starts a drip. That is right for a new lead coming out of the DMs, and
+ * badly wrong for a bulk import of contacts that already exist elsewhere —
+ * filing 500 Brivity contacts through it would send hundreds of texts and email
+ * hundreds of cold contacts unprompted.
+ *
+ * This is the import path: same store, same normalisation, no automations. Use
+ * it only for records being filed, never for a lead that has just come in.
+ */
+export function upsertLeadQuiet(
+  input: Omit<Lead, "id" | "createdAt" | "updatedAt"> & { id?: string },
+): Lead {
+  const now = nowIso();
+  const existing = input.id ? leadsById.get(input.id) : undefined;
+  if (existing) {
+    const merged = normalizeCrmDefaults({ ...existing, ...input, id: existing.id, updatedAt: now });
+    leadsById.set(existing.id, merged);
+    persistToFile();
+    return merged;
+  }
+  const id = input.id && !leadsById.has(input.id) ? input.id : String(idCounter++);
+  const created = normalizeCrmDefaults({ ...input, id, createdAt: now, updatedAt: now } as Lead);
+  leadsById.set(id, created);
+  leadKeyToId.set(leadKey(created.platform, created.userId), id);
+  if (!conversationsByLeadId.has(id)) conversationsByLeadId.set(id, { messages: [] });
+  persistToFile();
+  return created;
+}
+
 export async function updateLead(lead: Lead): Promise<Lead | undefined> {
   const existing = leadsById.get(lead.id);
   if (!existing) {

@@ -1218,19 +1218,61 @@ function initLayoutControls(){
   if(b)b.textContent="⊞ Custom layout: "+(GRID_ON?"On":"Off");
 }
 
-/* Time zone picker. Zones the team actually spans, plus whatever is already set. */
-var TZ_CHOICES=["America/New_York","America/Chicago","America/Denver","America/Phoenix",
+/* ===== Time zone picker =====
+   Pinned shortlist first (the zones the team actually spans), then every zone
+   the browser knows, grouped by region. The server accepts any valid IANA zone,
+   so the old hardcoded list of 14 was the only thing limiting the choice. */
+var TZ_COMMON=["America/New_York","America/Chicago","America/Denver","America/Phoenix",
   "America/Los_Angeles","America/Anchorage","Pacific/Honolulu","America/Mexico_City",
-  "America/Bogota","UTC","Europe/London","Europe/Madrid","Asia/Manila","Asia/Kolkata"];
+  "America/Toronto","America/Vancouver","UTC"];
+var TZ_REGIONS=[
+  ["Americas",            /^America\//],
+  ["Europe",              /^Europe\//],
+  ["Asia",                /^Asia\//],
+  ["Africa",              /^Africa\//],
+  ["Australia & Pacific", /^(Australia|Pacific)\//],
+  ["Atlantic & Indian",   /^(Atlantic|Indian)\//]
+];
+function allTimeZones(){
+  try{
+    if(typeof Intl.supportedValuesOf==="function"){
+      var v=Intl.supportedValuesOf("timeZone");
+      if(v&&v.length)return v;
+    }
+  }catch(_){}
+  return TZ_COMMON.slice();   // very old browser: shortlist is better than nothing
+}
+/* "3:42 PM · GMT-5" — the offset is what makes two similar zones distinguishable. */
+function tzOptionLabel(z){
+  var now="",off="";
+  try{
+    now=new Intl.DateTimeFormat("en-US",{timeZone:z,hour:"numeric",minute:"2-digit"}).format(new Date());
+    var p=new Intl.DateTimeFormat("en-US",{timeZone:z,timeZoneName:"shortOffset"}).formatToParts(new Date());
+    var o=p.find(function(x){return x.type==="timeZoneName";});
+    off=o?o.value:"";
+  }catch(_){}
+  return z.replace(/_/g," ")+(now?"  "+now:"")+(off?"  ·  "+off:"");
+}
 function initTzPicker(){
   var sel=document.getElementById("tzSelect"); if(!sel)return;
-  var list=TZ_CHOICES.slice();
-  if(list.indexOf(CMD_TZ)<0)list.unshift(CMD_TZ);
-  sel.innerHTML=list.map(function(z){
-    var now="";
-    try{now=new Intl.DateTimeFormat("en-US",{timeZone:z,hour:"numeric",minute:"2-digit"}).format(new Date());}catch(_){}
-    return '<option value="'+esc(z)+'"'+(z===CMD_TZ?" selected":"")+'>'+esc(z.replace(/_/g," "))+(now?" — "+now:"")+'</option>';
-  }).join("");
+  var all=allTimeZones();
+  var pinned=TZ_COMMON.slice();
+  if(pinned.indexOf(CMD_TZ)<0)pinned.unshift(CMD_TZ);
+  function opt(z){
+    return '<option value="'+esc(z)+'"'+(z===CMD_TZ?" selected":"")+'>'+esc(tzOptionLabel(z))+'</option>';
+  }
+  var html='<optgroup label="Commonly used">'+pinned.map(opt).join("")+'</optgroup>';
+  var used={};
+  pinned.forEach(function(z){used[z]=1;});
+  TZ_REGIONS.forEach(function(r){
+    var zs=all.filter(function(z){return r[1].test(z)&&!used[z];});
+    if(!zs.length)return;
+    zs.forEach(function(z){used[z]=1;});
+    html+='<optgroup label="'+esc(r[0])+'">'+zs.map(opt).join("")+'</optgroup>';
+  });
+  var rest=all.filter(function(z){return !used[z];});
+  if(rest.length)html+='<optgroup label="Other">'+rest.map(opt).join("")+'</optgroup>';
+  sel.innerHTML=html;
   sel.onchange=function(){
     var tz=sel.value, prev=CMD_TZ;
     fetch("/api/settings/command",{method:"PUT",headers:{"Content-Type":"application/json"},

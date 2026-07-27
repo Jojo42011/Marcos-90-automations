@@ -819,6 +819,39 @@ app.post("/api/brivity/import/plan", express_1.default.json({ limit: "16kb" }), 
         res.status(502).json({ ok: false, error: err.message });
     }
 });
+/**
+ * Apply a Brivity import. Re-plans server-side first so the write is against
+ * current data, then writes via the quiet path (no Twilio/email automations).
+ * Requires an explicit {"apply": true}.
+ */
+app.post("/api/brivity/import/apply", express_1.default.json({ limit: "16kb" }), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    if (body.apply !== true) {
+        res.status(400).json({ ok: false, error: 'Refusing to write without {"apply": true}' });
+        return;
+    }
+    try {
+        const { planBrivityImport, applyBrivityImport } = await Promise.resolve().then(() => __importStar(require("./core/brivityImport.js")));
+        const plan = await planBrivityImport({
+            includeDead: body.includeDead === true,
+            enrichDeadMatches: body.enrichDeadMatches !== false,
+            preferBrivityName: body.preferBrivityName !== false,
+        });
+        const result = await applyBrivityImport(plan);
+        res.json({
+            ok: true,
+            planned: { create: plan.counts.create, merge: plan.counts.merge, renames: plan.counts.renames },
+            ...result,
+        });
+    }
+    catch (err) {
+        res.status(502).json({ ok: false, error: err.message });
+    }
+});
 app.get("/api/brivity/status", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });

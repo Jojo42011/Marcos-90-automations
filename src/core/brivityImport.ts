@@ -279,6 +279,64 @@ export async function planBrivityImport(
   return plan;
 }
 
+export interface BrivityImportResult {
+  applied: true;
+  created: number;
+  merged: number;
+  fieldsWritten: Record<string, number>;
+  failures: Array<{ ref: string; error: string }>;
+}
+
+/**
+ * Write a plan.
+ *
+ * Everything goes through `upsertLeadQuiet`, never `createLead` — see the note
+ * at the top of this file. Filing existing contacts must not text Marco and
+ * Carlos hundreds of times or email hundreds of cold contacts.
+ */
+export async function applyBrivityImport(plan: BrivityImportPlan): Promise<BrivityImportResult> {
+  const { upsertLeadQuiet } = await import("./db.js");
+  const leads = await listAllLeads();
+  const byId = new Map(leads.map((l) => [l.id, l]));
+
+  const out: BrivityImportResult = {
+    applied: true,
+    created: 0,
+    merged: 0,
+    fieldsWritten: {},
+    failures: [],
+  };
+
+  for (const c of plan.creates) {
+    try {
+      upsertLeadQuiet(leadFromPlannedCreate(c));
+      out.created++;
+    } catch (err) {
+      out.failures.push({ ref: `create:${c.brivityId}`, error: (err as Error).message });
+    }
+  }
+
+  for (const m of plan.merges) {
+    const lead = byId.get(m.leadId);
+    if (!lead) {
+      out.failures.push({ ref: `merge:${m.leadId}`, error: "lead no longer exists" });
+      continue;
+    }
+    try {
+      const patch: Record<string, unknown> = {};
+      for (const ch of m.changes) {
+        patch[ch.field] = ch.to;
+        out.fieldsWritten[ch.field] = (out.fieldsWritten[ch.field] || 0) + 1;
+      }
+      upsertLeadQuiet({ ...lead, ...patch } as never);
+      out.merged++;
+    } catch (err) {
+      out.failures.push({ ref: `merge:${m.leadId}`, error: (err as Error).message });
+    }
+  }
+  return out;
+}
+
 /** The Lead a planned create becomes. Exported so apply and tests agree. */
 export function leadFromPlannedCreate(c: PlannedCreate): Omit<Lead, "id" | "createdAt" | "updatedAt"> {
   return {

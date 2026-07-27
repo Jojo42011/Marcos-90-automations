@@ -1,7 +1,41 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.phoneKey = phoneKey;
 exports.planBrivityImport = planBrivityImport;
+exports.applyBrivityImport = applyBrivityImport;
 exports.leadFromPlannedCreate = leadFromPlannedCreate;
 const state_js_1 = require("./state.js");
 const brivityPeople_js_1 = require("./brivityPeople.js");
@@ -234,6 +268,54 @@ async function planBrivityImport(opts = {}) {
         renames: plan.merges.filter((m) => m.changes.some((c) => c.field === "name")).length,
     };
     return plan;
+}
+/**
+ * Write a plan.
+ *
+ * Everything goes through `upsertLeadQuiet`, never `createLead` — see the note
+ * at the top of this file. Filing existing contacts must not text Marco and
+ * Carlos hundreds of times or email hundreds of cold contacts.
+ */
+async function applyBrivityImport(plan) {
+    const { upsertLeadQuiet } = await Promise.resolve().then(() => __importStar(require("./db.js")));
+    const leads = await (0, db_js_1.listAllLeads)();
+    const byId = new Map(leads.map((l) => [l.id, l]));
+    const out = {
+        applied: true,
+        created: 0,
+        merged: 0,
+        fieldsWritten: {},
+        failures: [],
+    };
+    for (const c of plan.creates) {
+        try {
+            upsertLeadQuiet(leadFromPlannedCreate(c));
+            out.created++;
+        }
+        catch (err) {
+            out.failures.push({ ref: `create:${c.brivityId}`, error: err.message });
+        }
+    }
+    for (const m of plan.merges) {
+        const lead = byId.get(m.leadId);
+        if (!lead) {
+            out.failures.push({ ref: `merge:${m.leadId}`, error: "lead no longer exists" });
+            continue;
+        }
+        try {
+            const patch = {};
+            for (const ch of m.changes) {
+                patch[ch.field] = ch.to;
+                out.fieldsWritten[ch.field] = (out.fieldsWritten[ch.field] || 0) + 1;
+            }
+            upsertLeadQuiet({ ...lead, ...patch });
+            out.merged++;
+        }
+        catch (err) {
+            out.failures.push({ ref: `merge:${m.leadId}`, error: err.message });
+        }
+    }
+    return out;
 }
 /** The Lead a planned create becomes. Exported so apply and tests agree. */
 function leadFromPlannedCreate(c) {
