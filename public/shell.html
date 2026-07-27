@@ -88,6 +88,16 @@
  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
  #toast b { color:var(--accent); }
 
+ /* ── Shell-level task notification popups: visible on top of whichever tab
+    is active (unlike the identical popup inside team-tasks.html's own
+    iframe, which is invisible whenever that tab isn't the active one). ── */
+ #notePops { position:absolute; top:18px; right:18px; z-index:75; display:flex; flex-direction:column; gap:10px; width:320px; max-width:88vw; }
+ .notecard { position:relative; background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:12px; box-shadow:0 14px 34px rgba(16,24,40,.16); padding:12px 32px 12px 14px; cursor:pointer; animation:notecardIn .22s ease; }
+ @keyframes notecardIn { from{ transform:translateX(24px); opacity:0; } to{ transform:none; opacity:1; } }
+ .notecard b { font-size:13px; color:var(--text); }
+ .notecard p { font-size:12px; color:var(--muted); margin-top:3px; }
+ .notecard .x { position:absolute; top:7px; right:8px; border:none; background:none; color:var(--muted); font-size:14px; cursor:pointer; line-height:1; padding:2px; }
+
 
  @media (max-width:780px){ :root{ --w:210px; } }
 </style>
@@ -125,6 +135,7 @@
    <div id="main">
      <div id="frames"></div>
      <div id="toast"></div>
+     <div id="notePops"></div>
    </div>
  </div>
 
@@ -306,6 +317,59 @@ function initShell(){
 
  /* Expose a tiny API in case you want to drive it from this window too. */
  window.AppShell = { open:function(k){ activate(k, true); }, collapse:setCollapsed, tabs:TABS };
+
+ /* TASK-ASSIGNMENT POPUPS ─────────────────────────────────────────
+    team-tasks.html already has this exact popup, but it only renders
+    while Tasks is the active tab - inactive iframes are opacity:0 (not
+    display:none) so its poller keeps running invisibly in the background.
+    This mirrors that poller here at the shell level so an assignment is
+    visible no matter which tab you're on; suppressed only when Tasks
+    itself is active, since that page already shows its own copy (avoids
+    a literal double popup in that one case). Identity is read from the
+    same localStorage key team-tasks.html's "who's on?" gate writes, so
+    no separate sign-in step is needed. */
+ var notePops = document.getElementById("notePops");
+ var noteSeenKey = "shell_note_seen";
+ var noteSeen = {};
+ try{ (JSON.parse(localStorage.getItem(noteSeenKey)||"[]")).forEach(function(id){ noteSeen[id]=1; }); }catch(_){}
+ var noteFirstPoll = true;
+
+ function escNote(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+ function popNoteCard(n){
+   var el = document.createElement("div");
+   el.className = "notecard";
+   el.innerHTML = "<b>"+escNote(n.title)+"</b><p>"+escNote(n.body)+"</p><button class=\"x\">✕</button>";
+   el.querySelector(".x").onclick = function(e){ e.stopPropagation(); el.remove(); };
+   el.onclick = function(){ el.remove(); activate("tasks", true); };
+   notePops.appendChild(el);
+   setTimeout(function(){ if(el.parentNode) el.remove(); }, 15000);
+ }
+
+ function pollNotes(){
+   var me = "";
+   try{ me = localStorage.getItem("marcoTaskUser") || ""; }catch(_){}
+   if(!me) return;
+   fetch("/api/team/notifications?user="+encodeURIComponent(me), { credentials:"same-origin" })
+     .then(function(r){ return r.ok ? r.json() : null; })
+     .then(function(d){
+       if(!d) return;
+       var notes = d.notifications || [];
+       var fresh = false;
+       notes.forEach(function(n){
+         if(noteSeen[n.id]) return;
+         noteSeen[n.id] = 1; fresh = true;
+         if(noteFirstPoll || n.readAt) return;   // don't flood already-known notes on load
+         if(current === "tasks") return;         // Tasks tab already shows its own copy of this
+         popNoteCard(n);
+       });
+       if(fresh){ try{ localStorage.setItem(noteSeenKey, JSON.stringify(Object.keys(noteSeen).slice(-500))); }catch(_){} }
+       noteFirstPoll = false;
+     })
+     .catch(function(){});
+ }
+ pollNotes();
+ setInterval(pollNotes, 20000);
 }
 
 /* Who's signed in — fetched before building the nav so an admin's Team tab
