@@ -8198,7 +8198,16 @@ app.patch("/api/tracker/records/:id", express.json({ limit: "256kb" }), (req, re
   const rec = updateTrackerRecord(id, body as never);
   if (!rec) { res.status(404).json({ ok: false, error: "Not found" }); return; }
   // Ticking an item that has a task completes the task, not just the checkbox.
-  const synced = "checklist" in body ? syncChecklistToTasks(before.checklist, rec.checklist) : 0;
+  /*
+   * Compare against the state the user was actually looking at, not the raw
+   * stored row. When a task is completed on the board the tracker's stored
+   * `done` stays false and only the read overlay shows it ticked — so a raw
+   * comparison saw "false -> false" when someone unticked it, and silently left
+   * the task closed.
+   */
+  const synced = "checklist" in body
+    ? syncChecklistToTasks(applyTaskState(before).checklist, rec.checklist)
+    : 0;
   const fresh = applyTaskState(rec);
   // Return the linked-task state alongside, so the drawer's chips do not sit
   // stale showing "open" for a task the save just completed.
