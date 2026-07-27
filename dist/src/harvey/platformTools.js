@@ -1,0 +1,439 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PLATFORM_TOOL_NAMES = exports.PLATFORM_TOOL_DEFINITIONS = void 0;
+exports.executePlatformTool = executePlatformTool;
+const types_js_1 = require("../core/types.js");
+const trackerStore_js_1 = require("../core/trackerStore.js");
+const trackerTasks_js_1 = require("../core/trackerTasks.js");
+const db_js_1 = require("../core/db.js");
+const teamStore_js_1 = require("../core/teamStore.js");
+const commandSettings_js_1 = require("../core/commandSettings.js");
+/**
+ * Harvey tools for the platform surfaces that had none — the Buyers & Sellers
+ * Tracker, Task Command, the team board and command settings.
+ *
+ * These existed as working subsystems Harvey simply could not see: it could
+ * describe the CRM in detail while being blind to the 1,219-record tracker and
+ * the task board the team actually works from. "No feature in a silo Harvey
+ * cannot see" is the point of this file.
+ *
+ * Reads are unrestricted. Writes are deliberately narrow — stage moves, status
+ * and notes, task create/update — because those are the actions someone would
+ * genuinely delegate out loud. Deleting anything is not offered.
+ */
+const BUYER_STAGE_KEYS = types_js_1.BUYER_STAGES.map((s) => s.key);
+const SELLER_STAGE_KEYS = types_js_1.SELLER_STAGES.map((s) => s.key);
+const TASK_COLUMNS = ["urgent", "today", "tomorrow", "this_week", "this_month"];
+const TASK_STATUSES = ["pending", "in_progress", "on_hold", "due_soon", "overdue", "done"];
+/** Cards carry a lot of noise for a language model; this is the useful part. */
+function slimRecord(r) {
+    const checklist = r.checklist || [];
+    return {
+        id: r.id,
+        name: r.name,
+        sides: r.sides,
+        status: r.status,
+        buyerStage: r.buyerStage ?? null,
+        sellerStage: r.sellerStage ?? null,
+        phone: r.phone ?? null,
+        email: r.email ?? null,
+        address: r.address ?? null,
+        source: r.source ?? null,
+        assignedTo: r.assignedTo ?? null,
+        contactable: Boolean((r.phone || "").trim() || (r.email || "").trim()),
+        lastInteractionAt: r.lastInteractionAt ?? null,
+        checklist: checklist.length
+            ? { total: checklist.length, done: checklist.filter((c) => c.done).length }
+            : null,
+        notes: r.notes ? r.notes.slice(0, 400) : null,
+    };
+}
+function slimTask(t) {
+    return {
+        id: t.id,
+        title: t.title,
+        column: t.column,
+        status: t.status,
+        assignedTo: t.assignedTo ?? null,
+        dueDate: t.dueDate ?? null,
+        dueTime: t.dueTime ?? null,
+        recurring: Boolean(t.recurring),
+        checklist: t.checklist?.length
+            ? { total: t.checklist.length, done: t.checklist.filter((c) => c.done).length }
+            : null,
+        tags: t.tags ?? [],
+    };
+}
+const str = (v) => (typeof v === "string" ? v.trim() : "");
+const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
+exports.PLATFORM_TOOL_DEFINITIONS = [
+    {
+        name: "get_tracker_summary",
+        description: "Buyers & Sellers Tracker totals: how many people, how many on each side, counts by status and by pipeline stage, and how many are actually contactable (have a phone or email). Use this for 'how many sellers do we have', 'what's in the pipeline', 'how many hot leads'.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "get_tracker_pipelines",
+        description: "The stage vocabulary: the ordered buyer pipeline (11 stages) and seller pipeline (15 stages), plus the status list. Call this before moving anyone so the stage key used is valid.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "search_tracker",
+        description: "Find people in the tracker. Filter by side (buyer/seller), status, pipeline stage, source, assignee, or a free-text query matching name, phone digits, email or address. Returns the matching people with their stage and contact details.",
+        input_schema: {
+            type: "object",
+            properties: {
+                query: { type: "string", description: "Name, phone, email or address fragment." },
+                side: { type: "string", enum: ["buyer", "seller"] },
+                status: { type: "string", description: `One of: ${types_js_1.TRACKER_STATUSES.join(", ")}` },
+                buyerStage: { type: "string", description: `One of: ${BUYER_STAGE_KEYS.join(", ")}` },
+                sellerStage: { type: "string", description: `One of: ${SELLER_STAGE_KEYS.join(", ")}` },
+                source: { type: "string" },
+                assignedTo: { type: "string" },
+                contactableOnly: {
+                    type: "boolean",
+                    description: "Only people with a phone or email. 472 records are social handles with neither.",
+                },
+                limit: { type: "number", description: "Default 25, max 200." },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "get_tracker_record",
+        description: "Everything about one tracker person: both pipeline stages, stage history and timeline dates, notes, full checklist including which items are linked to Task Command.",
+        input_schema: {
+            type: "object",
+            properties: { id: { type: "string", description: "Tracker record id." } },
+            required: ["id"],
+        },
+    },
+    {
+        name: "set_tracker_stage",
+        description: "Move one side of a person along their pipeline — e.g. move a seller to 'listing_appointment_set'. Buyer and seller sides move independently. Pass stage null to move them back to Unstaged. Call get_tracker_pipelines first if unsure of the stage key.",
+        input_schema: {
+            type: "object",
+            properties: {
+                id: { type: "string" },
+                side: { type: "string", enum: ["buyer", "seller"] },
+                stage: { type: "string", description: "Stage key, or empty string for Unstaged." },
+                timelineDate: {
+                    type: "string",
+                    description: "Optional YYYY-MM-DD, when they are looking to buy or list.",
+                },
+            },
+            required: ["id", "side", "stage"],
+        },
+    },
+    {
+        name: "update_tracker_record",
+        description: "Update a tracker person's status, notes, assignee, or record that they were contacted today. Does not move pipeline stages — use set_tracker_stage for that.",
+        input_schema: {
+            type: "object",
+            properties: {
+                id: { type: "string" },
+                status: { type: "string", description: `One of: ${types_js_1.TRACKER_STATUSES.join(", ")}` },
+                notes: { type: "string" },
+                assignedTo: { type: "string" },
+                contactedNow: { type: "boolean", description: "Stamp last contact as right now." },
+            },
+            required: ["id"],
+        },
+    },
+    {
+        name: "push_tracker_checklist_to_tasks",
+        description: "Send a tracker person's checklist items to the Task Command board as real tasks, assigned to whoever that person is assigned to. Already-sent items are skipped. Completion then syncs both ways between the checklist and the task.",
+        input_schema: {
+            type: "object",
+            properties: {
+                id: { type: "string", description: "Tracker record id." },
+                column: { type: "string", enum: TASK_COLUMNS, description: "Default 'today'." },
+            },
+            required: ["id"],
+        },
+    },
+    {
+        name: "get_task_board",
+        description: "Task Command board: counts plus the tasks themselves. Filter by column (urgent/today/tomorrow/this_week/this_month), status, or assignee. Use for 'what's due today', 'what is Wesley working on', 'what's overdue'.",
+        input_schema: {
+            type: "object",
+            properties: {
+                column: { type: "string", enum: TASK_COLUMNS },
+                status: { type: "string", enum: TASK_STATUSES },
+                assignedTo: { type: "string", description: "marco, wesley, kendrick or carlos." },
+                includeDone: { type: "boolean", description: "Default false." },
+                limit: { type: "number", description: "Default 40, max 200." },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "create_task",
+        description: "Put a task on the Task Command board. Use when asked to remember, schedule or delegate something.",
+        input_schema: {
+            type: "object",
+            properties: {
+                title: { type: "string" },
+                column: { type: "string", enum: TASK_COLUMNS, description: "Default 'today'." },
+                assignedTo: { type: "string", description: "marco, wesley, kendrick or carlos." },
+                description: { type: "string" },
+                dueDate: { type: "string", description: "YYYY-MM-DD." },
+                dueTime: { type: "string", description: "HH:MM, 24h." },
+                urgent: { type: "boolean", description: "Puts it in the urgent column, red." },
+            },
+            required: ["title"],
+        },
+    },
+    {
+        name: "update_task",
+        description: "Change a task: mark it done, move it to another column, reassign it, or change its due date.",
+        input_schema: {
+            type: "object",
+            properties: {
+                id: { type: "string" },
+                status: { type: "string", enum: TASK_STATUSES },
+                column: { type: "string", enum: TASK_COLUMNS },
+                assignedTo: { type: "string" },
+                dueDate: { type: "string", description: "YYYY-MM-DD." },
+                title: { type: "string" },
+            },
+            required: ["id"],
+        },
+    },
+    {
+        name: "get_team_status",
+        description: "Who is online, unread team chat counts, and recent notifications for a team member. Use for 'is Wesley around', 'what did I miss'.",
+        input_schema: {
+            type: "object",
+            properties: {
+                user: { type: "string", description: "Team member id; default marco." },
+                limit: { type: "number", description: "Notifications to return, default 15." },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "get_command_settings",
+        description: "The team-wide command settings — most importantly the shared time zone that every due date, deadline and task rollover resolves against, plus today's date in that zone.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+];
+exports.PLATFORM_TOOL_NAMES = new Set(exports.PLATFORM_TOOL_DEFINITIONS.map((t) => t.name));
+async function executePlatformTool(name, input) {
+    switch (name) {
+        case "get_tracker_summary": {
+            const c = (0, trackerStore_js_1.trackerCounts)();
+            const all = (0, trackerStore_js_1.listTrackerRecords)({});
+            const contactable = all.filter((r) => (r.phone || "").trim() || (r.email || "").trim()).length;
+            return {
+                ...c,
+                contactable,
+                noContactInfo: all.length - contactable,
+                note: "Records with no phone or email are Instagram/TikTok handles from the DM funnel — they cannot be called or emailed yet.",
+            };
+        }
+        case "get_tracker_pipelines":
+            return {
+                statuses: types_js_1.TRACKER_STATUSES,
+                buyerStages: types_js_1.BUYER_STAGES,
+                sellerStages: types_js_1.SELLER_STAGES,
+                note: "Stages are per side and move independently; a person can be both a buyer and a seller.",
+            };
+        case "search_tracker": {
+            const filter = {
+                q: str(input.query) || undefined,
+                side: input.side === "buyer" || input.side === "seller" ? input.side : undefined,
+                status: str(input.status) ? [str(input.status)] : undefined,
+                buyerStage: str(input.buyerStage) ? [str(input.buyerStage)] : undefined,
+                sellerStage: str(input.sellerStage) ? [str(input.sellerStage)] : undefined,
+                source: str(input.source) ? [str(input.source)] : undefined,
+                assignedTo: str(input.assignedTo) || undefined,
+            };
+            let rows = (0, trackerTasks_js_1.applyTaskStateAll)((0, trackerStore_js_1.listTrackerRecords)(filter));
+            if (input.contactableOnly === true) {
+                rows = rows.filter((r) => (r.phone || "").trim() || (r.email || "").trim());
+            }
+            const limit = Math.min(200, Math.max(1, num(input.limit, 25)));
+            return {
+                matched: rows.length,
+                returned: Math.min(limit, rows.length),
+                records: rows.slice(0, limit).map(slimRecord),
+            };
+        }
+        case "get_tracker_record": {
+            const raw = (0, trackerStore_js_1.getTrackerRecord)(str(input.id));
+            if (!raw)
+                return { error: "No tracker record with that id." };
+            const r = (0, trackerTasks_js_1.applyTaskState)(raw);
+            return {
+                ...slimRecord(r),
+                stageMeta: r.stageMeta || {},
+                checklistItems: (r.checklist || []).map((c) => ({
+                    id: c.id,
+                    text: c.text,
+                    done: c.done,
+                    inTaskManager: Boolean(c.taskId),
+                })),
+                legacyStage: r.legacyStage ?? null,
+                leadId: r.leadId ?? null,
+                addedAt: r.addedAt,
+            };
+        }
+        case "set_tracker_stage": {
+            const id = str(input.id);
+            const side = input.side === "seller" ? "seller" : "buyer";
+            const stage = str(input.stage);
+            const valid = side === "buyer" ? BUYER_STAGE_KEYS : SELLER_STAGE_KEYS;
+            if (stage && !valid.includes(stage)) {
+                return { error: `'${stage}' is not a ${side} stage.`, validStages: valid };
+            }
+            const meta = str(input.timelineDate) ? { timelineDate: str(input.timelineDate) } : undefined;
+            const rec = (0, trackerStore_js_1.setTrackerStage)(id, side, stage || null, meta);
+            if (!rec)
+                return { error: "No tracker record with that id." };
+            return {
+                ok: true,
+                moved: `${rec.name} → ${side}: ${stage || "Unstaged"}`,
+                record: slimRecord(rec),
+            };
+        }
+        case "update_tracker_record": {
+            const id = str(input.id);
+            const patch = {};
+            if (str(input.status)) {
+                if (!types_js_1.TRACKER_STATUSES.includes(str(input.status))) {
+                    return { error: `'${input.status}' is not a status.`, validStatuses: types_js_1.TRACKER_STATUSES };
+                }
+                patch.status = str(input.status);
+            }
+            if (typeof input.notes === "string")
+                patch.notes = input.notes;
+            if (str(input.assignedTo))
+                patch.assignedTo = str(input.assignedTo);
+            if (input.contactedNow === true)
+                patch.lastInteractionAt = new Date().toISOString();
+            if (!Object.keys(patch).length)
+                return { error: "Nothing to update." };
+            const rec = (0, trackerStore_js_1.updateTrackerRecord)(id, patch);
+            if (!rec)
+                return { error: "No tracker record with that id." };
+            return { ok: true, updated: Object.keys(patch), record: slimRecord(rec) };
+        }
+        case "push_tracker_checklist_to_tasks": {
+            const column = TASK_COLUMNS.includes(input.column)
+                ? input.column
+                : "today";
+            const out = (0, trackerTasks_js_1.pushChecklistToTasks)(str(input.id), undefined, column);
+            if (!out)
+                return { error: "No tracker record with that id." };
+            return {
+                ok: true,
+                created: out.created.length,
+                alreadyLinked: out.skipped,
+                tasks: out.created.map((t) => ({ id: t.id, title: t.title, assignedTo: t.assignedTo })),
+            };
+        }
+        case "get_task_board": {
+            const all = (0, db_js_1.getCommandTasks)();
+            const includeDone = input.includeDone === true;
+            const column = str(input.column);
+            const status = str(input.status);
+            const who = str(input.assignedTo).toLowerCase();
+            let rows = all.filter((t) => {
+                if (!includeDone && t.status === "done")
+                    return false;
+                if (column && t.column !== column)
+                    return false;
+                if (status && t.status !== status)
+                    return false;
+                if (who && String(t.assignedTo || "").toLowerCase() !== who)
+                    return false;
+                return true;
+            });
+            const limit = Math.min(200, Math.max(1, num(input.limit, 40)));
+            const today = (0, commandSettings_js_1.commandDateString)();
+            return {
+                summary: (0, db_js_1.buildCommandTasksSummary)(all),
+                today,
+                timeZone: (0, commandSettings_js_1.getCommandSettings)().timeZone,
+                overdue: rows.filter((t) => t.dueDate && t.dueDate < today && t.status !== "done").length,
+                matched: rows.length,
+                tasks: rows.slice(0, limit).map(slimTask),
+            };
+        }
+        case "create_task": {
+            const title = str(input.title);
+            if (!title)
+                return { error: "title is required." };
+            const urgent = input.urgent === true;
+            const column = urgent
+                ? "urgent"
+                : TASK_COLUMNS.includes(input.column)
+                    ? input.column
+                    : "today";
+            const task = (0, db_js_1.createCommandTask)({
+                title: title.slice(0, 300),
+                description: str(input.description) || undefined,
+                column,
+                status: "pending",
+                color: urgent ? "red" : "blue",
+                assignedTo: str(input.assignedTo).toLowerCase() || "carlos",
+                createdBy: "harvey",
+                dueDate: str(input.dueDate).slice(0, 10) || undefined,
+                dueTime: /^\d{2}:\d{2}$/.test(str(input.dueTime)) ? str(input.dueTime) : undefined,
+                tags: ["harvey"],
+            });
+            return { ok: true, task: slimTask(task) };
+        }
+        case "update_task": {
+            const id = str(input.id);
+            const patch = {};
+            if (str(input.status))
+                patch.status = str(input.status);
+            if (str(input.column))
+                patch.column = str(input.column);
+            if (str(input.assignedTo))
+                patch.assignedTo = str(input.assignedTo).toLowerCase();
+            if (str(input.dueDate))
+                patch.dueDate = str(input.dueDate).slice(0, 10);
+            if (str(input.title))
+                patch.title = str(input.title).slice(0, 300);
+            if (patch.status === "done")
+                patch.completedAt = new Date().toISOString();
+            if (!Object.keys(patch).length)
+                return { error: "Nothing to update." };
+            const task = (0, db_js_1.updateCommandTask)(id, patch);
+            if (!task)
+                return { error: "No task with that id." };
+            return { ok: true, task: slimTask(task) };
+        }
+        case "get_team_status": {
+            const user = str(input.user).toLowerCase() || "marco";
+            const limit = Math.min(100, Math.max(1, num(input.limit, 15)));
+            return {
+                user,
+                presence: (0, teamStore_js_1.getPresence)(),
+                unreadChat: (0, teamStore_js_1.chatUnreadCounts)(user),
+                notifications: (0, teamStore_js_1.getNotifications)(user, limit).map((n) => ({
+                    type: n.type,
+                    title: n.title,
+                    body: n.body,
+                    from: n.from ?? null,
+                    read: Boolean(n.readAt),
+                    at: n.at,
+                })),
+            };
+        }
+        case "get_command_settings": {
+            const s = (0, commandSettings_js_1.getCommandSettings)();
+            return {
+                timeZone: s.timeZone,
+                todayInCommandZone: (0, commandSettings_js_1.commandDateString)(),
+                note: "This one zone drives every due date, deadline and task rollover for the whole team, regardless of where each person is.",
+                updatedAt: s.updatedAt,
+            };
+        }
+        default:
+            return { error: `Unknown platform tool: ${name}` };
+    }
+}

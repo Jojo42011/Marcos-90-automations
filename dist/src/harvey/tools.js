@@ -38,6 +38,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HARVEY_GEMINI_TOOLS = exports.HARVEY_TOOL_DEFINITIONS = void 0;
 exports.executeHarveyTool = executeHarveyTool;
+const platformTools_js_1 = require("./platformTools.js");
 const smsStore_js_1 = require("../core/smsStore.js");
 const db_js_1 = require("../core/db.js");
 const socialStore_js_1 = require("../core/socialStore.js");
@@ -520,6 +521,8 @@ exports.HARVEY_TOOL_DEFINITIONS = [
             required: ["question"],
         },
     },
+    // Tracker, Task Command, team and settings — see platformTools.ts.
+    ...platformTools_js_1.PLATFORM_TOOL_DEFINITIONS,
 ];
 exports.HARVEY_GEMINI_TOOLS = {
     functionDeclarations: [
@@ -980,6 +983,9 @@ async function enrichNurtureLeadScore(scoreEntry, leadMap) {
 }
 async function executeHarveyTool(name, input) {
     const normalized = normalizeHarveyToolInput(input);
+    // Platform surfaces (tracker / tasks / team / settings) live in their own module.
+    if (platformTools_js_1.PLATFORM_TOOL_NAMES.has(name))
+        return (0, platformTools_js_1.executePlatformTool)(name, normalized);
     switch (name) {
         case "get_lead_summary":
             return getLeadSummary();

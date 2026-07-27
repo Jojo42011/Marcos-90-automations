@@ -2,6 +2,11 @@
  * Harvey chat tools — Anthropic tool definitions + DB-backed executors.
  */
 
+import {
+  PLATFORM_TOOL_DEFINITIONS,
+  PLATFORM_TOOL_NAMES,
+  executePlatformTool,
+} from "./platformTools.js";
 import { getThreadForLead } from "../core/smsStore.js";
 import { getConversation, listAllLeads, getLeadById } from "../core/db.js";
 import { getSocialSummaryForHarvey, getSocialVideos, getPendingCommentReplies } from "../core/socialStore.js";
@@ -553,6 +558,8 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
       required: ["question"],
     },
   },
+  // Tracker, Task Command, team and settings — see platformTools.ts.
+  ...PLATFORM_TOOL_DEFINITIONS,
 ];
 
 export const HARVEY_GEMINI_TOOLS = {
@@ -1045,6 +1052,8 @@ export async function executeHarveyTool(
   input: Record<string, unknown>,
 ): Promise<unknown> {
   const normalized = normalizeHarveyToolInput(input);
+  // Platform surfaces (tracker / tasks / team / settings) live in their own module.
+  if (PLATFORM_TOOL_NAMES.has(name)) return executePlatformTool(name, normalized);
   switch (name) {
     case "get_lead_summary":
       return getLeadSummary();
