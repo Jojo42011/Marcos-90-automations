@@ -812,6 +812,11 @@ app.get("/team-tasks", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "team-tasks.html"));
 });
 
+// Harvey Jobs — start a job, watch each step, read what it produced.
+app.get("/jobs", requireAuthPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "jobs.html"));
+});
+
 // Buyers & Sellers Tracker — the two-pipeline board over /api/tracker/*.
 app.get("/tracker", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "tracker.html"));

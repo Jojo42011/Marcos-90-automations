@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Harvey Jobs · Marco Puga</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,500;0,8..60,600;0,8..60,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   HARVEY JOBS — hand Harvey a job, watch it work, read what it made.
+   Same design system as Task Command and the Tracker.
+   ============================================================ */
+:root{
+  --brand1:#f4695b; --brand2:#bd1e2b;
+  --teal:#59c4c4; --teal-strong:#4ca7a7;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --sans:"Inter",-apple-system,"Segoe UI","Helvetica Neue",Helvetica,Arial,Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:14px; --r-sm:10px;
+  --ease:cubic-bezier(.32,.72,.28,1);
+  --bg:#f6f8f9; --card:#ffffff; --line:#e8ecee; --ink:#2f3438; --muted:#5f6b78;
+  --soft:#f2f6f6; --shadow:0 1px 3px rgba(16,24,40,.07),0 1px 2px rgba(16,24,40,.05);
+  color-scheme: light;
+}
+html[data-theme="dark"]{
+  --bg:#0f1418; --card:#171d24; --line:#242c35; --ink:#e6ebef; --muted:#93a0ac;
+  --soft:#1c242c; --shadow:0 1px 3px rgba(0,0,0,.4);
+  color-scheme: dark;
+}
+select option, select optgroup{background:var(--card);color:var(--ink)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;color:var(--ink)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#9aa6b2;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-clip:padding-box}
+*{scrollbar-color:#9aa6b2 transparent}
+
+#top{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--card);
+  border-bottom:1px solid var(--line);box-shadow:var(--shadow);z-index:20}
+.brand{display:flex;align-items:center;gap:9px}
+.brand .wm{display:flex;flex-direction:column;line-height:1;font-family:var(--serif)}
+.brand .wm small{font-size:5.6px;letter-spacing:.18em;color:#c23b3b;margin-bottom:2px;white-space:nowrap}
+.brand .wm b{font-size:13px;letter-spacing:.06em;color:var(--ink)}
+.brand .wm i{font-style:normal;font-size:9px;letter-spacing:.3em;color:var(--muted);margin-top:3px}
+.tbtn{height:36px;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:10px;
+  padding:0 13px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.tbtn:hover{color:var(--teal-strong);border-color:var(--teal)}
+.tbtn.primary{background:linear-gradient(180deg,var(--brand1),var(--brand2));border-color:transparent;color:#fff}
+.tbtn.primary:hover{color:#fff;filter:brightness(1.05)}
+.tbtn:disabled{opacity:.5;cursor:default}
+#counts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.cbadge{font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px;color:#fff}
+
+#wrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:16px;
+  padding:16px 20px 18px}
+@media(max-width:1080px){#wrap{grid-template-columns:1fr;overflow-y:auto}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);
+  display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.chead{flex:0 0 auto;padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+.chead h2{font-family:var(--serif);font-size:16px;flex:1}
+.cbody{flex:1 1 auto;min-height:0;overflow-y:auto;padding:12px 14px}
+
+/* ── New job ── */
+#newTask{width:100%;min-height:96px;border:1px solid var(--line);background:var(--card);border-radius:var(--r-sm);
+  padding:10px;font-size:13px;line-height:1.5;resize:vertical}
+#newTask:focus{outline:none;border-color:var(--teal)}
+.hint{font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:8px}
+.hint b{color:var(--ink)}
+#startRow{display:flex;gap:8px;align-items:center;margin-top:10px}
+
+/* ── Job list ── */
+.job{border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 11px;margin-bottom:9px;cursor:pointer;
+  transition:box-shadow .14s var(--ease),border-color .14s var(--ease)}
+.job:hover{box-shadow:0 4px 14px rgba(16,24,40,.10)}
+.job.sel{border-color:var(--teal);box-shadow:0 0 0 2px rgba(89,196,196,.22)}
+.job .jtop{display:flex;align-items:center;gap:7px}
+.job .jprompt{font-size:12.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;line-height:1.35}
+.pill{font-size:9.5px;font-weight:800;letter-spacing:.04em;color:#fff;border-radius:999px;padding:2px 7px;
+  text-transform:uppercase;flex:0 0 auto}
+.job .jmeta{margin-top:5px;font-size:10.5px;color:var(--muted);display:flex;gap:9px}
+.spin{width:9px;height:9px;border-radius:50%;border:2px solid rgba(127,140,155,.35);border-top-color:var(--teal-strong);
+  animation:sp .8s linear infinite;flex:0 0 auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ── Detail ── */
+#detail{display:flex;flex-direction:column;min-height:0}
+#dPrompt{font-size:13.5px;line-height:1.6;background:var(--soft);border-radius:var(--r-sm);padding:10px 12px;
+  margin-bottom:14px;white-space:pre-wrap}
+.sect h3{font-size:11px;font-weight:800;letter-spacing:.07em;color:var(--muted);margin:16px 0 8px}
+.step{display:flex;gap:9px;padding:7px 0;border-bottom:1px solid var(--line)}
+.step:last-child{border-bottom:0}
+.stepn{font-size:10.5px;font-weight:800;color:var(--muted);min-width:20px;font-family:var(--mono)}
+.stepbody{flex:1;min-width:0}
+.steptool{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--teal-strong)}
+.stepio{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:3px;white-space:pre-wrap;
+  word-break:break-word;max-height:70px;overflow:hidden}
+.steptext{font-size:12.5px;line-height:1.55;white-space:pre-wrap}
+.step.err .steptext{color:#DC2626}
+#dResult{font-size:13px;line-height:1.65;white-space:pre-wrap;background:var(--soft);border-radius:var(--r-sm);
+  padding:12px 13px;overflow-x:auto}
+#dErr{font-size:12.5px;line-height:1.6;color:#DC2626;background:rgba(220,38,38,.07);border-radius:var(--r-sm);
+  padding:10px 12px;border:1px solid rgba(220,38,38,.25)}
+.filelink{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:8px 10px;margin-bottom:6px;font-size:12.5px;cursor:pointer}
+.filelink:hover{border-color:var(--teal)}
+.filelink .fpath{flex:1;font-family:var(--mono);font-size:11.5px}
+.filelink .fmeta{font-size:10.5px;color:var(--muted)}
+#fileView{margin-top:8px;font-family:var(--mono);font-size:11.5px;line-height:1.6;white-space:pre-wrap;
+  background:var(--soft);border-radius:var(--r-sm);padding:12px;max-height:420px;overflow:auto;display:none}
+.empty{color:var(--muted);font-size:13px;text-align:center;padding:40px 16px;line-height:1.6}
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);background:#1f2937;color:#fff;
+  padding:10px 16px;border-radius:11px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;
+  transition:all .2s var(--ease);z-index:70}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<header id="top">
+  <div class="brand">
+    <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
+      <defs><linearGradient id="mp" x1="0" y1="2" x2="0" y2="46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f4695b"/><stop offset="1" stop-color="#bd1e2b"/></linearGradient></defs>
+      <path d="M24 4 44 24 24 44 4 24Z" stroke="url(#mp)" stroke-width="2.2"/>
+      <path d="M14.5 22 24 12.5 33.5 22" stroke="url(#mp)" stroke-width="1.9" stroke-linejoin="round"/>
+      <text x="24" y="33.5" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="14.5" fill="url(#mp)">M</text>
+    </svg>
+    <span class="wm"><small>HAPPINESS BEGINS AT HOME</small><b>MARCO PUGA</b><i>HARVEY JOBS</i></span>
+  </div>
+  <button class="tbtn" id="themeBtn">◐ Theme</button>
+  <button class="tbtn" id="refreshBtn">↺ Refresh</button>
+  <div id="counts"></div>
+</header>
+
+<div id="wrap">
+  <!-- LEFT: start a job + the list -->
+  <section class="card">
+    <div class="chead"><h2>Give Harvey a job</h2></div>
+    <div class="cbody" style="flex:0 0 auto;border-bottom:1px solid var(--line)">
+      <textarea id="newTask" placeholder="e.g. Go through every hot seller in the tracker and write me a call list with their phone, stage and last contact date."></textarea>
+      <div id="startRow">
+        <button class="tbtn primary" id="startBtn">▶ Start job</button>
+        <span class="hint" style="margin:0">Runs on its own — no follow-up needed.</span>
+      </div>
+      <div class="hint">
+        Harvey works this to completion in the background with every tool it has, up to 40 steps.
+        Write it as <b>complete instructions</b>: nobody can answer a question mid-run.
+      </div>
+    </div>
+    <div class="chead" style="border-top:0"><h2 style="font-size:14px">Recent jobs</h2></div>
+    <div class="cbody" id="jobList"><div class="empty">No jobs yet.</div></div>
+  </section>
+
+  <!-- RIGHT: what the selected job did -->
+  <section class="card">
+    <div class="chead">
+      <h2 id="dTitle">Select a job</h2>
+      <button class="tbtn" id="cancelBtn" style="display:none">■ Cancel</button>
+    </div>
+    <div class="cbody" id="detail">
+      <div class="empty">Pick a job on the left to see every step it took and what it produced.</div>
+    </div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+var STATUS_META = {
+  queued:      {label:"Queued",      c:"#64748B"},
+  running:     {label:"Running",     c:"#3B82F6"},
+  done:        {label:"Done",        c:"#059669"},
+  failed:      {label:"Failed",      c:"#DC2626"},
+  cancelled:   {label:"Cancelled",   c:"#94A3B8"},
+  interrupted: {label:"Interrupted", c:"#F59E0B"}
+};
+var JOBS = [], SEL = null, POLL = null;
+
+function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML;}
+function toast(m){var t=document.getElementById("toast");t.textContent=m;t.classList.add("on");
+  clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove("on");},2400);}
+function api(p,opts){return fetch(p,opts).then(function(r){
+  return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||("HTTP "+r.status)); return j; });});}
+function jsonReq(m,b){return {method:m,headers:{"Content-Type":"application/json"},body:JSON.stringify(b)};}
+function isLive(s){return s==="running"||s==="queued";}
+function ago(iso){
+  if(!iso)return "";
+  var s=(Date.now()-new Date(iso))/1000;
+  if(s<60)return Math.max(1,Math.floor(s))+"s ago";
+  if(s<3600)return Math.floor(s/60)+"m ago";
+  if(s<86400)return Math.floor(s/3600)+"h ago";
+  return Math.floor(s/86400)+"d ago";
+}
+function dur(a,b){
+  if(!a)return "";
+  var end=b?new Date(b):new Date();
+  var s=Math.max(0,(end-new Date(a))/1000);
+  return s<60?Math.round(s)+"s":Math.floor(s/60)+"m "+Math.round(s%60)+"s";
+}
+
+/* ================= theme ================= */
+function applyTheme(t){document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");
+  localStorage.setItem("teamTasksTheme",t);}
+applyTheme(localStorage.getItem("teamTasksTheme")||"light");
+document.getElementById("themeBtn").onclick=function(){
+  applyTheme(document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark");};
+
+/* ================= list ================= */
+function renderCounts(counts){
+  var order=["running","queued","done","failed","interrupted","cancelled"];
+  document.getElementById("counts").innerHTML=order.filter(function(k){return counts[k];})
+    .map(function(k){
+      var m=STATUS_META[k];
+      return '<span class="cbadge" style="background:'+m.c+'">'+counts[k]+" "+m.label+'</span>';
+    }).join("");
+}
+function renderList(){
+  var el=document.getElementById("jobList");
+  if(!JOBS.length){el.innerHTML='<div class="empty">No jobs yet.<br>Give Harvey one above.</div>';return;}
+  el.innerHTML=JOBS.map(function(j){
+    var m=STATUS_META[j.status]||STATUS_META.queued;
+    return '<article class="job'+(SEL===j.id?" sel":"")+'" data-id="'+esc(j.id)+'">'+
+      '<div class="jtop">'+
+        (isLive(j.status)?'<span class="spin"></span>':'')+
+        '<div class="jprompt">'+esc(j.prompt)+'</div>'+
+        '<span class="pill" style="background:'+m.c+'">'+m.label+'</span>'+
+      '</div>'+
+      '<div class="jmeta">'+
+        '<span>'+j.steps.length+' step'+(j.steps.length===1?"":"s")+'</span>'+
+        '<span>'+j.toolCalls+' tool call'+(j.toolCalls===1?"":"s")+'</span>'+
+        (j.startedAt?'<span>'+dur(j.startedAt,j.finishedAt)+'</span>':'')+
+        '<span style="margin-left:auto">'+ago(j.createdAt)+'</span>'+
+      '</div>'+
+    '</article>';
+  }).join("");
+  el.querySelectorAll(".job").forEach(function(n){
+    n.onclick=function(){SEL=n.getAttribute("data-id");renderList();renderDetail();};
+  });
+}
+
+/* ================= detail ================= */
+function stepHtml(s){
+  if(s.kind==="tool"){
+    return '<div class="step"><div class="stepn">'+s.n+'</div><div class="stepbody">'+
+      '<div class="steptool">'+esc(s.tool||"tool")+'</div>'+
+      (s.input?'<div class="stepio">→ '+esc(s.input)+'</div>':'')+
+      (s.output?'<div class="stepio">← '+esc(s.output)+'</div>':'')+
+    '</div></div>';
+  }
+  return '<div class="step'+(s.kind==="error"?" err":"")+'"><div class="stepn">'+s.n+'</div>'+
+    '<div class="stepbody"><div class="steptext">'+esc(s.text||"")+'</div></div></div>';
+}
+
+/* Files Harvey wrote during the job, pulled from the write_file steps so the
+   output is one click away instead of something you have to go hunting for. */
+function filesTouched(job){
+  var paths=[];
+  (job.steps||[]).forEach(function(s){
+    if(s.kind!=="tool"||!s.tool)return;
+    if(s.tool!=="write_file"&&s.tool!=="edit_file")return;
+    try{
+      var p=JSON.parse(s.input||"{}").path;
+      if(p&&paths.indexOf(p)<0)paths.push(p);
+    }catch(_){}
+  });
+  return paths;
+}
+
+function renderDetail(){
+  var job=JOBS.find(function(j){return j.id===SEL;});
+  var el=document.getElementById("detail");
+  var cancel=document.getElementById("cancelBtn");
+  if(!job){
+    document.getElementById("dTitle").textContent="Select a job";
+    cancel.style.display="none";
+    el.innerHTML='<div class="empty">Pick a job on the left to see every step it took and what it produced.</div>';
+    return;
+  }
+  var m=STATUS_META[job.status]||STATUS_META.queued;
+  document.getElementById("dTitle").innerHTML='Job <span class="pill" style="background:'+m.c+'">'+m.label+'</span>';
+  cancel.style.display=isLive(job.status)?"flex":"none";
+  cancel.onclick=function(){
+    api("/api/harvey/jobs/"+encodeURIComponent(job.id)+"/cancel",{method:"POST"})
+      .then(function(){toast("Cancellation requested");load();})
+      .catch(function(e){toast("Could not cancel: "+e.message);});
+  };
+
+  var files=filesTouched(job);
+  el.innerHTML=
+    '<div id="dPrompt">'+esc(job.prompt)+'</div>'+
+    (job.error?'<div id="dErr"><b>'+(job.status==="interrupted"?"Interrupted":"Failed")+':</b> '+esc(job.error)+'</div>':'')+
+    (job.result?'<div class="sect"><h3>RESULT</h3><div id="dResult">'+esc(job.result)+'</div></div>':'')+
+    (files.length?'<div class="sect"><h3>FILES WRITTEN</h3>'+files.map(function(p){
+        return '<div class="filelink" data-file="'+esc(p)+'"><span class="fpath">'+esc(p)+'</span>'+
+               '<span class="fmeta">view</span></div>';}).join("")+
+      '<div id="fileView"></div></div>':'')+
+    '<div class="sect"><h3>STEPS ('+job.steps.length+')</h3>'+
+      (job.steps.length?job.steps.map(stepHtml).join("")
+        :'<div class="empty" style="padding:18px">'+(isLive(job.status)?"Starting…":"No steps recorded.")+'</div>')+
+    '</div>';
+
+  el.querySelectorAll("[data-file]").forEach(function(n){
+    n.onclick=function(){
+      var p=n.getAttribute("data-file");
+      var view=document.getElementById("fileView");
+      api("/api/harvey/workspace?path="+encodeURIComponent(p))
+        .then(function(j){view.style.display="block";view.textContent=j.file.content;})
+        .catch(function(e){view.style.display="block";view.textContent="Could not read "+p+": "+e.message;});
+    };
+  });
+}
+
+/* ================= load + live polling ================= */
+function load(){
+  return api("/api/harvey/jobs?limit=40")
+    .then(function(j){
+      JOBS=j.jobs||[];
+      renderCounts(j.counts||{});
+      if(SEL && !JOBS.some(function(x){return x.id===SEL;})) SEL=null;
+      renderList();renderDetail();
+      schedulePoll();
+    })
+    .catch(function(e){
+      document.getElementById("jobList").innerHTML=
+        '<div class="empty">Could not load jobs: '+esc(e.message)+'</div>';
+    });
+}
+/* Poll only while something is actually running, so an idle tab is silent. */
+function schedulePoll(){
+  clearTimeout(POLL);
+  if(JOBS.some(function(j){return isLive(j.status);})) POLL=setTimeout(load,2500);
+}
+
+document.getElementById("refreshBtn").onclick=function(){load().then(function(){toast("Refreshed");});};
+document.getElementById("startBtn").onclick=function(){
+  var ta=document.getElementById("newTask");
+  var task=ta.value.trim();
+  if(!task){toast("Describe the job first.");ta.focus();return;}
+  var btn=this; btn.disabled=true; btn.textContent="Starting…";
+  api("/api/harvey/jobs",jsonReq("POST",{task:task}))
+    .then(function(j){
+      ta.value="";SEL=j.job.id;
+      toast("Job started — it runs on its own.");
+      return load();
+    })
+    .catch(function(e){toast("Could not start: "+e.message);})
+    .then(function(){btn.disabled=false;btn.textContent="▶ Start job";});
+};
+document.getElementById("newTask").onkeydown=function(e){
+  if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){e.preventDefault();document.getElementById("startBtn").click();}
+};
+
+load();
+</script>
+</body>
+</html>
