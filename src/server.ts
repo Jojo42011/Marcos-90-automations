@@ -294,6 +294,8 @@ import {
   getCommandSettings,
   setCommandTimeZone,
   isValidTimeZone,
+  getUserLayout,
+  setUserLayout,
 } from "./core/commandSettings.js";
 
 import type {
@@ -8099,6 +8101,25 @@ app.put("/api/settings/command", express.json({ limit: "16kb" }), async (req, re
     /* audit is best-effort; the setting is already saved */
   }
   res.json({ ok: true, settings });
+});
+
+/** Per-user dashboard widget layout. */
+app.get("/api/settings/layout", (req, res) => {
+  const user = String(req.query.user || "").trim();
+  if (!user) { res.status(400).json({ ok: false, error: "user required" }); return; }
+  res.json({ ok: true, layout: getUserLayout(user) });
+});
+
+app.put("/api/settings/layout", express.json({ limit: "64kb" }), (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const user = typeof body.user === "string" ? body.user.trim() : "";
+  if (!user) { res.status(400).json({ ok: false, error: "user required" }); return; }
+  try {
+    const layout = setUserLayout(user, body.layout);
+    res.json({ ok: true, layout });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {

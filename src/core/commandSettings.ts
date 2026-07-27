@@ -9,9 +9,21 @@ import { dirname, join } from "path";
  * disagreed about which day a task was due and whether it had rolled over.
  * Everything that asks "what day is it" now resolves against this one zone.
  */
+/** One widget's placement on the 12-column dashboard grid. */
+export interface WidgetPlacement {
+  id: string;
+  x: number;      // 0-11
+  y: number;      // row index
+  w: number;      // columns
+  h: number;      // rows
+  hidden?: boolean;
+}
+
 export interface CommandSettings {
   /** IANA zone, e.g. "America/Chicago". */
   timeZone: string;
+  /** Per-user dashboard layouts, keyed by user id, so they follow between machines. */
+  layouts?: Record<string, WidgetPlacement[]>;
   updatedAt: string;
   updatedBy?: string;
 }
@@ -41,7 +53,33 @@ export function isValidTimeZone(tz: unknown): tz is string {
 }
 
 function defaults(): CommandSettings {
-  return { timeZone: DEFAULT_TIME_ZONE, updatedAt: new Date().toISOString() };
+  return { timeZone: DEFAULT_TIME_ZONE, layouts: {}, updatedAt: new Date().toISOString() };
+}
+
+/** Keep stored placements sane: whole numbers, on-grid, bounded size. */
+function sanitizeLayout(raw: unknown): WidgetPlacement[] {
+  if (!Array.isArray(raw)) return [];
+  const out: WidgetPlacement[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const w = item as Record<string, unknown>;
+    const id = typeof w.id === "string" ? w.id.trim().slice(0, 40) : "";
+    if (!id) continue;
+    const num = (v: unknown, min: number, max: number, dflt: number) => {
+      const n = Math.round(Number(v));
+      return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
+    };
+    out.push({
+      id,
+      x: num(w.x, 0, 11, 0),
+      y: num(w.y, 0, 200, 0),
+      w: num(w.w, 2, 12, 6),
+      h: num(w.h, 2, 60, 8),
+      hidden: w.hidden === true,
+    });
+    if (out.length >= 24) break;
+  }
+  return out;
 }
 
 export function getCommandSettings(): CommandSettings {
@@ -51,6 +89,11 @@ export function getCommandSettings(): CommandSettings {
     return {
       timeZone: isValidTimeZone(raw?.timeZone) ? raw.timeZone : DEFAULT_TIME_ZONE,
       updatedAt: typeof raw?.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
+      layouts: raw?.layouts && typeof raw.layouts === "object"
+        ? Object.fromEntries(Object.entries(raw.layouts as Record<string, unknown>)
+            .slice(0, 50)
+            .map(([k, v]) => [k, sanitizeLayout(v)]))
+        : {},
       updatedBy: typeof raw?.updatedBy === "string" ? raw.updatedBy : undefined,
     };
   } catch {
@@ -84,4 +127,24 @@ export function commandDatePlus(days: number, at: Date = new Date(), tz = getCom
   const shifted = new Date(Date.UTC(y, m - 1, d));
   shifted.setUTCDate(shifted.getUTCDate() + days);
   return shifted.toISOString().slice(0, 10);
+}
+
+/** Save one user's dashboard arrangement without touching anyone else's. */
+export function setUserLayout(userId: string, layout: unknown): WidgetPlacement[] {
+  const uid = String(userId || "").trim().slice(0, 60);
+  if (!uid) throw new Error("userId required");
+  const current = getCommandSettings();
+  const layouts = { ...(current.layouts || {}) };
+  const clean = sanitizeLayout(layout);
+  if (clean.length) layouts[uid] = clean;
+  else delete layouts[uid];
+  const next: CommandSettings = { ...current, layouts, updatedAt: new Date().toISOString() };
+  mkdirSync(dirname(SETTINGS_PATH), { recursive: true });
+  writeFileSync(SETTINGS_PATH, JSON.stringify(next, null, 2));
+  return clean;
+}
+
+export function getUserLayout(userId: string): WidgetPlacement[] {
+  const uid = String(userId || "").trim();
+  return (getCommandSettings().layouts || {})[uid] || [];
 }

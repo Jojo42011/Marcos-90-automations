@@ -159,6 +159,45 @@ html[data-theme="dark"] #barsScrollThumb:hover{background:#6e7a87}
 #splitter:hover::after,#splitter.drag::after{background:var(--teal)}
 body.splitting{cursor:col-resize;user-select:none}
 @media(max-width:1080px){#splitter{display:none}}
+/* ===== Free-form widget grid =====
+   12 columns, absolute placement, drag by the header, resize from the corner. */
+#grid{display:none;position:relative;padding:16px 20px 26px;min-height:calc(100vh - 90px)}
+body.gridmode #wrap{display:none}
+body.gridmode #grid{display:block}
+.wg{position:absolute;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;transition:box-shadow .15s}
+.wg.dragging{opacity:.85;z-index:40;box-shadow:0 18px 44px rgba(8,12,16,.34)}
+.wg.resizing{z-index:40}
+.wg-h{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 11px;cursor:grab;
+  border-bottom:1px solid var(--line);background:var(--bg);font-size:12px;font-weight:800;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--muted);user-select:none}
+.wg-h:active{cursor:grabbing}
+.wg-h .wg-grip{color:var(--line-2,#9aa6b2);letter-spacing:-2px}
+.wg-h .wg-x{margin-left:auto;cursor:pointer;font-size:13px;color:var(--muted);padding:0 3px;border-radius:5px}
+.wg-h .wg-x:hover{color:var(--urgent);background:var(--soft)}
+.wg-b{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
+.wg-b > *{flex:1 1 auto;min-height:0}
+.wg-r{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize}
+.wg-r::after{content:"";position:absolute;right:4px;bottom:4px;width:8px;height:8px;
+  border-right:2px solid var(--line);border-bottom:2px solid var(--line);border-radius:0 0 3px 0}
+.wg:hover .wg-r::after{border-color:var(--teal)}
+#wgGhost{position:absolute;border:2px dashed var(--teal);border-radius:var(--r);
+  background:var(--teal-soft,rgba(89,196,196,.10));pointer-events:none;display:none;z-index:30}
+body.gridding{user-select:none}
+#wgTray{position:fixed;inset:0;background:rgba(8,12,16,.28);display:none;z-index:78}
+#wgTray.on{display:block}
+#wgTrayInner{position:absolute;right:20px;top:64px;width:300px;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--r);box-shadow:0 18px 50px rgba(8,12,16,.4);padding:14px}
+#wgTrayInner b{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+#wgTrayList{display:flex;flex-direction:column;gap:7px;margin:9px 0}
+#wgTrayList button{height:34px;border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer}
+#wgTrayList button:hover{border-color:var(--teal);color:var(--teal-strong)}
+#wgTrayList .none{font-size:12px;color:var(--muted);padding:4px 2px}
+#wgTrayClose{width:100%;height:32px;border:1px solid var(--line);background:var(--card);color:var(--muted);
+  border-radius:8px;font-size:12px;font-weight:700;cursor:pointer}
+@media(max-width:1080px){body.gridmode #grid{padding:12px}}
+
 /* Horizontal drag handles: calendar vs messages, and the task list's height. */
 .hsplit{flex:0 0 auto;height:14px;margin:-4px 0;cursor:row-resize;display:flex;align-items:center;justify-content:center}
 .hsplit::after{content:"";height:3px;width:56px;border-radius:3px;background:var(--line);transition:background .15s}
@@ -572,6 +611,14 @@ html{scroll-behavior:smooth}
   <div id="splitter" title="Drag to resize · double-click to reset"></div>
 </div>
 
+<!-- Free-form widget canvas. Empty until custom layout is switched on, at which
+     point the existing panes are moved into frames here (and moved back on exit). -->
+<div id="grid"></div>
+<div id="wgTray"><div id="wgTrayInner">
+  <b>Add widget</b><div id="wgTrayList"></div>
+  <button id="wgTrayClose">Done</button>
+</div></div>
+
 <!-- Pick who to message; opens the existing chat drawer. -->
 <div id="msgPop"><div id="msgPanel">
   <div class="card-h"><h2>Messages</h2><span class="sub">pick a teammate</span></div>
@@ -588,6 +635,13 @@ html{scroll-behavior:smooth}
     <div class="layrow">
       <button id="swapSidesBtn">⇄ Swap sides</button>
       <button id="resetLayoutBtn">↺ Reset</button>
+    </div>
+    <div class="layrow" style="margin-top:7px">
+      <button id="gridModeBtn">⊞ Custom layout: Off</button>
+    </div>
+    <div class="layrow" style="margin-top:7px" id="gridOnlyRow">
+      <button id="addWidgetBtn">+ Add widget</button>
+      <button id="resetGridBtn">↺ Reset grid</button>
     </div>
   </div>
   <div class="tzbox">
@@ -787,7 +841,7 @@ function paintMe(){
 function openGate(){
   var w=document.getElementById("gateBtns");
   w.innerHTML=TEAM.map(function(m){return '<button class="gatebtn" data-u="'+m.id+'"><span class="av" style="background:'+m.color+'">'+m.name[0]+'</span>'+m.name+' <span style="color:var(--muted);font-weight:600;font-size:11.5px">· '+m.role+'</span></button>';}).join("");
-  w.querySelectorAll("button").forEach(function(b){b.onclick=function(){ME=b.getAttribute("data-u");localStorage.setItem(USER_KEY,ME);document.getElementById("gate").classList.remove("on");paintMe();loadLayout();renderAll();pollNotes();};});
+  w.querySelectorAll("button").forEach(function(b){b.onclick=function(){ME=b.getAttribute("data-u");localStorage.setItem(USER_KEY,ME);document.getElementById("gate").classList.remove("on");paintMe();loadLayout();bootGrid();renderAll();pollNotes();};});
   document.getElementById("gate").classList.add("on");
 }
 /* Messages: same member list, but every row opens the chat drawer. */
@@ -929,11 +983,228 @@ function applyLayout(){
     LAYOUT.leftPct=Math.min(100,Math.max(40,(y-r.top)/avail*100));
   },function(){LAYOUT.leftPct=100;});
 })();
+/* ===== Widget grid engine =====
+   Widgets are frames that HOST the existing panes rather than re-render them, so
+   renderBars/renderBig/renderDone keep working untouched. Entering grid mode moves
+   the nodes in; leaving puts them back exactly where they came from. */
+var GRID_COLS=12, GRID_ROW=44, GRID_GAP=16;
+var WIDGET_DEFS=[
+  {id:"tasks",    title:"Task list", src:"left",    def:{x:0,y:0,w:7,h:15}},
+  {id:"calendar", title:"Calendar",  src:"calCard", def:{x:7,y:0,w:5,h:11}},
+  {id:"messages", title:"Messages",  src:"msgBar",  def:{x:7,y:11,w:5,h:4}},
+];
+var GRID_ON=false, GRID_LAYOUT=[], WG_HOME={};
+function wgDef(id){ return WIDGET_DEFS.find(function(d){return d.id===id;}); }
+function defaultGridLayout(){ return WIDGET_DEFS.map(function(d){
+  return {id:d.id,x:d.def.x,y:d.def.y,w:d.def.w,h:d.def.h,hidden:false}; }); }
+function gridPlace(id){ return GRID_LAYOUT.find(function(p){return p.id===id;}); }
+
+function gridMetrics(){
+  var g=document.getElementById("grid");
+  var inner=g.clientWidth-40;                       // padding both sides
+  var colW=(inner-(GRID_COLS-1)*GRID_GAP)/GRID_COLS;
+  return {colW:colW,rowH:GRID_ROW,gap:GRID_GAP,left:20,top:16};
+}
+function gridRect(p){
+  var m=gridMetrics();
+  return {
+    left:Math.round(m.left+p.x*(m.colW+m.gap)),
+    top:Math.round(m.top+p.y*(m.rowH+m.gap)),
+    width:Math.round(p.w*m.colW+(p.w-1)*m.gap),
+    height:Math.round(p.h*m.rowH+(p.h-1)*m.gap)
+  };
+}
+/* Push anything this widget now overlaps downward, repeatedly until it settles. */
+function resolveCollisions(moved){
+  for(var pass=0;pass<12;pass++){
+    var bumped=false;
+    GRID_LAYOUT.forEach(function(p){
+      if(p.hidden||p.id===moved.id)return;
+      var overlapX=moved.x < p.x+p.w && p.x < moved.x+moved.w;
+      var overlapY=moved.y < p.y+p.h && p.y < moved.y+moved.h;
+      if(overlapX&&overlapY){ p.y=moved.y+moved.h; bumped=true; }
+    });
+    if(!bumped)break;
+    // a pushed widget can in turn collide with another
+    GRID_LAYOUT.slice().sort(function(a,b){return a.y-b.y;}).forEach(function(p){
+      if(p.hidden||p.id===moved.id)return;
+      GRID_LAYOUT.forEach(function(q){
+        if(q.hidden||q.id===p.id||q.id===moved.id)return;
+        if(p.x<q.x+q.w&&q.x<p.x+p.w&&p.y<q.y+q.h&&q.y<p.y+p.h) q.y=p.y+p.h;
+      });
+    });
+  }
+}
+function paintGrid(){
+  if(!GRID_ON)return;
+  var g=document.getElementById("grid");
+  GRID_LAYOUT.forEach(function(p){
+    var el=g.querySelector('.wg[data-wid="'+p.id+'"]');
+    if(!el)return;
+    el.style.display=p.hidden?"none":"flex";
+    if(p.hidden)return;
+    var r=gridRect(p);
+    el.style.left=r.left+"px"; el.style.top=r.top+"px";
+    el.style.width=r.width+"px"; el.style.height=r.height+"px";
+  });
+  var maxY=GRID_LAYOUT.filter(function(p){return !p.hidden;})
+    .reduce(function(a,p){return Math.max(a,p.y+p.h);},0);
+  g.style.height=(16+maxY*(GRID_ROW+GRID_GAP)+40)+"px";
+  if(window.syncBarsScroll)requestAnimationFrame(window.syncBarsScroll);
+}
+function buildFrames(){
+  var g=document.getElementById("grid");
+  g.innerHTML='<div id="wgGhost"></div>';
+  WIDGET_DEFS.forEach(function(d){
+    var src=document.getElementById(d.src); if(!src)return;
+    if(!WG_HOME[d.id]) WG_HOME[d.id]={parent:src.parentNode,next:src.nextSibling,cls:src.className};
+    var f=document.createElement("div");
+    f.className="wg"; f.setAttribute("data-wid",d.id);
+    f.innerHTML='<div class="wg-h"><span class="wg-grip">⋮⋮</span>'+esc(d.title)+
+      '<span class="wg-x" title="Remove">✕</span></div><div class="wg-b"></div><div class="wg-r"></div>';
+    g.appendChild(f);
+    src.className=src.className.replace(/\bcard\b/,"").trim();  // frame provides the card chrome
+    src.style.height=""; src.style.flex="1 1 auto";
+    f.querySelector(".wg-b").appendChild(src);
+  });
+  bindGridInteractions();
+}
+function restoreFrames(){
+  WIDGET_DEFS.forEach(function(d){
+    var src=document.getElementById(d.src), home=WG_HOME[d.id];
+    if(!src||!home)return;
+    src.className=home.cls; src.style.flex="";
+    if(home.next&&home.next.parentNode===home.parent) home.parent.insertBefore(src,home.next);
+    else home.parent.appendChild(src);
+  });
+  document.getElementById("grid").innerHTML="";
+  applyLayout();
+}
+function bindGridInteractions(){
+  var g=document.getElementById("grid"), ghost=document.getElementById("wgGhost");
+  var mode=null,cur=null,el=null,startX=0,startY=0,orig=null;
+  function showGhost(p){ var r=gridRect(p);
+    ghost.style.display="block"; ghost.style.left=r.left+"px"; ghost.style.top=r.top+"px";
+    ghost.style.width=r.width+"px"; ghost.style.height=r.height+"px"; }
+  g.querySelectorAll(".wg").forEach(function(frame){
+    var id=frame.getAttribute("data-wid");
+    frame.querySelector(".wg-h").addEventListener("mousedown",function(e){
+      if(e.target.classList.contains("wg-x"))return;
+      mode="move"; cur=gridPlace(id); el=frame; orig={x:cur.x,y:cur.y,w:cur.w,h:cur.h};
+      startX=e.clientX; startY=e.clientY; frame.classList.add("dragging");
+      document.body.classList.add("gridding"); showGhost(cur); e.preventDefault();
+    });
+    frame.querySelector(".wg-r").addEventListener("mousedown",function(e){
+      mode="resize"; cur=gridPlace(id); el=frame; orig={x:cur.x,y:cur.y,w:cur.w,h:cur.h};
+      startX=e.clientX; startY=e.clientY; frame.classList.add("resizing");
+      document.body.classList.add("gridding"); showGhost(cur); e.preventDefault();
+    });
+    frame.querySelector(".wg-x").addEventListener("click",function(e){
+      e.stopPropagation(); var p=gridPlace(id); if(!p)return;
+      p.hidden=true; paintGrid(); saveGrid(); toast(wgDef(id).title+" removed");
+    });
+  });
+  document.addEventListener("mousemove",function(e){
+    if(!mode||!cur)return;
+    var m=gridMetrics();
+    var dx=Math.round((e.clientX-startX)/(m.colW+m.gap));
+    var dy=Math.round((e.clientY-startY)/(m.rowH+m.gap));
+    if(mode==="move"){
+      cur.x=Math.max(0,Math.min(GRID_COLS-orig.w,orig.x+dx));
+      cur.y=Math.max(0,orig.y+dy);
+    }else{
+      cur.w=Math.max(2,Math.min(GRID_COLS-cur.x,orig.w+dx));
+      cur.h=Math.max(3,orig.h+dy);
+    }
+    showGhost(cur);
+  });
+  document.addEventListener("mouseup",function(){
+    if(!mode||!cur)return;
+    ghost.style.display="none";
+    if(el)el.classList.remove("dragging","resizing");
+    document.body.classList.remove("gridding");
+    resolveCollisions(cur);
+    paintGrid(); saveGrid();
+    mode=null;cur=null;el=null;
+  });
+  window.addEventListener("resize",paintGrid);
+}
+function saveGrid(){
+  try{localStorage.setItem("marcoTaskGrid:"+(ME||"anon"),JSON.stringify(GRID_LAYOUT));}catch(_){}
+  if(!ME)return;
+  fetch("/api/settings/layout",{method:"PUT",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({user:ME,layout:GRID_LAYOUT})}).catch(function(){});
+}
+function loadGrid(){
+  var local=null;
+  try{local=JSON.parse(localStorage.getItem("marcoTaskGrid:"+(ME||"anon"))||"null");}catch(_){}
+  GRID_LAYOUT=(Array.isArray(local)&&local.length)?local:defaultGridLayout();
+  // server copy wins so a layout follows you between machines
+  if(ME)api("/api/settings/layout?user="+encodeURIComponent(ME)).then(function(d){
+    if(d&&Array.isArray(d.layout)&&d.layout.length){ GRID_LAYOUT=d.layout; if(GRID_ON)paintGrid(); }
+  }).catch(function(){});
+}
+function setGridMode(on,quiet){
+  GRID_ON=!!on;
+  document.body.classList.toggle("gridmode",GRID_ON);
+  try{localStorage.setItem("marcoTaskGridOn:"+(ME||"anon"),GRID_ON?"1":"0");}catch(_){}
+  if(GRID_ON){ if(!GRID_LAYOUT.length)GRID_LAYOUT=defaultGridLayout(); buildFrames(); paintGrid(); }
+  else restoreFrames();
+  var b=document.getElementById("gridModeBtn");
+  if(b)b.textContent="⊞ Custom layout: "+(GRID_ON?"On":"Off");
+  var row=document.getElementById("gridOnlyRow");
+  if(row)row.style.display=GRID_ON?"flex":"none";
+  if(!quiet)toast(GRID_ON?"Custom layout on — drag headers to move, corners to resize":"Back to the standard layout");
+}
+function openWidgetTray(){
+  var tray=document.getElementById("wgTray"),list=document.getElementById("wgTrayList");
+  var hidden=GRID_LAYOUT.filter(function(p){return p.hidden;});
+  list.innerHTML=hidden.length?hidden.map(function(p){
+    return '<button data-add="'+esc(p.id)+'">+ '+esc((wgDef(p.id)||{}).title||p.id)+'</button>';
+  }).join(""):'<div class="none">Every widget is already on the board.</div>';
+  list.querySelectorAll("[data-add]").forEach(function(b){
+    b.onclick=function(){
+      var p=gridPlace(b.getAttribute("data-add")); if(!p)return;
+      p.hidden=false;
+      p.y=GRID_LAYOUT.filter(function(q){return !q.hidden&&q.id!==p.id;})
+        .reduce(function(a,q){return Math.max(a,q.y+q.h);},0);
+      paintGrid(); saveGrid(); openWidgetTray(); toast((wgDef(p.id)||{}).title+" added");
+    };
+  });
+  tray.classList.add("on");
+}
+(function(){
+  var tray=document.getElementById("wgTray");
+  if(tray){
+    tray.addEventListener("click",function(e){ if(e.target.id==="wgTray")tray.classList.remove("on"); });
+    var c=document.getElementById("wgTrayClose");
+    if(c)c.onclick=function(){tray.classList.remove("on");};
+  }
+})();
+
+/* Restore this user's saved grid, and re-enter grid mode if they left it on. */
+function bootGrid(){
+  loadGrid();
+  try{
+    if(localStorage.getItem("marcoTaskGridOn:"+(ME||"anon"))==="1")
+      setTimeout(function(){setGridMode(true,true);},60);
+  }catch(_){}
+}
 function initLayoutControls(){
   var sw=document.getElementById("swapSidesBtn"),rs=document.getElementById("resetLayoutBtn");
   if(sw)sw.onclick=function(){LAYOUT.swapped=!LAYOUT.swapped;applyLayout();saveLayout();
     toast(LAYOUT.swapped?"Calendar moved left":"Calendar moved right");};
   if(rs)rs.onclick=function(){LAYOUT={rightPct:48,swapped:false,calPct:78,leftPct:100};applyLayout();saveLayout();toast("Layout reset");};
+  var gm=document.getElementById("gridModeBtn");
+  if(gm)gm.onclick=function(){setGridMode(!GRID_ON);};
+  var aw=document.getElementById("addWidgetBtn");
+  if(aw)aw.onclick=function(){closeTeamPop();openWidgetTray();};
+  var rg=document.getElementById("resetGridBtn");
+  if(rg)rg.onclick=function(){GRID_LAYOUT=defaultGridLayout();paintGrid();saveGrid();toast("Grid reset");};
+  var row=document.getElementById("gridOnlyRow");
+  if(row)row.style.display=GRID_ON?"flex":"none";
+  var b=document.getElementById("gridModeBtn");
+  if(b)b.textContent="⊞ Custom layout: "+(GRID_ON?"On":"Off");
 }
 
 /* Time zone picker. Zones the team actually spans, plus whatever is already set. */
@@ -1665,6 +1936,7 @@ function loadCmdSettings(){
 initCal();
 paintMe();
 loadLayout();
+bootGrid();
 if(!ME)openGate();
 loadCmdSettings().then(function(){return loadTasks();}).catch(function(){toast("Failed to load tasks");});
 pollNotes();

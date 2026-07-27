@@ -7281,6 +7281,30 @@ app.put("/api/settings/command", express_1.default.json({ limit: "16kb" }), asyn
     }
     res.json({ ok: true, settings });
 });
+/** Per-user dashboard widget layout. */
+app.get("/api/settings/layout", (req, res) => {
+    const user = String(req.query.user || "").trim();
+    if (!user) {
+        res.status(400).json({ ok: false, error: "user required" });
+        return;
+    }
+    res.json({ ok: true, layout: (0, commandSettings_js_1.getUserLayout)(user) });
+});
+app.put("/api/settings/layout", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const user = typeof body.user === "string" ? body.user.trim() : "";
+    if (!user) {
+        res.status(400).json({ ok: false, error: "user required" });
+        return;
+    }
+    try {
+        const layout = (0, commandSettings_js_1.setUserLayout)(user, body.layout);
+        res.json({ ok: true, layout });
+    }
+    catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
 app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
     const body = (req.body && typeof req.body === "object" ? req.body : {});
     const title = typeof body.title === "string" ? body.title.trim() : "";
