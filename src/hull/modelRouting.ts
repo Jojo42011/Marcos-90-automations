@@ -41,6 +41,26 @@ const SONNET_TRIGGERS = [
   "transaction",
   "showing",
   "listing",
+  // Tracker / Task Command / team vocabulary. Without these the keyword-gated
+  // paths (voice, WhatsApp) get no tools for those subsystems and answer from
+  // memory instead of the database.
+  "tracker",
+  "pipeline",
+  "stage",
+  "seller",
+  "buyer",
+  "task",
+  "board",
+  "due",
+  "overdue",
+  "checklist",
+  "assigned",
+  "team",
+  "time zone",
+  "timezone",
+  "wesley",
+  "kendrick",
+  "carlos",
 ];
 
 export function needsSonnet(message: string): boolean {

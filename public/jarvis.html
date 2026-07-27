@@ -2152,7 +2152,9 @@
       const res = await fetch(apiUrl("/api/jarvis/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text.trim(), sessionId: sessionId || undefined }),
+        // full:true — Harvey must always have every business tool, or it answers
+        // tracker/task questions from imagination instead of the database.
+        body: JSON.stringify({ message: text.trim(), sessionId: sessionId || undefined, full: true }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || res.statusText);
