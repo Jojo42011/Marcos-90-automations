@@ -74,9 +74,22 @@ function richer(a, b) {
 async function planBrivityImport(opts = {}) {
     const options = {
         includeDead: opts.includeDead === true,
+        enrichDeadMatches: opts.enrichDeadMatches !== false,
         preferBrivityName: opts.preferBrivityName !== false,
     };
     const people = await (0, brivityPeople_js_1.getBrivityPeople)(false);
+    /*
+     * getBrivityPeople swallows fetch failures and returns [] (it is built to
+     * degrade for the CRM view). For an import plan that is dangerous: an empty
+     * result would read as "nothing to import" when it actually means "we could
+     * not reach Brivity". Refuse rather than report a false no-op.
+     */
+    if (!people.length) {
+        const st = (0, brivityPeople_js_1.getBrivityImportStatus)();
+        throw new Error(st.lastError
+            ? `Brivity fetch failed (${st.lastError}) — refusing to plan against an empty result`
+            : "Brivity returned no contacts — refusing to plan against an empty result");
+    }
     const leads = await (0, db_js_1.listAllLeads)();
     // Existing leads indexed for matching. A phone shared by two leads is a
     // conflict we refuse to guess at rather than merging into the wrong one.
@@ -108,13 +121,14 @@ async function planBrivityImport(opts = {}) {
         counts: { create: 0, merge: 0, renames: 0 },
     };
     // Collapse duplicates inside Brivity itself before matching outward.
+    /*
+     * Dead contacts are held back from CREATE, not from matching. Dropping them
+     * outright also drops the enrichment for leads we already have: 134 of them
+     * match a dead Brivity contact and 114 are on the board under a social handle
+     * when Brivity knows the real name. Enrichment adds no rows.
+     */
     const chosen = new Map();
-    const noKey = [];
     for (const p of people) {
-        if (!options.includeDead && statusOf(p) === "dead") {
-            plan.skipped.dead++;
-            continue;
-        }
         const pk = phoneKey(p.phone);
         const ek = emailKey(p.email);
         if (!pk && !ek) {
@@ -130,7 +144,6 @@ async function planBrivityImport(opts = {}) {
         else
             chosen.set(key, p);
     }
-    void noKey;
     for (const p of chosen.values()) {
         const pk = phoneKey(p.phone);
         const ek = emailKey(p.email);
@@ -154,7 +167,13 @@ async function planBrivityImport(opts = {}) {
             match = byEmail.get(ek);
             matchedOn = "email";
         }
+        const isDead = statusOf(p) === "dead";
         if (!match) {
+            // Nothing to enrich, so a dead contact is simply not imported.
+            if (isDead && !options.includeDead) {
+                plan.skipped.dead++;
+                continue;
+            }
             plan.creates.push({
                 brivityId: bid,
                 name: usableName(p.name) || p.phone || p.email || "Unnamed",
@@ -164,6 +183,10 @@ async function planBrivityImport(opts = {}) {
                 status: statusOf(p),
                 source: p.source || null,
             });
+            continue;
+        }
+        if (isDead && !options.enrichDeadMatches) {
+            plan.skipped.dead++;
             continue;
         }
         // Merge: only record fields that would actually change.
@@ -186,10 +209,14 @@ async function planBrivityImport(opts = {}) {
         if (bIntent !== match.crmIntent) {
             changes.push({ field: "crmIntent", from: match.crmIntent, to: bIntent });
         }
-        // Status only fills a gap: a lead we have actively worked should not be
-        // dragged back to "dead" because Brivity has not been touched in a year.
+        /*
+         * Status only fills a gap, and never imports "dead". A lead we have talked
+         * to in the DMs should not be marked dead because a Brivity row nobody has
+         * touched in a year says so — that would quietly bury live conversations.
+         * Identity (name, email) is still enriched from those rows.
+         */
         const bStatus = statusOf(p);
-        if (match.crmStatus === "new" && bStatus !== "new") {
+        if (match.crmStatus === "new" && bStatus !== "new" && bStatus !== "dead") {
             changes.push({ field: "crmStatus", from: match.crmStatus, to: bStatus });
         }
         if (p.source && !match.source) {

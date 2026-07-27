@@ -1,6 +1,6 @@
 import type { CrmIntent, CrmStatusValue, Lead } from "./types.js";
 import { FunnelStage } from "./state.js";
-import { getBrivityPeople, type BrivityLeadRow } from "./brivityPeople.js";
+import { getBrivityPeople, getBrivityImportStatus, type BrivityLeadRow } from "./brivityPeople.js";
 import { listAllLeads } from "./db.js";
 
 /**
@@ -53,8 +53,16 @@ function usableName(raw: unknown): string {
 }
 
 export interface BrivityImportOptions {
-  /** Import contacts Brivity has marked dead. Default false — 1,786 of them. */
+  /** Create new leads for contacts Brivity marks dead. Default false. */
   includeDead?: boolean;
+  /**
+   * Still use a dead Brivity contact to enrich a lead we ALREADY have.
+   * Default true, and it matters: 134 existing leads match a dead Brivity
+   * contact, 114 of which are sitting on the board under a social handle
+   * ("purple kitty 22") when Brivity knows the real name (Andrea Perez).
+   * Enrichment adds no rows — it only fills in what we already hold.
+   */
+  enrichDeadMatches?: boolean;
   /** Overwrite a DM handle with Brivity's real name. Default true. */
   preferBrivityName?: boolean;
   dryRun?: boolean;
@@ -119,10 +127,25 @@ export async function planBrivityImport(
 ): Promise<BrivityImportPlan> {
   const options = {
     includeDead: opts.includeDead === true,
+    enrichDeadMatches: opts.enrichDeadMatches !== false,
     preferBrivityName: opts.preferBrivityName !== false,
   };
 
   const people = await getBrivityPeople(false);
+  /*
+   * getBrivityPeople swallows fetch failures and returns [] (it is built to
+   * degrade for the CRM view). For an import plan that is dangerous: an empty
+   * result would read as "nothing to import" when it actually means "we could
+   * not reach Brivity". Refuse rather than report a false no-op.
+   */
+  if (!people.length) {
+    const st = getBrivityImportStatus();
+    throw new Error(
+      st.lastError
+        ? `Brivity fetch failed (${st.lastError}) — refusing to plan against an empty result`
+        : "Brivity returned no contacts — refusing to plan against an empty result",
+    );
+  }
   const leads = await listAllLeads();
 
   // Existing leads indexed for matching. A phone shared by two leads is a
@@ -151,10 +174,14 @@ export async function planBrivityImport(
   };
 
   // Collapse duplicates inside Brivity itself before matching outward.
+  /*
+   * Dead contacts are held back from CREATE, not from matching. Dropping them
+   * outright also drops the enrichment for leads we already have: 134 of them
+   * match a dead Brivity contact and 114 are on the board under a social handle
+   * when Brivity knows the real name. Enrichment adds no rows.
+   */
   const chosen = new Map<string, BrivityLeadRow>();
-  const noKey: BrivityLeadRow[] = [];
   for (const p of people) {
-    if (!options.includeDead && statusOf(p) === "dead") { plan.skipped.dead++; continue; }
     const pk = phoneKey(p.phone);
     const ek = emailKey(p.email);
     if (!pk && !ek) { plan.skipped.noContactInfo++; continue; }
@@ -163,7 +190,6 @@ export async function planBrivityImport(
     if (prev) { plan.skipped.duplicateWithinBrivity++; chosen.set(key, richer(prev, p)); }
     else chosen.set(key, p);
   }
-  void noKey;
 
   for (const p of chosen.values()) {
     const pk = phoneKey(p.phone);
@@ -188,7 +214,11 @@ export async function planBrivityImport(
     }
     if (!match && ek) { match = byEmail.get(ek); matchedOn = "email"; }
 
+    const isDead = statusOf(p) === "dead";
+
     if (!match) {
+      // Nothing to enrich, so a dead contact is simply not imported.
+      if (isDead && !options.includeDead) { plan.skipped.dead++; continue; }
       plan.creates.push({
         brivityId: bid,
         name: usableName(p.name) || p.phone || p.email || "Unnamed",
@@ -200,6 +230,8 @@ export async function planBrivityImport(
       });
       continue;
     }
+
+    if (isDead && !options.enrichDeadMatches) { plan.skipped.dead++; continue; }
 
     // Merge: only record fields that would actually change.
     const changes: PlannedMerge["changes"] = [];
@@ -221,10 +253,14 @@ export async function planBrivityImport(
     if (bIntent !== match.crmIntent) {
       changes.push({ field: "crmIntent", from: match.crmIntent, to: bIntent });
     }
-    // Status only fills a gap: a lead we have actively worked should not be
-    // dragged back to "dead" because Brivity has not been touched in a year.
+    /*
+     * Status only fills a gap, and never imports "dead". A lead we have talked
+     * to in the DMs should not be marked dead because a Brivity row nobody has
+     * touched in a year says so — that would quietly bury live conversations.
+     * Identity (name, email) is still enriched from those rows.
+     */
     const bStatus = statusOf(p);
-    if (match.crmStatus === "new" && bStatus !== "new") {
+    if (match.crmStatus === "new" && bStatus !== "new" && bStatus !== "dead") {
       changes.push({ field: "crmStatus", from: match.crmStatus, to: bStatus });
     }
     if (p.source && !match.source) {
