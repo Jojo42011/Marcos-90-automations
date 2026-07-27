@@ -788,6 +788,37 @@ app.get("/api/brivity/people", async (req, res) => {
         res.status(502).json({ ok: false, error: message, ...(0, brivityPeople_js_1.getBrivityImportStatus)() });
     }
 });
+/**
+ * Plan an import of Brivity contacts into the lead store.
+ *
+ * Read-only: this endpoint never writes. Applying is a separate, deliberate
+ * step that has to avoid db.createLead()'s outbound SMS/email hooks — see the
+ * header of core/brivityImport.ts.
+ */
+app.post("/api/brivity/import/plan", express_1.default.json({ limit: "16kb" }), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    try {
+        const { planBrivityImport } = await Promise.resolve().then(() => __importStar(require("./core/brivityImport.js")));
+        const plan = await planBrivityImport({
+            includeDead: body.includeDead === true,
+            preferBrivityName: body.preferBrivityName !== false,
+        });
+        // Full lists are large; callers asking for a summary get counts only.
+        if (body.summary === true) {
+            const { creates, merges, ...rest } = plan;
+            res.json({ ok: true, ...rest, sampleCreates: creates.slice(0, 10), sampleMerges: merges.slice(0, 10) });
+            return;
+        }
+        res.json({ ok: true, ...plan });
+    }
+    catch (err) {
+        res.status(502).json({ ok: false, error: err.message });
+    }
+});
 app.get("/api/brivity/status", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
