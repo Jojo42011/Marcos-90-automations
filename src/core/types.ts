@@ -587,6 +587,128 @@ export type CommandTaskRecurringInterval =
   | "weekly"
   | "monthly";
 
+/* ===== Buyers & Sellers Tracker =====
+   Buyers and sellers run on separate pipelines, so stages are two distinct
+   vocabularies rather than the single shared list the CRM used before. A record
+   can sit on both tracks at once (Marco's "Buyer & Seller" intent), which is why
+   buyerStage and sellerStage are independent rather than one `stage` field. */
+
+export type TrackerSide = "buyer" | "seller";
+
+/** Statuses are shared across both pipelines. */
+export type TrackerStatus = "new" | "unqualified" | "watch" | "nurture" | "hot" | "pending";
+
+export const TRACKER_STATUSES: TrackerStatus[] = [
+  "new", "unqualified", "watch", "nurture", "hot", "pending",
+];
+
+export type BuyerStage =
+  | "contacted"
+  | "qualified"
+  | "pre_approved"
+  | "buyer_rep_signed"
+  | "actively_showing"
+  | "offer_submitted"
+  | "under_contract"
+  | "option_period"
+  | "clear_to_close"
+  | "closed"
+  | "past_client";
+
+export type SellerStage =
+  | "new"
+  | "contacted"
+  | "cma_requested"
+  | "listing_appointment_set"
+  | "appointment_held"
+  | "listing_agreement_signed"
+  | "prep_pre_market"
+  | "active_on_mls"
+  | "price_adjustment"
+  | "offer_received"
+  | "under_contract"
+  | "option_period"
+  | "clear_to_close"
+  | "closed"
+  | "past_client";
+
+/** Ordered, with labels, so UI and reporting share one source of truth. */
+export const BUYER_STAGES: Array<{ key: BuyerStage; label: string }> = [
+  { key: "contacted", label: "Contacted" },
+  { key: "qualified", label: "Qualified" },
+  { key: "pre_approved", label: "Pre-Approved" },
+  { key: "buyer_rep_signed", label: "Buyer Rep Signed" },
+  { key: "actively_showing", label: "Actively Showing" },
+  { key: "offer_submitted", label: "Offer Submitted" },
+  { key: "under_contract", label: "Under Contract" },
+  { key: "option_period", label: "Option Period" },
+  { key: "clear_to_close", label: "Clear to Close" },
+  { key: "closed", label: "Closed" },
+  { key: "past_client", label: "Past Client" },
+];
+
+export const SELLER_STAGES: Array<{ key: SellerStage; label: string }> = [
+  { key: "new", label: "New" },
+  { key: "contacted", label: "Contacted" },
+  { key: "cma_requested", label: "CMA Requested" },
+  { key: "listing_appointment_set", label: "Listing Appointment Set" },
+  { key: "appointment_held", label: "Appointment Held" },
+  { key: "listing_agreement_signed", label: "Listing Agreement Signed" },
+  { key: "prep_pre_market", label: "Prep/Pre-Market" },
+  { key: "active_on_mls", label: "Active on MLS" },
+  { key: "price_adjustment", label: "Price Adjustment" },
+  { key: "offer_received", label: "Offer Received" },
+  { key: "under_contract", label: "Under Contract" },
+  { key: "option_period", label: "Option Period" },
+  { key: "clear_to_close", label: "Clear to Close" },
+  { key: "closed", label: "Closed" },
+  { key: "past_client", label: "Past Client" },
+];
+
+/**
+ * Per-stage extras. Buyer "Qualified" carries the buyer's timeline date, which is
+ * why stages need somewhere to hang data instead of being a bare enum.
+ */
+export interface TrackerStageMeta {
+  /** YYYY-MM-DD. Buyer > Qualified: when they intend to buy. */
+  timelineDate?: string;
+  /** When the record entered this stage. */
+  enteredAt?: string;
+  note?: string;
+}
+
+export interface TrackerRecord {
+  id: string;
+  /** Links back to the CRM lead when the record came from there. */
+  leadId?: string;
+  /** Which pipeline(s) this record is on. */
+  sides: TrackerSide[];
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  source?: string;
+  status: TrackerStatus;
+  buyerStage?: BuyerStage;
+  sellerStage?: SellerStage;
+  /** Keyed "buyer:qualified" / "seller:active_on_mls". */
+  stageMeta?: Record<string, TrackerStageMeta>;
+  notes?: string;
+  /** Same shape as task checklists, so items can sync into Task Command. */
+  checklist?: CommandTaskChecklistItem[];
+  /** Tasks this record has pushed into the Task Manager. */
+  taskIds?: string[];
+  assignedTo?: string;
+  lastInteractionAt?: string;
+  addedAt: string;
+  updatedAt: string;
+  /**
+   * The pre-tracker CRM stage this record carried, kept so the migration is
+   * reversible and a mis-mapped record can be re-derived rather than re-entered.
+   */
+  legacyStage?: string;
+}
+
 /** One row of a task's "Details / Notes" checklist. */
 export interface CommandTaskChecklistItem {
   id: string;

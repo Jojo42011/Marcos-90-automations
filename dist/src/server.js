@@ -98,6 +98,9 @@ const types_js_2 = require("./core/types.js");
 const tasks_js_1 = require("./core/tasks.js");
 const marcoTasks_js_1 = require("./core/marcoTasks.js");
 const harveyNotes_js_1 = require("./core/harveyNotes.js");
+const types_js_3 = require("./core/types.js");
+const trackerStore_js_1 = require("./core/trackerStore.js");
+const trackerMigration_js_1 = require("./core/trackerMigration.js");
 const commandSettings_js_1 = require("./core/commandSettings.js");
 const deals_js_1 = require("./core/deals.js");
 const transactionsStore_js_1 = require("./core/transactionsStore.js");
@@ -7282,6 +7285,95 @@ app.put("/api/settings/command", express_1.default.json({ limit: "16kb" }), asyn
     res.json({ ok: true, settings });
 });
 /** Per-user dashboard widget layout. */
+/* ===== Buyers & Sellers Tracker ===== */
+/** Pipeline vocabulary, so the UI never hardcodes stage lists. */
+app.get("/api/tracker/schema", (_req, res) => {
+    res.json({
+        ok: true,
+        statuses: types_js_3.TRACKER_STATUSES,
+        buyerStages: types_js_3.BUYER_STAGES,
+        sellerStages: types_js_3.SELLER_STAGES,
+    });
+});
+app.get("/api/tracker/records", (req, res) => {
+    const q = req.query;
+    const csv = (v) => v ? v.split(",").map((x) => x.trim()).filter(Boolean) : undefined;
+    const filter = {
+        side: q.side === "buyer" || q.side === "seller" ? q.side : undefined,
+        status: csv(q.status),
+        buyerStage: csv(q.buyerStage),
+        sellerStage: csv(q.sellerStage),
+        source: csv(q.source),
+        assignedTo: q.assignedTo || undefined,
+        q: q.q || undefined,
+        addedFrom: q.addedFrom || undefined,
+        addedTo: q.addedTo || undefined,
+        interactionFrom: q.interactionFrom || undefined,
+        interactionTo: q.interactionTo || undefined,
+    };
+    res.json({ ok: true, records: (0, trackerStore_js_1.listTrackerRecords)(filter) });
+});
+app.get("/api/tracker/counts", (_req, res) => {
+    res.json({ ok: true, counts: (0, trackerStore_js_1.trackerCounts)() });
+});
+app.get("/api/tracker/records/:id", (req, res) => {
+    const rec = (0, trackerStore_js_1.getTrackerRecord)(String(req.params.id));
+    if (!rec) {
+        res.status(404).json({ ok: false, error: "Not found" });
+        return;
+    }
+    res.json({ ok: true, record: rec });
+});
+app.post("/api/tracker/records", express_1.default.json({ limit: "256kb" }), (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) {
+        res.status(400).json({ ok: false, error: "name is required" });
+        return;
+    }
+    res.json({ ok: true, record: (0, trackerStore_js_1.createTrackerRecord)({ ...body, name }) });
+});
+app.patch("/api/tracker/records/:id", express_1.default.json({ limit: "256kb" }), (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const rec = (0, trackerStore_js_1.updateTrackerRecord)(String(req.params.id), body);
+    if (!rec) {
+        res.status(404).json({ ok: false, error: "Not found" });
+        return;
+    }
+    res.json({ ok: true, record: rec });
+});
+/** Move one side of a record along its pipeline. */
+app.post("/api/tracker/records/:id/stage", express_1.default.json({ limit: "16kb" }), (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const side = body.side === "seller" ? "seller" : "buyer";
+    const stage = body.stage === null ? null : String(body.stage || "");
+    const meta = body.meta && typeof body.meta === "object" ? body.meta : undefined;
+    const rec = (0, trackerStore_js_1.setTrackerStage)(String(req.params.id), side, stage, meta);
+    if (!rec) {
+        res.status(404).json({ ok: false, error: "Not found" });
+        return;
+    }
+    res.json({ ok: true, record: rec });
+});
+app.delete("/api/tracker/records/:id", (req, res) => {
+    res.json({ ok: true, deleted: (0, trackerStore_js_1.deleteTrackerRecord)(String(req.params.id)) });
+});
+/**
+ * Backfill from CRM leads. Defaults to a dry run so the mapping can be inspected
+ * before anything is written; pass {"apply":true} to commit.
+ */
+app.post("/api/tracker/backfill", express_1.default.json({ limit: "16kb" }), async (req, res) => {
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const apply = body.apply === true;
+    try {
+        const leads = await (0, db_js_1.listAllLeads)();
+        const result = (0, trackerMigration_js_1.backfillTrackerFromLeads)(leads, !apply);
+        res.json({ ok: true, ...result });
+    }
+    catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
 app.get("/api/settings/layout", (req, res) => {
     const user = String(req.query.user || "").trim();
     if (!user) {

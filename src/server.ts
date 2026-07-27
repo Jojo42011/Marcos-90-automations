@@ -291,6 +291,22 @@ import {
   updateNote,
 } from "./core/harveyNotes.js";
 import {
+  BUYER_STAGES,
+  SELLER_STAGES,
+  TRACKER_STATUSES,
+} from "./core/types.js";
+import {
+  createTrackerRecord,
+  deleteTrackerRecord,
+  getTrackerRecord,
+  listTrackerRecords,
+  setTrackerStage,
+  trackerCounts,
+  updateTrackerRecord,
+  type TrackerFilter,
+} from "./core/trackerStore.js";
+import { backfillTrackerFromLeads } from "./core/trackerMigration.js";
+import {
   getCommandSettings,
   setCommandTimeZone,
   isValidTimeZone,
@@ -8104,6 +8120,93 @@ app.put("/api/settings/command", express.json({ limit: "16kb" }), async (req, re
 });
 
 /** Per-user dashboard widget layout. */
+/* ===== Buyers & Sellers Tracker ===== */
+
+/** Pipeline vocabulary, so the UI never hardcodes stage lists. */
+app.get("/api/tracker/schema", (_req, res) => {
+  res.json({
+    ok: true,
+    statuses: TRACKER_STATUSES,
+    buyerStages: BUYER_STAGES,
+    sellerStages: SELLER_STAGES,
+  });
+});
+
+app.get("/api/tracker/records", (req, res) => {
+  const q = req.query as Record<string, string | undefined>;
+  const csv = (v: string | undefined) =>
+    v ? v.split(",").map((x) => x.trim()).filter(Boolean) : undefined;
+  const filter: TrackerFilter = {
+    side: q.side === "buyer" || q.side === "seller" ? q.side : undefined,
+    status: csv(q.status) as TrackerFilter["status"],
+    buyerStage: csv(q.buyerStage) as TrackerFilter["buyerStage"],
+    sellerStage: csv(q.sellerStage) as TrackerFilter["sellerStage"],
+    source: csv(q.source),
+    assignedTo: q.assignedTo || undefined,
+    q: q.q || undefined,
+    addedFrom: q.addedFrom || undefined,
+    addedTo: q.addedTo || undefined,
+    interactionFrom: q.interactionFrom || undefined,
+    interactionTo: q.interactionTo || undefined,
+  };
+  res.json({ ok: true, records: listTrackerRecords(filter) });
+});
+
+app.get("/api/tracker/counts", (_req, res) => {
+  res.json({ ok: true, counts: trackerCounts() });
+});
+
+app.get("/api/tracker/records/:id", (req, res) => {
+  const rec = getTrackerRecord(String(req.params.id));
+  if (!rec) { res.status(404).json({ ok: false, error: "Not found" }); return; }
+  res.json({ ok: true, record: rec });
+});
+
+app.post("/api/tracker/records", express.json({ limit: "256kb" }), (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) { res.status(400).json({ ok: false, error: "name is required" }); return; }
+  res.json({ ok: true, record: createTrackerRecord({ ...(body as object), name } as never) });
+});
+
+app.patch("/api/tracker/records/:id", express.json({ limit: "256kb" }), (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const rec = updateTrackerRecord(String(req.params.id), body as never);
+  if (!rec) { res.status(404).json({ ok: false, error: "Not found" }); return; }
+  res.json({ ok: true, record: rec });
+});
+
+/** Move one side of a record along its pipeline. */
+app.post("/api/tracker/records/:id/stage", express.json({ limit: "16kb" }), (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const side = body.side === "seller" ? "seller" : "buyer";
+  const stage = body.stage === null ? null : String(body.stage || "");
+  const meta = body.meta && typeof body.meta === "object" ? (body.meta as never) : undefined;
+  const rec = setTrackerStage(String(req.params.id), side, stage, meta);
+  if (!rec) { res.status(404).json({ ok: false, error: "Not found" }); return; }
+  res.json({ ok: true, record: rec });
+});
+
+app.delete("/api/tracker/records/:id", (req, res) => {
+  res.json({ ok: true, deleted: deleteTrackerRecord(String(req.params.id)) });
+});
+
+/**
+ * Backfill from CRM leads. Defaults to a dry run so the mapping can be inspected
+ * before anything is written; pass {"apply":true} to commit.
+ */
+app.post("/api/tracker/backfill", express.json({ limit: "16kb" }), async (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const apply = body.apply === true;
+  try {
+    const leads = await listAllLeads();
+    const result = backfillTrackerFromLeads(leads, !apply);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 app.get("/api/settings/layout", (req, res) => {
   const user = String(req.query.user || "").trim();
   if (!user) { res.status(400).json({ ok: false, error: "user required" }); return; }
