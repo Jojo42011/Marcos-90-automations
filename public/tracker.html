@@ -130,7 +130,11 @@ html[data-theme="dark"] #boardThumb{background:#5c6875}
   border-radius:var(--r-sm)}
 
 /* ── Card ── */
-.rec{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 11px 10px 13px;
+/* flex:0 0 auto is load-bearing: .colbody is a flex column, so once a column holds
+   more cards than fit, the default flex-shrink squashes every card and clips its
+   text instead of letting the column scroll. */
+.rec{flex:0 0 auto;position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:10px 11px 10px 13px;
   cursor:pointer;transition:box-shadow .14s var(--ease),transform .14s var(--ease);overflow:hidden}
 .rec:hover{box-shadow:0 5px 16px rgba(16,24,40,.12);transform:translateY(-1px)}
 html[data-theme="dark"] .rec:hover{box-shadow:0 6px 18px rgba(0,0,0,.45)}
