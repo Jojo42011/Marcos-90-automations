@@ -14,9 +14,9 @@ function paint(cfg, live) {
   dot.className = "dot";
   if (!cfg.serverUrl || !cfg.token) {
     $("statusText").textContent = "Not paired";
-  } else if (live && live.reachable === false) {
+  } else if (live && live.ok === false) {
     dot.classList.add("err");
-    $("statusText").textContent = "Can't reach the server";
+    $("statusText").textContent = live.why;
   } else if (cfg.enabled) {
     dot.classList.add("on");
     $("statusText").textContent = "Paired · armed";
@@ -28,19 +28,48 @@ function paint(cfg, live) {
   }
 }
 
-/** Ask the server whether it can see us, so pairing failures are visible here
- *  rather than only showing up as Harvey saying "not connected". */
+/**
+ * Ask the server whether it can see us, so pairing failures are visible here
+ * rather than only showing up as Harvey saying "not connected".
+ *
+ * Every failure used to read "Can't reach the server", which was wrong and
+ * actively misleading: a 401 means the server answered perfectly well and the
+ * token is the problem, and a 404 means the URL has a page path on the end.
+ * Each of those has a different fix, so each gets its own message.
+ */
 async function checkServer(cfg) {
   if (!cfg.serverUrl || !cfg.token) return null;
   try {
-    const res = await fetch(cfg.serverUrl.replace(/\/+$/, "") + "/api/browser/status", {
+    const res = await fetch(normalizeServer(cfg.serverUrl) + "/api/browser/status", {
       headers: { "X-Browser-Token": cfg.token },
     });
-    if (!res.ok) return { reachable: false };
+    if (res.status === 404) return { ok: false, why: "Wrong server address" };
+    if (res.status === 401) {
+      const d = await res.json().catch(() => ({}));
+      return d.configured === false
+        ? { ok: false, why: "Server has no pairing token set" }
+        : { ok: false, why: "Pairing token doesn't match" };
+    }
+    if (!res.ok) return { ok: false, why: "Server error (" + res.status + ")" };
     const d = await res.json();
-    return { reachable: true, page: d.page };
+    return { ok: true, page: d.page };
   } catch (_) {
-    return { reachable: false };
+    return { ok: false, why: "Can't reach the server" };
+  }
+}
+
+/**
+ * Keep only the origin. People paste whatever is in their address bar — which
+ * is a page like `/shell`, not the API root — and every request then 404s with
+ * nothing on screen explaining why.
+ */
+function normalizeServer(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  try {
+    return new URL(/^https?:\/\//i.test(s) ? s : "https://" + s).origin;
+  } catch (_) {
+    return s.replace(/\/+$/, "");
   }
 }
 
@@ -50,9 +79,10 @@ async function refresh() {
 }
 
 $("save").addEventListener("click", async () => {
-  const serverUrl = $("serverUrl").value.trim().replace(/\/+$/, "");
+  const serverUrl = normalizeServer($("serverUrl").value);
   const token = $("token").value.trim();
   await chrome.storage.local.set({ serverUrl, token });
+  $("serverUrl").value = serverUrl;   // show what was actually saved
   $("save").textContent = "Saved";
   setTimeout(() => { $("save").textContent = "Save & pair"; }, 1400);
   chrome.runtime.sendMessage({ type: "harvey:poll-now" }, () => refresh());

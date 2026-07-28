@@ -15,10 +15,26 @@ const IDLE_POLL_MS = 6000; // slower when switched off; nothing can arrive anywa
 
 let polling = false;
 
+/**
+ * Keep only the origin. People paste the page they're looking at
+ * (".../shell"), not the API root, and every request then 404s. Duplicated in
+ * popup.js on purpose — the popup and the worker are separate contexts and
+ * this manifest doesn't load modules.
+ */
+function normalizeServer(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  try {
+    return new URL(/^https?:\/\//i.test(s) ? s : "https://" + s).origin;
+  } catch (_) {
+    return s.replace(/\/+$/, "");
+  }
+}
+
 async function config() {
   const c = await chrome.storage.local.get(["serverUrl", "token", "enabled"]);
   return {
-    serverUrl: (c.serverUrl || "").replace(/\/+$/, ""),
+    serverUrl: normalizeServer(c.serverUrl),
     token: c.token || "",
     enabled: c.enabled === true,
   };
