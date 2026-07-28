@@ -91,6 +91,12 @@ html[data-theme="dark"] *{scrollbar-color:#4a5560 transparent}
   padding:0 11px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
 .chip .cdot{width:7px;height:7px;border-radius:50%}
 .chip.on{color:#fff;border-color:transparent}
+/* Force the stage row onto its own line: appended to the status row, the
+   "STAGE" label reads as if it belongs to the statuses. */
+.frow-break{flex-basis:100%;height:0}
+.chip .chipn{font-size:10px;font-weight:800;opacity:.75;margin-left:1px}
+.chip.empty{opacity:.42}
+.chip.empty:hover{opacity:.75}
 .chip.on .cdot{background:rgba(255,255,255,.85)}
 .fsel{height:28px;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:0 8px;
   font-size:12px;font-weight:600;max-width:170px}
@@ -157,6 +163,12 @@ body.selecting .rec .rsel{display:block}
 .rec .rmeta{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}
 .tag{font-size:10.5px;font-weight:600;color:var(--muted);background:var(--soft);border-radius:6px;padding:2px 6px;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Combined view: two lists instead of many stage columns, so each gets far more
+   width — the point of the request was seeing both books at once. */
+.col.col-wide{flex:1 1 0;min-width:300px;max-width:none}
+.tag.stagetag{background:rgba(8,145,178,.14);color:#0E7490;font-weight:700}
+.tag.stagetag.none{background:var(--soft);color:var(--muted);font-weight:600}
+[data-theme="dark"] .tag.stagetag{background:rgba(34,211,238,.16);color:#67E8F9}
 .tag.sidetag{color:#fff}
 .tag.sidetag.b{background:var(--buyer)}
 .tag.sidetag.s{background:var(--seller)}
@@ -275,6 +287,7 @@ body.selecting #bulkBar{display:flex}
   <div id="sideSwitch">
     <button data-side="buyer" class="on"><span class="dot"></span>Buyers</button>
     <button data-side="seller"><span class="dot"></span>Sellers</button>
+    <button data-side="both"><span class="dot"></span>Both</button>
   </div>
   <input id="search" placeholder="Search name, phone, email, address…" autocomplete="off" />
   <button class="tbtn" id="themeBtn">◐ Theme</button>
@@ -290,6 +303,10 @@ body.selecting #bulkBar{display:flex}
   </button>
   <span class="flabel">STATUS</span>
   <div class="chips" id="statusChips"></div>
+  <span class="frow-break"></span>
+  <span class="flabel">STAGE</span>
+  <div class="chips" id="stageChips"></div>
+  <span class="frow-break"></span>
   <span class="flabel">SOURCE</span>
   <select class="fsel" id="fSource"><option value="">All</option></select>
   <span class="flabel">ASSIGNED</span>
@@ -359,7 +376,7 @@ var STATUS_META = {
   hot:         {label:"Hot",         c:"#DC2626"},
   pending:     {label:"Pending",     c:"#059669"}
 };
-var SIDE_COLOR = {buyer:"#4F46E5", seller:"#EA580C"};
+var SIDE_COLOR = {buyer:"#4F46E5", seller:"#EA580C", both:"#0891B2"};
 /* Stage at which the tracker asks for a timeline date (per the spec). */
 var TIMELINE_STAGE = {buyer:"qualified", seller:"cma_requested"};
 var STALE_DAYS = 14;
@@ -368,7 +385,7 @@ var STALE_DAYS = 14;
 var SIDE   = "buyer";          // which pipeline the board is showing
 var SCHEMA = {statuses:[], buyerStages:[], sellerStages:[]};
 var RECORDS = [];              // everything, unfiltered
-var FILTER  = {status:{}, source:"", assigned:"", from:"", to:"", q:"", contactable:false};
+var FILTER  = {status:{}, stage:{}, source:"", assigned:"", from:"", to:"", q:"", contactable:false};
 /* Most of the imported book is Instagram/TikTok handles with no phone or email.
    The preference sticks, because someone who only ever works the reachable
    people should not have to re-hide the rest on every visit. */
@@ -396,6 +413,78 @@ function api(p,opts){return fetch(p,opts).then(function(r){
 function jsonReq(method,body){return {method:method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)};}
 function stages(side){return side==="seller"?SCHEMA.sellerStages:SCHEMA.buyerStages;}
 function stageOf(rec,side){return side==="seller"?(rec.sellerStage||null):(rec.buyerStage||null);}
+
+/* ================= combined stage vocabulary =================
+   Buyers and sellers do NOT share a stage list — 11 vs 14, overlapping on six
+   keys (contacted, under_contract, option_period, clear_to_close, closed,
+   past_client). For one flat row of stage buttons "like the statuses", the
+   shared keys have to collapse into a single chip: two "Under Contract"
+   buttons that mean the same thing, one of which silently ignores half the
+   book, is worse than none.
+
+   Side-specific stages keep a small B/S marker so it is obvious WHY tapping
+   "Pre-Approved" shows no sellers — the filter isn't broken, sellers simply
+   don't have that stage. */
+function mergedStages(){
+  var seen={}, out=[];
+  var add=function(list,side){
+    (list||[]).forEach(function(s){
+      if(seen[s.key]){ seen[s.key].sides[side]=true; return; }
+      seen[s.key]={key:s.key,label:s.label,sides:{}};
+      seen[s.key].sides[side]=true;
+      out.push(seen[s.key]);
+    });
+  };
+  /* Seller list first: it is the longer one and its ordering reads as the
+     fuller funnel, so buyer-only stages slot in rather than the reverse. */
+  add(SCHEMA.sellerStages,"seller");
+  add(SCHEMA.buyerStages,"buyer");
+  return out;
+}
+/** Stage chips for whichever side(s) the board is showing. */
+function stageOptions(){
+  if(SIDE==="both") return mergedStages();
+  return stages(SIDE).map(function(s){
+    var o={key:s.key,label:s.label,sides:{}};
+    o.sides[SIDE]=true;
+    return o;
+  });
+}
+function anyStageOn(){return Object.keys(FILTER.stage).some(function(k){return FILTER.stage[k];});}
+
+/**
+ * How many people sit in each stage right now.
+ *
+ * Counted against every OTHER active filter but not the stage filter itself —
+ * the standard faceted count. Counting against the stage filter too would make
+ * every unselected chip read 0 the moment you picked one, which is the exact
+ * opposite of what the number is for.
+ */
+function stageCounts(){
+  var out={__unstaged:0};
+  var check=SIDE==="both"?["buyer","seller"]:[SIDE];
+  RECORDS.forEach(function(rec){
+    var sides=rec.sides||[];
+    if(!sides.length) return;
+    if(SIDE!=="both" && sides.indexOf(SIDE)<0) return;
+    if(FILTER.contactable && !contactable(rec)) return;
+    if(anyStatusOn() && !FILTER.status[rec.status]) return;
+    if(FILTER.source && (rec.source||"").trim().toLowerCase()!==FILTER.source) return;
+    if(FILTER.assigned && (rec.assignedTo||"").trim().toLowerCase()!==FILTER.assigned) return;
+    if(FILTER.from && ymdOf(rec.addedAt) < FILTER.from) return;
+    if(FILTER.to   && ymdOf(rec.addedAt) > FILTER.to)   return;
+    if(FILTER.q && !matchesQuery(rec)) return;
+
+    var staged=false;
+    check.forEach(function(side){
+      if(sides.indexOf(side)<0) return;
+      var k=stageOf(rec,side);
+      if(k){ staged=true; out[k]=(out[k]||0)+1; }
+    });
+    if(!staged) out.__unstaged++;
+  });
+  return out;
+}
 function stageLabel(side,key){var s=stages(side).find(function(x){return x.key===key;});return s?s.label:key;}
 function sideClass(rec){var s=rec.sides||[];
   if(s.indexOf("buyer")>=0&&s.indexOf("seller")>=0)return "side-both";
@@ -422,35 +511,86 @@ function anyStatusOn(){return Object.keys(FILTER.status).some(function(k){return
 /* "Contactable" means there is a way to actually reach them. A social handle is
    not one — the DM agent owns that conversation until they hand over a number. */
 function contactable(rec){return !!((rec.phone||"").trim()||(rec.email||"").trim());}
+
+/**
+ * Does this record sit in any selected stage?
+ *
+ * Checks whichever side(s) the board is showing, so someone who is buying AND
+ * selling matches on either of their two stages — filtering to "Under
+ * Contract" should surface them if either side of their deal is under
+ * contract, not only the one that happens to be on screen.
+ *
+ * "__unstaged" is a real, selectable choice. After the CRM import most of the
+ * book has no stage at all, and those people are exactly who the team needs to
+ * find; a filter that could not name them would hide the largest group.
+ */
+function matchesStage(rec){
+  var check=SIDE==="both"?["buyer","seller"]:[SIDE];
+  var sides=rec.sides||[];
+  var unstagedWanted=!!FILTER.stage.__unstaged;
+  var anyOnSide=false, anyStaged=false;
+  for(var i=0;i<check.length;i++){
+    var side=check[i];
+    if(sides.indexOf(side)<0) continue;
+    anyOnSide=true;
+    var k=stageOf(rec,side);
+    if(k){ anyStaged=true; if(FILTER.stage[k]) return true; }
+  }
+  if(unstagedWanted && anyOnSide && !anyStaged) return true;
+  return false;
+}
 function passes(rec){
-  if(!(rec.sides||[]).length || (rec.sides||[]).indexOf(SIDE)<0) return false;
+  var sides=rec.sides||[];
+  /* "Both" is every record on either pipeline — including someone selling and
+     buying at once, who appears in each column rather than being shown twice
+     in one. */
+  if(!sides.length) return false;
+  if(SIDE!=="both" && sides.indexOf(SIDE)<0) return false;
   if(FILTER.contactable && !contactable(rec)) return false;
   if(anyStatusOn() && !FILTER.status[rec.status]) return false;
+  if(anyStageOn() && !matchesStage(rec)) return false;
   if(FILTER.source && (rec.source||"").trim().toLowerCase()!==FILTER.source) return false;
   if(FILTER.assigned && (rec.assignedTo||"").trim().toLowerCase()!==FILTER.assigned) return false;
   if(FILTER.from && ymdOf(rec.addedAt) < FILTER.from) return false;
   if(FILTER.to   && ymdOf(rec.addedAt) > FILTER.to)   return false;
-  if(FILTER.q){
-    var q=FILTER.q.toLowerCase();
-    var hay=[rec.name,rec.phone,rec.email,rec.address,rec.source,rec.notes]
-      .filter(Boolean).join(" ").toLowerCase();
-    var digits=String(rec.phone||"").replace(/\D/g,"");
-    if(hay.indexOf(q)<0 && !(/\d/.test(q)&&digits.indexOf(q.replace(/\D/g,""))>=0)) return false;
-  }
+  if(FILTER.q && !matchesQuery(rec)) return false;
   return true;
+}
+
+/* Pulled out of passes() so the stage counts use the SAME search logic rather
+   than a second copy that quietly drifts from it. */
+function matchesQuery(rec){
+  var q=FILTER.q.toLowerCase();
+  var hay=[rec.name,rec.phone,rec.email,rec.address,rec.source,rec.notes]
+    .filter(Boolean).join(" ").toLowerCase();
+  var digits=String(rec.phone||"").replace(/\D/g,"");
+  return hay.indexOf(q)>=0 || (/\d/.test(q)&&digits.indexOf(q.replace(/\D/g,""))>=0);
 }
 function visible(){return RECORDS.filter(passes);}
 
 /* ================= board ================= */
-function cardHtml(rec){
+/**
+ * @param viewSide Which pipeline this card is being shown under. Only passed
+ *   by the combined view, where a column no longer implies the side — and,
+ *   more importantly, no longer implies the STAGE. On the kanban the column
+ *   header is the stage; in a flat list nothing is, so the stage has to travel
+ *   on the card or it disappears from the view entirely.
+ */
+function cardHtml(rec,viewSide){
+  var mine = viewSide || (SIDE==="seller"?"seller":"buyer");
   var st=STATUS_META[rec.status]||STATUS_META.new;
   var bits=[];
+  if(viewSide){
+    var ms=stageOf(rec,mine);
+    bits.push('<span class="tag stagetag'+(ms?"":" none")+'">'+
+      (ms?esc(stageLabel(mine,ms)):"Unstaged")+'</span>');
+  }
   if(rec.phone)   bits.push('<span class="tag">'+esc(rec.phone)+'</span>');
   if(rec.address) bits.push('<span class="tag">'+esc(rec.address)+'</span>');
   if(rec.source)  bits.push('<span class="tag">'+esc(rec.source)+'</span>');
   /* A two-sided person shows where they sit on the OTHER pipeline, so working the
      buyer board never hides the fact that they are also selling. */
-  var other = SIDE==="buyer"?"seller":"buyer";
+  var other = mine==="buyer"?"seller":"buyer";
   if((rec.sides||[]).indexOf(other)>=0){
     var os=stageOf(rec,other);
     bits.push('<span class="tag sidetag '+(other==="buyer"?"b":"s")+'">'+
@@ -482,6 +622,7 @@ function cardHtml(rec){
 }
 
 function renderBoard(){
+  if(SIDE==="both") return renderCombined();
   var board=document.getElementById("board");
   var list=visible();
   var st=stages(SIDE);
@@ -531,6 +672,59 @@ function renderBoard(){
   syncScrollbar();
 }
 
+/**
+ * Combined view: BUYERS and SELLERS side by side, one page.
+ *
+ * Not a kanban, deliberately. The stage-column board only works for one side
+ * at a time because the two pipelines have different stage lists — laying both
+ * out as columns would need two incompatible column sets on one screen. Here
+ * the stage becomes a FILTER (the chip row) instead of the layout, which is
+ * what makes "show me everyone under contract, both sides" a single click.
+ *
+ * Consequence worth knowing: there are no stage columns to drag into, so
+ * staging by drag is off in this view. The card still opens the drawer, and
+ * select-mode bulk staging still works, so nothing is actually lost.
+ */
+function renderCombined(){
+  var board=document.getElementById("board");
+  var list=visible();
+  var cols=[
+    {side:"buyer",  label:"BUYERS",  items:list.filter(function(r){return (r.sides||[]).indexOf("buyer")>=0;})},
+    {side:"seller", label:"SELLERS", items:list.filter(function(r){return (r.sides||[]).indexOf("seller")>=0;})}
+  ];
+
+  board.innerHTML=cols.map(function(c){
+    return '<section class="col col-wide nodrop" data-side="'+esc(c.side)+'">'+
+      '<div class="colhead">'+
+        '<span class="cbar" style="background:'+SIDE_COLOR[c.side]+'"></span>'+
+        '<h3>'+esc(c.label)+'</h3>'+
+        '<span class="cnt">'+c.items.length+'</span>'+
+      '</div>'+
+      '<div class="colbody">'+
+        (c.items.length?c.items.map(function(r){return cardHtml(r,c.side);}).join("")
+          :'<div class="colempty">Nothing matches these filters</div>')+
+      '</div>'+
+    '</section>';
+  }).join("");
+
+  var totalBuyers=RECORDS.filter(function(r){return (r.sides||[]).indexOf("buyer")>=0;}).length;
+  var totalSellers=RECORDS.filter(function(r){return (r.sides||[]).indexOf("seller")>=0;}).length;
+  var hidden=FILTER.contactable
+    ? RECORDS.filter(function(r){return (r.sides||[]).length && !contactable(r);}).length : 0;
+  document.getElementById("countLine").innerHTML=
+    '<b>'+cols[0].items.length+'</b> of '+totalBuyers+' buyers · '+
+    '<b>'+cols[1].items.length+'</b> of '+totalSellers+' sellers'+
+    (hidden?' · <span title="No phone or email on file">'+hidden+' hidden with no contact info</span>':'');
+
+  var none=RECORDS.length===0;
+  document.getElementById("empty").style.display=none?"flex":"none";
+  document.getElementById("boardWrap").style.display=none?"none":"flex";
+
+  if(SELECTING)updateBulkBar();
+  bindCards();
+  syncScrollbar();
+}
+
 /* ================= drag between stages ================= */
 var dragId=null;
 function bindCards(){
@@ -555,6 +749,10 @@ function bindCards(){
     cb.onclick=function(e){e.stopPropagation();toggleSelect(cb.getAttribute("data-selid"));};
   });
   document.querySelectorAll(".col").forEach(function(col){
+    /* The combined view's columns are pipelines, not stages. Dropping a card
+       there would have no stage to move it to, so it must not even look like a
+       target — a highlight that does nothing is worse than no highlight. */
+    if(col.classList.contains("nodrop")) return;
     col.ondragover=function(e){if(!dragId)return;e.preventDefault();e.dataTransfer.dropEffect="move";col.classList.add("drop");};
     col.ondragleave=function(){col.classList.remove("drop");};
     col.ondrop=function(e){
@@ -648,9 +846,63 @@ function paintStatusChips(){
   }).join("");
   wrap.querySelectorAll("[data-st]").forEach(function(b){
     b.onclick=function(){var k=b.getAttribute("data-st");
-      FILTER.status[k]=!FILTER.status[k];paintStatusChips();renderBoard();};
+      FILTER.status[k]=!FILTER.status[k];paintStatusChips();paintStageChips();renderBoard();};
   });
 }
+/**
+ * Stage chips — the same interaction as the status row, multi-select.
+ *
+ * Rebuilt whenever the side changes, because the vocabulary changes with it.
+ * Any selected stage that doesn't exist on the new side is dropped rather than
+ * left silently filtering: a sticky "Pre-Approved" while looking at sellers
+ * would show an empty board with no visible cause.
+ */
+function paintStageChips(){
+  var wrap=document.getElementById("stageChips");
+  var opts=stageOptions();
+  var valid={__unstaged:true};
+  opts.forEach(function(o){valid[o.key]=true;});
+  Object.keys(FILTER.stage).forEach(function(k){ if(!valid[k]) delete FILTER.stage[k]; });
+
+  var counts=stageCounts();
+  var chip=function(key,label,marker,color){
+    var on=!!FILTER.stage[key];
+    var n=counts[key]||0;
+    /* Counts matter more here than on the status row. The book is barely
+       staged — in live data 18 of the 21 stages hold nobody — so without a
+       number every one of those chips is a dead end you only discover by
+       clicking it. Empty chips stay visible (a stage that exists but is unused
+       is real information) but are dimmed so the eye skips them. */
+    return '<button class="chip'+(on?" on":"")+(n?"":" empty")+'" data-stg="'+esc(key)+'"'+
+      (on?' style="background:'+color+'"':'')+
+      ' title="'+esc(label)+' — '+n+' '+(n===1?"person":"people")+'">'+
+      '<span class="cdot" style="background:'+(on?"rgba(255,255,255,.85)":color)+'"></span>'+
+      esc(label)+(marker?' <span style="opacity:.6;font-size:9px;font-weight:800">'+marker+'</span>':'')+
+      ' <span class="chipn">'+n+'</span>'+
+      '</button>';
+  };
+
+  var html=chip("__unstaged","Unstaged","", "#94A3B8");
+  html+=opts.map(function(o){
+    var b=!!o.sides.buyer, s=!!o.sides.seller;
+    /* Only mark a stage when the board could show both vocabularies and this
+       one belongs to just one of them. */
+    var marker=(SIDE==="both"&&!(b&&s))?(b?"B":"S"):"";
+    var color=(b&&s)?"#0891B2":(b?SIDE_COLOR.buyer:SIDE_COLOR.seller);
+    if(SIDE!=="both") color=SIDE_COLOR[SIDE];
+    return chip(o.key,o.label,marker,color);
+  }).join("");
+  wrap.innerHTML=html;
+
+  wrap.querySelectorAll("[data-stg]").forEach(function(b){
+    b.onclick=function(){
+      var k=b.getAttribute("data-stg");
+      FILTER.stage[k]=!FILTER.stage[k];
+      paintStageChips();renderBoard();
+    };
+  });
+}
+
 /* Sources arrive from several intake paths with inconsistent casing ("instagram"
    and "Instagram" both exist in the live data), so group case-insensitively and
    show one tidy option instead of two that each match half the records. */
@@ -685,21 +937,21 @@ function paintContactChip(){
 document.getElementById("fContact").onclick=function(){
   FILTER.contactable=!FILTER.contactable;
   try{ localStorage.setItem(CONTACT_KEY,FILTER.contactable?"1":"0"); }catch(_){}
-  paintContactChip();renderBoard();
+  paintContactChip();paintStageChips();renderBoard();
 };
-document.getElementById("fSource").onchange=function(){FILTER.source=this.value;renderBoard();};
-document.getElementById("fAssigned").onchange=function(){FILTER.assigned=this.value;renderBoard();};
-document.getElementById("fFrom").onchange=function(){FILTER.from=this.value;renderBoard();};
-document.getElementById("fTo").onchange=function(){FILTER.to=this.value;renderBoard();};
-document.getElementById("search").oninput=function(){FILTER.q=this.value.trim();renderBoard();};
+document.getElementById("fSource").onchange=function(){FILTER.source=this.value;paintStageChips();renderBoard();};
+document.getElementById("fAssigned").onchange=function(){FILTER.assigned=this.value;paintStageChips();renderBoard();};
+document.getElementById("fFrom").onchange=function(){FILTER.from=this.value;paintStageChips();renderBoard();};
+document.getElementById("fTo").onchange=function(){FILTER.to=this.value;paintStageChips();renderBoard();};
+document.getElementById("search").oninput=function(){FILTER.q=this.value.trim();paintStageChips();renderBoard();};
 document.getElementById("clearF").onclick=function(){
-  FILTER={status:{},source:"",assigned:"",from:"",to:"",q:"",contactable:false};
+  FILTER={status:{},stage:{},source:"",assigned:"",from:"",to:"",q:"",contactable:false};
   try{ localStorage.setItem(CONTACT_KEY,"0"); }catch(_){}
   paintContactChip();
   document.getElementById("fSource").value="";document.getElementById("fAssigned").value="";
   document.getElementById("fFrom").value="";document.getElementById("fTo").value="";
   document.getElementById("search").value="";
-  paintStatusChips();renderBoard();
+  paintStatusChips();paintStageChips();renderBoard();
 };
 document.querySelectorAll("#sideSwitch button").forEach(function(b){
   b.onclick=function(){
@@ -709,6 +961,7 @@ document.querySelectorAll("#sideSwitch button").forEach(function(b){
       "Add a person with “+ Add Person”, or drop an existing one into a stage.";
     clearSelection();          // stage keys belong to the OTHER pipeline now
     paintBulkStageOptions();
+    paintStageChips();         // the stage vocabulary changes with the side
     renderBoard();
     document.getElementById("board").scrollLeft=0;
   };
@@ -1141,7 +1394,7 @@ function load(announce){
     .then(function(res){
       SCHEMA={statuses:res[0].statuses||[],buyerStages:res[0].buyerStages||[],sellerStages:res[0].sellerStages||[]};
       RECORDS=res[1].records||[];
-      paintStatusChips();paintContactChip();paintSelectFilters();paintBulkStageOptions();renderBoard();
+      paintStatusChips();paintStageChips();paintContactChip();paintSelectFilters();paintBulkStageOptions();renderBoard();
       if(announce)toast("Refreshed — "+RECORDS.length+" in tracker");
     })
     .catch(function(e){
