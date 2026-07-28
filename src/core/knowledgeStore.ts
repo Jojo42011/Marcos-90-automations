@@ -234,6 +234,16 @@ HOA?" works without opening anything first.
 The extension popup shows which page Harvey is on, so you can check before
 asking him to click something.
 
+## When the page is a picture, not text
+Ask him to *look* at it — "what does this floor plan show?", "read the price
+off that flyer". He takes a screenshot and actually sees it. Useful for maps
+of comps, scanned disclosures, floor plans, and anything where the number is
+inside an image.
+
+Chrome can only photograph whichever tab is in front, so taking one flicks
+your screen to his tab for a moment and puts yours right back. Reading text is
+faster, so he only does this when looking is the point.
+
 ## Sites that need a login
 **You never give Harvey a password.** He works in a tab inside your own Chrome,
 so you are already signed in to anything you normally use — the MLS, a title

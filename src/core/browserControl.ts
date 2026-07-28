@@ -44,7 +44,9 @@ export type BrowserAction =
    *  human at a login wall. */
   | "focus"
   /** Scroll to trigger lazy-loaded content before reading. */
-  | "scroll";
+  | "scroll"
+  /** Capture the tab as an image — for pages that are visual, not textual. */
+  | "screenshot";
 
 export interface BrowserCommand {
   id: string;
@@ -60,6 +62,8 @@ export interface BrowserCommand {
   timeoutMs?: number;
   /** For scroll: "bottom" | "top" | pixel count. */
   to?: string | number;
+  /** For screenshot: longest edge in px. */
+  maxWidth?: number;
   createdAt: string;
   issuedBy: string;
 }
@@ -75,6 +79,9 @@ export interface BrowserResult {
   /** Side-signals the page noticed — e.g. `needsLogin`, `truncated`. Kept
    *  separate from `data` so the shape Harvey reads back doesn't change. */
   meta?: Record<string, unknown>;
+  /** Base64 screenshot. Deliberately excluded from the audit history — a few
+   *  hundred KB per capture would blow out memory within an afternoon. */
+  image?: { media_type: string; data: string };
   at: string;
 }
 
@@ -319,7 +326,11 @@ export function submitResult(result: Omit<BrowserResult, "at">): boolean {
   const full: BrowserResult = { ...result, at: new Date().toISOString() };
   if (full.url || full.title) extensionPage = { url: full.url, title: full.title };
   const h = history.find((x) => x.command.id === result.id);
-  if (h) h.result = full;
+  // Store everything EXCEPT the screenshot: the audit trail keeps the last 200
+  // entries, and a few hundred KB of base64 each would be tens of megabytes
+  // held forever for no investigative value. The fact a capture happened is
+  // what matters here, not the pixels.
+  if (h) h.result = full.image ? { ...full, image: undefined, data: { ...(full.data as object), screenshot: "[captured]" } } : full;
   entry.resolve(full);
   return true;
 }

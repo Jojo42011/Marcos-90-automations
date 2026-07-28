@@ -234,8 +234,12 @@ function submitResult(result) {
     if (full.url || full.title)
         extensionPage = { url: full.url, title: full.title };
     const h = history.find((x) => x.command.id === result.id);
+    // Store everything EXCEPT the screenshot: the audit trail keeps the last 200
+    // entries, and a few hundred KB of base64 each would be tens of megabytes
+    // held forever for no investigative value. The fact a capture happened is
+    // what matters here, not the pixels.
     if (h)
-        h.result = full;
+        h.result = full.image ? { ...full, image: undefined, data: { ...full.data, screenshot: "[captured]" } } : full;
     entry.resolve(full);
     return true;
 }

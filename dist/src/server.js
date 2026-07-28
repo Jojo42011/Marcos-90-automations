@@ -8170,7 +8170,9 @@ app.post("/api/browser/poll", express_1.default.json({ limit: "64kb" }), async (
         return;
     res.json(result);
 });
-app.post("/api/browser/result", express_1.default.json({ limit: "1mb" }), (req, res) => {
+// 6mb, not the old 1mb: a screenshot rides back in this body as base64 and a
+// dense page can clear a megabyte on its own.
+app.post("/api/browser/result", express_1.default.json({ limit: "6mb" }), (req, res) => {
     const b = (req.body || {});
     if (!(0, browserControl_js_1.tokenMatches)(String(b.token || ""))) {
         res.status(401).json({ error: "Bad or missing pairing token" });
@@ -8184,6 +8186,9 @@ app.post("/api/browser/result", express_1.default.json({ limit: "1mb" }), (req, 
         url: typeof b.url === "string" ? b.url : undefined,
         title: typeof b.title === "string" ? b.title : undefined,
         meta: b.meta && typeof b.meta === "object" ? b.meta : undefined,
+        image: b.image && typeof b.image === "object"
+            ? b.image
+            : undefined,
     });
     res.json({ accepted });
 });

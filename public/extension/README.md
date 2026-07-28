@@ -68,6 +68,12 @@ He reads a page's schema.org JSON-LD before guessing at CSS selectors, sees
 through open shadow roots and same-origin iframes, waits for content that
 loads after the page does, and scrolls to pull in lazy-loaded results.
 
+He can also **look** at the page — a screenshot, for things that only make
+sense visually: a map of comps, a scanned disclosure, a floor plan, a number
+baked into an image. Chrome can only photograph the tab that's in front, so
+taking one flicks the screen to his tab for a moment and puts yours straight
+back. That flicker is the API, not a bug.
+
 **Cannot, by design:** read cookies, read `localStorage`, type into password
 fields, or run arbitrary JavaScript. Those turn "fill in this form" into
 "exfiltrate this session", and nothing in the use case needs them.

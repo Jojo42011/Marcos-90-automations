@@ -188,6 +188,15 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
         },
     },
     {
+        name: "browser_screenshot",
+        description: "SEE Harvey's tab as a picture. Use when the page is visual rather than textual and reading it isn't enough — a map or chart of comps, a scanned disclosure or PDF, a floor plan, a layout where the number you need is baked into an image, or when a read/extract came back empty and you want to know what is actually on screen before guessing again. Prefer browser_read or browser_extract for ordinary text: this is slower, and it briefly flicks the operator's screen over to Harvey's tab to take the picture.",
+        input_schema: {
+            type: "object",
+            properties: { maxWidth: { type: "number", description: "Longest edge in px, 320-1568. Default 1000." } },
+            required: [],
+        },
+    },
+    {
         name: "browser_show_tab",
         description: "Bring Harvey's tab to the front so the operator can see it and take over. THIS IS THE ANSWER TO A LOGIN WALL: never ask for a password — call this, then ask them to sign in. Their session persists in that tab and you carry on from there.",
         input_schema: { type: "object", properties: {}, required: [] },
@@ -566,6 +575,16 @@ async function executePlatformTool(name, input) {
             return await (0, browserControl_js_1.run)({ action: "scroll", to: str(input.to) || "bottom" }, { timeoutMs: 30000 });
         case "browser_show_tab":
             return await (0, browserControl_js_1.run)({ action: "focus" });
+        case "browser_screenshot": {
+            const r = await (0, browserControl_js_1.run)({ action: "screenshot", maxWidth: num(input.maxWidth, 1000) }, { timeoutMs: 40000 });
+            if (!r.ok || !r.image)
+                return r;
+            // `_image` is the convention the agent loop understands: it lifts this
+            // into a real image block so the model actually looks at the page
+            // instead of being handed a base64 string it can only describe.
+            const { image, ...rest } = r;
+            return { ...rest, _image: image };
+        }
         case "browser_enable": {
             const st = (0, browserControl_js_1.status)();
             if (!st.configured) {

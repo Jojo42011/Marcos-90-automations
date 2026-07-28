@@ -519,6 +519,78 @@ function pagePresent(arg) {
   return document.readyState === "complete";
 }
 
+/**
+ * Take a picture of Harvey's tab.
+ *
+ * Two things make this less trivial than it sounds:
+ *
+ * 1. captureVisibleTab only ever captures the ACTIVE tab of a window, and
+ *    Harvey's tab is deliberately in the background. So it is brought forward
+ *    for the capture and the operator's tab is put straight back. That is a
+ *    brief visible flicker — unavoidable with this API, and worth naming
+ *    rather than pretending the capture is invisible.
+ * 2. A raw screenshot is far too big to hand a model. It is re-encoded down to
+ *    a sane width as JPEG; a 1920px PNG is megabytes, which would be slow,
+ *    expensive, and past the image size limit.
+ */
+async function captureTab(tab, opts) {
+  const maxWidth = Math.min(Math.max(Number(opts && opts.maxWidth) || 1000, 320), 1568);
+  let previous = null;
+  try {
+    const [active] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
+    if (active && active.id !== tab.id) previous = active.id;
+  } catch (_) {}
+
+  let dataUrl;
+  try {
+    if (previous != null) {
+      await chrome.tabs.update(tab.id, { active: true });
+      await sleep(300);   // let the compositor actually paint it
+    }
+    dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 70 });
+  } finally {
+    // Always hand focus back, even if the capture threw — leaving the operator
+    // staring at Harvey's tab would be worse than failing the command.
+    if (previous != null) {
+      try { await chrome.tabs.update(previous, { active: true }); } catch (_) {}
+    }
+  }
+  if (!dataUrl) return { ok: false, error: "Chrome returned no image for this tab." };
+
+  const blob = await (await fetch(dataUrl)).blob();
+  let media = "image/jpeg";
+  let bytes;
+  try {
+    const bmp = await createImageBitmap(blob);
+    const scale = Math.min(1, maxWidth / bmp.width);
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = new OffscreenCanvas(w, h);
+    canvas.getContext("2d").drawImage(bmp, 0, 0, w, h);
+    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.72 });
+    bytes = new Uint8Array(await out.arrayBuffer());
+    bmp.close();
+  } catch (_) {
+    // OffscreenCanvas missing or the decode failed — send Chrome's own JPEG.
+    bytes = new Uint8Array(await blob.arrayBuffer());
+  }
+
+  // Chunked: spreading a few hundred thousand bytes into String.fromCharCode
+  // overflows the argument stack.
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  }
+  const b64 = btoa(binary);
+
+  const t = await chrome.tabs.get(tab.id);
+  return {
+    ok: true,
+    data: { url: t.url, title: t.title, kb: Math.round(b64.length / 1024) },
+    image: { media_type: media, data: b64 },
+  };
+}
+
 /** Injected: scroll, so lazy-loaded listings actually render before a read. */
 async function pageScroll(arg) {
   const to = arg && arg.to;
@@ -601,6 +673,8 @@ async function execute(cmd, serverUrl) {
         return await inPage(tab.id, pageExtract, { schema: cmd.schema || {} });
       case "structured":
         return await inPage(tab.id, pageStructured, {});
+      case "screenshot":
+        return await captureTab(tab, { maxWidth: cmd.maxWidth });
       case "scroll":
         return await inPage(tab.id, pageScroll, { to: cmd.to });
       case "waitFor": {
@@ -757,6 +831,7 @@ async function pollOnce() {
           error: result.error,
           url: result.url || page.url,
           title: result.title || page.title,
+          image: result.image,
           // Side-signals the page noticed. needsLogin is the important one:
           // without it a login wall reaches Harvey as a short, content-free
           // page and he reports "the listing isn't there".

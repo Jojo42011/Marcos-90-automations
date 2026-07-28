@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.serializeToolResult = serializeToolResult;
+exports.toolResultContent = toolResultContent;
 exports.runAgentLoop = runAgentLoop;
 exports.extractSentences = extractSentences;
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
@@ -16,11 +17,37 @@ const index_js_2 = require("../integrations/gmail/index.js");
 const curiosity_js_1 = require("./curiosity.js");
 const MAX_AGENT_STEPS = 8;
 const MAX_TOOL_CHARS = 12000;
+function takeImage(result) {
+    if (!result || typeof result !== "object" || Array.isArray(result))
+        return { rest: result, image: null };
+    const obj = result;
+    const raw = obj._image;
+    if (!raw || typeof raw.data !== "string" || !raw.data)
+        return { rest: result, image: null };
+    const { _image, ...rest } = obj;
+    return { rest, image: { media_type: raw.media_type || "image/jpeg", data: raw.data } };
+}
 function serializeToolResult(result) {
-    const str = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+    const { rest, image } = takeImage(result);
+    const payload = image ? { ...rest, screenshot: "[image omitted in this context]" } : rest;
+    const str = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
     if (str.length <= MAX_TOOL_CHARS)
         return str;
     return str.slice(0, MAX_TOOL_CHARS) + `\n\n[TRUNCATED: ${str.length} chars total]`;
+}
+/** Tool result content for the model: text, plus the image when there is one. */
+function toolResultContent(result) {
+    const { rest, image } = takeImage(result);
+    if (!image)
+        return serializeToolResult(result);
+    const text = typeof rest === "string" ? rest : JSON.stringify(rest, null, 2);
+    return [
+        { type: "text", text: text.slice(0, MAX_TOOL_CHARS) },
+        {
+            type: "image",
+            source: { type: "base64", media_type: image.media_type, data: image.data },
+        },
+    ];
 }
 function extractAssistantText(content) {
     const parts = [];
@@ -177,7 +204,7 @@ async function runAgentLoop(opts) {
                 return {
                     type: "tool_result",
                     tool_use_id: tu.id,
-                    content: serializeToolResult(result),
+                    content: toolResultContent(result),
                 };
             }));
             messages.push({ role: "assistant", content: finalMsg.content });
@@ -215,7 +242,7 @@ async function runAgentLoop(opts) {
             return {
                 type: "tool_result",
                 tool_use_id: tu.id,
-                content: serializeToolResult(result),
+                content: toolResultContent(result),
             };
         }));
         messages.push({ role: "assistant", content: response.content });

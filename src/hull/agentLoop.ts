@@ -11,10 +11,51 @@ import { maybeAppendCuriosityQuestion } from "./curiosity.js";
 const MAX_AGENT_STEPS = 8;
 const MAX_TOOL_CHARS = 12000;
 
+/**
+ * A tool can hand back a picture as well as text.
+ *
+ * The convention is a `_image: { media_type, data }` key on the result object.
+ * It exists for browser_screenshot: some pages only make sense visually — a map
+ * of comps, a scanned disclosure, a layout where the price is inside an image —
+ * and no amount of DOM reading recovers that.
+ *
+ * `_image` is stripped everywhere the result is flattened to a string, so a
+ * few hundred KB of base64 can never leak into a log line, an audit trail, or
+ * a code path that only expected text.
+ */
+interface ToolImage { media_type: string; data: string }
+
+function takeImage(result: unknown): { rest: unknown; image: ToolImage | null } {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return { rest: result, image: null };
+  const obj = result as Record<string, unknown>;
+  const raw = obj._image as ToolImage | undefined;
+  if (!raw || typeof raw.data !== "string" || !raw.data) return { rest: result, image: null };
+  const { _image, ...rest } = obj;
+  return { rest, image: { media_type: raw.media_type || "image/jpeg", data: raw.data } };
+}
+
 export function serializeToolResult(result: unknown): string {
-  const str = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+  const { rest, image } = takeImage(result);
+  const payload = image ? { ...(rest as object), screenshot: "[image omitted in this context]" } : rest;
+  const str = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
   if (str.length <= MAX_TOOL_CHARS) return str;
   return str.slice(0, MAX_TOOL_CHARS) + `\n\n[TRUNCATED: ${str.length} chars total]`;
+}
+
+/** Tool result content for the model: text, plus the image when there is one. */
+export function toolResultContent(
+  result: unknown,
+): string | Array<Anthropic.Messages.TextBlockParam | Anthropic.Messages.ImageBlockParam> {
+  const { rest, image } = takeImage(result);
+  if (!image) return serializeToolResult(result);
+  const text = typeof rest === "string" ? rest : JSON.stringify(rest, null, 2);
+  return [
+    { type: "text", text: text.slice(0, MAX_TOOL_CHARS) },
+    {
+      type: "image",
+      source: { type: "base64", media_type: image.media_type as "image/jpeg" | "image/png", data: image.data },
+    },
+  ];
 }
 
 function extractAssistantText(content: Anthropic.Messages.Message["content"]): string {
@@ -214,7 +255,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
           return {
             type: "tool_result" as const,
             tool_use_id: tu.id,
-            content: serializeToolResult(result),
+            content: toolResultContent(result),
           };
         }),
       );
@@ -257,7 +298,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         return {
           type: "tool_result" as const,
           tool_use_id: tu.id,
-          content: serializeToolResult(result),
+          content: toolResultContent(result),
         };
       }),
     );
