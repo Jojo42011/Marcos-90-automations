@@ -110,7 +110,23 @@ import {
 } from "./core/scheduledMessages.js";
 import { canSendOn, startScheduledSender } from "./core/scheduledSender.js";
 import { parseSendTime, suggestNextGoodTime } from "./core/scheduleTime.js";
-import { suggestReply, completeReply } from "./core/replySuggest.js";
+import {
+  suggestReply,
+  completeReply,
+  suggestReplyFromThread,
+  completeReplyFromThread,
+} from "./core/replySuggest.js";
+import {
+  listDocs,
+  listCategories,
+  getDoc,
+  createDoc,
+  updateDoc,
+  deleteDoc,
+  searchDocs,
+  knowledgeStats,
+} from "./core/knowledgeStore.js";
+
 
 import { sendAssignmentEmail } from "./core/taskAssignmentEmail.js";
 import { getBrivityPeople, getBrivityImportStatus } from "./core/brivityPeople.js";
@@ -8823,6 +8839,133 @@ app.post("/api/leads/:id/complete-reply", express.json({ limit: "64kb" }), async
     console.error("[complete-reply] failed:", err);
     res.json({ completion: "" });
   }
+});
+
+/**
+ * Draft for a thread with no linked lead (group threads, demo rows).
+ * Refusing these was wrong — the conversation itself is the most useful
+ * input, and it's already on screen. Degraded but genuinely useful.
+ */
+app.post("/api/suggest-reply", express.json({ limit: "256kb" }), async (req, res) => {
+  const b = (req.body || {}) as Record<string, unknown>;
+  const messages = Array.isArray(b.messages)
+    ? (b.messages as unknown[])
+        .map((m) => {
+          const x = (m || {}) as Record<string, unknown>;
+          return {
+            role: x.role === "assistant" ? "assistant" : "user",
+            text: String(x.text || ""),
+            at: String(x.at || ""),
+          };
+        })
+        .filter((m) => m.text.trim())
+    : [];
+  if (!messages.length) {
+    res.status(400).json({ error: "Nothing to work from — this conversation has no messages." });
+    return;
+  }
+  try {
+    res.json(
+      await suggestReplyFromThread(String(b.contactName || ""), messages as never, {
+        channel: b.channel === "email" ? "email" : "sms",
+        draft: typeof b.draft === "string" ? b.draft : undefined,
+      }),
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[suggest-reply/thread] failed:", message);
+    res.status(502).json({ error: message });
+  }
+});
+
+app.post("/api/complete-reply", express.json({ limit: "256kb" }), async (req, res) => {
+  const b = (req.body || {}) as Record<string, unknown>;
+  const messages = Array.isArray(b.messages)
+    ? (b.messages as unknown[])
+        .map((m) => {
+          const x = (m || {}) as Record<string, unknown>;
+          return {
+            role: x.role === "assistant" ? "assistant" : "user",
+            text: String(x.text || ""),
+            at: String(x.at || ""),
+          };
+        })
+        .filter((m) => m.text.trim())
+    : [];
+  try {
+    const completion = await completeReplyFromThread(
+      String(b.contactName || ""),
+      messages as never,
+      typeof b.draft === "string" ? b.draft : "",
+      { channel: b.channel === "email" ? "email" : "sms" },
+    );
+    res.json({ completion });
+  } catch (err) {
+    // Ghost text is an enhancement; failing silently is correct here.
+    console.error("[complete-reply/thread] failed:", err);
+    res.json({ completion: "" });
+  }
+});
+
+/* ——— 3.4 Knowledge Center: SOPs + internal documentation ———
+   Same documents back this API and Harvey's knowledge tools, so answers and
+   the page can never disagree. */
+
+app.get("/api/knowledge", (req, res) => {
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  if (q) {
+    res.json({ query: q, results: searchDocs(q, 10), categories: listCategories() });
+    return;
+  }
+  res.json({
+    docs: listDocs(typeof req.query.category === "string" ? req.query.category : undefined)
+      .map(({ body, ...rest }) => ({ ...rest, excerpt: body.replace(/[#*`]/g, "").replace(/\s+/g, " ").trim().slice(0, 160) })),
+    categories: listCategories(),
+    stats: knowledgeStats(),
+  });
+});
+
+app.get("/api/knowledge/:id", (req, res) => {
+  const doc = getDoc(String(req.params.id || ""));
+  if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+  res.json({ doc });
+});
+
+app.post("/api/knowledge", express.json({ limit: "1mb" }), (req, res) => {
+  const b = (req.body || {}) as Record<string, unknown>;
+  const title = String(b.title || "").trim();
+  const body = String(b.body || "");
+  if (!title || !body.trim()) { res.status(400).json({ error: "title and body are required" }); return; }
+  res.json({
+    doc: createDoc({
+      title, body,
+      category: typeof b.category === "string" ? b.category : undefined,
+      tags: Array.isArray(b.tags) ? (b.tags as string[]) : [],
+      updatedBy: typeof b.updatedBy === "string" ? b.updatedBy : undefined,
+    }),
+  });
+});
+
+app.patch("/api/knowledge/:id", express.json({ limit: "1mb" }), (req, res) => {
+  const b = (req.body || {}) as Record<string, unknown>;
+  const doc = updateDoc(String(req.params.id || ""), {
+    title: typeof b.title === "string" ? b.title : undefined,
+    body: typeof b.body === "string" ? b.body : undefined,
+    category: typeof b.category === "string" ? b.category : undefined,
+    tags: Array.isArray(b.tags) ? (b.tags as string[]) : undefined,
+    updatedBy: typeof b.updatedBy === "string" ? b.updatedBy : undefined,
+  });
+  if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+  res.json({ doc });
+});
+
+app.delete("/api/knowledge/:id", (req, res) => {
+  if (!deleteDoc(String(req.params.id || ""))) { res.status(404).json({ error: "Not found" }); return; }
+  res.json({ deleted: true });
+});
+
+app.get("/knowledge", requireAuthPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "knowledge.html"));
 });
 
 /* ——— Team collaboration: notifications, chat, presence (task command center) ——— */

@@ -7,6 +7,9 @@ import {
   type CommandTaskColumn,
   type CommandTaskStatus,
   type TrackerRecord,
+  type LeadActivity,
+  CRM_STATUSES,
+  CRM_STAGES,
 } from "../core/types.js";
 import {
   getTrackerRecord,
@@ -34,7 +37,17 @@ import {
 } from "../core/scheduledMessages.js";
 import { canSendOn } from "../core/scheduledSender.js";
 import { parseSendTime, suggestNextGoodTime } from "../core/scheduleTime.js";
-import { getLeadById } from "../core/db.js";
+import {
+  getLeadById,
+  listAllLeads,
+  findLeadByPhoneDigits,
+  getConversation,
+  createLead,
+  updateLeadCrmFields,
+  appendLeadActivity,
+} from "../core/db.js";
+import { channelForLead } from "../core/messageChannels.js";
+import { searchDocs, getDoc, listDocs, listCategories, knowledgeStats } from "../core/knowledgeStore.js";
 
 /**
  * Harvey tools for the platform surfaces that had none — the Buyers & Sellers
@@ -100,6 +113,105 @@ const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const num = (v: unknown, d: number): number => (Number.isFinite(Number(v)) ? Number(v) : d);
 
 export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
+  {
+    name: "search_knowledge",
+    description:
+      "Search the Knowledge Center — the team's SOPs and internal documentation. Use this whenever someone asks how a process works, what the policy is, or what they should do next in a workflow ('what's our listing process', 'how do we handle a price drop', 'what do I do after a showing'). ALWAYS search here before answering a process question from general knowledge, and say which document the answer came from. If nothing matches, say so plainly — do not invent a procedure.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What you're looking for, in plain words." },
+        limit: { type: "number", description: "Default 5." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "read_knowledge_doc",
+    description:
+      "Read one Knowledge Center document in full. Use after search_knowledge when the excerpt isn't enough to answer properly — quote the actual steps rather than paraphrasing from a snippet.",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Document id from search_knowledge." } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "list_knowledge",
+    description:
+      "What documentation exists, by category. Use for 'what SOPs do we have', or when onboarding someone who doesn't know what to ask for yet.",
+    input_schema: {
+      type: "object",
+      properties: { category: { type: "string" } },
+      required: [],
+    },
+  },
+  {
+    name: "update_lead",
+    description:
+      "Change a contact's CRM fields: status, pipeline stage, intent, priority, name, phone, email, or notes. Only pass the fields you are actually changing — anything omitted is left alone. Call search_leads first to get the id. Use log_lead_activity (not this) to record that a call or text happened.",
+    input_schema: {
+      type: "object",
+      properties: {
+        leadId: { type: "string", description: "Lead id from search_leads." },
+        crmStatus: { type: "string", enum: [...CRM_STATUSES], description: "Lead temperature." },
+        crmStage: { type: "string", enum: [...CRM_STAGES], description: "Pipeline stage." },
+        crmIntent: { type: "string", enum: ["buyer", "seller", "buyer_seller"] },
+        crmPriority: { type: "string", enum: ["low", "normal", "high"] },
+        name: { type: "string" },
+        phone: { type: "string" },
+        email: { type: "string" },
+        notes: { type: "string", description: "REPLACES the notes field. To add without losing what's there, read the lead first and send the combined text." },
+      },
+      required: ["leadId"],
+    },
+  },
+  {
+    name: "log_lead_activity",
+    description:
+      "Record something that happened with a contact on their timeline — a call, a text, an email, a note. This is how 'I just called Kenneth, he wants to see it Saturday' gets written down. Does NOT send anything; it only records that it happened.",
+    input_schema: {
+      type: "object",
+      properties: {
+        leadId: { type: "string" },
+        type: {
+          type: "string",
+          enum: ["call", "call_made", "text_sent", "text_received", "email_sent", "task", "note"],
+          description: "Use 'note' for a plain observation.",
+        },
+        description: { type: "string", description: "One line: what happened." },
+        notes: { type: "string", description: "Longer detail, optional." },
+      },
+      required: ["leadId", "type", "description"],
+    },
+  },
+  {
+    name: "create_lead",
+    description:
+      "Add a brand-new contact to the CRM. Search first — creating a duplicate of someone already in the system is worse than not adding them. Needs at least a name plus a phone or email.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        phone: { type: "string" },
+        email: { type: "string" },
+        crmIntent: { type: "string", enum: ["buyer", "seller", "buyer_seller"] },
+        source: { type: "string", description: "Where they came from, e.g. 'Referral - Jane D'." },
+        notes: { type: "string" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "get_lead",
+    description:
+      "The full record for one contact: CRM fields, criteria, notes, tags, recent activity and how many messages are in the thread. Read this before changing anything so an update doesn't overwrite something that mattered.",
+    input_schema: {
+      type: "object",
+      properties: { leadId: { type: "string" } },
+      required: ["leadId"],
+    },
+  },
   {
     name: "schedule_message",
     description:
@@ -314,6 +426,198 @@ export async function executePlatformTool(
   input: Record<string, unknown>,
 ): Promise<unknown> {
   switch (name) {
+    case "search_knowledge": {
+      const query = str(input.query);
+      if (!query) return { error: "query is required" };
+      const results = searchDocs(query, Math.min(10, Math.max(1, num(input.limit, 5))));
+      if (!results.length) {
+        // An empty shelf and a wrong answer are very different failures. Make
+        // sure Harvey reports the former instead of improvising a procedure.
+        return {
+          results: [],
+          note: `Nothing in the Knowledge Center matches "${query}". Say so plainly — do not invent a process. Suggest the SOP be written and added.`,
+          available: listCategories(),
+        };
+      }
+      return {
+        results,
+        note: "Cite the document title when answering. Call read_knowledge_doc for the full steps if the excerpt isn't enough.",
+      };
+    }
+
+    case "read_knowledge_doc": {
+      const doc = getDoc(str(input.id));
+      if (!doc) return { error: `No document with id ${str(input.id)}` };
+      return {
+        id: doc.id, title: doc.title, category: doc.category, tags: doc.tags,
+        body: doc.body, updatedAt: doc.updatedAt,
+        builtIn: Boolean(doc.builtIn),
+      };
+    }
+
+    case "list_knowledge": {
+      const category = str(input.category) || undefined;
+      return {
+        categories: listCategories(),
+        stats: knowledgeStats(),
+        docs: listDocs(category).map((d) => ({
+          id: d.id, title: d.title, category: d.category, tags: d.tags, updatedAt: d.updatedAt,
+        })),
+      };
+    }
+
+    case "get_lead": {
+      const lead = await getLeadById(str(input.leadId));
+      if (!lead) return { error: `No lead with id ${str(input.leadId)}` };
+      const convo = await getConversation(lead.id);
+      return {
+        id: lead.id,
+        name: lead.name || lead.username || null,
+        phone: lead.phone || null,
+        email: lead.email || null,
+        channel: channelForLead(lead),
+        source: lead.source || null,
+        crmStatus: lead.crmStatus,
+        crmStage: lead.crmStage,
+        crmIntent: lead.crmIntent,
+        crmPriority: lead.crmPriority,
+        notes: lead.crmNotes || null,
+        tags: lead.tags || [],
+        criteria: lead.criteria || null,
+        propertyInquired: lead.propertyInquired || null,
+        messages: convo?.messages?.length || 0,
+        lastActivity: lead.lastActivity || null,
+        recentActivity: (lead.activity || []).slice(-6).map((a) => ({
+          type: a.type, description: a.description, at: a.timestamp,
+        })),
+      };
+    }
+
+    case "update_lead": {
+      const leadId = str(input.leadId);
+      const lead = await getLeadById(leadId);
+      if (!lead) return { error: `No lead with id ${leadId}` };
+
+      // Only what was actually passed — an omitted field must never be
+      // blanked, or "mark him hot" would quietly wipe his phone number.
+      const patch: Record<string, unknown> = { leadId };
+      const changed: string[] = [];
+      const setIf = (key: string, value: string, valid?: readonly string[]) => {
+        if (!value) return true;
+        if (valid && !valid.includes(value)) return false;
+        patch[key] = value;
+        changed.push(`${key}=${value}`);
+        return true;
+      };
+
+      if (!setIf("crmStatus", str(input.crmStatus), CRM_STATUSES)) {
+        return { error: `Invalid crmStatus. Use one of: ${CRM_STATUSES.join(", ")}` };
+      }
+      if (!setIf("crmStage", str(input.crmStage), CRM_STAGES)) {
+        return { error: `Invalid crmStage. Use one of: ${CRM_STAGES.join(", ")}` };
+      }
+      if (!setIf("crmIntent", str(input.crmIntent), ["buyer", "seller", "buyer_seller"])) {
+        return { error: "Invalid crmIntent. Use buyer, seller or buyer_seller." };
+      }
+      if (!setIf("crmPriority", str(input.crmPriority), ["low", "normal", "high"])) {
+        return { error: "Invalid crmPriority. Use low, normal or high." };
+      }
+      setIf("name", str(input.name));
+      setIf("phone", str(input.phone));
+      setIf("email", str(input.email));
+      if (str(input.notes)) { patch.crmNotes = str(input.notes); changed.push("notes"); }
+
+      if (changed.length === 0) return { error: "Nothing to change — pass at least one field." };
+
+      const updated = await updateLeadCrmFields(patch as never);
+      if (!updated) return { error: "Update failed" };
+      return {
+        updated: true,
+        leadId,
+        name: updated.name || updated.username || null,
+        changed,
+        crmStatus: updated.crmStatus,
+        crmStage: updated.crmStage,
+      };
+    }
+
+    case "log_lead_activity": {
+      const leadId = str(input.leadId);
+      const lead = await getLeadById(leadId);
+      if (!lead) return { error: `No lead with id ${leadId}` };
+      const type = str(input.type) || "note";
+      const description = str(input.description);
+      if (!description) return { error: "description is required" };
+
+      const entry: LeadActivity = {
+        type: (type === "note" ? "task" : type) as LeadActivity["type"],
+        description,
+        timestamp: new Date().toISOString(),
+        ...(str(input.notes) ? { notes: str(input.notes) } : {}),
+      };
+      // appendLeadActivity already normalises and merges — rebuilding the
+      // array here would bypass that and risk dropping existing entries.
+      const updated = await appendLeadActivity(leadId, [entry], { lastActivity: entry.timestamp });
+      if (!updated) return { error: "Could not write the activity" };
+      return {
+        logged: true,
+        leadId,
+        name: updated.name || updated.username || null,
+        type: entry.type,
+        description,
+        at: entry.timestamp,
+        totalActivity: (updated.activity || []).length,
+      };
+    }
+
+    case "create_lead": {
+      const name = str(input.name);
+      const phone = str(input.phone);
+      const email = str(input.email);
+      if (!name) return { error: "name is required" };
+      if (!phone && !email) {
+        return { error: "A phone or an email is required — a contact with neither can't be reached." };
+      }
+
+      // Cheap duplicate guard. A second copy of someone already in the CRM
+      // is worse than not adding them, because it splits their history.
+      let existing = phone ? await findLeadByPhoneDigits(phone) : null;
+      if (!existing && email) {
+        const target = email.toLowerCase();
+        existing = (await listAllLeads()).find((l) => (l.email || "").toLowerCase() === target) || null;
+      }
+      if (existing) {
+        return {
+          error: "That contact already exists — use update_lead instead of creating a duplicate.",
+          existingLeadId: existing.id,
+          existingName: existing.name || existing.username || null,
+        };
+      }
+
+      const created = await createLead({
+        platform: "manual",
+        userId: `manual_${Date.now()}`,
+        username: null,
+        name,
+        phone: phone || null,
+        email: email || null,
+        state: "new" as never,
+        source: str(input.source) || "Added by Harvey",
+        adCampaign: null,
+        propertyInquired: null,
+        criteria: null,
+        brivityId: null,
+        crmStatus: "new",
+        crmStage: "new",
+        crmPriority: "normal",
+        crmIntent: (str(input.crmIntent) || "buyer") as never,
+        crmCallQueue: null,
+        crmNotes: str(input.notes) || null,
+      } as never);
+
+      return { created: true, leadId: created.id, name: created.name, phone: created.phone, email: created.email };
+    }
+
     case "schedule_message": {
       const leadId = str(input.leadId);
       const channel = input.channel === "email" ? "email" : "sms";

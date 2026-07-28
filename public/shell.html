@@ -248,10 +248,14 @@ var TABS = [
    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>'
  },
  {
-   key: "howto",
-   label: "How to Use",
-   sub: "Guided tour of every tab",
-   src: "/how-to",
+   /* Was the "How to Use" slideshow. Replaced by the Knowledge Center: a
+      living SOP library the team writes into, and the same documents Harvey
+      answers from — so onboarding is "ask Harvey", not a fixed tour. The old
+      tour still works at /how-to if it's ever wanted back. */
+   key: "knowledge",
+   label: "Knowledge Center",
+   sub: "SOPs · docs · Harvey reads these",
+   src: "/knowledge",
    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
  }
 ];
@@ -265,7 +269,7 @@ var SECTIONS = {
  dm:        null,
  content:   'Growth',
  tasks:     null,
- howto:     'Help'
+ knowledge: 'Help'
 };
 
 

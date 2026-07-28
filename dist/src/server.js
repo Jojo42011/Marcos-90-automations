@@ -75,6 +75,7 @@ const scheduledMessages_js_1 = require("./core/scheduledMessages.js");
 const scheduledSender_js_1 = require("./core/scheduledSender.js");
 const scheduleTime_js_1 = require("./core/scheduleTime.js");
 const replySuggest_js_1 = require("./core/replySuggest.js");
+const knowledgeStore_js_1 = require("./core/knowledgeStore.js");
 const taskAssignmentEmail_js_1 = require("./core/taskAssignmentEmail.js");
 const brivityPeople_js_1 = require("./core/brivityPeople.js");
 const index_js_11 = require("./agents/reEngagement/index.js");
@@ -8014,6 +8015,131 @@ app.post("/api/leads/:id/complete-reply", express_1.default.json({ limit: "64kb"
         console.error("[complete-reply] failed:", err);
         res.json({ completion: "" });
     }
+});
+/**
+ * Draft for a thread with no linked lead (group threads, demo rows).
+ * Refusing these was wrong — the conversation itself is the most useful
+ * input, and it's already on screen. Degraded but genuinely useful.
+ */
+app.post("/api/suggest-reply", express_1.default.json({ limit: "256kb" }), async (req, res) => {
+    const b = (req.body || {});
+    const messages = Array.isArray(b.messages)
+        ? b.messages
+            .map((m) => {
+            const x = (m || {});
+            return {
+                role: x.role === "assistant" ? "assistant" : "user",
+                text: String(x.text || ""),
+                at: String(x.at || ""),
+            };
+        })
+            .filter((m) => m.text.trim())
+        : [];
+    if (!messages.length) {
+        res.status(400).json({ error: "Nothing to work from — this conversation has no messages." });
+        return;
+    }
+    try {
+        res.json(await (0, replySuggest_js_1.suggestReplyFromThread)(String(b.contactName || ""), messages, {
+            channel: b.channel === "email" ? "email" : "sms",
+            draft: typeof b.draft === "string" ? b.draft : undefined,
+        }));
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[suggest-reply/thread] failed:", message);
+        res.status(502).json({ error: message });
+    }
+});
+app.post("/api/complete-reply", express_1.default.json({ limit: "256kb" }), async (req, res) => {
+    const b = (req.body || {});
+    const messages = Array.isArray(b.messages)
+        ? b.messages
+            .map((m) => {
+            const x = (m || {});
+            return {
+                role: x.role === "assistant" ? "assistant" : "user",
+                text: String(x.text || ""),
+                at: String(x.at || ""),
+            };
+        })
+            .filter((m) => m.text.trim())
+        : [];
+    try {
+        const completion = await (0, replySuggest_js_1.completeReplyFromThread)(String(b.contactName || ""), messages, typeof b.draft === "string" ? b.draft : "", { channel: b.channel === "email" ? "email" : "sms" });
+        res.json({ completion });
+    }
+    catch (err) {
+        // Ghost text is an enhancement; failing silently is correct here.
+        console.error("[complete-reply/thread] failed:", err);
+        res.json({ completion: "" });
+    }
+});
+/* ——— 3.4 Knowledge Center: SOPs + internal documentation ———
+   Same documents back this API and Harvey's knowledge tools, so answers and
+   the page can never disagree. */
+app.get("/api/knowledge", (req, res) => {
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (q) {
+        res.json({ query: q, results: (0, knowledgeStore_js_1.searchDocs)(q, 10), categories: (0, knowledgeStore_js_1.listCategories)() });
+        return;
+    }
+    res.json({
+        docs: (0, knowledgeStore_js_1.listDocs)(typeof req.query.category === "string" ? req.query.category : undefined)
+            .map(({ body, ...rest }) => ({ ...rest, excerpt: body.replace(/[#*`]/g, "").replace(/\s+/g, " ").trim().slice(0, 160) })),
+        categories: (0, knowledgeStore_js_1.listCategories)(),
+        stats: (0, knowledgeStore_js_1.knowledgeStats)(),
+    });
+});
+app.get("/api/knowledge/:id", (req, res) => {
+    const doc = (0, knowledgeStore_js_1.getDoc)(String(req.params.id || ""));
+    if (!doc) {
+        res.status(404).json({ error: "Not found" });
+        return;
+    }
+    res.json({ doc });
+});
+app.post("/api/knowledge", express_1.default.json({ limit: "1mb" }), (req, res) => {
+    const b = (req.body || {});
+    const title = String(b.title || "").trim();
+    const body = String(b.body || "");
+    if (!title || !body.trim()) {
+        res.status(400).json({ error: "title and body are required" });
+        return;
+    }
+    res.json({
+        doc: (0, knowledgeStore_js_1.createDoc)({
+            title, body,
+            category: typeof b.category === "string" ? b.category : undefined,
+            tags: Array.isArray(b.tags) ? b.tags : [],
+            updatedBy: typeof b.updatedBy === "string" ? b.updatedBy : undefined,
+        }),
+    });
+});
+app.patch("/api/knowledge/:id", express_1.default.json({ limit: "1mb" }), (req, res) => {
+    const b = (req.body || {});
+    const doc = (0, knowledgeStore_js_1.updateDoc)(String(req.params.id || ""), {
+        title: typeof b.title === "string" ? b.title : undefined,
+        body: typeof b.body === "string" ? b.body : undefined,
+        category: typeof b.category === "string" ? b.category : undefined,
+        tags: Array.isArray(b.tags) ? b.tags : undefined,
+        updatedBy: typeof b.updatedBy === "string" ? b.updatedBy : undefined,
+    });
+    if (!doc) {
+        res.status(404).json({ error: "Not found" });
+        return;
+    }
+    res.json({ doc });
+});
+app.delete("/api/knowledge/:id", (req, res) => {
+    if (!(0, knowledgeStore_js_1.deleteDoc)(String(req.params.id || ""))) {
+        res.status(404).json({ error: "Not found" });
+        return;
+    }
+    res.json({ deleted: true });
+});
+app.get("/knowledge", requireAuthPage, (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "knowledge.html"));
 });
 /* ——— Team collaboration: notifications, chat, presence (task command center) ——— */
 /** Who can sign in. Email addresses are intentionally omitted — see teamRoster.ts. */

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Knowledge Center · Marco Puga</title>
+<script src="/team-session.js"></script>
+<!--
+  3.4 Knowledge Center — SOPs and internal documentation.
+
+  Replaces the old How to Use tour. That tour was a fixed slideshow about the
+  software; this is a living library the team writes into, and — the actual
+  point — the same documents Harvey answers from. Onboarding becomes "ask
+  Harvey" rather than a walkthrough, which only works if the two can never
+  disagree, so there is one store behind both.
+-->
+<style>
+  :root{
+    --bg:#f9fbfb; --panel:#fff; --text:#333; --muted:#5f6b78; --line:#edf0f0;
+    --teal:#59c4c4; --teal-2:#4ca7a7; --soft:#eef7f7; --bad:#c0616a;
+    --font:"Helvetica Neue",Helvetica,Arial,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:16px 24px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+  header h1{font-size:19px;font-weight:600}
+  header .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .search{flex:1;max-width:460px;margin-left:auto;position:relative}
+  .search input{width:100%;height:38px;border:1px solid var(--line);border-radius:20px;padding:0 16px 0 38px;font-size:13.5px;outline:none;background:#fbfcfd}
+  .search input:focus{border-color:var(--teal);background:#fff}
+  .search svg{position:absolute;left:13px;top:11px;color:#9aa4ae}
+  .newbtn{background:linear-gradient(135deg,var(--teal),var(--teal-2));color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
+
+  #wrap{flex:1;display:flex;min-height:0}
+  aside{width:230px;flex-shrink:0;border-right:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:14px 0}
+  aside .ch{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:8px 18px 6px}
+  aside a{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 18px;font-size:13px;color:#41505c;cursor:pointer;border-left:3px solid transparent}
+  aside a:hover{background:var(--soft)}
+  aside a.on{background:var(--soft);border-left-color:var(--teal);color:var(--teal-2);font-weight:600}
+  aside a .n{font-size:11px;color:#9aa4ae}
+
+  #list{width:330px;flex-shrink:0;border-right:1px solid var(--line);overflow-y:auto;background:var(--panel)}
+  .doc{padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer}
+  .doc:hover{background:#fbfcfd}
+  .doc.on{background:var(--soft)}
+  .doc h3{font-size:13.5px;font-weight:600;margin-bottom:3px}
+  .doc .meta{font-size:10.5px;color:#9aa4ae;margin-bottom:4px}
+  .doc p{font-size:12px;color:var(--muted);line-height:1.5}
+  .doc .tags{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
+  .tag{font-size:9.5px;background:#f0f4f4;color:#5f6b78;border-radius:9px;padding:2px 7px}
+  .score{float:right;font-size:9.5px;color:var(--teal-2);font-weight:700}
+
+  main{flex:1;overflow-y:auto;padding:26px 34px;min-width:0}
+  .empty{color:var(--muted);font-size:13px;padding:36px 0;text-align:center;line-height:1.6}
+  .dochead{display:flex;align-items:flex-start;gap:12px;margin-bottom:6px}
+  .dochead h2{font-size:22px;font-weight:600;flex:1}
+  .dochead button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 11px;font-size:12px;color:#41505c;cursor:pointer}
+  .dochead button:hover{border-color:var(--teal);color:var(--teal-2)}
+  .dochead button.del:hover{border-color:var(--bad);color:var(--bad)}
+  .docmeta{font-size:11.5px;color:#9aa4ae;margin-bottom:18px}
+  .md{font-size:14px;line-height:1.68;color:#374151;max-width:760px}
+  .md h1{font-size:20px;margin:22px 0 10px;color:var(--text)}
+  .md h2{font-size:16.5px;margin:20px 0 8px;color:var(--text)}
+  .md h3{font-size:14.5px;margin:16px 0 6px;color:var(--text)}
+  .md p{margin:9px 0}
+  .md ul,.md ol{margin:9px 0 9px 22px}
+  .md li{margin:4px 0}
+  .md code{font-family:var(--mono);font-size:12.5px;background:#f3f6f6;padding:1px 5px;border-radius:4px}
+  .md strong{font-weight:700;color:var(--text)}
+  .md hr{border:none;border-top:1px solid var(--line);margin:18px 0}
+
+  /* Editor */
+  #editor{display:none;max-width:820px}
+  #editor.on{display:block}
+  #editor label{display:block;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:14px 0 5px}
+  #editor input,#editor textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:13.5px;outline:none;background:#fff;font-family:inherit}
+  #editor textarea{min-height:400px;font-family:var(--mono);font-size:12.5px;line-height:1.6;resize:vertical}
+  #editor input:focus,#editor textarea:focus{border-color:var(--teal)}
+  .ed-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+  .ed-foot .cancel{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 16px;font-size:13px;color:#41505c;cursor:pointer}
+  .ed-foot .save{border:none;background:var(--teal);color:#fff;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.5}
+  .banner{background:var(--soft);border:1px solid rgba(89,196,196,.3);border-radius:10px;padding:12px 15px;font-size:12.5px;color:#41505c;line-height:1.6;margin-bottom:20px}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#2b3440;color:#fff;font-size:12.5px;padding:10px 18px;border-radius:9px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+  .toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Knowledge Center</h1>
+    <div class="sub">SOPs and internal docs &mdash; Harvey answers from these</div>
+  </div>
+  <div class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.7" y2="16.7"/></svg>
+    <input id="q" type="search" placeholder="Search SOPs and documentation…" />
+  </div>
+  <button class="newbtn" id="newBtn">+ New document</button>
+</header>
+
+<div id="wrap">
+  <aside id="cats"></aside>
+  <div id="list"></div>
+  <main>
+    <div id="reader"></div>
+    <div id="editor">
+      <label for="edTitle">Title</label>
+      <input id="edTitle" placeholder="e.g. New listing intake" />
+      <label for="edCat">Category</label>
+      <input id="edCat" placeholder="e.g. Listings" list="catList" />
+      <datalist id="catList"></datalist>
+      <label for="edTags">Tags</label>
+      <input id="edTags" placeholder="listing, seller, intake" />
+      <div class="hint">Comma separated. Tags are a strong search signal &mdash; tag a listing SOP with the words someone would actually ask about.</div>
+      <label for="edBody">Content</label>
+      <textarea id="edBody" placeholder="# Listing intake&#10;&#10;1. Confirm the seller's timeline&#10;2. ..."></textarea>
+      <div class="hint">Markdown. One process per document, numbered steps, say who does what &mdash; that's what makes Harvey's answers useful.</div>
+      <div class="ed-foot">
+        <button class="cancel" id="edCancel">Cancel</button>
+        <button class="save" id="edSave">Save</button>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var DOCS=[], CATS=[], CURRENT=null, MODE="read", ACTIVE_CAT="", SEARCHING=false;
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function toast(m){var t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove("on");},2600);}
+function who(){ try{ return (window.TeamSession&&TeamSession.currentUser())||""; }catch(_){ return ""; } }
+
+/* Small markdown renderer — enough for SOPs (headings, lists, bold, code).
+   Everything is escaped first, so document text can never inject markup. */
+function md(src){
+  var lines=String(src||"").split("\n"), out=[], list=null;
+  function closeList(){ if(list){ out.push("</"+list+">"); list=null; } }
+  for(var i=0;i<lines.length;i++){
+    var l=lines[i], t=l.trim();
+    if(!t){ closeList(); continue; }
+    if(/^---+$/.test(t)){ closeList(); out.push("<hr>"); continue; }
+    var h=/^(#{1,3})\s+(.*)$/.exec(t);
+    if(h){ closeList(); var n=h[1].length; out.push("<h"+n+">"+inline(h[2])+"</h"+n+">"); continue; }
+    var ol=/^(\d+)[.)]\s+(.*)$/.exec(t);
+    if(ol){ if(list!=="ol"){ closeList(); out.push("<ol>"); list="ol"; } out.push("<li>"+inline(ol[2])+"</li>"); continue; }
+    var ul=/^[-*+]\s+(.*)$/.exec(t);
+    if(ul){ if(list!=="ul"){ closeList(); out.push("<ul>"); list="ul"; } out.push("<li>"+inline(ul[1])+"</li>"); continue; }
+    closeList(); out.push("<p>"+inline(t)+"</p>");
+  }
+  closeList();
+  return out.join("");
+}
+function inline(s){
+  return esc(s)
+    .replace(/`([^`]+)`/g,"<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*/g,"$1<em>$2</em>");
+}
+
+function api(path,opts){ return fetch(path,opts).then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); }); }
+
+function renderCats(){
+  var el=document.getElementById("cats");
+  el.innerHTML='<div class="ch">Library</div>'+
+    '<a data-cat="" class="'+(ACTIVE_CAT?"":"on")+'">All documents <span class="n">'+DOCS.length+'</span></a>'+
+    CATS.map(function(c){
+      return '<a data-cat="'+esc(c.category)+'" class="'+(ACTIVE_CAT===c.category?"on":"")+'">'+esc(c.category)+' <span class="n">'+c.count+'</span></a>';
+    }).join("");
+  el.querySelectorAll("[data-cat]").forEach(function(a){
+    a.onclick=function(){ ACTIVE_CAT=a.getAttribute("data-cat"); document.getElementById("q").value=""; load(); };
+  });
+  document.getElementById("catList").innerHTML=CATS.map(function(c){return '<option value="'+esc(c.category)+'">';}).join("");
+}
+
+function renderList(){
+  var el=document.getElementById("list");
+  if(!DOCS.length){
+    el.innerHTML='<div class="empty">'+(SEARCHING?"No documents match that search.":"No documents yet.<br>Add your first SOP with <b>+ New document</b>.")+'</div>';
+    return;
+  }
+  el.innerHTML=DOCS.map(function(d){
+    return '<div class="doc'+(CURRENT&&CURRENT.id===d.id?" on":"")+'" data-id="'+esc(d.id)+'">'+
+      (d.score?'<span class="score">match</span>':'')+
+      '<h3>'+esc(d.title)+'</h3>'+
+      '<div class="meta">'+esc(d.category)+'</div>'+
+      '<p>'+esc((d.excerpt||"").slice(0,150))+'</p>'+
+      (d.tags&&d.tags.length?'<div class="tags">'+d.tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>':'')+
+    '</div>';
+  }).join("");
+  el.querySelectorAll(".doc").forEach(function(x){ x.onclick=function(){ open(x.getAttribute("data-id")); }; });
+}
+
+function renderReader(){
+  var r=document.getElementById("reader");
+  document.getElementById("editor").classList.remove("on");
+  r.style.display="block";
+  if(!CURRENT){
+    r.innerHTML='<div class="banner"><b>This is what Harvey reads.</b> Anything you put here he can answer from — so onboarding someone new is "ask Harvey" instead of walking them through it. Try asking him <i>&ldquo;what&rsquo;s our process for a new listing?&rdquo;</i> after adding that SOP.</div>'+
+      '<div class="empty">Pick a document on the left, or search above.</div>';
+    return;
+  }
+  var d=CURRENT;
+  r.innerHTML='<div class="dochead"><h2>'+esc(d.title)+'</h2>'+
+      '<button id="editBtn">Edit</button><button class="del" id="delBtn">Delete</button></div>'+
+    '<div class="docmeta">'+esc(d.category)+
+      (d.tags&&d.tags.length?' · '+d.tags.map(esc).join(", "):'')+
+      ' · updated '+new Date(d.updatedAt).toLocaleDateString()+
+      (d.updatedBy?' by '+esc(d.updatedBy):'')+
+      (d.builtIn?' · <i>starter doc — edit or replace it</i>':'')+'</div>'+
+    '<div class="md">'+md(d.body)+'</div>';
+  document.getElementById("editBtn").onclick=function(){ edit(d); };
+  document.getElementById("delBtn").onclick=function(){
+    if(!confirm('Delete "'+d.title+'"? Harvey will no longer be able to answer from it.')) return;
+    api("/api/knowledge/"+encodeURIComponent(d.id),{method:"DELETE"}).then(function(res){
+      if(!res.ok){ toast(res.d.error||"Couldn't delete"); return; }
+      toast("Deleted"); CURRENT=null; load();
+    });
+  };
+}
+
+function edit(doc){
+  MODE=doc?"edit":"new";
+  document.getElementById("reader").style.display="none";
+  document.getElementById("editor").classList.add("on");
+  document.getElementById("edTitle").value=doc?doc.title:"";
+  document.getElementById("edCat").value=doc?doc.category:(ACTIVE_CAT||"");
+  document.getElementById("edTags").value=doc&&doc.tags?doc.tags.join(", "):"";
+  document.getElementById("edBody").value=doc?doc.body:"";
+  document.getElementById("edTitle").focus();
+}
+document.getElementById("edCancel").onclick=function(){ renderReader(); };
+document.getElementById("edSave").onclick=function(){
+  var title=document.getElementById("edTitle").value.trim();
+  var body=document.getElementById("edBody").value;
+  if(!title||!body.trim()){ toast("Title and content are both required"); return; }
+  var payload={title:title,body:body,
+    category:document.getElementById("edCat").value.trim()||"Uncategorised",
+    tags:document.getElementById("edTags").value.split(",").map(function(t){return t.trim();}).filter(Boolean),
+    updatedBy:who()};
+  var isEdit=MODE==="edit"&&CURRENT;
+  api(isEdit?("/api/knowledge/"+encodeURIComponent(CURRENT.id)):"/api/knowledge",
+      {method:isEdit?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+    .then(function(res){
+      if(!res.ok){ toast(res.d.error||"Couldn't save"); return; }
+      toast(isEdit?"Saved — Harvey will use the new version":"Added — Harvey can answer from it now");
+      CURRENT=res.d.doc; load(true);
+    });
+};
+document.getElementById("newBtn").onclick=function(){ CURRENT=null; edit(null); };
+
+function open(id){
+  api("/api/knowledge/"+encodeURIComponent(id)).then(function(res){
+    if(!res.ok) return;
+    CURRENT=res.d.doc; renderList(); renderReader();
+  });
+}
+
+function load(keepCurrent){
+  var q=document.getElementById("q").value.trim();
+  SEARCHING=!!q;
+  var url=q?("/api/knowledge?q="+encodeURIComponent(q))
+           :("/api/knowledge"+(ACTIVE_CAT?"?category="+encodeURIComponent(ACTIVE_CAT):""));
+  api(url).then(function(res){
+    if(!res.ok) return;
+    DOCS=q?(res.d.results||[]):(res.d.docs||[]);
+    CATS=res.d.categories||[];
+    renderCats(); renderList();
+    if(!keepCurrent) renderReader(); else renderReader();
+  });
+}
+
+var qTimer=null;
+document.getElementById("q").addEventListener("input",function(){
+  clearTimeout(qTimer); qTimer=setTimeout(function(){ load(); },260);
+});
+load();
+</script>
+</body>
+</html>

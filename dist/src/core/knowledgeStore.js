@@ -1,0 +1,372 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.listDocs = listDocs;
+exports.listCategories = listCategories;
+exports.getDoc = getDoc;
+exports.createDoc = createDoc;
+exports.updateDoc = updateDoc;
+exports.deleteDoc = deleteDoc;
+exports.searchDocs = searchDocs;
+exports.knowledgeStats = knowledgeStats;
+/**
+ * 3.4 — Knowledge Center: SOPs and internal documentation.
+ *
+ * The point is not storage, it's onboarding: a new agent or assistant should
+ * be pointed at Harvey instead of being walked through everything by hand.
+ * That only works if Harvey can actually read what's in here, so the same
+ * documents back both the CRM page and Harvey's `search_knowledge` /
+ * `read_knowledge_doc` tools — one source, no second copy to drift.
+ *
+ * Markdown text, file-backed JSON on the /data volume (same pattern as the
+ * other JSON stores). Deliberately not a database: these are a few dozen
+ * documents people edit occasionally, and keeping them as plain text is what
+ * makes them readable by a language model without a retrieval layer.
+ *
+ * Search is keyword scoring, not embeddings — no new dependency (the overlay
+ * deploy path can't npm install) and at this corpus size an embedding index
+ * would be slower to build than it is worth. If the library grows past a few
+ * hundred documents this is the piece to revisit.
+ */
+const fs_1 = require("fs");
+const path_1 = require("path");
+const crypto_1 = require("crypto");
+function resolvePath() {
+    const explicit = process.env.KNOWLEDGE_JSON_PATH?.trim();
+    if (explicit)
+        return explicit;
+    if ((0, fs_1.existsSync)("/data"))
+        return "/data/knowledge.json";
+    return (0, path_1.join)(process.cwd(), "data", "knowledge.json");
+}
+const PATH = resolvePath();
+let state = { docs: [] };
+let loaded = false;
+const nowIso = () => new Date().toISOString();
+function persist() {
+    try {
+        (0, fs_1.mkdirSync)((0, path_1.dirname)(PATH), { recursive: true });
+        (0, fs_1.writeFileSync)(PATH, JSON.stringify(state), "utf8");
+    }
+    catch (err) {
+        console.error("[knowledge] persist failed:", err);
+    }
+}
+function load() {
+    if (loaded)
+        return;
+    loaded = true;
+    try {
+        if ((0, fs_1.existsSync)(PATH)) {
+            const raw = (0, fs_1.readFileSync)(PATH, "utf8");
+            if (raw.trim()) {
+                const data = JSON.parse(raw);
+                state.docs = Array.isArray(data.docs) ? data.docs : [];
+            }
+        }
+    }
+    catch (err) {
+        console.error("[knowledge] load failed:", err);
+    }
+    if (!state.docs.length)
+        seedBuiltIns();
+}
+/**
+ * Starter content so the section and Harvey's tools are useful on day one.
+ *
+ * These document THE SOFTWARE — how the system works — carried over from the
+ * old How to Use tour. They are explicitly NOT Marco's business SOPs (listing
+ * process, showing checklist, offer handling); nobody but the team can write
+ * those, and inventing them would be worse than an empty shelf.
+ */
+function seedBuiltIns() {
+    const t = nowIso();
+    const mk = (title, category, tags, body) => ({
+        id: (0, crypto_1.randomUUID)(), title, category, tags, body: body.trim(),
+        createdAt: t, updatedAt: t, builtIn: true,
+    });
+    state.docs = [
+        mk("Signing in and switching users", "Getting started", ["login", "onboarding", "account"], `
+# Signing in
+
+Open the site and you'll land on **Who's logging in?** — pick your name. There
+is no password; the picker identifies who you are so your tasks, notifications
+and messages load for you.
+
+You stay signed in for the browser session. Close the browser and you'll be
+asked again — that's deliberate, so the next person on a shared machine isn't
+silently signed in as you.
+
+**To switch users:** click your name at the bottom-left of the sidebar.
+**To sign out:** the arrow icon next to your name.
+`),
+        mk("Task Command: assigning work", "Getting started", ["tasks", "assign", "notifications"], `
+# Assigning a task
+
+Tasks tab → **Add Task**. Fill in the description and date, then pick who it's
+for under **Assign To**. Anyone can assign to anyone.
+
+The moment you save, the assignee gets:
+
+- a **popup** wherever they are in the system, and
+- a **red count** on their Tasks tab.
+
+If they're logged out, both appear the next time they sign in — nothing is
+missed because they weren't looking.
+
+Tasks roll over: anything incomplete carries to today with a *Missed Task*
+banner. The original due date is never rewritten, so "how late is this" stays
+honest.
+`),
+        mk("Message Center: channels", "Day to day", ["messages", "inbox", "instagram", "tiktok", "sms"], `
+# Message Center
+
+Conversations are split by channel so a live DM and a text don't share one
+list — they carry very different urgency.
+
+- **Instagram / TikTok** — social DMs from the funnel.
+- **SMS** — real texts.
+- **Email** — email threads.
+- **ALL** — everything, with a channel tag on each row.
+
+The red number on each tab is **unread in that channel**, so you can be reading
+TikTok and still see Instagram has three waiting.
+`),
+        mk("Scheduling a message for later", "Day to day", ["schedule", "send later", "sms", "email"], `
+# Send later
+
+Open a conversation, type the message, then click the **clock** button.
+
+Three ways to set the time:
+
+1. **Quick picks** — In an hour, Tomorrow 9am, Monday 9am.
+2. **Date + time** — pick them explicitly.
+3. **Describe it** — "Tuesday morning", "in 2 hours", "tomorrow at 8am".
+
+Whatever you use, the line underneath shows **exactly how it was read** before
+you commit. If the wording is ambiguous it says so and refuses rather than
+guessing.
+
+Queued messages live under the **SCHEDULED** tab, where you can reschedule or
+cancel them.
+
+You can also ask Harvey: *"text Jessica tomorrow morning about the comps."*
+`),
+        mk("Asking Harvey for a reply", "Day to day", ["harvey", "ai", "suggested reply"], `
+# Suggested replies
+
+In any conversation, the **spark** button drafts the next message. Harvey reads
+the whole thread plus everything on the contact's record — criteria, stage,
+your notes, recent calls — not just the last message.
+
+You get the draft, a one-line *why*, and a note of what it read. Then
+**Use it**, **Edit**, or **Ignore**. Nothing sends on its own.
+
+While typing, grey **ghost text** suggests how to finish the sentence.
+**Tab** or **→** accepts it, **Esc** dismisses it.
+`),
+        mk("What Harvey can do for you", "Harvey", ["harvey", "tools", "onboarding"], `
+# Harvey
+
+Ask in plain English. Harvey can read the CRM, the Buyers & Sellers tracker,
+the task board, content performance, finance and email — and can act on some
+of it.
+
+**Reads:** "how many sellers are in the pipeline", "what's overdue",
+"show me hot leads", "what did we spend on ads last month".
+
+**Writes:** create and update tasks, move tracker stages, update a contact's
+status or stage, log that a call happened, add a new contact, queue a message
+for later.
+
+**Onboarding:** ask Harvey anything in this Knowledge Center — *"what's our
+process for a new listing?"* — and he answers from these documents.
+
+Harvey will not invent facts. If something isn't in the system he says so
+rather than guessing.
+`),
+        mk("How to write an SOP for Harvey", "Harvey", ["sop", "writing", "onboarding"], `
+# Writing SOPs Harvey can use
+
+Harvey answers out of these documents, so how they're written matters.
+
+**Do:**
+- One process per document. "Listing intake" and "Showing follow-up" are two.
+- A clear title — it's the strongest search signal.
+- Numbered steps in the order they happen.
+- Say who does what: "Carlos sends…", "Marco approves…".
+- Include real thresholds and names: "under $250k", "within 24 hours".
+
+**Avoid:**
+- One giant document covering everything.
+- Vague language — "handle it promptly" tells Harvey nothing useful.
+- Screenshots as the only content; Harvey reads text.
+
+**Tags** help retrieval. Tag a listing SOP with \`listing\`, \`seller\`,
+\`intake\` and any of those words will find it.
+`),
+    ];
+    persist();
+    console.log(`[knowledge] seeded ${state.docs.length} starter documents`);
+}
+function listDocs(category) {
+    load();
+    const docs = category
+        ? state.docs.filter((d) => d.category.toLowerCase() === category.toLowerCase())
+        : state.docs.slice();
+    return docs.sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title));
+}
+function listCategories() {
+    load();
+    const counts = new Map();
+    for (const d of state.docs)
+        counts.set(d.category, (counts.get(d.category) || 0) + 1);
+    return [...counts.entries()]
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => a.category.localeCompare(b.category));
+}
+function getDoc(id) {
+    load();
+    return state.docs.find((d) => d.id === id);
+}
+function createDoc(input) {
+    load();
+    const t = nowIso();
+    const doc = {
+        id: (0, crypto_1.randomUUID)(),
+        title: input.title.trim(),
+        category: (input.category || "Uncategorised").trim(),
+        body: input.body,
+        tags: (input.tags || []).map((x) => String(x).trim()).filter(Boolean),
+        createdAt: t,
+        updatedAt: t,
+        updatedBy: input.updatedBy,
+    };
+    state.docs.push(doc);
+    persist();
+    return doc;
+}
+function updateDoc(id, patch) {
+    load();
+    const doc = state.docs.find((d) => d.id === id);
+    if (!doc)
+        return undefined;
+    if (patch.title !== undefined)
+        doc.title = patch.title.trim();
+    if (patch.category !== undefined)
+        doc.category = patch.category.trim() || "Uncategorised";
+    if (patch.body !== undefined)
+        doc.body = patch.body;
+    if (patch.tags !== undefined)
+        doc.tags = patch.tags.map((x) => String(x).trim()).filter(Boolean);
+    if (patch.updatedBy !== undefined)
+        doc.updatedBy = patch.updatedBy;
+    doc.updatedAt = nowIso();
+    // An edited built-in is now the team's document, not starter content.
+    doc.builtIn = false;
+    persist();
+    return doc;
+}
+function deleteDoc(id) {
+    load();
+    const before = state.docs.length;
+    state.docs = state.docs.filter((d) => d.id !== id);
+    if (state.docs.length === before)
+        return false;
+    persist();
+    return true;
+}
+/**
+ * Keyword search over title, tags, category and body.
+ *
+ * Title and tag matches outweigh body matches, because a document *named*
+ * "Listing intake" is almost always the right answer for "listing intake"
+ * even if another document mentions the phrase more often.
+ */
+/**
+ * Words that carry no retrieval signal. Without this, "what is our process
+ * for X" matches nearly every document on "our"/"for"/"process" alone.
+ */
+const STOPWORDS = new Set([
+    "the", "and", "for", "our", "you", "your", "what", "how", "when", "who", "why",
+    "with", "from", "are", "was", "can", "this", "that", "they", "has", "have",
+    "its", "not", "but", "all", "any", "does", "did", "get", "got", "use", "using",
+    "about", "into", "out", "off", "there", "their", "them", "his", "her", "she",
+    "him", "were", "been", "being", "just", "like", "than", "then", "now",
+]);
+function searchDocs(query, limit = 5) {
+    load();
+    const terms = query
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length > 2 && !STOPWORDS.has(t));
+    if (!terms.length)
+        return [];
+    const hits = [];
+    for (const doc of state.docs) {
+        const title = doc.title.toLowerCase();
+        const tags = doc.tags.join(" ").toLowerCase();
+        const category = doc.category.toLowerCase();
+        const body = doc.body.toLowerCase();
+        let score = 0;
+        let matched = 0; // how many distinct query terms appear anywhere
+        let strong = false; // did any term hit a title/tag/category
+        for (const term of terms) {
+            let termHit = false;
+            if (title.includes(term)) {
+                score += 10;
+                strong = true;
+                termHit = true;
+            }
+            if (tags.includes(term)) {
+                score += 6;
+                strong = true;
+                termHit = true;
+            }
+            if (category.includes(term)) {
+                score += 3;
+                strong = true;
+                termHit = true;
+            }
+            const occurrences = body.split(term).length - 1;
+            if (occurrences > 0) {
+                score += Math.min(occurrences, 5);
+                termHit = true;
+            }
+            if (termHit)
+                matched++;
+        }
+        /*
+         * Relevance gate. Weak keyword overlap used to return five documents for
+         * a genuinely undocumented question ("commission split for referral
+         * partners"), which is the worst outcome here: Harvey would cite an
+         * unrelated SOP with confidence instead of saying it isn't written down.
+         * A hit now needs most of the query's meaningful words present, and at
+         * least one of them in a title, tag or category.
+         */
+        const needed = Math.max(1, Math.ceil(terms.length * 0.6));
+        if (matched < needed || !strong)
+            continue;
+        // Show the passage around the first hit so the answer is traceable.
+        let excerpt = doc.body.slice(0, 240);
+        for (const term of terms) {
+            const at = body.indexOf(term);
+            if (at >= 0) {
+                excerpt = doc.body.slice(Math.max(0, at - 90), Math.min(doc.body.length, at + 190));
+                break;
+            }
+        }
+        hits.push({
+            id: doc.id, title: doc.title, category: doc.category, tags: doc.tags,
+            score, excerpt: excerpt.replace(/\s+/g, " ").trim(),
+        });
+    }
+    return hits.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+function knowledgeStats() {
+    load();
+    return {
+        docs: state.docs.length,
+        categories: listCategories().length,
+        builtIn: state.docs.filter((d) => d.builtIn).length,
+    };
+}

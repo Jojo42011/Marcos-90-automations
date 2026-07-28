@@ -1393,11 +1393,15 @@ function paintThread(i){
     const typed=(tInput.value||"").trim();
     // Below this there isn't enough signal to predict from, and a wrong
     // guess while someone is still forming a thought is just noise.
-    if(!c.leadId||typed.length<8){ clearGhost(); return; }
+    if(typed.length<8){ clearGhost(); return; }
     const seq=++ghostSeq;
-    fetch(crmApi("/api/leads/"+encodeURIComponent(c.leadId)+"/complete-reply"),
-      {method:"POST",headers:{"Content-Type":"application/json"},
-       body:JSON.stringify({draft:tInput.value,channel:composeChannel()})})
+    // Linked lead → full record. Unlinked → the thread itself, which is
+    // still the most useful input and is right here on screen.
+    const url=c.leadId?("/api/leads/"+encodeURIComponent(c.leadId)+"/complete-reply"):"/api/complete-reply";
+    const payload=c.leadId
+      ? {draft:tInput.value,channel:composeChannel()}
+      : {draft:tInput.value,channel:composeChannel(),contactName:otherName(),messages:threadMessages()};
+    fetch(crmApi(url),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
       .then(r=>r.ok?r.json():null)
       .then(d=>{
         // Ignore anything that came back after the user kept typing.
@@ -1429,15 +1433,25 @@ function paintThread(i){
     document.getElementById("sugBased").textContent=
       "Read "+(b.messages||0)+" message"+((b.messages===1)?"":"s")+
       (b.hasCriteria?", their criteria":"")+(b.hasNotes?", your notes":"")+
-      (b.stage&&b.stage!=="unknown"?", stage: "+b.stage:"");
+      (b.stage==="unlinked"?" · no CRM record linked":(b.stage&&b.stage!=="unknown"?", stage: "+b.stage:""));
     sugPop.classList.add("on");
   }
+  /* The thread as the API expects it, for conversations with no CRM record. */
+  function otherName(){ return (c.names||[]).find(n=>n!=="Marco Puga")||(c.names||[])[0]||""; }
+  function threadMessages(){
+    return (c.msgs||[]).filter(m=>m.t).map(m=>({role:m.me?"assistant":"user",text:m.t,at:m.at||""}));
+  }
+
   sugBtn.addEventListener("click",()=>{
-    if(!c.leadId){ crmToast("This conversation isn't linked to a lead yet"); return; }
+    if(!c.leadId && !threadMessages().length){
+      crmToast("Nothing to work from yet — this conversation is empty"); return;
+    }
     sugBtn.classList.add("busy");
-    fetch(crmApi("/api/leads/"+encodeURIComponent(c.leadId)+"/suggest-reply"),
-      {method:"POST",headers:{"Content-Type":"application/json"},
-       body:JSON.stringify({channel:composeChannel(),draft:tInput.value||undefined})})
+    const url=c.leadId?("/api/leads/"+encodeURIComponent(c.leadId)+"/suggest-reply"):"/api/suggest-reply";
+    const payload=c.leadId
+      ? {channel:composeChannel(),draft:tInput.value||undefined}
+      : {channel:composeChannel(),draft:tInput.value||undefined,contactName:otherName(),messages:threadMessages()};
+    fetch(crmApi(url),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
       .then(r=>r.json().then(d=>({ok:r.ok,d})))
       .then(({ok,d})=>{
         sugBtn.classList.remove("busy");

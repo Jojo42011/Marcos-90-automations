@@ -1,6 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildLeadContext = buildLeadContext;
+exports.buildThreadContext = buildThreadContext;
+exports.suggestReplyFromThread = suggestReplyFromThread;
+exports.completeReplyFromThread = completeReplyFromThread;
 exports.suggestReply = suggestReply;
 exports.completeReply = completeReply;
 const db_js_1 = require("./db.js");
@@ -95,17 +98,40 @@ function stripQuotes(s) {
     }
     return t;
 }
-/** A full reply to accept, edit, or ignore. */
-async function suggestReply(lead, opts = {}) {
-    const conversation = await (0, db_js_1.getConversation)(lead.id);
-    const messages = conversation?.messages || [];
-    const context = buildLeadContext(lead, messages);
-    const channel = opts.channel === "email" ? "email" : "sms";
+/**
+ * Context for a thread with no CRM record behind it.
+ *
+ * Some conversations aren't linked to a lead — group threads, and anything
+ * still showing from the demo set. Refusing to draft for those was wrong:
+ * the conversation is right there on screen, and it is the single most
+ * useful input. This is the degraded path — thread only, no criteria or
+ * notes — and `basedOn` reports exactly that, so the panel never implies it
+ * read a record it didn't have.
+ */
+function buildThreadContext(contactName, messages) {
+    const name = contactName || "the contact";
+    const lines = [`CONTACT: ${name}`, "(No CRM record linked — working from the conversation alone.)"];
+    const convo = messages.slice(-MAX_MESSAGES);
+    if (convo.length) {
+        lines.push(`\nFULL CONVERSATION (${messages.length} message${messages.length === 1 ? "" : "s"}, oldest first):`);
+        for (const m of convo) {
+            const who = m.role === "assistant" ? "Marco" : name;
+            const at = m.at ? ` (${String(m.at).slice(0, 16).replace("T", " ")})` : "";
+            lines.push(`${who}${at}: ${m.text}`);
+        }
+    }
+    else {
+        lines.push("\nFULL CONVERSATION: none yet.");
+    }
+    return lines.join("\n");
+}
+/** Shared drafting step, so both paths produce identical shapes. */
+async function draftFrom(context, channel, draft, basedOn) {
     const lengthRule = channel === "sms"
         ? "This is a TEXT MESSAGE. One or two sentences, under 320 characters. No greeting line, no sign-off."
         : "This is an EMAIL. Up to a short paragraph or two. No subject line, no sign-off — Marco adds those.";
-    const draftNote = opts.draft?.trim()
-        ? `\n\nMarco has already started typing: "${opts.draft.trim()}". Finish that thought in his voice rather than starting over.`
+    const draftNote = draft?.trim()
+        ? `\n\nMarco has already started typing: "${draft.trim()}". Finish that thought in his voice rather than starting over.`
         : "";
     const prompt = `${VOICE}
 
@@ -133,30 +159,33 @@ Write the reply Marco should send next. Return ONLY JSON:
     // throwing it away would be worse than showing it.
     if (!suggestion)
         suggestion = stripQuotes(raw);
-    return {
-        suggestion,
-        rationale,
-        basedOn: {
-            messages: messages.length,
-            hasCriteria: Boolean(fmtCriteria(lead)),
-            hasNotes: Boolean(lead.crmNotes),
-            stage: lead.crmStage || lead.state || "unknown",
-        },
-    };
+    return { suggestion, rationale, basedOn };
 }
-/**
- * Inline predictive text: finish the sentence in progress.
- * Returns only the CONTINUATION, so the caller can render it as ghost text
- * after what's already typed.
- */
-async function completeReply(lead, draft, opts = {}) {
+/** Draft for a thread with no linked lead. */
+async function suggestReplyFromThread(contactName, messages, opts = {}) {
+    return draftFrom(buildThreadContext(contactName, messages), opts.channel === "email" ? "email" : "sms", opts.draft, { messages: messages.length, hasCriteria: false, hasNotes: false, stage: "unlinked" });
+}
+/** Finish the sentence for a thread with no linked lead. */
+async function completeReplyFromThread(contactName, messages, draft, opts = {}) {
+    return completeFrom(buildThreadContext(contactName, messages), draft, opts);
+}
+/** A full reply to accept, edit, or ignore. Uses the contact's whole record. */
+async function suggestReply(lead, opts = {}) {
+    const conversation = await (0, db_js_1.getConversation)(lead.id);
+    const messages = conversation?.messages || [];
+    return draftFrom(buildLeadContext(lead, messages), opts.channel === "email" ? "email" : "sms", opts.draft, {
+        messages: messages.length,
+        hasCriteria: Boolean(fmtCriteria(lead)),
+        hasNotes: Boolean(lead.crmNotes),
+        stage: lead.crmStage || lead.state || "unknown",
+    });
+}
+/** Shared sentence-completion step. Returns only the CONTINUATION. */
+async function completeFrom(context, draft, opts) {
     const typed = draft.trim();
     // Too little to predict from — a completion off two characters is noise.
     if (typed.length < 8)
         return "";
-    const conversation = await (0, db_js_1.getConversation)(lead.id);
-    const messages = conversation?.messages || [];
-    const context = buildLeadContext(lead, messages);
     const prompt = `${VOICE}
 
 ${GROUNDING}
@@ -179,4 +208,14 @@ return an empty string. Return plain text only, no quotes, no JSON.`;
     if (out.length > 220)
         out = out.slice(0, 220);
     return out.trim();
+}
+/**
+ * Inline predictive text for a linked lead: finish the sentence in progress,
+ * with the whole record available.
+ */
+async function completeReply(lead, draft, opts = {}) {
+    if (draft.trim().length < 8)
+        return "";
+    const conversation = await (0, db_js_1.getConversation)(lead.id);
+    return completeFrom(buildLeadContext(lead, conversation?.messages || []), draft, opts);
 }
