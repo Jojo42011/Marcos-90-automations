@@ -117,6 +117,41 @@
   .sp-quick button:hover,.sp-quick button.on{border-color:var(--teal);color:var(--teal);background:#eef7f7}
   #schedWhen{width:100%;height:34px;border:1px solid #e3e8e8;border-radius:8px;padding:0 10px;font-size:12.5px;outline:none}
   #schedWhen:focus{border-color:var(--teal)}
+  .sp-manual{display:flex;gap:6px;margin-bottom:8px}
+  .sp-manual input{flex:1;min-width:0;height:34px;border:1px solid #e3e8e8;border-radius:8px;padding:0 8px;font-size:12.5px;outline:none;color:#333;background:#fff}
+  .sp-manual input:focus{border-color:var(--teal)}
+  /* Inline predictive text: a ghost layer sitting exactly under the input. */
+  .ti-wrap{position:relative;flex:1;min-width:0;display:flex}
+  .ti-wrap #threadInput{position:relative;background:transparent;z-index:2;width:100%}
+  .ti-ghost{position:absolute;inset:0;z-index:1;pointer-events:none;color:#b6bfc7;white-space:pre;overflow:hidden;display:flex;align-items:center}
+  .ti-ghost b{visibility:hidden;font-weight:inherit}
+  .rb.sug:hover{color:var(--teal);border-color:var(--teal)}
+  .rb.sug.busy{opacity:.5;pointer-events:none}
+  /* Suggested-reply panel. */
+  .sug-pop{display:none;position:absolute;left:14px;right:14px;bottom:64px;z-index:41;background:#fff;border:1px solid #e3e8e8;border-radius:12px;box-shadow:0 18px 44px rgba(16,24,40,.18);padding:13px}
+  .sug-pop.on{display:block}
+  .sg-head{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700;color:#333;margin-bottom:8px}
+  .sg-x{border:none;background:none;color:#9aa4ae;cursor:pointer;font-size:13px}
+  .sg-body{font-size:13px;color:#333;line-height:1.5;background:#f9fbfb;border:1px solid #eef2f2;border-radius:9px;padding:10px 11px;white-space:pre-wrap;max-height:190px;overflow:auto}
+  .sg-why{font-size:11.5px;color:#5f6b78;margin-top:7px;font-style:italic}
+  .sg-based{font-size:10.5px;color:#9aa4ae;margin-top:5px}
+  .sg-foot{display:flex;justify-content:flex-end;gap:7px;margin-top:10px}
+  .sg-ignore,.sg-edit{border:1px solid #e3e8e8;background:#fff;border-radius:7px;padding:6px 12px;font-size:12px;color:#41505c;cursor:pointer}
+  .sg-edit:hover,.sg-ignore:hover{border-color:var(--teal);color:var(--teal)}
+  .sg-use{border:none;background:var(--teal);color:#fff;font-size:12px;font-weight:700;border-radius:7px;padding:7px 14px;cursor:pointer}
+  .sched-warn{margin:10px 12px;padding:9px 11px;border:1px solid rgba(180,83,9,.28);background:#fffbeb;border-radius:9px;font-size:11.5px;color:#92400e;line-height:1.5}
+  .schedrow{padding:11px 14px;border-bottom:1px solid #f0f3f3}
+  .sr-top{display:flex;align-items:center;gap:8px}
+  .sr-name{font-size:13px;font-weight:700;color:#333;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sr-status{color:#fff;font-size:9.5px;font-weight:700;letter-spacing:.03em;padding:2px 7px;border-radius:9px}
+  .sr-when{font-size:11px;color:#7a8590;margin-top:3px}
+  .sr-body{font-size:12.5px;color:#41505c;margin-top:5px;line-height:1.45}
+  .sr-err{font-size:11px;color:#c0616a;margin-top:4px}
+  .sr-acts{display:flex;gap:7px;margin-top:8px}
+  .sr-acts button{border:1px solid #e3e8e8;background:#fff;border-radius:7px;padding:4px 10px;font-size:11.5px;color:#41505c;cursor:pointer}
+  .sr-acts button:hover{border-color:var(--teal);color:var(--teal)}
+  .sr-acts button.danger:hover{border-color:#c0616a;color:#c0616a}
+  .sp-or{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#9aa4ae;text-align:center;margin:0 0 6px}
   .sp-echo{min-height:16px;margin-top:6px;font-size:11.5px;color:#5f6b78}
   .sp-echo.bad{color:#c0616a}
   .sp-echo.warn{color:#b45309}
@@ -528,6 +563,7 @@
         <button data-mt="sms">SMS <span class="chcount" data-cc="sms"></span></button>
         <button data-mt="email">EMAIL <span class="chcount" data-cc="email"></span></button>
         <button data-mt="group">GROUP</button>
+        <button data-mt="scheduled">SCHEDULED <span class="chcount" data-cc="scheduled"></span></button>
       </div>
     </div>
     <div class="msg-wrap">
@@ -1174,6 +1210,7 @@ function paintChannelCounts(){
     const ch=c.channel||"other";
     counts[ch]=(counts[ch]||0)+1; counts.all++;
   });
+  counts.scheduled=SCHEDULED.filter(m=>m.status==="pending").length;
   document.querySelectorAll("#msgTabs [data-cc]").forEach(el=>{
     const n=counts[el.getAttribute("data-cc")]||0;
     el.textContent=n>99?"99+":String(n);
@@ -1183,12 +1220,79 @@ function paintChannelCounts(){
   // "nothing here yet" rather than "broken".
   document.querySelectorAll("#msgTabs [data-mt]").forEach(b=>{
     const tab=b.getAttribute("data-mt");
-    if(tab==="all"||tab==="group"){ b.classList.remove("quiet"); return; }
+    if(tab==="all"||tab==="group"||tab==="scheduled"){ b.classList.remove("quiet"); return; }
     b.classList.toggle("quiet",!CONVOS.some(c=>(c.channel||"other")===tab));
   });
 }
 
+/* ---- Scheduled queue (viewer for 3.2) --------------------------------
+   Scheduling was write-only from the UI: you could queue a message and then
+   had no way to see, reschedule or cancel it. This is that missing half. */
+var SCHEDULED=[], SCHED_CAP=null, schedLoaded=false;
+
+function loadScheduled(){
+  return fetch(crmApi("/api/scheduled")).then(r=>r.ok?r.json():null).then(d=>{
+    if(!d) return;
+    SCHEDULED=d.messages||[]; SCHED_CAP=d.capability||null; schedLoaded=true;
+    paintChannelCounts();
+    if(convGroupMode==="scheduled") renderScheduled();
+  }).catch(()=>{});
+}
+
+function schedWhenLabel(iso){
+  const d=new Date(iso); if(isNaN(d)) return iso;
+  return d.toLocaleString(undefined,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+}
+var SCHED_STATUS={pending:{l:"Scheduled",c:"#2563eb"},sent:{l:"Sent",c:"#10b981"},
+                  failed:{l:"Failed",c:"#c0616a"},canceled:{l:"Canceled",c:"#94a3b8"}};
+
+function renderScheduled(){
+  const el=document.getElementById("convList");
+  if(!schedLoaded){ el.innerHTML='<div class="empty">Loading…</div>'; return; }
+  const q=(convSearchTerm||SEARCH||"").toLowerCase();
+  const list=SCHEDULED.filter(m=>!q||(m.leadName+" "+m.body+" "+m.to).toLowerCase().includes(q));
+  // A queued message that can never send is the single most important thing
+  // to say here, so it sits above the list rather than inside a row.
+  let banner="";
+  if(SCHED_CAP&&(!SCHED_CAP.sms.ok||!SCHED_CAP.email.ok)){
+    const dead=[!SCHED_CAP.sms.ok?"SMS":"",!SCHED_CAP.email.ok?"Email":""].filter(Boolean).join(" and ");
+    banner='<div class="sched-warn"><b>'+dead+' cannot send right now.</b> Messages still queue, but they will fail until this is fixed.</div>';
+  }
+  el.innerHTML=banner+(list.length?list.map(m=>{
+    const st=SCHED_STATUS[m.status]||SCHED_STATUS.pending;
+    return '<div class="schedrow" data-sid="'+esc(m.id)+'">'+
+      '<div class="sr-top"><span class="sr-name">'+esc(m.leadName||m.to)+'</span>'+
+      '<span class="sr-status" style="background:'+st.c+'">'+st.l+'</span></div>'+
+      '<div class="sr-when">'+esc(m.channel.toUpperCase())+' · '+esc(schedWhenLabel(m.sendAt))+
+        (m.createdBy==="harvey"?' · <i>queued by Harvey</i>':'')+'</div>'+
+      '<div class="sr-body">'+esc(m.preview||m.body||"")+'</div>'+
+      (m.error?'<div class="sr-err">'+esc(m.error)+'</div>':'')+
+      (m.status==="pending"?'<div class="sr-acts"><button data-resched="'+esc(m.id)+'">Reschedule</button>'+
+        '<button class="danger" data-cancel="'+esc(m.id)+'">Cancel</button></div>':'')+
+    '</div>';
+  }).join(""):'<div class="empty">Nothing scheduled. Use the clock button in any conversation to queue a message.</div>');
+
+  el.querySelectorAll("[data-cancel]").forEach(b=>b.addEventListener("click",()=>{
+    const id=b.getAttribute("data-cancel");
+    if(!confirm("Cancel this scheduled message?")) return;
+    fetch(crmApi("/api/scheduled/"+encodeURIComponent(id)),{method:"DELETE"})
+      .then(r=>r.json()).then(d=>{ crmToast(d.canceled?"Canceled":(d.error||"Couldn't cancel")); loadScheduled(); })
+      .catch(()=>crmToast("Couldn't reach the server"));
+  }));
+  el.querySelectorAll("[data-resched]").forEach(b=>b.addEventListener("click",()=>{
+    const id=b.getAttribute("data-resched");
+    const when=prompt('New send time — a date like 2026-08-05 14:30, or "tomorrow at 9am":');
+    if(!when) return;
+    fetch(crmApi("/api/scheduled/"+encodeURIComponent(id)),{method:"PATCH",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({when})})
+      .then(r=>r.json().then(d=>({ok:r.ok,d})))
+      .then(({ok,d})=>{ crmToast(ok?("Moved to "+d.interpreted):(d.error||"Couldn't reschedule")); loadScheduled(); })
+      .catch(()=>crmToast("Couldn't reach the server"));
+  }));
+}
+
 function renderConvos(){
+  if(convGroupMode==="scheduled"){ paintChannelCounts(); renderScheduled(); return; }
   const q=(convSearchTerm||SEARCH||"");
   const list=CONVOS.map((c,i)=>({c,i}))
     .filter(e=>convInTab(e.c,convGroupMode))
@@ -1233,9 +1337,19 @@ function paintThread(i){
     '<div class="thread-compose"><div class="ch-toggle"><button class="on" data-ch="sms">SMS</button><button data-ch="email">Email</button></div>'+
       '<button class="rb attach" id="threadAttachBtn" title="Attach"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.4 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.2-9.2a3 3 0 0 1 4.24 4.25l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.48-8.49"/></svg></button>'+
       '<input type="file" id="threadAttachInput" multiple style="display:none">'+
-      '<input id="threadInput" placeholder="Type a message…">'+
+      '<div class="ti-wrap"><div class="ti-ghost" id="threadGhost"></div><input id="threadInput" placeholder="Type a message…" autocomplete="off"></div>'+
+      '<button class="rb sug" id="threadSuggestBtn" title="Suggest a reply — reads the whole conversation"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg></button>'+
       '<button class="rb" id="threadLaterBtn" title="Send later"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>'+
       '<button class="snd" id="threadSend"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button></div>'+
+    '<div class="sug-pop" id="sugPop">'+
+      '<div class="sg-head"><span>Suggested reply</span><button class="sg-x" id="sugClose">✕</button></div>'+
+      '<div class="sg-body" id="sugBody"></div>'+
+      '<div class="sg-why" id="sugWhy"></div>'+
+      '<div class="sg-based" id="sugBased"></div>'+
+      '<div class="sg-foot"><button class="sg-ignore" id="sugIgnore">Ignore</button>'+
+        '<button class="sg-edit" id="sugEdit">Edit</button>'+
+        '<button class="sg-use" id="sugUse">Use it</button></div>'+
+    '</div>'+
     '<div class="sched-pop" id="schedPop">'+
       '<div class="sp-head">Schedule this message</div>'+
       '<div class="sp-quick">'+
@@ -1244,11 +1358,105 @@ function paintThread(i){
         '<button data-when="tomorrow afternoon">Tomorrow PM</button>'+
         '<button data-when="monday at 9am">Monday 9am</button>'+
       '</div>'+
-      '<input id="schedWhen" placeholder="or describe it — &quot;Tuesday morning&quot;">'+
+      '<div class="sp-manual"><input type="date" id="schedDate"><input type="time" id="schedTime"></div>'+
+      '<div class="sp-or">or describe it</div>'+
+      '<input id="schedWhen" placeholder="&quot;Tuesday morning&quot;, &quot;in 2 hours&quot;">'+
       '<div class="sp-echo" id="schedEcho"></div>'+
       '<div class="sp-foot"><button class="sp-cancel" id="schedCancel">Cancel</button><button class="sp-go" id="schedGo">Schedule</button></div>'+
     '</div>';
   document.querySelectorAll(".ch-toggle button").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".ch-toggle button").forEach(x=>x.classList.toggle("on",x===b));}));
+
+  /* ---- 3.3 AI suggested replies ---------------------------------------
+     Two shapes, one server context builder that reads the contact's WHOLE
+     record (every message, criteria, stage, notes, activity) — not just the
+     last message, which is the point of the feature: "yes that works" is
+     meaningless without the six messages before it.
+
+     Both are suggestions only. Nothing here sends; the text lands in the
+     composer and a human decides. */
+  const sugPop=document.getElementById("sugPop");
+  const sugBtn=document.getElementById("threadSuggestBtn");
+  const ghost=document.getElementById("threadGhost");
+  const tInput=document.getElementById("threadInput");
+  let ghostText="", ghostTimer=null, ghostSeq=0;
+
+  /* Ghost text renders the typed portion invisibly, then the completion in
+     grey, so the suggestion lines up exactly after the caret. */
+  function paintGhost(){
+    const typed=tInput.value||"";
+    if(!ghostText||!typed){ ghost.innerHTML=""; return; }
+    ghost.innerHTML='<b>'+esc(typed)+'</b>'+esc(ghostText);
+  }
+  function clearGhost(){ ghostText=""; paintGhost(); }
+
+  function requestCompletion(){
+    const typed=(tInput.value||"").trim();
+    // Below this there isn't enough signal to predict from, and a wrong
+    // guess while someone is still forming a thought is just noise.
+    if(!c.leadId||typed.length<8){ clearGhost(); return; }
+    const seq=++ghostSeq;
+    fetch(crmApi("/api/leads/"+encodeURIComponent(c.leadId)+"/complete-reply"),
+      {method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({draft:tInput.value,channel:composeChannel()})})
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{
+        // Ignore anything that came back after the user kept typing.
+        if(seq!==ghostSeq||!d) return;
+        ghostText=d.completion||""; paintGhost();
+      }).catch(()=>{});
+  }
+
+  tInput.addEventListener("input",()=>{
+    clearGhost();
+    clearTimeout(ghostTimer);
+    ghostTimer=setTimeout(requestCompletion,650);
+  });
+  tInput.addEventListener("keydown",e=>{
+    // Tab or → at the end accepts the ghost; Escape dismisses it.
+    if(e.key==="Tab"&&ghostText){ e.preventDefault(); tInput.value=tInput.value+ghostText; clearGhost(); return; }
+    if(e.key==="ArrowRight"&&ghostText&&tInput.selectionStart===tInput.value.length){
+      e.preventDefault(); tInput.value=tInput.value+ghostText; clearGhost(); return; }
+    if(e.key==="Escape"){ clearGhost(); }
+  });
+  tInput.addEventListener("blur",clearGhost);
+
+  /* Full suggested reply. */
+  function showSuggestion(d){
+    document.getElementById("sugBody").textContent=d.suggestion||"";
+    const why=document.getElementById("sugWhy");
+    why.textContent=d.rationale?("Why: "+d.rationale):"";
+    const b=d.basedOn||{};
+    document.getElementById("sugBased").textContent=
+      "Read "+(b.messages||0)+" message"+((b.messages===1)?"":"s")+
+      (b.hasCriteria?", their criteria":"")+(b.hasNotes?", your notes":"")+
+      (b.stage&&b.stage!=="unknown"?", stage: "+b.stage:"");
+    sugPop.classList.add("on");
+  }
+  sugBtn.addEventListener("click",()=>{
+    if(!c.leadId){ crmToast("This conversation isn't linked to a lead yet"); return; }
+    sugBtn.classList.add("busy");
+    fetch(crmApi("/api/leads/"+encodeURIComponent(c.leadId)+"/suggest-reply"),
+      {method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({channel:composeChannel(),draft:tInput.value||undefined})})
+      .then(r=>r.json().then(d=>({ok:r.ok,d})))
+      .then(({ok,d})=>{
+        sugBtn.classList.remove("busy");
+        // Say what actually failed. A blank panel would read as "Harvey had
+        // nothing to say", which is a different problem from no API key.
+        if(!ok){ crmToast(d.error?("Couldn't draft: "+d.error):"Couldn't draft a reply"); return; }
+        showSuggestion(d);
+      })
+      .catch(()=>{ sugBtn.classList.remove("busy"); crmToast("Couldn't reach the server"); });
+  });
+  function useSuggestion(focus){
+    tInput.value=document.getElementById("sugBody").textContent||"";
+    sugPop.classList.remove("on"); clearGhost();
+    if(focus){ tInput.focus(); tInput.setSelectionRange(tInput.value.length,tInput.value.length); }
+  }
+  document.getElementById("sugUse").addEventListener("click",()=>useSuggestion(false));
+  document.getElementById("sugEdit").addEventListener("click",()=>useSuggestion(true));
+  document.getElementById("sugIgnore").addEventListener("click",()=>sugPop.classList.remove("on"));
+  document.getElementById("sugClose").addEventListener("click",()=>sugPop.classList.remove("on"));
 
   /* ---- Send later (3.2) ------------------------------------------------
      The time is parsed on the server so the CRM and Harvey agree on what
@@ -1268,9 +1476,24 @@ function paintThread(i){
   }
   function setEcho(text,cls){ echo.textContent=text||""; echo.className="sp-echo"+(cls?" "+cls:""); }
 
-  /* Dry-run the phrase against the real parser (never writes anything). */
+  /* The three inputs (quick pick, manual date+time, free text) all resolve
+     to one phrase, so there is a single parse path and a single preview.
+     A manual date wins when set — it's the most explicit thing the user
+     can say, so it should never be overridden by leftover free text. */
+  function currentWhenPhrase(){
+    const d=(document.getElementById("schedDate")||{}).value||"";
+    const t=(document.getElementById("schedTime")||{}).value||"";
+    if(d) return d+" "+(t||"09:00");
+    if(t){ // time only → today or tomorrow, same rule as typing "at 4pm"
+      const [hh,mm]=t.split(":");
+      return "at "+hh+":"+mm;
+    }
+    return (whenInput.value||"").trim();
+  }
+
+  /* Dry-run against the real parser (never writes anything). */
   function previewWhen(){
-    const phrase=(whenInput.value||"").trim();
+    const phrase=currentWhenPhrase();
     lastParse=null; goBtn.disabled=true;
     if(!phrase){ setEcho(""); return; }
     setEcho("Reading…");
@@ -1285,9 +1508,20 @@ function paintThread(i){
       })
       .catch(()=>setEcho("Couldn't reach the server","bad"));
   }
-  whenInput.addEventListener("input",()=>{ clearTimeout(echoTimer); echoTimer=setTimeout(previewWhen,300); });
+  whenInput.addEventListener("input",()=>{
+    // Typing a phrase clears the manual fields so the two can't disagree.
+    document.getElementById("schedDate").value=""; document.getElementById("schedTime").value="";
+    document.querySelectorAll("#schedPop .sp-quick button").forEach(x=>x.classList.remove("on"));
+    clearTimeout(echoTimer); echoTimer=setTimeout(previewWhen,300);
+  });
+  ["schedDate","schedTime"].forEach(id=>document.getElementById(id).addEventListener("change",()=>{
+    whenInput.value="";
+    document.querySelectorAll("#schedPop .sp-quick button").forEach(x=>x.classList.remove("on"));
+    previewWhen();
+  }));
   document.querySelectorAll("#schedPop .sp-quick button").forEach(b=>b.addEventListener("click",()=>{
     document.querySelectorAll("#schedPop .sp-quick button").forEach(x=>x.classList.toggle("on",x===b));
+    document.getElementById("schedDate").value=""; document.getElementById("schedTime").value="";
     whenInput.value=b.getAttribute("data-when"); previewWhen();
   }));
   document.getElementById("threadLaterBtn").addEventListener("click",()=>{
@@ -1301,15 +1535,16 @@ function paintThread(i){
     if(!c.leadId){ crmToast("This conversation isn't linked to a lead yet"); return; }
     goBtn.disabled=true;
     fetch(crmApi("/api/scheduled"),{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({leadId:c.leadId,channel:composeChannel(),body,when:whenInput.value.trim()})})
+      body:JSON.stringify({leadId:c.leadId,channel:composeChannel(),body,when:currentWhenPhrase()})})
       .then(r=>r.json().then(d=>({ok:r.ok,d})))
       .then(({ok,d})=>{
         if(!ok){ setEcho(d.error||"Couldn't schedule","bad"); goBtn.disabled=false; return; }
         pop.classList.remove("on");
         document.getElementById("threadInput").value="";
-        whenInput.value="";
+        whenInput.value=""; document.getElementById("schedDate").value=""; document.getElementById("schedTime").value="";
         crmToast(d.warning?("Queued for "+d.interpreted+" — will not send: "+d.warning)
                           :("Scheduled for "+d.interpreted));
+        loadScheduled();
       })
       .catch(()=>{ setEcho("Couldn't reach the server","bad"); goBtn.disabled=false; });
   });
@@ -2396,6 +2631,9 @@ async function loadLive(opts){
   LEADS=rawLeads.map(mapLeadRow);
   PEOPLE=mapPeopleLive(LEADS);
   const convos=deriveConvosLive(rawLeads); if(convos.length) CONVOS=convos;
+  // Load the send-later queue too, so the SCHEDULED tab shows its pending
+  // count without having to open it first.
+  loadScheduled();
   const deals=(body.deals||[]).filter(d=>d&&d.propertyAddress);
   if(deals.length) TX=deals.map(mapDealTx);
   const evs=calEventsFromTx();
@@ -3096,7 +3334,9 @@ document.getElementById("dashTabs").addEventListener("click",e=>{
 document.getElementById("msgTabs").addEventListener("click",e=>{
   const b=e.target.closest("[data-mt]"); if(!b)return;
   document.querySelectorAll("#msgTabs [data-mt]").forEach(x=>x.classList.toggle("on",x===b));
-  convGroupMode=b.getAttribute("data-mt"); renderConvos();
+  convGroupMode=b.getAttribute("data-mt");
+  if(convGroupMode==="scheduled") loadScheduled();
+  renderConvos();
 });
 document.querySelectorAll('#view-leads .leads-nav a[data-lb]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(x=>x.classList.remove("on"));

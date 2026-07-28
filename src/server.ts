@@ -110,6 +110,7 @@ import {
 } from "./core/scheduledMessages.js";
 import { canSendOn, startScheduledSender } from "./core/scheduledSender.js";
 import { parseSendTime, suggestNextGoodTime } from "./core/scheduleTime.js";
+import { suggestReply, completeReply } from "./core/replySuggest.js";
 
 import { sendAssignmentEmail } from "./core/taskAssignmentEmail.js";
 import { getBrivityPeople, getBrivityImportStatus } from "./core/brivityPeople.js";
@@ -8773,6 +8774,55 @@ app.patch("/api/scheduled/:id", express.json({ limit: "64kb" }), (req, res) => {
     return;
   }
   res.json({ message: getScheduled(String(req.params.id)), interpreted: parsed.interpreted });
+});
+
+/* ——— 3.3 AI suggested replies ———
+   Suggestion only: neither endpoint sends anything. The draft lands in the
+   composer and a human decides. Both read the contact's whole record, not
+   just the last message. */
+
+app.post("/api/leads/:id/suggest-reply", express.json({ limit: "64kb" }), async (req, res) => {
+  const lead = await getLeadById(String(req.params.id || "").trim());
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  const b = (req.body || {}) as Record<string, unknown>;
+  try {
+    const out = await suggestReply(lead, {
+      channel: b.channel === "email" ? "email" : "sms",
+      draft: typeof b.draft === "string" ? b.draft : undefined,
+    });
+    res.json(out);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[suggest-reply] failed:", message);
+    // Say what actually broke — a silent empty suggestion looks like the
+    // model had nothing to say, which is a very different problem from the
+    // API key being unset.
+    res.status(502).json({ error: message });
+  }
+});
+
+app.post("/api/leads/:id/complete-reply", express.json({ limit: "64kb" }), async (req, res) => {
+  const lead = await getLeadById(String(req.params.id || "").trim());
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  const b = (req.body || {}) as Record<string, unknown>;
+  const draft = typeof b.draft === "string" ? b.draft : "";
+  try {
+    const completion = await completeReply(lead, draft, {
+      channel: b.channel === "email" ? "email" : "sms",
+    });
+    res.json({ completion });
+  } catch (err) {
+    // Ghost text is an enhancement; if it fails the user just keeps typing.
+    // Never surface an error dialog for a prediction nobody asked for.
+    console.error("[complete-reply] failed:", err);
+    res.json({ completion: "" });
+  }
 });
 
 /* ——— Team collaboration: notifications, chat, presence (task command center) ——— */
