@@ -8659,7 +8659,7 @@ async function resolveScheduleTarget(
   return { to: lead.email, name };
 }
 
-app.get("/api/scheduled", (req, res) => {
+app.get("/api/scheduled", async (req, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   const leadId = typeof req.query.leadId === "string" ? req.query.leadId : undefined;
   res.json({
@@ -8671,7 +8671,7 @@ app.get("/api/scheduled", (req, res) => {
     counts: scheduledCounts(),
     // Surfaced so the UI can warn BEFORE queueing into a channel that can't
     // deliver, rather than letting it fail silently an hour later.
-    capability: { sms: canSendOn("sms"), email: canSendOn("email") },
+    capability: { sms: await canSendOn("sms"), email: await canSendOn("email") },
   });
 });
 
@@ -8716,7 +8716,7 @@ app.post("/api/scheduled", express.json({ limit: "256kb" }), async (req, res) =>
     requestedTime: when || undefined,
   });
 
-  const capability = canSendOn(channel);
+  const capability = await canSendOn(channel);
   res.json({
     message: msg,
     interpreted: parsed.interpreted,
@@ -8731,7 +8731,7 @@ app.post("/api/scheduled", express.json({ limit: "256kb" }), async (req, res) =>
  * real queue uses. Finding out how a phrase was read by having a client
  * receive a text at the wrong hour is not an acceptable feedback loop.
  */
-app.post("/api/scheduled/preview", express.json({ limit: "16kb" }), (req, res) => {
+app.post("/api/scheduled/preview", express.json({ limit: "16kb" }), async (req, res) => {
   const b = (req.body || {}) as Record<string, unknown>;
   const when = String(b.when || "").trim();
   const channel: ScheduledChannel = b.channel === "email" ? "email" : "sms";
@@ -8743,7 +8743,7 @@ app.post("/api/scheduled/preview", express.json({ limit: "16kb" }), (req, res) =
     });
     return;
   }
-  const capability = canSendOn(channel);
+  const capability = await canSendOn(channel);
   res.json({
     ok: true,
     sendAt: parsed.sendAt,

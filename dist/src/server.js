@@ -7859,7 +7859,7 @@ async function resolveScheduleTarget(leadId, channel) {
         return { error: `${name} has no email address on file` };
     return { to: lead.email, name };
 }
-app.get("/api/scheduled", (req, res) => {
+app.get("/api/scheduled", async (req, res) => {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const leadId = typeof req.query.leadId === "string" ? req.query.leadId : undefined;
     res.json({
@@ -7871,7 +7871,7 @@ app.get("/api/scheduled", (req, res) => {
         counts: (0, scheduledMessages_js_1.scheduledCounts)(),
         // Surfaced so the UI can warn BEFORE queueing into a channel that can't
         // deliver, rather than letting it fail silently an hour later.
-        capability: { sms: (0, scheduledSender_js_1.canSendOn)("sms"), email: (0, scheduledSender_js_1.canSendOn)("email") },
+        capability: { sms: await (0, scheduledSender_js_1.canSendOn)("sms"), email: await (0, scheduledSender_js_1.canSendOn)("email") },
     });
 });
 app.post("/api/scheduled", express_1.default.json({ limit: "256kb" }), async (req, res) => {
@@ -7911,7 +7911,7 @@ app.post("/api/scheduled", express_1.default.json({ limit: "256kb" }), async (re
         createdBy: typeof b.createdBy === "string" ? b.createdBy : "marco",
         requestedTime: when || undefined,
     });
-    const capability = (0, scheduledSender_js_1.canSendOn)(channel);
+    const capability = await (0, scheduledSender_js_1.canSendOn)(channel);
     res.json({
         message: msg,
         interpreted: parsed.interpreted,
@@ -7925,7 +7925,7 @@ app.post("/api/scheduled", express_1.default.json({ limit: "256kb" }), async (re
  * real queue uses. Finding out how a phrase was read by having a client
  * receive a text at the wrong hour is not an acceptable feedback loop.
  */
-app.post("/api/scheduled/preview", express_1.default.json({ limit: "16kb" }), (req, res) => {
+app.post("/api/scheduled/preview", express_1.default.json({ limit: "16kb" }), async (req, res) => {
     const b = (req.body || {});
     const when = String(b.when || "").trim();
     const channel = b.channel === "email" ? "email" : "sms";
@@ -7937,7 +7937,7 @@ app.post("/api/scheduled/preview", express_1.default.json({ limit: "16kb" }), (r
         });
         return;
     }
-    const capability = (0, scheduledSender_js_1.canSendOn)(channel);
+    const capability = await (0, scheduledSender_js_1.canSendOn)(channel);
     res.json({
         ok: true,
         sendAt: parsed.sendAt,

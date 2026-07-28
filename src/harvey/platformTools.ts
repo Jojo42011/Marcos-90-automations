@@ -350,7 +350,7 @@ export async function executePlatformTool(
         requestedTime: whenRaw || undefined,
       });
 
-      const capability = canSendOn(channel);
+      const capability = await canSendOn(channel);
       return {
         scheduled: true,
         id: msg.id,
@@ -374,7 +374,7 @@ export async function executePlatformTool(
       });
       return {
         counts: scheduledCounts(),
-        canDeliver: { sms: canSendOn("sms"), email: canSendOn("email") },
+        canDeliver: { sms: await canSendOn("sms"), email: await canSendOn("email") },
         messages: msgs.map((m) => ({
           id: m.id,
           leadName: m.leadName,

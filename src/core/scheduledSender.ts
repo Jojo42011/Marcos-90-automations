@@ -22,17 +22,38 @@ import {
 } from "./scheduledMessages.js";
 import { isTwilioConfigured, sendTwilioMessage } from "../integrations/twilio/index.js";
 import { isEmailConfigured, sendEmail } from "../integrations/email/index.js";
+import { checkGmailAuth } from "../integrations/gmail/index.js";
 
-/** Can this channel actually deliver right now? For pre-flight warnings. */
-export function canSendOn(channel: ScheduledChannel): { ok: boolean; reason?: string } {
+/**
+ * Can this channel actually deliver right now?
+ *
+ * For email this **exercises the refresh token**, it does not just check that
+ * credentials are present. `isEmailConfigured()` only asks whether the env
+ * vars exist, which reported "email is fine" against a token Google had been
+ * rejecting for hours — the same false green that hid a total email outage
+ * behind `/api/email/connection-status`. A capability check that can't fail
+ * is worse than no check, because everything downstream repeats its answer.
+ *
+ * The access token is cached after a successful handshake, so repeat calls
+ * are cheap.
+ */
+export async function canSendOn(
+  channel: ScheduledChannel,
+): Promise<{ ok: boolean; reason?: string }> {
   if (channel === "sms") {
+    // Twilio has no equivalent handshake; presence of credentials is all we
+    // can know without sending something real.
     return isTwilioConfigured()
       ? { ok: true }
       : { ok: false, reason: "Twilio is not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER." };
   }
-  return isEmailConfigured()
+  if (!isEmailConfigured()) {
+    return { ok: false, reason: "Gmail is not connected — relink at /api/email/gmail-oauth/start." };
+  }
+  const auth = await checkGmailAuth();
+  return auth.ok
     ? { ok: true }
-    : { ok: false, reason: "Gmail is not connected — relink at /api/email/gmail-oauth/start." };
+    : { ok: false, reason: `Gmail rejected its token (${auth.error}) — relink at /api/email/gmail-oauth/start.` };
 }
 
 async function deliver(msg: ScheduledMessage): Promise<void> {
@@ -85,12 +106,12 @@ export function startScheduledSender(intervalMs = 60_000): void {
   // Don't hold the process open just for this.
   if (typeof timer.unref === "function") timer.unref();
 
-  const sms = canSendOn("sms");
-  const email = canSendOn("email");
-  console.log(
-    `[scheduled] sender started — checking every ${Math.round(intervalMs / 1000)}s ` +
-      `(sms: ${sms.ok ? "ready" : "UNAVAILABLE"}, email: ${email.ok ? "ready" : "UNAVAILABLE"})`,
-  );
+  void Promise.all([canSendOn("sms"), canSendOn("email")]).then(([sms, email]) => {
+    console.log(
+      `[scheduled] sender started — checking every ${Math.round(intervalMs / 1000)}s ` +
+        `(sms: ${sms.ok ? "ready" : "UNAVAILABLE"}, email: ${email.ok ? "ready" : "UNAVAILABLE"})`,
+    );
+  });
   tick();
 }
 

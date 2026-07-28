@@ -334,7 +334,7 @@ async function executePlatformTool(name, input) {
                 createdBy: "harvey",
                 requestedTime: whenRaw || undefined,
             });
-            const capability = (0, scheduledSender_js_1.canSendOn)(channel);
+            const capability = await (0, scheduledSender_js_1.canSendOn)(channel);
             return {
                 scheduled: true,
                 id: msg.id,
@@ -357,7 +357,7 @@ async function executePlatformTool(name, input) {
             });
             return {
                 counts: (0, scheduledMessages_js_1.scheduledCounts)(),
-                canDeliver: { sms: (0, scheduledSender_js_1.canSendOn)("sms"), email: (0, scheduledSender_js_1.canSendOn)("email") },
+                canDeliver: { sms: await (0, scheduledSender_js_1.canSendOn)("sms"), email: await (0, scheduledSender_js_1.canSendOn)("email") },
                 messages: msgs.map((m) => ({
                     id: m.id,
                     leadName: m.leadName,
