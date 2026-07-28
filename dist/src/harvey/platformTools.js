@@ -49,6 +49,7 @@ const scheduleTime_js_1 = require("../core/scheduleTime.js");
 const db_js_2 = require("../core/db.js");
 const messageChannels_js_1 = require("../core/messageChannels.js");
 const knowledgeStore_js_1 = require("../core/knowledgeStore.js");
+const socialAnalytics_js_1 = require("../core/socialAnalytics.js");
 const browserControl_js_1 = require("../core/browserControl.js");
 /**
  * Harvey tools for the platform surfaces that had none — the Buyers & Sellers
@@ -259,6 +260,23 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
                 },
             },
             required: ["schema"],
+        },
+    },
+    {
+        name: "get_social_analytics",
+        description: "Social media analytics — followers, posts, views, likes, comments, shares, average views per post and engagement rate, per platform plus a combined roll-up. Use for any question about how content is performing ('how did TikTok do', 'what's our engagement', 'which post did best', 'are we growing'). " +
+            "REPORTING RULES, because this data is deliberately partial: (1) every metric is a number OR null — null means NO DATA SOURCE, never zero. Never report a null as 0 or say a platform 'has no engagement' when it simply isn't connected. " +
+            "(2) The combined totals cover ONLY the platforms listed in `included`. If `excluded` is non-empty you MUST say which platforms the number leaves out — do not present it as total social reach. " +
+            "(3) If a platform is `stale`, say how old the data is before quoting it. Do not present a two-week-old pull as current performance.",
+        input_schema: {
+            type: "object",
+            properties: {
+                platform: {
+                    type: "string",
+                    description: "'all' for the combined roll-up (default), or one platform: tiktok, instagram, facebook, youtube.",
+                },
+            },
+            required: [],
         },
     },
     {
@@ -664,6 +682,42 @@ async function executePlatformTool(name, input) {
             if (!Object.keys(schema).length)
                 return { error: "schema is required — a map of field name to CSS selector." };
             return await (0, browserControl_js_1.run)({ action: "extract", schema });
+        }
+        case "get_social_analytics": {
+            const wanted = str(input.platform).toLowerCase().trim() || "all";
+            const payload = await (0, socialAnalytics_js_1.getSocialAnalytics)();
+            if (wanted !== "all") {
+                const p = payload.platforms.find((x) => x.id === wanted);
+                if (!p) {
+                    return {
+                        error: `No such platform "${wanted}".`,
+                        available: ["all", ...payload.platforms.map((x) => x.id)],
+                    };
+                }
+                if (p.status !== "live") {
+                    // Spelled out so it can't be paraphrased into "they have no views".
+                    return {
+                        platform: p.label,
+                        status: p.status,
+                        hasData: false,
+                        reason: p.note,
+                        say: `There is no data source for ${p.label} yet — say that plainly. Do NOT report zeros or imply the account is underperforming.`,
+                    };
+                }
+                return { platform: p.label, hasData: true, ...p };
+            }
+            const c = payload.combined;
+            return {
+                combined: c,
+                platforms: payload.platforms,
+                coverage: c.included.length
+                    ? `These totals cover ${c.included.join(", ")} only.`
+                    : "No platform is reporting yet.",
+                missing: c.excluded.map((e) => e.label),
+                say: c.excluded.length
+                    ? `When you quote these totals you MUST name what they exclude: ${c.excluded.map((e) => e.label).join(", ")} ${c.excluded.length === 1 ? "is" : "are"} not connected, so this is not total social reach.`
+                    : "All connected platforms are included in these totals.",
+            };
         }
         case "search_knowledge": {
             const query = str(input.query);
