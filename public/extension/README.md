@@ -3,8 +3,12 @@
 Lets Harvey work inside sites that have no API — pull a listing off a portal,
 fill out a third-party form, read a page in an MLS back office.
 
-Harvey acts in **your** browser, in **your** active tab, with your existing
-logins — and only while you switch it on.
+Harvey acts in **your** browser, with your existing logins — and only while you
+switch it on.
+
+He works in **his own tab**, opened in the background the first time he needs
+one. The page you're reading — including the Harvey shell itself — is never
+navigated out from under you.
 
 ## Install
 
@@ -52,8 +56,13 @@ what to fix if it isn't.
 
 ## What it can and cannot do
 
-**Can:** navigate the active tab, click links and buttons, type into form
+**Can:** open and navigate his own tab, click links and buttons, type into form
 fields, read visible page text, extract named values by selector.
+
+If Harvey hasn't opened a tab yet and you ask him about a page, he acts on the
+tab you're currently on — so *"what does this page say about the HOA?"* works
+without asking him to open it first. The Harvey shell is excluded from that:
+he'll never treat his own UI as the page in question.
 
 **Cannot, by design:** read cookies, read `localStorage`, type into password
 fields, or run arbitrary JavaScript. Those turn "fill in this form" into

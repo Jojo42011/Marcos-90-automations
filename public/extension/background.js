@@ -1,17 +1,29 @@
 /**
  * Harvey Browser Control — service worker.
  *
- * Polls the server for commands and runs them in the active tab. The server
+ * Polls the server for commands and runs them in a tab Harvey owns. The server
  * can't reach into a browser, so the browser asks; that also means a laptop
  * that sleeps or drops wifi just resumes on its own with no reconnect logic.
  *
  * Nothing runs unless the user has both paired (server URL + token) and
  * switched control ON. The OFF state still polls so the app can show the
  * extension is installed and reachable — it just receives no work.
+ *
+ * THE WORK TAB — why commands don't target the active tab.
+ * They used to, and it made Harvey destroy himself: the tab the user is
+ * looking at when they ask for something is the tab Harvey's own page is open
+ * in, so "pull up that listing" navigated the shell away to Zillow and the
+ * conversation was gone mid-task. Harvey now keeps a dedicated work tab,
+ * opened in the background on first navigate, and every command targets that.
+ * The shell tab is never a valid target — it is excluded explicitly, not just
+ * by luck of which tab happens to be focused.
  */
 
 const POLL_MS = 2000;
 const IDLE_POLL_MS = 6000; // slower when switched off; nothing can arrive anyway
+
+/** Service workers get killed, so the work tab id lives in storage, not here. */
+const WORK_TAB_KEY = "workTabId";
 
 let polling = false;
 
@@ -50,10 +62,80 @@ async function setBadge(state) {
   } catch (_) {}
 }
 
-/** The tab commands act on: whatever the user is looking at. */
-async function activeTab() {
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  return tab || null;
+/** Chrome refuses script injection on its own pages. */
+function isInternalUrl(url) {
+  return /^(chrome|edge|about|devtools|chrome-extension):/i.test(url || "");
+}
+
+/**
+ * Is this one of the app's own pages — the shell Harvey is being talked to
+ * from? Never a valid work tab: driving it navigates Harvey out of existence.
+ */
+function isAppTab(tab, serverUrl) {
+  if (!tab || !tab.url || !serverUrl) return false;
+  try {
+    return new URL(tab.url).origin === new URL(serverUrl).origin;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function readWorkTabId() {
+  const c = await chrome.storage.local.get([WORK_TAB_KEY]);
+  return typeof c[WORK_TAB_KEY] === "number" ? c[WORK_TAB_KEY] : null;
+}
+
+async function writeWorkTabId(id) {
+  if (id == null) await chrome.storage.local.remove(WORK_TAB_KEY);
+  else await chrome.storage.local.set({ [WORK_TAB_KEY]: id });
+}
+
+/**
+ * Harvey's tab, or null if he hasn't opened one / the user closed it.
+ * Forgets the id on any of those, so the next navigate opens a fresh tab
+ * instead of failing forever on a dead id.
+ */
+async function workTab(serverUrl) {
+  const id = await readWorkTabId();
+  if (id == null) return null;
+  let tab = null;
+  try {
+    tab = await chrome.tabs.get(id);
+  } catch (_) {
+    await writeWorkTabId(null); // closed
+    return null;
+  }
+  // If the user navigated Harvey's tab onto the app itself, stop treating it
+  // as the work tab rather than driving the shell.
+  if (isAppTab(tab, serverUrl)) {
+    await writeWorkTabId(null);
+    return null;
+  }
+  return tab;
+}
+
+/** Open Harvey a tab of his own, in the background so the shell keeps focus. */
+async function openWorkTab(url) {
+  const tab = await chrome.tabs.create({ url, active: false });
+  await writeWorkTabId(tab.id);
+  return tab;
+}
+
+/**
+ * Target for a command that needs a page already open. If Harvey has no work
+ * tab yet, adopt the tab the user is on — but only when it is a real site tab
+ * and not the shell, so "read the page I'm looking at" keeps working without
+ * ever letting the shell become the target.
+ */
+async function targetTab(serverUrl) {
+  const existing = await workTab(serverUrl);
+  if (existing) return existing;
+  const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (active && active.id != null && !isAppTab(active, serverUrl) && !isInternalUrl(active.url)) {
+    await writeWorkTabId(active.id);
+    return active;
+  }
+  return null;
 }
 
 /** Run a function inside the page. Content-script work happens here. */
@@ -134,25 +216,45 @@ function pageExtract(arg) {
   return { ok: true, data: out };
 }
 
-async function execute(cmd) {
-  const tab = await activeTab();
-  if (!tab || !tab.id) return { ok: false, error: "No active tab to work in." };
-
-  // Chrome refuses injection on its own pages; say so clearly rather than
-  // surfacing an opaque platform error.
-  if (/^(chrome|edge|about|devtools):/i.test(tab.url || "")) {
-    return { ok: false, error: "Can't act on a browser internal page (" + (tab.url || "").split("/")[0] + "). Switch to a normal site tab." };
-  }
-
+async function execute(cmd, serverUrl) {
   try {
-    switch (cmd.action) {
-      case "navigate": {
-        if (!cmd.url) return { ok: false, error: "navigate needs a url" };
+    // Doesn't touch a page at all, so it needs no tab — and must not fail
+    // just because Harvey hasn't opened one yet.
+    if (cmd.action === "wait") {
+      await sleep(Math.min(cmd.timeoutMs || 1500, 10000));
+      return { ok: true, data: "waited" };
+    }
+
+    // Navigate is the one action that can create the work tab. Reusing it when
+    // it's alive keeps Harvey on one tab instead of littering the window.
+    if (cmd.action === "navigate") {
+      if (!cmd.url) return { ok: false, error: "navigate needs a url" };
+      let tab = await workTab(serverUrl);
+      if (tab && tab.id != null) {
         await chrome.tabs.update(tab.id, { url: cmd.url });
-        await waitForLoad(tab.id, cmd.timeoutMs || 20000);
-        const t = await chrome.tabs.get(tab.id);
-        return { ok: true, data: "navigated", url: t.url, title: t.title };
+      } else {
+        tab = await openWorkTab(cmd.url);
       }
+      await waitForLoad(tab.id, cmd.timeoutMs || 20000);
+      const t = await chrome.tabs.get(tab.id);
+      return { ok: true, data: "navigated", url: t.url, title: t.title };
+    }
+
+    const tab = await targetTab(serverUrl);
+    if (!tab || tab.id == null) {
+      return {
+        ok: false,
+        error: "No page open to act on yet. Ask Harvey to open a site first — he'll do it in his own tab, then this will act on that page.",
+      };
+    }
+
+    // Chrome refuses injection on its own pages; say so clearly rather than
+    // surfacing an opaque platform error.
+    if (isInternalUrl(tab.url)) {
+      return { ok: false, error: "Can't act on a browser internal page (" + (tab.url || "").split("/")[0] + "). Ask Harvey to open a normal site first." };
+    }
+
+    switch (cmd.action) {
       case "click": {
         const r = await inPage(tab.id, pageClick, { selector: cmd.selector, text: cmd.text });
         // A click often starts a navigation; give it a moment to settle so the
@@ -166,9 +268,6 @@ async function execute(cmd) {
         return await inPage(tab.id, pageRead, { selector: cmd.selector });
       case "extract":
         return await inPage(tab.id, pageExtract, { schema: cmd.schema || {} });
-      case "wait":
-        await sleep(Math.min(cmd.timeoutMs || 1500, 10000));
-        return { ok: true, data: "waited" };
       default:
         return { ok: false, error: "Unknown action: " + cmd.action };
     }
@@ -192,9 +291,12 @@ async function pollOnce() {
   const { serverUrl, token, enabled } = await config();
   if (!serverUrl || !token) { await setBadge("off"); return IDLE_POLL_MS; }
 
+  // Report the tab Harvey is driving, not the one the user happens to be
+  // looking at — otherwise the app claims he's on whatever the human just
+  // clicked over to, and he acts somewhere else entirely.
   let tabInfo = {};
   try {
-    const tab = await activeTab();
+    const tab = await workTab(serverUrl);
     if (tab) tabInfo = { url: tab.url, title: tab.title };
   } catch (_) {}
 
@@ -216,10 +318,10 @@ async function pollOnce() {
   await setBadge(enabled ? "on" : "off");
 
   for (const cmd of commands) {
-    const result = await execute(cmd);
+    const result = await execute(cmd, serverUrl);
     let page = {};
     try {
-      const tab = await activeTab();
+      const tab = await workTab(serverUrl);
       if (tab) page = { url: tab.url, title: tab.title };
     } catch (_) {}
     try {
@@ -257,6 +359,13 @@ async function loop() {
 chrome.runtime.onStartup.addListener(loop);
 chrome.runtime.onInstalled.addListener(loop);
 loop();
+
+// The user closing Harvey's tab is a normal way to end a browsing session, so
+// drop the id immediately rather than waiting for the next command to fail on
+// it. The next navigate opens a fresh tab.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  readWorkTabId().then((id) => { if (id === tabId) writeWorkTabId(null); }).catch(() => {});
+});
 
 // The popup asks for live status and can trigger an immediate poll after the
 // user flips the switch, so ON feels instant instead of up-to-6s later.

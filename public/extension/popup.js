@@ -7,7 +7,7 @@ function paint(cfg, live) {
   $("token").value = cfg.token || "";
   $("enabled").checked = cfg.enabled === true;
   $("swHint").textContent = cfg.enabled
-    ? "On — Harvey can act in your active tab"
+    ? "On — Harvey works in his own tab, not the one you're reading"
     : "Off — nothing can run";
 
   const dot = $("dot");
@@ -24,7 +24,9 @@ function paint(cfg, live) {
     $("statusText").textContent = "Paired · standby";
   }
   if (live && live.page && live.page.url) {
-    $("page").textContent = "Active tab: " + live.page.url;
+    $("page").textContent = "Harvey's tab: " + live.page.url;
+  } else if (live && live.ok) {
+    $("page").textContent = "Harvey has no tab open yet";
   }
 }
 
