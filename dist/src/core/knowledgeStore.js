@@ -184,6 +184,32 @@ process for a new listing?"* — and he answers from these documents.
 Harvey will not invent facts. If something isn't in the system he says so
 rather than guessing.
 `),
+        mk("Harvey browser control (extension)", "Harvey", ["browser", "extension", "portal", "scraping"], `
+# Browser control
+
+Harvey can work inside sites that have no API — pull a listing off a portal,
+fill a third-party form, read an MLS back office — by driving **your** Chrome
+tab through the Harvey extension.
+
+## Turning it on
+1. Install the extension (Chrome → \`chrome://extensions\` → Developer mode →
+   Load unpacked → the \`extension/\` folder).
+2. Click the icon, enter the server URL and pairing token, **Save & pair**.
+3. Flip **Let Harvey control this browser** on. The badge reads ON.
+
+## Using it
+Open the page you want worked on, then ask:
+- "Pull the price, address, beds and baths off this listing."
+- "Fill the request form with my details and submit."
+
+Harvey acts in whatever tab you're looking at, so leave it on the right page.
+
+## What it will not do
+It cannot read cookies, read saved passwords, type into password fields, or
+run arbitrary code. If a form has a password box Harvey skips it and says so.
+
+Switch it off when you're done — off means no command can run at all.
+`),
         mk("How to write an SOP for Harvey", "Harvey", ["sop", "writing", "onboarding"], `
 # Writing SOPs Harvey can use
 

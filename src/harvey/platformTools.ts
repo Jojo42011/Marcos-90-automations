@@ -48,6 +48,11 @@ import {
 } from "../core/db.js";
 import { channelForLead } from "../core/messageChannels.js";
 import { searchDocs, getDoc, listDocs, listCategories, knowledgeStats } from "../core/knowledgeStore.js";
+import {
+  run as runBrowserCommand,
+  status as browserStatus,
+  recentActivity as recentBrowserActivity,
+} from "../core/browserControl.js";
 
 /**
  * Harvey tools for the platform surfaces that had none — the Buyers & Sellers
@@ -113,6 +118,77 @@ const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const num = (v: unknown, d: number): number => (Number.isFinite(Number(v)) ? Number(v) : d);
 
 export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
+  {
+    name: "browser_status",
+    description:
+      "Whether the Harvey browser extension is connected and armed, and what page the operator is currently on. ALWAYS call this before trying to drive the browser — if it isn't connected or is switched off, say so and tell them how to fix it instead of attempting actions that will fail.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "browser_navigate",
+    description:
+      "Point the operator's active browser tab at a URL and wait for it to load. Use for sites with no API — a listing portal, a title company's form, an MLS back office. Returns the resulting page URL and title.",
+    input_schema: {
+      type: "object",
+      properties: { url: { type: "string", description: "Full URL including https://" } },
+      required: ["url"],
+    },
+  },
+  {
+    name: "browser_read",
+    description:
+      "Read the visible text of the current page, or of one region. Call this after navigating so you can see what's actually there before clicking or extracting — never guess a page's structure.",
+    input_schema: {
+      type: "object",
+      properties: {
+        selector: { type: "string", description: "Optional CSS selector to read just one part. Omit for the whole page." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "browser_click",
+    description:
+      "Click something on the page. Prefer `text` (the visible label, e.g. 'Next' or 'Save') since that's what a person would say; use `selector` when you know the exact element. One of the two is required.",
+    input_schema: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "Visible label of the link or button." },
+        selector: { type: "string", description: "CSS selector." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "browser_fill",
+    description:
+      "Type values into form fields — a map of CSS selector to value. Call browser_read first to learn the field selectors. Password fields are refused by design.",
+    input_schema: {
+      type: "object",
+      properties: {
+        fields: {
+          type: "object",
+          description: 'e.g. {"#firstName": "Marco", "input[name=email]": "marco@example.com"}',
+        },
+      },
+      required: ["fields"],
+    },
+  },
+  {
+    name: "browser_extract",
+    description:
+      "Pull named values off the page in one shot — a map of field name to CSS selector. Use this to lift a listing (price, address, beds, baths) into structured data instead of reading the whole page and parsing prose. A selector matching several nodes returns a list.",
+    input_schema: {
+      type: "object",
+      properties: {
+        schema: {
+          type: "object",
+          description: 'e.g. {"price": ".listing-price", "address": "h1.address", "features": ".feature-list li"}',
+        },
+      },
+      required: ["schema"],
+    },
+  },
   {
     name: "search_knowledge",
     description:
@@ -426,6 +502,48 @@ export async function executePlatformTool(
   input: Record<string, unknown>,
 ): Promise<unknown> {
   switch (name) {
+    case "browser_status": {
+      const st = browserStatus();
+      if (!st.configured) {
+        return { ...st, hint: "BROWSER_CONTROL_TOKEN is not set on the server, so browser control is disabled entirely." };
+      }
+      if (!st.connected) {
+        return { ...st, hint: "Extension not connected. The operator needs Chrome open with the Harvey extension installed and paired." };
+      }
+      if (!st.enabled) {
+        return { ...st, hint: "Extension is connected but switched OFF. Ask the operator to turn on 'Let Harvey control this browser' in the extension popup." };
+      }
+      return { ...st, recent: recentBrowserActivity(5) };
+    }
+
+    case "browser_navigate": {
+      const url = str(input.url);
+      if (!/^https?:\/\//i.test(url)) return { error: "url must start with http:// or https://" };
+      return await runBrowserCommand({ action: "navigate", url });
+    }
+
+    case "browser_read":
+      return await runBrowserCommand({ action: "read", selector: str(input.selector) || undefined });
+
+    case "browser_click": {
+      const text = str(input.text);
+      const selector = str(input.selector);
+      if (!text && !selector) return { error: "Give either text (the visible label) or selector." };
+      return await runBrowserCommand({ action: "click", text: text || undefined, selector: selector || undefined });
+    }
+
+    case "browser_fill": {
+      const fields = (input.fields && typeof input.fields === "object" ? input.fields : {}) as Record<string, string>;
+      if (!Object.keys(fields).length) return { error: "fields is required — a map of CSS selector to value." };
+      return await runBrowserCommand({ action: "fill", fields });
+    }
+
+    case "browser_extract": {
+      const schema = (input.schema && typeof input.schema === "object" ? input.schema : {}) as Record<string, string>;
+      if (!Object.keys(schema).length) return { error: "schema is required — a map of field name to CSS selector." };
+      return await runBrowserCommand({ action: "extract", schema });
+    }
+
     case "search_knowledge": {
       const query = str(input.query);
       if (!query) return { error: "query is required" };

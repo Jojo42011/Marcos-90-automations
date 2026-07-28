@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+  :root{ --teal:#59c4c4; --teal-2:#4ca7a7; --line:#edf0f0; --muted:#5f6b78; --bad:#c0616a; --ok:#10b981; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:320px;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:#333;background:#f9fbfb}
+  header{background:#fff;border-bottom:1px solid var(--line);padding:13px 15px}
+  header b{font-size:14px}
+  header .s{font-size:11px;color:var(--muted);margin-top:2px}
+  .body{padding:14px 15px}
+  label{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 5px}
+  input{width:100%;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;font-size:12.5px;outline:none;background:#fff;margin-bottom:11px}
+  input:focus{border-color:var(--teal)}
+  .row{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:11px}
+  .row .t{flex:1}
+  .row .t b{font-size:12.5px;display:block}
+  .row .t span{font-size:11px;color:var(--muted)}
+  .sw{position:relative;width:40px;height:22px;flex-shrink:0}
+  .sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:2}
+  .sw .track{position:absolute;inset:0;background:#cbd5d5;border-radius:11px;transition:background .18s}
+  .sw .knob{position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .18s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .sw input:checked ~ .track{background:var(--ok)}
+  .sw input:checked ~ .knob{transform:translateX(18px)}
+  .status{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);margin-bottom:10px}
+  .dot{width:7px;height:7px;border-radius:50%;background:#cbd5d5;flex-shrink:0}
+  .dot.on{background:var(--ok)} .dot.err{background:var(--bad)}
+  button.save{width:100%;height:36px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--teal),var(--teal-2));color:#fff;font-size:13px;font-weight:700;cursor:pointer}
+  .warn{background:#fffbeb;border:1px solid rgba(180,83,9,.25);border-radius:8px;padding:9px 11px;font-size:11px;color:#92400e;line-height:1.5;margin-top:11px}
+  .pg{font-size:10.5px;color:#9aa4ae;margin-top:9px;word-break:break-all;line-height:1.4}
+</style>
+</head>
+<body>
+<header>
+  <b>Harvey Browser Control</b>
+  <div class="s">Let Harvey work in sites that have no API</div>
+</header>
+<div class="body">
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">Not paired</span></div>
+
+  <div class="row">
+    <div class="t">
+      <b>Let Harvey control this browser</b>
+      <span id="swHint">Off — nothing can run</span>
+    </div>
+    <span class="sw">
+      <input type="checkbox" id="enabled" />
+      <span class="track"></span><span class="knob"></span>
+    </span>
+  </div>
+
+  <label for="serverUrl">Server</label>
+  <input id="serverUrl" placeholder="https://marco-90-automation.fly.dev" />
+  <label for="token">Pairing token</label>
+  <input id="token" type="password" placeholder="from BROWSER_CONTROL_TOKEN" />
+  <button class="save" id="save">Save &amp; pair</button>
+
+  <div class="pg" id="page"></div>
+
+  <div class="warn">
+    While this is ON, Harvey can navigate, click, fill forms and read pages in
+    your active tab. It cannot read cookies, passwords or run arbitrary code.
+    Switch it off when you're done.
+  </div>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

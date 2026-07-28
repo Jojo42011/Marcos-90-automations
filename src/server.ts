@@ -117,6 +117,15 @@ import {
   completeReplyFromThread,
 } from "./core/replySuggest.js";
 import {
+  run as runBrowserCommand,
+  status as browserStatus,
+  recordPoll as recordBrowserPoll,
+  submitResult as submitBrowserResult,
+  tokenMatches as browserTokenMatches,
+  isConfigured as browserControlConfigured,
+  recentActivity as recentBrowserActivity,
+} from "./core/browserControl.js";
+import {
   listDocs,
   listCategories,
   getDoc,
@@ -8967,6 +8976,73 @@ app.delete("/api/knowledge/:id", (req, res) => {
 app.get("/knowledge", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "knowledge.html"));
 });
+
+/* ——— 1.2 Browser control: the extension's endpoints ———
+   The extension polls; the server never reaches into a browser. Both routes
+   authenticate on the pairing token and fail closed when it isn't set. */
+
+app.post("/api/browser/poll", express.json({ limit: "64kb" }), (req, res) => {
+  const b = (req.body || {}) as Record<string, unknown>;
+  if (!browserTokenMatches(String(b.token || ""))) {
+    res.status(401).json({ error: "Bad or missing pairing token" });
+    return;
+  }
+  const page = (b.page && typeof b.page === "object" ? b.page : {}) as { url?: string; title?: string };
+  res.json({ commands: recordBrowserPoll(b.enabled === true, page) });
+});
+
+app.post("/api/browser/result", express.json({ limit: "1mb" }), (req, res) => {
+  const b = (req.body || {}) as Record<string, unknown>;
+  if (!browserTokenMatches(String(b.token || ""))) {
+    res.status(401).json({ error: "Bad or missing pairing token" });
+    return;
+  }
+  const accepted = submitBrowserResult({
+    id: String(b.id || ""),
+    ok: b.ok === true,
+    data: b.data,
+    error: typeof b.error === "string" ? b.error : undefined,
+    url: typeof b.url === "string" ? b.url : undefined,
+    title: typeof b.title === "string" ? b.title : undefined,
+  });
+  res.json({ accepted });
+});
+
+/** Status for the popup and for the app UI. Token-gated: it reveals the URL
+ *  of whatever tab the operator is looking at. */
+app.get("/api/browser/status", (req, res) => {
+  const token = String(req.get("X-Browser-Token") || req.query.token || "");
+  if (!browserTokenMatches(token)) {
+    // Configuration state is safe to expose unauthenticated; the live page is not.
+    res.status(401).json({ configured: browserControlConfigured(), error: "Bad or missing pairing token" });
+    return;
+  }
+  res.json({ ...browserStatus(), recent: recentBrowserActivity(10) });
+});
+
+/**
+ * Test-only hook for driving a platform tool over HTTP.
+ *
+ * The browser-control queue is in-process memory, so a test can't call the
+ * tool from outside the server and still share the bus with the extension's
+ * poll/result endpoints. This exists so the extension can be verified against
+ * the REAL endpoints rather than a re-implementation of them.
+ *
+ * Gated on BROWSER_CONTROL_TEST_HOOK, which is never set in production — if
+ * it's unset the route is not registered at all, so there is no surface.
+ */
+if (process.env.BROWSER_CONTROL_TEST_HOOK === "1") {
+  console.warn("[test] platform-tool HTTP hook is ENABLED — this must never be on in production");
+  app.post("/__test/tool", express.json({ limit: "256kb" }), async (req, res) => {
+    const b = (req.body || {}) as { tool?: string; input?: Record<string, unknown> };
+    try {
+      const { executePlatformTool } = await import("./harvey/platformTools.js");
+      res.json(await executePlatformTool(String(b.tool || ""), b.input || {}));
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+}
 
 /* ——— Team collaboration: notifications, chat, presence (task command center) ——— */
 

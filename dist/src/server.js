@@ -75,6 +75,7 @@ const scheduledMessages_js_1 = require("./core/scheduledMessages.js");
 const scheduledSender_js_1 = require("./core/scheduledSender.js");
 const scheduleTime_js_1 = require("./core/scheduleTime.js");
 const replySuggest_js_1 = require("./core/replySuggest.js");
+const browserControl_js_1 = require("./core/browserControl.js");
 const knowledgeStore_js_1 = require("./core/knowledgeStore.js");
 const taskAssignmentEmail_js_1 = require("./core/taskAssignmentEmail.js");
 const brivityPeople_js_1 = require("./core/brivityPeople.js");
@@ -8141,6 +8142,69 @@ app.delete("/api/knowledge/:id", (req, res) => {
 app.get("/knowledge", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "knowledge.html"));
 });
+/* ——— 1.2 Browser control: the extension's endpoints ———
+   The extension polls; the server never reaches into a browser. Both routes
+   authenticate on the pairing token and fail closed when it isn't set. */
+app.post("/api/browser/poll", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    const b = (req.body || {});
+    if (!(0, browserControl_js_1.tokenMatches)(String(b.token || ""))) {
+        res.status(401).json({ error: "Bad or missing pairing token" });
+        return;
+    }
+    const page = (b.page && typeof b.page === "object" ? b.page : {});
+    res.json({ commands: (0, browserControl_js_1.recordPoll)(b.enabled === true, page) });
+});
+app.post("/api/browser/result", express_1.default.json({ limit: "1mb" }), (req, res) => {
+    const b = (req.body || {});
+    if (!(0, browserControl_js_1.tokenMatches)(String(b.token || ""))) {
+        res.status(401).json({ error: "Bad or missing pairing token" });
+        return;
+    }
+    const accepted = (0, browserControl_js_1.submitResult)({
+        id: String(b.id || ""),
+        ok: b.ok === true,
+        data: b.data,
+        error: typeof b.error === "string" ? b.error : undefined,
+        url: typeof b.url === "string" ? b.url : undefined,
+        title: typeof b.title === "string" ? b.title : undefined,
+    });
+    res.json({ accepted });
+});
+/** Status for the popup and for the app UI. Token-gated: it reveals the URL
+ *  of whatever tab the operator is looking at. */
+app.get("/api/browser/status", (req, res) => {
+    const token = String(req.get("X-Browser-Token") || req.query.token || "");
+    if (!(0, browserControl_js_1.tokenMatches)(token)) {
+        // Configuration state is safe to expose unauthenticated; the live page is not.
+        res.status(401).json({ configured: (0, browserControl_js_1.isConfigured)(), error: "Bad or missing pairing token" });
+        return;
+    }
+    res.json({ ...(0, browserControl_js_1.status)(), recent: (0, browserControl_js_1.recentActivity)(10) });
+});
+/**
+ * Test-only hook for driving a platform tool over HTTP.
+ *
+ * The browser-control queue is in-process memory, so a test can't call the
+ * tool from outside the server and still share the bus with the extension's
+ * poll/result endpoints. This exists so the extension can be verified against
+ * the REAL endpoints rather than a re-implementation of them.
+ *
+ * Gated on BROWSER_CONTROL_TEST_HOOK, which is never set in production — if
+ * it's unset the route is not registered at all, so there is no surface.
+ */
+if (process.env.BROWSER_CONTROL_TEST_HOOK === "1") {
+    console.warn("[test] platform-tool HTTP hook is ENABLED — this must never be on in production");
+    app.post("/__test/tool", express_1.default.json({ limit: "256kb" }), async (req, res) => {
+        const b = (req.body || {});
+        try {
+            const { executePlatformTool } = await Promise.resolve().then(() => __importStar(require("./harvey/platformTools.js")));
+            res.json(await executePlatformTool(String(b.tool || ""), b.input || {}));
+        }
+        catch (err) {
+            res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+        }
+    });
+}
 /* ——— Team collaboration: notifications, chat, presence (task command center) ——— */
 /** Who can sign in. Email addresses are intentionally omitted — see teamRoster.ts. */
 app.get("/api/team/roster", (_req, res) => {
