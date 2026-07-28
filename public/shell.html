@@ -4,6 +4,18 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>Harvey - Marco 90</title>
+<!-- Blocking on purpose: the sign-in check below must run before any of the
+     app paints, so an unidentified visitor never sees the interior. -->
+<script src="/team-session.js"></script>
+<script>
+  /* Not signed in this browser session → the sign-in screen, before anything
+     else loads. Note this is a *session* check, not just "is a name saved":
+     picking a name is remembered for the session only, so returning to the
+     site asks again rather than silently reusing whoever used it last. */
+  if (window.TeamSession && !TeamSession.isSignedIn()) {
+    location.replace(TeamSession.signInUrl());
+  }
+</script>
 <style>
  /* ============================================================
     NEUTRAL UI SHELL - collapsible sidebar + tabbed iframe views
@@ -138,6 +150,7 @@
          <span id="whoLabel" style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Marco Puga &middot; Live</span>
        </button>
        <button id="logoutBtn" title="Sign out" style="display:none;background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+       <button id="teamOutBtn" title="Sign out" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;display:flex;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
      </div>
    </aside>
 
@@ -265,13 +278,13 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 
 
 /* ── TEAM IDENTITY ────────────────────────────────────────────────
-   Who is at this device. Same localStorage key the Task Command board
-   uses, so signing in here signs you in there too (and vice versa).
-   This is the lightweight "who's on" picker, NOT the real account auth
-   in /api/auth/* — that system is separate and currently switched off. */
-var USER_KEY = "marcoTaskUser";
-/* Only used if /api/team/roster can't be reached — the gate must never be
-   a dead end that locks someone out of the app. Server list wins. */
+   Who is at this device, per team-session.js. Signing in on /who signs you
+   in here, in Task Command and everywhere else at once. This is the
+   lightweight "who's on" identity, NOT the real account auth in
+   /api/auth/* — that system is separate and currently switched off.
+
+   Only used if /api/team/roster can't be reached — never a dead end that
+   locks someone out of the app. The server list wins. */
 var ROSTER_FALLBACK = [
   { id:"marco",    name:"Marco",    role:"Lead Agent", color:"#7C3AED" },
   { id:"wesley",   name:"Wesley",   role:"Agent",      color:"#0E7490" },
@@ -280,24 +293,16 @@ var ROSTER_FALLBACK = [
 ];
 var ROSTER = ROSTER_FALLBACK.slice();
 
-function currentUser(){ try{ return localStorage.getItem(USER_KEY) || ""; }catch(_){ return ""; } }
+/* Identity comes from team-session.js (loaded in <head>, which also does the
+   not-signed-in redirect before any of this runs). */
+function currentUser(){ return TeamSession.currentUser(); }
 function rosterMember(id){
   for(var i=0;i<ROSTER.length;i++) if(ROSTER[i].id===id) return ROSTER[i];
   return null;
 }
 
-/* Nobody signed in on this device → the sign-in screen, immediately.
-   Checked synchronously (not after the auth/roster fetches) so the app never
-   flashes usable to someone we can't identify. replace(), not href, so Back
-   doesn't bounce them straight into this redirect again. */
-if(!currentUser()){
-  location.replace("/who?next=" + encodeURIComponent(location.pathname + location.search));
-}
-
 /** Switching user goes through the same one screen, never a second picker. */
-function goSignIn(){
-  location.href = "/who?next=" + encodeURIComponent(location.pathname + location.search);
-}
+function goSignIn(){ location.href = TeamSession.signInUrl(); }
 
 
 function initShell(){
@@ -454,7 +459,14 @@ function initShell(){
  }
 
  document.getElementById("whoBtn").onclick = goSignIn;
+ // Sign out ends the session outright, so the next person gets the picker
+ // rather than inheriting whoever was here last.
+ document.getElementById("teamOutBtn").onclick = function(){
+   TeamSession.signOut();
+   location.replace("/who?next=%2Fshell");
+ };
  window.AppShell.signIn = goSignIn;
+ window.AppShell.signOut = function(){ TeamSession.signOut(); location.replace("/who?next=%2Fshell"); };
 
  /* Names/colours for the footer chip. The sign-in screen fetches this too;
     here it only affects display, so the hardcoded fallback is harmless. */

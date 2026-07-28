@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Task Command · Marco Puga</title>
+<script src="/team-session.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,600&display=swap" rel="stylesheet">
@@ -1988,13 +1989,17 @@ initCal();
 paintMe();
 loadLayout();
 bootGrid();
-/* No identity yet. Standalone → the one sign-in screen at /who, so there is
-   never a second place to pick a name. Inside the shell's iframe the shell
-   already redirects the whole window, so the in-page picker is only a
-   safety net for the rare case that hasn't happened. */
-if(!ME){
-  if(window.top===window.self) location.replace("/who?next="+encodeURIComponent(location.pathname));
-  else openGate();
+/* Opened directly (not inside the shell) and not signed in this browser
+   session → the one sign-in screen at /who, so there is never a second place
+   to pick a name. Inside the shell's iframe the shell has already done this
+   for the whole window, so the in-page picker survives only as a safety net
+   for the rare case where it somehow hasn't. */
+if(window.top===window.self){
+  if(window.TeamSession && !TeamSession.isSignedIn()){
+    location.replace(TeamSession.signInUrl());
+  }
+} else if(!ME){
+  openGate();
 }
 loadCmdSettings().then(function(){return loadTasks();}).catch(function(){toast("Failed to load tasks");});
 pollNotes();

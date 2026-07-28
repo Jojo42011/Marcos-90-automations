@@ -89,9 +89,8 @@
     <div id="list"><div class="loading">Loading team&hellip;</div></div>
     <div class="foot">Your tasks, notifications and messages load for you.<br/>Signed in on this device until you switch.</div>
   </div>
+<script src="/team-session.js"></script>
 <script>
-  var USER_KEY = "marcoTaskUser";
-
   /* Stands in only if /api/team/roster can't be reached — this screen must
      never become a dead end that locks the team out of the app. */
   var FALLBACK = [
@@ -104,7 +103,9 @@
   var listEl = document.getElementById("list");
   var errEl  = document.getElementById("err");
 
-  function current(){ try{ return localStorage.getItem(USER_KEY) || ""; }catch(_){ return ""; } }
+  /* Last name picked on this device — marks it "Current" so the usual case
+     is one tap. It does NOT sign you in; the session cookie does that. */
+  function current(){ return TeamSession.rememberedUser(); }
 
   /* Only same-origin paths, so ?next= can't be used to bounce someone off-site. */
   function nextUrl(){
@@ -128,25 +129,18 @@
       '</button>';
     }).join("");
     Array.prototype.forEach.call(listEl.querySelectorAll(".who"), function(b){
-      b.onclick = function(){ signIn(b.getAttribute("data-u"), members); };
+      b.onclick = function(){ signIn(b.getAttribute("data-u")); };
     });
   }
 
-  function signIn(id, members){
-    var prev = current();
-    try{ localStorage.setItem(USER_KEY, id); }
-    catch(_){
+  function signIn(id){
+    // Writes the identity, opens the browser-session cookie, and clears the
+    // previous person's notification-dedup state. See team-session.js.
+    if(!TeamSession.signIn(id)){
       errEl.textContent = "This browser is blocking storage, so we can't keep you signed in. Turn off private browsing and try again.";
       errEl.classList.add("show");
       return;
     }
-    // Let the server see who's on as well (display/logging; not a security check).
-    try{ document.cookie = "mp_team="+encodeURIComponent(id)+"; path=/; max-age=31536000; samesite=lax"; }catch(_){}
-
-    // A different person on this device: clear the popup-dedup set so their
-    // own notifications are treated as new rather than already-seen.
-    if(prev && prev !== id){ try{ localStorage.removeItem("shell_note_seen"); localStorage.removeItem("tt_seen"); }catch(_){} }
-
     Array.prototype.forEach.call(listEl.querySelectorAll(".who"), function(b){ b.disabled = true; });
     location.replace(nextUrl());
   }
