@@ -8989,7 +8989,7 @@ app.post("/api/browser/poll", express.json({ limit: "64kb" }), (req, res) => {
     return;
   }
   const page = (b.page && typeof b.page === "object" ? b.page : {}) as { url?: string; title?: string };
-  res.json({ commands: recordBrowserPoll(b.enabled === true, page) });
+  res.json(recordBrowserPoll(b.enabled === true, page));
 });
 
 app.post("/api/browser/result", express.json({ limit: "1mb" }), (req, res) => {

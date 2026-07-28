@@ -8153,7 +8153,7 @@ app.post("/api/browser/poll", express_1.default.json({ limit: "64kb" }), (req, r
         return;
     }
     const page = (b.page && typeof b.page === "object" ? b.page : {});
-    res.json({ commands: (0, browserControl_js_1.recordPoll)(b.enabled === true, page) });
+    res.json((0, browserControl_js_1.recordPoll)(b.enabled === true, page));
 });
 app.post("/api/browser/result", express_1.default.json({ limit: "1mb" }), (req, res) => {
     const b = (req.body || {});

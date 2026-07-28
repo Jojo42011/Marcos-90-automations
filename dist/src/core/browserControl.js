@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isConfigured = isConfigured;
 exports.tokenMatches = tokenMatches;
 exports.status = status;
+exports.requestDisarm = requestDisarm;
+exports.isDisarmPending = isDisarmPending;
 exports.recordPoll = recordPoll;
 exports.submitResult = submitResult;
 exports.run = run;
@@ -71,19 +73,57 @@ function status() {
         page: extensionPage,
     };
 }
+/**
+ * Ask the extension to switch itself off at its next poll.
+ *
+ * Deliberately one-way: the server can DISARM a browser but can never arm
+ * one. Arming has to stay a physical act by the human at the keyboard —
+ * otherwise "turn it on" becomes something anyone holding the pairing token
+ * can do to a signed-in browser. Turning it off is the safe direction, so
+ * that half is allowed remotely.
+ *
+ * Exists because Harvey used to answer "browser control is now off" when he
+ * had no way to do it — the toggle lived only in the popup. Saying it without
+ * doing it is worse than refusing, since the operator then believes a control
+ * is off while it is still armed.
+ */
+let disarmRequested = false;
+function requestDisarm() {
+    const s = status();
+    if (!s.connected)
+        return { alreadyOff: !s.enabled, connected: false };
+    if (!s.enabled)
+        return { alreadyOff: true, connected: true };
+    disarmRequested = true;
+    // Anything already queued must not run in the window before the extension
+    // polls and disarms — "off" has to mean off immediately.
+    queue = [];
+    return { alreadyOff: false, connected: true };
+}
+function isDisarmPending() {
+    return disarmRequested;
+}
 /** Called on every extension poll. */
 function recordPoll(enabled, page) {
     lastPollAt = Date.now();
     extensionEnabled = enabled;
     if (page)
         extensionPage = page;
+    if (disarmRequested) {
+        // Clear only once the extension confirms it is off, so a poll that
+        // crosses the request in flight doesn't drop the instruction.
+        if (!enabled)
+            disarmRequested = false;
+        else
+            return { commands: [], disarm: true };
+    }
     // A switched-off extension still polls (so the UI can show it's there) but
     // is handed nothing to run.
     if (!enabled)
-        return [];
+        return { commands: [], disarm: false };
     const batch = queue;
     queue = [];
-    return batch;
+    return { commands: batch, disarm: false };
 }
 function submitResult(result) {
     const entry = pending.get(result.id);

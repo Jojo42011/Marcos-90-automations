@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORKSPACE_TOOL_NAMES = exports.WORKSPACE_TOOL_DEFINITIONS = exports.PLATFORM_TOOL_NAMES = exports.PLATFORM_TOOL_DEFINITIONS = void 0;
+exports.normalizeNavigateUrl = normalizeNavigateUrl;
 exports.executePlatformTool = executePlatformTool;
 exports.executeWorkspaceTool = executeWorkspaceTool;
 const types_js_1 = require("../core/types.js");
@@ -107,6 +108,33 @@ function slimTask(t) {
 }
 const str = (v) => (typeof v === "string" ? v.trim() : "");
 const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
+/**
+ * Accept what a person actually says. "Open books.toscrape.com" is a complete
+ * instruction to a human, and making Harvey demand the scheme back turned a
+ * one-word request into an argument — he told the operator to retype the URL
+ * four times in a row rather than just adding `https://`.
+ *
+ * Returns "" for anything that isn't plausibly an address, so a stray phrase
+ * doesn't get turned into a navigation to https://some%20words.
+ */
+function normalizeNavigateUrl(raw) {
+    const s = String(raw || "").trim().replace(/^["'<]+|["'>]+$/g, "");
+    if (!s || /\s/.test(s))
+        return "";
+    const withScheme = /^https?:\/\//i.test(s) ? s : "https://" + s.replace(/^\/+/, "");
+    let u;
+    try {
+        u = new URL(withScheme);
+    }
+    catch {
+        return "";
+    }
+    // A hostname with no dot is a search phrase or a typo, not a site. localhost
+    // is the one real exception and is worth keeping for testing.
+    if (!u.hostname.includes(".") && u.hostname !== "localhost")
+        return "";
+    return u.toString();
+}
 exports.PLATFORM_TOOL_DEFINITIONS = [
     {
         name: "browser_status",
@@ -115,12 +143,17 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
     },
     {
         name: "browser_navigate",
-        description: "Point the operator's active browser tab at a URL and wait for it to load. Use for sites with no API — a listing portal, a title company's form, an MLS back office. Returns the resulting page URL and title.",
+        description: "Open a URL in Harvey's own browser tab and wait for it to load. Use for sites with no API — a listing portal, a title company's form, an MLS back office. Returns the resulting page URL and title. A bare domain is fine ('books.toscrape.com', 'zillow.com/homes/123') — https:// is added for you, so NEVER ask the operator to retype an address with the scheme on it.",
         input_schema: {
             type: "object",
-            properties: { url: { type: "string", description: "Full URL including https://" } },
+            properties: { url: { type: "string", description: "A URL or a bare domain — 'books.toscrape.com' works." } },
             required: ["url"],
         },
+    },
+    {
+        name: "browser_disable",
+        description: "Switch browser control OFF. Use whenever the operator says they're done, or asks you to turn it off / stop / disarm the browser. This genuinely disarms the extension — do NOT claim the browser is off unless this tool returned success. There is deliberately no tool to turn it back ON: only the person at the keyboard can arm it, from the extension popup.",
+        input_schema: { type: "object", properties: {}, required: [] },
     },
     {
         name: "browser_read",
@@ -147,7 +180,9 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
     },
     {
         name: "browser_fill",
-        description: "Type values into form fields — a map of CSS selector to value. Call browser_read first to learn the field selectors. Password fields are refused by design.",
+        description: "Type values into form fields — a map of CSS selector to value. If you don't know the field selectors, call browser_read first; common ones ('#email', 'input[name=username]') can be tried directly. " +
+            "ALWAYS ATTEMPT THE FILL. Password fields are refused at the page, per field, and the refusal comes back in the result — so a form containing a password box still gets its other fields filled. " +
+            "Never decline the whole request up front because a password is mentioned: run the tool, then report exactly which fields were filled and which were refused.",
         input_schema: {
             type: "object",
             properties: {
@@ -473,10 +508,27 @@ async function executePlatformTool(name, input) {
             return { ...st, recent: (0, browserControl_js_1.recentActivity)(5) };
         }
         case "browser_navigate": {
-            const url = str(input.url);
-            if (!/^https?:\/\//i.test(url))
-                return { error: "url must start with http:// or https://" };
+            const url = normalizeNavigateUrl(str(input.url));
+            if (!url) {
+                return { error: "That doesn't look like a web address. Give a domain or URL, e.g. books.toscrape.com" };
+            }
             return await (0, browserControl_js_1.run)({ action: "navigate", url });
+        }
+        case "browser_disable": {
+            const st = (0, browserControl_js_1.status)();
+            if (!st.configured)
+                return { ok: true, enabled: false, note: "Browser control isn't configured at all, so nothing is armed." };
+            const r = (0, browserControl_js_1.requestDisarm)();
+            if (!r.connected) {
+                return { ok: true, enabled: false, note: "The extension isn't connected, so nothing can run. It starts switched off when it reconnects." };
+            }
+            if (r.alreadyOff)
+                return { ok: true, enabled: false, note: "Browser control was already off." };
+            return {
+                ok: true,
+                enabled: false,
+                note: "Browser control switched off — the extension disarms on its next poll (within ~2 seconds) and any queued actions were dropped. To turn it back on, the operator flips the switch in the extension popup; you cannot.",
+            };
         }
         case "browser_read":
             return await (0, browserControl_js_1.run)({ action: "read", selector: str(input.selector) || undefined });

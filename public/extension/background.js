@@ -309,6 +309,15 @@ async function pollOnce() {
     });
     if (!res.ok) { await setBadge("err"); return IDLE_POLL_MS; }
     const body = await res.json();
+    // The server can ask us to switch off — never to switch on. Arming stays
+    // a physical act by the person at the keyboard; disarming is the safe
+    // direction, so "Harvey, turn the browser off" can actually be true
+    // instead of Harvey claiming a control he doesn't have.
+    if (body.disarm) {
+      await chrome.storage.local.set({ enabled: false });
+      await setBadge("off");
+      return POLL_MS; // report enabled:false promptly so the server can clear it
+    }
     commands = body.commands || [];
   } catch (_) {
     await setBadge("err");
