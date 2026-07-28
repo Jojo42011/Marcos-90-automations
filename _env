@@ -58,3 +58,13 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # MONTHLY_GCI_GOAL=50000
 # BROKERAGE_SPLIT_PCT=0.5
 # MARCO_PHONE_NUMBER=+1...
+
+# Analytics — Zernio social analytics provider (section 5).
+# Unset = Instagram/Facebook/YouTube tabs report "not connected" and show no
+# numbers at all. Nothing is fabricated when this is missing.
+# ZERNIO_API_KEY=
+# ZERNIO_BASE_URL=https://api.zernio.com
+
+# Browser control — pairing token for the Harvey Chrome extension.
+# Unset = browser control is disabled entirely (fails closed).
+# BROWSER_CONTROL_TOKEN=

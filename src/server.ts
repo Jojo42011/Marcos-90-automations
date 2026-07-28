@@ -140,6 +140,7 @@ import {
 import { sendAssignmentEmail } from "./core/taskAssignmentEmail.js";
 import { getBrivityPeople, getBrivityImportStatus } from "./core/brivityPeople.js";
 import { buildZip } from "./core/zipWriter.js";
+import { getSocialAnalytics } from "./core/socialAnalytics.js";
 import { handleWebsiteVisit } from "./agents/reEngagement/index.js";
 import { handleListingStatusUpdate } from "./agents/listingStatusAutomation/index.js";
 import {
@@ -8976,6 +8977,24 @@ app.delete("/api/knowledge/:id", (req, res) => {
 
 app.get("/knowledge", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "knowledge.html"));
+});
+
+/* ——— 5. Social analytics ———
+   Per-platform metrics plus a combined roll-up. TikTok is live from the
+   existing Apify pull; the other platforms report `not_connected` until
+   ZERNIO_API_KEY is set. Nothing here fabricates a number. */
+
+app.get("/api/analytics/social", async (_req, res) => {
+  try {
+    res.json(await getSocialAnalytics());
+  } catch (err) {
+    console.error("[analytics] failed:", err);
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get("/analytics", requireAuthPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "analytics.html"));
 });
 
 /* ——— 1.2 Browser control: the extension's endpoints ———

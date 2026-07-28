@@ -80,6 +80,7 @@ const knowledgeStore_js_1 = require("./core/knowledgeStore.js");
 const taskAssignmentEmail_js_1 = require("./core/taskAssignmentEmail.js");
 const brivityPeople_js_1 = require("./core/brivityPeople.js");
 const zipWriter_js_1 = require("./core/zipWriter.js");
+const socialAnalytics_js_1 = require("./core/socialAnalytics.js");
 const index_js_11 = require("./agents/reEngagement/index.js");
 const index_js_12 = require("./agents/listingStatusAutomation/index.js");
 const index_js_13 = require("./agents/contentManager/index.js");
@@ -8142,6 +8143,22 @@ app.delete("/api/knowledge/:id", (req, res) => {
 });
 app.get("/knowledge", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "knowledge.html"));
+});
+/* ——— 5. Social analytics ———
+   Per-platform metrics plus a combined roll-up. TikTok is live from the
+   existing Apify pull; the other platforms report `not_connected` until
+   ZERNIO_API_KEY is set. Nothing here fabricates a number. */
+app.get("/api/analytics/social", async (_req, res) => {
+    try {
+        res.json(await (0, socialAnalytics_js_1.getSocialAnalytics)());
+    }
+    catch (err) {
+        console.error("[analytics] failed:", err);
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+});
+app.get("/analytics", requireAuthPage, (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "analytics.html"));
 });
 /* ——— 1.2 Browser control: the extension's endpoints ———
    The extension polls; the server never reaches into a browser. Both routes
