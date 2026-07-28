@@ -19,8 +19,12 @@
  * by luck of which tab happens to be focused.
  */
 
-const POLL_MS = 2000;
-const IDLE_POLL_MS = 6000; // slower when switched off; nothing can arrive anyway
+/** How long the server may park our poll. Must stay under Chrome's 30s
+ *  service-worker idle kill even with the keepalive as a safety net. */
+const LONG_POLL_MS = 20000;
+/** Backoff after an error or while unpaired — not the normal path, which
+ *  parks on the server instead of sleeping on a timer. */
+const IDLE_POLL_MS = 6000;
 
 /** Service workers get killed, so the work tab id lives in storage, not here. */
 const WORK_TAB_KEY = "workTabId";
@@ -149,71 +153,389 @@ async function inPage(tabId, fn, args) {
   return res?.result;
 }
 
-/* ── The page-side implementations. These are injected, so they must be
-      self-contained: no closures over anything in this file. ── */
+/* ── The page-side implementations ─────────────────────────────────────────
+   These are injected with chrome.scripting, so each one must be entirely
+   self-contained: no closures over anything in this file, no shared helpers.
+   That forces some duplication (the DOM-walking preamble appears in each),
+   which is deliberate — a "tidier" shared helper silently becomes undefined
+   inside the page and every action fails with a confusing ReferenceError.
+
+   Everything below queries through a deep walk rather than plain
+   document.querySelector, because real portals put their content inside web
+   components and same-origin iframes. A selector that works when you paste it
+   into DevTools (which searches the inspected root) would otherwise come back
+   empty here, and it looks exactly like "the site changed". ── */
+
+/** Injected: every searchable root — document, open shadow roots, same-origin
+ *  iframe documents. Closed shadow roots are genuinely unreachable. */
+function pageRoots() {
+  const roots = [document];
+  const seen = new Set();
+  const walk = (root, depth) => {
+    if (!root || depth > 8 || seen.has(root)) return;
+    seen.add(root);
+    let all = [];
+    try { all = root.querySelectorAll("*"); } catch (_) { return; }
+    for (const el of all) {
+      if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot, depth + 1); }
+      if (el.tagName === "IFRAME") {
+        // Cross-origin frames throw on access. That's a browser boundary, not
+        // something to work around.
+        try {
+          const doc = el.contentDocument;
+          if (doc) { roots.push(doc); walk(doc, depth + 1); }
+        } catch (_) { /* cross-origin */ }
+      }
+    }
+  };
+  walk(document, 0);
+  return roots;
+}
 
 function pageClick(arg) {
+  const ROOTS = (function collect() {
+    const roots = [document]; const seen = new Set();
+    const walk = (r, d) => {
+      if (!r || d > 8 || seen.has(r)) return; seen.add(r);
+      let all = []; try { all = r.querySelectorAll("*"); } catch (_) { return; }
+      for (const el of all) {
+        if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot, d + 1); }
+        if (el.tagName === "IFRAME") { try { const doc = el.contentDocument; if (doc) { roots.push(doc); walk(doc, d + 1); } } catch (_) {} }
+      }
+    };
+    walk(document, 0); return roots;
+  })();
+  const visible = (el) => {
+    if (!el || !el.getClientRects || !el.getClientRects().length) return false;
+    const s = (el.ownerDocument.defaultView || window).getComputedStyle(el);
+    return s.visibility !== "hidden" && s.display !== "none" && Number(s.opacity) !== 0;
+  };
+
   const { selector, text } = arg;
   let el = null;
-  if (selector) el = document.querySelector(selector);
-  if (!el && text) {
-    // Click by visible label — how a person would describe it ("the Save
-    // button"), rather than requiring a selector nobody knows.
-    const needle = String(text).toLowerCase().trim();
-    const candidates = document.querySelectorAll('a,button,[role="button"],input[type="submit"],input[type="button"]');
-    for (const c of candidates) {
-      const label = (c.innerText || c.value || c.getAttribute("aria-label") || "").toLowerCase().trim();
-      if (label && (label === needle || label.includes(needle))) { el = c; break; }
+
+  if (selector) {
+    for (const r of ROOTS) {
+      try { const found = r.querySelector(selector); if (found) { el = found; break; } } catch (_) {}
     }
   }
-  if (!el) return { ok: false, error: "Nothing matched " + (selector || '"' + text + '"') };
-  el.scrollIntoView({ block: "center" });
+
+  if (!el && text) {
+    // Click by visible label — how a person describes it ("the Save button"),
+    // not a selector nobody knows. Scored rather than first-match: an exact
+    // label must beat a longer one that merely contains the phrase, or
+    // "Search" hits "Search all listings in this area" every time.
+    const needle = String(text).toLowerCase().trim();
+    const sel = 'a,button,[role="button"],[role="link"],[role="tab"],[role="menuitem"],' +
+                'input[type="submit"],input[type="button"],summary,[onclick],label';
+    let best = null, bestScore = -1;
+    for (const r of ROOTS) {
+      let nodes = [];
+      try { nodes = r.querySelectorAll(sel); } catch (_) { continue; }
+      for (const c of nodes) {
+        const label = (
+          c.innerText || c.value || c.getAttribute("aria-label") ||
+          c.getAttribute("title") || c.textContent || ""
+        ).toLowerCase().replace(/\s+/g, " ").trim();
+        if (!label) continue;
+        let score = -1;
+        if (label === needle) score = 100;
+        else if (label.startsWith(needle)) score = 70;
+        else if (label.includes(needle)) score = 40;
+        else continue;
+        if (visible(c)) score += 25;
+        if (c.disabled) score -= 60;
+        // Prefer the tightest match when several contain the phrase.
+        score -= Math.min(20, Math.floor(label.length / 12));
+        if (score > bestScore) { bestScore = score; best = c; }
+      }
+    }
+    el = best;
+  }
+
+  if (!el) {
+    return {
+      ok: false,
+      error: "Nothing on the page matched " + (selector ? selector : '"' + text + '"') +
+        ". Read the page first to see the real labels, or the content may still be loading — wait for it, then retry.",
+    };
+  }
+  try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
+  const label = (el.innerText || el.value || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 60);
   el.click();
-  return { ok: true, data: "clicked " + (el.tagName.toLowerCase()) };
+  return { ok: true, data: "clicked <" + el.tagName.toLowerCase() + ">" + (label ? ' "' + label + '"' : "") };
 }
 
 function pageFill(arg) {
+  const ROOTS = (function collect() {
+    const roots = [document]; const seen = new Set();
+    const walk = (r, d) => {
+      if (!r || d > 8 || seen.has(r)) return; seen.add(r);
+      let all = []; try { all = r.querySelectorAll("*"); } catch (_) { return; }
+      for (const el of all) {
+        if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot, d + 1); }
+        if (el.tagName === "IFRAME") { try { const doc = el.contentDocument; if (doc) { roots.push(doc); walk(doc, d + 1); } } catch (_) {} }
+      }
+    };
+    walk(document, 0); return roots;
+  })();
+  const find = (sel) => {
+    for (const r of ROOTS) { try { const f = r.querySelector(sel); if (f) return f; } catch (_) {} }
+    return null;
+  };
+  const fire = (el, names) => {
+    for (const n of names) {
+      try { el.dispatchEvent(new Event(n, { bubbles: true })); } catch (_) {}
+    }
+  };
+
   const filled = [];
+  const refused = [];
   const missing = [];
-  for (const [sel, value] of Object.entries(arg.fields || {})) {
-    const el = document.querySelector(sel);
+
+  for (const [sel, rawValue] of Object.entries(arg.fields || {})) {
+    const el = find(sel);
     if (!el) { missing.push(sel); continue; }
-    // Refuse password fields outright. "Fill in this form" must never become
-    // a way to type into a credential box.
-    if (el.type === "password") { missing.push(sel + " (password field — refused)"); continue; }
-    const proto = el instanceof HTMLTextAreaElement
-      ? window.HTMLTextAreaElement.prototype
-      : window.HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-    // Use the native setter so React/Vue-style frameworks see the change.
-    if (setter) setter.call(el, value); else el.value = value;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-    filled.push(sel);
+    const value = rawValue == null ? "" : String(rawValue);
+
+    // Refuse credential boxes outright. This is OUR rule, not a browser
+    // restriction — say so accurately in the reason so nobody goes hunting
+    // for a Chrome setting that would "allow" it.
+    if (el.type === "password") {
+      refused.push(sel + " — password field, refused by Harvey's own safety rule (not a browser limitation). The operator types this themselves.");
+      continue;
+    }
+
+    const tag = (el.tagName || "").toLowerCase();
+    try {
+      if (tag === "select") {
+        // Match by value, then by visible option text — a person says
+        // "set the state to Texas", not "set it to TX".
+        const opts = Array.from(el.options || []);
+        const want = value.toLowerCase().trim();
+        const hit = opts.find((o) => o.value.toLowerCase() === want)
+          || opts.find((o) => (o.text || "").toLowerCase().trim() === want)
+          || opts.find((o) => (o.text || "").toLowerCase().includes(want));
+        if (!hit) {
+          refused.push(sel + ' — no option matching "' + value + '". Options: ' + opts.slice(0, 12).map((o) => o.text).join(", "));
+          continue;
+        }
+        el.value = hit.value;
+        fire(el, ["input", "change"]);
+        filled.push(sel + " = " + hit.text);
+        continue;
+      }
+
+      if (el.type === "checkbox" || el.type === "radio") {
+        const on = !/^(false|0|no|off|unchecked|)$/i.test(value.trim());
+        if (el.checked !== on) el.click();       // click, so framework handlers run
+        filled.push(sel + " = " + (el.checked ? "checked" : "unchecked"));
+        continue;
+      }
+
+      if (el.isContentEditable) {
+        el.focus();
+        el.textContent = value;
+        fire(el, ["input", "change"]);
+        filled.push(sel);
+        continue;
+      }
+
+      // Text-like inputs. Use the native value setter so React/Vue see the
+      // change — assigning .value directly is swallowed by their tracking.
+      const win = el.ownerDocument.defaultView || window;
+      const proto = tag === "textarea" ? win.HTMLTextAreaElement.prototype : win.HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, "value") && Object.getOwnPropertyDescriptor(proto, "value").set;
+      el.focus();
+      if (setter) setter.call(el, value); else el.value = value;
+      // keydown/keyup too: some autocompletes only react to key events.
+      fire(el, ["input", "change", "keyup", "blur"]);
+      filled.push(sel);
+    } catch (e) {
+      refused.push(sel + " — " + String((e && e.message) || e));
+    }
   }
-  return { ok: filled.length > 0 || missing.length === 0, data: { filled, missing } };
+
+  return {
+    ok: filled.length > 0,
+    data: { filled, refused, missing },
+  };
 }
 
 function pageRead(arg) {
   const sel = arg && arg.selector;
-  const root = sel ? document.querySelector(sel) : document.body;
-  if (!root) return { ok: false, error: "Nothing matched " + sel };
-  const text = (root.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
-  // Cap it — a full portal page can be enormous and the model only needs
-  // enough to work with.
-  return { ok: true, data: text.slice(0, 12000) };
+  let root = document.body;
+  if (sel) {
+    const ROOTS = (function collect() {
+      const roots = [document]; const seen = new Set();
+      const walk = (r, d) => {
+        if (!r || d > 8 || seen.has(r)) return; seen.add(r);
+        let all = []; try { all = r.querySelectorAll("*"); } catch (_) { return; }
+        for (const el of all) {
+          if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot, d + 1); }
+          if (el.tagName === "IFRAME") { try { const doc = el.contentDocument; if (doc) { roots.push(doc); walk(doc, d + 1); } } catch (_) {} }
+        }
+      };
+      walk(document, 0); return roots;
+    })();
+    root = null;
+    for (const r of ROOTS) { try { const f = r.querySelector(sel); if (f) { root = f; break; } } catch (_) {} }
+    if (!root) return { ok: false, error: "Nothing matched " + sel };
+  }
+  let text = (root.innerText || root.textContent || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  // A login wall reads as a nearly empty page, and Harvey would otherwise
+  // report "the listing isn't there" when the real answer is "sign in".
+  const pw = document.querySelector('input[type="password"]');
+  const loginish = pw && /sign in|log ?in|password|username|email/i.test(text.slice(0, 2000));
+
+  const truncated = text.length > 12000;
+  return {
+    ok: true,
+    data: text.slice(0, 12000),
+    truncated,
+    title: document.title,
+    url: location.href,
+    needsLogin: Boolean(loginish),
+  };
 }
 
 function pageExtract(arg) {
+  const ROOTS = (function collect() {
+    const roots = [document]; const seen = new Set();
+    const walk = (r, d) => {
+      if (!r || d > 8 || seen.has(r)) return; seen.add(r);
+      let all = []; try { all = r.querySelectorAll("*"); } catch (_) { return; }
+      for (const el of all) {
+        if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot, d + 1); }
+        if (el.tagName === "IFRAME") { try { const doc = el.contentDocument; if (doc) { roots.push(doc); walk(doc, d + 1); } } catch (_) {} }
+      }
+    };
+    walk(document, 0); return roots;
+  })();
+
+  const valueOf = (n, attr) => {
+    if (attr) {
+      // Properties beat attributes for href/src so relative URLs come back
+      // absolute — a relative href is useless to something outside the page.
+      if (attr === "href" && n.href) return String(n.href);
+      if (attr === "src" && n.src) return String(n.src);
+      return n.getAttribute(attr);
+    }
+    if (n.tagName === "INPUT" || n.tagName === "TEXTAREA" || n.tagName === "SELECT") return (n.value || "").trim();
+    if (n.tagName === "IMG") return n.getAttribute("alt") || n.src || "";
+    if (n.tagName === "META") return n.getAttribute("content") || "";
+    return (n.innerText || n.textContent || "").replace(/\s+/g, " ").trim();
+  };
+
   const out = {};
-  for (const [name, sel] of Object.entries(arg.schema || {})) {
-    const nodes = document.querySelectorAll(sel);
-    if (!nodes.length) { out[name] = null; continue; }
-    out[name] = nodes.length === 1
-      ? (nodes[0].innerText || nodes[0].value || "").trim()
-      : Array.from(nodes).map((n) => (n.innerText || n.value || "").trim()).filter(Boolean);
+  const notFound = [];
+  for (const [name, rawSel] of Object.entries(arg.schema || {})) {
+    // "a.listing @href" pulls the attribute instead of the text.
+    const m = String(rawSel).match(/^(.*?)\s*@([\w:-]+)\s*$/);
+    const sel = (m ? m[1] : String(rawSel)).trim();
+    const attr = m ? m[2] : null;
+
+    let nodes = [];
+    for (const r of ROOTS) {
+      try {
+        const found = r.querySelectorAll(sel);
+        if (found && found.length) { nodes = Array.from(found); break; }
+      } catch (_) { /* invalid selector for this root */ }
+    }
+    if (!nodes.length) { out[name] = null; notFound.push(name); continue; }
+    const vals = nodes.map((n) => valueOf(n, attr)).filter((v) => v != null && String(v).length);
+    out[name] = nodes.length === 1 ? (vals[0] ?? null) : vals;
   }
-  return { ok: true, data: out };
+  return { ok: true, data: out, notFound, url: location.href };
+}
+
+/**
+ * Injected: pull the page's own structured data.
+ *
+ * Listing portals publish schema.org JSON-LD for search engines, and that
+ * block is far more stable than any CSS class — class names churn with every
+ * redesign, the JSON-LD does not. Try this before guessing selectors.
+ */
+function pageStructured() {
+  const out = { jsonLd: [], openGraph: {}, title: document.title, url: location.href };
+  const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+  for (const s of scripts) {
+    try {
+      const parsed = JSON.parse(s.textContent || "");
+      for (const item of Array.isArray(parsed) ? parsed : [parsed]) {
+        if (item && typeof item === "object") {
+          // @graph is how many CMSes wrap several entities in one block.
+          const graph = item["@graph"];
+          if (Array.isArray(graph)) out.jsonLd.push(...graph);
+          else out.jsonLd.push(item);
+        }
+      }
+    } catch (_) { /* a malformed block shouldn't lose the good ones */ }
+  }
+  for (const m of document.querySelectorAll('meta[property^="og:"],meta[name^="og:"],meta[name="description"],meta[property^="product:"]')) {
+    const key = m.getAttribute("property") || m.getAttribute("name");
+    const val = m.getAttribute("content");
+    if (key && val) out.openGraph[key] = val;
+  }
+  // Cap it: some sites embed enormous graphs and the model only needs the shape.
+  const json = JSON.stringify(out.jsonLd);
+  if (json.length > 40000) {
+    out.jsonLd = out.jsonLd.slice(0, 5);
+    out.note = "JSON-LD was very large; showing the first few entities.";
+  }
+  const found = out.jsonLd.length > 0 || Object.keys(out.openGraph).length > 0;
+  return {
+    ok: true,
+    data: out,
+    note: found ? undefined : "This page publishes no JSON-LD or OpenGraph data — fall back to reading it and extracting with selectors.",
+  };
+}
+
+/** Injected: is the element/text there yet? Polled from the worker side. */
+function pagePresent(arg) {
+  const ROOTS = (function collect() {
+    const roots = [document]; const seen = new Set();
+    const walk = (r, d) => {
+      if (!r || d > 8 || seen.has(r)) return; seen.add(r);
+      let all = []; try { all = r.querySelectorAll("*"); } catch (_) { return; }
+      for (const el of all) {
+        if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot, d + 1); }
+        if (el.tagName === "IFRAME") { try { const doc = el.contentDocument; if (doc) { roots.push(doc); walk(doc, d + 1); } } catch (_) {} }
+      }
+    };
+    walk(document, 0); return roots;
+  })();
+  if (arg.selector) {
+    for (const r of ROOTS) {
+      try { if (r.querySelector(arg.selector)) return true; } catch (_) {}
+    }
+    return false;
+  }
+  if (arg.text) {
+    const needle = String(arg.text).toLowerCase();
+    return (document.body.innerText || "").toLowerCase().includes(needle);
+  }
+  return document.readyState === "complete";
+}
+
+/** Injected: scroll, so lazy-loaded listings actually render before a read. */
+async function pageScroll(arg) {
+  const to = arg && arg.to;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  if (to === "top") { window.scrollTo({ top: 0 }); await sleep(400); return { ok: true, data: "scrolled to top" }; }
+  if (typeof to === "number") { window.scrollBy({ top: to }); await sleep(400); return { ok: true, data: "scrolled " + to + "px" }; }
+  // Default: walk to the bottom in steps, pausing so infinite-scroll handlers
+  // fire. One jump to the bottom loads nothing on most lazy pages.
+  let last = -1;
+  for (let i = 0; i < 12; i++) {
+    window.scrollTo({ top: document.body.scrollHeight });
+    await sleep(450);
+    const h = document.body.scrollHeight;
+    if (h === last) break;
+    last = h;
+  }
+  return { ok: true, data: "scrolled to bottom; page height " + document.body.scrollHeight };
 }
 
 async function execute(cmd, serverUrl) {
@@ -236,6 +558,15 @@ async function execute(cmd, serverUrl) {
         tab = await openWorkTab(cmd.url);
       }
       await waitForLoad(tab.id, cmd.timeoutMs || 20000);
+      // status:"complete" fires when the document loaded, which on a
+      // single-page app is long before the listing exists. If the caller named
+      // something to wait for, wait for that instead of guessing; otherwise
+      // give the first render a brief settle.
+      if (cmd.selector || cmd.text) {
+        await waitForPresence(tab.id, { selector: cmd.selector, text: cmd.text }, cmd.timeoutMs || 15000);
+      } else {
+        await settle(tab.id, 1500);
+      }
       const t = await chrome.tabs.get(tab.id);
       return { ok: true, data: "navigated", url: t.url, title: t.title };
     }
@@ -259,7 +590,7 @@ async function execute(cmd, serverUrl) {
         const r = await inPage(tab.id, pageClick, { selector: cmd.selector, text: cmd.text });
         // A click often starts a navigation; give it a moment to settle so the
         // next read doesn't catch the old page.
-        await sleep(600);
+        if (r && r.ok) await settle(tab.id, 1200);
         return r;
       }
       case "fill":
@@ -268,6 +599,22 @@ async function execute(cmd, serverUrl) {
         return await inPage(tab.id, pageRead, { selector: cmd.selector });
       case "extract":
         return await inPage(tab.id, pageExtract, { schema: cmd.schema || {} });
+      case "structured":
+        return await inPage(tab.id, pageStructured, {});
+      case "scroll":
+        return await inPage(tab.id, pageScroll, { to: cmd.to });
+      case "waitFor": {
+        const found = await waitForPresence(tab.id, { selector: cmd.selector, text: cmd.text }, cmd.timeoutMs || 15000);
+        return found
+          ? { ok: true, data: "present" }
+          : { ok: false, error: "Still not on the page after " + Math.round((cmd.timeoutMs || 15000) / 1000) + "s: " + (cmd.selector || cmd.text) };
+      }
+      case "focus": {
+        // Hand the keyboard back to the human — the login-wall path.
+        await chrome.tabs.update(tab.id, { active: true });
+        try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (_) {}
+        return { ok: true, data: "Harvey's tab is now in front of the operator." };
+      }
       default:
         return { ok: false, error: "Unknown action: " + cmd.action };
     }
@@ -278,6 +625,34 @@ async function execute(cmd, serverUrl) {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+/**
+ * Poll the page until the element/text shows up.
+ *
+ * Single-page apps are the whole reason this exists: the tab reports
+ * "complete" as soon as the shell HTML lands, and the actual listing arrives
+ * from XHR a second or two later. Reading at "complete" returned a spinner,
+ * which Harvey faithfully reported as the page's content.
+ */
+async function waitForPresence(tabId, what, timeoutMs) {
+  const deadline = Date.now() + Math.max(1000, timeoutMs || 15000);
+  while (Date.now() < deadline) {
+    try {
+      const hit = await inPage(tabId, pagePresent, { selector: what.selector, text: what.text });
+      if (hit === true) return true;
+    } catch (_) { /* mid-navigation the frame can be gone; just retry */ }
+    await sleep(300);
+  }
+  return false;
+}
+
+/** Let a just-loaded or just-clicked page finish its first render. */
+async function settle(tabId, ms) {
+  await sleep(Math.min(ms || 1000, 4000));
+  try {
+    await inPage(tabId, () => document.readyState, {});
+  } catch (_) { /* navigating; the next action will re-target anyway */ }
+}
+
 function waitForLoad(tabId, timeoutMs) {
   return new Promise((resolve) => {
     const done = () => { chrome.tabs.onUpdated.removeListener(listener); clearTimeout(t); resolve(); };
@@ -287,8 +662,25 @@ function waitForLoad(tabId, timeoutMs) {
   });
 }
 
+/**
+ * Keep the service worker alive across a parked long poll.
+ *
+ * Chrome kills an MV3 worker after 30s idle, and an in-flight fetch does NOT
+ * count as activity — a 20s hold plus a slow response was landing right on
+ * that edge. Calling any extension API resets the timer, so a cheap call on a
+ * short interval carries us through the wait. This is the documented pattern,
+ * used narrowly (only while a poll is parked) rather than to pin the worker up
+ * forever.
+ */
+function startKeepalive() {
+  return setInterval(() => {
+    try { chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError); } catch (_) {}
+  }, 15000);
+}
+
 async function pollOnce() {
-  const { serverUrl, token, enabled } = await config();
+  const cfg = await config();
+  const { serverUrl, token, enabled } = cfg;
   if (!serverUrl || !token) { await setBadge("off"); return IDLE_POLL_MS; }
 
   // Report the tab Harvey is driving, not the one the user happens to be
@@ -300,34 +692,54 @@ async function pollOnce() {
     if (tab) tabInfo = { url: tab.url, title: tab.title };
   } catch (_) {}
 
+  const { armLock } = await chrome.storage.local.get(["armLock"]);
+
   let commands = [];
+  const ka = startKeepalive();
   try {
     const res = await fetch(serverUrl + "/api/browser/poll", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, enabled, page: tabInfo }),
+      // Ask the server to hold the request until there's work. Dispatch used
+      // to wait for the next 2s tick; every step of a multi-step task paid it.
+      body: JSON.stringify({ token, enabled, page: tabInfo, waitMs: LONG_POLL_MS, armLock: armLock === true }),
     });
     if (!res.ok) { await setBadge("err"); return IDLE_POLL_MS; }
     const body = await res.json();
-    // The server can ask us to switch off — never to switch on. Arming stays
-    // a physical act by the person at the keyboard; disarming is the safe
-    // direction, so "Harvey, turn the browser off" can actually be true
-    // instead of Harvey claiming a control he doesn't have.
+
+    // The server may ask us to switch OFF at any time. It may ask us to switch
+    // ON only because the operator asked for that — and never past the local
+    // lock, which is the human's override.
     if (body.disarm) {
       await chrome.storage.local.set({ enabled: false });
       await setBadge("off");
-      return POLL_MS; // report enabled:false promptly so the server can clear it
+      return 0; // report the new state immediately so the server can clear it
+    }
+    if (body.arm && armLock !== true) {
+      await chrome.storage.local.set({ enabled: true });
+      await setBadge("on");
+      return 0;
     }
     commands = body.commands || [];
   } catch (_) {
     await setBadge("err");
     return IDLE_POLL_MS;
+  } finally {
+    clearInterval(ka);
   }
 
   await setBadge(enabled ? "on" : "off");
 
   for (const cmd of commands) {
-    const result = await execute(cmd, serverUrl);
+    const guard = startKeepalive();   // a slow page must not get the worker killed
+    let result;
+    try {
+      result = await execute(cmd, serverUrl);
+    } catch (err) {
+      result = { ok: false, error: String((err && err.message) || err) };
+    } finally {
+      clearInterval(guard);
+    }
     let page = {};
     try {
       const tab = await workTab(serverUrl);
@@ -345,28 +757,65 @@ async function pollOnce() {
           error: result.error,
           url: result.url || page.url,
           title: result.title || page.title,
+          // Side-signals the page noticed. needsLogin is the important one:
+          // without it a login wall reaches Harvey as a short, content-free
+          // page and he reports "the listing isn't there".
+          meta: (result.needsLogin != null || result.truncated != null || result.notFound != null)
+            ? { needsLogin: result.needsLogin, truncated: result.truncated, notFound: result.notFound }
+            : undefined,
         }),
       });
     } catch (_) {}
   }
 
-  return enabled ? POLL_MS : IDLE_POLL_MS;
+  // With a long poll there's nothing to wait for — go straight back to
+  // parking, so the next command dispatches the instant it's queued.
+  //
+  // This applies while switched OFF too. A disarmed extension used to idle on
+  // a 6s timer, which made "Harvey, turn the browser back on" take up to six
+  // seconds to do anything — the one moment the operator is watching for a
+  // reaction. Parking instead means the arm directive arrives immediately, and
+  // a disarmed extension still receives no commands.
+  return 0;
 }
 
 async function loop() {
   if (polling) return;
   polling = true;
-  // A plain interval would stack up if a command outlives the tick, so each
-  // cycle schedules the next only once it's finished.
-  for (;;) {
-    let wait = IDLE_POLL_MS;
-    try { wait = await pollOnce(); } catch (_) {}
-    await sleep(wait);
+  try {
+    // A plain interval would stack up if a command outlives the tick, so each
+    // cycle schedules the next only once it's finished.
+    for (;;) {
+      let wait = IDLE_POLL_MS;
+      try { wait = await pollOnce(); } catch (_) {}
+      if (wait > 0) await sleep(wait);
+    }
+  } finally {
+    // Reaching here means the loop died. Clear the flag so the alarm below can
+    // restart it instead of seeing polling===true forever and doing nothing.
+    polling = false;
   }
 }
 
+/**
+ * Watchdog. The loop lives in a service worker Chrome can terminate at any
+ * time — and when it does, every pending setTimeout dies with it and polling
+ * silently stops. Nothing tells the user; the extension just goes deaf until
+ * some unrelated event happens to wake it. An alarm survives termination and
+ * wakes the worker, so this is what actually makes the extension reliable.
+ *
+ * 30s is Chrome's minimum period, which is also the worker's idle timeout, so
+ * the worst case is one missed window rather than an indefinitely dead poller.
+ */
+const WATCHDOG_ALARM = "harvey-poll-watchdog";
+chrome.alarms.create(WATCHDOG_ALARM, { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === WATCHDOG_ALARM) loop(); });
+
 chrome.runtime.onStartup.addListener(loop);
-chrome.runtime.onInstalled.addListener(loop);
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create(WATCHDOG_ALARM, { periodInMinutes: 0.5 });
+  loop();
+});
 loop();
 
 // The user closing Harvey's tab is a normal way to end a browsing session, so

@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Harvey Browser Control",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Lets Harvey navigate, click, fill forms and pull data from sites that have no API — in his own tab, on your machine, only while you switch it on.",
-  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "permissions": ["activeTab", "alarms", "scripting", "storage", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "action": {

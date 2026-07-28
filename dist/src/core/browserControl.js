@@ -4,7 +4,8 @@ exports.isConfigured = isConfigured;
 exports.tokenMatches = tokenMatches;
 exports.status = status;
 exports.requestDisarm = requestDisarm;
-exports.isDisarmPending = isDisarmPending;
+exports.requestArm = requestArm;
+exports.armLocked = armLocked;
 exports.recordPoll = recordPoll;
 exports.submitResult = submitResult;
 exports.run = run;
@@ -48,8 +49,14 @@ const MAX_HISTORY = 200;
 let lastPollAt = 0;
 let extensionEnabled = false;
 let extensionPage = {};
-/** Considered live if it polled recently — the extension polls every ~2s. */
-const CONNECTED_WINDOW_MS = 8000;
+/** Longest the server will hold a poll open. Must stay under Chrome's 30s
+ *  service-worker idle kill, or the extension dies mid-wait. */
+const MAX_LONG_POLL_MS = 20000;
+/** Considered live if it polled recently. With long polling a healthy
+ *  extension answers at least every MAX_LONG_POLL_MS, so the window has to
+ *  clear that plus round-trip — 8s was right for 2s polling and would have
+ *  reported a perfectly healthy browser as disconnected. */
+const CONNECTED_WINDOW_MS = MAX_LONG_POLL_MS + 10000;
 function isConfigured() {
     return Boolean(process.env.BROWSER_CONTROL_TOKEN?.trim());
 }
@@ -88,42 +95,134 @@ function status() {
  * is off while it is still armed.
  */
 let disarmRequested = false;
+let armRequested = false;
+/** Set by the extension when the human has locked out remote arming. */
+let armLockedByUser = false;
 function requestDisarm() {
     const s = status();
     if (!s.connected)
         return { alreadyOff: !s.enabled, connected: false };
     if (!s.enabled)
         return { alreadyOff: true, connected: true };
+    armRequested = false;
     disarmRequested = true;
+    wakeWaiters();
     // Anything already queued must not run in the window before the extension
     // polls and disarms — "off" has to mean off immediately.
     queue = [];
     return { alreadyOff: false, connected: true };
 }
-function isDisarmPending() {
-    return disarmRequested;
+/**
+ * Ask the extension to switch itself on.
+ *
+ * This is the one control that can escalate rather than reduce capability, so
+ * it is bounded on purpose:
+ *   - it does nothing unless a human has already paired this browser, and
+ *   - the human can set a lock in the popup that refuses it outright.
+ *
+ * The operator asked for it after finding that "turn it back on" was the only
+ * step he still had to leave the conversation to do. The honest trade is
+ * stated in the popup rather than hidden: anyone holding the pairing token can
+ * re-arm a paired browser unless the lock is on.
+ */
+function requestArm() {
+    const s = status();
+    if (!s.connected)
+        return { alreadyOn: s.enabled, connected: false, locked: armLockedByUser };
+    if (armLockedByUser)
+        return { alreadyOn: s.enabled, connected: true, locked: true };
+    if (s.enabled)
+        return { alreadyOn: true, connected: true, locked: false };
+    disarmRequested = false;
+    armRequested = true;
+    wakeWaiters();
+    return { alreadyOn: false, connected: true, locked: false };
+}
+function armLocked() {
+    return armLockedByUser;
+}
+let waiters = [];
+function wakeWaiters() {
+    if (!waiters.length)
+        return;
+    const batch = waiters;
+    waiters = [];
+    for (const w of batch) {
+        clearTimeout(w.timer);
+        w.resolve(drain());
+    }
+}
+/** Close out parked polls with an empty answer without handing them work. */
+function retireWaiters() {
+    if (!waiters.length)
+        return;
+    const batch = waiters;
+    waiters = [];
+    for (const w of batch) {
+        clearTimeout(w.timer);
+        w.resolve({ commands: [], disarm: false, arm: false });
+    }
+}
+/** Hand over whatever is pending right now. */
+function drain() {
+    if (disarmRequested)
+        return { commands: [], disarm: true, arm: false };
+    if (armRequested)
+        return { commands: [], disarm: false, arm: true };
+    if (!extensionEnabled)
+        return { commands: [], disarm: false, arm: false };
+    const batch = queue;
+    queue = [];
+    return { commands: batch, disarm: false, arm: false };
 }
 /** Called on every extension poll. */
-function recordPoll(enabled, page) {
+function recordPoll(enabled, page, opts = {}) {
     lastPollAt = Date.now();
     extensionEnabled = enabled;
     if (page)
         extensionPage = page;
-    if (disarmRequested) {
-        // Clear only once the extension confirms it is off, so a poll that
-        // crosses the request in flight doesn't drop the instruction.
-        if (!enabled)
-            disarmRequested = false;
-        else
-            return { commands: [], disarm: true };
-    }
-    // A switched-off extension still polls (so the UI can show it's there) but
-    // is handed nothing to run.
-    if (!enabled)
-        return { commands: [], disarm: false };
-    const batch = queue;
-    queue = [];
-    return { commands: batch, disarm: false };
+    if (typeof opts.armLock === "boolean")
+        armLockedByUser = opts.armLock;
+    // Clear the one-shot directives once the extension confirms the new state,
+    // so a poll that crossed the request in flight doesn't drop the instruction.
+    if (disarmRequested && !enabled)
+        disarmRequested = false;
+    if (armRequested && enabled)
+        armRequested = false;
+    // Retire any older parked poll before doing anything else.
+    //
+    // There is one browser on this bus, so a newer poll means every earlier one
+    // is stale — its socket may already be dead (laptop slept, wifi dropped,
+    // browser closed). Left in place, a dead waiter still wins the race in
+    // wakeWaiters(), drains the queue, and resolves into a socket nobody is
+    // reading: the command is silently lost and the caller is told "the browser
+    // didn't respond" about a browser that is sitting right there. Closing them
+    // out with an empty answer is harmless — the extension re-polls — and it
+    // guarantees commands can only ever go to the live connection.
+    retireWaiters();
+    const immediate = drain();
+    const hasWork = immediate.commands.length > 0 || immediate.disarm || immediate.arm;
+    const waitMs = Math.min(Math.max(Number(opts.waitMs) || 0, 0), MAX_LONG_POLL_MS);
+    if (hasWork || waitMs === 0)
+        return immediate;
+    return new Promise((resolve) => {
+        const w = {
+            resolve,
+            // Time out with an empty answer rather than holding forever: the
+            // extension re-polls, which doubles as the liveness signal `connected`
+            // depends on.
+            timer: setTimeout(() => {
+                waiters = waiters.filter((x) => x !== w);
+                resolve({ commands: [], disarm: false, arm: false });
+            }, waitMs),
+        };
+        waiters.push(w);
+        opts.onAbort?.(() => {
+            clearTimeout(w.timer);
+            waiters = waiters.filter((x) => x !== w);
+            resolve({ commands: [], disarm: false, arm: false });
+        });
+    });
 }
 function submitResult(result) {
     const entry = pending.get(result.id);
@@ -168,7 +267,17 @@ function run(command, opts = {}) {
     if (history.length > MAX_HISTORY)
         history.length = MAX_HISTORY;
     queue.push(full);
-    const timeoutMs = opts.timeoutMs ?? command.timeoutMs ?? 25_000;
+    // Hand it straight to a parked long poll instead of letting it sit until the
+    // next timer tick — this is where the latency saving actually lands.
+    wakeWaiters();
+    // `command.timeoutMs` is how long the PAGE should keep waiting; this timer is
+    // how long the SERVER waits for an answer. Treating them as the same number
+    // guarantees the server gives up a moment before the browser replies, and the
+    // caller sees "the browser didn't respond" for a command that worked. Add
+    // headroom for the round trip.
+    const timeoutMs = opts.timeoutMs
+        ?? (command.timeoutMs ? command.timeoutMs + 8000 : undefined)
+        ?? 25_000;
     return new Promise((resolve) => {
         const timer = setTimeout(() => {
             pending.delete(full.id);

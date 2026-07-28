@@ -64,9 +64,23 @@ tab you're currently on — so *"what does this page say about the HOA?"* works
 without asking him to open it first. The Harvey shell is excluded from that:
 he'll never treat his own UI as the page in question.
 
+He reads a page's schema.org JSON-LD before guessing at CSS selectors, sees
+through open shadow roots and same-origin iframes, waits for content that
+loads after the page does, and scrolls to pull in lazy-loaded results.
+
 **Cannot, by design:** read cookies, read `localStorage`, type into password
 fields, or run arbitrary JavaScript. Those turn "fill in this form" into
 "exfiltrate this session", and nothing in the use case needs them.
+
+These are *this extension's* rules, not browser restrictions — there is no
+Chrome setting that relaxes them.
+
+## Logins
+
+You never hand over a password. Harvey's tab runs in your own Chrome profile,
+so you are already signed in to whatever you normally use. At a sign-in screen
+he brings the tab forward and asks you to log in; the session persists there
+and he continues from it.
 
 ## Safety
 

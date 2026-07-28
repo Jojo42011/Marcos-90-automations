@@ -8982,14 +8982,27 @@ app.get("/knowledge", requireAuthPage, (_req, res) => {
    The extension polls; the server never reaches into a browser. Both routes
    authenticate on the pairing token and fail closed when it isn't set. */
 
-app.post("/api/browser/poll", express.json({ limit: "64kb" }), (req, res) => {
+app.post("/api/browser/poll", express.json({ limit: "64kb" }), async (req, res) => {
   const b = (req.body || {}) as Record<string, unknown>;
   if (!browserTokenMatches(String(b.token || ""))) {
     res.status(401).json({ error: "Bad or missing pairing token" });
     return;
   }
   const page = (b.page && typeof b.page === "object" ? b.page : {}) as { url?: string; title?: string };
-  res.json(recordBrowserPoll(b.enabled === true, page));
+  // The extension asks the server to hold the request open until there's
+  // something to do. Without a waitMs this behaves exactly as before, so an
+  // older extension build keeps working against a newer server.
+  const result = await recordBrowserPoll(b.enabled === true, page, {
+    waitMs: Number(b.waitMs) || 0,
+    armLock: typeof b.armLock === "boolean" ? b.armLock : undefined,
+    onAbort: (cancel) => {
+      // A parked poll whose client hung up (laptop slept, wifi dropped) must
+      // not keep a timer and a resolver alive for the full window.
+      req.on("close", () => { if (!res.writableEnded) cancel(); });
+    },
+  });
+  if (res.writableEnded) return;
+  res.json(result);
 });
 
 app.post("/api/browser/result", express.json({ limit: "1mb" }), (req, res) => {
@@ -9005,6 +9018,7 @@ app.post("/api/browser/result", express.json({ limit: "1mb" }), (req, res) => {
     error: typeof b.error === "string" ? b.error : undefined,
     url: typeof b.url === "string" ? b.url : undefined,
     title: typeof b.title === "string" ? b.title : undefined,
+    meta: b.meta && typeof b.meta === "object" ? (b.meta as Record<string, unknown>) : undefined,
   });
   res.json({ accepted });
 });

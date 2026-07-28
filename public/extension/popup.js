@@ -10,6 +10,15 @@ function paint(cfg, live) {
     ? "On — Harvey works in his own tab, not the one you're reading"
     : "Off — nothing can run";
 
+  // Inverted on purpose: the checkbox reads "let Harvey switch it back on",
+  // so ticked = allowed = lock off. Storing the lock rather than the
+  // permission keeps the safe state as the default for anyone who never
+  // opens this row.
+  $("armLock").checked = cfg.armLock !== true;
+  $("lockHint").textContent = cfg.armLock === true
+    ? "Locked — only you can switch it on, from here"
+    : 'Allowed — "turn the browser back on" works';
+
   const dot = $("dot");
   dot.className = "dot";
   if (!cfg.serverUrl || !cfg.token) {
@@ -76,9 +85,14 @@ function normalizeServer(raw) {
 }
 
 async function refresh() {
-  const cfg = await chrome.storage.local.get(["serverUrl", "token", "enabled"]);
+  const cfg = await chrome.storage.local.get(["serverUrl", "token", "enabled", "armLock"]);
   paint(cfg, await checkServer(cfg));
 }
+
+$("armLock").addEventListener("change", async (e) => {
+  await chrome.storage.local.set({ armLock: !e.target.checked });
+  chrome.runtime.sendMessage({ type: "harvey:poll-now" }, () => refresh());
+});
 
 $("save").addEventListener("click", async () => {
   const serverUrl = normalizeServer($("serverUrl").value);

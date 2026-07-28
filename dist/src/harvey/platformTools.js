@@ -152,7 +152,44 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
     },
     {
         name: "browser_disable",
-        description: "Switch browser control OFF. Use whenever the operator says they're done, or asks you to turn it off / stop / disarm the browser. This genuinely disarms the extension — do NOT claim the browser is off unless this tool returned success. There is deliberately no tool to turn it back ON: only the person at the keyboard can arm it, from the extension popup.",
+        description: "Switch browser control OFF. Use whenever the operator says they're done, or asks you to turn it off / stop / disarm the browser. This genuinely disarms the extension — do NOT claim the browser is off unless this tool returned success.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "browser_enable",
+        description: "Switch browser control back ON when the operator asks you to. Only works on a browser they already paired, and they can set a lock in the extension popup that refuses this — if it comes back locked, say so and tell them to flip the switch themselves. Never claim the browser is on unless this returned success.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "browser_wait_for",
+        description: "Wait until something appears on the page. Use on sites that load their content after the page itself (most modern listing portals): if a read or extract comes back empty or looks like a loading state, wait for the thing you expect and then retry rather than reporting the page as empty.",
+        input_schema: {
+            type: "object",
+            properties: {
+                selector: { type: "string", description: "CSS selector to wait for." },
+                text: { type: "string", description: "Visible text to wait for." },
+                timeoutMs: { type: "number", description: "Default 15000." },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "browser_structured_data",
+        description: "Read the page's own schema.org JSON-LD and OpenGraph data. TRY THIS FIRST on any listing or product page: portals publish their real data here for search engines — price, address, beds, baths, agent — and it survives redesigns that break every CSS selector. Fall back to browser_read + browser_extract only when this returns nothing.",
+        input_schema: { type: "object", properties: {}, required: [] },
+    },
+    {
+        name: "browser_scroll",
+        description: "Scroll Harvey's tab. Use before reading a search-results page: portals lazy-load listings as you scroll, so a plain read only sees the first few. Defaults to stepping to the bottom until the page stops growing.",
+        input_schema: {
+            type: "object",
+            properties: { to: { type: "string", description: '"bottom" (default), "top", or a pixel number.' } },
+            required: [],
+        },
+    },
+    {
+        name: "browser_show_tab",
+        description: "Bring Harvey's tab to the front so the operator can see it and take over. THIS IS THE ANSWER TO A LOGIN WALL: never ask for a password — call this, then ask them to sign in. Their session persists in that tab and you carry on from there.",
         input_schema: { type: "object", properties: {}, required: [] },
     },
     {
@@ -180,9 +217,11 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
     },
     {
         name: "browser_fill",
-        description: "Type values into form fields — a map of CSS selector to value. If you don't know the field selectors, call browser_read first; common ones ('#email', 'input[name=username]') can be tried directly. " +
-            "ALWAYS ATTEMPT THE FILL. Password fields are refused at the page, per field, and the refusal comes back in the result — so a form containing a password box still gets its other fields filled. " +
-            "Never decline the whole request up front because a password is mentioned: run the tool, then report exactly which fields were filled and which were refused.",
+        description: "Type values into form fields — a map of CSS selector to value. Handles text inputs, textareas, contenteditable, checkboxes and radios (pass true/false), and <select> (match by option value OR visible text, e.g. 'Texas'). If you don't know the selectors, call browser_read first; common ones ('#email', 'input[name=username]') can be tried directly. " +
+            "ALWAYS ATTEMPT THE FILL. Password fields are the single exception and are refused per-field at the page, with the refusal returned in the result — so a form containing a password box still gets every other field filled. " +
+            "Never decline the whole request up front because a password is mentioned: run the tool, then report exactly which fields were filled and which were refused. " +
+            "When you explain the password refusal, be accurate: it is HARVEY'S OWN safety rule, NOT a Chrome or browser restriction — do not tell the operator it is 'browser security', because they will go looking for a setting that does not exist. " +
+            "And do not treat it as a dead end: if the site needs a login, call browser_show_tab and ask them to sign in themselves. The tab keeps their session, so you never need their password at all.",
         input_schema: {
             type: "object",
             properties: {
@@ -514,6 +553,39 @@ async function executePlatformTool(name, input) {
             }
             return await (0, browserControl_js_1.run)({ action: "navigate", url });
         }
+        case "browser_wait_for":
+            return await (0, browserControl_js_1.run)({
+                action: "waitFor",
+                selector: str(input.selector) || undefined,
+                text: str(input.text) || undefined,
+                timeoutMs: num(input.timeoutMs, 15000),
+            }, { timeoutMs: num(input.timeoutMs, 15000) + 8000 });
+        case "browser_structured_data":
+            return await (0, browserControl_js_1.run)({ action: "structured" });
+        case "browser_scroll":
+            return await (0, browserControl_js_1.run)({ action: "scroll", to: str(input.to) || "bottom" }, { timeoutMs: 30000 });
+        case "browser_show_tab":
+            return await (0, browserControl_js_1.run)({ action: "focus" });
+        case "browser_enable": {
+            const st = (0, browserControl_js_1.status)();
+            if (!st.configured) {
+                return { ok: false, error: "Browser control isn't configured on the server (BROWSER_CONTROL_TOKEN is unset), so there's nothing to switch on." };
+            }
+            const r = (0, browserControl_js_1.requestArm)();
+            if (!r.connected) {
+                return { ok: false, error: "No paired browser is reachable. The operator needs Chrome open with the Harvey extension installed." };
+            }
+            if (r.locked) {
+                return {
+                    ok: false,
+                    locked: true,
+                    error: "The operator locked remote arming in the extension popup. Tell them to switch 'Let Harvey control this browser' on themselves — you cannot do it while that lock is set.",
+                };
+            }
+            if (r.alreadyOn)
+                return { ok: true, enabled: true, note: "Browser control was already on." };
+            return { ok: true, enabled: true, note: "Browser control switched on — the extension arms within a second or two." };
+        }
         case "browser_disable": {
             const st = (0, browserControl_js_1.status)();
             if (!st.configured)
@@ -530,8 +602,22 @@ async function executePlatformTool(name, input) {
                 note: "Browser control switched off — the extension disarms on its next poll (within ~2 seconds) and any queued actions were dropped. To turn it back on, the operator flips the switch in the extension popup; you cannot.",
             };
         }
-        case "browser_read":
-            return await (0, browserControl_js_1.run)({ action: "read", selector: str(input.selector) || undefined });
+        case "browser_read": {
+            const r = await (0, browserControl_js_1.run)({ action: "read", selector: str(input.selector) || undefined });
+            const meta = (r.meta || {});
+            if (r.ok && meta.needsLogin) {
+                // Without this, a sign-in wall looks like a thin page and gets
+                // reported as "there's nothing on this listing".
+                return {
+                    ...r,
+                    hint: "This page is a SIGN-IN WALL, not the content — do not report it as an empty or missing listing. Do NOT ask for their password and do not try to type one. Call browser_show_tab, ask the operator to sign in themselves, then continue: their session stays in that tab.",
+                };
+            }
+            if (r.ok && meta.truncated) {
+                return { ...r, hint: "The page was longer than the limit and this is the top of it. Use browser_extract or a selector for anything further down." };
+            }
+            return r;
+        }
         case "browser_click": {
             const text = str(input.text);
             const selector = str(input.selector);

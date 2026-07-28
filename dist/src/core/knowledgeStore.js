@@ -218,11 +218,29 @@ HOA?" works without opening anything first.
 The extension popup shows which page Harvey is on, so you can check before
 asking him to click something.
 
-## What it will not do
-It cannot read cookies, read saved passwords, type into password fields, or
-run arbitrary code. If a form has a password box Harvey skips it and says so.
+## Sites that need a login
+**You never give Harvey a password.** He works in a tab inside your own Chrome,
+so you are already signed in to anything you normally use — the MLS, a title
+company portal, your email. Your session is simply there.
 
-Switch it off when you're done — off means no command can run at all.
+If he does hit a sign-in screen, he brings his tab to the front and asks you to
+sign in. Do it yourself, then tell him to carry on: the session stays in that
+tab and he keeps working from there.
+
+## What it will not do
+It cannot read cookies, read saved passwords, type into password fields, or run
+arbitrary code. If a form has a password box he fills every other field and
+skips that one.
+
+To be clear about why: **this is Harvey's own safety rule, not a Chrome
+restriction.** There is no browser setting that turns it on. It exists so
+"fill in this form" can never quietly become "type my credentials somewhere",
+and because — see above — he does not need your password to do the work.
+
+Switch it off when you're done — off means no command can run at all. You can
+also ask him to turn it off, and to turn it back on. If you'd rather he could
+never switch it on himself, untick **Let Harvey switch it back on** in the
+popup; then only you can arm it.
 `),
         mk("How to write an SOP for Harvey", "Harvey", ["sop", "writing", "onboarding"], `
 # Writing SOPs Harvey can use
