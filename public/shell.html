@@ -98,6 +98,30 @@
  .notecard p { font-size:12px; color:var(--muted); margin-top:3px; }
  .notecard .x { position:absolute; top:7px; right:8px; border:none; background:none; color:var(--muted); font-size:14px; cursor:pointer; line-height:1; padding:2px; }
 
+ /* ── Unread-assignment count on the Tasks tab ── */
+ .nav-item .badge { display:none; margin-left:auto; min-width:20px; height:20px; padding:0 6px; border-radius:10px; background:#e2483d; color:#fff; font-size:11px; font-weight:700; align-items:center; justify-content:center; line-height:1; flex:0 0 auto; }
+ .nav-item .badge.on { display:flex; }
+
+ /* ── "Who's logging in?" gate ── */
+ #gate { position:fixed; inset:0; z-index:200; background:rgba(16,24,40,.45); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; padding:20px; }
+ #gate.on { display:flex; }
+ #gateCard { width:100%; max-width:420px; background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:0 24px 60px rgba(16,24,40,.28); padding:26px 26px 22px; animation:gateIn .22s ease; }
+ @keyframes gateIn { from{ opacity:0; transform:translateY(10px) scale(.98); } to{ opacity:1; transform:none; } }
+ #gateCard h2 { font-size:19px; color:var(--text); margin-bottom:5px; }
+ #gateCard p { font-size:12.5px; color:var(--muted); margin-bottom:18px; line-height:1.5; }
+ .gatebtn { display:flex; align-items:center; gap:11px; width:100%; padding:11px 13px; margin-bottom:8px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; text-align:left; font-family:var(--font); transition:border-color .15s, background .15s, transform .1s; }
+ .gatebtn:hover { border-color:var(--line-2); background:var(--soft); transform:translateX(2px); }
+ .gatebtn .av { flex:0 0 auto; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:13px; }
+ .gatebtn .nm { font-size:13.5px; font-weight:600; color:var(--text); }
+ .gatebtn .rl { font-size:11px; color:var(--muted); margin-top:1px; }
+ #gateLoading { font-size:12.5px; color:var(--muted); padding:8px 0; }
+
+ /* Signed-in chip in the sidebar footer — click to switch user. */
+ #whoBtn { display:flex; align-items:center; gap:7px; flex:1; min-width:0; background:none; border:none; padding:0; cursor:pointer; font-family:var(--font); text-align:left; color:inherit; }
+ #whoBtn:hover #whoLabel { color:var(--accent); }
+ #whoAv { flex:0 0 auto; width:18px; height:18px; border-radius:50%; display:none; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:9px; }
+ #whoAv.on { display:flex; }
+
 
  @media (max-width:780px){ :root{ --w:210px; } }
 </style>
@@ -123,7 +147,10 @@
      <nav id="nav"></nav>
      <div id="side-foot">
        <span class="dot"></span>
-       <span id="whoLabel" style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;flex:1">Marco Puga &middot; Live</span>
+       <button id="whoBtn" title="Switch user">
+         <span id="whoAv"></span>
+         <span id="whoLabel" style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Marco Puga &middot; Live</span>
+       </button>
        <button id="logoutBtn" title="Sign out" style="display:none;background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
      </div>
    </aside>
@@ -136,6 +163,17 @@
      <div id="frames"></div>
      <div id="toast"></div>
      <div id="notePops"></div>
+   </div>
+ </div>
+
+ <!-- Who's logging in? Shown whenever no team member is selected on this
+      device. Writes the same localStorage key the Task Command board reads,
+      so picking here signs you in everywhere. -->
+ <div id="gate">
+   <div id="gateCard">
+     <h2>Who&rsquo;s logging in?</h2>
+     <p>Pick your name. Your tasks, notifications and messages load for you.</p>
+     <div id="gateBtns"><div id="gateLoading">Loading team&hellip;</div></div>
    </div>
  </div>
 
@@ -250,6 +288,33 @@ var NAV_MESSAGE_TYPE = "app-navigate";
 var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg>';
 
 
+/* ── TEAM IDENTITY ────────────────────────────────────────────────
+   Who is at this device. Same localStorage key the Task Command board
+   uses, so signing in here signs you in there too (and vice versa).
+   This is the lightweight "who's on" picker, NOT the real account auth
+   in /api/auth/* — that system is separate and currently switched off. */
+var USER_KEY = "marcoTaskUser";
+/* Only used if /api/team/roster can't be reached — the gate must never be
+   a dead end that locks someone out of the app. Server list wins. */
+var ROSTER_FALLBACK = [
+  { id:"marco",    name:"Marco",    role:"Lead Agent", color:"#7C3AED" },
+  { id:"wesley",   name:"Wesley",   role:"Agent",      color:"#0E7490" },
+  { id:"kendrick", name:"Kendrick", role:"Assistant",  color:"#DB2777" },
+  { id:"carlos",   name:"Carlos",   role:"Assistant",  color:"#A16207" }
+];
+var ROSTER = ROSTER_FALLBACK.slice();
+
+function currentUser(){ try{ return localStorage.getItem(USER_KEY) || ""; }catch(_){ return ""; } }
+function rosterMember(id){
+  for(var i=0;i<ROSTER.length;i++) if(ROSTER[i].id===id) return ROSTER[i];
+  return null;
+}
+
+/* Show the gate synchronously when nobody is signed in — waiting on the
+   auth/roster fetches would flash a usable-looking app first. */
+if(!currentUser()) document.getElementById("gate").classList.add("on");
+
+
 function initShell(){
  "use strict";
  var byKey = {}; TABS.forEach(function(t){ byKey[t.key]=t; });
@@ -262,7 +327,8 @@ function initShell(){
  nav.innerHTML = TABS.map(function(t,i){
    var sep = SECTIONS[t.key] ? '<div class="nav-sep">'+SECTIONS[t.key]+'</div>' : '';
    return sep + '<div class="nav-item'+(t.key===current?' active':'')+'" data-key="'+t.key+'" title="'+t.label+'">'+
-     '<div class="ic">'+(t.icon||DEFAULT_ICON)+'</div><div class="tx"><div class="l">'+t.label+'</div><div class="s">'+(t.sub||'')+'</div></div></div>';
+     '<div class="ic">'+(t.icon||DEFAULT_ICON)+'</div><div class="tx"><div class="l">'+t.label+'</div><div class="s">'+(t.sub||'')+'</div></div>'+
+     '<span class="badge" data-badge="'+t.key+'"></span></div>';
  }).join("");
 
 
@@ -345,27 +411,109 @@ function initShell(){
    setTimeout(function(){ if(el.parentNode) el.remove(); }, 15000);
  }
 
+ /* Count pill on a sidebar tab. 0 hides it. */
+ function setNavBadge(key, n){
+   var el = nav.querySelector('.badge[data-badge="'+key+'"]');
+   if(!el) return;
+   el.textContent = n > 99 ? "99+" : String(n);
+   el.classList.toggle("on", n > 0);
+ }
+
+ /* At most this many toasts per poll — signing in with a backlog of
+    assignments should not bury the screen. The Tasks badge carries the
+    full count, so nothing is lost by capping the popups. */
+ var MAX_POPS_PER_POLL = 3;
+
  function pollNotes(){
-   var me = "";
-   try{ me = localStorage.getItem("marcoTaskUser") || ""; }catch(_){}
-   if(!me) return;
+   var me = currentUser();
+   if(!me){ setNavBadge("tasks", 0); return; }
    fetch("/api/team/notifications?user="+encodeURIComponent(me), { credentials:"same-origin" })
      .then(function(r){ return r.ok ? r.json() : null; })
      .then(function(d){
        if(!d) return;
        var notes = d.notifications || [];
-       var fresh = false;
+       var fresh = false, popped = 0, unreadTasks = 0;
        notes.forEach(function(n){
+         // Badge: every unread task assignment, whether or not it has
+         // already been popped on this device.
+         if(!n.readAt && n.type === "assignment") unreadTasks++;
+
          if(noteSeen[n.id]) return;
          noteSeen[n.id] = 1; fresh = true;
-         if(n.readAt) return;                    // already acknowledged - nothing to show
+         if(n.readAt) return;                     // already acknowledged - nothing to show
          if(current === "tasks") return;          // Tasks tab already shows its own copy of this
+         if(popped >= MAX_POPS_PER_POLL) return;  // badge still counts it
+         popped++;
          popNoteCard(n);
        });
+       setNavBadge("tasks", unreadTasks);
        if(fresh){ try{ localStorage.setItem(noteSeenKey, JSON.stringify(Object.keys(noteSeen).slice(-500))); }catch(_){} }
      })
      .catch(function(){});
  }
+
+ /* ── Login gate ──────────────────────────────────────────────────
+    Picking a name writes USER_KEY, which is the single identity the
+    whole app reads. Switching users reloads the Tasks frame if it has
+    already loaded, since that page reads the identity once at startup. */
+ var gateEl = document.getElementById("gate");
+
+ function paintIdentity(){
+   var m = rosterMember(currentUser());
+   var av = document.getElementById("whoAv");
+   var label = document.getElementById("whoLabel");
+   if(!m){ av.classList.remove("on"); return; }
+   av.textContent = m.name.charAt(0);
+   av.style.background = m.color;
+   av.classList.add("on");
+   // A real signed-in account (from /api/auth/me) owns this label if present.
+   if(!window.__authUser) label.textContent = m.name + " · " + m.role;
+ }
+
+ function renderGate(){
+   document.getElementById("gateBtns").innerHTML = ROSTER.map(function(m){
+     return '<button class="gatebtn" data-u="'+m.id+'">'+
+       '<span class="av" style="background:'+m.color+'">'+m.name.charAt(0)+'</span>'+
+       '<span><span class="nm">'+m.name+'</span><span class="rl">'+m.role+'</span></span></button>';
+   }).join("");
+   Array.prototype.forEach.call(document.querySelectorAll("#gateBtns .gatebtn"), function(b){
+     b.onclick = function(){ signIn(b.getAttribute("data-u")); };
+   });
+ }
+
+ function signIn(id){
+   var prev = currentUser();
+   try{ localStorage.setItem(USER_KEY, id); }catch(_){}
+   gateEl.classList.remove("on");
+   paintIdentity();
+   if(prev && prev !== id){
+     // Different person now — drop this device's popup history and reload
+     // the Tasks page so it re-reads who it is.
+     noteSeen = {};
+     try{ localStorage.removeItem(noteSeenKey); }catch(_){}
+     var tf = document.getElementById("frame-tasks");
+     if(tf && tf.src) tf.src = tf.getAttribute("data-src");
+   }
+   pollNotes();
+ }
+
+ function openGate(){ renderGate(); gateEl.classList.add("on"); }
+ document.getElementById("whoBtn").onclick = openGate;
+ window.AppShell.signIn = signIn;
+ window.AppShell.openGate = openGate;
+
+ /* Real roster from the server; the hardcoded fallback stands in if the
+    call fails so the gate can never lock someone out. */
+ fetch("/api/team/roster", { credentials:"same-origin" })
+   .then(function(r){ return r.ok ? r.json() : null; })
+   .then(function(d){ if(d && d.members && d.members.length) ROSTER = d.members; })
+   .catch(function(){})
+   .then(function(){
+     renderGate();
+     paintIdentity();
+     if(!currentUser()) gateEl.classList.add("on");
+   });
+
  pollNotes();
  setInterval(pollNotes, 20000);
 }
@@ -378,9 +526,10 @@ fetch("/api/auth/me", { credentials: "same-origin" })
     var user = d && d.user;
     var who = document.getElementById("whoLabel");
     // No user (either nobody's signed in, or the login gate is currently
-    // switched off in the backend) - leave the default "Marco Puga · Live"
-    // label alone rather than showing a confusing "Not signed in".
+    // switched off in the backend) - the footer then shows the team member
+    // picked at the "Who's logging in?" gate instead (see paintIdentity).
     if (user) {
+      window.__authUser = user;   // real account wins the footer label
       if (who) who.textContent = user.name + " · " + user.role;
       var lo = document.getElementById("logoutBtn"); if (lo) lo.style.display = "flex";
       if (user.role === "admin") {

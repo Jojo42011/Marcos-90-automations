@@ -70,6 +70,8 @@ const db_js_1 = require("./core/db.js");
 const crmNotificationStore_js_1 = require("./core/crmNotificationStore.js");
 const pushStore_js_1 = require("./core/pushStore.js");
 const teamStore_js_1 = require("./core/teamStore.js");
+const teamRoster_js_1 = require("./core/teamRoster.js");
+const taskAssignmentEmail_js_1 = require("./core/taskAssignmentEmail.js");
 const brivityPeople_js_1 = require("./core/brivityPeople.js");
 const index_js_11 = require("./agents/reEngagement/index.js");
 const index_js_12 = require("./agents/listingStatusAutomation/index.js");
@@ -7691,7 +7693,9 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
         createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
         sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : undefined,
     });
-    // Assigning someone else's task notifies them (Notifications tab + popup).
+    // Assigning someone else's task notifies them (Notifications tab + popup)
+    // and emails them from Marco's Gmail. The email is fire-and-forget so a
+    // slow or down Gmail can never delay or fail task creation.
     if (task.assignedTo && task.createdBy && task.assignedTo !== task.createdBy) {
         try {
             (0, teamStore_js_1.addNotification)({
@@ -7706,6 +7710,7 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
         catch (err) {
             console.error("[team] assignment notification failed:", err);
         }
+        void (0, taskAssignmentEmail_js_1.sendAssignmentEmail)(task, task.createdBy);
     }
     console.log("[Tasks] Created:", task.title, "column:", task.column);
     res.json({ task });
@@ -7754,7 +7759,8 @@ app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res)
         res.status(404).json({ error: "Task not found" });
         return;
     }
-    // Reassignment notifies the new assignee.
+    // Reassignment notifies — and emails — the new assignee, same as a fresh
+    // assignment: being handed an existing task is still being handed a task.
     if (updates.assignedTo && updates.assignedTo !== prevAssignee && task.createdBy !== updates.assignedTo) {
         try {
             (0, teamStore_js_1.addNotification)({
@@ -7769,6 +7775,7 @@ app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res)
         catch (err) {
             console.error("[team] reassignment notification failed:", err);
         }
+        void (0, taskAssignmentEmail_js_1.sendAssignmentEmail)(task, task.createdBy);
     }
     console.log("[Tasks] Updated:", task.title, "status:", task.status, "column:", task.column);
     res.json({ task });
@@ -7820,6 +7827,10 @@ app.post("/api/push/unsubscribe", express_1.default.json({ limit: "64kb" }), (re
     res.json({ success: true });
 });
 /* ——— Team collaboration: notifications, chat, presence (task command center) ——— */
+/** Who can sign in. Email addresses are intentionally omitted — see teamRoster.ts. */
+app.get("/api/team/roster", (_req, res) => {
+    res.json({ members: (0, teamRoster_js_1.listTeamMembers)() });
+});
 app.get("/api/team/notifications", (req, res) => {
     const user = String(req.query.user || "").toLowerCase();
     if (!user) {

@@ -98,6 +98,8 @@ import {
   markChatRead,
   chatUnreadCounts,
 } from "./core/teamStore.js";
+import { listTeamMembers } from "./core/teamRoster.js";
+import { sendAssignmentEmail } from "./core/taskAssignmentEmail.js";
 import { getBrivityPeople, getBrivityImportStatus } from "./core/brivityPeople.js";
 import { handleWebsiteVisit } from "./agents/reEngagement/index.js";
 import { handleListingStatusUpdate } from "./agents/listingStatusAutomation/index.js";
@@ -8490,7 +8492,9 @@ app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
     createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
     sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : undefined,
   });
-  // Assigning someone else's task notifies them (Notifications tab + popup).
+  // Assigning someone else's task notifies them (Notifications tab + popup)
+  // and emails them from Marco's Gmail. The email is fire-and-forget so a
+  // slow or down Gmail can never delay or fail task creation.
   if (task.assignedTo && task.createdBy && task.assignedTo !== task.createdBy) {
     try {
       addNotification({
@@ -8502,6 +8506,7 @@ app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
         from: task.createdBy,
       });
     } catch (err) { console.error("[team] assignment notification failed:", err); }
+    void sendAssignmentEmail(task, task.createdBy);
   }
   console.log("[Tasks] Created:", task.title, "column:", task.column);
   res.json({ task });
@@ -8541,7 +8546,8 @@ app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
     res.status(404).json({ error: "Task not found" });
     return;
   }
-  // Reassignment notifies the new assignee.
+  // Reassignment notifies — and emails — the new assignee, same as a fresh
+  // assignment: being handed an existing task is still being handed a task.
   if (updates.assignedTo && updates.assignedTo !== prevAssignee && task.createdBy !== updates.assignedTo) {
     try {
       addNotification({
@@ -8553,6 +8559,7 @@ app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
         from: task.createdBy,
       });
     } catch (err) { console.error("[team] reassignment notification failed:", err); }
+    void sendAssignmentEmail(task, task.createdBy);
   }
   console.log("[Tasks] Updated:", task.title, "status:", task.status, "column:", task.column);
   res.json({ task });
@@ -8608,6 +8615,12 @@ app.post("/api/push/unsubscribe", express.json({ limit: "64kb" }), (req, res) =>
 });
 
 /* ——— Team collaboration: notifications, chat, presence (task command center) ——— */
+
+/** Who can sign in. Email addresses are intentionally omitted — see teamRoster.ts. */
+app.get("/api/team/roster", (_req, res) => {
+  res.json({ members: listTeamMembers() });
+});
+
 app.get("/api/team/notifications", (req, res) => {
   const user = String(req.query.user || "").toLowerCase();
   if (!user) { res.status(400).json({ error: "user required" }); return; }
