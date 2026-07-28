@@ -9014,6 +9014,8 @@ app.post("/api/browser/poll", express.json({ limit: "64kb" }), async (req, res) 
   const result = await recordBrowserPoll(b.enabled === true, page, {
     waitMs: Number(b.waitMs) || 0,
     armLock: typeof b.armLock === "boolean" ? b.armLock : undefined,
+    deviceId: typeof b.deviceId === "string" ? b.deviceId : undefined,
+    deviceName: typeof b.deviceName === "string" ? b.deviceName : undefined,
     onAbort: (cancel) => {
       // A parked poll whose client hung up (laptop slept, wifi dropped) must
       // not keep a timer and a resolver alive for the full window.

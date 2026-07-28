@@ -130,6 +130,11 @@ function shortCaption(s){
 }
 
 function statusBanner(p){
+  /* A failing refresh is not "stale data", it is a broken pipe — and it needs
+     to read as a problem someone must fix, not as a nudge to press Refresh. */
+  if (p.status === "live" && p.refreshFailing) {
+    return '<div class="banner bad"><b>The automatic refresh is failing.</b> ' + esc(p.note || "") + '</div>';
+  }
   if (p.status === "live" && p.stale) {
     return '<div class="banner warn"><b>These numbers are stale.</b> ' + esc(p.note || "") + '</div>';
   }

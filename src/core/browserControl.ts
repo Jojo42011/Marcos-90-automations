@@ -66,6 +66,9 @@ export interface BrowserCommand {
   maxWidth?: number;
   /** For navigate: bring Harvey's window to the front. Defaults to true. */
   focus?: boolean;
+  /** Which paired browser runs this. Set at enqueue time, never guessed at
+   *  poll time — that is what stopped two armed browsers racing for it. */
+  targetDeviceId?: string;
   createdAt: string;
   issuedBy: string;
 }
@@ -105,6 +108,140 @@ let lastPollAt = 0;
 let extensionEnabled = false;
 let extensionPage: { url?: string; title?: string } = {};
 
+/* ── Devices ────────────────────────────────────────────────────────────────
+   There used to be exactly one queue, so with two browsers armed a command
+   went to whichever polled first — effectively at random, and the operator had
+   no way to tell which machine acted.
+
+   Each paired browser is now a device with its own name, and every command is
+   addressed to one of them before it is queued. When no device is named,
+   PRIORITY decides: Marco's machine wins, because it is his system and his
+   logins are the ones a listing portal expects. */
+export interface BrowserDevice {
+  id: string;
+  name: string;
+  lastPollAt: number;
+  enabled: boolean;
+  armLock: boolean;
+  page: { url?: string; title?: string };
+  firstSeenAt: number;
+  /** One-shot directives, per device — arming one browser must never arm the
+   *  other, which is exactly what a shared flag would have done. */
+  disarmRequested: boolean;
+  armRequested: boolean;
+}
+const devices = new Map<string, BrowserDevice>();
+
+/** Stands in for an extension build that predates device ids, so an operator
+ *  who hasn't reinstalled yet keeps working instead of going dark. */
+const LEGACY_DEVICE_ID = "__legacy";
+
+function touchDevice(id: string, name: string, enabled: boolean,
+                     page?: { url?: string; title?: string }, armLock?: boolean): BrowserDevice {
+  let d = devices.get(id);
+  if (!d) {
+    d = { id, name: name || id, lastPollAt: 0, enabled: false, armLock: false,
+          page: {}, firstSeenAt: Date.now(), disarmRequested: false, armRequested: false };
+    devices.set(id, d);
+  }
+  if (name) d.name = name;
+  d.lastPollAt = Date.now();
+  d.enabled = enabled;
+  if (page) d.page = page;
+  if (typeof armLock === "boolean") d.armLock = armLock;
+  // Clear one-shot directives once this device confirms the new state.
+  if (d.disarmRequested && !enabled) d.disarmRequested = false;
+  if (d.armRequested && enabled) d.armRequested = false;
+  return d;
+}
+
+/** Ordered, case-insensitive. First match wins; unlisted devices rank after. */
+function priorityNames(): string[] {
+  const raw = process.env.BROWSER_DEVICE_PRIORITY?.trim();
+  return (raw || "marco").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+
+function priorityRank(d: BrowserDevice): number {
+  const name = (d.name || "").toLowerCase();
+  const names = priorityNames();
+  for (let i = 0; i < names.length; i++) {
+    // substring, so "Marco's MacBook" still matches a priority entry of "marco"
+    if (name.includes(names[i])) return i;
+  }
+  return names.length;
+}
+
+function isLive(d: BrowserDevice): boolean {
+  return Date.now() - d.lastPollAt < CONNECTED_WINDOW_MS;
+}
+
+/** How long a silent device stays listed before it is forgotten entirely. */
+const DEVICE_FORGET_MS = 10 * 60 * 1000;
+
+/** Connected devices, best candidate first. */
+export function listDevices(): Array<BrowserDevice & { connected: boolean; priority: number }> {
+  // Drop browsers nobody has heard from in ten minutes, or the list grows
+  // forever with machines that were closed days ago.
+  const cutoff = Date.now() - DEVICE_FORGET_MS;
+  for (const [id, d] of devices) if (d.lastPollAt < cutoff) devices.delete(id);
+
+  return [...devices.values()]
+    .map((d) => {
+      const connected = isLive(d);
+      /* A browser that stopped polling is NOT armed, whatever its last poll
+         said. Reporting a closed laptop as "armed" is the same class of lie as
+         Harvey claiming he had switched the browser off — the operator would
+         believe a machine is live and controllable when it is gone. */
+      return { ...d, enabled: d.enabled && connected, connected, priority: priorityRank(d) };
+    })
+    .sort((a, b) => {
+      if (a.connected !== b.connected) return a.connected ? -1 : 1;
+      if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      /* Among devices of EQUAL priority, prefer the one heard from most
+         recently. A browser that was closed stops polling, and its lastPollAt
+         falls behind within seconds — without this, a dead device kept winning
+         on "first seen" and commands went into the void while a live browser
+         sat idle. Priority is still the primary key, so Marco vs Wesley stays
+         stable and doesn't flip as they take turns re-polling. */
+      if (a.lastPollAt !== b.lastPollAt) return b.lastPollAt - a.lastPollAt;
+      return a.firstSeenAt - b.firstSeenAt;
+    });
+}
+
+/**
+ * Which device should run this command.
+ *
+ * `wanted` may be a device id or part of a name ("marco", "wesley"). Naming a
+ * device that is present but switched OFF is an error rather than a silent
+ * fall-through to someone else's browser — quietly acting on a different
+ * machine than the one asked for is the worst outcome here.
+ */
+export function resolveDevice(wanted?: string): { device: BrowserDevice | null; error: string | null } {
+  const live = listDevices().filter((d) => d.connected);
+  if (!live.length) return { device: null, error: "No paired browser is connected." };
+
+  if (wanted && wanted.trim()) {
+    const w = wanted.trim().toLowerCase();
+    const hit = live.find((d) => d.id.toLowerCase() === w)
+      || live.find((d) => (d.name || "").toLowerCase() === w)
+      || live.find((d) => (d.name || "").toLowerCase().includes(w));
+    if (!hit) {
+      return { device: null, error: `No connected browser matches "${wanted}". Connected: ${live.map((d) => d.name || d.id).join(", ")}.` };
+    }
+    if (!hit.enabled) {
+      return { device: null, error: `${hit.name || hit.id} is connected but switched OFF — ask them to turn on 'Let Harvey control this browser'.` };
+    }
+    return { device: hit, error: null };
+  }
+
+  const armed = live.filter((d) => d.enabled);
+  if (!armed.length) {
+    return { device: null, error: "A browser is connected but none are switched on. Turn on 'Let Harvey control this browser' in the extension popup." };
+  }
+  return { device: armed[0], error: null };   // already priority-sorted
+}
+
 /** Longest the server will hold a poll open. Must stay under Chrome's 30s
  *  service-worker idle kill, or the extension dies mid-wait. */
 const MAX_LONG_POLL_MS = 20000;
@@ -132,6 +269,12 @@ export interface BrowserStatus {
   configured: boolean;
   connected: boolean;
   enabled: boolean;
+  devices: Array<{
+    id: string; name: string; connected: boolean; enabled: boolean;
+    armLock: boolean; page: { url?: string; title?: string }; priority: number;
+  }>;
+  /** Name of the browser an unaddressed command would go to. */
+  activeDevice: string | null;
   lastPollAt: string | null;
   queued: number;
   awaitingResult: number;
@@ -139,10 +282,18 @@ export interface BrowserStatus {
 }
 
 export function status(): BrowserStatus {
+  const all = listDevices();
+  const live = all.filter((d) => d.connected);
   return {
     configured: isConfigured(),
-    connected: Date.now() - lastPollAt < CONNECTED_WINDOW_MS,
-    enabled: extensionEnabled,
+    connected: live.length > 0 || Date.now() - lastPollAt < CONNECTED_WINDOW_MS,
+    enabled: live.some((d) => d.enabled),
+    devices: all.map((d) => ({
+      id: d.id, name: d.name, connected: d.connected, enabled: d.enabled,
+      armLock: d.armLock, page: d.page, priority: d.priority,
+    })),
+    /** Who an unaddressed command would go to right now. */
+    activeDevice: live.filter((d) => d.enabled)[0]?.name || null,
     lastPollAt: lastPollAt ? new Date(lastPollAt).toISOString() : null,
     queued: queue.length,
     awaitingResult: pending.size,
@@ -169,17 +320,32 @@ let armRequested = false;
 /** Set by the extension when the human has locked out remote arming. */
 let armLockedByUser = false;
 
-export function requestDisarm(): { alreadyOff: boolean; connected: boolean } {
-  const s = status();
-  if (!s.connected) return { alreadyOff: !s.enabled, connected: false };
-  if (!s.enabled) return { alreadyOff: true, connected: true };
-  armRequested = false;
-  disarmRequested = true;
-  wakeWaiters();
-  // Anything already queued must not run in the window before the extension
-  // polls and disarms — "off" has to mean off immediately.
-  queue = [];
-  return { alreadyOff: false, connected: true };
+export function requestDisarm(wanted?: string): { alreadyOff: boolean; connected: boolean; device?: string } {
+  const live = listDevices().filter((d) => d.connected);
+  if (!live.length) return { alreadyOff: true, connected: false };
+
+  /* No device named = disarm EVERYTHING. "Turn the browser off" said out loud
+     means stop, not stop on one of two machines — the safe direction should
+     never need a second instruction to finish the job. */
+  const targets = wanted
+    ? live.filter((d) => d.id.toLowerCase() === wanted.toLowerCase()
+        || (d.name || "").toLowerCase().includes(wanted.toLowerCase()))
+    : live;
+  if (!targets.length) return { alreadyOff: false, connected: true };
+
+  const armed = targets.filter((d) => d.enabled);
+  if (!armed.length) {
+    return { alreadyOff: true, connected: true, device: targets.map((d) => d.name).join(", ") };
+  }
+  for (const t of armed) {
+    const d = devices.get(t.id)!;
+    d.armRequested = false;
+    d.disarmRequested = true;
+    // Anything queued for it must not run in the window before it disarms.
+    queue = queue.filter((c) => c.targetDeviceId !== d.id);
+    wakeWaiters(d.id);
+  }
+  return { alreadyOff: false, connected: true, device: armed.map((d) => d.name).join(", ") };
 }
 
 /**
@@ -195,15 +361,26 @@ export function requestDisarm(): { alreadyOff: boolean; connected: boolean } {
  * stated in the popup rather than hidden: anyone holding the pairing token can
  * re-arm a paired browser unless the lock is on.
  */
-export function requestArm(): { alreadyOn: boolean; connected: boolean; locked: boolean } {
-  const s = status();
-  if (!s.connected) return { alreadyOn: s.enabled, connected: false, locked: armLockedByUser };
-  if (armLockedByUser) return { alreadyOn: s.enabled, connected: true, locked: true };
-  if (s.enabled) return { alreadyOn: true, connected: true, locked: false };
-  disarmRequested = false;
-  armRequested = true;
-  wakeWaiters();
-  return { alreadyOn: false, connected: true, locked: false };
+export function requestArm(wanted?: string): { alreadyOn: boolean; connected: boolean; locked: boolean; device?: string } {
+  const live = listDevices().filter((d) => d.connected);
+  if (!live.length) return { alreadyOn: false, connected: false, locked: false };
+
+  /* Arming, unlike disarming, targets ONE browser — the priority pick when
+     none is named. Switching on every paired machine at once because someone
+     said "turn it back on" would arm a browser nobody was looking at. */
+  const pick = wanted
+    ? live.find((d) => d.id.toLowerCase() === wanted.toLowerCase()
+        || (d.name || "").toLowerCase().includes(wanted.toLowerCase()))
+    : live[0];
+  if (!pick) return { alreadyOn: false, connected: true, locked: false };
+  if (pick.armLock) return { alreadyOn: pick.enabled, connected: true, locked: true, device: pick.name };
+  if (pick.enabled) return { alreadyOn: true, connected: true, locked: false, device: pick.name };
+
+  const d = devices.get(pick.id)!;
+  d.disarmRequested = false;
+  d.armRequested = true;
+  wakeWaiters(d.id);
+  return { alreadyOn: false, connected: true, locked: false, device: d.name };
 }
 
 export function armLocked(): boolean {
@@ -224,41 +401,64 @@ export interface PollResponse {
    on every step. The poll now parks server-side until a command exists, so
    dispatch is immediate and the request count drops at the same time. */
 
-type Waiter = { resolve: (r: PollResponse) => void; timer: NodeJS.Timeout };
+type Waiter = { deviceId: string; resolve: (r: PollResponse) => void; timer: NodeJS.Timeout };
 let waiters: Waiter[] = [];
 
-function wakeWaiters(): void {
+/** Wake parked polls. With a target, only that device's poll is answered. */
+function wakeWaiters(deviceId?: string): void {
   if (!waiters.length) return;
-  const batch = waiters;
-  waiters = [];
-  for (const w of batch) {
+  const hit = deviceId ? waiters.filter((w) => w.deviceId === deviceId) : waiters;
+  if (!hit.length) return;
+  waiters = waiters.filter((w) => !hit.includes(w));
+  for (const w of hit) {
     clearTimeout(w.timer);
-    w.resolve(drain());
+    w.resolve(drain(w.deviceId));
   }
 }
 
 /** Close out parked polls with an empty answer without handing them work. */
-function retireWaiters(): void {
-  if (!waiters.length) return;
-  const batch = waiters;
-  waiters = [];
-  for (const w of batch) {
+function retireWaiters(deviceId: string): void {
+  const stale = waiters.filter((w) => w.deviceId === deviceId);
+  if (!stale.length) return;
+  waiters = waiters.filter((w) => w.deviceId !== deviceId);
+  for (const w of stale) {
     clearTimeout(w.timer);
     w.resolve({ commands: [], disarm: false, arm: false });
   }
 }
 
 /** Hand over whatever is pending right now. */
-function drain(): PollResponse {
+/**
+ * Hand over whatever is pending for ONE device.
+ *
+ * Filtering by target here is the whole fix: a command addressed to Marco's
+ * machine stays in the queue when anyone else polls, instead of being taken by
+ * whoever happened to ask first.
+ */
+function drain(deviceId?: string): PollResponse {
+  const dev = deviceId ? devices.get(deviceId) : undefined;
+  if (dev) {
+    if (dev.disarmRequested) return { commands: [], disarm: true, arm: false };
+    if (dev.armRequested) return { commands: [], disarm: false, arm: true };
+    if (!dev.enabled) return { commands: [], disarm: false, arm: false };
+    const mine = queue.filter((c) => c.targetDeviceId === deviceId);
+    if (mine.length) queue = queue.filter((c) => c.targetDeviceId !== deviceId);
+    return { commands: mine, disarm: false, arm: false };
+  }
+  // Legacy single-device path: an older extension build that sends no device id.
   if (disarmRequested) return { commands: [], disarm: true, arm: false };
   if (armRequested) return { commands: [], disarm: false, arm: true };
   if (!extensionEnabled) return { commands: [], disarm: false, arm: false };
-  const batch = queue;
-  queue = [];
+  const batch = queue.filter((c) => !c.targetDeviceId || c.targetDeviceId === LEGACY_DEVICE_ID);
+  if (batch.length) queue = queue.filter((c) => !(!c.targetDeviceId || c.targetDeviceId === LEGACY_DEVICE_ID));
   return { commands: batch, disarm: false, arm: false };
 }
 
 export interface PollOptions {
+  /** Stable per-browser id, generated by the extension. */
+  deviceId?: string;
+  /** Human name from the popup — this is what priority matches on. */
+  deviceName?: string;
   /** How long the server may hold the request open. 0 = answer immediately. */
   waitMs?: number;
   /** Extension reports whether the human has locked out remote arming. */
@@ -278,6 +478,9 @@ export function recordPoll(
   if (page) extensionPage = page;
   if (typeof opts.armLock === "boolean") armLockedByUser = opts.armLock;
 
+  const deviceId = (opts.deviceId || "").trim() || LEGACY_DEVICE_ID;
+  touchDevice(deviceId, (opts.deviceName || "").trim(), enabled, page, opts.armLock);
+
   // Clear the one-shot directives once the extension confirms the new state,
   // so a poll that crossed the request in flight doesn't drop the instruction.
   if (disarmRequested && !enabled) disarmRequested = false;
@@ -293,15 +496,16 @@ export function recordPoll(
   // didn't respond" about a browser that is sitting right there. Closing them
   // out with an empty answer is harmless — the extension re-polls — and it
   // guarantees commands can only ever go to the live connection.
-  retireWaiters();
+  retireWaiters(deviceId);
 
-  const immediate = drain();
+  const immediate = drain(deviceId);
   const hasWork = immediate.commands.length > 0 || immediate.disarm || immediate.arm;
   const waitMs = Math.min(Math.max(Number(opts.waitMs) || 0, 0), MAX_LONG_POLL_MS);
   if (hasWork || waitMs === 0) return immediate;
 
   return new Promise<PollResponse>((resolve) => {
     const w: Waiter = {
+      deviceId,
       resolve,
       // Time out with an empty answer rather than holding forever: the
       // extension re-polls, which doubles as the liveness signal `connected`
@@ -340,6 +544,9 @@ export function submitResult(result: Omit<BrowserResult, "at">): boolean {
 export interface RunOptions {
   issuedBy?: string;
   timeoutMs?: number;
+  /** Device id or part of a name. Omitted = highest-priority armed browser,
+   *  which is Marco's unless BROWSER_DEVICE_PRIORITY says otherwise. */
+  device?: string;
 }
 
 /**
@@ -357,16 +564,17 @@ export function run(
   if (!s.configured) {
     return Promise.resolve(fail("", "Browser control is not configured — BROWSER_CONTROL_TOKEN is not set on the server."));
   }
-  if (!s.connected) {
-    return Promise.resolve(fail("", "The Harvey browser extension isn't connected. Open Chrome, make sure the extension is installed and paired."));
-  }
-  if (!s.enabled) {
-    return Promise.resolve(fail("", "The extension is connected but switched OFF. Turn on 'Let Harvey control this browser' in the extension popup."));
-  }
+
+  /* Pick the browser BEFORE queueing. The old code queued blind and let
+     whichever extension polled first take the command, so with two machines
+     armed the operator could not tell — or choose — which one acted. */
+  const target = resolveDevice(opts.device);
+  if (!target.device) return Promise.resolve(fail("", target.error || "No browser available."));
 
   const full: BrowserCommand = {
     ...command,
     id: randomUUID(),
+    targetDeviceId: target.device.id,
     createdAt: new Date().toISOString(),
     issuedBy: opts.issuedBy || "harvey",
   };
@@ -374,9 +582,9 @@ export function run(
   history.unshift({ command: full });
   if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
   queue.push(full);
-  // Hand it straight to a parked long poll instead of letting it sit until the
-  // next timer tick — this is where the latency saving actually lands.
-  wakeWaiters();
+  // Hand it straight to that device's parked long poll instead of letting it
+  // sit until the next timer tick — this is where the latency saving lands.
+  wakeWaiters(target.device.id);
 
   // `command.timeoutMs` is how long the PAGE should keep waiting; this timer is
   // how long the SERVER waits for an answer. Treating them as the same number

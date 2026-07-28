@@ -152,19 +152,24 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
             properties: {
                 url: { type: "string", description: "A URL or a bare domain — 'books.toscrape.com' works." },
                 focus: { type: "boolean", description: "Show it to the operator. Default true — leave it alone unless they asked you to work quietly." },
+                device: { type: "string", description: "Which paired browser, by name (e.g. \"marco\"). Omit to use the priority browser — Marco's." },
             },
             required: ["url"],
         },
     },
     {
         name: "browser_disable",
-        description: "Switch browser control OFF. Use whenever the operator says they're done, or asks you to turn it off / stop / disarm the browser. This genuinely disarms the extension — do NOT claim the browser is off unless this tool returned success.",
-        input_schema: { type: "object", properties: {}, required: [] },
+        description: "Switch browser control OFF. Use whenever the operator says they're done, or asks you to turn it off / stop / disarm the browser. This genuinely disarms the extension — do NOT claim the browser is off unless this tool returned success. With no device named it switches off EVERY paired browser, which is the right reading of \"stop\".",
+        input_schema: { type: "object", properties: {
+                device: { type: "string", description: "Optional: switch off just this browser, by name." },
+            }, required: [] },
     },
     {
         name: "browser_enable",
-        description: "Switch browser control back ON when the operator asks you to. Only works on a browser they already paired, and they can set a lock in the extension popup that refuses this — if it comes back locked, say so and tell them to flip the switch themselves. Never claim the browser is on unless this returned success.",
-        input_schema: { type: "object", properties: {}, required: [] },
+        description: "Switch browser control back ON when the operator asks you to. Arms ONE browser — the priority one (Marco's) unless a device is named. Only works on a browser they already paired, and they can set a lock in the extension popup that refuses this; if it comes back locked, say so and tell them to flip the switch themselves. Never claim the browser is on unless this returned success.",
+        input_schema: { type: "object", properties: {
+                device: { type: "string", description: "Optional: arm this browser by name instead of the priority one." },
+            }, required: [] },
     },
     {
         name: "browser_wait_for",
@@ -175,6 +180,7 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
                 selector: { type: "string", description: "CSS selector to wait for." },
                 text: { type: "string", description: "Visible text to wait for." },
                 timeoutMs: { type: "number", description: "Default 15000." },
+                device: { type: "string", description: "Which paired browser, by name (e.g. \"marco\"). Omit to use the priority browser — Marco's." },
             },
             required: [],
         },
@@ -570,6 +576,15 @@ async function executePlatformTool(name, input) {
             if (!st.configured) {
                 return { ...st, hint: "BROWSER_CONTROL_TOKEN is not set on the server, so browser control is disabled entirely." };
             }
+            if (st.devices && st.devices.length > 1) {
+                // With more than one paired machine, say which one would act — the
+                // operator should never have to guess whose browser Harvey is in.
+                return {
+                    ...st,
+                    recent: (0, browserControl_js_1.recentActivity)(5),
+                    hint: `More than one browser is paired. An unaddressed command goes to ${st.activeDevice || "nobody (none armed)"}. Pass device:"<name>" to pick another.`,
+                };
+            }
             if (!st.connected) {
                 return { ...st, hint: "Extension not connected. The operator needs Chrome open with the Harvey extension installed and paired." };
             }
@@ -587,7 +602,7 @@ async function executePlatformTool(name, input) {
                 action: "navigate",
                 url,
                 focus: input.focus === false ? false : true,
-            });
+            }, { device: str(input.device) || undefined });
         }
         case "browser_wait_for":
             return await (0, browserControl_js_1.run)({
@@ -595,15 +610,15 @@ async function executePlatformTool(name, input) {
                 selector: str(input.selector) || undefined,
                 text: str(input.text) || undefined,
                 timeoutMs: num(input.timeoutMs, 15000),
-            }, { timeoutMs: num(input.timeoutMs, 15000) + 8000 });
+            }, { timeoutMs: num(input.timeoutMs, 15000) + 8000, device: str(input.device) || undefined });
         case "browser_structured_data":
-            return await (0, browserControl_js_1.run)({ action: "structured" });
+            return await (0, browserControl_js_1.run)({ action: "structured" }, { device: str(input.device) || undefined });
         case "browser_scroll":
-            return await (0, browserControl_js_1.run)({ action: "scroll", to: str(input.to) || "bottom" }, { timeoutMs: 30000 });
+            return await (0, browserControl_js_1.run)({ action: "scroll", to: str(input.to) || "bottom" }, { timeoutMs: 30000, device: str(input.device) || undefined });
         case "browser_show_tab":
-            return await (0, browserControl_js_1.run)({ action: "focus" });
+            return await (0, browserControl_js_1.run)({ action: "focus" }, { device: str(input.device) || undefined });
         case "browser_screenshot": {
-            const r = await (0, browserControl_js_1.run)({ action: "screenshot", maxWidth: num(input.maxWidth, 1000) }, { timeoutMs: 40000 });
+            const r = await (0, browserControl_js_1.run)({ action: "screenshot", maxWidth: num(input.maxWidth, 1000) }, { timeoutMs: 40000, device: str(input.device) || undefined });
             if (!r.ok || !r.image)
                 return r;
             // `_image` is the convention the agent loop understands: it lifts this
@@ -617,7 +632,7 @@ async function executePlatformTool(name, input) {
             if (!st.configured) {
                 return { ok: false, error: "Browser control isn't configured on the server (BROWSER_CONTROL_TOKEN is unset), so there's nothing to switch on." };
             }
-            const r = (0, browserControl_js_1.requestArm)();
+            const r = (0, browserControl_js_1.requestArm)(str(input.device) || undefined);
             if (!r.connected) {
                 return { ok: false, error: "No paired browser is reachable. The operator needs Chrome open with the Harvey extension installed." };
             }
@@ -636,7 +651,7 @@ async function executePlatformTool(name, input) {
             const st = (0, browserControl_js_1.status)();
             if (!st.configured)
                 return { ok: true, enabled: false, note: "Browser control isn't configured at all, so nothing is armed." };
-            const r = (0, browserControl_js_1.requestDisarm)();
+            const r = (0, browserControl_js_1.requestDisarm)(str(input.device) || undefined);
             if (!r.connected) {
                 return { ok: true, enabled: false, note: "The extension isn't connected, so nothing can run. It starts switched off when it reconnects." };
             }

@@ -47,6 +47,24 @@ function normalizeServer(raw) {
   }
 }
 
+/**
+ * A stable id for THIS browser, plus the name the operator gave it.
+ *
+ * Without an identity the server could only ever see "a browser", so two armed
+ * machines raced for every command and neither the operator nor Harvey could
+ * say which one had acted. The id is generated once and kept; the name is
+ * whatever the human typed in the popup, and it is what priority matches on.
+ */
+async function identity() {
+  const c = await chrome.storage.local.get(["deviceId", "deviceName"]);
+  let id = c.deviceId;
+  if (!id) {
+    id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
+    await chrome.storage.local.set({ deviceId: id });
+  }
+  return { deviceId: id, deviceName: (c.deviceName || "").trim() };
+}
+
 async function config() {
   const c = await chrome.storage.local.get(["serverUrl", "token", "enabled"]);
   return {
@@ -836,6 +854,7 @@ async function pollOnce() {
   } catch (_) {}
 
   const { armLock } = await chrome.storage.local.get(["armLock"]);
+  const who = await identity();
 
   let commands = [];
   const ka = startKeepalive();
@@ -845,7 +864,8 @@ async function pollOnce() {
       headers: { "Content-Type": "application/json" },
       // Ask the server to hold the request until there's work. Dispatch used
       // to wait for the next 2s tick; every step of a multi-step task paid it.
-      body: JSON.stringify({ token, enabled, page: tabInfo, waitMs: LONG_POLL_MS, armLock: armLock === true }),
+      body: JSON.stringify({ token, enabled, page: tabInfo, waitMs: LONG_POLL_MS, armLock: armLock === true,
+                             deviceId: who.deviceId, deviceName: who.deviceName }),
     });
     if (!res.ok) { await setBadge("err"); return IDLE_POLL_MS; }
     const body = await res.json();

@@ -55,6 +55,33 @@ function emptyPlatform(id, label, note) {
         avgViews: null, engagementRate: null, topPost: null, mix: null,
     };
 }
+/**
+ * The most recent attempt to refresh TikTok, successful or not.
+ *
+ * Exists because "stale" on its own is a dead end. The nightly pull IS
+ * scheduled and IS running — it had been failing every night for thirteen days
+ * with Apify's "Monthly usage hard limit exceeded", and nothing anywhere said
+ * so. The page told the operator to hit Refresh in Content Manager, which
+ * could only ever fail the same way. A stale figure whose cause is invisible
+ * sends someone to press a button that cannot work.
+ */
+function lastRefreshAttempt() {
+    let pulls;
+    try {
+        pulls = (0, socialStore_js_1.getRecentAgentPulls)(40);
+    }
+    catch {
+        return null;
+    }
+    const last = (pulls || []).find((p) => p.pullType === "social_refresh");
+    if (!last)
+        return null;
+    return {
+        at: last.pulledAt,
+        ok: last.status === "success",
+        detail: String(last.summary || "").replace(/^Failed:\s*/i, "").trim(),
+    };
+}
 /** TikTok, from the existing Apify pull. This is the one live source today. */
 function tiktokMetrics() {
     let data;
@@ -76,16 +103,30 @@ function tiktokMetrics() {
     const top = data.videos && data.videos.length
         ? data.videos.reduce((a, b) => (b.views > a.views ? b : a))
         : null;
+    /* A failing refresh outranks a plain "it's old" note: the age is the
+       symptom, the failure is the thing someone can act on. */
+    const attempt = lastRefreshAttempt();
+    const attemptNewerThanData = attempt && (!data.lastUpdated || Date.parse(attempt.at) > Date.parse(data.lastUpdated));
+    const stale = age != null && age > STALE_AFTER_HOURS;
+    let note = null;
+    if (attempt && !attempt.ok && attemptNewerThanData) {
+        note =
+            `The automatic refresh is running but FAILING — last tried ${attempt.at.slice(0, 16).replace("T", " ")} UTC: ` +
+                `"${attempt.detail}". These numbers are frozen until that is fixed; pressing Refresh will hit the same error.`;
+    }
+    else if (stale) {
+        note = `Last pulled ${Math.round(age / 24)} day(s) ago — refresh in Content Manager for current numbers.`;
+    }
     return {
         id: "tiktok",
         label: "TikTok",
         status: "live",
         source: "Apify pull (Content Manager)",
         lastUpdated: data.lastUpdated,
-        stale: age != null && age > STALE_AFTER_HOURS,
-        note: age != null && age > STALE_AFTER_HOURS
-            ? `Last pulled ${Math.round(age / 24)} day(s) ago — refresh in Content Manager for current numbers.`
-            : null,
+        stale: stale || Boolean(attempt && !attempt.ok && attemptNewerThanData),
+        note,
+        refreshFailing: Boolean(attempt && !attempt.ok && attemptNewerThanData),
+        lastAttempt: attempt,
         followers: data.snapshot?.followerCount ?? null,
         posts: s.totalVideos,
         views: s.totalViews,

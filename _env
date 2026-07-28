@@ -68,3 +68,8 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # Browser control — pairing token for the Harvey Chrome extension.
 # Unset = browser control is disabled entirely (fails closed).
 # BROWSER_CONTROL_TOKEN=
+
+# Browser control — which paired machine wins an unaddressed command.
+# Comma-separated, case-insensitive, matched as a substring of the device name
+# set in the extension popup. Default "marco" — it is his system.
+# BROWSER_DEVICE_PRIORITY=marco,wesley

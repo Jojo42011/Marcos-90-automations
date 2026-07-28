@@ -3,6 +3,7 @@
 const $ = (id) => document.getElementById(id);
 
 function paint(cfg, live) {
+  $("deviceName").value = cfg.deviceName || "";
   $("serverUrl").value = cfg.serverUrl || "";
   $("token").value = cfg.token || "";
   $("enabled").checked = cfg.enabled === true;
@@ -85,7 +86,7 @@ function normalizeServer(raw) {
 }
 
 async function refresh() {
-  const cfg = await chrome.storage.local.get(["serverUrl", "token", "enabled", "armLock"]);
+  const cfg = await chrome.storage.local.get(["serverUrl", "token", "enabled", "armLock", "deviceName"]);
   paint(cfg, await checkServer(cfg));
 }
 
@@ -97,7 +98,10 @@ $("armLock").addEventListener("change", async (e) => {
 $("save").addEventListener("click", async () => {
   const serverUrl = normalizeServer($("serverUrl").value);
   const token = $("token").value.trim();
-  await chrome.storage.local.set({ serverUrl, token });
+  /* The name is how Harvey addresses this machine and how priority is
+     decided, so it is saved with the pairing rather than hidden in settings. */
+  const deviceName = $("deviceName").value.trim();
+  await chrome.storage.local.set({ serverUrl, token, deviceName });
   $("serverUrl").value = serverUrl;   // show what was actually saved
   $("save").textContent = "Saved";
   setTimeout(() => { $("save").textContent = "Save & pair"; }, 1400);
