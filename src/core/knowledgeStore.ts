@@ -219,11 +219,18 @@ Chrome only offers "Load unpacked" for a folder that is already on your own
 computer — that's why there's a download step; there is no Web Store listing.
 
 ## Using it
-Open the page you want worked on, then ask:
-- "Pull the price, address, beds and baths off this listing."
+Just ask:
+- "Open this listing and pull the price, address, beds and baths."
 - "Fill the request form with my details and submit."
 
-Harvey acts in whatever tab you're looking at, so leave it on the right page.
+Harvey works in **his own tab**, opened in the background the first time he
+needs one. He will never navigate the page you're reading — including this
+app — out from under you. If he hasn't opened a tab yet and you ask about the
+page you're on, he acts on that one, so "what does this page say about the
+HOA?" works without opening anything first.
+
+The extension popup shows which page Harvey is on, so you can check before
+asking him to click something.
 
 ## What it will not do
 It cannot read cookies, read saved passwords, type into password fields, or
