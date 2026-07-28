@@ -79,6 +79,7 @@ const browserControl_js_1 = require("./core/browserControl.js");
 const knowledgeStore_js_1 = require("./core/knowledgeStore.js");
 const taskAssignmentEmail_js_1 = require("./core/taskAssignmentEmail.js");
 const brivityPeople_js_1 = require("./core/brivityPeople.js");
+const zipWriter_js_1 = require("./core/zipWriter.js");
 const index_js_11 = require("./agents/reEngagement/index.js");
 const index_js_12 = require("./agents/listingStatusAutomation/index.js");
 const index_js_13 = require("./agents/contentManager/index.js");
@@ -8180,6 +8181,54 @@ app.get("/api/browser/status", (req, res) => {
         return;
     }
     res.json({ ...(0, browserControl_js_1.status)(), recent: (0, browserControl_js_1.recentActivity)(10) });
+});
+/**
+ * Download the extension as a folder you can actually point Chrome at.
+ *
+ * "Load unpacked" needs a real directory on the operator's own machine, and
+ * the source only ever existed in the repo — cloning it is not a reasonable
+ * first step for the person installing this. So the server hands back the
+ * same files it ships with, zipped.
+ *
+ * Deliberately ungated: it contains no secrets. The pairing token is typed in
+ * afterwards, and without it the extension can do nothing at all. Gating this
+ * behind auth would only mean the person installing it can't get it.
+ */
+const extensionDir = path_1.default.join(publicDir, "extension");
+function collectExtensionFiles(dir, prefix = "") {
+    const out = [];
+    for (const entry of fs_1.default.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+        const full = path_1.default.join(dir, entry.name);
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory())
+            out.push(...collectExtensionFiles(full, rel));
+        else if (entry.isFile())
+            out.push({ name: rel, data: fs_1.default.readFileSync(full) });
+    }
+    return out;
+}
+app.get("/api/browser/extension.zip", (_req, res) => {
+    try {
+        const files = collectExtensionFiles(extensionDir);
+        if (!files.length)
+            throw new Error("extension folder is empty");
+        // Sanity-check rather than shipping a zip that Chrome will reject with an
+        // unhelpful error — a missing manifest is the one failure worth naming.
+        // Flat entries, no wrapping folder: both Windows "Extract All" and macOS
+        // Archive Utility then create one folder named after the zip with
+        // manifest.json directly inside — which is exactly what Load unpacked wants.
+        if (!files.some((f) => f.name === "manifest.json"))
+            throw new Error("manifest.json missing");
+        const zip = (0, zipWriter_js_1.buildZip)(files);
+        res.setHeader("Content-Type", "application/zip");
+        res.setHeader("Content-Disposition", 'attachment; filename="harvey-browser-control.zip"');
+        res.setHeader("Content-Length", String(zip.length));
+        res.end(zip);
+    }
+    catch (e) {
+        console.error("[browser] extension zip failed:", e);
+        res.status(500).json({ error: "Could not build the extension download: " + e.message });
+    }
 });
 /**
  * Test-only hook for driving a platform tool over HTTP.

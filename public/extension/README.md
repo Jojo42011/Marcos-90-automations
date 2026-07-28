@@ -16,16 +16,27 @@ logins — and only while you switch it on.
 
    Without this, browser control is disabled entirely — it fails closed.
 
-2. In Chrome, open `chrome://extensions`, turn on **Developer mode**, click
-   **Load unpacked**, and select this `extension/` folder.
+2. Get the extension folder onto the machine that will run it. Either clone the
+   repo, or download it from the running server — no clone needed:
 
-3. Click the extension icon and enter:
+   ```
+   https://marco-90-automation.fly.dev/api/browser/extension.zip
+   ```
+
+   Unzip it (Windows: right-click → **Extract All**). You should end up with a
+   folder containing `manifest.json`.
+
+3. In Chrome, open `chrome://extensions`, turn on **Developer mode**, click
+   **Load unpacked**, and select that unzipped folder — the one with
+   `manifest.json` directly inside it, not its parent.
+
+4. Click the extension icon and enter:
    - **Server** — `https://marco-90-automation.fly.dev`
    - **Pairing token** — the same value from step 1
 
    Press **Save & pair**. The dot turns grey/"Paired · standby".
 
-4. When you want Harvey to work in the browser, flip
+5. When you want Harvey to work in the browser, flip
    **Let Harvey control this browser** on. The badge shows `ON`.
 
 ## Using it

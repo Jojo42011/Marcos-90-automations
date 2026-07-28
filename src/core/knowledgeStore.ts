@@ -208,10 +208,15 @@ fill a third-party form, read an MLS back office — by driving **your** Chrome
 tab through the Harvey extension.
 
 ## Turning it on
-1. Install the extension (Chrome → \`chrome://extensions\` → Developer mode →
-   Load unpacked → the \`extension/\` folder).
-2. Click the icon, enter the server URL and pairing token, **Save & pair**.
-3. Flip **Let Harvey control this browser** on. The badge reads ON.
+1. Download the extension: **/api/browser/extension.zip**. Unzip it (Windows:
+   right-click → Extract All) — you want the folder with \`manifest.json\` in it.
+2. Chrome → \`chrome://extensions\` → **Developer mode** on → **Load unpacked**
+   → pick that unzipped folder.
+3. Click the icon, enter the server URL and pairing token, **Save & pair**.
+4. Flip **Let Harvey control this browser** on. The badge reads ON.
+
+Chrome only offers "Load unpacked" for a folder that is already on your own
+computer — that's why there's a download step; there is no Web Store listing.
 
 ## Using it
 Open the page you want worked on, then ask:
