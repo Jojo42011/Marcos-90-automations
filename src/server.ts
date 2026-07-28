@@ -3614,10 +3614,15 @@ app.post("/api/email/sequence/:id/pause", express.json(), async (req, res) => {
 });
 
 app.get("/api/email/connection-status", async (_req, res) => {
-  const { isEmailConfigured, verifyEmailConnection } = await import("./integrations/email/index.js");
+  const { isEmailConfigured } = await import("./integrations/email/index.js");
+  const { checkGmailAuth } = await import("./integrations/gmail/index.js");
   const configured = isEmailConfigured();
-  const verified = configured ? await verifyEmailConnection() : false;
-  res.json({ configured, verified });
+  // `verified` must mean "a send would actually work", so this exercises the
+  // refresh token for real. It used to call verifyEmailConnection(), which
+  // only resolved a sender address and so reported verified:true against a
+  // token Google was rejecting — a false green that hid a total email outage.
+  const auth = configured ? await checkGmailAuth() : { ok: false, error: "Gmail not configured" };
+  res.json({ configured, verified: auth.ok, error: auth.error || null });
 });
 
 // ── CRM Email Marketing: real Gmail sends for newsletters/campaigns ───────

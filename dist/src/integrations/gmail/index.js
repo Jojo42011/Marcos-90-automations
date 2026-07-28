@@ -6,6 +6,7 @@ exports.getGmailAuthInfo = getGmailAuthInfo;
 exports.isGmailConfigured = isGmailConfigured;
 exports.getMarcoEmail = getMarcoEmail;
 exports.getGmailSenderAddress = getGmailSenderAddress;
+exports.checkGmailAuth = checkGmailAuth;
 exports.getGmailAccessToken = getGmailAccessToken;
 exports.resolveEmailRecipient = resolveEmailRecipient;
 exports.sendEmail = sendEmail;
@@ -95,6 +96,27 @@ async function getGmailSenderAddress() {
         return getMarcoEmail();
     }
 }
+/**
+ * Actually exercise the refresh token and say whether Gmail can send.
+ *
+ * Exists because `getGmailSenderAddress()` is NOT a health check: it returns
+ * `GMAIL_FROM`/`GMAIL_USER` (or a cached address) without ever calling Google,
+ * and swallows failures. Anything built on it reports a healthy connection
+ * while every send is bouncing — which is exactly what happened on
+ * 2026-07-28, where the status endpoint said "verified" for a token Google
+ * had been rejecting for hours.
+ */
+async function checkGmailAuth() {
+    if (!isGmailConfigured())
+        return { ok: false, error: "Gmail OAuth not configured" };
+    try {
+        await fetchAccessToken(getConfig());
+        return { ok: true };
+    }
+    catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+}
 function getConfig() {
     const clientId = process.env.GMAIL_CLIENT_ID?.trim();
     const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim();
@@ -125,7 +147,13 @@ async function fetchAccessToken(cfg) {
     });
     const data = (await res.json().catch(() => ({})));
     if (!res.ok || !data.access_token) {
-        const detail = data.error_description || data.error || `HTTP ${res.status}`;
+        // Report Google's error CODE alongside its description. The description
+        // alone is often just "Bad Request", which says nothing about the cause —
+        // the code is what distinguishes a dead refresh token (invalid_grant)
+        // from bad app credentials (invalid_client). Relinking fixes the first
+        // and cannot fix the second, so the difference matters.
+        const detail = [data.error, data.error_description].filter(Boolean).join(": ") ||
+            `HTTP ${res.status}`;
         // "invalid_grant"/"Bad Request" = the refresh token itself is dead
         // (revoked or expired). Record it so the dashboard can show a
         // "Reconnect Gmail" prompt instead of failing silently for weeks.
