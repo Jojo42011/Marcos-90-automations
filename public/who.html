@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Who's logging in? · Marco Puga</title>
+<!--
+  The team sign-in screen. Deliberately the same card as login.html (the
+  email + password screen) so it reads as "the login page", but the whole
+  form is replaced by one tap on your own name.
+
+  Picking a name writes `marcoTaskUser` — the single identity key every page
+  in this app reads — so you are signed in across the shell, Task Command,
+  the CRM and everything else at once, with no per-page account switching.
+  A matching `mp_team` cookie is set so the server can see who is on too.
+
+  This identifies you; it is NOT a security boundary. Real account auth
+  (password + session) is the separate /login screen, currently switched
+  off behind SITE_LOGIN_ENABLED.
+-->
+<style>
+  :root{
+    --bg:#f9fbfb; --panel:#ffffff; --text:#333; --muted:#5f6b78; --line:#edf0f0;
+    --accent:#59c4c4; --accent-2:#4ca7a7; --soft:#eef7f7; --bad:#c0616a;
+    --font:"Helvetica Neue",Helvetica,Arial,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--font); background:var(--bg); color:var(--text);
+    display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;
+  }
+  .card{
+    width:100%; max-width:400px; background:var(--panel); border:1px solid var(--line);
+    border-radius:16px; padding:34px 32px 30px; box-shadow:0 20px 60px -30px rgba(16,24,40,.25);
+  }
+  .brand{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:22px}
+  .brand .wm{display:flex;flex-direction:column;align-items:center;line-height:1;font-family:Georgia,"Times New Roman",serif}
+  .brand .wm small{font-size:9px;letter-spacing:.18em;color:#c23b3b;margin-bottom:4px}
+  .brand .wm b{font-weight:700;font-size:17px;letter-spacing:.06em;color:#3a3f45}
+  h1{font-size:16px;font-weight:600;color:var(--text);text-align:center;margin-bottom:4px}
+  .sub{font-size:12.5px;color:var(--muted);text-align:center;margin-bottom:22px}
+
+  .who{
+    display:flex; align-items:center; gap:12px; width:100%; padding:12px 14px; margin-bottom:9px;
+    border:1px solid var(--line); border-radius:11px; background:#fbfcfd; cursor:pointer;
+    font-family:var(--font); text-align:left; transition:border-color .15s, background .15s, transform .1s;
+  }
+  .who:hover{ border-color:var(--accent); background:var(--soft); transform:translateY(-1px); }
+  .who:active{ transform:none; }
+  .who:disabled{ opacity:.5; cursor:default; transform:none; }
+  .who .av{
+    flex:0 0 auto; width:38px; height:38px; border-radius:50%; display:flex;
+    align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:15px;
+  }
+  .who .nm{ display:block; font-size:14.5px; font-weight:600; color:var(--text); }
+  .who .rl{ display:block; font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .who .cur{
+    margin-left:auto; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--accent-2); background:var(--soft); border:1px solid rgba(89,196,196,.35);
+    border-radius:20px; padding:3px 9px;
+  }
+  .err{
+    background:#fdf1f1;border:1px solid rgba(192,97,106,.3);color:var(--bad);font-size:12.5px;
+    border-radius:8px;padding:9px 12px;margin-bottom:16px;display:none;
+  }
+  .err.show{display:block}
+  .foot{margin-top:20px;text-align:center;font-size:11px;color:var(--muted);line-height:1.6}
+  .loading{font-size:12.5px;color:var(--muted);text-align:center;padding:18px 0}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+        <defs><linearGradient id="mpr" x1="0" y1="2" x2="0" y2="46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f4695b"/><stop offset="1" stop-color="#bd1e2b"/></linearGradient></defs>
+        <path d="M24 4 44 24 24 44 4 24Z" stroke="url(#mpr)" stroke-width="2.2"/>
+        <path d="M24 9 39 24 24 39 9 24Z" stroke="url(#mpr)" stroke-width="1" opacity=".55"/>
+        <path d="M14.5 22 24 12.5 33.5 22" stroke="url(#mpr)" stroke-width="1.9" stroke-linejoin="round"/>
+        <g fill="url(#mpr)"><rect x="21" y="15.4" width="2.3" height="2.3" rx=".4"/><rect x="24.7" y="15.4" width="2.3" height="2.3" rx=".4"/><rect x="21" y="18.3" width="2.3" height="2.3" rx=".4"/><rect x="24.7" y="18.3" width="2.3" height="2.3" rx=".4"/></g>
+        <text x="24" y="33.5" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-weight="700" font-size="14.5" fill="url(#mpr)">M</text>
+        <g stroke="url(#mpr)" stroke-width="1.5" stroke-linecap="round"><line x1="17" y1="34.5" x2="17" y2="41"/><line x1="20.4" y1="35.5" x2="20.4" y2="41"/><line x1="27.6" y1="35.5" x2="27.6" y2="41"/><line x1="31" y1="34.5" x2="31" y2="41"/></g>
+      </svg>
+      <span class="wm"><small>HAPPINESS BEGINS AT HOME</small><b>MARCO PUGA</b></span>
+    </div>
+    <h1>Who&rsquo;s logging in?</h1>
+    <div class="sub">Pick your name &mdash; you&rsquo;ll be signed in across the whole system.</div>
+    <div class="err" id="err"></div>
+    <div id="list"><div class="loading">Loading team&hellip;</div></div>
+    <div class="foot">Your tasks, notifications and messages load for you.<br/>Signed in on this device until you switch.</div>
+  </div>
+<script>
+  var USER_KEY = "marcoTaskUser";
+
+  /* Stands in only if /api/team/roster can't be reached — this screen must
+     never become a dead end that locks the team out of the app. */
+  var FALLBACK = [
+    { id:"marco",    name:"Marco",    role:"Lead Agent", color:"#7C3AED" },
+    { id:"wesley",   name:"Wesley",   role:"Agent",      color:"#0E7490" },
+    { id:"kendrick", name:"Kendrick", role:"Assistant",  color:"#DB2777" },
+    { id:"carlos",   name:"Carlos",   role:"Assistant",  color:"#A16207" }
+  ];
+
+  var listEl = document.getElementById("list");
+  var errEl  = document.getElementById("err");
+
+  function current(){ try{ return localStorage.getItem(USER_KEY) || ""; }catch(_){ return ""; } }
+
+  /* Only same-origin paths, so ?next= can't be used to bounce someone off-site. */
+  function nextUrl(){
+    var n = new URLSearchParams(location.search).get("next") || "";
+    return (n.charAt(0) === "/" && n.charAt(1) !== "/") ? n : "/shell";
+  }
+
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function render(members){
+    var me = current();
+    listEl.innerHTML = members.map(function(m){
+      return '<button class="who" data-u="'+esc(m.id)+'">'+
+        '<span class="av" style="background:'+esc(m.color)+'">'+esc(m.name.charAt(0))+'</span>'+
+        '<span><span class="nm">'+esc(m.name)+'</span><span class="rl">'+esc(m.role)+'</span></span>'+
+        (m.id === me ? '<span class="cur">Current</span>' : '')+
+      '</button>';
+    }).join("");
+    Array.prototype.forEach.call(listEl.querySelectorAll(".who"), function(b){
+      b.onclick = function(){ signIn(b.getAttribute("data-u"), members); };
+    });
+  }
+
+  function signIn(id, members){
+    var prev = current();
+    try{ localStorage.setItem(USER_KEY, id); }
+    catch(_){
+      errEl.textContent = "This browser is blocking storage, so we can't keep you signed in. Turn off private browsing and try again.";
+      errEl.classList.add("show");
+      return;
+    }
+    // Let the server see who's on as well (display/logging; not a security check).
+    try{ document.cookie = "mp_team="+encodeURIComponent(id)+"; path=/; max-age=31536000; samesite=lax"; }catch(_){}
+
+    // A different person on this device: clear the popup-dedup set so their
+    // own notifications are treated as new rather than already-seen.
+    if(prev && prev !== id){ try{ localStorage.removeItem("shell_note_seen"); localStorage.removeItem("tt_seen"); }catch(_){} }
+
+    Array.prototype.forEach.call(listEl.querySelectorAll(".who"), function(b){ b.disabled = true; });
+    location.replace(nextUrl());
+  }
+
+  fetch("/api/team/roster", { credentials:"same-origin" })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ render(d && d.members && d.members.length ? d.members : FALLBACK); })
+    .catch(function(){ render(FALLBACK); });
+</script>
+</body>
+</html>

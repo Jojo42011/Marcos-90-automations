@@ -775,6 +775,14 @@ app.get("/shell", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "shell.html"));
 });
 
+// Team sign-in screen — "who's logging in?" as a real page, not a modal.
+// Ungated on purpose: it IS the sign-in screen, and gating it behind the
+// thing it grants would lock the team out. It sets the shared identity every
+// page reads, so one pick signs you in across the whole system.
+app.get("/who", (_req, res) => {
+  res.sendFile(path.join(publicDir, "who.html"));
+});
+
 app.get("/", (_req, res) => {
   res.redirect("/shell");
 });

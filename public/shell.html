@@ -102,21 +102,7 @@
  .nav-item .badge { display:none; margin-left:auto; min-width:20px; height:20px; padding:0 6px; border-radius:10px; background:#e2483d; color:#fff; font-size:11px; font-weight:700; align-items:center; justify-content:center; line-height:1; flex:0 0 auto; }
  .nav-item .badge.on { display:flex; }
 
- /* ── "Who's logging in?" gate ── */
- #gate { position:fixed; inset:0; z-index:200; background:rgba(16,24,40,.45); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; padding:20px; }
- #gate.on { display:flex; }
- #gateCard { width:100%; max-width:420px; background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:0 24px 60px rgba(16,24,40,.28); padding:26px 26px 22px; animation:gateIn .22s ease; }
- @keyframes gateIn { from{ opacity:0; transform:translateY(10px) scale(.98); } to{ opacity:1; transform:none; } }
- #gateCard h2 { font-size:19px; color:var(--text); margin-bottom:5px; }
- #gateCard p { font-size:12.5px; color:var(--muted); margin-bottom:18px; line-height:1.5; }
- .gatebtn { display:flex; align-items:center; gap:11px; width:100%; padding:11px 13px; margin-bottom:8px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; text-align:left; font-family:var(--font); transition:border-color .15s, background .15s, transform .1s; }
- .gatebtn:hover { border-color:var(--line-2); background:var(--soft); transform:translateX(2px); }
- .gatebtn .av { flex:0 0 auto; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:13px; }
- .gatebtn .nm { font-size:13.5px; font-weight:600; color:var(--text); }
- .gatebtn .rl { font-size:11px; color:var(--muted); margin-top:1px; }
- #gateLoading { font-size:12.5px; color:var(--muted); padding:8px 0; }
-
- /* Signed-in chip in the sidebar footer — click to switch user. */
+ /* Signed-in chip in the sidebar footer — click to switch user (goes to /who). */
  #whoBtn { display:flex; align-items:center; gap:7px; flex:1; min-width:0; background:none; border:none; padding:0; cursor:pointer; font-family:var(--font); text-align:left; color:inherit; }
  #whoBtn:hover #whoLabel { color:var(--accent); }
  #whoAv { flex:0 0 auto; width:18px; height:18px; border-radius:50%; display:none; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:9px; }
@@ -166,16 +152,6 @@
    </div>
  </div>
 
- <!-- Who's logging in? Shown whenever no team member is selected on this
-      device. Writes the same localStorage key the Task Command board reads,
-      so picking here signs you in everywhere. -->
- <div id="gate">
-   <div id="gateCard">
-     <h2>Who&rsquo;s logging in?</h2>
-     <p>Pick your name. Your tasks, notifications and messages load for you.</p>
-     <div id="gateBtns"><div id="gateLoading">Loading team&hellip;</div></div>
-   </div>
- </div>
 
 
 <script>
@@ -310,9 +286,18 @@ function rosterMember(id){
   return null;
 }
 
-/* Show the gate synchronously when nobody is signed in — waiting on the
-   auth/roster fetches would flash a usable-looking app first. */
-if(!currentUser()) document.getElementById("gate").classList.add("on");
+/* Nobody signed in on this device → the sign-in screen, immediately.
+   Checked synchronously (not after the auth/roster fetches) so the app never
+   flashes usable to someone we can't identify. replace(), not href, so Back
+   doesn't bounce them straight into this redirect again. */
+if(!currentUser()){
+  location.replace("/who?next=" + encodeURIComponent(location.pathname + location.search));
+}
+
+/** Switching user goes through the same one screen, never a second picker. */
+function goSignIn(){
+  location.href = "/who?next=" + encodeURIComponent(location.pathname + location.search);
+}
 
 
 function initShell(){
@@ -452,12 +437,10 @@ function initShell(){
      .catch(function(){});
  }
 
- /* ── Login gate ──────────────────────────────────────────────────
-    Picking a name writes USER_KEY, which is the single identity the
-    whole app reads. Switching users reloads the Tasks frame if it has
-    already loaded, since that page reads the identity once at startup. */
- var gateEl = document.getElementById("gate");
-
+ /* ── Signed-in identity ──────────────────────────────────────────
+    Picking a name happens on /who (the sign-in screen), which writes
+    USER_KEY — the single identity every page in this app reads. All the
+    shell does is display who that is and offer to switch. */
  function paintIdentity(){
    var m = rosterMember(currentUser());
    var av = document.getElementById("whoAv");
@@ -470,49 +453,16 @@ function initShell(){
    if(!window.__authUser) label.textContent = m.name + " · " + m.role;
  }
 
- function renderGate(){
-   document.getElementById("gateBtns").innerHTML = ROSTER.map(function(m){
-     return '<button class="gatebtn" data-u="'+m.id+'">'+
-       '<span class="av" style="background:'+m.color+'">'+m.name.charAt(0)+'</span>'+
-       '<span><span class="nm">'+m.name+'</span><span class="rl">'+m.role+'</span></span></button>';
-   }).join("");
-   Array.prototype.forEach.call(document.querySelectorAll("#gateBtns .gatebtn"), function(b){
-     b.onclick = function(){ signIn(b.getAttribute("data-u")); };
-   });
- }
+ document.getElementById("whoBtn").onclick = goSignIn;
+ window.AppShell.signIn = goSignIn;
 
- function signIn(id){
-   var prev = currentUser();
-   try{ localStorage.setItem(USER_KEY, id); }catch(_){}
-   gateEl.classList.remove("on");
-   paintIdentity();
-   if(prev && prev !== id){
-     // Different person now — drop this device's popup history and reload
-     // the Tasks page so it re-reads who it is.
-     noteSeen = {};
-     try{ localStorage.removeItem(noteSeenKey); }catch(_){}
-     var tf = document.getElementById("frame-tasks");
-     if(tf && tf.src) tf.src = tf.getAttribute("data-src");
-   }
-   pollNotes();
- }
-
- function openGate(){ renderGate(); gateEl.classList.add("on"); }
- document.getElementById("whoBtn").onclick = openGate;
- window.AppShell.signIn = signIn;
- window.AppShell.openGate = openGate;
-
- /* Real roster from the server; the hardcoded fallback stands in if the
-    call fails so the gate can never lock someone out. */
+ /* Names/colours for the footer chip. The sign-in screen fetches this too;
+    here it only affects display, so the hardcoded fallback is harmless. */
  fetch("/api/team/roster", { credentials:"same-origin" })
    .then(function(r){ return r.ok ? r.json() : null; })
    .then(function(d){ if(d && d.members && d.members.length) ROSTER = d.members; })
    .catch(function(){})
-   .then(function(){
-     renderGate();
-     paintIdentity();
-     if(!currentUser()) gateEl.classList.add("on");
-   });
+   .then(paintIdentity);
 
  pollNotes();
  setInterval(pollNotes, 20000);

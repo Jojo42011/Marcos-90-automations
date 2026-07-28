@@ -1988,7 +1988,14 @@ initCal();
 paintMe();
 loadLayout();
 bootGrid();
-if(!ME)openGate();
+/* No identity yet. Standalone → the one sign-in screen at /who, so there is
+   never a second place to pick a name. Inside the shell's iframe the shell
+   already redirects the whole window, so the in-page picker is only a
+   safety net for the rare case that hasn't happened. */
+if(!ME){
+  if(window.top===window.self) location.replace("/who?next="+encodeURIComponent(location.pathname));
+  else openGate();
+}
 loadCmdSettings().then(function(){return loadTasks();}).catch(function(){toast("Failed to load tasks");});
 pollNotes();
 setInterval(function(){api("/api/tasks").then(function(d){
