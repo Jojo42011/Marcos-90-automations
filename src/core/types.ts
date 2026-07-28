@@ -1,4 +1,5 @@
 import type { FunnelStage } from "./state.js";
+import type { MessageChannel } from "./messageChannels.js";
 
 export type CrmStatus = "new" | "hot" | "nurture" | "watch" | "dead" | "unresponsive";
 
@@ -462,6 +463,13 @@ export interface Conversation {
 export interface DashboardLeadRow {
   id: string;
   platform: string;
+  /**
+   * Which Message Center inbox this thread belongs to — derived from
+   * `platform` by messageChannels.ts, not stored. Social DMs (instagram /
+   * tiktok) are separated from real SMS/email because they carry very
+   * different urgency and shouldn't share one list.
+   */
+  channel: MessageChannel;
   userId: string;
   username: string | null;
   name: string | null;

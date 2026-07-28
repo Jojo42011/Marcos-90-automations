@@ -102,6 +102,11 @@
   .tabs{display:flex;gap:22px;border-bottom:1px solid var(--line);padding:0 0 0 2px;margin-bottom:6px;align-items:center}
   .tabs button{background:none;border:none;padding:12px 2px;font-size:13px;font-weight:700;letter-spacing:.04em;color:#7a8590;border-bottom:2px solid transparent;margin-bottom:-1px}
   .tabs button.on{color:var(--teal);border-bottom-color:var(--teal)}
+  /* Per-channel unread pill in the Message Center tab strip. */
+  .chcount{display:none;margin-left:5px;min-width:17px;padding:1px 5px;border-radius:9px;background:#e2483d;color:#fff;font-size:10.5px;font-weight:800;letter-spacing:0;vertical-align:1px}
+  .chcount.on{display:inline-block}
+  .tabs button.quiet{opacity:.45}
+  .chchip{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:9px;color:#fff;font-size:9.5px;font-weight:700;letter-spacing:.03em;vertical-align:1px}
   .chip{background:var(--teal-pill);color:#fff;font-size:11px;font-weight:700;border-radius:14px;padding:4px 12px;border:none}
 
   .feed-item{display:flex;gap:14px;padding:18px 4px;border-bottom:1px solid var(--line-2)}
@@ -495,7 +500,18 @@
   <!-- MESSAGES -->
   <section class="view" id="view-messages">
     <div class="pad" style="padding-bottom:0"><div class="page-head" style="margin-bottom:10px"><h1>Message Center</h1><button class="pill-btn">FILTER</button></div>
-      <div class="tabs" style="padding-left:2px" id="msgTabs"><button class="on" data-mt="all">ALL</button><button data-mt="group">GROUP</button></div>
+      <!-- Channel split: social DMs (Instagram/TikTok) are a different kind of
+           conversation from real SMS/email and no longer share one list.
+           Counts are unread-per-channel; tabs with nothing in them are dimmed
+           rather than hidden, so it's clear the channel exists but is quiet. -->
+      <div class="tabs" style="padding-left:2px" id="msgTabs">
+        <button class="on" data-mt="all">ALL <span class="chcount" data-cc="all"></span></button>
+        <button data-mt="instagram">INSTAGRAM <span class="chcount" data-cc="instagram"></span></button>
+        <button data-mt="tiktok">TIKTOK <span class="chcount" data-cc="tiktok"></span></button>
+        <button data-mt="sms">SMS <span class="chcount" data-cc="sms"></span></button>
+        <button data-mt="email">EMAIL <span class="chcount" data-cc="email"></span></button>
+        <button data-mt="group">GROUP</button>
+      </div>
     </div>
     <div class="msg-wrap">
       <div class="msg-list">
@@ -1100,11 +1116,67 @@ function convHit(c,q){
   }
   return false;
 }
+var CHANNEL_META={
+  instagram:{label:"Instagram",c:"#C13584"},
+  tiktok:{label:"TikTok",c:"#0f766e"},
+  sms:{label:"SMS",c:"#2563eb"},
+  email:{label:"Email",c:"#b45309"},
+  other:{label:"Other",c:"#64748b"}
+};
+/* Small channel tag on each row, so the ALL list still tells you at a glance
+   whether something is a DM or a text. Hidden inside a single-channel tab -
+   it would just repeat the tab name on every row. */
+function chChip(ch){
+  var m=CHANNEL_META[ch||"other"]||CHANNEL_META.other;
+  if(convGroupMode!=="all"&&convGroupMode!=="group") return "";
+  return '<span class="chchip" style="background:'+m.c+'">'+esc(m.label)+'</span>';
+}
+function emptyChannelMsg(){
+  var m=CHANNEL_META[convGroupMode];
+  if(!m) return "No conversations found.";
+  if(convGroupMode==="sms") return "No SMS threads yet. Texts sent or received through the CRM will appear here.";
+  if(convGroupMode==="email") return "No email threads yet. Email lives in the Email Marketing tab until a reply comes back to a lead.";
+  return "No "+m.label+" conversations found.";
+}
+
+/* Which tab a conversation belongs to. "all" and "group" span every channel;
+   otherwise the tab name IS the channel id. */
+function convInTab(c,tab){
+  if(tab==="all") return true;
+  if(tab==="group") return (c.names||[]).length>=3;
+  return (c.channel||"other")===tab;
+}
+
+/* Unread per channel, painted onto the tab strip. Counting is independent of
+   the tab you're on - the point is seeing that Instagram has 3 waiting while
+   you're reading TikTok. */
+function paintChannelCounts(){
+  const counts={all:0};
+  CONVOS.forEach((c,i)=>{
+    if(!convUnread(c)||i===openConvIdx) return;
+    const ch=c.channel||"other";
+    counts[ch]=(counts[ch]||0)+1; counts.all++;
+  });
+  document.querySelectorAll("#msgTabs [data-cc]").forEach(el=>{
+    const n=counts[el.getAttribute("data-cc")]||0;
+    el.textContent=n>99?"99+":String(n);
+    el.classList.toggle("on",n>0);
+  });
+  // Dim a channel with no conversations at all, so an empty SMS tab reads as
+  // "nothing here yet" rather than "broken".
+  document.querySelectorAll("#msgTabs [data-mt]").forEach(b=>{
+    const tab=b.getAttribute("data-mt");
+    if(tab==="all"||tab==="group"){ b.classList.remove("quiet"); return; }
+    b.classList.toggle("quiet",!CONVOS.some(c=>(c.channel||"other")===tab));
+  });
+}
+
 function renderConvos(){
   const q=(convSearchTerm||SEARCH||"");
   const list=CONVOS.map((c,i)=>({c,i}))
-    .filter(e=>convGroupMode!=="group"||e.c.names.length>=3)
+    .filter(e=>convInTab(e.c,convGroupMode))
     .filter(e=>convHit(e.c,q));
+  paintChannelCounts();
   const el=document.getElementById("convList");
   el.innerHTML=list.length?list.map(({c,i})=>{
     const last=c.msgs[c.msgs.length-1]||{};const who=last.me?"Marco Puga":(c.names.find(n=>n!=="Marco Puga")||c.names[0]);
@@ -1112,10 +1184,10 @@ function renderConvos(){
     return '<div class="conv'+(i===openConvIdx?" on":"")+'" data-i="'+i+'">'+
       '<div class="conv-dot">'+(unread?'<i></i>':'')+'</div>'+
       avStack(c.names)+
-      '<div class="conv-body"><div class="conv-top"><div class="conv-names"'+(unread?' style="font-weight:800"':'')+'>'+esc(convTitle(c.names))+'</div><div class="conv-time">'+relTime(c.at)+'</div></div>'+
+      '<div class="conv-body"><div class="conv-top"><div class="conv-names"'+(unread?' style="font-weight:800"':'')+'>'+esc(convTitle(c.names))+chChip(c.channel)+'</div><div class="conv-time">'+relTime(c.at)+'</div></div>'+
       '<div class="conv-prev">'+esc(who)+': '+esc(last.t||"")+'</div></div>'+
       '<button class="conv-del" data-cdel="'+i+'" title="Delete conversation">✕</button></div>';
-  }).join(""):'<div class="empty">No conversations found.</div>';
+  }).join(""):'<div class="empty">'+emptyChannelMsg()+'</div>';
   el.querySelectorAll(".conv").forEach(x=>x.addEventListener("click",()=>openThread(+x.dataset.i,x)));
   el.querySelectorAll("[data-cdel]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); deleteConv(+b.getAttribute("data-cdel")); }));
 }
@@ -2173,6 +2245,10 @@ function deriveConvosLive(leads){
     .slice().sort((a,b)=>String(b.lastMessageAt||"").localeCompare(String(a.lastMessageAt||"")))
     .slice(0,50)
     .map(l=>({names:[l.name||l.username||"Lead","Marco Puga"], at:l.lastMessageAt||l.updatedAt,
+      // channel comes from the server (messageChannels.ts) so the tabs, the
+      // counts and anything Harvey says about "unread Instagram DMs" agree.
+      // leadId/phone/email are carried so a reply knows where to send.
+      channel:l.channel||"other", leadId:l.id, phone:l.phone||"", email:l.email||"",
       msgs:(l.messages||[]).slice(-40).map(m=>({me:m.role==="assistant", t:m.text||"", at:m.at}))}))
     .filter(c=>c.msgs.some(m=>m.t));
 }

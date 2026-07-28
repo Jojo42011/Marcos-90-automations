@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
+import { channelForLead } from "./messageChannels.js";
 
 import type {
   CommandTask,
@@ -997,6 +998,7 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     leads.push({
       id: lead.id,
       platform: lead.platform,
+      channel: channelForLead(lead),
       userId: lead.userId,
       username: lead.username,
       name: lead.name,

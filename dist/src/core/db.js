@@ -69,6 +69,7 @@ exports.updateLeadCrmFields = updateLeadCrmFields;
 const crypto_1 = require("crypto");
 const fs_1 = require("fs");
 const path_1 = require("path");
+const messageChannels_js_1 = require("./messageChannels.js");
 const types_js_1 = require("./types.js");
 const deals_js_1 = require("./deals.js");
 const tagTemplates_js_1 = require("./tagTemplates.js");
@@ -986,6 +987,7 @@ async function getDashboardSnapshot() {
         leads.push({
             id: lead.id,
             platform: lead.platform,
+            channel: (0, messageChannels_js_1.channelForLead)(lead),
             userId: lead.userId,
             username: lead.username,
             name: lead.name,
