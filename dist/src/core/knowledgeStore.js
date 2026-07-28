@@ -184,7 +184,9 @@ process for a new listing?"* — and he answers from these documents.
 Harvey will not invent facts. If something isn't in the system he says so
 rather than guessing.
 `),
-        mk("Harvey browser control (extension)", "Harvey", ["browser", "extension", "portal", "scraping"], `
+        // "load unpacked" and "install" are in the body but the search gate wants a
+        // title/tag hit, so the most likely question missed. Tag them.
+        mk("Harvey browser control (extension)", "Harvey", ["browser", "extension", "portal", "scraping", "install", "load unpacked", "chrome"], `
 # Browser control
 
 Harvey can work inside sites that have no API — pull a listing off a portal,
@@ -203,11 +205,18 @@ Chrome only offers "Load unpacked" for a folder that is already on your own
 computer — that's why there's a download step; there is no Web Store listing.
 
 ## Using it
-Open the page you want worked on, then ask:
-- "Pull the price, address, beds and baths off this listing."
+Just ask:
+- "Open this listing and pull the price, address, beds and baths."
 - "Fill the request form with my details and submit."
 
-Harvey acts in whatever tab you're looking at, so leave it on the right page.
+Harvey works in **his own tab**, opened in the background the first time he
+needs one. He will never navigate the page you're reading — including this
+app — out from under you. If he hasn't opened a tab yet and you ask about the
+page you're on, he acts on that one, so "what does this page say about the
+HOA?" works without opening anything first.
+
+The extension popup shows which page Harvey is on, so you can check before
+asking him to click something.
 
 ## What it will not do
 It cannot read cookies, read saved passwords, type into password fields, or

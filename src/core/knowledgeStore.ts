@@ -200,7 +200,9 @@ Harvey will not invent facts. If something isn't in the system he says so
 rather than guessing.
 `),
 
-    mk("Harvey browser control (extension)", "Harvey", ["browser", "extension", "portal", "scraping"], `
+    // "load unpacked" and "install" are in the body but the search gate wants a
+    // title/tag hit, so the most likely question missed. Tag them.
+    mk("Harvey browser control (extension)", "Harvey", ["browser", "extension", "portal", "scraping", "install", "load unpacked", "chrome"], `
 # Browser control
 
 Harvey can work inside sites that have no API — pull a listing off a portal,
