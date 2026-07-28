@@ -118,11 +118,49 @@ async function workTab(serverUrl) {
   return tab;
 }
 
-/** Open Harvey a tab of his own, in the background so the shell keeps focus. */
-async function openWorkTab(url) {
-  const tab = await chrome.tabs.create({ url, active: false });
+/**
+ * Open Harvey a tab of his own — in a SEPARATE WINDOW, brought to the front.
+ *
+ * Two requirements pull against each other here, and a separate window is the
+ * only arrangement that satisfies both:
+ *
+ *   - "Take me there." Opening a listing silently in a background tab meant
+ *     the operator had to go hunting for it. When they ask Harvey to open
+ *     something, they expect to see it.
+ *   - "Keep listening." The Harvey shell holds the microphone and the STT
+ *     socket. Browsers throttle timers in HIDDEN tabs hard (roughly one per
+ *     minute), so if Harvey's page were simply activated in the same window,
+ *     the shell would go hidden and voice would degrade — which is exactly the
+ *     "he stops listening after a while" symptom.
+ *
+ * A separate window means the shell stays the active tab of ITS window, so it
+ * stays visible and unthrottled, while the operator still gets the site put in
+ * front of them. (If the new window fully covers the shell, Chrome's occlusion
+ * tracking can still mark it hidden — hence the voice-side hardening too.)
+ */
+async function openWorkTab(url, focus) {
+  const wantFocus = focus !== false;
+  try {
+    const win = await chrome.windows.create({ url, focused: wantFocus });
+    const tab = win && win.tabs && win.tabs[0];
+    if (tab && tab.id != null) {
+      await writeWorkTabId(tab.id);
+      return tab;
+    }
+  } catch (_) {
+    // Window creation can fail (kiosk mode, policy). Fall back to a tab.
+  }
+  const tab = await chrome.tabs.create({ url, active: wantFocus });
   await writeWorkTabId(tab.id);
   return tab;
+}
+
+/** Put Harvey's tab in front of the operator. */
+async function bringToFront(tab) {
+  try {
+    await chrome.tabs.update(tab.id, { active: true });
+    await chrome.windows.update(tab.windowId, { focused: true, drawAttention: true });
+  } catch (_) {}
 }
 
 /**
@@ -623,23 +661,55 @@ async function execute(cmd, serverUrl) {
     // it's alive keeps Harvey on one tab instead of littering the window.
     if (cmd.action === "navigate") {
       if (!cmd.url) return { ok: false, error: "navigate needs a url" };
+      // Show the operator what was opened unless explicitly told not to.
+      // Silently loading a listing somewhere off-screen is the wrong default:
+      // they asked for it, they want to see it.
+      const wantFocus = cmd.focus !== false;
       let tab = await workTab(serverUrl);
       if (tab && tab.id != null) {
         await chrome.tabs.update(tab.id, { url: cmd.url });
+        if (wantFocus) await bringToFront(tab);
       } else {
-        tab = await openWorkTab(cmd.url);
+        tab = await openWorkTab(cmd.url, wantFocus);
       }
       await waitForLoad(tab.id, cmd.timeoutMs || 20000);
       // status:"complete" fires when the document loaded, which on a
       // single-page app is long before the listing exists. If the caller named
       // something to wait for, wait for that instead of guessing; otherwise
       // give the first render a brief settle.
+      let found = null;
       if (cmd.selector || cmd.text) {
-        await waitForPresence(tab.id, { selector: cmd.selector, text: cmd.text }, cmd.timeoutMs || 15000);
+        found = await waitForPresence(tab.id, { selector: cmd.selector, text: cmd.text }, cmd.timeoutMs || 15000);
       } else {
         await settle(tab.id, 1500);
       }
       const t = await chrome.tabs.get(tab.id);
+
+      // Confirm the page is really there. Chrome happily reports a load as
+      // "complete" when what loaded is its own error page, and reporting that
+      // as a successful navigation is how Harvey ends up describing a site he
+      // never actually reached.
+      try {
+        await inPage(tab.id, () => document.readyState, {});
+      } catch (err) {
+        const msg = String((err && err.message) || err);
+        if (/error page/i.test(msg)) {
+          return { ok: false, error: "That address didn't load — the browser is showing an error page. Check the URL, or the site may be down or refusing the connection.", url: t.url, title: t.title };
+        }
+        return { ok: false, error: "Couldn't reach the page after navigating: " + msg, url: t.url, title: t.title };
+      }
+
+      if (found === false) {
+        // Not a failure — the page loaded — but Harvey must not assume the
+        // thing he was waiting for is on screen.
+        return {
+          ok: true,
+          data: "navigated, but " + (cmd.selector || '"' + cmd.text + '"') + " never appeared — the page may still be loading, or it isn't what you expected",
+          found: false,
+          url: t.url,
+          title: t.title,
+        };
+      }
       return { ok: true, data: "navigated", url: t.url, title: t.title };
     }
 
@@ -685,8 +755,7 @@ async function execute(cmd, serverUrl) {
       }
       case "focus": {
         // Hand the keyboard back to the human — the login-wall path.
-        await chrome.tabs.update(tab.id, { active: true });
-        try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (_) {}
+        await bringToFront(tab);
         return { ok: true, data: "Harvey's tab is now in front of the operator." };
       }
       default:

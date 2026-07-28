@@ -64,6 +64,8 @@ export interface BrowserCommand {
   to?: string | number;
   /** For screenshot: longest edge in px. */
   maxWidth?: number;
+  /** For navigate: bring Harvey's window to the front. Defaults to true. */
+  focus?: boolean;
   createdAt: string;
   issuedBy: string;
 }

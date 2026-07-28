@@ -225,11 +225,19 @@ Just ask:
 - "Open this listing and pull the price, address, beds and baths."
 - "Fill the request form with my details and submit."
 
-Harvey works in **his own tab**, opened in the background the first time he
-needs one. He will never navigate the page you're reading — including this
-app — out from under you. If he hasn't opened a tab yet and you ask about the
-page you're on, he acts on that one, so "what does this page say about the
-HOA?" works without opening anything first.
+Harvey works in **his own window**. Ask him to open something and he opens it
+there and brings it up in front of you — you don't have to go looking for it.
+He will never navigate the page you're reading, including this app, out from
+under you.
+
+The separate window is deliberate: it leaves Harvey's own page as the active
+tab of its window, which keeps the microphone and the speech connection awake.
+Browsers throttle hidden tabs heavily, and that is what used to make him seem
+to stop listening after a while.
+
+If he hasn't opened anything yet and you ask about the page you're on, he acts
+on that one — so "what does this page say about the HOA?" works without
+opening anything first.
 
 The extension popup shows which page Harvey is on, so you can check before
 asking him to click something.

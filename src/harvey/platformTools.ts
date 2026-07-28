@@ -154,10 +154,15 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "browser_navigate",
     description:
-      "Open a URL in Harvey's own browser tab and wait for it to load. Use for sites with no API — a listing portal, a title company's form, an MLS back office. Returns the resulting page URL and title. A bare domain is fine ('books.toscrape.com', 'zillow.com/homes/123') — https:// is added for you, so NEVER ask the operator to retype an address with the scheme on it.",
+      "Open a URL in Harvey's own browser window and BRING IT UP IN FRONT OF THE OPERATOR, then wait for it to load. Use for sites with no API — a listing portal, a title company's form, an MLS back office. Returns the resulting page URL and title. " +
+      "A bare domain is fine ('books.toscrape.com', 'zillow.com/homes/123') — https:// is added for you, so NEVER ask the operator to retype an address with the scheme on it. " +
+      "The page is shown to them by default, which is what they expect when they ask you to open something; pass focus:false only for a background step they did not ask to see.",
     input_schema: {
       type: "object",
-      properties: { url: { type: "string", description: "A URL or a bare domain — 'books.toscrape.com' works." } },
+      properties: {
+        url: { type: "string", description: "A URL or a bare domain — 'books.toscrape.com' works." },
+        focus: { type: "boolean", description: "Show it to the operator. Default true — leave it alone unless they asked you to work quietly." },
+      },
       required: ["url"],
     },
   },
@@ -610,7 +615,11 @@ export async function executePlatformTool(
       if (!url) {
         return { error: "That doesn't look like a web address. Give a domain or URL, e.g. books.toscrape.com" };
       }
-      return await runBrowserCommand({ action: "navigate", url });
+      return await runBrowserCommand({
+        action: "navigate",
+        url,
+        focus: input.focus === false ? false : true,
+      });
     }
 
     case "browser_wait_for":

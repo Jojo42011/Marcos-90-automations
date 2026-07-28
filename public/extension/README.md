@@ -6,9 +6,14 @@ fill out a third-party form, read a page in an MLS back office.
 Harvey acts in **your** browser, with your existing logins — and only while you
 switch it on.
 
-He works in **his own tab**, opened in the background the first time he needs
-one. The page you're reading — including the Harvey shell itself — is never
-navigated out from under you.
+He works in **his own window**, which he opens the first time he needs one and
+brings to the front so you can see what he opened. The page you're reading —
+including the Harvey shell itself — is never navigated out from under you.
+
+A separate window rather than a tab is deliberate: it keeps the Harvey shell
+the active tab of *its* window, so the microphone and the speech connection
+stay awake. Browsers throttle hidden tabs hard, and a hidden shell is what
+makes Harvey appear to stop listening.
 
 ## Install
 

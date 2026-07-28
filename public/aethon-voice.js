@@ -27,6 +27,8 @@
   let sttConnected = false;
   let captureStarted = false; // mic AudioContext/ScriptProcessor set up once
   let sttReconnectTimer = null;
+  let sttHealthTimer = null;
+  let sttRetries = 0;
 
   let playCtx = null;
   let ttsQueue = [];
@@ -671,6 +673,11 @@
       // rebuilds just the socket — no greeting, no new mic pipeline.
       if (voiceActive) {
         if (sttReconnectTimer) clearTimeout(sttReconnectTimer);
+        // Backoff, capped. A tight 2s retry against a server that is down (or
+        // an API key that has expired) just hammers it; unbounded backoff means
+        // Harvey never comes back.
+        const delay = Math.min(2000 * Math.pow(1.6, Math.min(sttRetries, 5)), 15000);
+        sttRetries++;
         sttReconnectTimer = setTimeout(() => {
           sttReconnectTimer = null;
           if (voiceActive) {
@@ -678,13 +685,14 @@
             console.log("[STT] Reconnecting STT WebSocket (session still active)");
             initSttWebSocket();
           }
-        }, 2000);
+        }, delay);
       }
     };
 
     sttWs.onopen = async () => {
       sttConnected = true;
       listening = true;
+      sttRetries = 0;
       console.log("[STT] WebSocket connected");
       // Set up the mic pipeline once; on a reconnect it persists (don't rebuild
       // the AudioContext — that would churn the mic and drop barge-in monitoring).
@@ -692,8 +700,64 @@
         captureStarted = true;
         await startCapture();
       }
+      startSttHealthWatch();
     };
   }
+
+  /**
+   * Keep listening alive when the tab isn't the one being looked at.
+   *
+   * The reconnect above is a setTimeout, and browsers throttle timers in a
+   * HIDDEN tab to roughly one per minute. That is precisely the situation
+   * Harvey creates for himself — he opens a site, the operator looks at it,
+   * the Harvey tab goes to the background — so a dropped socket that should
+   * have recovered in two seconds could sit dead for a minute or more. From
+   * the outside that is "he stops listening after a while".
+   *
+   * Two defences, because neither alone is enough:
+   *   1. A periodic health check that reconnects a socket found closed. Still
+   *      a timer, so still throttled — but a throttled check every ~60s beats
+   *      a reconnect that was never scheduled at all.
+   *   2. An immediate check the moment the tab becomes visible again, plus one
+   *      on window focus and on the network coming back. These are EVENTS, not
+   *      timers, so throttling doesn't apply — this is what makes coming back
+   *      to Harvey feel instant instead of dead for a minute.
+   *
+   * The AudioContext gets resumed here too: browsers may suspend it while
+   * hidden, and a suspended context delivers silence rather than an error, so
+   * the socket looks perfectly healthy while nothing is being heard.
+   */
+  function checkSttHealth(reason) {
+    if (!voiceActive) return;
+    try {
+      if (captureCtx && captureCtx.state === "suspended") {
+        captureCtx.resume().catch(() => {});
+        console.log("[STT] Resumed suspended mic AudioContext (" + reason + ")");
+      }
+    } catch (_) {}
+    const dead = !sttWs || sttWs.readyState === WebSocket.CLOSED || sttWs.readyState === WebSocket.CLOSING;
+    if (dead) {
+      console.log("[STT] Health check found a dead socket (" + reason + ") — reconnecting now");
+      if (sttReconnectTimer) { clearTimeout(sttReconnectTimer); sttReconnectTimer = null; }
+      sttRetries = 0;   // a user-visible return deserves a fast first retry
+      initSttWebSocket();
+    }
+  }
+
+  function startSttHealthWatch() {
+    if (sttHealthTimer) return;
+    sttHealthTimer = setInterval(() => checkSttHealth("interval"), 15000);
+  }
+
+  function stopSttHealthWatch() {
+    if (sttHealthTimer) { clearInterval(sttHealthTimer); sttHealthTimer = null; }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkSttHealth("tab visible");
+  });
+  window.addEventListener("focus", () => checkSttHealth("window focus"));
+  window.addEventListener("online", () => checkSttHealth("network back"));
 
   // Only one Harvey tab may run voice at a time. When a session starts here we
   // tell every other tab to stand down; a tab hearing that while live stops its
@@ -765,6 +829,9 @@
       clearTimeout(sttReconnectTimer);
       sttReconnectTimer = null;
     }
+    // Otherwise the health check keeps reviving a session the user just ended.
+    stopSttHealthWatch();
+    sttRetries = 0;
     ttsQueue = [];
     window.HarveyStreamingTts?.stop?.();
     if (currentSource) {
