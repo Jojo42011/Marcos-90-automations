@@ -824,7 +824,6 @@ var viewingPage="";        // member id whose dedicated page we're viewing (read
 var noteTab="all", NOTES=[], UNREAD_CHAT={}, PRESENCE={};
 var chatWith="", chatTimer=null;
 var seenPopIds={}; try{ (JSON.parse(localStorage.getItem("tt_seen")||"[]")).forEach(function(i){seenPopIds[i]=1}); }catch(_){}
-var firstNotePoll=true;
 
 /* ================= theme ================= */
 function applyTheme(t){document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");localStorage.setItem("teamTasksTheme",t);}
@@ -1760,10 +1759,9 @@ function pollNotes(){
     NOTES.forEach(function(n){
       if(seenPopIds[n.id])return;
       seenPopIds[n.id]=1;newSeen=true;
-      if(!firstNotePoll&&!n.readAt)popNote(n);
+      if(!n.readAt)popNote(n);
     });
     if(newSeen){try{localStorage.setItem("tt_seen",JSON.stringify(Object.keys(seenPopIds).slice(-300)));}catch(_){}}
-    firstNotePoll=false;
   }).catch(function(){});
 }
 

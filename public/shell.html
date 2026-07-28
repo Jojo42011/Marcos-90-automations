@@ -332,7 +332,6 @@ function initShell(){
  var noteSeenKey = "shell_note_seen";
  var noteSeen = {};
  try{ (JSON.parse(localStorage.getItem(noteSeenKey)||"[]")).forEach(function(id){ noteSeen[id]=1; }); }catch(_){}
- var noteFirstPoll = true;
 
  function escNote(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 
@@ -359,12 +358,11 @@ function initShell(){
        notes.forEach(function(n){
          if(noteSeen[n.id]) return;
          noteSeen[n.id] = 1; fresh = true;
-         if(noteFirstPoll || n.readAt) return;   // don't flood already-known notes on load
-         if(current === "tasks") return;         // Tasks tab already shows its own copy of this
+         if(n.readAt) return;                    // already acknowledged - nothing to show
+         if(current === "tasks") return;          // Tasks tab already shows its own copy of this
          popNoteCard(n);
        });
        if(fresh){ try{ localStorage.setItem(noteSeenKey, JSON.stringify(Object.keys(noteSeen).slice(-500))); }catch(_){} }
-       noteFirstPoll = false;
      })
      .catch(function(){});
  }
