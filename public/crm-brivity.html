@@ -107,6 +107,23 @@
   .chcount.on{display:inline-block}
   .tabs button.quiet{opacity:.45}
   .chchip{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:9px;color:#fff;font-size:9.5px;font-weight:700;letter-spacing:.03em;vertical-align:1px}
+  /* Send-later popover, anchored above the composer. */
+  .thread-compose{position:relative}
+  .sched-pop{display:none;position:absolute;right:14px;bottom:64px;z-index:40;width:310px;background:#fff;border:1px solid #e3e8e8;border-radius:12px;box-shadow:0 18px 44px rgba(16,24,40,.18);padding:13px}
+  .sched-pop.on{display:block}
+  .sp-head{font-size:12.5px;font-weight:700;color:#333;margin-bottom:9px}
+  .sp-quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+  .sp-quick button{border:1px solid #e3e8e8;background:#fbfcfd;border-radius:16px;padding:5px 10px;font-size:11.5px;color:#41505c;cursor:pointer}
+  .sp-quick button:hover,.sp-quick button.on{border-color:var(--teal);color:var(--teal);background:#eef7f7}
+  #schedWhen{width:100%;height:34px;border:1px solid #e3e8e8;border-radius:8px;padding:0 10px;font-size:12.5px;outline:none}
+  #schedWhen:focus{border-color:var(--teal)}
+  .sp-echo{min-height:16px;margin-top:6px;font-size:11.5px;color:#5f6b78}
+  .sp-echo.bad{color:#c0616a}
+  .sp-echo.warn{color:#b45309}
+  .sp-foot{display:flex;justify-content:flex-end;gap:7px;margin-top:9px}
+  .sp-cancel{border:none;background:none;font-size:12px;color:#7a8590;cursor:pointer;padding:6px 8px}
+  .sp-go{border:none;background:var(--teal);color:#fff;font-size:12px;font-weight:700;border-radius:7px;padding:7px 14px;cursor:pointer}
+  .sp-go:disabled{opacity:.5;cursor:default}
   .chip{background:var(--teal-pill);color:#fff;font-size:11px;font-weight:700;border-radius:14px;padding:4px 12px;border:none}
 
   .feed-item{display:flex;gap:14px;padding:18px 4px;border-bottom:1px solid var(--line-2)}
@@ -1216,8 +1233,86 @@ function paintThread(i){
     '<div class="thread-compose"><div class="ch-toggle"><button class="on" data-ch="sms">SMS</button><button data-ch="email">Email</button></div>'+
       '<button class="rb attach" id="threadAttachBtn" title="Attach"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.4 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.2-9.2a3 3 0 0 1 4.24 4.25l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.48-8.49"/></svg></button>'+
       '<input type="file" id="threadAttachInput" multiple style="display:none">'+
-      '<input id="threadInput" placeholder="Type a message…"><button class="snd" id="threadSend"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button></div>';
+      '<input id="threadInput" placeholder="Type a message…">'+
+      '<button class="rb" id="threadLaterBtn" title="Send later"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>'+
+      '<button class="snd" id="threadSend"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button></div>'+
+    '<div class="sched-pop" id="schedPop">'+
+      '<div class="sp-head">Schedule this message</div>'+
+      '<div class="sp-quick">'+
+        '<button data-when="in 1 hours">In an hour</button>'+
+        '<button data-when="tomorrow at 9am">Tomorrow 9am</button>'+
+        '<button data-when="tomorrow afternoon">Tomorrow PM</button>'+
+        '<button data-when="monday at 9am">Monday 9am</button>'+
+      '</div>'+
+      '<input id="schedWhen" placeholder="or describe it — &quot;Tuesday morning&quot;">'+
+      '<div class="sp-echo" id="schedEcho"></div>'+
+      '<div class="sp-foot"><button class="sp-cancel" id="schedCancel">Cancel</button><button class="sp-go" id="schedGo">Schedule</button></div>'+
+    '</div>';
   document.querySelectorAll(".ch-toggle button").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".ch-toggle button").forEach(x=>x.classList.toggle("on",x===b));}));
+
+  /* ---- Send later (3.2) ------------------------------------------------
+     The time is parsed on the server so the CRM and Harvey agree on what
+     "Tuesday morning" means, and the parse is echoed back BEFORE you commit
+     — you should never find out the interpretation by having a client get a
+     text at the wrong hour. The server also reports whether the channel can
+     actually deliver, which is surfaced here rather than discovered later. */
+  const pop=document.getElementById("schedPop");
+  const whenInput=document.getElementById("schedWhen");
+  const echo=document.getElementById("schedEcho");
+  const goBtn=document.getElementById("schedGo");
+  let echoTimer=null, lastParse=null;
+
+  function composeChannel(){
+    const on=document.querySelector(".ch-toggle button.on");
+    return on&&on.getAttribute("data-ch")==="email"?"email":"sms";
+  }
+  function setEcho(text,cls){ echo.textContent=text||""; echo.className="sp-echo"+(cls?" "+cls:""); }
+
+  /* Dry-run the phrase against the real parser (never writes anything). */
+  function previewWhen(){
+    const phrase=(whenInput.value||"").trim();
+    lastParse=null; goBtn.disabled=true;
+    if(!phrase){ setEcho(""); return; }
+    setEcho("Reading…");
+    fetch(crmApi("/api/scheduled/preview"),{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({when:phrase,channel:composeChannel()})})
+      .then(r=>r.json())
+      .then(d=>{
+        if(!d.ok){ setEcho(d.error||"Couldn't read that time","bad"); return; }
+        lastParse=d; goBtn.disabled=false;
+        setEcho(d.warning?("Will queue for "+d.interpreted+" — but "+d.warning):("Sends "+d.interpreted),
+                d.warning?"warn":"");
+      })
+      .catch(()=>setEcho("Couldn't reach the server","bad"));
+  }
+  whenInput.addEventListener("input",()=>{ clearTimeout(echoTimer); echoTimer=setTimeout(previewWhen,300); });
+  document.querySelectorAll("#schedPop .sp-quick button").forEach(b=>b.addEventListener("click",()=>{
+    document.querySelectorAll("#schedPop .sp-quick button").forEach(x=>x.classList.toggle("on",x===b));
+    whenInput.value=b.getAttribute("data-when"); previewWhen();
+  }));
+  document.getElementById("threadLaterBtn").addEventListener("click",()=>{
+    if(!(document.getElementById("threadInput").value||"").trim()){ crmToast("Write the message first"); return; }
+    pop.classList.add("on"); whenInput.focus(); previewWhen();
+  });
+  document.getElementById("schedCancel").addEventListener("click",()=>pop.classList.remove("on"));
+  goBtn.addEventListener("click",()=>{
+    const body=(document.getElementById("threadInput").value||"").trim();
+    if(!body||!lastParse) return;
+    if(!c.leadId){ crmToast("This conversation isn't linked to a lead yet"); return; }
+    goBtn.disabled=true;
+    fetch(crmApi("/api/scheduled"),{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({leadId:c.leadId,channel:composeChannel(),body,when:whenInput.value.trim()})})
+      .then(r=>r.json().then(d=>({ok:r.ok,d})))
+      .then(({ok,d})=>{
+        if(!ok){ setEcho(d.error||"Couldn't schedule","bad"); goBtn.disabled=false; return; }
+        pop.classList.remove("on");
+        document.getElementById("threadInput").value="";
+        whenInput.value="";
+        crmToast(d.warning?("Queued for "+d.interpreted+" — will not send: "+d.warning)
+                          :("Scheduled for "+d.interpreted));
+      })
+      .catch(()=>{ setEcho("Couldn't reach the server","bad"); goBtn.disabled=false; });
+  });
   function renderAttachPreview(){
     var el=document.getElementById("threadAttachPreview"); if(!el)return;
     if(!pendingAttachments.length){ el.style.display="none"; el.innerHTML=""; return; }

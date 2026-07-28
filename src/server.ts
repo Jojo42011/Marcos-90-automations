@@ -99,6 +99,18 @@ import {
   chatUnreadCounts,
 } from "./core/teamStore.js";
 import { listTeamMembers } from "./core/teamRoster.js";
+import {
+  scheduleMessage,
+  listScheduled,
+  getScheduled,
+  cancelScheduled,
+  rescheduleMessage,
+  scheduledCounts,
+  type ScheduledChannel,
+} from "./core/scheduledMessages.js";
+import { canSendOn, startScheduledSender } from "./core/scheduledSender.js";
+import { parseSendTime, suggestNextGoodTime } from "./core/scheduleTime.js";
+
 import { sendAssignmentEmail } from "./core/taskAssignmentEmail.js";
 import { getBrivityPeople, getBrivityImportStatus } from "./core/brivityPeople.js";
 import { handleWebsiteVisit } from "./agents/reEngagement/index.js";
@@ -8627,6 +8639,142 @@ app.post("/api/push/unsubscribe", express.json({ limit: "64kb" }), (req, res) =>
   res.json({ success: true });
 });
 
+/* ——— Scheduled sending (3.2): queue a text or email for later ———
+   Two ways in — the user picks a time in the CRM, or Harvey queues it from a
+   plain-language time. Both land in the same queue and the same sender. */
+
+/** Resolve the destination for a channel, so callers never guess. */
+async function resolveScheduleTarget(
+  leadId: string,
+  channel: ScheduledChannel,
+): Promise<{ to: string; name: string } | { error: string }> {
+  const lead = await getLeadById(leadId);
+  if (!lead) return { error: "Lead not found" };
+  const name = lead.name || lead.username || "Lead";
+  if (channel === "sms") {
+    if (!lead.phone) return { error: `${name} has no phone number on file` };
+    return { to: lead.phone, name };
+  }
+  if (!lead.email) return { error: `${name} has no email address on file` };
+  return { to: lead.email, name };
+}
+
+app.get("/api/scheduled", (req, res) => {
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const leadId = typeof req.query.leadId === "string" ? req.query.leadId : undefined;
+  res.json({
+    messages: listScheduled({
+      status: status as never,
+      leadId,
+      limit: Number(req.query.limit) || 200,
+    }),
+    counts: scheduledCounts(),
+    // Surfaced so the UI can warn BEFORE queueing into a channel that can't
+    // deliver, rather than letting it fail silently an hour later.
+    capability: { sms: canSendOn("sms"), email: canSendOn("email") },
+  });
+});
+
+app.post("/api/scheduled", express.json({ limit: "256kb" }), async (req, res) => {
+  const b = (req.body || {}) as Record<string, unknown>;
+  const leadId = String(b.leadId || "").trim();
+  const channel = b.channel === "email" ? "email" : "sms";
+  const body = String(b.body || "").trim();
+  if (!leadId || !body) {
+    res.status(400).json({ error: "leadId and body are required" });
+    return;
+  }
+
+  // Accept either an explicit ISO instant or plain language ("Tuesday
+  // morning"). Ambiguous phrasing is rejected rather than guessed — the cost
+  // of a wrong guess is a real text to a real client at the wrong hour.
+  const when = String(b.sendAt || b.when || "").trim();
+  const parsed = when ? parseSendTime(when) : suggestNextGoodTime();
+  if (!parsed) {
+    res.status(400).json({
+      error: `Couldn't understand the send time "${when}"`,
+      hint: 'Try "tomorrow at 9am", "Tuesday morning", "in 2 hours", or an exact date.',
+    });
+    return;
+  }
+
+  const target = await resolveScheduleTarget(leadId, channel);
+  if ("error" in target) {
+    res.status(400).json({ error: target.error });
+    return;
+  }
+
+  const msg = scheduleMessage({
+    leadId,
+    leadName: target.name,
+    channel,
+    to: target.to,
+    subject: typeof b.subject === "string" ? b.subject : undefined,
+    body,
+    sendAt: parsed.sendAt,
+    createdBy: typeof b.createdBy === "string" ? b.createdBy : "marco",
+    requestedTime: when || undefined,
+  });
+
+  const capability = canSendOn(channel);
+  res.json({
+    message: msg,
+    interpreted: parsed.interpreted,
+    // Queued is not the same as deliverable. Say so up front.
+    warning: capability.ok ? undefined : capability.reason,
+  });
+});
+
+/**
+ * Dry-run a send time. Writes nothing — it exists so the composer can echo
+ * "Sends Tue, Aug 4, 9:00 AM CDT" while you type, using the SAME parser the
+ * real queue uses. Finding out how a phrase was read by having a client
+ * receive a text at the wrong hour is not an acceptable feedback loop.
+ */
+app.post("/api/scheduled/preview", express.json({ limit: "16kb" }), (req, res) => {
+  const b = (req.body || {}) as Record<string, unknown>;
+  const when = String(b.when || "").trim();
+  const channel: ScheduledChannel = b.channel === "email" ? "email" : "sms";
+  const parsed = when ? parseSendTime(when) : suggestNextGoodTime();
+  if (!parsed) {
+    res.json({
+      ok: false,
+      error: `Couldn't read "${when}" — try "tomorrow at 9am" or "Tuesday morning".`,
+    });
+    return;
+  }
+  const capability = canSendOn(channel);
+  res.json({
+    ok: true,
+    sendAt: parsed.sendAt,
+    interpreted: parsed.interpreted,
+    warning: capability.ok ? undefined : capability.reason,
+  });
+});
+
+app.delete("/api/scheduled/:id", (req, res) => {
+  const ok = cancelScheduled(String(req.params.id || ""));
+  if (!ok) {
+    res.status(404).json({ error: "Not found, or it already went out" });
+    return;
+  }
+  res.json({ canceled: true });
+});
+
+app.patch("/api/scheduled/:id", express.json({ limit: "64kb" }), (req, res) => {
+  const when = String((req.body || {}).sendAt || (req.body || {}).when || "").trim();
+  const parsed = when ? parseSendTime(when) : null;
+  if (!parsed) {
+    res.status(400).json({ error: `Couldn't understand the send time "${when}"` });
+    return;
+  }
+  if (!rescheduleMessage(String(req.params.id || ""), parsed.sendAt)) {
+    res.status(404).json({ error: "Not found, or it already went out" });
+    return;
+  }
+  res.json({ message: getScheduled(String(req.params.id)), interpreted: parsed.interpreted });
+});
+
 /* ——— Team collaboration: notifications, chat, presence (task command center) ——— */
 
 /** Who can sign in. Email addresses are intentionally omitted — see teamRoster.ts. */
@@ -10837,6 +10985,13 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     initPush();
   } catch (err) {
     console.error("[push] init failed:", err);
+  }
+  try {
+    // Scheduled texts/emails. The queue lives on the /data volume, so
+    // anything still pending across a deploy is picked up on the next tick.
+    startScheduledSender();
+  } catch (err) {
+    console.error("[scheduled] sender failed to start:", err);
   }
   try {
     initTeamStore();

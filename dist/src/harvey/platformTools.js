@@ -42,6 +42,10 @@ const trackerTasks_js_1 = require("../core/trackerTasks.js");
 const db_js_1 = require("../core/db.js");
 const teamStore_js_1 = require("../core/teamStore.js");
 const commandSettings_js_1 = require("../core/commandSettings.js");
+const scheduledMessages_js_1 = require("../core/scheduledMessages.js");
+const scheduledSender_js_1 = require("../core/scheduledSender.js");
+const scheduleTime_js_1 = require("../core/scheduleTime.js");
+const db_js_2 = require("../core/db.js");
 /**
  * Harvey tools for the platform surfaces that had none — the Buyers & Sellers
  * Tracker, Task Command, the team board and command settings.
@@ -101,6 +105,46 @@ function slimTask(t) {
 const str = (v) => (typeof v === "string" ? v.trim() : "");
 const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
 exports.PLATFORM_TOOL_DEFINITIONS = [
+    {
+        name: "schedule_message",
+        description: "Queue a text or email to a lead to go out at a later time. Give `when` in plain language — 'Tuesday morning', 'tomorrow at 9am', 'in 2 hours' — or an exact date; omit it to use the next good business hour. ALWAYS tell the user the interpreted time that comes back, and if a `warning` is returned say so plainly: the message is queued but that channel cannot currently deliver. If the time can't be understood the tool returns an error — ask the user rather than picking a time yourself.",
+        input_schema: {
+            type: "object",
+            properties: {
+                leadId: { type: "string", description: "Lead id. Use search_leads first if you only have a name." },
+                channel: { type: "string", enum: ["sms", "email"], description: "sms or email." },
+                body: { type: "string", description: "The message to send." },
+                subject: { type: "string", description: "Subject line — email only." },
+                when: {
+                    type: "string",
+                    description: "Plain-language or exact send time. Omit for the next good business hour.",
+                },
+            },
+            required: ["leadId", "channel", "body"],
+        },
+    },
+    {
+        name: "list_scheduled_messages",
+        description: "Messages queued to send later, newest first. Filter by status (pending/sent/failed/canceled) or by lead. Also reports whether SMS and email can actually deliver right now — use that to explain failures instead of guessing.",
+        input_schema: {
+            type: "object",
+            properties: {
+                status: { type: "string", enum: ["pending", "sent", "failed", "canceled"] },
+                leadId: { type: "string" },
+                limit: { type: "number", description: "Default 20." },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "cancel_scheduled_message",
+        description: "Cancel a queued message that hasn't gone out yet. Returns an error if it already sent — a sent message cannot be unsent.",
+        input_schema: {
+            type: "object",
+            properties: { id: { type: "string", description: "Scheduled message id." } },
+            required: ["id"],
+        },
+    },
     {
         name: "get_tracker_summary",
         description: "Buyers & Sellers Tracker totals: how many people, how many on each side, counts by status and by pipeline stage, and how many are actually contactable (have a phone or email). Use this for 'how many sellers do we have', 'what's in the pipeline', 'how many hot leads'.",
@@ -255,6 +299,90 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
 exports.PLATFORM_TOOL_NAMES = new Set(exports.PLATFORM_TOOL_DEFINITIONS.map((t) => t.name));
 async function executePlatformTool(name, input) {
     switch (name) {
+        case "schedule_message": {
+            const leadId = str(input.leadId);
+            const channel = input.channel === "email" ? "email" : "sms";
+            const body = str(input.body);
+            if (!leadId || !body)
+                return { error: "leadId and body are required" };
+            const whenRaw = str(input.when);
+            // Refuse to invent a time. A wrong guess here is a real message to a
+            // real client at the wrong hour, so an unparseable phrase comes back as
+            // a question for the user instead of a best guess.
+            const parsed = whenRaw ? (0, scheduleTime_js_1.parseSendTime)(whenRaw) : (0, scheduleTime_js_1.suggestNextGoodTime)();
+            if (!parsed) {
+                return {
+                    error: `Couldn't understand the send time "${whenRaw}". Ask the user for a clearer time.`,
+                    examples: ["tomorrow at 9am", "Tuesday morning", "in 2 hours", "2026-08-05 14:30"],
+                };
+            }
+            const lead = await (0, db_js_2.getLeadById)(leadId);
+            if (!lead)
+                return { error: `No lead with id ${leadId}` };
+            const leadName = lead.name || lead.username || "Lead";
+            const to = channel === "sms" ? lead.phone : lead.email;
+            if (!to)
+                return { error: `${leadName} has no ${channel === "sms" ? "phone number" : "email address"} on file` };
+            const msg = (0, scheduledMessages_js_1.scheduleMessage)({
+                leadId,
+                leadName,
+                channel,
+                to,
+                subject: str(input.subject) || undefined,
+                body,
+                sendAt: parsed.sendAt,
+                createdBy: "harvey",
+                requestedTime: whenRaw || undefined,
+            });
+            const capability = (0, scheduledSender_js_1.canSendOn)(channel);
+            return {
+                scheduled: true,
+                id: msg.id,
+                to,
+                leadName,
+                channel,
+                sendAt: msg.sendAt,
+                interpreted: parsed.interpreted,
+                // Queued ≠ deliverable. Never let Harvey imply this will arrive.
+                warning: capability.ok
+                    ? undefined
+                    : `Queued, but it will NOT be delivered: ${capability.reason}`,
+            };
+        }
+        case "list_scheduled_messages": {
+            const msgs = (0, scheduledMessages_js_1.listScheduled)({
+                status: (str(input.status) || undefined),
+                leadId: str(input.leadId) || undefined,
+                limit: Math.min(100, Math.max(1, num(input.limit, 20))),
+            });
+            return {
+                counts: (0, scheduledMessages_js_1.scheduledCounts)(),
+                canDeliver: { sms: (0, scheduledSender_js_1.canSendOn)("sms"), email: (0, scheduledSender_js_1.canSendOn)("email") },
+                messages: msgs.map((m) => ({
+                    id: m.id,
+                    leadName: m.leadName,
+                    channel: m.channel,
+                    to: m.to,
+                    sendAt: m.sendAt,
+                    status: m.status,
+                    createdBy: m.createdBy,
+                    preview: m.body.slice(0, 120),
+                    error: m.error,
+                })),
+            };
+        }
+        case "cancel_scheduled_message": {
+            const id = str(input.id);
+            if (!id)
+                return { error: "id is required" };
+            const existing = (0, scheduledMessages_js_1.getScheduled)(id);
+            if (!existing)
+                return { error: `No scheduled message with id ${id}` };
+            if (!(0, scheduledMessages_js_1.cancelScheduled)(id)) {
+                return { error: `That message is already ${existing.status} — it can't be canceled.` };
+            }
+            return { canceled: true, id, leadName: existing.leadName, channel: existing.channel };
+        }
         case "get_tracker_summary": {
             const c = (0, trackerStore_js_1.trackerCounts)();
             const all = (0, trackerStore_js_1.listTrackerRecords)({});

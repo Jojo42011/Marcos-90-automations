@@ -71,6 +71,9 @@ const crmNotificationStore_js_1 = require("./core/crmNotificationStore.js");
 const pushStore_js_1 = require("./core/pushStore.js");
 const teamStore_js_1 = require("./core/teamStore.js");
 const teamRoster_js_1 = require("./core/teamRoster.js");
+const scheduledMessages_js_1 = require("./core/scheduledMessages.js");
+const scheduledSender_js_1 = require("./core/scheduledSender.js");
+const scheduleTime_js_1 = require("./core/scheduleTime.js");
 const taskAssignmentEmail_js_1 = require("./core/taskAssignmentEmail.js");
 const brivityPeople_js_1 = require("./core/brivityPeople.js");
 const index_js_11 = require("./agents/reEngagement/index.js");
@@ -7838,6 +7841,131 @@ app.post("/api/push/unsubscribe", express_1.default.json({ limit: "64kb" }), (re
     (0, pushStore_js_1.removeSubscription)(endpoint);
     res.json({ success: true });
 });
+/* ——— Scheduled sending (3.2): queue a text or email for later ———
+   Two ways in — the user picks a time in the CRM, or Harvey queues it from a
+   plain-language time. Both land in the same queue and the same sender. */
+/** Resolve the destination for a channel, so callers never guess. */
+async function resolveScheduleTarget(leadId, channel) {
+    const lead = await (0, db_js_1.getLeadById)(leadId);
+    if (!lead)
+        return { error: "Lead not found" };
+    const name = lead.name || lead.username || "Lead";
+    if (channel === "sms") {
+        if (!lead.phone)
+            return { error: `${name} has no phone number on file` };
+        return { to: lead.phone, name };
+    }
+    if (!lead.email)
+        return { error: `${name} has no email address on file` };
+    return { to: lead.email, name };
+}
+app.get("/api/scheduled", (req, res) => {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const leadId = typeof req.query.leadId === "string" ? req.query.leadId : undefined;
+    res.json({
+        messages: (0, scheduledMessages_js_1.listScheduled)({
+            status: status,
+            leadId,
+            limit: Number(req.query.limit) || 200,
+        }),
+        counts: (0, scheduledMessages_js_1.scheduledCounts)(),
+        // Surfaced so the UI can warn BEFORE queueing into a channel that can't
+        // deliver, rather than letting it fail silently an hour later.
+        capability: { sms: (0, scheduledSender_js_1.canSendOn)("sms"), email: (0, scheduledSender_js_1.canSendOn)("email") },
+    });
+});
+app.post("/api/scheduled", express_1.default.json({ limit: "256kb" }), async (req, res) => {
+    const b = (req.body || {});
+    const leadId = String(b.leadId || "").trim();
+    const channel = b.channel === "email" ? "email" : "sms";
+    const body = String(b.body || "").trim();
+    if (!leadId || !body) {
+        res.status(400).json({ error: "leadId and body are required" });
+        return;
+    }
+    // Accept either an explicit ISO instant or plain language ("Tuesday
+    // morning"). Ambiguous phrasing is rejected rather than guessed — the cost
+    // of a wrong guess is a real text to a real client at the wrong hour.
+    const when = String(b.sendAt || b.when || "").trim();
+    const parsed = when ? (0, scheduleTime_js_1.parseSendTime)(when) : (0, scheduleTime_js_1.suggestNextGoodTime)();
+    if (!parsed) {
+        res.status(400).json({
+            error: `Couldn't understand the send time "${when}"`,
+            hint: 'Try "tomorrow at 9am", "Tuesday morning", "in 2 hours", or an exact date.',
+        });
+        return;
+    }
+    const target = await resolveScheduleTarget(leadId, channel);
+    if ("error" in target) {
+        res.status(400).json({ error: target.error });
+        return;
+    }
+    const msg = (0, scheduledMessages_js_1.scheduleMessage)({
+        leadId,
+        leadName: target.name,
+        channel,
+        to: target.to,
+        subject: typeof b.subject === "string" ? b.subject : undefined,
+        body,
+        sendAt: parsed.sendAt,
+        createdBy: typeof b.createdBy === "string" ? b.createdBy : "marco",
+        requestedTime: when || undefined,
+    });
+    const capability = (0, scheduledSender_js_1.canSendOn)(channel);
+    res.json({
+        message: msg,
+        interpreted: parsed.interpreted,
+        // Queued is not the same as deliverable. Say so up front.
+        warning: capability.ok ? undefined : capability.reason,
+    });
+});
+/**
+ * Dry-run a send time. Writes nothing — it exists so the composer can echo
+ * "Sends Tue, Aug 4, 9:00 AM CDT" while you type, using the SAME parser the
+ * real queue uses. Finding out how a phrase was read by having a client
+ * receive a text at the wrong hour is not an acceptable feedback loop.
+ */
+app.post("/api/scheduled/preview", express_1.default.json({ limit: "16kb" }), (req, res) => {
+    const b = (req.body || {});
+    const when = String(b.when || "").trim();
+    const channel = b.channel === "email" ? "email" : "sms";
+    const parsed = when ? (0, scheduleTime_js_1.parseSendTime)(when) : (0, scheduleTime_js_1.suggestNextGoodTime)();
+    if (!parsed) {
+        res.json({
+            ok: false,
+            error: `Couldn't read "${when}" — try "tomorrow at 9am" or "Tuesday morning".`,
+        });
+        return;
+    }
+    const capability = (0, scheduledSender_js_1.canSendOn)(channel);
+    res.json({
+        ok: true,
+        sendAt: parsed.sendAt,
+        interpreted: parsed.interpreted,
+        warning: capability.ok ? undefined : capability.reason,
+    });
+});
+app.delete("/api/scheduled/:id", (req, res) => {
+    const ok = (0, scheduledMessages_js_1.cancelScheduled)(String(req.params.id || ""));
+    if (!ok) {
+        res.status(404).json({ error: "Not found, or it already went out" });
+        return;
+    }
+    res.json({ canceled: true });
+});
+app.patch("/api/scheduled/:id", express_1.default.json({ limit: "64kb" }), (req, res) => {
+    const when = String((req.body || {}).sendAt || (req.body || {}).when || "").trim();
+    const parsed = when ? (0, scheduleTime_js_1.parseSendTime)(when) : null;
+    if (!parsed) {
+        res.status(400).json({ error: `Couldn't understand the send time "${when}"` });
+        return;
+    }
+    if (!(0, scheduledMessages_js_1.rescheduleMessage)(String(req.params.id || ""), parsed.sendAt)) {
+        res.status(404).json({ error: "Not found, or it already went out" });
+        return;
+    }
+    res.json({ message: (0, scheduledMessages_js_1.getScheduled)(String(req.params.id)), interpreted: parsed.interpreted });
+});
 /* ——— Team collaboration: notifications, chat, presence (task command center) ——— */
 /** Who can sign in. Email addresses are intentionally omitted — see teamRoster.ts. */
 app.get("/api/team/roster", (_req, res) => {
@@ -9890,6 +10018,14 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     }
     catch (err) {
         console.error("[push] init failed:", err);
+    }
+    try {
+        // Scheduled texts/emails. The queue lives on the /data volume, so
+        // anything still pending across a deploy is picked up on the next tick.
+        (0, scheduledSender_js_1.startScheduledSender)();
+    }
+    catch (err) {
+        console.error("[scheduled] sender failed to start:", err);
     }
     try {
         (0, teamStore_js_1.initTeamStore)();
