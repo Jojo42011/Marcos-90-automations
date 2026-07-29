@@ -1,5 +1,12 @@
 # Scope: code execution for Harvey
 
+> **Status, 2026-07-29:** Phase **A is built and deployed with `HARVEY_EXEC_MODE=off`**
+> (`src/core/codeExec.ts`, the `run_script` tool, `GET /api/harvey/exec-status`).
+> Every guard below was adversarially tested — 30/30 on the runner, 11/11 on the
+> tool boundary. **Phase B (the sandbox machine) is next and not started.**
+> Until it lands, `local` mode is hardening, not isolation, and should only be
+> switched on deliberately and temporarily.
+
 The last real gap between Harvey and Claude Cowork. Everything else in spec 1.1
 is built and working in production: a 40-step background job runner detached from
 any HTTP request, workspace file create/read/edit, multi-tool chaining, and jobs

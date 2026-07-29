@@ -4,6 +4,8 @@ exports.getHullToolDefinitions = getHullToolDefinitions;
 exports.executeHullTool = executeHullTool;
 exports.buildMemoryPacketForQuery = buildMemoryPacketForQuery;
 const tools_js_1 = require("../harvey/tools.js");
+const platformTools_js_1 = require("../harvey/platformTools.js");
+const codeExec_js_1 = require("../core/codeExec.js");
 const retrieval_js_1 = require("./memory/retrieval.js");
 const store_js_1 = require("./memory/store.js");
 const crypto_1 = require("crypto");
@@ -109,6 +111,10 @@ function getHullToolDefinitions(opts) {
         tools.push(GMAIL_SEND_TOOL);
     if (process.env.BRAVE_SEARCH_API_KEY?.trim())
         tools.push(WEB_SEARCH_TOOL);
+    /* Only offered when execution is actually switched on. Harvey never sees a
+       tool he would have to refuse. */
+    if ((0, codeExec_js_1.execMode)() === "local")
+        tools.push(...platformTools_js_1.EXEC_TOOL_DEFINITIONS);
     return tools;
 }
 async function executeHullTool(name, input) {

@@ -431,6 +431,7 @@ function filesTouched(job){
   var paths=[], add=function(p){ if(p&&paths.indexOf(p)<0)paths.push(p); };
   (job.steps||[]).forEach(function(s){
     if(s.kind!=="tool"||!s.tool)return;
+    if(Array.isArray(s.files)&&s.files.length){ s.files.forEach(add); return; }
     if(s.file){ add(s.file); return; }
     if(s.tool!=="write_file"&&s.tool!=="edit_file")return;
     var m=/"path"\s*:\s*"([^"]+)"/.exec(s.output||"");
@@ -542,6 +543,7 @@ function renderDetail(){
 var TOOL_LABELS={
   search_tracker:"searching the tracker", get_tracker_summary:"reading the tracker",
   write_file:"writing the file", edit_file:"editing the file", read_file:"reading a file",
+  run_script:"running a script to compute it",
   list_files:"looking through files", get_social_analytics:"pulling social analytics",
   get_task_board:"reading the task board", create_task:"creating a task",
   get_lead_nurture_overview:"reviewing lead scores", gmail_send:"sending an email",

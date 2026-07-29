@@ -1,5 +1,7 @@
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import { HARVEY_TOOL_DEFINITIONS, executeHarveyTool } from "../harvey/tools.js";
+import { EXEC_TOOL_DEFINITIONS } from "../harvey/platformTools.js";
+import { execMode } from "../core/codeExec.js";
 import { searchFacts, getMemoryPacket } from "./memory/retrieval.js";
 import { getHullDb } from "./memory/store.js";
 import { randomUUID } from "crypto";
@@ -115,6 +117,9 @@ export function getHullToolDefinitions(opts?: { whatsappSend?: boolean }): Tool[
   if (opts?.whatsappSend) tools.push(WHATSAPP_SEND_TOOL);
   if (isGmailConfigured()) tools.push(GMAIL_SEND_TOOL);
   if (process.env.BRAVE_SEARCH_API_KEY?.trim()) tools.push(WEB_SEARCH_TOOL);
+  /* Only offered when execution is actually switched on. Harvey never sees a
+     tool he would have to refuse. */
+  if (execMode() === "local") tools.push(...EXEC_TOOL_DEFINITIONS);
   return tools;
 }
 

@@ -3,13 +3,17 @@
  */
 
 import {
+  EXEC_TOOL_DEFINITIONS,
+  EXEC_TOOL_NAMES,
   PLATFORM_TOOL_DEFINITIONS,
   PLATFORM_TOOL_NAMES,
   WORKSPACE_TOOL_DEFINITIONS,
   WORKSPACE_TOOL_NAMES,
+  executeExecTool,
   executePlatformTool,
   executeWorkspaceTool,
 } from "./platformTools.js";
+import { execMode } from "../core/codeExec.js";
 import { getThreadForLead } from "../core/smsStore.js";
 import { getConversation, listAllLeads, getLeadById } from "../core/db.js";
 import { getSocialSummaryForHarvey, getSocialVideos, getPendingCommentReplies } from "../core/socialStore.js";
@@ -1060,6 +1064,15 @@ export async function executeHarveyTool(
   // Platform surfaces (tracker / tasks / team / settings) live in their own module.
   if (PLATFORM_TOOL_NAMES.has(name)) return executePlatformTool(name, normalized);
   if (WORKSPACE_TOOL_NAMES.has(name)) return executeWorkspaceTool(name, normalized);
+  if (EXEC_TOOL_NAMES.has(name)) {
+    /* Re-checked at call time, not only at definition time: a tool name can
+       still arrive from a replayed conversation after the mode was switched
+       off, and it must refuse rather than run. */
+    if (execMode() === "off") {
+      return { error: "Code execution is disabled on this server.", say: "Say plainly that you cannot run scripts here." };
+    }
+    return executeExecTool(name, normalized);
+  }
   switch (name) {
     case "get_lead_summary":
       return getLeadSummary();

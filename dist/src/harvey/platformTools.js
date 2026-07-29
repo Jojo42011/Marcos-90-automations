@@ -33,9 +33,10 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WORKSPACE_TOOL_NAMES = exports.WORKSPACE_TOOL_DEFINITIONS = exports.PLATFORM_TOOL_NAMES = exports.PLATFORM_TOOL_DEFINITIONS = void 0;
+exports.WORKSPACE_TOOL_NAMES = exports.EXEC_TOOL_NAMES = exports.EXEC_TOOL_DEFINITIONS = exports.WORKSPACE_TOOL_DEFINITIONS = exports.PLATFORM_TOOL_NAMES = exports.PLATFORM_TOOL_DEFINITIONS = void 0;
 exports.normalizeNavigateUrl = normalizeNavigateUrl;
 exports.executePlatformTool = executePlatformTool;
+exports.executeExecTool = executeExecTool;
 exports.executeWorkspaceTool = executeWorkspaceTool;
 const types_js_1 = require("../core/types.js");
 const trackerStore_js_1 = require("../core/trackerStore.js");
@@ -1317,6 +1318,68 @@ exports.WORKSPACE_TOOL_DEFINITIONS = [
         },
     },
 ];
+/**
+ * Code execution. Kept OUT of WORKSPACE_TOOL_DEFINITIONS and added only when
+ * `HARVEY_EXEC_MODE=local` — with execution off, Harvey is never shown the tool
+ * at all, so he cannot promise to compute something and then discover he can't.
+ * A capability that appears and refuses is worse than one that is absent.
+ */
+exports.EXEC_TOOL_DEFINITIONS = [
+    {
+        name: "run_script",
+        description: "Write and run a short script to COMPUTE something your other tools cannot: joins, dedupe, aggregation, arithmetic over many rows, reformatting. Use this instead of doing maths in your head — a computed number can be checked, an estimated one cannot. " +
+            "Pass workspace files via `inputs` and they are copied next to the script; read them by filename. Print results to stdout. Files the script writes are saved and returned. " +
+            "There is NO network and no access to any credential, database or API from inside the script — pass data in, print or write results out. Node or Python, no third-party packages.",
+        input_schema: {
+            type: "object",
+            properties: {
+                language: { type: "string", enum: ["node", "python"], description: "Default node." },
+                code: { type: "string", description: "The complete script. Print what you want to know." },
+                inputs: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Workspace file paths to copy in, e.g. ['reports/call-list.md']. Read them by filename.",
+                },
+                timeoutMs: { type: "number", description: "Default 20000, max 60000." },
+            },
+            required: ["code"],
+        },
+    },
+];
+exports.EXEC_TOOL_NAMES = new Set(exports.EXEC_TOOL_DEFINITIONS.map((t) => t.name));
+async function executeExecTool(name, input) {
+    if (name !== "run_script")
+        return { error: `Unknown tool: ${name}` };
+    const { runScript } = await Promise.resolve().then(() => __importStar(require("../core/codeExec.js")));
+    const r = await runScript({
+        language: input.language === "python" ? "python" : "node",
+        code: String(input.code ?? ""),
+        inputs: Array.isArray(input.inputs) ? input.inputs.map((x) => String(x)) : undefined,
+        timeoutMs: typeof input.timeoutMs === "number" ? input.timeoutMs : undefined,
+    });
+    /* Return the shape Harvey needs to report honestly: a timeout is a timeout and
+       a non-zero exit is a failure. `say` exists because the tempting move on an
+       empty stdout is to summarise it as "no matches", which would turn a crashed
+       script into a confident finding. */
+    return {
+        ok: r.ok,
+        exitCode: r.exitCode,
+        timedOut: r.timedOut,
+        durationMs: r.durationMs,
+        stdout: r.stdout,
+        stderr: r.stderr,
+        truncated: r.truncated,
+        files: r.files.map((f) => f.path),
+        runDir: r.runDir,
+        error: r.error,
+        note: r.note,
+        say: r.ok
+            ? "Report the computed numbers and mention that a script produced them."
+            : r.timedOut
+                ? "The script was KILLED by the timeout. Say that plainly. Do NOT report this as 'no results found'."
+                : "The script FAILED. Say so and quote the error. Do not describe what it would have found.",
+    };
+}
 exports.WORKSPACE_TOOL_NAMES = new Set(exports.WORKSPACE_TOOL_DEFINITIONS.map((t) => t.name));
 async function executeWorkspaceTool(name, input) {
     const ws = await Promise.resolve().then(() => __importStar(require("../core/workspace.js")));

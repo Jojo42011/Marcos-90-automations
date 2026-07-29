@@ -104,6 +104,7 @@ async function runJob(jobId) {
             for (const tu of toolUses) {
                 let out;
                 let wrote;
+                let made;
                 try {
                     const raw = await (0, tools_js_1.executeHullTool)(tu.name, (tu.input || {}));
                     out = (0, agentLoop_js_1.serializeToolResult)(raw);
@@ -114,6 +115,11 @@ async function runJob(jobId) {
                         const r = raw;
                         if (r.ok === true && typeof r.path === "string" && r.path)
                             wrote = r.path;
+                        /* A script run produces several artefacts (the script, its output,
+                           anything it wrote), so one `path` cannot represent it. */
+                        if (Array.isArray(r.files)) {
+                            made = r.files.filter((f) => typeof f === "string" && !!f);
+                        }
                     }
                 }
                 catch (err) {
@@ -125,6 +131,7 @@ async function runJob(jobId) {
                     input: JSON.stringify(tu.input ?? {}).slice(0, 600),
                     output: out.slice(0, 900),
                     file: wrote,
+                    files: made && made.length ? made : undefined,
                 });
                 results.push({
                     type: "tool_result",

@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.HARVEY_GEMINI_TOOLS = exports.HARVEY_TOOL_DEFINITIONS = void 0;
 exports.executeHarveyTool = executeHarveyTool;
 const platformTools_js_1 = require("./platformTools.js");
+const codeExec_js_1 = require("../core/codeExec.js");
 const smsStore_js_1 = require("../core/smsStore.js");
 const db_js_1 = require("../core/db.js");
 const socialStore_js_1 = require("../core/socialStore.js");
@@ -990,6 +991,15 @@ async function executeHarveyTool(name, input) {
         return (0, platformTools_js_1.executePlatformTool)(name, normalized);
     if (platformTools_js_1.WORKSPACE_TOOL_NAMES.has(name))
         return (0, platformTools_js_1.executeWorkspaceTool)(name, normalized);
+    if (platformTools_js_1.EXEC_TOOL_NAMES.has(name)) {
+        /* Re-checked at call time, not only at definition time: a tool name can
+           still arrive from a replayed conversation after the mode was switched
+           off, and it must refuse rather than run. */
+        if ((0, codeExec_js_1.execMode)() === "off") {
+            return { error: "Code execution is disabled on this server.", say: "Say plainly that you cannot run scripts here." };
+        }
+        return (0, platformTools_js_1.executeExecTool)(name, normalized);
+    }
     switch (name) {
         case "get_lead_summary":
             return getLeadSummary();

@@ -1413,6 +1413,17 @@ const WORKSPACE_MIME: Record<string, string> = {
   ".log": "text/plain", ".tsv": "text/tab-separated-values", ".xml": "application/xml",
   ".sql": "application/sql", ".ics": "text/calendar",
 };
+/**
+ * Whether Harvey can run code here, and precisely what that does and does not
+ * protect. Stated rather than implied — "hardened" and "sandboxed" are not the
+ * same claim and the difference is the whole point of Phase B.
+ */
+app.get("/api/harvey/exec-status", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { execStatus } = await import("./core/codeExec.js");
+  res.json({ ok: true, ...execStatus() });
+});
+
 app.get("/api/harvey/workspace/download", async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   const ws = await import("./core/workspace.js");

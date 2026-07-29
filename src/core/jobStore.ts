@@ -56,6 +56,8 @@ export interface JobStep {
    * truncated text.
    */
   file?: string;
+  /** Several paths, for a step that produced more than one (a script run). */
+  files?: string[];
   at: string;
 }
 
