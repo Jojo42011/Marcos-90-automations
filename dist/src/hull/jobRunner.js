@@ -103,9 +103,18 @@ async function runJob(jobId) {
             const results = [];
             for (const tu of toolUses) {
                 let out;
+                let wrote;
                 try {
                     const raw = await (0, tools_js_1.executeHullTool)(tu.name, (tu.input || {}));
                     out = (0, agentLoop_js_1.serializeToolResult)(raw);
+                    /* Take the path from the tool's own RESULT, not from the truncated
+                       input echo — the result is small, structured, and only present when
+                       the write actually succeeded. */
+                    if (raw && typeof raw === "object") {
+                        const r = raw;
+                        if (r.ok === true && typeof r.path === "string" && r.path)
+                            wrote = r.path;
+                    }
                 }
                 catch (err) {
                     out = `ERROR: ${err instanceof Error ? err.message : String(err)}`;
@@ -115,6 +124,7 @@ async function runJob(jobId) {
                     tool: tu.name,
                     input: JSON.stringify(tu.input ?? {}).slice(0, 600),
                     output: out.slice(0, 900),
+                    file: wrote,
                 });
                 results.push({
                     type: "tool_result",

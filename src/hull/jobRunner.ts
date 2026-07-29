@@ -117,9 +117,17 @@ export async function runJob(jobId: string): Promise<Job | null> {
       const results: Anthropic.Messages.ToolResultBlockParam[] = [];
       for (const tu of toolUses) {
         let out: string;
+        let wrote: string | undefined;
         try {
           const raw = await executeHullTool(tu.name, (tu.input || {}) as Record<string, unknown>);
           out = serializeToolResult(raw);
+          /* Take the path from the tool's own RESULT, not from the truncated
+             input echo — the result is small, structured, and only present when
+             the write actually succeeded. */
+          if (raw && typeof raw === "object") {
+            const r = raw as { ok?: unknown; path?: unknown };
+            if (r.ok === true && typeof r.path === "string" && r.path) wrote = r.path;
+          }
         } catch (err) {
           out = `ERROR: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -128,6 +136,7 @@ export async function runJob(jobId: string): Promise<Job | null> {
           tool: tu.name,
           input: JSON.stringify(tu.input ?? {}).slice(0, 600),
           output: out.slice(0, 900),
+          file: wrote,
         });
         results.push({
           type: "tool_result",

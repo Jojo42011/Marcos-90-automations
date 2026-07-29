@@ -1398,6 +1398,40 @@ app.post("/api/harvey/jobs/:id/cancel", async (req, res) => {
   res.json({ ok, job: getJob(String(req.params.id)) });
 });
 
+/**
+ * Serve a workspace file as an actual download rather than JSON.
+ *
+ * Registered BEFORE `/api/harvey/workspace` so the more specific path wins.
+ * The JSON reader is right for rendering a preview in the page; it is useless
+ * when someone wants the file itself — which is the normal thing to want with a
+ * call list. `safePath` still does the containment check, so this cannot be
+ * walked out of the workspace.
+ */
+const WORKSPACE_MIME: Record<string, string> = {
+  ".md": "text/markdown", ".txt": "text/plain", ".csv": "text/csv",
+  ".json": "application/json", ".html": "text/html", ".yaml": "text/yaml",
+  ".log": "text/plain", ".tsv": "text/tab-separated-values", ".xml": "application/xml",
+  ".sql": "application/sql", ".ics": "text/calendar",
+};
+app.get("/api/harvey/workspace/download", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const ws = await import("./core/workspace.js");
+  try {
+    const rel = typeof req.query.path === "string" ? req.query.path : "";
+    if (!rel) { res.status(400).json({ ok: false, error: "path is required" }); return; }
+    const file = await ws.readFile(rel);
+    const base = file.path.split("/").pop() || "file";
+    const ext = base.includes(".") ? base.slice(base.lastIndexOf(".")).toLowerCase() : "";
+    // inline=1 opens it in the browser instead of saving it — useful for .md/.html.
+    const disposition = req.query.inline === "1" ? "inline" : "attachment";
+    res.setHeader("Content-Type", (WORKSPACE_MIME[ext] || "text/plain") + "; charset=utf-8");
+    res.setHeader("Content-Disposition", `${disposition}; filename="${base.replace(/"/g, "")}"`);
+    res.send(file.content);
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 app.get("/api/harvey/workspace", async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   const ws = await import("./core/workspace.js");

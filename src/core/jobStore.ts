@@ -45,6 +45,17 @@ export interface JobStep {
   input?: string;
   output?: string;
   text?: string;
+  /**
+   * Workspace path this step wrote, recorded as a first-class field.
+   *
+   * `input` is truncated to 600 chars so a big write_file does not bloat the
+   * job record — which meant the UI, which used to recover the path by
+   * JSON.parse-ing `input`, silently found nothing whenever the file was large
+   * enough to matter. A produced file that the UI cannot link to might as well
+   * not exist, so the path is stored separately and never parsed out of
+   * truncated text.
+   */
+  file?: string;
   at: string;
 }
 

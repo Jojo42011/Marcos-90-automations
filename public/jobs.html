@@ -108,12 +108,17 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-
 #dErr{font-size:12.5px;line-height:1.6;color:#DC2626;background:rgba(220,38,38,.07);border-radius:var(--r-sm);
   padding:10px 12px;border:1px solid rgba(220,38,38,.25)}
 .filelink{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--r-sm);
-  padding:8px 10px;margin-bottom:6px;font-size:12.5px;cursor:pointer}
+  padding:8px 10px;margin-bottom:6px;font-size:12.5px}
 .filelink:hover{border-color:var(--teal)}
-.filelink .fpath{flex:1;font-family:var(--mono);font-size:11.5px}
-.filelink .fmeta{font-size:10.5px;color:var(--muted)}
-#fileView{margin-top:8px;font-family:var(--mono);font-size:11.5px;line-height:1.6;white-space:pre-wrap;
+.filelink .fpath{flex:1;font-family:var(--mono);font-size:11.5px;cursor:pointer}
+.filelink .fpath:hover{color:var(--teal)}
+.filelink .fmeta{font-size:10.5px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
+.filelink .fmeta a{color:var(--teal);text-decoration:none;font-weight:700;cursor:pointer}
+.filelink .fmeta a:hover{text-decoration:underline}
+.filelink .fsize{font-size:10.5px;color:var(--muted);font-family:var(--mono);flex:0 0 auto}
+#fileView,#wsView{margin-top:8px;font-family:var(--mono);font-size:11.5px;line-height:1.6;white-space:pre-wrap;
   background:var(--soft);border-radius:var(--r-sm);padding:12px;max-height:420px;overflow:auto;display:none}
+#wsView{max-height:200px}
 .empty{color:var(--muted);font-size:13px;text-align:center;padding:40px 16px;line-height:1.6}
 #toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);background:#1f2937;color:#fff;
   padding:10px 16px;border-radius:11px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;
@@ -155,6 +160,16 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-
     </div>
     <div class="chead" style="border-top:0"><h2 style="font-size:14px">Recent jobs</h2></div>
     <div class="cbody" id="jobList"><div class="empty">No jobs yet.</div></div>
+    <!-- Every file in the workspace, not only the ones a job on this list
+         produced: Harvey can also write files straight from chat, and those
+         were previously unreachable from any screen. -->
+    <div class="chead" style="border-top:1px solid var(--line)">
+      <h2 style="font-size:14px">Workspace files</h2>
+      <button class="tbtn" id="wsRefresh" style="font-size:11px;padding:4px 9px">↺</button>
+    </div>
+    <div class="cbody" id="wsList" style="flex:0 0 auto;max-height:240px">
+      <div class="empty" style="padding:20px">Loading…</div>
+    </div>
   </section>
 
   <!-- RIGHT: what the selected job did -->
@@ -261,15 +276,26 @@ function stepHtml(s){
 
 /* Files Harvey wrote during the job, pulled from the write_file steps so the
    output is one click away instead of something you have to go hunting for. */
+/**
+ * Which workspace files a job produced.
+ *
+ * The step's `input` is truncated to 600 chars server-side, so JSON.parse-ing it
+ * threw for any write big enough to be worth downloading — and the Files
+ * section then silently vanished on exactly the jobs that had produced
+ * something. Prefer the `file` field the runner now records, fall back to the
+ * tool's OUTPUT (small and structured: {"ok":true,"path":…}), and only then to
+ * parsing the input, so jobs written before this fix still resolve.
+ */
 function filesTouched(job){
-  var paths=[];
+  var paths=[], add=function(p){ if(p&&paths.indexOf(p)<0)paths.push(p); };
   (job.steps||[]).forEach(function(s){
     if(s.kind!=="tool"||!s.tool)return;
+    if(s.file){ add(s.file); return; }
     if(s.tool!=="write_file"&&s.tool!=="edit_file")return;
-    try{
-      var p=JSON.parse(s.input||"{}").path;
-      if(p&&paths.indexOf(p)<0)paths.push(p);
-    }catch(_){}
+    var m=/"path"\s*:\s*"([^"]+)"/.exec(s.output||"");
+    if(m){ add(m[1]); return; }
+    m=/"path"\s*:\s*"([^"]+)"/.exec(s.input||"");
+    if(m) add(m[1]);
   });
   return paths;
 }
@@ -299,18 +325,69 @@ function renderDetail(){
     (job.error?'<div id="dErr"><b>'+(job.status==="interrupted"?"Interrupted":"Failed")+':</b> '+esc(job.error)+'</div>':'')+
     (job.result?'<div class="sect"><h3>RESULT</h3><div id="dResult">'+esc(job.result)+'</div></div>':'')+
     (files.length?'<div class="sect"><h3>FILES WRITTEN</h3>'+files.map(function(p){
-        return '<div class="filelink" data-file="'+esc(p)+'"><span class="fpath">'+esc(p)+'</span>'+
-               '<span class="fmeta">view</span></div>';}).join("")+
+        return '<div class="filelink"><span class="fpath" data-file="'+esc(p)+'">'+esc(p)+'</span>'+
+               '<span class="fmeta"><a data-file="'+esc(p)+'">view</a> · '+
+               '<a href="/api/harvey/workspace/download?path='+encodeURIComponent(p)+'" download>download</a> · '+
+               '<a href="/api/harvey/workspace/download?inline=1&path='+encodeURIComponent(p)+'" target="_blank" rel="noopener">open</a>'+
+               '</span></div>';}).join("")+
       '<div id="fileView"></div></div>':'')+
     '<div class="sect"><h3>STEPS ('+job.steps.length+')</h3>'+
       (job.steps.length?job.steps.map(stepHtml).join("")
         :'<div class="empty" style="padding:18px">'+(isLive(job.status)?"Starting…":"No steps recorded.")+'</div>')+
     '</div>';
 
-  el.querySelectorAll("[data-file]").forEach(function(n){
-    n.onclick=function(){
+  bindFileClicks(el, "fileView");
+  el.querySelectorAll('.fmeta a[data-file]').forEach(function(n){
+    n.onclick=function(ev){
+      ev.preventDefault();
       var p=n.getAttribute("data-file");
       var view=document.getElementById("fileView");
+      api("/api/harvey/workspace?path="+encodeURIComponent(p))
+        .then(function(j){view.style.display="block";view.textContent=j.file.content;})
+        .catch(function(e){view.style.display="block";view.textContent="Could not read "+p+": "+e.message;});
+    };
+  });
+}
+
+/* ================= workspace files ================= */
+function fmtBytes(n){
+  if(n==null)return "";
+  if(n<1024)return n+" B";
+  if(n<1024*1024)return (n/1024).toFixed(n<10240?1:0)+" KB";
+  return (n/1048576).toFixed(1)+" MB";
+}
+function fileRowHtml(f){
+  var dl="/api/harvey/workspace/download?path="+encodeURIComponent(f.path);
+  return '<div class="filelink">'+
+    '<span class="fpath" data-file="'+esc(f.path)+'">'+esc(f.path)+'</span>'+
+    '<span class="fsize">'+fmtBytes(f.bytes)+'</span>'+
+    '<span class="fmeta"><a href="'+dl+'" download>download</a> · '+
+      '<a href="'+dl+'&inline=1" target="_blank" rel="noopener">open</a></span>'+
+  '</div>';
+}
+function loadWorkspace(){
+  return api("/api/harvey/workspace")
+    .then(function(j){
+      var files=j.files||[];
+      var el=document.getElementById("wsList");
+      el.innerHTML = files.length
+        ? files.map(fileRowHtml).join("")+'<div id="wsView"></div>'
+        : '<div class="empty" style="padding:20px">Nothing written yet. Ask Harvey for a file and it will show up here.</div>';
+      bindFileClicks(el, "wsView");
+    })
+    .catch(function(e){
+      document.getElementById("wsList").innerHTML =
+        '<div class="empty" style="padding:20px">Could not list files: '+esc(e.message)+'</div>';
+    });
+}
+/* Clicking the path previews it in place; download/open are real links so the
+   browser handles them, which is the point — the file is a file. */
+function bindFileClicks(scope, viewId){
+  scope.querySelectorAll(".fpath[data-file]").forEach(function(n){
+    n.onclick=function(){
+      var p=n.getAttribute("data-file");
+      var view=document.getElementById(viewId);
+      if(!view)return;
       api("/api/harvey/workspace?path="+encodeURIComponent(p))
         .then(function(j){view.style.display="block";view.textContent=j.file.content;})
         .catch(function(e){view.style.display="block";view.textContent="Could not read "+p+": "+e.message;});
@@ -339,7 +416,10 @@ function schedulePoll(){
   if(JOBS.some(function(j){return isLive(j.status);})) POLL=setTimeout(load,2500);
 }
 
-document.getElementById("refreshBtn").onclick=function(){load().then(function(){toast("Refreshed");});};
+document.getElementById("refreshBtn").onclick=function(){
+  Promise.all([load(),loadWorkspace()]).then(function(){toast("Refreshed");});
+};
+document.getElementById("wsRefresh").onclick=function(){loadWorkspace().then(function(){toast("Files refreshed");});};
 document.getElementById("startBtn").onclick=function(){
   var ta=document.getElementById("newTask");
   var task=ta.value.trim();
@@ -359,6 +439,7 @@ document.getElementById("newTask").onkeydown=function(e){
 };
 
 load();
+loadWorkspace();
 </script>
 </body>
 </html>
