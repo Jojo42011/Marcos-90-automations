@@ -416,6 +416,10 @@ import {
   type TransactionDocument,
 } from "./core/transactionsStore.js";
 import { applyTransactionImport, planTransactionImport } from "./core/transactionImport.js";
+import {
+  checkTransactionImportReminder,
+  scheduleTransactionImportReminder,
+} from "./agents/transactionImportReminder/index.js";
 import { fillDocumentTemplate, inspectTemplatePdfFields } from "./core/documentFill.js";
 import {
   checkTransactionDeadlines,
@@ -9509,6 +9513,23 @@ app.get("/api/transactions/import-status", (req, res) => {
   });
 });
 
+/**
+ * Run the staleness check on demand. The scheduler already runs it twice a day;
+ * this exists so the reminder can be tested, and so Harvey can be asked
+ * "is the transaction data due a refresh?" without waiting for a tick.
+ */
+app.post("/api/transactions/import-reminder/run", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  try {
+    res.json({ ok: true, ...checkTransactionImportReminder() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 app.get("/api/transactions/:id", (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -9604,7 +9625,16 @@ app.post(
         return;
       }
       const result = applyTransactionImport(plan, { filename, source: "brivity-csv" });
-      res.json({ ok: true, dryRun: false, ...result });
+      /* Close the "import the export" reminder immediately rather than waiting
+         for the next scheduled check — being told to do something you just did
+         is how a reminder trains people to ignore it. */
+      let reminder: string | undefined;
+      try {
+        reminder = checkTransactionImportReminder().action;
+      } catch (err) {
+        console.error("[txImportReminder] post-import check failed:", (err as Error).message);
+      }
+      res.json({ ok: true, dryRun: false, ...result, reminder });
     } catch (err) {
       res.status(500).json({ ok: false, error: (err as Error).message });
     }
@@ -11436,6 +11466,14 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     startScheduledSender();
   } catch (err) {
     console.error("[scheduled] sender failed to start:", err);
+  }
+  try {
+    // Raises (and clears) the monthly "import the Brivity transaction export"
+    // task. Brivity has no transaction API, so nothing else keeps that data
+    // from going quietly stale.
+    scheduleTransactionImportReminder();
+  } catch (err) {
+    console.error("[txImportReminder] failed to start:", err);
   }
   try {
     initTeamStore();

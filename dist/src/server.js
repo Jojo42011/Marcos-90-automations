@@ -116,11 +116,12 @@ const commandSettings_js_1 = require("./core/commandSettings.js");
 const deals_js_1 = require("./core/deals.js");
 const transactionsStore_js_1 = require("./core/transactionsStore.js");
 const transactionImport_js_1 = require("./core/transactionImport.js");
+const index_js_15 = require("./agents/transactionImportReminder/index.js");
 const documentFill_js_1 = require("./core/documentFill.js");
-const index_js_15 = require("./agents/transactionDeadlines/index.js");
+const index_js_16 = require("./agents/transactionDeadlines/index.js");
 const inspectionFlow_js_1 = require("./agents/transactionFlows/inspectionFlow.js");
 const postCloseFlow_js_1 = require("./agents/transactionFlows/postCloseFlow.js");
-const index_js_16 = require("./agents/leadScoring/index.js");
+const index_js_17 = require("./agents/leadScoring/index.js");
 const warmLeadFlow_js_1 = require("./agents/leadNurture/warmLeadFlow.js");
 const coldLeadFlow_js_1 = require("./agents/leadNurture/coldLeadFlow.js");
 const sourceRouting_js_1 = require("./agents/leadNurture/sourceRouting.js");
@@ -129,35 +130,35 @@ const dailyDigest_js_1 = require("./agents/reporting/dailyDigest.js");
 const weeklyKPI_js_1 = require("./agents/reporting/weeklyKPI.js");
 const reportingStore_js_1 = require("./core/reportingStore.js");
 const financeStore_js_1 = require("./core/financeStore.js");
-const index_js_17 = require("./agents/finance/index.js");
+const index_js_18 = require("./agents/finance/index.js");
 const state_js_1 = require("./core/state.js");
 const dialSession_js_1 = require("./core/dialSession.js");
 const callAssistant_js_1 = require("./core/callAssistant.js");
 const forewarn_js_1 = require("./integrations/forewarn.js");
 const db_js_2 = require("./core/db.js");
-const index_js_18 = require("./integrations/sinch/index.js");
-const index_js_19 = require("./integrations/twilio/index.js");
+const index_js_19 = require("./integrations/sinch/index.js");
+const index_js_20 = require("./integrations/twilio/index.js");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
-const index_js_20 = require("./integrations/llm/index.js");
+const index_js_21 = require("./integrations/llm/index.js");
 const adsUpstream_js_1 = require("./harvey/adsUpstream.js");
 const crypto_1 = require("crypto");
-const index_js_21 = require("./harvey/index.js");
-const index_js_22 = require("./hull/index.js");
+const index_js_22 = require("./harvey/index.js");
+const index_js_23 = require("./hull/index.js");
 const deepgramProxy_js_1 = require("./hull/voice/deepgramProxy.js");
 const elevenlabsProxy_js_1 = require("./hull/voice/elevenlabsProxy.js");
 const ws_1 = require("ws");
 const smsStore_js_1 = require("./core/smsStore.js");
 const inboundReplyHelper_js_1 = require("./app/inboundReplyHelper.js");
-const index_js_23 = require("./agents/showingReminders/index.js");
-const index_js_24 = require("./agents/mojoOutreach/index.js");
-const index_js_25 = require("./agents/conversationEscalations/index.js");
+const index_js_24 = require("./agents/showingReminders/index.js");
+const index_js_25 = require("./agents/mojoOutreach/index.js");
+const index_js_26 = require("./agents/conversationEscalations/index.js");
 const textingRules_js_1 = require("./core/textingRules.js");
 const marcoLog_js_1 = require("./app/marcoLog.js");
-const index_js_26 = require("./integrations/openshorts/index.js");
+const index_js_27 = require("./integrations/openshorts/index.js");
 const clipEditAgent_js_1 = require("./agents/contentManager/clipEditAgent.js");
 const http_proxy_middleware_1 = require("http-proxy-middleware");
-const index_js_27 = require("./integrations/voxcpm/index.js");
-const index_js_28 = require("./integrations/elevenlabsVoice/index.js");
+const index_js_28 = require("./integrations/voxcpm/index.js");
+const index_js_29 = require("./integrations/elevenlabsVoice/index.js");
 const safetyLock_js_1 = require("./agents/voiceClone/safetyLock.js");
 const voiceCloneStore_js_1 = require("./core/voiceCloneStore.js");
 const app = (0, express_1.default)();
@@ -294,28 +295,28 @@ function getDiskInfo() {
     }
 }
 app.get("/health", async (_req, res) => {
-    const apiKeyConfigured = (0, index_js_20.isAnthropicApiKeyConfigured)();
-    const openShortsHealth = await (0, index_js_26.checkOpenShortsHealth)().catch(() => ({ running: false }));
+    const apiKeyConfigured = (0, index_js_21.isAnthropicApiKeyConfigured)();
+    const openShortsHealth = await (0, index_js_27.checkOpenShortsHealth)().catch(() => ({ running: false }));
     const disk = getDiskInfo();
     res.status(200).json({
         ok: true,
         disk,
         anthropic: {
             api_key_configured: apiKeyConfigured,
-            model: (0, index_js_20.getAnthropicModel)(),
+            model: (0, index_js_21.getAnthropicModel)(),
             hint: apiKeyConfigured
                 ? "Haiku runs for preflight, opening, and pipeline when those paths call the API (billing and valid JSON still required)."
                 : "Set ANTHROPIC_API_KEY on the host. Without it, DMs use hardcoded fallbacks only.",
         },
         twilio: {
-            configured: (0, index_js_19.isTwilioConfigured)(),
-            hint: (0, index_js_19.isTwilioConfigured)()
+            configured: (0, index_js_20.isTwilioConfigured)(),
+            hint: (0, index_js_20.isTwilioConfigured)()
                 ? "Outbound SMS available; inbound webhook should point to POST /webhook/twilio"
                 : "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER for SMS handoff from CRM.",
         },
         harvey: {
-            model: (0, index_js_21.getHarveyModel)(),
-            api_key_configured: (0, index_js_20.isAnthropicApiKeyConfigured)(),
+            model: (0, index_js_22.getHarveyModel)(),
+            api_key_configured: (0, index_js_21.isAnthropicApiKeyConfigured)(),
             hull: "aethon-intelligence",
             voice: {
                 engine: process.env.DEEPGRAM_API_KEY ? "deepgram-flux" : "none",
@@ -336,7 +337,7 @@ app.get("/health", async (_req, res) => {
 // goes through Upload-Post, which handles OAuth for all platforms externally.)
 /** OpenClaw — OpenAI-compatible brain endpoint (WhatsApp / messaging gateway). */
 app.post("/v1/chat/completions", express_1.default.json({ limit: "256kb" }), async (req, res) => {
-    if (!(0, index_js_20.isAnthropicApiKeyConfigured)()) {
+    if (!(0, index_js_21.isAnthropicApiKeyConfigured)()) {
         res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
         return;
     }
@@ -1628,7 +1629,7 @@ app.get("/api/showings/upcoming", async (req, res) => {
         return;
     }
     try {
-        const upcoming = await (0, index_js_23.getUpcomingShowings)();
+        const upcoming = await (0, index_js_24.getUpcomingShowings)();
         res.json({ upcoming });
     }
     catch (err) {
@@ -1642,7 +1643,7 @@ app.post("/api/showings/check-reminders", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_23.checkAndSendShowingReminders)();
+        const result = await (0, index_js_24.checkAndSendShowingReminders)();
         res.json(result);
     }
     catch (err) {
@@ -1656,7 +1657,7 @@ app.post("/api/mojo-outreach/run", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_24.runMojoOutreachSequence)();
+        const result = await (0, index_js_25.runMojoOutreachSequence)();
         res.json(result);
     }
     catch (err) {
@@ -1987,7 +1988,7 @@ app.get("/api/jarvis/ops", async (req, res) => {
         return;
     }
     try {
-        const ops = await (0, index_js_21.runHarveyOps)(harveyDeps());
+        const ops = await (0, index_js_22.runHarveyOps)(harveyDeps());
         res.status(200).json(ops);
     }
     catch (err) {
@@ -2011,7 +2012,7 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
     // the smartest path with every business/memory tool available.
     const fullMode = req.body?.full === true || req.body?.full === "true";
     try {
-        const result = await (0, index_js_21.runHarveyChat)({
+        const result = await (0, index_js_22.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -2049,7 +2050,7 @@ app.post("/api/jarvis/analyze-reel", express_1.default.json(), async (req, res) 
     reelChatJobs.set(jobId, { status: "downloading", createdAt: Date.now() });
     // Kick off the (already self-polling) sidecar analysis in the background and
     // stash the result; the client polls GET below rather than holding a socket.
-    void (0, index_js_26.analyzeReelViaOpenShorts)(url, note)
+    void (0, index_js_27.analyzeReelViaOpenShorts)(url, note)
         .then((result) => {
         const job = reelChatJobs.get(jobId);
         if (!job)
@@ -2112,7 +2113,7 @@ app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }),
         let accumulated = "";
         let firstChunkSent = false;
         try {
-            const result = await (0, index_js_21.runHarveyChat)({
+            const result = await (0, index_js_22.runHarveyChat)({
                 message,
                 sessionId,
                 deps: harveyDeps(),
@@ -2147,7 +2148,7 @@ app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }),
         return;
     }
     try {
-        const result = await (0, index_js_21.runHarveyChat)({
+        const result = await (0, index_js_22.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -2167,8 +2168,8 @@ app.get("/api/jarvis/activation", async (req, res) => {
         return;
     }
     try {
-        const packet = await (0, index_js_22.buildMemoryPacketForQuery)("morning activation brief");
-        const text = await (0, index_js_22.handleActivation)(packet);
+        const packet = await (0, index_js_23.buildMemoryPacketForQuery)("morning activation brief");
+        const text = await (0, index_js_23.handleActivation)(packet);
         res.status(200).json({ text });
     }
     catch (err) {
@@ -2204,7 +2205,7 @@ app.post("/api/jarvis/execute-tool", express_1.default.json({ limit: "64kb" }), 
     }
     console.log("[Harvey Voice Tool] Executing:", toolName, "input:", JSON.stringify(toolInput));
     try {
-        const result = await (0, index_js_21.runHarveyTool)(toolName, toolInput);
+        const result = await (0, index_js_22.runHarveyTool)(toolName, toolInput);
         console.log("[Harvey Voice Tool] Result for", toolName, ":", JSON.stringify(result).substring(0, 200));
         res.status(200).json({ success: true, result });
     }
@@ -2328,7 +2329,7 @@ app.post("/api/jarvis/market-intel", express_1.default.json({ limit: "64kb" }), 
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_21.getHarveyModel)(),
+            model: (0, index_js_22.getHarveyModel)(),
             max_tokens: 1500,
             tools: [{
                     type: "web_search_20250305",
@@ -2402,7 +2403,7 @@ app.post("/api/jarvis/world-intel", express_1.default.json({ limit: "64kb" }), a
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_21.getHarveyModel)(),
+            model: (0, index_js_22.getHarveyModel)(),
             max_tokens: 2000,
             tools: [{
                     type: "web_search_20250305",
@@ -2514,7 +2515,7 @@ async function runClaudeResearchJson(prompt) {
         throw new Error("ANTHROPIC_API_KEY not configured");
     const anthropic = new sdk_1.default({ apiKey });
     const response = await anthropic.messages.create({
-        model: (0, index_js_21.getHarveyModel)(),
+        model: (0, index_js_22.getHarveyModel)(),
         max_tokens: 2500,
         tools: [{
                 type: "web_search_20250305",
@@ -2787,7 +2788,7 @@ app.get("/api/jarvis/memory", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const db = (0, index_js_22.getHullDb)();
+    const db = (0, index_js_23.getHullDb)();
     res.json({
         facts: db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC LIMIT 50").all(),
         nodes: db.prepare("SELECT * FROM nodes ORDER BY created_at DESC LIMIT 50").all(),
@@ -2803,7 +2804,7 @@ app.get("/api/memory/all", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const db = (0, index_js_22.getHullDb)();
+    const db = (0, index_js_23.getHullDb)();
     const facts = db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC").all();
     const nodes = db.prepare("SELECT * FROM nodes").all();
     const edges = db
@@ -2828,7 +2829,7 @@ app.get("/api/memory/all", (req, res) => {
 app.get("/api/memory/graph", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_22.getHullDb)();
+    const db = (0, index_js_23.getHullDb)();
     res.json({
         nodes: db.prepare("SELECT * FROM nodes").all(),
         edges: db.prepare("SELECT * FROM edges").all(),
@@ -2837,19 +2838,19 @@ app.get("/api/memory/graph", (req, res) => {
 app.get("/api/memory/episodes", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_22.getHullDb)();
+    const db = (0, index_js_23.getHullDb)();
     res.json(db.prepare("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 20").all());
 });
 app.get("/api/memory/rules", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_22.getHullDb)();
+    const db = (0, index_js_23.getHullDb)();
     res.json(db.prepare("SELECT * FROM rules ORDER BY confidence DESC").all());
 });
 app.get("/api/memory/identity", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_22.getHullDb)();
+    const db = (0, index_js_23.getHullDb)();
     const profile = db.prepare("SELECT dimension, confidence FROM identity_dimensions ORDER BY dimension").all();
     const recentQuestions = db
         .prepare("SELECT dimension, question, asked_at, answered FROM identity_questions ORDER BY asked_at DESC LIMIT 10")
@@ -3390,11 +3391,11 @@ app.post("/api/memory/extract-voice", express_1.default.json({ limit: "512kb" })
         return res.status(401).json({ error: "Unauthorized" });
     const transcript = Array.isArray(req.body?.transcript) ? req.body.transcript : [];
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId : "voice";
-    await (0, index_js_22.runPostConversationExtraction)(sessionId, transcript.map((t) => ({
+    await (0, index_js_23.runPostConversationExtraction)(sessionId, transcript.map((t) => ({
         role: String(t.role || "user"),
         text: String(t.text || ""),
     })));
-    (0, index_js_22.broadcastHullEvent)({ type: "memory_updated" });
+    (0, index_js_23.broadcastHullEvent)({ type: "memory_updated" });
     res.json({ ok: true });
 });
 /** Harvey memory search — hybrid retrieval. */
@@ -3422,12 +3423,12 @@ app.post("/api/jarvis/memory/add", express_1.default.json(), async (req, res) =>
         res.status(400).json({ error: "Missing fact" });
         return;
     }
-    const db = (0, index_js_22.getHullDb)();
+    const db = (0, index_js_23.getHullDb)();
     const id = (0, crypto_1.randomUUID)();
     const now = new Date().toISOString();
     db.prepare(`INSERT INTO facts (id, content, category, keywords, strength, access_count, last_accessed, created_at)
      VALUES (?, ?, ?, ?, ?, 0, ?, ?)`).run(id, content, category, keywords, strength, now, now);
-    (0, index_js_22.broadcastHullEvent)({ type: "memory_updated" });
+    (0, index_js_23.broadcastHullEvent)({ type: "memory_updated" });
     res.status(201).json({ id, content, category, keywords, strength });
 });
 /** Delete memory row by id across hull tables. */
@@ -3441,7 +3442,7 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
         res.status(400).json({ error: "Missing id" });
         return;
     }
-    const db = (0, index_js_22.getHullDb)();
+    const db = (0, index_js_23.getHullDb)();
     const tables = ["facts", "nodes", "edges", "rules", "episodes", "syntheses", "identity_questions"];
     let deleted = false;
     for (const table of tables) {
@@ -3453,7 +3454,7 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
         res.status(404).json({ error: "Memory not found" });
         return;
     }
-    (0, index_js_22.broadcastHullEvent)({ type: "memory_updated" });
+    (0, index_js_23.broadcastHullEvent)({ type: "memory_updated" });
     res.status(200).json({ ok: true, id });
 });
 /** Gemini TTS — Aethon mouth (director's notes + Charon). */
@@ -3476,7 +3477,7 @@ app.post("/api/jarvis/voice", express_1.default.json({ limit: "256kb" }), async 
     }
     ttsInFlight++;
     try {
-        const audio = await (0, index_js_22.generateTTS)(text);
+        const audio = await (0, index_js_23.generateTTS)(text);
         if (!audio) {
             res.status(502).json({ error: "TTS failed" });
             return;
@@ -3506,7 +3507,7 @@ app.post("/api/jarvis/gemini-tts", express_1.default.json({ limit: "256kb" }), a
         return;
     }
     try {
-        const audio = await (0, index_js_22.generateTTS)(text);
+        const audio = await (0, index_js_23.generateTTS)(text);
         if (!audio) {
             res.status(502).json({ error: "TTS failed" });
             return;
@@ -3723,7 +3724,7 @@ app.get("/api/dm/conversation/:leadId", async (req, res) => {
 });
 app.post("/sinch/inbound", express_1.default.json(), async (req, res) => {
     try {
-        const payload = (0, index_js_18.receiveInbound)(req.body);
+        const payload = (0, index_js_19.receiveInbound)(req.body);
         if (!payload) {
             res.status(400).json({ error: "Invalid or unparseable Sinch inbound payload" });
             return;
@@ -3747,7 +3748,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const signature = req.get("x-twilio-signature") ?? "";
         const protocol = req.get("x-forwarded-proto") || req.protocol;
         const url = `${protocol}://${req.get("host")}${req.originalUrl}`;
-        if (signature && !(0, index_js_19.validateTwilioSignature)(signature, url, req.body)) {
+        if (signature && !(0, index_js_20.validateTwilioSignature)(signature, url, req.body)) {
             console.warn("[Twilio Webhook] Invalid signature — rejecting");
             res.status(403).send("Invalid signature");
             return;
@@ -3756,7 +3757,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const from = typeof req.body?.From === "string" ? req.body.From.trim() : "";
         const message = typeof req.body?.Body === "string" ? req.body.Body.trim() : "";
         console.log("[Twilio Webhook] Inbound from", from, "- body:", message.substring(0, 100));
-        if (messageSid && ((0, smsStore_js_1.isMessageHandleSeen)(messageSid) || !(0, index_js_19.claimTwilioInboundSid)(messageSid))) {
+        if (messageSid && ((0, smsStore_js_1.isMessageHandleSeen)(messageSid) || !(0, index_js_20.claimTwilioInboundSid)(messageSid))) {
             console.log("[Twilio Webhook] Duplicate message, ignoring:", messageSid);
             res.status(200).send("");
             return;
@@ -3768,8 +3769,8 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const inspectionConfirmation = (0, inspectionFlow_js_1.checkInspectionConfirmation)(from, message);
         if (inspectionConfirmation.handled && inspectionConfirmation.replyMessage?.trim()) {
             const replyText = inspectionConfirmation.replyMessage.trim();
-            if ((0, index_js_19.isTwilioConfigured)()) {
-                const send = await (0, index_js_19.sendTwilioMessage)({ to: from, content: replyText });
+            if ((0, index_js_20.isTwilioConfigured)()) {
+                const send = await (0, index_js_20.sendTwilioMessage)({ to: from, content: replyText });
                 if (!send.success) {
                     console.error("[Twilio] inspection confirmation reply failed:", send.error);
                 }
@@ -3801,14 +3802,14 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         if (firstName) {
             console.log("[InboundSMS] Lead", lead.id, "first name available for greeting:", firstName);
         }
-        const confirmationResult = await (0, index_js_23.checkShowingConfirmation)(lead, message);
+        const confirmationResult = await (0, index_js_24.checkShowingConfirmation)(lead, message);
         if (confirmationResult.handled && confirmationResult.replyMessage.trim()) {
             const replyText = confirmationResult.replyMessage.trim();
             if (message) {
                 await (0, db_js_1.appendMessage)(lead.id, "user", message);
             }
-            if ((0, index_js_19.isTwilioConfigured)() && lead.phone) {
-                const send = await (0, index_js_19.sendTwilioMessage)({ to: lead.phone, content: replyText });
+            if ((0, index_js_20.isTwilioConfigured)() && lead.phone) {
+                const send = await (0, index_js_20.sendTwilioMessage)({ to: lead.phone, content: replyText });
                 if (!send.success) {
                     console.error("[Twilio] showing confirmation reply failed:", send.error);
                 }
@@ -3835,9 +3836,9 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
             res.status(200).send("");
             return;
         }
-        await (0, index_js_23.checkPostShowingFeedback)(lead, message);
+        await (0, index_js_24.checkPostShowingFeedback)(lead, message);
         let activeLead = (await (0, db_js_1.getLeadById)(lead.id)) ?? lead;
-        if ((0, index_js_24.isMojoLead)(activeLead) &&
+        if ((0, index_js_25.isMojoLead)(activeLead) &&
             activeLead.mojoOutreach &&
             (activeLead.mojoOutreach.status === "active" || activeLead.mojoOutreach.status === "paused")) {
             await (0, db_js_1.updateLeadCrmFields)({
@@ -3846,7 +3847,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
             });
             activeLead = (await (0, db_js_1.getLeadById)(activeLead.id)) ?? activeLead;
         }
-        const escalation = (0, index_js_25.detectConversationEscalation)(message);
+        const escalation = (0, index_js_26.detectConversationEscalation)(message);
         if (escalation.triggered && escalation.type) {
             await (0, db_js_1.updateLeadCrmFields)({
                 leadId: activeLead.id,
@@ -3854,13 +3855,13 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
                 automationPausedReason: escalation.type,
                 automationPausedAt: new Date().toISOString(),
             });
-            await (0, index_js_25.notifyMarcoOfConversationEscalation)(activeLead, escalation.type, message);
+            await (0, index_js_26.notifyMarcoOfConversationEscalation)(activeLead, escalation.type, message);
             if (escalation.type === "angry_client" &&
                 escalation.holdMessage &&
-                (0, index_js_19.isTwilioConfigured)() &&
+                (0, index_js_20.isTwilioConfigured)() &&
                 activeLead.phone) {
                 const holdText = escalation.holdMessage;
-                const send = await (0, index_js_19.sendTwilioMessage)({ to: activeLead.phone, content: holdText });
+                const send = await (0, index_js_20.sendTwilioMessage)({ to: activeLead.phone, content: holdText });
                 if (!send.success) {
                     console.error("[ConvEscalation] empathy hold send failed:", send.error);
                 }
@@ -3898,9 +3899,9 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
         const correlationId = (0, marcoLog_js_1.marcoCorrelationId)(payload.platform, payload.userId);
         const result = await (0, webhook_js_1.handleIncomingPayload)(payload, { requestId, correlationId });
-        if (result.reply?.trim() && (0, index_js_19.isTwilioConfigured)()) {
+        if (result.reply?.trim() && (0, index_js_20.isTwilioConfigured)()) {
             const replyText = result.reply.trim();
-            const send = await (0, index_js_19.sendTwilioMessage)({ to: activeLead.phone, content: replyText });
+            const send = await (0, index_js_20.sendTwilioMessage)({ to: activeLead.phone, content: replyText });
             if (!send.success) {
                 console.error("[Twilio] outbound after pipeline failed:", send.error);
             }
@@ -3937,7 +3938,7 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    if (!(0, index_js_19.isTwilioConfigured)()) {
+    if (!(0, index_js_20.isTwilioConfigured)()) {
         res.status(503).json({
             error: "Twilio not configured",
             hint: "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER on the server",
@@ -3968,11 +3969,11 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
                 res.status(400).json({ error: "Lead has no phone number" });
                 return;
             }
-            to = (0, index_js_19.normalizeToUsE164)(lead.phone);
+            to = (0, index_js_20.normalizeToUsE164)(lead.phone);
             threadLeadId = lead.id;
         }
         else {
-            to = (0, index_js_19.normalizeToUsE164)(toRaw);
+            to = (0, index_js_20.normalizeToUsE164)(toRaw);
             const digits = to.replace(/\D/g, "");
             if (digits.length < 10) {
                 res.status(400).json({ error: "Invalid phone number" });
@@ -3982,7 +3983,7 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
             if (matched)
                 threadLeadId = matched.id;
         }
-        const send = await (0, index_js_19.sendTwilioMessage)({ to, content });
+        const send = await (0, index_js_20.sendTwilioMessage)({ to, content });
         if (!send.success) {
             res.status(502).json({ error: send.error });
             return;
@@ -4014,10 +4015,10 @@ async function sendLeadText(leadId, content, threadType = "general") {
     const lead = await (0, db_js_1.getLeadById)(leadId);
     if (!lead?.phone?.trim())
         return { ok: false, error: "Lead has no phone number" };
-    if (!(0, index_js_19.isTwilioConfigured)())
+    if (!(0, index_js_20.isTwilioConfigured)())
         return { ok: false, error: "Twilio not configured" };
-    const to = (0, index_js_19.normalizeToUsE164)(lead.phone);
-    const send = await (0, index_js_19.sendTwilioMessage)({ to, content });
+    const to = (0, index_js_20.normalizeToUsE164)(lead.phone);
+    const send = await (0, index_js_20.sendTwilioMessage)({ to, content });
     if (!send.success)
         return { ok: false, error: send.error };
     await (0, db_js_1.appendMessage)(leadId, "assistant", content);
@@ -4469,7 +4470,7 @@ function gatherClipPathCandidates(video) {
             candidates.push(meta.clipPath);
         }
         if (meta && typeof meta.clipUrl === "string" && meta.clipUrl) {
-            candidates.push((0, index_js_26.mapClipUrlForFrontend)(meta.clipUrl));
+            candidates.push((0, index_js_27.mapClipUrlForFrontend)(meta.clipUrl));
         }
     }
     return [...new Set(candidates.filter(Boolean))].filter((p) => !p.startsWith("mock://"));
@@ -5232,7 +5233,7 @@ app.post("/api/content/clip/:clipId/trim", express_1.default.json(), async (req,
         return;
     }
     try {
-        const result = await (0, index_js_26.trimClipViaOpenShorts)({ clipPath: currentPath, start, end });
+        const result = await (0, index_js_27.trimClipViaOpenShorts)({ clipPath: currentPath, start, end });
         if (!result.newClipPath)
             throw new Error("Trim did not return a new file path");
         // Repoint the clip only after a confirmed-good render, then clean up the old
@@ -5384,7 +5385,7 @@ app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req,
         return;
     }
     try {
-        const result = await (0, index_js_26.editClipViaOpenShorts)({
+        const result = await (0, index_js_27.editClipViaOpenShorts)({
             clipPath: currentPath,
             editSpec: { trim, cuts, audio, audioReplacePath, captions, color, effects, autoTighten, snapToScenes },
         });
@@ -5599,7 +5600,7 @@ app.post("/api/content/clip/:clipId/ai-edit", express_1.default.json(), async (r
         }
     }
     try {
-        const result = await (0, index_js_26.editClipViaOpenShorts)({ clipPath: currentPath, editSpec });
+        const result = await (0, index_js_27.editClipViaOpenShorts)({ clipPath: currentPath, editSpec });
         if (!result.newClipPath)
             throw new Error("Edit did not return a new file path");
         (0, contentDb_js_1.updateContentVideoFilePath)(clipId, result.newClipPath);
@@ -8697,6 +8698,23 @@ app.get("/api/transactions/import-status", (req, res) => {
             : "No import has ever run — any transactions here were entered by hand.",
     });
 });
+/**
+ * Run the staleness check on demand. The scheduler already runs it twice a day;
+ * this exists so the reminder can be tested, and so Harvey can be asked
+ * "is the transaction data due a refresh?" without waiting for a tick.
+ */
+app.post("/api/transactions/import-reminder/run", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    try {
+        res.json({ ok: true, ...(0, index_js_15.checkTransactionImportReminder)() });
+    }
+    catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
 app.get("/api/transactions/:id", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -8727,7 +8745,7 @@ app.patch("/api/transactions/:id", express_1.default.json(), (req, res) => {
         return;
     }
     if (body.status === "closed" || tx.status === "closed") {
-        void (0, index_js_17.tryRecordCommissionForClosedDeal)(tx);
+        void (0, index_js_18.tryRecordCommissionForClosedDeal)(tx);
     }
     res.json({ transaction: tx });
 });
@@ -8784,7 +8802,17 @@ app.post("/api/transactions/import-csv", express_1.default.text({ type: ["text/c
             return;
         }
         const result = (0, transactionImport_js_1.applyTransactionImport)(plan, { filename, source: "brivity-csv" });
-        res.json({ ok: true, dryRun: false, ...result });
+        /* Close the "import the export" reminder immediately rather than waiting
+           for the next scheduled check — being told to do something you just did
+           is how a reminder trains people to ignore it. */
+        let reminder;
+        try {
+            reminder = (0, index_js_15.checkTransactionImportReminder)().action;
+        }
+        catch (err) {
+            console.error("[txImportReminder] post-import check failed:", err.message);
+        }
+        res.json({ ok: true, dryRun: false, ...result, reminder });
     }
     catch (err) {
         res.status(500).json({ ok: false, error: err.message });
@@ -8884,7 +8912,7 @@ app.post("/api/transactions/:id/inspection/schedule", express_1.default.json(), 
         if (!contact.phone?.trim())
             continue;
         const message = `Inspection scheduled for ${tx.address} on ${scheduledTimeStr}. Reply YES to confirm.`;
-        const result = await (0, index_js_19.sendTwilioMessage)(contact.phone, message);
+        const result = await (0, index_js_20.sendTwilioMessage)(contact.phone, message);
         if (result.success)
             notified++;
     }
@@ -8982,7 +9010,7 @@ app.post("/api/transactions/:id/final-week/walkthrough", express_1.default.json(
         timeZone: "America/Chicago",
     });
     if (tx.parties.buyerPhone) {
-        await (0, index_js_19.sendTwilioMessage)(tx.parties.buyerPhone, `Final walkthrough for ${tx.address} scheduled for ${timeStr}. Reply YES to confirm.`);
+        await (0, index_js_20.sendTwilioMessage)(tx.parties.buyerPhone, `Final walkthrough for ${tx.address} scheduled for ${timeStr}. Reply YES to confirm.`);
     }
     res.json({ transaction: (0, transactionsStore_js_1.getTransaction)(id) });
 });
@@ -9127,7 +9155,7 @@ app.post("/api/deadlines/check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_15.checkTransactionDeadlines)();
+    const result = await (0, index_js_16.checkTransactionDeadlines)();
     res.json(result);
 });
 app.post("/api/deadlines/daily-check-now", async (req, res) => {
@@ -9135,7 +9163,7 @@ app.post("/api/deadlines/daily-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_15.runDailyTransactionWorkflowChecks)();
+    const result = await (0, index_js_16.runDailyTransactionWorkflowChecks)();
     res.json(result);
 });
 app.post("/api/deadlines/close-day-check-now", async (req, res) => {
@@ -9159,7 +9187,7 @@ app.post("/api/deadlines/missed-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_15.checkMissedSameDayDeadlines)();
+    const result = await (0, index_js_16.checkMissedSameDayDeadlines)();
     res.json(result);
 });
 /* ===================== Lead scoring & nurture ===================== */
@@ -9168,7 +9196,7 @@ app.post("/api/lead-scoring/score-all", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_16.scoreAllLeads)();
+    const result = await (0, index_js_17.scoreAllLeads)();
     res.json(result);
 });
 app.post("/api/lead-scoring/score/:leadId", async (req, res) => {
@@ -9181,7 +9209,7 @@ app.post("/api/lead-scoring/score/:leadId", async (req, res) => {
         res.status(404).json({ error: "Lead not found" });
         return;
     }
-    const result = (0, index_js_16.scoreAndRecordLead)(lead);
+    const result = (0, index_js_17.scoreAndRecordLead)(lead);
     res.json(result);
 });
 app.get("/api/lead-scoring/:leadId", (req, res) => {
@@ -9212,7 +9240,7 @@ app.post("/api/lead-scoring/rescore-cold-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_16.scoreColdLeads)();
+    const result = await (0, index_js_17.scoreColdLeads)();
     res.json(result);
 });
 app.post("/api/lead-nurture/warm-touch-now", async (req, res) => {
@@ -9540,7 +9568,7 @@ app.get("/api/finance/pace-status", (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json((0, index_js_17.getCurrentPaceStatus)());
+    res.json((0, index_js_18.getCurrentPaceStatus)());
 });
 app.get("/api/voice-clone/health", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -9549,9 +9577,9 @@ app.get("/api/voice-clone/health", async (req, res) => {
     }
     // ElevenLabs is the primary engine on this CPU-only box; VoxCPM only runs if
     // someone stands up a GPU sidecar. Report whichever is active.
-    const elevenConfigured = (0, index_js_28.isElevenLabsConfigured)();
-    const eleven = elevenConfigured ? await (0, index_js_28.checkElevenLabsHealth)() : null;
-    const voxcpm = await (0, index_js_27.checkVoxCpmHealth)();
+    const elevenConfigured = (0, index_js_29.isElevenLabsConfigured)();
+    const eleven = elevenConfigured ? await (0, index_js_29.checkElevenLabsHealth)() : null;
+    const voxcpm = await (0, index_js_28.checkVoxCpmHealth)();
     const engine = elevenConfigured ? "elevenlabs" : process.env.VOXCPM_API_URL?.trim() ? "voxcpm" : "none";
     res.json({
         engine,
@@ -9743,8 +9771,8 @@ app.post("/api/voice-clone/reference-clips/upload", referenceAudioUpload.single(
     // Create the ElevenLabs clone now (best-effort). If it fails (e.g. plan
     // doesn't allow cloning), the clip still exists and generation will retry.
     let cloneError;
-    if ((0, index_js_28.isElevenLabsConfigured)() && clip.id) {
-        const clone = await (0, index_js_28.createInstantVoiceClone)({
+    if ((0, index_js_29.isElevenLabsConfigured)() && clip.id) {
+        const clone = await (0, index_js_29.createInstantVoiceClone)({
             name: `Marco Puga (${clip.id.slice(0, 8)})`,
             filePaths: [file.path],
             description: "Marco Puga Realty — cloned voiceover voice",
@@ -9757,7 +9785,7 @@ app.post("/api/voice-clone/reference-clips/upload", referenceAudioUpload.single(
             cloneError = clone.error;
         }
     }
-    else if (!(0, index_js_28.isElevenLabsConfigured)()) {
+    else if (!(0, index_js_29.isElevenLabsConfigured)()) {
         cloneError = "ELEVENLABS_API_KEY not set — clip saved; set the key to enable cloning";
     }
     res.json({ clip, voiceReady: !!clip.elevenVoiceId, cloneError });
@@ -9775,8 +9803,8 @@ app.post("/api/voice-clone/reference-clips/:id/set-primary", async (req, res) =>
     if (clip?.elevenVoiceId) {
         voiceReady = true;
     }
-    else if (clip?.localAudioPath && (0, index_js_28.isElevenLabsConfigured)()) {
-        const clone = await (0, index_js_28.createInstantVoiceClone)({
+    else if (clip?.localAudioPath && (0, index_js_29.isElevenLabsConfigured)()) {
+        const clone = await (0, index_js_29.createInstantVoiceClone)({
             name: `Marco Puga (${req.params.id.slice(0, 8)})`,
             filePaths: [clip.localAudioPath],
             description: "Marco Puga Realty — cloned voiceover voice",
@@ -9804,7 +9832,7 @@ app.post("/api/finance/sync", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const commissions = await (0, index_js_17.syncCommissionsFromClosedTransactions)();
+    const commissions = await (0, index_js_18.syncCommissionsFromClosedTransactions)();
     const projection = (0, financeStore_js_1.generatePipelineProjection)();
     res.json({
         commissions,
@@ -9839,21 +9867,21 @@ app.get("/api/finance/weekly-summary-preview", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json(await (0, index_js_17.buildWeeklyFinanceSummaryData)());
+    res.json(await (0, index_js_18.buildWeeklyFinanceSummaryData)());
 });
 app.get("/api/finance/monthly-report-preview", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json(await (0, index_js_17.buildMonthlyCloseReportData)());
+    res.json(await (0, index_js_18.buildMonthlyCloseReportData)());
 });
 app.post("/api/finance/weekly-summary-now", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_17.runWeeklyFinanceSummary)();
+    const result = await (0, index_js_18.runWeeklyFinanceSummary)();
     res.json(result);
 });
 app.post("/api/finance/monthly-report-now", async (req, res) => {
@@ -9861,7 +9889,7 @@ app.post("/api/finance/monthly-report-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_17.runMonthlyCloseReport)();
+    const result = await (0, index_js_18.runMonthlyCloseReport)();
     res.json(result);
 });
 app.post("/api/finance/pace-check-now", async (req, res) => {
@@ -9869,7 +9897,7 @@ app.post("/api/finance/pace-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_17.runPaceCheck)();
+    const result = await (0, index_js_18.runPaceCheck)();
     res.json(result);
 });
 app.post("/api/finance/expense-spike-check-now", async (req, res) => {
@@ -9877,7 +9905,7 @@ app.post("/api/finance/expense-spike-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_17.runExpenseSpikeCheck)();
+    const result = await (0, index_js_18.runExpenseSpikeCheck)();
     res.json(result);
 });
 app.post("/api/transactions/:id/documents", express_1.default.json(), (req, res) => {
@@ -10352,7 +10380,7 @@ httpServer.requestTimeout = 30 * 60 * 1000;
 httpServer.headersTimeout = 2 * 60 * 1000;
 const hullWss = new ws_1.WebSocketServer({ noServer: true });
 hullWss.on("connection", (ws) => {
-    (0, index_js_22.registerHullWs)(ws);
+    (0, index_js_23.registerHullWs)(ws);
 });
 httpServer.on("upgrade", (request, socket, head) => {
     // Harvey STT: ElevenLabs Scribe v2 realtime is the primary engine; Deepgram
@@ -10416,7 +10444,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
         console.error("[Server] content DB / jobs init failed:", err);
     }
     try {
-        (0, index_js_22.initHull)();
+        (0, index_js_23.initHull)();
     }
     catch (err) {
         console.error("[hull] init failed:", err);
@@ -10434,6 +10462,15 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     }
     catch (err) {
         console.error("[scheduled] sender failed to start:", err);
+    }
+    try {
+        // Raises (and clears) the monthly "import the Brivity transaction export"
+        // task. Brivity has no transaction API, so nothing else keeps that data
+        // from going quietly stale.
+        (0, index_js_15.scheduleTransactionImportReminder)();
+    }
+    catch (err) {
+        console.error("[txImportReminder] failed to start:", err);
     }
     try {
         (0, teamStore_js_1.initTeamStore)();
@@ -10473,8 +10510,8 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     else {
         console.log("[Harvey] GEMINI_API_KEY configured — Gemini TTS ready");
     }
-    if ((0, index_js_20.isAnthropicApiKeyConfigured)()) {
-        console.log(`[Anthropic] API key present — model ${(0, index_js_20.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
+    if ((0, index_js_21.isAnthropicApiKeyConfigured)()) {
+        console.log(`[Anthropic] API key present — model ${(0, index_js_21.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
     }
     else {
         console.warn("[Anthropic] ANTHROPIC_API_KEY missing — preflight/opening/pipeline skip Haiku and use template fallbacks only.");
@@ -10505,7 +10542,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Chat demo: GET http://localhost:${PORT}/chat`);
     console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
     console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
-    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_21.getHarveyModel)()})`);
+    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_22.getHarveyModel)()})`);
     console.log(`Harvey voice STT: WS   http://localhost:${PORT}/api/jarvis/elevenlabs/listen (fallback: /api/jarvis/deepgram/listen)`);
     console.log(`Harvey voice TTS: POST http://localhost:${PORT}/api/jarvis/voice`);
     console.log(`Neural Map: GET http://localhost:${PORT}/memory`);
