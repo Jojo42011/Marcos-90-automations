@@ -28,6 +28,7 @@
   .tab.active{color:var(--text);background:#fff;border-color:var(--line);border-bottom:1px solid #fff}
   .tab .dot{width:7px;height:7px;border-radius:50%;background:#cbd5d5;flex:0 0 auto}
   .tab .dot.live{background:var(--ok)} .tab .dot.warn{background:var(--warn)} .tab .dot.bad{background:var(--bad)}
+  .tabsep{width:1px;align-self:center;height:18px;background:var(--line);margin:0 5px}
 
   .banner{border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.55;margin-bottom:16px;border:1px solid}
   .banner.info{background:var(--soft);border-color:rgba(89,196,196,.35);color:#215b5b}
@@ -282,14 +283,31 @@ function render(){
   document.getElementById("tabs").innerHTML = tabs.map(function(t){
     return '<button class="tab' + (t.id === CURRENT ? " active" : "") + '" data-id="' + esc(t.id) + '">' +
       '<span class="dot ' + dotClass(t) + '"></span>' + esc(t.label) + '</button>';
-  }).join("");
+  }).join("") +
+    /* Separated on purpose: the DM Agent is a console, not a platform, and a
+       plain fifth chip would read as another set of metrics. */
+    '<span class="tabsep"></span>' +
+    '<button class="tab' + (CURRENT === "dm" ? " active" : "") + '" data-id="dm">DM Agent</button>';
 
   var live = DATA.platforms.filter(function(p){ return p.status === "live"; }).length;
   document.getElementById("sub").textContent =
     live + " of " + DATA.platforms.length + " platforms reporting" +
     (DATA.zernio.configured ? "" : " · Zernio not connected");
 
-  document.getElementById("view").innerHTML = CURRENT === "all"
+  var view = document.getElementById("view");
+  if (CURRENT === "dm") {
+    /* Embedded, not reimplemented — it is a full console with its own thread
+       list and reply flow. Kept mounted once loaded so switching tabs doesn't
+       throw away an open conversation. */
+    if (!document.getElementById("dmFrame")) {
+      view.innerHTML = '<iframe id="dmFrame" title="DM Agent" src="/chat" ' +
+        'style="width:100%;height:calc(100vh - 190px);min-height:520px;border:1px solid var(--line);' +
+        'border-radius:11px;background:#fff;display:block"></iframe>';
+    }
+    document.getElementById("sub").textContent = "DM Agent — Instagram, SMS and replies";
+    return;
+  }
+  view.innerHTML = CURRENT === "all"
     ? combinedBody(DATA.combined)
     : metricsBody(DATA.platforms.filter(function(p){ return p.id === CURRENT; })[0] || DATA.platforms[0]);
 }

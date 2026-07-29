@@ -208,20 +208,12 @@ var TABS = [
    src: "/jobs",
    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.9 4.9l2.9 2.9"/><path d="M16.2 16.2l2.9 2.9"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.9 19.1l2.9-2.9"/><path d="M16.2 7.8l2.9-2.9"/></svg>'
  },
- {
-   key: "tracker",
-   label: "Tracker",
-   sub: "Buyers · Sellers",
-   src: "/tracker",
-   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h6v14H3z"/><path d="M15 5h6v9h-6z"/><path d="M9 9h6"/></svg>'
- },
- {
-   key: "dm",
-   label: "DM Agent",
-   sub: "Instagram · SMS · Replies",
-   src: "/chat",
-   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>'
- },
+ /* Tracker moved INTO the CRM (rail icon between Opportunities and
+    Transactions) — it is the same book of people, and two separate top-level
+    entries had the team hunting for a contact in whichever one they opened
+    first. /tracker still serves standalone; the CRM iframes it. */
+ /* DM Agent moved INTO Analytics as its own tab. /chat still serves
+    standalone; the Analytics page iframes it. */
  {
    key: "content",
    label: "Content Manager",
@@ -273,7 +265,6 @@ var TABS = [
 var SECTIONS = {
  harvey:    null,
  crm:       'Operations',
- dm:        null,
  content:   'Growth',
  tasks:     null,
  knowledge: 'Help'

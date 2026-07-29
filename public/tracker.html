@@ -166,6 +166,18 @@ body.selecting .rec .rsel{display:block}
 /* Combined view: two lists instead of many stage columns, so each gets far more
    width — the point of the request was seeing both books at once. */
 .col.col-wide{flex:1 1 0;min-width:300px;max-width:none}
+/* Funnel view */
+.funnelbody{padding:14px 14px 16px}
+.fnrow{margin-bottom:13px}
+.fnrow.zero{opacity:.45}
+.fnhead{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+.fnlabel{flex:1;font-size:12.5px;font-weight:700}
+.fnn{font-size:13px;font-weight:800}
+.fnpct{font-size:11px;color:var(--muted);min-width:34px;text-align:right}
+.fnbar{height:9px;border-radius:5px;background:var(--soft);overflow:hidden}
+.fnbar i{display:block;height:100%;border-radius:5px;transition:width .25s}
+.fndrop{font-size:10.5px;color:var(--muted);margin-top:3px}
+.fnfoot{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);line-height:1.5}
 .tag.stagetag{background:rgba(8,145,178,.14);color:#0E7490;font-weight:700}
 .tag.stagetag.none{background:var(--soft);color:var(--muted);font-weight:600}
 [data-theme="dark"] .tag.stagetag{background:rgba(34,211,238,.16);color:#67E8F9}
@@ -275,7 +287,9 @@ body.selecting #bulkBar{display:flex}
 <body>
 
 <header id="top">
-  <div class="brand">
+  <!-- Hidden when embedded (CRM tab, shell): the host page already shows the
+       Marco Puga mark, and two stacked logos read as a broken nesting. -->
+  <div class="brand" id="brand">
     <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
       <defs><linearGradient id="mp" x1="0" y1="2" x2="0" y2="46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f4695b"/><stop offset="1" stop-color="#bd1e2b"/></linearGradient></defs>
       <path d="M24 4 44 24 24 44 4 24Z" stroke="url(#mp)" stroke-width="2.2"/>
@@ -288,6 +302,7 @@ body.selecting #bulkBar{display:flex}
     <button data-side="buyer" class="on"><span class="dot"></span>Buyers</button>
     <button data-side="seller"><span class="dot"></span>Sellers</button>
     <button data-side="both"><span class="dot"></span>Both</button>
+    <button data-side="funnel"><span class="dot"></span>Funnel</button>
   </div>
   <input id="search" placeholder="Search name, phone, email, address…" autocomplete="off" />
   <button class="tbtn" id="themeBtn">◐ Theme</button>
@@ -406,6 +421,9 @@ var DIRTY = false;
 function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML;}
 function toast(m){var t=document.getElementById("toast");t.textContent=m;t.classList.add("on");
   clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove("on");},2200);}
+var EMBEDDED = (function(){ try{ return window.self !== window.top; }catch(_){ return true; } })();
+if(EMBEDDED){ var _b=document.getElementById("brand"); if(_b) _b.style.display="none"; }
+
 function api(p,opts){return fetch(p,opts).then(function(r){
   if(!r.ok)return r.json().catch(function(){return{};}).then(function(j){
     throw new Error(j.error||("HTTP "+r.status));});
@@ -441,12 +459,18 @@ function mergedStages(){
   add(SCHEMA.buyerStages,"buyer");
   return out;
 }
+/* Which pipelines the current view covers. "both" and "funnel" are views, not
+   pipelines — every side test goes through here so a new view can never end up
+   silently filtering for a side no record has. */
+function sidesShown(){return (SIDE==="both"||SIDE==="funnel")?["buyer","seller"]:[SIDE];}
+function oneSide(){var s=sidesShown();return s.length===1?s[0]:null;}
+
 /** Stage chips for whichever side(s) the board is showing. */
 function stageOptions(){
-  if(SIDE==="both") return mergedStages();
-  return stages(SIDE).map(function(s){
+  if(!oneSide()) return mergedStages();
+  return stages(oneSide()).map(function(s){
     var o={key:s.key,label:s.label,sides:{}};
-    o.sides[SIDE]=true;
+    o.sides[oneSide()]=true;
     return o;
   });
 }
@@ -462,11 +486,11 @@ function anyStageOn(){return Object.keys(FILTER.stage).some(function(k){return F
  */
 function stageCounts(){
   var out={__unstaged:0};
-  var check=SIDE==="both"?["buyer","seller"]:[SIDE];
+  var check=sidesShown(), only=oneSide();
   RECORDS.forEach(function(rec){
     var sides=rec.sides||[];
     if(!sides.length) return;
-    if(SIDE!=="both" && sides.indexOf(SIDE)<0) return;
+    if(only && sides.indexOf(only)<0) return;
     if(FILTER.contactable && !contactable(rec)) return;
     if(anyStatusOn() && !FILTER.status[rec.status]) return;
     if(FILTER.source && (rec.source||"").trim().toLowerCase()!==FILTER.source) return;
@@ -525,7 +549,7 @@ function contactable(rec){return !!((rec.phone||"").trim()||(rec.email||"").trim
  * find; a filter that could not name them would hide the largest group.
  */
 function matchesStage(rec){
-  var check=SIDE==="both"?["buyer","seller"]:[SIDE];
+  var check=sidesShown();
   var sides=rec.sides||[];
   var unstagedWanted=!!FILTER.stage.__unstaged;
   var anyOnSide=false, anyStaged=false;
@@ -545,7 +569,8 @@ function passes(rec){
      buying at once, who appears in each column rather than being shown twice
      in one. */
   if(!sides.length) return false;
-  if(SIDE!=="both" && sides.indexOf(SIDE)<0) return false;
+  var only=oneSide();
+  if(only && sides.indexOf(only)<0) return false;
   if(FILTER.contactable && !contactable(rec)) return false;
   if(anyStatusOn() && !FILTER.status[rec.status]) return false;
   if(anyStageOn() && !matchesStage(rec)) return false;
@@ -621,7 +646,100 @@ function cardHtml(rec,viewSide){
   '</article>';
 }
 
+/**
+ * Sales funnel — both pipelines as ordered stages with drop-off.
+ *
+ * The one half of the requested dashboard that has real data behind it: 1,219
+ * tracker records with stages. It is honest about the shape of that data
+ * rather than flattering it — most of the book is unstaged, and a funnel drawn
+ * over three used stages would look like a healthy pipeline if the empty ones
+ * were hidden. They are shown at zero instead.
+ *
+ * "Reached" is cumulative: someone Under Contract has necessarily been
+ * Contacted, so each row counts everyone at that stage OR beyond it. A funnel
+ * built from per-stage occupancy instead would show a jagged sawtooth and
+ * imply people had gone backwards.
+ */
+function funnelFor(side){
+  const list = RECORDS.filter(function(r){
+    return (r.sides||[]).indexOf(side)>=0 && passesExceptSide(r);
+  });
+  const st = stages(side);
+  const idx = {}; st.forEach(function(s,i){ idx[s.key]=i; });
+
+  const atOrBeyond = st.map(function(){ return 0; });
+  let unstaged = 0;
+  list.forEach(function(r){
+    const k = stageOf(r,side);
+    if(k==null || idx[k]==null){ unstaged++; return; }
+    for(let i=0;i<=idx[k];i++) atOrBeyond[i]++;
+  });
+
+  const top = atOrBeyond.length ? atOrBeyond[0] : 0;
+  return { side:side, total:list.length, unstaged:unstaged, top:top,
+    rows: st.map(function(s,i){
+      const n = atOrBeyond[i];
+      const prev = i===0 ? n : atOrBeyond[i-1];
+      return { key:s.key, label:s.label, n:n,
+               pct: top ? Math.round((n/top)*100) : 0,
+               dropped: Math.max(0, prev-n) };
+    }) };
+}
+
+/* passes() minus the side test, so the funnel honours the status/source/date
+   filters without excluding the other pipeline. */
+function passesExceptSide(rec){
+  if(FILTER.contactable && !contactable(rec)) return false;
+  if(anyStatusOn() && !FILTER.status[rec.status]) return false;
+  if(FILTER.source && (rec.source||"").trim().toLowerCase()!==FILTER.source) return false;
+  if(FILTER.assigned && (rec.assignedTo||"").trim().toLowerCase()!==FILTER.assigned) return false;
+  if(FILTER.from && ymdOf(rec.addedAt) < FILTER.from) return false;
+  if(FILTER.to   && ymdOf(rec.addedAt) > FILTER.to)   return false;
+  if(FILTER.q && !matchesQuery(rec)) return false;
+  return true;
+}
+
+function funnelHtml(f){
+  const color = SIDE_COLOR[f.side];
+  const name = f.side==="buyer" ? "BUYERS" : "SELLERS";
+  const used = f.rows.filter(function(r){ return r.n>0; }).length;
+  return '<section class="col col-wide nodrop">'+
+    '<div class="colhead"><span class="cbar" style="background:'+color+'"></span>'+
+      '<h3>'+name+' FUNNEL</h3><span class="cnt">'+f.total+'</span></div>'+
+    '<div class="colbody funnelbody">'+
+      (f.total===0
+        ? '<div class="colempty">Nobody matches these filters</div>'
+        : f.rows.map(function(r){
+            return '<div class="fnrow'+(r.n?"":" zero")+'">'+
+              '<div class="fnhead"><span class="fnlabel">'+esc(r.label)+'</span>'+
+                '<span class="fnn">'+r.n+'</span>'+
+                '<span class="fnpct">'+r.pct+'%</span></div>'+
+              '<div class="fnbar"><i style="width:'+Math.max(r.pct,r.n?1.5:0)+'%;background:'+color+'"></i></div>'+
+              (r.dropped ? '<div class="fndrop">'+r.dropped+' did not reach this stage</div>' : '')+
+            '</div>';
+          }).join("")
+      )+
+      '<div class="fnfoot">'+
+        '<b>'+f.unstaged+'</b> of '+f.total+' have no stage set yet'+
+        (used<=1 && f.total ? ' · only '+used+' stage'+(used===1?" is":"s are")+' in use, so this funnel is mostly empty — that is the data, not a bug.' : '')+
+      '</div>'+
+    '</div></section>';
+}
+
+function renderFunnel(){
+  const b = funnelFor("buyer"), s = funnelFor("seller");
+  document.getElementById("board").innerHTML = funnelHtml(b) + funnelHtml(s);
+  document.getElementById("countLine").innerHTML =
+    '<b>'+b.total+'</b> buyers · <b>'+s.total+'</b> sellers · '+
+    (b.unstaged+s.unstaged)+' unstaged';
+  const none = RECORDS.length===0;
+  document.getElementById("empty").style.display=none?"flex":"none";
+  document.getElementById("boardWrap").style.display=none?"none":"flex";
+  syncScrollbar();
+}
+
 function renderBoard(){
+  if(SIDE==="funnel") return renderFunnel();
   if(SIDE==="both") return renderCombined();
   var board=document.getElementById("board");
   var list=visible();
@@ -859,6 +977,12 @@ function paintStatusChips(){
  */
 function paintStageChips(){
   var wrap=document.getElementById("stageChips");
+  /* The funnel already IS the stage breakdown — a stage filter on top of it
+     would collapse every bar to one row and read as a broken chart. */
+  var row=wrap.parentElement;
+  var lbl=wrap.previousElementSibling;
+  if(SIDE==="funnel"){ wrap.innerHTML=""; wrap.style.display="none"; if(lbl&&lbl.className==="flabel")lbl.style.display="none"; return; }
+  wrap.style.display=""; if(lbl&&lbl.className==="flabel")lbl.style.display="";
   var opts=stageOptions();
   var valid={__unstaged:true};
   opts.forEach(function(o){valid[o.key]=true;});
@@ -960,6 +1084,10 @@ document.querySelectorAll("#sideSwitch button").forEach(function(b){
     document.getElementById("emptyMsg").textContent=
       "Add a person with “+ Add Person”, or drop an existing one into a stage.";
     clearSelection();          // stage keys belong to the OTHER pipeline now
+    /* No cards on screen in Funnel, so "select all on this page" would silently
+       arm 1,219 invisible records. Leave select mode. */
+    if(SIDE==="funnel" && SELECTING) document.getElementById("selectModeBtn").click();
+    document.getElementById("selectModeBtn").style.display = SIDE==="funnel" ? "none" : "";
     paintBulkStageOptions();
     paintStageChips();         // the stage vocabulary changes with the side
     renderBoard();
@@ -990,9 +1118,15 @@ function updateBulkBar(){
 }
 function paintBulkStageOptions(){
   var sel=document.getElementById("bulkStageSel");
-  var opts=stages(SIDE).map(function(s){return '<option value="'+esc(s.key)+'">'+esc(s.label)+'</option>';}).join("");
+  /* In Both view the two vocabularies are merged, so an option has to carry
+     which side(s) it belongs to — the server only understands "buyer" or
+     "seller" and defaults anything else to buyer, which would quietly stage a
+     seller on their buyer pipeline. */
+  var opts=(oneSide()?stageOptions():mergedStages()).map(function(s){
+    return '<option value="'+esc(s.key)+'" data-sides="'+Object.keys(s.sides).join(",")+'">'+esc(s.label)+'</option>';
+  }).join("");
   sel.innerHTML='<option value="__none__" selected>Move to stage…</option>'+
-    '<option value="">— Unstaged —</option>'+opts;
+    '<option value="" data-sides="buyer,seller">— Unstaged —</option>'+opts;
 }
 document.getElementById("selectModeBtn").onclick=function(){
   SELECTING=!SELECTING;
@@ -1015,11 +1149,29 @@ document.getElementById("bulkApplyBtn").onclick=function(){
   var sel=document.getElementById("bulkStageSel");
   if(!ids.length||sel.selectedIndex<=0)return;
   var stage=sel.value;
-  var label=sel.options[sel.selectedIndex].textContent;
+  var opt=sel.options[sel.selectedIndex];
+  var label=opt.textContent;
+  /* Split the selection by pipeline and send one request per side, so a
+     seller is staged as a seller even when the chip came from a merged list.
+     A record on both pipelines and a stage that exists on both moves on both,
+     which is what the shared chip already means everywhere else. */
+  var sides=(opt.getAttribute("data-sides")||"buyer").split(",").filter(Boolean);
+  var byId={}; RECORDS.forEach(function(r){byId[r.id]=r;});
+  var batches=sides.map(function(side){
+    return {side:side, ids:ids.filter(function(id){
+      var r=byId[id]; return r && (r.sides||[]).indexOf(side)>=0;
+    })};
+  }).filter(function(b){return b.ids.length;});
+  if(!batches.length){toast("Nobody selected is on that pipeline.");return;}
+
   var btn=this;btn.disabled=true;var was=btn.textContent;btn.textContent="Moving…";
-  api("/api/tracker/records/bulk-stage",jsonReq("POST",{ids:ids,side:SIDE,stage:stage||null}))
-    .then(function(j){
-      toast("Moved "+j.moved+" to "+label+(j.notFound?(" ("+j.notFound+" not found)"):""));
+  Promise.all(batches.map(function(b){
+    return api("/api/tracker/records/bulk-stage",jsonReq("POST",{ids:b.ids,side:b.side,stage:stage||null}));
+  }))
+    .then(function(rs){
+      var moved=rs.reduce(function(n,j){return n+(j.moved||0);},0);
+      var nf=rs.reduce(function(n,j){return n+(j.notFound||0);},0);
+      toast("Moved "+moved+" to "+label+(nf?(" ("+nf+" not found)"):""));
       clearSelection();
       return load(false);
     })
@@ -1374,11 +1526,21 @@ document.getElementById("dDelete").onclick=function(){
 
 /* ================= add ================= */
 document.getElementById("addBtn").onclick=function(){
-  var name=prompt("Name of the "+(SIDE==="buyer"?"buyer":"seller")+"?");
+  /* Both and Funnel are views, not pipelines. sides:["both"] would create
+     someone who shows up in neither column, so ask which one they are. */
+  var side=oneSide();
+  if(!side){
+    var a=prompt("Is this a buyer or a seller? (type buyer or seller)","buyer");
+    if(a===null)return;
+    a=String(a).trim().toLowerCase();
+    side = /^b/.test(a) ? "buyer" : /^s/.test(a) ? "seller" : null;
+    if(!side){toast("Type buyer or seller.");return;}
+  }
+  var name=prompt("Name of the "+side+"?");
   if(name===null)return;
   name=name.trim();
   if(!name){toast("A name is required.");return;}
-  api("/api/tracker/records",jsonReq("POST",{name:name,sides:[SIDE],status:"new"}))
+  api("/api/tracker/records",jsonReq("POST",{name:name,sides:[side],status:"new"}))
     .then(function(j){
       RECORDS.push(j.record);
       paintSelectFilters();renderBoard();
