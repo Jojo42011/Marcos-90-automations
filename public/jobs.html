@@ -89,10 +89,69 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-
   animation:sp .8s linear infinite;flex:0 0 auto}
 @keyframes sp{to{transform:rotate(360deg)}}
 
-/* ── Detail ── */
+/* ── Detail: reads like a chat, not a log ──
+   The operator's note was that finished work looked "codey" — raw tool JSON and
+   step traces sat above the answer. The transcript is now the answer; the trace
+   is one collapsed line at the bottom for when something needs auditing. */
 #detail{display:flex;flex-direction:column;min-height:0}
-#dPrompt{font-size:13.5px;line-height:1.6;background:var(--soft);border-radius:var(--r-sm);padding:10px 12px;
-  margin-bottom:14px;white-space:pre-wrap}
+.bubrow{display:flex;gap:10px;margin-bottom:16px;align-items:flex-start}
+.bubrow.me{flex-direction:row-reverse}
+.avat{flex:0 0 auto;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;color:#fff;margin-top:2px}
+.avat.h{background:linear-gradient(180deg,var(--teal),var(--teal-strong))}
+.avat.m{background:linear-gradient(180deg,var(--brand1),var(--brand2))}
+.bub{max-width:min(760px,100%);border-radius:var(--r);padding:12px 15px;font-size:13.5px;line-height:1.65;min-width:0}
+.bub.ask{background:var(--soft);border:1px solid var(--line);white-space:pre-wrap}
+.bub.ans{background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow)}
+.bub.bad{background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.25);color:#DC2626}
+.working{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);
+  background:var(--soft);border:1px solid var(--line);border-radius:var(--r);padding:11px 14px}
+.working b{color:var(--ink);font-weight:600}
+
+/* rendered markdown inside an answer */
+.mdh{font-family:var(--serif);line-height:1.3;margin:14px 0 7px}
+.mdh:first-child{margin-top:0}
+.mdh1{font-size:19px;font-weight:700} .mdh2{font-size:16.5px;font-weight:700}
+.mdh3{font-size:14px;font-weight:700;font-family:var(--sans);letter-spacing:.01em}
+.mdh4{font-size:12.5px;font-weight:700;font-family:var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.mdp{margin:0 0 9px} .mdp:last-child{margin-bottom:0}
+.mdlist{margin:0 0 10px 20px} .mdlist li{margin-bottom:4px}
+.mdhr{border:0;border-top:1px solid var(--line);margin:14px 0}
+.mdq{border-left:3px solid var(--teal);padding:2px 0 2px 11px;margin:0 0 10px;color:var(--muted)}
+.bub code{font-family:var(--mono);font-size:12px;background:var(--soft);border-radius:4px;padding:1px 5px}
+.mdpre{font-family:var(--mono);font-size:11.5px;line-height:1.6;background:var(--soft);border-radius:var(--r-sm);
+  padding:11px;overflow-x:auto;margin:0 0 10px}
+.mdtwrap{overflow-x:auto;margin:0 0 12px;border:1px solid var(--line);border-radius:var(--r-sm)}
+.mdt{border-collapse:collapse;width:100%;font-size:12.5px}
+.mdt th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+  background:var(--soft);padding:8px 11px;white-space:nowrap;border-bottom:1px solid var(--line)}
+.mdt td{padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+.mdt tr:last-child td{border-bottom:0}
+.mdt tr:hover td{background:var(--soft)}
+
+/* file cards */
+.fcards{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.fcard{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:11px 13px;background:var(--card);transition:border-color .14s var(--ease),box-shadow .14s var(--ease)}
+.fcard:hover{border-color:var(--teal);box-shadow:0 3px 12px rgba(16,24,40,.08)}
+.fcard .fic{flex:0 0 auto;width:32px;height:32px;border-radius:8px;background:var(--soft);display:flex;
+  align-items:center;justify-content:center;font-size:15px}
+.fcard .fbody{flex:1;min-width:0}
+.fcard .fname{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcard .fsub{font-size:11px;color:var(--muted);margin-top:2px}
+.fcard .facts{flex:0 0 auto;display:flex;gap:7px}
+.fbtn{height:30px;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:8px;
+  padding:0 11px;font-size:11.5px;font-weight:700;display:flex;align-items:center;text-decoration:none}
+.fbtn:hover{color:var(--teal-strong);border-color:var(--teal)}
+.fbtn.go{background:var(--teal);border-color:var(--teal);color:#fff}
+.fbtn.go:hover{color:#fff;filter:brightness(1.05)}
+
+/* the trace, out of the way */
+#traceTog{margin-top:18px;font-size:11.5px;color:var(--muted);background:none;border:0;padding:6px 0;
+  display:flex;align-items:center;gap:6px;font-weight:600}
+#traceTog:hover{color:var(--teal-strong)}
+#trace{display:none;margin-top:6px;border-top:1px solid var(--line);padding-top:8px}
+#trace.on{display:block}
 .sect h3{font-size:11px;font-weight:800;letter-spacing:.07em;color:var(--muted);margin:16px 0 8px}
 .step{display:flex;gap:9px;padding:7px 0;border-bottom:1px solid var(--line)}
 .step:last-child{border-bottom:0}
@@ -118,6 +177,9 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-
 .filelink .fsize{font-size:10.5px;color:var(--muted);font-family:var(--mono);flex:0 0 auto}
 #fileView,#wsView{margin-top:8px;font-family:var(--mono);font-size:11.5px;line-height:1.6;white-space:pre-wrap;
   background:var(--soft);border-radius:var(--r-sm);padding:12px;max-height:420px;overflow:auto;display:none}
+/* A rendered .md preview is prose, not a code dump. */
+#fileView.mdview,#wsView.mdview{font-family:var(--sans);font-size:13px;white-space:normal;background:var(--card);
+  border:1px solid var(--line)}
 #wsView{max-height:200px}
 .empty{color:var(--muted);font-size:13px;text-align:center;padding:40px 16px;line-height:1.6}
 #toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);background:#1f2937;color:#fff;
@@ -188,6 +250,10 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-
 
 <script>
 "use strict";
+
+/* path -> bytes, filled by loadWorkspace() so a file card can state its size.
+   Empty until that lands; the card degrades to "file" rather than "0 B". */
+var FILE_SIZES={};
 
 var STATUS_META = {
   queued:      {label:"Queued",      c:"#64748B"},
@@ -262,6 +328,81 @@ function renderList(){
 }
 
 /* ================= detail ================= */
+/* ================= tiny markdown renderer =================
+   Harvey writes markdown — headings, tables, bold, lists — and showing it as
+   raw monospace made finished work look like a log file. Rendered here rather
+   than with a library because the fast deploy path cannot run npm install.
+
+   Everything is escaped FIRST and only a known set of inline patterns is turned
+   back into tags, so a lead's note containing "<script>" renders as text. */
+function mdInline(t){
+  return esc(t)
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/(^|[\s(])\*([^*\n]+)\*/g,'$1<em>$2</em>')
+    .replace(/(^|[\s(])_([^_\n]+)_/g,'$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+function isTableSep(l){ return /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(l) && l.indexOf("-")>=0; }
+function splitRow(l){
+  var s=l.trim().replace(/^\|/,"").replace(/\|$/,"");
+  return s.split("|").map(function(c){return c.trim();});
+}
+function renderMarkdown(src){
+  var lines=String(src==null?"":src).replace(/\r\n/g,"\n").split("\n");
+  var html="", i=0, listOpen=null;
+  var closeList=function(){ if(listOpen){ html+="</"+listOpen+">"; listOpen=null; } };
+
+  while(i<lines.length){
+    var l=lines[i];
+
+    if(/^\s*```/.test(l)){                                   // fenced code
+      closeList(); i++;
+      var buf=[];
+      while(i<lines.length && !/^\s*```/.test(lines[i])){ buf.push(lines[i]); i++; }
+      i++;
+      html+='<pre class="mdpre">'+esc(buf.join("\n"))+'</pre>';
+      continue;
+    }
+    if(!l.trim()){ closeList(); i++; continue; }
+    if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)){ closeList(); html+='<hr class="mdhr">'; i++; continue; }
+
+    var h=/^(#{1,6})\s+(.*)$/.exec(l);
+    if(h){ closeList(); var lv=Math.min(h[1].length,4); html+='<div class="mdh mdh'+lv+'">'+mdInline(h[2])+'</div>'; i++; continue; }
+
+    // table: a header row followed by a |---|---| separator
+    if(l.indexOf("|")>=0 && i+1<lines.length && isTableSep(lines[i+1])){
+      closeList();
+      var head=splitRow(l); i+=2;
+      var rows=[];
+      while(i<lines.length && lines[i].indexOf("|")>=0 && lines[i].trim()){ rows.push(splitRow(lines[i])); i++; }
+      html+='<div class="mdtwrap"><table class="mdt"><thead><tr>'+
+        head.map(function(c){return '<th>'+mdInline(c)+'</th>';}).join("")+'</tr></thead><tbody>'+
+        rows.map(function(r){
+          return '<tr>'+head.map(function(_,n){return '<td>'+mdInline(r[n]==null?"":r[n])+'</td>';}).join("")+'</tr>';
+        }).join("")+'</tbody></table></div>';
+      continue;
+    }
+
+    var li=/^\s*[-*+]\s+(.*)$/.exec(l);
+    var ol=/^\s*\d+[.)]\s+(.*)$/.exec(l);
+    if(li||ol){
+      var want=li?"ul":"ol";
+      if(listOpen!==want){ closeList(); listOpen=want; html+="<"+want+' class="mdlist">'; }
+      html+="<li>"+mdInline((li||ol)[1])+"</li>"; i++; continue;
+    }
+    if(/^\s*>\s?/.test(l)){ closeList(); html+='<blockquote class="mdq">'+mdInline(l.replace(/^\s*>\s?/,""))+'</blockquote>'; i++; continue; }
+
+    closeList();
+    var para=[l]; i++;
+    while(i<lines.length && lines[i].trim() && !/^\s*(#|[-*+]\s|\d+[.)]\s|>|```|\|)/.test(lines[i])
+          && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])){ para.push(lines[i]); i++; }
+    html+='<p class="mdp">'+mdInline(para.join(" "))+'</p>';
+  }
+  closeList();
+  return html;
+}
+
 function stepHtml(s){
   if(s.kind==="tool"){
     return '<div class="step"><div class="stepn">'+s.n+'</div><div class="stepbody">'+
@@ -300,6 +441,37 @@ function filesTouched(job){
   return paths;
 }
 
+function fileIcon(path){
+  var e=(path.split(".").pop()||"").toLowerCase();
+  if(e==="csv"||e==="tsv")return "📊";
+  if(e==="json"||e==="xml"||e==="yaml"||e==="sql")return "🧾";
+  if(e==="html")return "🌐";
+  if(e==="ics")return "🗓️";
+  return "📄";
+}
+function fileCardHtml(path, bytes){
+  var dl="/api/harvey/workspace/download?path="+encodeURIComponent(path);
+  var name=path.split("/").pop();
+  var folder=path.indexOf("/")>=0?path.slice(0,path.lastIndexOf("/")):"";
+  return '<div class="fcard">'+
+    '<div class="fic">'+fileIcon(path)+'</div>'+
+    '<div class="fbody"><div class="fname">'+esc(name)+'</div>'+
+      '<div class="fsub">'+(folder?esc(folder)+" · ":"")+(bytes!=null?fmtBytes(bytes):"file")+'</div></div>'+
+    '<div class="facts">'+
+      '<a class="fbtn" href="'+dl+'&inline=1" target="_blank" rel="noopener">Open</a>'+
+      '<a class="fbtn go" href="'+dl+'" download>Download</a>'+
+    '</div></div>';
+}
+
+/**
+ * One job, presented as a conversation.
+ *
+ * What Harvey produced is the point, so the answer is rendered markdown in an
+ * assistant bubble and the files it wrote are download cards underneath. The
+ * tool trace — raw JSON in and out — is real and worth keeping, but it was
+ * sitting above the answer making finished work look like a debug log, so it is
+ * collapsed behind one line. Nothing is hidden that cannot be opened.
+ */
 function renderDetail(){
   var job=JOBS.find(function(j){return j.id===SEL;});
   var el=document.getElementById("detail");
@@ -307,7 +479,7 @@ function renderDetail(){
   if(!job){
     document.getElementById("dTitle").textContent="Select a job";
     cancel.style.display="none";
-    el.innerHTML='<div class="empty">Pick a job on the left to see every step it took and what it produced.</div>';
+    el.innerHTML='<div class="empty">Pick a job on the left to see what Harvey did and download what it made.</div>';
     return;
   }
   var m=STATUS_META[job.status]||STATUS_META.queued;
@@ -320,33 +492,64 @@ function renderDetail(){
   };
 
   var files=filesTouched(job);
-  el.innerHTML=
-    '<div id="dPrompt">'+esc(job.prompt)+'</div>'+
-    (job.error?'<div id="dErr"><b>'+(job.status==="interrupted"?"Interrupted":"Failed")+':</b> '+esc(job.error)+'</div>':'')+
-    (job.result?'<div class="sect"><h3>RESULT</h3><div id="dResult">'+esc(job.result)+'</div></div>':'')+
-    (files.length?'<div class="sect"><h3>FILES WRITTEN</h3>'+files.map(function(p){
-        return '<div class="filelink"><span class="fpath" data-file="'+esc(p)+'">'+esc(p)+'</span>'+
-               '<span class="fmeta"><a data-file="'+esc(p)+'">view</a> · '+
-               '<a href="/api/harvey/workspace/download?path='+encodeURIComponent(p)+'" download>download</a> · '+
-               '<a href="/api/harvey/workspace/download?inline=1&path='+encodeURIComponent(p)+'" target="_blank" rel="noopener">open</a>'+
-               '</span></div>';}).join("")+
-      '<div id="fileView"></div></div>':'')+
-    '<div class="sect"><h3>STEPS ('+job.steps.length+')</h3>'+
-      (job.steps.length?job.steps.map(stepHtml).join("")
-        :'<div class="empty" style="padding:18px">'+(isLive(job.status)?"Starting…":"No steps recorded.")+'</div>')+
-    '</div>';
+  var steps=job.steps||[];
+  var toolCount=steps.filter(function(s){return s.kind==="tool";}).length;
 
-  bindFileClicks(el, "fileView");
-  el.querySelectorAll('.fmeta a[data-file]').forEach(function(n){
-    n.onclick=function(ev){
-      ev.preventDefault();
-      var p=n.getAttribute("data-file");
-      var view=document.getElementById("fileView");
-      api("/api/harvey/workspace?path="+encodeURIComponent(p))
-        .then(function(j){view.style.display="block";view.textContent=j.file.content;})
-        .catch(function(e){view.style.display="block";view.textContent="Could not read "+p+": "+e.message;});
+  /* While it runs, say what it is doing right now — that is progress, not
+     back-end noise, and it is the only thing that makes a 20s wait tolerable. */
+  var live="";
+  if(isLive(job.status)){
+    var last=null;
+    for(var i=steps.length-1;i>=0;i--){ if(steps[i].kind==="tool"){last=steps[i];break;} }
+    live='<div class="bubrow"><div class="avat h">H</div><div class="working"><span class="spin"></span>'+
+      (last?'<span>Working — <b>'+esc(prettyTool(last.tool))+'</b></span>'
+           :'<span>Getting started…</span>')+
+      '<span style="opacity:.7">· step '+steps.length+'</span></div></div>';
+  }
+
+  var answer="";
+  if(job.result){
+    answer='<div class="bubrow"><div class="avat h">H</div><div class="bub ans">'+
+      renderMarkdown(job.result)+
+      (files.length?'<div class="fcards">'+files.map(function(p){return fileCardHtml(p,FILE_SIZES[p]);}).join("")+'</div>':"")+
+    '</div></div>';
+  } else if(job.error){
+    answer='<div class="bubrow"><div class="avat h">H</div><div class="bub bad"><b>'+
+      (job.status==="interrupted"?"Interrupted":"Didn’t finish")+'</b><br>'+esc(job.error)+'</div></div>';
+  }
+
+  el.innerHTML=
+    '<div class="bubrow me"><div class="avat m">M</div><div class="bub ask">'+esc(job.prompt)+'</div></div>'+
+    live+answer+
+    (steps.length
+      ? '<button id="traceTog">▸ Show what Harvey did ('+toolCount+' tool call'+(toolCount===1?"":"s")+')</button>'+
+        '<div id="trace">'+steps.map(stepHtml).join("")+'<div id="fileView"></div></div>'
+      : "");
+
+  var tog=document.getElementById("traceTog");
+  if(tog){
+    tog.onclick=function(){
+      var t=document.getElementById("trace");
+      var on=t.classList.toggle("on");
+      tog.textContent=(on?"▾ Hide":"▸ Show")+" what Harvey did ("+toolCount+" tool call"+(toolCount===1?"":"s")+")";
     };
-  });
+  }
+  bindFileClicks(el,"fileView");
+}
+
+/* Tool names are snake_case internals. Shown to the operator they should read
+   as what Harvey is doing, not as a function signature. */
+var TOOL_LABELS={
+  search_tracker:"searching the tracker", get_tracker_summary:"reading the tracker",
+  write_file:"writing the file", edit_file:"editing the file", read_file:"reading a file",
+  list_files:"looking through files", get_social_analytics:"pulling social analytics",
+  get_task_board:"reading the task board", create_task:"creating a task",
+  get_lead_nurture_overview:"reviewing lead scores", gmail_send:"sending an email",
+  send_sms:"sending a text", get_command_settings:"checking settings"
+};
+function prettyTool(t){
+  if(!t)return "working";
+  return TOOL_LABELS[t]||String(t).replace(/_/g," ");
 }
 
 /* ================= workspace files ================= */
@@ -369,6 +572,8 @@ function loadWorkspace(){
   return api("/api/harvey/workspace")
     .then(function(j){
       var files=j.files||[];
+      files.forEach(function(f){ FILE_SIZES[f.path]=f.bytes; });
+      if(SEL) renderDetail();      // file cards can now state their size
       var el=document.getElementById("wsList");
       el.innerHTML = files.length
         ? files.map(fileRowHtml).join("")+'<div id="wsView"></div>'
@@ -389,8 +594,14 @@ function bindFileClicks(scope, viewId){
       var view=document.getElementById(viewId);
       if(!view)return;
       api("/api/harvey/workspace?path="+encodeURIComponent(p))
-        .then(function(j){view.style.display="block";view.textContent=j.file.content;})
-        .catch(function(e){view.style.display="block";view.textContent="Could not read "+p+": "+e.message;});
+        .then(function(j){
+          view.style.display="block";
+          /* Markdown gets rendered; everything else stays verbatim, because a
+             csv or a json IS its raw text and prettifying it would be a lie. */
+          if(/\.md$/i.test(p)){ view.className="mdview"; view.innerHTML=renderMarkdown(j.file.content); }
+          else { view.className=""; view.textContent=j.file.content; }
+        })
+        .catch(function(e){view.style.display="block";view.className="";view.textContent="Could not read "+p+": "+e.message;});
     };
   });
 }
@@ -411,9 +622,15 @@ function load(){
     });
 }
 /* Poll only while something is actually running, so an idle tab is silent. */
+var WAS_LIVE=false;
 function schedulePoll(){
   clearTimeout(POLL);
-  if(JOBS.some(function(j){return isLive(j.status);})) POLL=setTimeout(load,2500);
+  var live=JOBS.some(function(j){return isLive(j.status);});
+  /* A job that just finished has probably written something — pull the file
+     list so its download card appears without anyone hitting refresh. */
+  if(WAS_LIVE && !live) loadWorkspace();
+  WAS_LIVE=live;
+  if(live) POLL=setTimeout(load,2500);
 }
 
 document.getElementById("refreshBtn").onclick=function(){
