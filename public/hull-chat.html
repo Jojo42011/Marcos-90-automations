@@ -177,6 +177,40 @@ const CONFIG = AGENTS[AGENT_KEY] || AGENTS.harvey;
   .note{ margin-top:6px; font-size:12px; color:var(--muted); font-family:var(--mono); }
   .err{ color:#ff8ea0; font-size:14px; }
 
+  /* ── rendered markdown in a reply ── */
+  .bubble .mdh{ line-height:1.3; margin:15px 0 8px; font-weight:700; }
+  .bubble .mdh:first-child{ margin-top:0; }
+  .bubble .mdh1{ font-size:19px } .bubble .mdh2{ font-size:17px }
+  .bubble .mdh3{ font-size:15px }
+  .bubble .mdh4{ font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; opacity:.7 }
+  .bubble .mdhr{ border:0; border-top:1px solid rgba(255,255,255,.12); margin:15px 0 }
+  .bubble .mdq{ border-left:3px solid rgba(127,227,227,.5); padding:2px 0 2px 12px; margin:0 0 10px; opacity:.85 }
+  .bubble ol{ margin:0 0 10px 22px } .bubble ol li{ margin-bottom:4px }
+  .bubble .mdtwrap{ overflow-x:auto; margin:0 0 12px; border:1px solid rgba(255,255,255,.11); border-radius:10px }
+  .bubble .mdt{ border-collapse:collapse; width:100%; font-size:13px }
+  .bubble .mdt th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+    opacity:.65; background:rgba(255,255,255,.04); padding:8px 11px; white-space:nowrap;
+    border-bottom:1px solid rgba(255,255,255,.11) }
+  .bubble .mdt td{ padding:8px 11px; border-bottom:1px solid rgba(255,255,255,.07); vertical-align:top }
+  .bubble .mdt tr:last-child td{ border-bottom:0 }
+
+  /* ── background job card ── */
+  .jobcard{ border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:13px 15px;
+    background:rgba(255,255,255,.03); }
+  .jspin{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px;
+    border:2px solid rgba(255,255,255,.22); border-top-color:#7fe3e3; animation:jsp .8s linear infinite; }
+  @keyframes jsp{ to{ transform:rotate(360deg) } }
+  .jdone{ color:#6ee7b7; font-weight:700; font-size:12.5px; letter-spacing:.02em; margin-bottom:9px; }
+  .jbad{ color:#ff8ea0; font-weight:700; font-size:12.5px; margin-bottom:7px; }
+  .jfiles{ margin-top:13px; display:flex; flex-direction:column; gap:7px; }
+  .jfile{ display:flex; align-items:center; gap:9px; border:1px solid rgba(255,255,255,.10);
+    border-radius:10px; padding:9px 11px; background:rgba(255,255,255,.03); }
+  .jfn{ flex:1; min-width:0; font-size:13px; font-weight:600; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .jdl{ flex:0 0 auto; font-size:11.5px; font-weight:700; color:#7fe3e3; text-decoration:none;
+    border:1px solid rgba(127,227,227,.35); border-radius:7px; padding:4px 9px; }
+  .jdl:hover{ background:rgba(127,227,227,.12); }
+
   /* typing dots */
   .dots{ display:inline-flex; gap:5px; padding:6px 2px; }
   .dots i{ width:7px; height:7px; border-radius:50%; background:var(--muted); animation:bob 1.2s ease-in-out infinite; }
@@ -316,45 +350,76 @@ const CONFIG = AGENTS[AGENT_KEY] || AGENTS.harvey;
   let history = [];
   let busy = false;
 
-  /* ---------- markdown-lite (HTML-escaped first → XSS-safe) ---------- */
+  /* ---------- markdown (HTML-escaped first → XSS-safe) ----------
+     This used to handle bullets, bold and code fences only. Harvey's replies are
+     full of `###` headings and `|` tables, so a structured answer rendered as a
+     wall of raw punctuation — the same "codey" problem the Jobs page had. Escape
+     everything first, then re-introduce a known set of tags. */
   function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-  function mdInline(s){
-    return s
-      .replace(/`([^`]+)`/g, (_,x)=>"<code>"+x+"</code>")
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  function mdInline(t){
+    return esc(t)
+      .replace(/`([^`]+)`/g,'<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+      .replace(/(^|[\s(])\*([^*\n]+)\*/g,'$1<em>$2</em>')
+      .replace(/(^|[\s(])_([^_\n]+)_/g,'$1<em>$2</em>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
   }
-  function renderMarkdown(raw){
-    // split out fenced code blocks first so their contents aren't touched
-    const parts = String(raw).split(/```/);
-    let out = "";
-    for (let i=0;i<parts.length;i++){
-      if (i % 2 === 1){ // inside a code fence
-        const body = parts[i].replace(/^[a-zA-Z0-9]*\n/, ""); // strip lang hint
-        out += "<pre><code>" + esc(body).replace(/\n$/,"") + "</code></pre>";
+  function isTableSep(l){ return /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(l) && l.indexOf("-") >= 0; }
+  function splitRow(l){
+    return l.trim().replace(/^\|/,"").replace(/\|$/,"").split("|").map(c => c.trim());
+  }
+  function renderMarkdown(src){
+    const lines = String(src == null ? "" : src).replace(/\r\n/g,"\n").split("\n");
+    let html = "", i = 0, listOpen = null;
+    const closeList = () => { if (listOpen){ html += "</" + listOpen + ">"; listOpen = null; } };
+
+    while (i < lines.length){
+      const l = lines[i];
+
+      if (/^\s*```/.test(l)){
+        closeList(); i++;
+        const buf = [];
+        while (i < lines.length && !/^\s*```/.test(lines[i])){ buf.push(lines[i]); i++; }
+        i++;
+        html += "<pre><code>" + esc(buf.join("\n")) + "</code></pre>";
         continue;
       }
-      const block = parts[i];
-      const lines = block.split(/\n/);
-      let html = "", listOpen = false;
-      const closeList = () => { if (listOpen){ html += "</ul>"; listOpen = false; } };
-      let para = [];
-      const flushPara = () => { if (para.length){ html += "<p>" + mdInline(esc(para.join(" "))) + "</p>"; para = []; } };
-      for (const ln of lines){
-        if (/^\s*[-*]\s+/.test(ln)){
-          flushPara();
-          if (!listOpen){ html += "<ul>"; listOpen = true; }
-          html += "<li>" + mdInline(esc(ln.replace(/^\s*[-*]\s+/, ""))) + "</li>";
-        } else if (ln.trim() === ""){
-          flushPara(); closeList();
-        } else {
-          para.push(ln.trim());
-        }
+      if (!l.trim()){ closeList(); i++; continue; }
+      if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)){ closeList(); html += '<hr class="mdhr">'; i++; continue; }
+
+      const h = /^(#{1,6})\s+(.*)$/.exec(l);
+      if (h){ closeList(); html += '<div class="mdh mdh' + Math.min(h[1].length,4) + '">' + mdInline(h[2]) + "</div>"; i++; continue; }
+
+      if (l.indexOf("|") >= 0 && i + 1 < lines.length && isTableSep(lines[i+1])){
+        closeList();
+        const head = splitRow(l); i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].indexOf("|") >= 0 && lines[i].trim()){ rows.push(splitRow(lines[i])); i++; }
+        html += '<div class="mdtwrap"><table class="mdt"><thead><tr>' +
+          head.map(c => "<th>" + mdInline(c) + "</th>").join("") + "</tr></thead><tbody>" +
+          rows.map(r => "<tr>" + head.map((_,n) => "<td>" + mdInline(r[n] == null ? "" : r[n]) + "</td>").join("") + "</tr>").join("") +
+          "</tbody></table></div>";
+        continue;
       }
-      flushPara(); closeList();
-      out += html;
+
+      const li = /^\s*[-*+]\s+(.*)$/.exec(l);
+      const ol = /^\s*\d+[.)]\s+(.*)$/.exec(l);
+      if (li || ol){
+        const want = li ? "ul" : "ol";
+        if (listOpen !== want){ closeList(); listOpen = want; html += "<" + want + ">"; }
+        html += "<li>" + mdInline((li || ol)[1]) + "</li>"; i++; continue;
+      }
+      if (/^\s*>\s?/.test(l)){ closeList(); html += '<blockquote class="mdq">' + mdInline(l.replace(/^\s*>\s?/,"")) + "</blockquote>"; i++; continue; }
+
+      closeList();
+      const para = [l]; i++;
+      while (i < lines.length && lines[i].trim()
+             && !/^\s*(#|[-*+]\s|\d+[.)]\s|>|```|\|)/.test(lines[i])
+             && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])){ para.push(lines[i]); i++; }
+      html += "<p>" + mdInline(para.join(" ")) + "</p>";
     }
-    return out;
+    closeList();
+    return html;
   }
 
   /* ---------- message rendering ---------- */
@@ -443,6 +508,107 @@ const CONFIG = AGENTS[AGENT_KEY] || AGENTS.harvey;
     }
   }
 
+  /* ---------- background jobs ----------
+     Harvey escalates long work to a background job and replies with an id. Until
+     now that was the end of it: the chat had no idea the job existed, so a job
+     that finished in 100 seconds looked identical to one that had hung — the
+     operator sat watching a static reply for ten minutes and reasonably concluded
+     it was stuck. Self-escalation without a handoff back is not delegation, it is
+     a dropped thread. The chat now watches any job Harvey starts and reports the
+     outcome in the conversation, the way a person would. */
+  const JOB_ID_RE = /\bjob_[a-z0-9]{6,}_[a-z0-9]{4,}\b/i;
+  const watching = new Set();
+
+  function jobCard(){
+    const el = document.createElement("div");
+    el.className = "msg ai";
+    el.innerHTML = '<div class="av"></div><div class="bubble jobcard"></div>';
+    thread.appendChild(el); scrollDown();
+    return el.querySelector(".bubble");
+  }
+  function fileRow(path){
+    const dl = withToken("/api/harvey/workspace/download?path=" + encodeURIComponent(path));
+    const name = path.split("/").pop();
+    return '<div class="jfile"><span class="jfn">' + esc(name) + '</span>' +
+      '<a class="jdl" href="' + dl + '" download>Download</a>' +
+      '<a class="jdl" href="' + dl + '&inline=1" target="_blank" rel="noopener">Open</a></div>';
+  }
+  function filesFromJob(job){
+    const seen = [];
+    for (const st of (job.steps || [])){
+      if (st.kind !== "tool") continue;
+      const list = Array.isArray(st.files) && st.files.length ? st.files
+        : st.file ? [st.file]
+        : (String(st.output || "").match(/"path"\s*:\s*"([^"]+)"/) || [])[1] ? [(String(st.output).match(/"path"\s*:\s*"([^"]+)"/))[1]] : [];
+      for (const f of list) if (f && seen.indexOf(f) < 0 && !/\/(script\.(js|py)|guard\.cjs|sitecustomize\.py|output\.txt)$/.test(f)) seen.push(f);
+    }
+    return seen;
+  }
+
+  /**
+   * Poll a job until it stops, updating one card in place.
+   *
+   * Deliberately open-ended (up to ~20 min) rather than a short timeout: giving
+   * up early and leaving a "still working" card is the exact failure this fixes.
+   * If it does run out, it says so and points at /jobs rather than going quiet.
+   */
+  async function watchJob(id){
+    if (watching.has(id)) return;
+    watching.add(id);
+    const card = jobCard();
+    const label = t => '<span class="jspin"></span><b>Working on it</b> · ' + esc(t);
+    card.innerHTML = label("starting…");
+    for (let i = 0; i < 400; i++){
+      await new Promise(r => setTimeout(r, 3000));
+      let job = null;
+      try {
+        const res = await fetch(withToken("/api/harvey/jobs/" + encodeURIComponent(id)));
+        const data = await res.json().catch(() => ({}));
+        job = data.job || data;
+      } catch (_) { continue; }              // a blip should not kill the watch
+      if (!job || !job.status) continue;
+
+      if (job.status === "running" || job.status === "queued"){
+        const steps = (job.steps || []).length;
+        const last = (job.steps || []).slice().reverse().find(s => s.kind === "tool");
+        card.innerHTML = label((last ? prettyTool(last.tool) : "getting started") + " · step " + steps);
+        scrollDown();
+        continue;
+      }
+
+      const files = filesFromJob(job);
+      if (job.status === "done"){
+        card.innerHTML = '<div class="jdone">✓ Done' +
+          ((job.steps || []).length ? ' · ' + job.toolCalls + ' tool call' + (job.toolCalls === 1 ? "" : "s") : "") + '</div>' +
+          renderMarkdown(job.result || "(finished with no report)") +
+          (files.length ? '<div class="jfiles">' + files.map(fileRow).join("") + '</div>' : "");
+        history.push({ role:"assistant", content: job.result || "(job finished)" });
+      } else {
+        card.innerHTML = '<div class="jbad">' +
+          (job.status === "cancelled" ? "Stopped" : job.status === "interrupted" ? "Interrupted" : "Didn’t finish") +
+          '</div><span class="err">' + esc(job.error || "No reason recorded.") + '</span>' +
+          (files.length ? '<div class="jfiles">' + files.map(fileRow).join("") + '</div>' : "");
+      }
+      scrollDown();
+      watching.delete(id);
+      return;
+    }
+    card.innerHTML = '<span class="err">This job has been running over 20 minutes — I have stopped watching it here. ' +
+      'It may still be going: check <a href="/jobs" target="_blank" rel="noopener">Jobs</a>.</span>';
+    watching.delete(id);
+  }
+
+  var TOOL_LABELS = {
+    search_tracker:"searching the tracker", get_tracker_summary:"reading the tracker",
+    get_tracker_record:"reading a record", get_tracker_pipelines:"checking the pipelines",
+    get_lead:"reading a lead", write_file:"writing the file", edit_file:"editing the file",
+    read_file:"reading a file", list_files:"looking through files",
+    get_social_analytics:"pulling social analytics", get_task_board:"reading the task board",
+    create_task:"creating a task", gmail_send:"sending an email", send_sms:"sending a text",
+    run_script:"running a script to compute it", get_command_settings:"checking settings"
+  };
+  function prettyTool(t){ return t ? (TOOL_LABELS[t] || String(t).replace(/_/g," ")) : "working"; }
+
   /* ---------- send flow ---------- */
   async function send(text){
     text = (text || "").trim();
@@ -462,6 +628,10 @@ const CONFIG = AGENTS[AGENT_KEY] || AGENTS.harvey;
         const reply = (out && out.text) || "(no response)";
         await typeInto(bubble, reply, out && out.note);
         history.push({ role:"assistant", content:reply });
+        /* If he handed the work to a background job, follow it through to the
+           end instead of leaving the operator to guess. */
+        const jm = reply.match(JOB_ID_RE);
+        if (jm) watchJob(jm[0]);
       }
     } catch (e) {
       bubble.innerHTML = '<span class="err">⚠ ' + esc(e.message || "Something went wrong.") + '</span>';

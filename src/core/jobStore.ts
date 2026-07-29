@@ -187,6 +187,28 @@ export function finishJob(
   return getJob(id);
 }
 
+/**
+ * Remove a job and its record.
+ *
+ * A job that is still running is cancelled rather than deleted — deleting the row
+ * out from under the runner would leave it writing steps to a job that no longer
+ * exists, and `appendStep` would silently no-op while the work carried on
+ * invisibly. Cancel first, then it can be deleted once it has stopped.
+ *
+ * The workspace files a job produced are deliberately NOT touched: they are the
+ * output, they outlive the record of how they were made, and quietly deleting a
+ * call list because someone tidied a job list would be the wrong surprise.
+ */
+export function deleteJob(id: string): { deleted: boolean; reason?: string } {
+  const job = getJob(id);
+  if (!job) return { deleted: false, reason: "No job with that id." };
+  if (job.status === "running" || job.status === "queued") {
+    return { deleted: false, reason: "That job is still running — cancel it first, then delete it." };
+  }
+  getJobsDb().prepare(`DELETE FROM jobs WHERE id = ?`).run(id);
+  return { deleted: true };
+}
+
 export function requestCancel(id: string): boolean {
   const job = getJob(id);
   if (!job) return false;

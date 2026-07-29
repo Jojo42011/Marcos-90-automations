@@ -175,6 +175,11 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-
 .filelink .fmeta a{color:var(--teal);text-decoration:none;font-weight:700;cursor:pointer}
 .filelink .fmeta a:hover{text-decoration:underline}
 .filelink .fsize{font-size:10.5px;color:var(--muted);font-family:var(--mono);flex:0 0 auto}
+/* Small, quiet until hovered — destructive, so it should not invite a stray click. */
+.xbtn{flex:0 0 auto;width:22px;height:22px;border:0;background:none;color:var(--muted);opacity:.45;
+  border-radius:6px;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+.xbtn:hover{opacity:1;color:#DC2626;background:rgba(220,38,38,.09)}
+.job .jtop .xbtn{margin-left:2px}
 #fileView,#wsView{margin-top:8px;font-family:var(--mono);font-size:11.5px;line-height:1.6;white-space:pre-wrap;
   background:var(--soft);border-radius:var(--r-sm);padding:12px;max-height:420px;overflow:auto;display:none}
 /* A rendered .md preview is prose, not a code dump. */
@@ -313,6 +318,8 @@ function renderList(){
         (isLive(j.status)?'<span class="spin"></span>':'')+
         '<div class="jprompt">'+esc(j.prompt)+'</div>'+
         '<span class="pill" style="background:'+m.c+'">'+m.label+'</span>'+
+        '<button class="xbtn" data-del="'+esc(j.id)+'" title="'+
+          (isLive(j.status)?"Stop this job":"Delete this job")+'">✕</button>'+
       '</div>'+
       '<div class="jmeta">'+
         '<span>'+j.steps.length+' step'+(j.steps.length===1?"":"s")+'</span>'+
@@ -324,6 +331,32 @@ function renderList(){
   }).join("");
   el.querySelectorAll(".job").forEach(function(n){
     n.onclick=function(){SEL=n.getAttribute("data-id");renderList();renderDetail();};
+  });
+  /* A LIVE job is stopped, never deleted: removing the row while the runner is
+     mid-flight would leave it appending steps to a job that no longer exists,
+     working invisibly with nowhere to report. Stop it first, then delete. */
+  el.querySelectorAll("[data-del]").forEach(function(n){
+    n.onclick=function(ev){
+      ev.stopPropagation();
+      var id=n.getAttribute("data-del");
+      var job=JOBS.find(function(j){return j.id===id;});
+      if(!job)return;
+      if(isLive(job.status)){
+        if(!confirm("Stop this job? It is still running.\n\nAnything it has already written stays."))return;
+        api("/api/harvey/jobs/"+encodeURIComponent(id)+"/cancel",{method:"POST"})
+          .then(function(){toast("Stopping — delete it once it stops.");return load();})
+          .catch(function(e){toast("Could not stop: "+e.message);});
+        return;
+      }
+      if(!confirm("Delete this job?\n\nThe files it produced are KEPT — only the record of the run is removed."))return;
+      api("/api/harvey/jobs/"+encodeURIComponent(id),{method:"DELETE"})
+        .then(function(){
+          if(SEL===id)SEL=null;
+          toast("Job deleted");
+          return load();
+        })
+        .catch(function(e){toast("Could not delete: "+e.message);});
+    };
   });
 }
 
@@ -568,6 +601,7 @@ function fileRowHtml(f){
     '<span class="fsize">'+fmtBytes(f.bytes)+'</span>'+
     '<span class="fmeta"><a href="'+dl+'" download>download</a> · '+
       '<a href="'+dl+'&inline=1" target="_blank" rel="noopener">open</a></span>'+
+    '<button class="xbtn" data-delfile="'+esc(f.path)+'" title="Delete this file">✕</button>'+
   '</div>';
 }
 function loadWorkspace(){
@@ -581,6 +615,23 @@ function loadWorkspace(){
         ? files.map(fileRowHtml).join("")+'<div id="wsView"></div>'
         : '<div class="empty" style="padding:20px">Nothing written yet. Ask Harvey for a file and it will show up here.</div>';
       bindFileClicks(el, "wsView");
+      /* Named in the prompt, because "reports/call-list.md" and "the file" are
+         very different things to be asked to confirm deleting. */
+      el.querySelectorAll("[data-delfile]").forEach(function(n){
+        n.onclick=function(ev){
+          ev.stopPropagation();
+          var path=n.getAttribute("data-delfile");
+          if(!confirm("Delete "+path+"?\n\nThis removes the file for good. Download it first if you might want it."))return;
+          api("/api/harvey/workspace?path="+encodeURIComponent(path),{method:"DELETE"})
+            .then(function(){
+              delete FILE_SIZES[path];
+              toast("Deleted "+path);
+              return loadWorkspace();
+            })
+            .then(function(){ if(SEL) renderDetail(); })
+            .catch(function(e){toast("Could not delete: "+e.message);});
+        };
+      });
     })
     .catch(function(e){
       document.getElementById("wsList").innerHTML =

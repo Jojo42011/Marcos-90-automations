@@ -953,6 +953,49 @@ const WORKSPACE_MIME = {
  * protect. Stated rather than implied — "hardened" and "sandboxed" are not the
  * same claim and the difference is the whole point of Phase B.
  */
+/** Remove a finished job. Running jobs must be cancelled first — see deleteJob. */
+app.delete("/api/harvey/jobs/:id", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { deleteJob } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
+    const r = deleteJob(String(req.params.id || ""));
+    if (!r.deleted) {
+        res.status(400).json({ ok: false, error: r.reason });
+        return;
+    }
+    res.json({ ok: true, deleted: true });
+});
+/**
+ * Delete a workspace file.
+ *
+ * Separate from job deletion on purpose: a job record and the file it produced
+ * are different things, and removing one should never silently remove the other.
+ */
+app.delete("/api/harvey/workspace", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const ws = await Promise.resolve().then(() => __importStar(require("./core/workspace.js")));
+    try {
+        const path = typeof req.query.path === "string" ? req.query.path : "";
+        if (!path) {
+            res.status(400).json({ ok: false, error: "path is required" });
+            return;
+        }
+        const deleted = await ws.deleteFile(path);
+        if (!deleted) {
+            res.status(404).json({ ok: false, error: `No such file: ${path}` });
+            return;
+        }
+        res.json({ ok: true, deleted: true, path });
+    }
+    catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
 app.get("/api/harvey/exec-status", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
