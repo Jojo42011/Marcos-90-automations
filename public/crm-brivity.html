@@ -736,7 +736,7 @@
       </div>
       <div class="leads-main">
         <div class="leads-top">
-          <h1>Transactions</h1>
+          <h1>Transactions <small id="txAsOf" style="font-size:12px;color:#8a949e;font-weight:400;margin-left:10px"></small></h1>
           <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY: ADDRESS / TITLE ASC ▾</button><button class="pill-btn ghost">This Year ▾</button><button class="pill-btn ghost">All Sources (4) ▾</button><button class="pill-btn ghost">Filters (0)</button><button class="pill-btn" id="txImportBtn">⭱ Import CSV</button><button class="pill-btn">Share</button></div>
         <input type="file" id="txCsvInput" accept=".csv,text/csv" style="display:none">
         </div>
@@ -1879,6 +1879,21 @@ function renderTx(){
   bindTxRows();
   const chip=document.getElementById("txChipBar");
   if(txBucket==="all"){chip.style.display="none";}else{chip.style.display="block";document.getElementById("txChipLabel").textContent=(TX_STATUS[txBucket]||{l:txBucket}).l;}
+  paintTxAsOf();
+}
+/* Brivity has no transaction API, so this data is only ever as fresh as the
+   last export somebody uploaded. Say that out loud rather than letting the
+   page read as a live feed. */
+function paintTxAsOf(){
+  var el=document.getElementById("txAsOf"); if(!el)return;
+  var s=TX_IMPORT_STATUS;
+  if(!TX.length){ el.textContent=""; return; }
+  if(!s||!s.lastImport){ el.textContent="· entered by hand — no import has run"; return; }
+  var d=new Date(s.lastImport.importedAt);
+  el.textContent="· imported "+(isNaN(d)?s.lastImport.importedAt:d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}))+
+    (s.manual?(" · "+s.manual+" added by hand"):"");
+  el.title="Brivity does not expose a transaction API. These rows are as of the last CSV export imported"+
+    (s.lastImport.filename?(" ("+s.lastImport.filename+")"):"")+".";
 }
 /* Editable transaction cells (text / money). "Add" is just an empty value. */
 var TX_EDIT_FIELDS={mls:"text",dateListed:"text",listPrice:"money",expiration:"text",closePrice:"money",closeDate:"text",dateCanceled:"text",dom:"text"};
@@ -1993,122 +2008,54 @@ document.getElementById("txClear").addEventListener("click",()=>{txBucket="all";
 document.getElementById("txChipX").addEventListener("click",()=>document.getElementById("txClear").click());
 
 /* ===== Transactions CSV import =====
-   Parses a Brivity (or generic) CSV export and adds transactions to the board.
-   Handles quoted fields, embedded commas/newlines, and flexible column headers. */
-function parseCsv(text){
-  text=String(text||"").replace(/^﻿/,"").replace(/\r\n/g,"\n").replace(/\r/g,"\n");
-  var rows=[],row=[],cur="",q=false;
-  for(var i=0;i<text.length;i++){
-    var ch=text[i];
-    if(q){
-      if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else {q=false;} }
-      else cur+=ch;
-    }else{
-      if(ch==='"')q=true;
-      else if(ch===","){row.push(cur);cur="";}
-      else if(ch==="\n"){row.push(cur);rows.push(row);row=[];cur="";}
-      else cur+=ch;
-    }
-  }
-  if(cur!==""||row.length){row.push(cur);rows.push(row);}
-  return rows.filter(function(r){return r.some(function(c){return String(c).trim()!=="";});});
+   Brivity has no transaction API — api.brivity.com exposes /api/people and
+   nothing else — so a report export is how transaction data gets in.
+
+   The parsing and column mapping live SERVER-SIDE (core/transactionImport.ts).
+   This used to be a second implementation here that wrote to /api/deals while
+   everything else read /api/transactions, which is why an import appeared to
+   work and the board stayed empty. The page now just hands the file over and
+   re-reads the store. */
+function txImportSummary(j){
+  var bits=[];
+  if(j.created)bits.push(j.created+" added");
+  if(j.updated)bits.push(j.updated+" updated");
+  if(j.skipped)bits.push(j.skipped+" skipped");
+  return bits.length?bits.join(" · "):"nothing to import";
 }
-/* find a column index by matching any of the candidate header names (case/space insensitive) */
-function csvCol(headers,cands){
-  var norm=function(s){return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");};
-  var H=headers.map(norm);
-  for(var c=0;c<cands.length;c++){
-    var want=norm(cands[c]);
-    for(var h=0;h<H.length;h++){ if(H[h]===want) return h; }
+async function importTxCsv(text,filename){
+  // Dry run first: a wrong column mapping is caught by reading the plan, not
+  // by finding damaged records afterwards.
+  var plan=await fetch(crmApi("/api/transactions/import-csv"),{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({csv:text,filename:filename||null})
+  }).then(function(r){return r.json();}).catch(function(){return null;});
+
+  if(!plan||plan.ok!==true){
+    crmToast((plan&&(plan.error||(plan.errors||[])[0]))||"Could not read that CSV");
+    return;
   }
-  // fall back to "contains" match
-  for(var c2=0;c2<cands.length;c2++){
-    var want2=norm(cands[c2]);
-    for(var h2=0;h2<H.length;h2++){ if(H[h2]&&(H[h2].indexOf(want2)>=0||want2.indexOf(H[h2])>=0)) return h2; }
+  if(!plan.create&&!plan.update){
+    crmToast("No transactions found in "+(filename||"that file")+
+      (plan.rowsSeen?(" ("+plan.rowsSeen+" rows read)"):""));
+    return;
   }
-  return -1;
-}
-function csvStatus(v){
-  var s=String(v||"").toLowerCase();
-  if(/clos|sold/.test(s))return"closed";
-  if(/pend|under.?contract|escrow|mutual/.test(s))return"pending";
-  if(/coming/.test(s))return"coming_soon";
-  if(/active|list/.test(s))return"active";
-  if(/withdraw/.test(s))return"withdrawn";
-  if(/cancel/.test(s))return"canceled";
-  if(/expire/.test(s))return"expired";
-  if(/pipe|prospect/.test(s))return"pipeline";
-  if(/draft/.test(s))return"draft";
-  return s?"active":"pipeline";
-}
-function csvSide(v){ return /buy|purchase/i.test(String(v||""))?"buyer":"seller"; }
-function csvDate(v){
-  v=String(v||"").trim(); if(!v)return"";
-  var m=v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);            // 2026-07-23
-  if(m)return String(m[2]).padStart(2,"0")+"-"+String(m[3]).padStart(2,"0")+"-"+m[1];
-  m=v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);    // 07/23/2026 or 7-23-26
-  if(m){var y=m[3].length===2?("20"+m[3]):m[3];return String(m[1]).padStart(2,"0")+"-"+String(m[2]).padStart(2,"0")+"-"+y;}
-  return v;
-}
-function importTxCsv(text){
-  var rows=parseCsv(text);
-  if(rows.length<2){crmToast("No rows found in CSV");return;}
-  var headers=rows[0];
-  var ix={
-    addr:csvCol(headers,["Address","Property Address","Property","Street Address","Full Address","Listing Address","Title"]),
-    city:csvCol(headers,["City","City State Zip","Area"]),
-    side:csvCol(headers,["Type","Side","Representation","Transaction Type","Deal Type","Role"]),
-    status:csvCol(headers,["Status","Transaction Status","Listing Status","Stage","Deal Status"]),
-    mls:csvCol(headers,["MLS","MLS #","MLS Number","MLS ID"]),
-    agent:csvCol(headers,["Agent","Listing Agent","Assigned Agent","Owner","Team Member"]),
-    listDate:csvCol(headers,["List Date","Date Listed","Listing Date","Start Date"]),
-    listPrice:csvCol(headers,["List Price","Listing Price","Original Price","Asking Price"]),
-    closePrice:csvCol(headers,["Close Price","Sale Price","Sold Price","Selling Price","Final Price","Purchase Price"]),
-    gci:csvCol(headers,["GCI","Commission","Gross Commission","Commission Amount","Total Commission"]),
-    closeDate:csvCol(headers,["Close Date","Closing Date","Sold Date","Settlement Date","COE"]),
-    source:csvCol(headers,["Source","Lead Source"]),
-    expiration:csvCol(headers,["Expiration","Expiration Date","Expire Date"])
-  };
-  if(ix.addr<0){crmToast("Could not find an Address/Property column");return;}
-  var get=function(r,k){return ix[k]>=0?String(r[ix[k]]||"").trim():"";};
-  var money=function(v){var n=Number(String(v||"").replace(/[^0-9.]/g,""));return Number.isFinite(n)?Math.round(n):0;};
-  var existing={};
-  TX.forEach(function(t){existing[(String(t.address||"")+"|"+String(t.mls||"")).toLowerCase()]=true;});
-  var added=0,skipped=0,toPost=[];
-  for(var i=1;i<rows.length;i++){
-    var r=rows[i];
-    var addr=get(r,"addr"); if(!addr)continue;
-    var mls=get(r,"mls");
-    var key=(addr+"|"+mls).toLowerCase();
-    if(existing[key]){skipped++;continue;}
-    existing[key]=true;
-    var status=csvStatus(get(r,"status"));
-    var listP=money(get(r,"listPrice"));
-    var closeP=money(get(r,"closePrice"));
-    var gci=money(get(r,"gci"));
-    if(status==="closed"&&!closeP&&listP)closeP=listP;
-    if(status==="closed"&&!gci&&closeP)gci=Math.round(closeP*0.03);
-    var nt={
-      id:"csv-"+i+"-"+addr.slice(0,8).replace(/\W/g,""),
-      address:addr, city:get(r,"city"), type:csvSide(get(r,"side")), status:status,
-      mls:mls, agent:get(r,"agent")||"Marco Puga",
-      dateListed:csvDate(get(r,"listDate")), listPrice:listP,
-      expiration:csvDate(get(r,"expiration")), closePrice:closeP, gci:gci,
-      closeDate:csvDate(get(r,"closeDate")), dom:"", dateCanceled:status==="canceled"?csvDate(get(r,"closeDate")):"",
-      mutualAccept:"", lastUpdated:"", source:get(r,"source")||"CSV Import",
-      statusChangedAt:"", draft:status==="draft"
-    };
-    TX.unshift(nt); added++; toPost.push(nt);
-  }
+  var warn=(plan.unmappedHeaders||[]).length
+    ? "\n\nColumns I could not place (they will be ignored):\n"+plan.unmappedHeaders.join(", ")
+    : "";
+  if(!confirm("Import "+plan.create+" new and update "+plan.update+" existing transaction"+
+      ((plan.create+plan.update)===1?"":"s")+" from "+(filename||"this file")+"?"+warn)) return;
+
+  crmToast("Importing …");
+  var res=await fetch(crmApi("/api/transactions/import-csv"),{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({csv:text,filename:filename||null,apply:true})
+  }).then(function(r){return r.json();}).catch(function(){return null;});
+
+  if(!res||res.ok!==true){ crmToast((res&&res.error)||"Import failed"); return; }
+  await loadTransactions();
   renderTx(); renderReport(currentReport); renderFinance();
-  crmToast("Imported "+added+" transaction"+(added===1?"":"s")+(skipped?(" · "+skipped+" duplicate"+(skipped===1?"":"s")+" skipped"):""));
-  // best-effort persistence to the server (so a refresh keeps them)
-  toPost.forEach(function(nt){
-    fetch(crmApi("/api/deals"),{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({propertyAddress:nt.address,dealType:nt.type,status:(TX_TO_DEAL[nt.status]||"active"),
-        salePrice:(nt.closePrice||nt.listPrice||0),commissionPercent:3,closeDate:nt.closeDate||"",assignedTo:nt.agent})})
-      .then(function(r){return r.ok?r.json():null;}).then(function(res){if(res&&res.deal&&res.deal.id)nt.id=res.deal.id;}).catch(function(){});
-  });
+  crmToast("Imported — "+txImportSummary(res));
 }
 (function(){
   var btn=document.getElementById("txImportBtn"),inp=document.getElementById("txCsvInput");
@@ -2118,12 +2065,64 @@ function importTxCsv(text){
       var f=inp.files&&inp.files[0]; if(!f)return;
       crmToast("Reading "+f.name+" …");
       var fr=new FileReader();
-      fr.onload=function(){try{importTxCsv(String(fr.result||""));}catch(e){crmToast("Could not read CSV");}inp.value="";};
+      fr.onload=function(){
+        Promise.resolve(importTxCsv(String(fr.result||""),f.name))
+          .catch(function(){crmToast("Could not read CSV");});
+        inp.value="";
+      };
       fr.onerror=function(){crmToast("Could not read file");inp.value="";};
       fr.readAsText(f);
     });
   }
 })();
+
+/* ===== Transactions: read the real store =====
+   /api/transactions (SQLite) is the source of truth — the same rows the
+   deadline and document engines work from. deals.json is legacy. */
+var TX_STATUS_FROM_API={active:"active",under_contract:"pending",pending:"pending",
+  closed:"closed",fell_through:"canceled",cancelled:"canceled"};
+function txMDY(iso){
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||""));
+  return m?(m[2]+"-"+m[3]+"-"+m[1]):"";
+}
+function mapApiTx(t){
+  var p=t.parties||{};
+  /* Brivity's own status wins for display when we have it: our six-state
+     lifecycle cannot express "coming soon" or "referral", and showing a
+     referral as "active" would misstate the book. */
+  var legacy=String(p.legacyStatus||"").toLowerCase().replace(/[\s-]+/g,"_");
+  var known={draft:1,pipeline:1,coming_soon:1,active:1,pending:1,closed:1,referral:1,
+             expired:1,withdrawn:1,canceled:1,archived:1};
+  return {
+    id:t.id,
+    address:t.address||"-",
+    city:"",
+    type:(t.dealType==="seller")?"S":(t.dealType==="dual"?"D":"B"),
+    status:known[legacy]?legacy:(TX_STATUS_FROM_API[t.status]||"active"),
+    mls:t.mls||"",
+    agent:t.agent||p.assignedTo||"Marco Puga",
+    dateListed:txMDY(p.openedDate),
+    listPrice:t.listPrice||0,
+    expiration:"",
+    closePrice:(t.status==="closed")?(t.price||0):0,
+    gci:t.gci||p.estimatedGCI||0,
+    closeDate:txMDY(t.closingDate),
+    dom:"", dateCanceled:"", mutualAccept:txMDY(t.contractDate),
+    lastUpdated:txMDY(t.updatedAt), source:t.source||"", statusChangedAt:"",
+    draft:false, importedAt:t.importedAt||null
+  };
+}
+var TX_IMPORT_STATUS=null;
+async function loadTransactions(){
+  var r=await Promise.all([
+    fetch(crmApi("/api/transactions")).then(function(x){return x.ok?x.json():null;}).catch(function(){return null;}),
+    fetch(crmApi("/api/transactions/import-status")).then(function(x){return x.ok?x.json():null;}).catch(function(){return null;})
+  ]);
+  TX_IMPORT_STATUS=r[1]||null;
+  var list=(r[0]&&Array.isArray(r[0].transactions))?r[0].transactions:[];
+  if(list.length) TX=list.map(mapApiTx);
+  return TX;
+}
 
 /* ===== Reporting ===== */
 function kpiRow(items){return '<div class="kpi-row">'+items.map(k=>'<div class="kpi"><div class="l">'+k[0]+'</div><div class="n">'+k[1]+'</div></div>').join("")+'</div>';}
@@ -2657,6 +2656,13 @@ async function loadLive(opts){
       if(p&&seen.has("p"+p.slice(-10)))return false; if(e&&seen.has("e"+e))return false; return true; });
     rawLeads=rawLeads.concat(fresh);
   }
+  /* Transactions are loaded BEFORE the sparse-leads bail-out on purpose: a
+     real transaction is real whether or not any leads came back, and hiding an
+     imported deal behind the demo set because the lead feed was quiet is
+     exactly the kind of silent lie this system is not allowed to tell. */
+  const txReal = (await loadTransactions()).length;
+  if(txReal){ txBucket="all"; renderTx(); renderReport(currentReport); renderFinance(); }
+
   if(rawLeads.length<3) return;   // too sparse - keep the demo set
 
   LEADS=rawLeads.map(mapLeadRow);
@@ -2665,8 +2671,12 @@ async function loadLive(opts){
   // Load the send-later queue too, so the SCHEDULED tab shows its pending
   // count without having to open it first.
   loadScheduled();
+  /* deals.json is the legacy store. It is only consulted when the real one
+     (/api/transactions, loaded above) is empty, so an old deal isn't silently
+     dropped off the board. */
   const deals=(body.deals||[]).filter(d=>d&&d.propertyAddress);
-  if(deals.length) TX=deals.map(mapDealTx);
+  if(!txReal && deals.length) TX=deals.map(mapDealTx);
+  const txCount=txReal||deals.length;
   const evs=calEventsFromTx();
   if(evs.length){ CAL_EVENTS=evs; const first=evs.slice().sort((a,b)=>a.date.localeCompare(b.date))[0].date; const m=/^(\d{4})-(\d{2})/.exec(first); if(m){ calY=+m[1]; calM=+m[2]-1; } }
 
@@ -2676,7 +2686,7 @@ async function loadLive(opts){
   const feedN=LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length;
   document.getElementById("feedCount").textContent=String(Math.min(feedN,99));
   const tag=document.querySelector(".demo-tag");
-  if(tag) tag.textContent="Live data · "+LEADS.length+" leads"+(brvPeople.length?" · "+brvPeople.length+" from Brivity":"")+(deals.length?" · "+deals.length+" transactions":"");
+  if(tag) tag.textContent="Live data · "+LEADS.length+" leads"+(brvPeople.length?" · "+brvPeople.length+" from Brivity":"")+(txCount?" · "+txCount+" transactions":"");
 }
 
 /* ---- functional controls: top-bar search, SORT BY, dashboard + email selects ---- */

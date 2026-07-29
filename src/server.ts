@@ -398,6 +398,7 @@ import {
   getDocument,
   getDocumentsForDeal,
   getDocumentsNeedingReview,
+  getLastTransactionImport,
   getOverdueDeadlines,
   getTemplate,
   getTransaction,
@@ -414,6 +415,7 @@ import {
   type TransactionDeadline,
   type TransactionDocument,
 } from "./core/transactionsStore.js";
+import { applyTransactionImport, planTransactionImport } from "./core/transactionImport.js";
 import { fillDocumentTemplate, inspectTemplatePdfFields } from "./core/documentFill.js";
 import {
   checkTransactionDeadlines,
@@ -9478,6 +9480,35 @@ app.post("/api/transactions", express.json(), (req, res) => {
   res.status(201).json({ transaction: tx });
 });
 
+/**
+ * When the transaction data was last refreshed, and from what.
+ *
+ * Registered BEFORE `/api/transactions/:id` — Express matches in order, and
+ * otherwise "import-status" is read as a transaction id and 404s.
+ */
+app.get("/api/transactions/import-status", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const all = getAllTransactions();
+  const last = getLastTransactionImport();
+  const imported = all.filter((t) => !!t.importedAt).length;
+  res.json({
+    ok: true,
+    total: all.length,
+    imported,
+    manual: all.length - imported,
+    lastImport: last,
+    /* Stated rather than implied: Brivity exposes no transaction API, so this
+       data is only ever as fresh as the last export somebody uploaded. */
+    live: false,
+    note: last
+      ? `Last imported ${last.importedAt} from ${last.filename || "a CSV"}.`
+      : "No import has ever run — any transactions here were entered by hand.",
+  });
+});
+
 app.get("/api/transactions/:id", (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -9522,6 +9553,63 @@ app.delete("/api/transactions/:id", (req, res) => {
   const success = deleteTransaction(String(req.params.id || "").trim());
   res.json({ success });
 });
+
+/**
+ * Import a Brivity transaction export.
+ *
+ * Brivity has no transaction API (see the header of core/transactionImport.ts
+ * for the probe that established that), so this is how transaction data
+ * actually gets in. Dry run by default: POST the CSV, read the plan, then
+ * repeat with {"apply":true}. The body is the raw CSV text so Harvey and a
+ * future scheduled job can call it exactly the way the CRM does.
+ */
+app.post(
+  "/api/transactions/import-csv",
+  express.text({ type: ["text/csv", "text/plain"], limit: "8mb" }),
+  express.json({ limit: "8mb" }),
+  (req, res) => {
+    if (!dashboardTokenOk(req)) {
+      res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+      return;
+    }
+    const body = req.body as unknown;
+    const asObject = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const csv = typeof body === "string" ? body : typeof asObject.csv === "string" ? asObject.csv : "";
+    const apply = asObject.apply === true || req.query.apply === "1";
+    const filename = typeof asObject.filename === "string" ? asObject.filename : undefined;
+
+    if (!csv.trim()) {
+      res.status(400).json({ ok: false, error: "csv is required (raw text body, or {\"csv\":\"…\"})" });
+      return;
+    }
+    try {
+      const plan = planTransactionImport(csv);
+      if (plan.errors.length && !plan.rows.length) {
+        res.status(422).json({ ok: false, dryRun: !apply, ...plan });
+        return;
+      }
+      if (!apply) {
+        // Sample rather than the whole plan: a 2,000-row file would otherwise
+        // return a payload nobody can read.
+        res.json({
+          ok: true, dryRun: true,
+          rowsSeen: plan.rowsSeen, create: plan.create, update: plan.update, skip: plan.skip,
+          unmappedHeaders: plan.unmappedHeaders, errors: plan.errors,
+          sample: plan.rows.filter((r) => r.transaction).slice(0, 5).map((r) => ({
+            line: r.line, action: r.action, address: r.transaction.address,
+            status: r.transaction.status, dealType: r.transaction.dealType,
+            price: r.transaction.price, closingDate: r.transaction.closingDate,
+          })),
+        });
+        return;
+      }
+      const result = applyTransactionImport(plan, { filename, source: "brivity-csv" });
+      res.json({ ok: true, dryRun: false, ...result });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: (err as Error).message });
+    }
+  },
+);
 
 app.post("/api/transactions/migrate-from-deals", async (req, res) => {
   if (!dashboardTokenOk(req)) {

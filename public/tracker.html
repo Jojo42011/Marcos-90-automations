@@ -178,6 +178,12 @@ body.selecting .rec .rsel{display:block}
 .fnbar i{display:block;height:100%;border-radius:5px;transition:width .25s}
 .fndrop{font-size:10.5px;color:var(--muted);margin-top:3px}
 .fnfoot{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);line-height:1.5}
+/* Transaction snapshot */
+.snapgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.snapcell{border:1px solid var(--line);border-radius:10px;padding:12px 13px}
+.snapl{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.snapn{font-size:23px;font-weight:800;margin-top:5px;line-height:1.1}
+.snapsub{font-size:11px;color:var(--muted);margin-top:2px}
 .tag.stagetag{background:rgba(8,145,178,.14);color:#0E7490;font-weight:700}
 .tag.stagetag.none{background:var(--soft);color:var(--muted);font-weight:600}
 [data-theme="dark"] .tag.stagetag{background:rgba(34,211,238,.16);color:#67E8F9}
@@ -726,9 +732,77 @@ function funnelHtml(f){
     '</div></section>';
 }
 
+/* ================= transaction snapshot =================
+   The other half of the requested dashboard. It sits beside the funnels
+   because that is the pair the layout asked for, but it is a different KIND of
+   number — the funnel counts people in this tracker, the snapshot counts deals
+   in the transaction store, and those are not the same book.
+
+   Brivity exposes no transaction API (api.brivity.com serves /api/people and
+   nothing else), so these rows arrive by CSV import. The card therefore states
+   its own as-of date instead of implying a live feed, and when the store is
+   empty it says so and names the reason rather than rendering a wall of $0. */
+var TXN = null;            // {transactions:[…]} once loaded, null until then
+var TXN_STATUS = null;     // import provenance
+function loadTransactionSnapshot(){
+  return Promise.all([
+    api("/api/transactions").catch(function(){return null;}),
+    api("/api/transactions/import-status").catch(function(){return null;})
+  ]).then(function(r){
+    TXN = r[0] && Array.isArray(r[0].transactions) ? r[0].transactions : [];
+    TXN_STATUS = r[1] || null;
+  });
+}
+function usdShort(n){
+  if(n==null) return "—";
+  if(n>=1000000) return "$"+(n/1000000).toFixed(n>=10000000?0:1)+"M";
+  if(n>=1000) return "$"+Math.round(n/1000)+"k";
+  return "$"+Math.round(n);
+}
+function snapshotHtml(){
+  const list = TXN || [];
+  const sum = function(a,f){ return a.reduce(function(t,x){ return t+(f(x)||0); },0); };
+  const by = function(s){ return list.filter(function(t){ return t.status===s; }); };
+  const closed = by("closed"), pending = by("pending").concat(by("under_contract")), active = by("active");
+  const thisYear = String(new Date().getFullYear());
+  const closedYtd = closed.filter(function(t){ return String(t.closingDate||"").slice(0,4)===thisYear; });
+
+  const asOf = TXN_STATUS && TXN_STATUS.lastImport
+    ? new Date(TXN_STATUS.lastImport.importedAt)
+    : null;
+  const foot = list.length===0
+    ? 'No transactions yet. Brivity has no transaction API, so these arrive by CSV — <b>CRM → Transactions → Import CSV</b>.'
+    : (asOf && !isNaN(asOf)
+        ? 'As of the import on <b>'+asOf.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})+'</b>'+
+          (TXN_STATUS.manual?(' · '+TXN_STATUS.manual+' entered by hand'):'')+
+          ' — not a live feed.'
+        : 'Entered by hand — no import has run.');
+
+  const cells = list.length===0 ? '' :
+    '<div class="snapgrid">'+
+      [['Under contract', pending.length, usdShort(sum(pending,function(t){return t.price;}))],
+       ['Active listings', active.length, usdShort(sum(active,function(t){return t.listPrice||t.price;}))],
+       ['Closed '+thisYear, closedYtd.length, usdShort(sum(closedYtd,function(t){return t.price;}))],
+       ['GCI closed '+thisYear, null, usdShort(sum(closedYtd,function(t){return t.gci;}))]
+      ].map(function(c){
+        return '<div class="snapcell"><div class="snapl">'+esc(c[0])+'</div>'+
+          '<div class="snapn">'+(c[1]==null?c[2]:c[1])+'</div>'+
+          '<div class="snapsub">'+(c[1]==null?'gross commission':c[2]+' volume')+'</div></div>';
+      }).join('')+
+    '</div>';
+
+  return '<section class="col col-wide nodrop">'+
+    '<div class="colhead"><span class="cbar" style="background:#0891B2"></span>'+
+      '<h3>TRANSACTION SNAPSHOT</h3><span class="cnt">'+list.length+'</span></div>'+
+    '<div class="colbody funnelbody">'+
+      cells+
+      '<div class="fnfoot">'+foot+'</div>'+
+    '</div></section>';
+}
+
 function renderFunnel(){
   const b = funnelFor("buyer"), s = funnelFor("seller");
-  document.getElementById("board").innerHTML = funnelHtml(b) + funnelHtml(s);
+  document.getElementById("board").innerHTML = funnelHtml(b) + funnelHtml(s) + snapshotHtml();
   document.getElementById("countLine").innerHTML =
     '<b>'+b.total+'</b> buyers · <b>'+s.total+'</b> sellers · '+
     (b.unstaged+s.unstaged)+' unstaged';
@@ -1088,6 +1162,9 @@ document.querySelectorAll("#sideSwitch button").forEach(function(b){
        arm 1,219 invisible records. Leave select mode. */
     if(SIDE==="funnel" && SELECTING) document.getElementById("selectModeBtn").click();
     document.getElementById("selectModeBtn").style.display = SIDE==="funnel" ? "none" : "";
+    /* Transactions are only needed by the Funnel view's snapshot, so they are
+       fetched on first entry rather than on every tracker load. */
+    if(SIDE==="funnel" && TXN===null) loadTransactionSnapshot().then(renderBoard);
     paintBulkStageOptions();
     paintStageChips();         // the stage vocabulary changes with the side
     renderBoard();

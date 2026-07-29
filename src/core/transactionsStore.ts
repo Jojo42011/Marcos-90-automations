@@ -123,6 +123,120 @@ function initTransactionsSchema(database: Database.Database): void {
   } catch {
     /* column exists */
   }
+
+  /* Import provenance and the fields a Brivity transaction export carries that
+     the deadline/document engine never needed. They live in real columns
+     rather than in `parties` because they are not parties — `parties` is
+     already enough of a grab-bag. */
+  for (const [column, ddl] of [
+    ["mls", "TEXT"],
+    ["list_price", "REAL"],
+    ["gci", "REAL"],
+    ["agent", "TEXT"],
+    ["source", "TEXT"],
+    ["external_key", "TEXT"],
+    ["imported_at", "TEXT"],
+  ] as Array<[string, string]>) {
+    try {
+      database.exec(`ALTER TABLE transactions ADD COLUMN ${column} ${ddl}`);
+    } catch {
+      /* column exists */
+    }
+  }
+  database.exec(
+    `CREATE INDEX IF NOT EXISTS idx_transactions_external_key ON transactions(external_key)`,
+  );
+
+  /**
+   * One row per import run. This is what lets the UI say "as of 14 Jul"
+   * instead of "real-time" — a snapshot with no provenance is the same class
+   * of lie as a zero that means "no data".
+   */
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS transaction_imports (
+      id TEXT PRIMARY KEY,
+      imported_at TEXT NOT NULL,
+      filename TEXT,
+      source TEXT NOT NULL DEFAULT 'csv',
+      rows_seen INTEGER NOT NULL DEFAULT 0,
+      created INTEGER NOT NULL DEFAULT 0,
+      updated INTEGER NOT NULL DEFAULT 0,
+      skipped INTEGER NOT NULL DEFAULT 0,
+      unmapped_headers TEXT,
+      errors TEXT
+    )
+  `);
+}
+
+export interface TransactionImportRun {
+  id: string;
+  importedAt: string;
+  filename: string | null;
+  source: string;
+  rowsSeen: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  unmappedHeaders: string[];
+  errors: string[];
+}
+
+export function recordTransactionImport(
+  run: Omit<TransactionImportRun, "id" | "importedAt"> & { importedAt?: string },
+): TransactionImportRun {
+  const database = getTransactionsDb();
+  const id = randomUUID();
+  const importedAt = run.importedAt || new Date().toISOString();
+  database
+    .prepare(
+      `INSERT INTO transaction_imports
+        (id, imported_at, filename, source, rows_seen, created, updated, skipped, unmapped_headers, errors)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      importedAt,
+      run.filename ?? null,
+      run.source,
+      run.rowsSeen,
+      run.created,
+      run.updated,
+      run.skipped,
+      JSON.stringify(run.unmappedHeaders || []),
+      JSON.stringify(run.errors || []),
+    );
+  return { ...run, id, importedAt, filename: run.filename ?? null };
+}
+
+/** The most recent import, or null if transactions have only ever been typed in by hand. */
+export function getLastTransactionImport(): TransactionImportRun | null {
+  const database = getTransactionsDb();
+  const row = database
+    .prepare(`SELECT * FROM transaction_imports ORDER BY imported_at DESC LIMIT 1`)
+    .get() as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    importedAt: String(row.imported_at),
+    filename: row.filename ? String(row.filename) : null,
+    source: String(row.source || "csv"),
+    rowsSeen: Number(row.rows_seen || 0),
+    created: Number(row.created || 0),
+    updated: Number(row.updated || 0),
+    skipped: Number(row.skipped || 0),
+    unmappedHeaders: parseJsonColumn<string[]>(row.unmapped_headers, []),
+    errors: parseJsonColumn<string[]>(row.errors, []),
+  };
+}
+
+/** Look up a previously-imported transaction by its stable source key (MLS #, or address). */
+export function getTransactionByExternalKey(key: string): Transaction | null {
+  if (!key.trim()) return null;
+  const database = getTransactionsDb();
+  const row = database
+    .prepare(`SELECT * FROM transactions WHERE external_key = ?`)
+    .get(key.trim()) as Record<string, unknown> | undefined;
+  return row ? rowToTransaction(row) : null;
 }
 
 export function getTransactionsDb(): Database.Database {
@@ -222,6 +336,15 @@ export interface Transaction {
   inspectionFlow?: InspectionFlow;
   finalWeekFlow?: FinalWeekFlow;
   postCloseFlow?: PostCloseFlow;
+  /* Carried by a Brivity transaction export. `importedAt` is the honest
+     as-of date for anything computed from these rows. */
+  mls?: string;
+  listPrice?: number;
+  gci?: number;
+  agent?: string;
+  source?: string;
+  externalKey?: string;
+  importedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -340,6 +463,13 @@ function rowToTransaction(row: Record<string, unknown>): Transaction {
     inspectionFlow: parseJsonColumn<InspectionFlow>(row.inspection_flow, {}),
     finalWeekFlow: parseJsonColumn<FinalWeekFlow>(row.final_week_flow, {}),
     postCloseFlow: parseJsonColumn<PostCloseFlow>(row.post_close_flow, {}),
+    mls: row.mls ? String(row.mls) : undefined,
+    listPrice: row.list_price != null ? Number(row.list_price) : undefined,
+    gci: row.gci != null ? Number(row.gci) : undefined,
+    agent: row.agent ? String(row.agent) : undefined,
+    source: row.source ? String(row.source) : undefined,
+    externalKey: row.external_key ? String(row.external_key) : undefined,
+    importedAt: row.imported_at ? String(row.imported_at) : undefined,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -420,8 +550,9 @@ export function createTransaction(
       `INSERT INTO transactions
         (id, address, deal_type, parties, price, status, contract_date, inspection_date,
          appraisal_date, loan_commitment_date, title_date, closing_date, possession_date,
-         lead_id, deal_file_url, notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         lead_id, deal_file_url, notes, mls, list_price, gci, agent, source, external_key,
+         imported_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -440,6 +571,13 @@ export function createTransaction(
       tx.leadId ?? null,
       tx.dealFileUrl ?? null,
       tx.notes ?? null,
+      tx.mls ?? null,
+      tx.listPrice ?? null,
+      tx.gci ?? null,
+      tx.agent ?? null,
+      tx.source ?? null,
+      tx.externalKey ?? null,
+      tx.importedAt ?? null,
       now,
       now,
     );
@@ -472,7 +610,9 @@ export function updateTransaction(id: string, updates: Partial<Transaction>): Tr
         address = ?, deal_type = ?, parties = ?, price = ?, status = ?,
         contract_date = ?, inspection_date = ?, appraisal_date = ?, loan_commitment_date = ?,
         title_date = ?, closing_date = ?, possession_date = ?, lead_id = ?, deal_file_url = ?,
-        notes = ?, inspection_flow = ?, final_week_flow = ?, post_close_flow = ?, updated_at = ?
+        notes = ?, inspection_flow = ?, final_week_flow = ?, post_close_flow = ?,
+        mls = ?, list_price = ?, gci = ?, agent = ?, source = ?, external_key = ?,
+        imported_at = ?, updated_at = ?
       WHERE id = ?`,
     )
     .run(
@@ -494,6 +634,13 @@ export function updateTransaction(id: string, updates: Partial<Transaction>): Tr
       JSON.stringify(merged.inspectionFlow || {}),
       JSON.stringify(merged.finalWeekFlow || {}),
       JSON.stringify(merged.postCloseFlow || {}),
+      merged.mls ?? null,
+      merged.listPrice ?? null,
+      merged.gci ?? null,
+      merged.agent ?? null,
+      merged.source ?? null,
+      merged.externalKey ?? null,
+      merged.importedAt ?? null,
       merged.updatedAt,
       id,
     );
