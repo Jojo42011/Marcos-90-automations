@@ -1367,6 +1367,17 @@
       </section>
     </main>
 
+    <!-- Typed command bar. Removed in b868746 when the console went voice-first,
+         which left its JS (#jForm, #jSend, sendMessage) as dead code and a 54px
+         empty strip where --j-compose-h still reserved space. Restored so this
+         page can be driven by typing again — voice remains the primary path. -->
+    <form class="j-compose" id="jForm" autocomplete="off">
+      <span class="j-prompt" aria-hidden="true">&rsaquo;</span>
+      <input class="j-input" id="jInput" type="text" autocomplete="off"
+             placeholder="Or type a command…" aria-label="Type a command for Harvey" />
+      <button type="submit" class="j-send" id="jSend">SEND</button>
+    </form>
+
     <aside class="j-col left side" id="jColOps">
       <div class="j-head">
         <span>LIVE OPS</span>
@@ -2723,9 +2734,9 @@
       }
     }
 
-    // The typed command bar now lives in the "Chat with Harvey" tab (hull-chat),
-    // including reel-link analysis. Harvey's dashboard is voice-first, so the
-    // compose form is optional here - guard in case it isn't rendered.
+    /* Typed commands. The optional-chaining guard stays: this page is voice-first
+       and the composer has been removed once already, so the handler should not
+       throw if it goes away again. */
     document.getElementById("jForm")?.addEventListener("submit", e => {
       e.preventDefault();
       const input = document.getElementById("jInput");
