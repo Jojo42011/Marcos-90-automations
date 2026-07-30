@@ -2,6 +2,7 @@ import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import { HARVEY_TOOL_DEFINITIONS, executeHarveyTool } from "../harvey/tools.js";
 import { EXEC_TOOL_DEFINITIONS } from "../harvey/platformTools.js";
 import { execMode } from "../core/codeExec.js";
+import { webResearchAvailable } from "../core/webResearch.js";
 import { searchFacts, getMemoryPacket } from "./memory/retrieval.js";
 import { getHullDb } from "./memory/store.js";
 import { randomUUID } from "crypto";
@@ -85,13 +86,33 @@ const GMAIL_SEND_TOOL: Tool = {
 const WEB_SEARCH_TOOL: Tool = {
   name: "web_search",
   description:
-    "Search the internet for current external information. Only call when Marco explicitly asks about news, prices, competitors, or external research. Do NOT call for questions answerable from memory or business tools.",
+    "Search the internet and get back result titles, URLs and snippets. Use for news, prices, competitors, market data, or anything outside Marco's own systems. Do NOT call for questions answerable from memory or the business tools. " +
+    "SNIPPETS ARE NOT SOURCES: a snippet is a teaser, often stale and sometimes wrong. When the answer matters, follow up with read_web_page on the results you intend to rely on, and say which pages you actually read. " +
+    "If this returns ok:false it FAILED — say the search failed. Never report a failed search as 'I found nothing'.",
   input_schema: {
     type: "object",
     properties: {
-      query: { type: "string" },
+      query: { type: "string", description: "What to search for." },
+      limit: { type: "number", description: "How many results, 1-10. Default 6." },
     },
     required: ["query"],
+  },
+};
+
+const READ_PAGE_TOOL: Tool = {
+  name: "read_web_page",
+  description:
+    "Open a URL in Marco's paired browser and read the page's actual text. This is how you READ A SOURCE rather than guessing from a search snippet — always do this before quoting a figure, a price, or a claim you will act on. " +
+    "Because it is Marco's own signed-in browser, it can also read pages behind a login that no search engine can see. " +
+    "If the result says needsLogin, you got the sign-in page and NOT the source: say so instead of summarising what you were shown.",
+  input_schema: {
+    type: "object",
+    properties: {
+      url: { type: "string", description: "Full URL starting with http:// or https://" },
+      selector: { type: "string", description: "Optional CSS selector to read just one region (e.g. 'article')." },
+      device: { type: "string", description: "Which paired browser, by name. Omit for the priority browser." },
+    },
+    required: ["url"],
   },
 };
 
@@ -116,7 +137,12 @@ export function getHullToolDefinitions(opts?: { whatsappSend?: boolean }): Tool[
   const tools = [...HARVEY_TOOL_DEFINITIONS, ...MEMORY_TOOLS, ANALYZE_REEL_TOOL];
   if (opts?.whatsappSend) tools.push(WHATSAPP_SEND_TOOL);
   if (isGmailConfigured()) tools.push(GMAIL_SEND_TOOL);
-  if (process.env.BRAVE_SEARCH_API_KEY?.trim()) tools.push(WEB_SEARCH_TOOL);
+  /* Search is offered when EITHER backend exists: the Brave API (works
+     unattended) or the paired browser (needs Marco's Chrome open, but reads
+     real pages and can see behind a login). Reading a page is browser-only —
+     no search API returns a page body. */
+  if (process.env.BRAVE_SEARCH_API_KEY?.trim() || webResearchAvailable()) tools.push(WEB_SEARCH_TOOL);
+  if (webResearchAvailable()) tools.push(READ_PAGE_TOOL);
   /* Only offered when execution is actually switched on. Harvey never sees a
      tool he would have to refuse. */
   if (execMode() === "local") tools.push(...EXEC_TOOL_DEFINITIONS);
@@ -175,13 +201,46 @@ export async function executeHullTool(name: string, input: Record<string, unknow
 
   if (name === "web_search") {
     const query = String(input.query || "").trim();
+    const limit = Math.min(Math.max(Number(input.limit) || 6, 1), 10);
     const apiKey = process.env.BRAVE_SEARCH_API_KEY?.trim();
-    if (!apiKey) return { error: "BRAVE_SEARCH_API_KEY not configured" };
-    const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`;
-    const res = await fetch(url, { headers: { Accept: "application/json", "X-Subscription-Token": apiKey } });
-    if (!res.ok) return { error: `Brave search failed: ${res.status}` };
-    const data = (await res.json()) as { web?: { results?: { title: string; description: string; url: string }[] } };
-    return { results: data.web?.results?.slice(0, 5) || [] };
+    /* Prefer the API when a key exists: it is faster and does not need anyone's
+       browser to be open. Fall back to driving the paired browser. */
+    if (apiKey) {
+      const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`;
+      const res = await fetch(url, { headers: { Accept: "application/json", "X-Subscription-Token": apiKey } });
+      if (!res.ok) return { ok: false, error: `Brave search failed: ${res.status}`, say: "Say the search failed — do not report it as nothing found." };
+      const data = (await res.json()) as { web?: { results?: { title: string; description: string; url: string }[] } };
+      return {
+        ok: true,
+        engine: "brave",
+        results: (data.web?.results || []).slice(0, limit),
+        note: "Snippets only. Call read_web_page on a result before relying on it.",
+      };
+    }
+    const { searchWeb } = await import("../core/webResearch.js");
+    const out = await searchWeb(query, { limit, device: String(input.device || "") || undefined });
+    return {
+      ...out,
+      say: out.ok
+        ? "These are snippets. Read the sources you intend to rely on before quoting them."
+        : "The search FAILED. Say so plainly — do not report it as 'nothing found'.",
+    };
+  }
+
+  if (name === "read_web_page") {
+    const { readWebPage } = await import("../core/webResearch.js");
+    const out = await readWebPage(String(input.url || ""), {
+      device: String(input.device || "") || undefined,
+      selector: String(input.selector || "") || undefined,
+    });
+    return {
+      ...out,
+      say: out.ok
+        ? (out.needsLogin
+            ? "You received a LOGIN PAGE, not the source. Say that; do not summarise it as the article."
+            : "Cite this page by name when you use it.")
+        : "The page could not be read. Say so rather than describing what it probably said.",
+    };
   }
 
   if (name === "analyze_reel") {

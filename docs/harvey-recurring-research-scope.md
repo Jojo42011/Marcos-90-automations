@@ -100,11 +100,20 @@ markdown renderer and file rows are already shared components.
 
 ## The shape of the build (phased, each shippable on its own)
 
-**Phase 1 — give Harvey the web (unblocks everything).**
-Enable `web_search` (needs a key) and add a `fetch_page` tool: fetch a URL,
-extract readable text, cap the size, refuse internal/loopback addresses. Verify
-Harvey can research a topic end-to-end in a one-off job. ~2–3 days once the key
-exists. **Nothing else is worth building until this works.**
+**Phase 1 — give Harvey the web (unblocks everything). — BUILT, via the browser.**
+Marco chose the browser path over buying a search key, so this shipped as
+`src/core/webResearch.ts`: `web_search` drives the paired Chrome against
+DuckDuckGo then Bing, and a new `read_web_page` returns a page's actual text —
+including pages behind a login, which no search API can reach. No extension
+change was needed. Every failure is reported as a failure; a scrape that breaks
+after a markup change says SCRAPE FAILURE rather than "nothing found". 23/23
+verified through the real extension.
+
+*What this does not change:* it needs Marco's Chrome open and armed, so it is an
+on-demand capability, not an unattended one. A nightly brief built on Phase 2
+will only run when the browser is there. `web_search` still prefers the Brave
+API if a key is ever set — that is the upgrade path to unattended, and it is a
+one-secret change, not a rewrite.
 
 **Phase 2 — recurring briefs.**
 The `briefs.db` store, a generic scheduler, the "one brief → one living doc,

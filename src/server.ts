@@ -9203,8 +9203,12 @@ if (process.env.BROWSER_CONTROL_TEST_HOOK === "1") {
   app.post("/__test/tool", express.json({ limit: "256kb" }), async (req, res) => {
     const b = (req.body || {}) as { tool?: string; input?: Record<string, unknown> };
     try {
-      const { executePlatformTool } = await import("./harvey/platformTools.js");
-      res.json(await executePlatformTool(String(b.tool || ""), b.input || {}));
+      /* Route through the HULL dispatcher, not the platform one: it is the
+         entry point Harvey actually uses, and it is where web_search and
+         read_web_page live. Testing a narrower path than production runs is
+         how a tool passes its tests and fails in the operator's hands. */
+      const { executeHullTool } = await import("./hull/tools.js");
+      res.json(await executeHullTool(String(b.tool || ""), b.input || {}));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
