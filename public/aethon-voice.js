@@ -466,6 +466,9 @@
           if (typeof addMsg === "function") addMsg("user", text);
           if (typeof addMsg === "function") addMsg("ai", fullSpeech);
           if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(fullSpeech);
+          // Harvey can hand long work to a background job by voice too — follow
+          // it, or the operator is left with no idea whether it finished.
+          if (window.HarveyJobWatch) window.HarveyJobWatch.watchReply(fullSpeech);
           if (firstChunkStarted) {
             window.HarveyStreamingTts.appendRemainingText(fullSpeech, {
               onEnd: () => {
@@ -487,6 +490,7 @@
           if (typeof addMsg === "function") addMsg("user", text);
           if (typeof addMsg === "function") addMsg("ai", speech);
           if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(speech);
+          if (window.HarveyJobWatch) window.HarveyJobWatch.watchReply(speech);
           await speakText(speech);
         }
       }

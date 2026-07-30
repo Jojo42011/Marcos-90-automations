@@ -320,7 +320,11 @@
 
   <!-- Harvey's real pipeline: streaming TTS + STT/brain. Loaded AFTER the orb so
        the bridge globals + hidden hooks exist. -->
+  <!-- Voice can start a background job, and this page has no transcript to put a
+       reply card in, so the watcher renders as a floating notice. -->
+  <script src="/harvey-jobwatch.js"></script>
   <script src="/harvey-streaming-tts.js"></script>
   <script src="/aethon-voice.js"></script>
+  <script>HarveyJobWatch.init({ mount: "floating" });</script>
 </body>
 </html>

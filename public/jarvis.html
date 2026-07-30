@@ -1402,6 +1402,7 @@
     <div class="j-drawer-backdrop" id="jDrawerBackdrop" aria-hidden="true"></div>
   </div>
 
+  <script src="/harvey-jobwatch.js"></script>
   <script>
     /* ── voice-nav-bridge (inlined) ─────────────────────────────────────────
      * Forwards a backend "navigate" directive up to the parent shell, which
@@ -2120,6 +2121,27 @@
       return div;
     }
 
+    /* Background-job cards. The implementation is shared with hull-chat via
+       /harvey-jobwatch.js; this only says where the card is mounted, because
+       this transcript uses textContent everywhere else and a card needs HTML. */
+    if (window.HarveyJobWatch) {
+      HarveyJobWatch.init({
+        mount: function () {
+          const wrap = document.getElementById("jTranscript");
+          const div = document.createElement("div");
+          div.className = "j-msg ai j-jobcard";
+          wrap.appendChild(div);
+          wrap.scrollTop = wrap.scrollHeight;
+          return div;
+        },
+        scrollDown: function () {
+          const wrap = document.getElementById("jTranscript");
+          if (wrap) wrap.scrollTop = wrap.scrollHeight;
+        },
+        withToken: apiUrl,
+      });
+    }
+
     function typeText(el, text) {
       return new Promise(resolve => {
         let i = 0;
@@ -2686,6 +2708,10 @@
         }
         const el = addMsg("ai", "", true);
         await typeText(el, speech);
+        /* If Harvey handed the work to a background job, follow it to the end.
+           Without this the transcript went silent and a job that finished in
+           100 seconds looked exactly like one that had hung. */
+        HarveyJobWatch.watchReply(speech);
         await playGeminiTts(speech);
         setStatus("STANDBY", false);
       } catch (e) {

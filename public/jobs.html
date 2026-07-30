@@ -108,27 +108,18 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-
   background:var(--soft);border:1px solid var(--line);border-radius:var(--r);padding:11px 14px}
 .working b{color:var(--ink);font-weight:600}
 
-/* rendered markdown inside an answer */
-.mdh{font-family:var(--serif);line-height:1.3;margin:14px 0 7px}
-.mdh:first-child{margin-top:0}
-.mdh1{font-size:19px;font-weight:700} .mdh2{font-size:16.5px;font-weight:700}
-.mdh3{font-size:14px;font-weight:700;font-family:var(--sans);letter-spacing:.01em}
-.mdh4{font-size:12.5px;font-weight:700;font-family:var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.mdp{margin:0 0 9px} .mdp:last-child{margin-bottom:0}
-.mdlist{margin:0 0 10px 20px} .mdlist li{margin-bottom:4px}
-.mdhr{border:0;border-top:1px solid var(--line);margin:14px 0}
-.mdq{border-left:3px solid var(--teal);padding:2px 0 2px 11px;margin:0 0 10px;color:var(--muted)}
-.bub code{font-family:var(--mono);font-size:12px;background:var(--soft);border-radius:4px;padding:1px 5px}
-.mdpre{font-family:var(--mono);font-size:11.5px;line-height:1.6;background:var(--soft);border-radius:var(--r-sm);
-  padding:11px;overflow-x:auto;margin:0 0 10px}
-.mdtwrap{overflow-x:auto;margin:0 0 12px;border:1px solid var(--line);border-radius:var(--r-sm)}
-.mdt{border-collapse:collapse;width:100%;font-size:12.5px}
-.mdt th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
-  background:var(--soft);padding:8px 11px;white-space:nowrap;border-bottom:1px solid var(--line)}
-.mdt td{padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
-.mdt tr:last-child td{border-bottom:0}
-.mdt tr:hover td{background:var(--soft)}
-
+/* Rendered markdown inside an answer. Classes come from harvey-jobwatch.js,
+   which self-styles for dark; body.hjw-light plus these tune it for this page. */
+.bub .hjw-h{font-family:var(--serif);line-height:1.3;margin:14px 0 7px}
+.bub .hjw-h:first-child{margin-top:0}
+.bub .hjw-h1{font-size:19px} .bub .hjw-h2{font-size:16.5px}
+.bub .hjw-h3{font-size:14px;font-family:var(--sans)}
+.bub .hjw-h4{font-size:12.5px;font-family:var(--sans);color:var(--muted)}
+.bub .hjw-list{margin:0 0 10px 20px}
+.bub code,#fileView code{font-family:var(--mono);font-size:12px}
+.hjw-card,.bub .hjw-twrap,.bub .hjw-file{border-color:var(--line)!important}
+.bub .hjw-t th{background:var(--soft)!important;color:var(--muted)!important}
+.bub .hjw-pre{background:var(--soft)!important}
 /* file cards */
 .fcards{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 .fcard{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:var(--r-sm);
@@ -253,8 +244,10 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4a5560;background-
 
 <div id="toast"></div>
 
+<script src="/harvey-jobwatch.js"></script>
 <script>
 "use strict";
+HarveyJobWatch.init({ dark:false });
 
 /* path -> bytes, filled by loadWorkspace() so a file card can state its size.
    Empty until that lands; the card degrades to "file" rather than "0 B". */
@@ -361,80 +354,13 @@ function renderList(){
 }
 
 /* ================= detail ================= */
-/* ================= tiny markdown renderer =================
-   Harvey writes markdown — headings, tables, bold, lists — and showing it as
-   raw monospace made finished work look like a log file. Rendered here rather
-   than with a library because the fast deploy path cannot run npm install.
-
-   Everything is escaped FIRST and only a known set of inline patterns is turned
-   back into tags, so a lead's note containing "<script>" renders as text. */
-function mdInline(t){
-  return esc(t)
-    .replace(/`([^`]+)`/g,'<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-    .replace(/(^|[\s(])\*([^*\n]+)\*/g,'$1<em>$2</em>')
-    .replace(/(^|[\s(])_([^_\n]+)_/g,'$1<em>$2</em>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
-}
-function isTableSep(l){ return /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(l) && l.indexOf("-")>=0; }
-function splitRow(l){
-  var s=l.trim().replace(/^\|/,"").replace(/\|$/,"");
-  return s.split("|").map(function(c){return c.trim();});
-}
-function renderMarkdown(src){
-  var lines=String(src==null?"":src).replace(/\r\n/g,"\n").split("\n");
-  var html="", i=0, listOpen=null;
-  var closeList=function(){ if(listOpen){ html+="</"+listOpen+">"; listOpen=null; } };
-
-  while(i<lines.length){
-    var l=lines[i];
-
-    if(/^\s*```/.test(l)){                                   // fenced code
-      closeList(); i++;
-      var buf=[];
-      while(i<lines.length && !/^\s*```/.test(lines[i])){ buf.push(lines[i]); i++; }
-      i++;
-      html+='<pre class="mdpre">'+esc(buf.join("\n"))+'</pre>';
-      continue;
-    }
-    if(!l.trim()){ closeList(); i++; continue; }
-    if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)){ closeList(); html+='<hr class="mdhr">'; i++; continue; }
-
-    var h=/^(#{1,6})\s+(.*)$/.exec(l);
-    if(h){ closeList(); var lv=Math.min(h[1].length,4); html+='<div class="mdh mdh'+lv+'">'+mdInline(h[2])+'</div>'; i++; continue; }
-
-    // table: a header row followed by a |---|---| separator
-    if(l.indexOf("|")>=0 && i+1<lines.length && isTableSep(lines[i+1])){
-      closeList();
-      var head=splitRow(l); i+=2;
-      var rows=[];
-      while(i<lines.length && lines[i].indexOf("|")>=0 && lines[i].trim()){ rows.push(splitRow(lines[i])); i++; }
-      html+='<div class="mdtwrap"><table class="mdt"><thead><tr>'+
-        head.map(function(c){return '<th>'+mdInline(c)+'</th>';}).join("")+'</tr></thead><tbody>'+
-        rows.map(function(r){
-          return '<tr>'+head.map(function(_,n){return '<td>'+mdInline(r[n]==null?"":r[n])+'</td>';}).join("")+'</tr>';
-        }).join("")+'</tbody></table></div>';
-      continue;
-    }
-
-    var li=/^\s*[-*+]\s+(.*)$/.exec(l);
-    var ol=/^\s*\d+[.)]\s+(.*)$/.exec(l);
-    if(li||ol){
-      var want=li?"ul":"ol";
-      if(listOpen!==want){ closeList(); listOpen=want; html+="<"+want+' class="mdlist">'; }
-      html+="<li>"+mdInline((li||ol)[1])+"</li>"; i++; continue;
-    }
-    if(/^\s*>\s?/.test(l)){ closeList(); html+='<blockquote class="mdq">'+mdInline(l.replace(/^\s*>\s?/,""))+'</blockquote>'; i++; continue; }
-
-    closeList();
-    var para=[l]; i++;
-    while(i<lines.length && lines[i].trim() && !/^\s*(#|[-*+]\s|\d+[.)]\s|>|```|\|)/.test(lines[i])
-          && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])){ para.push(lines[i]); i++; }
-    html+='<p class="mdp">'+mdInline(para.join(" "))+'</p>';
-  }
-  closeList();
-  return html;
-}
+/* ================= markdown =================
+   Delegated to /harvey-jobwatch.js. This page had its own copy and so did the
+   chat, which is one fix applied twice and one forgotten — the same shape as the
+   duplicated CSV mapping that quietly wrote to the wrong store. The module emits
+   .hjw-* classes; this page restyles them below for its light theme. */
+const renderMarkdown = HarveyJobWatch.renderMarkdown;
+const prettyTool = HarveyJobWatch.prettyTool;
 
 function stepHtml(s){
   if(s.kind==="tool"){
@@ -569,22 +495,6 @@ function renderDetail(){
     };
   }
   bindFileClicks(el,"fileView");
-}
-
-/* Tool names are snake_case internals. Shown to the operator they should read
-   as what Harvey is doing, not as a function signature. */
-var TOOL_LABELS={
-  search_tracker:"searching the tracker", get_tracker_summary:"reading the tracker",
-  write_file:"writing the file", edit_file:"editing the file", read_file:"reading a file",
-  run_script:"running a script to compute it",
-  list_files:"looking through files", get_social_analytics:"pulling social analytics",
-  get_task_board:"reading the task board", create_task:"creating a task",
-  get_lead_nurture_overview:"reviewing lead scores", gmail_send:"sending an email",
-  send_sms:"sending a text", get_command_settings:"checking settings"
-};
-function prettyTool(t){
-  if(!t)return "working";
-  return TOOL_LABELS[t]||String(t).replace(/_/g," ");
 }
 
 /* ================= workspace files ================= */
