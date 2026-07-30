@@ -1,3 +1,4 @@
+import { stripAiTypography } from "../core/houseStyle.js";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import {
   BUYER_STAGES,
@@ -561,14 +562,22 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "create_task",
     description:
-      "Put a task on the Task Command board. Use when asked to remember, schedule or delegate something.",
+      "Put a task on the Task Command board. Use when asked to remember, schedule or delegate something. " +
+      "Carlos and Marco read these on a phone between calls, so write it the way a colleague would: plain words, no em dashes, no emoji, no shouted headings, no 'good news' commentary. Say who to contact, the number, and why.",
     input_schema: {
       type: "object",
       properties: {
-        title: { type: "string" },
+        title: {
+          type: "string",
+          description: "Short and plain. What needs doing. No em dash, no emoji.",
+        },
         column: { type: "string", enum: TASK_COLUMNS, description: "Default 'today'." },
         assignedTo: { type: "string", description: "marco, wesley, kendrick or carlos." },
-        description: { type: "string" },
+        description: {
+          type: "string",
+          description:
+            "Only what someone needs in order to act: names, numbers, the reason, the next step. Ordinary sentences or a plain list. No em dashes, no emoji, no ALL-CAPS emphasis, no closing summary.",
+        },
         dueDate: { type: "string", description: "YYYY-MM-DD." },
         dueTime: { type: "string", description: "HH:MM, 24h." },
         urgent: { type: "boolean", description: "Puts it in the urgent column, red." },
@@ -1222,9 +1231,14 @@ export async function executePlatformTool(
         : TASK_COLUMNS.includes(input.column as CommandTaskColumn)
           ? (input.column as CommandTaskColumn)
           : "today";
+      /* The prompt asks for house style; this guarantees the punctuation half of
+         it. Applied here, on the tool that stamps createdBy "harvey", rather
+         than in createCommandTask, because the store is also where a person's
+         own typing lands and silently rewriting Carlos's words would be a worse
+         bug than the one being fixed. */
       const task = createCommandTask({
-        title: title.slice(0, 300),
-        description: str(input.description) || undefined,
+        title: stripAiTypography(title).slice(0, 300),
+        description: stripAiTypography(str(input.description)) || undefined,
         column,
         status: "pending",
         color: urgent ? "red" : "blue",
@@ -1244,7 +1258,7 @@ export async function executePlatformTool(
       if (str(input.column)) patch.column = str(input.column) as CommandTaskColumn;
       if (str(input.assignedTo)) patch.assignedTo = str(input.assignedTo).toLowerCase();
       if (str(input.dueDate)) patch.dueDate = str(input.dueDate).slice(0, 10);
-      if (str(input.title)) patch.title = str(input.title).slice(0, 300);
+      if (str(input.title)) patch.title = stripAiTypography(str(input.title)).slice(0, 300);
       if (patch.status === "done") patch.completedAt = new Date().toISOString();
       if (!Object.keys(patch).length) return { error: "Nothing to update." };
       const task = updateCommandTask(id, patch);

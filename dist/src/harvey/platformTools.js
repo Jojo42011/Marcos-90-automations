@@ -38,6 +38,7 @@ exports.normalizeNavigateUrl = normalizeNavigateUrl;
 exports.executePlatformTool = executePlatformTool;
 exports.executeExecTool = executeExecTool;
 exports.executeWorkspaceTool = executeWorkspaceTool;
+const houseStyle_js_1 = require("../core/houseStyle.js");
 const types_js_1 = require("../core/types.js");
 const trackerStore_js_1 = require("../core/trackerStore.js");
 const trackerTasks_js_1 = require("../core/trackerTasks.js");
@@ -520,14 +521,21 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
     },
     {
         name: "create_task",
-        description: "Put a task on the Task Command board. Use when asked to remember, schedule or delegate something.",
+        description: "Put a task on the Task Command board. Use when asked to remember, schedule or delegate something. " +
+            "Carlos and Marco read these on a phone between calls, so write it the way a colleague would: plain words, no em dashes, no emoji, no shouted headings, no 'good news' commentary. Say who to contact, the number, and why.",
         input_schema: {
             type: "object",
             properties: {
-                title: { type: "string" },
+                title: {
+                    type: "string",
+                    description: "Short and plain. What needs doing. No em dash, no emoji.",
+                },
                 column: { type: "string", enum: TASK_COLUMNS, description: "Default 'today'." },
                 assignedTo: { type: "string", description: "marco, wesley, kendrick or carlos." },
-                description: { type: "string" },
+                description: {
+                    type: "string",
+                    description: "Only what someone needs in order to act: names, numbers, the reason, the next step. Ordinary sentences or a plain list. No em dashes, no emoji, no ALL-CAPS emphasis, no closing summary.",
+                },
                 dueDate: { type: "string", description: "YYYY-MM-DD." },
                 dueTime: { type: "string", description: "HH:MM, 24h." },
                 urgent: { type: "boolean", description: "Puts it in the urgent column, red." },
@@ -1161,9 +1169,14 @@ async function executePlatformTool(name, input) {
                 : TASK_COLUMNS.includes(input.column)
                     ? input.column
                     : "today";
+            /* The prompt asks for house style; this guarantees the punctuation half of
+               it. Applied here, on the tool that stamps createdBy "harvey", rather
+               than in createCommandTask, because the store is also where a person's
+               own typing lands and silently rewriting Carlos's words would be a worse
+               bug than the one being fixed. */
             const task = (0, db_js_1.createCommandTask)({
-                title: title.slice(0, 300),
-                description: str(input.description) || undefined,
+                title: (0, houseStyle_js_1.stripAiTypography)(title).slice(0, 300),
+                description: (0, houseStyle_js_1.stripAiTypography)(str(input.description)) || undefined,
                 column,
                 status: "pending",
                 color: urgent ? "red" : "blue",
@@ -1187,7 +1200,7 @@ async function executePlatformTool(name, input) {
             if (str(input.dueDate))
                 patch.dueDate = str(input.dueDate).slice(0, 10);
             if (str(input.title))
-                patch.title = str(input.title).slice(0, 300);
+                patch.title = (0, houseStyle_js_1.stripAiTypography)(str(input.title)).slice(0, 300);
             if (patch.status === "done")
                 patch.completedAt = new Date().toISOString();
             if (!Object.keys(patch).length)

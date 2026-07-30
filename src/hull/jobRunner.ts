@@ -12,6 +12,7 @@ import {
   markRunning,
   type Job,
 } from "../core/jobStore.js";
+import { HARVEY_HOUSE_STYLE, stripAiTypography } from "../core/houseStyle.js";
 
 /**
  * Runs a Harvey job to completion, detached from any HTTP request.
@@ -35,7 +36,7 @@ function jobSystemPrompt(): string {
     "You are Harvey, running a background job for Marco Puga's real-estate business.",
     "",
     "You are not in a conversation. Nobody will answer a follow-up question, so do",
-    "not ask one — make a reasonable decision, note it, and keep going.",
+    "not ask one. Make a reasonable decision, note it, and keep going.",
     "",
     "Work the task to completion using your tools. Chain as many tool calls as you",
     "need. When you have finished, reply with a short plain-text report of what you",
@@ -43,8 +44,15 @@ function jobSystemPrompt(): string {
     "",
     "If you write anything durable, use the workspace file tools so it survives.",
     "If you genuinely cannot finish, say plainly what blocked you and what you did",
-    "manage to do. Never claim an action you did not take, and never invent data —",
-    "if a tool did not return it, say so.",
+    "manage to do. Never claim an action you did not take, and never invent data.",
+    "If a tool did not return it, say so.",
+    "",
+    /* A background job had NO voice rules at all until this line: the persona
+       layer lives in buildFounderSystemPrompt, which only the interactive loop
+       calls. That is why the job-written task Marco objected to read nothing
+       like the chat does. Jobs are also the surface that writes the most prose,
+       so it was exactly the wrong place to have no style rules. */
+    HARVEY_HOUSE_STYLE,
   ].join("\n");
 }
 
@@ -96,11 +104,17 @@ export async function runJob(jobId: string): Promise<Job | null> {
         messages,
       });
 
-      const text = response.content
-        .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
-        .map((b) => b.text.trim())
-        .filter(Boolean)
-        .join("\n\n");
+      /* The report is prose a person reads, so it goes through the house-style
+         backstop. Applied here rather than at the write tools on purpose: a
+         file Harvey writes may be a .csv or .json whose values legitimately
+         contain a dash, and rewriting those would be corrupting data. */
+      const text = stripAiTypography(
+        response.content
+          .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+          .map((b) => b.text.trim())
+          .filter(Boolean)
+          .join("\n\n"),
+      );
 
       if (response.stop_reason !== "tool_use") {
         if (text) appendStep(jobId, { kind: "result", text });

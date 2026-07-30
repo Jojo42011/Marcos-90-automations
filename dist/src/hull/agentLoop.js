@@ -113,7 +113,7 @@ async function runAgentLoop(opts) {
     system += `\n\n${index_js_1.HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT}`;
     if (opts.voiceMode) {
         system +=
-            "\n\nVOICE MODE: Spoken replies only. Max 2-3 short sentences. Lead with the number or answer. No markdown, bullets, or asterisks — plain spoken English. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
+            "\n\nVOICE MODE: Spoken replies only. Max 2-3 short sentences. Lead with the number or answer. No markdown, bullets, or asterisks. Plain spoken English. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
         if ((0, index_js_2.isGmailConfigured)()) {
             system +=
                 "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send first. Use to=\"marco\" for his inbox. NEVER confirm sent unless gmail_send returned ok:true with messageId.";

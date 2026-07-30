@@ -11,6 +11,7 @@ const modelRouting_js_1 = require("./modelRouting.js");
 const tools_js_1 = require("./tools.js");
 const agentLoop_js_1 = require("./agentLoop.js");
 const jobStore_js_1 = require("../core/jobStore.js");
+const houseStyle_js_1 = require("../core/houseStyle.js");
 /**
  * Runs a Harvey job to completion, detached from any HTTP request.
  *
@@ -31,7 +32,7 @@ function jobSystemPrompt() {
         "You are Harvey, running a background job for Marco Puga's real-estate business.",
         "",
         "You are not in a conversation. Nobody will answer a follow-up question, so do",
-        "not ask one — make a reasonable decision, note it, and keep going.",
+        "not ask one. Make a reasonable decision, note it, and keep going.",
         "",
         "Work the task to completion using your tools. Chain as many tool calls as you",
         "need. When you have finished, reply with a short plain-text report of what you",
@@ -39,8 +40,15 @@ function jobSystemPrompt() {
         "",
         "If you write anything durable, use the workspace file tools so it survives.",
         "If you genuinely cannot finish, say plainly what blocked you and what you did",
-        "manage to do. Never claim an action you did not take, and never invent data —",
-        "if a tool did not return it, say so.",
+        "manage to do. Never claim an action you did not take, and never invent data.",
+        "If a tool did not return it, say so.",
+        "",
+        /* A background job had NO voice rules at all until this line: the persona
+           layer lives in buildFounderSystemPrompt, which only the interactive loop
+           calls. That is why the job-written task Marco objected to read nothing
+           like the chat does. Jobs are also the surface that writes the most prose,
+           so it was exactly the wrong place to have no style rules. */
+        houseStyle_js_1.HARVEY_HOUSE_STYLE,
     ].join("\n");
 }
 let anthropic = null;
@@ -86,11 +94,15 @@ async function runJob(jobId) {
                 tools,
                 messages,
             });
-            const text = response.content
+            /* The report is prose a person reads, so it goes through the house-style
+               backstop. Applied here rather than at the write tools on purpose: a
+               file Harvey writes may be a .csv or .json whose values legitimately
+               contain a dash, and rewriting those would be corrupting data. */
+            const text = (0, houseStyle_js_1.stripAiTypography)(response.content
                 .filter((b) => b.type === "text")
                 .map((b) => b.text.trim())
                 .filter(Boolean)
-                .join("\n\n");
+                .join("\n\n"));
             if (response.stop_reason !== "tool_use") {
                 if (text)
                     (0, jobStore_js_1.appendStep)(jobId, { kind: "result", text });

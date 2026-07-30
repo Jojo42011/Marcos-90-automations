@@ -293,11 +293,11 @@ export function seedCommandTasksIfEmpty(): CommandTask[] {
     { title: "Add new TikTok leads to Brivity CRM", column: "today", color: "amber", assignedTo: "carlos", createdBy: "carlos" },
     { title: "Confirm tomorrow's consultation appointments", column: "today", color: "green", assignedTo: "carlos", createdBy: "carlos" },
     { title: "Send listing agreement to new seller lead", column: "urgent", color: "red", assignedTo: "carlos", createdBy: "carlos" },
-    { title: "Follow up on unsigned buyer rep — Geno Perez", column: "urgent", color: "red", assignedTo: "carlos", createdBy: "carlos" },
+    { title: "Follow up on unsigned buyer rep for Geno Perez", column: "urgent", color: "red", assignedTo: "carlos", createdBy: "carlos" },
     { title: "Weekly check-in on all active transactions", column: "this_week", color: "purple", assignedTo: "carlos", recurring: true, recurringInterval: "weekly", createdBy: "carlos" },
-    { title: "Post TikTok videos — 7 per day target", column: "today", color: "blue", assignedTo: "carlos", recurring: true, recurringInterval: "daily", createdBy: "carlos" },
+    { title: "Post TikTok videos, 7 per day target", column: "today", color: "blue", assignedTo: "carlos", recurring: true, recurringInterval: "daily", createdBy: "carlos" },
     { title: "Send property options to Canyon Lake inquiry", column: "tomorrow", color: "blue", assignedTo: "carlos", createdBy: "carlos" },
-    { title: "Geno Perez — every 3 week check-in re: August closing", column: "this_week", color: "green", assignedTo: "carlos", recurring: true, recurringInterval: "every_3_days", createdBy: "carlos" },
+    { title: "Geno Perez, every 3 week check-in re: August closing", column: "this_week", color: "green", assignedTo: "carlos", recurring: true, recurringInterval: "every_3_days", createdBy: "carlos" },
     { title: "Send weekly update to seller leads bucket", column: "this_week", color: "amber", assignedTo: "carlos", recurring: true, recurringInterval: "weekly", createdBy: "carlos" },
   ];
 
