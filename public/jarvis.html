@@ -414,6 +414,37 @@
       display: flex; flex-direction: column; gap: 0.5rem;
       mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
       -webkit-mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
+      transition: max-height 0.28s cubic-bezier(.32,.72,.28,1);
+    }
+    /* ── The transcript grows once there is something to read ──
+       16vh is right for a voice console where a reply is spoken and the text is
+       a receipt. It is far too small now that the command bar is back: a job
+       report is thousands of words, and reading it through a thin band is worse
+       than not showing it. So the orb yields space when the transcript has
+       real content, and takes it back when it is cleared.
+
+       `.j-core-wrap` is sized in vmin, so shrinking it is what actually frees
+       the room — capping the transcript alone would just make it scroll. */
+    body.j-has-chat .j-transcript {
+      max-height: min(56vh, 620px);
+    }
+    body.j-has-chat .j-core-wrap {
+      max-width: 34vmin; max-height: 34vmin;
+      transition: max-width 0.28s cubic-bezier(.32,.72,.28,1),
+                  max-height 0.28s cubic-bezier(.32,.72,.28,1);
+    }
+    body.j-has-chat .j-core-hint { margin-top: 0.5rem; }
+    /* The top fade eats the first line once the pane is tall enough to read in
+       full, so only the bottom edge stays soft. */
+    body.j-has-chat .j-transcript {
+      mask-image: linear-gradient(#000 0%, #000 96%, transparent);
+      -webkit-mask-image: linear-gradient(#000 0%, #000 96%, transparent);
+    }
+    /* Short viewports have no room to give: keep the orb small and let the
+       transcript take most of the height rather than squeezing both. */
+    @media (max-height: 700px) {
+      body.j-has-chat .j-core-wrap { max-width: 22vmin; max-height: 22vmin; }
+      body.j-has-chat .j-transcript { max-height: 62vh; }
     }
 
     .j-msg {
@@ -2122,12 +2153,51 @@
       }).join("");
     }
 
+    /**
+     * Is there anything worth making room for?
+     *
+     * The placeholder ("Loading operator context…") and the boot status lines
+     * are not content — growing the pane for those would just shrink the orb on
+     * every page load for nothing. Only a real user/ai exchange counts.
+     */
+    /**
+     * Keep --j-compose-h equal to the composer's real height.
+     *
+     * It was hardcoded at 54px while the bar actually renders 59, so `.j-main`
+     * (bottom: var(--j-compose-h)) ended 5px too low and the transcript sat
+     * under the input. Invisible while the transcript was a 16vh strip; not
+     * invisible now it reaches the bottom. Measuring also covers the safe-area
+     * inset on a phone and any font that changes the input's height.
+     */
+    function syncComposeHeight() {
+      const f = document.getElementById("jForm");
+      if (!f) return;
+      const h = Math.ceil(f.getBoundingClientRect().height);
+      if (h > 0) document.documentElement.style.setProperty("--j-compose-h", h + "px");
+    }
+    syncComposeHeight();
+    window.addEventListener("resize", syncComposeHeight);
+    if (window.ResizeObserver) {
+      const jf = document.getElementById("jForm");
+      if (jf) new ResizeObserver(syncComposeHeight).observe(jf);
+    }
+    // Web fonts land after first paint and change the input's height.
+    if (document.fonts?.ready) document.fonts.ready.then(syncComposeHeight).catch(() => {});
+
+    function syncTranscriptSize() {
+      const wrap = document.getElementById("jTranscript");
+      if (!wrap) return;
+      const real = wrap.querySelectorAll(".j-msg.user, .j-msg.ai, .j-jobcard").length;
+      document.body.classList.toggle("j-has-chat", real > 0);
+    }
+
     function addMsg(role, text, typing) {
       const wrap = document.getElementById("jTranscript");
       const div  = document.createElement("div");
       div.className = "j-msg " + role + (typing ? " j-typing" : "");
       if (text) div.textContent = text;
       wrap.appendChild(div);
+      syncTranscriptSize();
       wrap.scrollTop = wrap.scrollHeight;
       return div;
     }
@@ -2142,6 +2212,7 @@
           const div = document.createElement("div");
           div.className = "j-msg ai j-jobcard";
           wrap.appendChild(div);
+          syncTranscriptSize();
           wrap.scrollTop = wrap.scrollHeight;
           return div;
         },
@@ -3783,9 +3854,11 @@
         await loadOps();
         await refreshMetrics();
         document.getElementById("jTranscript").innerHTML = "";
+        syncTranscriptSize();      // clearing must give the orb its space back
       } catch (e) {
         document.getElementById("jTranscript").innerHTML =
           '<div class="j-msg system">Failed to load: ' + esc(e.message || e) + "</div>";
+        syncTranscriptSize();
       }
     })();
 
