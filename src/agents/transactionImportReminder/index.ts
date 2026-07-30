@@ -26,6 +26,7 @@
  */
 
 import { createCommandTask, getCommandTasks, updateCommandTask } from "../../core/db.js";
+import { stripAiTypography } from "../../core/houseStyle.js";
 import { getAllTransactions, getLastTransactionImport } from "../../core/transactionsStore.js";
 import type { CommandTask } from "../../core/types.js";
 
@@ -76,7 +77,7 @@ function body(last: ReturnType<typeof getLastTransactionImport>, age: number | n
   return (
     `No transaction export has ever been imported${total ? ` (${total} transaction(s) were entered by hand)` : ""}, ` +
     `so the Transactions board and the Transaction Snapshot have nothing real behind them.\n\n` +
-    `Brivity does not offer a transaction API — only contacts — so this is the supported route until ` +
+    `Brivity does not offer a transaction API, only contacts, so this is the supported route until ` +
     `they grant one. Export the transaction report from Brivity, then ${where.charAt(0).toLowerCase()}${where.slice(1)}`
   );
 }
@@ -140,7 +141,7 @@ export function checkTransactionImportReminder(): ReminderCheck {
 
   const task = createCommandTask({
     title: REMINDER_TITLE,
-    description: body(last, age),
+    description: stripAiTypography(body(last, age)),
     column: "this_week",
     status: "pending",
     color: "amber",

@@ -30,6 +30,7 @@ exports.REMINDER_TITLE = void 0;
 exports.checkTransactionImportReminder = checkTransactionImportReminder;
 exports.scheduleTransactionImportReminder = scheduleTransactionImportReminder;
 const db_js_1 = require("../../core/db.js");
+const houseStyle_js_1 = require("../../core/houseStyle.js");
 const transactionsStore_js_1 = require("../../core/transactionsStore.js");
 /** Stable marker — this is how an existing reminder is found again. */
 exports.REMINDER_TITLE = "Import the Brivity transaction export";
@@ -61,7 +62,7 @@ function body(last, age) {
     const total = (0, transactionsStore_js_1.getAllTransactions)().length;
     return (`No transaction export has ever been imported${total ? ` (${total} transaction(s) were entered by hand)` : ""}, ` +
         `so the Transactions board and the Transaction Snapshot have nothing real behind them.\n\n` +
-        `Brivity does not offer a transaction API — only contacts — so this is the supported route until ` +
+        `Brivity does not offer a transaction API, only contacts, so this is the supported route until ` +
         `they grant one. Export the transaction report from Brivity, then ${where.charAt(0).toLowerCase()}${where.slice(1)}`);
 }
 /**
@@ -119,7 +120,7 @@ function checkTransactionImportReminder() {
     }
     const task = (0, db_js_1.createCommandTask)({
         title: exports.REMINDER_TITLE,
-        description: body(last, age),
+        description: (0, houseStyle_js_1.stripAiTypography)(body(last, age)),
         column: "this_week",
         status: "pending",
         color: "amber",
