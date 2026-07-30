@@ -84,6 +84,27 @@ function stripAiTypography(text) {
        list of fragments each starting with ", ". */
     out = out.replace(new RegExp(`^([ \\t]*)[${DASHES}]+[ \\t]+`, "gm"), "$1- ");
     out = out.replace(DASH_RUN, MARK);
+    /* The ASCII double hyphen, which is what the model reaches for the moment the
+       em dash is banned. Observed in production on the very first job run after
+       this rule shipped: "Call these three first -- they have real names",
+       "Pete Morales -- (512) 736-6961 -- San Antonio number". It is the same tell
+       wearing a different hat, so it gets the same treatment.
+  
+       Three things it must not touch, hence the narrow matching:
+         - a CLI flag (`--permission`): double hyphen with no space after it, so
+           neither branch below fires;
+         - a markdown horizontal rule and a table separator row (`|---|---|`),
+           which are handled by skipping any line that is only dashes, pipes,
+           colons and spaces;
+         - a normal hyphenated word, which never has two. */
+    out = out
+        .split("\n")
+        .map((line) => /^[\s|:-]+$/.test(line)
+        ? line
+        : line
+            .replace(/(\s|^)-{2,}(?=\s)/g, `$1${MARK}`)
+            .replace(/(\S)-{2,}(?=\S)/g, `$1${MARK}`))
+        .join("\n");
     /* A dash at the end of a line or against punctuation was decoration; it wants
        deleting, not replacing, or the line ends on a dangling comma. */
     out = out.replace(new RegExp(`${MARK}(?=\\n|$)`, "g"), "");
@@ -111,9 +132,17 @@ written to impress, cut it.
 
 PUNCTUATION
 Never use an em dash (—) or an en dash (–). Not once. If two thoughts need
-joining, use a full stop, a comma, or a colon. A spaced hyphen ("word - word")
-is the same tell and is equally banned. This is the single clearest sign a
-machine wrote something, and Marco has asked for it to stop.
+joining, use a full stop, a comma, or a colon. This is the single clearest sign
+a machine wrote something, and Marco has asked for it to stop.
+
+Do NOT substitute another mark for it. A double hyphen ("first -- they have")
+and a spaced hyphen ("word - word") are the SAME tell in a different costume and
+are equally banned. The fix is not a different character, it is a different
+sentence: rewrite it so no pause-mark is needed at all.
+  WRONG: "Pete Morales — (512) 736-6961 — no follow-up on record."
+  WRONG: "Pete Morales -- (512) 736-6961 -- no follow-up on record."
+  RIGHT: "Pete Morales, (512) 736-6961. No follow-up on record."
+
 Type straight quotes (" and ') and three dots (...), not the typeset versions.
 
 NEVER
