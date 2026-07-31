@@ -299,6 +299,8 @@ body.rowsizing{cursor:row-resize;user-select:none}
 .mchip.rec{color:#7C3AED;border-color:rgba(124,58,237,.35)}
 .who{display:inline-flex;align-items:center;gap:6px;border-radius:7px;padding:2px 8px 2px 3px;font-weight:700;color:#fff}
 .who .mini{width:17px;height:17px;border-radius:5px;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:9px}
+.who .mini.by{box-shadow:0 0 0 1.5px rgba(255,255,255,.55)}
+.who .arr{font-size:9px;opacity:.75;margin:0 -1px}
 .stbadge{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:8px;padding:4px 11px;font-size:11px;font-weight:800;letter-spacing:.04em;color:#fff;text-transform:uppercase}
 .stbadge:disabled{cursor:default;opacity:.9}
 .task{flex-wrap:wrap}
@@ -681,6 +683,7 @@ html{scroll-behavior:smooth}
 <!-- add/edit modal -->
 <div class="scrim" id="taskScrim"><div class="modal">
   <div style="display:flex;align-items:flex-start"><h3 id="tmTitle">New Task</h3><button class="icobtn" id="tmClose" style="margin-left:auto">✕</button></div>
+  <div id="tmBy" style="display:none;font-size:11.5px;font-weight:700;color:var(--muted);margin-top:2px"></div>
   <div class="fld" style="margin-top:8px"><label>Task Description <i>*</i></label><textarea class="fin grow" id="tTitle" maxlength="255" rows="1" placeholder="What needs to get done?"></textarea></div>
   <div class="fld" style="margin-top:12px"><label>Details / Notes</label><textarea class="fin grow" id="tDesc" rows="3"></textarea>
     <div class="ckwrap">
@@ -737,6 +740,16 @@ var STATUSES=[
 var REC_COLORS={daily:"#3B82F6",every_3_days:"#8B5CF6",every_5_days:"#8B5CF6",weekly:"#7C3AED",monthly:"#0E7490"};
 var USER_KEY="marcoTaskUser";
 function member(id){return TEAM.find(function(m){return m.id===String(id||"").toLowerCase();})||null;}
+/* Who created a task is not always a team member: Harvey writes tasks from chat
+   and jobs, and the reminder agents write them at boot. Those get their own
+   identity on the chip rather than being dressed up as a person — and a task
+   with no recorded creator shows nothing, not a guess. */
+var BOTS={
+  harvey:    {id:"harvey",    name:"Harvey", color:"#0891B2"},
+  automation:{id:"automation",name:"Auto",   color:"#475569"},
+  system:    {id:"system",    name:"Auto",   color:"#475569"}
+};
+function author(id){var k=String(id||"").toLowerCase();if(!k)return null;return member(k)||BOTS[k]||null;}
 function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML;}
 function toast(m){var t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove("on");},2200);}
 function api(p,opts){return fetch(p,opts).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});}
@@ -1331,6 +1344,23 @@ function readOnlyView(){ return viewingPage && viewingPage!==ME; }
 
 /* ================= render: bars ================= */
 function statusMeta(id){return STATUSES.find(function(s){return s.id===id;})||STATUSES[0];}
+/* The assignment chip. "Harvey ➜ Carlos" when someone put it on someone else's
+   plate, just "Carlos" when it's their own (a self-arrow is noise), and the
+   creator alone when the assignee isn't a known member. No creator recorded
+   (old tasks) falls back to the plain assignee chip rather than inventing one. */
+function whoChip(t,m){
+  var by=author(t.createdBy);
+  var self=by&&m&&by.id===m.id;
+  if(by&&m&&!self){
+    return '<span class="who" style="background:'+m.color+'" title="'+esc(by.name)+' assigned this to '+esc(m.name)+'">'+
+      '<span class="mini by" style="background:'+by.color+'">'+by.name[0]+'</span>'+esc(by.name)+
+      '<span class="arr">➜</span>'+
+      '<span class="mini">'+m.name[0]+'</span>'+m.name+'</span>';
+  }
+  if(m)return '<span class="who" style="background:'+m.color+'" title="'+(self?esc(m.name)+' added this themselves':'')+'"><span class="mini">'+m.name[0]+'</span>'+m.name+'</span>';
+  if(by)return '<span class="who" style="background:'+by.color+'"><span class="mini">'+by.name[0]+'</span>'+esc(by.name)+'</span>';
+  return '';
+}
 function taskCard(t){
   var m=member(t.assignedTo);
   var st=statusMeta((t.status==="due_soon"||t.status==="overdue")?(t.previousStatus||"pending"):t.status);
@@ -1355,7 +1385,7 @@ function taskCard(t){
         (dstate==="overdue"?'<span class="mchip" style="color:var(--urgent);border-color:var(--urgent)">OVERDUE</span>':'')+
         (dstate==="due_today"?'<span class="mchip" style="color:#F59E0B;border-color:#F59E0B">DUE TODAY</span>':'')+
         (dstate==="due_soon"?'<span class="mchip" style="color:#F59E0B;border-color:#F59E0B">DUE SOON</span>':'')+
-        (m?'<span class="who" style="background:'+m.color+'"><span class="mini">'+m.name[0]+'</span>'+m.name+'</span>':'')+
+        whoChip(t,m)+
       '</div>'+
       ckCardList(t,ro)+
       (t.status==="done"&&t.completedAt?'<div class="done-stamp">✓ Completed: '+esc(stampFmt(t.completedAt))+'</div>':'')+
@@ -1861,6 +1891,13 @@ function openTaskModal(t,presetTitle,opts){
   opts=opts||{};
   editId=t?t.id:null;
   document.getElementById("tmTitle").textContent=t?"Edit Task":"New Task";
+  var byLine=document.getElementById("tmBy");
+  var byA=t?author(t.createdBy):null;
+  if(byA){
+    byLine.style.display="block";
+    byLine.innerHTML='Assigned by <b style="color:'+byA.color+'">'+esc(byA.name)+'</b>'+
+      (t.createdAt?' · '+esc(longDate(String(t.createdAt).slice(0,10))):'');
+  } else byLine.style.display="none";
   document.getElementById("tTitle").value=t?t.title:(presetTitle||"");
   document.getElementById("tDesc").value=t?(t.description||""):"";
   document.getElementById("tDate").value=t?(taskDate(t)):selDate;
