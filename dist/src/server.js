@@ -9377,11 +9377,19 @@ app.get("/api/lead-nurture/summary", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const hot = (0, leadScoreStore_js_1.getLeadsByTier)("hot").sort((a, b) => b.score - a.score);
-    const warm = (0, leadScoreStore_js_1.getLeadsByTier)("warm");
-    const cold = (0, leadScoreStore_js_1.getLeadsByTier)("cold");
     const all = await (0, db_js_1.listAllLeads)();
     const leadMap = new Map(all.map((l) => [l.id, l]));
+    /* Scores outlive the leads they describe. Leads get re-imported and their ids
+       churn, but lead_scores keeps every row, so the table held 2,902 scored ids
+       against 1,306 real leads — 1,601 of them pointing at people who are no
+       longer in the CRM. Reported raw, that produced a "cold: 2902" on a board of
+       1,306 leads, and `Math.max(0, unscored)` then clamped away the negative
+       that would have made the contradiction obvious. Counting only scores whose
+       lead still exists is what makes these numbers mean anything. */
+    const live = (rows) => rows.filter((s) => leadMap.has(s.leadId));
+    const hot = live((0, leadScoreStore_js_1.getLeadsByTier)("hot")).sort((a, b) => b.score - a.score);
+    const warm = live((0, leadScoreStore_js_1.getLeadsByTier)("warm"));
+    const cold = live((0, leadScoreStore_js_1.getLeadsByTier)("cold"));
     const scoredIds = new Set([...hot, ...warm, ...cold].map((s) => s.leadId));
     const unscored = all.length - scoredIds.size;
     const sinceIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
@@ -9430,13 +9438,16 @@ app.get("/api/lead-nurture/tier-detail/:tier", async (req, res) => {
         res.status(400).json({ error: "Invalid tier — must be hot, warm, or cold" });
         return;
     }
-    const scoreEntries = (0, leadScoreStore_js_1.getLeadsByTier)(tier);
     const leads = await (0, db_js_1.listAllLeads)();
     const leadMap = new Map(leads.map((l) => [l.id, l]));
+    /* Same orphan filter as the summary: a score whose lead no longer exists
+       rendered here as a row named "Unknown" with no phone, which is worse than
+       absent — it looks like a real person nobody can reach. */
+    const scoreEntries = (0, leadScoreStore_js_1.getLeadsByTier)(tier).filter((s) => leadMap.has(s.leadId));
     const enriched = scoreEntries
         .map((s) => {
         const lead = leadMap.get(s.leadId);
-        const inboundReplyCount = (0, smsStore_js_1.getInboundMessageCount)(s.leadId);
+        const inboundReplyCount = Math.max((0, smsStore_js_1.getInboundMessageCount)(s.leadId), (0, db_js_1.getInboundDmCount)(s.leadId));
         const propertyViewsCount = typeof lead?.propertyViewsCount === "number" && lead.propertyViewsCount > 0
             ? lead.propertyViewsCount
             : (lead?.activity ?? []).filter((a) => ["home_clicked", "home_hearted", "web_visit"].includes(a.type)).length;

@@ -74,6 +74,7 @@ import {
   isLeadInactive30Days,
   listAllLeads,
   deleteLeads,
+  getInboundDmCount,
 } from "./core/db.js";
 import {
   getAllNotifications,
@@ -10257,11 +10258,20 @@ app.get("/api/lead-nurture/summary", async (req, res) => {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
   }
-  const hot = getLeadsByTier("hot").sort((a, b) => b.score - a.score);
-  const warm = getLeadsByTier("warm");
-  const cold = getLeadsByTier("cold");
   const all = await listAllLeads();
   const leadMap = new Map(all.map((l) => [l.id, l]));
+  /* Scores outlive the leads they describe. Leads get re-imported and their ids
+     churn, but lead_scores keeps every row, so the table held 2,902 scored ids
+     against 1,306 real leads — 1,601 of them pointing at people who are no
+     longer in the CRM. Reported raw, that produced a "cold: 2902" on a board of
+     1,306 leads, and `Math.max(0, unscored)` then clamped away the negative
+     that would have made the contradiction obvious. Counting only scores whose
+     lead still exists is what makes these numbers mean anything. */
+  const live = <T extends { leadId: string }>(rows: T[]): T[] =>
+    rows.filter((s) => leadMap.has(s.leadId));
+  const hot = live(getLeadsByTier("hot")).sort((a, b) => b.score - a.score);
+  const warm = live(getLeadsByTier("warm"));
+  const cold = live(getLeadsByTier("cold"));
   const scoredIds = new Set([...hot, ...warm, ...cold].map((s) => s.leadId));
   const unscored = all.length - scoredIds.size;
 
@@ -10315,14 +10325,20 @@ app.get("/api/lead-nurture/tier-detail/:tier", async (req, res) => {
     return;
   }
 
-  const scoreEntries = getLeadsByTier(tier);
   const leads = await listAllLeads();
   const leadMap = new Map(leads.map((l) => [l.id, l]));
+  /* Same orphan filter as the summary: a score whose lead no longer exists
+     rendered here as a row named "Unknown" with no phone, which is worse than
+     absent — it looks like a real person nobody can reach. */
+  const scoreEntries = getLeadsByTier(tier).filter((s) => leadMap.has(s.leadId));
 
   const enriched = scoreEntries
     .map((s) => {
       const lead = leadMap.get(s.leadId);
-      const inboundReplyCount = getInboundMessageCount(s.leadId);
+      const inboundReplyCount = Math.max(
+        getInboundMessageCount(s.leadId),
+        getInboundDmCount(s.leadId),
+      );
       const propertyViewsCount =
         typeof lead?.propertyViewsCount === "number" && lead.propertyViewsCount > 0
           ? lead.propertyViewsCount

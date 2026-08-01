@@ -55,6 +55,7 @@ exports.createLead = createLead;
 exports.upsertLeadQuiet = upsertLeadQuiet;
 exports.updateLead = updateLead;
 exports.getConversation = getConversation;
+exports.getInboundDmCount = getInboundDmCount;
 exports.appendMessage = appendMessage;
 exports.normalizeCrmDeal = normalizeCrmDeal;
 exports.normalizeCrmActivity = normalizeCrmActivity;
@@ -578,6 +579,23 @@ async function updateLead(lead) {
 }
 async function getConversation(leadId) {
     return conversationsByLeadId.get(leadId) ?? { messages: [] };
+}
+/**
+ * How many times this lead has replied over DM.
+ *
+ * Synchronous on purpose: lead scoring runs this across every lead in one pass
+ * and is itself sync. The conversations live in an in-memory Map, so there is
+ * nothing to await.
+ *
+ * A `user` message is a message FROM the lead. This is the DM equivalent of an
+ * inbound SMS, and it is the number lead scoring should have been reading all
+ * along on a business whose funnel runs on Instagram and TikTok.
+ */
+function getInboundDmCount(leadId) {
+    const conv = conversationsByLeadId.get(leadId);
+    if (!conv)
+        return 0;
+    return conv.messages.reduce((n, m) => (m.role === "user" ? n + 1 : n), 0);
 }
 async function appendMessage(leadId, role, text) {
     const conversation = conversationsByLeadId.get(leadId) ?? { messages: [] };

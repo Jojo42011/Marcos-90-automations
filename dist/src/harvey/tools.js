@@ -41,6 +41,7 @@ exports.executeHarveyTool = executeHarveyTool;
 const platformTools_js_1 = require("./platformTools.js");
 const codeExec_js_1 = require("../core/codeExec.js");
 const smsStore_js_1 = require("../core/smsStore.js");
+const harveyNotes_js_1 = require("../core/harveyNotes.js");
 const db_js_1 = require("../core/db.js");
 const socialStore_js_1 = require("../core/socialStore.js");
 const index_js_1 = require("../agents/morningScan/index.js");
@@ -169,24 +170,53 @@ exports.HARVEY_TOOL_DEFINITIONS = [
     },
     {
         name: "search_leads",
-        description: "Search leads by first name, last name, or phone number.",
+        description: "Find leads by name/phone, by segment, or both. Use the filters to build a working call list: stage picks a funnel stage (new, opening_asked_first_time, phone_requested, criteria_collected, opening_offered_details, property_sent, closed), source matches platform or ad campaign (instagram, tiktok, canyon_lake_ad, low_interest_ad), hasPhone keeps only leads you can actually call. " +
+            "Returns totalMatching alongside count, so say how many exist, not just how many you listed. At least one of query/stage/source/hasPhone is required.",
         input_schema: {
             type: "object",
             properties: {
-                query: { type: "string", description: "Name or phone fragment to search" },
+                query: { type: "string", description: "Name or phone fragment. Optional if a filter is given." },
+                stage: { type: "string", description: "Exact funnel stage to filter to." },
+                source: { type: "string", description: "Platform or ad campaign fragment, e.g. 'tiktok' or 'canyon_lake_ad'." },
+                hasPhone: { type: "boolean", description: "Only leads with a phone number on file." },
+                limit: { type: "number", description: "How many to return, 1-100. Default 20." },
             },
-            required: ["query"],
+            required: [],
         },
     },
     {
         name: "get_conversation",
-        description: "Full DM conversation thread for a lead by internal lead id.",
+        description: "The full message history with a lead by internal lead id, across BOTH Instagram/TikTok DMs and SMS, merged in time order and labelled by channel. Returns dmCount and smsCount so you can say which channel the conversation actually happened on. If it comes back empty, say there is no history rather than guessing what was discussed.",
         input_schema: {
             type: "object",
             properties: {
                 leadId: { type: "string", description: "Internal lead id" },
             },
             required: ["leadId"],
+        },
+    },
+    {
+        name: "get_sms_thread",
+        description: "Every text message sent to and received from a lead: body, direction and timestamp. Use whenever the question is about texting rather than DMs, or when get_conversation shows smsCount above zero and you need the actual words. This is the only way to read what was actually said over SMS.",
+        input_schema: {
+            type: "object",
+            properties: {
+                leadId: { type: "string", description: "Internal lead id" },
+                limit: { type: "number", description: "How many messages, newest last. Default 50." },
+            },
+            required: ["leadId"],
+        },
+    },
+    {
+        name: "get_my_notes",
+        description: "The notes Marco has asked you to take (\"note that...\", \"remember this...\"). Call this before saying you do not have something written down, and whenever he asks what you noted. Optional query filters by text, title, lead name or tag.",
+        input_schema: {
+            type: "object",
+            properties: {
+                query: { type: "string", description: "Optional text filter. Omit for the most recent notes." },
+                limit: { type: "number", description: "How many notes, newest first. Default 20." },
+            },
+            required: [],
         },
     },
     {
@@ -1008,9 +1038,18 @@ async function executeHarveyTool(name, input) {
         case "get_funnel_stats":
             return getFunnelStats();
         case "search_leads":
-            return searchLeads(String(normalized.query ?? ""));
+            return searchLeads(String(normalized.query ?? ""), {
+                stage: normalized.stage == null ? undefined : String(normalized.stage),
+                source: normalized.source == null ? undefined : String(normalized.source),
+                hasPhone: normalized.hasPhone === true,
+                limit: Number(normalized.limit) || undefined,
+            });
         case "get_conversation":
             return getConversationForLead(String(normalized.leadId ?? ""));
+        case "get_sms_thread":
+            return getSmsThreadForHarvey(String(normalized.leadId ?? ""), Number(normalized.limit) || 50);
+        case "get_my_notes":
+            return getMyNotes(normalized.query == null ? "" : String(normalized.query), Number(normalized.limit) || 20);
         case "get_stalled_leads":
             return getStalledLeads();
         case "get_social_summary": {
@@ -1550,12 +1589,40 @@ async function getFunnelStats() {
         leadsAllTime: total,
     };
 }
-async function searchLeads(query) {
+/**
+ * Find leads by name/phone OR by segment.
+ *
+ * Name-only search meant Harvey could report that 101 leads had reached
+ * "property sent" and then be unable to name a single one of them — he could
+ * count a segment but never work it, which is the difference between a
+ * dashboard and a call list. The filters are optional and combine, and a query
+ * is no longer required as long as at least one filter is given.
+ */
+async function searchLeads(query, filters = {}) {
     const q = query.trim();
-    if (!q)
-        return { matches: [], query: q };
+    const stage = (filters.stage || "").trim().toLowerCase();
+    const source = (filters.source || "").trim().toLowerCase();
+    const wantsPhone = filters.hasPhone === true;
+    const limit = Math.min(Math.max(Number(filters.limit) || 20, 1), 100);
+    if (!q && !stage && !source && !wantsPhone) {
+        return { matches: [], count: 0, error: "Give a search query or at least one filter (stage, source, hasPhone)." };
+    }
     const leads = await (0, db_js_1.listAllLeads)();
-    const matches = leads.filter((l) => fuzzyMatchLead(l, q)).slice(0, 20);
+    const filtered = leads.filter((l) => {
+        if (q && !fuzzyMatchLead(l, q))
+            return false;
+        if (stage && String(l.state).toLowerCase() !== stage)
+            return false;
+        if (wantsPhone && !l.phone?.trim())
+            return false;
+        if (source) {
+            const hay = `${l.source ?? ""} ${l.platform ?? ""} ${l.adCampaign ?? ""}`.toLowerCase();
+            if (!hay.includes(source))
+                return false;
+        }
+        return true;
+    });
+    const matches = filtered.slice(0, limit);
     const rows = await Promise.all(matches.map(async (lead) => {
         const conv = await (0, db_js_1.getConversation)(lead.id);
         const lastTwo = conv.messages.slice(-2).map((m) => ({
@@ -1573,8 +1640,105 @@ async function searchLeads(query) {
             conversationSnippet: lastTwo,
         };
     }));
-    return { query: q, count: rows.length, matches: rows };
+    return {
+        query: q || undefined,
+        filters: { stage: stage || undefined, source: source || undefined, hasPhone: wantsPhone || undefined },
+        /* Both numbers, because "20 matches" out of 340 and out of 20 mean very
+           different things and only one of them is a finished call list. */
+        count: rows.length,
+        totalMatching: filtered.length,
+        truncated: filtered.length > rows.length,
+        matches: rows,
+    };
 }
+/**
+ * The actual text messages, in Marco's and the lead's own words.
+ *
+ * sms.db held every text the system had ever sent or received and NO tool read
+ * it. The only things that leaked out were two derived numbers, so Harvey could
+ * tell you a lead had been texted and never what was said.
+ */
+function getSmsThreadForHarvey(leadId, limit) {
+    const id = leadId.trim();
+    if (!id)
+        return { error: "Missing leadId" };
+    const n = Math.min(Math.max(limit, 1), 200);
+    let thread;
+    try {
+        thread = (0, smsStore_js_1.getThreadForLead)(id, n);
+    }
+    catch (err) {
+        return {
+            error: "The SMS store could not be read: " + (err instanceof Error ? err.message : String(err)),
+            say: "Say the text history could not be read. Do not describe it as empty.",
+        };
+    }
+    if (!thread.length) {
+        return {
+            leadId: id,
+            count: 0,
+            messages: [],
+            say: "No SMS has been exchanged with this lead. Check get_conversation for DMs before saying there was no contact at all.",
+        };
+    }
+    return {
+        leadId: id,
+        count: thread.length,
+        inbound: thread.filter((m) => m.direction === "inbound").length,
+        outbound: thread.filter((m) => m.direction === "outbound").length,
+        messages: thread.map((m) => ({
+            who: m.direction === "inbound" ? "Lead" : "Marco",
+            at: m.sentAt,
+            text: m.messageBody,
+        })),
+    };
+}
+/**
+ * Read back the notes Harvey was told to take.
+ *
+ * `noteCapture` has been intercepting "note that..." and writing to
+ * harvey-notes.json all along, with no tool to read it. Harvey confirmed saving
+ * things he could never retrieve, which is a promise the system quietly broke
+ * every time it was used.
+ */
+function getMyNotes(query, limit) {
+    const n = Math.min(Math.max(limit, 1), 100);
+    const q = query.trim();
+    let notes;
+    try {
+        notes = q ? (0, harveyNotes_js_1.searchNotes)(q) : (0, harveyNotes_js_1.getNotes)();
+    }
+    catch (err) {
+        return { error: "Notes could not be read: " + (err instanceof Error ? err.message : String(err)) };
+    }
+    const sorted = [...notes].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    const rows = sorted.slice(0, n).map((x) => ({
+        id: x.id,
+        title: x.title || null,
+        content: x.content,
+        leadName: x.leadName || null,
+        tags: x.tags || [],
+        createdAt: x.createdAt,
+    }));
+    return {
+        query: q || undefined,
+        count: rows.length,
+        totalNotes: sorted.length,
+        notes: rows,
+        say: rows.length ? undefined : "There are no saved notes matching that. Say so plainly.",
+    };
+}
+/**
+ * The whole conversation with a lead, across BOTH channels.
+ *
+ * This used to return DM messages only. That was the worst possible shape of
+ * wrong: for a lead Marco had only ever texted, it returned a short, confident,
+ * EMPTY-looking thread with no hint that an entire SMS history existed beside
+ * it. A missing tool announces itself; a tool that silently shows you half the
+ * relationship does not. Both channels are now merged and every line is
+ * labelled with the channel it came from, so "we never heard back" can be told
+ * apart from "we heard back on the other number".
+ */
 async function getConversationForLead(leadId) {
     const id = leadId.trim();
     if (!id)
@@ -1584,19 +1748,39 @@ async function getConversationForLead(leadId) {
     if (!lead)
         return { error: "Lead not found", leadId: id };
     const conv = await (0, db_js_1.getConversation)(id);
-    const lines = [];
-    for (const m of conv.messages) {
-        const who = m.role === "user" ? "Lead" : "Marco";
-        lines.push(`${who} (${m.at}): ${m.text}`);
+    const dm = conv.messages.map((m) => ({
+        channel: "dm",
+        who: m.role === "user" ? "Lead" : "Marco",
+        at: m.at,
+        text: m.text,
+    }));
+    let sms = [];
+    try {
+        sms = (0, smsStore_js_1.getThreadForLead)(id, 200).map((s) => ({
+            channel: "sms",
+            who: s.direction === "inbound" ? "Lead" : "Marco",
+            at: s.sentAt,
+            text: s.messageBody,
+        }));
     }
+    catch {
+        /* No SMS store on this box is not a reason to lose the DM thread. */
+    }
+    const all = [...dm, ...sms].sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    const lines = all.map((m) => `[${m.channel.toUpperCase()}] ${m.who} (${m.at}): ${m.text}`);
     return {
         leadId: id,
         name: leadDisplayName(lead),
         platform: lead.platform,
         stage: String(lead.state),
-        messageCount: conv.messages.length,
+        messageCount: all.length,
+        dmCount: dm.length,
+        smsCount: sms.length,
         thread: lines.join("\n"),
-        messages: conv.messages,
+        messages: all,
+        say: all.length === 0
+            ? "There is no message history with this lead on either channel. Say that, rather than describing what was probably discussed."
+            : undefined,
     };
 }
 async function getStalledLeads() {

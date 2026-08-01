@@ -47,8 +47,28 @@ function scorePreApproval(lead) {
         return Math.round(exports.WEIGHTS.preApproval * 0.1);
     return 0;
 }
+/**
+ * How engaged this lead is, measured on the channel they actually used.
+ *
+ * This read `sms_threads` alone, which is why every one of 1,306 leads scored
+ * 0/100 and the board showed ZERO hot leads: Twilio is not configured in
+ * production, so that table is empty, while the entire funnel runs on Instagram
+ * and TikTok DMs. A lead who had replied fifteen times scored the same as one
+ * who never answered. Twenty of the hundred points were dead.
+ *
+ * Both channels now count, and the higher wins rather than the sum: a lead who
+ * moved from DM to text is one conversation, not two, and adding them would
+ * quietly reward channel-switching over actual interest.
+ */
 function scoreResponseCount(leadId) {
-    const inboundCount = (0, smsStore_js_1.getInboundMessageCount)(leadId);
+    let sms = 0;
+    try {
+        sms = (0, smsStore_js_1.getInboundMessageCount)(leadId);
+    }
+    catch {
+        /* No SMS store configured is not a reason to score the DM history at zero. */
+    }
+    const inboundCount = Math.max(sms, (0, db_js_1.getInboundDmCount)(leadId));
     if (inboundCount === 0)
         return 0;
     if (inboundCount <= 2)
