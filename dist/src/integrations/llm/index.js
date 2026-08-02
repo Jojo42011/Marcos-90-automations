@@ -23,6 +23,8 @@ const state_js_1 = require("../../core/state.js");
 const funnelDeterministic_js_1 = require("../../app/funnelDeterministic.js");
 const conversationUtils_js_1 = require("../../app/conversationUtils.js");
 const marcoLog_js_1 = require("../../app/marcoLog.js");
+const index_js_1 = require("../simplyrets/index.js");
+const listingMatch_js_1 = require("../../core/listingMatch.js");
 /** Default: Claude 3.5 Haiku. Override with ANTHROPIC_MODEL in .env if needed. */
 const DEFAULT_MODEL = "claude-3-5-haiku-latest";
 const model = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
@@ -962,6 +964,41 @@ async function generateMarcoPipelineReply(input) {
     const canPromiseSms = Boolean(lead.phone?.trim()) || meta.phoneJustCaptured;
     if (!canPromiseSms) {
         postOpeningHints.push("NO_PHONE_ON_FILE: No mobile number captured yet (unless phone_just_captured in FUNNEL_CONTEXT is true). Never say you will text them, shoot a text, or promise SMS or WhatsApp delivery of the breakdown, pricing, or packet. Never promise the full breakdown or pricing packet inside TikTok or Instagram DM as the delivery path. You may offer that once they share a number you will text the full breakdown by end of day. If they want info in-app only, acknowledge in Marco's casual voice and persist toward a good number. Links and full sheet read cleaner in one text thread. Fresh wording, not a copy of MARCO_PREVIOUS_OUTBOUND.");
+    }
+    /* Real MLS facts for the property this lead actually named.
+       INSTAGRAM ONLY, and that is not an oversight: TIKTOK_NO_LIST_PRICE_IN_DM
+       below forbids quoting a price on TikTok, so handing the model real figures
+       there would be handing it the thing it is told not to say.
+       Facts are provided, never a script — the model still writes in Marco's
+       voice — and only on an EXACT match, because a confidently quoted price for
+       the wrong house is worse than no price at all. */
+    if (!isTikTokPlatform(inboundPlatform) && (0, index_js_1.isMlsFeedConfigured)()) {
+        try {
+            const match = (0, listingMatch_js_1.matchListingForLead)(lead, conversation);
+            const matched = match.confidence === "exact" ? match.listing : null;
+            const comps = (0, listingMatch_js_1.comparablesFor)(lead, matched, matched ? 2 : 3);
+            if (matched || comps.length) {
+                const fact = (l) => `${[l.street, l.city].filter(Boolean).join(", ")} | ${l.listPrice != null ? "$" + Math.round(l.listPrice).toLocaleString("en-US") : "price on request"}${l.beds != null ? ` | ${l.beds} bed` : ""}${l.baths != null ? ` | ${l.baths} bath` : ""}${l.livingArea ? ` | ${Math.round(l.livingArea).toLocaleString("en-US")} sqft` : ""}${l.status ? ` | ${l.status}` : ""}${l.mlsNumber ? ` | MLS ${l.mlsNumber}` : ""}`;
+                const lines = [];
+                if (matched)
+                    lines.push(`THE PROPERTY THEY ASKED ABOUT: ${fact(matched)}`);
+                if (comps.length)
+                    lines.push(`OTHER ACTIVE LISTINGS THAT FIT: ${comps.map(fact).join(" ;; ")}`);
+                postOpeningHints.push("LIVE_MLS_FACTS: These come from the live MLS feed and are true as of now. " +
+                    "Use them to answer a price or specs question directly instead of deferring. " +
+                    "COPY EVERY FIGURE EXACTLY as written — never round, re-estimate or average a price, " +
+                    "and never state a number that is not below. " +
+                    (matched
+                        ? ""
+                        : "There is NO confident match for a specific property, so do NOT say 'the home you asked about' or imply these are it. Offer them as options. ") +
+                    "If a listing is not Active, say so before anything else.\n" +
+                    lines.join("\n"));
+            }
+        }
+        catch (err) {
+            /* Never let a listing lookup stop a lead getting a reply. */
+            console.error("[pipeline] MLS fact lookup failed:", err);
+        }
     }
     if (isTikTokPlatform(inboundPlatform)) {
         postOpeningHints.push("TIKTOK_NO_LIST_PRICE_IN_DM: Never quote list price, ballpark, mid 500s, or dollar amounts for the specific property in chat. If they ask cost, use Marco's breakdown-offer voice from training (yeah of course, would it help if I sent the entire breakdown, location and pricing included by text), not platform meta about TikTok or DMs being a rough place for sheets. Offer the breakdown by text first; mobile number only after they clearly want it sent. Buyer budget criteria is ok to discuss.");

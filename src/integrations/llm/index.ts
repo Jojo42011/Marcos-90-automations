@@ -40,6 +40,8 @@ import {
   enforceOutboundTextRules,
 } from "../../app/conversationUtils.js";
 import { marcoLog, marcoLogDebug, previewText, type MarcoLogContext } from "../../app/marcoLog.js";
+import { isMlsFeedConfigured } from "../simplyrets/index.js";
+import { comparablesFor, matchListingForLead } from "../../core/listingMatch.js";
 
 /** Default: Claude 3.5 Haiku. Override with ANTHROPIC_MODEL in .env if needed. */
 const DEFAULT_MODEL = "claude-3-5-haiku-latest";
@@ -1272,6 +1274,45 @@ export async function generateMarcoPipelineReply(input: {
     postOpeningHints.push(
       "NO_PHONE_ON_FILE: No mobile number captured yet (unless phone_just_captured in FUNNEL_CONTEXT is true). Never say you will text them, shoot a text, or promise SMS or WhatsApp delivery of the breakdown, pricing, or packet. Never promise the full breakdown or pricing packet inside TikTok or Instagram DM as the delivery path. You may offer that once they share a number you will text the full breakdown by end of day. If they want info in-app only, acknowledge in Marco's casual voice and persist toward a good number. Links and full sheet read cleaner in one text thread. Fresh wording, not a copy of MARCO_PREVIOUS_OUTBOUND.",
     );
+  }
+  /* Real MLS facts for the property this lead actually named.
+     INSTAGRAM ONLY, and that is not an oversight: TIKTOK_NO_LIST_PRICE_IN_DM
+     below forbids quoting a price on TikTok, so handing the model real figures
+     there would be handing it the thing it is told not to say.
+     Facts are provided, never a script — the model still writes in Marco's
+     voice — and only on an EXACT match, because a confidently quoted price for
+     the wrong house is worse than no price at all. */
+  if (!isTikTokPlatform(inboundPlatform) && isMlsFeedConfigured()) {
+    try {
+      const match = matchListingForLead(lead, conversation);
+      const matched = match.confidence === "exact" ? match.listing : null;
+      const comps = comparablesFor(lead, matched, matched ? 2 : 3);
+      if (matched || comps.length) {
+        const fact = (l: NonNullable<typeof matched>) =>
+          `${[l.street, l.city].filter(Boolean).join(", ")} | ${
+            l.listPrice != null ? "$" + Math.round(l.listPrice).toLocaleString("en-US") : "price on request"
+          }${l.beds != null ? ` | ${l.beds} bed` : ""}${l.baths != null ? ` | ${l.baths} bath` : ""}${
+            l.livingArea ? ` | ${Math.round(l.livingArea).toLocaleString("en-US")} sqft` : ""
+          }${l.status ? ` | ${l.status}` : ""}${l.mlsNumber ? ` | MLS ${l.mlsNumber}` : ""}`;
+        const lines: string[] = [];
+        if (matched) lines.push(`THE PROPERTY THEY ASKED ABOUT: ${fact(matched)}`);
+        if (comps.length) lines.push(`OTHER ACTIVE LISTINGS THAT FIT: ${comps.map(fact).join(" ;; ")}`);
+        postOpeningHints.push(
+          "LIVE_MLS_FACTS: These come from the live MLS feed and are true as of now. " +
+            "Use them to answer a price or specs question directly instead of deferring. " +
+            "COPY EVERY FIGURE EXACTLY as written — never round, re-estimate or average a price, " +
+            "and never state a number that is not below. " +
+            (matched
+              ? ""
+              : "There is NO confident match for a specific property, so do NOT say 'the home you asked about' or imply these are it. Offer them as options. ") +
+            "If a listing is not Active, say so before anything else.\n" +
+            lines.join("\n"),
+        );
+      }
+    } catch (err) {
+      /* Never let a listing lookup stop a lead getting a reply. */
+      console.error("[pipeline] MLS fact lookup failed:", err);
+    }
   }
   if (isTikTokPlatform(inboundPlatform)) {
     postOpeningHints.push(
