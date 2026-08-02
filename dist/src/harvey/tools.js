@@ -42,25 +42,27 @@ const platformTools_js_1 = require("./platformTools.js");
 const codeExec_js_1 = require("../core/codeExec.js");
 const smsStore_js_1 = require("../core/smsStore.js");
 const harveyNotes_js_1 = require("../core/harveyNotes.js");
+const listingsStore_js_1 = require("../core/listingsStore.js");
+const index_js_1 = require("../agents/mlsSync/index.js");
 const db_js_1 = require("../core/db.js");
 const socialStore_js_1 = require("../core/socialStore.js");
-const index_js_1 = require("../agents/morningScan/index.js");
-const index_js_2 = require("../agents/reporting/index.js");
-const index_js_3 = require("../agents/contentSuggestions/index.js");
-const index_js_4 = require("../agents/escalations/index.js");
-const index_js_5 = require("../agents/showingReminders/index.js");
-const index_js_6 = require("../agents/mojoOutreach/index.js");
+const index_js_2 = require("../agents/morningScan/index.js");
+const index_js_3 = require("../agents/reporting/index.js");
+const index_js_4 = require("../agents/contentSuggestions/index.js");
+const index_js_5 = require("../agents/escalations/index.js");
+const index_js_6 = require("../agents/showingReminders/index.js");
+const index_js_7 = require("../agents/mojoOutreach/index.js");
 const transactionsStore_js_1 = require("../core/transactionsStore.js");
-const index_js_7 = require("../agents/harveyContentDigest/index.js");
+const index_js_8 = require("../agents/harveyContentDigest/index.js");
 const leadScoreStore_js_1 = require("../core/leadScoreStore.js");
 const smsStore_js_2 = require("../core/smsStore.js");
-const index_js_8 = require("../agents/leadScoring/index.js");
+const index_js_9 = require("../agents/leadScoring/index.js");
 const sourceRouting_js_1 = require("../agents/leadNurture/sourceRouting.js");
-const index_js_9 = require("../agents/reEngagement/index.js");
+const index_js_10 = require("../agents/reEngagement/index.js");
 const analytics_js_1 = require("../agents/contentManager/analytics.js");
 const contentDb_js_1 = require("../core/contentDb.js");
-const index_js_10 = require("../agents/contentManager/brain/index.js");
-const index_js_11 = require("../agents/listingStatusAutomation/index.js");
+const index_js_11 = require("../agents/contentManager/brain/index.js");
+const index_js_12 = require("../agents/listingStatusAutomation/index.js");
 const crmNotificationStore_js_1 = require("../core/crmNotificationStore.js");
 const reportingStore_js_1 = require("../core/reportingStore.js");
 const financeStore_js_1 = require("../core/financeStore.js");
@@ -194,6 +196,41 @@ exports.HARVEY_TOOL_DEFINITIONS = [
             },
             required: ["leadId"],
         },
+    },
+    {
+        name: "search_listings",
+        description: "Search live MLS listings from the Bridge feed: price, beds, baths, city, status, property type. Use for any question about what is on the market, comps, or a property a lead asked about. " +
+            "Returns totalMatching alongside the page, so say how many exist and not just how many you listed. " +
+            "If it reports notConfigured or stale, SAY SO — an empty result from a disconnected feed is not a quiet market.",
+        input_schema: {
+            type: "object",
+            properties: {
+                q: { type: "string", description: "Free text over address, city, subdivision, MLS number, remarks." },
+                city: { type: "string" },
+                status: { type: "string", description: "RESO status, e.g. Active, Pending, Closed." },
+                minPrice: { type: "number" },
+                maxPrice: { type: "number" },
+                minBeds: { type: "number" },
+                minBaths: { type: "number" },
+                propertyType: { type: "string" },
+                limit: { type: "number", description: "1-200. Default 25." },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "get_listing",
+        description: "One MLS listing in full by listing key or MLS number, including the complete raw RESO record. Use before quoting a price, square footage or status on a specific property.",
+        input_schema: {
+            type: "object",
+            properties: { id: { type: "string", description: "Listing key or MLS number." } },
+            required: ["id"],
+        },
+    },
+    {
+        name: "get_mls_status",
+        description: "Whether the MLS feed is connected and how fresh it is. Call this before telling Marco the market is quiet or that a property does not exist, so you can tell 'no matches' apart from 'not connected'.",
+        input_schema: { type: "object", properties: {}, required: [] },
     },
     {
         name: "get_sms_thread",
@@ -961,7 +998,7 @@ function normalizeHarveyToolInput(input) {
 }
 /* Re-exported from the scoring model rather than copied, so Harvey can never
    quote a factor ceiling the scorer no longer uses. */
-const NURTURE_WEIGHTS = index_js_8.WEIGHTS;
+const NURTURE_WEIGHTS = index_js_9.WEIGHTS;
 function formatPreApproval(status) {
     if (!status)
         return "Not set";
@@ -1042,6 +1079,52 @@ async function executeHarveyTool(name, input) {
             });
         case "get_conversation":
             return getConversationForLead(String(normalized.leadId ?? ""));
+        case "search_listings": {
+            const st = (0, index_js_1.mlsStatus)();
+            if (!st.configured) {
+                return {
+                    ok: false, notConfigured: true, error: st.error, fix: st.fix,
+                    say: "The MLS feed is not connected, so this is NOT an empty market. Say the feed is off and name what is missing.",
+                };
+            }
+            const out = (0, listingsStore_js_1.searchListings)({
+                q: normalized.q == null ? undefined : String(normalized.q),
+                city: normalized.city == null ? undefined : String(normalized.city),
+                status: normalized.status == null ? undefined : String(normalized.status),
+                propertyType: normalized.propertyType == null ? undefined : String(normalized.propertyType),
+                minPrice: Number(normalized.minPrice) || undefined,
+                maxPrice: Number(normalized.maxPrice) || undefined,
+                minBeds: Number(normalized.minBeds) || undefined,
+                minBaths: Number(normalized.minBaths) || undefined,
+                limit: Number(normalized.limit) || undefined,
+            });
+            return {
+                ok: true,
+                totalMatching: out.total,
+                count: out.listings.length,
+                stale: st.stale,
+                hoursSinceLastSync: st.hoursSinceLastSync,
+                listings: out.listings,
+                say: st.stale
+                    ? "This mirror is stale — say when it last synced rather than presenting it as live."
+                    : undefined,
+            };
+        }
+        case "get_listing": {
+            const st = (0, index_js_1.mlsStatus)();
+            if (!st.configured) {
+                return { ok: false, notConfigured: true, error: st.error, fix: st.fix,
+                    say: "The MLS feed is not connected. Do not say the property does not exist." };
+            }
+            const row = (0, listingsStore_js_1.getListing)(String(normalized.id ?? "").trim());
+            if (!row) {
+                return { ok: false, error: "No listing with that key or MLS number in the local mirror.",
+                    say: "Say it is not in the feed we hold. It may exist on another board or be older than our sync window." };
+            }
+            return { ok: true, listing: row };
+        }
+        case "get_mls_status":
+            return (0, index_js_1.mlsStatus)();
         case "get_sms_thread":
             return getSmsThreadForHarvey(String(normalized.leadId ?? ""), Number(normalized.limit) || 50);
         case "get_my_notes":
@@ -1063,30 +1146,30 @@ async function executeHarveyTool(name, input) {
         case "get_social_videos":
             return getSocialVideosForHarvey(normalized);
         case "get_morning_scan": {
-            const scan = (0, index_js_1.getLatestMorningScan)();
+            const scan = (0, index_js_2.getLatestMorningScan)();
             return { result: scan };
         }
         case "get_pending_comment_replies": {
             return { replies: (0, socialStore_js_1.getPendingCommentReplies)() };
         }
         case "get_evening_pull": {
-            return (0, index_js_2.getLatestReportingSnapshot)("evening");
+            return (0, index_js_3.getLatestReportingSnapshot)("evening");
         }
         case "get_content_suggestions": {
-            return (0, index_js_3.getLatestContentSuggestions)();
+            return (0, index_js_4.getLatestContentSuggestions)();
         }
         case "get_content_digest": {
-            return (0, index_js_7.getLatestContentDigest)();
+            return (0, index_js_8.getLatestContentDigest)();
         }
         case "get_recent_escalations": {
-            return { escalations: (0, index_js_4.getRecentEscalations)(10) };
+            return { escalations: (0, index_js_5.getRecentEscalations)(10) };
         }
         case "get_upcoming_showings": {
-            const upcoming = await (0, index_js_5.getUpcomingShowings)();
+            const upcoming = await (0, index_js_6.getUpcomingShowings)();
             return { upcoming };
         }
         case "get_mojo_outreach_status": {
-            return await (0, index_js_6.getMojoOutreachStatus)();
+            return await (0, index_js_7.getMojoOutreachStatus)();
         }
         case "get_paused_conversations": {
             const leads = (await (0, db_js_1.listAllLeads)()).filter((l) => l.automationPaused);
@@ -1223,10 +1306,10 @@ async function executeHarveyTool(name, input) {
             };
         }
         case "lead_nurture_score_all": {
-            return (0, index_js_8.scoreAllLeads)();
+            return (0, index_js_9.scoreAllLeads)();
         }
         case "lead_nurture_rescore_cold": {
-            return (0, index_js_8.scoreColdLeads)();
+            return (0, index_js_9.scoreColdLeads)();
         }
         case "lead_nurture_route_lead": {
             const leadId = String(normalized.leadId || "").trim();
@@ -1421,7 +1504,7 @@ async function executeHarveyTool(name, input) {
             const lead = await (0, db_js_1.getLeadById)(leadId);
             if (!lead)
                 return { error: "Lead not found", leadId };
-            return (0, index_js_9.handleWebsiteVisit)(leadId);
+            return (0, index_js_10.handleWebsiteVisit)(leadId);
         }
         case "update_seller_listing_status": {
             const leadId = String(normalized.leadId || normalized.lead_id || "").trim();
@@ -1438,7 +1521,7 @@ async function executeHarveyTool(name, input) {
             if (!lead)
                 return { error: "Lead not found", leadId };
             const source = normalized.source === "mls_feed" ? "mls_feed" : "manual";
-            return (0, index_js_11.handleListingStatusUpdate)(leadId, address, status, source);
+            return (0, index_js_12.handleListingStatusUpdate)(leadId, address, status, source);
         }
         case "get_content_summary": {
             const daily = (0, analytics_js_1.getDailyReport)();
@@ -1503,7 +1586,7 @@ async function executeHarveyTool(name, input) {
             const question = String(normalized.question ?? "").trim();
             if (!question)
                 return { error: "question required" };
-            const answer = await index_js_10.contentManagerBrain.chat(question);
+            const answer = await index_js_11.contentManagerBrain.chat(question);
             return { answer };
         }
         default:

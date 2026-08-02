@@ -8347,6 +8347,50 @@ app.post("/api/browser/command", express_1.default.json({ limit: "256kb" }), asy
         res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
 });
+/**
+ * MLS feed health. Ungated like /api/browser/status's configuration half: it
+ * exposes whether a feed is connected and how stale it is, never listing data.
+ */
+app.get("/api/mls/status", async (_req, res) => {
+    const { mlsStatus } = await Promise.resolve().then(() => __importStar(require("./agents/mlsSync/index.js")));
+    res.json(mlsStatus());
+});
+/** Prove the credentials by actually calling Bridge, not by checking env vars. */
+app.get("/api/mls/ping", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { bridgePing } = await Promise.resolve().then(() => __importStar(require("./integrations/bridge/index.js")));
+    res.json(await bridgePing());
+});
+app.post("/api/mls/sync", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { runMlsSync } = await Promise.resolve().then(() => __importStar(require("./agents/mlsSync/index.js")));
+    res.json(await runMlsSync());
+});
+app.get("/api/mls/listings", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { searchListings } = await Promise.resolve().then(() => __importStar(require("./core/listingsStore.js")));
+    const q = req.query;
+    res.json(searchListings({
+        q: q.q,
+        city: q.city,
+        status: q.status,
+        propertyType: q.propertyType,
+        minPrice: q.minPrice ? Number(q.minPrice) : undefined,
+        maxPrice: q.maxPrice ? Number(q.maxPrice) : undefined,
+        minBeds: q.minBeds ? Number(q.minBeds) : undefined,
+        minBaths: q.minBaths ? Number(q.minBaths) : undefined,
+        limit: q.limit ? Number(q.limit) : undefined,
+    }));
+});
 app.get("/api/browser/status", (req, res) => {
     const token = String(req.get("X-Browser-Token") || req.query.token || "");
     if (!(0, browserControl_js_1.tokenMatches)(token)) {

@@ -19,6 +19,7 @@ import { scheduleTaskDeadlineAutomation } from "../core/taskDeadlineAutomation.j
 import { scheduleWarmLeadWeeklyTouch } from "../agents/leadNurture/warmLeadFlow.js";
 import { scheduleColdLeadMonthlyTouch } from "../agents/leadNurture/coldLeadFlow.js";
 import { scheduleAutoRescore } from "../agents/leadScoring/index.js";
+import { scheduleMlsSync } from "../agents/mlsSync/index.js";
 import { scheduleDailyDigest } from "../agents/reporting/dailyDigest.js";
 import { scheduleWeeklyKPI } from "../agents/reporting/weeklyKPI.js";
 import {
@@ -77,6 +78,7 @@ export function scheduleContentJobs(): void {
   scheduleWarmLeadWeeklyTouch();
   scheduleColdLeadMonthlyTouch();
   scheduleAutoRescore();
+  scheduleMlsSync();
   scheduleDailyDigest();
   scheduleWeeklyKPI();
   scheduleWeeklyFinanceSummary();

@@ -9172,6 +9172,56 @@ app.post("/api/browser/command", express.json({ limit: "256kb" }), async (req, r
   }
 });
 
+/**
+ * MLS feed health. Ungated like /api/browser/status's configuration half: it
+ * exposes whether a feed is connected and how stale it is, never listing data.
+ */
+app.get("/api/mls/status", async (_req, res) => {
+  const { mlsStatus } = await import("./agents/mlsSync/index.js");
+  res.json(mlsStatus());
+});
+
+/** Prove the credentials by actually calling Bridge, not by checking env vars. */
+app.get("/api/mls/ping", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { bridgePing } = await import("./integrations/bridge/index.js");
+  res.json(await bridgePing());
+});
+
+app.post("/api/mls/sync", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { runMlsSync } = await import("./agents/mlsSync/index.js");
+  res.json(await runMlsSync());
+});
+
+app.get("/api/mls/listings", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { searchListings } = await import("./core/listingsStore.js");
+  const q = req.query as Record<string, string | undefined>;
+  res.json(
+    searchListings({
+      q: q.q,
+      city: q.city,
+      status: q.status,
+      propertyType: q.propertyType,
+      minPrice: q.minPrice ? Number(q.minPrice) : undefined,
+      maxPrice: q.maxPrice ? Number(q.maxPrice) : undefined,
+      minBeds: q.minBeds ? Number(q.minBeds) : undefined,
+      minBaths: q.minBaths ? Number(q.minBaths) : undefined,
+      limit: q.limit ? Number(q.limit) : undefined,
+    }),
+  );
+});
+
 app.get("/api/browser/status", (req, res) => {
   const token = String(req.get("X-Browser-Token") || req.query.token || "");
   if (!browserTokenMatches(token)) {

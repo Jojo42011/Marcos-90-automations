@@ -16,6 +16,8 @@ import {
 import { execMode } from "../core/codeExec.js";
 import { getThreadForLead } from "../core/smsStore.js";
 import { getNotes, searchNotes } from "../core/harveyNotes.js";
+import { searchListings, getListing } from "../core/listingsStore.js";
+import { mlsStatus } from "../agents/mlsSync/index.js";
 import { getConversation, listAllLeads, getLeadById } from "../core/db.js";
 import { getSocialSummaryForHarvey, getSocialVideos, getPendingCommentReplies } from "../core/socialStore.js";
 import { getLatestMorningScan } from "../agents/morningScan/index.js";
@@ -202,6 +204,44 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
       },
       required: ["leadId"],
     },
+  },
+  {
+    name: "search_listings",
+    description:
+      "Search live MLS listings from the Bridge feed: price, beds, baths, city, status, property type. Use for any question about what is on the market, comps, or a property a lead asked about. " +
+      "Returns totalMatching alongside the page, so say how many exist and not just how many you listed. " +
+      "If it reports notConfigured or stale, SAY SO — an empty result from a disconnected feed is not a quiet market.",
+    input_schema: {
+      type: "object",
+      properties: {
+        q: { type: "string", description: "Free text over address, city, subdivision, MLS number, remarks." },
+        city: { type: "string" },
+        status: { type: "string", description: "RESO status, e.g. Active, Pending, Closed." },
+        minPrice: { type: "number" },
+        maxPrice: { type: "number" },
+        minBeds: { type: "number" },
+        minBaths: { type: "number" },
+        propertyType: { type: "string" },
+        limit: { type: "number", description: "1-200. Default 25." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_listing",
+    description:
+      "One MLS listing in full by listing key or MLS number, including the complete raw RESO record. Use before quoting a price, square footage or status on a specific property.",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Listing key or MLS number." } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "get_mls_status",
+    description:
+      "Whether the MLS feed is connected and how fresh it is. Call this before telling Marco the market is quiet or that a property does not exist, so you can tell 'no matches' apart from 'not connected'.",
+    input_schema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "get_sms_thread",
@@ -1119,6 +1159,52 @@ export async function executeHarveyTool(
       });
     case "get_conversation":
       return getConversationForLead(String(normalized.leadId ?? ""));
+    case "search_listings": {
+      const st = mlsStatus();
+      if (!st.configured) {
+        return {
+          ok: false, notConfigured: true, error: st.error, fix: st.fix,
+          say: "The MLS feed is not connected, so this is NOT an empty market. Say the feed is off and name what is missing.",
+        };
+      }
+      const out = searchListings({
+        q: normalized.q == null ? undefined : String(normalized.q),
+        city: normalized.city == null ? undefined : String(normalized.city),
+        status: normalized.status == null ? undefined : String(normalized.status),
+        propertyType: normalized.propertyType == null ? undefined : String(normalized.propertyType),
+        minPrice: Number(normalized.minPrice) || undefined,
+        maxPrice: Number(normalized.maxPrice) || undefined,
+        minBeds: Number(normalized.minBeds) || undefined,
+        minBaths: Number(normalized.minBaths) || undefined,
+        limit: Number(normalized.limit) || undefined,
+      });
+      return {
+        ok: true,
+        totalMatching: out.total,
+        count: out.listings.length,
+        stale: st.stale,
+        hoursSinceLastSync: st.hoursSinceLastSync,
+        listings: out.listings,
+        say: st.stale
+          ? "This mirror is stale — say when it last synced rather than presenting it as live."
+          : undefined,
+      };
+    }
+    case "get_listing": {
+      const st = mlsStatus();
+      if (!st.configured) {
+        return { ok: false, notConfigured: true, error: st.error, fix: st.fix,
+          say: "The MLS feed is not connected. Do not say the property does not exist." };
+      }
+      const row = getListing(String(normalized.id ?? "").trim());
+      if (!row) {
+        return { ok: false, error: "No listing with that key or MLS number in the local mirror.",
+          say: "Say it is not in the feed we hold. It may exist on another board or be older than our sync window." };
+      }
+      return { ok: true, listing: row };
+    }
+    case "get_mls_status":
+      return mlsStatus();
     case "get_sms_thread":
       return getSmsThreadForHarvey(
         String(normalized.leadId ?? ""),
