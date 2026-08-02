@@ -283,6 +283,35 @@ function enqueueInstagramDm(senderId, messageText, payload, log) {
 /**
  * ManyChat / Make / custom proxies often nest fields or use different names than our web demo.
  */
+/**
+ * A value ManyChat sent as a literal merge field instead of substituting it.
+ *
+ * When a flow references a variable the subscriber has no value for (or the
+ * field name is wrong), ManyChat posts the token verbatim: `{{full_name}}`,
+ * `{{ig_username}}`, `{{tt_username}}`. Nothing downstream checked, so the
+ * token became the person's identity. 45 leads in production carry one, and
+ * once lead scoring started working, one of them ranked FIRST on the call list
+ * as a lead nobody could name or phone.
+ *
+ * Matches a token anywhere in the value, not just a whole-string match, since
+ * "Hi {{first_name}}" is equally unusable as a name.
+ */
+function isUnsubstitutedMergeField(v) {
+    return typeof v === "string" && /\{\{[^{}]*\}\}/.test(v);
+}
+/**
+ * Fields where a merge token makes the value worthless and it is safer to have
+ * nothing. Deliberately EXCLUDES the message body: a DM that happens to contain
+ * a token is still a real message from a real person, and dropping it would
+ * lose the conversation to fix a cosmetic problem.
+ */
+const IDENTITY_KEYS = [
+    "user_id", "userId", "subscriber_id", "subscriberId", "contact_id", "contactId",
+    "username", "user_name", "handle", "ig_username", "tt_username", "tiktok_username",
+    "instagram_username", "instagram_handle",
+    "full_name", "fullName", "display_name", "displayName", "name",
+    "phone", "phone_number", "phoneNumber", "email",
+];
 function normalizeWebhookRecord(body) {
     const out = { ...body };
     const mergeKeys = [
@@ -322,7 +351,9 @@ function normalizeWebhookRecord(body) {
             const v = inner[k];
             const cur = out[k];
             const empty = cur === undefined || cur === null || cur === "";
-            if (empty && v != null && v !== "") {
+            /* A placeholder must never win an empty slot: it would look like data and
+               then be preferred over the real value on a later merge pass. */
+            if (empty && v != null && v !== "" && !isUnsubstitutedMergeField(v)) {
                 out[k] = v;
             }
         }
@@ -331,7 +362,7 @@ function normalizeWebhookRecord(body) {
             const emptyUid = curUid === undefined || curUid === null || curUid === "";
             if (emptyUid) {
                 const sid = inner.id ?? inner.subscriber_id ?? inner.subscriberId;
-                if (typeof sid === "string" && sid.trim()) {
+                if (typeof sid === "string" && sid.trim() && !isUnsubstitutedMergeField(sid)) {
                     out.user_id = sid.trim();
                 }
                 else if (typeof sid === "number" && Number.isFinite(sid)) {
@@ -343,6 +374,23 @@ function normalizeWebhookRecord(body) {
     mergeFrom(body.data, false);
     mergeFrom(body.contact, true);
     mergeFrom(body.subscriber, true);
+    /* Top-level values never went through mergeFrom, so scrub here as well. This
+       is the single choke point every pick* helper reads from, which is why the
+       guard lives here rather than in each of them: five pickers each doing their
+       own validation is five chances to add a sixth that forgets. */
+    const dropped = [];
+    for (const k of IDENTITY_KEYS) {
+        if (isUnsubstitutedMergeField(out[k])) {
+            dropped.push(`${k}=${String(out[k])}`);
+            delete out[k];
+        }
+    }
+    if (dropped.length) {
+        console.warn("[webhook] ManyChat sent unsubstituted merge field(s), dropped:", dropped.join(", "), "— check the flow's External Request body maps real subscriber fields.");
+    }
+    if (isUnsubstitutedMergeField(out.message)) {
+        console.warn("[webhook] message text contains a merge token; kept, but the flow is misconfigured.");
+    }
     return out;
 }
 function pickUserId(b) {
@@ -517,7 +565,22 @@ async function handleWebhook(body) {
     }
     const payload = parseBody(body);
     if (!payload) {
-        (0, marcoLog_js_1.marcoLog)("inbound_rejected", { reason: "parse_body_failed_or_missing_user_id" });
+        /* A user_id that was a merge token has been scrubbed by now, so this also
+           catches it — and rejecting is the right outcome. Every such message would
+           otherwise key to the SAME lead, silently merging different people's
+           conversations into one thread. Two production leads already have a token
+           as their identity. Losing one message is recoverable; a merged thread is
+           not, and a 400 tells ManyChat something is wrong instead of failing
+           quietly. */
+        const scrubbed = isUnsubstitutedMergeField(body?.user_id ??
+            body?.userId);
+        (0, marcoLog_js_1.marcoLog)("inbound_rejected", {
+            reason: scrubbed ? "unsubstituted_merge_field_user_id" : "parse_body_failed_or_missing_user_id",
+        });
+        if (scrubbed) {
+            console.error("[webhook] REJECTED: ManyChat sent an unsubstituted user_id merge field. " +
+                "Fix the flow's External Request body — every message with this payload would collapse into one lead.");
+        }
         return { status: 400 };
     }
     const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
