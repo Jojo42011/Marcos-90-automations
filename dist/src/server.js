@@ -8311,6 +8311,42 @@ app.post("/api/browser/result", express_1.default.json({ limit: "6mb" }), (req, 
 });
 /** Status for the popup and for the app UI. Token-gated: it reveals the URL
  *  of whatever tab the operator is looking at. */
+/**
+ * Operator command endpoint: run one browser action and wait for its result.
+ *
+ * Exists because the bus was previously only drivable from inside Harvey's
+ * agent loop — fine for chat, useless for an operator (or an operator's agent)
+ * doing precise, step-at-a-time work like editing a third-party dashboard,
+ * where each next click depends on reading the last screenshot rather than on
+ * an LLM's paraphrase of it.
+ *
+ * Gated on the SAME pairing token as the bus itself: whoever holds that token
+ * already controls the paired browser by definition (they could impersonate
+ * the extension via /poll + /result), so this adds capability for the token
+ * holder and attack surface for nobody.
+ */
+app.post("/api/browser/command", express_1.default.json({ limit: "256kb" }), async (req, res) => {
+    const token = String(req.get("X-Browser-Token") || req.query.token || "");
+    if (!(0, browserControl_js_1.tokenMatches)(token)) {
+        res.status(401).json({ error: "Bad or missing pairing token" });
+        return;
+    }
+    const b = (req.body || {});
+    if (!b.command || typeof b.command !== "object" || typeof b.command.action !== "string") {
+        res.status(400).json({ error: "Body must be { command: { action, ... }, device?, timeoutMs? }" });
+        return;
+    }
+    try {
+        const result = await (0, browserControl_js_1.run)(b.command, {
+            device: typeof b.device === "string" && b.device ? b.device : undefined,
+            timeoutMs: Math.min(Math.max(Number(b.timeoutMs) || 30_000, 5_000), 120_000),
+        });
+        res.json(result);
+    }
+    catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+});
 app.get("/api/browser/status", (req, res) => {
     const token = String(req.get("X-Browser-Token") || req.query.token || "");
     if (!(0, browserControl_js_1.tokenMatches)(token)) {
