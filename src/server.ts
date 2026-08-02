@@ -10253,6 +10253,26 @@ app.post("/api/lead-nurture/route/:leadId", async (req, res) => {
   res.json({ success: true });
 });
 
+/**
+ * A lead's name for display, never a template token.
+ *
+ * 42 leads arrived from ManyChat with the merge field unsubstituted, so their
+ * username is the literal string "{{full_name}}". Rendered raw that reads as a
+ * broken app, and once scoring started working one of them ranked FIRST on the
+ * call list — an unidentifiable record at the top of Carlos's day. The
+ * conversation behind these is real, so they are not hidden or dropped; they
+ * are just labelled honestly so the record can be recognised as needing repair
+ * rather than dialled.
+ */
+function leadDisplayNameSafe(lead: { name?: string | null; username?: string | null } | undefined): string {
+  const isToken = (v: string | null | undefined) => !v || /\{\{|\}\}/.test(v);
+  const name = lead?.name?.trim();
+  if (name && !isToken(name)) return name;
+  const user = lead?.username?.trim();
+  if (user && !isToken(user)) return user;
+  return lead?.name || lead?.username ? "Unknown (broken import)" : "Unknown";
+}
+
 app.get("/api/lead-nurture/summary", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -10284,7 +10304,7 @@ app.get("/api/lead-nurture/summary", async (req, res) => {
       const lead = leadMap.get(s.leadId);
       return {
         leadId: s.leadId,
-        name: lead?.name || lead?.username || "Unknown",
+        name: leadDisplayNameSafe(lead),
         score: s.score,
         previousScore: s.previousScore,
         delta: s.score - (s.previousScore ?? 0),
@@ -10356,7 +10376,7 @@ app.get("/api/lead-nurture/tier-detail/:tier", async (req, res) => {
            pre-2026-08 factors months after they stopped being scored. */
         factorMax: LEAD_SCORE_WEIGHTS,
         tier: s.tier,
-        name: lead?.name || lead?.username || "Unknown",
+        name: leadDisplayNameSafe(lead),
         phone: lead?.phone || null,
         email: lead?.email || null,
         source: lead?.source || null,
