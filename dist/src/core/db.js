@@ -1168,6 +1168,7 @@ async function updateLeadCrmFields(input) {
     }
     const next = {
         ...lead,
+        mlsListingKey: input.mlsListingKey !== undefined ? input.mlsListingKey : lead.mlsListingKey,
         crmStatus: input.crmStatus !== undefined ? normalizeCrmStatus(input.crmStatus) : lead.crmStatus,
         crmStage: input.crmStage ?? lead.crmStage,
         crmPriority: input.crmPriority ?? lead.crmPriority,

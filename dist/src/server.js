@@ -8394,6 +8394,69 @@ app.get("/api/mls/listings", async (req, res) => {
         limit: q.limit ? Number(q.limit) : undefined,
     }));
 });
+/**
+ * Live MLS context for one lead, for the CRM profile drawer.
+ *
+ * Three separate things, kept separate on purpose:
+ *   `listing`     — the property we are CERTAIN they asked about, read live, so
+ *                   a price cut or a move to Pending shows in the drawer rather
+ *                   than in a stale field somebody typed weeks ago.
+ *   `suggestions` — active homes fitting their criteria. Explicitly NOT theirs.
+ *   `market`      — inventory for their city. Asking prices only; this feed has
+ *                   no solds, and the UI has to say so.
+ *
+ * `source: "linked" | "matched" | "none"` is returned so the drawer can show
+ * where the property came from. A match derived from free text is a different
+ * claim from one an agent confirmed, and collapsing the two would make a wrong
+ * match invisible.
+ */
+app.get("/api/leads/:id/mls", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { isMlsFeedConfigured } = await Promise.resolve().then(() => __importStar(require("./integrations/simplyrets/index.js")));
+    if (!isMlsFeedConfigured()) {
+        res.json({ configured: false, listing: null, source: "none", suggestions: [], market: null });
+        return;
+    }
+    const { findLeadById } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+    const lead = await findLeadById(String(req.params.id));
+    if (!lead) {
+        res.status(404).json({ error: "No such lead" });
+        return;
+    }
+    const { liveListingForLead, listingsForCriteria, marketForLead } = await Promise.resolve().then(() => __importStar(require("./core/listingMatch.js")));
+    try {
+        const { listing, source } = liveListingForLead(lead);
+        /* `getListing` carries the untouched SimplyRETS record — several KB of
+           agent phone numbers, HOA fields and remarks per lead. The drawer shows
+           an address, a price and a status, so send that. */
+        const slim = (l) => ({
+            listingKey: l.listingKey,
+            mlsNumber: l.mlsNumber,
+            status: l.status,
+            listPrice: l.listPrice,
+            street: l.street,
+            city: l.city,
+            beds: l.beds,
+            baths: l.baths,
+            livingArea: l.livingArea,
+        });
+        res.json({
+            configured: true,
+            listing: listing ? slim(listing) : null,
+            source,
+            suggestions: listingsForCriteria(lead, 3).map(slim),
+            market: marketForLead(lead),
+        });
+    }
+    catch (err) {
+        /* The drawer must still open if the mirror is mid-write or missing. */
+        console.error("[LeadMLS] lookup failed:", err);
+        res.status(500).json({ error: "MLS lookup failed" });
+    }
+});
 app.get("/api/browser/status", (req, res) => {
     const token = String(req.get("X-Browser-Token") || req.query.token || "");
     if (!(0, browserControl_js_1.tokenMatches)(token)) {

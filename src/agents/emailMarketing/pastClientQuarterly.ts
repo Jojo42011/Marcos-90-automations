@@ -8,11 +8,33 @@ import {
   updateDripSequence,
 } from "../../core/emailStore.js";
 import { listAllLeads } from "../../core/db.js";
+import { isMlsFeedConfigured } from "../../integrations/simplyrets/index.js";
+import { marketForLead, marketSentence } from "../../core/listingMatch.js";
 import type { Lead } from "../../core/types.js";
 
 interface QuarterlyStep {
   subject: (n: string) => string;
-  body: (n: string) => string;
+  body: (n: string, lead: Lead) => string;
+}
+
+/**
+ * What the mirror can honestly tell a past client about their area.
+ *
+ * NOT "how home values have been trending" — that needs sold prices, and this
+ * feed carries Active and Pending only. What it can say is what is on the
+ * market and what those homes are asking, labelled as exactly that. A past
+ * client who reads an asking-price median as "what my house is worth" and
+ * lists on it is the exact harm this wording avoids.
+ */
+function marketLine(lead: Lead): string | null {
+  if (!isMlsFeedConfigured()) return null;
+  try {
+    return marketSentence(marketForLead(lead));
+  } catch (err) {
+    /* A quarterly touch must never fail to send because a lookup broke. */
+    console.error("[PastClientQuarterly] market lookup failed:", err);
+    return null;
+  }
 }
 
 const QUARTERLY_CONTENT: Record<number, QuarterlyStep> = {
@@ -22,9 +44,17 @@ const QUARTERLY_CONTENT: Record<number, QuarterlyStep> = {
       `Hi ${n},\n\nJust thinking of you as another year goes by in your home! Hope everything's going great. As always, here if you ever need anything — even just a contractor recommendation.\n\nMarco`,
   },
   2: {
+    /* Was a market update containing no market. Now it carries live inventory
+       when we know their area, and falls back to the original wording when we
+       do not, rather than promising an update twice. */
     subject: () => `Quick market update for your area`,
-    body: (n) =>
-      `Hi ${n},\n\nWanted to share a quick update on how home values have been trending in your neighborhood — always good info to have, even if you're not planning to move anytime soon.\n\nMarco`,
+    body: (n, lead) => {
+      const line = marketLine(lead);
+      if (!line) {
+        return `Hi ${n},\n\nWanted to share a quick update on how home values have been trending in your neighborhood — always good info to have, even if you're not planning to move anytime soon.\n\nMarco`;
+      }
+      return `Hi ${n},\n\nQuick snapshot of your area: ${line} Those are asking prices, not sale prices — if you ever want to know what your own home would actually fetch, I'll pull the solds and put real numbers to it.\n\nAlways good info to have, even if you're not planning to move anytime soon.\n\nMarco`;
+    },
   },
   3: {
     subject: () => `A small favor, if you don't mind`,
@@ -42,6 +72,9 @@ function getCurrentQuarter(): number {
   return Math.ceil((new Date().getMonth() + 1) / 3);
 }
 
+/** Exported so the copy can be exercised against the listings mirror directly. */
+export const __testQuarterlyContent = QUARTERLY_CONTENT;
+
 export async function runPastClientQuarterlyTouch(): Promise<{ sent: number }> {
   const leads = await listAllLeads();
   const pastClients = leads.filter((l: Lead) => l.isPastClient && l.email);
@@ -57,7 +90,7 @@ export async function runPastClientQuarterlyTouch(): Promise<{ sent: number }> {
 
     const firstName = lead.name?.trim().split(/\s+/)[0] || "there";
     const subject = content.subject(firstName);
-    const body = content.body(firstName);
+    const body = content.body(firstName, lead);
 
     const emailRecord = logEmail({
       leadId: lead.id,

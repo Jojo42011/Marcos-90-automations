@@ -40,6 +40,7 @@ import {
   enforceOutboundTextRules,
 } from "../../app/conversationUtils.js";
 import { marcoLog, marcoLogDebug, previewText, type MarcoLogContext } from "../../app/marcoLog.js";
+import { updateLeadCrmFields } from "../../core/db.js";
 import { isMlsFeedConfigured } from "../simplyrets/index.js";
 import { comparablesFor, matchListingForLead } from "../../core/listingMatch.js";
 
@@ -1286,6 +1287,14 @@ export async function generateMarcoPipelineReply(input: {
     try {
       const match = matchListingForLead(lead, conversation);
       const matched = match.confidence === "exact" ? match.listing : null;
+      /* Remember a certain match on the lead itself, so the CRM and the drips
+         can show the property later without re-deriving it from a conversation
+         that will keep growing. Only ever set on `exact`. */
+      if (matched && lead.mlsListingKey !== matched.listingKey) {
+        void updateLeadCrmFields({ leadId: lead.id, mlsListingKey: matched.listingKey }).catch(
+          (e: unknown) => console.error("[pipeline] could not link listing to lead:", e),
+        );
+      }
       const comps = comparablesFor(lead, matched, matched ? 2 : 3);
       if (matched || comps.length) {
         const fact = (l: NonNullable<typeof matched>) =>

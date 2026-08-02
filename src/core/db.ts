@@ -1198,6 +1198,8 @@ export async function updateLeadCrmFields(input: {
   movedToColdNurtureAt?: string | null;
   lastWebsiteVisitAt?: string | null;
   lastReEngagementTriggeredAt?: string | null;
+  /** Set only when a match was certain; see listingMatch.ts. */
+  mlsListingKey?: string | null;
 }): Promise<Lead | null> {
   const existing = leadsById.get(input.leadId);
   if (!existing) return null;
@@ -1224,6 +1226,8 @@ export async function updateLeadCrmFields(input: {
   }
   const next: Lead = {
     ...lead,
+    mlsListingKey:
+      input.mlsListingKey !== undefined ? input.mlsListingKey : lead.mlsListingKey,
     crmStatus: input.crmStatus !== undefined ? normalizeCrmStatus(input.crmStatus) : lead.crmStatus,
     crmStage: input.crmStage ?? lead.crmStage,
     crmPriority: input.crmPriority ?? lead.crmPriority,

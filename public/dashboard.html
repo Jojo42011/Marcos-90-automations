@@ -2642,6 +2642,53 @@
     }
     .crm-profile-prop-grid .k { font-size: 0.62rem; color: rgba(248,250,252,0.5); text-transform: uppercase; letter-spacing: 0.05em; }
     .crm-profile-prop-grid .v { font-size: 0.82rem; color: #f8fafc; font-weight: 600; }
+    /* Live MLS block in the profile drawer. Empty when there is nothing real
+       to show, so it collapses to nothing rather than to a heading. */
+    .crm-mls-box:empty { display: none; }
+    .crm-mls-box { margin-bottom: 0.85rem; }
+    .crm-mls-head {
+      font-family: var(--mono);
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(248, 250, 252, 0.45);
+      margin: 0.55rem 0 0.35rem;
+    }
+    .crm-mls-src { color: rgba(248,250,252,0.35); letter-spacing: 0.04em; }
+    .crm-mls-listing {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.45rem;
+      padding: 0.4rem 0.55rem;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 8px;
+      margin-bottom: 0.3rem;
+    }
+    .crm-mls-addr { font-size: 0.78rem; font-weight: 600; color: #f8fafc; }
+    .crm-mls-price { font-size: 0.78rem; font-weight: 700; color: var(--accent, #38bdf8); }
+    .crm-mls-spec { font-size: 0.66rem; color: rgba(248,250,252,0.5); }
+    .crm-mls-status {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.1rem 0.35rem;
+      border-radius: 5px;
+      background: rgba(34,197,94,0.14);
+      color: #4ade80;
+    }
+    /* A property that is no longer Active is the one thing in this panel that
+       changes what Marco should do next, so it reads loudest. */
+    .crm-mls-status.warn { background: rgba(251,191,36,0.16); color: #fbbf24; }
+    .crm-mls-market { font-size: 0.74rem; color: rgba(248,250,252,0.8); }
+    .crm-mls-note { display: block; font-size: 0.62rem; color: rgba(248,250,252,0.42); margin-top: 0.2rem; }
+    html[data-theme="light"] .crm-mls-head { color: #64748b; }
+    html[data-theme="light"] .crm-mls-src { color: #94a3b8; }
+    html[data-theme="light"] .crm-mls-listing { border-color: #e2e8f0; }
+    html[data-theme="light"] .crm-mls-addr { color: #111; }
+    html[data-theme="light"] .crm-mls-spec { color: #64748b; }
+    html[data-theme="light"] .crm-mls-market { color: #1a1a1a; }
+    html[data-theme="light"] .crm-mls-note { color: #94a3b8; }
     .crm-convo-thread {
       display: flex;
       flex-direction: column;
@@ -8671,6 +8718,83 @@
         : { cls: "active", label: "Active", value: "active" };
     }
 
+    /**
+     * Live MLS context in the profile drawer.
+     *
+     * Reads from the feed on open rather than from the lead record, so a price
+     * cut or a move to Pending is visible here instead of in a field somebody
+     * typed weeks ago — that difference is the whole point of the integration.
+     *
+     * Renders nothing at all when there is nothing real to show. An "MLS" panel
+     * that is empty or full of unrelated houses trains Marco to ignore it, and
+     * then it is worse than not being there.
+     */
+    async function paintLeadMls(leadId) {
+      const box = document.getElementById("crm-profile-mls");
+      if (!box || box.getAttribute("data-lead") !== String(leadId)) return;
+      let d;
+      try {
+        d = await fetch("/api/leads/" + encodeURIComponent(leadId) + "/mls").then((r) => (r.ok ? r.json() : null));
+      } catch (_e) {
+        d = null;
+      }
+      /* The drawer may have moved on to another lead while this was in flight. */
+      if (!box.isConnected || box.getAttribute("data-lead") !== String(leadId)) return;
+      if (!d || !d.configured) { box.innerHTML = ""; return; }
+
+      const m = (n) => (n == null ? "price on request" : "$" + Math.round(n).toLocaleString());
+      const spec = (l) => [
+        l.beds != null ? l.beds + " bed" : "",
+        l.baths != null ? l.baths + " bath" : "",
+        l.livingArea ? Math.round(l.livingArea).toLocaleString() + " sqft" : "",
+      ].filter(Boolean).join(" / ");
+      const addr = (l) => [l.street, l.city].filter(Boolean).join(", ");
+
+      const parts = [];
+      if (d.listing) {
+        const l = d.listing;
+        const stale = l.status && l.status.toLowerCase() !== "active";
+        parts.push(
+          '<div class="crm-mls-head">Their property <span class="crm-mls-src">' +
+            (d.source === "linked" ? "confirmed match" : "matched from conversation") +
+            "</span></div>" +
+            '<div class="crm-mls-listing">' +
+            '<span class="crm-mls-addr">' + escapeHtml(addr(l)) + "</span>" +
+            '<span class="crm-mls-price">' + escapeHtml(m(l.listPrice)) + "</span>" +
+            (spec(l) ? '<span class="crm-mls-spec">' + escapeHtml(spec(l)) + "</span>" : "") +
+            (l.status ? '<span class="crm-mls-status ' + (stale ? "warn" : "") + '">' + escapeHtml(l.status) + "</span>" : "") +
+            (l.mlsNumber ? '<span class="crm-mls-spec">MLS ' + escapeHtml(l.mlsNumber) + "</span>" : "") +
+            "</div>",
+        );
+      }
+      if (d.suggestions && d.suggestions.length) {
+        parts.push(
+          '<div class="crm-mls-head">Active homes matching their criteria</div>' +
+            d.suggestions.map((l) =>
+              '<div class="crm-mls-listing">' +
+              '<span class="crm-mls-addr">' + escapeHtml(addr(l)) + "</span>" +
+              '<span class="crm-mls-price">' + escapeHtml(m(l.listPrice)) + "</span>" +
+              (spec(l) ? '<span class="crm-mls-spec">' + escapeHtml(spec(l)) + "</span>" : "") +
+              "</div>").join(""),
+        );
+      }
+      if (d.market) {
+        const k = d.market;
+        parts.push(
+          '<div class="crm-mls-head">' + escapeHtml(k.city) + " market</div>" +
+            '<div class="crm-mls-market">' +
+            escapeHtml(k.active.toLocaleString()) + " active" +
+            (k.pending ? " · " + escapeHtml(k.pending.toLocaleString()) + " under contract" : "") +
+            (k.medianActivePrice ? " · median asking " + escapeHtml(m(k.medianActivePrice)) : "") +
+            /* Said plainly because the feed has no sold data and a list price
+               mistaken for a sale price is how a seller ends up overpriced. */
+            '<span class="crm-mls-note">Asking prices from active listings — this feed carries no sold data.</span>' +
+            "</div>",
+        );
+      }
+      box.innerHTML = parts.join("");
+    }
+
     async function crmChangeListingStatus(leadId, status) {
       hideCrmErr();
       try {
@@ -8749,6 +8873,7 @@
         property.innerHTML = `
           <div class="crm-profile-section">
             <h4>Property / criteria</h4>
+            <div id="crm-profile-mls" class="crm-mls-box" data-lead="${escapeHtml(row.id)}"></div>
             <div class="crm-drawer-field"><label for="pf-property">Property / listing interest</label><input id="pf-property" type="text" value="${escapeHtml(row.propertyInquired || "")}" /></div>
             <div class="crm-drawer-field"><label for="pf-brivity">Brivity ID</label><input id="pf-brivity" type="text" value="${escapeHtml(row.brivityId || "")}" /></div>
             <div class="crm-row2">
@@ -8760,6 +8885,7 @@
               <div class="crm-drawer-field"><label for="pf-baths">Baths</label><input id="pf-baths" type="number" step="0.5" value="${cr.baths != null ? escapeHtml(String(cr.baths)) : ""}" /></div>
             </div>
           </div>`;
+        void paintLeadMls(row.id);
       }
       const convo = document.getElementById("crm-profile-convo");
       if (convo) {

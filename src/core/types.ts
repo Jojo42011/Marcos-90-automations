@@ -192,6 +192,16 @@ export interface Lead {
   /** CRM user assigned to this lead. */
   assignedUserId?: string | null;
   assignedUserName?: string | null;
+  /**
+   * The MLS listing this lead asked about, once we are CERTAIN which one.
+   *
+   * Only ever written on an exact match (an MLS number, or an address that
+   * resolves to a single listing) — `propertyInquired` stays as the lead's own
+   * words. Keeping them separate matters: the free text is what they said, this
+   * is what we resolved it to, and conflating them would make a wrong match
+   * impossible to spot afterwards.
+   */
+  mlsListingKey?: string | null;
   /** ISO timestamp when phone was first captured. */
   phoneCapturedAt?: string;
   /** False until Marco/Carlos opens the lead in CRM after phone capture. */

@@ -8,6 +8,7 @@ import {
   type CommandTaskColumn,
   type CommandTaskStatus,
   type TrackerRecord,
+  type Lead,
   type LeadActivity,
   CRM_STATUSES,
   CRM_STAGES,
@@ -120,6 +121,61 @@ function slimTask(t: CommandTask) {
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const num = (v: unknown, d: number): number => (Number.isFinite(Number(v)) ? Number(v) : d);
+
+/**
+ * Live MLS context attached to `get_lead`, so Harvey answers "what's happening
+ * with the Rockcress house" from the feed rather than from a field somebody
+ * typed a month ago.
+ *
+ * Shaped for a model, not a screen. `source` tells him whether the property is
+ * one we resolved with certainty or nothing at all; `suggestions` are labelled
+ * as fitting the lead's criteria, NOT as theirs, because he will otherwise
+ * write "the home you asked about" over a comparable. And the market block is
+ * marked as asking prices — this feed carries Active and Pending only, and the
+ * one thing a seller must never be handed is a list price called a sale price.
+ */
+async function mlsContextFor(lead: Lead): Promise<Record<string, unknown> | null> {
+  try {
+    const { isMlsFeedConfigured } = await import("../integrations/simplyrets/index.js");
+    if (!isMlsFeedConfigured()) return null;
+    const { liveListingForLead, listingsForCriteria, marketForLead } = await import(
+      "../core/listingMatch.js"
+    );
+    const { listing, source } = liveListingForLead(lead);
+    const slim = (l: NonNullable<typeof listing>) => ({
+      mlsNumber: l.mlsNumber,
+      address: [l.street, l.city].filter(Boolean).join(", "),
+      listPrice: l.listPrice,
+      status: l.status,
+      beds: l.beds,
+      baths: l.baths,
+      sqft: l.livingArea,
+    });
+    const suggestions = listingsForCriteria(lead, 3);
+    const m = marketForLead(lead);
+    return {
+      theirProperty: listing ? slim(listing) : null,
+      theirPropertySource: source,
+      matchesTheirCriteria: suggestions.map(slim),
+      note:
+        "theirProperty is the home this lead asked about and is safe to quote as theirs. " +
+        "matchesTheirCriteria are other active homes — never describe those as the one they asked about.",
+      market: m
+        ? {
+            city: m.city,
+            activeListings: m.active,
+            underContract: m.pending,
+            medianAskingPrice: m.medianActivePrice,
+            newLast30Days: m.newLast30,
+            note: "Asking prices from active listings. This feed has no sold data — never call these sale prices.",
+          }
+        : null,
+    };
+  } catch (err) {
+    console.error("[Harvey] MLS context lookup failed:", err);
+    return null;
+  }
+}
 
 /**
  * Accept what a person actually says. "Open books.toscrape.com" is a complete
@@ -401,7 +457,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_lead",
     description:
-      "The full record for one contact: CRM fields, criteria, notes, tags, recent activity and how many messages are in the thread. Read this before changing anything so an update doesn't overwrite something that mattered.",
+      "The full record for one contact: CRM fields, criteria, notes, tags, recent activity and how many messages are in the thread. Read this before changing anything so an update doesn't overwrite something that mattered. Also returns `mls` — the live MLS record for the property they asked about (read fresh, so a price cut or a move to Pending shows here), other active homes matching their criteria, and their city's inventory. Quote figures from it exactly; do not round them.",
     input_schema: {
       type: "object",
       properties: { leadId: { type: "string" } },
@@ -850,6 +906,7 @@ export async function executePlatformTool(
       if (!lead) return { error: `No lead with id ${str(input.leadId)}` };
       const convo = await getConversation(lead.id);
       return {
+        mls: await mlsContextFor(lead),
         id: lead.id,
         name: lead.name || lead.username || null,
         phone: lead.phone || null,

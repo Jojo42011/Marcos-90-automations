@@ -331,6 +331,80 @@ export function searchListings(query: ListingQuery = {}): { total: number; listi
   return { total, listings: rows.map(rowToListing) };
 }
 
+export interface MarketStats {
+  city: string;
+  active: number;
+  pending: number;
+  /** Median ASKING price of what is active. Not a sale price — see below. */
+  medianActivePrice: number | null;
+  medianSqft: number | null;
+  /** Active listings first seen on market in the last 30 days. */
+  newLast30: number;
+}
+
+/**
+ * What the mirror can honestly say about one city's market.
+ *
+ * DELIBERATELY NO SOLD DATA. The SABOR feed we are entitled to returns Active
+ * and Pending only — 23,205 and 3,878 rows against 2 with a close price — so
+ * anything phrased as "homes near you sold for X" would be a number we do not
+ * have. Everything here is asking price and inventory, and the copy that uses
+ * it has to say so. A seller who prices off a "sold" figure that was really a
+ * list price loses real money.
+ *
+ * Returns null below a floor of 5 active listings: a median of two houses is
+ * not a market, and quoting it would be worse than saying nothing.
+ */
+export function marketStats(city: string): MarketStats | null {
+  const database = getListingsDb();
+  const name = city.trim();
+  if (!name) return null;
+
+  const counts = database
+    .prepare(
+      `SELECT
+         SUM(CASE WHEN LOWER(status) = 'active' THEN 1 ELSE 0 END) AS active,
+         SUM(CASE WHEN LOWER(status) = 'pending' THEN 1 ELSE 0 END) AS pending
+       FROM listings WHERE LOWER(city) = LOWER(?)`,
+    )
+    .get(name) as { active: number | null; pending: number | null };
+  const active = Number(counts?.active ?? 0);
+  if (active < 5) return null;
+
+  /* SQLite has no median, and the average is the wrong statistic here: one
+     $12M ranch drags the mean for a whole suburb. */
+  const median = (column: string): number | null => {
+    const row = database
+      .prepare(
+        `SELECT ${column} AS v FROM listings
+         WHERE LOWER(city) = LOWER(?) AND LOWER(status) = 'active' AND ${column} > 0
+         ORDER BY ${column} LIMIT 1 OFFSET (
+           SELECT COUNT(*) / 2 FROM listings
+           WHERE LOWER(city) = LOWER(?) AND LOWER(status) = 'active' AND ${column} > 0
+         )`,
+      )
+      .get(name, name) as { v: number } | undefined;
+    return row ? Number(row.v) : null;
+  };
+
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const fresh = database
+    .prepare(
+      `SELECT COUNT(*) AS c FROM listings
+       WHERE LOWER(city) = LOWER(?) AND LOWER(status) = 'active' AND listed_at >= ?`,
+    )
+    .get(name, cutoff) as { c: number };
+
+  return {
+    city: name,
+    active,
+    pending: Number(counts?.pending ?? 0),
+    medianActivePrice: median("list_price"),
+    medianSqft: median("living_area"),
+    newLast30: Number(fresh?.c ?? 0),
+  };
+}
+
 export function getListing(keyOrMls: string): (Listing & { raw: unknown }) | null {
   const database = getListingsDb();
   const row = database

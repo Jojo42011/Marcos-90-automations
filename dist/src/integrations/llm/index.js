@@ -23,6 +23,7 @@ const state_js_1 = require("../../core/state.js");
 const funnelDeterministic_js_1 = require("../../app/funnelDeterministic.js");
 const conversationUtils_js_1 = require("../../app/conversationUtils.js");
 const marcoLog_js_1 = require("../../app/marcoLog.js");
+const db_js_1 = require("../../core/db.js");
 const index_js_1 = require("../simplyrets/index.js");
 const listingMatch_js_1 = require("../../core/listingMatch.js");
 /** Default: Claude 3.5 Haiku. Override with ANTHROPIC_MODEL in .env if needed. */
@@ -976,6 +977,12 @@ async function generateMarcoPipelineReply(input) {
         try {
             const match = (0, listingMatch_js_1.matchListingForLead)(lead, conversation);
             const matched = match.confidence === "exact" ? match.listing : null;
+            /* Remember a certain match on the lead itself, so the CRM and the drips
+               can show the property later without re-deriving it from a conversation
+               that will keep growing. Only ever set on `exact`. */
+            if (matched && lead.mlsListingKey !== matched.listingKey) {
+                void (0, db_js_1.updateLeadCrmFields)({ leadId: lead.id, mlsListingKey: matched.listingKey }).catch((e) => console.error("[pipeline] could not link listing to lead:", e));
+            }
             const comps = (0, listingMatch_js_1.comparablesFor)(lead, matched, matched ? 2 : 3);
             if (matched || comps.length) {
                 const fact = (l) => `${[l.street, l.city].filter(Boolean).join(", ")} | ${l.listPrice != null ? "$" + Math.round(l.listPrice).toLocaleString("en-US") : "price on request"}${l.beds != null ? ` | ${l.beds} bed` : ""}${l.baths != null ? ` | ${l.baths} bath` : ""}${l.livingArea ? ` | ${Math.round(l.livingArea).toLocaleString("en-US")} sqft` : ""}${l.status ? ` | ${l.status}` : ""}${l.mlsNumber ? ` | MLS ${l.mlsNumber}` : ""}`;

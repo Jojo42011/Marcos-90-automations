@@ -1,4 +1,11 @@
-import { getListingsDb, searchListings, type Listing } from "./listingsStore.js";
+import {
+  getListing,
+  getListingsDb,
+  marketStats,
+  searchListings,
+  type Listing,
+  type MarketStats,
+} from "./listingsStore.js";
 import type { Conversation, Lead } from "./types.js";
 
 /**
@@ -126,12 +133,39 @@ export function comparablesFor(
     minPrice: price ? Math.round(price * 0.75) : undefined,
     maxPrice: price ? Math.round(price * 1.25) : undefined,
     minBeds: beds || undefined,
-    limit: limit + 4,
+    limit: Math.max(limit * 6, 12),
   });
 
-  return res.listings
-    .filter((l) => !anchor || l.listingKey !== anchor.listingKey)
-    .slice(0, limit);
+  return spreadAcrossStreets(
+    res.listings.filter((l) => !anchor || l.listingKey !== anchor.listingKey),
+    limit,
+  );
+}
+
+/**
+ * One home per street, then fill.
+ *
+ * The mirror is ordered by how recently a listing changed, and in a new-build
+ * subdivision that means three consecutive doors on the same road — the first
+ * shortlist this produced was 9923, 9911 and 9918 Rockcress. Technically three
+ * matches; reads as a machine that only knows one street. Falls back to the
+ * duplicates rather than returning a short list, because a buyer would rather
+ * see three homes on one road than one home.
+ */
+function spreadAcrossStreets(rows: Listing[], limit: number): Listing[] {
+  const seen = new Set<string>();
+  const first: Listing[] = [];
+  const rest: Listing[] = [];
+  for (const l of rows) {
+    /* Street name without the house number — "9923 Rockcress Rd" -> "rockcress rd". */
+    const road = (l.street || "").toLowerCase().replace(/^\s*\d+\s*/, "").trim();
+    if (road && seen.has(road)) rest.push(l);
+    else {
+      if (road) seen.add(road);
+      first.push(l);
+    }
+  }
+  return [...first, ...rest].slice(0, limit);
 }
 
 /** "$534,149" — the only price format that should ever reach a lead. */
@@ -148,4 +182,101 @@ export function specLine(l: Listing): string {
   const head = bits.join(" / ");
   const area = l.livingArea ? `${Math.round(l.livingArea).toLocaleString("en-US")} sqft` : null;
   return [head, area].filter(Boolean).join(", ");
+}
+
+/**
+ * The live listing for a lead, and whether it has moved since anyone looked.
+ *
+ * Prefers the stored `mlsListingKey` (a match we already made and were sure
+ * about) over re-deriving one from free text, so a lead's property does not
+ * silently change identity because the conversation grew.
+ *
+ * Returns the CURRENT record, so a property that has since gone Pending or
+ * changed price reads as it is today rather than as it was when the lead asked.
+ * That difference is the whole reason to look it up live instead of copying
+ * price into the lead at capture time.
+ */
+export function liveListingForLead(
+  lead: Lead,
+  conversation?: Conversation,
+): { listing: Listing | null; source: "linked" | "matched" | "none" } {
+  if (lead.mlsListingKey) {
+    const l = getListing(lead.mlsListingKey);
+    if (l) return { listing: l, source: "linked" };
+  }
+  if (conversation) {
+    const m = matchListingForLead(lead, conversation);
+    if (m.confidence === "exact" && m.listing) return { listing: m.listing, source: "matched" };
+  }
+  return { listing: null, source: "none" };
+}
+
+/**
+ * Active listings that fit what a lead told us they want.
+ *
+ * Used by the drips, where there is no conversation to match against — only
+ * whatever criteria were captured. Returns EMPTY rather than a default city
+ * when we know nothing: an email headed "homes you might like" containing homes
+ * chosen at random is worse than not sending that email at all.
+ *
+ * Never includes the home they already asked about. Everywhere this is used,
+ * it is captioned "a few OTHERS" and sits directly under that property — the
+ * first CRM drawer built on it listed 9923 Rockcress as an alternative to
+ * 9923 Rockcress.
+ */
+export function listingsForCriteria(lead: Lead, limit = 3): Listing[] {
+  const c = lead.criteria;
+  const hasSomething = Boolean(c?.area || c?.priceCap || c?.beds);
+  if (!hasSomething) return [];
+  const cap = c?.priceCap ?? null;
+  const rows = searchListings({
+    city: c?.area || undefined,
+    status: "Active",
+    /* A price cap is a ceiling, not a target: showing homes above it wastes
+       the lead's time and reads as not having listened. */
+    maxPrice: cap || undefined,
+    minPrice: cap ? Math.round(cap * 0.6) : undefined,
+    minBeds: c?.beds || undefined,
+    limit: Math.max(limit * 6, 12),
+  }).listings.filter((l) => l.listingKey !== lead.mlsListingKey);
+  return spreadAcrossStreets(rows, limit);
+}
+
+/**
+ * The market a lead actually cares about, if we can name it.
+ *
+ * City comes from the listing we linked them to first (a seller's own home, a
+ * buyer's exact match) and only then from the area they typed. Free text like
+ * "north side" or "somewhere quiet" is not a city, and `marketStats` returns
+ * null for it rather than guessing — which is the behaviour we want, because
+ * the alternative is quoting San Antonio numbers at someone in Boerne.
+ */
+export function marketForLead(lead: Lead): MarketStats | null {
+  const linked = lead.mlsListingKey ? getListing(lead.mlsListingKey) : null;
+  const city = linked?.city || lead.criteria?.area || null;
+  if (!city) return null;
+  try {
+    return marketStats(city);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One sentence of market context, or null.
+ *
+ * NEVER says "sold". The feed carries Active and Pending only, so every figure
+ * available here is an asking price. Writing "homes near you sold for" over
+ * list-price data would hand a seller a number to price against that no buyer
+ * ever paid, and it is the kind of wrong that only shows up months later when
+ * the house does not move.
+ */
+export function marketSentence(m: MarketStats | null): string | null {
+  if (!m) return null;
+  const bits: string[] = [`${m.active.toLocaleString("en-US")} homes are on the market in ${m.city} right now`];
+  if (m.medianActivePrice) bits.push(`the median asking price is ${money(m.medianActivePrice)}`);
+  if (m.pending) {
+    bits.push(`${m.pending.toLocaleString("en-US")} more are already under contract`);
+  }
+  return bits.join(", ") + ".";
 }
