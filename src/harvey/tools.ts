@@ -34,7 +34,7 @@ import {
 import { getLatestContentDigest } from "../agents/harveyContentDigest/index.js";
 import { getLeadsByTier, getLatestScore, getScoreHistory, type LeadScoreEntry } from "../core/leadScoreStore.js";
 import { getInboundMessageCount } from "../core/smsStore.js";
-import { scoreAllLeads, scoreAndRecordLead, scoreColdLeads } from "../agents/leadScoring/index.js";
+import { scoreAllLeads, scoreAndRecordLead, scoreColdLeads, WEIGHTS as LEAD_SCORE_WEIGHTS } from "../agents/leadScoring/index.js";
 import { routeNewLead } from "../agents/leadNurture/sourceRouting.js";
 import { runWarmLeadWeeklyTouch } from "../agents/leadNurture/warmLeadFlow.js";
 import { runColdLeadMonthlyTouch } from "../agents/leadNurture/coldLeadFlow.js";
@@ -1029,13 +1029,9 @@ function normalizeHarveyToolInput(input: Record<string, unknown>): Record<string
   return out;
 }
 
-const NURTURE_WEIGHTS = {
-  timeline: 25,
-  preApproval: 25,
-  responseCount: 20,
-  propertyViews: 15,
-  showingRequests: 15,
-};
+/* Re-exported from the scoring model rather than copied, so Harvey can never
+   quote a factor ceiling the scorer no longer uses. */
+const NURTURE_WEIGHTS = LEAD_SCORE_WEIGHTS;
 
 function formatPreApproval(status: string | null | undefined): string {
   if (!status) return "Not set";

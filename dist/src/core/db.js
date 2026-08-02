@@ -56,6 +56,7 @@ exports.upsertLeadQuiet = upsertLeadQuiet;
 exports.updateLead = updateLead;
 exports.getConversation = getConversation;
 exports.getInboundDmCount = getInboundDmCount;
+exports.getLastInboundDmAt = getLastInboundDmAt;
 exports.appendMessage = appendMessage;
 exports.normalizeCrmDeal = normalizeCrmDeal;
 exports.normalizeCrmActivity = normalizeCrmActivity;
@@ -596,6 +597,23 @@ function getInboundDmCount(leadId) {
     if (!conv)
         return 0;
     return conv.messages.reduce((n, m) => (m.role === "user" ? n + 1 : n), 0);
+}
+/**
+ * When this lead last said something to us, or null if they never have.
+ *
+ * Deliberately the last INBOUND message rather than the last message: five
+ * unanswered follow-ups we sent yesterday do not make a lead warm, and using
+ * "last touched" would let the system mistake its own activity for interest.
+ */
+function getLastInboundDmAt(leadId) {
+    const conv = conversationsByLeadId.get(leadId);
+    if (!conv)
+        return null;
+    for (let i = conv.messages.length - 1; i >= 0; i--) {
+        if (conv.messages[i].role === "user")
+            return conv.messages[i].at;
+    }
+    return null;
 }
 async function appendMessage(leadId, role, text) {
     const conversation = conversationsByLeadId.get(leadId) ?? { messages: [] };

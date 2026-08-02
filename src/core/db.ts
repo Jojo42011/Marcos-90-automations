@@ -608,6 +608,22 @@ export function getInboundDmCount(leadId: string): number {
   return conv.messages.reduce((n, m) => (m.role === "user" ? n + 1 : n), 0);
 }
 
+/**
+ * When this lead last said something to us, or null if they never have.
+ *
+ * Deliberately the last INBOUND message rather than the last message: five
+ * unanswered follow-ups we sent yesterday do not make a lead warm, and using
+ * "last touched" would let the system mistake its own activity for interest.
+ */
+export function getLastInboundDmAt(leadId: string): string | null {
+  const conv = conversationsByLeadId.get(leadId);
+  if (!conv) return null;
+  for (let i = conv.messages.length - 1; i >= 0; i--) {
+    if (conv.messages[i].role === "user") return conv.messages[i].at;
+  }
+  return null;
+}
+
 export async function appendMessage(
   leadId: string,
   role: Message["role"],

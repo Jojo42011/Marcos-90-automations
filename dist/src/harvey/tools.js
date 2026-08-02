@@ -959,13 +959,9 @@ function normalizeHarveyToolInput(input) {
     }
     return out;
 }
-const NURTURE_WEIGHTS = {
-    timeline: 25,
-    preApproval: 25,
-    responseCount: 20,
-    propertyViews: 15,
-    showingRequests: 15,
-};
+/* Re-exported from the scoring model rather than copied, so Harvey can never
+   quote a factor ceiling the scorer no longer uses. */
+const NURTURE_WEIGHTS = index_js_8.WEIGHTS;
 function formatPreApproval(status) {
     if (!status)
         return "Not set";

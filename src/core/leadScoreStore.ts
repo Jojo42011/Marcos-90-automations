@@ -43,12 +43,28 @@ export function getLeadScoreDb(): Database.Database {
   return db;
 }
 
+/**
+ * The parts of a lead's score.
+ *
+ * Every field is optional because rows written before the 2026-08 reweight are
+ * still in the table under the OLD factor names. A historical row is a record
+ * of what the system believed at the time and must stay readable; making these
+ * required would mean either a migration that rewrites history or a type that
+ * lies about what is on disk.
+ */
 export interface ScoringFactors {
-  timeline: number;
-  preApproval: number;
-  responseCount: number;
-  propertyViews: number;
-  showingRequests: number;
+  /* Current model. */
+  engagement?: number;
+  funnelDepth?: number;
+  recency?: number;
+  contactable?: number;
+  intentSignals?: number;
+  /* Pre-2026-08 model, kept so old rows still parse and display. */
+  timeline?: number;
+  preApproval?: number;
+  responseCount?: number;
+  propertyViews?: number;
+  showingRequests?: number;
 }
 
 export interface LeadScoreEntry {

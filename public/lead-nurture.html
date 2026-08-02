@@ -611,7 +611,11 @@
   <div class="ln-toast" id="ln-toast" role="status"></div>
 
   <script>
-    const WEIGHTS = { timeline: 25, preApproval: 25, responseCount: 20, propertyViews: 15, showingRequests: 15 };
+    /* Mirrors WEIGHTS in src/agents/leadScoring/index.ts. The API also returns
+       factorMax on every lead; that is authoritative and these are the fallback
+       for a row scored before the 2026-08 reweight. */
+    const WEIGHTS = { engagement: 30, funnelDepth: 25, recency: 20, contactable: 10, intentSignals: 15 };
+    const LEGACY_WEIGHTS = { timeline: 25, preApproval: 25, responseCount: 20, propertyViews: 15, showingRequests: 15 };
     let autoRefreshTimer = null;
     let coldLeadsCache = [];
     let coldPage = 0;
@@ -657,7 +661,15 @@
       requestAnimationFrame(update);
     }
 
-    const FACTOR_ORDER = ["timeline", "preApproval", "responseCount", "propertyViews", "showingRequests"];
+    const FACTOR_ORDER = ["engagement", "funnelDepth", "recency", "contactable", "intentSignals"];
+    const LEGACY_FACTOR_ORDER = ["timeline", "preApproval", "responseCount", "propertyViews", "showingRequests"];
+    /* Old rows carry the old keys. Detect which model a row was scored under
+       rather than showing five empty bars for anything scored before the change. */
+    function factorSetFor(factors) {
+      const hasNew = FACTOR_ORDER.some((k) => factors && factors[k] != null);
+      return hasNew ? { order: FACTOR_ORDER, weights: WEIGHTS }
+                    : { order: LEGACY_FACTOR_ORDER, weights: LEGACY_WEIGHTS };
+    }
 
     function formatPreApprovalShort(status) {
       if (!status) return "Not set";
@@ -669,6 +681,30 @@
 
     function factorRealLabel(key, lead) {
       if (!lead) return "-";
+      if (key === "engagement") {
+        const n = lead.inboundReplyCount ?? 0;
+        return n === 1 ? "1 reply from them" : `${n} replies from them`;
+      }
+      if (key === "funnelDepth") {
+        const st = lead.stage || lead.state || "";
+        return st ? String(st).replace(/_/g, " ") : "No stage";
+      }
+      if (key === "recency") {
+        const iso = lead.lastInboundAt || lead.lastActivity;
+        if (!iso) return "Never replied";
+        const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+        if (d <= 0) return "Replied today";
+        return d === 1 ? "Replied yesterday" : `Replied ${d}d ago`;
+      }
+      if (key === "contactable") return lead.phone ? "Phone on file" : "No phone";
+      if (key === "intentSignals") {
+        const bits = [];
+        if (lead.timeline || lead.criteria?.timeline) bits.push("timeline");
+        if (lead.preApprovalStatus) bits.push("pre-approval");
+        if (lead.propertyViewsCount) bits.push("views");
+        if (lead.showingAppointment) bits.push("showing");
+        return bits.length ? bits.join(", ") : "No extra signals";
+      }
       if (key === "timeline") {
         const t = lead.timeline || lead.criteria?.timeline;
         return t ? String(t).slice(0, 32) : "Timeline not set";
@@ -693,6 +729,11 @@
 
     function factorShortWord(key, val, maxVal) {
       const pct = maxVal ? Number(val) / maxVal : 0;
+      if (key === "engagement") return pct >= 0.9 ? "Active" : pct >= 0.5 ? "Some" : pct > 0 ? "Once" : "Quiet";
+      if (key === "funnelDepth") return pct >= 0.9 ? "Deep" : pct >= 0.5 ? "Mid" : pct > 0 ? "Early" : "None";
+      if (key === "recency") return pct >= 0.9 ? "Now" : pct >= 0.5 ? "Recent" : pct > 0 ? "Stale" : "Cold";
+      if (key === "contactable") return pct >= 1 ? "Callable" : "No phone";
+      if (key === "intentSignals") return pct >= 0.6 ? "Strong" : pct > 0 ? "Some" : "None";
       if (key === "timeline") return pct >= 0.9 ? "ASAP" : pct >= 0.5 ? "Soon" : "Later";
       if (key === "preApproval") return pct >= 1 ? "Ready" : pct >= 0.5 ? "Partial" : "Gap";
       if (key === "responseCount") return pct >= 0.9 ? "Active" : pct >= 0.4 ? "Some" : "Quiet";
@@ -704,15 +745,21 @@
     function buildScoreFactorBars(factors, lead) {
       if (!factors) return "";
       const labels = {
+        engagement: "Replies",
+        funnelDepth: "Funnel",
+        recency: "Recency",
+        contactable: "Phone",
+        intentSignals: "Signals",
         timeline: "Timeline",
         preApproval: "Pre-Apprvl",
         responseCount: "Replies",
         propertyViews: "Views",
         showingRequests: "Showings",
       };
-      return `<div class="ln-factor-grid">${FACTOR_ORDER.map((key) => {
+      const set = factorSetFor(factors);
+      return `<div class="ln-factor-grid">${set.order.map((key) => {
         const val = Number(factors[key] ?? 0);
-        const maxVal = WEIGHTS[key] || 25;
+        const maxVal = set.weights[key] || 25;
         const pct = Math.max(22, Math.min(100, Math.round((val / maxVal) * 100)));
         const fillCls = pct >= 70 ? "" : pct >= 40 ? " mid" : " low";
         const real = escapeHtml(factorRealLabel(key, lead));

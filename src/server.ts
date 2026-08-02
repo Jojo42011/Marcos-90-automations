@@ -432,7 +432,7 @@ import {
   checkCloseDayTriggers,
   checkScheduledClientCheckIns,
 } from "./agents/transactionFlows/postCloseFlow.js";
-import { scoreAllLeads, scoreAndRecordLead, scoreColdLeads } from "./agents/leadScoring/index.js";
+import { scoreAllLeads, scoreAndRecordLead, scoreColdLeads, WEIGHTS as LEAD_SCORE_WEIGHTS } from "./agents/leadScoring/index.js";
 import { runWarmLeadWeeklyTouch } from "./agents/leadNurture/warmLeadFlow.js";
 import { runColdLeadMonthlyTouch } from "./agents/leadNurture/coldLeadFlow.js";
 import { routeNewLead } from "./agents/leadNurture/sourceRouting.js";
@@ -10351,7 +10351,10 @@ app.get("/api/lead-nurture/tier-detail/:tier", async (req, res) => {
         previousScore: s.previousScore,
         scoreDate: s.scoreDate,
         scoringFactors: s.scoringFactors,
-        factorMax: { timeline: 25, preApproval: 25, responseCount: 20, propertyViews: 15, showingRequests: 15 },
+        /* From the model, never restated. A second copy of the weights is a
+           copy that drifts, and this one already had: it still described the
+           pre-2026-08 factors months after they stopped being scored. */
+        factorMax: LEAD_SCORE_WEIGHTS,
         tier: s.tier,
         name: lead?.name || lead?.username || "Unknown",
         phone: lead?.phone || null,
