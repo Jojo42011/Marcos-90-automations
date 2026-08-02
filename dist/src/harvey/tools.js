@@ -1103,11 +1103,18 @@ async function executeHarveyTool(name, input) {
                 totalMatching: out.total,
                 count: out.listings.length,
                 stale: st.stale,
+                mirrorComplete: st.mirrorComplete,
                 hoursSinceLastSync: st.hoursSinceLastSync,
                 listings: out.listings,
-                say: st.stale
-                    ? "This mirror is stale — say when it last synced rather than presenting it as live."
-                    : undefined,
+                /* While the backfill is running the mirror holds only the most recently
+                   changed slice of the board, so "no matches" does not mean "not for
+                   sale". Saying so is the difference between a caveat and a wrong
+                   answer. */
+                say: !st.mirrorComplete
+                    ? "The MLS mirror is still backfilling and does NOT yet cover the whole board. If you found nothing, say the search is incomplete rather than that nothing exists."
+                    : st.stale
+                        ? "This mirror is stale — say when it last synced rather than presenting it as live."
+                        : undefined,
             };
         }
         case "get_listing": {
@@ -1118,8 +1125,14 @@ async function executeHarveyTool(name, input) {
             }
             const row = (0, listingsStore_js_1.getListing)(String(normalized.id ?? "").trim());
             if (!row) {
-                return { ok: false, error: "No listing with that key or MLS number in the local mirror.",
-                    say: "Say it is not in the feed we hold. It may exist on another board or be older than our sync window." };
+                return {
+                    ok: false,
+                    error: "No listing with that key or MLS number in the local mirror.",
+                    mirrorComplete: st.mirrorComplete,
+                    say: st.mirrorComplete
+                        ? "Say it is not in the feed we hold. It may be on another board or outside our sync window."
+                        : "The mirror is still backfilling, so this may simply not have synced yet. Do not say the property does not exist.",
+                };
             }
             return { ok: true, listing: row };
         }

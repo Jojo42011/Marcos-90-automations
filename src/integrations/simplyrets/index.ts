@@ -15,10 +15,16 @@
  * sends no `X-Total-Count`, so the only honest way to know whether more remain
  * is to follow the link until it stops appearing.
  *
- * INCREMENTAL SYNC has no "modified since" filter here. What exists is
- * `sort=-modified`, newest change first, so a sync walks from the top and stops
- * the moment it reaches something it already has. That is why `fetchProperties`
- * takes `stopAtModified` rather than a `since` filter.
+ * SYNC IS TWO-PHASE, and it has to be. There is no "modified since" filter —
+ * only `sort=-modified` (newest change first). So the steady state is a walk
+ * from the top that stops at the first listing already held (`stopAtModified`).
+ *
+ * That alone is NOT enough. If the first pull is capped before reaching the
+ * bottom of the board, a top-walk stops at record #1 on every later run and the
+ * listings below the cap are never fetched — a mirror permanently missing its
+ * older half while reporting itself healthy. So until the board has been walked
+ * to the end once, sync runs in BACKFILL mode using `offset`, and only switches
+ * to the incremental top-walk after a page comes back empty.
  *
  * NOTHING IS FAKED WHEN UNCONFIGURED. Missing credentials return an explicit
  * failure naming the variable, never an empty listing array — "no listings" and
@@ -134,11 +140,15 @@ export interface FetchOptions {
    */
   stopAtModified?: string | null;
   maxRecords?: number;
+  /** Start position for the backfill walk. Omitted for the incremental top-walk. */
+  offset?: number;
 }
 
 export async function fetchProperties(
   opts: FetchOptions = {},
-): Promise<{ ok: true; records: Record<string, unknown>[]; truncated: boolean } | FeedProblem> {
+): Promise<
+  { ok: true; records: Record<string, unknown>[]; truncated: boolean; exhausted: boolean } | FeedProblem
+> {
   const cfg = simplyRetsConfig();
   if ("ok" in cfg) return cfg;
 
@@ -149,10 +159,12 @@ export async function fetchProperties(
      repeat or skip rows as the feed shifts underneath it. */
   params.set("sort", "-modified");
   if (cfg.vendor) params.set("vendor", cfg.vendor);
+  if (opts.offset && opts.offset > 0) params.set("offset", String(opts.offset));
 
   let url: string | null = `${cfg.baseUrl}/properties?${params.toString()}`;
   const records: Record<string, unknown>[] = [];
   let reachedKnown = false;
+  let exhausted = false;
   let guard = 0;
 
   while (url && records.length < max && !reachedKnown) {
@@ -162,7 +174,7 @@ export async function fetchProperties(
     const page: RawPage | FeedProblem = await getPage(url, cfg);
     if ("error" in page) {
       /* Keep what already succeeded rather than discarding a partial pull. */
-      if (records.length) return { ok: true, records: records.slice(0, max), truncated: true };
+      if (records.length) return { ok: true, records: records.slice(0, max), truncated: true, exhausted: false };
       return page;
     }
     for (const rec of page.records) {
@@ -174,7 +186,16 @@ export async function fetchProperties(
       records.push(rec);
       if (records.length >= max) break;
     }
-    if (!page.records.length) break;
+    /* An empty page is the feed telling us there is nothing further down.
+       That, not a record count, is what ends a backfill. */
+    if (!page.records.length) {
+      exhausted = true;
+      break;
+    }
+    if (!page.next) {
+      exhausted = true;
+      break;
+    }
     url = page.next;
   }
 
@@ -183,7 +204,8 @@ export async function fetchProperties(
     records: records.slice(0, max),
     /* Only "truncated" if the cap stopped us, not if we stopped because we
        caught up — those mean very different things to the caller. */
-    truncated: !reachedKnown && records.length >= max,
+    truncated: !reachedKnown && !exhausted && records.length >= max,
+    exhausted,
   };
 }
 

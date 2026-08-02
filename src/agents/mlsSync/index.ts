@@ -1,6 +1,8 @@
 import { fetchProperties, isMlsFeedConfigured, simplyRetsConfig } from "../../integrations/simplyrets/index.js";
 import {
   finishSyncRun,
+  getBackfillState,
+  setBackfillState,
   fromSimplyRets,
   lastSuccessfulSync,
   listingCounts,
@@ -34,6 +36,8 @@ let running = false;
 export interface MlsSyncResult {
   ran: boolean;
   ok?: boolean;
+  phase?: "backfill" | "incremental";
+  backfillComplete?: boolean;
   fetched?: number;
   upserted?: number;
   truncated?: boolean;
@@ -53,13 +57,18 @@ export async function runMlsSync(): Promise<MlsSyncResult> {
   if (running) return { ran: false, error: "A sync is already in progress." };
   running = true;
 
+  const backfill = getBackfillState();
   const since = newestModificationTs();
   const runId = startSyncRun();
   try {
-    const res = await fetchProperties({
-      stopAtModified: since,
-      maxRecords: since ? INCREMENTAL_MAX : FIRST_RUN_MAX,
-    });
+    /* Two phases. Until the board has been walked to the bottom once, keep
+       paging DOWNWARD from where the last run stopped; a top-walk would halt at
+       record #1 every time and the older half of the board would never arrive.
+       Once a page comes back empty the mirror is complete and every later run
+       is a cheap top-walk that stops at the first listing already held. */
+    const res = backfill.complete
+      ? await fetchProperties({ stopAtModified: since, maxRecords: INCREMENTAL_MAX })
+      : await fetchProperties({ offset: backfill.offset, maxRecords: FIRST_RUN_MAX });
     if ("error" in res) {
       finishSyncRun(runId, { ok: false, error: res.error });
       console.error("[MlsSync] failed:", res.error);
@@ -69,11 +78,32 @@ export async function runMlsSync(): Promise<MlsSyncResult> {
       .map(fromSimplyRets)
       .filter((r) => r.listingKey);
     const upserted = upsertListings(rows);
+
+    let phase: "backfill" | "incremental" = backfill.complete ? "incremental" : "backfill";
+    if (!backfill.complete) {
+      if (res.exhausted) {
+        setBackfillState({ complete: true, offset: 0 });
+        phase = "backfill";
+        console.log("[MlsSync] Backfill complete — switching to incremental top-walk.");
+      } else {
+        setBackfillState({ offset: backfill.offset + res.records.length });
+      }
+    }
+
     finishSyncRun(runId, { ok: true, fetched: res.records.length, upserted });
     console.log(
-      `[MlsSync] ${res.records.length} fetched, ${upserted} stored${res.truncated ? " (capped — more remain, next run continues)" : ""}`,
+      `[MlsSync] ${phase}: ${res.records.length} fetched, ${upserted} stored` +
+        (res.truncated ? " (capped — next run resumes)" : ""),
     );
-    return { ran: true, ok: true, fetched: res.records.length, upserted, truncated: res.truncated };
+    return {
+      ran: true,
+      ok: true,
+      phase,
+      backfillComplete: getBackfillState().complete,
+      fetched: res.records.length,
+      upserted,
+      truncated: res.truncated,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     finishSyncRun(runId, { ok: false, error: message });
@@ -99,8 +129,13 @@ export function mlsStatus(): Record<string, unknown> {
   const ageHours = last?.finishedAt
     ? (Date.now() - new Date(last.finishedAt).getTime()) / 3_600_000
     : null;
+  const backfill = getBackfillState();
   return {
     configured,
+    /* An in-progress backfill is NOT a complete picture of the market, and a
+       listing count on its own would imply it is. */
+    mirrorComplete: backfill.complete,
+    ...(backfill.complete ? {} : { backfillOffset: backfill.offset }),
     ...(configured ? {} : { error: "ok" in cfg ? cfg.error : undefined, fix: "ok" in cfg ? cfg.fix : undefined }),
     vendor: configured && !("ok" in cfg) ? cfg.vendor : null,
     listings: counts.total,
@@ -112,7 +147,9 @@ export function mlsStatus(): Record<string, unknown> {
     note: configured
       ? counts.total === 0
         ? "Configured but nothing stored yet — run a sync."
-        : undefined
+        : backfill.complete
+          ? undefined
+          : `Backfill still running (${counts.total} listings so far). Searches work but do NOT yet cover the whole board.`
       : "Not connected to the MLS feed. Listing tools will say so rather than return an empty market.",
   };
 }

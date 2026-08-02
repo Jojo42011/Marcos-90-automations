@@ -14,6 +14,8 @@ exports.startSyncRun = startSyncRun;
 exports.finishSyncRun = finishSyncRun;
 exports.recentSyncRuns = recentSyncRuns;
 exports.lastSuccessfulSync = lastSuccessfulSync;
+exports.getBackfillState = getBackfillState;
+exports.setBackfillState = setBackfillState;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
@@ -85,6 +87,18 @@ function initListingsSchema(database) {
     /* One row per sync attempt, successes AND failures. A feed that silently
        stopped updating looks exactly like a quiet market until you can see that
        the last successful run was eleven days ago. */
+    /* Backfill progress. Without this the mirror is silently incomplete: the
+       incremental walk goes newest-first and stops at the first listing already
+       held, so anything below a capped first pull would never be reached and the
+       status endpoint would still report a healthy feed. */
+    database.exec(`
+    CREATE TABLE IF NOT EXISTS listing_sync_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      backfill_complete INTEGER NOT NULL DEFAULT 0,
+      backfill_offset INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+    database.exec(`INSERT OR IGNORE INTO listing_sync_state (id) VALUES (1)`);
     database.exec(`
     CREATE TABLE IF NOT EXISTS listing_syncs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -356,4 +370,16 @@ function lastSuccessfulSync() {
         upserted: Number(r.upserted),
         error: null,
     };
+}
+function getBackfillState() {
+    const r = getListingsDb()
+        .prepare(`SELECT backfill_complete, backfill_offset FROM listing_sync_state WHERE id = 1`)
+        .get();
+    return { complete: Number(r?.backfill_complete) === 1, offset: Number(r?.backfill_offset ?? 0) };
+}
+function setBackfillState(state) {
+    const cur = getBackfillState();
+    getListingsDb()
+        .prepare(`UPDATE listing_sync_state SET backfill_complete = ?, backfill_offset = ? WHERE id = 1`)
+        .run((state.complete ?? cur.complete) ? 1 : 0, Math.max(0, state.offset ?? cur.offset));
 }
