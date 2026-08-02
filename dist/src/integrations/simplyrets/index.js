@@ -89,6 +89,16 @@ async function getPage(url, cfg) {
         });
         const text = await res.text();
         if (!res.ok) {
+            /* SimplyRETS signals "you have paged past the end" with 400
+               InvalidArguments / "offset too high" rather than an empty page. Treated
+               as an error it looks like a broken feed and the backfill retries the
+               same doomed offset forever; treated as end-of-feed it is simply the
+               bottom of the board. Found by running the real backfill to its end —
+               a mock returns an empty page here, which is the sane behaviour and not
+               the one the vendor implements. */
+            if (res.status === 400 && /offset too high/i.test(text)) {
+                return { ok: true, records: [], next: null, endOfFeed: true };
+            }
             const fix = res.status === 401
                 ? "SimplyRETS rejected the credentials. Check SIMPLYRETS_USERNAME and SIMPLYRETS_PASSWORD are the pair from the credentials page."
                 : res.status === 403
@@ -155,9 +165,9 @@ async function fetchProperties(opts = {}) {
             if (records.length >= max)
                 break;
         }
-        /* An empty page is the feed telling us there is nothing further down.
-           That, not a record count, is what ends a backfill. */
-        if (!page.records.length) {
+        /* An empty page, or an explicit "offset too high", is the feed telling us
+           there is nothing further down. That, not a record count, ends a backfill. */
+        if (page.endOfFeed || !page.records.length) {
             exhausted = true;
             break;
         }
