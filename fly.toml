@@ -4,6 +4,11 @@
 app = "marco-90-automation"
 primary_region = "dfw"
 
+# Top-level ON PURPOSE. In TOML a bare key attaches to the table header above
+# it, so placing this further down silently made it http_service.checks.swap
+# and the machine came up with SwapTotal: 0 while the config still "validated".
+swap_size_mb = 1024
+
 [build]
 
 [[mounts]]
@@ -33,6 +38,24 @@ primary_region = "dfw"
     path = "/health"
     timeout = "10s"
 
+# Sized from measurement, not from headroom-by-default. Over 26.7h on the old
+# performance-2x the whole machine used 0.81% of its two DEDICATED cores
+# (load average 0.00/0.00/0.00) while ~$58 of the $80 monthly bill was those
+# cores. Dedicated CPU costs roughly 14x shared and nothing here needed it.
+#
+# shared-cpu-8x gives FOUR TIMES the cores for burst at a fraction of the price;
+# the video pipeline is the only CPU-hungry path and it renders a handful of
+# clips a month, so burst is the right shape for it rather than reserved cores.
+#
+# 2gb against a measured 803MB peak across all three services. `swap_size_mb`
+# is the safety net that makes that number sensible instead of brave: a render
+# spawning ffmpeg can spike, and swapping to the (99% empty) data volume makes
+# the worst case SLOW rather than an OOM kill that takes the scheduled agents
+# down with it.
+#
+# KEEP THIS IN SYNC WITH THE RUNNING MACHINE. `flyctl deploy` applies this
+# block, so a stale size here silently re-inflates the bill on the next deploy —
+# which is exactly what would have happened after the first resize.
 [[vm]]
-  size = "performance-2x"
-  memory = "4gb"
+  size = "shared-cpu-8x"
+  memory = "2gb"
