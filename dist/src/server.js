@@ -9435,7 +9435,7 @@ app.get("/api/lead-nurture/summary", async (req, res) => {
     const topHotLead = top
         ? {
             ...top,
-            name: topLead?.name || topLead?.username || "Unknown",
+            name: leadDisplayNameSafe(topLead),
             phone: topLead?.phone || null,
         }
         : null;
