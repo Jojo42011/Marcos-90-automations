@@ -871,6 +871,10 @@ app.get("/team-tasks", requireAuthPage, (_req, res) => {
 });
 
 // Harvey Jobs — start a job, watch each step, read what it produced.
+app.get("/listings", requireAuthPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "listings.html"));
+});
+
 app.get("/jobs", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "jobs.html"));
 });

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLS · Marco Puga</title>
+<style>
+  /* Matches the light command-center pages (jobs/tracker): plain CSS, no build
+     step, no framework. */
+  :root{
+    --bg:#F6F7F9; --card:#FFFFFF; --line:#E3E7EE; --ink:#0F172A; --muted:#64748B;
+    --brand:#0E7490; --brand2:#0891B2; --urgent:#DC2626; --ok:#059669; --amber:#B45309;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .top{display:flex;align-items:center;gap:14px;padding:14px 20px;background:var(--card);
+       border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+  .top h1{font-size:16px;margin:0;letter-spacing:.02em}
+  .feed{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;
+        padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--amber)} .dot.bad{background:var(--urgent)}
+  .wrap{padding:18px 20px;max-width:1400px;margin:0 auto}
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;
+           background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:16px}
+  label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+        letter-spacing:.05em;margin-bottom:5px}
+  input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+               font:inherit;background:#fff;color:var(--ink)}
+  input:focus,select:focus{outline:none;border-color:var(--brand2)}
+  .acts{display:flex;align-items:flex-end;gap:8px}
+  button{padding:9px 16px;border:none;border-radius:8px;background:var(--brand);color:#fff;
+         font-weight:700;cursor:pointer;font-size:13px}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  button:disabled{opacity:.55;cursor:default}
+  .count{font-size:12.5px;color:var(--muted);margin:0 0 12px;font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+        display:flex;flex-direction:column}
+  .photo{width:100%;aspect-ratio:4/3;object-fit:cover;background:#EEF2F7;display:block}
+  .nophoto{width:100%;aspect-ratio:4/3;background:#EEF2F7;display:flex;align-items:center;
+           justify-content:center;color:var(--muted);font-size:12px}
+  .body{padding:12px 13px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .price{font-size:18px;font-weight:800;letter-spacing:-.01em}
+  .addr{font-weight:700;font-size:13.5px}
+  .sub{font-size:12px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto;padding-top:8px}
+  .chip{font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:999px;
+        border:1px solid var(--line);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .chip.active{color:var(--ok);border-color:var(--ok)}
+  .chip.pending{color:var(--amber);border-color:var(--amber)}
+  .empty{padding:40px 20px;text-align:center;color:var(--muted);background:var(--card);
+         border:1px solid var(--line);border-radius:12px}
+  .warn{background:#FFFBEB;border:1px solid #FCD34D;color:#92400E;padding:11px 14px;
+        border-radius:10px;font-size:12.5px;font-weight:600;margin-bottom:14px}
+  .err{background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>MLS · SABOR</h1>
+  <span class="feed"><span class="dot" id="dot"></span><span id="feedTxt">checking feed…</span></span>
+  <span style="margin-left:auto"><button class="ghost" id="syncBtn">Sync now</button></span>
+</div>
+
+<div class="wrap">
+  <!-- Populated only when the feed itself has something to say. An always-present
+       banner is one nobody reads. -->
+  <div id="banner" style="display:none"></div>
+
+  <div class="filters">
+    <div><label>Search</label><input id="q" placeholder="address, subdivision, MLS #"></div>
+    <div><label>City</label><input id="city" placeholder="Boerne"></div>
+    <div><label>Status</label><select id="status">
+      <option value="Active">Active</option><option value="Pending">Pending</option>
+      <option value="">Any</option></select></div>
+    <div><label>Min price</label><input id="minPrice" type="number" placeholder="400000"></div>
+    <div><label>Max price</label><input id="maxPrice" type="number" placeholder="600000"></div>
+    <div><label>Min beds</label><input id="minBeds" type="number" placeholder="3"></div>
+    <div><label>Min baths</label><input id="minBaths" type="number" placeholder="2"></div>
+    <div class="acts"><button id="go">Search</button><button class="ghost" id="clear">Clear</button></div>
+  </div>
+
+  <p class="count" id="count"></p>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+function token(){
+  const p = new URLSearchParams(location.search);
+  return p.get("token") || localStorage.getItem("dashboardToken") || "";
+}
+function url(path, params){
+  const u = new URL(path, location.origin);
+  if (params) for (const [k,v] of Object.entries(params)) if (v !== "" && v != null) u.searchParams.set(k,v);
+  const t = token(); if (t) u.searchParams.set("token", t);
+  return u.toString();
+}
+const esc = s => { const d=document.createElement("div"); d.textContent = s==null?"":String(s); return d.innerHTML; };
+const money = n => n==null ? "—" : "$" + Number(n).toLocaleString();
+const el = id => document.getElementById(id);
+
+/* The feed's own health, shown before any results. A page that renders an empty
+   grid without saying the feed is down is how "no listings" gets mistaken for
+   "no market". */
+async function paintFeed(){
+  let s;
+  try { s = await fetch(url("/api/mls/status")).then(r=>r.json()); }
+  catch { el("feedTxt").textContent = "status unavailable"; return; }
+
+  const dot = el("dot"), banner = el("banner");
+  banner.style.display = "none";
+  banner.className = "";
+
+  if (!s.configured){
+    dot.className = "dot bad";
+    el("feedTxt").textContent = "not connected";
+    banner.className = "warn err"; banner.style.display = "block";
+    banner.innerHTML = esc(s.error || "MLS feed is not connected.") + (s.fix ? "<br>" + esc(s.fix) : "");
+    return;
+  }
+  const hrs = s.hoursSinceLastSync;
+  dot.className = "dot " + (s.stale ? "warn" : "ok");
+  el("feedTxt").textContent =
+    Number(s.listings).toLocaleString() + " listings · " +
+    (hrs == null ? "never synced" : hrs < 1 ? "synced just now" : "synced " + hrs + "h ago");
+
+  if (!s.mirrorComplete){
+    banner.className = "warn"; banner.style.display = "block";
+    banner.textContent = "Still backfilling — " + Number(s.listings).toLocaleString() +
+      " listings so far. Searches work but do not yet cover the whole board.";
+  } else if (s.stale){
+    banner.className = "warn"; banner.style.display = "block";
+    banner.textContent = "Last successful sync was " + hrs + " hours ago. These prices may be out of date.";
+  }
+}
+
+function card(l){
+  const beds = l.beds != null ? l.beds + " bd" : null;
+  const baths = l.baths != null ? l.baths + " ba" : null;
+  const area = l.livingArea ? Number(l.livingArea).toLocaleString() + " sqft" : null;
+  const line = [beds, baths, area].filter(Boolean).join(" · ");
+  const st = (l.status||"").toLowerCase();
+  const stCls = st === "active" ? "active" : st === "pending" ? "pending" : "";
+  return '<div class="card">' +
+    (l.photoUrl
+      ? '<img class="photo" loading="lazy" src="'+esc(l.photoUrl)+'" alt="" onerror="this.outerHTML=\'<div class=&quot;nophoto&quot;>no photo</div>\'">'
+      : '<div class="nophoto">no photo</div>') +
+    '<div class="body">' +
+      '<div class="price">'+money(l.listPrice)+'</div>' +
+      '<div class="addr">'+esc(l.street||"(no address)")+'</div>' +
+      '<div class="sub">'+esc([l.city,l.state,l.postalCode].filter(Boolean).join(", "))+'</div>' +
+      (line ? '<div class="sub">'+esc(line)+'</div>' : '') +
+      (l.subdivision ? '<div class="sub">'+esc(l.subdivision)+'</div>' : '') +
+      '<div class="chips">' +
+        (l.status ? '<span class="chip '+stCls+'">'+esc(l.status)+'</span>' : '') +
+        (l.mlsNumber ? '<span class="chip">MLS '+esc(l.mlsNumber)+'</span>' : '') +
+        (l.yearBuilt ? '<span class="chip">'+esc(l.yearBuilt)+'</span>' : '') +
+      '</div>' +
+    '</div></div>';
+}
+
+let busy = false;
+async function search(){
+  if (busy) return;
+  busy = true; el("go").disabled = true;
+  el("count").textContent = "Searching…";
+  try {
+    const d = await fetch(url("/api/mls/listings", {
+      q: el("q").value.trim(), city: el("city").value.trim(), status: el("status").value,
+      minPrice: el("minPrice").value, maxPrice: el("maxPrice").value,
+      minBeds: el("minBeds").value, minBaths: el("minBaths").value, limit: 60,
+    })).then(r=>r.json());
+
+    if (d.error){ el("count").textContent = ""; el("grid").innerHTML =
+      '<div class="empty">'+esc(d.error)+'</div>'; return; }
+
+    const rows = d.listings || [];
+    /* Both numbers, because "60 shown" and "60 exist" are very different
+       answers to "what's on the market". */
+    el("count").textContent = rows.length
+      ? "Showing " + rows.length + " of " + Number(d.total).toLocaleString() + " matching"
+      : "";
+    el("grid").innerHTML = rows.length
+      ? rows.map(card).join("")
+      : '<div class="empty">No listings match those filters.</div>';
+  } catch (e) {
+    el("count").textContent = "";
+    el("grid").innerHTML = '<div class="empty">Search failed: '+esc(e.message)+'</div>';
+  } finally { busy = false; el("go").disabled = false; }
+}
+
+el("go").onclick = search;
+el("clear").onclick = () => {
+  ["q","city","minPrice","maxPrice","minBeds","minBaths"].forEach(i => el(i).value = "");
+  el("status").value = "Active"; search();
+};
+["q","city","minPrice","maxPrice","minBeds","minBaths"].forEach(i =>
+  el(i).addEventListener("keydown", e => { if (e.key === "Enter") search(); }));
+el("status").onchange = search;
+
+el("syncBtn").onclick = async () => {
+  const b = el("syncBtn"); b.disabled = true; b.textContent = "Syncing…";
+  try {
+    const r = await fetch(url("/api/mls/sync"), { method:"POST", headers:{"Content-Type":"application/json"}, body:"{}" }).then(r=>r.json());
+    b.textContent = r.ok ? "Synced (+" + (r.upserted||0) + ")" : "Sync failed";
+    await paintFeed(); await search();
+  } catch { b.textContent = "Sync failed"; }
+  setTimeout(()=>{ b.disabled=false; b.textContent="Sync now"; }, 2500);
+};
+
+paintFeed();
+search();
+setInterval(paintFeed, 120000);
+</script>
+</body>
+</html>
