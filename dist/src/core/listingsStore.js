@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getListingsDb = getListingsDb;
-exports.fromResoProperty = fromResoProperty;
+exports.fromSimplyRets = fromSimplyRets;
 exports.upsertListings = upsertListings;
 exports.searchListings = searchListings;
 exports.getListing = getListing;
@@ -18,19 +18,18 @@ const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 /**
- * MLS listings, pulled from Bridge Interactive and cached locally.
+ * MLS listings, pulled from SimplyRETS (SABOR / San Antonio Board of REALTORS)
+ * and cached locally.
  *
  * WHY CACHE AT ALL. Every MLS feed is rate-limited and most licences forbid
  * hammering them per user request. A local mirror also means the DM pipeline
  * can answer "what's the price on that Canyon Lake place" in milliseconds
  * instead of blocking a lead's reply on a third-party round trip.
  *
- * FIELD NAMES ARE RESO. `ListingKey`, `StandardStatus`, `ListPrice` and the
- * rest are the RESO Data Dictionary spellings that Bridge returns verbatim.
- * Renaming them to something prettier would mean maintaining a translation
- * table against a spec that changes yearly, and would make every future
- * question ("does Bridge send LivingArea or AboveGradeFinishedArea?")
- * unanswerable without reading two files instead of one.
+ * COLUMNS ARE FLATTENED, RAW IS KEPT. SimplyRETS nests the interesting parts
+ * three levels down (`property.bedrooms`, `address.city`, `mls.status`), which
+ * is fine to read and impossible to index. The columns below are the handful
+ * worth querying on; everything else stays in `raw`.
  *
  * `raw` keeps the untouched record. MLS feeds carry hundreds of fields, vary
  * by board, and the ones nobody thought to map are exactly the ones an agent
@@ -117,56 +116,62 @@ const str = (v) => {
     const s = String(v).trim();
     return s ? s : null;
 };
+/** Fallback address when the feed omits the pre-assembled `full`. */
+function fromParts(addr) {
+    return [str(addr.streetNumberText) ?? str(addr.streetNumber), str(addr.streetName)]
+        .filter(Boolean)
+        .join(" ");
+}
 /**
- * Flatten a RESO Property record into the columns we query on.
+ * Flatten one SimplyRETS listing into the columns we query on.
  *
- * Address is assembled from the RESO parts rather than trusting
- * `UnparsedAddress`, which many boards leave empty even when the components
- * are all present.
+ * Mapped against the LIVE payload rather than the docs — verified on real SABOR
+ * records, which is why `street` uses `address.full` (already assembled and
+ * correct) instead of rebuilding it from `streetNumber` + `streetName`, and why
+ * baths combine `bathsFull` with a half-count that the feed reports separately.
+ *
+ * `mlsId` is the stable primary key; `listingId` is the human-facing MLS number
+ * an agent actually types. Both are kept because they are asked for by
+ * different people.
  */
-function fromResoProperty(p) {
-    const streetParts = [
-        p.StreetNumber,
-        p.StreetDirPrefix,
-        p.StreetName,
-        p.StreetSuffix,
-        p.StreetDirSuffix,
-        p.UnitNumber ? `#${String(p.UnitNumber)}` : null,
-    ]
-        .map(str)
-        .filter(Boolean);
-    const street = streetParts.length ? streetParts.join(" ") : str(p.UnparsedAddress);
-    /* Boards disagree on which bath field is authoritative; take the first that
-       is actually populated rather than assuming one spelling. */
-    const baths = num(p.BathroomsTotalInteger) ??
-        num(p.BathroomsFull) ??
-        num(p.BathroomsTotalDecimal);
-    const media = Array.isArray(p.Media) ? p.Media : [];
-    const photoUrl = str(media[0]?.MediaURL) ?? str(p.PhotosURL);
+function fromSimplyRets(p) {
+    const prop = (p.property ?? {});
+    const addr = (p.address ?? {});
+    const mls = (p.mls ?? {});
+    const sales = (p.sales ?? {});
+    const agent = (p.agent ?? {});
+    const office = (p.office ?? {});
+    const photos = Array.isArray(p.photos) ? p.photos : [];
+    /* A half bath is half a bath to a buyer; the feed keeps them in separate
+       fields, so "2.5 baths" only exists if we add them up. */
+    const full = num(prop.bathsFull) ?? 0;
+    const half = num(prop.bathsHalf) ?? 0;
+    const baths = num(prop.bathrooms) ?? (full + half * 0.5 || null);
+    const agentName = [str(agent.firstName), str(agent.lastName)].filter(Boolean).join(" ") || null;
     return {
-        listingKey: String(p.ListingKey ?? p.ListingId ?? "").trim(),
-        mlsNumber: str(p.ListingId) ?? str(p.MLSNumber),
-        status: str(p.StandardStatus) ?? str(p.MlsStatus),
-        listPrice: num(p.ListPrice),
-        closePrice: num(p.ClosePrice),
-        street,
-        city: str(p.City),
-        state: str(p.StateOrProvince),
-        postalCode: str(p.PostalCode),
-        beds: num(p.BedroomsTotal),
+        listingKey: String(p.mlsId ?? p.listingId ?? "").trim(),
+        mlsNumber: str(p.listingId),
+        status: str(mls.status),
+        listPrice: num(p.listPrice),
+        closePrice: num(sales.closePrice),
+        street: str(addr.full) ?? (fromParts(addr) || null),
+        city: str(addr.city),
+        state: str(addr.state),
+        postalCode: str(addr.postalCode),
+        beds: num(prop.bedrooms),
         baths,
-        livingArea: num(p.LivingArea) ?? num(p.AboveGradeFinishedArea),
-        lotSize: num(p.LotSizeAcres) ?? num(p.LotSizeSquareFeet),
-        yearBuilt: num(p.YearBuilt),
-        propertyType: str(p.PropertyType) ?? str(p.PropertySubType),
-        subdivision: str(p.SubdivisionName),
-        listAgent: str(p.ListAgentFullName),
-        listOffice: str(p.ListOfficeName),
-        photoUrl,
-        publicRemarks: str(p.PublicRemarks),
-        modificationTs: str(p.ModificationTimestamp),
-        listedAt: str(p.OnMarketDate) ?? str(p.ListingContractDate),
-        closedAt: str(p.CloseDate),
+        livingArea: num(prop.area),
+        lotSize: num(prop.acres) ?? num(prop.lotSize),
+        yearBuilt: num(prop.yearBuilt),
+        propertyType: str(prop.type),
+        subdivision: str(prop.subdivision),
+        listAgent: agentName,
+        listOffice: str(office.name),
+        photoUrl: typeof photos[0] === "string" ? photos[0] : null,
+        publicRemarks: str(p.remarks),
+        modificationTs: str(p.modified),
+        listedAt: str(p.listDate),
+        closedAt: str(sales.closeDate),
         raw: JSON.stringify(p),
     };
 }

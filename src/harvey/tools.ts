@@ -208,7 +208,7 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "search_listings",
     description:
-      "Search live MLS listings from the Bridge feed: price, beds, baths, city, status, property type. Use for any question about what is on the market, comps, or a property a lead asked about. " +
+      "Search live MLS listings from the SABOR MLS feed: price, beds, baths, city, status, property type. Use for any question about what is on the market, comps, or a property a lead asked about. " +
       "Returns totalMatching alongside the page, so say how many exist and not just how many you listed. " +
       "If it reports notConfigured or stale, SAY SO — an empty result from a disconnected feed is not a quiet market.",
     input_schema: {

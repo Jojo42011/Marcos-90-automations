@@ -9181,14 +9181,14 @@ app.get("/api/mls/status", async (_req, res) => {
   res.json(mlsStatus());
 });
 
-/** Prove the credentials by actually calling Bridge, not by checking env vars. */
+/** Prove the credentials by actually calling SimplyRETS, not by checking env vars. */
 app.get("/api/mls/ping", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const { bridgePing } = await import("./integrations/bridge/index.js");
-  res.json(await bridgePing());
+  const { mlsPing } = await import("./integrations/simplyrets/index.js");
+  res.json(await mlsPing());
 });
 
 app.post("/api/mls/sync", express.json(), async (req, res) => {

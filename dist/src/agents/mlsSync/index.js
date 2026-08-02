@@ -3,16 +3,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runMlsSync = runMlsSync;
 exports.mlsStatus = mlsStatus;
 exports.scheduleMlsSync = scheduleMlsSync;
-const index_js_1 = require("../../integrations/bridge/index.js");
+const index_js_1 = require("../../integrations/simplyrets/index.js");
 const listingsStore_js_1 = require("../../core/listingsStore.js");
 /**
  * Keeps the local MLS mirror current.
  *
- * INCREMENTAL BY DESIGN. Each run asks Bridge only for records whose
- * ModificationTimestamp is newer than the newest one already stored. The first
- * run therefore does the heavy pull and every run after it is small, which is
- * what makes a 30-minute cadence affordable against a metered, rate-limited
- * feed.
+ * INCREMENTAL BY DESIGN. SimplyRETS has no "modified since" filter, so each run
+ * walks the feed newest-change-first (`sort=-modified`) and stops the moment it
+ * reaches a listing it already holds. The first run does the heavy pull; every
+ * run after it reads a page or two, which is what makes a 30-minute cadence
+ * affordable against a metered, rate-limited feed.
  *
  * Every attempt is recorded, successes and failures alike. A feed that quietly
  * stopped returning data looks exactly like a quiet market from the dashboard,
@@ -24,9 +24,9 @@ const FIRST_RUN_MAX = 5000;
 const INCREMENTAL_MAX = 2000;
 let running = false;
 async function runMlsSync() {
-    if (!(0, index_js_1.isBridgeConfigured)()) {
-        const cfg = (0, index_js_1.bridgeConfig)();
-        const problem = "ok" in cfg ? cfg : { error: "Bridge is not configured.", fix: undefined };
+    if (!(0, index_js_1.isMlsFeedConfigured)()) {
+        const cfg = (0, index_js_1.simplyRetsConfig)();
+        const problem = "ok" in cfg ? cfg : { error: "MLS feed is not configured.", fix: undefined };
         return { ran: false, ok: false, error: problem.error, fix: problem.fix };
     }
     /* Overlapping runs would double-fetch a metered feed and interleave writes
@@ -39,7 +39,7 @@ async function runMlsSync() {
     const runId = (0, listingsStore_js_1.startSyncRun)();
     try {
         const res = await (0, index_js_1.fetchProperties)({
-            since,
+            stopAtModified: since,
             maxRecords: since ? INCREMENTAL_MAX : FIRST_RUN_MAX,
         });
         if ("error" in res) {
@@ -48,7 +48,7 @@ async function runMlsSync() {
             return { ran: true, ok: false, error: res.error, fix: res.fix };
         }
         const rows = res.records
-            .map(listingsStore_js_1.fromResoProperty)
+            .map(listingsStore_js_1.fromSimplyRets)
             .filter((r) => r.listingKey);
         const upserted = (0, listingsStore_js_1.upsertListings)(rows);
         (0, listingsStore_js_1.finishSyncRun)(runId, { ok: true, fetched: res.records.length, upserted });
@@ -73,8 +73,8 @@ async function runMlsSync() {
  * green tick would hide the difference.
  */
 function mlsStatus() {
-    const configured = (0, index_js_1.isBridgeConfigured)();
-    const cfg = (0, index_js_1.bridgeConfig)();
+    const configured = (0, index_js_1.isMlsFeedConfigured)();
+    const cfg = (0, index_js_1.simplyRetsConfig)();
     const counts = (0, listingsStore_js_1.listingCounts)();
     const last = (0, listingsStore_js_1.lastSuccessfulSync)();
     const ageHours = last?.finishedAt
@@ -83,7 +83,7 @@ function mlsStatus() {
     return {
         configured,
         ...(configured ? {} : { error: "ok" in cfg ? cfg.error : undefined, fix: "ok" in cfg ? cfg.fix : undefined }),
-        dataset: configured && !("ok" in cfg) ? cfg.dataset : null,
+        vendor: configured && !("ok" in cfg) ? cfg.vendor : null,
         listings: counts.total,
         byStatus: counts.byStatus,
         lastSuccessfulSyncAt: last?.finishedAt ?? null,
@@ -94,12 +94,12 @@ function mlsStatus() {
             ? counts.total === 0
                 ? "Configured but nothing stored yet — run a sync."
                 : undefined
-            : "Not connected to Bridge. Listing tools will say so rather than return an empty market.",
+            : "Not connected to the MLS feed. Listing tools will say so rather than return an empty market.",
     };
 }
 function scheduleMlsSync() {
-    if (!(0, index_js_1.isBridgeConfigured)()) {
-        console.log("[MlsSync] Not scheduled — Bridge is not configured (BRIDGE_SERVER_TOKEN / BRIDGE_DATASET).");
+    if (!(0, index_js_1.isMlsFeedConfigured)()) {
+        console.log("[MlsSync] Not scheduled — MLS feed is not configured (SIMPLYRETS_USERNAME / SIMPLYRETS_PASSWORD).");
         return;
     }
     /* Delayed so the first pull does not compete with boot, and so a crash-loop

@@ -1,7 +1,7 @@
-import { fetchProperties, isBridgeConfigured, bridgeConfig } from "../../integrations/bridge/index.js";
+import { fetchProperties, isMlsFeedConfigured, simplyRetsConfig } from "../../integrations/simplyrets/index.js";
 import {
   finishSyncRun,
-  fromResoProperty,
+  fromSimplyRets,
   lastSuccessfulSync,
   listingCounts,
   newestModificationTs,
@@ -13,11 +13,11 @@ import {
 /**
  * Keeps the local MLS mirror current.
  *
- * INCREMENTAL BY DESIGN. Each run asks Bridge only for records whose
- * ModificationTimestamp is newer than the newest one already stored. The first
- * run therefore does the heavy pull and every run after it is small, which is
- * what makes a 30-minute cadence affordable against a metered, rate-limited
- * feed.
+ * INCREMENTAL BY DESIGN. SimplyRETS has no "modified since" filter, so each run
+ * walks the feed newest-change-first (`sort=-modified`) and stops the moment it
+ * reaches a listing it already holds. The first run does the heavy pull; every
+ * run after it reads a page or two, which is what makes a 30-minute cadence
+ * affordable against a metered, rate-limited feed.
  *
  * Every attempt is recorded, successes and failures alike. A feed that quietly
  * stopped returning data looks exactly like a quiet market from the dashboard,
@@ -42,9 +42,9 @@ export interface MlsSyncResult {
 }
 
 export async function runMlsSync(): Promise<MlsSyncResult> {
-  if (!isBridgeConfigured()) {
-    const cfg = bridgeConfig();
-    const problem = "ok" in cfg ? cfg : { error: "Bridge is not configured.", fix: undefined };
+  if (!isMlsFeedConfigured()) {
+    const cfg = simplyRetsConfig();
+    const problem = "ok" in cfg ? cfg : { error: "MLS feed is not configured.", fix: undefined };
     return { ran: false, ok: false, error: problem.error, fix: problem.fix };
   }
   /* Overlapping runs would double-fetch a metered feed and interleave writes
@@ -57,7 +57,7 @@ export async function runMlsSync(): Promise<MlsSyncResult> {
   const runId = startSyncRun();
   try {
     const res = await fetchProperties({
-      since,
+      stopAtModified: since,
       maxRecords: since ? INCREMENTAL_MAX : FIRST_RUN_MAX,
     });
     if ("error" in res) {
@@ -66,7 +66,7 @@ export async function runMlsSync(): Promise<MlsSyncResult> {
       return { ran: true, ok: false, error: res.error, fix: res.fix };
     }
     const rows = res.records
-      .map(fromResoProperty)
+      .map(fromSimplyRets)
       .filter((r) => r.listingKey);
     const upserted = upsertListings(rows);
     finishSyncRun(runId, { ok: true, fetched: res.records.length, upserted });
@@ -92,8 +92,8 @@ export async function runMlsSync(): Promise<MlsSyncResult> {
  * green tick would hide the difference.
  */
 export function mlsStatus(): Record<string, unknown> {
-  const configured = isBridgeConfigured();
-  const cfg = bridgeConfig();
+  const configured = isMlsFeedConfigured();
+  const cfg = simplyRetsConfig();
   const counts = listingCounts();
   const last = lastSuccessfulSync();
   const ageHours = last?.finishedAt
@@ -102,7 +102,7 @@ export function mlsStatus(): Record<string, unknown> {
   return {
     configured,
     ...(configured ? {} : { error: "ok" in cfg ? cfg.error : undefined, fix: "ok" in cfg ? cfg.fix : undefined }),
-    dataset: configured && !("ok" in cfg) ? cfg.dataset : null,
+    vendor: configured && !("ok" in cfg) ? cfg.vendor : null,
     listings: counts.total,
     byStatus: counts.byStatus,
     lastSuccessfulSyncAt: last?.finishedAt ?? null,
@@ -113,13 +113,13 @@ export function mlsStatus(): Record<string, unknown> {
       ? counts.total === 0
         ? "Configured but nothing stored yet — run a sync."
         : undefined
-      : "Not connected to Bridge. Listing tools will say so rather than return an empty market.",
+      : "Not connected to the MLS feed. Listing tools will say so rather than return an empty market.",
   };
 }
 
 export function scheduleMlsSync(): void {
-  if (!isBridgeConfigured()) {
-    console.log("[MlsSync] Not scheduled — Bridge is not configured (BRIDGE_SERVER_TOKEN / BRIDGE_DATASET).");
+  if (!isMlsFeedConfigured()) {
+    console.log("[MlsSync] Not scheduled — MLS feed is not configured (SIMPLYRETS_USERNAME / SIMPLYRETS_PASSWORD).");
     return;
   }
   /* Delayed so the first pull does not compete with boot, and so a crash-loop

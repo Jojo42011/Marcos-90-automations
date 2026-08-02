@@ -8355,14 +8355,14 @@ app.get("/api/mls/status", async (_req, res) => {
     const { mlsStatus } = await Promise.resolve().then(() => __importStar(require("./agents/mlsSync/index.js")));
     res.json(mlsStatus());
 });
-/** Prove the credentials by actually calling Bridge, not by checking env vars. */
+/** Prove the credentials by actually calling SimplyRETS, not by checking env vars. */
 app.get("/api/mls/ping", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const { bridgePing } = await Promise.resolve().then(() => __importStar(require("./integrations/bridge/index.js")));
-    res.json(await bridgePing());
+    const { mlsPing } = await Promise.resolve().then(() => __importStar(require("./integrations/simplyrets/index.js")));
+    res.json(await mlsPing());
 });
 app.post("/api/mls/sync", express_1.default.json(), async (req, res) => {
     if (!dashboardTokenOk(req)) {
