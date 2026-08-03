@@ -497,6 +497,7 @@ import {
 import { runCallAssistantSuggest, streamCallAssistantWords } from "./core/callAssistant.js";
 import { runSkipTrace } from "./integrations/forewarn.js";
 import { normalizeCrmStatus, normalizeCrmTags } from "./core/db.js";
+import { normalizeArea } from "./core/areaExtract.js";
 import type { IncomingWebhookPayload } from "./core/types.js";
 import { receiveInbound } from "./integrations/sinch/index.js";
 import {
@@ -2018,6 +2019,15 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
         : undefined;
   const brivityId =
     body.brivityId === null ? null : typeof body.brivityId === "string" ? body.brivityId : undefined;
+  /* Links a lead to a specific MLS listing. Set from the MLS tab inside the
+     CRM ("set as their property"), which is the only way to make the link by
+     hand — otherwise it is written by the DM pipeline on an exact match. */
+  const mlsListingKey =
+    body.mlsListingKey === null
+      ? null
+      : typeof body.mlsListingKey === "string"
+        ? body.mlsListingKey.trim() || null
+        : undefined;
   const tags = body.tags !== undefined ? normalizeCrmTags(body.tags) : undefined;
   const assignedUserId =
     body.assignedUserId === null
@@ -2062,7 +2072,11 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
       criteria.baths = n === null || n === "" ? null : typeof n === "number" ? n : Number(n);
     }
     if ("area" in c) {
-      criteria.area = c.area === null ? null : typeof c.area === "string" ? c.area : String(c.area);
+      const raw = c.area === null ? null : typeof c.area === "string" ? c.area : String(c.area);
+      /* Resolve to a real city on the way in, so a hand-typed "san antonio"
+         becomes "San Antonio" and actually matches listings.city. Anything
+         that is not a place is stored as null rather than as a fragment. */
+      criteria.area = raw === null ? null : normalizeArea(raw);
     }
     if ("timeline" in c) {
       criteria.timeline =
@@ -2089,6 +2103,7 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
       source,
       propertyInquired,
       brivityId,
+      mlsListingKey,
       criteria: criteria as any,
       tags,
       assignedUserId,

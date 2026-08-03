@@ -50,6 +50,13 @@
         border:1px solid var(--line);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
   .chip.active{color:var(--ok);border-color:var(--ok)}
   .chip.pending{color:var(--amber);border-color:var(--amber)}
+  /* Only rendered when the CRM opened this page for a specific lead. */
+  .linkbtn{margin-top:10px;width:100%;padding:8px;border-radius:8px;cursor:pointer;
+           font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+           background:transparent;border:1px solid var(--line);color:var(--muted)}
+  .linkbtn:hover{border-color:var(--ok);color:var(--ok)}
+  /* The one already linked reads as a state, not as another thing to click. */
+  .linkbtn.on{border-color:var(--ok);color:var(--ok);background:rgba(34,197,94,.10)}
   .empty{padding:40px 20px;text-align:center;color:var(--muted);background:var(--card);
          border:1px solid var(--line);border-radius:12px}
   .warn{background:#FFFBEB;border:1px solid #FCD34D;color:#92400E;padding:11px 14px;
@@ -97,6 +104,22 @@ function url(path, params){
   const t = token(); if (t) u.searchParams.set("token", t);
   return u.toString();
 }
+/**
+ * Lead context, when the CRM opened this page for a specific person.
+ *
+ * With a leadId present every card gains "set as their property", which writes
+ * `mlsListingKey` on the lead. That is the link the DM pipeline, the drips and
+ * Harvey all read, so making it by hand here is the manual equivalent of an
+ * exact match — and the reason this page and the CRM show the same data rather
+ * than two views that drift.
+ */
+const LEAD = (function(){
+  const p = new URLSearchParams(location.search);
+  const id = p.get("leadId");
+  return id ? { id, name: p.get("leadName") || "this lead" } : null;
+})();
+let LINKED_KEY = null;
+
 const esc = s => { const d=document.createElement("div"); d.textContent = s==null?"":String(s); return d.innerHTML; };
 const money = n => n==null ? "—" : "$" + Number(n).toLocaleString();
 const el = id => document.getElementById(id);
@@ -158,7 +181,57 @@ function card(l){
         (l.mlsNumber ? '<span class="chip">MLS '+esc(l.mlsNumber)+'</span>' : '') +
         (l.yearBuilt ? '<span class="chip">'+esc(l.yearBuilt)+'</span>' : '') +
       '</div>' +
+      (LEAD
+        ? '<button class="linkbtn'+(LINKED_KEY===l.listingKey?' on':'')+'" data-link="'+esc(l.listingKey)+'">'+
+          (LINKED_KEY===l.listingKey ? '\u2713 Their property \u00b7 click to unlink' : 'Set as their property')+'</button>'
+        : '') +
     '</div></div>';
+}
+
+/* Prefill the filters from the URL so arriving from a lead lands on THEIR
+   search rather than on everything. Runs once, before the first search. */
+(function(){
+  const p = new URLSearchParams(location.search);
+  for (const [param, id] of [["q","q"],["city","city"],["status","status"],
+                             ["minPrice","minPrice"],["maxPrice","maxPrice"],
+                             ["minBeds","minBeds"],["minBaths","minBaths"]]) {
+    const v = p.get(param);
+    if (v != null && el(id)) el(id).value = v;
+  }
+})();
+
+/**
+ * Link or unlink this listing as the lead's property.
+ *
+ * Clicking the one already linked clears it — a wrong link is worse than none,
+ * because everything downstream quotes it as "the home you asked about", so
+ * undoing has to be as easy as doing.
+ */
+async function linkListing(key){
+  if (!LEAD) return;
+  const clearing = LINKED_KEY === key;
+  try {
+    const r = await fetch(url("/api/crm/lead/" + encodeURIComponent(LEAD.id)), {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mlsListingKey: clearing ? null : key }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    LINKED_KEY = clearing ? null : key;
+    /* Tell the CRM so the lead's panel updates without a reload. */
+    try { window.parent.postMessage({ type:"mls-linked", leadId: LEAD.id, name: LEAD.name, cleared: clearing }, "*"); } catch(_){}
+    await search();
+  } catch (e) {
+    el("count").textContent = "Could not link that listing: " + e.message;
+  }
+}
+
+/* Which listing is already this lead's, so the button reads correctly on load. */
+async function loadLinked(){
+  if (!LEAD) return;
+  try {
+    const d = await fetch(url("/api/leads/" + encodeURIComponent(LEAD.id) + "/mls")).then(r=>r.ok?r.json():null);
+    LINKED_KEY = d && d.listing ? d.listing.listingKey : null;
+  } catch(_) { LINKED_KEY = null; }
 }
 
 let busy = false;
@@ -191,6 +264,11 @@ async function search(){
   } finally { busy = false; el("go").disabled = false; }
 }
 
+el("grid").addEventListener("click", e => {
+  const b = e.target.closest("[data-link]");
+  if (b) void linkListing(b.getAttribute("data-link"));
+});
+
 el("go").onclick = search;
 el("clear").onclick = () => {
   ["q","city","minPrice","maxPrice","minBeds","minBaths"].forEach(i => el(i).value = "");
@@ -211,7 +289,12 @@ el("syncBtn").onclick = async () => {
 };
 
 paintFeed();
-search();
+if (LEAD) {
+  const banner = el("banner");
+  banner.className = "warn"; banner.style.display = "block";
+  banner.innerHTML = "Searching for <b>" + esc(LEAD.name) + "</b>. Pick a listing to set it as their property.";
+}
+void loadLinked().then(search);
 setInterval(paintFeed, 120000);
 </script>
 </body>

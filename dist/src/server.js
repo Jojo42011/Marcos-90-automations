@@ -136,6 +136,7 @@ const dialSession_js_1 = require("./core/dialSession.js");
 const callAssistant_js_1 = require("./core/callAssistant.js");
 const forewarn_js_1 = require("./integrations/forewarn.js");
 const db_js_2 = require("./core/db.js");
+const areaExtract_js_1 = require("./core/areaExtract.js");
 const index_js_19 = require("./integrations/sinch/index.js");
 const index_js_20 = require("./integrations/twilio/index.js");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
@@ -1533,6 +1534,14 @@ app.patch("/api/crm/lead/:id", express_1.default.json(), async (req, res) => {
             ? body.propertyInquired
             : undefined;
     const brivityId = body.brivityId === null ? null : typeof body.brivityId === "string" ? body.brivityId : undefined;
+    /* Links a lead to a specific MLS listing. Set from the MLS tab inside the
+       CRM ("set as their property"), which is the only way to make the link by
+       hand — otherwise it is written by the DM pipeline on an exact match. */
+    const mlsListingKey = body.mlsListingKey === null
+        ? null
+        : typeof body.mlsListingKey === "string"
+            ? body.mlsListingKey.trim() || null
+            : undefined;
     const tags = body.tags !== undefined ? (0, db_js_2.normalizeCrmTags)(body.tags) : undefined;
     const assignedUserId = body.assignedUserId === null
         ? null
@@ -1573,7 +1582,11 @@ app.patch("/api/crm/lead/:id", express_1.default.json(), async (req, res) => {
             criteria.baths = n === null || n === "" ? null : typeof n === "number" ? n : Number(n);
         }
         if ("area" in c) {
-            criteria.area = c.area === null ? null : typeof c.area === "string" ? c.area : String(c.area);
+            const raw = c.area === null ? null : typeof c.area === "string" ? c.area : String(c.area);
+            /* Resolve to a real city on the way in, so a hand-typed "san antonio"
+               becomes "San Antonio" and actually matches listings.city. Anything
+               that is not a place is stored as null rather than as a fragment. */
+            criteria.area = raw === null ? null : (0, areaExtract_js_1.normalizeArea)(raw);
         }
         if ("timeline" in c) {
             criteria.timeline =
@@ -1599,6 +1612,7 @@ app.patch("/api/crm/lead/:id", express_1.default.json(), async (req, res) => {
             source,
             propertyInquired,
             brivityId,
+            mlsListingKey,
             criteria: criteria,
             tags,
             assignedUserId,

@@ -7,6 +7,7 @@ exports.getListingsDb = getListingsDb;
 exports.fromSimplyRets = fromSimplyRets;
 exports.upsertListings = upsertListings;
 exports.searchListings = searchListings;
+exports.knownCities = knownCities;
 exports.marketStats = marketStats;
 exports.getListing = getListing;
 exports.listingCounts = listingCounts;
@@ -296,6 +297,40 @@ function searchListings(query = {}) {
         .prepare(`SELECT * FROM listings ${clause} ORDER BY COALESCE(modification_ts, synced_at) DESC LIMIT @limit`)
         .all({ ...params, limit });
     return { total, listings: rows.map(rowToListing) };
+}
+/**
+ * Every city the board actually covers, longest name first.
+ *
+ * This is the authority for "is that a place?" — it comes from the 27,083
+ * listings themselves, so it needs no maintenance and cannot drift from what
+ * Marco can actually sell. Longest-first matters: "New Braunfels" has to be
+ * tried before "Braunfels" would ever match, and "San Antonio" before "Antonio".
+ *
+ * Cached for the process. The city list changes when a new subdivision is
+ * annexed, not between two DMs, and this is called on every inbound message.
+ */
+let cityCache = null;
+const CITY_CACHE_MS = 60 * 60 * 1000;
+function knownCities() {
+    if (cityCache && Date.now() - cityCache.at < CITY_CACHE_MS)
+        return cityCache.rows;
+    let rows = [];
+    try {
+        rows = getListingsDb()
+            .prepare(`SELECT city, COUNT(*) AS c FROM listings
+           WHERE city IS NOT NULL AND TRIM(city) <> '' GROUP BY city`)
+            .all()
+            .map((r) => ({ city: r.city.trim(), count: Number(r.c) }))
+            /* One stray listing does not make a city, and single-row rows in an MLS
+               feed are usually a typo in someone's data entry. */
+            .filter((r) => r.count >= 2 && r.city.length >= 3)
+            .sort((a, b) => b.city.length - a.city.length);
+    }
+    catch {
+        rows = [];
+    }
+    cityCache = { at: Date.now(), rows };
+    return rows;
 }
 /**
  * What the mirror can honestly say about one city's market.

@@ -524,6 +524,7 @@
   <button class="r" data-view="leads" title="Leads"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg></button>
   <button class="r" data-view="people" title="People"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.2 2.7-5.5 6-5.5S15 16.8 15 20"/><path d="M16 5.5a3 3 0 0 1 0 5.6M22 20c0-2.6-1.7-4.6-4-5.2"/></svg></button>
   <button class="r" data-view="opps" title="Opportunities"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="2.6"/></svg></button>
+  <button class="r" data-view="mls" title="MLS · Live SABOR listings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/></svg></button>
   <button class="r" data-view="tracker" title="Buyers &amp; Sellers Tracker"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h6v14H3z"/><path d="M15 5h6v9h-6z"/><path d="M9 9h6"/></svg></button>
   <button class="r" data-view="tx" title="Transactions"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
   <button class="r" data-view="reporting" title="Reporting"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
@@ -721,6 +722,15 @@
        bulk staging, and two copies would drift apart within a week. The src
        is set on first open so the CRM doesn't pull 1,219 records on every
        visit to an unrelated view. -->
+  <!-- MLS lives inside the CRM as the same page served at /listings, embedded.
+       Not a reimplementation: one page, one API, so the two can never drift
+       into showing different prices for the same house. Lazy-loaded on first
+       open, and re-pointed with filters when opened from a lead. -->
+  <section class="view" id="view-mls">
+    <iframe id="mlsFrame" title="MLS · Live SABOR listings"
+            style="width:100%;height:calc(100vh - var(--topbar));border:0;display:block;background:var(--bg)"></iframe>
+  </section>
+
   <section class="view" id="view-tracker">
     <!-- Explicit height, not 100%: .view is a plain block inside .main, so a
          percentage height would collapse the iframe to its 150px default. -->
@@ -2550,7 +2560,45 @@ document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("
     const f=document.getElementById("trackerFrame");
     if(f && !f.getAttribute("src")) f.setAttribute("src","/tracker");   // lazy: first open only
   }
+  if(v==="mls"){
+    const f=document.getElementById("mlsFrame");
+    if(f && !f.getAttribute("src")) f.setAttribute("src", crmApi("/listings"));  // lazy: first open only
+  }
 }));
+
+/**
+ * Open the MLS tab already filtered to what a lead told us they want.
+ *
+ * Passes the lead id through as well, so the listings page can offer "set as
+ * their property" on each card — that write is what turns a browse into the
+ * confirmed link the drips, the DM pipeline and Harvey all read.
+ *
+ * Always re-points the frame rather than reusing whatever was last shown: the
+ * whole point of arriving here from a lead is seeing THEIR search.
+ */
+function openMlsForLead(l){
+  const p=new URLSearchParams();
+  const c=l.criteria||{};
+  if(c.area) p.set("city", c.area);
+  if(c.priceCap) p.set("maxPrice", String(c.priceCap));
+  if(c.beds!=null) p.set("minBeds", String(c.beds));
+  p.set("status","Active");
+  p.set("leadId", l.id);
+  p.set("leadName", l.name||"this lead");
+  const f=document.getElementById("mlsFrame");
+  if(f) f.setAttribute("src", crmApi("/listings?"+p.toString()));
+  const btn=document.querySelector('.rail .r[data-view="mls"]');
+  if(btn) btn.click();
+}
+
+/* The listings page posts back when a listing is linked to a lead, so the
+   lead detail reflects it without a manual refresh. */
+window.addEventListener("message", function(e){
+  const d=e.data||{};
+  if(d.type!=="mls-linked"||!d.leadId) return;
+  if(currentLeadId===d.leadId) void paintLeadMls(d.leadId);
+  crmToast(d.cleared?"Property unlinked":"Property linked to "+(d.name||"lead"));
+});
 
 /* Deep link: /crm?view=finance opens straight to that view (used by the
    shell's Finance tab so it lands on the Brivity finance, not the old page). */
@@ -3035,7 +3083,17 @@ async function paintLeadMls(leadId){
       '<span class="mls-note">Asking prices from active listings — this feed carries no sold data.</span>'+
       '</div></div>');
   }
-  box.innerHTML=parts.length?'<div class="ld-card" style="margin-bottom:18px">'+parts.join("")+'</div>':"";
+  /* Always offer the way through to the full MLS, even with nothing matched —
+     that is exactly when Marco needs to go looking. */
+  parts.push('<div class="rblock" style="margin-bottom:0;border-top:1px solid var(--line-2);padding-top:12px">'+
+    '<button class="rbtn" id="ldMlsSearch" style="margin-bottom:0">🔍 SEARCH MLS FOR THIS LEAD</button></div>');
+
+  box.innerHTML='<div class="ld-card" style="margin-bottom:18px">'+parts.join("")+'</div>';
+  const go=document.getElementById("ldMlsSearch");
+  if(go) go.addEventListener("click",()=>{
+    const l=LEADS.find(x=>x.id===leadId);
+    if(l) openMlsForLead(l);
+  });
 }
 
 function openLead(id, tab){ const l=LEADS.find(x=>x.id===id); if(!l)return; currentLeadId=id; ldTab=tab||"note"; ldOutcome=null; ldEditing=false;

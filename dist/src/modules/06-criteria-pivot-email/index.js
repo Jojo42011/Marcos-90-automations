@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.process = process;
 const state_js_1 = require("../../core/state.js");
+const areaExtract_js_1 = require("../../core/areaExtract.js");
 function getLastUserMessage(conversation) {
     const reversed = [...conversation.messages].reverse();
     return reversed.find((m) => m.role === "user") ?? null;
@@ -24,13 +25,6 @@ function extractBaths(text) {
     const n = Number(m[1]);
     return Number.isFinite(n) ? n : null;
 }
-function extractArea(text) {
-    const m = text.match(/\b(in|area)\s+([A-Za-z]+(?:\s+[A-Za-z]+){0,3})\b/i) ??
-        text.match(/\b([A-Za-z]+(?:\s+[A-Za-z]+){0,3})\s+(area)\b/i);
-    if (!m)
-        return null;
-    return (m[2] ?? m[1] ?? "").trim() || null;
-}
 function extractPriceCap(text) {
     // Very small heuristic: find a big number and interpret as dollars.
     const m = text.match(/\b\$?\s?(\d{3,}(?:,\d{3})*)\s?\b/);
@@ -51,7 +45,9 @@ async function process(lead, conversation) {
     const email = lead.email ?? extractEmail(last.text);
     const beds = lead.criteria?.beds ?? extractBeds(last.text);
     const baths = lead.criteria?.baths ?? extractBaths(last.text);
-    const area = lead.criteria?.area ?? extractArea(last.text);
+    /* Normalise what is already stored before trusting it — see the note in
+       funnelDeterministic; rows written by the old rule hold sentence fragments. */
+    const area = (0, areaExtract_js_1.normalizeArea)(lead.criteria?.area) ?? (0, areaExtract_js_1.extractArea)(last.text);
     const priceCap = lead.criteria?.priceCap ?? extractPriceCap(last.text);
     const criteria = lead.criteria
         ? {

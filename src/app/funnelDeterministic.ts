@@ -5,6 +5,7 @@
 import type { Conversation, Lead, Message } from "../core/types.js";
 import { FunnelStage } from "../core/state.js";
 import { MARCO_PHONE_CAPTURED_REPLY } from "../../config/prompts.js";
+import { extractArea, normalizeArea } from "../core/areaExtract.js";
 
 export interface FunnelDeterministicMeta {
   phoneJustCaptured?: boolean;
@@ -73,14 +74,6 @@ function extractBaths(text: string): number | null {
   if (!m) return null;
   const n = Number(m[1]);
   return Number.isFinite(n) ? n : null;
-}
-
-function extractArea(text: string): string | null {
-  const m =
-    text.match(/\b(in|area)\s+([A-Za-z]+(?:\s+[A-Za-z]+){0,3})\b/i) ??
-    text.match(/\b([A-Za-z]+(?:\s+[A-Za-z]+){0,3})\s+(area)\b/i);
-  if (!m) return null;
-  return (m[2] ?? m[1] ?? "").trim() || null;
 }
 
 function extractPriceCap(text: string): number | null {
@@ -157,7 +150,10 @@ function applyModule06Deterministic(lead: Lead, lastText: string): Lead {
   const email = lead.email ?? extractEmail(lastText);
   const beds = lead.criteria?.beds ?? extractBeds(lastText);
   const baths = lead.criteria?.baths ?? extractBaths(lastText);
-  const area = lead.criteria?.area ?? extractArea(lastText);
+  /* Normalise what is already stored before trusting it: rows written by the
+     old rule hold fragments like "San Antonio yes", which match no city at
+     all in search. Self-heals a lead the next time they message. */
+  const area = normalizeArea(lead.criteria?.area) ?? extractArea(lastText);
   const priceCap = lead.criteria?.priceCap ?? extractPriceCap(lastText);
 
   const criteria = lead.criteria

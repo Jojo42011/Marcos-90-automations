@@ -6,6 +6,7 @@ exports.extractPhoneFromConversation = extractPhoneFromConversation;
 exports.advanceFunnelDeterministic = advanceFunnelDeterministic;
 const state_js_1 = require("../core/state.js");
 const prompts_js_1 = require("../../config/prompts.js");
+const areaExtract_js_1 = require("../core/areaExtract.js");
 function getLastUserMessage(conversation) {
     const reversed = [...conversation.messages].reverse();
     return reversed.find((m) => m.role === "user") ?? null;
@@ -65,13 +66,6 @@ function extractBaths(text) {
         return null;
     const n = Number(m[1]);
     return Number.isFinite(n) ? n : null;
-}
-function extractArea(text) {
-    const m = text.match(/\b(in|area)\s+([A-Za-z]+(?:\s+[A-Za-z]+){0,3})\b/i) ??
-        text.match(/\b([A-Za-z]+(?:\s+[A-Za-z]+){0,3})\s+(area)\b/i);
-    if (!m)
-        return null;
-    return (m[2] ?? m[1] ?? "").trim() || null;
 }
 function extractPriceCap(text) {
     const m = text.match(/\b\$?\s?(\d{3,}(?:,\d{3})*)\s?\b/);
@@ -143,7 +137,10 @@ function applyModule06Deterministic(lead, lastText) {
     const email = lead.email ?? extractEmail(lastText);
     const beds = lead.criteria?.beds ?? extractBeds(lastText);
     const baths = lead.criteria?.baths ?? extractBaths(lastText);
-    const area = lead.criteria?.area ?? extractArea(lastText);
+    /* Normalise what is already stored before trusting it: rows written by the
+       old rule hold fragments like "San Antonio yes", which match no city at
+       all in search. Self-heals a lead the next time they message. */
+    const area = (0, areaExtract_js_1.normalizeArea)(lead.criteria?.area) ?? (0, areaExtract_js_1.extractArea)(lastText);
     const priceCap = lead.criteria?.priceCap ?? extractPriceCap(lastText);
     const criteria = lead.criteria
         ? {

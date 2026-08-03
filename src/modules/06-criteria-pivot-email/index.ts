@@ -3,6 +3,7 @@
  */
 import type { Conversation, Lead, Message } from "../../core/types.js";
 import { FunnelStage } from "../../core/state.js";
+import { extractArea, normalizeArea } from "../../core/areaExtract.js";
 
 export interface ModuleResult {
   lead: Lead;
@@ -33,14 +34,6 @@ function extractBaths(text: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function extractArea(text: string): string | null {
-  const m =
-    text.match(/\b(in|area)\s+([A-Za-z]+(?:\s+[A-Za-z]+){0,3})\b/i) ??
-    text.match(/\b([A-Za-z]+(?:\s+[A-Za-z]+){0,3})\s+(area)\b/i);
-  if (!m) return null;
-  return (m[2] ?? m[1] ?? "").trim() || null;
-}
-
 function extractPriceCap(text: string): number | null {
   // Very small heuristic: find a big number and interpret as dollars.
   const m = text.match(/\b\$?\s?(\d{3,}(?:,\d{3})*)\s?\b/);
@@ -59,7 +52,9 @@ export async function process(lead: Lead, conversation: Conversation): Promise<M
   const email = lead.email ?? extractEmail(last.text);
   const beds = lead.criteria?.beds ?? extractBeds(last.text);
   const baths = lead.criteria?.baths ?? extractBaths(last.text);
-  const area = lead.criteria?.area ?? extractArea(last.text);
+  /* Normalise what is already stored before trusting it — see the note in
+     funnelDeterministic; rows written by the old rule hold sentence fragments. */
+  const area = normalizeArea(lead.criteria?.area) ?? extractArea(last.text);
   const priceCap = lead.criteria?.priceCap ?? extractPriceCap(last.text);
 
   const criteria = lead.criteria
