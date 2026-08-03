@@ -5,7 +5,7 @@
 import type { Conversation, Lead, Message } from "../core/types.js";
 import { FunnelStage } from "../core/state.js";
 import { MARCO_PHONE_CAPTURED_REPLY } from "../../config/prompts.js";
-import { extractArea, normalizeArea } from "../core/areaExtract.js";
+import { extractArea, extractPriceCap, isJunkPriceCap, normalizeArea } from "../core/criteriaExtract.js";
 
 export interface FunnelDeterministicMeta {
   phoneJustCaptured?: boolean;
@@ -74,15 +74,6 @@ function extractBaths(text: string): number | null {
   if (!m) return null;
   const n = Number(m[1]);
   return Number.isFinite(n) ? n : null;
-}
-
-function extractPriceCap(text: string): number | null {
-  const m = text.match(/\b\$?\s?(\d{3,}(?:,\d{3})*)\s?\b/);
-  if (!m) return null;
-  const raw = m[1].replace(/,/g, "");
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 50000) return null;
-  return n;
 }
 
 /** True when the lead mentions floor plan / layout preferences (open concept, single story, etc). */
@@ -154,7 +145,11 @@ function applyModule06Deterministic(lead: Lead, lastText: string): Lead {
      old rule hold fragments like "San Antonio yes", which match no city at
      all in search. Self-heals a lead the next time they message. */
   const area = normalizeArea(lead.criteria?.area) ?? extractArea(lastText);
-  const priceCap = lead.criteria?.priceCap ?? extractPriceCap(lastText);
+  /* Drop a stored cap that cannot be a budget before falling back to it —
+     11 of 13 production caps were phone numbers. Self-heals on the next
+     message, same as the area. */
+  const storedCap = isJunkPriceCap(lead.criteria?.priceCap) ? null : lead.criteria?.priceCap;
+  const priceCap = storedCap ?? extractPriceCap(lastText);
 
   const criteria = lead.criteria
     ? {

@@ -167,3 +167,56 @@ export function isJunkArea(area: string | null | undefined): boolean {
   if (!s) return false;
   return normalizeArea(s) === null;
 }
+
+/**
+ * A buyer's budget, from what they typed.
+ *
+ * THE BUG THIS REPLACES was the sibling of the area one: "find a number of 3+
+ * digits and call it dollars". A lead who typed their phone number had a budget
+ * recorded of **$9,566,489,575**. On production, **11 of 13 stored price caps
+ * were phone numbers** — and because the shortlist searches from 60% of the cap
+ * upwards, those leads matched nothing at all while looking fully qualified.
+ *
+ * Three rules, each earned:
+ *
+ *   - A run of 10 or more digits is a PHONE NUMBER, not a price. Nobody's
+ *     budget has ten digits, and this is exactly the collision that happened.
+ *   - A price above the ceiling is not a price. The dearest home in the whole
+ *     mirror is $10.3M, so anything past $25M is a typo or another phone
+ *     number, and quoting it would search a range with nothing in it.
+ *   - "400k" and "1.2m" are how people actually write budgets. The old rule
+ *     read "under 400k" as the number 400, threw it away for being under the
+ *     floor, and recorded no budget at all.
+ */
+const PRICE_FLOOR = 50_000;
+const PRICE_CEILING = 25_000_000;
+
+export function extractPriceCap(text: string): number | null {
+  if (!text) return null;
+
+  /* Suffixed forms first — they are unambiguous, and a bare-digit scan would
+     otherwise read "400k" as 400. */
+  const suffixed = /\$?\s?(\d{1,4}(?:\.\d{1,2})?)\s*([km])\b/i.exec(text);
+  if (suffixed) {
+    const n = Number(suffixed[1]) * (suffixed[2].toLowerCase() === "k" ? 1_000 : 1_000_000);
+    if (Number.isFinite(n) && n >= PRICE_FLOOR && n <= PRICE_CEILING) return Math.round(n);
+  }
+
+  for (const m of text.matchAll(/\$?\s?(\d{1,3}(?:,\d{3})+|\d+)/g)) {
+    const raw = m[1].replace(/,/g, "");
+    /* Ten digits or more is someone's phone number. Checked on the DIGITS, not
+       on the value, so a formatted "(956) 648-9575" is caught as well. */
+    if (raw.length >= 10) continue;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < PRICE_FLOOR || n > PRICE_CEILING) continue;
+    return n;
+  }
+  return null;
+}
+
+/** True when a stored price cap cannot be a budget — used to clean up old rows. */
+export function isJunkPriceCap(cap: number | null | undefined): boolean {
+  if (cap == null) return false;
+  if (!Number.isFinite(cap)) return true;
+  return cap < PRICE_FLOOR || cap > PRICE_CEILING;
+}

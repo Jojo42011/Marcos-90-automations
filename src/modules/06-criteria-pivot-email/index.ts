@@ -3,7 +3,7 @@
  */
 import type { Conversation, Lead, Message } from "../../core/types.js";
 import { FunnelStage } from "../../core/state.js";
-import { extractArea, normalizeArea } from "../../core/areaExtract.js";
+import { extractArea, extractPriceCap, isJunkPriceCap, normalizeArea } from "../../core/criteriaExtract.js";
 
 export interface ModuleResult {
   lead: Lead;
@@ -34,17 +34,6 @@ function extractBaths(text: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function extractPriceCap(text: string): number | null {
-  // Very small heuristic: find a big number and interpret as dollars.
-  const m = text.match(/\b\$?\s?(\d{3,}(?:,\d{3})*)\s?\b/);
-  if (!m) return null;
-  const raw = m[1].replace(/,/g, "");
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return null;
-  if (n < 50000) return null;
-  return n;
-}
-
 export async function process(lead: Lead, conversation: Conversation): Promise<ModuleResult> {
   const last = getLastUserMessage(conversation);
   if (!last) return { lead, reply: null };
@@ -55,7 +44,11 @@ export async function process(lead: Lead, conversation: Conversation): Promise<M
   /* Normalise what is already stored before trusting it — see the note in
      funnelDeterministic; rows written by the old rule hold sentence fragments. */
   const area = normalizeArea(lead.criteria?.area) ?? extractArea(last.text);
-  const priceCap = lead.criteria?.priceCap ?? extractPriceCap(last.text);
+  /* Drop a stored cap that cannot be a budget before falling back to it —
+     11 of 13 production caps were phone numbers. Self-heals on the next
+     message, same as the area. */
+  const storedCap = isJunkPriceCap(lead.criteria?.priceCap) ? null : lead.criteria?.priceCap;
+  const priceCap = storedCap ?? extractPriceCap(last.text);
 
   const criteria = lead.criteria
     ? {

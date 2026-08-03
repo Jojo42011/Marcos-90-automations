@@ -497,7 +497,7 @@ import {
 import { runCallAssistantSuggest, streamCallAssistantWords } from "./core/callAssistant.js";
 import { runSkipTrace } from "./integrations/forewarn.js";
 import { normalizeCrmStatus, normalizeCrmTags } from "./core/db.js";
-import { normalizeArea } from "./core/areaExtract.js";
+import { isJunkPriceCap, normalizeArea } from "./core/criteriaExtract.js";
 import type { IncomingWebhookPayload } from "./core/types.js";
 import { receiveInbound } from "./integrations/sinch/index.js";
 import {
@@ -2061,7 +2061,10 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
     criteria = {};
     if ("priceCap" in c) {
       const n = c.priceCap;
-      criteria.priceCap = n === null || n === "" ? null : typeof n === "number" ? n : Number(n);
+      const parsed = n === null || n === "" ? null : typeof n === "number" ? n : Number(n);
+      /* A ten-digit "budget" is a phone number. Refused on the way in rather
+         than stored and then worked around by every reader. */
+      criteria.priceCap = isJunkPriceCap(parsed) ? null : parsed;
     }
     if ("beds" in c) {
       const n = c.beds;

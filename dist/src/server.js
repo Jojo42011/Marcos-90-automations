@@ -136,7 +136,7 @@ const dialSession_js_1 = require("./core/dialSession.js");
 const callAssistant_js_1 = require("./core/callAssistant.js");
 const forewarn_js_1 = require("./integrations/forewarn.js");
 const db_js_2 = require("./core/db.js");
-const areaExtract_js_1 = require("./core/areaExtract.js");
+const criteriaExtract_js_1 = require("./core/criteriaExtract.js");
 const index_js_19 = require("./integrations/sinch/index.js");
 const index_js_20 = require("./integrations/twilio/index.js");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
@@ -1571,7 +1571,10 @@ app.patch("/api/crm/lead/:id", express_1.default.json(), async (req, res) => {
         criteria = {};
         if ("priceCap" in c) {
             const n = c.priceCap;
-            criteria.priceCap = n === null || n === "" ? null : typeof n === "number" ? n : Number(n);
+            const parsed = n === null || n === "" ? null : typeof n === "number" ? n : Number(n);
+            /* A ten-digit "budget" is a phone number. Refused on the way in rather
+               than stored and then worked around by every reader. */
+            criteria.priceCap = (0, criteriaExtract_js_1.isJunkPriceCap)(parsed) ? null : parsed;
         }
         if ("beds" in c) {
             const n = c.beds;
@@ -1586,7 +1589,7 @@ app.patch("/api/crm/lead/:id", express_1.default.json(), async (req, res) => {
             /* Resolve to a real city on the way in, so a hand-typed "san antonio"
                becomes "San Antonio" and actually matches listings.city. Anything
                that is not a place is stored as null rather than as a fragment. */
-            criteria.area = raw === null ? null : (0, areaExtract_js_1.normalizeArea)(raw);
+            criteria.area = raw === null ? null : (0, criteriaExtract_js_1.normalizeArea)(raw);
         }
         if ("timeline" in c) {
             criteria.timeline =

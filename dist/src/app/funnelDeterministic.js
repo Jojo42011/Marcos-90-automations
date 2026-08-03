@@ -6,7 +6,7 @@ exports.extractPhoneFromConversation = extractPhoneFromConversation;
 exports.advanceFunnelDeterministic = advanceFunnelDeterministic;
 const state_js_1 = require("../core/state.js");
 const prompts_js_1 = require("../../config/prompts.js");
-const areaExtract_js_1 = require("../core/areaExtract.js");
+const criteriaExtract_js_1 = require("../core/criteriaExtract.js");
 function getLastUserMessage(conversation) {
     const reversed = [...conversation.messages].reverse();
     return reversed.find((m) => m.role === "user") ?? null;
@@ -66,16 +66,6 @@ function extractBaths(text) {
         return null;
     const n = Number(m[1]);
     return Number.isFinite(n) ? n : null;
-}
-function extractPriceCap(text) {
-    const m = text.match(/\b\$?\s?(\d{3,}(?:,\d{3})*)\s?\b/);
-    if (!m)
-        return null;
-    const raw = m[1].replace(/,/g, "");
-    const n = Number(raw);
-    if (!Number.isFinite(n) || n < 50000)
-        return null;
-    return n;
 }
 /** True when the lead mentions floor plan / layout preferences (open concept, single story, etc). */
 const LAYOUT_PATTERNS = [
@@ -140,8 +130,12 @@ function applyModule06Deterministic(lead, lastText) {
     /* Normalise what is already stored before trusting it: rows written by the
        old rule hold fragments like "San Antonio yes", which match no city at
        all in search. Self-heals a lead the next time they message. */
-    const area = (0, areaExtract_js_1.normalizeArea)(lead.criteria?.area) ?? (0, areaExtract_js_1.extractArea)(lastText);
-    const priceCap = lead.criteria?.priceCap ?? extractPriceCap(lastText);
+    const area = (0, criteriaExtract_js_1.normalizeArea)(lead.criteria?.area) ?? (0, criteriaExtract_js_1.extractArea)(lastText);
+    /* Drop a stored cap that cannot be a budget before falling back to it —
+       11 of 13 production caps were phone numbers. Self-heals on the next
+       message, same as the area. */
+    const storedCap = (0, criteriaExtract_js_1.isJunkPriceCap)(lead.criteria?.priceCap) ? null : lead.criteria?.priceCap;
+    const priceCap = storedCap ?? (0, criteriaExtract_js_1.extractPriceCap)(lastText);
     const criteria = lead.criteria
         ? {
             ...lead.criteria,
