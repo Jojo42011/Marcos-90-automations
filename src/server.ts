@@ -420,6 +420,7 @@ import {
   type TransactionDocument,
 } from "./core/transactionsStore.js";
 import { applyTransactionImport, planTransactionImport } from "./core/transactionImport.js";
+import { runSheetSync, sheetSyncStatus, isSheetSyncConfigured } from "./core/transactionSheetSync.js";
 import {
   checkTransactionImportReminder,
   scheduleTransactionImportReminder,
@@ -9865,6 +9866,15 @@ function parseTransactionBody(body: Record<string, unknown>): Partial<Transactio
   if (typeof body.leadId === "string") out.leadId = body.leadId.trim() || undefined;
   if (typeof body.dealFileUrl === "string") out.dealFileUrl = body.dealFileUrl;
   if (typeof body.notes === "string") out.notes = body.notes;
+  /* The Brivity-carried fields the CRM's inline editor writes back. `null`
+     clears (an expiration that was renegotiated away must be deletable), a
+     missing key leaves the stored value alone. */
+  if (typeof body.mls === "string") out.mls = body.mls.trim() || undefined;
+  if (typeof body.agent === "string") out.agent = body.agent.trim() || undefined;
+  if (typeof body.listPrice === "number") out.listPrice = body.listPrice;
+  if (typeof body.gci === "number") out.gci = body.gci;
+  if (typeof body.expiration === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.expiration)) out.expiration = body.expiration;
+  if (body.expiration === null) out.expiration = undefined;
   return out;
 }
 
@@ -10067,6 +10077,30 @@ app.post(
     }
   },
 );
+
+/**
+ * Automated sheet sync — the no-download version of the CSV import above.
+ * Brivity cannot export transactions (see core/transactionSheetSync.ts for
+ * the research), so the team's Google Sheet is the source and the server
+ * pulls it itself. GET = status, POST = run now ({"dryRun":true} to preview).
+ */
+app.get("/api/transactions/sheet-sync", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(sheetSyncStatus());
+});
+
+app.post("/api/transactions/sheet-sync", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const result = await runSheetSync({ apply: body.dryRun === true ? false : true });
+  res.status(result.ok ? 200 : 422).json(result);
+});
 
 app.post("/api/transactions/migrate-from-deals", async (req, res) => {
   if (!dashboardTokenOk(req)) {
@@ -11874,6 +11908,22 @@ httpServer.on("upgrade", (request, socket, head) => {
 
   socket.destroy();
 });
+
+/* Scheduled transactions sheet sync — every 6 hours (configurable), plus one
+   run shortly after boot so a restart never leaves the numbers a day stale.
+   No-ops harmlessly when TRANSACTIONS_SHEET_URL is unset. */
+if (isSheetSyncConfigured()) {
+  const sheetSyncEveryMs = Math.max(
+    30 * 60_000,
+    (parseInt(process.env.TRANSACTIONS_SHEET_SYNC_HOURS || "6", 10) || 6) * 60 * 60_000,
+  );
+  setTimeout(() => {
+    void runSheetSync().catch((err) => console.warn("[sheetSync] boot run failed:", err));
+  }, 90_000).unref();
+  setInterval(() => {
+    void runSheetSync().catch((err) => console.warn("[sheetSync] scheduled run failed:", err));
+  }, sheetSyncEveryMs).unref();
+}
 
 // Scheduled Auto Plan execution — every 24 hours.
 const AUTO_PLAN_INTERVAL_MS = 24 * 60 * 60 * 1000;

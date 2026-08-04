@@ -234,6 +234,10 @@ function planTransactionImport(csvText, opts) {
             listPrice,
             gci: money(get(r, "gci")),
             mls: mls || undefined,
+            /* The Expiration column was mapped from day one and then silently
+               dropped on the floor — an alias with no consumer. It feeds the
+               listing-expiration column and calendar now. */
+            expiration: isoDate(get(r, "expiration")),
             agent: get(r, "agent") || undefined,
             contractDate: isoDate(get(r, "contractDate")),
             closingDate: isoDate(get(r, "closeDate")),

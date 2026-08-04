@@ -136,6 +136,11 @@ function initTransactionsSchema(database: Database.Database): void {
     ["source", "TEXT"],
     ["external_key", "TEXT"],
     ["imported_at", "TEXT"],
+    /* Listing-agreement expiration (ISO date). The UI showed an Expiration
+       column for years while nothing stored one, so every value typed there
+       evaporated on reload — and an expiring listing is precisely the thing a
+       seller's agent cannot afford to discover late. */
+    ["expiration", "TEXT"],
   ] as Array<[string, string]>) {
     try {
       database.exec(`ALTER TABLE transactions ADD COLUMN ${column} ${ddl}`);
@@ -341,6 +346,8 @@ export interface Transaction {
   mls?: string;
   listPrice?: number;
   gci?: number;
+  /** Listing-agreement expiration, ISO YYYY-MM-DD. */
+  expiration?: string;
   agent?: string;
   source?: string;
   externalKey?: string;
@@ -466,6 +473,7 @@ function rowToTransaction(row: Record<string, unknown>): Transaction {
     mls: row.mls ? String(row.mls) : undefined,
     listPrice: row.list_price != null ? Number(row.list_price) : undefined,
     gci: row.gci != null ? Number(row.gci) : undefined,
+    expiration: row.expiration ? String(row.expiration) : undefined,
     agent: row.agent ? String(row.agent) : undefined,
     source: row.source ? String(row.source) : undefined,
     externalKey: row.external_key ? String(row.external_key) : undefined,
@@ -550,9 +558,9 @@ export function createTransaction(
       `INSERT INTO transactions
         (id, address, deal_type, parties, price, status, contract_date, inspection_date,
          appraisal_date, loan_commitment_date, title_date, closing_date, possession_date,
-         lead_id, deal_file_url, notes, mls, list_price, gci, agent, source, external_key,
+         lead_id, deal_file_url, notes, mls, list_price, gci, expiration, agent, source, external_key,
          imported_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -574,6 +582,7 @@ export function createTransaction(
       tx.mls ?? null,
       tx.listPrice ?? null,
       tx.gci ?? null,
+      tx.expiration ?? null,
       tx.agent ?? null,
       tx.source ?? null,
       tx.externalKey ?? null,
@@ -611,7 +620,7 @@ export function updateTransaction(id: string, updates: Partial<Transaction>): Tr
         contract_date = ?, inspection_date = ?, appraisal_date = ?, loan_commitment_date = ?,
         title_date = ?, closing_date = ?, possession_date = ?, lead_id = ?, deal_file_url = ?,
         notes = ?, inspection_flow = ?, final_week_flow = ?, post_close_flow = ?,
-        mls = ?, list_price = ?, gci = ?, agent = ?, source = ?, external_key = ?,
+        mls = ?, list_price = ?, gci = ?, expiration = ?, agent = ?, source = ?, external_key = ?,
         imported_at = ?, updated_at = ?
       WHERE id = ?`,
     )
@@ -637,6 +646,7 @@ export function updateTransaction(id: string, updates: Partial<Transaction>): Tr
       merged.mls ?? null,
       merged.listPrice ?? null,
       merged.gci ?? null,
+      merged.expiration ?? null,
       merged.agent ?? null,
       merged.source ?? null,
       merged.externalKey ?? null,

@@ -1971,6 +1971,28 @@ function txPersist(t,extra){
   if(!t||!t.id) return;
   var body=Object.assign({},extra||{});
   fetch(crmApi("/api/deals/"+encodeURIComponent(t.id)),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).catch(function(){});
+  /* Imported rows live in /api/transactions, where the /api/deals PATCH above
+     404s silently — which meant every inline edit on an imported transaction
+     evaporated on reload. Mirror the row's editable fields there, translated
+     to that store's names (MDY dates back to ISO, closePrice to price). The
+     one that isn't found in a store simply 404s, harmlessly, same as before. */
+  var toIso=function(mdy){var m=/^(\d{2})-(\d{2})-(\d{4})/.exec(String(mdy||""));return m?(m[3]+"-"+m[1]+"-"+m[2]):null;};
+  var statusToApi={pipeline:"active",coming_soon:"active",active:"active",pending:"pending",
+                   closed:"closed",expired:"cancelled",withdrawn:"cancelled",canceled:"cancelled",
+                   archived:"cancelled",draft:"active",referral:"active"};
+  var txBody={
+    address:t.address||undefined,
+    mls:t.mls||undefined,
+    listPrice:t.listPrice||undefined,
+    gci:t.gci||undefined,
+    expiration:toIso(t.expiration),
+    closingDate:toIso(t.closeDate),
+    /* Same rule as the importer: closed deals are worth what they sold for,
+       open ones carry list. */
+    price:(t.status==="closed"?(t.closePrice||t.listPrice):(t.listPrice||t.closePrice))||undefined,
+    status:statusToApi[t.status]||undefined
+  };
+  fetch(crmApi("/api/transactions/"+encodeURIComponent(t.id)),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(txBody)}).catch(function(){});
 }
 function txMoney(v){var n=Number(String(v==null?"":v).replace(/[^0-9.]/g,""));return Number.isFinite(n)?n:0;}
 function bindTxRows(){
@@ -2125,7 +2147,7 @@ function mapApiTx(t){
     agent:t.agent||p.assignedTo||"Marco Puga",
     dateListed:txMDY(p.openedDate),
     listPrice:t.listPrice||0,
-    expiration:"",
+    expiration:txMDY(t.expiration),
     closePrice:(t.status==="closed")?(t.price||0):0,
     gci:t.gci||p.estimatedGCI||0,
     closeDate:txMDY(t.closingDate),

@@ -172,6 +172,11 @@ function initTransactionsSchema(database) {
         ["source", "TEXT"],
         ["external_key", "TEXT"],
         ["imported_at", "TEXT"],
+        /* Listing-agreement expiration (ISO date). The UI showed an Expiration
+           column for years while nothing stored one, so every value typed there
+           evaporated on reload — and an expiring listing is precisely the thing a
+           seller's agent cannot afford to discover late. */
+        ["expiration", "TEXT"],
     ]) {
         try {
             database.exec(`ALTER TABLE transactions ADD COLUMN ${column} ${ddl}`);
@@ -294,6 +299,7 @@ function rowToTransaction(row) {
         mls: row.mls ? String(row.mls) : undefined,
         listPrice: row.list_price != null ? Number(row.list_price) : undefined,
         gci: row.gci != null ? Number(row.gci) : undefined,
+        expiration: row.expiration ? String(row.expiration) : undefined,
         agent: row.agent ? String(row.agent) : undefined,
         source: row.source ? String(row.source) : undefined,
         externalKey: row.external_key ? String(row.external_key) : undefined,
@@ -371,10 +377,10 @@ function createTransaction(tx, options) {
         .prepare(`INSERT INTO transactions
         (id, address, deal_type, parties, price, status, contract_date, inspection_date,
          appraisal_date, loan_commitment_date, title_date, closing_date, possession_date,
-         lead_id, deal_file_url, notes, mls, list_price, gci, agent, source, external_key,
+         lead_id, deal_file_url, notes, mls, list_price, gci, expiration, agent, source, external_key,
          imported_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, tx.address, tx.dealType, JSON.stringify(tx.parties || {}), tx.price ?? null, tx.status, tx.contractDate ?? null, tx.inspectionDate ?? null, tx.appraisalDate ?? null, tx.loanCommitmentDate ?? null, tx.titleDate ?? null, tx.closingDate ?? null, tx.possessionDate ?? null, tx.leadId ?? null, tx.dealFileUrl ?? null, tx.notes ?? null, tx.mls ?? null, tx.listPrice ?? null, tx.gci ?? null, tx.agent ?? null, tx.source ?? null, tx.externalKey ?? null, tx.importedAt ?? null, now, now);
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, tx.address, tx.dealType, JSON.stringify(tx.parties || {}), tx.price ?? null, tx.status, tx.contractDate ?? null, tx.inspectionDate ?? null, tx.appraisalDate ?? null, tx.loanCommitmentDate ?? null, tx.titleDate ?? null, tx.closingDate ?? null, tx.possessionDate ?? null, tx.leadId ?? null, tx.dealFileUrl ?? null, tx.notes ?? null, tx.mls ?? null, tx.listPrice ?? null, tx.gci ?? null, tx.expiration ?? null, tx.agent ?? null, tx.source ?? null, tx.externalKey ?? null, tx.importedAt ?? null, now, now);
     const created = { ...tx, id, createdAt: now, updatedAt: now };
     if (created.status === "under_contract") {
         syncDeadlinesFromTransaction(created);
@@ -401,10 +407,10 @@ function updateTransaction(id, updates) {
         contract_date = ?, inspection_date = ?, appraisal_date = ?, loan_commitment_date = ?,
         title_date = ?, closing_date = ?, possession_date = ?, lead_id = ?, deal_file_url = ?,
         notes = ?, inspection_flow = ?, final_week_flow = ?, post_close_flow = ?,
-        mls = ?, list_price = ?, gci = ?, agent = ?, source = ?, external_key = ?,
+        mls = ?, list_price = ?, gci = ?, expiration = ?, agent = ?, source = ?, external_key = ?,
         imported_at = ?, updated_at = ?
       WHERE id = ?`)
-        .run(merged.address, merged.dealType, JSON.stringify(merged.parties || {}), merged.price ?? null, merged.status, merged.contractDate ?? null, merged.inspectionDate ?? null, merged.appraisalDate ?? null, merged.loanCommitmentDate ?? null, merged.titleDate ?? null, merged.closingDate ?? null, merged.possessionDate ?? null, merged.leadId ?? null, merged.dealFileUrl ?? null, merged.notes ?? null, JSON.stringify(merged.inspectionFlow || {}), JSON.stringify(merged.finalWeekFlow || {}), JSON.stringify(merged.postCloseFlow || {}), merged.mls ?? null, merged.listPrice ?? null, merged.gci ?? null, merged.agent ?? null, merged.source ?? null, merged.externalKey ?? null, merged.importedAt ?? null, merged.updatedAt, id);
+        .run(merged.address, merged.dealType, JSON.stringify(merged.parties || {}), merged.price ?? null, merged.status, merged.contractDate ?? null, merged.inspectionDate ?? null, merged.appraisalDate ?? null, merged.loanCommitmentDate ?? null, merged.titleDate ?? null, merged.closingDate ?? null, merged.possessionDate ?? null, merged.leadId ?? null, merged.dealFileUrl ?? null, merged.notes ?? null, JSON.stringify(merged.inspectionFlow || {}), JSON.stringify(merged.finalWeekFlow || {}), JSON.stringify(merged.postCloseFlow || {}), merged.mls ?? null, merged.listPrice ?? null, merged.gci ?? null, merged.expiration ?? null, merged.agent ?? null, merged.source ?? null, merged.externalKey ?? null, merged.importedAt ?? null, merged.updatedAt, id);
     if (merged.status === "under_contract") {
         syncDeadlinesFromTransaction(merged);
     }
