@@ -2,10 +2,25 @@
 
 const $ = (id) => document.getElementById(id);
 
+/* Never overwrite a field being edited. Repaint happens on load and after
+   every toggle, and it used to rewrite these three inputs from storage — so a
+   token typed but not yet saved was replaced with the stored (empty) value
+   mid-keystroke. Same fix as the side panel; see the comment there. */
+const dirty = new Set();
+const FIELDS = ["deviceName", "serverUrl", "token"];
+
+function fillForm(cfg, force) {
+  for (const id of FIELDS) {
+    const field = $(id);
+    if (!force && (document.activeElement === field || dirty.has(id))) continue;
+    field.value = cfg[id] || "";
+  }
+}
+
+FIELDS.forEach((id) => $(id).addEventListener("input", () => dirty.add(id)));
+
 function paint(cfg, live) {
-  $("deviceName").value = cfg.deviceName || "";
-  $("serverUrl").value = cfg.serverUrl || "";
-  $("token").value = cfg.token || "";
+  fillForm(cfg, false);
   $("enabled").checked = cfg.enabled === true;
   $("swHint").textContent = cfg.enabled
     ? "On — Harvey works in his own tab, not the one you're reading"
@@ -101,8 +116,13 @@ $("save").addEventListener("click", async () => {
   /* The name is how Harvey addresses this machine and how priority is
      decided, so it is saved with the pairing rather than hidden in settings. */
   const deviceName = $("deviceName").value.trim();
+  if (!serverUrl || !token) {
+    $("statusText").textContent = !serverUrl ? "Enter the server address first" : "Enter your pairing token first";
+    return;
+  }
   await chrome.storage.local.set({ serverUrl, token, deviceName });
-  $("serverUrl").value = serverUrl;   // show what was actually saved
+  dirty.clear();
+  fillForm({ serverUrl, token, deviceName }, true);   // show what was actually saved
   $("save").textContent = "Saved";
   setTimeout(() => { $("save").textContent = "Save & pair"; }, 1400);
   chrome.runtime.sendMessage({ type: "harvey:poll-now" }, () => refresh());

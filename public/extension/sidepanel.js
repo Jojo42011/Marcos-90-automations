@@ -105,10 +105,36 @@ async function checkServer(c) {
   }
 }
 
+/* ── The form vs. the status repaint ──────────────────────────────────────
+ * These are deliberately separate now.
+ *
+ * They used to be one function, and it ate what you were typing: the status
+ * repaint runs on load, when Setup is opened, and on a 15s timer, and each
+ * run rewrote the inputs from storage. A token you were halfway through
+ * typing had never been saved, so "from storage" meant EMPTY — the field
+ * cleared itself under your hands and you had to beat the timer to pair.
+ *
+ * So the form is only ever filled when it is safe to do so: not while a field
+ * has focus, and not while it holds edits you haven't saved. `force` is for
+ * after a save, where the stored value IS the truth and should be shown (the
+ * server URL gets normalized on the way in, and you should see what was
+ * actually kept).
+ */
+const dirty = new Set();
+const FIELDS = ["deviceName", "serverUrl", "token"];
+
+function fillForm(c, force) {
+  for (const id of FIELDS) {
+    const field = $(id);
+    if (!force && (document.activeElement === field || dirty.has(id))) continue;
+    field.value = c[id] || "";
+  }
+}
+
+FIELDS.forEach((id) => $(id).addEventListener("input", () => dirty.add(id)));
+
 function paint(c, live) {
-  $("deviceName").value = c.deviceName || "";
-  $("serverUrl").value = c.serverUrl || "";
-  $("token").value = c.token || "";
+  fillForm(c, false);
   $("enabled").checked = c.enabled === true;
   $("swHint").textContent = c.enabled
     ? "On — Harvey works in his own tab, not the one you're reading"
@@ -235,8 +261,17 @@ $("save").addEventListener("click", async () => {
   const serverUrl = normalizeServer($("serverUrl").value);
   const token = $("token").value.trim();
   const deviceName = $("deviceName").value.trim();
+  if (!serverUrl || !token) {
+    /* Saying nothing and storing a half-pairing is how you end up staring at
+       "Not paired" with no idea which field is missing. */
+    $("statusText").textContent = !serverUrl ? "Enter the server address first" : "Enter your pairing token first";
+    return;
+  }
   await chrome.storage.local.set({ serverUrl, token, deviceName });
-  $("serverUrl").value = serverUrl;
+  /* Saved, so the stored values are now the truth: clear the edit flags and
+     show what was actually kept (the URL is normalized to its origin). */
+  dirty.clear();
+  fillForm({ serverUrl, token, deviceName }, true);
   $("save").textContent = "Saved";
   setTimeout(() => { $("save").textContent = "Save & pair"; }, 1400);
   chrome.runtime.sendMessage({ type: "harvey:poll-now" }, () => refresh());
