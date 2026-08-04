@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Harvey Browser Control",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Talk to Harvey in a side panel beside any page, and let him navigate, click, fill forms and pull data from sites that have no API — in his own tab, on your machine, only while you switch it on.",
   "permissions": ["activeTab", "alarms", "scripting", "sidePanel", "storage", "tabs"],
   "host_permissions": ["<all_urls>"],

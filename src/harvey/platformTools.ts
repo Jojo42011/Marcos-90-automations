@@ -57,7 +57,26 @@ import {
   recentActivity as recentBrowserActivity,
   requestDisarm as requestBrowserDisarm,
   requestArm as requestBrowserArm,
+  type BrowserResult,
 } from "../core/browserControl.js";
+
+/**
+ * Make a failed browser action impossible to narrate as a success.
+ *
+ * A `say` on the result is the same device web_search uses for scrape
+ * failures: the instruction rides INSIDE the tool result, where the model is
+ * actually looking when it writes its next sentence, instead of in a system
+ * prompt paragraph it read thousands of tokens ago.
+ */
+function groundBrowserResult<T extends Pick<BrowserResult, "ok" | "error" | "url" | "title">>(r: T): T & { say?: string } {
+  if (r.ok) return r;
+  return {
+    ...r,
+    say:
+      "This browser action FAILED — nothing happened in Marco's browser. " +
+      "Tell him it failed and read him the error above. NEVER say you opened, pulled up, or did the thing: you did not.",
+  };
+}
 
 /**
  * Harvey tools for the platform surfaces that had none — the Buyers & Sellers
@@ -686,6 +705,15 @@ export async function executePlatformTool(
   input: Record<string, unknown>,
 ): Promise<unknown> {
   switch (name) {
+    /* ── Grounding every browser result ─────────────────────────────────────
+       Observed on a live call: Harvey told Marco he had "pulled up Zillow"
+       when nothing had opened. The tool had FAILED — but the failure was a
+       quiet JSON object, and the model narrated the intention instead of the
+       outcome. browser_disable/enable and gmail_send already carry a "never
+       claim it unless the tool succeeded" clause; the action tools never got
+       one. This wrapper closes that for every browser action at once: a
+       failure now argues for itself inside the result, in words aimed at the
+       model's next sentence. */
     case "browser_status": {
       const st = browserStatus();
       if (!st.configured) {
@@ -714,35 +742,46 @@ export async function executePlatformTool(
       if (!url) {
         return { error: "That doesn't look like a web address. Give a domain or URL, e.g. books.toscrape.com" };
       }
-      return await runBrowserCommand({
+      const r = groundBrowserResult(await runBrowserCommand({
         action: "navigate",
         url,
         focus: input.focus === false ? false : true,
-      }, { device: str(input.device) || undefined });
+      }, { device: str(input.device) || undefined }));
+      if (r.ok) {
+        /* Ground the claim in what actually loaded. "Pulled up Zillow" when
+           the tab shows a bot-check is Harvey believing his own intention;
+           quoting the landed URL/title is how the reply stays tied to the
+           screen the operator is looking at. */
+        return {
+          ...r,
+          say: `Confirm using the ACTUAL page: "${r.title || r.url || url}". If that is not the site Marco asked for, say what loaded instead.`,
+        };
+      }
+      return r;
     }
 
     case "browser_wait_for":
-      return await runBrowserCommand({
+      return groundBrowserResult(await runBrowserCommand({
         action: "waitFor",
         selector: str(input.selector) || undefined,
         text: str(input.text) || undefined,
         timeoutMs: num(input.timeoutMs, 15000),
-      }, { timeoutMs: num(input.timeoutMs, 15000) + 8000, device: str(input.device) || undefined });
+      }, { timeoutMs: num(input.timeoutMs, 15000) + 8000, device: str(input.device) || undefined }));
 
     case "browser_structured_data":
-      return await runBrowserCommand({ action: "structured" }, { device: str(input.device) || undefined });
+      return groundBrowserResult(await runBrowserCommand({ action: "structured" }, { device: str(input.device) || undefined }));
 
     case "browser_scroll":
-      return await runBrowserCommand({ action: "scroll", to: str(input.to) || "bottom" }, { timeoutMs: 30000, device: str(input.device) || undefined });
+      return groundBrowserResult(await runBrowserCommand({ action: "scroll", to: str(input.to) || "bottom" }, { timeoutMs: 30000, device: str(input.device) || undefined }));
 
     case "browser_show_tab":
-      return await runBrowserCommand({ action: "focus" }, { device: str(input.device) || undefined });
+      return groundBrowserResult(await runBrowserCommand({ action: "focus" }, { device: str(input.device) || undefined }));
 
     case "browser_screenshot": {
-      const r = await runBrowserCommand(
+      const r = groundBrowserResult(await runBrowserCommand(
         { action: "screenshot", maxWidth: num(input.maxWidth, 1000) },
         { timeoutMs: 40000, device: str(input.device) || undefined },   // capture is slower than a DOM read
-      );
+      ));
       if (!r.ok || !r.image) return r;
       // `_image` is the convention the agent loop understands: it lifts this
       // into a real image block so the model actually looks at the page
@@ -787,7 +826,7 @@ export async function executePlatformTool(
     }
 
     case "browser_read": {
-      const r = await runBrowserCommand({ action: "read", selector: str(input.selector) || undefined });
+      const r = groundBrowserResult(await runBrowserCommand({ action: "read", selector: str(input.selector) || undefined }));
       const meta = (r.meta || {}) as { needsLogin?: boolean; truncated?: boolean };
       if (r.ok && meta.needsLogin) {
         // Without this, a sign-in wall looks like a thin page and gets
@@ -807,19 +846,19 @@ export async function executePlatformTool(
       const text = str(input.text);
       const selector = str(input.selector);
       if (!text && !selector) return { error: "Give either text (the visible label) or selector." };
-      return await runBrowserCommand({ action: "click", text: text || undefined, selector: selector || undefined });
+      return groundBrowserResult(await runBrowserCommand({ action: "click", text: text || undefined, selector: selector || undefined }));
     }
 
     case "browser_fill": {
       const fields = (input.fields && typeof input.fields === "object" ? input.fields : {}) as Record<string, string>;
       if (!Object.keys(fields).length) return { error: "fields is required — a map of CSS selector to value." };
-      return await runBrowserCommand({ action: "fill", fields });
+      return groundBrowserResult(await runBrowserCommand({ action: "fill", fields }));
     }
 
     case "browser_extract": {
       const schema = (input.schema && typeof input.schema === "object" ? input.schema : {}) as Record<string, string>;
       if (!Object.keys(schema).length) return { error: "schema is required — a map of field name to CSS selector." };
-      return await runBrowserCommand({ action: "extract", schema });
+      return groundBrowserResult(await runBrowserCommand({ action: "extract", schema }));
     }
 
     case "get_social_analytics": {

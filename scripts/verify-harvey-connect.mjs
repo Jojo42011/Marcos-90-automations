@@ -229,7 +229,7 @@ check("panel: manifest declares the side panel and drops the popup as the click 
   assert(manifest.permissions.includes("sidePanel"));
   assert(!manifest.action.default_popup, "a default_popup would swallow the click and the panel would never open");
   assert.equal(manifest.options_page, "popup.html", "the old popup should stay reachable as options");
-  assert.equal(manifest.version, "1.6.0", "version must be bumped or Chrome keeps the old build");
+  // The exact version is pinned by the dedicated bump check further down.
 });
 
 check("panel: clicking the toolbar icon opens the panel, on install and on restart", () => {
@@ -277,6 +277,64 @@ check("server: poll, status, command and chat all resolve the ACCOUNT, not just 
 
 check("server: extension chat threads are keyed per account and device", () => {
   assert(/ext-\$\{account\.id\}-\$\{deviceId\}/.test(server));
+});
+
+/* ── 6. Browser honesty (the "said he pulled up Zillow" fix) ─────────────── */
+const platformSrc = read("src/harvey/platformTools.ts");
+const bgSrc = read("public/extension/background.js");
+
+check("honesty: every browser action result passes through the grounding wrapper", () => {
+  assert(/function groundBrowserResult/.test(platformSrc));
+  assert(/NEVER say you opened, pulled up/.test(platformSrc));
+  // No browser action may return a raw runBrowserCommand result any more.
+  const raw = platformSrc.match(/return await runBrowserCommand\(/g) || [];
+  assert.equal(raw.length, 0, `${raw.length} call site(s) bypass groundBrowserResult`);
+  const wrapped = platformSrc.match(/groundBrowserResult\(await runBrowserCommand\(/g) || [];
+  assert(wrapped.length >= 10, `expected >=10 wrapped call sites, found ${wrapped.length}`);
+});
+
+await checkAsync("honesty: a failed navigate carries the do-not-claim instruction (functional)", async () => {
+  // No accounts configured → the bus fails closed → the tool must come back
+  // ok:false AND argue against narrating success.
+  const savedMulti = process.env.BROWSER_CONTROL_TOKENS;
+  const savedSingle = process.env.BROWSER_CONTROL_TOKEN;
+  delete process.env.BROWSER_CONTROL_TOKENS;
+  delete process.env.BROWSER_CONTROL_TOKEN;
+  acc._resetAccountCache();
+  try {
+    const { executeHarveyTool } = await import("../dist/src/harvey/tools.js");
+    const r = await executeHarveyTool("browser_navigate", { url: "https://zillow.com" });
+    assert.equal(r.ok, false);
+    assert(/NEVER say you opened/.test(r.say || ""), `say missing on failure: ${JSON.stringify(r).slice(0, 200)}`);
+  } finally {
+    process.env.BROWSER_CONTROL_TOKENS = savedMulti;
+    process.env.BROWSER_CONTROL_TOKEN = savedSingle;
+    acc._resetAccountCache();
+  }
+});
+
+check("honesty: a successful navigate must confirm with the ACTUAL page", () => {
+  assert(/Confirm using the ACTUAL page/.test(platformSrc));
+});
+
+check("honesty: the prompt states the browser rule once, in the tool guide", () => {
+  const fpSrc = read("src/hull/founderPrompt.ts");
+  assert(/BROWSER HONESTY/.test(fpSrc));
+  assert(/ok:true in THIS turn/.test(fpSrc));
+});
+
+check("extension: a bot wall is a failed navigate, not a pulled-up site", () => {
+  assert(/press\\s\*&\\s\*hold/.test(bgSrc), "Zillow's Press & Hold must be recognized");
+  assert(/access to this page has been denied/.test(bgSrc));
+  assert(/blocked: true/.test(bgSrc));
+  assert(/The site was NOT pulled up/.test(bgSrc));
+  // The check must not run on error paths only — it sits before the ok return.
+  assert(bgSrc.indexOf("blocked: true") < bgSrc.indexOf('return { ok: true, data: "navigated"'));
+});
+
+check("extension: version bumped so Chrome actually takes the new build", () => {
+  const m = JSON.parse(read("public/extension/manifest.json"));
+  assert.equal(m.version, "1.6.2");
 });
 
 /* ── Report ──────────────────────────────────────────────────────────────── */

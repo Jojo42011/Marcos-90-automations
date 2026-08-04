@@ -728,6 +728,34 @@ async function execute(cmd, serverUrl) {
           title: t.title,
         };
       }
+
+      // A page that LOADED can still be a wall, not the site. Zillow and
+      // friends front automated visits with a bot check ("Press & Hold",
+      // "Access denied", a captcha) — document loads fine, title looks
+      // plausible, and reporting ok here is exactly how Harvey ends up telling
+      // the operator he pulled up a site that never actually appeared. The
+      // check reads only the visible top of the page; a real listing that
+      // merely mentions the word "captcha" in a paragraph won't trip it.
+      try {
+        const peek = await inPage(tab.id, () => ({
+          title: document.title || "",
+          top: (document.body && document.body.innerText || "").slice(0, 600),
+        }), {});
+        const wall = /press\s*&\s*hold|access to this page has been denied|verify you are (a )?human|are you a (ro)?bot|pardon our interruption|unusual traffic|checking your browser|just a moment/i;
+        if (peek && (wall.test(peek.title) || wall.test(peek.top))) {
+          return {
+            ok: false,
+            blocked: true,
+            error: "The site loaded a BOT CHECK instead of its content (" + (peek.title || t.url) + "). The site was NOT pulled up. The operator can complete the check themselves in Harvey's window — it is on screen — and then ask again.",
+            url: t.url,
+            title: t.title,
+          };
+        }
+      } catch (_) {
+        // Peek failing is not a navigation failure; fall through to the
+        // ordinary success report rather than inventing an error.
+      }
+
       return { ok: true, data: "navigated", url: t.url, title: t.title };
     }
 
