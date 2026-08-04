@@ -78,6 +78,10 @@ export async function runHarveyChat(input: {
       const result = await runAgentLoop({
         message: trimmed,
         history: sessionMemory,
+        // Timestamped turns feed the continuity layer: sitting detection,
+        // open-question tracking, deictic retrieval, rolling summary.
+        timedHistory: history.map((t) => ({ role: t.role, content: t.content, at: t.at })),
+        sessionId,
         voiceMode: input.voiceMode,
         fullMode: input.fullMode,
         onToken: input.onToken,

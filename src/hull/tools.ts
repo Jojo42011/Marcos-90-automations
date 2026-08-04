@@ -11,6 +11,49 @@ import { upsertNode, findSimilarNode } from "./memory/nodes.js";
 import { resolveWhatsAppTarget, sendWhatsAppViaGateway } from "./whatsappSend.js";
 import { isGmailConfigured, sendEmail } from "../integrations/gmail/index.js";
 import { analyzeReelViaOpenShorts } from "../integrations/openshorts/index.js";
+import {
+  clampTraits,
+  getPersonaTraits,
+  resetPersonaTraits,
+  setPersonaTraits,
+  type PersonaTraits,
+} from "./personaTraits.js";
+import { addStandingOrder, listStandingOrders, removeStandingOrder } from "./standingOrders.js";
+
+const TUNE_PERSONALITY_TOOL: Tool = {
+  name: "tune_personality",
+  description:
+    "Adjust Harvey's personality dials when Marco asks for a different feel: 'be funnier' means humor UP, 'be more serious' means humor DOWN, 'less formal' means formality DOWN, 'more direct' means assertiveness UP. Six dials, each 0.0-1.0: warmth, humor, formality, energy, empathy, assertiveness. Move a dial by about 0.2 per request unless Marco says how much. Pass only the dials being changed; set reset=true to restore defaults. The change applies from the very next reply and persists.",
+  input_schema: {
+    type: "object",
+    properties: {
+      warmth: { type: "number", description: "0.0-1.0" },
+      humor: { type: "number", description: "0.0-1.0" },
+      formality: { type: "number", description: "0.0-1.0" },
+      energy: { type: "number", description: "0.0-1.0" },
+      empathy: { type: "number", description: "0.0-1.0" },
+      assertiveness: { type: "number", description: "0.0-1.0" },
+      reset: { type: "boolean", description: "Restore the default calibration" },
+    },
+  },
+};
+
+const CHANGE_AGENT_LOGIC_TOOL: Tool = {
+  name: "change_agent_logic",
+  description:
+    "Store, list, or retract a STANDING ORDER — a rule Harvey follows in every future reply. When Marco says 'stop doing X' or 'always do Y' about Harvey's own behavior, that is an instruction, not a remark: store it. Each order is ONE plain-English rule. action='add' with rule, action='remove' with rule (or its id), action='list'.",
+  input_schema: {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["add", "remove", "list"] },
+      rule: {
+        type: "string",
+        description: "The rule text (for add), or text/id identifying the order to retract (for remove)",
+      },
+    },
+    required: ["action"],
+  },
+};
 
 const WHATSAPP_SEND_TOOL: Tool = {
   name: "whatsapp_send",
@@ -134,7 +177,13 @@ const ANALYZE_REEL_TOOL: Tool = {
 };
 
 export function getHullToolDefinitions(opts?: { whatsappSend?: boolean }): Tool[] {
-  const tools = [...HARVEY_TOOL_DEFINITIONS, ...MEMORY_TOOLS, ANALYZE_REEL_TOOL];
+  const tools = [
+    ...HARVEY_TOOL_DEFINITIONS,
+    ...MEMORY_TOOLS,
+    ANALYZE_REEL_TOOL,
+    TUNE_PERSONALITY_TOOL,
+    CHANGE_AGENT_LOGIC_TOOL,
+  ];
   if (opts?.whatsappSend) tools.push(WHATSAPP_SEND_TOOL);
   if (isGmailConfigured()) tools.push(GMAIL_SEND_TOOL);
   /* Search is offered when EITHER backend exists: the Brave API (works
@@ -150,6 +199,33 @@ export function getHullToolDefinitions(opts?: { whatsappSend?: boolean }): Tool[
 }
 
 export async function executeHullTool(name: string, input: Record<string, unknown>): Promise<unknown> {
+  if (name === "tune_personality") {
+    if (input.reset === true) {
+      return { ok: true, traits: resetPersonaTraits(), note: "Personality restored to defaults." };
+    }
+    const update = clampTraits(input as Partial<PersonaTraits>);
+    if (!Object.keys(update).length) {
+      return { error: "Pass at least one dial (warmth, humor, formality, energy, empathy, assertiveness) or reset=true.", current: getPersonaTraits() };
+    }
+    const traits = setPersonaTraits(update);
+    return { ok: true, traits, note: "Applied from the next reply onward. Confirm the change to Marco in one short line." };
+  }
+
+  if (name === "change_agent_logic") {
+    const action = String(input.action || "").trim();
+    const rule = String(input.rule || "").trim();
+    if (action === "list") return { orders: listStandingOrders() };
+    if (action === "add") {
+      const result = addStandingOrder(rule);
+      return "error" in result ? result : { ok: true, order: result };
+    }
+    if (action === "remove") {
+      const removed = removeStandingOrder(rule);
+      return removed ? { ok: true } : { error: "No standing order matched that." };
+    }
+    return { error: "action must be add, remove, or list" };
+  }
+
   if (name === "memory_store") {
     const content = String(input.content || "").trim();
     if (!content) return { error: "content required" };

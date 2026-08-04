@@ -9,6 +9,19 @@
   // lower = more sensitive. 2-3 = normal voice, 6-8 = loud voice.
   const BARGE_IN_RMS_THRESHOLD = 3;
 
+  // Turn-taking constants ported from livekit/agents InterruptionOptions
+  // (via the conversational playbook §5). The behaviors, not the framework.
+  const BARGE_IN_GRACE_MS = 1000;          // ignore the first second after Harvey starts speaking (his own onset, echo)
+  const BARGE_IN_MIN_WORDS = 3;            // a real interruption, not an echo blip or a listening noise
+  const BARGE_IN_SUSTAIN_FRAMES = 4;       // ×~128ms mic frames ≈ 500ms of sustained speech before RMS counts as a barge-in
+  const FALSE_INTERRUPTION_TIMEOUT_MS = 2000; // no committed turn within 2s → it wasn't an interruption, resume
+  const POST_SPEECH_COOLDOWN_MS = 1200;    // STT commits lag the audio: echo/backchannel guards apply this long after playback
+  const BRIDGE_PHRASE_AFTER_MS = 2500;     // nothing spoken this long after a commit → one short bridge, never dead air
+  // Listening noises — never interrupts, and never turns of their own right after Harvey speaks.
+  const BACKCHANNEL_RE = /^(?:mm+|mhm+|uh[- ]?huh|yeah|yep|ok(?:ay)?|right|sure|got it|i see|nice|cool|gotcha|alright|hmm+|ah+|oh+)[.!,]?$/i;
+  // An explicit stop discards the parked audio instead of resuming it.
+  const STOP_COMMAND_RE = /^(?:stop|stop it|stop talking|shut up|quiet|be quiet|never ?mind|cancel|forget it)[.!,]?$/i;
+
   let processor = null;
   let lpFilter = null;
   let captureCtx = null;
@@ -43,6 +56,43 @@
   let pendingCommitTimer = null;
   let micCaptureActive = false;
 
+  // Turn-taking state (see the constants above).
+  let bargeGraceUntil = 0;        // set when playback actually STARTS, not when it's requested
+  let rmsRunFrames = 0;           // consecutive mic frames above the RMS threshold
+  let lastPlaybackEndedAt = 0;    // drives the post-speech cooldown at commit time
+  let recentSpokenText = "";      // what Harvey just said, for the self-echo compare
+  let parked = null;              // { timer } while audio is parked pending a real turn
+  let bridgeTimer = null;
+
+  function normalizeWords(t) {
+    return t.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  // Everything Harvey speaks passes through here so a transcript that is just
+  // his own voice leaking back in can be recognized and dropped.
+  function noteSpokenText(text) {
+    const norm = normalizeWords(text || "");
+    if (!norm) return;
+    recentSpokenText = (recentSpokenText + " " + norm).slice(-800);
+  }
+
+  function isEchoOfHarvey(text) {
+    const norm = normalizeWords(text);
+    if (!norm || !recentSpokenText) return false;
+    if (recentSpokenText.includes(norm)) return true;
+    const words = norm.split(" ");
+    if (words.length < 3) return false;
+    const hits = words.filter((w) => recentSpokenText.includes(w)).length;
+    return hits / words.length >= 0.8;
+  }
+
+  function clearBridgeTimer() {
+    if (bridgeTimer) {
+      clearTimeout(bridgeTimer);
+      bridgeTimer = null;
+    }
+  }
+
   function voiceSessionId() {
     const stored = sessionStorage.getItem("harvey_session_id");
     if (stored) return stored;
@@ -63,6 +113,19 @@
     // Only finalize on high-confidence end of turn — eager fires too early on fragments.
     if (event !== "EndOfTurn") return false;
     if (wordCount(t) < 2 && t.length < 12) return false;
+    // Post-speech cooldown: STT commits seconds after the audio, so Harvey's
+    // own tail (echo) and Marco's listening noises land right AFTER playback
+    // ends — exactly when the mic re-opens. Guard at COMMIT time, both kinds.
+    if (Date.now() - lastPlaybackEndedAt < POST_SPEECH_COOLDOWN_MS) {
+      if (BACKCHANNEL_RE.test(t)) {
+        console.log("[VAD] Dropped backchannel in post-speech cooldown:", t);
+        return false;
+      }
+      if (isEchoOfHarvey(t)) {
+        console.log("[VAD] Dropped self-echo in post-speech cooldown:", t.slice(0, 60));
+        return false;
+      }
+    }
     return true;
   }
 
@@ -298,12 +361,26 @@
       }
 
       // Mic muted for transcription (Harvey speaking) — watch for barge-in via local RMS.
-      if (!isVoicePlaybackActive() || bargeInCooldown) return;
+      if (!isVoicePlaybackActive() || bargeInCooldown) {
+        rmsRunFrames = 0;
+        return;
+      }
+      // Start-of-speech grace: Harvey's own onset (and its room echo) must not
+      // count as an interruption in the first second of his turn.
+      if (Date.now() < bargeGraceUntil) return;
       let sum = 0;
       for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
       const rms = Math.sqrt(sum / input.length) * 100;
       if (rms > BARGE_IN_RMS_THRESHOLD) {
-        triggerBargeIn();
+        // min_duration: one loud frame is a cough or a door; ~500ms of
+        // sustained level is a person actually talking over Harvey.
+        rmsRunFrames++;
+        if (rmsRunFrames >= BARGE_IN_SUSTAIN_FRAMES) {
+          rmsRunFrames = 0;
+          triggerBargeIn();
+        }
+      } else {
+        rmsRunFrames = 0;
       }
     };
 
@@ -382,6 +459,13 @@
       if (event === "EndOfTurn") {
         const finalText = transcript || latestTurnTranscript;
         latestTurnTranscript = finalText;
+        // While parked, an EndOfTurn is the verdict on whether the barge-in
+        // was real — it must not go through the normal commit gate (brainBusy
+        // is still true for the reply being spoken).
+        if (parked) {
+          handleParkedUtterance((finalText || "").trim());
+          return;
+        }
         scheduleCommit(finalText, event);
       }
       return;
@@ -416,6 +500,19 @@
     setHarveyStatus("PROCESSING");
     pauseMicCapture();
 
+    // Bridge phrase: if nothing has been spoken this long after the commit
+    // (slow tools, cold model), one short bridge — a tool round-trip must
+    // never read as dead air. Cancelled the moment real speech starts.
+    clearBridgeTimer();
+    bridgeTimer = setTimeout(() => {
+      bridgeTimer = null;
+      if (brainBusy && !isVoicePlaybackActive()) {
+        console.log("[Harvey] Brain is slow — bridge phrase");
+        noteSpokenText("One sec.");
+        void window.HarveyStreamingTts?.speak?.("One sec.");
+      }
+    }, BRIDGE_PHRASE_AFTER_MS);
+
     try {
       const res = await fetch(apiUrl("/api/jarvis/voice/command"), {
         method: "POST",
@@ -447,9 +544,14 @@
             if (data.type === "speech_chunk" && !firstChunkStarted && data.text) {
               firstChunkStarted = true;
               console.log("[Harvey] First sentence received from brain — starting TTS immediately");
+              clearBridgeTimer();
               pauseMicForHarveyResponse();
+              noteSpokenText(data.text);
               speakPromise = window.HarveyStreamingTts.speak(data.text, {
                 streamingOpen: true,
+                onStart: () => {
+                  bargeGraceUntil = Date.now() + BARGE_IN_GRACE_MS;
+                },
               });
             }
             if (data.type === "speech_complete") {
@@ -470,8 +572,10 @@
           // it, or the operator is left with no idea whether it finished.
           if (window.HarveyJobWatch) window.HarveyJobWatch.watchReply(fullSpeech);
           if (firstChunkStarted) {
+            noteSpokenText(fullSpeech);
             window.HarveyStreamingTts.appendRemainingText(fullSpeech, {
               onEnd: () => {
+                lastPlaybackEndedAt = Date.now();
                 resumeMicCapture();
                 setHarveyStatus("LISTENING");
                 console.log("[Harvey] Mic re-enabled — ready for next message");
@@ -495,9 +599,21 @@
         }
       }
     } catch (err) {
-      showVoiceError(err instanceof Error ? err.message : String(err));
+      const raw = err instanceof Error ? err.message : String(err);
+      showVoiceError(raw);
       setHarveyStatus("ERROR");
+      // Say the failure in Harvey's own voice (playbook §7.9): to someone
+      // wearing headphones, silence is indistinguishable from being ignored.
+      const spokenLine = /429|rate.?limit|overloaded/i.test(raw)
+        ? "I just hit my rate limit. Give me ten seconds and ask that again."
+        : /network|fetch|HTTP 5|timeout|timed out/i.test(raw)
+          ? "I lost the connection for a second there. Say that again."
+          : "Something broke on my end. Give it another go.";
+      try {
+        await speakText(spokenLine);
+      } catch (_) {}
     } finally {
+      clearBridgeTimer();
       brainBusy = false;
     }
 
@@ -527,8 +643,13 @@
   async function speakText(fullText) {
     if (window.HarveyStreamingTts) {
       pauseMicForHarveyResponse();
+      noteSpokenText(fullText);
       await window.HarveyStreamingTts.speak(fullText, {
+        onStart: () => {
+          bargeGraceUntil = Date.now() + BARGE_IN_GRACE_MS;
+        },
         onEnd: () => {
+          lastPlaybackEndedAt = Date.now();
           resumeMicCapture();
           setHarveyStatus("LISTENING");
           console.log("[Harvey] Mic re-enabled — ready for next message");
@@ -836,6 +957,13 @@
     // Otherwise the health check keeps reviving a session the user just ended.
     stopSttHealthWatch();
     sttRetries = 0;
+    clearBridgeTimer();
+    if (parked) {
+      clearTimeout(parked.timer);
+      parked = null;
+    }
+    rmsRunFrames = 0;
+    recentSpokenText = "";
     ttsQueue = [];
     window.HarveyStreamingTts?.stop?.();
     if (currentSource) {
@@ -861,6 +989,7 @@
 
   function interruptHarvey() {
     console.log("[Harvey] Barge-in — stopping immediately");
+    lastPlaybackEndedAt = Date.now();
     window.HarveyStreamingTts?.stop?.();
     ttsQueue = [];
     if (currentSource) {
@@ -877,13 +1006,88 @@
     }
   }
 
+  /* ── False-interruption resume (livekit/agents behavior) ──────────────────
+   * A barge-in PARKS the unplayed audio instead of destroying it, and opens
+   * the mic. If no real turn follows within FALSE_INTERRUPTION_TIMEOUT_MS —
+   * or what follows is a backchannel, a self-echo, or too short to be a turn —
+   * it wasn't an interruption: the parked sentence resumes. An explicit
+   * "stop" still discards; a genuine new turn discards the remainder so it
+   * can never resurface, and is then committed to the brain. */
+  function parkHarvey() {
+    const couldPark = window.HarveyStreamingTts?.pause?.();
+    if (!couldPark) {
+      // Legacy queue path (no streaming session) can't park — hard interrupt.
+      interruptHarvey();
+      return;
+    }
+    console.log("[Harvey] Possible barge-in — audio parked, listening for a real turn");
+    resumeMicCapture();
+    setHarveyStatus("LISTENING");
+    parked = {
+      timer: setTimeout(
+        () => resumeFromFalseInterruption("no turn followed"),
+        FALSE_INTERRUPTION_TIMEOUT_MS,
+      ),
+    };
+  }
+
+  function resumeFromFalseInterruption(reason) {
+    if (!parked) return;
+    clearTimeout(parked.timer);
+    parked = null;
+    console.log("[Harvey] False interruption (" + reason + ") — resuming parked audio");
+    pauseMicCapture();
+    setHarveyStatus("RESPONDING");
+    bargeGraceUntil = Date.now() + BARGE_IN_GRACE_MS;
+    window.HarveyStreamingTts?.resume?.();
+  }
+
+  function handleParkedUtterance(text) {
+    if (!parked) return;
+    if (!text || BACKCHANNEL_RE.test(text)) {
+      resumeFromFalseInterruption("backchannel");
+      return;
+    }
+    if (STOP_COMMAND_RE.test(text)) {
+      clearTimeout(parked.timer);
+      parked = null;
+      console.log("[Harvey] Explicit stop — discarding parked audio");
+      interruptHarvey();
+      return;
+    }
+    if (isEchoOfHarvey(text)) {
+      resumeFromFalseInterruption("self-echo");
+      return;
+    }
+    if (wordCount(text) < BARGE_IN_MIN_WORDS) {
+      resumeFromFalseInterruption("too short to be a turn");
+      return;
+    }
+    // A genuine new turn: kill the parked remainder for good and hand the
+    // utterance to the brain once the abandoned reply's await unwinds.
+    clearTimeout(parked.timer);
+    parked = null;
+    console.log("[Harvey] Real interruption — discarding parked audio, committing:", text.slice(0, 60));
+    interruptHarvey();
+    const started = Date.now();
+    const wait = setInterval(() => {
+      if (!brainBusy) {
+        clearInterval(wait);
+        void commitTranscript(text);
+      } else if (Date.now() - started > 4000) {
+        clearInterval(wait);
+        console.warn("[Harvey] Brain never released after interruption — dropping:", text.slice(0, 60));
+      }
+    }, 80);
+  }
+
   function triggerBargeIn() {
-    if (bargeInCooldown) return;
+    if (bargeInCooldown || parked) return;
     bargeInCooldown = true;
     setTimeout(() => {
       bargeInCooldown = false;
     }, 300);
-    interruptHarvey();
+    parkHarvey();
   }
 
   window.interruptHarvey = interruptHarvey;

@@ -1,13 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateTTS = generateTTS;
+const speakNumbers_js_1 = require("./speakNumbers.js");
 const ttsCache = new Map();
 const TTS_CACHE_MAX = 50;
 /** ElevenLabs returns raw S16LE PCM when output_format=pcm_24000 — matches the client's Int16 decoder. */
 const ELEVENLABS_SAMPLE_RATE = 24000;
-async function generateTTS(text) {
+async function generateTTS(rawText) {
     const key = process.env.ELEVENLABS_API_KEY?.trim();
-    if (!key || !text.trim())
+    if (!key || !rawText.trim())
+        return null;
+    /* Ear-text, not eye-text (playbook §6.2): "$40k" and "(210) 718-3874" come
+       out of a low-latency TTS model flat or mangled, so numbers become words
+       HERE, at the mouth — the UI keeps the readable form. */
+    const text = (0, speakNumbers_js_1.sanitizeForSpeech)(rawText);
+    if (!text.trim())
         return null;
     const cacheKey = text.trim().toLowerCase().substring(0, 200);
     const cached = ttsCache.get(cacheKey);

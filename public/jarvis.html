@@ -2431,6 +2431,34 @@
         finishSpeak(null, false);
       }
 
+      /* Park the unplayed audio instead of destroying it. Returns false when
+         there is nothing playing to park. */
+      function pause() {
+        const s = speakSession;
+        if (!s || s.aborted || s.paused) return false;
+        s.paused = true;
+        if (ttsCurrentSource) {
+          try {
+            ttsCurrentSource.stop(0);
+          } catch (_) {}
+          ttsCurrentSource = null;
+        }
+        console.log("[TTS Stream] Parked (possible barge-in)");
+        return true;
+      }
+
+      function resume() {
+        const s = speakSession;
+        if (!s || s.aborted || !s.paused) return false;
+        s.paused = false;
+        console.log("[TTS Stream] Resumed parked audio (false interruption)");
+        return true;
+      }
+
+      function isPaused() {
+        return !!(speakSession && speakSession.paused && !speakSession.aborted);
+      }
+
       async function generateTtsForSentence(text) {
         const startTime = Date.now();
         prefetchInFlight++;
@@ -2523,6 +2551,15 @@
             break;
           }
 
+          /* Parked by a possible barge-in (false-interruption resume, ported
+             from livekit/agents): hold position instead of destroying the
+             queue. If it wasn't a real interruption we replay the interrupted
+             chunk and carry on; a genuine new turn calls stop() instead. */
+          if (s.paused) {
+            await new Promise((r) => setTimeout(r, 100));
+            continue;
+          }
+
           if (i >= s.chunks.length) {
             if (s.streamingOpen) {
               await new Promise((r) => setTimeout(r, 50));
@@ -2559,6 +2596,13 @@
           }
 
           await playAudioBuffer(audioBuffer, s.chunks[i], i + 1, s.chunks.length);
+
+          if (s.paused) {
+            // Interrupted mid-chunk: keep this chunk's buffer and DON'T advance,
+            // so a resume replays the interrupted sentence from its start.
+            currentPromise = Promise.resolve(audioBuffer);
+            continue;
+          }
 
           currentPromise = nextPromise || Promise.resolve(null);
           i++;
@@ -2603,6 +2647,7 @@
           index: 0,
           options: options || {},
           aborted: false,
+          paused: false,
           streamingOpen: Boolean(options?.streamingOpen),
         };
 
@@ -2675,6 +2720,9 @@
       return {
         speak,
         stop,
+        pause,
+        resume,
+        isPaused,
         isActive,
         unlock,
         splitIntoSentences,
