@@ -2,7 +2,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildFounderSystemPrompt } from "./founderPrompt.js";
 import { HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT } from "../harvey/index.js";
-import { getAethonModel, getHaikuModel, getMaxTokens, needsSonnet } from "./modelRouting.js";
+import { getAethonModel, getHaikuModel, getMaxTokens, isSocialTurn, needsSonnet } from "./modelRouting.js";
+import {
+  buildConversationState,
+  buildRetrievalQuery,
+  getConversationSummary,
+  type TimedTurn,
+} from "./conversation.js";
+import { standingOrderRules } from "./standingOrders.js";
 import { searchFacts, getMemoryPacket, getRetrievalConfidence } from "./memory/retrieval.js";
 import { getHullToolDefinitions, executeHullTool } from "./tools.js";
 import { isGmailConfigured } from "../integrations/gmail/index.js";
@@ -76,6 +83,11 @@ export interface AgentLoopResult {
 export interface AgentLoopOptions {
   message: string;
   history?: MessageParam[];
+  /** Timestamped turns for the continuity layer (conversation state, deictic
+   *  retrieval). Same content as history, plus `at`. */
+  timedHistory?: TimedTurn[];
+  /** Session id — keys the rolling "conversation so far" summary. */
+  sessionId?: string;
   voiceMode?: boolean;
   /** Low-latency path (WhatsApp): Haiku, short replies. */
   fastMode?: boolean;
@@ -121,9 +133,17 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   }
 
   const client = new Anthropic({ apiKey: key });
+  const timedHistory = opts.timedHistory ?? [];
+  /* A pure pleasantry attaches no tools and runs on the fast model — the
+     operational prompt half is dead weight on exactly the turns that need to
+     feel most human. Anything ambiguous falls through to the full path. */
+  const socialTurn = isSocialTurn(opts.message);
   const factLimit = opts.fastMode ? 4 : 8;
-  const facts = await searchFacts(opts.message, factLimit);
-  const memoryPacket = getMemoryPacket(opts.message, facts);
+  /* "What about him?" carries zero retrievable keywords — short or deictic
+     messages blend the prior user turns in so retrieval can see the referent. */
+  const retrievalQuery = buildRetrievalQuery(opts.message, timedHistory);
+  const facts = await searchFacts(retrievalQuery, factLimit);
+  const memoryPacket = getMemoryPacket(retrievalQuery, facts);
   const { confidence, count } = opts.fastMode
     ? { confidence: 1, count: facts.length }
     : await getRetrievalConfidence(opts.message);
@@ -148,28 +168,11 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     return { speech: q, toolRounds: 0, model: getHaikuModel(), clarification: true };
   }
 
-  let system = buildFounderSystemPrompt(memoryPacket);
-  system += `\n\n${HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT}`;
-  if (opts.voiceMode) {
-    system +=
-      "\n\nVOICE MODE: Spoken replies only. Max 2-3 short sentences. Lead with the number or answer. No markdown, bullets, or asterisks. Plain spoken English. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
-    if (isGmailConfigured()) {
-      system +=
-        "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send first. Use to=\"marco\" for his inbox. NEVER confirm sent unless gmail_send returned ok:true with messageId.";
-    }
-  } else if (opts.fastMode) {
-    system +=
-      "\n\nWHATSAPP MODE: Reply in 1-3 short sentences. No markdown. Be direct and conversational.";
-    if (opts.ownerMode) {
-      system +=
-        "\n\nWhen Marco asks you to text/send someone on WhatsApp, call whatsapp_send with the contact name or number and exact message. Confirm briefly after sending.";
-    }
-    if (opts.channelContext) {
-      system += `\n\n${opts.channelContext}`;
-    }
-  }
-
-  const model = opts.fullMode
+  /* Tool gating is decided BEFORE the prompt is built, because the prompt's
+     operational half only attaches when tools do (CORE/OPERATIONAL split). */
+  const model = socialTurn
+    ? getHaikuModel()
+    : opts.fullMode
     ? getAethonModel()
     : opts.fastMode
     ? getHaikuModel()
@@ -196,17 +199,48 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     (sonnetTools || ownerWhatsAppTools || voiceTools || emailIntent || opts.ownerMode);
   const nurtureTools =
     sonnetTools || ownerWhatsAppTools || voiceTools || nurtureIntent || opts.ownerMode;
-  const toolsEnabled = Boolean(opts.fullMode) || sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools;
-  if (gmailTools) {
+  const toolsEnabled =
+    !socialTurn &&
+    (Boolean(opts.fullMode) || sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools);
+
+  let system = buildFounderSystemPrompt(memoryPacket, {
+    hasTools: toolsEnabled,
+    voiceMode: opts.voiceMode,
+    conversationState: buildConversationState(timedHistory),
+    conversationSummary: opts.sessionId ? getConversationSummary(opts.sessionId) : "",
+    standingOrders: standingOrderRules(),
+  });
+  if (toolsEnabled) system += `\n\n${HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT}`;
+  if (opts.voiceMode) {
+    system +=
+      "\n\nVOICE MODE: Spoken replies only. Lead with the number or answer. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
+    if (toolsEnabled && isGmailConfigured()) {
+      system +=
+        "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send first. Use to=\"marco\" for his inbox. NEVER confirm sent unless gmail_send returned ok:true with messageId.";
+    }
+  } else if (opts.fastMode) {
+    system +=
+      "\n\nWHATSAPP MODE: Reply in 1-3 short sentences. No markdown. Be direct and conversational.";
+    if (opts.ownerMode) {
+      system +=
+        "\n\nWhen Marco asks you to text/send someone on WhatsApp, call whatsapp_send with the contact name or number and exact message. Confirm briefly after sending.";
+    }
+    if (opts.channelContext) {
+      system += `\n\n${opts.channelContext}`;
+    }
+  }
+  if (toolsEnabled && gmailTools) {
     system +=
       "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send with recipient, subject, and body before replying. For Marco's inbox use to=\"marco\" or his full email if you know it. NEVER say an email was sent unless gmail_send returned ok:true with a messageId — if the tool returns error, report that error to Marco.";
   }
-  if (nurtureTools) {
+  if (toolsEnabled && nurtureTools) {
     system +=
       "\n\nLEAD NURTURE: For scoring, hot/warm/cold tiers, or nurture routing questions, call get_lead_nurture_overview or get_lead_nurture_tier before answering. Use get_lead_score_detail for one lead. Use lead_nurture_score_all / lead_nurture_rescore_cold only when Marco explicitly asks to refresh scores.";
   }
   const activeTools = toolsEnabled ? hullTools : undefined;
-  const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 384 : getMaxTokens();
+  /* Voice turns are 1-3 sentences; a large reserve both wastes budget and
+     removes the hard backstop on rambling (playbook §7.5). */
+  const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 320 : getMaxTokens();
 
   let toolRounds = 0;
   let hadToolOnly = false;

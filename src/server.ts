@@ -2724,8 +2724,17 @@ app.get("/api/jarvis/analyze-reel/:jobId", (req, res) => {
 
 /** Aethon voice command — Claude brain (not Gemini Live). */
 function findFirstSentenceBoundary(text: string): number {
-  const match = text.match(/[.!?…]\s/);
-  return match ? match.index! + 1 : -1;
+  /* Never split on an abbreviation ("Mr.", "approx.", "e.g.") — a false
+     boundary here ships a half-thought to TTS and it lands as an audible
+     mid-sentence choke (playbook §6.1). */
+  const ABBREV = /(?:\b(?:mr|mrs|ms|dr|st|vs|no|approx|etc|inc|jr|sr)|\b[a-z])\.$/i;
+  const re = /[.!?…]\s/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const upto = text.slice(0, m.index + 1);
+    if (!ABBREV.test(upto.trimEnd())) return m.index + 1;
+  }
+  return -1;
 }
 
 app.post("/api/jarvis/voice/command", express.json({ limit: "64kb" }), async (req, res) => {

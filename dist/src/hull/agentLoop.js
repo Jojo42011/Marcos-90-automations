@@ -11,6 +11,8 @@ const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const founderPrompt_js_1 = require("./founderPrompt.js");
 const index_js_1 = require("../harvey/index.js");
 const modelRouting_js_1 = require("./modelRouting.js");
+const conversation_js_1 = require("./conversation.js");
+const standingOrders_js_1 = require("./standingOrders.js");
 const retrieval_js_1 = require("./memory/retrieval.js");
 const tools_js_1 = require("./tools.js");
 const index_js_2 = require("../integrations/gmail/index.js");
@@ -86,9 +88,17 @@ async function runAgentLoop(opts) {
         };
     }
     const client = new sdk_1.default({ apiKey: key });
+    const timedHistory = opts.timedHistory ?? [];
+    /* A pure pleasantry attaches no tools and runs on the fast model — the
+       operational prompt half is dead weight on exactly the turns that need to
+       feel most human. Anything ambiguous falls through to the full path. */
+    const socialTurn = (0, modelRouting_js_1.isSocialTurn)(opts.message);
     const factLimit = opts.fastMode ? 4 : 8;
-    const facts = await (0, retrieval_js_1.searchFacts)(opts.message, factLimit);
-    const memoryPacket = (0, retrieval_js_1.getMemoryPacket)(opts.message, facts);
+    /* "What about him?" carries zero retrievable keywords — short or deictic
+       messages blend the prior user turns in so retrieval can see the referent. */
+    const retrievalQuery = (0, conversation_js_1.buildRetrievalQuery)(opts.message, timedHistory);
+    const facts = await (0, retrieval_js_1.searchFacts)(retrievalQuery, factLimit);
+    const memoryPacket = (0, retrieval_js_1.getMemoryPacket)(retrievalQuery, facts);
     const { confidence, count } = opts.fastMode
         ? { confidence: 1, count: facts.length }
         : await (0, retrieval_js_1.getRetrievalConfidence)(opts.message);
@@ -109,12 +119,46 @@ async function runAgentLoop(opts) {
         const q = extractAssistantText(clar.content);
         return { speech: q, toolRounds: 0, model: (0, modelRouting_js_1.getHaikuModel)(), clarification: true };
     }
-    let system = (0, founderPrompt_js_1.buildFounderSystemPrompt)(memoryPacket);
-    system += `\n\n${index_js_1.HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT}`;
+    /* Tool gating is decided BEFORE the prompt is built, because the prompt's
+       operational half only attaches when tools do (CORE/OPERATIONAL split). */
+    const model = socialTurn
+        ? (0, modelRouting_js_1.getHaikuModel)()
+        : opts.fullMode
+            ? (0, modelRouting_js_1.getAethonModel)()
+            : opts.fastMode
+                ? (0, modelRouting_js_1.getHaikuModel)()
+                : opts.voiceMode
+                    ? (0, modelRouting_js_1.getHaikuModel)()
+                    : (0, modelRouting_js_1.needsSonnet)(opts.message)
+                        ? (0, modelRouting_js_1.getAethonModel)()
+                        : (0, modelRouting_js_1.getHaikuModel)();
+    const messages = [...(opts.history || []), { role: "user", content: opts.message }];
+    const hullTools = (0, tools_js_1.getHullToolDefinitions)({ whatsappSend: opts.ownerMode });
+    const sonnetTools = !opts.fastMode && model === (0, modelRouting_js_1.getAethonModel)();
+    const ownerWhatsAppTools = opts.fastMode && opts.ownerMode;
+    const voiceTools = Boolean(opts.voiceMode) && !opts.fastMode;
+    const emailIntent = (0, index_js_2.isGmailConfigured)() &&
+        /\b(send|email|e-mail|mail)\b/i.test(opts.message) &&
+        /\b(email|e-mail|mail|inbox|gmail|me|marco)\b/i.test(opts.message);
+    const nurtureIntent = /\b(nurture|scoring|score|hot lead|warm lead|cold lead|lead nurture|re-score|rescore)\b/i.test(opts.message);
+    const gmailTools = (0, index_js_2.isGmailConfigured)() &&
+        (sonnetTools || ownerWhatsAppTools || voiceTools || emailIntent || opts.ownerMode);
+    const nurtureTools = sonnetTools || ownerWhatsAppTools || voiceTools || nurtureIntent || opts.ownerMode;
+    const toolsEnabled = !socialTurn &&
+        (Boolean(opts.fullMode) || sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools);
+    let system = (0, founderPrompt_js_1.buildFounderSystemPrompt)(memoryPacket, {
+        hasTools: toolsEnabled,
+        voiceMode: opts.voiceMode,
+        conversationState: (0, conversation_js_1.buildConversationState)(timedHistory),
+        conversationSummary: opts.sessionId ? (0, conversation_js_1.getConversationSummary)(opts.sessionId) : "",
+        standingOrders: (0, standingOrders_js_1.standingOrderRules)(),
+    });
+    if (toolsEnabled)
+        system += `\n\n${index_js_1.HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT}`;
     if (opts.voiceMode) {
         system +=
-            "\n\nVOICE MODE: Spoken replies only. Max 2-3 short sentences. Lead with the number or answer. No markdown, bullets, or asterisks. Plain spoken English. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
-        if ((0, index_js_2.isGmailConfigured)()) {
+            "\n\nVOICE MODE: Spoken replies only. Lead with the number or answer. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
+        if (toolsEnabled && (0, index_js_2.isGmailConfigured)()) {
             system +=
                 "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send first. Use to=\"marco\" for his inbox. NEVER confirm sent unless gmail_send returned ok:true with messageId.";
         }
@@ -130,38 +174,18 @@ async function runAgentLoop(opts) {
             system += `\n\n${opts.channelContext}`;
         }
     }
-    const model = opts.fullMode
-        ? (0, modelRouting_js_1.getAethonModel)()
-        : opts.fastMode
-            ? (0, modelRouting_js_1.getHaikuModel)()
-            : opts.voiceMode
-                ? (0, modelRouting_js_1.getHaikuModel)()
-                : (0, modelRouting_js_1.needsSonnet)(opts.message)
-                    ? (0, modelRouting_js_1.getAethonModel)()
-                    : (0, modelRouting_js_1.getHaikuModel)();
-    const messages = [...(opts.history || []), { role: "user", content: opts.message }];
-    const hullTools = (0, tools_js_1.getHullToolDefinitions)({ whatsappSend: opts.ownerMode });
-    const sonnetTools = !opts.fastMode && model === (0, modelRouting_js_1.getAethonModel)();
-    const ownerWhatsAppTools = opts.fastMode && opts.ownerMode;
-    const voiceTools = Boolean(opts.voiceMode) && !opts.fastMode;
-    const emailIntent = (0, index_js_2.isGmailConfigured)() &&
-        /\b(send|email|e-mail|mail)\b/i.test(opts.message) &&
-        /\b(email|e-mail|mail|inbox|gmail|me|marco)\b/i.test(opts.message);
-    const nurtureIntent = /\b(nurture|scoring|score|hot lead|warm lead|cold lead|lead nurture|re-score|rescore)\b/i.test(opts.message);
-    const gmailTools = (0, index_js_2.isGmailConfigured)() &&
-        (sonnetTools || ownerWhatsAppTools || voiceTools || emailIntent || opts.ownerMode);
-    const nurtureTools = sonnetTools || ownerWhatsAppTools || voiceTools || nurtureIntent || opts.ownerMode;
-    const toolsEnabled = Boolean(opts.fullMode) || sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools;
-    if (gmailTools) {
+    if (toolsEnabled && gmailTools) {
         system +=
             "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send with recipient, subject, and body before replying. For Marco's inbox use to=\"marco\" or his full email if you know it. NEVER say an email was sent unless gmail_send returned ok:true with a messageId — if the tool returns error, report that error to Marco.";
     }
-    if (nurtureTools) {
+    if (toolsEnabled && nurtureTools) {
         system +=
             "\n\nLEAD NURTURE: For scoring, hot/warm/cold tiers, or nurture routing questions, call get_lead_nurture_overview or get_lead_nurture_tier before answering. Use get_lead_score_detail for one lead. Use lead_nurture_score_all / lead_nurture_rescore_cold only when Marco explicitly asks to refresh scores.";
     }
     const activeTools = toolsEnabled ? hullTools : undefined;
-    const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 384 : (0, modelRouting_js_1.getMaxTokens)();
+    /* Voice turns are 1-3 sentences; a large reserve both wastes budget and
+       removes the hard backstop on rambling (playbook §7.5). */
+    const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 320 : (0, modelRouting_js_1.getMaxTokens)();
     let toolRounds = 0;
     let hadToolOnly = false;
     for (let step = 0; step < MAX_AGENT_STEPS; step++) {
