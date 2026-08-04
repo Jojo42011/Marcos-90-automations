@@ -416,6 +416,10 @@ app.get("/team-tasks", requireAuthPage, (_req, res) => {
 app.get("/listings", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "listings.html"));
 });
+/** One listing, in full — where a click in the MLS tab lands. */
+app.get("/listing", requireAuthPage, (_req, res) => {
+    res.sendFile(path_1.default.join(publicDir, "listing.html"));
+});
 app.get("/jobs", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "jobs.html"));
 });
@@ -8477,6 +8481,93 @@ app.get("/api/mls/listings", async (req, res) => {
         minBaths: q.minBaths ? Number(q.minBaths) : undefined,
         limit: q.limit ? Number(q.limit) : undefined,
     }));
+});
+/**
+ * One listing, in full, for the detail page behind a click in the MLS tab.
+ *
+ * The search endpoint returns the card-sized subset (one photo, price, specs).
+ * A detail view needs the rest, and the rest is already on disk: the sync
+ * stores the whole SimplyRETS payload in `raw`, so every photo, the school
+ * district, the HOA line and the remarks are there without a second API call
+ * to the feed. This reads them out rather than re-fetching, which is what
+ * makes the page open instantly and still work while the feed is down.
+ *
+ * `raw` itself is deliberately NOT returned. It carries fields this app has no
+ * license to redisplay and would grow the response tenfold; the endpoint picks
+ * out the parts the page actually renders and names them.
+ */
+app.get("/api/mls/listing/:key", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { getListing } = await Promise.resolve().then(() => __importStar(require("./core/listingsStore.js")));
+    const key = String(req.params.key || "").trim();
+    if (!key) {
+        res.status(400).json({ error: "Missing listing key" });
+        return;
+    }
+    const found = getListing(key);
+    if (!found) {
+        /* 404 rather than an empty shell: a listing that fell out of the feed
+           (sold, withdrawn, expired) is a different thing from one with no photos,
+           and the page says so instead of rendering a blank card. */
+        res.status(404).json({ error: "That listing is no longer in the feed." });
+        return;
+    }
+    const { raw, ...listing } = found;
+    const p = (raw && typeof raw === "object" ? raw : {});
+    const prop = (p.property && typeof p.property === "object" ? p.property : {});
+    const geo = (p.geo && typeof p.geo === "object" ? p.geo : {});
+    const school = (p.school && typeof p.school === "object" ? p.school : {});
+    const agent = (p.agent && typeof p.agent === "object" ? p.agent : {});
+    const photos = Array.isArray(p.photos) ? p.photos.filter((x) => typeof x === "string") : [];
+    const s = (v) => {
+        if (v === null || v === undefined)
+            return null;
+        const t = String(v).trim();
+        return t ? t : null;
+    };
+    const n = (v) => {
+        if (v === null || v === undefined || v === "")
+            return null;
+        const x = Number(v);
+        return Number.isFinite(x) ? x : null;
+    };
+    res.json({
+        ...listing,
+        /* Every photo, not just the cover. Capped: some listings carry 60+ and the
+           page lazy-loads anyway, but an unbounded array is an unbounded response. */
+        photos: photos.slice(0, 60),
+        detail: {
+            garage: n(prop.garageSpaces),
+            stories: n(prop.stories),
+            pool: s(prop.pool),
+            heating: s(prop.heating),
+            cooling: s(prop.cooling),
+            roof: s(prop.roof),
+            style: s(prop.style),
+            construction: s(prop.construction),
+            flooring: s(prop.flooring),
+            laundry: s(prop.laundryFeatures),
+            interiorFeatures: s(prop.interiorFeatures),
+            exteriorFeatures: s(prop.exteriorFeatures),
+            subType: s(prop.subType),
+            area: s(prop.area),
+            acres: n(prop.acres),
+            taxes: n(p.tax && typeof p.tax === "object" ? p.tax.taxAnnualAmount : null),
+            taxYear: n(p.tax && typeof p.tax === "object" ? p.tax.taxYear : null),
+            schoolDistrict: s(school.district),
+            elementary: s(school.elementarySchool),
+            middle: s(school.middleSchool),
+            high: s(school.highSchool),
+            lat: n(geo.lat),
+            lng: n(geo.lng),
+            county: s(geo.county),
+            agentPhone: s(agent.contact),
+            daysOnMarket: n(p.mls && typeof p.mls === "object" ? p.mls.daysOnMarket : null),
+        },
+    });
 });
 /**
  * Live MLS context for one lead, for the CRM profile drawer.

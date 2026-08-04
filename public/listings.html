@@ -37,7 +37,13 @@
   .count{font-size:12.5px;color:var(--muted);margin:0 0 12px;font-weight:600}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
-        display:flex;flex-direction:column}
+        display:flex;flex-direction:column;transition:border-color .12s,box-shadow .12s}
+  .card:hover{border-color:var(--brand2);box-shadow:0 2px 10px rgba(15,23,42,.08)}
+  /* The card is a real link, so cmd/middle-click opens the listing in a new
+     tab and the keyboard can reach it — a div with an onclick does neither. */
+  .cardlink{display:flex;flex-direction:column;flex:1;text-decoration:none;color:inherit}
+  .cardlink:focus-visible{outline:2px solid var(--brand2);outline-offset:-2px}
+  .linkwrap{padding:0 13px 12px}
   .photo{width:100%;aspect-ratio:4/3;object-fit:cover;background:#EEF2F7;display:block}
   .nophoto{width:100%;aspect-ratio:4/3;background:#EEF2F7;display:flex;align-items:center;
            justify-content:center;color:var(--muted);font-size:12px}
@@ -166,7 +172,12 @@ function card(l){
   const line = [beds, baths, area].filter(Boolean).join(" · ");
   const st = (l.status||"").toLowerCase();
   const stCls = st === "active" ? "active" : st === "pending" ? "pending" : "";
+  /* The whole card opens the listing. "Set as their property" stays OUTSIDE
+     the anchor: nesting a button inside a link is invalid, and a mis-click
+     that linked a lead to the wrong house when they meant to look at it would
+     be a genuinely damaging misfire. */
   return '<div class="card">' +
+    '<a class="cardlink" href="'+esc(url("/listing", { key: l.listingKey }))+'">' +
     (l.photoUrl
       ? '<img class="photo" loading="lazy" src="'+esc(l.photoUrl)+'" alt="" onerror="this.outerHTML=\'<div class=&quot;nophoto&quot;>no photo</div>\'">'
       : '<div class="nophoto">no photo</div>') +
@@ -181,11 +192,12 @@ function card(l){
         (l.mlsNumber ? '<span class="chip">MLS '+esc(l.mlsNumber)+'</span>' : '') +
         (l.yearBuilt ? '<span class="chip">'+esc(l.yearBuilt)+'</span>' : '') +
       '</div>' +
-      (LEAD
-        ? '<button class="linkbtn'+(LINKED_KEY===l.listingKey?' on':'')+'" data-link="'+esc(l.listingKey)+'">'+
-          (LINKED_KEY===l.listingKey ? '\u2713 Their property \u00b7 click to unlink' : 'Set as their property')+'</button>'
-        : '') +
-    '</div></div>';
+    '</div></a>' +
+    (LEAD
+      ? '<div class="linkwrap"><button class="linkbtn'+(LINKED_KEY===l.listingKey?' on':'')+'" data-link="'+esc(l.listingKey)+'">'+
+        (LINKED_KEY===l.listingKey ? '\u2713 Their property \u00b7 click to unlink' : 'Set as their property')+'</button></div>'
+      : '') +
+  '</div>';
 }
 
 /* Prefill the filters from the URL so arriving from a lead lands on THEIR
