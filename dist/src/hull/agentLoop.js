@@ -17,8 +17,47 @@ const retrieval_js_1 = require("./memory/retrieval.js");
 const tools_js_1 = require("./tools.js");
 const index_js_2 = require("../integrations/gmail/index.js");
 const curiosity_js_1 = require("./curiosity.js");
-const MAX_AGENT_STEPS = 8;
+/**
+ * Tool-round budget.
+ *
+ * WHY THIS WAS HIT, AND WHY RAISING IT ALONE WOULD NOT HAVE FIXED IT.
+ * The old budget was a flat 8 rounds and running out produced
+ * "Hit the tool loop limit — try a narrower question." — which threw away
+ * every fact gathered on the way and handed Marco nothing. Three things
+ * conspired:
+ *   1. Real questions genuinely need more than 8 rounds now. Since MLS landed,
+ *      "what's moving in Boerne under 600" is a listing search, then a per-
+ *      listing read, then a CRM cross-check: each is its own round, and web
+ *      research spends 2-3 before it has even read a page.
+ *   2. The model re-called the SAME tool with the SAME arguments when a result
+ *      came back thin or empty — a genuine loop, burning the budget without
+ *      new information (see `signature` below).
+ *   3. Exhaustion was a dead end rather than a deadline. Nothing told the model
+ *      it was running out, so it never wound up.
+ *
+ * The fix is all three: a bigger, mode-aware budget; identical repeat calls
+ * refused with a nudge instead of re-executed; and the LAST round always runs
+ * with tools withheld, so the budget ends in an answer built from what was
+ * actually gathered rather than an apology.
+ */
+const MAX_AGENT_STEPS = 16;
+/** Voice and WhatsApp answer in 1-3 sentences and a human is waiting on the
+ *  line — a long tool chain there is a silence, not a better answer. */
+const MAX_AGENT_STEPS_FAST = 8;
+/** How many times an identical call is allowed before it is refused. Two, not
+ *  one: a legitimate retry after a transient failure is real. */
+const MAX_IDENTICAL_CALLS = 2;
 const MAX_TOOL_CHARS = 12000;
+/** Identity of a tool call, for spotting a model going in circles. */
+function signature(name, input) {
+    try {
+        // Key order varies between rounds; sort so the same call always matches.
+        return `${name}:${JSON.stringify(input, Object.keys(input).sort())}`;
+    }
+    catch {
+        return `${name}:[unserializable]`;
+    }
+}
 function takeImage(result) {
     if (!result || typeof result !== "object" || Array.isArray(result))
         return { rest: result, image: null };
@@ -188,14 +227,52 @@ async function runAgentLoop(opts) {
     const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 320 : (0, modelRouting_js_1.getMaxTokens)();
     let toolRounds = 0;
     let hadToolOnly = false;
-    for (let step = 0; step < MAX_AGENT_STEPS; step++) {
+    /* How many times each identical call has been made this turn. */
+    const callCounts = new Map();
+    const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : MAX_AGENT_STEPS;
+    /**
+     * Run one tool call, refusing an identical repeat.
+     *
+     * A refusal returns a RESULT, not an error — the model gets told plainly
+     * that it already has this data and should answer from it, which is what
+     * breaks the circle. Re-executing would also re-pay the latency (an MLS
+     * search or a browser read is seconds) for information already in context.
+     */
+    const runTool = async (name, input) => {
+        const sig = signature(name, input);
+        const seen = (callCounts.get(sig) || 0) + 1;
+        callCounts.set(sig, seen);
+        if (seen > MAX_IDENTICAL_CALLS) {
+            console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
+            return {
+                error: "REPEATED CALL REFUSED",
+                detail: `You have already called ${name} with these exact arguments ${seen - 1} times this turn. The answer will not change. Use what you already have, and if it is genuinely empty say so plainly rather than searching again.`,
+            };
+        }
+        try {
+            return await (0, tools_js_1.executeHullTool)(name, input);
+        }
+        catch (err) {
+            return { error: err instanceof Error ? err.message : String(err) };
+        }
+    };
+    for (let step = 0; step < stepBudget; step++) {
+        /* The final round runs with tools WITHHELD. The budget then ends in an
+           answer assembled from everything gathered, instead of the dead-end
+           "hit the tool loop limit" that discarded the whole turn's work. */
+        const lastRound = step === stepBudget - 1;
+        const stepTools = lastRound ? undefined : activeTools;
+        const stepSystem = lastRound && toolRounds > 0
+            ? system +
+                "\n\nFINAL ROUND: no more tool calls are available this turn. Answer Marco now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
+            : system;
         if (opts.onToken) {
             const stream = client.messages.stream({
                 model,
                 max_tokens: maxTokens,
-                system,
+                system: stepSystem,
                 messages,
-                tools: activeTools,
+                tools: stepTools,
             });
             let full = "";
             const finalMsg = await new Promise((resolve, reject) => {
@@ -218,17 +295,10 @@ async function runAgentLoop(opts) {
                 const input = tu.input && typeof tu.input === "object" && !Array.isArray(tu.input)
                     ? tu.input
                     : {};
-                let result;
-                try {
-                    result = await (0, tools_js_1.executeHullTool)(tu.name, input);
-                }
-                catch (err) {
-                    result = { error: err instanceof Error ? err.message : String(err) };
-                }
                 return {
                     type: "tool_result",
                     tool_use_id: tu.id,
-                    content: toolResultContent(result),
+                    content: toolResultContent(await runTool(tu.name, input)),
                 };
             }));
             messages.push({ role: "assistant", content: finalMsg.content });
@@ -239,9 +309,9 @@ async function runAgentLoop(opts) {
         const response = await client.messages.create({
             model,
             max_tokens: maxTokens,
-            system,
+            system: stepSystem,
             messages,
-            tools: activeTools,
+            tools: stepTools,
         });
         if (response.stop_reason !== "tool_use") {
             return {
@@ -256,25 +326,22 @@ async function runAgentLoop(opts) {
             const input = tu.input && typeof tu.input === "object" && !Array.isArray(tu.input)
                 ? tu.input
                 : {};
-            let result;
-            try {
-                result = await (0, tools_js_1.executeHullTool)(tu.name, input);
-            }
-            catch (err) {
-                result = { error: err instanceof Error ? err.message : String(err) };
-            }
             return {
                 type: "tool_result",
                 tool_use_id: tu.id,
-                content: toolResultContent(result),
+                content: toolResultContent(await runTool(tu.name, input)),
             };
         }));
         messages.push({ role: "assistant", content: response.content });
         messages.push({ role: "user", content: toolResults });
         toolRounds++;
     }
+    /* Unreachable in practice: the final round withholds tools, so the loop
+       always exits through a text answer above. Kept as a last-resort guard
+       rather than deleted — if a future change reintroduces a path that falls
+       out here, an honest sentence beats an undefined. */
     return {
-        speech: "Hit the tool loop limit — try a narrower question.",
+        speech: "I ran out of room to keep digging on that one. Ask me for the specific piece you need and I'll go straight at it.",
         toolRounds,
         model,
     };

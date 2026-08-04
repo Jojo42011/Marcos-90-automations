@@ -1,7 +1,18 @@
 # Harvey Browser Control
 
-Lets Harvey work inside sites that have no API — pull a listing off a portal,
-fill out a third-party form, read a page in an MLS back office.
+Two things: a **side panel** where you talk to Harvey next to whatever page
+you're on, and the ability for him to **work inside sites that have no API** —
+pull a listing off a portal, fill out a third-party form, read a page in an MLS
+back office.
+
+Click the toolbar icon and the panel opens beside the tab. It stays open while
+you click around, which is the whole point: *"what do you make of this
+listing?"* is a question about the page you're looking at, and a popup would
+close the moment you looked at it.
+
+The panel is the full Harvey — the same brain, tools and memory as the shell,
+not a cut-down version — and it uses the pairing token you already entered, so
+there is no second login.
 
 Harvey acts in **your** browser, with your existing logins — and only while you
 switch it on.
@@ -17,13 +28,25 @@ makes Harvey appear to stop listening.
 
 ## Install
 
-1. Set the pairing token on the server (once):
+1. Set the pairing tokens on the server (once). **Give each person their own** —
+   one token per account, separated by commas:
 
    ```
-   flyctl secrets set BROWSER_CONTROL_TOKEN="<a long random string>" -a marco-90-automation
+   flyctl secrets set BROWSER_CONTROL_TOKENS="marco:<random>,carlos:<random>,wesley:<random>" -a marco-90-automation
    ```
 
-   Without this, browser control is disabled entirely — it fails closed.
+   Without at least one token, browser control is disabled entirely — it fails
+   closed.
+
+   Why one each rather than one shared string: a browser belongs to the account
+   whose token it paired with, so Carlos asking Harvey to open a listing drives
+   *Carlos's* browser and never Marco's, and the two of them can work at the
+   same time without fighting over the bus. Each person also gets their own
+   conversation thread in the panel. Removing someone is deleting their entry;
+   nobody else has to re-pair.
+
+   The older single `BROWSER_CONTROL_TOKEN` still works and becomes an account
+   of its own, so browsers paired before this change keep working untouched.
 
 2. Get the extension folder onto the machine that will run it. Either clone the
    repo, or download it from the running server — no clone needed:
@@ -39,18 +62,23 @@ makes Harvey appear to stop listening.
    **Load unpacked**, and select that unzipped folder — the one with
    `manifest.json` directly inside it, not its parent.
 
-4. Click the extension icon and enter:
+4. Click the extension icon. The panel opens; click **Setup** and enter:
+   - **This browser's name** — e.g. `Marco's laptop`
    - **Server** — `https://marco-90-automation.fly.dev`
-   - **Pairing token** — the same value from step 1
+   - **Your pairing token** — *your own* value from step 1, not someone else's
 
-   Press **Save & pair**. The dot turns grey/"Paired · standby".
+   Press **Save & pair**. The header shows your account name and "standby".
 
 5. When you want Harvey to work in the browser, flip
    **Let Harvey control this browser** on. The badge shows `ON`.
 
 ## Using it
 
-Ask Harvey normally:
+Type in the panel, or ask Harvey from the shell or by voice — same Harvey
+either way. Your conversation in the panel is kept per browser, so closing and
+reopening it picks up where you left off. **Clear** starts a fresh thread.
+
+Things worth asking from the panel:
 
 - *"Open this listing and pull the price, address, beds and baths."*
 - *"Fill in the request form with my details and submit it."*
@@ -101,5 +129,8 @@ and he continues from it.
   returns the recent trail.
 - Switch it off when you're done.
 
-Treat the pairing token like a password. Anyone holding it and the server URL
-can queue actions for whatever browser is armed.
+Treat your pairing token like a password, and don't pass it around — it is
+yours, and sharing it puts someone else's commands on your browser. Anyone
+holding it and the server URL can queue actions for whatever browser is armed
+**on that account**, and can talk to Harvey as that account. They cannot see or
+drive anyone else's browsers.

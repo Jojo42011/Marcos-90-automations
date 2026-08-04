@@ -975,11 +975,38 @@ const WATCHDOG_ALARM = "harvey-poll-watchdog";
 chrome.alarms.create(WATCHDOG_ALARM, { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === WATCHDOG_ALARM) loop(); });
 
-chrome.runtime.onStartup.addListener(loop);
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create(WATCHDOG_ALARM, { periodInMinutes: 0.5 });
+/**
+ * Clicking the toolbar icon opens the side panel.
+ *
+ * This replaces the old popup as the default click target: a popup closes the
+ * instant you click the page, which is exactly when you want to ask Harvey
+ * about the page you're on. The panel stays put beside the tab.
+ *
+ * Set on install AND on startup because the preference lives with the
+ * extension's registration, not with a tab, and a browser restart is the case
+ * where a missing behavior would silently do nothing on click. Guarded in
+ * case the API is missing — an older Chrome should still poll and act, just
+ * without the panel, rather than the whole worker dying on a bad call.
+ */
+function enableSidePanelOnClick() {
+  try {
+    chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true })
+      .catch((e) => console.warn("[harvey] side panel behavior:", e?.message || e));
+  } catch (e) {
+    console.warn("[harvey] side panel unavailable:", e?.message || e);
+  }
+}
+
+chrome.runtime.onStartup.addListener(() => {
+  enableSidePanelOnClick();
   loop();
 });
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create(WATCHDOG_ALARM, { periodInMinutes: 0.5 });
+  enableSidePanelOnClick();
+  loop();
+});
+enableSidePanelOnClick();
 loop();
 
 // The user closing Harvey's tab is a normal way to end a browsing session, so

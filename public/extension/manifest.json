@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Harvey Browser Control",
-  "version": "1.5.0",
-  "description": "Lets Harvey navigate, click, fill forms and pull data from sites that have no API — in his own tab, on your machine, only while you switch it on.",
-  "permissions": ["activeTab", "alarms", "scripting", "storage", "tabs"],
+  "version": "1.6.0",
+  "description": "Talk to Harvey in a side panel beside any page, and let him navigate, click, fill forms and pull data from sites that have no API — in his own tab, on your machine, only while you switch it on.",
+  "permissions": ["activeTab", "alarms", "scripting", "sidePanel", "storage", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Harvey Browser Control"
+    "default_title": "Harvey"
   },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "options_page": "popup.html",
   "icons": { "128": "icons/icon128.png" }
 }

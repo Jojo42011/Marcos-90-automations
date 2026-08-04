@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Harvey</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #262d36;
+    --text: #e6edf3; --dim: #8b949e; --accent: #00d4ff; --err: #f85149; --ok: #3fb950;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #ffffff; --panel: #f4f6f8; --line: #d8dee4;
+            --text: #1f2328; --dim: #656d76; --accent: #0969da; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column; background: var(--bg); color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+
+  header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    border-bottom: 1px solid var(--line); background: var(--panel); flex: none;
+  }
+  .brand { font-weight: 600; letter-spacing: .02em; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.err { background: var(--err); }
+  #who { color: var(--dim); font-size: 11px; margin-left: auto; text-align: right; }
+  .iconbtn {
+    background: none; border: 1px solid var(--line); color: var(--dim); cursor: pointer;
+    border-radius: 6px; padding: 3px 8px; font-size: 11px;
+  }
+  .iconbtn:hover { color: var(--text); border-color: var(--dim); }
+
+  /* Pairing — collapsed once paired, because it is setup, not daily use. */
+  #setup { border-bottom: 1px solid var(--line); background: var(--panel); flex: none; }
+  #setup[hidden] { display: none; }
+  .setup-inner { padding: 10px 12px; display: grid; gap: 8px; }
+  label { font-size: 11px; color: var(--dim); display: block; margin-bottom: 3px; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit;
+  }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row label { margin: 0; font-size: 12px; color: var(--text); }
+  button.primary {
+    background: var(--accent); color: #04121a; border: none; border-radius: 6px;
+    padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px;
+  }
+  .hint { font-size: 11px; color: var(--dim); }
+
+  #log { flex: 1 1 auto; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--panel); border: 1px solid var(--line);
+              padding: 7px 10px; border-radius: 10px 10px 2px 10px; max-width: 85%; }
+  .msg.harvey { align-self: flex-start; }
+  .msg.harvey .name { color: var(--accent); font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+  .msg.sys { align-self: center; color: var(--dim); font-size: 11px; text-align: center; }
+  .msg.sys.err { color: var(--err); }
+  .thinking { color: var(--dim); font-style: italic; }
+
+  form { flex: none; border-top: 1px solid var(--line); background: var(--panel); padding: 10px; display: flex; gap: 8px; }
+  #input {
+    flex: 1; resize: none; min-height: 38px; max-height: 140px; padding: 8px 10px;
+    border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
+    color: var(--text); font: inherit;
+  }
+  #send { flex: none; align-self: flex-end; }
+  #send:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="dot" id="dot"></span>
+    <span class="brand">Harvey</span>
+    <span id="who"></span>
+    <button class="iconbtn" id="toggleSetup" title="Pairing settings">Setup</button>
+    <button class="iconbtn" id="clear" title="Clear this conversation">Clear</button>
+  </header>
+
+  <section id="setup" hidden>
+    <div class="setup-inner">
+      <div>
+        <label for="deviceName">This browser's name</label>
+        <input type="text" id="deviceName" placeholder="Marco's laptop" />
+      </div>
+      <div>
+        <label for="serverUrl">Server</label>
+        <input type="text" id="serverUrl" placeholder="https://marco-90-automation.fly.dev" />
+      </div>
+      <div>
+        <label for="token">Your pairing token</label>
+        <input type="password" id="token" placeholder="your own token, not a shared one" />
+      </div>
+      <div class="row">
+        <input type="checkbox" id="enabled" />
+        <label for="enabled">Let Harvey control this browser</label>
+      </div>
+      <div class="hint" id="swHint"></div>
+      <div class="row">
+        <input type="checkbox" id="armLock" />
+        <label for="armLock">Let Harvey switch it back on remotely</label>
+      </div>
+      <div class="hint" id="lockHint"></div>
+      <div class="row">
+        <button class="primary" id="save">Save &amp; pair</button>
+        <span class="hint" id="statusText"></span>
+      </div>
+      <div class="hint" id="page"></div>
+    </div>
+  </section>
+
+  <div id="log"></div>
+
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Ask Harvey…" autocomplete="off"></textarea>
+    <button class="primary" id="send" type="submit">Send</button>
+  </form>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

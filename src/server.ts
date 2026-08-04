@@ -124,6 +124,8 @@ import {
   recordPoll as recordBrowserPoll,
   submitResult as submitBrowserResult,
   tokenMatches as browserTokenMatches,
+  accountForToken as browserAccountForToken,
+  withAccount as withBrowserAccount,
   isConfigured as browserControlConfigured,
   recentActivity as recentBrowserActivity,
 } from "./core/browserControl.js";
@@ -9116,7 +9118,10 @@ app.get("/analytics", requireAuthPage, (_req, res) => {
 
 app.post("/api/browser/poll", express.json({ limit: "64kb" }), async (req, res) => {
   const b = (req.body || {}) as Record<string, unknown>;
-  if (!browserTokenMatches(String(b.token || ""))) {
+  /* Which ACCOUNT this token belongs to, not merely whether it is valid: the
+     device is filed under that account and can only ever be driven from it. */
+  const account = browserAccountForToken(String(b.token || ""));
+  if (!account) {
     res.status(401).json({ error: "Bad or missing pairing token" });
     return;
   }
@@ -9125,6 +9130,7 @@ app.post("/api/browser/poll", express.json({ limit: "64kb" }), async (req, res) 
   // something to do. Without a waitMs this behaves exactly as before, so an
   // older extension build keeps working against a newer server.
   const result = await recordBrowserPoll(b.enabled === true, page, {
+    account,
     waitMs: Number(b.waitMs) || 0,
     armLock: typeof b.armLock === "boolean" ? b.armLock : undefined,
     deviceId: typeof b.deviceId === "string" ? b.deviceId : undefined,
@@ -9180,7 +9186,8 @@ app.post("/api/browser/result", express.json({ limit: "6mb" }), (req, res) => {
  */
 app.post("/api/browser/command", express.json({ limit: "256kb" }), async (req, res) => {
   const token = String(req.get("X-Browser-Token") || req.query.token || "");
-  if (!browserTokenMatches(token)) {
+  const cmdAccount = browserAccountForToken(token);
+  if (!cmdAccount) {
     res.status(401).json({ error: "Bad or missing pairing token" });
     return;
   }
@@ -9194,12 +9201,67 @@ app.post("/api/browser/command", express.json({ limit: "256kb" }), async (req, r
       b.command as Parameters<typeof runBrowserCommandDirect>[0],
       {
         device: typeof b.device === "string" && b.device ? b.device : undefined,
+        account: cmdAccount.id,
         timeoutMs: Math.min(Math.max(Number(b.timeoutMs) || 30_000, 5_000), 120_000),
       },
     );
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/**
+ * Talk to Harvey from the extension's side panel.
+ *
+ * This is the same Harvey as `/api/jarvis/chat` — same brain, same tools, same
+ * memory — reached with the PAIRING token instead of the dashboard token, so
+ * the extension needs exactly one secret and the person installing it never
+ * has to be handed a second one.
+ *
+ * Two things it does that the dashboard route cannot:
+ *   - Every browser action Harvey takes during the turn is scoped to the
+ *     account that owns this token, so Carlos asking Harvey to open a listing
+ *     drives Carlos's browser and never Marco's.
+ *   - The conversation is keyed per account AND per browser, so two people
+ *     talking to Harvey at the same time hold two separate threads.
+ */
+app.post("/api/browser/chat", express.json({ limit: "256kb" }), async (req, res) => {
+  const token = String(req.get("X-Browser-Token") || req.query.token || "");
+  const account = browserAccountForToken(token);
+  if (!account) {
+    res.status(401).json({ configured: browserControlConfigured(), error: "Bad or missing pairing token" });
+    return;
+  }
+  const b = (req.body || {}) as Record<string, unknown>;
+  const message = typeof b.message === "string" ? b.message.trim() : "";
+  if (!message) {
+    res.status(400).json({ error: "Missing message" });
+    return;
+  }
+  const deviceId = typeof b.deviceId === "string" && b.deviceId.trim() ? b.deviceId.trim() : "panel";
+  /* Session id carries the account so two people never share a thread, and
+     the device so the same person's laptop and desktop stay separate. */
+  const sessionId = `ext-${account.id}-${deviceId}`.slice(0, 128);
+
+  try {
+    const result = await withBrowserAccount(account.id, () =>
+      runHarveyChat({
+        message,
+        sessionId,
+        deps: harveyDeps(),
+        fullMode: true,
+      }),
+    );
+    res.json({
+      speech: result.speech,
+      sessionId: result.sessionId,
+      account: { id: account.id, name: account.name },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[browser/chat]", msg);
+    res.status(500).json({ error: msg });
   }
 });
 
@@ -9320,12 +9382,19 @@ app.get("/api/leads/:id/mls", async (req, res) => {
 
 app.get("/api/browser/status", (req, res) => {
   const token = String(req.get("X-Browser-Token") || req.query.token || "");
-  if (!browserTokenMatches(token)) {
+  const account = browserAccountForToken(token);
+  if (!account) {
     // Configuration state is safe to expose unauthenticated; the live page is not.
     res.status(401).json({ configured: browserControlConfigured(), error: "Bad or missing pairing token" });
     return;
   }
-  res.json({ ...browserStatus(), recent: recentBrowserActivity(10) });
+  /* Scoped to the caller's own account: someone holding Carlos's token must
+     not be able to enumerate Marco's machines or see what page he is on. */
+  res.json({
+    ...browserStatus(account.id),
+    account: { id: account.id, name: account.name },
+    recent: recentBrowserActivity(10),
+  });
 });
 
 /**

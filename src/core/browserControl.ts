@@ -26,6 +26,31 @@
  * "exfiltrate this session", and no use case in the spec needs them.
  */
 import { randomUUID } from "crypto";
+import { AsyncLocalStorage } from "async_hooks";
+import { isConfigured as accountsConfigured, resolveAccount } from "./browserAccounts.js";
+
+/* ── Account scope ──────────────────────────────────────────────────────────
+   Which Harvey Connect account the current work belongs to. Set per request
+   (the extension's chat, an operator command) and read wherever a device is
+   picked, so a command raised inside one person's session can only ever reach
+   that person's browsers.
+
+   AsyncLocalStorage rather than a parameter threaded through every tool: the
+   agent loop calls tools it does not know the shape of, and a parameter that
+   an individual tool can forget to pass is a parameter that eventually routes
+   a click to the wrong desk. Node built-in, so the overlay deploy path stays
+   dependency-free. */
+const accountScope = new AsyncLocalStorage<string>();
+
+/** Run `fn` with every browser action scoped to one account. */
+export function withAccount<T>(accountId: string | undefined, fn: () => T): T {
+  if (!accountId) return fn();
+  return accountScope.run(accountId, fn);
+}
+
+export function currentAccount(): string | undefined {
+  return accountScope.getStore();
+}
 
 export type BrowserAction =
   | "navigate"
@@ -120,6 +145,10 @@ let extensionPage: { url?: string; title?: string } = {};
 export interface BrowserDevice {
   id: string;
   name: string;
+  /** Harvey Connect account this browser paired under. Devices are only ever
+   *  visible to, and drivable from, their own account. */
+  accountId: string;
+  accountName: string;
   lastPollAt: number;
   enabled: boolean;
   armLock: boolean;
@@ -130,20 +159,29 @@ export interface BrowserDevice {
   disarmRequested: boolean;
   armRequested: boolean;
 }
+/* Keyed by account + device: two people may both be running a legacy
+   extension build (same "__legacy" id), and merging those two browsers into
+   one record is precisely the cross-talk this is meant to prevent. */
 const devices = new Map<string, BrowserDevice>();
+
+const deviceKey = (accountId: string, deviceId: string) => `${accountId}::${deviceId}`;
 
 /** Stands in for an extension build that predates device ids, so an operator
  *  who hasn't reinstalled yet keeps working instead of going dark. */
 const LEGACY_DEVICE_ID = "__legacy";
 
 function touchDevice(id: string, name: string, enabled: boolean,
+                     account: { id: string; name: string },
                      page?: { url?: string; title?: string }, armLock?: boolean): BrowserDevice {
-  let d = devices.get(id);
+  const key = deviceKey(account.id, id);
+  let d = devices.get(key);
   if (!d) {
-    d = { id, name: name || id, lastPollAt: 0, enabled: false, armLock: false,
+    d = { id, name: name || id, accountId: account.id, accountName: account.name,
+          lastPollAt: 0, enabled: false, armLock: false,
           page: {}, firstSeenAt: Date.now(), disarmRequested: false, armRequested: false };
-    devices.set(id, d);
+    devices.set(key, d);
   }
+  d.accountName = account.name;
   if (name) d.name = name;
   d.lastPollAt = Date.now();
   d.enabled = enabled;
@@ -178,14 +216,23 @@ function isLive(d: BrowserDevice): boolean {
 /** How long a silent device stays listed before it is forgotten entirely. */
 const DEVICE_FORGET_MS = 10 * 60 * 1000;
 
-/** Connected devices, best candidate first. */
-export function listDevices(): Array<BrowserDevice & { connected: boolean; priority: number }> {
+/**
+ * Connected devices, best candidate first.
+ *
+ * `accountId` scopes the list to one Harvey Connect account. Omitting it
+ * returns every account's browsers and is only correct for server-side
+ * surfaces that legitimately span accounts (the operator status page). Every
+ * path that ACTS on a browser passes one.
+ */
+export function listDevices(accountId?: string): Array<BrowserDevice & { connected: boolean; priority: number }> {
   // Drop browsers nobody has heard from in ten minutes, or the list grows
   // forever with machines that were closed days ago.
   const cutoff = Date.now() - DEVICE_FORGET_MS;
-  for (const [id, d] of devices) if (d.lastPollAt < cutoff) devices.delete(id);
+  for (const [key, d] of devices) if (d.lastPollAt < cutoff) devices.delete(key);
 
+  const scope = accountId ?? currentAccount();
   return [...devices.values()]
+    .filter((d) => !scope || d.accountId === scope)
     .map((d) => {
       const connected = isLive(d);
       /* A browser that stopped polling is NOT armed, whatever its last poll
@@ -217,8 +264,9 @@ export function listDevices(): Array<BrowserDevice & { connected: boolean; prior
  * fall-through to someone else's browser — quietly acting on a different
  * machine than the one asked for is the worst outcome here.
  */
-export function resolveDevice(wanted?: string): { device: BrowserDevice | null; error: string | null } {
-  const live = listDevices().filter((d) => d.connected);
+export function resolveDevice(wanted?: string, accountId?: string): { device: BrowserDevice | null; error: string | null } {
+  const scope = accountId ?? currentAccount();
+  const live = listDevices(scope).filter((d) => d.connected);
   if (!live.length) return { device: null, error: "No paired browser is connected." };
 
   if (wanted && wanted.trim()) {
@@ -253,16 +301,24 @@ const MAX_LONG_POLL_MS = 20000;
 const CONNECTED_WINDOW_MS = MAX_LONG_POLL_MS + 10000;
 
 export function isConfigured(): boolean {
-  return Boolean(process.env.BROWSER_CONTROL_TOKEN?.trim());
+  return accountsConfigured();
 }
 
+/**
+ * Does this token belong to ANY Harvey Connect account?
+ *
+ * Fails closed: no configured account must never mean "everyone is allowed"
+ * the way DASHBOARD_TOKEN does elsewhere — the blast radius here is a human's
+ * live browser session. Callers that need to know WHOSE token it is (which is
+ * most of them now) should use `accountForToken` instead.
+ */
 export function tokenMatches(token: string | undefined): boolean {
-  const expected = process.env.BROWSER_CONTROL_TOKEN?.trim();
-  // Fail closed. An unset token must never mean "everyone is allowed" the way
-  // DASHBOARD_TOKEN does elsewhere in this app — the blast radius here is a
-  // human's live browser session.
-  if (!expected) return false;
-  return typeof token === "string" && token.trim() === expected;
+  return resolveAccount(token) !== null;
+}
+
+/** The account a pairing token belongs to, or null. */
+export function accountForToken(token: string | undefined) {
+  return resolveAccount(token);
 }
 
 export interface BrowserStatus {
@@ -272,6 +328,7 @@ export interface BrowserStatus {
   devices: Array<{
     id: string; name: string; connected: boolean; enabled: boolean;
     armLock: boolean; page: { url?: string; title?: string }; priority: number;
+    account: string;
   }>;
   /** Name of the browser an unaddressed command would go to. */
   activeDevice: string | null;
@@ -281,16 +338,21 @@ export interface BrowserStatus {
   page: { url?: string; title?: string };
 }
 
-export function status(): BrowserStatus {
-  const all = listDevices();
+export function status(accountId?: string): BrowserStatus {
+  const all = listDevices(accountId);
   const live = all.filter((d) => d.connected);
+  const scoped = Boolean(accountId ?? currentAccount());
   return {
     configured: isConfigured(),
-    connected: live.length > 0 || Date.now() - lastPollAt < CONNECTED_WINDOW_MS,
+    /* The global `lastPollAt` fallback covers an extension build old enough to
+       send no device id at all. It must NOT apply to an account-scoped call:
+       any browser polling would otherwise report as "connected" to everyone,
+       so Carlos would be told a browser was live because Marco's was. */
+    connected: live.length > 0 || (!scoped && Date.now() - lastPollAt < CONNECTED_WINDOW_MS),
     enabled: live.some((d) => d.enabled),
     devices: all.map((d) => ({
       id: d.id, name: d.name, connected: d.connected, enabled: d.enabled,
-      armLock: d.armLock, page: d.page, priority: d.priority,
+      armLock: d.armLock, page: d.page, priority: d.priority, account: d.accountName,
     })),
     /** Who an unaddressed command would go to right now. */
     activeDevice: live.filter((d) => d.enabled)[0]?.name || null,
@@ -320,8 +382,8 @@ let armRequested = false;
 /** Set by the extension when the human has locked out remote arming. */
 let armLockedByUser = false;
 
-export function requestDisarm(wanted?: string): { alreadyOff: boolean; connected: boolean; device?: string } {
-  const live = listDevices().filter((d) => d.connected);
+export function requestDisarm(wanted?: string, accountId?: string): { alreadyOff: boolean; connected: boolean; device?: string } {
+  const live = listDevices(accountId ?? currentAccount()).filter((d) => d.connected);
   if (!live.length) return { alreadyOff: true, connected: false };
 
   /* No device named = disarm EVERYTHING. "Turn the browser off" said out loud
@@ -338,12 +400,12 @@ export function requestDisarm(wanted?: string): { alreadyOff: boolean; connected
     return { alreadyOff: true, connected: true, device: targets.map((d) => d.name).join(", ") };
   }
   for (const t of armed) {
-    const d = devices.get(t.id)!;
+    const d = devices.get(deviceKey(t.accountId, t.id))!;
     d.armRequested = false;
     d.disarmRequested = true;
     // Anything queued for it must not run in the window before it disarms.
     queue = queue.filter((c) => c.targetDeviceId !== d.id);
-    wakeWaiters(d.id);
+    wakeWaiters(d.accountId, d.id);
   }
   return { alreadyOff: false, connected: true, device: armed.map((d) => d.name).join(", ") };
 }
@@ -361,8 +423,8 @@ export function requestDisarm(wanted?: string): { alreadyOff: boolean; connected
  * stated in the popup rather than hidden: anyone holding the pairing token can
  * re-arm a paired browser unless the lock is on.
  */
-export function requestArm(wanted?: string): { alreadyOn: boolean; connected: boolean; locked: boolean; device?: string } {
-  const live = listDevices().filter((d) => d.connected);
+export function requestArm(wanted?: string, accountId?: string): { alreadyOn: boolean; connected: boolean; locked: boolean; device?: string } {
+  const live = listDevices(accountId ?? currentAccount()).filter((d) => d.connected);
   if (!live.length) return { alreadyOn: false, connected: false, locked: false };
 
   /* Arming, unlike disarming, targets ONE browser — the priority pick when
@@ -376,10 +438,10 @@ export function requestArm(wanted?: string): { alreadyOn: boolean; connected: bo
   if (pick.armLock) return { alreadyOn: pick.enabled, connected: true, locked: true, device: pick.name };
   if (pick.enabled) return { alreadyOn: true, connected: true, locked: false, device: pick.name };
 
-  const d = devices.get(pick.id)!;
+  const d = devices.get(deviceKey(pick.accountId, pick.id))!;
   d.disarmRequested = false;
   d.armRequested = true;
-  wakeWaiters(d.id);
+  wakeWaiters(d.accountId, d.id);
   return { alreadyOn: false, connected: true, locked: false, device: d.name };
 }
 
@@ -401,26 +463,28 @@ export interface PollResponse {
    on every step. The poll now parks server-side until a command exists, so
    dispatch is immediate and the request count drops at the same time. */
 
-type Waiter = { deviceId: string; resolve: (r: PollResponse) => void; timer: NodeJS.Timeout };
+type Waiter = { key: string; accountId: string; deviceId: string; resolve: (r: PollResponse) => void; timer: NodeJS.Timeout };
 let waiters: Waiter[] = [];
 
 /** Wake parked polls. With a target, only that device's poll is answered. */
-function wakeWaiters(deviceId?: string): void {
+function wakeWaiters(accountId?: string, deviceId?: string): void {
   if (!waiters.length) return;
-  const hit = deviceId ? waiters.filter((w) => w.deviceId === deviceId) : waiters;
+  const key = accountId && deviceId ? deviceKey(accountId, deviceId) : null;
+  const hit = key ? waiters.filter((w) => w.key === key) : waiters;
   if (!hit.length) return;
   waiters = waiters.filter((w) => !hit.includes(w));
   for (const w of hit) {
     clearTimeout(w.timer);
-    w.resolve(drain(w.deviceId));
+    w.resolve(drain(w.accountId, w.deviceId));
   }
 }
 
 /** Close out parked polls with an empty answer without handing them work. */
-function retireWaiters(deviceId: string): void {
-  const stale = waiters.filter((w) => w.deviceId === deviceId);
+function retireWaiters(accountId: string, deviceId: string): void {
+  const key = deviceKey(accountId, deviceId);
+  const stale = waiters.filter((w) => w.key === key);
   if (!stale.length) return;
-  waiters = waiters.filter((w) => w.deviceId !== deviceId);
+  waiters = waiters.filter((w) => w.key !== key);
   for (const w of stale) {
     clearTimeout(w.timer);
     w.resolve({ commands: [], disarm: false, arm: false });
@@ -435,8 +499,8 @@ function retireWaiters(deviceId: string): void {
  * machine stays in the queue when anyone else polls, instead of being taken by
  * whoever happened to ask first.
  */
-function drain(deviceId?: string): PollResponse {
-  const dev = deviceId ? devices.get(deviceId) : undefined;
+function drain(accountId?: string, deviceId?: string): PollResponse {
+  const dev = accountId && deviceId ? devices.get(deviceKey(accountId, deviceId)) : undefined;
   if (dev) {
     if (dev.disarmRequested) return { commands: [], disarm: true, arm: false };
     if (dev.armRequested) return { commands: [], disarm: false, arm: true };
@@ -455,6 +519,8 @@ function drain(deviceId?: string): PollResponse {
 }
 
 export interface PollOptions {
+  /** Which Harvey Connect account this browser paired under. */
+  account?: { id: string; name: string };
   /** Stable per-browser id, generated by the extension. */
   deviceId?: string;
   /** Human name from the popup — this is what priority matches on. */
@@ -479,7 +545,8 @@ export function recordPoll(
   if (typeof opts.armLock === "boolean") armLockedByUser = opts.armLock;
 
   const deviceId = (opts.deviceId || "").trim() || LEGACY_DEVICE_ID;
-  touchDevice(deviceId, (opts.deviceName || "").trim(), enabled, page, opts.armLock);
+  const account = opts.account || { id: "__unscoped", name: "Unknown" };
+  touchDevice(deviceId, (opts.deviceName || "").trim(), enabled, account, page, opts.armLock);
 
   // Clear the one-shot directives once the extension confirms the new state,
   // so a poll that crossed the request in flight doesn't drop the instruction.
@@ -496,15 +563,17 @@ export function recordPoll(
   // didn't respond" about a browser that is sitting right there. Closing them
   // out with an empty answer is harmless — the extension re-polls — and it
   // guarantees commands can only ever go to the live connection.
-  retireWaiters(deviceId);
+  retireWaiters(account.id, deviceId);
 
-  const immediate = drain(deviceId);
+  const immediate = drain(account.id, deviceId);
   const hasWork = immediate.commands.length > 0 || immediate.disarm || immediate.arm;
   const waitMs = Math.min(Math.max(Number(opts.waitMs) || 0, 0), MAX_LONG_POLL_MS);
   if (hasWork || waitMs === 0) return immediate;
 
   return new Promise<PollResponse>((resolve) => {
     const w: Waiter = {
+      key: deviceKey(account.id, deviceId),
+      accountId: account.id,
       deviceId,
       resolve,
       // Time out with an empty answer rather than holding forever: the
@@ -547,6 +616,9 @@ export interface RunOptions {
   /** Device id or part of a name. Omitted = highest-priority armed browser,
    *  which is Marco's unless BROWSER_DEVICE_PRIORITY says otherwise. */
   device?: string;
+  /** Harvey Connect account to resolve the device within. Defaults to the
+   *  ambient account scope set by withAccount(). */
+  account?: string;
 }
 
 /**
@@ -568,9 +640,10 @@ export function run(
   /* Pick the browser BEFORE queueing. The old code queued blind and let
      whichever extension polled first take the command, so with two machines
      armed the operator could not tell — or choose — which one acted. */
-  const target = resolveDevice(opts.device);
+  const target = resolveDevice(opts.device, opts.account);
   if (!target.device) return Promise.resolve(fail("", target.error || "No browser available."));
 
+  const targetAccountId = target.device.accountId;
   const full: BrowserCommand = {
     ...command,
     id: randomUUID(),
@@ -584,7 +657,7 @@ export function run(
   queue.push(full);
   // Hand it straight to that device's parked long poll instead of letting it
   // sit until the next timer tick — this is where the latency saving lands.
-  wakeWaiters(target.device.id);
+  wakeWaiters(targetAccountId, target.device.id);
 
   // `command.timeoutMs` is how long the PAGE should keep waiting; this timer is
   // how long the SERVER waits for an answer. Treating them as the same number
@@ -631,9 +704,18 @@ export function recentActivity(limit = 20): {
 export function _resetForTests(): void {
   for (const p of pending.values()) clearTimeout(p.timer);
   pending.clear();
+  /* Devices and parked polls have to go too. They didn't before, so state
+     leaked between runs: a device paired in one scenario stayed visible in the
+     next, and a parked waiter kept a live timer pointing at a resolved test. */
+  for (const w of waiters) clearTimeout(w.timer);
+  waiters = [];
+  devices.clear();
   queue = [];
   history.length = 0;
   lastPollAt = 0;
   extensionEnabled = false;
   extensionPage = {};
+  disarmRequested = false;
+  armRequested = false;
+  armLockedByUser = false;
 }
