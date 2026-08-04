@@ -111,6 +111,13 @@ check("sync: endpoints exist — GET status, POST run with dry-run", () => {
   assert(/app\.get\("\/api\/transactions\/sheet-sync"/.test(s));
   assert(/app\.post\("\/api\/transactions\/sheet-sync"/.test(s));
   assert(/body\.dryRun === true \? false : true/.test(s));
+  // Express matches in registration order: the literal path must be
+  // registered before GET /api/transactions/:id, or ":id" swallows
+  // "sheet-sync" and the status endpoint 404s. This shipped broken once.
+  assert(
+    s.indexOf('app.get("/api/transactions/sheet-sync"') < s.indexOf('app.get("/api/transactions/:id"'),
+    "sheet-sync GET is registered after the :id route and will be shadowed",
+  );
 });
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

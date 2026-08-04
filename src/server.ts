@@ -9967,6 +9967,32 @@ app.post("/api/transactions/import-reminder/run", (req, res) => {
   }
 });
 
+/* Registered BEFORE /api/transactions/:id — the literal path must win, or
+   Express hands "sheet-sync" to the :id route and answers 404. */
+/**
+ * Automated sheet sync — the no-download version of the CSV import above.
+ * Brivity cannot export transactions (see core/transactionSheetSync.ts for
+ * the research), so the team's Google Sheet is the source and the server
+ * pulls it itself. GET = status, POST = run now ({"dryRun":true} to preview).
+ */
+app.get("/api/transactions/sheet-sync", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.json(sheetSyncStatus());
+});
+
+app.post("/api/transactions/sheet-sync", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const result = await runSheetSync({ apply: body.dryRun === true ? false : true });
+  res.status(result.ok ? 200 : 422).json(result);
+});
+
 app.get("/api/transactions/:id", (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -10077,30 +10103,6 @@ app.post(
     }
   },
 );
-
-/**
- * Automated sheet sync — the no-download version of the CSV import above.
- * Brivity cannot export transactions (see core/transactionSheetSync.ts for
- * the research), so the team's Google Sheet is the source and the server
- * pulls it itself. GET = status, POST = run now ({"dryRun":true} to preview).
- */
-app.get("/api/transactions/sheet-sync", (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-    return;
-  }
-  res.json(sheetSyncStatus());
-});
-
-app.post("/api/transactions/sheet-sync", express.json(), async (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-    return;
-  }
-  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  const result = await runSheetSync({ apply: body.dryRun === true ? false : true });
-  res.status(result.ok ? 200 : 422).json(result);
-});
 
 app.post("/api/transactions/migrate-from-deals", async (req, res) => {
   if (!dashboardTokenOk(req)) {
