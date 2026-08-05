@@ -20,6 +20,7 @@ import { scheduleWarmLeadWeeklyTouch } from "../agents/leadNurture/warmLeadFlow.
 import { scheduleColdLeadMonthlyTouch } from "../agents/leadNurture/coldLeadFlow.js";
 import { scheduleAutoRescore } from "../agents/leadScoring/index.js";
 import { scheduleMlsSync } from "../agents/mlsSync/index.js";
+import { scheduleLuxurySweep } from "../agents/luxuryContent/index.js";
 import { scheduleDailyDigest } from "../agents/reporting/dailyDigest.js";
 import { scheduleWeeklyKPI } from "../agents/reporting/weeklyKPI.js";
 import {
@@ -79,6 +80,7 @@ export function scheduleContentJobs(): void {
   scheduleColdLeadMonthlyTouch();
   scheduleAutoRescore();
   scheduleMlsSync();
+  scheduleLuxurySweep();
   scheduleDailyDigest();
   scheduleWeeklyKPI();
   scheduleWeeklyFinanceSummary();

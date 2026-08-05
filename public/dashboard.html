@@ -6625,6 +6625,7 @@
             <span><span class="crm-muted">${escapeHtml(latest.source)}</span> <span class="crm-conf-badge ${conf}">${escapeHtml(conf)}</span></span>
           </div>
           <div class="crm-muted" style="font-size:0.68rem;margin:0.35rem 0;">Run ${escapeHtml(fmtDate(latest.runAt))}</div>`;
+        if (latest.note) html += `<div style="margin-top:0.35rem;font-size:0.75rem;color:var(--warn,#b45309);">${escapeHtml(latest.note)}</div>`;
         if (latest.foundName) html += `<div style="margin-top:0.35rem;">Name found: <b>${escapeHtml(latest.foundName)}</b> <button type="button" class="crm-light-btn" data-skip-apply="name" style="font-size:0.68rem;padding:0.2rem 0.4rem;">Apply</button></div>`;
         if (latest.foundEmail) html += `<div style="margin-top:0.25rem;">Email found: <b>${escapeHtml(latest.foundEmail)}</b> <button type="button" class="crm-light-btn" data-skip-apply="email" style="font-size:0.68rem;padding:0.2rem 0.4rem;">Apply</button></div>`;
         if (latest.foundAddress) html += `<div style="margin-top:0.25rem;">Address: <b>${escapeHtml(latest.foundAddress)}</b> <button type="button" class="crm-light-btn" data-skip-apply="address" style="font-size:0.68rem;padding:0.2rem 0.4rem;">Apply</button></div>`;

@@ -674,7 +674,8 @@
       <div class="leads-main">
         <div class="leads-top">
           <h1 id="pTitle">All People <small id="pCount"></small></h1>
-          <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn" id="pFilterBtn">FILTERED</button></div>
+          <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn" id="leadImportBtn">⭱ Import CSV</button><button class="pill-btn" id="pFilterBtn">FILTERED</button></div>
+          <input type="file" id="leadCsvInput" accept=".csv,text/csv" style="display:none">
         </div>
         <div class="filter-bar" id="pChipBar" style="display:none">
           <span class="fchip">Status: Past Client <span class="x">×</span></span>
@@ -2101,6 +2102,59 @@ async function importTxCsv(text,filename){
   renderTx(); renderReport(currentReport); renderFinance();
   crmToast("Imported — "+txImportSummary(res));
 }
+/* ===== Lead CSV import (Mojo exports, website form dumps) =====
+   Same server-side plan/apply shape as transactions. The one extra question
+   is the SOURCE: a Mojo file usually has no source column, and stamping the
+   right one is the difference between the Mojo follow-up automation seeing
+   these leads and ignoring them. */
+async function importLeadCsv(text,filename){
+  var guess=/mojo/i.test(filename||"")?"Mojo":"";
+  var source=prompt("Lead source for rows that don't carry one (this is what automations key off):",guess||"Mojo");
+  if(source===null) return;                     // cancel = abort the import
+  source=(source||"").trim()||"CSV Import";
+
+  var plan=await fetch(crmApi("/api/leads/import-csv"),{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({csv:text,source:source})
+  }).then(function(r){return r.json();}).catch(function(){return null;});
+  if(!plan||plan.ok!==true){
+    crmToast((plan&&(plan.error||(plan.errors||[])[0]))||"Could not read that CSV"); return;
+  }
+  if(!plan.create&&!plan.enrich){
+    crmToast("Nothing new in "+(filename||"that file")+" — "+plan.skip+" skipped"+(plan.ambiguous?", "+plan.ambiguous+" ambiguous":"")); return;
+  }
+  var warn=(plan.unmappedHeaders||[]).length
+    ? "\n\nColumns I could not place (ignored):\n"+plan.unmappedHeaders.join(", ") : "";
+  var amb=plan.ambiguous
+    ? "\n\n"+plan.ambiguous+" row(s) match MORE THAN ONE existing lead and will be left alone — check them by hand." : "";
+  if(!confirm("Import as source \""+source+"\":\n"+plan.create+" new lead(s), enrich "+plan.enrich+
+      " existing (fills empty fields only), skip "+plan.skip+"."+amb+warn)) return;
+
+  crmToast("Importing …");
+  var res=await fetch(crmApi("/api/leads/import-csv"),{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({csv:text,source:source,apply:true})
+  }).then(function(r){return r.json();}).catch(function(){return null;});
+  if(!res||res.ok!==true){ crmToast((res&&res.error)||"Import failed"); return; }
+  crmToast("Imported — "+res.created+" added, "+res.enriched+" enriched"+(res.ambiguous?", "+res.ambiguous+" need a human":""));
+  /* The lead list is assembled at boot; a reload is the honest refresh. */
+  setTimeout(function(){ location.reload(); }, 900);
+}
+(function(){
+  var btn=document.getElementById("leadImportBtn"),inp=document.getElementById("leadCsvInput");
+  if(btn&&inp){
+    btn.addEventListener("click",function(){inp.click();});
+    inp.addEventListener("change",function(){
+      var f=inp.files&&inp.files[0]; if(!f)return;
+      crmToast("Reading "+f.name+" …");
+      var fr=new FileReader();
+      fr.onload=function(){ Promise.resolve(importLeadCsv(String(fr.result||""),f.name)).catch(function(){crmToast("Could not read CSV");}); inp.value=""; };
+      fr.onerror=function(){crmToast("Could not read file");inp.value="";};
+      fr.readAsText(f);
+    });
+  }
+})();
+
 (function(){
   var btn=document.getElementById("txImportBtn"),inp=document.getElementById("txCsvInput");
   if(btn&&inp){

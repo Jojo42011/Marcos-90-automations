@@ -360,6 +360,8 @@ export type SkipTraceResult = {
   }[];
   additionalPhones?: string[];
   confidence?: "high" | "medium" | "low";
+  /** Honest status line when a lookup could not run (no provider configured). */
+  note?: string;
   raw?: unknown;
 };
 

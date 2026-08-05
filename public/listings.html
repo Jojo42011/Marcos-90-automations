@@ -125,6 +125,9 @@ const LEAD = (function(){
   return id ? { id, name: p.get("leadName") || "this lead" } : null;
 })();
 let LINKED_KEY = null;
+/* Listing keys on this lead's shortlist — drives the star state on each card
+   and the PDF link in the banner. */
+let FAVS = new Set();
 
 const esc = s => { const d=document.createElement("div"); d.textContent = s==null?"":String(s); return d.innerHTML; };
 const money = n => n==null ? "—" : "$" + Number(n).toLocaleString();
@@ -194,8 +197,12 @@ function card(l){
       '</div>' +
     '</div></a>' +
     (LEAD
-      ? '<div class="linkwrap"><button class="linkbtn'+(LINKED_KEY===l.listingKey?' on':'')+'" data-link="'+esc(l.listingKey)+'">'+
-        (LINKED_KEY===l.listingKey ? '\u2713 Their property \u00b7 click to unlink' : 'Set as their property')+'</button></div>'
+      ? '<div class="linkwrap">'+
+        '<button class="linkbtn'+(LINKED_KEY===l.listingKey?' on':'')+'" data-link="'+esc(l.listingKey)+'">'+
+        (LINKED_KEY===l.listingKey ? '\u2713 Their property \u00b7 click to unlink' : 'Set as their property')+'</button>'+
+        '<button class="linkbtn'+(FAVS.has(l.listingKey)?' on':'')+'" data-fav="'+esc(l.listingKey)+'" style="margin-top:6px">'+
+        (FAVS.has(l.listingKey) ? '\u2605 On their shortlist \u00b7 click to remove' : '\u2606 Add to their shortlist')+'</button>'+
+        '</div>'
       : '') +
   '</div>';
 }
@@ -244,6 +251,43 @@ async function loadLinked(){
     const d = await fetch(url("/api/leads/" + encodeURIComponent(LEAD.id) + "/mls")).then(r=>r.ok?r.json():null);
     LINKED_KEY = d && d.listing ? d.listing.listingKey : null;
   } catch(_) { LINKED_KEY = null; }
+  try {
+    const f = await fetch(url("/api/leads/" + encodeURIComponent(LEAD.id) + "/favorites")).then(r=>r.ok?r.json():null);
+    FAVS = new Set(((f&&f.favorites)||[]).map(x=>x.listingKey));
+  } catch(_) { FAVS = new Set(); }
+  paintFavBanner();
+}
+
+/* The banner doubles as the shortlist's home: live count + the PDF link. */
+function paintFavBanner(){
+  if (!LEAD) return;
+  const banner = el("banner");
+  banner.className = "warn"; banner.style.display = "block";
+  banner.innerHTML = "Searching for <b>" + esc(LEAD.name) + "</b>. Pick a listing to set it as their property, or star homes for their shortlist." +
+    (FAVS.size
+      ? ' &nbsp;·&nbsp; <b>' + FAVS.size + '</b> on the shortlist — <a href="' +
+        esc(url("/api/leads/" + encodeURIComponent(LEAD.id) + "/property-pdf")) +
+        '" style="color:inherit;font-weight:700">download the PDF</a>'
+      : '');
+}
+
+async function toggleFavorite(key){
+  if (!LEAD) return;
+  const removing = FAVS.has(key);
+  try {
+    const r = removing
+      ? await fetch(url("/api/leads/" + encodeURIComponent(LEAD.id) + "/favorites/" + encodeURIComponent(key)), { method: "DELETE" })
+      : await fetch(url("/api/leads/" + encodeURIComponent(LEAD.id) + "/favorites"), {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ listingKey: key }),
+        });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    if (removing) FAVS.delete(key); else FAVS.add(key);
+    paintFavBanner();
+    await search();
+  } catch (e) {
+    el("count").textContent = "Could not update the shortlist: " + e.message;
+  }
 }
 
 let busy = false;
@@ -277,6 +321,8 @@ async function search(){
 }
 
 el("grid").addEventListener("click", e => {
+  const f = e.target.closest("[data-fav]");
+  if (f) { void toggleFavorite(f.getAttribute("data-fav")); return; }
   const b = e.target.closest("[data-link]");
   if (b) void linkListing(b.getAttribute("data-link"));
 });
@@ -301,11 +347,7 @@ el("syncBtn").onclick = async () => {
 };
 
 paintFeed();
-if (LEAD) {
-  const banner = el("banner");
-  banner.className = "warn"; banner.style.display = "block";
-  banner.innerHTML = "Searching for <b>" + esc(LEAD.name) + "</b>. Pick a listing to set it as their property.";
-}
+if (LEAD) paintFavBanner();
 void loadLinked().then(search);
 setInterval(paintFeed, 120000);
 </script>

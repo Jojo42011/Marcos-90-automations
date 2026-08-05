@@ -194,6 +194,9 @@ function listingsForCriteria(lead, limit = 3) {
         maxPrice: cap || undefined,
         minPrice: cap ? Math.round(cap * 0.6) : undefined,
         minBeds: c?.beds || undefined,
+        /* Baths were captured on every lead and then ignored here — a client who
+           asked for 3 baths was shown 2-bath homes and read it as not listening. */
+        minBaths: c?.baths || undefined,
         limit: Math.max(limit * 6, 12),
     }).listings.filter((l) => l.listingKey !== lead.mlsListingKey);
     return spreadAcrossStreets(rows, limit);

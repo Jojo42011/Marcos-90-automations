@@ -2168,6 +2168,53 @@ async function handleMassDeleteLeads(
   }
 }
 
+/**
+ * Lead CSV import — Mojo exports, website form dumps, any contact CSV.
+ *
+ * Dry run by default (POST the csv, read the plan), {"apply":true} commits.
+ * Writes go through upsertLeadQuiet — a bulk file must never fire the
+ * new-lead automations (Twilio texts to Marco/Carlos, drip enrollment).
+ */
+app.post("/api/leads/import-csv", express.json({ limit: "8mb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const csv = typeof body.csv === "string" ? body.csv : "";
+  if (!csv.trim()) {
+    res.status(400).json({ ok: false, error: 'csv is required — {"csv":"…", "apply":true, "source":"Mojo"}' });
+    return;
+  }
+  try {
+    const { planLeadImport, applyLeadImport } = await import("./core/leadCsvImport.js");
+    const plan = await planLeadImport(csv, {
+      defaultSource: typeof body.source === "string" && body.source.trim() ? body.source.trim() : undefined,
+      tags: Array.isArray(body.tags) ? body.tags.map(String) : undefined,
+    });
+    if (plan.errors.length && !plan.rows.length) {
+      res.status(422).json({ ok: false, dryRun: true, ...plan, _writes: undefined });
+      return;
+    }
+    if (body.apply !== true) {
+      res.json({
+        ok: true, dryRun: true,
+        rowsSeen: plan.rowsSeen, create: plan.create, enrich: plan.enrich,
+        skip: plan.skip, ambiguous: plan.ambiguous,
+        defaultSource: plan.defaultSource,
+        unmappedHeaders: plan.unmappedHeaders, errors: plan.errors,
+        sample: plan.rows.slice(0, 8),
+        ambiguousRows: plan.rows.filter((r) => r.action === "ambiguous").slice(0, 10),
+      });
+      return;
+    }
+    const result = await applyLeadImport(plan);
+    res.json({ ok: true, dryRun: false, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 app.post("/api/leads/mass-delete", express.json(), handleMassDeleteLeads);
 console.log("[Routes] POST /api/leads/mass-delete registered");
 app.post("/api/crm/leads/mass-delete", express.json(), handleMassDeleteLeads);
@@ -4812,6 +4859,62 @@ async function sendLeadText(
 }
 
 /** Website visit — re-engagement when lead is ghosted (30+ days no inbound SMS). */
+/* ── Client property shortlist + branded PDF ──────────────────────────────
+   The homes picked for one lead, and the one-click document made from them.
+   Facts join live from the MLS mirror at read time (price cuts show same-day). */
+app.get("/api/leads/:id/favorites", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { listFavorites } = await import("./core/favoritesStore.js");
+  res.json({ favorites: listFavorites(String(req.params.id || "")) });
+});
+
+app.post("/api/leads/:id/favorites", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const listingKey = String((req.body as Record<string, unknown>)?.listingKey || "").trim();
+  if (!listingKey) { res.status(400).json({ error: "listingKey is required" }); return; }
+  const { getListing } = await import("./core/listingsStore.js");
+  if (!getListing(listingKey)) {
+    res.status(404).json({ error: "That listing is not in the MLS mirror." });
+    return;
+  }
+  const { addFavorite } = await import("./core/favoritesStore.js");
+  const note = typeof (req.body as Record<string, unknown>)?.note === "string"
+    ? String((req.body as Record<string, unknown>).note) : undefined;
+  res.json({ ok: true, ...addFavorite(String(req.params.id || ""), listingKey, note) });
+});
+
+app.delete("/api/leads/:id/favorites/:key", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { removeFavorite } = await import("./core/favoritesStore.js");
+  res.json({ ok: true, ...removeFavorite(String(req.params.id || ""), String(req.params.key || "")) });
+});
+
+/** The branded PDF of a lead's shortlist — photos, pricing, details, links. */
+app.get("/api/leads/:id/property-pdf", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const leadId = String(req.params.id || "");
+    const { listFavorites } = await import("./core/favoritesStore.js");
+    const entries = listFavorites(leadId);
+    if (!entries.some((e) => e.listing)) {
+      res.status(404).json({ error: "This lead has no shortlisted homes yet. Add some from the MLS tab first." });
+      return;
+    }
+    const { getLeadById } = await import("./core/db.js");
+    const lead = await getLeadById(leadId);
+    const clientName = (lead?.name || "you").trim() || "you";
+    const { buildPropertyPdf } = await import("./core/propertyPdf.js");
+    const origin = `${req.get("x-forwarded-proto") || req.protocol}://${req.get("host")}`;
+    const bytes = await buildPropertyPdf({ clientName, entries, linkOrigin: origin });
+    const safeName = clientName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "client";
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="homes-for-${safeName}.pdf"`);
+    res.send(Buffer.from(bytes));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 app.post("/api/leads/:id/website-visit", express.json(), async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -9275,6 +9378,46 @@ app.post("/api/browser/chat", express.json({ limit: "256kb" }), async (req, res)
  * MLS feed health. Ungated like /api/browser/status's configuration half: it
  * exposes whether a feed is connected and how stale it is, never listing data.
  */
+/* ── Luxury content shortlist: the rolling 5–7 $1M+ homes worth filming ─── */
+app.get("/api/luxury/shortlist", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { getLuxuryShortlist } = await import("./agents/luxuryContent/index.js");
+  res.json(getLuxuryShortlist());
+});
+
+app.post("/api/luxury/run", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { runLuxurySweep } = await import("./agents/luxuryContent/index.js");
+  const result = await runLuxurySweep();
+  res.status(result.error && !result.candidatesSeen ? 422 : 200).json(result);
+});
+
+/** Operator verdicts: filmed and dismissed never resurface; shortlist/candidate restore. */
+app.post("/api/luxury/:key/status", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const status = String((req.body as Record<string, unknown>)?.status || "");
+  if (!["filmed", "dismissed", "shortlist", "candidate"].includes(status)) {
+    res.status(400).json({ error: "status must be filmed, dismissed, shortlist, or candidate" });
+    return;
+  }
+  const { setLuxuryStatus } = await import("./agents/luxuryContent/index.js");
+  const ok = setLuxuryStatus(String(req.params.key || ""), status as "filmed" | "dismissed" | "shortlist" | "candidate");
+  if (!ok) {
+    res.status(404).json({ error: "No luxury candidate with that listing key" });
+    return;
+  }
+  res.json({ ok: true });
+});
+
 app.get("/api/mls/status", async (_req, res) => {
   const { mlsStatus } = await import("./agents/mlsSync/index.js");
   res.json(mlsStatus());

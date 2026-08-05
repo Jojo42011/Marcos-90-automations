@@ -282,6 +282,23 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
+    name: "get_luxury_shortlist",
+    description:
+      "The rolling shortlist of $1M+ homes worth filming for content tours — scored daily from the live MLS feed for standout architecture, views, amenities and design. Use when Marco asks what luxury homes to tour, what's content-worthy this week, or about the luxury shortlist. Each entry says WHY it made the list. Pass an action to record Marco's verdict on one.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list", "filmed", "dismissed"],
+          description: "list (default) shows the shortlist; filmed/dismissed records Marco's verdict on one home so it never resurfaces.",
+        },
+        listingKey: { type: "string", description: "Required for filmed/dismissed — the listing key from a prior list." },
+      },
+      required: [],
+    },
+  },
+  {
     name: "get_social_videos",
     description:
       "Get a list of Marco's TikTok videos filtered by performance tier and time period. Use when Marco asks about his best videos, worst videos, recent videos, or wants to see specific video performance.",
@@ -1230,6 +1247,34 @@ export async function executeHarveyTool(
       );
     case "get_stalled_leads":
       return getStalledLeads();
+    case "get_luxury_shortlist": {
+      const { getLuxuryShortlist, setLuxuryStatus } = await import("../agents/luxuryContent/index.js");
+      const action = String(normalized.action || "list");
+      if (action === "filmed" || action === "dismissed") {
+        const key = String(normalized.listingKey || "").trim();
+        if (!key) return { error: "listingKey is required to mark a home filmed or dismissed." };
+        const ok = setLuxuryStatus(key, action);
+        return ok ? { ok: true, action, listingKey: key } : { error: `No luxury candidate with key ${key}.` };
+      }
+      const { shortlist, stats } = getLuxuryShortlist();
+      return {
+        shortlist: shortlist.map((c) => ({
+          listingKey: c.listingKey,
+          address: [c.street, c.city].filter(Boolean).join(", "),
+          price: c.listPrice,
+          specs: [c.beds && `${c.beds}bd`, c.baths && `${c.baths}ba`, c.livingArea && `${Math.round(c.livingArea).toLocaleString()}sqft`].filter(Boolean).join(" "),
+          subdivision: c.subdivision,
+          why: c.scoreReasons,
+          score: c.score,
+          /* Name which judge spoke: a keyword match is not an opinion. */
+          judgedBy: c.scoreSource,
+        })),
+        stats,
+        note: shortlist.length === 0
+          ? "The shortlist is empty — the daily sweep may not have run yet. It refills automatically."
+          : `Rolling list of ${shortlist.length}. Mark ones Marco tours as filmed so they drop off.`,
+      };
+    }
     case "get_social_summary": {
       const summary = getSocialSummaryForHarvey() as Record<string, unknown>;
       const stats = summary.stats as Record<string, unknown> | undefined;

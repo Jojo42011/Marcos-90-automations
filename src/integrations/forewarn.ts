@@ -26,24 +26,25 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function mockSkipTraceResult(): SkipTraceResult {
+/**
+ * There used to be a mock here that returned "John Demo, 123 Demo Street,
+ * San Antonio" with confidence "high" whenever no provider was configured —
+ * live, in production, indistinguishable from a real lookup. A CRM that
+ * invents a contact's identity is worse than one that says it doesn't know,
+ * so the unconfigured case now says exactly that and finds nothing.
+ *
+ * Note before wiring a real provider: Forewarn's subscriber terms prohibit
+ * filing its Information into third-party systems ("used by Subscriber
+ * only"), so automated lookups feeding this CRM need an idiCORE (Red Violet)
+ * contract, not a Forewarn key. The honest in-terms flow is a one-click
+ * manual lookup in Forewarn's own app.
+ */
+function notConfiguredResult(): SkipTraceResult {
   return {
     runAt: nowIso(),
-    source: "mock",
-    foundName: "John Demo",
-    foundEmail: "johndemo@example.com",
-    foundAddress: "123 Demo Street, San Antonio TX 78201",
-    propertyOwnership: [
-      {
-        address: "123 Demo Street, San Antonio TX 78201",
-        owner: "John Demo",
-        estimatedValue: 285000,
-        lastSaleDate: "2019-03-15",
-        lastSalePrice: 240000,
-      },
-    ],
-    additionalPhones: [],
-    confidence: "high",
+    source: "not-configured",
+    confidence: "low",
+    note: "No lookup ran — no skip-trace provider is configured. Look the number up in Forewarn directly; results cannot be fabricated here.",
   };
 }
 
@@ -80,7 +81,7 @@ export async function runSkipTrace(phone: string): Promise<SkipTraceResult> {
   }
   const apiKey = process.env.FOREWARN_API_KEY?.trim();
   if (!apiKey) {
-    return mockSkipTraceResult();
+    return notConfiguredResult();
   }
   try {
     return await forewarnApiLookup(phone, apiKey);
