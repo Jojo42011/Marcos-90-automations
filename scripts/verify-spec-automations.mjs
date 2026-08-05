@@ -47,6 +47,12 @@ check("luxury: scheduled daily alongside the other agents", () => {
   const s = read("src/app/jobs.ts");
   assert(/scheduleLuxurySweep\(\)/.test(s));
 });
+check("luxury: the sweep sees the WHOLE market, not the API's clamped page", () => {
+  const agent = read("src/agents/luxuryContent/index.ts");
+  assert(/allActiveListingsOver\(MIN_PRICE\)/.test(agent));
+  assert(!/searchListings\(/.test(agent), "searchListings clamps to 200 and made 200 look like all 1,059 in production");
+  assert(/No clamp here, by design and by name/.test(read("src/core/listingsStore.ts")));
+});
 check("luxury: heuristic is word-bounded (bare /spa/ scored 'Spacious home')", () => {
   const s = read("src/agents/luxuryContent/index.ts");
   assert(/\\bpool\\b\|\\bspa\\b/.test(s));

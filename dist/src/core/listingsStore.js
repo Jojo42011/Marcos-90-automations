@@ -7,6 +7,7 @@ exports.getListingsDb = getListingsDb;
 exports.fromSimplyRets = fromSimplyRets;
 exports.upsertListings = upsertListings;
 exports.searchListings = searchListings;
+exports.allActiveListingsOver = allActiveListingsOver;
 exports.knownCities = knownCities;
 exports.marketStats = marketStats;
 exports.getListing = getListing;
@@ -311,6 +312,22 @@ function searchListings(query = {}) {
  */
 let cityCache = null;
 const CITY_CACHE_MS = 60 * 60 * 1000;
+/**
+ * Every active listing at or above a price — for sweeps, not for the API.
+ * `searchListings` clamps its limit to 200 (correct for a request that renders
+ * a page, silently wrong for an agent that believes it saw the whole market:
+ * the luxury scout's first production run reported 200 candidates as if they
+ * were all ~1,059). No clamp here, by design and by name.
+ */
+function allActiveListingsOver(minPrice) {
+    const database = getListingsDb();
+    const rows = database
+        .prepare(`SELECT * FROM listings
+       WHERE LOWER(status) = 'active' AND list_price >= ?
+       ORDER BY COALESCE(modification_ts, synced_at) DESC`)
+        .all(minPrice);
+    return rows.map(rowToListing);
+}
 function knownCities() {
     if (cityCache && Date.now() - cityCache.at < CITY_CACHE_MS)
         return cityCache.rows;

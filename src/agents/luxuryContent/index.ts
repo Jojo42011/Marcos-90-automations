@@ -19,7 +19,7 @@
  * re-billed nightly.
  */
 
-import { searchListings } from "../../core/listingsStore.js";
+import { allActiveListingsOver } from "../../core/listingsStore.js";
 import {
   upsertCandidates,
   unscoredCandidates,
@@ -147,8 +147,10 @@ export async function runLuxurySweep(): Promise<LuxurySweepResult> {
   if (running) return { ran: false, error: "already running" };
   running = true;
   try {
-    const live = searchListings({ status: "Active", minPrice: MIN_PRICE, limit: 2000 });
-    const rows = live.listings;
+    /* The whole $1M+ market, not the API's 200-row page. The first production
+       run used searchListings and its silent clamp made 200 look like all
+       1,059 — exactly the truncation-reads-as-coverage failure. */
+    const rows = allActiveListingsOver(MIN_PRICE);
     const ingested = upsertCandidates(rows.map((l) => ({
       listingKey: l.listingKey,
       mlsNumber: l.mlsNumber,
