@@ -528,12 +528,12 @@ function openingContextAppendix(lastUserText, conversation, channel, platform, p
     const assistantTurns = conversation.messages.filter((m) => m.role === "assistant").length;
     const tikTokOpenerAlreadyInThread = isTikTokPlatform(platform) &&
         (assistantTurns >= 1 || (0, conversationUtils_js_1.threadContainsFirstTimeBuyingQuestion)(conversation));
-    const tikTokNoPrice = "TIKTOK_NO_LIST_PRICE_IN_DM: TikTok DMs can be about many different homes/videos. Never state or hint list price, asking price, dollar amounts, ballpark, mid 500s, or payment estimates for the property they asked about. If they ask how much or price, do not give a number in chat. Offer the full breakdown by text first in Marco's real voice (same family as the training screenshots: yeah of course, would it help if I sent the entire breakdown of the home you inquired about, location and pricing included, that kind of beat). Do not use platform meta or AI-ish lines about TikTok being a rough place for sheets or similar. Ask for a mobile number only after they agree they want it sent. Discussing the buyer's own budget range is fine; do not quote this listing's price in DM.\n\n";
+    const tikTokNoPrice = "TIKTOK_NO_LIST_PRICE_IN_DM: TikTok DMs can be about many different homes/videos. Never state or hint list price, asking price, dollar amounts, ballpark, mid 500s, or payment estimates for the property they asked about. If they ask how much or price, do not give a number in chat. Offer the full breakdown by text first in Marco's real voice (same family as the training screenshots: yeah of course, would it help if I sent the entire breakdown of the home you inquired about, location and pricing included, that kind of beat). Do not use platform meta or AI-ish lines about TikTok being a rough place for sheets or similar. Offer the breakdown AND ask for the mobile number in the SAME reply; do not wait a turn for them to agree first. Discussing the buyer's own budget range is fine; do not quote this listing's price in DM.\n\n";
     const tikTokChannelBlock = isTikTokPlatform(platform)
         ? tikTokNoPrice +
             (tikTokOpenerAlreadyInThread
-                ? "CHANNEL: tiktok_dm. Marco already has at least one outbound in this thread (often the manual first DM with the first-time buying question). Do NOT send another opener and do NOT ask about first-time vs experienced buyer or the buying process again. Answer LATEST_LEAD_MESSAGE in Marco's voice. Order: offer to text the full breakdown first when they have not agreed yet; ask for a mobile number only after they clearly want the packet sent, or on the next turn after they agree. Never recycle appreciation + first-time question.\n\n"
-                : "CHANNEL: tiktok_dm. Use TikTok flow, not Instagram. If this is Marco's first line in the thread, first-time check then breakdown offer then number (after they agree to the packet) can apply; if any Marco line already exists above, skip opener scripts entirely.\n\n")
+                ? "CHANNEL: tiktok_dm. Marco already has at least one outbound in this thread (often the manual first DM with the first-time buying question). Do NOT send another opener and do NOT ask about first-time vs experienced buyer or the buying process again. Answer LATEST_LEAD_MESSAGE in Marco's voice, then offer the full breakdown and ask for the best mobile number in that SAME reply. Do not spend a turn waiting for them to agree to the packet before asking. If they already gave a number, confirm you are texting it instead of asking again. Never recycle appreciation + first-time question.\n\n"
+                : "CHANNEL: tiktok_dm. Use TikTok flow, not Instagram. If this is Marco's first line in the thread, send ONE message that offers the full breakdown plus a couple other options and asks for the best number to text them to. Do not open with the first-time buying question and do not split the offer and the number ask across turns. If any Marco line already exists above, skip opener scripts entirely.\n\n")
         : "";
     const igDmNeutral = isInstagramDm(platform, channel);
     const igDmOpenerAlreadyInThread = igDmNeutral &&
@@ -541,8 +541,8 @@ function openingContextAppendix(lastUserText, conversation, channel, platform, p
     const igNeutralDmChannelBlock = igDmNeutral
         ? tikTokNoPrice +
             (igDmOpenerAlreadyInThread
-                ? "CHANNEL: instagram_dm. Marco already has at least one outbound in this thread (often the manual first DM with the first-time buying question). Do NOT send another opener and do NOT ask about first-time vs experienced buyer or the buying process again. Answer LATEST_LEAD_MESSAGE in Marco's voice. Order: offer to text the full breakdown first when they have not agreed yet; ask for a mobile number only after they clearly want the packet sent, or on the next turn after they agree. Never recycle appreciation + first-time question.\n\n"
-                : "CHANNEL: instagram_dm. Use the same neutral DM flow as TikTok. If this is Marco's first line in the thread, first-time check then breakdown offer then number (after they agree to the packet) can apply; if any Marco line already exists above, skip opener scripts entirely. Never quote list price in DM.\n\n")
+                ? "CHANNEL: instagram_dm. Marco already has at least one outbound in this thread (often the manual first DM with the first-time buying question). Do NOT send another opener and do NOT ask about first-time vs experienced buyer or the buying process again. Answer LATEST_LEAD_MESSAGE in Marco's voice, then offer the full breakdown and ask for the best mobile number in that SAME reply. Do not spend a turn waiting for them to agree to the packet before asking. If they already gave a number, confirm you are texting it instead of asking again. Never recycle appreciation + first-time question.\n\n"
+                : "CHANNEL: instagram_dm. Use the same neutral DM flow as TikTok. If this is Marco's first line in the thread, send ONE message that offers the full breakdown plus a couple other options and asks for the best number to text them to. Do not open with the first-time buying question and do not split the offer and the number ask across turns. If any Marco line already exists above, skip opener scripts entirely. Never quote list price in DM.\n\n")
         : "";
     const prefix = tikTokChannelBlock + igNeutralDmChannelBlock + inboundChannelBlock(channel, hasKnownListing);
     if (assistantTurns === 0 && lastUserText.trim() && !igDmNeutral && !isTikTokPlatform(platform)) {
@@ -593,21 +593,28 @@ function fallbackOpeningReply(lead, openingStage, lastUserText, conversation, in
     if (openingStage === state_js_1.FunnelStage.New) {
         if (neutralDm) {
             const hey = who !== "there" ? `Thanks for reaching out ${who}!` : "Thanks for reaching out!";
+            /* Collapsed opener: offer AND ask in one message. Each of these used to
+               end without the number ask, which cost a whole round trip on a
+               surface where the next reply can be days away. */
             if (signalsTourOrScheduleIntent(lastUserText)) {
-                return `${hey} I'd love to help. Want me to send the full breakdown on that place first, specs and timing, then we can line up a tour from there?`;
+                return `${hey} I can send the full breakdown on that place, specs and timing included, and we can line up a tour from there. What's the best number to text it to?`;
             }
             if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUserText)) {
-                return `${hey} I'd love to help. Want me to text you the full breakdown on that home, address and all the specs included?`;
+                return `${hey} I can text you the full breakdown on that home, address and all the specs included. What's the best number to send it to?`;
             }
-            return `${hey} I'd love to help. Is this going to be your first time going through the buying process?!`;
+            return `${hey} I'd love to send over the full breakdown on that home, plus a couple other options in case it's not quite the right fit. What's the best number to text them to?`;
         }
+        /* Instagram keeps its trained mid-500s price framing, but the alignment
+           qualifier no longer stands alone as the whole reply. Since the collapse
+           the funnel moves to PhoneRequested right after this message, so the
+           message itself has to carry the ask or the ask never happens. */
         if ((0, conversationUtils_js_1.messageAsksListingLocation)(lastUserText)) {
             const hey = who !== "there" ? `Hey ${who}` : "Hey";
-            return `${hey}, this one's typically mid 500s depending on finishes. Does that line up with what you're looking for or a different price point?`;
+            return `${hey}, this one's typically mid 500s depending on finishes. I can text you the full breakdown with the address and specs, what's the best number to send it to?`;
         }
         if (signalsTourOrScheduleIntent(lastUserText)) {
             const hey = who !== "there" ? `Hey ${who}` : "Hey";
-            return `${hey}, for sure we can line up a tour. What days or times usually work best for you? This one is typically mid 500s depending on finishes if that helps you ballpark it.`;
+            return `${hey}, for sure we can line up a tour. This one is typically mid 500s depending on finishes if that helps you ballpark it. What's the best number to reach you at so I can send the details and times?`;
         }
         const thanks = inboundChannel === "comment"
             ? who !== "there"
@@ -616,7 +623,7 @@ function fallbackOpeningReply(lead, openingStage, lastUserText, conversation, in
             : who !== "there"
                 ? `Hey ${who}, I appreciate you reaching out`
                 : "Hey, I appreciate you reaching out";
-        return `${thanks}. The pricing on this one typically runs in the mid 500s depending on finishes and add-ons. Did this home somewhat align with what you're looking for or something in a different price point?`;
+        return `${thanks}. The pricing on this one typically runs in the mid 500s depending on finishes and add-ons. I'd love to send over the full breakdown plus a couple other options in case it's not quite the right fit, what's the best number to text them to?`;
     }
     if (openingStage === state_js_1.FunnelStage.OpeningAskedFirstTime) {
         if (neutralDm) {
@@ -1026,7 +1033,7 @@ async function generateMarcoPipelineReply(input) {
         postOpeningHints.push("LOCATION_ASK: Lead asked where this listing is. Let them know you can text the full breakdown including the address and specs. Steer toward a mobile number. Do not state any specific area, neighborhood, or street in DM.");
     }
     if (neutralDmPipeline && (0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(lastUserText)) {
-        postOpeningHints.push("PRICE_ASK_TIKTOK: No dollar amounts in DM. First beat is the entire-breakdown offer in Marco's casual texting voice (same shape as screenshots: would it help if I sent the breakdown on the home they inquired about, location and pricing included). No app or DM quality lectures. Ask for a mobile number only after they agree they want it sent.");
+        postOpeningHints.push("PRICE_ASK_TIKTOK: No dollar amounts in DM. First beat is the entire-breakdown offer in Marco's casual texting voice (same shape as screenshots: would it help if I sent the breakdown on the home they inquired about, location and pricing included). No app or DM quality lectures. Offer the breakdown and ask for the best mobile number in the SAME reply, not on a later turn.");
     }
     if ((0, conversationUtils_js_1.messageAsksBuilderIdentity)(lastUserText)) {
         postOpeningHints.push("BUILDER_ASK: Lead asked builder or developer identity. NEVER name the builder. Deflect in one short line; steer to phone number or address only the non-builder parts of their message.");

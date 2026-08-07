@@ -31,23 +31,42 @@ function nextOpeningState(lead, lastUserText, repeat, conversation) {
     if (capturablePhoneFromThread(conversation, lastUserText)) {
         return state_js_1.FunnelStage.PhoneRequested;
     }
-    if (lead.state === state_js_1.FunnelStage.New) {
-        return state_js_1.FunnelStage.OpeningAskedFirstTime;
-    }
-    if (lead.state === state_js_1.FunnelStage.OpeningAskedFirstTime) {
-        if (repeat)
-            return state_js_1.FunnelStage.OpeningAskedFirstTime;
-        return state_js_1.FunnelStage.OpeningOfferedDetails;
-    }
-    if (lead.state === state_js_1.FunnelStage.OpeningOfferedDetails) {
-        /** Deterministic escape: agent Q already in thread + lead said no agent — always advance (never freeze on repeat). */
+    /* ── COLLAPSED OPENER (Aug 2026) ────────────────────────────────────────
+       The opener used to be a three-beat ladder: ask the first-time-buyer
+       question, wait; offer the breakdown, wait; ask for the number, wait.
+       Three round trips before a phone number ever landed.
+  
+       Kendrick's TikTok threads on Wesley's account (the screenshots this was
+       modelled on) get there in ONE: value plus options plus the number ask in
+       the first message. That matters because the observed gaps between DM
+       turns are DAYS, not minutes, so every extra beat is a real chance to
+       lose the lead entirely rather than a small delay.
+  
+       So the first outbound now carries the ask, and the funnel goes straight
+       to PhoneRequested, where 04-phone-extraction takes over.
+  
+       Legacy stages still resolve: leads that were mid-ladder when this
+       shipped advance rather than being stranded waiting for a beat that no
+       longer exists. The one thing preserved from the old ladder is the
+       has-an-agent hold, which is a real objection and not a pacing step. */
+    if (lead.state === state_js_1.FunnelStage.New ||
+        lead.state === state_js_1.FunnelStage.OpeningAskedFirstTime ||
+        lead.state === state_js_1.FunnelStage.OpeningOfferedDetails) {
+        /* Deterministic escape kept from the old ladder: agent question already
+           asked and answered "no agent" always advances, never freezes. */
         if ((0, conversationUtils_js_1.threadContainsAgentQuestion)(conversation) && (0, conversationUtils_js_1.leadTextSignalsNoAgent)(lastUserText)) {
             return state_js_1.FunnelStage.PhoneRequested;
         }
-        if (repeat)
-            return state_js_1.FunnelStage.OpeningOfferedDetails;
+        /* A lead who says they already have an agent is a genuine objection, so
+           hold the opening phase and let the reply address it. Not a pacing
+           beat, which is why it survives the collapse. */
         if (saysHasAgent(lastUserText) && !openToAdvisor(lastUserText)) {
             return state_js_1.FunnelStage.OpeningOfferedDetails;
+        }
+        /* A repeated message means the lead said nothing new; re-asking the
+           number on a loop reads as nagging, so hold position. */
+        if (repeat && lead.state !== state_js_1.FunnelStage.New) {
+            return lead.state;
         }
         return state_js_1.FunnelStage.PhoneRequested;
     }
