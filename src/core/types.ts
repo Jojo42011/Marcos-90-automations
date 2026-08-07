@@ -880,5 +880,15 @@ export interface IncomingWebhookPayload {
    * so the thread has Marco’s opener before the user line — AI continues without duplicating it.
    */
   marcoPreviousOutbound: string | null;
+  /**
+   * Which listing the lead messaged about, as ManyChat knows it — the post or
+   * video the automation fired from. Accepts an MLS number or a listingKey; the
+   * pipeline resolves it against the MLS mirror and only then links the lead.
+   *
+   * This is the difference between an agent that has to ask "which property?"
+   * and one that already knows. Absent (the default for every automation that
+   * has not been configured to send it), everything behaves exactly as before.
+   */
+  listingRef: string | null;
 }
 

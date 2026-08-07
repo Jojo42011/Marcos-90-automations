@@ -392,6 +392,15 @@ function normalizeWebhookRecord(body: Record<string, unknown>): Record<string, u
     "marcoLastOutbound",
     "manual_marco_opener",
     "manualMarcoOpener",
+    "listing_id",
+    "listingId",
+    "listing_key",
+    "listingKey",
+    "mls_number",
+    "mlsNumber",
+    "mls",
+    "property_id",
+    "propertyId",
   ];
 
   const mergeFrom = (inner: unknown, mapInnerIdToUserId: boolean) => {
@@ -475,6 +484,32 @@ function pickMarcoPreviousOutbound(b: Record<string, unknown>): string | null {
   return null;
 }
 
+/**
+ * The listing the automation fired from. ManyChat field naming is whatever the
+ * person building the flow typed, so accept the plausible spellings rather than
+ * silently ignoring a value someone did send. Numbers are accepted because an
+ * MLS number pasted into a ManyChat custom field often arrives unquoted.
+ */
+function pickListingRef(b: Record<string, unknown>): string | null {
+  const keys = [
+    "listing_id",
+    "listingId",
+    "listing_key",
+    "listingKey",
+    "mls_number",
+    "mlsNumber",
+    "mls",
+    "property_id",
+    "propertyId",
+  ];
+  for (const k of keys) {
+    const v = b[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  }
+  return null;
+}
+
 function pickMessage(b: Record<string, unknown>): string {
   const keys = [
     "message",
@@ -552,6 +587,7 @@ function parseBody(body: unknown): IncomingWebhookPayload | null {
       message: meta.text,
       commentOrDm: "dm",
       marcoPreviousOutbound: null,
+      listingRef: null,
     };
   }
 
@@ -579,6 +615,7 @@ function parseBody(body: unknown): IncomingWebhookPayload | null {
     message,
     commentOrDm,
     marcoPreviousOutbound: pickMarcoPreviousOutbound(b),
+    listingRef: pickListingRef(b),
   };
 }
 

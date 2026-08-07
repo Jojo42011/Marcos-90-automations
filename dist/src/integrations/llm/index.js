@@ -26,6 +26,7 @@ const marcoLog_js_1 = require("../../app/marcoLog.js");
 const db_js_1 = require("../../core/db.js");
 const index_js_1 = require("../simplyrets/index.js");
 const listingMatch_js_1 = require("../../core/listingMatch.js");
+const listingsStore_js_1 = require("../../core/listingsStore.js");
 /** Default: Claude 3.5 Haiku. Override with ANTHROPIC_MODEL in .env if needed. */
 const DEFAULT_MODEL = "claude-3-5-haiku-latest";
 const model = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
@@ -558,7 +559,7 @@ function openingContextAppendix(lastUserText, conversation, channel, platform, p
         lines.push("LOCATION_ASK: The lead asked where this home is. Let them know you can text the full breakdown which includes the address and all specs. Steer toward getting a good mobile number. Do not state any specific street, neighborhood, or location detail in DM.");
     }
     if (isNeutralDmFlow(platform, channel) && (0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(lastUserText)) {
-        lines.push("PRICE_ASK_TIKTOK: They asked price or cost. Do not quote any dollar amount in DM. First beat: Marco's breakdown offer in casual voice (yeah of course, would it help if I sent the entire breakdown on the home they inquired about, location and pricing included, by text when they want it). No lecturing about the app or DMs being a rough place for sheets. Do not ask for their phone number in the same reply unless they already clearly agreed to receive the packet. After they agree, next turn can ask for a good mobile number to text it to.");
+        lines.push("PRICE_ASK_TIKTOK: They asked price or cost. Do not quote any dollar amount in DM. Offer the breakdown in Marco's casual voice (yeah of course, would it help if I sent the entire breakdown on the home they inquired about, location and pricing included) AND ask for the best number to text it to, in the SAME reply. No lecturing about the app or DMs being a rough place for sheets. Do not split the offer and the ask across turns.");
     }
     if ((0, conversationUtils_js_1.messageAsksBuilderIdentity)(lastUserText)) {
         lines.push("BUILDER_ASK: The lead asked who the builder or developer is. NEVER name the builder. Briefly deflect; steer to a good number for the breakdown or answer non-builder parts of their message.");
@@ -566,10 +567,10 @@ function openingContextAppendix(lastUserText, conversation, channel, platform, p
     if ((0, conversationUtils_js_1.threadContainsFirstTimeBuyingQuestion)(conversation) || (0, conversationUtils_js_1.leadThreadSignalsExperiencedBuyer)(conversation)) {
         lines.push("FIRST_TIME_TOPIC_CLOSED: The first-time-through-the-buying-process question already appears in Marco's lines or the lead already said they are not a first-time buyer. Do NOT ask that again in any wording (including rephrases like first time through a process like this).");
         if (isTikTokPlatform(platform)) {
-            lines.push("TIKTOK_AFTER_FIRST_TIME_ANSWER: Next step is the breakdown-offer beat only, in Marco's natural texting voice (warm, not robotic). Do not ask for a phone number in this reply unless they already clearly agreed they want the packet sent. Number ask comes after they agree to the packet, or on the following turn once they said yes to sending it.");
+            lines.push("TIKTOK_AFTER_FIRST_TIME_ANSWER: Acknowledge their answer in a few words, then offer the breakdown AND ask for the best number to text it to, in this same reply. Marco's natural texting voice (warm, not robotic). Do not wait a turn for them to agree to the packet before asking.");
         }
         if (igDmNeutral) {
-            lines.push("INSTAGRAM_DM_AFTER_FIRST_TIME_ANSWER: Next step is the breakdown-offer beat only, in Marco's natural texting voice (warm, not robotic). Do not ask for a phone number in this reply unless they already clearly agreed they want the packet sent. Number ask comes after they agree to the packet, or on the following turn once they said yes to sending it.");
+            lines.push("INSTAGRAM_DM_AFTER_FIRST_TIME_ANSWER: Acknowledge their answer in a few words, then offer the breakdown AND ask for the best number to text it to, in this same reply. Marco's natural texting voice (warm, not robotic). Do not wait a turn for them to agree to the packet before asking.");
         }
     }
     if ((0, conversationUtils_js_1.signalsLookingOutsideSanAntonio)(lastUserText)) {
@@ -583,6 +584,44 @@ function openingContextAppendix(lastUserText, conversation, channel, platform, p
     }
     const body = lines.length ? `${lines.join("\n")}\n\n` : "";
     return prefix + body;
+}
+/**
+ * What Marco knows about the home this lead messaged about, when ManyChat told
+ * us which one (or an exact match was made earlier).
+ *
+ * The point of wiring `listing_id` through was to stop the agent asking "which
+ * property?", so the block leads with the address and the fact that it must not
+ * ask. It deliberately does NOT relax the DM price rule: knowing the list price
+ * and being allowed to quote it in a TikTok/Instagram DM are separate questions,
+ * and the answer to the second is still no. The breakdown-by-text offer is what
+ * carries pricing, which is exactly why it earns the number.
+ */
+function knownListingBlock(lead, neutralDm) {
+    const key = lead.mlsListingKey?.trim();
+    if (!key)
+        return "";
+    const listing = (0, listingsStore_js_1.getListing)(key);
+    if (!listing)
+        return "";
+    const address = [listing.street, listing.city, listing.state].filter(Boolean).join(", ");
+    const specs = [
+        listing.beds ? `${listing.beds} bed` : null,
+        listing.baths ? `${listing.baths} bath` : null,
+        listing.livingArea ? `${listing.livingArea} sqft` : null,
+        listing.yearBuilt ? `built ${listing.yearBuilt}` : null,
+    ]
+        .filter(Boolean)
+        .join(", ");
+    const priceRule = neutralDm
+        ? "Do NOT state the list price or any dollar amount in this DM, even though you know it. The full breakdown by text is what carries pricing."
+        : "You may reference pricing per your normal rules for a confirmed listing.";
+    return ("KNOWN_LISTING: You know exactly which home this lead is asking about. " +
+        `It is ${address || key}` +
+        (specs ? ` (${specs})` : "") +
+        ". Never ask them which property they mean, and never ask them to send a screenshot or a link. " +
+        "You may refer to it naturally, the way someone who pulled it up would. " +
+        priceRule +
+        " Do not invent any fact that is not listed here.\n\n");
 }
 function fallbackOpeningReply(lead, openingStage, lastUserText, conversation, inboundChannel = "dm", inboundPlatform = "instagram") {
     if (lead.phone) {
@@ -842,6 +881,7 @@ async function generateMarcoOpeningReply(input) {
     const openingDeliveryBlock = "PHONE_ONLY_DELIVERY: Use SMS/text to their phone for breakdowns and options. Never ask phone or email, never offer email.\n\n";
     const dynamicRules = getDynamicRuleReinforcement(lastUserText);
     const userBlock = contextPrefix +
+        knownListingBlock(lead, isNeutralDmFlow(inboundPlatform, inboundChannel)) +
         openingDeliveryBlock +
         dynamicRules +
         (dynamicRules ? "\n\n" : "") +

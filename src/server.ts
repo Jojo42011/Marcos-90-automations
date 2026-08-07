@@ -4717,6 +4717,9 @@ app.post("/webhook/twilio", express.urlencoded({ extended: false }), async (req,
       message,
       commentOrDm: "dm",
       marcoPreviousOutbound: null,
+      /* SMS carries no post context — the listing link, if any, was already made
+         when the lead came in through the DM funnel. */
+      listingRef: null,
     };
     const requestId = newMarcoRequestId();
     const correlationId = marcoCorrelationId(payload.platform, payload.userId);

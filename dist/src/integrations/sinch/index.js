@@ -155,5 +155,6 @@ function receiveInbound(payload) {
         message: text,
         commentOrDm: "dm",
         marcoPreviousOutbound: null,
+        listingRef: null,
     };
 }

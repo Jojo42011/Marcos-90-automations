@@ -4,6 +4,7 @@
 import * as db from "../core/db.js";
 import type { Conversation, IncomingWebhookPayload, Lead } from "../core/types.js";
 import { FunnelStage } from "../core/state.js";
+import { resolveInboundListingRef } from "./inboundListing.js";
 import { process as toneMatchedProcess } from "../modules/03-tone-matched-dm";
 import { process as commentDmMonitorProcess } from "../modules/01-comment-dm-monitor";
 import { process as brivitySyncProcess } from "../modules/08-brivity-auto-sync";
@@ -452,6 +453,27 @@ export async function run(
   }
 
   lead = await maybeSeedTiktokManualOpener(lead, payload, ctx);
+
+  /* ManyChat can tell us WHICH listing the automation fired from. Resolving it
+     here, before the reply is generated, is what lets the opener name the home
+     instead of asking which one. See inboundListing.ts for why we only trust a
+     confirmed match and never overwrite an existing link. */
+  const listingRef = resolveInboundListingRef(payload.listingRef, lead.mlsListingKey);
+  if (listingRef.outcome !== "none") {
+    marcoLog("inbound_listing_ref", {
+      requestId,
+      correlationId,
+      lead_id: lead.id,
+      outcome: listingRef.outcome,
+      ref: listingRef.ref,
+      resolved_key: listingRef.listingKey,
+      resolved_address: listingRef.address,
+    });
+    if (listingRef.outcome === "resolved" && listingRef.listingKey) {
+      lead = { ...lead, mlsListingKey: listingRef.listingKey };
+      await db.updateLead(lead);
+    }
+  }
 
   await db.appendMessage(lead.id, "user", payload.message);
   const conversation: Conversation = await db.getConversation(lead.id);

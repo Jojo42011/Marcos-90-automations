@@ -146,6 +146,8 @@ export function receiveInbound(payload: unknown): {
   message: string;
   commentOrDm: "dm";
   marcoPreviousOutbound: null;
+  /** SMS has no originating post, so there is never a listing to resolve here. */
+  listingRef: null;
 } | null {
   if (!isRecord(payload)) return null;
 
@@ -169,6 +171,7 @@ export function receiveInbound(payload: unknown): {
     message: text,
     commentOrDm: "dm",
     marcoPreviousOutbound: null,
+    listingRef: null,
   };
 }
 
