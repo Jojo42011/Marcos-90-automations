@@ -78,12 +78,15 @@ await checkAsync("collapse: a phone already in the thread jumps straight past th
 });
 
 /* ── 3. Legacy stages are documented as legacy, not silently dead ─────────── */
-check("collapse: the two ladder stages are marked LEGACY and kept for deserialization", () => {
+check("collapse: both ladder stages survive in the enum and say what they now mean", () => {
   const s = read("src/core/state.ts");
-  assert(/LEGACY[\s\S]{0,800}OpeningAskedFirstTime = /.test(s), "OpeningAskedFirstTime must be marked legacy");
   assert(/OpeningAskedFirstTime = "opening_asked_first_time"/.test(s),
     "the enum member must stay — live leads were persisted in it when this shipped");
   assert(/OpeningOfferedDetails = "opening_offered_details"/.test(s));
+  assert(/LEGACY[\s\S]{0,300}OpeningOfferedDetails = /.test(s),
+    "OpeningOfferedDetails is reachable only via the has-an-agent hold and must say so");
+  assert(/Narrowed by the opener collapse/.test(s),
+    "OpeningAskedFirstTime's meaning changed — an unexplained stage is how the pinned layer got missed");
 });
 
 /* ── 4. No prompt still tells the model to wait a turn ────────────────────── */
@@ -147,7 +150,37 @@ check("fallback: New-stage replies end with a number ask even when the model is 
     `fallback branch with no number ask (an outage would silently restore the ladder): ${askless[0]}`);
 });
 
-/* ── 6. The phone-only delivery rule is untouched by all of this ──────────── */
+/* ── 6. The PINNED replies, which fire BEFORE the model ───────────────────── *
+ * These are the ones that actually answer the most common opening questions.
+ * The first cut of this change missed them entirely: a live simulate returned a
+ * bare "would it help if I sent over the entire breakdown?" with no ask, because
+ * pipeline.ts short-circuits to a pinned constant and never reaches module 03.
+ * Prompt-level collapse is worthless if the deterministic layer still ladders. */
+await checkAsync("pinned: the price reply asks for the number in the same message", async () => {
+  const { MARCO_PRICE_REPLY, MARCO_CITY_REPLY } = await import("../dist/config/prompts.js");
+  for (const [name, text] of [["price", MARCO_PRICE_REPLY], ["city", MARCO_CITY_REPLY]]) {
+    assert(/number/i.test(text), `the pinned ${name} reply offers without asking: ${text}`);
+    assert(/\?/.test(text), `the pinned ${name} reply must end on a question`);
+  }
+});
+check("pinned: offer-shaped pinned paths advance to PhoneRequested, not the legacy stage", () => {
+  const s = read("src/app/pipeline.ts");
+  for (const guard of ["messageAsksPropertyPriceOrCost(latestLeadText)", "messageAsksWhatCity(latestLeadText)"]) {
+    const after = s.split(guard)[1] ?? "";
+    const window = after.slice(0, 400);
+    assert(/FunnelStage\.PhoneRequested/.test(window),
+      `${guard} must land the lead where its own reply points`);
+    assert(!/FunnelStage\.OpeningAskedFirstTime/.test(window),
+      `${guard} still parks the lead in the ladder stage`);
+  }
+});
+check("pinned: clarifier paths may still hold, and state.ts says so honestly", () => {
+  const s = read("src/core/state.ts");
+  assert(/pinned CLARIFYING question is outstanding/.test(s),
+    "the narrowed meaning of this stage must be documented, not left claiming nothing enters it");
+});
+
+/* ── 7. The phone-only delivery rule is untouched by all of this ──────────── */
 check("regression: phone-only delivery survives the rewrite", () => {
   assert(/Never ask "phone or email"/.test(PROMPTS), "the phone-only rule must not have been edited away");
 });

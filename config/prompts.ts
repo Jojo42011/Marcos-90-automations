@@ -18,9 +18,13 @@ export const MARCO_CLOSEOUT_REPLY =
 export const MARCO_WAVE_REPLY =
   "Hey, I saw you sent a wave. Were you looking for more info on a property I toured, or did you just happen to send it by accident?";
 
-/** Pre-phone only: canonical reply when the lead asks price / cost / pricing for the listing. */
+/**
+ * Pre-phone only: canonical reply when the lead asks price / cost / pricing for the listing.
+ * This fires BEFORE the model on the most common opening question there is, so the collapsed
+ * opener lives or dies here: the offer and the number ask go out together, in one message.
+ */
 export const MARCO_PRICE_REPLY =
-  "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included, by text?";
+  "Would it help if I sent over the entire breakdown of the home you inquired about, location and pricing included? What's the best number to text it to?";
 
 /** Pre-phone only: lead agreed to receive the breakdown. Pinned number ask (no LLM "perfect"). */
 export const MARCO_PHONE_ASK_REPLY = "Yeah, of course, is there a good number I can get that over to?";
@@ -49,9 +53,9 @@ export const MARCO_NUMBER_NOT_RECEIVED_REPLIES = [
 export const MARCO_BUSINESS_COLLAB_REPLY =
   "I would definitely be open to it. For any business ideas or collaboration opportunities, please email my assistant at jamescarterpugarealestate@gmail.com.";
 
-/** Pre-phone only: lead asks what city the property is in — answer then offer breakdown. */
+/** Pre-phone only: lead asks what city the property is in — answer, offer the breakdown, ask in the same message. */
 export const MARCO_CITY_REPLY =
-  "San Antonio, Texas. Would it be helpful if I sent you over the full breakdown of the property you inquired about?";
+  "San Antonio, Texas. Would it be helpful if I sent you over the full breakdown of the property you inquired about? What's the best number to send it to?";
 
 /** Bucket F: lead clearly confirmed in-state (Texas / San Antonio), pre-phone. */
 export const MARCO_CALL_ASK_INSTATE =

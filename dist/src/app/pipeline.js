@@ -597,9 +597,9 @@ async function run(payload, log) {
     if (!hadPhone &&
         !phoneCapturedThisTurn &&
         (0, conversationUtils_js_1.messageAsksWhatCity)(latestLeadText)) {
-        if (lead.state === state_js_1.FunnelStage.New) {
-            lead = { ...lead, state: state_js_1.FunnelStage.OpeningAskedFirstTime };
-        }
+        /* Collapsed opener: MARCO_CITY_REPLY carries the number ask, so the funnel
+           goes where the ask actually points instead of parking in a legacy stage. */
+        lead = { ...lead, state: state_js_1.FunnelStage.PhoneRequested };
         await db.appendMessage(lead.id, "assistant", prompts_js_1.MARCO_CITY_REPLY);
         await db.updateLead(lead);
         (0, marcoLog_js_1.marcoLog)("pipeline_end", {
@@ -618,9 +618,9 @@ async function run(payload, log) {
     if (!hadPhone &&
         !phoneCapturedThisTurn &&
         (0, conversationUtils_js_1.messageAsksPropertyPriceOrCost)(latestLeadText)) {
-        if (lead.state === state_js_1.FunnelStage.New) {
-            lead = { ...lead, state: state_js_1.FunnelStage.OpeningAskedFirstTime };
-        }
+        /* Collapsed opener: this pinned reply fires before the model on the single most
+           common opening question, and it now asks for the number, so advance to match. */
+        lead = { ...lead, state: state_js_1.FunnelStage.PhoneRequested };
         await db.appendMessage(lead.id, "assistant", prompts_js_1.MARCO_PRICE_REPLY);
         await db.updateLead(lead);
         (0, marcoLog_js_1.marcoLog)("price_reply_pinned", {

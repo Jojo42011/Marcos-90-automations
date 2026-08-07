@@ -5,16 +5,27 @@
 export enum FunnelStage {
   New = "new",
   /**
-   * LEGACY — no new lead enters this stage since the opener was collapsed
-   * (Aug 2026). Kept because live leads were sitting here when the change
-   * shipped and their persisted state must still deserialize; they advance
-   * straight to PhoneRequested on their next inbound.
+   * Narrowed by the opener collapse (Aug 2026). It used to mean "step 1 of the
+   * ladder sent (thanks + first-time buyer question), waiting for the reply
+   * before the breakdown could even be offered" — a pacing beat.
    *
-   * It used to mean: step 1 sent (thanks + first-time buyer question),
-   * waiting for the reply before the breakdown could even be offered.
+   * It now means only: a pinned CLARIFYING question is outstanding and no number
+   * has been asked for yet. The three pinned paths that still land here all ask
+   * something you genuinely cannot bolt a number request onto — the wave-only
+   * reply, the "buying of what?" confusion recovery, and Marco's own manually
+   * sent opener. Every pinned path whose reply is an OFFER (price, city) now
+   * carries the number ask and goes straight to PhoneRequested instead.
+   *
+   * Leads persisted here before the collapse still deserialize and advance to
+   * PhoneRequested on their next inbound rather than waiting for a beat that no
+   * longer exists.
    */
   OpeningAskedFirstTime = "opening_asked_first_time",
-  /** LEGACY — see above. Was: step 2 sent (details + other options pitch). */
+  /**
+   * LEGACY — nothing enters this stage except the has-an-agent objection hold.
+   * Was: step 2 of the ladder sent (details + other options pitch), waiting for
+   * permission before the number could be asked for.
+   */
   OpeningOfferedDetails = "opening_offered_details",
   IdentityRequested = "identity_requested",
   PhoneRequested = "phone_requested",
