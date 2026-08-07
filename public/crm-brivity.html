@@ -2,9 +2,16 @@
      CRM - Brivity-style front end for Marco Puga Realty.
      Replicates Brivity's layout/visual language (white background, teal accent,
      left icon rail, Dashboard + Message Center + Leads) using Marco's own
-     branding. Currently populated with realistic MOCK data so the look can be
-     evaluated against Brivity as if it held real clients; swaps to live data
-     when we finalize.
+     branding. The markup and CSS here are hand-written; no Brivity source or
+     asset is vendored. Contact data comes from Brivity's own authenticated Core
+     API (see src/core/brivityPeople.ts), not from scraping their app.
+
+     THIS RUNS ON LIVE CLIENT DATA. The demo dataset further down is only the
+     pre-load default and the fallback when an API call fails — on load, Leads,
+     People, Messages, Transactions, Dashboard and Calendar swap to real records
+     (see the LIVE DATA section). Opps and Email are still demo, because no live
+     source exists for them yet. Treat anything you change here as touching real
+     clients, real phone numbers and real deals.
      ============================================================================ -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
