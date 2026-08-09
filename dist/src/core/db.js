@@ -167,6 +167,35 @@ const COMMAND_COLORS = new Set([
     "purple",
     "gray",
 ]);
+/**
+ * Checklist items must survive the disk round trip. The board saves them fine,
+ * but this load-path normalizer predates the checklist/dueTime/reminder/sort
+ * fields and silently dropped all four on every restart — and the next
+ * persistToFile() then wrote the stripped tasks back, so the loss looked like
+ * "checklists vanish when the page refreshes" and was permanent.
+ */
+function normalizeChecklist(raw) {
+    if (!Array.isArray(raw))
+        return undefined;
+    const items = [];
+    for (const entry of raw) {
+        if (!entry || typeof entry !== "object")
+            continue;
+        const e = entry;
+        const text = typeof e.text === "string" ? e.text.trim().slice(0, 500) : "";
+        if (!text)
+            continue;
+        items.push({
+            id: typeof e.id === "string" && e.id.trim() ? e.id.trim().slice(0, 64) : (0, crypto_1.randomUUID)(),
+            text,
+            done: e.done === true,
+            taskId: typeof e.taskId === "string" && e.taskId.trim() ? e.taskId.trim().slice(0, 64) : undefined,
+        });
+        if (items.length >= 100)
+            break;
+    }
+    return items.length ? items : undefined;
+}
 function normalizeCommandTask(raw) {
     if (!raw || typeof raw !== "object")
         return null;
@@ -187,6 +216,7 @@ function normalizeCommandTask(raw) {
         id: typeof t.id === "string" && t.id ? t.id : (0, crypto_1.randomUUID)(),
         title,
         description: typeof t.description === "string" ? t.description : undefined,
+        checklist: normalizeChecklist(t.checklist),
         column,
         status,
         previousStatus: types_js_1.COMMAND_TASK_STATUSES.includes(t.previousStatus)
@@ -207,6 +237,17 @@ function normalizeCommandTask(raw) {
         createdBy: typeof t.createdBy === "string" ? t.createdBy : undefined,
         assignedTo: typeof t.assignedTo === "string" ? t.assignedTo : undefined,
         dueDate: typeof t.dueDate === "string" ? t.dueDate.slice(0, 10) : undefined,
+        dueTime: typeof t.dueTime === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(t.dueTime)
+            ? t.dueTime
+            : undefined,
+        reminderMinutes: Array.isArray(t.reminderMinutes)
+            ? t.reminderMinutes
+                .map((n) => Math.round(Number(n)))
+                .filter((n) => Number.isFinite(n) && n >= 0 && n <= 1440)
+            : undefined,
+        sortOrder: typeof t.sortOrder === "number" && Number.isFinite(t.sortOrder)
+            ? t.sortOrder
+            : undefined,
         completedAt: typeof t.completedAt === "string" ? t.completedAt : undefined,
         createdAt: typeof t.createdAt === "string" ? t.createdAt : nowIso(),
         updatedAt: typeof t.updatedAt === "string" ? t.updatedAt : nowIso(),
