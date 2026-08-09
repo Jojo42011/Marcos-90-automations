@@ -39,6 +39,11 @@
     text-indent:-9999px;
     overflow:hidden;
   }
+  /* Settings · Auto Plans tables */
+  .tbl{border-collapse:collapse}
+  .tbl th{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#8a939c;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+  .tbl td{padding:8px;border-bottom:1px solid var(--line-2);color:var(--ink)}
+  .tbl a{font-size:12px}
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
   body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
@@ -538,6 +543,7 @@
   <button class="r" data-view="calendar" title="Calendar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button>
   <button class="r" data-view="email" title="Email"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></button>
   <button class="r" data-view="nurture" title="Lead Nurture"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-4.6-9.2-9A5.4 5.4 0 0 1 12 6.4 5.4 5.4 0 0 1 21.2 12C19 16.4 12 21 12 21z"/></svg></button>
+  <button class="r" data-view="plansettings" title="Settings · Auto Plans"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg></button>
   <button class="r" data-view="finance" title="Finance"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M14.5 8.5c-.6-.8-1.5-1.2-2.5-1.2-1.7 0-3 1-3 2.35C9 12.6 15 11.4 15 14.35c0 1.35-1.3 2.35-3 2.35-1 0-1.9-.4-2.5-1.2M12 5.8v1.5M12 16.7v1.5"/></svg></button>
   <span class="sp"></span>
   <button class="r" data-view="dashboard" title="Home"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
@@ -881,6 +887,23 @@
   </section>
 
   <!-- LEAD DETAIL -->
+  <section class="view" id="view-plansettings"><div class="pad" style="max-width:1150px">
+    <div class="page-head"><h1>Settings · Auto Plans</h1><button class="pill-btn" id="apAddPlan">ADD PLAN</button></div>
+    <div style="background:#fff8ec;border:1px solid #f0dcae;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#7a5c1e;margin-bottom:14px">
+      <b>SMS compliance:</b> phone carriers cap how many texts one number can send per day; exceeding it (or non-compliant content) risks the number being flagged or blocked. Double-check a plan's steps before turning a trigger on — once live it enrolls contacts with no manual review in between.
+    </div>
+    <div class="tabs" style="margin-bottom:14px"><button class="on" id="apTabPeople">PEOPLE PLANS</button><button id="apTabTx">TRANSACTION PLANS</button></div>
+    <div id="apTriggersWrap" class="card" style="padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-size:14px">People Auto Plan Triggers</b><button class="pill-btn ghost" id="apAddTrigger">ADD TRIGGER</button></div>
+      <div style="font-size:11.5px;color:#8a939c;margin-bottom:8px">Conditions combine (AND). Triggers fire on organic changes only — never on bulk CSV imports — and never stack a second plan onto a contact already on an active one.</div>
+      <table class="tbl" style="width:100%;font-size:13px" id="apTriggersTable"><thead><tr><th style="text-align:left">Condition</th><th style="text-align:left">Plan</th><th>Enrolled</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="card" style="padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b style="font-size:14px" id="apPlansTitle">People Plans</b><input id="apPlanSearch" placeholder="Search plans" style="border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:12.5px"></div>
+      <table class="tbl" style="width:100%;font-size:13px" id="apPlansTable"><thead><tr><th style="text-align:left">Name</th><th>Steps</th><th>Enrolled</th><th>Created</th><th>Last Updated</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+  </div></section>
+  <div id="apEditorOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:80;overflow:auto"><div style="background:#fff;border-radius:10px;max-width:760px;margin:40px auto;padding:22px" id="apEditorBox"></div></div>
   <section class="view" id="view-lead"><div class="pad" id="leadDetail"></div></section>
 </main>
 
@@ -3843,6 +3866,170 @@ if(typeof paintSortArrows==="function")paintSortArrows();
     });
     mo.observe(document.body,{childList:true,subtree:true});
   }
+})();
+
+/* ===== SETTINGS · AUTO PLANS (Brivity parity) ===== */
+(function(){
+  var AP={plans:[],triggers:[],tab:"people"};
+  var STATUSES=["new","hot","nurture","watch","dead","unresponsive"];
+  var INTENTS=["buyer","seller"];
+  var TXDATES=[["closing_date","Close Date"],["contract_date","Contract (Mutual Acceptance)"],["expiration","Expiration"],["inspection_date","Inspection Date"]];
+  function api(p){ return crmApi(p); }
+  function esc(t){ return String(t==null?"":t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function fmtD(iso){ return iso?String(iso).slice(0,10):""; }
+  function load(){
+    fetch(api("/api/auto-plans/settings")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+      if(!d) return;
+      AP.plans=d.plans||[]; AP.triggers=d.triggers||[]; render();
+    }).catch(function(){});
+  }
+  function planName(id){ var p=AP.plans.find(function(x){return x.id===id;}); return p?p.name:id; }
+  function condLabel(t){
+    var parts=[];
+    if(t.intent)parts.push("Intent: "+t.intent); if(t.status)parts.push("Status: "+t.status);
+    if(t.source)parts.push("Source: "+t.source); if(t.tag)parts.push("Tag: "+t.tag);
+    return parts.length?parts.join(" + "):"Any contact";
+  }
+  function render(){
+    var tb=document.querySelector("#apTriggersTable tbody"); tb.innerHTML="";
+    AP.triggers.forEach(function(t){
+      var tr=document.createElement("tr");
+      tr.innerHTML="<td>"+esc(condLabel(t))+"</td><td>"+esc(planName(t.planId))+"</td><td style='text-align:center'>"+(t.enrolled||0)+
+        "</td><td style='text-align:center'><input type='checkbox' "+(t.active?"checked":"")+" data-tgl='"+t.id+"'></td>"+
+        "<td style='text-align:right;white-space:nowrap'><a href='#' data-edt='"+t.id+"'>edit</a> · <a href='#' data-del='"+t.id+"' style='color:#c0392b'>delete</a></td>";
+      tb.appendChild(tr);
+    });
+    if(!AP.triggers.length) tb.innerHTML="<tr><td colspan='5' style='color:#98a1aa;padding:10px'>No triggers yet — contacts only enroll manually until one is added.</td></tr>";
+    var q=(document.getElementById("apPlanSearch").value||"").toLowerCase();
+    var pb=document.querySelector("#apPlansTable tbody"); pb.innerHTML="";
+    document.getElementById("apPlansTitle").textContent=AP.tab==="people"?"People Plans":"Transaction Plans";
+    document.getElementById("apTriggersWrap").style.display=AP.tab==="people"?"":"none";
+    AP.plans.filter(function(p){ return ((p.planType||"people")===AP.tab)&&!p.archived&&(!q||p.name.toLowerCase().indexOf(q)>=0); }).forEach(function(p){
+      var tr=document.createElement("tr");
+      tr.innerHTML="<td>"+esc(p.name)+"</td><td style='text-align:center'>"+(p.steps||[]).length+"</td><td style='text-align:center'>"+(p.enrolled||0)+
+        "</td><td style='text-align:center'>"+fmtD(p.createdAt)+"</td><td style='text-align:center'>"+fmtD(p.updatedAt)+
+        "</td><td style='text-align:center'><input type='checkbox' "+(p.active?"checked":"")+" data-ptgl='"+p.id+"'></td>"+
+        "<td style='text-align:right;white-space:nowrap'><a href='#' data-pedt='"+p.id+"'>edit</a> · <a href='#' data-pdup='"+p.id+"'>duplicate</a> · <a href='#' data-parc='"+p.id+"' style='color:#96690e'>archive</a></td>";
+      pb.appendChild(tr);
+    });
+  }
+  document.getElementById("apTabPeople").onclick=function(){ AP.tab="people"; this.classList.add("on"); document.getElementById("apTabTx").classList.remove("on"); render(); };
+  document.getElementById("apTabTx").onclick=function(){ AP.tab="transaction"; this.classList.add("on"); document.getElementById("apTabPeople").classList.remove("on"); render(); };
+  document.getElementById("apPlanSearch").oninput=render;
+  document.addEventListener("click",function(e){
+    var a=e.target.closest("[data-tgl],[data-del],[data-edt],[data-ptgl],[data-pedt],[data-pdup],[data-parc]"); if(!a)return;
+    if(a.dataset.tgl){ fetch(api("/api/auto-plan-triggers/"+a.dataset.tgl),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:a.checked})}).then(load); return; }
+    if(a.dataset.ptgl){ fetch(api("/api/auto-plans/"+a.dataset.ptgl),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:a.checked})}).then(load); return; }
+    e.preventDefault();
+    if(a.dataset.del){ if(confirm("Delete this trigger? (not undoable)")) fetch(api("/api/auto-plan-triggers/"+a.dataset.del),{method:"DELETE"}).then(load); }
+    else if(a.dataset.edt){ openTriggerEditor(AP.triggers.find(function(t){return t.id===a.dataset.edt;})); }
+    else if(a.dataset.pedt){ openPlanEditor(AP.plans.find(function(p){return p.id===a.dataset.pedt;})); }
+    else if(a.dataset.pdup){ fetch(api("/api/auto-plans/"+a.dataset.pdup+"/duplicate"),{method:"POST"}).then(load); }
+    else if(a.dataset.parc){ if(confirm("Archive this plan? It keeps its history but leaves pickers and triggers.")) fetch(api("/api/auto-plans/"+a.dataset.parc),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({archived:true})}).then(load); }
+  });
+  function sel(opts,cur,attrs){ return "<select "+(attrs||"")+"><option value=''>Any</option>"+opts.map(function(o){return "<option "+(String(cur||"")===o?"selected":"")+">"+o+"</option>";}).join("")+"</select>"; }
+  function openTriggerEditor(t){
+    t=t||{};
+    var box=document.getElementById("apEditorBox");
+    var peoplePlans=AP.plans.filter(function(p){return (p.planType||"people")==="people"&&!p.archived;});
+    box.innerHTML="<h3 style='margin:0 0 4px'>"+(t.id?"Edit":"New")+" Auto Plan Trigger</h3>"+
+      "<div style='font-size:11.5px;color:#8a939c;margin-bottom:12px'>Auto-start when a contact meets ALL of the following (leave a field on Any to skip it). Fires on organic updates only — never bulk imports — and never stacks onto an active plan.</div>"+
+      "<div style='display:grid;grid-template-columns:1fr 1fr;gap:10px'>"+
+      "<label>Intent "+sel(INTENTS,t.intent,"id='trgIntent'")+"</label>"+
+      "<label>Status "+sel(STATUSES,t.status,"id='trgStatus'")+"</label>"+
+      "<label>Source <input id='trgSource' value='"+esc(t.source||"")+"' placeholder='Any (e.g. Mojo, tiktok)'></label>"+
+      "<label>Tag <input id='trgTag' value='"+esc(t.tag||"")+"' placeholder='Any (e.g. Expired - Hot)'></label></div>"+
+      "<label style='display:block;margin-top:10px'>Apply Auto Plan <select id='trgPlan'>"+peoplePlans.map(function(p){return "<option value='"+p.id+"' "+(t.planId===p.id?"selected":"")+">"+esc(p.name)+"</option>";}).join("")+"</select></label>"+
+      "<div style='margin-top:16px;text-align:right'><button class='pill-btn ghost' id='apCancel'>Cancel</button> <button class='pill-btn' id='trgSave'>Save</button></div>";
+    styleEditorInputs(box);
+    document.getElementById("apEditorOv").style.display="block";
+    document.getElementById("trgSave").onclick=function(){
+      var body={intent:val("trgIntent"),status:val("trgStatus"),source:val("trgSource"),tag:val("trgTag"),planId:document.getElementById("trgPlan").value};
+      var req=t.id?fetch(api("/api/auto-plan-triggers/"+t.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+                  :fetch(api("/api/auto-plan-triggers"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      req.then(function(r){ if(r.ok){ closeEd(); load(); } else r.json().then(function(j){ alert(j.error||"Save failed"); }); });
+    };
+  }
+  function val(id){ var v=document.getElementById(id).value.trim(); return v||null; }
+  function stepRow(st,i,planType,steps){
+    var afterOpts="<option value=''>Auto Plan starts</option>";
+    steps.slice(0,i).forEach(function(pr){ afterOpts+="<option value='"+pr.id+"' "+(st.afterStepId===pr.id?"selected":"")+">After: "+esc((pr.content||"").slice(0,30))+"</option>"; });
+    var dateOpts=TXDATES.map(function(d){ return "<option value='"+d[0]+"' "+(st.anchor===d[0]?"selected":"")+">"+d[1]+"</option>"; }).join("");
+    return "<div class='apStep' data-i='"+i+"' style='border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px'>"+
+      "<div style='display:flex;gap:8px;align-items:center;margin-bottom:6px'><b style='text-transform:uppercase;font-size:11px;color:var(--teal-strong)'>"+st.type+"</b>"+
+      "<input type='number' class='stOff' value='"+(st.dayOffset||0)+"' style='width:64px'> day(s) "+
+      "<select class='stAnchor'>"+(planType==="transaction"?"<option value='' "+(!st.anchor||st.anchor==="enrollment"?"selected":"")+">after enrollment</option>"+dateOpts:"<option value=''>after Auto Plan starts</option>"+afterOpts)+"</select>"+
+      (planType==="transaction"?"<span style='font-size:11px;color:#8a939c'>(negative = before the date)</span>":"")+
+      "<span style='flex:1'></span><a href='#' class='stDel' style='color:#c0392b;font-size:12px'>remove</a></div>"+
+      (st.type==="email"?"<input class='stSubj' placeholder='Email subject' value='"+esc(st.subject||"")+"' style='width:100%;margin-bottom:6px'>":"")+
+      "<textarea class='stContent' rows='2' style='width:100%' placeholder='"+(st.type==="task"?"Task name — be specific (e.g. Follow Up with Buyer Prospect)":"Message — [name] merges the contact\u2019s first name")+"'>"+esc(st.content||"")+"</textarea>"+
+      (st.type==="task"?"<div style='display:flex;gap:8px;margin-top:6px'><input class='stAssign' placeholder='Assign to' value='"+esc(st.assignedTo||"Marco Puga")+"'><input type='number' class='stPrio' min='1' max='9' placeholder='Priority 1-9' value='"+(st.taskPriority||"")+"' style='width:110px'><input class='stInstr' placeholder='Instructions (enough for any teammate)' value='"+esc(st.instructions||"")+"' style='flex:1'></div>":"")+
+      "</div>";
+  }
+  function openPlanEditor(p){
+    p=p?JSON.parse(JSON.stringify(p)):{name:"",planType:AP.tab,steps:[],active:true,autoPauseOnReply:true,autoPauseOnStatus:null,completionStatus:null};
+    var box=document.getElementById("apEditorBox");
+    function paint(){
+      box.innerHTML="<h3 style='margin:0 0 10px'>"+(p.id?"Edit":"New")+" "+(p.planType==="transaction"?"Transaction":"People")+" Plan</h3>"+
+        "<div style='display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px'>"+
+        "<label>Name <input id='plName' value='"+esc(p.name)+"'></label>"+
+        "<label>Type <select id='plType'><option value='people' "+(p.planType!=="transaction"?"selected":"")+">People Plan</option><option value='transaction' "+(p.planType==="transaction"?"selected":"")+">Transaction Plan</option></select></label></div>"+
+        (p.planType!=="transaction"?
+          "<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;background:#f7fafa;border:1px solid var(--line);border-radius:8px;padding:10px'>"+
+          "<label style='font-size:12px'>Auto-pause when lead replies by text? <select id='plPauseReply'><option value='yes' "+(p.autoPauseOnReply!==false?"selected":"")+">Yes</option><option value='no' "+(p.autoPauseOnReply===false?"selected":"")+">No</option></select></label>"+
+          "<label style='font-size:12px'>Auto-pause when status changes to "+sel(STATUSES,p.autoPauseOnStatus,"id='plPauseStatus'").replace(">Any<",">No<")+"</label>"+
+          "<label style='font-size:12px'>On completion, change status to "+sel(STATUSES,p.completionStatus,"id='plDoneStatus'").replace(">Any<",">Don\u2019t change<")+"</label></div>"
+        :"<div style='font-size:12px;color:#8a939c;margin-bottom:10px'>Transaction plan steps anchor to the deal\u2019s real dates (close, contract, expiration, inspection); negative offsets mean before. Steps land as tasks — text goes out only when the deal is linked to a lead with a phone, and email steps become hand-off tasks because email automation is not connected.</div>")+
+        "<div id='plSteps'>"+(p.steps.map(function(st,i){return stepRow(st,i,p.planType,p.steps);}).join(""))+"</div>"+
+        "<div style='margin:8px 0 14px'>Add a new: <button class='pill-btn ghost' data-add='task'>TASK</button> <button class='pill-btn ghost' data-add='email'>EMAIL</button> <button class='pill-btn ghost' data-add='text'>TEXT</button></div>"+
+        "<div style='text-align:right'><button class='pill-btn ghost' id='apCancel'>Cancel</button> <button class='pill-btn' id='plSave'>Save Plan</button></div>";
+      styleEditorInputs(box);
+      box.querySelectorAll("[data-add]").forEach(function(b){ b.onclick=function(){ harvest(); p.steps.push({id:"new_"+Date.now()+Math.random().toString(36).slice(2,6),type:b.dataset.add,dayOffset:0,content:""}); paint(); }; });
+      box.querySelectorAll(".stDel").forEach(function(a,i){ a.onclick=function(e){ e.preventDefault(); harvest(); p.steps.splice(Number(a.closest(".apStep").dataset.i),1); paint(); }; });
+      var typeSel=document.getElementById("plType"); typeSel.onchange=function(){ harvest(); p.planType=typeSel.value; paint(); };
+      document.getElementById("plSave").onclick=function(){
+        harvest(); p.name=document.getElementById("plName").value.trim();
+        if(!p.name){ alert("Plan needs a name"); return; }
+        var body={name:p.name,planType:p.planType,steps:p.steps,active:p.active!==false,
+          autoPauseOnReply:p.planType!=="transaction"?document.getElementById("plPauseReply").value==="yes":false,
+          autoPauseOnStatus:p.planType!=="transaction"?(document.getElementById("plPauseStatus").value||null):null,
+          completionStatus:p.planType!=="transaction"?(document.getElementById("plDoneStatus").value||null):null};
+        var req=p.id?fetch(api("/api/auto-plans/"+p.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+                    :fetch(api("/api/auto-plans"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+        req.then(function(r){ if(r.ok){ closeEd(); load(); } else r.json().then(function(j){ alert(j.error||"Save failed"); }); });
+      };
+    }
+    function harvest(){
+      box.querySelectorAll(".apStep").forEach(function(row){
+        var st=p.steps[Number(row.dataset.i)]; if(!st)return;
+        st.dayOffset=Number(row.querySelector(".stOff").value)||0;
+        var an=row.querySelector(".stAnchor").value;
+        if(!an){ delete st.anchor; delete st.afterStepId; }
+        else if(an.indexOf("step")===0||an.indexOf("new_")===0){ st.anchor="prev_step"; st.afterStepId=an; }
+        else { st.anchor=an; delete st.afterStepId; }
+        st.content=row.querySelector(".stContent").value;
+        var e;
+        if((e=row.querySelector(".stSubj"))) st.subject=e.value;
+        if((e=row.querySelector(".stAssign"))) st.assignedTo=e.value;
+        if((e=row.querySelector(".stPrio"))) st.taskPriority=Number(e.value)||undefined;
+        if((e=row.querySelector(".stInstr"))) st.instructions=e.value;
+      });
+    }
+    paint();
+    document.getElementById("apEditorOv").style.display="block";
+  }
+  function styleEditorInputs(box){
+    box.querySelectorAll("input:not([type=checkbox]):not([type=number]),select,textarea").forEach(function(el){ el.style.cssText+=";border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px;font-family:inherit;display:block;width:"+(el.tagName==="TEXTAREA"||el.style.width?el.style.width||"100%":"100%")+";box-sizing:border-box;margin-top:3px"; });
+    box.querySelectorAll("input[type=number]").forEach(function(el){ el.style.cssText+=";border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px"; });
+    box.querySelectorAll("label").forEach(function(l){ l.style.fontSize="12.5px"; l.style.color="#5c6166"; });
+  }
+  function closeEd(){ document.getElementById("apEditorOv").style.display="none"; }
+  document.getElementById("apEditorOv").addEventListener("click",function(e){ if(e.target===this) closeEd(); });
+  document.addEventListener("click",function(e){ if(e.target&&e.target.id==="apCancel") closeEd(); });
+  document.getElementById("apAddTrigger").onclick=function(){ if(!AP.plans.filter(function(p){return (p.planType||"people")==="people"&&!p.archived;}).length){ alert("Build a People plan first — a trigger only decides who gets dropped into an already-built plan."); return; } openTriggerEditor(null); };
+  document.getElementById("apAddPlan").onclick=function(){ openPlanEditor(null); };
+  document.querySelector('.rail .r[data-view="plansettings"]').addEventListener("click",load);
+  window.apReloadPlans=load;
 })();
 
 loadLive();

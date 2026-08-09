@@ -476,6 +476,18 @@ export async function run(
   }
 
   await db.appendMessage(lead.id, "user", payload.message);
+
+  /* Brivity's Auto Plan safety valve: the moment the lead actually replies,
+     stop any plan configured to auto-pause on reply — a scripted drip must not
+     keep firing at someone who is now in a live conversation. Covers SMS and
+     DMs alike, since both land here. */
+  const pausedForReply = db.pauseAutoPlansOnInboundText(lead);
+  if (pausedForReply) {
+    lead = pausedForReply;
+    await db.updateLead(lead);
+    marcoLog("auto_plan_paused_on_reply", { requestId, correlationId, lead_id: lead.id });
+  }
+
   const conversation: Conversation = await db.getConversation(lead.id);
   const hadPhone = Boolean(lead.phone);
   const hadEmail = Boolean(lead.email);

@@ -264,26 +264,58 @@ export interface MojoOutreach {
 /** A single step in an Auto Plan drip campaign. */
 export type AutoPlanStepType = "email" | "text" | "task";
 
+/**
+ * What a step's dayOffset counts from (Brivity's "After [...]" dropdown).
+ * People plans: enrollment or a prior step's completion.
+ * Transaction plans: one of the deal's real dates — dayOffset may be NEGATIVE
+ * there ("-3 days from close_date" = 3 days before close).
+ */
+export type AutoPlanStepAnchor =
+  | "enrollment"
+  | "prev_step"
+  | "contract_date"
+  | "closing_date"
+  | "expiration"
+  | "inspection_date";
+
 export interface AutoPlanStep {
   id: string;
   type: AutoPlanStepType;
-  /** Days after plan start: 0 = same day, 3 = day 3, 30 = day 30. */
+  /** Days after (negative = before) the anchor: 0 = same day. */
   dayOffset: number;
+  /** Defaults to "enrollment" when absent — every pre-existing plan means that. */
+  anchor?: AutoPlanStepAnchor;
+  /** When anchor === "prev_step": which step's COMPLETION the offset counts from. */
+  afterStepId?: string;
   /** Email subject only. */
   subject?: string;
   /** Email body, text message, or task description. */
   content: string;
   /** Task assignee — defaults to "Marco Puga". */
   assignedTo?: string;
+  /** Task priority, Brivity's 1 (highest) – 9 (lowest) scale. */
+  taskPriority?: number;
+  /** Task execution instructions — detailed enough for a covering teammate. */
+  instructions?: string;
 }
 
 export interface AutoPlan {
   id: string;
   name: string;
-  /** Which tag triggers this plan: Watch, Nurture, etc. */
+  /** Which tag triggers this plan: Watch, Nurture, etc. (legacy trigger; see AutoPlanTrigger). */
   tag: string;
+  /** "people" (contacts, default for all pre-existing plans) or "transaction" (deals, date-anchored). */
+  planType?: "people" | "transaction";
   steps: AutoPlanStep[];
   active: boolean;
+  /** Stop the plan the moment the contact actually replies by text (Brivity's safety valve). */
+  autoPauseOnReply?: boolean;
+  /** Pause automatically when the contact's CRM status changes to this value. */
+  autoPauseOnStatus?: string | null;
+  /** When every step finishes, flip the contact's CRM status to this. */
+  completionStatus?: string | null;
+  /** Archived plans are hidden from pickers/triggers but keep their history. */
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -295,7 +327,29 @@ export interface LeadAutoPlanEnrollment {
   currentStepIndex: number;
   /** Step IDs already executed. */
   completedSteps: string[];
+  /** Step ID → ISO completion time; lets later steps chain off a prior step's completion. */
+  completedAt?: Record<string, string>;
+  /** "manual" or the trigger id that auto-enrolled this contact. */
+  enrolledVia?: string;
   status: "active" | "paused" | "completed";
+}
+
+/**
+ * Automatic-enrollment rule (Brivity's "People Auto Plan Triggers"): when a
+ * contact matches ALL non-null conditions, they are enrolled in the plan.
+ * Per Brivity these four fields are the only ones a trigger can key off.
+ */
+export interface AutoPlanTrigger {
+  id: string;
+  /** null = Any. */
+  intent: string | null;
+  status: string | null;
+  source: string | null;
+  tag: string | null;
+  planId: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Digital signing document attached to a lead. */
@@ -436,7 +490,8 @@ export type LeadActivityType =
   | "listing_off_market"
   | "listing_active"
   | "task"
-  | "email_pending";
+  | "email_pending"
+  | "auto_plan";
 
 /** Seller listing status (drives drawer badge + listing-status automations). */
 export type ListingStatus = "active" | "off_market";
