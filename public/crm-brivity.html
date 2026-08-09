@@ -755,7 +755,7 @@
   <section class="view" id="view-tx">
     <div class="leads-wrap">
       <div class="leads-nav">
-        <div class="h"><b>Transactions</b><span class="add">+</span></div>
+        <div class="h"><b>Transactions</b><span class="add" id="txNavAdd" style="cursor:pointer">+</span></div>
         <a class="on" data-txb="all">All <span class="c" id="txAll">0</span></a>
         <a data-txb="draft">Drafts <span class="c" id="txDraft">0</span></a>
         <a data-txb="pipeline">Pipeline <span class="c" id="txPipe">0</span></a>
@@ -773,7 +773,7 @@
       <div class="leads-main">
         <div class="leads-top">
           <h1>Transactions <small id="txAsOf" style="font-size:12px;color:#8a949e;font-weight:400;margin-left:10px"></small></h1>
-          <div class="acts"><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY: ADDRESS / TITLE ASC ▾</button><button class="pill-btn ghost">This Year ▾</button><button class="pill-btn ghost">All Sources (4) ▾</button><button class="pill-btn ghost">Filters (0)</button><button class="pill-btn" id="txImportBtn">⭱ Import CSV</button><button class="pill-btn">Share</button></div>
+          <div class="acts"><button class="pill-btn ghost" id="txColsBtn">COLUMNS ▾</button><button class="pill-btn ghost" id="txSortBtn">SORT BY: LAST UPDATED ▾</button><button class="pill-btn ghost" id="txFilterBtn">FILTER</button><button class="pill-btn" id="txImportBtn">⭱ Import CSV</button><button class="pill-btn" id="txAddBtn">+ ADD TRANSACTION</button></div>
         <input type="file" id="txCsvInput" accept=".csv,text/csv" style="display:none">
         </div>
         <div id="txChipBar" style="padding:0 22px 8px;display:none"><span class="txchip"><b>Status:</b> <span id="txChipLabel"></span> <span class="x" id="txChipX">✕</span></span> <a class="addlink" style="margin-left:10px;font-size:12px">Save Filter</a> <a style="color:#6e7986;margin-left:8px;font-size:12px" id="txClear">Clear all</a></div>
@@ -904,6 +904,8 @@
     </div>
   </div></section>
   <div id="apEditorOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:80;overflow:auto"><div style="background:#fff;border-radius:10px;max-width:760px;margin:40px auto;padding:22px" id="apEditorBox"></div></div>
+  <div id="txOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:81;overflow:auto"><div style="background:#fff;border-radius:10px;max-width:640px;margin:40px auto;padding:22px" id="txOvBox"></div></div>
+  <div id="txDetailOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:80;overflow:auto"><div style="background:#fff;border-radius:10px;max-width:900px;margin:30px auto;padding:0" id="txDetailBox"></div></div>
   <section class="view" id="view-lead"><div class="pad" id="leadDetail"></div></section>
 </main>
 
@@ -1927,7 +1929,8 @@ function renderTx(){
   document.getElementById("txClosed").textContent=byS("closed");
   document.getElementById("txWd").textContent=byS("withdrawn");
   document.getElementById("txCan").textContent=byS("canceled");
-  const list=sortRows(txFor(txBucket).filter(hitRow));
+  let list=txFor(txBucket).filter(hitRow);
+  list=(window.txApplySortFilter?window.txApplySortFilter(list):sortRows(list));
   document.getElementById("txRows").innerHTML=list.map(txRowHTML).join("");
   bindTxRows();
   const chip=document.getElementById("txChipBar");
@@ -2208,7 +2211,8 @@ async function importLeadCsv(text,filename){
    /api/transactions (SQLite) is the source of truth — the same rows the
    deadline and document engines work from. deals.json is legacy. */
 var TX_STATUS_FROM_API={active:"active",under_contract:"pending",pending:"pending",
-  closed:"closed",fell_through:"canceled",cancelled:"canceled"};
+  closed:"closed",fell_through:"canceled",cancelled:"canceled",
+  pipeline:"pipeline",coming_soon:"coming_soon",expired:"expired",withdrawn:"withdrawn",archived:"archived"};
 function txMDY(iso){
   var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||""));
   return m?(m[2]+"-"+m[3]+"-"+m[1]):"";
@@ -2229,14 +2233,14 @@ function mapApiTx(t){
     status:known[legacy]?legacy:(TX_STATUS_FROM_API[t.status]||"active"),
     mls:t.mls||"",
     agent:t.agent||p.assignedTo||"Marco Puga",
-    dateListed:txMDY(p.openedDate),
+    dateListed:txMDY(t.dateListed||p.openedDate),
     listPrice:t.listPrice||0,
     expiration:txMDY(t.expiration),
     closePrice:(t.status==="closed")?(t.price||0):0,
     gci:t.gci||p.estimatedGCI||0,
     closeDate:txMDY(t.closingDate),
-    dom:"", dateCanceled:"", mutualAccept:txMDY(t.contractDate),
-    lastUpdated:txMDY(t.updatedAt), source:t.source||"", statusChangedAt:"",
+    dom:"", dateCanceled:txMDY(t.dateCanceled), mutualAccept:txMDY(t.contractDate),
+    lastUpdated:txMDY(t.updatedAt), source:t.source||"", statusChangedAt:txMDY(t.statusChangedAt),
     draft:false, importedAt:t.importedAt||null
   };
 }
@@ -3866,6 +3870,189 @@ if(typeof paintSortArrows==="function")paintSortArrows();
     });
     mo.observe(document.body,{childList:true,subtree:true});
   }
+})();
+
+/* ===== TRANSACTIONS: add-flow, sort, filter, columns, detail (Brivity parity) ===== */
+(function(){
+  var TX_TYPES=[["buyer","Buyer"],["seller","Seller"],["tenant","Tenant"],["landlord","Landlord"],["referral","Referral"]];
+  var TX_STATUSES=[["pipeline","Pipeline"],["coming_soon","Coming Soon"],["active","Active"],["pending","Pending"],["closed","Closed"],["expired","Expired"],["withdrawn","Withdrawn"],["canceled","Canceled"],["archived","Archived"]];
+  var TX_SOURCES=["Sign Call","Zillow","TikTok","Instagram","Referral","Mojo","Open House","Website","Past Client","Other"];
+  var SORT_FIELDS=[["address","Address / Title"],["closeDate","Close Date"],["closePrice","Close Price"],["dateCanceled","Date Canceled"],["dateListed","Date Listed"],["expiration","Expiration"],["gci","GCI"],["lastUpdated","Last Updated"],["listPrice","Listing Price"],["source","Source"],["type","Type"],["statusChangedAt","Status Changed At"],["mutualAccept","Mutual Acceptance"]];
+  var COLS=[["photo","Photo",0],["address","Address / Title",1],["type","Type",2],["status","Status",3],["mls","MLS#",4],["agent","Agent",5],["dateListed","Date Listed",6],["listPrice","Listing Price",7],["expiration","Expiration",8],["closePrice","Close Price",9],["gci","GCI",10],["closeDate","Close Date",11],["dom","DOM",12],["dateCanceled","Date Canceled",13],["mutualAccept","Mutual Acceptance",14],["lastUpdated","Last Updated",15],["source","Source",16],["statusChangedAt","Status Changed At",17],["edit","Edit",18]];
+  var st={sortKey:"lastUpdated",sortDir:-1,filters:{},hidden:{}};
+  try{ var saved=JSON.parse(localStorage.getItem("txViewPrefs")||"{}"); if(saved.sortKey)st.sortKey=saved.sortKey; if(saved.sortDir)st.sortDir=saved.sortDir; if(saved.hidden)st.hidden=saved.hidden; }catch(_){}
+  function persist(){ try{ localStorage.setItem("txViewPrefs",JSON.stringify({sortKey:st.sortKey,sortDir:st.sortDir,hidden:st.hidden})); }catch(_){}}
+  function mdyToKey(v){ if(!v)return ""; var m=/^(\d{2})-(\d{2})-(\d{4})$/.exec(v); return m?(m[3]+m[1]+m[2]):String(v); }
+  function sortVal(t,k){ var v=t[k]; if(k==="listPrice"||k==="closePrice"||k==="gci")return Number(v)||0; if(/Date|dateListed|expiration|lastUpdated|statusChangedAt|mutualAccept|dateCanceled/i.test(k))return mdyToKey(v); return String(v||"").toLowerCase(); }
+  window.txApplySortFilter=function(list){
+    var f=st.filters;
+    var out=list.filter(function(t){
+      if(f.agent&&t.agent!==f.agent)return false;
+      if(f.type&&t.type!==f.type&&!(f.type==="buyer"&&t.type==="B")&&!(f.type==="seller"&&t.type==="S"))return false;
+      if(f.status&&f.status.length&&f.status.indexOf(t.status)<0)return false;
+      if(f.source&&(t.source||"").toLowerCase().indexOf(f.source.toLowerCase())<0)return false;
+      function inRange(v,from,to){ var k=mdyToKey(v); if(!from&&!to)return true; if(!k)return false; if(from&&k<from.replace(/-/g,""))return false; if(to&&k>to.replace(/-/g,""))return false; return true; }
+      if(!inRange(t.mutualAccept,f.maFrom,f.maTo))return false;
+      if(!inRange(t.closeDate,f.cdFrom,f.cdTo))return false;
+      if(!inRange(t.statusChangedAt,f.scFrom,f.scTo))return false;
+      return true;
+    });
+    out.sort(function(a,b){ var x=sortVal(a,st.sortKey),y=sortVal(b,st.sortKey); return x<y?-st.sortDir:x>y?st.sortDir:0; });
+    return out;
+  };
+  function filterCount(){ var f=st.filters,n=0; ["agent","type","source","maFrom","maTo","cdFrom","cdTo","scFrom","scTo"].forEach(function(k){if(f[k])n++;}); if(f.status&&f.status.length)n++; return n; }
+  function paintButtons(){
+    var lbl=(SORT_FIELDS.find(function(x){return x[0]===st.sortKey;})||["","?"])[1];
+    document.getElementById("txSortBtn").textContent="SORT BY: "+lbl.toUpperCase()+(st.sortDir>0?" ASC":" DESC")+" ▾";
+    var n=filterCount();
+    document.getElementById("txFilterBtn").textContent=n?("FILTERED ("+n+")"):"FILTER";
+    applyCols();
+  }
+  function applyCols(){
+    var css="";
+    COLS.forEach(function(c){ if(st.hidden[c[0]]) css+="#view-tx table.leads th:nth-child("+(c[2]+1)+"),#view-tx table.leads td:nth-child("+(c[2]+1)+"){display:none}"; });
+    var el=document.getElementById("txColCss"); if(!el){ el=document.createElement("style"); el.id="txColCss"; document.head.appendChild(el); }
+    el.textContent=css;
+  }
+  function ov(html){ document.getElementById("txOvBox").innerHTML=html; document.getElementById("txOv").style.display="block"; }
+  function closeOv(){ document.getElementById("txOv").style.display="none"; }
+  document.getElementById("txOv").addEventListener("click",function(e){ if(e.target===this) closeOv(); });
+  /* SORT */
+  document.getElementById("txSortBtn").onclick=function(){
+    ov("<h3 style='margin:0 0 10px'>Sort transactions</h3>"+
+      "<select id='txSortSel' style='width:100%;border:1px solid var(--line);border-radius:6px;padding:8px'>"+SORT_FIELDS.map(function(f){return "<option value='"+f[0]+"' "+(st.sortKey===f[0]?"selected":"")+">"+f[1]+"</option>";}).join("")+"</select>"+
+      "<select id='txSortDir' style='width:100%;border:1px solid var(--line);border-radius:6px;padding:8px;margin-top:8px'><option value='1' "+(st.sortDir>0?"selected":"")+">Ascending</option><option value='-1' "+(st.sortDir<0?"selected":"")+">Descending</option></select>"+
+      "<div style='text-align:right;margin-top:14px'><button class='pill-btn' id='txSortApply'>Apply</button></div>");
+    document.getElementById("txSortApply").onclick=function(){ st.sortKey=document.getElementById("txSortSel").value; st.sortDir=Number(document.getElementById("txSortDir").value); persist(); paintButtons(); renderTx(); closeOv(); };
+  };
+  /* COLUMNS */
+  document.getElementById("txColsBtn").onclick=function(){
+    ov("<h3 style='margin:0 0 10px'>Columns</h3><div style='columns:2'>"+COLS.filter(function(c){return c[0]!=="edit"&&c[0]!=="address";}).map(function(c){return "<label style='display:block;font-size:13px;margin:4px 0'><input type='checkbox' data-col='"+c[0]+"' "+(st.hidden[c[0]]?"":"checked")+"> "+c[1]+"</label>";}).join("")+"</div>"+
+      "<div style='text-align:right;margin-top:14px'><button class='pill-btn' id='txColsApply'>Apply</button></div>");
+    document.getElementById("txColsApply").onclick=function(){
+      document.querySelectorAll("#txOvBox [data-col]").forEach(function(cb){ if(cb.checked) delete st.hidden[cb.dataset.col]; else st.hidden[cb.dataset.col]=1; });
+      persist(); paintButtons(); closeOv();
+    };
+  };
+  /* FILTER */
+  document.getElementById("txFilterBtn").onclick=function(){
+    var f=st.filters;
+    function dr(id,from,to){ return "<div style='display:flex;gap:8px'><input type='date' id='"+id+"F' value='"+(from||"")+"' style='flex:1'><input type='date' id='"+id+"T' value='"+(to||"")+"' style='flex:1'></div>"; }
+    ov("<h3 style='margin:0 0 10px'>Filter</h3><div style='display:grid;gap:10px;font-size:13px'>"+
+      "<label>Agent <select id='fAgent' style='width:100%'><option value=''>Any</option>"+AGENTS_TX.map(function(a){return "<option "+(f.agent===a?"selected":"")+">"+a+"</option>";}).join("")+"</select></label>"+
+      "<label>Type <select id='fType' style='width:100%'><option value=''>Any</option>"+TX_TYPES.map(function(t){return "<option value='"+t[0]+"' "+(f.type===t[0]?"selected":"")+">"+t[1]+"</option>";}).join("")+"</select></label>"+
+      "<div>Status<div style='display:flex;flex-wrap:wrap;gap:6px;margin-top:4px'>"+TX_STATUSES.map(function(x){var on=(f.status||[]).indexOf(x[0])>=0;return "<span class='pill-btn ghost fStat' data-s='"+x[0]+"' style='cursor:pointer;font-size:11px;"+(on?"background:var(--teal);color:#fff;border-color:var(--teal)":"")+"'>"+x[1]+"</span>";}).join("")+"</div></div>"+
+      "<label>Source <input id='fSource' value='"+(f.source||"")+"' placeholder='contains…' style='width:100%'></label>"+
+      "<label>Mutual Acceptance range "+dr("fMa",f.maFrom,f.maTo)+"</label>"+
+      "<label>Close Date range "+dr("fCd",f.cdFrom,f.cdTo)+"</label>"+
+      "<label>Status Change range "+dr("fSc",f.scFrom,f.scTo)+"</label></div>"+
+      "<div style='display:flex;justify-content:space-between;margin-top:14px'><button class='pill-btn ghost' id='txFClear'>Clear all</button><button class='pill-btn' id='txFApply'>Apply</button></div>");
+    document.getElementById("txOvBox").querySelectorAll("input,select").forEach(function(el){ el.style.cssText+=";border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px"; });
+    document.getElementById("txOvBox").querySelectorAll(".fStat").forEach(function(sp){ sp.onclick=function(){ var on=sp.style.background!==""; if(on){sp.style.cssText=sp.style.cssText.replace(/background[^;]*;|color[^;]*;|border-color[^;]*;/g,"");} else {sp.style.background="var(--teal)";sp.style.color="#fff";sp.style.borderColor="var(--teal)";} }; });
+    document.getElementById("txFClear").onclick=function(){ st.filters={}; paintButtons(); renderTx(); closeOv(); };
+    document.getElementById("txFApply").onclick=function(){
+      st.filters={ agent:document.getElementById("fAgent").value||null, type:document.getElementById("fType").value||null,
+        status:Array.prototype.slice.call(document.querySelectorAll("#txOvBox .fStat")).filter(function(x){return x.style.background!=="";}).map(function(x){return x.dataset.s;}),
+        source:document.getElementById("fSource").value.trim()||null,
+        maFrom:document.getElementById("fMaF").value||null, maTo:document.getElementById("fMaT").value||null,
+        cdFrom:document.getElementById("fCdF").value||null, cdTo:document.getElementById("fCdT").value||null,
+        scFrom:document.getElementById("fScF").value||null, scTo:document.getElementById("fScT").value||null };
+      paintButtons(); renderTx(); closeOv();
+    };
+  };
+  /* ADD FLOW: type picker → info modal (mirrors Brivity's two-step) */
+  function openAdd(){
+    ov("<h3 style='margin:0 0 12px;text-align:center'>Select Transaction Type</h3>"+
+      TX_TYPES.map(function(t){return "<button class='pill-btn ghost txTypePick' data-t='"+t[0]+"' style='display:block;width:100%;margin:6px 0;padding:10px'>"+t[1]+"</button>";}).join(""));
+    document.querySelectorAll(".txTypePick").forEach(function(b){ b.onclick=function(){ openInfo(b.dataset.t); }; });
+  }
+  function openInfo(type){
+    ov("<h3 style='margin:0 0 12px'>Add Transaction Information</h3><div style='display:grid;gap:10px;font-size:13px'>"+
+      "<label>Transaction Title / Address <input id='nAddr' placeholder='885 Brushy Creek'></label>"+
+      "<div style='display:grid;grid-template-columns:1fr 1fr;gap:10px'>"+
+      "<label>Status <select id='nStatus'>"+TX_STATUSES.filter(function(x){return x[0]!=='archived';}).map(function(x){return "<option value='"+x[0]+"' "+(x[0]==="pipeline"?"selected":"")+">"+x[1]+"</option>";}).join("")+"</select></label>"+
+      "<label>Source <select id='nSource'><option value=''>Select</option>"+TX_SOURCES.map(function(x){return "<option>"+x+"</option>";}).join("")+"</select></label>"+
+      "<label>Mutual Acceptance Date <input type='date' id='nMa'></label>"+
+      "<label>Est. Close Date <input type='date' id='nCd'></label>"+
+      "<label>Listing / Est. Close Price <input type='number' id='nPrice' placeholder='0'></label>"+
+      "<label>Expiration <input type='date' id='nExp'></label></div>"+
+      "<label>Roles — Agent <select id='nAgent'>"+AGENTS_TX.map(function(a){return "<option "+(a==="Marco Puga"?"selected":"")+">"+a+"</option>";}).join("")+"</select></label></div>"+
+      "<div style='text-align:right;margin-top:14px'><button class='pill-btn ghost' onclick=\"document.getElementById('txOv').style.display='none'\">Cancel</button> <button class='pill-btn' id='nCreate'>CREATE TRANSACTION</button></div>");
+    document.getElementById("txOvBox").querySelectorAll("input,select").forEach(function(el){ el.style.cssText+=";border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-size:12.5px;width:100%;box-sizing:border-box;margin-top:3px"; });
+    document.getElementById("nCreate").onclick=function(){
+      var addr=document.getElementById("nAddr").value.trim();
+      if(!addr){ alert("A title or address is required"); return; }
+      var body={ address:addr, dealType:type, status:document.getElementById("nStatus").value, parties:{},
+        source:document.getElementById("nSource").value||undefined,
+        contractDate:document.getElementById("nMa").value||undefined,
+        closingDate:document.getElementById("nCd").value||undefined,
+        expiration:document.getElementById("nExp").value||undefined,
+        listPrice:Number(document.getElementById("nPrice").value)||undefined,
+        agent:document.getElementById("nAgent").value };
+      fetch(crmApi("/api/transactions"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+        .then(function(r){ if(r.ok){ closeOv(); loadTransactions().then(renderTx); } else r.json().then(function(j){ alert(j.error||"Create failed"); }); });
+    };
+  }
+  document.getElementById("txAddBtn").onclick=openAdd;
+  document.getElementById("txNavAdd").onclick=openAdd;
+  /* DETAIL VIEW — open on address-cell click */
+  var DETAIL_DATES=[["dateListed","Date Listed"],["contractDate","Mutual Acceptance"],["closingDate","Close Date"],["expiration","Expiration"],["depositDue","Deposit Due"],["additionalDepositDue","Additional Deposit Due"],["escrowSigningDate","Escrow Signing Date"],["inspectionDate","Home Inspection Date"],["appraisalDate","Appraisal Date"],["dateCanceled","Date Canceled"]];
+  window.openTxDetail=function(id){
+    fetch(crmApi("/api/transactions/"+encodeURIComponent(id))).then(function(r){return r.ok?r.json():null;}).then(function(d){
+      if(!d){ alert("This row lives only in the demo dataset — imported and created transactions open here."); return; }
+      var t=d.transaction||d;
+      fetch(crmApi("/api/auto-plans")).then(function(r){return r.ok?r.json():{plans:[]};}).then(function(pd){
+        paintDetail(t,(pd.plans||[]).filter(function(pl){return pl.planType==="transaction"&&!pl.archived&&pl.active;}));
+      });
+    });
+  };
+  function paintDetail(t,txPlans){
+    var box=document.getElementById("txDetailBox");
+    var sm=TX_STATUS[t.status]||{l:t.status,c:"#7c8b98"};
+    var enr=t.autoPlans||[];
+    box.innerHTML="<div style='padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px'>"+
+      "<div><div style='font-size:18px;font-weight:700'>"+esc(t.address)+"</div><div style='font-size:12px;color:#8a939c'>"+esc(t.dealType||"")+" · listed "+(t.listPrice?("$"+Number(t.listPrice).toLocaleString()):"—")+" · GCI "+(t.gci?("$"+Number(t.gci).toLocaleString()):"—")+"</div></div>"+
+      "<span class='status' style='background:"+sm.c+"'>"+esc(sm.l||t.status)+"</span><span style='flex:1'></span>"+
+      "<span style='font-size:12px;color:#8a939c'>"+esc(t.agent||"")+"</span>"+
+      "<button class='pill-btn ghost' id='txDetClose'>✕</button></div>"+
+      "<div style='display:grid;grid-template-columns:1fr 320px;gap:0'>"+
+      "<div style='padding:16px 22px'>"+
+        "<b style='font-size:13px'>Notes</b><textarea id='txDetNotes' rows='5' style='width:100%;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12.5px;margin-top:6px'>"+esc(t.notes||"")+"</textarea>"+
+        "<div style='text-align:right;margin-top:6px'><button class='pill-btn ghost' id='txDetSaveNotes'>Save notes</button></div>"+
+        "<div style='margin-top:14px'><b style='font-size:13px'>Auto Plans</b>"+
+        (enr.length?enr.map(function(e){return "<div style='display:flex;align-items:center;gap:8px;font-size:12.5px;margin-top:6px'><span>"+esc(e.planName)+"</span><span style='color:#8a939c'>"+e.status+" · "+(e.completedSteps||[]).length+" step(s) done</span><span style='flex:1'></span><a href='#' data-unenr='"+esc(e.planId)+"' style='color:#c0392b;font-size:12px'>remove</a></div>";}).join(""):"<div style='font-size:12px;color:#98a1aa;margin-top:6px'>No plan applied.</div>")+
+        (txPlans.length?"<div style='margin-top:8px;display:flex;gap:8px'><select id='txDetPlan' style='flex:1;border:1px solid var(--line);border-radius:6px;padding:6px'>"+txPlans.map(function(pl){return "<option value='"+pl.id+"'>"+esc(pl.name)+"</option>";}).join("")+"</select><button class='pill-btn' id='txDetApply'>+ APPLY AUTO PLAN</button></div>":"<div style='font-size:11.5px;color:#98a1aa;margin-top:6px'>No transaction plans exist yet — build one under Settings · Auto Plans.</div>")+
+        "</div></div>"+
+      "<div style='border-left:1px solid var(--line);padding:16px 18px'><b style='font-size:13px'>Dates</b>"+
+        DETAIL_DATES.map(function(dd){ var v=(t[dd[0]]||"").slice(0,10); return "<label style='display:block;font-size:11.5px;color:#8a939c;margin-top:8px'>"+dd[1]+"<input type='date' data-dfield='"+dd[0]+"' value='"+v+"' style='width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:12px;margin-top:2px'></label>"; }).join("")+
+        "<div style='text-align:right;margin-top:10px'><button class='pill-btn' id='txDetSaveDates'>Save dates</button></div></div></div>";
+    document.getElementById("txDetailOv").style.display="block";
+    document.getElementById("txDetClose").onclick=function(){ document.getElementById("txDetailOv").style.display="none"; };
+    document.getElementById("txDetSaveNotes").onclick=function(){
+      fetch(crmApi("/api/transactions/"+t.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({notes:document.getElementById("txDetNotes").value})}).then(function(r){ if(!r.ok)alert("Save failed"); });
+    };
+    document.getElementById("txDetSaveDates").onclick=function(){
+      var body={};
+      box.querySelectorAll("[data-dfield]").forEach(function(inp){ body[inp.dataset.dfield]=inp.value||null; });
+      fetch(crmApi("/api/transactions/"+t.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+        .then(function(r){ if(r.ok){ loadTransactions().then(renderTx); } else alert("Save failed"); });
+    };
+    var ap=document.getElementById("txDetApply");
+    if(ap) ap.onclick=function(){
+      fetch(crmApi("/api/transactions/"+t.id+"/auto-plans/"+document.getElementById("txDetPlan").value),{method:"POST"})
+        .then(function(r){return r.json();}).then(function(j){ if(j.transaction) paintDetail(j.transaction,txPlans); else alert(j.error||"Apply failed"); });
+    };
+    box.querySelectorAll("[data-unenr]").forEach(function(a){ a.onclick=function(e){ e.preventDefault();
+      fetch(crmApi("/api/transactions/"+t.id+"/auto-plans/"+a.dataset.unenr),{method:"DELETE"})
+        .then(function(r){return r.json();}).then(function(j){ if(j.transaction) paintDetail(j.transaction,txPlans); });
+    }; });
+  }
+  document.getElementById("txDetailOv").addEventListener("click",function(e){ if(e.target===this) this.style.display="none"; });
+  document.addEventListener("click",function(e){
+    var cell=e.target.closest("#txRows .lead-name"); if(!cell)return;
+    var tr=cell.closest("tr[data-txid]"); if(tr) window.openTxDetail(tr.dataset.txid);
+  });
+  paintButtons();
 })();
 
 /* ===== SETTINGS · AUTO PLANS (Brivity parity) ===== */

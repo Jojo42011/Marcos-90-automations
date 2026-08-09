@@ -144,6 +144,13 @@ function initTransactionsSchema(database: Database.Database): void {
     /* Transaction Auto Plan enrollments (JSON array). Date-anchored plans need
        somewhere to live on the deal itself; leads keep theirs on the lead. */
     ["auto_plans", "TEXT"],
+    /* Brivity transaction-page dates (team feature list, Aug 2026). */
+    ["date_listed", "TEXT"],
+    ["date_canceled", "TEXT"],
+    ["status_changed_at", "TEXT"],
+    ["deposit_due", "TEXT"],
+    ["additional_deposit_due", "TEXT"],
+    ["escrow_signing_date", "TEXT"],
   ] as Array<[string, string]>) {
     try {
       database.exec(`ALTER TABLE transactions ADD COLUMN ${column} ${ddl}`);
@@ -283,7 +290,9 @@ export interface TransactionParties {
   activityLog?: DealActivityLogEntry[];
 }
 
-export type TransactionDealType = "buyer" | "seller" | "dual";
+/* buyer/seller/dual are the legacy engine values; tenant/landlord/referral come
+   from Brivity's Select Transaction Type flow (team feature list, Aug 2026). */
+export type TransactionDealType = "buyer" | "seller" | "dual" | "tenant" | "landlord" | "referral";
 
 export interface TransactionPlanEnrollment {
   planId: string;
@@ -299,7 +308,14 @@ export type TransactionStatus =
   | "pending"
   | "closed"
   | "fell_through"
-  | "cancelled";
+  | "cancelled"
+  /* Brivity lifecycle statuses (team feature list). under_contract keeps
+     driving the deadline engine; these are bookkeeping states around it. */
+  | "pipeline"
+  | "coming_soon"
+  | "expired"
+  | "withdrawn"
+  | "archived";
 
 export interface InspectionFlow {
   inspectorName?: string;
@@ -362,6 +378,13 @@ export interface Transaction {
   expiration?: string;
   /** Transaction Auto Plan enrollments (same shape as a lead's, minus enrolledVia). */
   autoPlans?: TransactionPlanEnrollment[];
+  /** Brivity date fields (ISO). dateListed/dateCanceled/statusChangedAt drive the tx table's sort+columns. */
+  dateListed?: string;
+  dateCanceled?: string;
+  statusChangedAt?: string;
+  depositDue?: string;
+  additionalDepositDue?: string;
+  escrowSigningDate?: string;
   agent?: string;
   source?: string;
   externalKey?: string;
@@ -488,6 +511,12 @@ function rowToTransaction(row: Record<string, unknown>): Transaction {
     listPrice: row.list_price != null ? Number(row.list_price) : undefined,
     gci: row.gci != null ? Number(row.gci) : undefined,
     expiration: row.expiration ? String(row.expiration) : undefined,
+    dateListed: row.date_listed ? String(row.date_listed) : undefined,
+    dateCanceled: row.date_canceled ? String(row.date_canceled) : undefined,
+    statusChangedAt: row.status_changed_at ? String(row.status_changed_at) : undefined,
+    depositDue: row.deposit_due ? String(row.deposit_due) : undefined,
+    additionalDepositDue: row.additional_deposit_due ? String(row.additional_deposit_due) : undefined,
+    escrowSigningDate: row.escrow_signing_date ? String(row.escrow_signing_date) : undefined,
     autoPlans: (() => {
       try {
         const parsed = row.auto_plans ? JSON.parse(String(row.auto_plans)) : null;
@@ -581,8 +610,9 @@ export function createTransaction(
         (id, address, deal_type, parties, price, status, contract_date, inspection_date,
          appraisal_date, loan_commitment_date, title_date, closing_date, possession_date,
          lead_id, deal_file_url, notes, mls, list_price, gci, expiration, auto_plans, agent, source, external_key,
-         imported_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         imported_at, date_listed, date_canceled, status_changed_at, deposit_due, additional_deposit_due, escrow_signing_date,
+         created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -610,11 +640,17 @@ export function createTransaction(
       tx.source ?? null,
       tx.externalKey ?? null,
       tx.importedAt ?? null,
+      tx.dateListed ?? null,
+      tx.dateCanceled ?? null,
+      tx.statusChangedAt ?? now,
+      tx.depositDue ?? null,
+      tx.additionalDepositDue ?? null,
+      tx.escrowSigningDate ?? null,
       now,
       now,
     );
 
-  const created = { ...tx, id, createdAt: now, updatedAt: now };
+  const created = { ...tx, id, statusChangedAt: tx.statusChangedAt ?? now, createdAt: now, updatedAt: now };
   if (created.status === "under_contract") {
     syncDeadlinesFromTransaction(created);
   }
@@ -628,6 +664,12 @@ export function updateTransaction(id: string, updates: Partial<Transaction>): Tr
   const merged: Transaction = {
     ...existing,
     ...updates,
+    /* Brivity's Status Changed At: stamped automatically whenever status
+       actually moves, so the tx table's column and date-range filter are real. */
+    statusChangedAt:
+      updates.status !== undefined && updates.status !== existing.status
+        ? new Date().toISOString().slice(0, 10)
+        : (updates.statusChangedAt ?? existing.statusChangedAt),
     parties: { ...existing.parties, ...(updates.parties ?? {}) },
     inspectionFlow: { ...existing.inspectionFlow, ...(updates.inspectionFlow ?? {}) },
     finalWeekFlow: { ...existing.finalWeekFlow, ...(updates.finalWeekFlow ?? {}) },
@@ -644,7 +686,8 @@ export function updateTransaction(id: string, updates: Partial<Transaction>): Tr
         title_date = ?, closing_date = ?, possession_date = ?, lead_id = ?, deal_file_url = ?,
         notes = ?, inspection_flow = ?, final_week_flow = ?, post_close_flow = ?,
         mls = ?, list_price = ?, gci = ?, expiration = ?, auto_plans = ?, agent = ?, source = ?, external_key = ?,
-        imported_at = ?, updated_at = ?
+        imported_at = ?, date_listed = ?, date_canceled = ?, status_changed_at = ?,
+        deposit_due = ?, additional_deposit_due = ?, escrow_signing_date = ?, updated_at = ?
       WHERE id = ?`,
     )
     .run(
@@ -675,6 +718,12 @@ export function updateTransaction(id: string, updates: Partial<Transaction>): Tr
       merged.source ?? null,
       merged.externalKey ?? null,
       merged.importedAt ?? null,
+      merged.dateListed ?? null,
+      merged.dateCanceled ?? null,
+      merged.statusChangedAt ?? null,
+      merged.depositDue ?? null,
+      merged.additionalDepositDue ?? null,
+      merged.escrowSigningDate ?? null,
       merged.updatedAt,
       id,
     );

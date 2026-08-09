@@ -10334,12 +10334,12 @@ app.delete("/api/deals/:id", async (req, res) => {
 function parseTransactionBody(body: Record<string, unknown>): Partial<Transaction> {
   const out: Partial<Transaction> = {};
   if (typeof body.address === "string") out.address = body.address.trim();
-  if (typeof body.dealType === "string") out.dealType = body.dealType as Transaction["dealType"];
+  if (typeof body.dealType === "string" && TX_DEAL_TYPES.has(body.dealType)) out.dealType = body.dealType as Transaction["dealType"];
   if (body.parties && typeof body.parties === "object" && !Array.isArray(body.parties)) {
     out.parties = body.parties as Transaction["parties"];
   }
   if (typeof body.price === "number") out.price = body.price;
-  if (typeof body.status === "string") out.status = body.status as Transaction["status"];
+  if (typeof body.status === "string" && TX_STATUSES.has(body.status)) out.status = body.status as Transaction["status"];
   if (typeof body.contractDate === "string") out.contractDate = body.contractDate;
   if (typeof body.inspectionDate === "string") out.inspectionDate = body.inspectionDate;
   if (typeof body.appraisalDate === "string") out.appraisalDate = body.appraisalDate;
@@ -10359,8 +10359,22 @@ function parseTransactionBody(body: Record<string, unknown>): Partial<Transactio
   if (typeof body.gci === "number") out.gci = body.gci;
   if (typeof body.expiration === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.expiration)) out.expiration = body.expiration;
   if (body.expiration === null) out.expiration = undefined;
+  /* Brivity transaction-page dates — same contract as expiration: valid ISO
+     sets, null clears, absent leaves alone. */
+  for (const k of ["dateListed", "dateCanceled", "depositDue", "additionalDepositDue", "escrowSigningDate"] as const) {
+    const v = body[k];
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) out[k] = v;
+    if (v === null) out[k] = undefined;
+  }
+  if (typeof body.source === "string") out.source = body.source.trim() || undefined;
   return out;
 }
+
+const TX_DEAL_TYPES = new Set(["buyer", "seller", "dual", "tenant", "landlord", "referral"]);
+const TX_STATUSES = new Set([
+  "active", "under_contract", "pending", "closed", "fell_through", "cancelled",
+  "pipeline", "coming_soon", "expired", "withdrawn", "archived",
+]);
 
 app.get("/api/transactions", (req, res) => {
   if (!dashboardTokenOk(req)) {
@@ -10401,6 +10415,17 @@ app.post("/api/transactions", express.json(), (req, res) => {
     leadId: parsed.leadId,
     dealFileUrl: parsed.dealFileUrl,
     notes: parsed.notes,
+    mls: parsed.mls,
+    agent: parsed.agent,
+    listPrice: parsed.listPrice,
+    gci: parsed.gci,
+    source: parsed.source,
+    expiration: parsed.expiration,
+    dateListed: parsed.dateListed,
+    dateCanceled: parsed.dateCanceled,
+    depositDue: parsed.depositDue,
+    additionalDepositDue: parsed.additionalDepositDue,
+    escrowSigningDate: parsed.escrowSigningDate,
   });
   res.status(201).json({ transaction: tx });
 });
