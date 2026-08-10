@@ -44,12 +44,24 @@ export interface LeadFilter {
   status?: string[];
   source?: string[];
   stage?: string[];
+  /** Include: lead must carry at least one of these tags. */
   tags?: string[];
+  /** Exclude: lead must carry none of these tags. */
+  tagsExclude?: string[];
   dateAddedFrom?: string;
   dateAddedTo?: string;
   lastContactFrom?: string;
   lastContactTo?: string;
   assignedUser?: string;
+  /** Tri-state: true = must have, false = must not have, undefined = don't care. */
+  hasEmail?: boolean;
+  hasPhone?: boolean;
+  hasAddress?: boolean;
+  /** "any" = enrolled in at least one plan, "none" = no enrollments, else a plan name. */
+  autoPlan?: string;
+  /** 1-12: month of the lead's birthday / home anniversary. */
+  birthdayMonth?: number;
+  anniversaryMonth?: number;
 }
 
 export type UserRole = "admin" | "agent" | "isa" | "custom";
@@ -172,6 +184,12 @@ export interface Lead {
   crmNotes: string | null;
   /** CRM labels (dashboard-managed). */
   tags?: string[];
+  /** Mailing address typed in the CRM (distinct from criteria.area / propertyInquired). */
+  address?: string | null;
+  /** ISO YYYY-MM-DD. Drives the Dates filters and future birthday touches. */
+  birthday?: string | null;
+  /** ISO YYYY-MM-DD — the anniversary of buying their home. */
+  homeAnniversary?: string | null;
   /** Listing-alert / market-report counts. Default 0; never auto-generated. */
   alerts?: number;
   reports?: number;
@@ -500,6 +518,9 @@ export interface DashboardLeadRow {
   crmCallQueue: CrmCallQueue;
   crmNotes: string | null;
   tags: string[];
+  address: string | null;
+  birthday: string | null;
+  homeAnniversary: string | null;
   alerts: number;
   reports: number;
   createdAt: string;

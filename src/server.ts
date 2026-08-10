@@ -2061,6 +2061,28 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
         : undefined;
   const propertyViewsCount =
     typeof body.propertyViewsCount === "number" ? body.propertyViewsCount : undefined;
+  const address =
+    body.address === null ? null : typeof body.address === "string" ? body.address : undefined;
+  /* Date-only fields: accepted as YYYY-MM-DD, null clears, junk is a 400 —
+     a garbled birthday silently stored would poison the Dates filters. */
+  const parseDay = (key: "birthday" | "homeAnniversary"): string | null | undefined => {
+    const v = body[key];
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) && !Number.isNaN(new Date(v.trim() + "T00:00:00Z").getTime())) {
+      return v.trim();
+    }
+    throw Object.assign(new Error(`${key} must be YYYY-MM-DD or null`), { statusCode: 400 });
+  };
+  let birthday: string | null | undefined;
+  let homeAnniversary: string | null | undefined;
+  try {
+    birthday = parseDay("birthday");
+    homeAnniversary = parseDay("homeAnniversary");
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+    return;
+  }
 
   let criteria: Record<string, unknown> | null | undefined = undefined;
   if (body.criteria === null) criteria = null;
@@ -2117,6 +2139,9 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
       mlsListingKey,
       criteria: criteria as any,
       tags,
+      address,
+      birthday,
+      homeAnniversary,
       assignedUserId,
       assignedUserName,
       deal,
@@ -7856,6 +7881,17 @@ function parseLeadFilterBody(body: Record<string, unknown>): LeadFilter {
   filter.source = arr("source");
   filter.stage = arr("stage");
   filter.tags = arr("tags");
+  filter.tagsExclude = arr("tagsExclude");
+  if (typeof body.hasEmail === "boolean") filter.hasEmail = body.hasEmail;
+  if (typeof body.hasPhone === "boolean") filter.hasPhone = body.hasPhone;
+  if (typeof body.hasAddress === "boolean") filter.hasAddress = body.hasAddress;
+  if (typeof body.autoPlan === "string" && body.autoPlan.trim()) filter.autoPlan = body.autoPlan.trim();
+  const month = (key: "birthdayMonth" | "anniversaryMonth") => {
+    const n = Math.round(Number(body[key]));
+    if (Number.isFinite(n) && n >= 1 && n <= 12) filter[key] = n;
+  };
+  month("birthdayMonth");
+  month("anniversaryMonth");
   if (typeof body.dateAddedFrom === "string" && body.dateAddedFrom.trim()) filter.dateAddedFrom = body.dateAddedFrom.trim();
   if (typeof body.dateAddedTo === "string" && body.dateAddedTo.trim()) filter.dateAddedTo = body.dateAddedTo.trim();
   if (typeof body.lastContactFrom === "string" && body.lastContactFrom.trim()) {
@@ -8731,6 +8767,30 @@ app.put("/api/settings/layout", express.json({ limit: "64kb" }), (req, res) => {
     const gridOn = typeof body.gridOn === "boolean" ? body.gridOn : undefined;
     const saved = setUserLayout(user, body.layout, gridOn);
     res.json({ ok: true, ...saved });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+/* Per-user table preferences (CRM Columns picker + Sort By). Persisted
+   server-side per user so each agent's list layout follows them across
+   devices, the way Brivity does it. */
+app.get("/api/settings/table-prefs", async (req, res) => {
+  const user = String(req.query.user || "").trim();
+  if (!user) { res.status(400).json({ ok: false, error: "user required" }); return; }
+  const { getUserTablePrefs } = await import("./core/userPrefs.js");
+  res.json({ ok: true, tables: getUserTablePrefs(user) });
+});
+
+app.put("/api/settings/table-prefs", express.json({ limit: "32kb" }), async (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const user = typeof body.user === "string" ? body.user.trim() : "";
+  const table = typeof body.table === "string" ? body.table.trim() : "";
+  if (!user || !table) { res.status(400).json({ ok: false, error: "user and table required" }); return; }
+  try {
+    const { setUserTablePrefs } = await import("./core/userPrefs.js");
+    const saved = setUserTablePrefs(user, table, body.prefs);
+    res.json({ ok: true, prefs: saved });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }

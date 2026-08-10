@@ -320,6 +320,34 @@
   .sf-list .sf{padding:8px 18px 8px 30px;color:#7b8590;font-size:12.5px;white-space:normal;line-height:1.3}
   .sf-list .sf:hover{background:#f2f6f5;color:var(--teal)}
   .sf-list .sf.on{background:#eaf3f2;color:var(--teal-strong);font-weight:600}
+  /* ---- Advanced filter drawer (Brivity "Filter Leads" side panel) ---- */
+  .afd-scrim{position:fixed;inset:0;background:rgba(20,28,36,.35);z-index:80;display:none}
+  .afd-scrim.on{display:block}
+  .afd{position:fixed;top:0;right:0;bottom:0;width:400px;max-width:94vw;background:#fff;box-shadow:-8px 0 30px rgba(0,0,0,.14);display:flex;flex-direction:column}
+  .afd-h{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .afd-h h3{margin:0;font-size:16px;flex:1}
+  .afd-clear{border:1px solid var(--line);background:#fff;color:var(--teal-strong);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer}
+  .afd-x{border:none;background:none;font-size:22px;line-height:1;color:#7d8894;cursor:pointer;padding:0 2px}
+  .afd-body{flex:1;overflow-y:auto;padding:6px 0 14px}
+  .afd-foot{display:flex;justify-content:space-between;gap:10px;padding:12px 18px;border-top:1px solid var(--line)}
+  .afg{border-bottom:1px solid #eef1f4}
+  .afg-h{display:flex;align-items:center;gap:8px;width:100%;padding:11px 18px;border:none;background:none;font-size:12px;font-weight:800;letter-spacing:.4px;color:#3c4854;cursor:pointer;text-transform:uppercase}
+  .afg-h .car{margin-left:auto;transition:transform .15s;color:#9aa4ae}
+  .afg.open .car{transform:rotate(90deg)}
+  .afg-c{display:none;padding:2px 18px 14px}
+  .afg.open .afg-c{display:block}
+  .afg-h .cnt{background:var(--teal);color:#fff;border-radius:999px;font-size:10px;padding:1px 7px;font-weight:800}
+  .afg.nodata .afg-h{color:#aab2ba;cursor:not-allowed}
+  .afopt{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;color:#414c57;cursor:pointer}
+  .afopt input{accent-color:var(--teal)}
+  .afopt.dis{color:#b6bec6;cursor:not-allowed}
+  .aflab{font-size:11px;font-weight:700;color:#7d8894;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.4px}
+  .aftri{display:flex;gap:6px;margin:4px 0 8px}
+  .aftri button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;color:#5b6570;cursor:pointer}
+  .aftri button.on{background:var(--teal);border-color:var(--teal);color:#fff}
+  .afd input[type="date"],.afd select{border:1px solid var(--line);border-radius:8px;height:30px;padding:0 8px;font-size:12.5px;color:#414c57;background:#fff}
+  .afnote{font-size:11.5px;color:#98a2ac;padding:2px 0 6px;line-height:1.45}
+
   /* Filters whose source data (website visit tracking) is not connected yet. */
   .sf-list .sf.sf-nodata{color:#b3bcc4;cursor:help}
   .sf-list .sf.sf-nodata:hover{background:#f7f8f9;color:#9aa4ae}
@@ -631,15 +659,9 @@
       <div class="leads-main">
         <div class="leads-top">
           <h1>Leads <small id="ltCount"></small></h1>
-          <div class="acts"><button class="pill-btn ghost">ACTIONS ▾</button><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button></div>
+          <div class="acts"><button class="pill-btn ghost">ACTIONS ▾</button><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn" id="lFilterBtn">FILTER</button></div>
         </div>
-        <div class="filter-bar">
-          <span class="fb-label">filtered</span>
-          <span class="fchip">Status: Inactive <span class="x">×</span></span>
-          <span class="fchip">Status: Archived <span class="x">×</span></span>
-          <span class="fchip">Status: Trash <span class="x">×</span></span>
-          <a class="fb-link">Save Filter</a>
-          <a class="fb-link">Clear All</a>
+        <div class="filter-bar" id="lChipBar" style="display:none">
         </div>
         <div class="tbl-scroll">
           <table class="leads">
@@ -685,11 +707,6 @@
           <input type="file" id="leadCsvInput" accept=".csv,text/csv" style="display:none">
         </div>
         <div class="filter-bar" id="pChipBar" style="display:none">
-          <span class="fchip">Status: Past Client <span class="x">×</span></span>
-          <span class="fchip">Status: Active Client <span class="x">×</span></span>
-          <span class="fchip">Status: Prospective Client <span class="x">×</span></span>
-          <a class="fb-link">Save Filter</a>
-          <a class="fb-link">Clear All</a>
         </div>
         <div class="tbl-scroll">
           <table class="leads">
@@ -933,6 +950,15 @@
   <div class="modal-foot"><button class="btn-plain" id="calCancel">CANCEL</button><button class="pill-btn" id="calApply">FILTER</button></div>
 </div></div>
 
+<!-- Advanced Lead/People filter drawer (Brivity "Filter Leads" side panel). -->
+<div class="afd-scrim" id="afScrim">
+  <aside class="afd" id="afDrawer" role="dialog" aria-label="Filter Leads">
+    <div class="afd-h"><h3>Filter Leads</h3><button class="afd-clear" id="afClearAll">⟲ CLEAR ALL</button><button class="afd-x" id="afClose" aria-label="Close">×</button></div>
+    <div class="afd-body" id="afBody"><!-- groups rendered by buildAdvPanel() --></div>
+    <div class="afd-foot"><button class="btn-plain" id="afCancel">CANCEL</button><button class="pill-btn" id="afApply">APPLY FILTER</button></div>
+  </aside>
+</div>
+
 <div class="dd-menu" id="ddMenu"></div>
 <div class="crm-toast" id="crmToast"></div>
 
@@ -1138,22 +1164,44 @@ function renderTracking(){
 let SEARCH="", leadSort="recent";
 function _q(s){return String(s||"").toLowerCase();}
 function hitRow(o){ if(!SEARCH)return true; return (_q(o.name)+" "+_q(o.address)+" "+_q(o.city)+" "+_q(o.phone)+" "+_q(o.email)+" "+_q(o.agent)).includes(SEARCH); }
-/* Column sort - set by clicking a table header (Brivity-style ▲/▼). When no
-   column is chosen, fall back to the SORT BY pill (recent / name A-Z). */
-var leadSortCol=null, leadSortDir=1;
+/* Column sort — per table, persisted per user (TABLE_PREFS, defined below;
+   var hoisting makes it visible here). Header clicks and the SORT BY pill
+   write the same state, so they can never disagree. No column chosen falls
+   back to the legacy pill default (recent / name A-Z). */
 var STATUS_ORDER={new:0,hot:1,nurture:2,watch:3,unqualified:4,dead:4,unresponsive:5,past_client:6,archived:7};
 var STAGE_ORDER={"NEW LEAD":0,"ATTEMPTED CONTACT":1,"APPOINTMENT SET":2,"SHOWING SET":3,"PENDING":4,"UNDER CONTRACT":5,"CLOSED":6};
+function mdySortable(v){ var m=/^(\d{2})-(\d{2})-(\d{4})$/.exec(String(v||"")); return m?(m[3]+m[1]+m[2]):""; }
 function sortKeyVal(l,k){
   if(k==="name")return String(l.name||l.address||"").toLowerCase();
-  if(k==="status")return STATUS_ORDER[l.statusDisp||l.crmStatus]!=null?STATUS_ORDER[l.statusDisp||l.crmStatus]:99;
+  if(k==="status"){
+    if(l.statusDisp||l.crmStatus)return STATUS_ORDER[l.statusDisp||l.crmStatus]!=null?STATUS_ORDER[l.statusDisp||l.crmStatus]:99;
+    return String(l.status||"");
+  }
   if(k==="stage")return STAGE_ORDER[l.stageLabel]!=null?STAGE_ORDER[l.stageLabel]:99;
   if(k==="address")return String(l.address||"").toLowerCase();
   if(k==="last")return new Date(l.lastActivity||0).getTime();
+  if(k==="created")return new Date(l.createdAt||0).getTime();
+  if(k==="source")return String(l.source||"").toLowerCase();
+  if(k==="birthdate")return mdySortable(l.birthdate);
+  if(k==="anniversary")return mdySortable(l.anniversary);
+  if(k==="list_price")return +l.listPrice||0;
+  if(k==="close_price")return +l.closePrice||0;
+  if(k==="gci")return +l.gci||0;
+  if(k==="close_date")return mdySortable(l.closeDate);
+  if(k==="date_listed")return mdySortable(l.dateListed);
+  if(k==="expiration")return mdySortable(l.expiration);
+  if(k==="last_updated")return mdySortable(l.lastUpdated);
+  if(k==="agent")return String(l.agent||"").toLowerCase();
   return 0;
 }
-function sortRows(a){
-  if(leadSortCol){
-    var k=leadSortCol,d=leadSortDir;
+function sortStateFor(tkey){
+  var p=(typeof TABLE_PREFS==="object"&&TABLE_PREFS[tkey])||null;
+  return p?{field:p.sortField||null,dir:p.sortDir===-1?-1:1}:{field:null,dir:1};
+}
+function sortRows(a,tkey){
+  var st=sortStateFor(tkey||"leads");
+  if(st.field){
+    var k=st.field,d=st.dir;
     return a.slice().sort(function(x,y){
       var vx=sortKeyVal(x,k),vy=sortKeyVal(y,k);
       if(vx<vy)return -1*d; if(vx>vy)return 1*d; return 0;
@@ -1164,18 +1212,21 @@ function sortRows(a){
     : a.slice().sort((x,y)=>new Date(y.lastActivity||0)-new Date(x.lastActivity||0));
 }
 function paintSortArrows(){
+  var st=sortStateFor("leads");
   document.querySelectorAll('#view-leads th.sortcol').forEach(function(th){
     var k=th.getAttribute("data-sortk"); var arr=th.querySelector(".sarr");
     if(!arr){arr=document.createElement("span");arr.className="sarr";th.appendChild(document.createTextNode(" "));th.appendChild(arr);}
-    if(leadSortCol===k){ arr.textContent=leadSortDir>0?"▲":"▼"; th.classList.add("sorted"); }
+    if(st.field===k){ arr.textContent=st.dir>0?"▲":"▼"; th.classList.add("sorted"); }
     else { arr.textContent="⇅"; th.classList.remove("sorted"); }
   });
 }
 document.addEventListener("click",function(e){
   var th=e.target.closest('#view-leads th.sortcol'); if(!th)return;
   var k=th.getAttribute("data-sortk");
-  if(leadSortCol===k){ leadSortDir=-leadSortDir; } else { leadSortCol=k; leadSortDir=1; }
-  page=1; renderLeads(); paintSortArrows();
+  var p=tblPrefs("leads");
+  if(p.sortField===k){ p.sortDir=-p.sortDir; } else { p.sortField=k; p.sortDir=1; }
+  saveTablePrefs("leads");
+  page=1; renderLeads(); paintSortArrows(); paintSortPills();
 });
 
 let openConvIdx=null;
@@ -1639,7 +1690,7 @@ function renderLeads(){
   document.getElementById("lnAll").textContent=LEADS.length.toLocaleString();
   document.getElementById("lnIdx").textContent=LEADS.filter(l=>l.source==="Website IDX").length;
   const zEl=document.getElementById("lnZillow"); if(zEl) zEl.textContent=LEADS.filter(l=>/zillow/i.test(l.source||"")).length;
-  const src=sortRows(LEADS.filter(leadBucketPred).filter(leadSmartPred).filter(hitRow));
+  const src=sortRows(LEADS.filter(leadBucketPred).filter(leadSmartPred).filter(advPred).filter(hitRow),"leads");
   const total=src.length;
   document.getElementById("ltCount").textContent="("+total.toLocaleString()+")";
   const pages=Math.max(1,Math.ceil(total/PER));
@@ -1674,6 +1725,7 @@ function renderLeads(){
   pg+='<button '+(page>=pages?'disabled':'')+' data-p="'+(page+1)+'">›</button>';
   document.getElementById("pager").innerHTML=pg;
   document.querySelectorAll("#pager button[data-p]").forEach(b=>b.addEventListener("click",()=>{const p=+b.dataset.p;if(p>=1&&p<=pages){page=p;renderLeads();document.querySelector(".tbl-scroll").scrollTop=0;}}));
+  if(typeof applyColPrefs==="function")applyColPrefs(document.querySelector("#view-leads table.leads"),"leads");
 }
 
 /* ===== People ===== */
@@ -1799,11 +1851,13 @@ function renderPeople(){
   document.getElementById("pnCollab").textContent=PEOPLE.filter(p=>p.cat==="collaborator").length;
   document.getElementById("pnTeam").textContent=PEOPLE.filter(p=>p.cat==="team").length;
   document.getElementById("pnArch").textContent=PEOPLE.filter(p=>p.cat==="archived").length;
-  const list=sortRows(peopleFor(pBucket).filter(hitRow));
+  const list=sortRows(peopleFor(pBucket).filter(advPred).filter(hitRow),"people");
   const titleMap={all:"All People",client:"Clients",collaborator:"Collaborators",team:"Team",archived:"Archived"};
   const smartActive=pSmartKey?PEOPLE_SMART_FILTERS.find(f=>f.key===pSmartKey):null;
   document.getElementById("pTitle").innerHTML=(smartActive?esc(smartActive.label):titleMap[pBucket])+' <small>('+list.length+')</small>';
-  const pcb=document.getElementById("pChipBar"); if(pcb) pcb.style.display=pBucket==="client"?"flex":"none";
+  /* The chip bar is owned by the advanced filter now — it shows the live
+     filter chips whenever any are set, on every bucket. */
+  if(typeof renderAdvChips==="function") renderAdvChips();
   const pages=Math.max(1,Math.ceil(list.length/PER));
   const rows=list.slice((pPage-1)*PER,pPage*PER);
   document.getElementById("peopleRows").innerHTML=rows.map(p=>{
@@ -1823,6 +1877,7 @@ function renderPeople(){
   pg+='<button '+(pPage>=pages?'disabled':'')+' data-p="'+(pPage+1)+'">›</button>';
   document.getElementById("pPager").innerHTML=pg;
   document.querySelectorAll("#pPager button[data-p]").forEach(b=>b.addEventListener("click",()=>{const p=+b.dataset.p;if(p>=1&&p<=pages){pPage=p;renderPeople();}}));
+  if(typeof applyColPrefs==="function")applyColPrefs(document.querySelector("#view-people table.leads"),"people");
 }
 document.querySelectorAll('.leads-nav a[data-bucket]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('.leads-nav a[data-bucket]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
@@ -1904,12 +1959,13 @@ function renderTx(){
   document.getElementById("txClosed").textContent=byS("closed");
   document.getElementById("txWd").textContent=byS("withdrawn");
   document.getElementById("txCan").textContent=byS("canceled");
-  const list=sortRows(txFor(txBucket).filter(hitRow));
+  const list=sortRows(txFor(txBucket).filter(hitRow),"tx");
   document.getElementById("txRows").innerHTML=list.map(txRowHTML).join("");
   bindTxRows();
   const chip=document.getElementById("txChipBar");
   if(txBucket==="all"){chip.style.display="none";}else{chip.style.display="block";document.getElementById("txChipLabel").textContent=(TX_STATUS[txBucket]||{l:txBucket}).l;}
   paintTxAsOf();
+  if(typeof applyColPrefs==="function")applyColPrefs(document.querySelector("#view-tx table.leads"),"tx");
 }
 /* Brivity has no transaction API, so this data is only ever as fresh as the
    last export somebody uploaded. Say that out loud rather than letting the
@@ -2728,19 +2784,23 @@ function lastLabelFor(l){
 }
 function mapLeadRow(l){
   const c=l.criteria||{};
-  const loc=c.location||c.address||l.propertyInquired||"";
+  // A hand-typed CRM address wins; the criteria/property fallbacks are what
+  // the DM funnel guessed and stay as display-only stand-ins.
+  const loc=l.address||c.location||c.address||l.propertyInquired||"";
   return {
     id:l.id, name:l.name||l.username||"Unknown",
     intent:(l.crmIntent==="seller")?"seller":"buyer",
     crmStatus:l.crmStatus, statusDisp:STATUS_MAP[l.crmStatus]||"nurture",
     stage:l.crmStage, stageLabel:STAGE_MAP[l.crmStage]||"NEW LEAD",
-    phone:l.phone||"", email:l.email||null, source:l.source||"",
-    address:loc, criteria:c, beds:c.beds!=null?c.beds:null, baths:c.baths!=null?c.baths:null, sqft:c.sqft!=null?c.sqft:null,
+    phone:l.phone||"", email:l.email||null, source:l.source||"", platform:l.platform||"",
+    address:loc, addressSaved:l.address||"", criteria:c, beds:c.beds!=null?c.beds:null, baths:c.baths!=null?c.baths:null, sqft:c.sqft!=null?c.sqft:null,
     lastLabel:lastLabelFor(l), lastActivity:l.lastActivity||l.lastMessageAt||l.updatedAt||l.createdAt,
     createdAt:l.createdAt, due:{label:(l.crmCallQueue==="urgent")?"Due Today":"Upcoming", date:""},
     activity:l.activity||[], alerts:l.alerts||0, reports:l.reports||0,
     autoPlanEnrollments:l.autoPlanEnrollments||[], crmCallQueue:l.crmCallQueue,
-    propertyInquired:l.propertyInquired||null, _msgs:l.messages||[], _lastMsgAt:l.lastMessageAt,
+    tags:l.tags||[], assignedUserId:l.assignedUserId||null, assignedUserName:l.assignedUserName||null,
+    birthdate:fmtMDY(l.birthday), anniversary:fmtMDY(l.homeAnniversary),
+    propertyInquired:l.propertyInquired||null, _msgs:l.messages||[], _lastMsgAt:l.lastMessageAt, _live:true,
   };
 }
 function deriveConvosLive(leads){
@@ -2767,7 +2827,11 @@ function mapPeopleLive(rows){
       // Carried through so the People smart filters can actually evaluate. Without
       // these, filters like "No Auto Plan" silently matched every row.
       statusDisp:r.statusDisp,crmStatus:r.crmStatus,alerts:r.alerts||0,reports:r.reports||0,
-      autoPlanEnrollments:r.autoPlanEnrollments||[],activity:r.activity||[]};
+      autoPlanEnrollments:r.autoPlanEnrollments||[],activity:r.activity||[],
+      // Advanced-filter fields (tags / assignment / dates / source) ride along
+      // so the one filter panel evaluates identically on both tables.
+      tags:r.tags||[],assignedUserId:r.assignedUserId||null,source:r.source||"",platform:r.platform||"",
+      birthdate:r.birthdate||"",anniversary:r.anniversary||"",createdAt:r.createdAt,crmCallQueue:r.crmCallQueue,_live:true};
   });
 }
 function mapDealTx(d){
@@ -2832,18 +2896,316 @@ async function loadLive(opts){
   if(tag) tag.textContent="Live data · "+LEADS.length+" leads"+(brvPeople.length?" · "+brvPeople.length+" from Brivity":"")+(txCount?" · "+txCount+" transactions":"");
 }
 
+/* ===== Advanced filter — the Brivity "Filter Leads" side panel =====
+   One panel, one state, applied to BOTH the Leads and People tables so the
+   two can never disagree about what "filtered" means. AND across groups,
+   OR within a multi-select group. Web Activity is rendered but disabled —
+   there is no site-visit tracking connected, and a filter that silently
+   matches nothing (or everything) is worse than one that says why. */
+var ADV=null;         // committed filter (null = nothing active)
+var ADV_DRAFT=null;   // edited in the drawer, committed on APPLY
+var ADV_SRC={loaded:false,tags:[],plans:[],roster:[],tasksByLead:null,tasksErr:false};
+var ADV_OPEN={};   // which drawer groups are expanded, survives panel rebuilds
+function advBlank(){return {leadType:[],status:[],stage:[],assigned:[],source:[],tagsInc:[],tagsExc:[],autoPlan:"",hasEmail:null,hasPhone:null,hasAddress:null,addedFrom:"",addedTo:"",lastFrom:"",lastTo:"",birthdayMonth:0,annivMonth:0,tasks:""};}
+function advActive(a){
+  a=a||ADV; if(!a)return 0; var n=0;
+  ["leadType","status","stage","assigned","source","tagsInc","tagsExc"].forEach(function(k){n+=a[k].length?1:0;});
+  if(a.autoPlan)n++; if(a.hasEmail!==null)n++; if(a.hasPhone!==null)n++; if(a.hasAddress!==null)n++;
+  if(a.addedFrom||a.addedTo)n++; if(a.lastFrom||a.lastTo)n++; if(a.birthdayMonth)n++; if(a.annivMonth)n++; if(a.tasks)n++;
+  return n;
+}
+function advInRange(iso,from,to){
+  if(!from&&!to)return true; if(!iso)return false;
+  var t=new Date(iso).getTime(); if(isNaN(t))return false;
+  if(from&&t<new Date(from+"T00:00:00").getTime())return false;
+  if(to&&t>new Date(to+"T23:59:59").getTime())return false;
+  return true;
+}
+function advMonthOf(mdy){ if(!mdy)return 0; var m=/^(\d{2})-/.exec(mdy); return m?+m[1]:0; }
+function advTaskState(id){
+  var map=ADV_SRC.tasksByLead; if(!map)return null;
+  return map[id]||{has:false,overdue:false,dueToday:false,upcoming:false};
+}
+function advPred(row){
+  var a=ADV; if(!a)return true;
+  if(a.leadType.length&&a.leadType.indexOf(row.intent)<0)return false;
+  if(a.status.length&&a.status.indexOf(row.statusDisp||row.crmStatus)<0)return false;
+  if(a.stage.length&&a.stage.indexOf(row.stageLabel)<0)return false;
+  if(a.assigned.length){
+    var uid=row.assignedUserId||"";
+    var hit=a.assigned.some(function(x){return x==="unassigned"?!uid:x===uid;});
+    if(!hit)return false;
+  }
+  if(a.source.length){
+    var src=String(row.source||"").toLowerCase(), plat=String(row.platform||"").toLowerCase();
+    if(!a.source.some(function(x){x=x.toLowerCase();return src===x||plat===x;}))return false;
+  }
+  var tags=row.tags||[];
+  if(a.tagsInc.length&&!a.tagsInc.some(function(t){return tags.indexOf(t)>=0;}))return false;
+  if(a.tagsExc.length&&a.tagsExc.some(function(t){return tags.indexOf(t)>=0;}))return false;
+  if(a.autoPlan){
+    var en=row.autoPlanEnrollments||[];
+    if(a.autoPlan==="any"){ if(!en.length)return false; }
+    else if(a.autoPlan==="none"){ if(en.length)return false; }
+    else if(!en.some(function(e){return (e&&(e.planName||e.planId))===a.autoPlan||e===a.autoPlan;}))return false;
+  }
+  if(a.hasEmail!==null&&Boolean(row.email)!==a.hasEmail)return false;
+  if(a.hasPhone!==null&&Boolean(row.phone&&String(row.phone).trim())!==a.hasPhone)return false;
+  if(a.hasAddress!==null&&Boolean(row.address&&String(row.address).trim())!==a.hasAddress)return false;
+  if(!advInRange(row.createdAt,a.addedFrom,a.addedTo))return false;
+  if(!advInRange(row.lastActivity,a.lastFrom,a.lastTo))return false;
+  if(a.birthdayMonth&&advMonthOf(row.birthdate)!==a.birthdayMonth)return false;
+  if(a.annivMonth&&advMonthOf(row.anniversary)!==a.annivMonth)return false;
+  if(a.tasks){
+    var ts=advTaskState(row.id);
+    if(!ts)return true; // task data unavailable — filter disabled, never guessed
+    if(a.tasks==="none"&&ts.has)return false;
+    if(a.tasks==="has"&&!ts.has)return false;
+    if(a.tasks==="overdue"&&!ts.overdue)return false;
+    if(a.tasks==="due_today"&&!ts.dueToday)return false;
+    if(a.tasks==="upcoming"&&!ts.upcoming)return false;
+  }
+  return true;
+}
+function advChipDefs(){
+  var a=ADV; if(!a)return [];
+  var out=[]; var MONTHS=["","January","February","March","April","May","June","July","August","September","October","November","December"];
+  function multi(key,label,vals,fmt){ if(vals.length)out.push({key:key,label:label+": "+vals.map(fmt||String).join(", ")}); }
+  multi("leadType","Type",a.leadType,function(v){return v==="buyer"?"Buyer":"Seller";});
+  multi("status","Status",a.status,function(v){return v.toUpperCase();});
+  multi("stage","Stage",a.stage);
+  multi("assigned","Assigned",a.assigned,function(v){var r=ADV_SRC.roster.find(function(x){return x.id===v;});return v==="unassigned"?"Unassigned":(r?r.name:v);});
+  multi("source","Source",a.source);
+  multi("tagsInc","Tags",a.tagsInc);
+  multi("tagsExc","Not tagged",a.tagsExc);
+  if(a.autoPlan)out.push({key:"autoPlan",label:"Auto Plan: "+(a.autoPlan==="any"?"Any plan":a.autoPlan==="none"?"No plan":a.autoPlan)});
+  if(a.hasEmail!==null)out.push({key:"hasEmail",label:a.hasEmail?"Has Email":"No Email"});
+  if(a.hasPhone!==null)out.push({key:"hasPhone",label:a.hasPhone?"Has Phone":"No Phone"});
+  if(a.hasAddress!==null)out.push({key:"hasAddress",label:a.hasAddress?"Has Address":"No Address"});
+  if(a.addedFrom||a.addedTo)out.push({key:"added",label:"Added: "+(a.addedFrom||"…")+" → "+(a.addedTo||"…")});
+  if(a.lastFrom||a.lastTo)out.push({key:"last",label:"Last contact: "+(a.lastFrom||"…")+" → "+(a.lastTo||"…")});
+  if(a.birthdayMonth)out.push({key:"birthdayMonth",label:"Birthday: "+MONTHS[a.birthdayMonth]});
+  if(a.annivMonth)out.push({key:"annivMonth",label:"Home anniversary: "+MONTHS[a.annivMonth]});
+  if(a.tasks)out.push({key:"tasks",label:"Tasks: "+({none:"No tasks",has:"Has tasks",overdue:"Overdue",due_today:"Due today",upcoming:"Upcoming"}[a.tasks]||a.tasks)});
+  return out;
+}
+function advRemoveChip(key){
+  if(!ADV)return;
+  if(key==="added"){ADV.addedFrom="";ADV.addedTo="";}
+  else if(key==="last"){ADV.lastFrom="";ADV.lastTo="";}
+  else if(Array.isArray(ADV[key]))ADV[key]=[];
+  else if(key==="autoPlan"||key==="tasks")ADV[key]="";
+  else if(key==="birthdayMonth"||key==="annivMonth")ADV[key]=0;
+  else ADV[key]=null;
+  if(!advActive())ADV=null;
+  page=1;pPage=1;renderLeads();renderPeople();renderAdvChips();
+}
+function renderAdvChips(){
+  var defs=advChipDefs();
+  ["lChipBar","pChipBar"].forEach(function(id){
+    var bar=document.getElementById(id); if(!bar)return;
+    if(!defs.length){bar.style.display="none";bar.innerHTML="";return;}
+    bar.style.display="flex";
+    bar.innerHTML='<span class="fb-label">filtered</span>'+
+      defs.map(function(d){return '<span class="fchip">'+esc(d.label)+' <span class="x" data-afchip="'+esc(d.key)+'">×</span></span>';}).join("")+
+      '<a class="fb-link" data-afclear="1">Clear All</a>';
+    bar.querySelectorAll("[data-afchip]").forEach(function(x){x.addEventListener("click",function(){advRemoveChip(x.getAttribute("data-afchip"));});});
+    var cl=bar.querySelector("[data-afclear]"); if(cl)cl.addEventListener("click",function(){ADV=null;page=1;pPage=1;renderLeads();renderPeople();renderAdvChips();});
+  });
+  var n=advActive();
+  ["lFilterBtn","pFilterBtn"].forEach(function(id){
+    var b=document.getElementById(id); if(b)b.textContent=n?("FILTERED ("+n+")"):"FILTER";
+  });
+}
+function loadAdvSources(cb){
+  if(ADV_SRC.loaded){cb&&cb();return;}
+  var done=0,need=4; function fin(){if(++done===need){ADV_SRC.loaded=true;cb&&cb();}}
+  fetch(crmApi("/api/tag-templates")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    ADV_SRC.tags=((d&&d.templates)||d||[]).map(function(t){return t&&t.name;}).filter(Boolean);}).catch(function(){}).finally(fin);
+  fetch(crmApi("/api/auto-plans")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    ADV_SRC.plans=((d&&d.plans)||[]).map(function(p){return p&&p.name;}).filter(Boolean);}).catch(function(){}).finally(fin);
+  fetch(crmApi("/api/team/roster")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    ADV_SRC.roster=((d&&d.roster)||[]).map(function(u){return {id:u.id,name:u.name};});}).catch(function(){}).finally(fin);
+  fetch(crmApi("/api/crm-tasks")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    var tasks=(d&&d.tasks)||[]; var map={};
+    var today=new Date(); today.setHours(0,0,0,0); var todayMs=today.getTime(), tomorrowMs=todayMs+86400000;
+    tasks.forEach(function(t){
+      if(!t||!t.leadId)return;
+      var open=t.status!=="completed"&&t.status!=="cancelled";
+      if(!open)return;
+      var m=map[t.leadId]||(map[t.leadId]={has:false,overdue:false,dueToday:false,upcoming:false});
+      m.has=true;
+      var due=t.dueDate?new Date(t.dueDate+"T00:00:00").getTime():NaN;
+      if(!isNaN(due)){ if(due<todayMs)m.overdue=true; else if(due<tomorrowMs)m.dueToday=true; else m.upcoming=true; }
+    });
+    ADV_SRC.tasksByLead=map; ADV_SRC.tasksErr=false;
+  }).catch(function(){ADV_SRC.tasksByLead=null;ADV_SRC.tasksErr=true;}).finally(fin);
+}
+function advDistinctSources(){
+  var set={};
+  LEADS.forEach(function(l){ if(l.source)set[l.source.trim()]=1; if(l.platform&&/insta|tik/i.test(l.platform))set[l.platform.trim()]=1; });
+  return Object.keys(set).sort();
+}
+function advDistinctTags(){
+  var set={}; ADV_SRC.tags.forEach(function(t){set[t]=1;});
+  LEADS.forEach(function(l){(l.tags||[]).forEach(function(t){set[t]=1;});});
+  return Object.keys(set).sort();
+}
+function buildAdvPanel(){
+  var a=ADV_DRAFT, body=document.getElementById("afBody");
+  var MONTHS=["Any month","January","February","March","April","May","June","July","August","September","October","November","December"];
+  function checks(key,opts){
+    return opts.map(function(o){
+      var on=a[key].indexOf(o.v)>=0;
+      return '<label class="afopt"><input type="checkbox" data-afk="'+key+'" data-afv="'+esc(o.v)+'"'+(on?" checked":"")+'> '+esc(o.l)+'</label>';
+    }).join("");
+  }
+  function tri(key,label){
+    var v=a[key];
+    return '<div class="aflab">'+label+'</div><div class="aftri">'+
+      '<button data-aft="'+key+'" data-aftv="null" class="'+(v===null?"on":"")+'">Any</button>'+
+      '<button data-aft="'+key+'" data-aftv="true" class="'+(v===true?"on":"")+'">Has</button>'+
+      '<button data-aft="'+key+'" data-aftv="false" class="'+(v===false?"on":"")+'">None</button></div>';
+  }
+  function group(title,inner,openIt,extra){
+    var key=title.replace(/[^a-z]/gi,"");
+    if(openIt&&ADV_OPEN[key]===undefined)ADV_OPEN[key]=1;
+    var isOpen=!!ADV_OPEN[key];
+    return '<div class="afg'+(isOpen?" open":"")+(extra||"")+'" data-afgk="'+key+'"><button type="button" class="afg-h">'+title+' <span class="car">›</span></button><div class="afg-c">'+inner+'</div></div>';
+  }
+  var stages=Object.keys(STAGE_ORDER);
+  var statuses=[{v:"new",l:"New"},{v:"hot",l:"Hot"},{v:"nurture",l:"Nurture"},{v:"watch",l:"Watch"},{v:"unqualified",l:"Unqualified"}];
+  var roster=ADV_SRC.roster.length?ADV_SRC.roster:[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"},{id:"kendrick",name:"Kendrick"}];
+  var tagOpts=advDistinctTags(), planOpts=ADV_SRC.plans, srcOpts=advDistinctSources();
+  var html="";
+  html+=group("General",
+    '<div class="aflab">Lead Type</div>'+checks("leadType",[{v:"buyer",l:"Buyer"},{v:"seller",l:"Seller"}])+
+    '<div class="aflab">Lead Status</div>'+checks("status",statuses)+
+    '<div class="aflab">Stage</div>'+checks("stage",stages.map(function(s){return {v:s,l:s};}))+
+    '<div class="aflab">Assigned To</div>'+checks("assigned",[{v:"unassigned",l:"Unassigned"}].concat(roster.map(function(u){return {v:u.id,l:u.name};})))+
+    '<div class="aflab">Source</div>'+(srcOpts.length?checks("source",srcOpts.map(function(s){return {v:s,l:s};})):'<div class="afnote">No sources recorded on the current leads.</div>'),
+    true);
+  html+=group("Tags",
+    '<div class="aflab">Include tags</div>'+(tagOpts.length?checks("tagsInc",tagOpts.map(function(t){return {v:t,l:t};})):'<div class="afnote">No tags yet — add tags to leads or create tag templates first.</div>')+
+    '<div class="aflab">Exclude tags</div>'+(tagOpts.length?checks("tagsExc",tagOpts.map(function(t){return {v:t,l:t};})):""));
+  html+=group("Auto Plans",
+    '<div class="aftri">'+
+    '<button data-afplan="" class="'+(a.autoPlan===""?"on":"")+'">Any</button>'+
+    '<button data-afplan="any" class="'+(a.autoPlan==="any"?"on":"")+'">On a plan</button>'+
+    '<button data-afplan="none" class="'+(a.autoPlan==="none"?"on":"")+'">No plan</button></div>'+
+    (planOpts.length?('<div class="aflab">Specific plan</div><select data-afplansel><option value="">—</option>'+planOpts.map(function(p){return '<option'+(a.autoPlan===p?" selected":"")+'>'+esc(p)+'</option>';}).join("")+'</select>'):""));
+  html+=group("Web Activity",
+    '<div class="afnote">Website visit tracking is not connected, so these filters have no data to run on. They will light up when Marco\'s site sends visit events.</div>',
+    false," nodata");
+  html+=group("Contact Info",tri("hasEmail","Email")+tri("hasPhone","Phone")+tri("hasAddress","Address"));
+  html+=group("Appointments &amp; Tasks",
+    ADV_SRC.tasksByLead===null&&ADV_SRC.tasksErr
+      ?'<div class="afnote">Task data could not be loaded — this filter is off rather than guessing.</div>'
+      :'<div class="aftri" style="flex-wrap:wrap">'+
+        [["","Any"],["has","Has tasks"],["none","No tasks"],["overdue","Overdue"],["due_today","Due today"],["upcoming","Upcoming"]].map(function(p){
+          return '<button data-aftask="'+p[0]+'" class="'+(a.tasks===p[0]?"on":"")+'">'+p[1]+'</button>';}).join("")+'</div>');
+  html+=group("Dates",
+    '<div class="aflab">Date added</div><div style="display:flex;gap:6px"><input type="date" data-afd="addedFrom" value="'+esc(a.addedFrom)+'"><input type="date" data-afd="addedTo" value="'+esc(a.addedTo)+'"></div>'+
+    '<div class="aflab">Last contact</div><div style="display:flex;gap:6px"><input type="date" data-afd="lastFrom" value="'+esc(a.lastFrom)+'"><input type="date" data-afd="lastTo" value="'+esc(a.lastTo)+'"></div>'+
+    '<div class="aflab">Birthday month</div><select data-afm="birthdayMonth">'+MONTHS.map(function(m,i){return '<option value="'+i+'"'+(a.birthdayMonth===i?" selected":"")+'>'+m+'</option>';}).join("")+'</select>'+
+    '<div class="aflab">Home anniversary month</div><select data-afm="annivMonth">'+MONTHS.map(function(m,i){return '<option value="'+i+'"'+(a.annivMonth===i?" selected":"")+'>'+m+'</option>';}).join("")+'</select>');
+  body.innerHTML=html;
+  body.querySelectorAll(".afg-h").forEach(function(h){h.addEventListener("click",function(){
+    var g=h.closest(".afg");
+    if(g.classList.contains("nodata")){crmToast("Site visit tracking isn't connected yet, so this filter has no data to run on.");return;}
+    g.classList.toggle("open");
+    ADV_OPEN[g.getAttribute("data-afgk")]=g.classList.contains("open")?1:0;
+  });});
+  body.querySelectorAll("input[data-afk]").forEach(function(cb){cb.addEventListener("change",function(){
+    var k=cb.getAttribute("data-afk"),v=cb.getAttribute("data-afv");
+    var arr=a[k]; var i=arr.indexOf(v);
+    if(cb.checked&&i<0)arr.push(v); if(!cb.checked&&i>=0)arr.splice(i,1);
+  });});
+  body.querySelectorAll("button[data-aft]").forEach(function(b){b.addEventListener("click",function(){
+    var k=b.getAttribute("data-aft"),v=b.getAttribute("data-aftv");
+    a[k]=v==="null"?null:v==="true";
+    buildAdvPanel();
+  });});
+  body.querySelectorAll("button[data-afplan]").forEach(function(b){b.addEventListener("click",function(){
+    a.autoPlan=b.getAttribute("data-afplan"); buildAdvPanel();
+  });});
+  var ps=body.querySelector("select[data-afplansel]");
+  if(ps)ps.addEventListener("change",function(){ if(ps.value)a.autoPlan=ps.value; buildAdvPanel(); });
+  body.querySelectorAll("button[data-aftask]").forEach(function(b){b.addEventListener("click",function(){
+    a.tasks=b.getAttribute("data-aftask"); buildAdvPanel();
+  });});
+  body.querySelectorAll("input[data-afd]").forEach(function(inp){inp.addEventListener("change",function(){a[inp.getAttribute("data-afd")]=inp.value||"";});});
+  body.querySelectorAll("select[data-afm]").forEach(function(sel){sel.addEventListener("change",function(){a[sel.getAttribute("data-afm")]=+sel.value||0;});});
+}
+function openAdvFilter(){
+  ADV_DRAFT=ADV?JSON.parse(JSON.stringify(ADV)):advBlank();
+  loadAdvSources(function(){buildAdvPanel();});
+  buildAdvPanel();
+  document.getElementById("afScrim").classList.add("on");
+}
+function closeAdvFilter(){document.getElementById("afScrim").classList.remove("on");}
+(function wireAdvFilter(){
+  var l=document.getElementById("lFilterBtn"); if(l)l.addEventListener("click",openAdvFilter);
+  var p=document.getElementById("pFilterBtn"); if(p)p.addEventListener("click",openAdvFilter);
+  document.getElementById("afClose").addEventListener("click",closeAdvFilter);
+  document.getElementById("afCancel").addEventListener("click",closeAdvFilter);
+  document.getElementById("afScrim").addEventListener("click",function(e){if(e.target===e.currentTarget)closeAdvFilter();});
+  document.getElementById("afClearAll").addEventListener("click",function(){ADV_DRAFT=advBlank();buildAdvPanel();});
+  document.getElementById("afApply").addEventListener("click",function(){
+    ADV=advActive(ADV_DRAFT)?ADV_DRAFT:null;
+    closeAdvFilter(); page=1;pPage=1;
+    renderLeads();renderPeople();renderAdvChips();
+  });
+})();
+
 /* ---- functional controls: top-bar search, SORT BY, dashboard + email selects ---- */
 document.getElementById("topSearch").addEventListener("input",function(){
   SEARCH=_q(this.value).trim(); page=1; pPage=1; nPage=1;
   renderLeads(); renderPeople(); renderTx(); renderConvos(); renderFeed(); renderNurture();
   if(document.getElementById("view-email")&&document.getElementById("view-email").classList.contains("on")) renderEmail(currentEmail);
 });
+/* SORT BY — a real field picker per table, persisted per user. The pill and
+   the clickable column headers write the same TABLE_PREFS state. */
+var SORT_FIELDS={
+  leads:[[null,"Most recent (default)"],["name","Name"],["status","Status"],["stage","Stage"],["last","Last Interaction"],["created","Date Added"],["source","Source"],["address","Address"],["birthdate","Birthdate"],["anniversary","Home Anniversary"]],
+  people:[[null,"Most recent (default)"],["name","Name"],["status","Status"],["stage","Stage"],["last","Last Interaction"],["created","Date Added"],["source","Source"],["address","Address"]],
+  tx:[[null,"Most recent (default)"],["address","Address / Title"],["list_price","Listing Price"],["close_price","Close Price"],["gci","GCI"],["close_date","Close Date"],["date_listed","Date Listed"],["expiration","Expiration"],["last_updated","Last Updated"],["status","Status"],["source","Source"],["agent","Agent"]]
+};
+function sortViewKey(b){
+  var view=b.closest('[id^="view-"]'); if(!view)return null;
+  return view.id==="view-leads"?"leads":view.id==="view-people"?"people":view.id==="view-tx"?"tx":null;
+}
+function sortFieldLabel(tkey){
+  var st=sortStateFor(tkey);
+  var f=(SORT_FIELDS[tkey]||[]).find(function(p){return p[0]===st.field;});
+  return f?f[1]:"Most recent";
+}
+function paintSortPills(){
+  document.querySelectorAll(".pill-btn.ghost").forEach(function(b){
+    if(!/^SORT BY/i.test(b.textContent))return;
+    var tkey=sortViewKey(b); if(!tkey)return;
+    var st=sortStateFor(tkey);
+    b.textContent="SORT BY: "+sortFieldLabel(tkey).toUpperCase()+(st.field?(st.dir>0?" ↑":" ↓"):"")+" ▾";
+  });
+}
+function openSortMenu(anchor,tkey){
+  var p=tblPrefs(tkey);
+  var rerender=function(){
+    page=1;pPage=1;
+    if(tkey==="leads")renderLeads(); if(tkey==="people")renderPeople(); if(tkey==="tx")renderTx();
+    paintSortArrows(); paintSortPills(); saveTablePrefs(tkey);
+  };
+  var items=(SORT_FIELDS[tkey]||[]).map(function(pair){
+    return {label:pair[1],cur:(p.sortField||null)===pair[0],fn:function(){ p.sortField=pair[0]; if(!pair[0])p.sortDir=1; rerender(); }};
+  });
+  items.push({label:(p.sortDir>0?"▼ Switch to descending":"▲ Switch to ascending"),fn:function(){ p.sortDir=-p.sortDir; rerender(); }});
+  openActionMenu(anchor,items);
+}
 document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
   if(/^SORT BY/i.test(b.textContent)){
+    var tkey=sortViewKey(b); if(!tkey)return;
     b.style.cursor="pointer"; b.dataset.live="1";
-    b.addEventListener("click",()=>{ leadSort=(leadSort==="recent")?"name":"recent"; leadSortCol=null;
-      b.textContent="SORT BY: "+(leadSort==="name"?"NAME A-Z":"MOST RECENT")+" ▾";
-      page=1; pPage=1; renderLeads(); renderPeople(); renderTx(); renderNurture(); if(typeof paintSortArrows==="function")paintSortArrows(); });
+    b.addEventListener("click",function(e){e.stopPropagation();openSortMenu(b,tkey);});
   }
 });
 document.querySelectorAll("#view-dashboard select").forEach(s=>s.addEventListener("change",()=>{ renderTakeAction(); renderTracking(); renderFeed(); }));
@@ -2894,28 +3256,117 @@ function openActionMenu(anchor,items){
   ddMenu.classList.add("on"); ddMenu._for=anchor;
 }
 /* Column show/hide: toggles the Nth <th>/<td> across a table. */
-var HIDDEN_COLS={};   // tableId -> Set of hidden column indexes (as object)
-function applyColHidden(table){
-  var id=table.id||table.dataset.colid||"tbl";
-  var hidden=HIDDEN_COLS[id]||{};
-  var heads=table.querySelectorAll("thead th");
-  heads.forEach(function(th,i){ th.style.display=hidden[i]?"none":""; });
+/* ===== Per-user table preferences: Columns picker + Sort By =====
+   Persisted server-side per user (user-prefs.json), keyed by a slug of the
+   header text so saved prefs survive column reorders and new columns. The
+   old version kept hidden columns in memory by INDEX and never re-applied
+   after a re-render, so any paginate/sort brought the cells back while the
+   headers stayed hidden. Prefs are now applied at the END of every render. */
+function crmUserId(){ try{return localStorage.getItem("marcoTaskUser")||"team";}catch(_){return "team";} }
+var TABLE_PREFS={};   // tableKey -> {hidden:[], order:[], sortField, sortDir}
+function tblPrefs(tkey){ return TABLE_PREFS[tkey]||(TABLE_PREFS[tkey]={hidden:[],order:[],sortField:null,sortDir:1}); }
+function colKey(th){ return (th.textContent||"").replace(/[⇅▾▲▼]/g,"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"")||"col"; }
+function saveTablePrefs(tkey){
+  var p=tblPrefs(tkey);
+  fetch("/api/settings/table-prefs",{method:"PUT",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({user:crmUserId(),table:tkey,prefs:{hidden:p.hidden,order:p.order,sortField:p.sortField,sortDir:p.sortDir}})})
+    .catch(function(){ /* stays for this session; the next load simply won't have it */ });
+}
+function loadTablePrefs(){
+  fetch("/api/settings/table-prefs?user="+encodeURIComponent(crmUserId()))
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(!d||!d.tables)return;
+      Object.keys(d.tables).forEach(function(k){
+        var p=d.tables[k]||{};
+        TABLE_PREFS[k]={hidden:p.hidden||[],order:p.order||[],sortField:p.sortField||null,sortDir:p.sortDir===-1?-1:1};
+      });
+      renderLeads(); renderPeople(); renderTx(); paintSortArrows(); paintSortPills();
+    }).catch(function(){});
+}
+function applyColPrefs(table,tkey){
+  if(!table)return;
+  var p=TABLE_PREFS[tkey]; if(!p||(!p.hidden.length&&!p.order.length))return;
+  var headRow=table.querySelector("thead tr"); if(!headRow)return;
+  var ths=[].slice.call(headRow.children);
+  var byKey={}; ths.forEach(function(th,i){ byKey[colKey(th)]=i; });
+  // Reorder: saved keys first (in order), then everything else in current order.
+  if(p.order.length){
+    var seq=p.order.filter(function(k){return byKey[k]!=null;}).map(function(k){return byKey[k];});
+    var rest=ths.map(function(_,i){return i;}).filter(function(i){return seq.indexOf(i)<0;});
+    var newIdx=seq.concat(rest);
+    var same=newIdx.every(function(v,i){return v===i;});
+    if(!same){
+      var rows=[headRow].concat([].slice.call(table.querySelectorAll("tbody tr")));
+      rows.forEach(function(tr){
+        var cells=[].slice.call(tr.children);
+        if(cells.length!==ths.length)return;   // malformed row (colspan etc.) — leave it
+        newIdx.forEach(function(oldI){ tr.appendChild(cells[oldI]); });
+      });
+    }
+  }
+  // Hide AFTER reorder, matching keys against the (possibly moved) headers.
+  var hiddenSet={}; p.hidden.forEach(function(k){hiddenSet[k]=1;});
+  var ths2=[].slice.call(headRow.children);
+  var hideIdx=[]; ths2.forEach(function(th,i){ if(hiddenSet[colKey(th)])hideIdx.push(i); th.style.display=hiddenSet[colKey(th)]?"none":""; });
   table.querySelectorAll("tbody tr").forEach(function(tr){
-    var cells=tr.children;
-    for(var i=0;i<cells.length;i++) cells[i].style.display=hidden[i]?"none":"";
+    var cells=tr.children; if(cells.length!==ths2.length)return;
+    for(var i=0;i<cells.length;i++) cells[i].style.display="";
+    hideIdx.forEach(function(i){ if(cells[i])cells[i].style.display="none"; });
   });
 }
-function openColumnsMenu(anchor,table){
+function openColumnsMenu(anchor,table,tkey){
   if(!table){ crmToast("No table here"); return; }
-  var id=table.id||(table.dataset.colid="cols-"+Math.random().toString(36).slice(2,7));
-  HIDDEN_COLS[id]=HIDDEN_COLS[id]||{};
-  var hidden=HIDDEN_COLS[id];
-  var heads=[].slice.call(table.querySelectorAll("thead th"));
-  var items=heads.map(function(th,i){
-    var name=(th.textContent||("Column "+(i+1))).replace(/[⇅▾]/g,"").trim()||("Column "+(i+1));
-    return {label:name,check:!hidden[i],fn:function(){ hidden[i]=!!(!hidden[i]?1:0); if(!hidden[i])delete hidden[i]; applyColHidden(table); openColumnsMenu(anchor,table); return true; }};
+  tkey=tkey||"tbl";
+  var p=tblPrefs(tkey);
+  var headRow=table.querySelector("thead tr");
+  var ths=[].slice.call(headRow.children);
+  // Menu lists columns in their CURRENT display order (prefs already applied).
+  var cols=ths.map(function(th){
+    var key=colKey(th);
+    var name=(th.textContent||"").replace(/[⇅▾▲▼]/g,"").trim()||key;
+    return {key:key,name:name||"(checkbox)"};
   });
-  openActionMenu(anchor,items);
+  function rerender(){
+    // Recording order = the full current sequence with the moved key applied.
+    renderLeads&&tkey==="leads"&&renderLeads();
+    tkey==="people"&&renderPeople(); tkey==="tx"&&renderTx();
+    if(tkey!=="leads"&&tkey!=="people"&&tkey!=="tx")applyColPrefs(table,tkey);
+    saveTablePrefs(tkey);
+    openColumnsMenu(anchor,table,tkey);
+  }
+  ddMenu.innerHTML='<div style="max-height:340px;overflow-y:auto;min-width:230px">'+cols.map(function(c,i){
+    var hidden=p.hidden.indexOf(c.key)>=0;
+    return '<div style="display:flex;align-items:center;gap:6px;padding:4px 10px">'+
+      '<input type="checkbox" data-ck="'+esc(c.key)+'"'+(hidden?"":" checked")+' style="accent-color:var(--teal)">'+
+      '<span style="flex:1;font-size:12.5px;color:#414c57">'+esc(c.name)+'</span>'+
+      '<button data-mv="-1" data-i="'+i+'" title="Move up" style="border:none;background:none;cursor:pointer;color:#7d8894"'+(i===0?" disabled":"")+'>▲</button>'+
+      '<button data-mv="1" data-i="'+i+'" title="Move down" style="border:none;background:none;cursor:pointer;color:#7d8894"'+(i===cols.length-1?" disabled":"")+'>▼</button>'+
+    '</div>';
+  }).join("")+'</div>'+
+  '<div style="border-top:1px solid var(--line);padding:6px 10px"><button data-colreset style="border:none;background:none;color:var(--teal-strong);font-size:12px;font-weight:700;cursor:pointer">Reset to default</button></div>';
+  ddMenu.querySelectorAll("input[data-ck]").forEach(function(cb){cb.addEventListener("change",function(e){
+    e.stopPropagation();
+    var k=cb.getAttribute("data-ck"), idx=p.hidden.indexOf(k);
+    if(cb.checked&&idx>=0)p.hidden.splice(idx,1);
+    if(!cb.checked&&idx<0)p.hidden.push(k);
+    rerender();
+  });});
+  ddMenu.querySelectorAll("button[data-mv]").forEach(function(b){b.addEventListener("click",function(e){
+    e.stopPropagation();
+    var i=+b.getAttribute("data-i"), d=+b.getAttribute("data-mv"), j=i+d;
+    if(j<0||j>=cols.length)return;
+    var seq=cols.map(function(c){return c.key;});
+    var tmp=seq[i]; seq[i]=seq[j]; seq[j]=tmp;
+    p.order=seq;
+    rerender();
+  });});
+  var rst=ddMenu.querySelector("[data-colreset]");
+  if(rst)rst.addEventListener("click",function(e){e.stopPropagation();p.hidden=[];p.order=[];rerender();});
+  var r=anchor.getBoundingClientRect();
+  ddMenu.style.left=Math.max(8,Math.min(r.left,window.innerWidth-260))+"px";
+  ddMenu.style.top=(r.bottom+4)+"px";
+  ddMenu.classList.add("on");
 }
 function leadsToCsv(rows){
   var cols=["name","statusDisp","stageLabel","phone","email","source","address","lastLabel"];
@@ -2949,7 +3400,7 @@ function applyTxFilters(){
   renderTx();
   var now=new Date(), y=now.getFullYear();
   var rows=document.querySelectorAll("#txRows tr");
-  var list=(typeof sortRows==="function"?sortRows(txFor(txBucket).filter(hitRow)):txFor(txBucket).filter(hitRow));
+  var list=(typeof sortRows==="function"?sortRows(txFor(txBucket).filter(hitRow),"tx"):txFor(txBucket).filter(hitRow));
   list.forEach(function(t,i){
     var tr=rows[i]; if(!tr) return; var show=true;
     if(txDateRange!=="all"){ var ty=txYearOf(t);
@@ -2978,7 +3429,9 @@ function wireToolbarDropdowns(){
     } else if(/^COLUMNS/.test(t)){
       b.dataset.ddwired="1"; b.dataset.dd="1"; b.style.cursor="pointer";
       b.addEventListener("click",function(e){e.stopPropagation();
-        var tb=view?view.querySelector("table.leads")||view.querySelector("table"):null; openColumnsMenu(b,tb);});
+        var tb=view?view.querySelector("table.leads")||view.querySelector("table"):null;
+        var tkey=view?(view.id==="view-leads"?"leads":view.id==="view-people"?"people":view.id==="view-tx"?"tx":view.id):null;
+        openColumnsMenu(b,tb,tkey);});
     } else if(/(THIS YEAR|THIS QUARTER|LAST YEAR)/.test(t)&&view&&view.id==="view-tx"){
       b.dataset.ddwired="1"; b.dataset.dd="1"; b.style.cursor="pointer";
       b.addEventListener("click",function(e){e.stopPropagation();openActionMenu(b,txDateItems(b));});
@@ -3057,11 +3510,19 @@ function openEditMenu(el){
   ddMenu.classList.add("on");
 }
 /* Birthdate / Home Anniversary — click-to-edit date cells (Brivity-style
-   nurture triggers). No dedicated server field for these yet, so they
-   persist client-side + sync onto the People-tab row, same as Address. */
+   nurture triggers). Persisted to the lead record (birthday /
+   homeAnniversary, ISO) so they survive reload and feed the Dates filters. */
 function dtCell(l,kind){
   var v=l[kind];
   return '<td><span class="dtcell" data-lid="'+esc(l.id)+'" data-kind="'+kind+'">'+(v?esc(v):'<span class="addlink">Add</span>')+'</span></td>';
+}
+/* "MM/DD/YYYY" or "MM-DD-YYYY" -> "YYYY-MM-DD"; ""/null for blank; false for junk. */
+function mdyToIsoStrict(v){
+  if(!v) return null;
+  var m=/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(v.trim()); if(!m) return false;
+  var mo=+m[1], d=+m[2];
+  if(mo<1||mo>12||d<1||d>31) return false;
+  return m[3]+"-"+String(mo).padStart(2,"0")+"-"+String(d).padStart(2,"0");
 }
 function startDateEdit(el){
   var lid=el.getAttribute("data-lid"), kind=el.getAttribute("data-kind");
@@ -3074,10 +3535,20 @@ function startDateEdit(el){
   var done=false;
   function commit(){
     if(done)return; done=true;
-    var v=inp.value.trim(); l[kind]=v;
-    var pe=PEOPLE.find(function(x){return x.id===lid;}); if(pe)pe[kind]=v;
+    var v=inp.value.trim();
+    var iso=mdyToIsoStrict(v);
+    if(iso===false){ renderLeads(); renderPeople(); renderNurture(); crmToast("Use MM/DD/YYYY (or leave blank to clear)"); return; }
+    var disp=iso?fmtMDY(iso):"";
+    l[kind]=disp;
+    var pe=PEOPLE.find(function(x){return x.id===lid;}); if(pe)pe[kind]=disp;
     renderLeads(); renderPeople(); renderNurture();
-    crmToast((kind==="birthdate"?"Birthdate":"Home anniversary")+" updated");
+    var label=(kind==="birthdate"?"Birthdate":"Home anniversary");
+    if(!l._live){ crmToast(label+" updated (demo row — not saved)"); return; }
+    var field=(kind==="birthdate")?"birthday":"homeAnniversary";
+    var body={}; body[field]=iso;
+    fetch(crmApi("/api/crm/lead/"+encodeURIComponent(lid)),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+      .then(function(r){ crmToast(r.ok?(label+" saved"):(label+" could not be saved")); })
+      .catch(function(){ crmToast(label+" could not be saved (offline?)"); });
   }
   inp.addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();commit();}else if(ev.key==="Escape"){done=true;renderLeads();renderPeople();renderNurture();}});
   inp.addEventListener("blur",commit);
@@ -3183,7 +3654,7 @@ function openLead(id, tab){ const l=LEADS.find(x=>x.id===id); if(!l)return; curr
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-lead").classList.add("on"); window.scrollTo(0,0); renderLead(); }
 function backToLeads(){ document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-leads").classList.add("on");
   document.querySelectorAll(".rail .r").forEach(x=>x.classList.remove("on")); document.querySelectorAll('.rail .r[data-view="leads"]').forEach(x=>x.classList.add("on")); }
-function stepLead(dir){ const list=sortRows(LEADS.filter(hitRow)); const i=list.findIndex(x=>x.id===currentLeadId); const n=list[i+dir]; if(n) openLead(n.id); }
+function stepLead(dir){ const list=sortRows(LEADS.filter(hitRow),"leads"); const i=list.findIndex(x=>x.id===currentLeadId); const n=list[i+dir]; if(n) openLead(n.id); }
 function renderLead(){
   const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
   const sm=STATUS_META[l.statusDisp]||STATUS_META.nurture;
@@ -3317,7 +3788,19 @@ function renderTimeline(){
   document.getElementById("ldTimeline").innerHTML=items.length?items.map(a=>'<div class="tl"><div class="dot">'+icon(a.type)+'</div><div><div class="tt">'+esc((a.type||"activity").charAt(0).toUpperCase()+(a.type||"activity").slice(1))+(a.note?" - "+esc(a.note):"")+'</div><div class="tm">'+(a.at?relTime(a.at):"")+'</div></div></div>').join(""):'<div class="empty" style="padding:16px 0">No activity logged yet.</div>';
 }
 document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")&&!e.target.closest("[data-dd]")&&!e.target.closest("select")&&!e.target.closest("#userFilter")) closeDD(); });
-window.addEventListener("scroll",closeDD,true);
+/* Close anchored menus when the page scrolls out from under them — but NOT
+   when the scroll happens INSIDE the menu (the Columns picker has its own
+   scrollable list; scrolling it must not close it). */
+window.addEventListener("scroll",function(e){
+  var t=e.target;
+  if(t&&t.nodeType===1&&ddMenu.contains(t))return;
+  closeDD();
+},true);
+/* Clicks inside the menu never bubble to the document-level closer. Without
+   this, toggling a Columns checkbox rebuilt the menu mid-click, the original
+   target was detached by the rebuild, closest("#ddMenu") failed, and the
+   closer shut the menu on every toggle. */
+ddMenu.addEventListener("click",function(e){ e.stopPropagation(); });
 window.addEventListener("resize",closeDD);
 
 /* ═══════════ Lead Nurture + Finance views ═══════════ */
@@ -3638,8 +4121,11 @@ function leadRecs(l){
   recs.push("Send the "+((l.criteria&&l.criteria.location)?l.criteria.location.split(",")[0]:"local")+" market report to stay top of mind.");
   return recs.slice(0,4);
 }
-// Filter chip bars: × removes, Save toasts, Clear All resets
+// Filter chip bars: × removes, Save toasts, Clear All resets.
+// lChipBar/pChipBar are owned by the advanced filter (renderAdvChips), whose
+// chips carry their own handlers — the legacy delegate must not touch them.
 document.querySelectorAll(".filter-bar").forEach(bar=>{
+  if(bar.id==="lChipBar"||bar.id==="pChipBar")return;
   bar.addEventListener("click",e=>{
     const x=e.target.closest(".fchip .x, .x");
     if(x&&x.closest(".fchip")){ x.closest(".fchip").remove();
@@ -3809,6 +4295,8 @@ document.getElementById("actSave").addEventListener("click",()=>{
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");renderNurture();renderFinance();
 refreshEmailConn();
 wireToolbarDropdowns();
+loadTablePrefs();      // per-user Columns + Sort By, saved server-side
+paintSortPills();
 if(typeof paintSortArrows==="function")paintSortArrows();
 
 /* ===== Always-visible top scrollbar (mirrors each table's bottom bar) =====

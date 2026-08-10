@@ -115,7 +115,12 @@ export function setCommandTimeZone(timeZone: string, updatedBy?: string): Comman
   if (!isValidTimeZone(timeZone)) {
     throw new Error(`Unknown time zone: ${timeZone}`);
   }
+  /* Spread the current settings first: this file also holds every user's
+     saved dashboard layout, and rebuilding from scratch here silently wiped
+     them all on any time-zone change. */
+  const current = getCommandSettings();
   const next: CommandSettings = {
+    ...current,
     timeZone: timeZone.trim(),
     updatedAt: new Date().toISOString(),
     updatedBy: updatedBy?.trim() || undefined,

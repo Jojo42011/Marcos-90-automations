@@ -30,6 +30,13 @@ function normalizeFilterSource(label: string): string {
   return label.trim().toLowerCase();
 }
 
+/** 1-12 from a YYYY-MM-DD string, or 0 when absent/garbled. */
+function monthOf(day: string | null | undefined): number {
+  if (!day) return 0;
+  const m = /^\d{4}-(\d{2})-\d{2}$/.exec(day);
+  return m ? Number(m[1]) : 0;
+}
+
 function leadMatchesSource(row: DashboardLeadRow, sources: string[]): boolean {
   const plat = String(row.platform || "").toLowerCase();
   const src = String(row.source || "").toLowerCase();
@@ -62,12 +69,27 @@ export function applyLeadFilter(rows: DashboardLeadRow[], filter: LeadFilter): D
       const tags = row.tags || [];
       if (!filter.tags.some((t) => tags.includes(t))) return false;
     }
+    if (filter.tagsExclude?.length) {
+      const tags = row.tags || [];
+      if (filter.tagsExclude.some((t) => tags.includes(t))) return false;
+    }
     if (!inDateRange(row.createdAt, filter.dateAddedFrom, filter.dateAddedTo)) return false;
     if (!inDateRange(row.lastActivity, filter.lastContactFrom, filter.lastContactTo)) return false;
     if (filter.assignedUser) {
       const uid = filter.assignedUser.trim();
       if (uid && uid !== "all" && (row.assignedUserId || "") !== uid) return false;
     }
+    if (filter.hasEmail !== undefined && Boolean(row.email && String(row.email).trim()) !== filter.hasEmail) return false;
+    if (filter.hasPhone !== undefined && Boolean(row.phone && String(row.phone).trim()) !== filter.hasPhone) return false;
+    if (filter.hasAddress !== undefined && Boolean(row.address && String(row.address).trim()) !== filter.hasAddress) return false;
+    if (filter.autoPlan) {
+      const enrollments = row.autoPlanEnrollments || [];
+      if (filter.autoPlan === "any") { if (!enrollments.length) return false; }
+      else if (filter.autoPlan === "none") { if (enrollments.length) return false; }
+      else if (!enrollments.some((e) => String((e as { planName?: string; planId?: string }).planName || (e as { planId?: string }).planId || "") === filter.autoPlan)) return false;
+    }
+    if (filter.birthdayMonth && monthOf(row.birthday) !== filter.birthdayMonth) return false;
+    if (filter.anniversaryMonth && monthOf(row.homeAnniversary) !== filter.anniversaryMonth) return false;
     return true;
   });
 }

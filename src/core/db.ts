@@ -1089,6 +1089,9 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
       crmCallQueue: lead.crmCallQueue,
       crmNotes: lead.crmNotes,
       tags: normalizeCrmTags(lead.tags),
+      address: typeof lead.address === "string" && lead.address.trim() ? lead.address.trim() : null,
+      birthday: normalizeIsoDay(lead.birthday),
+      homeAnniversary: normalizeIsoDay(lead.homeAnniversary),
       alerts: typeof lead.alerts === "number" && lead.alerts > 0 ? lead.alerts : 0,
       reports: typeof lead.reports === "number" && lead.reports > 0 ? lead.reports : 0,
       createdAt: lead.createdAt,
@@ -1196,6 +1199,15 @@ export async function appendLeadActivity(
   });
 }
 
+/** A date-only field is either a valid YYYY-MM-DD string or null — junk never sticks. */
+export function normalizeIsoDay(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(s + "T00:00:00Z");
+  return Number.isNaN(d.getTime()) ? null : s;
+}
+
 export async function updateLeadCrmFields(input: {
   leadId: string;
   crmStatus?: CrmStatusValue;
@@ -1212,6 +1224,9 @@ export async function updateLeadCrmFields(input: {
   brivityId?: string | null;
   criteria?: Partial<Criteria> | null;
   tags?: string[] | null;
+  address?: string | null;
+  birthday?: string | null;
+  homeAnniversary?: string | null;
   deal?: unknown;
   activity?: unknown;
   lastActivity?: string | null;
@@ -1281,6 +1296,17 @@ export async function updateLeadCrmFields(input: {
     brivityId: input.brivityId !== undefined ? input.brivityId : lead.brivityId,
     criteria,
     tags: input.tags !== undefined ? normalizeCrmTags(input.tags) : normalizeCrmTags(lead.tags),
+    address:
+      input.address !== undefined
+        ? input.address === null || !String(input.address).trim()
+          ? null
+          : String(input.address).trim()
+        : lead.address ?? null,
+    birthday: input.birthday !== undefined ? normalizeIsoDay(input.birthday) : normalizeIsoDay(lead.birthday),
+    homeAnniversary:
+      input.homeAnniversary !== undefined
+        ? normalizeIsoDay(input.homeAnniversary)
+        : normalizeIsoDay(lead.homeAnniversary),
     deal: input.deal !== undefined ? normalizeCrmDeal(input.deal) : normalizeCrmDeal(lead.deal),
     activity: input.activity !== undefined ? normalizeCrmActivity(input.activity) : normalizeCrmActivity(lead.activity),
     lastActivity: input.lastActivity !== undefined ? input.lastActivity : (lead.lastActivity ?? null),
