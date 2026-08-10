@@ -2282,6 +2282,7 @@ function mapApiTx(t){
              expired:1,withdrawn:1,canceled:1,archived:1};
   return {
     id:t.id,
+    leadId:t.leadId||null,
     address:t.address||"-",
     city:"",
     type:(t.dealType==="seller")?"S":(t.dealType==="dual"?"D":"B"),
@@ -2826,6 +2827,8 @@ function mapLeadRow(l){
     autoPlanEnrollments:l.autoPlanEnrollments||[], crmCallQueue:l.crmCallQueue,
     tags:l.tags||[], assignedUserId:l.assignedUserId||null, assignedUserName:l.assignedUserName||null,
     birthdate:fmtMDY(l.birthday), anniversary:fmtMDY(l.homeAnniversary),
+    description:l.description||"", letterSalutation:l.letterSalutation||"", envelopeSalutation:l.envelopeSalutation||"",
+    preferredLanguage:l.preferredLanguage||"", relationships:l.relationships||[],
     propertyInquired:l.propertyInquired||null, _msgs:l.messages||[], _lastMsgAt:l.lastMessageAt, _live:true,
   };
 }
@@ -3709,6 +3712,8 @@ function renderLead(){
         '<div class="ld-field"><span class="k">PHONE</span><span class="v" style="display:flex;align-items:center;gap:8px">'+(ldEditing?'<input id="ldPhoneIn" class="ld-edit-in" value="'+esc(l.phone||"")+'" placeholder="(555) 555-5555">':(actIcon("phone")+actIcon("sms")+esc(l.phone||"-")))+'</span></div>'+
         (ldEditing?'<div class="ld-field"><span class="k">ADDRESS</span><span class="v" style="max-width:180px;text-align:right"><input id="ldAddrIn" class="ld-edit-in" value="'+esc(l.address||"")+'" placeholder="Street address"></span></div>'
           :(l.address?'<div class="ld-field"><span class="k">ADDRESS</span><span class="v" style="max-width:180px;text-align:right">'+esc(l.address)+'</span></div>':''))+
+        detailsBlockHTML(l)+
+        relationshipsBlockHTML(l)+
       '</div>'+
       '<div>'+
         '<div class="ai-panel"><div class="ai-top"><h4>✦ Harvey AI ▾</h4><span class="ai-upd">↻ Updated: '+esc(fmtUpdated(l.lastActivity||l.updatedAt))+'</span></div><div class="ai-tabs"><button data-ai="rec" class="'+(aiTab==="rec"?"on":"")+'">Harvey Recommends</button><button data-ai="about" class="'+(aiTab==="about"?"on":"")+'">About This Lead</button></div><ul>'+(aiTab==="rec"?leadRecs(l):leadInsights(l)).map(i=>'<li>'+esc(i)+'</li>').join("")+'</ul></div>'+
@@ -3719,7 +3724,10 @@ function renderLead(){
          the first thing worth knowing, and a price cut or a move to Pending
          outranks anything below it. Empty when there is nothing real. */
       '<div><div id="ldMls"></div><div class="ld-card">'+
-        '<div class="rblock"><h5>Assigned To: <button class="mini-pill">MANAGE</button></h5><div class="assign-row"><div class="av has-marco-photo"></div><div><div style="font-weight:700;color:#4a5560">Marco Puga</div><div style="color:var(--muted);font-size:12px">Primary Agent</div></div></div></div>'+
+        '<div class="rblock"><h5>Assigned To: <button class="mini-pill" id="ldAssignBtn">MANAGE</button></h5><div class="assign-row" id="ldAssignRow"><div class="av'+(l.assignedUserName?'':' has-marco-photo')+'">'+(l.assignedUserName?esc(initials(l.assignedUserName)):'')+'</div><div><div style="font-weight:700;color:#4a5560">'+esc(l.assignedUserName||"Marco Puga")+'</div><div style="color:var(--muted);font-size:12px">'+(l.assignedUserName?"Assigned agent":"Primary Agent (default)")+'</div></div></div></div>'+
+        '<div class="rblock"><h5>Transactions</h5><div id="ldTxBlk" style="font-size:12.5px"></div></div>'+
+        '<div class="rblock"><h5>Tasks <button class="mini-pill" id="ldTaskAdd">+ ADD</button></h5><div id="ldTasksBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
+        '<div class="rblock"><h5>Auto Plans <button class="mini-pill" id="ldPlanAdd">+ ADD</button></h5><div id="ldPlansBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
         '<div class="rblock"><h5>Web Activity <button class="mini-pill">VIEW</button></h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5">See when this contact visits your site and which homes they view.</div></div>'+
         '<div class="rblock"><h5>Agreements</h5><button class="rbtn">+ BUYER</button><button class="rbtn">+ SELLER</button><button class="rbtn">+ REFERRAL</button></div>'+
         '<div class="rblock"><h5>Appointments <button class="mini-pill">+ ADD</button></h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5">Create an appointment for this contact and assign it to yourself or a teammate.</div></div>'+
@@ -3742,7 +3750,7 @@ function renderLead(){
     if(pe){ pe.name=name; pe.email=email; pe.phone=phone; pe.address=address; }
     ldEditing=false; renderLead(); renderLeads(); renderPeople();
     fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)),{method:"PATCH",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({name:name,email:email||null,phone:phone||null})})
+      body:JSON.stringify({name:name,email:email||null,phone:phone||null,address:address||null})})
       .then(function(r){crmToast(r&&r.ok?"Lead updated":"Updated locally");}).catch(function(){crmToast("Updated locally");});
   });
   document.getElementById("ldEmailIn")&&document.getElementById("ldEmailIn").addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();document.getElementById("ldEdit").click();}});
@@ -3760,11 +3768,211 @@ function renderLead(){
     ]);
   });
   renderLeadTab(); renderTimeline();
+  wireDetailsBlock(l); wireRelationshipsBlock(l); wireAssignBlock(l);
+  paintLeadTx(l); paintLeadTasks(l); paintLeadPlans(l);
 }
+
+/* ===== Profile blocks: Details / Relationships / Assigned To / Tasks /
+   Auto Plans / Transactions. All read and write REAL APIs; the demo rows
+   degrade to a local-only toast rather than pretending to save. ===== */
+function detailsBlockHTML(l){
+  var tags=(l.tags||[]).map(function(t){return '<span class="fchip" style="font-size:11px">'+esc(t)+' <span class="x" data-rmtag="'+esc(t)+'">×</span></span>';}).join(" ");
+  return '<div class="ld-sec-h" style="border-top:1px solid var(--line-2);padding-top:16px;margin-top:14px">Details</div>'+
+    '<div class="ld-flabel">Description</div>'+
+    '<textarea class="ld-note" id="ldDescIn" style="min-height:56px;font-size:12.5px" placeholder="Background on how this lead came in…">'+esc(l.description||"")+'</textarea>'+
+    '<div class="ld-flabel" style="margin-top:8px">Tags</div>'+
+    '<div id="ldTagRow" style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">'+(tags||'<span style="color:#98a2ac;font-size:12px">No tags</span>')+'</div>'+
+    '<div style="display:flex;gap:6px"><input class="ld-input" id="ldTagIn" placeholder="Add a tag" style="flex:1;font-size:12px" list="ldTagOpts"><datalist id="ldTagOpts"></datalist><button class="mini-pill" id="ldTagAdd">+</button></div>'+
+    '<div class="ld-flabel" style="margin-top:8px">Letter Salutation</div><input class="ld-input" id="ldLetSal" style="font-size:12.5px" value="'+esc(l.letterSalutation||"")+'" placeholder="Dear Maria">'+
+    '<div class="ld-flabel" style="margin-top:8px">Envelope Salutation</div><input class="ld-input" id="ldEnvSal" style="font-size:12.5px" value="'+esc(l.envelopeSalutation||"")+'" placeholder="Maria Gonzales">'+
+    '<div class="ld-flabel" style="margin-top:8px">Preferred Language</div><input class="ld-input" id="ldLang" style="font-size:12.5px" value="'+esc(l.preferredLanguage||"")+'" placeholder="English">'+
+    '<div style="margin-top:8px;text-align:right"><button class="mini-pill" id="ldDetSave">SAVE DETAILS</button></div>';
+}
+function ldPatch(l,body,okMsg){
+  if(!l._live){ crmToast(okMsg+" (demo row — not saved)"); return Promise.resolve(false); }
+  return fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+    .then(function(r){ crmToast(r.ok?okMsg:"Could not save"); return r.ok; })
+    .catch(function(){ crmToast("Could not reach the server"); return false; });
+}
+function wireDetailsBlock(l){
+  var add=document.getElementById("ldTagAdd"); if(!add)return;
+  // datalist offers the tag templates + tags in use
+  fetch(crmApi("/api/tag-templates")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    var dl=document.getElementById("ldTagOpts"); if(!dl)return;
+    var names={}; (((d&&d.templates)||[])).forEach(function(t){if(t&&t.name)names[t.name]=1;});
+    LEADS.forEach(function(x){(x.tags||[]).forEach(function(t){names[t]=1;});});
+    dl.innerHTML=Object.keys(names).sort().map(function(n){return '<option value="'+esc(n)+'">';}).join("");
+  }).catch(function(){});
+  function saveTags(){ ldPatch(l,{tags:l.tags||[]},"Tags saved").then(function(){ renderLead(); }); }
+  add.addEventListener("click",function(){
+    var inp=document.getElementById("ldTagIn"); var v=(inp.value||"").trim(); if(!v)return;
+    l.tags=l.tags||[]; if(l.tags.indexOf(v)<0)l.tags.push(v);
+    inp.value=""; saveTags();
+  });
+  document.getElementById("ldTagIn").addEventListener("keydown",function(e){ if(e.key==="Enter"){e.preventDefault();add.click();} });
+  document.querySelectorAll("#ldTagRow [data-rmtag]").forEach(function(x){x.addEventListener("click",function(){
+    l.tags=(l.tags||[]).filter(function(t){return t!==x.getAttribute("data-rmtag");}); saveTags();
+  });});
+  document.getElementById("ldDetSave").addEventListener("click",function(){
+    l.description=document.getElementById("ldDescIn").value;
+    l.letterSalutation=document.getElementById("ldLetSal").value.trim();
+    l.envelopeSalutation=document.getElementById("ldEnvSal").value.trim();
+    l.preferredLanguage=document.getElementById("ldLang").value.trim();
+    ldPatch(l,{description:l.description||null,letterSalutation:l.letterSalutation||null,envelopeSalutation:l.envelopeSalutation||null,preferredLanguage:l.preferredLanguage||null},"Details saved");
+  });
+}
+function relationshipsBlockHTML(l){
+  var rows=(l.relationships||[]).map(function(r,i){
+    var linked=r.leadId&&LEADS.some(function(x){return x.id===r.leadId;});
+    return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12.5px">'+
+      '<span style="color:#7d8894">'+esc(r.relation)+':</span>'+
+      (linked?'<a class="ldlink" data-lid="'+esc(r.leadId)+'" style="cursor:pointer;color:var(--teal-strong);font-weight:600">'+esc(r.name)+'</a>':'<span style="font-weight:600;color:#4a5560">'+esc(r.name)+'</span>')+
+      '<span class="x" data-rmrel="'+i+'" style="margin-left:auto;cursor:pointer;color:#c2cad1">×</span></div>';
+  }).join("");
+  return '<div class="ld-sec-h" style="border-top:1px solid var(--line-2);padding-top:16px;margin-top:14px">Relationships</div>'+
+    '<div id="ldRelRows">'+(rows||'<div style="color:#98a2ac;font-size:12px">None linked</div>')+'</div>'+
+    '<div style="display:flex;gap:4px;margin-top:6px"><input class="ld-input" id="ldRelName" placeholder="Name" style="flex:1.2;font-size:12px" list="ldRelOpts"><datalist id="ldRelOpts"></datalist><input class="ld-input" id="ldRelKind" placeholder="Spouse / Referred by…" style="flex:1;font-size:12px"><button class="mini-pill" id="ldRelAdd">+</button></div>';
+}
+function wireRelationshipsBlock(l){
+  var add=document.getElementById("ldRelAdd"); if(!add)return;
+  var dl=document.getElementById("ldRelOpts");
+  if(dl)dl.innerHTML=LEADS.filter(function(x){return x.id!==l.id;}).slice(0,400).map(function(x){return '<option value="'+esc(x.name)+'">';}).join("");
+  add.addEventListener("click",function(){
+    var name=(document.getElementById("ldRelName").value||"").trim();
+    var kind=(document.getElementById("ldRelKind").value||"").trim();
+    if(!name||!kind){ crmToast("Name and relationship are both needed"); return; }
+    var match=LEADS.find(function(x){return x.id!==l.id&&(x.name||"").toLowerCase()===name.toLowerCase();});
+    l.relationships=l.relationships||[];
+    var entry={name:name,relation:kind}; if(match)entry.leadId=match.id;
+    l.relationships.push(entry);
+    ldPatch(l,{relationships:l.relationships},"Relationship added").then(function(){ renderLead(); });
+  });
+  document.querySelectorAll("#ldRelRows [data-rmrel]").forEach(function(x){x.addEventListener("click",function(){
+    l.relationships.splice(+x.getAttribute("data-rmrel"),1);
+    ldPatch(l,{relationships:l.relationships},"Relationship removed").then(function(){ renderLead(); });
+  });});
+  document.querySelectorAll("#ldRelRows .ldlink").forEach(function(a){a.addEventListener("click",function(){ openLead(a.getAttribute("data-lid")); });});
+}
+var LD_ROSTER=null;
+function ensureRoster(cb){
+  if(LD_ROSTER){cb(LD_ROSTER);return;}
+  fetch(crmApi("/api/team/roster")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    LD_ROSTER=((d&&d.roster)||[]).map(function(u){return {id:u.id,name:u.name};});
+    if(!LD_ROSTER.length)LD_ROSTER=[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"},{id:"kendrick",name:"Kendrick"}];
+    cb(LD_ROSTER);
+  }).catch(function(){ LD_ROSTER=[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"},{id:"kendrick",name:"Kendrick"}]; cb(LD_ROSTER); });
+}
+function wireAssignBlock(l){
+  var btn=document.getElementById("ldAssignBtn"); if(!btn)return;
+  btn.addEventListener("click",function(e){
+    e.stopPropagation();
+    ensureRoster(function(roster){
+      openActionMenu(btn,roster.map(function(u){
+        return {label:u.name,cur:l.assignedUserId===u.id,fn:function(){
+          l.assignedUserId=u.id; l.assignedUserName=u.name;
+          ldPatch(l,{assignedUserId:u.id,assignedUserName:u.name},"Assigned to "+u.name).then(function(){ renderLead(); });
+        }};
+      }).concat([{label:"Unassign",fn:function(){
+        l.assignedUserId=null; l.assignedUserName=null;
+        ldPatch(l,{assignedUserId:null,assignedUserName:null},"Unassigned").then(function(){ renderLead(); });
+      }}]));
+    });
+  });
+}
+function paintLeadTx(l){
+  var el=document.getElementById("ldTxBlk"); if(!el)return;
+  var mine=TX.filter(function(t){return t.leadId&&t.leadId===l.id;});
+  if(!mine.length){ el.innerHTML='<div style="color:var(--muted)">No transactions linked to this contact.</div>'; return; }
+  el.innerHTML=mine.map(function(t){
+    var st=(TX_STATUS[t.status]||{l:t.status,c:"#7c8b98"});
+    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer" data-txopen="'+esc(t.id)+'">'+
+      '<span class="status" style="background:'+st.c+';font-size:9px">'+st.l+'</span>'+
+      '<span style="font-weight:600;color:#4a5560;flex:1">'+esc(t.address)+'</span>'+
+      (t.listPrice?'<span style="color:#7d8894">'+usd(t.listPrice)+'</span>':'')+'</div>';
+  }).join("");
+  el.querySelectorAll("[data-txopen]").forEach(function(row){row.addEventListener("click",function(){
+    if(window.openTxDetail)window.openTxDetail(row.getAttribute("data-txopen"));
+  });});
+}
+function paintLeadTasks(l){
+  var el=document.getElementById("ldTasksBlk"); if(!el)return;
+  var addBtn=document.getElementById("ldTaskAdd");
+  fetch(crmApi("/api/crm-tasks?leadId="+encodeURIComponent(l.id))).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    var tasks=((d&&d.tasks)||[]).filter(function(t){return t.status!=="completed"&&t.status!=="cancelled";});
+    el.innerHTML=tasks.length?tasks.map(function(t){
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0">'+
+        '<input type="checkbox" data-tdone="'+esc(t.id)+'" style="accent-color:var(--teal)" title="Mark complete">'+
+        '<span style="flex:1;color:#4a5560">'+esc(t.title)+'</span>'+
+        '<span style="color:#98a2ac;font-size:11px">'+esc(t.dueDate||"")+(t.dueTime?" "+esc(t.dueTime):"")+'</span></div>';
+    }).join(""):'<div style="color:var(--muted)">No open tasks.</div>';
+    el.querySelectorAll("[data-tdone]").forEach(function(cb){cb.addEventListener("change",function(){
+      fetch(crmApi("/api/crm-tasks/"+encodeURIComponent(cb.getAttribute("data-tdone"))+"/complete"),{method:"POST"})
+        .then(function(r){ if(r.ok){crmToast("Task completed");paintLeadTasks(l);} else crmToast("Could not complete task"); })
+        .catch(function(){ crmToast("Could not reach the server"); });
+    });});
+  }).catch(function(){ el.innerHTML='<div style="color:var(--muted)">Task list unavailable.</div>'; });
+  if(addBtn&&!addBtn.__wired){ addBtn.__wired=1; addBtn.addEventListener("click",function(){ ldTab="appointment";
+    document.querySelectorAll("#ldTabs button").forEach(function(x){x.classList.toggle("on",x.getAttribute("data-t")==="appointment");});
+    renderLeadTab(); document.getElementById("ldTabBody").scrollIntoView({behavior:"smooth",block:"center"});
+  }); }
+}
+function paintLeadPlans(l){
+  var el=document.getElementById("ldPlansBlk"); if(!el)return;
+  var addBtn=document.getElementById("ldPlanAdd");
+  fetch(crmApi("/api/auto-plans")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    var plans=(d&&d.plans)||[];
+    var enr=(l.autoPlanEnrollments||[]);
+    var active=enr.filter(function(e){return e&&e.status!=="completed"&&e.status!=="removed";});
+    el.innerHTML=active.length?active.map(function(e){
+      var paused=e.status==="paused";
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0">'+
+        '<span style="flex:1;font-weight:600;color:#4a5560">'+esc(e.planName||e.planId)+'</span>'+
+        '<span style="font-size:10px;color:'+(paused?"#b8860b":"var(--teal-strong)")+'">'+(paused?"PAUSED":"ACTIVE")+'</span>'+
+        '<button class="mini-pill" data-ptoggle="'+esc(e.planId)+'" data-paused="'+(paused?1:0)+'">'+(paused?"RESUME":"PAUSE")+'</button>'+
+        '<button class="mini-pill" data-premove="'+esc(e.planId)+'">✕</button></div>';
+    }).join(""):'<div style="color:var(--muted)">Not on any plan.</div>';
+    function act(url,msg){
+      fetch(crmApi(url),{method:"POST"}).then(function(r){return r.ok?r.json().catch(function(){return {};}):null;})
+        .then(function(res){ if(res){ crmToast(msg);
+          fetch(crmApi("/api/dashboard/data")).then(function(x){return x.ok?x.json():null;}).then(function(snap){
+            var fresh=snap&&snap.leads&&snap.leads.find(function(x){return x.id===l.id;});
+            if(fresh){ l.autoPlanEnrollments=fresh.autoPlanEnrollments||[]; paintLeadPlans(l); }
+          });
+        } else crmToast("The server refused that"); })
+        .catch(function(){ crmToast("Could not reach the server"); });
+    }
+    el.querySelectorAll("[data-ptoggle]").forEach(function(b){b.addEventListener("click",function(){
+      var pid=b.getAttribute("data-ptoggle"), paused=b.getAttribute("data-paused")==="1";
+      act("/api/auto-plans/enrollment/"+encodeURIComponent(l.id)+"/"+encodeURIComponent(pid)+"/"+(paused?"resume":"pause"),paused?"Plan resumed":"Plan paused");
+    });});
+    el.querySelectorAll("[data-premove]").forEach(function(b){b.addEventListener("click",function(){
+      act("/api/auto-plans/unenroll/"+encodeURIComponent(l.id)+"/"+encodeURIComponent(b.getAttribute("data-premove")),"Removed from plan");
+    });});
+    if(addBtn&&!addBtn.__wired){ addBtn.__wired=1; addBtn.addEventListener("click",function(e){
+      e.stopPropagation();
+      var available=plans.filter(function(pl){return pl.active!==false&&!active.some(function(en){return en.planId===pl.id;});});
+      if(!available.length){ crmToast("No other plans to apply — manage plans in Auto Plans settings"); return; }
+      openActionMenu(addBtn,available.map(function(pl){
+        return {label:pl.name,fn:function(){ act("/api/auto-plans/"+encodeURIComponent(pl.id)+"/enroll/"+encodeURIComponent(l.id),"Applied "+pl.name); }};
+      }));
+    }); }
+  }).catch(function(){ el.innerHTML='<div style="color:var(--muted)">Auto plans unavailable.</div>'; });
+}
+/* Manual activity logging. Persisted through POST /api/crm/lead/:id/activity —
+   the old version appended to a client array that vanished on reload. The
+   server types are the honest "logged" variants: this page sends nothing. */
+var LOG_TYPE_MAP={note:"note",call:"call",text:"text_logged",email:"email_logged",appointment:"appointment",other:"other"};
 function logActivity(type,text){ const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
-  (l.activity=l.activity||[]).push({type,note:text||"",at:new Date().toISOString()}); l.lastActivity=new Date().toISOString();
-  l.lastLabel=(type==="call"?"Call Logged":type==="text"?"Texted":type==="email"?"Emailed":type==="appointment"?"Appointment":"Note");
-  renderTimeline(); renderLeads(); renderTakeAction(); renderFeed(); crmToast("Logged"); }
+  var now=new Date().toISOString();
+  var srvType=LOG_TYPE_MAP[type]||"other";
+  (l.activity=l.activity||[]).push({type:srvType,description:text||"",timestamp:now}); l.lastActivity=now;
+  l.lastLabel=(type==="call"?"Call Logged":type==="text"?"Text Logged":type==="email"?"Email Logged":type==="appointment"?"Appointment":"Note");
+  renderTimeline(); renderLeads(); renderTakeAction(); renderFeed();
+  if(!l._live){ crmToast("Logged (demo row — not saved)"); return; }
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/activity"),{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({type:srvType,description:text||""})})
+    .then(function(r){ crmToast(r.ok?"Logged":"Logged locally — server rejected it"); })
+    .catch(function(){ crmToast("Logged locally — could not reach the server"); }); }
 function renderLeadTab(){
   const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return; const body=document.getElementById("ldTabBody");
   if(ldTab==="note"){
@@ -3777,11 +3985,14 @@ function renderLeadTab(){
     document.querySelectorAll("#ldOut button").forEach(b=>b.addEventListener("click",()=>{ldOutcome=b.getAttribute("data-o");document.querySelectorAll("#ldOut button").forEach(x=>x.classList.toggle("on",x===b));}));
     document.getElementById("ldLogCall").addEventListener("click",()=>logActivity("call",(ldOutcome||"Call")+(document.getElementById("ldCallNote").value?": "+document.getElementById("ldCallNote").value:"")));
   } else if(ldTab==="text"){
-    body.innerHTML='<textarea class="ld-note" id="ldTxt" placeholder="Type a text message…" style="min-height:90px"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSendTxt">SEND TEXT</button></div>';
+    body.innerHTML='<textarea class="ld-note" id="ldTxt" placeholder="Type a text message…" style="min-height:90px"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSendTxt">LOG TEXT</button></div><div style="font-size:11px;color:#98a2ac;text-align:right;margin-top:4px">Logs the text on the timeline — to actually send, use the Message Center.</div>';
     document.getElementById("ldSendTxt").addEventListener("click",()=>{const v=document.getElementById("ldTxt").value.trim();if(v)logActivity("text",v);});
   } else if(ldTab==="email"){
-    body.innerHTML='<input class="ld-input" id="ldSubj" placeholder="Subject" style="margin-bottom:10px"><textarea class="ld-note" id="ldMail" placeholder="Write your email…"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSendMail">SEND EMAIL</button></div>';
-    document.getElementById("ldSendMail").addEventListener("click",()=>logActivity("email",document.getElementById("ldSubj").value||"Email"));
+    body.innerHTML='<input class="ld-input" id="ldSubj" placeholder="Subject" style="margin-bottom:10px"><textarea class="ld-note" id="ldMail" placeholder="Write your email…"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSendMail">LOG EMAIL</button></div><div style="font-size:11px;color:#98a2ac;text-align:right;margin-top:4px">Logs the email on the timeline — nothing is sent from here.</div>';
+    document.getElementById("ldSendMail").addEventListener("click",()=>{
+      var subj=document.getElementById("ldSubj").value.trim(), bodyTxt=document.getElementById("ldMail").value.trim();
+      logActivity("email",(subj||"Email")+(bodyTxt?" — "+bodyTxt.slice(0,200):""));
+    });
   } else if(ldTab==="appointment"){
     body.innerHTML=
       '<div class="ld-flabel">Task Details (max 255 characters) <span style="color:#e05a45">*</span></div>'+
@@ -3790,18 +4001,36 @@ function renderLeadTab(){
       '<div class="ld-flabel">Priority (1: highest, 9: lowest) <span style="color:#e05a45">*</span></div>'+
       '<div class="prio" id="ldPrio">'+[1,2,3,4,5,6,7,8,9].map(n=>'<label><input type="radio" name="ldprio" value="'+n+'"'+(n===9?" checked":"")+'> '+n+'</label>').join("")+'</div>'+
       '<div class="ld-flabel" style="margin-top:12px">Appointment Type <span style="color:#e05a45">*</span></div>'+
-      '<select class="ld-input"><option>Select</option><option>Buyer Consultation</option><option>Listing Presentation</option><option>Showing</option><option>Closing</option><option>Follow-up Call</option></select>'+
+      '<select class="ld-input" id="ldApptType"><option>Select</option><option>Buyer Consultation</option><option>Listing Presentation</option><option>Showing</option><option>Closing</option><option>Follow-up Call</option></select>'+
       '<div class="ld-flabel" style="margin-top:12px">Assigned To</div>'+
-      '<select class="ld-input"><option>Marco Puga</option><option>Wesley</option><option>Kendrick</option><option>Carlos</option></select>'+
+      '<select class="ld-input" id="ldApptWho"><option value="marco">Marco Puga</option><option value="wesley">Wesley</option><option value="kendrick">Kendrick</option><option value="carlos">Carlos</option></select>'+
       '<div class="ld-flabel" style="margin-top:12px">Location</div>'+
       '<input class="ld-input" id="ldApptLoc" placeholder="Address or place">'+
       '<div class="ld-flabel" style="margin-top:12px">Date &amp; time</div>'+
       '<div style="display:flex;gap:10px"><input class="ld-input" type="date" id="ldDate"><input class="ld-input" type="time" id="ldTime"></div>'+
       '<div style="margin-top:12px;text-align:right"><button class="pill-btn" id="ldSched">SCHEDULE</button></div>';
+    /* SCHEDULE creates a REAL task via /api/crm-tasks — the old handler
+       collapsed everything into one timeline line and silently discarded the
+       priority, type, assignee, date and time the user had just picked. */
     document.getElementById("ldSched").addEventListener("click",()=>{
       const task=document.getElementById("ldApptTask").value.trim();
       const loc=document.getElementById("ldApptLoc").value.trim();
-      logActivity("appointment",(task||"Appointment")+(loc?" @ "+loc:""));
+      const typ=document.getElementById("ldApptType").value;
+      const whoSel=document.getElementById("ldApptWho");
+      const who=whoSel.value, whoName=whoSel.options[whoSel.selectedIndex].textContent;
+      const date=document.getElementById("ldDate").value, time=document.getElementById("ldTime").value;
+      if(!task){ crmToast("Task details are required"); return; }
+      if(!date){ crmToast("Pick a date — the task needs a due date"); return; }
+      const pr=+(document.querySelector('#ldPrio input:checked')||{value:9}).value;
+      const priority=pr<=2?"urgent":pr<=4?"high":pr<=6?"normal":"low";
+      const desc=[typ&&typ!=="Select"?("Type: "+typ):"",loc?("Location: "+loc):""].filter(Boolean).join("\n");
+      fetch(crmApi("/api/crm-tasks"),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({title:task,type:"appointment",priority:priority,dueDate:date,dueTime:time||undefined,
+          leadId:l.id,leadName:l.name,assignedUserId:who,assignedUserName:whoName,description:desc||undefined})})
+        .then(r=>{ if(r.ok){ logActivity("appointment",task+(loc?" @ "+loc:"")+(date?" on "+date+(time?" "+time:""):""));
+            crmToast("Appointment task created"); paintLeadTasks(l); }
+          else crmToast("Could not create the task"); })
+        .catch(()=>crmToast("Could not reach the server"));
     });
   } else {
     body.innerHTML='<input class="ld-input" id="ldOtherTitle" placeholder="Log an activity…"><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldLogOther">LOG</button></div>';
@@ -3811,8 +4040,12 @@ function renderLeadTab(){
 function renderTimeline(){
   const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
   const items=(l.activity||[]).slice().reverse().slice(0,12);
-  const icon=t=>t==="call"?"☎":t==="text"?"✉":t==="email"?"@":t==="appointment"?"◷":t==="note"?"✎":"•";
-  document.getElementById("ldTimeline").innerHTML=items.length?items.map(a=>'<div class="tl"><div class="dot">'+icon(a.type)+'</div><div><div class="tt">'+esc((a.type||"activity").charAt(0).toUpperCase()+(a.type||"activity").slice(1))+(a.note?" - "+esc(a.note):"")+'</div><div class="tm">'+(a.at?relTime(a.at):"")+'</div></div></div>').join(""):'<div class="empty" style="padding:16px 0">No activity logged yet.</div>';
+  const icon=t=>/call/.test(t)?"☎":/text/.test(t)?"✉":/email/.test(t)?"@":/appointment|showing/.test(t)?"◷":t==="note"?"✎":"•";
+  const label=t=>String(t||"activity").replace(/_/g," ").replace(/^./,c=>c.toUpperCase());
+  document.getElementById("ldTimeline").innerHTML=items.length?items.map(a=>{
+    var text=a.description||a.note||"", when=a.timestamp||a.at||"";
+    return '<div class="tl"><div class="dot">'+icon(a.type)+'</div><div><div class="tt">'+esc(label(a.type))+(text?" - "+esc(text):"")+'</div><div class="tm">'+(when?relTime(when):"")+'</div></div></div>';
+  }).join(""):'<div class="empty" style="padding:16px 0">No activity logged yet.</div>';
 }
 document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")&&!e.target.closest("[data-dd]")&&!e.target.closest("select")&&!e.target.closest("#userFilter")) closeDD(); });
 /* Close anchored menus when the page scrolls out from under them — but NOT

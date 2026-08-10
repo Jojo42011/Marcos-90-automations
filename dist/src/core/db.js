@@ -68,6 +68,7 @@ exports.listCrmLeads = listCrmLeads;
 exports.listAllLeads = listAllLeads;
 exports.isLeadInactive30Days = isLeadInactive30Days;
 exports.appendLeadActivity = appendLeadActivity;
+exports.normalizeRelationships = normalizeRelationships;
 exports.normalizeIsoDay = normalizeIsoDay;
 exports.updateLeadCrmFields = updateLeadCrmFields;
 const crypto_1 = require("crypto");
@@ -775,6 +776,11 @@ function normalizeCrmDeal(raw) {
     };
 }
 const ACTIVITY_TYPES = new Set([
+    "email_logged",
+    "text_logged",
+    "appointment",
+    "note",
+    "other",
     "call",
     "call_made",
     "skip_trace",
@@ -1191,6 +1197,11 @@ async function getDashboardSnapshot() {
             address: typeof lead.address === "string" && lead.address.trim() ? lead.address.trim() : null,
             birthday: normalizeIsoDay(lead.birthday),
             homeAnniversary: normalizeIsoDay(lead.homeAnniversary),
+            description: typeof lead.description === "string" && lead.description.trim() ? lead.description : null,
+            letterSalutation: typeof lead.letterSalutation === "string" && lead.letterSalutation.trim() ? lead.letterSalutation.trim() : null,
+            envelopeSalutation: typeof lead.envelopeSalutation === "string" && lead.envelopeSalutation.trim() ? lead.envelopeSalutation.trim() : null,
+            preferredLanguage: typeof lead.preferredLanguage === "string" && lead.preferredLanguage.trim() ? lead.preferredLanguage.trim() : null,
+            relationships: normalizeRelationships(lead.relationships),
             alerts: typeof lead.alerts === "number" && lead.alerts > 0 ? lead.alerts : 0,
             reports: typeof lead.reports === "number" && lead.reports > 0 ? lead.reports : 0,
             createdAt: lead.createdAt,
@@ -1290,6 +1301,28 @@ async function appendLeadActivity(leadId, entries, opts) {
         lastActivity: stamp,
     });
 }
+/** Relationships: name+relation required, capped, unknown fields dropped. */
+function normalizeRelationships(raw) {
+    if (!Array.isArray(raw))
+        return [];
+    const out = [];
+    for (const item of raw) {
+        if (!item || typeof item !== "object")
+            continue;
+        const r = item;
+        const name = typeof r.name === "string" ? r.name.trim().slice(0, 120) : "";
+        const relation = typeof r.relation === "string" ? r.relation.trim().slice(0, 60) : "";
+        if (!name || !relation)
+            continue;
+        const entry = { name, relation };
+        if (typeof r.leadId === "string" && r.leadId.trim())
+            entry.leadId = r.leadId.trim();
+        out.push(entry);
+        if (out.length >= 30)
+            break;
+    }
+    return out;
+}
 /** A date-only field is either a valid YYYY-MM-DD string or null — junk never sticks. */
 function normalizeIsoDay(raw) {
     if (typeof raw !== "string")
@@ -1348,6 +1381,11 @@ async function updateLeadCrmFields(input) {
                 : String(input.address).trim()
             : lead.address ?? null,
         birthday: input.birthday !== undefined ? normalizeIsoDay(input.birthday) : normalizeIsoDay(lead.birthday),
+        description: input.description !== undefined ? (input.description === null || !String(input.description).trim() ? null : String(input.description).slice(0, 4000)) : lead.description ?? null,
+        letterSalutation: input.letterSalutation !== undefined ? (input.letterSalutation === null || !String(input.letterSalutation).trim() ? null : String(input.letterSalutation).trim().slice(0, 120)) : lead.letterSalutation ?? null,
+        envelopeSalutation: input.envelopeSalutation !== undefined ? (input.envelopeSalutation === null || !String(input.envelopeSalutation).trim() ? null : String(input.envelopeSalutation).trim().slice(0, 120)) : lead.envelopeSalutation ?? null,
+        preferredLanguage: input.preferredLanguage !== undefined ? (input.preferredLanguage === null || !String(input.preferredLanguage).trim() ? null : String(input.preferredLanguage).trim().slice(0, 60)) : lead.preferredLanguage ?? null,
+        relationships: input.relationships !== undefined ? normalizeRelationships(input.relationships) : normalizeRelationships(lead.relationships),
         homeAnniversary: input.homeAnniversary !== undefined
             ? normalizeIsoDay(input.homeAnniversary)
             : normalizeIsoDay(lead.homeAnniversary),

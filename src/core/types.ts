@@ -190,6 +190,14 @@ export interface Lead {
   birthday?: string | null;
   /** ISO YYYY-MM-DD — the anniversary of buying their home. */
   homeAnniversary?: string | null;
+  /** Details block: free-text background on how the lead came in. */
+  description?: string | null;
+  /** Mail-merge personalization (Auto Plan emails / letters). */
+  letterSalutation?: string | null;
+  envelopeSalutation?: string | null;
+  preferredLanguage?: string | null;
+  /** Labeled links to other contacts (spouse, referred-by, co-buyer, ...). */
+  relationships?: LeadRelationship[];
   /** Listing-alert / market-report counts. Default 0; never auto-generated. */
   alerts?: number;
   reports?: number;
@@ -509,10 +517,27 @@ export type LeadActivityType =
   | "listing_active"
   | "task"
   | "email_pending"
-  | "auto_plan";
+  | "auto_plan"
+  /* Profile-page manual logging. "email_logged"/"text_logged" record that a
+     message was written down, NOT that anything was delivered — the page has
+     no send path and the type name must not imply one. */
+  | "email_logged"
+  | "text_logged"
+  | "appointment"
+  | "note"
+  | "other";
 
 /** Seller listing status (drives drawer badge + listing-status automations). */
 export type ListingStatus = "active" | "off_market";
+
+/** A labeled link from one contact to another (household / referral graph). */
+export interface LeadRelationship {
+  /** Other lead's id when they exist in the CRM; absent for a name-only link. */
+  leadId?: string;
+  name: string;
+  /** e.g. "Spouse", "Referred by", "Co-buyer", "Child". Free text. */
+  relation: string;
+}
 
 /** Single activity timeline entry on a lead. */
 export interface LeadActivity {
@@ -576,6 +601,11 @@ export interface DashboardLeadRow {
   address: string | null;
   birthday: string | null;
   homeAnniversary: string | null;
+  description: string | null;
+  letterSalutation: string | null;
+  envelopeSalutation: string | null;
+  preferredLanguage: string | null;
+  relationships: LeadRelationship[];
   alerts: number;
   reports: number;
   createdAt: string;

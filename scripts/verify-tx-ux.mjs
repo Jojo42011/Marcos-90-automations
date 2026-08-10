@@ -79,7 +79,7 @@ check("crm: detail view opens from the row, edits dates via PATCH, applies trans
   const det = html.split("function paintDetail")[1]?.slice(0, 6000) ?? "";
   assert(/data-dfield/.test(det) && /method:"PATCH"/.test(det));
   assert(/auto-plans\//.test(det), "the APPLY AUTO PLAN button must hit the enroll route");
-  assert(/planType==="transaction"/.test(html.split("openTxDetail")[1]?.slice(0, 800) ?? ""),
+  assert(/planType==="transaction"/.test(html.split("window.openTxDetail=function")[1]?.slice(0, 800) ?? ""),
     "only transaction plans may be offered on a deal");
 });
 check("crm: the API status map knows the new lifecycle states (coming_soon showed as active)", () => {
@@ -89,7 +89,7 @@ check("crm: the API status map knows the new lifecycle states (coming_soon showe
   }
 });
 check("crm: demo-only rows say so instead of opening an empty detail", () => {
-  assert(/demo dataset/.test(html.split("openTxDetail")[1]?.slice(0, 600) ?? ""));
+  assert(/demo dataset/.test(html.split("window.openTxDetail=function")[1]?.slice(0, 600) ?? ""));
 });
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

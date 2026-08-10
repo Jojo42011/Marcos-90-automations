@@ -2070,6 +2070,17 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
     typeof body.propertyViewsCount === "number" ? body.propertyViewsCount : undefined;
   const address =
     body.address === null ? null : typeof body.address === "string" ? body.address : undefined;
+  const strOrNull = (key: string): string | null | undefined => {
+    const v = body[key];
+    if (v === undefined) return undefined;
+    if (v === null) return null;
+    return typeof v === "string" ? v : undefined;
+  };
+  const description = strOrNull("description");
+  const letterSalutation = strOrNull("letterSalutation");
+  const envelopeSalutation = strOrNull("envelopeSalutation");
+  const preferredLanguage = strOrNull("preferredLanguage");
+  const relationships = body.relationships !== undefined ? body.relationships : undefined;
   /* Date-only fields: accepted as YYYY-MM-DD, null clears, junk is a 400 —
      a garbled birthday silently stored would poison the Dates filters. */
   const parseDay = (key: "birthday" | "homeAnniversary"): string | null | undefined => {
@@ -2149,6 +2160,11 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
       address,
       birthday,
       homeAnniversary,
+      description,
+      letterSalutation,
+      envelopeSalutation,
+      preferredLanguage,
+      relationships,
       assignedUserId,
       assignedUserName,
       deal,
@@ -2251,6 +2267,39 @@ app.post("/api/leads/mass-delete", express.json(), handleMassDeleteLeads);
 console.log("[Routes] POST /api/leads/mass-delete registered");
 app.post("/api/crm/leads/mass-delete", express.json(), handleMassDeleteLeads);
 console.log("[Routes] POST /api/crm/leads/mass-delete registered");
+
+/**
+ * Log a manual activity onto a lead's timeline. This is what the profile
+ * page's NOTE/EMAIL/CALL/TEXT/APPOINTMENT/OTHER tabs write through — until
+ * now they appended to a client array that vanished on reload. Types are the
+ * honest "logged" variants: nothing here sends anything.
+ */
+app.post("/api/crm/lead/:id/activity", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const ALLOWED = new Set(["note", "call", "text_logged", "email_logged", "appointment", "other"]);
+  const type = typeof body.type === "string" && ALLOWED.has(body.type) ? body.type : null;
+  const description = typeof body.description === "string" ? body.description.trim().slice(0, 2000) : "";
+  if (!id || !type || !description) {
+    res.status(400).json({ error: "type (" + [...ALLOWED].join("/") + ") and description required" });
+    return;
+  }
+  const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 2000) : undefined;
+  try {
+    const { appendLeadActivity } = await import("./core/db.js");
+    const entry: import("./core/types.js").LeadActivity = { type: type as import("./core/types.js").LeadActivityType, description, timestamp: new Date().toISOString() };
+    if (notes) entry.notes = notes;
+    const lead = await appendLeadActivity(id, [entry]);
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    res.json({ ok: true, activity: lead.activity ?? [] });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
 
 app.post("/api/crm/lead/:id/mark-phone-seen", async (req, res) => {
   if (!dashboardTokenOk(req)) {
