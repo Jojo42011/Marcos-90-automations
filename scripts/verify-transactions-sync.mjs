@@ -24,8 +24,8 @@ check("store: expiration is a real column, read and written everywhere", () => {
   assert(/expiration\?: string/.test(storeSrc), "interface missing");
   // Both INSERT and UPDATE must carry it — one without the other silently
   // drops the value on whichever path runs.
-  assert(/gci, expiration, agent/.test(storeSrc), "INSERT column list missing expiration");
-  assert(/gci = \?, expiration = \?, agent = \?/.test(storeSrc), "UPDATE set list missing expiration");
+  assert(/gci, expiration, /.test(storeSrc), "INSERT column list missing expiration");
+  assert(/gci = \?, expiration = \?, /.test(storeSrc), "UPDATE set list missing expiration");
   const args = storeSrc.match(/\.expiration \?\? null/g) || [];
   assert.equal(args.length, 2, `expected expiration bound in both statements, found ${args.length}`);
 });

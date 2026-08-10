@@ -274,14 +274,21 @@ import {
   createAutoPlan,
   updateAutoPlan,
   deleteAutoPlan,
+  duplicateAutoPlan,
 } from "./core/autoPlans.js";
+import {
+  getAutoPlanTriggers,
+  createAutoPlanTrigger,
+  updateAutoPlanTrigger,
+  deleteAutoPlanTrigger,
+} from "./core/autoPlanTriggers.js";
 import {
   createTagTemplate,
   deleteTagTemplate,
   getTagTemplates,
 } from "./core/tagTemplates.js";
 import { filterDashboardLeads } from "./core/leadFilter.js";
-import type { LeadFilter } from "./core/types.js";
+import type { LeadFilter, CrmStatusValue } from "./core/types.js";
 import {
   createUser,
   deleteUser,
@@ -8077,6 +8084,128 @@ app.get("/api/auto-plans", (req, res) => {
   res.status(200).json({ plans: getAutoPlans() });
 });
 
+/**
+ * Settings-screen payload: plans + triggers with LIVE enrolled counts, computed
+ * from actual lead enrollments (and transaction enrollments for deal plans) —
+ * Brivity shows these so you can confirm a trigger is actually firing.
+ */
+app.get("/api/auto-plans/settings", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const plans = getAutoPlans();
+  const triggers = getAutoPlanTriggers();
+  const leads = await listAllLeads();
+  const byPlan = new Map<string, number>();
+  const byTrigger = new Map<string, number>();
+  for (const lead of leads) {
+    for (const enr of lead.autoPlanEnrollments || []) {
+      if (enr.status === "active") byPlan.set(enr.planId, (byPlan.get(enr.planId) || 0) + 1);
+      if (enr.enrolledVia && enr.enrolledVia !== "manual") {
+        byTrigger.set(enr.enrolledVia, (byTrigger.get(enr.enrolledVia) || 0) + 1);
+      }
+    }
+  }
+  for (const tx of getAllTransactions()) {
+    for (const enr of tx.autoPlans || []) {
+      if (enr.status === "active") byPlan.set(enr.planId, (byPlan.get(enr.planId) || 0) + 1);
+    }
+  }
+  res.status(200).json({
+    plans: plans.map((p) => ({ ...p, enrolled: byPlan.get(p.id) || 0 })),
+    triggers: triggers.map((t) => ({ ...t, enrolled: byTrigger.get(t.id) || 0 })),
+  });
+});
+
+app.post("/api/auto-plans/:id/duplicate", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const plan = duplicateAutoPlan(String(req.params.id || "").trim());
+  if (!plan) {
+    res.status(404).json({ error: "Plan not found" });
+    return;
+  }
+  res.status(201).json({ plan });
+});
+
+app.get("/api/auto-plan-triggers", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  res.status(200).json({ triggers: getAutoPlanTriggers() });
+});
+
+app.post("/api/auto-plan-triggers", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const planId = typeof body.planId === "string" ? body.planId.trim() : "";
+  const plan = planId ? getAutoPlanById(planId) : null;
+  if (!plan) {
+    res.status(400).json({ error: "planId must reference an existing plan" });
+    return;
+  }
+  if (plan.planType === "transaction") {
+    res.status(400).json({ error: "Triggers enroll PEOPLE — a transaction plan cannot be a trigger target" });
+    return;
+  }
+  const clean = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const trigger = createAutoPlanTrigger({
+    intent: clean(body.intent),
+    status: clean(body.status),
+    source: clean(body.source),
+    tag: clean(body.tag),
+    planId,
+    active: body.active !== false,
+  });
+  res.status(201).json({ trigger });
+});
+
+app.patch("/api/auto-plan-triggers/:id", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  const clean = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  for (const k of ["intent", "status", "source", "tag"] as const) {
+    if (body[k] !== undefined) patch[k] = clean(body[k]);
+  }
+  if (typeof body.planId === "string" && body.planId.trim()) {
+    if (!getAutoPlanById(body.planId.trim())) {
+      res.status(400).json({ error: "planId must reference an existing plan" });
+      return;
+    }
+    patch.planId = body.planId.trim();
+  }
+  if (typeof body.active === "boolean") patch.active = body.active;
+  const trigger = updateAutoPlanTrigger(String(req.params.id || "").trim(), patch);
+  if (!trigger) {
+    res.status(404).json({ error: "Trigger not found" });
+    return;
+  }
+  res.status(200).json({ trigger });
+});
+
+app.delete("/api/auto-plan-triggers/:id", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  if (!deleteAutoPlanTrigger(String(req.params.id || "").trim())) {
+    res.status(404).json({ error: "Trigger not found" });
+    return;
+  }
+  res.status(200).json({ success: true });
+});
+
 app.post("/api/auto-plans", express.json({ limit: "2mb" }), (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -8091,8 +8220,13 @@ app.post("/api/auto-plans", express.json({ limit: "2mb" }), (req, res) => {
   const plan = createAutoPlan({
     name,
     tag: typeof body.tag === "string" ? body.tag : "",
+    planType: body.planType === "transaction" ? "transaction" : "people",
     steps: Array.isArray(body.steps) ? (body.steps as AutoPlan["steps"]) : [],
     active: body.active !== false,
+    autoPauseOnReply: body.autoPauseOnReply !== false,
+    autoPauseOnStatus: typeof body.autoPauseOnStatus === "string" ? body.autoPauseOnStatus : null,
+    completionStatus: typeof body.completionStatus === "string" ? body.completionStatus : null,
+    archived: body.archived === true,
   });
   res.status(201).json({ plan });
 });
@@ -8109,6 +8243,11 @@ app.patch("/api/auto-plans/:id", express.json({ limit: "2mb" }), (req, res) => {
   if (typeof body.tag === "string") updates.tag = body.tag;
   if (Array.isArray(body.steps)) updates.steps = body.steps as AutoPlan["steps"];
   if (typeof body.active === "boolean") updates.active = body.active;
+  if (body.planType === "people" || body.planType === "transaction") updates.planType = body.planType;
+  if (typeof body.autoPauseOnReply === "boolean") updates.autoPauseOnReply = body.autoPauseOnReply;
+  if (body.autoPauseOnStatus !== undefined) updates.autoPauseOnStatus = typeof body.autoPauseOnStatus === "string" ? body.autoPauseOnStatus : null;
+  if (body.completionStatus !== undefined) updates.completionStatus = typeof body.completionStatus === "string" ? body.completionStatus : null;
+  if (typeof body.archived === "boolean") updates.archived = body.archived;
   const plan = updateAutoPlan(id, updates);
   if (!plan) {
     res.status(404).json({ error: "Plan not found" });
@@ -8274,6 +8413,7 @@ export async function executeDueAutoPlanSteps(): Promise<{ processed: number; st
   const now = Date.now();
   let processed = 0;
   let stepsExecuted = 0;
+  const completionStatusByLead = new Map<string, string>();
 
   for (const lead of leads) {
     const enrollments = lead.autoPlanEnrollments || [];
@@ -8288,24 +8428,53 @@ export async function executeDueAutoPlanSteps(): Promise<{ processed: number; st
         continue;
       }
       const plan = planById.get(enr.planId);
-      if (!plan || !plan.active) {
+      if (!plan || !plan.active || plan.archived || plan.planType === "transaction") {
         nextEnrollments.push(enr);
         continue;
       }
       processed++;
       const enrolledMs = new Date(enr.enrolledAt).getTime();
       const completed = new Set(enr.completedSteps);
+      const completedAt: Record<string, string> = { ...(enr.completedAt || {}) };
       const first = leadFirstName(lead);
 
       for (const step of plan.steps) {
         if (completed.has(step.id)) continue;
-        const dueMs = enrolledMs + step.dayOffset * 24 * 60 * 60 * 1000;
+        /* Anchor resolution (Brivity's "After [...]" dropdown): a chained step
+           counts from when its referenced step actually completed — and is
+           simply not due yet while that step is unfinished. */
+        let baseMs = enrolledMs;
+        if (step.anchor === "prev_step" && step.afterStepId) {
+          const prevDone = completedAt[step.afterStepId];
+          if (!prevDone) continue;
+          baseMs = new Date(prevDone).getTime();
+        }
+        const dueMs = baseMs + step.dayOffset * 24 * 60 * 60 * 1000;
         if (dueMs > now) continue;
         const content = (step.content || "").replace(/\[name\]/g, first);
         const stamp = new Date().toISOString();
         if (step.type === "text") {
-          await sendLeadText(lead.id, content);
-          newActivity.push({ type: "text_sent", description: `Auto Plan text: ${content}`, timestamp: stamp });
+          if (!lead.phone) {
+            /* Brivity surfaces this as an Auto Plan error; the honest move here
+               is a visible task for a human, never a silent skip and never a
+               fake "sent". The step is marked done so the plan continues. */
+            createTask({
+              title: `Auto Plan text needs a phone number: ${lead.name || lead.username || lead.id}`,
+              description: `Plan "${plan.name}" tried to text this contact but no phone is on file. Message: ${content}`,
+              type: "follow_up",
+              priority: "high",
+              status: "pending",
+              dueDate: stamp.slice(0, 10),
+              leadId: lead.id,
+              leadName: lead.name || lead.username || undefined,
+              assignedUserName: "Marco Puga",
+              source: "auto_plan",
+            });
+            newActivity.push({ type: "auto_plan", description: `Auto Plan text SKIPPED — no phone on file (task created): ${content}`, timestamp: stamp });
+          } else {
+            await sendLeadText(lead.id, content);
+            newActivity.push({ type: "text_sent", description: `Auto Plan text: ${content}`, timestamp: stamp });
+          }
         } else if (step.type === "email") {
           const subj = step.subject ? `${step.subject} — ` : "";
           newActivity.push({
@@ -8335,14 +8504,22 @@ export async function executeDueAutoPlanSteps(): Promise<{ processed: number; st
           });
         }
         completed.add(step.id);
+        completedAt[step.id] = stamp;
         stepsExecuted++;
         changed = true;
       }
 
       const allDone = plan.steps.every((s) => completed.has(s.id));
+      /* enr.status is "active" here — non-active enrollments were pushed through above. */
+      if (allDone && plan.completionStatus) {
+        /* Brivity's "auto change lead's status when the plan is completed". */
+        completionStatusByLead.set(lead.id, plan.completionStatus);
+        changed = true;
+      }
       nextEnrollments.push({
         ...enr,
         completedSteps: [...completed],
+        completedAt,
         currentStepIndex: completed.size,
         status: allDone ? "completed" : enr.status,
       });
@@ -8356,11 +8533,166 @@ export async function executeDueAutoPlanSteps(): Promise<{ processed: number; st
         activity: mergedActivity,
         lastActivity: new Date().toISOString(),
       });
+      const completion = completionStatusByLead.get(lead.id);
+      if (completion) {
+        /* Separate write so the status change goes through the ordinary organic
+           path — trigger evaluation included, exactly like a hand edit. */
+        await updateLeadCrmFields({ leadId: lead.id, crmStatus: completion as CrmStatusValue });
+      }
     }
   }
 
   return { processed, stepsExecuted };
 }
+
+/**
+ * Transaction Plans engine — Brivity's second flavor: the same step machinery
+ * running against a DEAL, timed off the deal's real dates ("3 days before Close
+ * Date"), not days-since-enrollment. Steps become tasks (and texts when the
+ * deal is linked to a lead with a phone). Email steps become tasks too, stated
+ * plainly in the task body: the Gmail send path is not connected, and a task a
+ * human sees beats an email that silently never sends.
+ */
+export async function executeDueTransactionPlanSteps(): Promise<{ processed: number; stepsExecuted: number }> {
+  const plans = getAutoPlans();
+  const planById = new Map(plans.map((p) => [p.id, p]));
+  const now = Date.now();
+  let processed = 0;
+  let stepsExecuted = 0;
+
+  for (const tx of getAllTransactions()) {
+    const enrollments = tx.autoPlans || [];
+    if (!enrollments.length) continue;
+    let changed = false;
+    const nextEnrollments: typeof enrollments = [];
+
+    for (const enr of enrollments) {
+      if (enr.status !== "active") {
+        nextEnrollments.push(enr);
+        continue;
+      }
+      const plan = planById.get(enr.planId);
+      if (!plan || !plan.active || plan.archived || plan.planType !== "transaction") {
+        nextEnrollments.push(enr);
+        continue;
+      }
+      processed++;
+      const completed = new Set(enr.completedSteps);
+      const completedAt: Record<string, string> = { ...(enr.completedAt || {}) };
+
+      for (const step of plan.steps) {
+        if (completed.has(step.id)) continue;
+        let baseIso: string | undefined;
+        switch (step.anchor) {
+          case "contract_date": baseIso = tx.contractDate; break;
+          case "closing_date": baseIso = tx.closingDate; break;
+          case "expiration": baseIso = tx.expiration; break;
+          case "inspection_date": baseIso = tx.inspectionDate; break;
+          case "prev_step": baseIso = step.afterStepId ? completedAt[step.afterStepId] : undefined; break;
+          default: baseIso = enr.enrolledAt;
+        }
+        /* A date the deal does not have yet is not an error — the step simply
+           waits until someone fills the date in. That is how "3 days before
+           close" behaves on a deal with no close date. */
+        if (!baseIso) continue;
+        const dueMs = new Date(baseIso).getTime() + step.dayOffset * 24 * 60 * 60 * 1000;
+        if (Number.isNaN(dueMs) || dueMs > now) continue;
+        const stamp = new Date().toISOString();
+        const content = (step.content || "").replace(/\[address\]/g, tx.address);
+
+        if (step.type === "text" && tx.leadId) {
+          const lead = await getLeadById(tx.leadId);
+          if (lead?.phone) {
+            await sendLeadText(lead.id, content);
+          } else {
+            createTask({
+              title: `Transaction plan text needs a phone: ${tx.address}`,
+              description: `Plan "${plan.name}" step could not text (no linked phone). Message: ${content}`,
+              type: "follow_up", priority: "high", status: "pending",
+              dueDate: stamp.slice(0, 10), assignedUserName: "Marco Puga", source: "auto_plan",
+            });
+          }
+        } else {
+          const label = step.type === "email"
+            ? `SEND EMAIL (email automation not connected — send by hand): ${step.subject ? step.subject + " — " : ""}${content}`
+            : step.type === "text"
+              ? `SEND TEXT (deal has no linked lead): ${content}`
+              : content;
+          createTask({
+            title: (step.type === "task" ? content : label).slice(0, 120) || `Transaction plan step — ${tx.address}`,
+            description: `Transaction plan "${plan.name}" — ${tx.address}: ${label}${step.instructions ? "\nInstructions: " + step.instructions : ""}`,
+            type: "follow_up",
+            priority: step.taskPriority && step.taskPriority <= 3 ? "high" : "normal",
+            status: "pending",
+            dueDate: stamp.slice(0, 10),
+            assignedUserName: step.assignedTo || "Marco Puga",
+            source: "auto_plan",
+          });
+        }
+        completed.add(step.id);
+        completedAt[step.id] = stamp;
+        stepsExecuted++;
+        changed = true;
+      }
+
+      const allDone = plan.steps.every((st) => completed.has(st.id));
+      nextEnrollments.push({
+        ...enr,
+        completedSteps: [...completed],
+        completedAt,
+        status: allDone ? "completed" : enr.status,
+      });
+    }
+
+    if (changed) {
+      updateTransaction(String(tx.id), { autoPlans: nextEnrollments });
+    }
+  }
+
+  return { processed, stepsExecuted };
+}
+
+app.post("/api/transactions/:id/auto-plans/:planId", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const tx = getTransaction(String(req.params.id || "").trim());
+  const plan = getAutoPlanById(String(req.params.planId || "").trim());
+  if (!tx || !plan) {
+    res.status(404).json({ error: !tx ? "Transaction not found" : "Plan not found" });
+    return;
+  }
+  if (plan.planType !== "transaction") {
+    res.status(400).json({ error: "That is a People plan — enroll contacts in it, not deals" });
+    return;
+  }
+  const rest = (tx.autoPlans || []).filter((e) => e.planId !== plan.id);
+  const updated = updateTransaction(String(tx.id), {
+    autoPlans: [...rest, {
+      planId: plan.id, planName: plan.name, enrolledAt: new Date().toISOString(),
+      completedSteps: [], status: "active" as const,
+    }],
+  });
+  res.status(200).json({ transaction: updated });
+});
+
+app.delete("/api/transactions/:id/auto-plans/:planId", (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const tx = getTransaction(String(req.params.id || "").trim());
+  if (!tx) {
+    res.status(404).json({ error: "Transaction not found" });
+    return;
+  }
+  const planId = String(req.params.planId || "").trim();
+  const updated = updateTransaction(String(tx.id), {
+    autoPlans: (tx.autoPlans || []).filter((e) => e.planId !== planId),
+  });
+  res.status(200).json({ transaction: updated });
+});
 
 app.post("/api/auto-plans/execute-due-steps", async (req, res) => {
   if (!dashboardTokenOk(req)) {
@@ -8368,8 +8700,14 @@ app.post("/api/auto-plans/execute-due-steps", async (req, res) => {
     return;
   }
   try {
-    const result = await executeDueAutoPlanSteps();
-    res.status(200).json(result);
+    const people = await executeDueAutoPlanSteps();
+    const transactions = await executeDueTransactionPlanSteps();
+    res.status(200).json({
+      processed: people.processed + transactions.processed,
+      stepsExecuted: people.stepsExecuted + transactions.stepsExecuted,
+      people,
+      transactions,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
@@ -10056,12 +10394,12 @@ app.delete("/api/deals/:id", async (req, res) => {
 function parseTransactionBody(body: Record<string, unknown>): Partial<Transaction> {
   const out: Partial<Transaction> = {};
   if (typeof body.address === "string") out.address = body.address.trim();
-  if (typeof body.dealType === "string") out.dealType = body.dealType as Transaction["dealType"];
+  if (typeof body.dealType === "string" && TX_DEAL_TYPES.has(body.dealType)) out.dealType = body.dealType as Transaction["dealType"];
   if (body.parties && typeof body.parties === "object" && !Array.isArray(body.parties)) {
     out.parties = body.parties as Transaction["parties"];
   }
   if (typeof body.price === "number") out.price = body.price;
-  if (typeof body.status === "string") out.status = body.status as Transaction["status"];
+  if (typeof body.status === "string" && TX_STATUSES.has(body.status)) out.status = body.status as Transaction["status"];
   if (typeof body.contractDate === "string") out.contractDate = body.contractDate;
   if (typeof body.inspectionDate === "string") out.inspectionDate = body.inspectionDate;
   if (typeof body.appraisalDate === "string") out.appraisalDate = body.appraisalDate;
@@ -10081,8 +10419,22 @@ function parseTransactionBody(body: Record<string, unknown>): Partial<Transactio
   if (typeof body.gci === "number") out.gci = body.gci;
   if (typeof body.expiration === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.expiration)) out.expiration = body.expiration;
   if (body.expiration === null) out.expiration = undefined;
+  /* Brivity transaction-page dates — same contract as expiration: valid ISO
+     sets, null clears, absent leaves alone. */
+  for (const k of ["dateListed", "dateCanceled", "depositDue", "additionalDepositDue", "escrowSigningDate"] as const) {
+    const v = body[k];
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) out[k] = v;
+    if (v === null) out[k] = undefined;
+  }
+  if (typeof body.source === "string") out.source = body.source.trim() || undefined;
   return out;
 }
+
+const TX_DEAL_TYPES = new Set(["buyer", "seller", "dual", "tenant", "landlord", "referral"]);
+const TX_STATUSES = new Set([
+  "active", "under_contract", "pending", "closed", "fell_through", "cancelled",
+  "pipeline", "coming_soon", "expired", "withdrawn", "archived",
+]);
 
 app.get("/api/transactions", (req, res) => {
   if (!dashboardTokenOk(req)) {
@@ -10123,6 +10475,17 @@ app.post("/api/transactions", express.json(), (req, res) => {
     leadId: parsed.leadId,
     dealFileUrl: parsed.dealFileUrl,
     notes: parsed.notes,
+    mls: parsed.mls,
+    agent: parsed.agent,
+    listPrice: parsed.listPrice,
+    gci: parsed.gci,
+    source: parsed.source,
+    expiration: parsed.expiration,
+    dateListed: parsed.dateListed,
+    dateCanceled: parsed.dateCanceled,
+    depositDue: parsed.depositDue,
+    additionalDepositDue: parsed.additionalDepositDue,
+    escrowSigningDate: parsed.escrowSigningDate,
   });
   res.status(201).json({ transaction: tx });
 });
@@ -12133,13 +12496,21 @@ if (isSheetSyncConfigured()) {
   }, sheetSyncEveryMs).unref();
 }
 
-// Scheduled Auto Plan execution — every 24 hours.
-const AUTO_PLAN_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/* Scheduled Auto Plan execution — hourly. The old 24h cadence meant a "day 0"
+   step could sit unsent for a day and chained steps drifted a full day per
+   link; an hourly sweep keeps offsets honest at day granularity. */
+const AUTO_PLAN_INTERVAL_MS = 60 * 60 * 1000;
 setInterval(() => {
   executeDueAutoPlanSteps()
     .then((r) => {
       if (r.stepsExecuted > 0) {
         console.log(`[autoPlans] scheduled run: ${r.stepsExecuted} step(s) across ${r.processed} enrollment(s)`);
+      }
+      return executeDueTransactionPlanSteps();
+    })
+    .then((r) => {
+      if (r.stepsExecuted > 0) {
+        console.log(`[autoPlans] transaction run: ${r.stepsExecuted} step(s) across ${r.processed} enrollment(s)`);
       }
     })
     .catch((err) => console.error("[autoPlans] scheduled run failed:", err));

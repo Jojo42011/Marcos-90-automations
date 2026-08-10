@@ -51,6 +51,7 @@ exports.deleteLead = deleteLead;
 exports.deleteLeads = deleteLeads;
 exports.phoneMatchKey = phoneMatchKey;
 exports.findLeadByPhoneDigits = findLeadByPhoneDigits;
+exports.pauseAutoPlansOnInboundText = pauseAutoPlansOnInboundText;
 exports.createLead = createLead;
 exports.upsertLeadQuiet = upsertLeadQuiet;
 exports.updateLead = updateLead;
@@ -80,6 +81,8 @@ const users_js_1 = require("./users.js");
 const tasks_js_1 = require("./tasks.js");
 const marcoTasks_js_1 = require("./marcoTasks.js");
 const index_js_1 = require("../integrations/twilio/index.js");
+const autoPlans_js_1 = require("./autoPlans.js");
+const autoPlanTriggers_js_1 = require("./autoPlanTriggers.js");
 const CRM_STATUS_SET = new Set(types_js_1.CRM_STATUSES);
 /** Normalize CRM intent; defaults to buyer. */
 function normalizeCrmIntent(raw) {
@@ -544,10 +547,97 @@ async function triggerSourceRoutingIfNeeded(lead) {
     routeNewLead(marked).catch((err) => console.error("[SourceRouting]", err));
     return marked;
 }
+/**
+ * Auto Plan trigger evaluation + status-change auto-pause. Runs on ORGANIC
+ * writes only — createLead (a lead actually arriving) and updateLeadCrmFields
+ * when one of the four trigger fields changed. The bulk paths (upsertLeadQuiet,
+ * importLeadQuiet) deliberately never call this: Brivity's own triggers skip
+ * mass imports, and ours enrolling 500 filed contacts into a texting drip would
+ * be far worse than a missed nurture. Mutates and returns `next`.
+ */
+function applyAutoPlanAutomations(prev, next) {
+    try {
+        const plans = (0, autoPlans_js_1.getAutoPlans)();
+        const planById = new Map(plans.map((p) => [p.id, p]));
+        // Auto-pause: the contact's status changed to a value a plan pauses on.
+        if (prev && prev.crmStatus !== next.crmStatus && next.autoPlanEnrollments?.length) {
+            next.autoPlanEnrollments = next.autoPlanEnrollments.map((enr) => {
+                if (enr.status !== "active")
+                    return enr;
+                const plan = planById.get(enr.planId);
+                if (!plan?.autoPauseOnStatus)
+                    return enr;
+                if (String(plan.autoPauseOnStatus).toLowerCase() !== String(next.crmStatus).toLowerCase())
+                    return enr;
+                return { ...enr, status: "paused" };
+            });
+        }
+        const relevantChanged = !prev ||
+            prev.crmStatus !== next.crmStatus ||
+            prev.crmIntent !== next.crmIntent ||
+            (prev.source ?? null) !== (next.source ?? null) ||
+            JSON.stringify(prev.tags ?? []) !== JSON.stringify(next.tags ?? []);
+        if (!relevantChanged)
+            return next;
+        const hit = (0, autoPlanTriggers_js_1.findTriggeredEnrollment)(next, plans);
+        if (hit) {
+            next.autoPlanEnrollments = [
+                ...(next.autoPlanEnrollments || []).filter((e) => e.planId !== hit.plan.id),
+                {
+                    planId: hit.plan.id,
+                    planName: hit.plan.name,
+                    enrolledAt: nowIso(),
+                    currentStepIndex: 0,
+                    completedSteps: [],
+                    enrolledVia: hit.trigger.id,
+                    status: "active",
+                },
+            ];
+            next.activity = [
+                ...(next.activity || []),
+                {
+                    type: "auto_plan",
+                    description: `Auto-enrolled in "${hit.plan.name}" by trigger`,
+                    timestamp: nowIso(),
+                },
+            ];
+        }
+    }
+    catch (err) {
+        // A broken trigger store must never block a lead write.
+        console.error("[autoPlans] trigger evaluation failed:", err);
+    }
+    return next;
+}
+/** Pause every active enrollment whose plan has the reply safety valve on. */
+function pauseAutoPlansOnInboundText(lead) {
+    const enrollments = lead.autoPlanEnrollments || [];
+    if (!enrollments.some((e) => e.status === "active"))
+        return null;
+    let plans;
+    try {
+        plans = (0, autoPlans_js_1.getAutoPlans)();
+    }
+    catch {
+        return null;
+    }
+    const planById = new Map(plans.map((p) => [p.id, p]));
+    let changed = false;
+    const next = enrollments.map((enr) => {
+        if (enr.status !== "active")
+            return enr;
+        if (!planById.get(enr.planId)?.autoPauseOnReply)
+            return enr;
+        changed = true;
+        return { ...enr, status: "paused" };
+    });
+    return changed ? { ...lead, autoPlanEnrollments: next } : null;
+}
 async function createLead(lead) {
     const id = String(idCounter++);
     const createdAt = nowIso();
     let next = normalizeCrmDefaults({ ...lead, id, createdAt, updatedAt: createdAt });
+    next = applyAutoPlanAutomations(null, next);
     if (leadHasPhone(next.phone)) {
         next = {
             ...next,
@@ -699,6 +789,7 @@ const ACTIVITY_TYPES = new Set([
     "listing_active",
     "task",
     "email_pending",
+    "auto_plan",
 ]);
 /** Normalize an arbitrary activity payload to a LeadActivity[] (drops invalid entries). */
 function normalizeCrmActivity(raw) {
@@ -787,7 +878,7 @@ function normalizeAutoPlanEnrollments(raw) {
         if (!planId)
             continue;
         const status = e.status === "paused" || e.status === "completed" ? e.status : "active";
-        out.push({
+        const entry = {
             planId,
             planName: typeof e.planName === "string" ? e.planName : "",
             enrolledAt: typeof e.enrolledAt === "string" && e.enrolledAt ? e.enrolledAt : nowIso(),
@@ -796,7 +887,20 @@ function normalizeAutoPlanEnrollments(raw) {
                 ? e.completedSteps.filter((s) => typeof s === "string")
                 : [],
             status,
-        });
+        };
+        /* completedAt drives step chaining; enrolledVia drives trigger enrolled
+           counts. Dropping either here would silently break both features. */
+        if (e.completedAt && typeof e.completedAt === "object" && !Array.isArray(e.completedAt)) {
+            const map = {};
+            for (const [k, v] of Object.entries(e.completedAt)) {
+                if (typeof v === "string")
+                    map[k] = v;
+            }
+            entry.completedAt = map;
+        }
+        if (typeof e.enrolledVia === "string" && e.enrolledVia)
+            entry.enrolledVia = e.enrolledVia;
+        out.push(entry);
     }
     return out;
 }
@@ -1331,6 +1435,12 @@ async function updateLeadCrmFields(input) {
                 : String(input.lastReEngagementTriggeredAt)
             : lead.lastReEngagementTriggeredAt ?? null,
     };
-    await updateLead(next);
-    return next;
+    /* Trigger evaluation on organic field changes — but never when the caller is
+       explicitly managing enrollments (input.autoPlanEnrollments set): unenrolling
+       someone and having the trigger instantly re-enroll them would make removal
+       impossible. */
+    const managed = input.autoPlanEnrollments !== undefined;
+    const finalNext = managed ? next : applyAutoPlanAutomations(lead, next);
+    await updateLead(finalNext);
+    return finalNext;
 }

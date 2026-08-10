@@ -177,6 +177,16 @@ function initTransactionsSchema(database) {
            evaporated on reload — and an expiring listing is precisely the thing a
            seller's agent cannot afford to discover late. */
         ["expiration", "TEXT"],
+        /* Transaction Auto Plan enrollments (JSON array). Date-anchored plans need
+           somewhere to live on the deal itself; leads keep theirs on the lead. */
+        ["auto_plans", "TEXT"],
+        /* Brivity transaction-page dates (team feature list, Aug 2026). */
+        ["date_listed", "TEXT"],
+        ["date_canceled", "TEXT"],
+        ["status_changed_at", "TEXT"],
+        ["deposit_due", "TEXT"],
+        ["additional_deposit_due", "TEXT"],
+        ["escrow_signing_date", "TEXT"],
     ]) {
         try {
             database.exec(`ALTER TABLE transactions ADD COLUMN ${column} ${ddl}`);
@@ -300,6 +310,21 @@ function rowToTransaction(row) {
         listPrice: row.list_price != null ? Number(row.list_price) : undefined,
         gci: row.gci != null ? Number(row.gci) : undefined,
         expiration: row.expiration ? String(row.expiration) : undefined,
+        dateListed: row.date_listed ? String(row.date_listed) : undefined,
+        dateCanceled: row.date_canceled ? String(row.date_canceled) : undefined,
+        statusChangedAt: row.status_changed_at ? String(row.status_changed_at) : undefined,
+        depositDue: row.deposit_due ? String(row.deposit_due) : undefined,
+        additionalDepositDue: row.additional_deposit_due ? String(row.additional_deposit_due) : undefined,
+        escrowSigningDate: row.escrow_signing_date ? String(row.escrow_signing_date) : undefined,
+        autoPlans: (() => {
+            try {
+                const parsed = row.auto_plans ? JSON.parse(String(row.auto_plans)) : null;
+                return Array.isArray(parsed) ? parsed : undefined;
+            }
+            catch {
+                return undefined;
+            }
+        })(),
         agent: row.agent ? String(row.agent) : undefined,
         source: row.source ? String(row.source) : undefined,
         externalKey: row.external_key ? String(row.external_key) : undefined,
@@ -377,11 +402,12 @@ function createTransaction(tx, options) {
         .prepare(`INSERT INTO transactions
         (id, address, deal_type, parties, price, status, contract_date, inspection_date,
          appraisal_date, loan_commitment_date, title_date, closing_date, possession_date,
-         lead_id, deal_file_url, notes, mls, list_price, gci, expiration, agent, source, external_key,
-         imported_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, tx.address, tx.dealType, JSON.stringify(tx.parties || {}), tx.price ?? null, tx.status, tx.contractDate ?? null, tx.inspectionDate ?? null, tx.appraisalDate ?? null, tx.loanCommitmentDate ?? null, tx.titleDate ?? null, tx.closingDate ?? null, tx.possessionDate ?? null, tx.leadId ?? null, tx.dealFileUrl ?? null, tx.notes ?? null, tx.mls ?? null, tx.listPrice ?? null, tx.gci ?? null, tx.expiration ?? null, tx.agent ?? null, tx.source ?? null, tx.externalKey ?? null, tx.importedAt ?? null, now, now);
-    const created = { ...tx, id, createdAt: now, updatedAt: now };
+         lead_id, deal_file_url, notes, mls, list_price, gci, expiration, auto_plans, agent, source, external_key,
+         imported_at, date_listed, date_canceled, status_changed_at, deposit_due, additional_deposit_due, escrow_signing_date,
+         created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, tx.address, tx.dealType, JSON.stringify(tx.parties || {}), tx.price ?? null, tx.status, tx.contractDate ?? null, tx.inspectionDate ?? null, tx.appraisalDate ?? null, tx.loanCommitmentDate ?? null, tx.titleDate ?? null, tx.closingDate ?? null, tx.possessionDate ?? null, tx.leadId ?? null, tx.dealFileUrl ?? null, tx.notes ?? null, tx.mls ?? null, tx.listPrice ?? null, tx.gci ?? null, tx.expiration ?? null, tx.autoPlans ? JSON.stringify(tx.autoPlans) : null, tx.agent ?? null, tx.source ?? null, tx.externalKey ?? null, tx.importedAt ?? null, tx.dateListed ?? null, tx.dateCanceled ?? null, tx.statusChangedAt ?? now, tx.depositDue ?? null, tx.additionalDepositDue ?? null, tx.escrowSigningDate ?? null, now, now);
+    const created = { ...tx, id, statusChangedAt: tx.statusChangedAt ?? now, createdAt: now, updatedAt: now };
     if (created.status === "under_contract") {
         syncDeadlinesFromTransaction(created);
     }
@@ -394,6 +420,11 @@ function updateTransaction(id, updates) {
     const merged = {
         ...existing,
         ...updates,
+        /* Brivity's Status Changed At: stamped automatically whenever status
+           actually moves, so the tx table's column and date-range filter are real. */
+        statusChangedAt: updates.status !== undefined && updates.status !== existing.status
+            ? new Date().toISOString().slice(0, 10)
+            : (updates.statusChangedAt ?? existing.statusChangedAt),
         parties: { ...existing.parties, ...(updates.parties ?? {}) },
         inspectionFlow: { ...existing.inspectionFlow, ...(updates.inspectionFlow ?? {}) },
         finalWeekFlow: { ...existing.finalWeekFlow, ...(updates.finalWeekFlow ?? {}) },
@@ -407,10 +438,11 @@ function updateTransaction(id, updates) {
         contract_date = ?, inspection_date = ?, appraisal_date = ?, loan_commitment_date = ?,
         title_date = ?, closing_date = ?, possession_date = ?, lead_id = ?, deal_file_url = ?,
         notes = ?, inspection_flow = ?, final_week_flow = ?, post_close_flow = ?,
-        mls = ?, list_price = ?, gci = ?, expiration = ?, agent = ?, source = ?, external_key = ?,
-        imported_at = ?, updated_at = ?
+        mls = ?, list_price = ?, gci = ?, expiration = ?, auto_plans = ?, agent = ?, source = ?, external_key = ?,
+        imported_at = ?, date_listed = ?, date_canceled = ?, status_changed_at = ?,
+        deposit_due = ?, additional_deposit_due = ?, escrow_signing_date = ?, updated_at = ?
       WHERE id = ?`)
-        .run(merged.address, merged.dealType, JSON.stringify(merged.parties || {}), merged.price ?? null, merged.status, merged.contractDate ?? null, merged.inspectionDate ?? null, merged.appraisalDate ?? null, merged.loanCommitmentDate ?? null, merged.titleDate ?? null, merged.closingDate ?? null, merged.possessionDate ?? null, merged.leadId ?? null, merged.dealFileUrl ?? null, merged.notes ?? null, JSON.stringify(merged.inspectionFlow || {}), JSON.stringify(merged.finalWeekFlow || {}), JSON.stringify(merged.postCloseFlow || {}), merged.mls ?? null, merged.listPrice ?? null, merged.gci ?? null, merged.expiration ?? null, merged.agent ?? null, merged.source ?? null, merged.externalKey ?? null, merged.importedAt ?? null, merged.updatedAt, id);
+        .run(merged.address, merged.dealType, JSON.stringify(merged.parties || {}), merged.price ?? null, merged.status, merged.contractDate ?? null, merged.inspectionDate ?? null, merged.appraisalDate ?? null, merged.loanCommitmentDate ?? null, merged.titleDate ?? null, merged.closingDate ?? null, merged.possessionDate ?? null, merged.leadId ?? null, merged.dealFileUrl ?? null, merged.notes ?? null, JSON.stringify(merged.inspectionFlow || {}), JSON.stringify(merged.finalWeekFlow || {}), JSON.stringify(merged.postCloseFlow || {}), merged.mls ?? null, merged.listPrice ?? null, merged.gci ?? null, merged.expiration ?? null, merged.autoPlans ? JSON.stringify(merged.autoPlans) : null, merged.agent ?? null, merged.source ?? null, merged.externalKey ?? null, merged.importedAt ?? null, merged.dateListed ?? null, merged.dateCanceled ?? null, merged.statusChangedAt ?? null, merged.depositDue ?? null, merged.additionalDepositDue ?? null, merged.escrowSigningDate ?? null, merged.updatedAt, id);
     if (merged.status === "under_contract") {
         syncDeadlinesFromTransaction(merged);
     }
