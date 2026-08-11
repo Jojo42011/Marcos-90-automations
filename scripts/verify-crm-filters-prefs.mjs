@@ -97,7 +97,10 @@ try {
   ok("table-prefs round trip", tp.tables && tp.tables.leads && tp.tables.leads.sortField === "name" && tp.tables.leads.sortDir === -1 && tp.tables.leads.hidden.includes("source"));
 
   // ---- browser layer -------------------------------------------------------
-  const br = await chromium.launch();
+  /* The container pre-installs Chromium at PLAYWRIGHT_BROWSERS_PATH but a
+     version-mismatched playwright package looks for a different revision —
+     PW_CHROMIUM points launch at the real binary in that case. */
+  const br = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {});
   const page = await br.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push("pageerror: " + e.message));
