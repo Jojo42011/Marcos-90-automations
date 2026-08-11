@@ -4790,6 +4790,11 @@ if(typeof paintSortArrows==="function")paintSortArrows();
       if(!d) return;
       AP.plans=d.plans||[]; AP.triggers=d.triggers||[]; render();
     }).catch(function(){});
+    /* Dropdown sources for the step editors (merge fields, roles, team,
+       email templates). Fetched once; the editor degrades to plain inputs
+       rather than blocking if it fails. */
+    if(!AP.meta) fetch(api("/api/auto-plans/meta")).then(function(r){return r.ok?r.json():null;})
+      .then(function(m){ if(m) AP.meta=m; }).catch(function(){});
   }
   function planName(id){ var p=AP.plans.find(function(x){return x.id===id;}); return p?p.name:id; }
   function condLabel(t){
@@ -4859,20 +4864,106 @@ if(typeof paintSortArrows==="function")paintSortArrows();
     };
   }
   function val(id){ var v=document.getElementById(id).value.trim(); return v||null; }
+  /* ---- Step editor (Brivity's Task / Email / Text step modals) ----
+     One row per step. Shared across all three types: the "Send [n] [unit]
+     After [reference]" scheduler, Make Contingent, and the SMS-compliance
+     notice on anything that sends a text. Type-specific fields below it. */
+  var SMS_NOTE="Phone carriers cap how many texts one number can send per day. Exceeding it — or non-compliant content — risks the number being flagged or blocked.";
+  function metaList(key){ return (AP.meta&&AP.meta[key])||[]; }
+  function senderOptions(cur){
+    var roles=metaList("roles"), team=metaList("team");
+    var out="<option value=''>Default (Marco Puga)</option>";
+    if(roles.length){
+      out+="<optgroup label='Roles — survive staffing changes'>"+roles.map(function(r){
+        return "<option value='"+esc(r.key)+"' "+(cur===r.key?"selected":"")+">"+esc(r.label)+"</option>";}).join("")+"</optgroup>";
+    }
+    if(team.length){
+      out+="<optgroup label='Specific teammate'>"+team.map(function(m){
+        return "<option value='"+esc(m.id)+"' "+(cur===m.id?"selected":"")+">"+esc(m.name)+"</option>";}).join("")+"</optgroup>";
+    }
+    /* A name typed before roles existed stays selectable rather than being
+       silently reset to the default on the next save. */
+    if(cur&&!roles.some(function(r){return r.key===cur;})&&!team.some(function(m){return m.id===cur;})){
+      out+="<option value='"+esc(cur)+"' selected>"+esc(cur)+" (as typed)</option>";
+    }
+    return out;
+  }
+  function placeholderBtn(cls){
+    var fields=metaList("mergeFields");
+    if(!fields.length) return "";
+    return "<select class='"+cls+"' style='max-width:190px'><option value=''>Insert placeholder…</option>"+
+      fields.map(function(f){return "<option value='{{"+esc(f.key)+"}}'>"+esc(f.label)+"</option>";}).join("")+"</select>";
+  }
   function stepRow(st,i,planType,steps){
-    var afterOpts="<option value=''>Auto Plan starts</option>";
-    steps.slice(0,i).forEach(function(pr){ afterOpts+="<option value='"+pr.id+"' "+(st.afterStepId===pr.id?"selected":"")+">After: "+esc((pr.content||"").slice(0,30))+"</option>"; });
-    var dateOpts=TXDATES.map(function(d){ return "<option value='"+d[0]+"' "+(st.anchor===d[0]?"selected":"")+">"+d[1]+"</option>"; }).join("");
-    return "<div class='apStep' data-i='"+i+"' style='border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px'>"+
-      "<div style='display:flex;gap:8px;align-items:center;margin-bottom:6px'><b style='text-transform:uppercase;font-size:11px;color:var(--teal-strong)'>"+st.type+"</b>"+
-      "<input type='number' class='stOff' value='"+(st.dayOffset||0)+"' style='width:64px'> day(s) "+
-      "<select class='stAnchor'>"+(planType==="transaction"?"<option value='' "+(!st.anchor||st.anchor==="enrollment"?"selected":"")+">after enrollment</option>"+dateOpts:"<option value=''>after Auto Plan starts</option>"+afterOpts)+"</select>"+
-      (planType==="transaction"?"<span style='font-size:11px;color:#8a939c'>(negative = before the date)</span>":"")+
+    var unit=st.offsetUnit||"days";
+    var unitSel="<select class='stUnit'>"+["minutes","hours","days"].map(function(u){
+      return "<option value='"+u+"' "+(unit===u?"selected":"")+">"+u+"</option>";}).join("")+"</select>";
+    var anchorOpts="<option value='' "+(!st.anchor||st.anchor==="enrollment"?"selected":"")+">after Auto Plan starts</option>";
+    steps.slice(0,i).forEach(function(pr){
+      anchorOpts+="<option value='"+pr.id+"' "+(st.afterStepId===pr.id?"selected":"")+">after step "+(steps.indexOf(pr)+1)+": "+esc((pr.content||pr.subject||pr.type).slice(0,26))+"</option>";
+    });
+    if(planType==="transaction"){
+      anchorOpts+=TXDATES.map(function(d){ return "<option value='"+d[0]+"' "+(st.anchor===d[0]?"selected":"")+">"+d[1]+"</option>"; }).join("");
+    } else {
+      /* Brivity's "Specific Dates": pinned to a real date on the contact.
+         Both are annual, so they pair with the yearly recurrence below. */
+      anchorOpts+="<optgroup label='Specific Dates'>"+
+        "<option value='birthday' "+(st.anchor==="birthday"?"selected":"")+">their birthday</option>"+
+        "<option value='home_anniversary' "+(st.anchor==="home_anniversary"?"selected":"")+">their home anniversary</option></optgroup>";
+    }
+    var chained=st.anchor==="prev_step"&&st.afterStepId;
+    var sendsText=st.type==="text";
+    var h="<div class='apStep' data-i='"+i+"' style='border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px'>"+
+      "<div style='display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px'>"+
+      "<b style='text-transform:uppercase;font-size:11px;color:var(--teal-strong)'>"+st.type+"</b>"+
+      "<span style='font-size:11.5px;color:#8a939c'>"+(st.type==="task"?"Due":"Send")+"</span>"+
+      "<input type='number' class='stOff' value='"+(st.dayOffset||0)+"' style='width:64px'>"+unitSel+
+      "<select class='stAnchor'>"+anchorOpts+"</select>"+
+      (planType==="transaction"?"<span style='font-size:11px;color:#8a939c'>(negative = before)</span>":"")+
       "<span style='flex:1'></span><a href='#' class='stDel' style='color:#c0392b;font-size:12px'>remove</a></div>"+
-      (st.type==="email"?"<input class='stSubj' placeholder='Email subject' value='"+esc(st.subject||"")+"' style='width:100%;margin-bottom:6px'>":"")+
-      "<textarea class='stContent' rows='2' style='width:100%' placeholder='"+(st.type==="task"?"Task name — be specific (e.g. Follow Up with Buyer Prospect)":"Message — [name] merges the contact\u2019s first name")+"'>"+esc(st.content||"")+"</textarea>"+
-      (st.type==="task"?"<div style='display:flex;gap:8px;margin-top:6px'><input class='stAssign' placeholder='Assign to' value='"+esc(st.assignedTo||"Marco Puga")+"'><input type='number' class='stPrio' min='1' max='9' placeholder='Priority 1-9' value='"+(st.taskPriority||"")+"' style='width:110px'><input class='stInstr' placeholder='Instructions (enough for any teammate)' value='"+esc(st.instructions||"")+"' style='flex:1'></div>":"")+
-      "</div>";
+      "<label style='display:"+(chained?"flex":"none")+";align-items:center;gap:6px;font-size:11.5px;color:#5c6166;margin-bottom:6px' class='stContWrap'>"+
+        "<input type='checkbox' class='stCont' "+(st.contingent?"checked":"")+"> Make contingent — count from when that step is actually completed, not the original schedule</label>";
+
+    if(sendsText){
+      h+="<div style='background:#fff8ec;border:1px solid #f0dcae;border-radius:6px;padding:7px 10px;font-size:11px;color:#7a5c1e;margin-bottom:6px'><b>SMS compliance:</b> "+SMS_NOTE+"</div>";
+    }
+    if(st.type==="email"){
+      var tpls=metaList("templates");
+      h+="<input class='stSubj' placeholder='Email subject (required)' value='"+esc(st.subject||"")+"' style='width:100%;margin-bottom:6px'>";
+      if(tpls.length){
+        h+="<select class='stTpl' style='width:100%;margin-bottom:6px'><option value=''>Write the body below (no template)</option>"+
+          tpls.map(function(t){return "<option value='"+esc(t.id)+"' "+(st.templateId===t.id?"selected":"")+">Template: "+esc(t.name)+"</option>";}).join("")+"</select>";
+      }
+    }
+    h+="<textarea class='stContent' rows='2' style='width:100%' placeholder='"+
+      (st.type==="task"?"Task name — be specific (e.g. Follow Up with Buyer Prospect)":"Message — use placeholders so one step fits every contact")+
+      "'>"+esc(st.content||"")+"</textarea>";
+    if(st.type!=="task"){
+      h+="<div style='display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap'>"+
+        placeholderBtn("stPh")+
+        "<button type='button' class='pill-btn ghost stAi' style='font-size:11px;padding:4px 10px'>✦ AI: Help me write</button>"+
+        "<span style='flex:1'></span>"+
+        "<label style='font-size:11.5px;color:#5c6166'>Send from <select class='stFrom'>"+senderOptions(st.sendFrom)+"</select></label></div>";
+    }
+    if(st.type==="email"){
+      /* CC/BCC live on email only — a text in Brivity is one-to-one from the
+         agent's number, so there is nothing to copy in. */
+      h+="<div style='display:flex;gap:6px;margin-top:6px'>"+
+        "<input class='stCc' placeholder='CC (comma-separated)' value='"+esc((st.cc||[]).join(", "))+"' style='flex:1'>"+
+        "<input class='stBcc' placeholder='BCC' value='"+esc((st.bcc||[]).join(", "))+"' style='flex:1'></div>";
+    }
+    if(st.type==="task"){
+      var recur=st.recurrence||"never";
+      h+="<div style='display:flex;gap:8px;margin-top:6px;flex-wrap:wrap'>"+
+        "<label style='font-size:11.5px;color:#5c6166'>Assign to <select class='stAssign'>"+senderOptions(st.assignedTo)+"</select></label>"+
+        "<label style='font-size:11.5px;color:#5c6166'>Priority (1 highest) <input type='number' class='stPrio' min='1' max='9' value='"+(st.taskPriority||"")+"' style='width:70px'></label>"+
+        "<label style='font-size:11.5px;color:#5c6166'>Repeat <select class='stRecur'>"+
+          ["never","daily","weekly","monthly","yearly"].map(function(r){return "<option value='"+r+"' "+(recur===r?"selected":"")+">"+r+"</option>";}).join("")+
+        "</select></label></div>"+
+        "<input class='stInstr' placeholder='Instructions — enough that any teammate could do it without context' value='"+esc(st.instructions||"")+"' style='width:100%;margin-top:6px'>"+
+        "<input class='stNotes' placeholder='Notes to log on the contact timeline with this task' value='"+esc(st.notes||"")+"' style='width:100%;margin-top:6px'>";
+    }
+    return h+"</div>";
   }
   function openPlanEditor(p){
     p=p?JSON.parse(JSON.stringify(p)):{name:"",planType:AP.tab,steps:[],active:true,autoPauseOnReply:true,autoPauseOnStatus:null,completionStatus:null};
@@ -4892,6 +4983,7 @@ if(typeof paintSortArrows==="function")paintSortArrows();
         "<div style='margin:8px 0 14px'>Add a new: <button class='pill-btn ghost' data-add='task'>TASK</button> <button class='pill-btn ghost' data-add='email'>EMAIL</button> <button class='pill-btn ghost' data-add='text'>TEXT</button></div>"+
         "<div style='text-align:right'><button class='pill-btn ghost' id='apCancel'>Cancel</button> <button class='pill-btn' id='plSave'>Save Plan</button></div>";
       styleEditorInputs(box);
+      wireStepControls();
       box.querySelectorAll("[data-add]").forEach(function(b){ b.onclick=function(){ harvest(); p.steps.push({id:"new_"+Date.now()+Math.random().toString(36).slice(2,6),type:b.dataset.add,dayOffset:0,content:""}); paint(); }; });
       box.querySelectorAll(".stDel").forEach(function(a,i){ a.onclick=function(e){ e.preventDefault(); harvest(); p.steps.splice(Number(a.closest(".apStep").dataset.i),1); paint(); }; });
       var typeSel=document.getElementById("plType"); typeSel.onchange=function(){ harvest(); p.planType=typeSel.value; paint(); };
@@ -4911,16 +5003,71 @@ if(typeof paintSortArrows==="function")paintSortArrows();
       box.querySelectorAll(".apStep").forEach(function(row){
         var st=p.steps[Number(row.dataset.i)]; if(!st)return;
         st.dayOffset=Number(row.querySelector(".stOff").value)||0;
+        var u=row.querySelector(".stUnit");
+        if(u){ if(u.value==="days") delete st.offsetUnit; else st.offsetUnit=u.value; }
         var an=row.querySelector(".stAnchor").value;
         if(!an){ delete st.anchor; delete st.afterStepId; }
         else if(an.indexOf("step")===0||an.indexOf("new_")===0){ st.anchor="prev_step"; st.afterStepId=an; }
         else { st.anchor=an; delete st.afterStepId; }
+        var cont=row.querySelector(".stCont");
+        if(cont&&cont.checked&&st.anchor==="prev_step") st.contingent=true; else delete st.contingent;
         st.content=row.querySelector(".stContent").value;
         var e;
         if((e=row.querySelector(".stSubj"))) st.subject=e.value;
+        if((e=row.querySelector(".stTpl"))) { if(e.value) st.templateId=e.value; else delete st.templateId; }
+        if((e=row.querySelector(".stFrom"))) { if(e.value) st.sendFrom=e.value; else delete st.sendFrom; }
+        var addrs=function(v){ return String(v||"").split(",").map(function(x){return x.trim();}).filter(Boolean); };
+        if((e=row.querySelector(".stCc"))) { var cc=addrs(e.value); if(cc.length) st.cc=cc; else delete st.cc; }
+        if((e=row.querySelector(".stBcc"))) { var bcc=addrs(e.value); if(bcc.length) st.bcc=bcc; else delete st.bcc; }
         if((e=row.querySelector(".stAssign"))) st.assignedTo=e.value;
         if((e=row.querySelector(".stPrio"))) st.taskPriority=Number(e.value)||undefined;
         if((e=row.querySelector(".stInstr"))) st.instructions=e.value;
+        if((e=row.querySelector(".stNotes"))) st.notes=e.value;
+        if((e=row.querySelector(".stRecur"))) { if(e.value&&e.value!=="never") st.recurrence=e.value; else delete st.recurrence; }
+      });
+    }
+    /* Live controls inside a step row: the contingent checkbox only applies to
+       a chained step, placeholders insert at the cursor, and the AI drafter
+       fills the body it was clicked next to. */
+    function wireStepControls(){
+      box.querySelectorAll(".apStep").forEach(function(row){
+        var anchorSel=row.querySelector(".stAnchor"), contWrap=row.querySelector(".stContWrap");
+        if(anchorSel&&contWrap){
+          anchorSel.addEventListener("change",function(){
+            var v=anchorSel.value;
+            var isStep=v&&(v.indexOf("step")===0||v.indexOf("new_")===0);
+            contWrap.style.display=isStep?"flex":"none";
+            if(!isStep){ var c=row.querySelector(".stCont"); if(c)c.checked=false; }
+          });
+        }
+        var ph=row.querySelector(".stPh"), ta=row.querySelector(".stContent");
+        if(ph&&ta){
+          ph.addEventListener("change",function(){
+            if(!ph.value)return;
+            var start=ta.selectionStart||ta.value.length, end=ta.selectionEnd||start;
+            ta.value=ta.value.slice(0,start)+ph.value+ta.value.slice(end);
+            ta.focus(); ta.selectionStart=ta.selectionEnd=start+ph.value.length;
+            ph.value="";
+          });
+        }
+        var ai=row.querySelector(".stAi");
+        if(ai&&ta){
+          ai.addEventListener("click",function(){
+            var about=prompt("What should this step say? (e.g. check in a week after a showing)", ta.value.slice(0,120)||"");
+            if(!about||!about.trim())return;
+            var idx=Number(row.dataset.i), kind=(p.steps[idx]||{}).type||"text";
+            ai.disabled=true; ai.textContent="✦ writing…";
+            fetch(api("/api/auto-plans/draft-step"),{method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({kind:kind,about:about.trim()})})
+              .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+              .then(function(res){
+                ai.disabled=false; ai.textContent="✦ AI: Help me write";
+                if(!res.ok){ alert(res.j.error||"Could not draft that"); return; }
+                ta.value=res.j.draft||""; harvest();
+              })
+              .catch(function(){ ai.disabled=false; ai.textContent="✦ AI: Help me write"; alert("Could not reach the server"); });
+          });
+        }
       });
     }
     paint();

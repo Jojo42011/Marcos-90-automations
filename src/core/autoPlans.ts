@@ -143,7 +143,9 @@ export function normalizeAutoPlanSteps(raw: unknown): AutoPlanStep[] {
       s.anchor === "contract_date" ||
       s.anchor === "closing_date" ||
       s.anchor === "expiration" ||
-      s.anchor === "inspection_date"
+      s.anchor === "inspection_date" ||
+      s.anchor === "birthday" ||
+      s.anchor === "home_anniversary"
         ? s.anchor
         : "enrollment";
     const dateAnchored = anchor !== "enrollment" && anchor !== "prev_step";
@@ -158,18 +160,50 @@ export function normalizeAutoPlanSteps(raw: unknown): AutoPlanStep[] {
       dayOffset,
       content: typeof s.content === "string" ? s.content : "",
     };
+    /* Unit is stored only when it is not the historical default, so an
+       untouched plan round-trips byte-identical. */
+    if (s.offsetUnit === "minutes" || s.offsetUnit === "hours") next.offsetUnit = s.offsetUnit;
     if (anchor !== "enrollment") next.anchor = anchor;
     if (anchor === "prev_step" && typeof s.afterStepId === "string" && s.afterStepId) {
       next.afterStepId = s.afterStepId;
     } else if (anchor === "prev_step") {
       next.anchor = "enrollment"; // a chain with no link is just plan-start
     }
-    if (type === "email" && typeof s.subject === "string") next.subject = s.subject;
+    /* Contingent only means something on a chained step: it says "recompute
+       from when that step really finished". On any other anchor it would be a
+       checkbox that changes nothing, so it is not stored there. */
+    if (s.contingent === true && next.anchor === "prev_step") next.contingent = true;
+    if (type === "email") {
+      if (typeof s.subject === "string") next.subject = s.subject;
+      const addrs = (v: unknown): string[] =>
+        Array.isArray(v)
+          ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+              .map((x) => x.trim().slice(0, 200))
+              .slice(0, 10)
+          : [];
+      const cc = addrs(s.cc);
+      const bcc = addrs(s.bcc);
+      if (cc.length) next.cc = cc;
+      if (bcc.length) next.bcc = bcc;
+      if (typeof s.templateId === "string" && s.templateId.trim()) next.templateId = s.templateId.trim();
+    }
+    /* Brivity has no CC/BCC on SMS — a text is one-to-one from the agent's
+       number — so those fields are dropped rather than stored-and-ignored. */
+    if (type === "email" || type === "text") {
+      if (typeof s.sendFrom === "string" && s.sendFrom.trim()) next.sendFrom = s.sendFrom.trim().slice(0, 60);
+    }
     if (type === "task") {
       next.assignedTo = typeof s.assignedTo === "string" && s.assignedTo ? s.assignedTo : "Marco Puga";
       const pr = Number(s.taskPriority);
       if (Number.isInteger(pr) && pr >= 1 && pr <= 9) next.taskPriority = pr;
       if (typeof s.instructions === "string" && s.instructions.trim()) next.instructions = s.instructions.trim();
+      if (typeof s.notes === "string" && s.notes.trim()) next.notes = s.notes.trim().slice(0, 2000);
+      if (
+        s.recurrence === "daily" || s.recurrence === "weekly" ||
+        s.recurrence === "monthly" || s.recurrence === "yearly"
+      ) {
+        next.recurrence = s.recurrence;
+      }
     }
     out.push(next);
   }

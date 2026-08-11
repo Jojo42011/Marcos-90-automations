@@ -902,6 +902,24 @@ export function normalizeAutoPlanEnrollments(raw: unknown): LeadAutoPlanEnrollme
       }
       entry.completedAt = map;
     }
+    /* lastRunAt/runCount are the recurring-step clock. Same reasoning as
+       completedAt above: a repeating step is never "completed", so dropping
+       these here would make it re-fire on every single engine tick. */
+    if (e.lastRunAt && typeof e.lastRunAt === "object" && !Array.isArray(e.lastRunAt)) {
+      const map: Record<string, string> = {};
+      for (const [k, v] of Object.entries(e.lastRunAt as Record<string, unknown>)) {
+        if (typeof v === "string") map[k] = v;
+      }
+      if (Object.keys(map).length) entry.lastRunAt = map;
+    }
+    if (e.runCount && typeof e.runCount === "object" && !Array.isArray(e.runCount)) {
+      const map: Record<string, number> = {};
+      for (const [k, v] of Object.entries(e.runCount as Record<string, unknown>)) {
+        const n = Number(v);
+        if (Number.isFinite(n) && n >= 0) map[k] = Math.trunc(n);
+      }
+      if (Object.keys(map).length) entry.runCount = map;
+    }
     if (typeof e.enrolledVia === "string" && e.enrolledVia) entry.enrolledVia = e.enrolledVia;
     out.push(entry);
   }

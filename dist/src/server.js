@@ -72,6 +72,8 @@ const crmNotificationStore_js_1 = require("./core/crmNotificationStore.js");
 const pushStore_js_1 = require("./core/pushStore.js");
 const teamStore_js_1 = require("./core/teamStore.js");
 const teamRoster_js_1 = require("./core/teamRoster.js");
+const autoPlanScheduling_js_1 = require("./core/autoPlanScheduling.js");
+const mergeFields_js_1 = require("./core/mergeFields.js");
 const scheduledMessages_js_1 = require("./core/scheduledMessages.js");
 const scheduledSender_js_1 = require("./core/scheduledSender.js");
 const scheduleTime_js_1 = require("./core/scheduleTime.js");
@@ -7455,6 +7457,86 @@ app.delete("/api/auto-plan-triggers/:id", (req, res) => {
     }
     res.status(200).json({ success: true });
 });
+/**
+ * Everything the plan/step editors need to populate their dropdowns, in one
+ * request: merge fields for Insert Placeholder, roles for Send From /
+ * Assign To, and the saved email templates. One endpoint rather than three
+ * because the editor opens as a unit and three round trips would show a
+ * modal with half its options missing.
+ */
+app.get("/api/auto-plans/meta", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    let templates = [];
+    try {
+        const { getEmailTemplates } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
+        templates = getEmailTemplates().filter((t) => t.isActive !== false).map((t) => ({ id: t.id, name: t.name, subject: t.subject }));
+    }
+    catch {
+        templates = []; // an unreachable template store must not break the editor
+    }
+    res.json({
+        ok: true,
+        mergeFields: mergeFields_js_1.MERGE_FIELDS,
+        roles: autoPlanScheduling_js_1.AUTO_PLAN_ROLES,
+        team: (0, teamRoster_js_1.listTeamMembers)().map((m) => ({ id: m.id, name: m.name, role: m.role })),
+        templates,
+        offsetUnits: ["minutes", "hours", "days"],
+        recurrences: ["never", "daily", "weekly", "monthly", "yearly"],
+        maxRecurringRuns: autoPlanScheduling_js_1.MAX_RECURRING_RUNS,
+    });
+});
+/**
+ * "AI: Help Me Write" on the email/text/task step editors.
+ *
+ * Drafts step COPY, not a message to a specific person — a plan step is
+ * written once for hundreds of contacts — so the prompt asks for merge-field
+ * placeholders rather than invented names, and the house style rules apply
+ * (this text goes to real clients under Marco's name).
+ */
+app.post("/api/auto-plans/draft-step", express_1.default.json({ limit: "32kb" }), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const kind = body.kind === "email" || body.kind === "text" || body.kind === "task" ? body.kind : null;
+    const about = typeof body.about === "string" ? body.about.trim().slice(0, 600) : "";
+    if (!kind || !about) {
+        res.status(400).json({ error: "kind (email|text|task) and about are required" });
+        return;
+    }
+    try {
+        const { complete, isAnthropicApiKeyConfigured } = await Promise.resolve().then(() => __importStar(require("./integrations/llm/index.js")));
+        if (!isAnthropicApiKeyConfigured()) {
+            res.status(503).json({ error: "AI drafting is unavailable — ANTHROPIC_API_KEY is not set." });
+            return;
+        }
+        const { HARVEY_HOUSE_STYLE, stripAiTypography } = await Promise.resolve().then(() => __importStar(require("./core/houseStyle.js")));
+        const limits = kind === "text"
+            ? "Under 320 characters, no links, no emoji. It is an SMS from a real agent."
+            : kind === "email"
+                ? "Return the body only, no subject line, no signature block."
+                : "One line naming the action, specific enough that a teammate could do it without context.";
+        const placeholders = mergeFields_js_1.MERGE_FIELDS.map((f) => `{{${f.key}}}`).join(", ");
+        const prompt = [
+            `Write the ${kind} step of a real-estate follow-up Auto Plan for Marco Puga, a San Antonio agent.`,
+            `The step is about: ${about}`,
+            limits,
+            `This one piece of copy is sent to MANY different contacts, so never invent a name, address, or price.`,
+            `Where a personal detail belongs, use one of these placeholders exactly: ${placeholders}`,
+            `Return only the copy itself, with nothing before or after it.`,
+            HARVEY_HOUSE_STYLE,
+        ].join("\n\n");
+        const draft = await complete(prompt, "");
+        res.json({ ok: true, draft: stripAiTypography(String(draft || "").trim()) });
+    }
+    catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
 app.post("/api/auto-plans", express_1.default.json({ limit: "2mb" }), (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -7652,6 +7734,10 @@ app.post("/api/auto-plans/enrollment/:leadId/:planId/skip-step", async (req, res
 });
 /** Execution engine — run due Auto Plan steps across all leads. */
 async function executeDueAutoPlanSteps() {
+    /* Dynamic, matching how every other caller reaches emailStore — it opens a
+       SQLite handle on first import and the engine may run before anything else
+       has needed it. */
+    const { getEmailTemplate } = await Promise.resolve().then(() => __importStar(require("./core/emailStore.js")));
     const plans = (0, autoPlans_js_1.getAutoPlans)();
     const planById = new Map(plans.map((p) => [p.id, p]));
     const leads = await (0, db_js_1.listAllLeads)();
@@ -7680,26 +7766,86 @@ async function executeDueAutoPlanSteps() {
             const enrolledMs = new Date(enr.enrolledAt).getTime();
             const completed = new Set(enr.completedSteps);
             const completedAt = { ...(enr.completedAt || {}) };
-            const first = leadFirstName(lead);
+            const lastRunAt = { ...(enr.lastRunAt || {}) };
+            const runCount = { ...(enr.runCount || {}) };
             for (const step of plan.steps) {
+                const repeatMs = (0, autoPlanScheduling_js_1.recurrenceMs)(step.recurrence);
+                const isRecurring = step.type === "task" && repeatMs !== null;
                 if (completed.has(step.id))
                     continue;
                 /* Anchor resolution (Brivity's "After [...]" dropdown): a chained step
                    counts from when its referenced step actually completed — and is
-                   simply not due yet while that step is unfinished. */
-                let baseMs = enrolledMs;
-                if (step.anchor === "prev_step" && step.afterStepId) {
-                    const prevDone = completedAt[step.afterStepId];
-                    if (!prevDone)
-                        continue;
-                    baseMs = new Date(prevDone).getTime();
+                   simply not due yet while that step is unfinished. "Make Contingent"
+                   is the same mechanism stated explicitly in the UI. */
+                let dueMs;
+                if (step.anchor === "birthday" || step.anchor === "home_anniversary") {
+                    /* Specific Dates: pinned to a real date on the contact, never
+                       retroactive — the first occurrence at or after enrollment. */
+                    const specific = (0, autoPlanScheduling_js_1.specificDateDueMs)(step, lead, enrolledMs);
+                    if (specific === null)
+                        continue; // no such date on this contact
+                    dueMs = specific;
                 }
-                const dueMs = baseMs + step.dayOffset * 24 * 60 * 60 * 1000;
+                else {
+                    let baseMs = enrolledMs;
+                    if (step.anchor === "prev_step" && step.afterStepId) {
+                        const prevDone = completedAt[step.afterStepId];
+                        if (!prevDone)
+                            continue;
+                        baseMs = new Date(prevDone).getTime();
+                    }
+                    dueMs = baseMs + (0, autoPlanScheduling_js_1.offsetMs)(step);
+                }
+                if (isRecurring) {
+                    /* A repeating step is never "done": it re-arms off its own last run
+                       until the run cap stops it. */
+                    const runs = runCount[step.id] || 0;
+                    if (runs >= autoPlanScheduling_js_1.MAX_RECURRING_RUNS) {
+                        completed.add(step.id);
+                        completedAt[step.id] = new Date().toISOString();
+                        changed = true;
+                        newActivity.push({
+                            type: "auto_plan",
+                            description: `Auto Plan step stopped repeating after ${autoPlanScheduling_js_1.MAX_RECURRING_RUNS} runs: ${(step.content || "").slice(0, 80)}`,
+                            timestamp: new Date().toISOString(),
+                        });
+                        continue;
+                    }
+                    const last = lastRunAt[step.id];
+                    if (last)
+                        dueMs = new Date(last).getTime() + repeatMs;
+                }
                 if (dueMs > now)
                     continue;
-                const content = (step.content || "").replace(/\[name\]/g, first);
                 const stamp = new Date().toISOString();
+                /* Merge fields resolve against THIS contact. An unresolvable
+                   placeholder blocks the send further down rather than shipping
+                   "Hi {{recipient_first_name}}" to a real client. */
+                const merged = (0, mergeFields_js_1.applyMergeFields)(step.content || "", lead, { name: "Marco Puga", phone: process.env.HARVEY_OWNER_NUMBER });
+                const content = merged.text;
                 if (step.type === "text") {
+                    if (!(0, mergeFields_js_1.isSendable)(merged)) {
+                        /* Same shape as the missing-phone path: a visible task, never a
+                           silent skip and never a half-filled text to a real person. */
+                        (0, tasks_js_1.createTask)({
+                            title: `Auto Plan text held back — ${(0, mergeFields_js_1.describeMergeProblem)(merged)}`,
+                            description: `Plan "${plan.name}" could not fill every placeholder for ${lead.name || lead.username || lead.id}. Message as written: ${step.content}`,
+                            type: "follow_up",
+                            priority: "high",
+                            status: "pending",
+                            dueDate: stamp.slice(0, 10),
+                            leadId: lead.id,
+                            leadName: lead.name || lead.username || undefined,
+                            assignedUserName: (0, autoPlanScheduling_js_1.resolveSender)(step.sendFrom, lead).name,
+                            source: "auto_plan",
+                        });
+                        newActivity.push({ type: "auto_plan", description: `Auto Plan text HELD BACK — ${(0, mergeFields_js_1.describeMergeProblem)(merged)} (task created)`, timestamp: stamp });
+                        completed.add(step.id);
+                        completedAt[step.id] = stamp;
+                        stepsExecuted++;
+                        changed = true;
+                        continue;
+                    }
                     if (!lead.phone) {
                         /* Brivity surfaces this as an Auto Plan error; the honest move here
                            is a visible task for a human, never a silent skip and never a
@@ -7719,30 +7865,84 @@ async function executeDueAutoPlanSteps() {
                         newActivity.push({ type: "auto_plan", description: `Auto Plan text SKIPPED — no phone on file (task created): ${content}`, timestamp: stamp });
                     }
                     else {
+                        const sender = (0, autoPlanScheduling_js_1.resolveSender)(step.sendFrom, lead);
                         await sendLeadText(lead.id, content);
-                        newActivity.push({ type: "text_sent", description: `Auto Plan text: ${content}`, timestamp: stamp });
+                        newActivity.push({
+                            type: "text_sent",
+                            description: `Auto Plan text (from ${sender.name}${sender.fallbackFrom ? `, standing in for ${sender.fallbackFrom}` : ""}): ${content}`,
+                            timestamp: stamp,
+                        });
                     }
                 }
                 else if (step.type === "email") {
-                    const subj = step.subject ? `${step.subject} — ` : "";
-                    newActivity.push({
-                        type: "email_pending",
-                        description: `Auto Plan email (pending): ${subj}${content}`,
-                        timestamp: stamp,
-                    });
+                    /* A saved template supplies the body/subject when the step points at
+                       one, so a plan does not carry a stale copy of it. */
+                    const tpl = step.templateId ? getEmailTemplate(step.templateId) : null;
+                    const bodySource = tpl?.body || step.content || "";
+                    const mergedBody = (0, mergeFields_js_1.applyMergeFields)(bodySource, lead, { name: "Marco Puga", phone: process.env.HARVEY_OWNER_NUMBER });
+                    const mergedSubject = (0, mergeFields_js_1.applyMergeFields)(step.subject || tpl?.subject || "", lead, { name: "Marco Puga" });
+                    const sender = (0, autoPlanScheduling_js_1.resolveSender)(step.sendFrom, lead);
+                    const recipients = [
+                        ...(step.cc || []).map((a) => `cc ${a}`),
+                        ...(step.bcc || []).map((a) => `bcc ${a}`),
+                    ];
+                    const suffix = [
+                        `from ${sender.name}${sender.fallbackFrom ? `, standing in for ${sender.fallbackFrom}` : ""}`,
+                        recipients.length ? recipients.join(", ") : "",
+                        tpl ? `template "${tpl.name}"` : "",
+                    ].filter(Boolean).join("; ");
+                    if (!(0, mergeFields_js_1.isSendable)(mergedBody) || !(0, mergeFields_js_1.isSendable)(mergedSubject)) {
+                        const why = (0, mergeFields_js_1.describeMergeProblem)((0, mergeFields_js_1.isSendable)(mergedBody) ? mergedSubject : mergedBody);
+                        (0, tasks_js_1.createTask)({
+                            title: `Auto Plan email held back — ${why}`,
+                            description: `Plan "${plan.name}" could not fill every placeholder for ${lead.name || lead.username || lead.id}. Subject: ${step.subject || ""}. Body as written: ${bodySource}`,
+                            type: "follow_up",
+                            priority: "high",
+                            status: "pending",
+                            dueDate: stamp.slice(0, 10),
+                            leadId: lead.id,
+                            leadName: lead.name || lead.username || undefined,
+                            assignedUserName: sender.name,
+                            source: "auto_plan",
+                        });
+                        newActivity.push({ type: "auto_plan", description: `Auto Plan email HELD BACK — ${why} (task created)`, timestamp: stamp });
+                    }
+                    else {
+                        /* Still "pending", not "sent": the Gmail refresh token is dead, so
+                           nothing actually leaves the building. Saying sent would be the
+                           one lie this system must never tell. */
+                        const subj = mergedSubject.text ? `${mergedSubject.text} — ` : "";
+                        newActivity.push({
+                            type: "email_pending",
+                            description: `Auto Plan email (pending; ${suffix}): ${subj}${mergedBody.text}`,
+                            timestamp: stamp,
+                        });
+                    }
                 }
                 else {
-                    const who = step.assignedTo || "Marco Puga";
+                    const assignee = (0, autoPlanScheduling_js_1.resolveSender)(step.assignedTo, lead);
+                    const who = assignee.name;
                     const dueDate = stamp.slice(0, 10);
+                    /* Brivity's 1 (highest) – 9 (lowest) mapped onto the task store's
+                       four levels, so an Auto Plan task triages like any other. */
+                    const pr = step.taskPriority;
+                    const priority = pr === undefined ? "normal" : pr <= 2 ? "urgent" : pr <= 4 ? "high" : pr <= 6 ? "normal" : "low";
+                    const body = [
+                        `Auto Plan (${plan.name}): ${content}`,
+                        step.instructions ? `\nInstructions: ${step.instructions}` : "",
+                        step.notes ? `\nNotes to log on completion: ${step.notes}` : "",
+                        assignee.fallbackFrom ? `\nAssigned to ${who} standing in for ${assignee.fallbackFrom}.` : "",
+                    ].filter(Boolean).join("");
                     (0, tasks_js_1.createTask)({
                         title: content.length > 120 ? content.slice(0, 117) + "…" : content,
-                        description: `Auto Plan (${plan.name}): ${content}`,
+                        description: body,
                         type: "follow_up",
-                        priority: "normal",
+                        priority,
                         status: "pending",
                         dueDate,
                         leadId: lead.id,
                         leadName: lead.name || lead.username || lead.phone || undefined,
+                        assignedUserId: assignee.userId,
                         assignedUserName: who,
                         source: "auto_plan",
                     });
@@ -7751,12 +7951,31 @@ async function executeDueAutoPlanSteps() {
                         description: `Auto Plan task for ${who}: ${content}`,
                         timestamp: stamp,
                     });
+                    /* Brivity's "Notes can post to the timeline on completion" — logged
+                       at creation here, because nothing in this codebase observes a task
+                       being ticked. Stated as scheduled, not as done. */
+                    if (step.notes) {
+                        newActivity.push({
+                            type: "note",
+                            description: `Auto Plan note (with task "${content.slice(0, 60)}"): ${(0, mergeFields_js_1.applyMergeFields)(step.notes, lead).text}`,
+                            timestamp: stamp,
+                        });
+                    }
                 }
-                completed.add(step.id);
-                completedAt[step.id] = stamp;
+                if (repeatMs !== null && step.type === "task") {
+                    lastRunAt[step.id] = stamp;
+                    runCount[step.id] = (runCount[step.id] || 0) + 1;
+                }
+                else {
+                    completed.add(step.id);
+                    completedAt[step.id] = stamp;
+                }
                 stepsExecuted++;
                 changed = true;
             }
+            /* A recurring step is never complete, so a plan containing a live one is
+               never complete either — otherwise the completion status would fire
+               while the step is still running. */
             const allDone = plan.steps.every((s) => completed.has(s.id));
             /* enr.status is "active" here — non-active enrollments were pushed through above. */
             if (allDone && plan.completionStatus) {
@@ -7768,6 +7987,8 @@ async function executeDueAutoPlanSteps() {
                 ...enr,
                 completedSteps: [...completed],
                 completedAt,
+                lastRunAt,
+                runCount,
                 currentStepIndex: completed.size,
                 status: allDone ? "completed" : enr.status,
             });
@@ -7850,7 +8071,9 @@ async function executeDueTransactionPlanSteps() {
                    close" behaves on a deal with no close date. */
                 if (!baseIso)
                     continue;
-                const dueMs = new Date(baseIso).getTime() + step.dayOffset * 24 * 60 * 60 * 1000;
+                /* Shared with the People engine so a "30 minutes after" step means the
+                   same thing on both surfaces. */
+                const dueMs = new Date(baseIso).getTime() + (0, autoPlanScheduling_js_1.offsetMs)(step);
                 if (Number.isNaN(dueMs) || dueMs > now)
                     continue;
                 const stamp = new Date().toISOString();

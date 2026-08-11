@@ -302,13 +302,37 @@ export type AutoPlanStepAnchor =
   | "contract_date"
   | "closing_date"
   | "expiration"
-  | "inspection_date";
+  | "inspection_date"
+  /* Brivity's "Specific Dates" section: a step pinned to a real calendar date
+     on the contact rather than to elapsed time. Both recur annually, so these
+     pair naturally with recurrence "yearly". */
+  | "birthday"
+  | "home_anniversary";
+
+/**
+ * The unit of a step's offset amount. Brivity's step modals read
+ * "Send [number] [unit] After [reference]" — days alone could not express
+ * "text 30 minutes after the plan starts".
+ */
+export type AutoPlanOffsetUnit = "minutes" | "hours" | "days";
+
+/** Task-step repeat, Brivity's "Recurring Frequency" (default Never). */
+export type AutoPlanRecurrence = "never" | "daily" | "weekly" | "monthly" | "yearly";
 
 export interface AutoPlanStep {
   id: string;
   type: AutoPlanStepType;
-  /** Days after (negative = before) the anchor: 0 = same day. */
+  /**
+   * The offset AMOUNT (negative = before the anchor, 0 = at it). The unit is
+   * `offsetUnit`, which defaults to days.
+   *
+   * Named `dayOffset` for history, not accuracy: every stored plan already
+   * carries this key, and renaming it would silently reschedule live plans on
+   * the first read. Read it as "offset", and always through `offsetUnit`.
+   */
   dayOffset: number;
+  /** Defaults to "days" — which is what every pre-existing step means. */
+  offsetUnit?: AutoPlanOffsetUnit;
   /** Defaults to "enrollment" when absent — every pre-existing plan means that. */
   anchor?: AutoPlanStepAnchor;
   /** When anchor === "prev_step": which step's COMPLETION the offset counts from. */
@@ -323,6 +347,31 @@ export interface AutoPlanStep {
   taskPriority?: number;
   /** Task execution instructions — detailed enough for a covering teammate. */
   instructions?: string;
+  /**
+   * Brivity's "Make Contingent": the due time follows when the previous step
+   * ACTUALLY completed rather than staying pinned to the original schedule.
+   * Only meaningful with anchor "prev_step" — a contingent step whose
+   * predecessor is unfinished is simply not due yet.
+   */
+  contingent?: boolean;
+  /** Task step only. Defaults to "never". */
+  recurrence?: AutoPlanRecurrence;
+  /**
+   * Task step only. Posted to the contact's timeline when the task completes —
+   * distinct from `instructions`, which tells the teammate how to do it.
+   */
+  notes?: string;
+  /**
+   * Email/text steps: who the message comes from — a role key
+   * ("primary_agent", "listing_agent", ...) or a team member id. Brivity's own
+   * guidance is to use a ROLE so the plan survives staffing changes.
+   */
+  sendFrom?: string;
+  /** Email step only. Brivity has no CC on SMS, and neither do we. */
+  cc?: string[];
+  bcc?: string[];
+  /** Email step only: reuse a saved template instead of retyping the body. */
+  templateId?: string;
 }
 
 export interface AutoPlan {
@@ -355,6 +404,14 @@ export interface LeadAutoPlanEnrollment {
   completedSteps: string[];
   /** Step ID → ISO completion time; lets later steps chain off a prior step's completion. */
   completedAt?: Record<string, string>;
+  /**
+   * Step ID → ISO time a RECURRING step last fired, and how many times.
+   * Recurring steps never enter `completedSteps` (they are never "done"), so
+   * they need their own clock; the count is what stops a yearly step from
+   * running forever on a contact nobody ever unenrolled.
+   */
+  lastRunAt?: Record<string, string>;
+  runCount?: Record<string, number>;
   /** "manual" or the trigger id that auto-enrolled this contact. */
   enrolledVia?: string;
   status: "active" | "paused" | "completed";
