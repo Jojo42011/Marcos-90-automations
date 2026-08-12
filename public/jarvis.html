@@ -42,14 +42,14 @@
     .j-bg {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background:
-        radial-gradient(ellipse 60% 50% at 50% 45%, rgba(0, 212, 255, 0.07), transparent 70%),
-        linear-gradient(180deg, #050b14 0%, #03070c 100%);
+        radial-gradient(ellipse 55% 45% at 50% 44%, rgba(0, 150, 210, 0.045), transparent 72%),
+        linear-gradient(180deg, #03070d 0%, #01040a 100%);
     }
     .j-hex {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-opacity='1' d='M28 1 L54 15 L54 43 L28 57 L2 43 L2 15 Z'/%3E%3C/svg%3E");
-      background-size: 56px 100px;
-      opacity: 0.055;
+      background-size: 84px 148px;
+      opacity: 0.022;
     }
     .j-scanlines {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
@@ -58,7 +58,7 @@
         rgba(0,212,255,0.025) 0 1px,
         transparent 1px 4px);
       mix-blend-mode: overlay;
-      opacity: 0.4;
+      opacity: 0.14;
     }
     .j-vignette {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
@@ -1298,6 +1298,8 @@
       font-weight: 600 !important;
     }
   </style>
+  <!-- Harvey Core renderer: must load before the inline mount below. -->
+  <script src="/harvey-core.js"></script>
 </head>
 <body>
   <div class="j-bg" aria-hidden="true"></div>
@@ -1362,9 +1364,6 @@
             </div>
 
             <div class="j-core-wrap" id="jCoreWrap">
-              <svg class="j-tick-ring" viewBox="0 0 200 200" aria-hidden="true">
-                <g id="jTickGroup" stroke="rgba(0,212,255,0.45)" stroke-linecap="round"></g>
-              </svg>
               <canvas id="harvey-mic-btn" class="harvey-orb" data-action="toggle-voice" aria-label="Harvey core - tap to speak"></canvas>
               <!-- Mic icon centered over canvas -->
               <div class="j-mic-icon" id="jMicIcon">
@@ -1629,230 +1628,31 @@
       }
     });
 
-    /* ─────────────────────────────────────────────
-       TICK RING - radial marks around the core
-    ───────────────────────────────────────────── */
-    (function buildTicks() {
-      const g = document.getElementById("jTickGroup");
-      if (!g) return;
-      const cx = 100, cy = 100, r1 = 92, r2Major = 86, r2Minor = 89;
-      const frag = document.createDocumentFragment();
-      for (let i = 0; i < 120; i++) {
-        const a = (i / 120) * Math.PI * 2 - Math.PI / 2;
-        const isMajor = i % 10 === 0;
-        const r2 = isMajor ? r2Major : r2Minor;
-        const x1 = cx + Math.cos(a) * r1;
-        const y1 = cy + Math.sin(a) * r1;
-        const x2 = cx + Math.cos(a) * r2;
-        const y2 = cy + Math.sin(a) * r2;
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("x1", x1.toFixed(2));
-        line.setAttribute("y1", y1.toFixed(2));
-        line.setAttribute("x2", x2.toFixed(2));
-        line.setAttribute("y2", y2.toFixed(2));
-        line.setAttribute("stroke-width", isMajor ? "1.2" : "0.5");
-        line.setAttribute("stroke-opacity", isMajor ? "0.85" : "0.45");
-        frag.appendChild(line);
-      }
-      g.appendChild(frag);
-      updateOrbColors();
-    })();
+    /* The SVG tick ring that used to be built here is gone — HarveyCore draws
+       its own, and two tick systems at different radii read as debris. */
 
     /* ─────────────────────────────────────────────
-       CANVAS CORE - dynamic orbital animation
+       HARVEY CORE — mounted from public/harvey-core.js
+       The old inline particle-plasma renderer lived here. It is gone: the
+       core is now one shared module so /jarvis and /operator cannot drift
+       apart again, and so there is a single place to tune the look.
     ───────────────────────────────────────────── */
-    (function initCanvas() {
+    (function mountCore() {
       const canvas = document.getElementById("harvey-mic-btn");
-      const wrap   = document.getElementById("jCoreWrap");
-      if (!canvas || !wrap) return;
-      const ctx = canvas.getContext("2d");
+      if (!canvas || !window.HarveyCore) return;
+      window.HarveyCore.mount(canvas, {});
 
-      // Offscreen trail buffer - the plasma accumulates here (additive) and is
-      // faded toward transparent each frame, which is what makes the wispy,
-      // smoky filaments. Composited onto a soft dark stage disc so it glows the
-      // same on dark or light backgrounds. No per-particle shadowBlur anywhere
-      // (that was the old orb's perf killer) - glow is additive overlap + a
-      // couple of pre-rendered soft sprites.
-      const buf  = document.createElement("canvas");
-      const bctx = buf.getContext("2d");
-
-      let W, H, cx, cy, R, dpr, N;
-      let raf, t0 = null, last = 0;
-
-      function isLight(){ return document.documentElement.getAttribute("data-theme") === "light"; }
-
-      function makeSprite(size, inner){
-        const c = document.createElement("canvas"); c.width = c.height = size;
-        const g = c.getContext("2d");
-        const grd = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-        grd.addColorStop(0,    inner);
-        grd.addColorStop(0.45, "rgba(90,200,255,0.32)");
-        grd.addColorStop(1,    "rgba(90,200,255,0)");
-        g.fillStyle = grd; g.fillRect(0, 0, size, size);
-        return c;
-      }
-      const dotSprite  = makeSprite(48,  "rgba(220,248,255,0.95)");
-      const glowSprite = makeSprite(256, "rgba(120,215,255,0.55)");
-
-      // Pre-render the dark "stage" disc once per theme (scaled on draw) so we
-      // don't rebuild a radial gradient every frame.
-      function makeDisc(a){
-        const size = 512, c = document.createElement("canvas"); c.width = c.height = size;
-        const g = c.getContext("2d");
-        const grd = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-        grd.addColorStop(0,    "rgba(3,9,16," + a + ")");
-        grd.addColorStop(0.62, "rgba(3,9,16," + (a * 0.6) + ")");
-        grd.addColorStop(1,    "rgba(3,9,16,0)");
-        g.fillStyle = grd; g.fillRect(0, 0, size, size);
-        return c;
-      }
-      const discDark = makeDisc(0.5), discLight = makeDisc(0.93);
-
-      let P = [];
-      function rand(a, b){ return a + Math.random() * (b - a); }
-      function spawn(p){
-        // uniform-ish point on a sphere shell, then pushed to a preferred radius
-        const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2;
-        const r = Math.sqrt(Math.max(0, 1 - u * u));
-        const tr = rand(0.7, 1.12);
-        p.x = r * Math.cos(th) * tr;
-        p.y = u * tr;
-        p.z = r * Math.sin(th) * tr;
-        p.tr   = tr;
-        p.seed = Math.random() * 6.283;
-        p.kind = Math.random() < 0.58 ? 1 : 0;   // 1 = filament streak, 0 = haze dot
-        p.br   = rand(0.45, 1);
-        p.energy = 0;
-        p.px = p.py = null;
-        return p;
-      }
-      function buildParticles(){ P = new Array(N); for (let i = 0; i < N; i++) P[i] = spawn({}); }
-
-      function resize(){
-        const css = Math.max(120, wrap.offsetWidth || 480);
-        dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-        canvas.width  = buf.width  = Math.round(css * dpr);
-        canvas.height = buf.height = Math.round(css * dpr);
-        canvas.style.width = canvas.style.height = css + "px";
-        W = canvas.width; H = canvas.height; cx = W / 2; cy = H / 2;
-        R = W * 0.32;
-        N = Math.round(Math.min(640, Math.max(400, css * 1.1)));
-        buildParticles();
-        bctx.clearRect(0, 0, W, H);
-      }
-
-      // Smoothed params driven by coreState (idle / listening / busy).
-      const P_IDLE   = { spin: 0.32, turb: 0.14, fade: 0.07, bright: 1.30, glow: 0.20, breath: 0.03 };
-      const P_LISTEN = { spin: 0.52, turb: 0.24, fade: 0.09, bright: 1.60, glow: 0.30, breath: 0.05 };
-      const P_BUSY   = { spin: 1.00, turb: 0.36, fade: 0.12, bright: 1.90, glow: 0.40, breath: 0.09 };
-      const cur = Object.assign({}, P_IDLE);
-      function targetFor(s){
-        if (s === "busy" || s === "processing" || s === "responding") return P_BUSY;
-        if (s === "listening") return P_LISTEN;
-        return P_IDLE;
-      }
-
-      function step(dt, t){
-        const tgt = targetFor(window.coreState || "idle");
-        const k = 1 - Math.pow(0.0015, dt);            // frame-rate-independent easing
-        for (const key in cur) cur[key] += (tgt[key] - cur[key]) * k;
-
-        const dθ = cur.spin * dt, cosd = Math.cos(dθ), sind = Math.sin(dθ);
-        const F = 2.1, F2 = 4.3, ta = cur.turb;
-        for (let i = 0; i < N; i++){
-          const p = P[i];
-          // spin around the vertical axis → filaments wrap horizontally
-          const nx = p.x * cosd - p.z * sind;
-          const nz = p.x * sind + p.z * cosd;
-          p.x = nx; p.z = nz;
-          // swirling turbulence (two octaves) → churn + escaping wisps
-          const tx = Math.sin(p.y * F + t * 1.3 + p.seed) + 0.5 * Math.sin(p.z * F2 - t * 1.7);
-          const ty = Math.sin(p.z * F + t * 1.1)          + 0.5 * Math.sin(p.x * F2 + t * 1.9 + p.seed);
-          const tz = Math.sin(p.x * F - t * 1.5)          + 0.5 * Math.sin(p.y * F2 + t * 1.2);
-          p.x += tx * ta * dt; p.y += ty * ta * dt; p.z += tz * ta * dt;
-          // relax back toward preferred radius (spring vs turbulence = wisps)
-          const d = Math.hypot(p.x, p.y, p.z) || 1e-4;
-          const trg = p.tr * (1 + 0.05 * Math.sin(t * 0.6 + p.seed));
-          const nd = d + (trg - d) * Math.min(1, 2.2 * dt);
-          const f = nd / d; p.x *= f; p.y *= f; p.z *= f;
-          p.energy = Math.min(1, (Math.abs(tx) + Math.abs(ty) + Math.abs(tz)) / 3);
-          if (nd > 1.9) spawn(p);
-        }
-      }
-
-      function render(t){
-        // fade trail buffer toward transparent (keeps canvas see-through)
-        bctx.globalCompositeOperation = "destination-out";
-        bctx.fillStyle = "rgba(0,0,0," + cur.fade + ")";
-        bctx.fillRect(0, 0, W, H);
-
-        bctx.globalCompositeOperation = "lighter";
-        const camZ = 3.2, breath = 1 + cur.breath * Math.sin(t * 0.8);
-        for (let i = 0; i < N; i++){
-          const p = P[i];
-          const persp = camZ / (camZ - p.z);
-          const sx = cx + p.x * R * persp * breath;
-          const sy = cy - p.y * R * persp * breath;
-          const depth = Math.max(0, Math.min(1, (p.z + 1.3) / 2.6));
-          const en = 0.35 + 0.65 * p.energy;
-          const a = cur.bright * p.br * (0.25 + 0.75 * depth) * en;
-          if (p.kind === 1){
-            if (p.px != null){
-              const dx = sx - p.px, dy = sy - p.py;
-              if (dx * dx + dy * dy < (R * 0.5) * (R * 0.5)){   // skip the jump on respawn
-                const hot = Math.min(1, en * depth * 1.2);
-                bctx.strokeStyle = "rgba(" +
-                  Math.round(85 + 160 * hot) + "," +
-                  Math.round(195 + 60 * hot) + ",255," + a.toFixed(3) + ")";
-                bctx.lineWidth = (0.7 + 1.35 * persp) * dpr * 0.6;
-                bctx.beginPath(); bctx.moveTo(p.px, p.py); bctx.lineTo(sx, sy); bctx.stroke();
-              }
-            }
-          } else {
-            const r = (1.6 + 2.6 * persp) * dpr;
-            bctx.globalAlpha = Math.min(1, a * 0.85);
-            bctx.drawImage(dotSprite, sx - r, sy - r, r * 2, r * 2);
-            bctx.globalAlpha = 1;
-          }
-          p.px = sx; p.py = sy;
-        }
-
-        // Composite: soft dark stage disc, ambient glow, then the plasma buffer.
-        ctx.clearRect(0, 0, W, H);
-        ctx.globalCompositeOperation = "source-over";
-        const Rd = R * 1.7;
-        ctx.drawImage(isLight() ? discLight : discDark, cx - Rd, cy - Rd, Rd * 2, Rd * 2);
-
-        ctx.globalCompositeOperation = "lighter";
-        // broad ambient bloom + a softer inner fill so the sphere reads as a
-        // solid glowing volume rather than see-through
-        let gr = R * 1.7;
-        ctx.globalAlpha = cur.glow * 0.75;
-        ctx.drawImage(glowSprite, cx - gr, cy - gr, gr * 2, gr * 2);
-        gr = R * 1.02;
-        ctx.globalAlpha = cur.glow * 0.55;
-        ctx.drawImage(glowSprite, cx - gr, cy - gr, gr * 2, gr * 2);
-        ctx.globalAlpha = 1;
-        ctx.drawImage(buf, 0, 0);
-        ctx.globalCompositeOperation = "source-over";
-      }
-
-      function frame(now){
-        if (!t0){ t0 = now; last = now; }
-        let dt = (now - last) / 1000; last = now;
-        if (dt > 0.05) dt = 0.05;                 // clamp after tab-away
-        const t = (now - t0) / 1000;
-        step(dt, t);
-        render(t);
-        raf = requestAnimationFrame(frame);
-      }
-
-      window.coreState = "idle";
+      /* The voice pipeline drives state through this global. Keep the same
+         contract — several call sites across two pages set it — and mirror
+         every change into the renderer. */
+      let _core = "idle";
+      Object.defineProperty(window, "coreState", {
+        configurable: true,
+        get() { return _core; },
+        set(v) { _core = v || "idle"; window.HarveyCore.setState(_core); },
+      });
       window.setCoreState = (s) => { window.coreState = s || "idle"; };
-
-      resize();
-      window.addEventListener("resize", () => { cancelAnimationFrame(raf); resize(); raf = requestAnimationFrame(frame); });
-      raf = requestAnimationFrame(frame);
+      window.coreState = "idle";
     })();
 
     /* ─────────────────────────────────────────────

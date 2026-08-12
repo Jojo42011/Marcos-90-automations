@@ -352,6 +352,19 @@
       if (!listening || !sessionReady) return;
       const input = e.inputBuffer.getChannelData(0);
 
+      /* Visual level tap for the Harvey Core renderer. Computed BEFORE any of
+         the early returns below so it runs on every frame regardless of which
+         branch the audio path takes, and wrapped so a renderer fault can never
+         take down mic capture — the visual is the least important thing here. */
+      try {
+        if (window.HarveyCore) {
+          let vsum = 0;
+          for (let i = 0; i < input.length; i += 4) vsum += input[i] * input[i];
+          const vrms = Math.sqrt(vsum / (input.length / 4));
+          window.HarveyCore.setLevel(Math.min(1, vrms * 9));
+        }
+      } catch (_) { /* never let the orb break the microphone */ }
+
       if (micSending) {
         if (!sttWs || sttWs.readyState !== WebSocket.OPEN) return;
         const down = downsampleBuffer(input, inputRate, 16000);
