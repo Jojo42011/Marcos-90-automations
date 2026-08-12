@@ -38,6 +38,22 @@ BRIVITY_API_KEY=YOUR_BRIVITY_KEY
 BRIVITY_BASE_URL=https://app.brivityidx.com/api
 
 # Gmail (Harvey gmail_send tool + module 07) — OAuth account: pmarcopuga@gmail.com
+# --- Outbound email -------------------------------------------------------
+# PREFERRED: SMTP with a Gmail app password. Does not expire on a timer the
+# way the OAuth refresh token does (that consent screen sits in "Testing", so
+# Google kills its tokens weekly). Requires 2-Step Verification on the
+# account; generate at myaccount.google.com/apppasswords. Spaces in the
+# 16-character password are cosmetic and are stripped.
+GMAIL_SMTP_USER=
+GMAIL_SMTP_APP_PASSWORD=
+# GMAIL_SMTP_PORT=587      # 587 = STARTTLS (default), 465 = implicit TLS
+# GMAIL_SMTP_HOST=smtp.gmail.com
+# GMAIL_SMTP_DAILY_CAP=400 # free gmail.com is ~500/day, Workspace ~2000.
+#                          # Going over suspends the ACCOUNT for 24h, so sends
+#                          # are refused at this number instead.
+# GMAIL_FROM_NAME=Marco Puga
+
+# FALLBACK: OAuth. Still required for READING the inbox — SMTP only sends.
 GMAIL_CLIENT_ID=
 GMAIL_CLIENT_SECRET=
 GMAIL_REFRESH_TOKEN=

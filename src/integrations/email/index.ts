@@ -1,12 +1,15 @@
 /**
- * Email marketing sender — Gmail OAuth2 (wraps integrations/gmail).
- * Auth: GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN (not SMTP app password).
+ * Email marketing sender — wraps integrations/gmail, which picks the
+ * transport: SMTP app password (GMAIL_SMTP_USER + GMAIL_SMTP_APP_PASSWORD)
+ * when set, otherwise OAuth (GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN).
  */
 import {
+  getEmailTransport,
   getGmailSenderAddress,
   isGmailConfigured,
   sendEmail as gmailSendEmail,
 } from "../gmail/index.js";
+import { getSmtpStatus, verifySmtpConnection } from "../smtp/index.js";
 
 export function isEmailConfigured(): boolean {
   return isGmailConfigured();
@@ -35,11 +38,24 @@ export async function sendEmail(to: string, subject: string, body: string): Prom
   }
 }
 
-/** Lightweight OAuth + profile check at startup. */
+/** Lightweight transport check at startup. */
 export async function verifyEmailConnection(): Promise<boolean> {
   if (!isEmailConfigured()) {
-    console.warn("[Email] Gmail OAuth not configured — set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN");
+    console.warn(
+      "[Email] No send transport configured — set GMAIL_SMTP_USER + GMAIL_SMTP_APP_PASSWORD (preferred), " +
+        "or GMAIL_CLIENT_ID/GMAIL_CLIENT_SECRET/GMAIL_REFRESH_TOKEN",
+    );
     return false;
+  }
+  if (getEmailTransport() === "smtp") {
+    const res = await verifySmtpConnection();
+    if (!res.ok) {
+      console.error("[Email] SMTP connection FAILED:", res.error);
+      return false;
+    }
+    const st = getSmtpStatus();
+    console.log(`[Email] SMTP connection verified ✓ (as ${res.user}, ${st.sentToday}/${st.dailyCap} sent today)`);
+    return true;
   }
   try {
     const from = await getGmailSenderAddress();

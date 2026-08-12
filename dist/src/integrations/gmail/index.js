@@ -3,7 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.storeGmailRefreshToken = storeGmailRefreshToken;
 exports.recordGmailAuthError = recordGmailAuthError;
 exports.getGmailAuthInfo = getGmailAuthInfo;
+exports.isGmailOAuthConfigured = isGmailOAuthConfigured;
 exports.isGmailConfigured = isGmailConfigured;
+exports.getEmailTransport = getEmailTransport;
 exports.getMarcoEmail = getMarcoEmail;
 exports.getGmailSenderAddress = getGmailSenderAddress;
 exports.checkGmailAuth = checkGmailAuth;
@@ -12,7 +14,14 @@ exports.resolveEmailRecipient = resolveEmailRecipient;
 exports.sendEmail = sendEmail;
 exports.sendPropertyEmail = sendPropertyEmail;
 /**
- * Gmail — send email via OAuth refresh token (Marco's linked account).
+ * Gmail — send email as Marco, over SMTP app password or OAuth.
+ *
+ * TRANSPORT PRECEDENCE: SMTP wins when it is configured. The OAuth refresh
+ * token has died twice (invalid_grant) because the consent screen sits in
+ * "Testing", where Google expires refresh tokens weekly; an app password does
+ * not expire on a timer. OAuth is kept as the fallback so nothing breaks for
+ * an install that has not moved over, and because the inbox-reading side
+ * (gmail/inbox.ts) still needs it — SMTP can only send.
  *
  * Token precedence: a refresh token stored in the email DB (linked through the
  * in-app "Reconnect Gmail" OAuth flow) wins over GMAIL_REFRESH_TOKEN from the
@@ -21,6 +30,7 @@ exports.sendPropertyEmail = sendPropertyEmail;
  * from the browser and survive deploys.
  */
 const emailStore_js_1 = require("../../core/emailStore.js");
+const index_js_1 = require("../smtp/index.js");
 let cachedAccessToken = null;
 let cachedFromAddress = null;
 const KV_REFRESH_TOKEN = "gmail_refresh_token";
@@ -68,10 +78,23 @@ function getGmailAuthInfo() {
         authErrorAt: (0, emailStore_js_1.kvGet)(KV_AUTH_ERROR_AT),
     };
 }
-function isGmailConfigured() {
+/** OAuth specifically — the inbox reader needs this, SMTP cannot serve it. */
+function isGmailOAuthConfigured() {
     return Boolean(process.env.GMAIL_CLIENT_ID?.trim() &&
         process.env.GMAIL_CLIENT_SECRET?.trim() &&
         (storedRefreshToken() || process.env.GMAIL_REFRESH_TOKEN?.trim()));
+}
+/** Can this system SEND mail by any route? */
+function isGmailConfigured() {
+    return (0, index_js_1.isSmtpConfigured)() || isGmailOAuthConfigured();
+}
+/** Which transport a send would actually take right now. */
+function getEmailTransport() {
+    if ((0, index_js_1.isSmtpConfigured)())
+        return "smtp";
+    if (isGmailOAuthConfigured())
+        return "oauth";
+    return "none";
 }
 /** Marco's inbox — for "email me" when Harvey doesn't infer an address. */
 function getMarcoEmail() {
@@ -228,6 +251,21 @@ async function sendEmail(opts) {
     }
     if (!isValidEmail(to)) {
         throw new Error(`Invalid recipient email: ${to}`);
+    }
+    /* SMTP first: it is the transport that stays up. Falls through to OAuth
+       only when no app password is set. */
+    if ((0, index_js_1.isSmtpConfigured)()) {
+        const sent = await (0, index_js_1.sendViaSmtp)({
+            to,
+            subject,
+            body,
+            html: opts.html !== false,
+            cc: opts.cc,
+            bcc: opts.bcc,
+            replyTo: opts.replyTo,
+        });
+        console.log(`[gmail:smtp] Sent to ${to} subject="${subject.slice(0, 60)}" id=${sent.messageId}`);
+        return { ok: true, messageId: sent.messageId, to, from: sent.from };
     }
     const cfg = getConfig();
     const accessToken = await fetchAccessToken(cfg);

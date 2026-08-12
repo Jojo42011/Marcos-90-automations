@@ -4,6 +4,14 @@ import path from "path";
 import { randomUUID } from "crypto";
 
 function resolveEmailDbPath(): string {
+  /* EMAIL_DB_PATH matches the override every other store here has
+     (TRANSACTIONS_DB_PATH, TRACKER_DB_PATH, ...). Without it a verification
+     script has no way to avoid writing into the real data directory. */
+  const explicit = process.env.EMAIL_DB_PATH?.trim();
+  if (explicit) {
+    fs.mkdirSync(path.dirname(explicit), { recursive: true });
+    return explicit;
+  }
   const base = fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
   fs.mkdirSync(base, { recursive: true });
   return path.join(base, "email.db");

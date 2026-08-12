@@ -1,5 +1,12 @@
 /**
- * Gmail — send email via OAuth refresh token (Marco's linked account).
+ * Gmail — send email as Marco, over SMTP app password or OAuth.
+ *
+ * TRANSPORT PRECEDENCE: SMTP wins when it is configured. The OAuth refresh
+ * token has died twice (invalid_grant) because the consent screen sits in
+ * "Testing", where Google expires refresh tokens weekly; an app password does
+ * not expire on a timer. OAuth is kept as the fallback so nothing breaks for
+ * an install that has not moved over, and because the inbox-reading side
+ * (gmail/inbox.ts) still needs it — SMTP can only send.
  *
  * Token precedence: a refresh token stored in the email DB (linked through the
  * in-app "Reconnect Gmail" OAuth flow) wins over GMAIL_REFRESH_TOKEN from the
@@ -8,6 +15,7 @@
  * from the browser and survive deploys.
  */
 import { kvGet, kvSet } from "../../core/emailStore.js";
+import { isSmtpConfigured, sendViaSmtp } from "../smtp/index.js";
 
 interface GmailConfig {
   clientId: string;
@@ -73,12 +81,25 @@ export function getGmailAuthInfo(): {
   };
 }
 
-export function isGmailConfigured(): boolean {
+/** OAuth specifically — the inbox reader needs this, SMTP cannot serve it. */
+export function isGmailOAuthConfigured(): boolean {
   return Boolean(
     process.env.GMAIL_CLIENT_ID?.trim() &&
       process.env.GMAIL_CLIENT_SECRET?.trim() &&
       (storedRefreshToken() || process.env.GMAIL_REFRESH_TOKEN?.trim()),
   );
+}
+
+/** Can this system SEND mail by any route? */
+export function isGmailConfigured(): boolean {
+  return isSmtpConfigured() || isGmailOAuthConfigured();
+}
+
+/** Which transport a send would actually take right now. */
+export function getEmailTransport(): "smtp" | "oauth" | "none" {
+  if (isSmtpConfigured()) return "smtp";
+  if (isGmailOAuthConfigured()) return "oauth";
+  return "none";
 }
 
 /** Marco's inbox — for "email me" when Harvey doesn't infer an address. */
@@ -229,6 +250,13 @@ export interface SendEmailOptions {
   subject: string;
   body: string;
   html?: boolean;
+  /* Honoured on the SMTP path (Auto Plan email steps carry these). The OAuth
+     path ignores them today rather than pretending: its raw-message builder
+     writes no Cc/Bcc headers, and silently dropping them there would be the
+     kind of quiet lie this codebase does not ship. */
+  cc?: string[];
+  bcc?: string[];
+  replyTo?: string;
 }
 
 const MARCO_RECIPIENT_ALIASES = new Set([
@@ -266,6 +294,22 @@ export async function sendEmail(
   }
   if (!isValidEmail(to)) {
     throw new Error(`Invalid recipient email: ${to}`);
+  }
+
+  /* SMTP first: it is the transport that stays up. Falls through to OAuth
+     only when no app password is set. */
+  if (isSmtpConfigured()) {
+    const sent = await sendViaSmtp({
+      to,
+      subject,
+      body,
+      html: opts.html !== false,
+      cc: opts.cc,
+      bcc: opts.bcc,
+      replyTo: opts.replyTo,
+    });
+    console.log(`[gmail:smtp] Sent to ${to} subject="${subject.slice(0, 60)}" id=${sent.messageId}`);
+    return { ok: true, messageId: sent.messageId, to, from: sent.from };
   }
 
   const cfg = getConfig();

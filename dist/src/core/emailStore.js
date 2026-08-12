@@ -41,6 +41,14 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const crypto_1 = require("crypto");
 function resolveEmailDbPath() {
+    /* EMAIL_DB_PATH matches the override every other store here has
+       (TRANSACTIONS_DB_PATH, TRACKER_DB_PATH, ...). Without it a verification
+       script has no way to avoid writing into the real data directory. */
+    const explicit = process.env.EMAIL_DB_PATH?.trim();
+    if (explicit) {
+        fs_1.default.mkdirSync(path_1.default.dirname(explicit), { recursive: true });
+        return explicit;
+    }
     const base = fs_1.default.existsSync("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
     fs_1.default.mkdirSync(base, { recursive: true });
     return path_1.default.join(base, "email.db");

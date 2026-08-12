@@ -3919,14 +3919,100 @@ app.post("/api/email/sequence/:id/pause", express.json(), async (req, res) => {
 
 app.get("/api/email/connection-status", async (_req, res) => {
   const { isEmailConfigured } = await import("./integrations/email/index.js");
-  const { checkGmailAuth } = await import("./integrations/gmail/index.js");
+  const { checkGmailAuth, getEmailTransport } = await import("./integrations/gmail/index.js");
+  const { getSmtpStatus, verifySmtpConnection } = await import("./integrations/smtp/index.js");
   const configured = isEmailConfigured();
+  const transport = getEmailTransport();
   // `verified` must mean "a send would actually work", so this exercises the
-  // refresh token for real. It used to call verifyEmailConnection(), which
-  // only resolved a sender address and so reported verified:true against a
-  // token Google was rejecting — a false green that hid a total email outage.
-  const auth = configured ? await checkGmailAuth() : { ok: false, error: "Gmail not configured" };
-  res.json({ configured, verified: auth.ok, error: auth.error || null });
+  // credentials for real. It used to call verifyEmailConnection(), which only
+  // resolved a sender address and so reported verified:true against a token
+  // Google was rejecting — a false green that hid a total email outage. The
+  // SMTP path does a real LOGIN handshake for the same reason.
+  if (transport === "smtp") {
+    const check = await verifySmtpConnection();
+    const smtp = getSmtpStatus();
+    res.json({
+      configured: true,
+      transport: "smtp",
+      verified: check.ok,
+      error: check.error || null,
+      sender: check.user || smtp.user,
+      smtp: {
+        host: smtp.host,
+        port: smtp.port,
+        sentToday: smtp.sentToday,
+        dailyCap: smtp.dailyCap,
+        remainingToday: smtp.remainingToday,
+        lastSentAt: smtp.lastSentAt,
+        lastError: smtp.lastError,
+        lastErrorAt: smtp.lastErrorAt,
+      },
+    });
+    return;
+  }
+  const auth = configured ? await checkGmailAuth() : { ok: false, error: "No email transport configured" };
+  res.json({
+    configured,
+    transport,
+    verified: auth.ok,
+    error: auth.error || null,
+    hint: configured
+      ? undefined
+      : "Set GMAIL_SMTP_USER + GMAIL_SMTP_APP_PASSWORD (an app password does not expire weekly the way the OAuth token has).",
+  });
+});
+
+/**
+ * Operator-facing SMTP check: verify the credentials, and optionally put one
+ * real message in an inbox so "it works" is something you can see rather than
+ * something the app asserts. The test send bypasses the daily cap — it is one
+ * message, deliberately triggered, and being unable to test because a drip
+ * used the budget would be its own problem.
+ */
+app.post("/api/email/smtp-test", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { getSmtpConfig, getSmtpStatus, sendViaSmtp, verifySmtpConnection } = await import("./integrations/smtp/index.js");
+  const cfg = getSmtpConfig();
+  if (!cfg) {
+    res.status(400).json({
+      ok: false,
+      error: "SMTP is not configured.",
+      setup: [
+        "Turn on 2-Step Verification for the Google account (app passwords do not exist without it).",
+        "Generate an app password at myaccount.google.com/apppasswords.",
+        "fly secrets set GMAIL_SMTP_USER=<address> GMAIL_SMTP_APP_PASSWORD=<16-char password>",
+      ],
+    });
+    return;
+  }
+  const check = await verifySmtpConnection();
+  if (!check.ok) {
+    res.status(502).json({ ok: false, stage: "login", error: check.error });
+    return;
+  }
+  const to = typeof req.body?.to === "string" && req.body.to.trim() ? req.body.to.trim() : cfg.user;
+  if (req.body?.send === false) {
+    res.json({ ok: true, stage: "login", verified: true, user: check.user, status: getSmtpStatus() });
+    return;
+  }
+  try {
+    const sent = await sendViaSmtp({
+      to,
+      subject: "Marco 90 — SMTP test",
+      body:
+        "<p>This is a test from the Marco 90 automation system.</p>" +
+        "<p>If you are reading this, outbound email is working over SMTP with an app password — " +
+        "drips, digests, task-assignment emails and Auto Plan email steps can all send.</p>",
+      html: true,
+      bypassCap: true,
+    });
+    res.json({ ok: true, stage: "sent", to, messageId: sent.messageId, status: getSmtpStatus() });
+  } catch (err) {
+    res.status(502).json({ ok: false, stage: "send", error: (err as Error).message });
+  }
 });
 
 // ── CRM Email Marketing: real Gmail sends for newsletters/campaigns ───────
@@ -8718,16 +8804,62 @@ export async function executeDueAutoPlanSteps(): Promise<{ processed: number; st
               source: "auto_plan",
             });
             newActivity.push({ type: "auto_plan", description: `Auto Plan email HELD BACK — ${why} (task created)`, timestamp: stamp });
-          } else {
-            /* Still "pending", not "sent": the Gmail refresh token is dead, so
-               nothing actually leaves the building. Saying sent would be the
-               one lie this system must never tell. */
-            const subj = mergedSubject.text ? `${mergedSubject.text} — ` : "";
-            newActivity.push({
-              type: "email_pending",
-              description: `Auto Plan email (pending; ${suffix}): ${subj}${mergedBody.text}`,
-              timestamp: stamp,
+          } else if (!lead.email) {
+            /* Same shape as the missing-phone path: a task, never a silent
+               skip. A plan cannot email a contact with no address. */
+            createTask({
+              title: `Auto Plan email needs an address: ${lead.name || lead.username || lead.id}`,
+              description: `Plan "${plan.name}" tried to email this contact but no email is on file. Subject: ${mergedSubject.text}`,
+              type: "follow_up",
+              priority: "high",
+              status: "pending",
+              dueDate: stamp.slice(0, 10),
+              leadId: lead.id,
+              leadName: lead.name || lead.username || undefined,
+              assignedUserName: sender.name,
+              source: "auto_plan",
             });
+            newActivity.push({ type: "auto_plan", description: `Auto Plan email SKIPPED — no email on file (task created): ${mergedSubject.text}`, timestamp: stamp });
+          } else {
+            const subj = mergedSubject.text ? `${mergedSubject.text} — ` : "";
+            const { sendEmail: sendRealEmail } = await import("./integrations/gmail/index.js");
+            try {
+              /* Actually delivers now that SMTP app-password sending exists.
+                 A throw here is a real failure — recorded as such, with a task
+                 so a human picks it up, rather than swallowed. */
+              const sent = await sendRealEmail({
+                to: lead.email,
+                subject: mergedSubject.text || "(no subject)",
+                body: mergedBody.text,
+                html: true,
+                cc: step.cc,
+                bcc: step.bcc,
+              });
+              newActivity.push({
+                type: "email_sent",
+                description: `Auto Plan email sent (${suffix}) id=${sent.messageId}: ${subj}${mergedBody.text.slice(0, 200)}`,
+                timestamp: stamp,
+              });
+            } catch (sendErr) {
+              const why = sendErr instanceof Error ? sendErr.message : String(sendErr);
+              createTask({
+                title: `Auto Plan email failed to send: ${lead.name || lead.username || lead.id}`,
+                description: `Plan "${plan.name}" could not send. Reason: ${why}\n\nSubject: ${mergedSubject.text}\n\n${mergedBody.text}`,
+                type: "follow_up",
+                priority: "high",
+                status: "pending",
+                dueDate: stamp.slice(0, 10),
+                leadId: lead.id,
+                leadName: lead.name || lead.username || undefined,
+                assignedUserName: sender.name,
+                source: "auto_plan",
+              });
+              newActivity.push({
+                type: "auto_plan",
+                description: `Auto Plan email FAILED (${why}) — task created: ${subj}`,
+                timestamp: stamp,
+              });
+            }
           }
         } else {
           const assignee = resolveSender(step.assignedTo, lead);
