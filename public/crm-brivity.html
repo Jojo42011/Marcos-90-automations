@@ -1266,7 +1266,14 @@ document.getElementById("convNewBtn").addEventListener("click",()=>{
   const name=prompt("Start a new conversation with (name):"); if(!name||!name.trim())return;
   const phone=prompt("Phone number (optional):","")||"";
   const c={names:[name.trim(),"Marco Puga"],phone:phone.trim(),at:new Date().toISOString(),msgs:[]};
-  CONVOS.unshift(c); renderConvos(); openThread(0); crmToast("Conversation started with "+name.trim());
+  /* With a number and a live Quo line this is a real SMS thread from the
+     start, so the first message actually goes out rather than only appearing
+     to. Without one it stays an untyped local note, as before. */
+  if(c.phone&&QUO.configured&&phoneKeyOf(c.phone).length===10){
+    c.channel="sms"; c.peer=c.phone; c.peerKey=phoneKeyOf(c.phone); c.quo=true; c._full=true; c._local=true;
+  }
+  CONVOS.unshift(c); renderConvos(); openThread(0);
+  crmToast(c.quo?("Texting "+fmtPhone(c.phone)):("Conversation started with "+name.trim()));
 });
 // Brivity joins names with "&" for a pair, commas for 3+, keeping all names.
 function convTitle(names){ return names.length===2?names.join(" & "):names.join(", "); }
@@ -1306,9 +1313,133 @@ function chChip(ch){
 function emptyChannelMsg(){
   var m=CHANNEL_META[convGroupMode];
   if(!m) return "No conversations found.";
-  if(convGroupMode==="sms") return "No SMS threads yet. Texts sent or received through the CRM will appear here.";
+  if(convGroupMode==="sms") return quoEmptyMsg();
   if(convGroupMode==="email") return "No email threads yet. Email lives in the Email Marketing tab until a reply comes back to a lead.";
   return "No "+m.label+" conversations found.";
+}
+
+/* ==================== Quo — real SMS on (737) 283-4703 ====================
+   The SMS tab used to be permanently dim because nothing ever put a
+   conversation on the "sms" channel, and the composer's send only pushed a
+   bubble into local state — it never sent a text to anybody. Both halves are
+   real now: threads come from Quo through /api/quo/threads, and send goes to
+   /api/quo/send, which resolves only on Quo's own accept.
+
+   The thread LIST carries one line per thread (that is all the summary query
+   returns); the full history loads when a thread is opened. */
+var QUO={loaded:false,configured:false,verified:false,number:null,error:null,sig:""};
+
+function fmtPhone(raw){
+  var d=String(raw||"").replace(/\D/g,"");
+  if(d.length===11&&d.charAt(0)==="1") d=d.slice(1);
+  return d.length===10?("("+d.slice(0,3)+") "+d.slice(3,6)+"-"+d.slice(6)):String(raw||"");
+}
+/* Digits-only key, same rule the server uses, so a thread found by "+1737…"
+   and one typed as "737-…" are the same conversation. */
+function phoneKeyOf(raw){
+  var d=String(raw||"").replace(/\D/g,"");
+  return d.length>10?d.slice(-10):d;
+}
+/* Says what is actually true about SMS right now rather than a generic
+   "nothing here" — an unconfigured line and a quiet one are different. */
+function quoEmptyMsg(){
+  if(!QUO.loaded) return "Loading text messages…";
+  if(!QUO.configured) return "SMS is not connected yet. Once the Quo line is connected, every text to and from Marco's business number shows up here.";
+  if(!QUO.verified) return "Quo is connected but not responding"+(QUO.error?": "+esc(QUO.error):".");
+  return "No text threads yet on "+esc(fmtPhone(QUO.number)||"the Quo line")+". Incoming texts and anything sent from here will appear within a few minutes.";
+}
+/* Stable identity for a conversation, so a refresh that reorders the list can
+   keep the thread the user is reading open. */
+function convKey(c){
+  if(!c) return "";
+  return c.quo?("q:"+c.peerKey):("n:"+(c.names||[]).join("|"));
+}
+/* Can this thread put a real text on the wire?
+
+   Gated on the line being CONFIGURED, not on the last status probe having
+   succeeded. A momentary hiccup reaching Quo must not silently drop the
+   composer back to the old fake path that only drew a bubble — better to
+   attempt the send and report exactly what Quo said if it fails. */
+function convCanText(c){
+  return !!(c && QUO.configured && (c.peer||c.phone));
+}
+
+function loadQuo(){
+  return fetch(crmApi("/api/quo/status")).then(function(r){return r.ok?r.json():null;}).then(function(s){
+    QUO.loaded=true;
+    if(s){ QUO.configured=!!s.configured; QUO.verified=!!s.verified;
+           QUO.number=s.number||null; QUO.error=s.error||null; }
+    if(!QUO.configured){ paintChannelCounts(); if(convGroupMode==="sms") renderConvos(); return; }
+    return loadQuoThreads();
+  }).catch(function(){ QUO.loaded=true; });
+}
+
+function loadQuoThreads(){
+  return fetch(crmApi("/api/quo/threads")).then(function(r){return r.ok?r.json():null;})
+    .then(function(d){ if(d&&d.threads) mergeQuoConvos(d.threads); })
+    .catch(function(){});
+}
+
+/* Fold the Quo threads into CONVOS. Quo rows are replaced wholesale on every
+   refresh (they are owned by the server), everything else is left alone. */
+function mergeQuoConvos(threads){
+  var sig=threads.map(function(t){return t.peerKey+"@"+t.lastAt+"#"+t.messageCount;}).join(",");
+  if(sig===QUO.sig&&CONVOS.some(function(c){return c.quo;})) return;  // nothing moved
+  QUO.sig=sig;
+  var openK=(openConvIdx!=null&&CONVOS[openConvIdx])?convKey(CONVOS[openConvIdx]):null;
+  var prev={}, fromServer={};
+  threads.forEach(function(t){ fromServer[t.peerKey]=true; });
+  CONVOS.forEach(function(c){ if(c.quo) prev[c.peerKey]=c; });
+  /* A thread the user just started by hand has no server row until its first
+     text lands, so it survives the swap; once Quo knows about it, the server
+     row takes over. */
+  var kept=CONVOS.filter(function(c){ return !c.quo||(c._local&&!fromServer[c.peerKey]); });
+  /* A lead's own snapshot can also carry an "sms" conversation for someone
+     Quo has a real thread with. Quo is the phone line itself, so its record
+     wins — otherwise the same texts appear twice under one tab. */
+  kept=kept.filter(function(c){
+    return !(c.channel==="sms"&&c.phone&&fromServer[phoneKeyOf(c.phone)]);
+  });
+  var mapped=threads.map(function(t){
+    var old=prev[t.peerKey];
+    var name=t.leadName||fmtPhone(t.peer);
+    return {
+      names:[name,"Marco Puga"], at:t.lastAt, channel:"sms", quo:true,
+      peerKey:t.peerKey, peer:t.peer, phone:t.peer,
+      leadId:t.leadId||null, msgCount:t.messageCount,
+      /* Keep an already-opened history; otherwise stand in with the one line
+         the summary gave us until the thread is opened. */
+      msgs:(old&&old._full)?old.msgs:[{me:t.lastDirection==="outgoing",t:t.lastText,at:t.lastAt}],
+      _full:!!(old&&old._full)
+    };
+  });
+  CONVOS=kept.concat(mapped)
+    .sort(function(a,b){ return String(b.at||"").localeCompare(String(a.at||"")); });
+  openConvIdx=null;
+  if(openK){
+    var idx=CONVOS.findIndex(function(c){ return convKey(c)===openK; });
+    if(idx>=0) openConvIdx=idx;
+  }
+  renderConvos();
+}
+
+/* Pull a thread's full history the first time it is opened. */
+function loadQuoThread(i){
+  var c=CONVOS[i];
+  if(!c||!c.quo||c._loading) return;
+  c._loading=true;
+  fetch(crmApi("/api/quo/threads/"+encodeURIComponent(c.peerKey)))
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      c._loading=false;
+      if(!d||!Array.isArray(d.messages)) return;
+      c.msgs=d.messages.map(function(m){
+        return {me:m.direction==="outgoing",t:m.text||"",at:m.createdAt,status:m.status||""};
+      });
+      c._full=true;
+      if(CONVOS[openConvIdx]===c) paintThread(openConvIdx);
+    })
+    .catch(function(){ c._loading=false; });
 }
 
 /* Which tab a conversation belongs to. "all" and "group" span every channel;
@@ -1340,6 +1471,9 @@ function paintChannelCounts(){
   document.querySelectorAll("#msgTabs [data-mt]").forEach(b=>{
     const tab=b.getAttribute("data-mt");
     if(tab==="all"||tab==="group"||tab==="scheduled"){ b.classList.remove("quiet"); return; }
+    // SMS is a live channel once Quo answers, even on a quiet day - dimming a
+    // working line reads as "not available", which is the opposite of true.
+    if(tab==="sms"&&QUO.configured){ b.classList.remove("quiet"); return; }
     b.classList.toggle("quiet",!CONVOS.some(c=>(c.channel||"other")===tab));
   });
 }
@@ -1445,7 +1579,10 @@ function paintThread(i){
   const c=CONVOS[i];
   const other=c.names.find(n=>n!=="Marco Puga")||c.names[0];
   document.getElementById("thread").innerHTML=
-    '<div class="thread-head"><div>'+esc(convTitle(c.names))+'<div class="th-sub">'+esc(c.phone||"(210) 555-0148")+' · SMS</div></div>'+
+    '<div class="thread-head"><div>'+esc(convTitle(c.names))+'<div class="th-sub">'+
+      esc(c.phone?fmtPhone(c.phone):(c.email||""))+
+      (c.phone||c.email?' · ':'')+esc((CHANNEL_META[c.channel||"other"]||CHANNEL_META.other).label)+
+      (c.quo&&!c._full?' · loading history…':'')+'</div></div>'+
       '<div class="th-acts"><button class="rb" title="Call"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></button>'+
       '<button class="rb" title="Profile"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg></button>'+
       '<button class="rb" id="threadDeleteBtn" title="Delete conversation" style="color:#c0616a"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></div></div>'+
@@ -1699,15 +1836,49 @@ function paintThread(i){
     e.target.value="";
   });
   const send=()=>{const inp=document.getElementById("threadInput");const t=(inp.value||"").trim();if(!t&&!pendingAttachments.length)return;
+    /* SMS on a thread with a number goes out over Quo for real. The bubble is
+       added only after Quo accepts it — a text that failed must never sit in
+       the thread looking delivered. */
+    if(composeChannel()==="sms"&&convCanText(c)){ sendQuoText(t); return; }
     const files=pendingAttachments.slice(); pendingAttachments=[];
     c.msgs.push({me:true,t,files,at:new Date().toISOString()});c.at=new Date().toISOString();paintThread(i);renderConvos();
     const b=document.getElementById("threadBody");if(b)b.scrollTop=b.scrollHeight;};
+
+  function sendQuoText(t){
+    if(!t){ crmToast("SMS needs some text — attachments can't go out over text yet"); return; }
+    if(pendingAttachments.length) crmToast("Attachments don't send over SMS — sending the message text only");
+    const btn=document.getElementById("threadSend");
+    btn.disabled=true; btn.classList.add("busy");
+    fetch(crmApi("/api/quo/send"),{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({to:c.peer||c.phone,text:t})})
+      .then(r=>r.json().then(d=>({ok:r.ok,d})))
+      .then(({ok,d})=>{
+        btn.disabled=false; btn.classList.remove("busy");
+        // Quo's own words, not a generic failure - an A2P registration
+        // problem and a bad number need different things done about them.
+        if(!ok){ crmToast(d&&d.error?("Not sent — "+d.error):"Not sent"); return; }
+        pendingAttachments=[];
+        c.msgs.push({me:true,t,at:new Date().toISOString(),status:d.status||"sent"});
+        c.at=new Date().toISOString();
+        paintThread(openConvIdx!=null?openConvIdx:i); renderConvos();
+        const b=document.getElementById("threadBody"); if(b)b.scrollTop=b.scrollHeight;
+        /* Texting from a DM thread does not turn that thread into an SMS one -
+           the text is its own conversation, and it shows up under SMS on the
+           next refresh with the rest of the history. */
+        if(!c.quo) loadQuoThreads();
+      })
+      .catch(()=>{ btn.disabled=false; btn.classList.remove("busy");
+        crmToast("Couldn't reach the server — nothing was sent"); });
+  }
   document.getElementById("threadSend").addEventListener("click",send);
   document.getElementById("threadInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();send();}});
   document.getElementById("threadDeleteBtn").addEventListener("click",()=>deleteConv(i));
   const b=document.getElementById("threadBody");if(b)b.scrollTop=b.scrollHeight;
 }
-function openThread(i){ openConvIdx=i; pendingAttachments=[]; renderConvos(); paintThread(i); }
+function openThread(i){ openConvIdx=i; pendingAttachments=[]; renderConvos(); paintThread(i);
+  // Quo threads arrive as a one-line summary; the history loads on open.
+  const c=CONVOS[i]; if(c&&c.quo&&!c._full) loadQuoThread(i);
+}
 
 /* leads table */
 let page=1;const PER=10;
@@ -2903,7 +3074,16 @@ async function loadLive(opts){
 
   LEADS=rawLeads.map(mapLeadRow);
   PEOPLE=mapPeopleLive(LEADS);
-  const convos=deriveConvosLive(rawLeads); if(convos.length) CONVOS=convos;
+  /* Keep any Quo SMS threads already loaded — they are a different source
+     from the lead snapshot, and swapping the demo set for live leads must not
+     take real text messages off the board. */
+  const quoConvos=CONVOS.filter(c=>c.quo);
+  const quoKeys={}; quoConvos.forEach(c=>{ quoKeys[c.peerKey]=true; });
+  const convos=deriveConvosLive(rawLeads)
+    // Quo owns the phone line, so its thread wins over a snapshot copy.
+    .filter(c=>!(c.channel==="sms"&&c.phone&&quoKeys[phoneKeyOf(c.phone)]));
+  if(convos.length) CONVOS=convos.concat(quoConvos)
+    .sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")));
   // Load the send-later queue too, so the SCHEDULED tab shows its pending
   // count without having to open it first.
   loadScheduled();
@@ -4339,6 +4519,7 @@ document.getElementById("msgTabs").addEventListener("click",e=>{
   document.querySelectorAll("#msgTabs [data-mt]").forEach(x=>x.classList.toggle("on",x===b));
   convGroupMode=b.getAttribute("data-mt");
   if(convGroupMode==="scheduled") loadScheduled();
+  if(convGroupMode==="sms"||convGroupMode==="all"){ if(QUO.configured) loadQuoThreads(); }
   renderConvos();
 });
 document.querySelectorAll('#view-leads .leads-nav a[data-lb]').forEach(a=>a.addEventListener("click",()=>{
@@ -5088,4 +5269,14 @@ if(typeof paintSortArrows==="function")paintSortArrows();
 })();
 
 loadLive();
+
+/* Quo SMS. Loaded after the lead snapshot so names resolve, then refreshed on
+   a timer — the server polls Quo every 5 minutes and takes webhooks, so this
+   is only reading the local mirror. The merge is a no-op when nothing moved,
+   so a refresh while you are reading a thread does not disturb the list. */
+loadQuo();
+setInterval(function(){
+  if(document.hidden||!QUO.configured) return;
+  loadQuoThreads();
+}, 60000);
 </script>

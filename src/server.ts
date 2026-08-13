@@ -1304,6 +1304,219 @@ app.post("/api/auth/bootstrap", express.json(), async (req, res) => {
   res.json({ ok: true });
 });
 
+/* ===================== Quo — SMS on Marco's business line =====================
+   Quo is the phone system behind (737) 283-4703. These routes mirror its SMS
+   into the CRM's Messages tab and send from it. Threads are keyed by PHONE,
+   and matched to leads at read time — nothing here writes the lead store,
+   because createLead() fires real outbound automations and Quo's book is
+   mostly call records that must never become CRM leads.
+============================================================================ */
+
+/**
+ * The URL Quo should call, guard token included. Same base-URL convention the
+ * rest of the app uses, so a deploy behind a different hostname only needs
+ * PUBLIC_BASE_URL set in one place.
+ */
+async function quoWebhookUrl(override?: string): Promise<string | null> {
+  const { quoWebhookSecret } = await import("./integrations/quo/index.js");
+  const secret = quoWebhookSecret();
+  if (!secret) return null;
+  const base = (override || process.env.PUBLIC_BASE_URL || "https://marco-90-automation.fly.dev")
+    .trim().replace(/\/+$/, "");
+  if (!/^https:\/\//.test(base)) return null;   // Quo will not call plain http
+  return `${base}/api/quo/webhook?key=${secret}`;
+}
+
+app.get("/api/quo/status", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { isQuoConfigured, checkQuo, getQuoPhoneNumber } = await import("./integrations/quo/index.js");
+  const { quoMessageCount, quoThreadCount } = await import("./core/quoStore.js");
+  const { lastQuoSyncAt } = await import("./core/quoSync.js");
+  if (!isQuoConfigured()) {
+    res.json({
+      configured: false, verified: false,
+      hint: "Set QUO_API_KEY (and optionally QUO_PHONE_NUMBER_ID) as Fly secrets to turn on SMS.",
+    });
+    return;
+  }
+  const check = await checkQuo();
+  /* Whether Quo is calling us matters operationally — without the webhook the
+     CRM is still correct, just up to 5 minutes behind — so it is reported
+     rather than assumed. */
+  let webhook: { registered: boolean; url: string | null; error?: string } = { registered: false, url: null };
+  try {
+    const { listWebhooks } = await import("./integrations/quo/index.js");
+    const url = await quoWebhookUrl();
+    const hooks = await listWebhooks();
+    webhook = { registered: hooks.some((w) => w.url === url), url };
+  } catch (err) {
+    webhook = { registered: false, url: null, error: (err as Error).message };
+  }
+  res.json({
+    configured: true,
+    verified: check.ok,
+    error: check.error || null,
+    number: getQuoPhoneNumber() || check.numbers?.[0]?.number || null,
+    numbers: (check.numbers || []).map((n) => ({ id: n.id, name: n.name, number: n.number })),
+    threads: quoThreadCount(),
+    messages: quoMessageCount(),
+    lastSyncAt: lastQuoSyncAt(),
+    webhook,
+  });
+});
+
+/** Thread list for the SMS tab, joined to leads by phone at read time. */
+app.get("/api/quo/threads", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { listQuoThreads } = await import("./core/quoStore.js");
+  const { phoneKey } = await import("./integrations/quo/index.js");
+  const threads = listQuoThreads(Math.min(500, Number(req.query.limit) || 200));
+  /* Join to the CRM's own book so a known contact shows their name rather
+     than a bare number. Read-only: no lead is created or modified. */
+  const snap = await getDashboardSnapshot();
+  const byPhone = new Map<string, { id: string; name: string | null }>();
+  for (const l of snap.leads) {
+    const k = phoneKey(l.phone);
+    if (k && !byPhone.has(k)) byPhone.set(k, { id: l.id, name: l.name });
+  }
+  res.json({
+    ok: true,
+    threads: threads.map((t) => {
+      const lead = byPhone.get(t.peerKey) || null;
+      return { ...t, leadId: lead?.id ?? null, leadName: lead?.name ?? null };
+    }),
+  });
+});
+
+app.get("/api/quo/threads/:peer", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { getQuoThread } = await import("./core/quoStore.js");
+  const { phoneKey } = await import("./integrations/quo/index.js");
+  const key = phoneKey(String(req.params.peer || ""));
+  if (!key) { res.status(400).json({ error: "A phone number is required" }); return; }
+  res.json({ ok: true, peerKey: key, messages: getQuoThread(key, 300) });
+});
+
+/** Send an SMS from Marco's Quo line. */
+app.post("/api/quo/send", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const { sendText, toE164, phoneKey, isQuoConfigured } = await import("./integrations/quo/index.js");
+  if (!isQuoConfigured()) { res.status(503).json({ error: "Quo is not configured" }); return; }
+  const to = toE164(typeof body.to === "string" ? body.to : "");
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  if (!to) { res.status(400).json({ error: "A valid US phone number is required" }); return; }
+  if (!text) { res.status(400).json({ error: "Message text is required" }); return; }
+  try {
+    const sent = await sendText({ to, content: text });
+    /* Store our own copy immediately so the thread updates without waiting
+       for the next sync — same id Quo will report, so the sync de-dupes. */
+    const { upsertQuoMessage } = await import("./core/quoStore.js");
+    upsertQuoMessage({
+      id: sent.id,
+      conversationId: sent.conversationId || "",
+      phoneNumberId: sent.phoneNumberId || "",
+      peerKey: phoneKey(to),
+      peer: to,
+      direction: "outgoing",
+      text,
+      status: sent.status || "sent",
+      createdAt: sent.createdAt || new Date().toISOString(),
+      userId: sent.userId || null,
+    });
+    /* Mirror onto the lead's timeline when we can identify them, so the
+       contact's history shows the text alongside everything else. */
+    try {
+      const snap = await getDashboardSnapshot();
+      const lead = snap.leads.find((l) => phoneKey(l.phone) === phoneKey(to));
+      if (lead) {
+        const { appendLeadActivity } = await import("./core/db.js");
+        await appendLeadActivity(lead.id, [{
+          type: "text_sent",
+          description: `SMS (Quo): ${text}`,
+          timestamp: new Date().toISOString(),
+        }]);
+      }
+    } catch { /* the text went out; timeline mirroring is best-effort */ }
+    res.json({ ok: true, id: sent.id, to, status: sent.status });
+  } catch (err) {
+    const e = err as { message?: string; status?: number };
+    res.status(502).json({ error: e.message || String(err), status: e.status ?? null });
+  }
+});
+
+/**
+ * Register (or confirm) the inbound webhook with Quo, pointed at this app.
+ * Called at boot when a public base URL is known, and exposed so it can be
+ * re-run by hand after a URL change.
+ */
+app.post("/api/quo/register-webhook", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { ensureMessageWebhook } = await import("./integrations/quo/index.js");
+  try {
+    const url = await quoWebhookUrl(typeof req.body?.baseUrl === "string" ? req.body.baseUrl : undefined);
+    if (!url) { res.status(400).json({ error: "No public base URL — set PUBLIC_BASE_URL or pass baseUrl" }); return; }
+    const out = await ensureMessageWebhook(url);
+    res.json({ ok: true, ...out, url });
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/quo/sync", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { syncQuoMessages } = await import("./core/quoSync.js");
+  const full = req.body?.full === true || req.query.full === "1";
+  const result = await syncQuoMessages({ full });
+  res.status(result.ok ? 200 : 502).json(result);
+});
+
+/**
+ * Inbound webhook (message.received / message.delivered). Unauthenticated by
+ * necessity — Quo calls it — so it is deliberately narrow: it only accepts a
+ * message-shaped payload for our own phone number, stores it, and returns 200.
+ * A poll runs regardless, so a dropped or spoofed webhook changes nothing that
+ * the next sync would not correct.
+ */
+app.post("/api/quo/webhook", express.json({ limit: "256kb" }), async (req, res) => {
+  try {
+    const { quoWebhookSecret } = await import("./integrations/quo/index.js");
+    const secret = quoWebhookSecret();
+    /* Quo offers no request signing, so the guard is the `?key=` we put on the
+       URL when registering. A wrong or missing key is answered 202 rather than
+       401 — a probe learns nothing, and Quo would only retry on an error. */
+    if (!secret || String(req.query.key || "") !== secret) {
+      res.status(202).json({ ok: true });
+      return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+    const data = (body.data && typeof body.data === "object" ? body.data : body) as Record<string, unknown>;
+    const id = typeof data.id === "string" ? data.id : "";
+    const direction = data.direction === "outgoing" ? "outgoing" : "incoming";
+    const from = typeof data.from === "string" ? data.from : "";
+    const to = Array.isArray(data.to) ? String((data.to as unknown[])[0] || "") : "";
+    const peer = direction === "outgoing" ? to : from;
+    if (!id || !peer) { res.status(202).json({ ok: true, ignored: "not a message payload" }); return; }
+    const { phoneKey } = await import("./integrations/quo/index.js");
+    const { upsertQuoMessage } = await import("./core/quoStore.js");
+    upsertQuoMessage({
+      id,
+      conversationId: typeof data.conversationId === "string" ? data.conversationId : "",
+      phoneNumberId: typeof data.phoneNumberId === "string" ? data.phoneNumberId : "",
+      peerKey: phoneKey(peer),
+      peer,
+      direction,
+      text: typeof data.text === "string" ? data.text : "",
+      status: typeof data.status === "string" ? data.status : "",
+      createdAt: typeof data.createdAt === "string" ? data.createdAt : new Date().toISOString(),
+      userId: typeof data.userId === "string" ? data.userId : null,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(200).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 app.get("/api/dashboard/data", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
@@ -12980,6 +13193,25 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     // task. Brivity has no transaction API, so nothing else keeps that data
     // from going quietly stale.
     scheduleTransactionImportReminder();
+    void (async () => {
+      const { scheduleQuoSync } = await import("./core/quoSync.js");
+      const { isQuoConfigured, ensureMessageWebhook } = await import("./integrations/quo/index.js");
+      scheduleQuoSync(5);
+      /* Register the inbound webhook so a text lands in the CRM in seconds
+         rather than on the next poll. Idempotent, and failure is survivable —
+         the 5-minute poll is the fallback, so this only ever logs. */
+      if (isQuoConfigured()) {
+        try {
+          const url = await quoWebhookUrl();
+          if (url) {
+            const out = await ensureMessageWebhook(url);
+            console.log(`[Quo] webhook ${out.created ? "registered" : "already registered"} (${out.webhook.id})`);
+          }
+        } catch (err) {
+          console.error("[Quo] webhook registration failed (poll still covers it):", (err as Error).message);
+        }
+      }
+    })();
   } catch (err) {
     console.error("[txImportReminder] failed to start:", err);
   }
