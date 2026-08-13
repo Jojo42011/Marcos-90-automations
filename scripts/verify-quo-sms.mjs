@@ -31,6 +31,59 @@ const ok = (n, c, d) => { if (c) { pass++; console.log("  ok " + n); } else { fa
 const tmp = mkdtempSync(join(tmpdir(), "quo-"));
 const quoDb = join(tmp, "quo.db");
 
+// ---------------------------------------------------------------------------
+// Rate limiting, against a stub that behaves like Quo does.
+//
+// This is the bug that made the first production sweep store 8 of 48 threads:
+// Quo allows 10 requests/second, the client had no limiter and no retry, and
+// the sync swallowed every 429 — so two thirds of Marco's text history simply
+// wasn't there, and nothing said so. It cannot be proven against the live API
+// without deliberately abusing the account, hence a stub.
+// ---------------------------------------------------------------------------
+{
+  const { createServer } = await import("node:http");
+  let inflight = 0, refused = 0, served = 0, maxConcurrent = 0, worstPerSec = 0;
+  const stamps = [];
+  const stub = createServer((req, res) => {
+    inflight++; maxConcurrent = Math.max(maxConcurrent, inflight);
+    const now = Date.now();
+    stamps.push(now);
+    while (stamps.length && now - stamps[0] > 1000) stamps.shift();
+    worstPerSec = Math.max(worstPerSec, stamps.length);
+    // Refuse the first two requests outright, the way a throttled window does.
+    if (served + refused < 2) {
+      refused++; inflight--;
+      res.writeHead(429, { "content-type": "application/json", ratelimit: '"per-second"; r=0; t=1' });
+      res.end(JSON.stringify({ message: "Too many requests" }));
+      return;
+    }
+    served++; inflight--;
+    res.writeHead(200, { "content-type": "application/json", ratelimit: '"per-second"; r=5; t=1' });
+    res.end(JSON.stringify({ data: [], nextPageToken: null }));
+  });
+  await new Promise((r) => stub.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${stub.address().port}`;
+
+  process.env.QUO_API_BASE = base;
+  process.env.QUO_API_KEY = "stub-key";
+  const quo = await import("../dist/src/integrations/quo/index.js");
+
+  const t0 = Date.now();
+  const first = await quo.listPhoneNumbers();      // must survive two 429s
+  ok("a throttled request is retried, not dropped", Array.isArray(first) && refused === 2,
+    `refused=${refused} served=${served}`);
+  ok("the retry waits for the window Quo advertised", Date.now() - t0 >= 1000,
+    (Date.now() - t0) + "ms");
+
+  // 24 requests must be paced under the advertised 10/sec ceiling.
+  await Promise.all(Array.from({ length: 24 }, () => quo.listPhoneNumbers()));
+  ok("requests are paced under Quo's 10/sec quota", worstPerSec <= 10, "peak " + worstPerSec + "/sec");
+
+  await new Promise((r) => stub.close(r));
+  delete process.env.QUO_API_BASE;
+  delete process.env.QUO_API_KEY;
+}
+
 // ---- seed the mirror with two threads --------------------------------------
 {
   const db = new Database(quoDb);

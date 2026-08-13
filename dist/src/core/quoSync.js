@@ -26,6 +26,20 @@ const index_js_1 = require("../integrations/quo/index.js");
 const quoStore_js_1 = require("./quoStore.js");
 const META_LAST_SYNC = "last_sync_at";
 const META_LAST_FULL = "last_full_sync_at";
+const META_FULL_VERSION = "full_sync_version";
+/**
+ * Bump this whenever a fix changes what a full sweep would actually collect.
+ * A mirror built by an older, wronger version re-sweeps itself once on the
+ * next boot instead of sitting on incomplete history forever.
+ *
+ * v2 — the first production sweep stored 8 of 48 threads. Quo allows 10
+ * requests/second and the client had no limiter and no retry, so most reads
+ * came back 429 and were silently swallowed; worse, that partial pass was
+ * recorded as a completed full sweep, and incremental runs only revisit
+ * conversations that MOVED, so the missing 40 threads would never have come
+ * back on their own.
+ */
+const FULL_SYNC_VERSION = "2";
 /** Resolve the sending line: pinned by env, else the first on the account. */
 async function resolvePhoneNumberId() {
     const pinned = (0, index_js_1.getQuoPhoneNumberId)();
@@ -58,7 +72,7 @@ async function syncQuoMessages(opts = {}) {
     const startedAt = new Date().toISOString();
     const base = {
         ok: false, conversationsSeen: 0, conversationsWithMessages: 0, messagesStored: 0,
-        newMessages: 0, skippedCallThreads: 0, full: opts.full === true,
+        newMessages: 0, skippedCallThreads: 0, threadsFailed: 0, full: opts.full === true,
         startedAt, finishedAt: startedAt,
     };
     if (!(0, index_js_1.isQuoConfigured)()) {
@@ -70,15 +84,24 @@ async function syncQuoMessages(opts = {}) {
     }
     const lastSync = (0, quoStore_js_1.quoMetaGet)(META_LAST_SYNC);
     const everFull = (0, quoStore_js_1.quoMetaGet)(META_LAST_FULL);
+    const sweptBy = (0, quoStore_js_1.quoMetaGet)(META_FULL_VERSION);
     /* First run is always full, whatever was asked for: an incremental first
        pass would mirror only whatever happened to move today and quietly
-       present it as the whole history. */
-    const full = opts.full === true || !everFull;
+       present it as the whole history. A mirror swept by an older version is
+       treated the same way — see FULL_SYNC_VERSION. */
+    const staleSweep = everFull != null && sweptBy !== FULL_SYNC_VERSION;
+    if (staleSweep) {
+        console.log(`[Quo] mirror was built by sweep v${sweptBy ?? "1"}; re-sweeping at v${FULL_SYNC_VERSION}`);
+    }
+    const full = opts.full === true || !everFull || staleSweep;
     try {
         const conversations = await (0, index_js_1.listConversations)(full || !lastSync ? {} : { updatedAfter: lastSync });
         base.conversationsSeen = conversations.length;
-        let stored = 0, fresh = 0, withMsgs = 0, calls = 0;
-        await mapLimit(conversations, 4, async (c) => {
+        let stored = 0, fresh = 0, withMsgs = 0, calls = 0, failed = 0;
+        /* Concurrency 2 against a 10 req/s quota. The client paces itself as well,
+           but a thread can need several page requests, so the fan-out is kept
+           small rather than relying on the limiter alone. */
+        await mapLimit(conversations, 2, async (c) => {
             const participants = (c.participants || []).filter(Boolean);
             if (!participants.length)
                 return;
@@ -91,8 +114,13 @@ async function syncQuoMessages(opts = {}) {
                     maxPages: full ? 5 : 2,
                 });
             }
-            catch {
-                /* One unreadable thread must not fail the pass. */
+            catch (err) {
+                /* One unreadable thread must not fail the whole pass — but it must not
+                   vanish either. It is counted, and a pass with any failure is not
+                   recorded as a completed full sweep, so the next run retries it
+                   instead of assuming those conversations simply have no texts. */
+                failed++;
+                console.error(`[Quo] thread ${c.id} unreadable:`, err.message);
                 return;
             }
             if (!msgs.length) {
@@ -125,12 +153,18 @@ async function syncQuoMessages(opts = {}) {
         });
         const finishedAt = new Date().toISOString();
         (0, quoStore_js_1.quoMetaSet)(META_LAST_SYNC, finishedAt);
-        if (full)
+        /* Only a clean sweep counts as "we have seen everything". Marking a
+           partial pass full would strand every thread that was throttled: the
+           incremental runs that follow only revisit conversations that MOVED, so
+           a thread missed here would stay missing until someone texted again. */
+        if (full && !failed) {
             (0, quoStore_js_1.quoMetaSet)(META_LAST_FULL, finishedAt);
+            (0, quoStore_js_1.quoMetaSet)(META_FULL_VERSION, FULL_SYNC_VERSION);
+        }
         return {
             ...base, ok: true, full,
             conversationsWithMessages: withMsgs, messagesStored: stored,
-            newMessages: fresh, skippedCallThreads: calls, finishedAt,
+            newMessages: fresh, skippedCallThreads: calls, threadsFailed: failed, finishedAt,
         };
     }
     catch (err) {
@@ -159,8 +193,12 @@ function scheduleQuoSync(intervalMinutes = 5) {
             .then((r) => {
             if (!r.ok)
                 console.error("[Quo] sync failed:", r.error);
-            else if (r.newMessages)
-                console.log(`[Quo] sync: ${r.newMessages} new message(s) across ${r.conversationsWithMessages} thread(s)`);
+            else {
+                if (r.newMessages)
+                    console.log(`[Quo] sync: ${r.newMessages} new message(s) across ${r.conversationsWithMessages} thread(s)`);
+                if (r.threadsFailed)
+                    console.error(`[Quo] sync: ${r.threadsFailed} thread(s) unreadable — will retry next pass`);
+            }
         })
             .catch((e) => console.error("[Quo] sync threw:", e));
     };

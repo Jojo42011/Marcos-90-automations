@@ -25,7 +25,11 @@
 
 import { createHash } from "crypto";
 
-const BASE = "https://api.quo.com";
+/* Overridable only so the verification suite can point the client at a stub
+   that returns real 429s — the retry path is the whole reason this file has
+   a rate limiter, and it cannot be proven against the live API without
+   deliberately abusing Marco's account. */
+const BASE = process.env.QUO_API_BASE?.trim().replace(/\/+$/, "") || "https://api.quo.com";
 
 export interface QuoPhoneNumber {
   id: string;
@@ -85,47 +89,124 @@ export class QuoError extends Error {
   }
 }
 
+/**
+ * Rate limiting. Quo advertises its policy on every response:
+ *
+ *   ratelimit-policy: "per-second"; q=10; w=1
+ *   ratelimit:        "per-second"; r=6; t=1
+ *
+ * i.e. TEN requests per second, with `r` remaining and `t` seconds until the
+ * window resets. This matters more here than it would elsewhere: a full sync
+ * is one request per conversation over ~286 conversations, so the limit is not
+ * a corner case, it is the normal path. The first production sync stored only
+ * 8 of 16 threads because half the reads came back 429 and were swallowed.
+ *
+ * Two defences, because either alone is not enough: pace requests to stay
+ * under the quota, and retry the ones that get refused anyway.
+ */
+const RATE_PER_SEC = 8;                 // under the advertised 10, leaving headroom
+const MIN_INTERVAL_MS = Math.ceil(1000 / RATE_PER_SEC);
+/** When the next request may be dispatched. */
+let nextSlotAt = 0;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Block until it is this request's turn.
+ *
+ * Requests are SPACED, not merely counted. A counting window — even a sliding
+ * one — lets the whole quota leave in a single burst, and the gap between
+ * taking a slot and the request actually landing is not constant: a cold
+ * socket costs ~75ms, a warm one ~5ms. Measured against a stub, a limiter
+ * "capped at 8/sec" delivered 16 in one second purely from that jitter. Fixed
+ * spacing removes the burst, so what the server sees matches what we intended.
+ *
+ * The reservation is taken synchronously before any await, so concurrent
+ * callers each get their own slot rather than racing for the same one.
+ */
+async function takeRateSlot(): Promise<void> {
+  const now = Date.now();
+  const at = Math.max(now, nextSlotAt);
+  nextSlotAt = at + MIN_INTERVAL_MS;
+  if (at > now) await sleep(at - now);
+}
+
+/** Hold every pending request back — a 429 is about the account, not one call. */
+function backOffAll(ms: number): void {
+  nextSlotAt = Math.max(nextSlotAt, Date.now() + ms);
+}
+
+/** Seconds to wait after a 429, from Quo's own headers where it says so. */
+function retryDelayMs(res: Response, attempt: number): number {
+  const after = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(after) && after > 0) return Math.min(10000, after * 1000);
+  const m = /t=(\d+)/.exec(res.headers.get("ratelimit") || "");
+  if (m) return Math.min(10000, (Number(m[1]) + 1) * 1000);
+  return Math.min(8000, 400 * 2 ** attempt);       // exponential fallback
+}
+
 async function call<T>(
   path: string,
-  init: { method?: string; body?: unknown; timeoutMs?: number } = {},
+  init: { method?: string; body?: unknown; timeoutMs?: number; attempts?: number } = {},
 ): Promise<T> {
   const key = getQuoApiKey();
   if (!key) throw new QuoError("QUO_API_KEY is not set", 0);
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), init.timeoutMs ?? 25000);
-  try {
-    const res = await fetch(BASE + path, {
-      method: init.method || "GET",
-      headers: {
-        /* Raw key, NOT "Bearer <key>" — Quo rejects the bearer form. */
-        Authorization: key,
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-      },
-      body: init.body ? JSON.stringify(init.body) : undefined,
-      signal: ctrl.signal,
-    });
-    const text = await res.text();
-    let parsed: unknown = null;
+  const maxAttempts = init.attempts ?? 4;
+  let lastErr: unknown = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await takeRateSlot();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), init.timeoutMs ?? 25000);
     try {
-      parsed = text ? JSON.parse(text) : null;
-    } catch {
-      parsed = { raw: text.slice(0, 400) };
+      const res = await fetch(BASE + path, {
+        method: init.method || "GET",
+        headers: {
+          /* Raw key, NOT "Bearer <key>" — Quo rejects the bearer form. */
+          Authorization: key,
+          ...(init.body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: init.body ? JSON.stringify(init.body) : undefined,
+        signal: ctrl.signal,
+      });
+
+      /* Throttled or a server wobble — worth asking again. A 4xx that is not
+         429 is our mistake and will fail identically on a retry, so it is
+         raised immediately. */
+      if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts - 1) {
+        const wait = retryDelayMs(res, attempt);
+        await res.text().catch(() => "");
+        if (res.status === 429) backOffAll(wait);
+        await sleep(wait);
+        continue;
+      }
+
+      const text = await res.text();
+      let parsed: unknown = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        parsed = { raw: text.slice(0, 400) };
+      }
+      if (!res.ok) {
+        const msg =
+          (parsed && typeof parsed === "object" && "message" in parsed
+            ? String((parsed as { message: unknown }).message)
+            : "") || `HTTP ${res.status}`;
+        throw new QuoError(`Quo ${init.method || "GET"} ${path} failed: ${msg}`, res.status, parsed);
+      }
+      return parsed as T;
+    } catch (err) {
+      if (err instanceof QuoError) throw err;
+      lastErr = err;
+      /* A timeout or a dropped socket: retry, unless that was the last go. */
+      if (attempt < maxAttempts - 1) { await sleep(Math.min(8000, 400 * 2 ** attempt)); continue; }
+    } finally {
+      clearTimeout(timer);
     }
-    if (!res.ok) {
-      const msg =
-        (parsed && typeof parsed === "object" && "message" in parsed
-          ? String((parsed as { message: unknown }).message)
-          : "") || `HTTP ${res.status}`;
-      throw new QuoError(`Quo ${init.method || "GET"} ${path} failed: ${msg}`, res.status, parsed);
-    }
-    return parsed as T;
-  } catch (err) {
-    if (err instanceof QuoError) throw err;
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new QuoError(`Quo ${init.method || "GET"} ${path} failed: ${msg}`, 0);
-  } finally {
-    clearTimeout(timer);
   }
+  const msg = lastErr instanceof Error ? lastErr.message : String(lastErr ?? "rate limited");
+  throw new QuoError(`Quo ${init.method || "GET"} ${path} failed after ${maxAttempts} attempts: ${msg}`, 0);
 }
 
 export async function listPhoneNumbers(): Promise<QuoPhoneNumber[]> {
