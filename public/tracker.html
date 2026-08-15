@@ -184,6 +184,22 @@ body.selecting .rec .rsel{display:block}
 .snapl{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .snapn{font-size:23px;font-weight:800;margin-top:5px;line-height:1.1}
 .snapsub{font-size:11px;color:var(--muted);margin-top:2px}
+.snapm{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;color:var(--muted)}
+.snapm b{color:var(--fg);font-weight:700}
+.snapgroup{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  font-weight:800;margin:14px 0 8px}
+.snapgroup:first-child{margin-top:4px}
+.txtabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.txtab{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;
+  padding:4px 11px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit}
+.txtab:hover{color:var(--fg)}
+.txtab.on{background:#0891B2;border-color:#0891B2;color:#fff}
+.fnsrc{font-size:10.5px;color:var(--muted);margin-top:3px}
+.afctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.afseg{display:flex;gap:6px}
+.afdates{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.afdates input{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:6px;
+  padding:3px 6px;font-size:11.5px;font-family:inherit}
 .tag.stagetag{background:rgba(8,145,178,.14);color:#0E7490;font-weight:700}
 .tag.stagetag.none{background:var(--soft);color:var(--muted);font-weight:600}
 [data-theme="dark"] .tag.stagetag{background:rgba(34,211,238,.16);color:#67E8F9}
@@ -336,6 +352,10 @@ body.selecting #bulkBar{display:flex}
   <input class="fdate" type="date" id="fFrom" title="Added on or after" />
   <span style="color:var(--muted)">–</span>
   <input class="fdate" type="date" id="fTo" title="Added on or before" />
+  <span class="flabel">LAST TOUCH</span>
+  <input class="fdate" type="date" id="fIFrom" title="Last interaction on or after" />
+  <span style="color:var(--muted)">–</span>
+  <input class="fdate" type="date" id="fITo" title="Last interaction on or before" />
   <button id="clearF">Clear</button>
   <div id="countLine"></div>
 </div>
@@ -406,7 +426,7 @@ var STALE_DAYS = 14;
 var SIDE   = "buyer";          // which pipeline the board is showing
 var SCHEMA = {statuses:[], buyerStages:[], sellerStages:[]};
 var RECORDS = [];              // everything, unfiltered
-var FILTER  = {status:{}, stage:{}, source:"", assigned:"", from:"", to:"", q:"", contactable:false};
+var FILTER  = {status:{}, stage:{}, source:"", assigned:"", from:"", to:"", ifrom:"", ito:"", q:"", contactable:false};
 /* Most of the imported book is Instagram/TikTok handles with no phone or email.
    The preference sticks, because someone who only ever works the reachable
    people should not have to re-hide the rest on every visit. */
@@ -503,6 +523,8 @@ function stageCounts(){
     if(FILTER.assigned && (rec.assignedTo||"").trim().toLowerCase()!==FILTER.assigned) return;
     if(FILTER.from && ymdOf(rec.addedAt) < FILTER.from) return;
     if(FILTER.to   && ymdOf(rec.addedAt) > FILTER.to)   return;
+    if(FILTER.ifrom && (!rec.lastInteractionAt || ymdOf(rec.lastInteractionAt) < FILTER.ifrom)) return;
+    if(FILTER.ito   && (!rec.lastInteractionAt || ymdOf(rec.lastInteractionAt) > FILTER.ito))   return;
     if(FILTER.q && !matchesQuery(rec)) return;
 
     var staged=false;
@@ -584,6 +606,11 @@ function passes(rec){
   if(FILTER.assigned && (rec.assignedTo||"").trim().toLowerCase()!==FILTER.assigned) return false;
   if(FILTER.from && ymdOf(rec.addedAt) < FILTER.from) return false;
   if(FILTER.to   && ymdOf(rec.addedAt) > FILTER.to)   return false;
+  /* Last interaction: a record nobody has touched has NO date, so it cannot
+     satisfy a "touched since" filter — excluding it is the answer, and it is
+     the whole reason to reach for this filter. */
+  if(FILTER.ifrom && (!rec.lastInteractionAt || ymdOf(rec.lastInteractionAt) < FILTER.ifrom)) return false;
+  if(FILTER.ito   && (!rec.lastInteractionAt || ymdOf(rec.lastInteractionAt) > FILTER.ito))   return false;
   if(FILTER.q && !matchesQuery(rec)) return false;
   return true;
 }
@@ -701,6 +728,8 @@ function passesExceptSide(rec){
   if(FILTER.assigned && (rec.assignedTo||"").trim().toLowerCase()!==FILTER.assigned) return false;
   if(FILTER.from && ymdOf(rec.addedAt) < FILTER.from) return false;
   if(FILTER.to   && ymdOf(rec.addedAt) > FILTER.to)   return false;
+  if(FILTER.ifrom && (!rec.lastInteractionAt || ymdOf(rec.lastInteractionAt) < FILTER.ifrom)) return false;
+  if(FILTER.ito   && (!rec.lastInteractionAt || ymdOf(rec.lastInteractionAt) > FILTER.ito))   return false;
   if(FILTER.q && !matchesQuery(rec)) return false;
   return true;
 }
@@ -759,50 +788,283 @@ function usdShort(n){
   if(n>=1000) return "$"+Math.round(n/1000)+"k";
   return "$"+Math.round(n);
 }
-function snapshotHtml(){
-  const list = TXN || [];
-  const sum = function(a,f){ return a.reduce(function(t,x){ return t+(f(x)||0); },0); };
-  const by = function(s){ return list.filter(function(t){ return t.status===s; }); };
-  const closed = by("closed"), pending = by("pending").concat(by("under_contract")), active = by("active");
-  const thisYear = String(new Date().getFullYear());
-  const closedYtd = closed.filter(function(t){ return String(t.closingDate||"").slice(0,4)===thisYear; });
+/* ================= transaction snapshot =================
+   Rebuilt to the operator's spec: every transaction category tracks the SAME
+   three metrics — unit count, total volume, total GCI — across six stages.
 
-  const asOf = TXN_STATUS && TXN_STATUS.lastImport
-    ? new Date(TXN_STATUS.lastImport.importedAt)
-    : null;
-  const foot = list.length===0
+   The stages are two different questions and the layout says so: CLOSED is
+   money already earned (year to date, and this month), IN PROGRESS is money
+   that has not happened yet. Reporting a pipeline deal in the same block as a
+   closed one is how a board ends up celebrating revenue it has not been paid.
+
+   The deal-type tabs come straight from the transaction store's own dealType
+   vocabulary (buyer / seller / dual / tenant / landlord / referral), so a tab
+   can never filter for a type the data cannot contain. */
+var TXTAB = "all";
+var TX_TABS = [
+  ["all",      "All",              null],
+  ["both",     "Buyers & Sellers", ["buyer","seller","dual"]],
+  ["buyer",    "Buyers only",      ["buyer"]],
+  ["seller",   "Sellers only",     ["seller"]],
+  ["tenlan",   "Tenant & Landlord",["tenant","landlord"]],
+  ["referral", "Referral",         ["referral"]]
+];
+function txTabTypes(key){
+  var row = TX_TABS.find(function(t){ return t[0]===key; });
+  return row ? row[2] : null;
+}
+function txInTab(t){
+  var types = txTabTypes(TXTAB);
+  if(!types) return true;
+  return types.indexOf(String(t.dealType||"").toLowerCase()) >= 0;
+}
+
+/* One metric trio for a set of deals. `priceOf` differs by stage: a closed
+   deal is worth what it sold for, a live one what it is asking. */
+function txMetrics(list){
+  var units = list.length, volume = 0, gci = 0;
+  list.forEach(function(t){
+    var closed = t.status==="closed";
+    var v = closed ? (t.price!=null?t.price:t.listPrice) : (t.listPrice!=null?t.listPrice:t.price);
+    if(typeof v === "number" && isFinite(v)) volume += v;
+    if(typeof t.gci === "number" && isFinite(t.gci)) gci += t.gci;
+  });
+  return { units: units, volume: volume, gci: gci };
+}
+
+function snapshotHtml(){
+  const list = (TXN || []).filter(txInTab);
+  const now = new Date();
+  const thisYear = String(now.getFullYear());
+  const thisMonth = thisYear + "-" + String(now.getMonth()+1).padStart(2,"0");
+  const day = function(t){ return String(t.closingDate||t.closeDate||"").slice(0,10); };
+
+  const closed  = list.filter(function(t){ return t.status==="closed"; });
+  const ytd     = closed.filter(function(t){ return day(t).slice(0,4)===thisYear; });
+  const mtd     = closed.filter(function(t){ return day(t).slice(0,7)===thisMonth; });
+  const byStat  = function(s){ return list.filter(function(t){ return t.status===s; }); };
+  const pending = byStat("pending").concat(byStat("under_contract"));
+
+  const groups = [
+    ["Closed", [
+      ["YTD Closed",  ytd],
+      ["MTD Closed",  mtd]
+    ]],
+    ["In progress", [
+      ["Pending",     pending],
+      ["Active",      byStat("active")],
+      ["Coming Soon", byStat("coming_soon")],
+      ["Pipeline",    byStat("pipeline")]
+    ]]
+  ];
+
+  const tabs = '<div class="txtabs">' + TX_TABS.map(function(t){
+      return '<button class="txtab'+(TXTAB===t[0]?" on":"")+'" data-txtab="'+t[0]+'">'+esc(t[1])+'</button>';
+    }).join("") + '</div>';
+
+  const cell = function(label, rows){
+    const m = txMetrics(rows);
+    return '<div class="snapcell">'+
+      '<div class="snapl">'+esc(label)+'</div>'+
+      '<div class="snapn">'+m.units+'</div>'+
+      '<div class="snapsub">unit'+(m.units===1?"":"s")+'</div>'+
+      '<div class="snapm"><span>Volume</span><b>'+usdShort(m.volume)+'</b></div>'+
+      '<div class="snapm"><span>GCI</span><b>'+usdShort(m.gci)+'</b></div>'+
+    '</div>';
+  };
+
+  const asOf = TXN_STATUS && TXN_STATUS.lastImport ? new Date(TXN_STATUS.lastImport.importedAt) : null;
+  const foot = (TXN||[]).length===0
     ? 'No transactions yet. Brivity has no transaction API, so these arrive by CSV — <b>CRM → Transactions → Import CSV</b>.'
     : (asOf && !isNaN(asOf)
         ? 'As of the import on <b>'+asOf.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})+'</b>'+
-          (TXN_STATUS.manual?(' · '+TXN_STATUS.manual+' entered by hand'):'')+
-          ' — not a live feed.'
+          (TXN_STATUS.manual?(' · '+TXN_STATUS.manual+' entered by hand'):'')+' — not a live feed.'
         : 'Entered by hand — no import has run.');
 
-  const cells = list.length===0 ? '' :
-    '<div class="snapgrid">'+
-      [['Under contract', pending.length, usdShort(sum(pending,function(t){return t.price;}))],
-       ['Active listings', active.length, usdShort(sum(active,function(t){return t.listPrice||t.price;}))],
-       ['Closed '+thisYear, closedYtd.length, usdShort(sum(closedYtd,function(t){return t.price;}))],
-       ['GCI closed '+thisYear, null, usdShort(sum(closedYtd,function(t){return t.gci;}))]
-      ].map(function(c){
-        return '<div class="snapcell"><div class="snapl">'+esc(c[0])+'</div>'+
-          '<div class="snapn">'+(c[1]==null?c[2]:c[1])+'</div>'+
-          '<div class="snapsub">'+(c[1]==null?'gross commission':c[2]+' volume')+'</div></div>';
-      }).join('')+
-    '</div>';
+  const body = (TXN||[]).length===0 ? '' :
+    (list.length===0
+      ? '<div class="colempty">No transactions of this type</div>'
+      : groups.map(function(g){
+          return '<div class="snapgroup">'+esc(g[0])+'</div>'+
+            '<div class="snapgrid">'+g[1].map(function(x){ return cell(x[0], x[1]); }).join("")+'</div>';
+        }).join(""));
 
   return '<section class="col col-wide nodrop">'+
     '<div class="colhead"><span class="cbar" style="background:#0891B2"></span>'+
       '<h3>TRANSACTION SNAPSHOT</h3><span class="cnt">'+list.length+'</span></div>'+
-    '<div class="colbody funnelbody">'+
-      cells+
+    '<div class="colbody funnelbody">'+ tabs + body +
       '<div class="fnfoot">'+foot+'</div>'+
+    '</div></section>';
+}
+
+/* ================= appointment / sales funnel =================
+   The operator's second dashboard: how many people were called, contacted,
+   had an appointment set and held, signed, went pending, and sold.
+
+   EVERY ROW NAMES ITS SOURCE, because these seven numbers do not come from one
+   place and pretending they did would be the lie. Calls and appointments are
+   real dated task records; the rest are tracker pipeline stages. Where a
+   pipeline genuinely has no equivalent stage the row says so instead of
+   quietly reporting zero as if nobody got there.
+
+   The date range reads the stamp on the event itself — when a task was
+   completed, or when a record ENTERED that stage. Records staged before this
+   tracker existed carry no entry stamp, so a narrowed range cannot see them;
+   the footer says how many that is rather than letting them vanish. */
+var APPT_FROM = "", APPT_TO = "", APPT_TASKS = null;
+
+function loadApptTasks(){
+  return api("/api/crm-tasks").then(function(d){
+    APPT_TASKS = (d && d.tasks) || [];
+  }).catch(function(){ APPT_TASKS = []; });
+}
+
+/* buyer|seller|null for a task, via the tracker record that shares its lead. */
+function sideOfLead(leadId){
+  if(!leadId) return null;
+  var rec = RECORDS.find(function(r){ return r.leadId===leadId; });
+  if(!rec) return null;
+  var sides = rec.sides||[];
+  if(sides.length===1) return sides[0];
+  return "both";
+}
+function apptSideOk(side){
+  if(SIDE_FUNNEL==="all") return true;
+  if(side==="both") return true;
+  return side===SIDE_FUNNEL;
+}
+function inApptRange(iso){
+  if(!iso) return false;
+  var d = ymdOf(iso);
+  if(APPT_FROM && d < APPT_FROM) return false;
+  if(APPT_TO   && d > APPT_TO)   return false;
+  return true;
+}
+var SIDE_FUNNEL = "all";
+
+/* Records at or beyond `stageKey` on `side`, respecting the date range via the
+   stage entry stamp. Cumulative, same reasoning as the pipeline funnel. */
+function reachedStage(side, stageKey){
+  var st = stages(side);
+  var target = st.findIndex(function(x){ return x.key===stageKey; });
+  if(target < 0) return { n:0, undated:0, unsupported:true };
+  var idx = {}; st.forEach(function(x,i){ idx[x.key]=i; });
+  var n = 0, undated = 0;
+  RECORDS.forEach(function(r){
+    if((r.sides||[]).indexOf(side) < 0) return;
+    if(!passesExceptSide(r)) return;
+    var k = stageOf(r, side);
+    if(k==null || idx[k]==null || idx[k] < target) return;
+    var meta = (r.stageMeta||{})[side+":"+stageKey];
+    var at = meta && meta.enteredAt;
+    if(APPT_FROM || APPT_TO){
+      if(!at){ undated++; return; }
+      if(!inApptRange(at)) return;
+    }
+    n++;
+  });
+  return { n:n, undated:undated, unsupported:false };
+}
+
+function apptFunnel(){
+  var sides = SIDE_FUNNEL==="all" ? ["buyer","seller"] : [SIDE_FUNNEL];
+  var tasks = APPT_TASKS || [];
+  var undated = 0;
+
+  var taskCount = function(type, mode){
+    var seen = {};
+    tasks.forEach(function(t){
+      if(t.type !== type) return;
+      var when = mode==="completed" ? t.completedAt : t.createdAt;
+      if(mode==="completed" && t.status !== "completed") return;
+      if((APPT_FROM || APPT_TO) && !inApptRange(when)) return;
+      if(!apptSideOk(sideOfLead(t.leadId))) return;
+      seen[t.leadId || ("task:"+t.id)] = true;
+    });
+    return Object.keys(seen).length;
+  };
+
+  var stageSum = function(map){
+    var total = 0, unsupported = [];
+    sides.forEach(function(side){
+      var key = map[side];
+      if(!key){ unsupported.push(side); return; }
+      var r = reachedStage(side, key);
+      total += r.n; undated += r.undated;
+    });
+    return { n: total, unsupported: unsupported };
+  };
+
+  var rows = [
+    { label:"Persons Called",   n: taskCount("call","completed"),
+      src:"completed call tasks" },
+    { label:"Contacted",        v: stageSum({buyer:"contacted", seller:"contacted"}),
+      src:"pipeline stage" },
+    { label:"Appointments Set", n: taskCount("appointment","created"),
+      src:"appointment tasks created" },
+    { label:"Appointments Held",n: taskCount("appointment","completed"),
+      src:"appointment tasks completed" },
+    { label:"Signed",           v: stageSum({buyer:"buyer_rep_signed", seller:"listing_agreement_signed"}),
+      src:"pipeline stage" },
+    { label:"Pending",          v: stageSum({buyer:"under_contract", seller:"under_contract"}),
+      src:"pipeline stage" },
+    { label:"Sold",             v: stageSum({buyer:"closed", seller:"closed"}),
+      src:"pipeline stage" }
+  ].map(function(r){
+    if(r.v){ r.n = r.v.n; r.unsupported = r.v.unsupported; delete r.v; }
+    return r;
+  });
+
+  var top = rows[0].n || rows[1].n || 0;
+  rows.forEach(function(r){ r.pct = top ? Math.min(100, Math.round((r.n/top)*100)) : 0; });
+  return { rows: rows, undated: undated, tasksKnown: APPT_TASKS !== null };
+}
+
+function apptFunnelHtml(){
+  var f = apptFunnel();
+  var color = SIDE_FUNNEL==="seller" ? SIDE_COLOR.seller : (SIDE_FUNNEL==="buyer" ? SIDE_COLOR.buyer : "#0891B2");
+  var controls =
+    '<div class="afctl">'+
+      '<div class="afseg">'+
+        [["all","All"],["buyer","Buyers only"],["seller","Sellers only"]].map(function(x){
+          return '<button class="txtab'+(SIDE_FUNNEL===x[0]?" on":"")+'" data-afside="'+x[0]+'">'+esc(x[1])+'</button>';
+        }).join("")+
+      '</div>'+
+      '<div class="afdates"><span>From</span><input type="date" id="afFrom" value="'+esc(APPT_FROM)+'">'+
+        '<span>to</span><input type="date" id="afTo" value="'+esc(APPT_TO)+'">'+
+        (APPT_FROM||APPT_TO?'<button class="txtab" id="afClear">Clear</button>':'')+'</div>'+
+    '</div>';
+
+  var body = f.rows.map(function(r){
+    var dead = r.unsupported && r.unsupported.length;
+    return '<div class="fnrow'+(r.n?"":" zero")+'">'+
+      '<div class="fnhead"><span class="fnlabel">'+esc(r.label)+'</span>'+
+        '<span class="fnn">'+r.n+'</span><span class="fnpct">'+r.pct+'%</span></div>'+
+      '<div class="fnbar"><i style="width:'+Math.max(r.pct, r.n?1.5:0)+'%;background:'+color+'"></i></div>'+
+      '<div class="fnsrc">'+esc(r.src)+
+        (dead ? ' · no equivalent stage in the '+esc(r.unsupported.join(" and "))+' pipeline' : '')+'</div>'+
+    '</div>';
+  }).join("");
+
+  var notes = [];
+  if(!f.tasksKnown) notes.push("Task data has not loaded, so the call and appointment rows are blank rather than wrong.");
+  if(f.undated) notes.push("<b>"+f.undated+"</b> record"+(f.undated===1?" is":"s are")+
+    " at or past a stage but carry no entry date, so a narrowed date range cannot count them.");
+  notes.push("Calls and appointments come from dated task records; the other rows come from pipeline stages.");
+
+  return '<section class="col col-wide nodrop">'+
+    '<div class="colhead"><span class="cbar" style="background:'+color+'"></span>'+
+      '<h3>APPOINTMENT FUNNEL</h3></div>'+
+    '<div class="colbody funnelbody">'+controls+body+
+      '<div class="fnfoot">'+notes.join(" ")+'</div>'+
     '</div></section>';
 }
 
 function renderFunnel(){
   const b = funnelFor("buyer"), s = funnelFor("seller");
-  document.getElementById("board").innerHTML = funnelHtml(b) + funnelHtml(s) + snapshotHtml();
+  document.getElementById("board").innerHTML =
+    funnelHtml(b) + funnelHtml(s) + apptFunnelHtml() + snapshotHtml();
+  wireFunnelControls();
   document.getElementById("countLine").innerHTML =
     '<b>'+b.total+'</b> buyers · <b>'+s.total+'</b> sellers · '+
     (b.unstaged+s.unstaged)+' unstaged';
@@ -810,6 +1072,20 @@ function renderFunnel(){
   document.getElementById("empty").style.display=none?"flex":"none";
   document.getElementById("boardWrap").style.display=none?"none":"flex";
   syncScrollbar();
+}
+
+/* Re-bound on every paint because the funnel view rebuilds its own markup. */
+function wireFunnelControls(){
+  document.querySelectorAll("[data-txtab]").forEach(function(b){
+    b.onclick=function(){ TXTAB=b.getAttribute("data-txtab"); renderFunnel(); };
+  });
+  document.querySelectorAll("[data-afside]").forEach(function(b){
+    b.onclick=function(){ SIDE_FUNNEL=b.getAttribute("data-afside"); renderFunnel(); };
+  });
+  var f=document.getElementById("afFrom"), t=document.getElementById("afTo"), c=document.getElementById("afClear");
+  if(f) f.onchange=function(){ APPT_FROM=this.value; renderFunnel(); };
+  if(t) t.onchange=function(){ APPT_TO=this.value; renderFunnel(); };
+  if(c) c.onclick=function(){ APPT_FROM=""; APPT_TO=""; renderFunnel(); };
 }
 
 function renderBoard(){
@@ -1141,13 +1417,16 @@ document.getElementById("fSource").onchange=function(){FILTER.source=this.value;
 document.getElementById("fAssigned").onchange=function(){FILTER.assigned=this.value;paintStageChips();renderBoard();};
 document.getElementById("fFrom").onchange=function(){FILTER.from=this.value;paintStageChips();renderBoard();};
 document.getElementById("fTo").onchange=function(){FILTER.to=this.value;paintStageChips();renderBoard();};
+document.getElementById("fIFrom").onchange=function(){FILTER.ifrom=this.value;paintStageChips();renderBoard();};
+document.getElementById("fITo").onchange=function(){FILTER.ito=this.value;paintStageChips();renderBoard();};
 document.getElementById("search").oninput=function(){FILTER.q=this.value.trim();paintStageChips();renderBoard();};
 document.getElementById("clearF").onclick=function(){
-  FILTER={status:{},stage:{},source:"",assigned:"",from:"",to:"",q:"",contactable:false};
+  FILTER={status:{},stage:{},source:"",assigned:"",from:"",to:"",ifrom:"",ito:"",q:"",contactable:false};
   try{ localStorage.setItem(CONTACT_KEY,"0"); }catch(_){}
   paintContactChip();
   document.getElementById("fSource").value="";document.getElementById("fAssigned").value="";
   document.getElementById("fFrom").value="";document.getElementById("fTo").value="";
+  document.getElementById("fIFrom").value="";document.getElementById("fITo").value="";
   document.getElementById("search").value="";
   paintStatusChips();paintStageChips();renderBoard();
 };
@@ -1164,7 +1443,12 @@ document.querySelectorAll("#sideSwitch button").forEach(function(b){
     document.getElementById("selectModeBtn").style.display = SIDE==="funnel" ? "none" : "";
     /* Transactions are only needed by the Funnel view's snapshot, so they are
        fetched on first entry rather than on every tracker load. */
-    if(SIDE==="funnel" && TXN===null) loadTransactionSnapshot().then(renderBoard);
+    if(SIDE==="funnel" && TXN===null){
+      /* Both halves of the dashboard load together: the appointment funnel is
+         built from tasks, the snapshot from transactions, and painting one
+         before the other arrives shows a half-empty board that reads as broken. */
+      Promise.all([loadTransactionSnapshot(), loadApptTasks()]).then(renderBoard);
+    }
     paintBulkStageOptions();
     paintStageChips();         // the stage vocabulary changes with the side
     renderBoard();

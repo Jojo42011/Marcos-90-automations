@@ -513,6 +513,59 @@
   .outcome{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
   .outcome button{border:1px solid var(--line);background:#fff;color:#6b7480;border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer}
   .outcome button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+
+  /* ── Listing Alerts & Market Reports ── */
+  .oa-card{border:1px solid var(--line-2);border-radius:8px;padding:10px 11px;margin-bottom:10px;background:#fff}
+  .oa-top{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+  .oa-name{flex:1;font-weight:700;color:#3f4a55;font-size:12.5px;line-height:1.3}
+  .oa-ic{cursor:pointer;color:#98a2ad;font-size:12px;padding:2px 3px;border-radius:4px}
+  .oa-ic:hover{background:#f1f4f6;color:#4a5560}
+  .oa-row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;color:#8b95a1;font-size:11.5px}
+  .oa-row b{color:#4a5560;font-weight:600}
+  .oa-val{font-size:21px;font-weight:800;color:#2f7d74;margin:2px 0 6px}
+  .oa-adj{font-size:10px;font-weight:700;color:#7a8b96;margin-left:7px;letter-spacing:.05em}
+  .oa-acts{display:flex;gap:6px;margin-top:9px}
+  .oa-ov{display:none;position:fixed;inset:0;background:rgba(20,28,36,.5);z-index:9000;align-items:center;justify-content:center;padding:24px}
+  .oa-modal{background:#fff;border-radius:12px;width:min(980px,100%);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.28)}
+  .oa-head{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line-2)}
+  .oa-head h3{margin:0;flex:1;font-size:16px;color:#3f4a55}
+  .oa-x{border:0;background:none;font-size:24px;line-height:1;color:#98a2ad;cursor:pointer}
+  .oa-body{padding:18px 20px;overflow:auto;flex:1}
+  .oa-foot{display:flex;align-items:center;gap:10px;padding:13px 20px;border-top:1px solid var(--line-2);background:#fafbfc;border-radius:0 0 12px 12px}
+  .oa-cols{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media(max-width:820px){.oa-cols{grid-template-columns:1fr}}
+  .oa-f{margin-bottom:14px}
+  .oa-f>label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#7a8b96;font-weight:700;margin-bottom:5px}
+  .oa-f input[type=text],.oa-f input[type=number],.oa-f input:not([type]),.oa-f select,.oa-f textarea{
+    width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:13px;font-family:inherit;box-sizing:border-box}
+  .oa-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .oa-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;max-height:168px;overflow:auto;
+    border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+  .oa-ck{display:flex;align-items:center;gap:6px;font-size:12.5px;color:#4a5560;cursor:pointer;padding:2px 0}
+  .oa-ck input{accent-color:var(--teal)}
+  .oa-n{color:#b3bcc5;font-size:11px}
+  .oa-req{color:#c0616a;font-weight:600;text-transform:none;letter-spacing:0}
+  .oa-hint{color:#a8b2bb;font-weight:400;text-transform:none;letter-spacing:0}
+  .oa-sml{font-size:11px;color:#7a8b96;margin-bottom:4px}
+  .oa-auto{font-size:18px;font-weight:700;color:#3f4a55;padding-top:2px}
+  .oa-count{font-size:12.5px;font-weight:700;color:var(--teal-strong)}
+  .oa-count.zero{color:#c0616a}
+  .oa-cancel,.oa-alt,.oa-go{border-radius:6px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .oa-cancel{border:1px solid var(--line);background:#fff;color:#6b7480}
+  .oa-alt{border:1px solid var(--teal-pill);background:#fff;color:var(--teal-strong)}
+  .oa-go{border:0;background:var(--teal-pill);color:#fff}
+  .oa-go[disabled],.oa-alt[disabled]{opacity:.6;cursor:default}
+  .oa-note{margin-top:14px;font-size:12px;color:#7a8b96;line-height:1.55;background:#f7f9fa;border-radius:8px;padding:10px 12px}
+  .oa-unav{margin-top:14px;font-size:12px;color:#8a7340;line-height:1.55;background:#fdf8ec;border:1px solid #f0e3c2;border-radius:8px;padding:10px 12px}
+  .oa-unav ul{margin:6px 0 0;padding-left:18px}
+  .oa-live{border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12.5px;color:#6b7480;line-height:1.5}
+  .oa-livehead{font-weight:700;color:#3f4a55;margin-bottom:8px}
+  .oa-livegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+  .oa-livegrid div{background:#f7f9fa;border-radius:6px;padding:8px}
+  .oa-livegrid b{display:block;font-size:15px;color:#3f4a55}
+  .oa-livegrid span{font-size:10.5px;color:#8b95a1}
+  .oa-livebasis{color:#7a8b96}
+  .oa-livenote{margin-top:6px;color:#8a7340}
   .rblock{margin-bottom:20px}
   .rblock h5{font-size:14px;color:#6b7480;font-weight:600;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
   .rbtn{border:1px solid var(--teal);color:var(--teal);background:#fff;border-radius:8px;padding:12px;width:100%;font-weight:700;font-size:12px;letter-spacing:.05em;margin-bottom:10px;cursor:pointer}
@@ -3908,7 +3961,9 @@ function renderLead(){
         '<div class="rblock"><h5>Transactions</h5><div id="ldTxBlk" style="font-size:12.5px"></div></div>'+
         '<div class="rblock"><h5>Tasks <button class="mini-pill" id="ldTaskAdd">+ ADD</button></h5><div id="ldTasksBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
         '<div class="rblock"><h5>Auto Plans <button class="mini-pill" id="ldPlanAdd">+ ADD</button></h5><div id="ldPlansBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
-        '<div class="rblock"><h5>Web Activity <button class="mini-pill">VIEW</button></h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5">See when this contact visits your site and which homes they view.</div></div>'+
+        '<div class="rblock"><h5>Listing Alerts <button class="mini-pill" id="ldAlertAdd">+ ADD</button></h5><div id="ldAlertsBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
+        '<div class="rblock"><h5>Market Reports <button class="mini-pill" id="ldReportAdd">+ ADD</button></h5><div id="ldReportsBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
+        '<div class="rblock"><h5>Web Activity</h5><div id="ldWebActBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
         '<div class="rblock"><h5>Agreements</h5><button class="rbtn">+ BUYER</button><button class="rbtn">+ SELLER</button><button class="rbtn">+ REFERRAL</button></div>'+
         '<div class="rblock"><h5>Appointments <button class="mini-pill">+ ADD</button></h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5">Create an appointment for this contact and assign it to yourself or a teammate.</div></div>'+
         '<div class="rblock" style="margin-bottom:0"><h5>Marketing</h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5;margin-bottom:12px">Send postcards, bifolds, trifolds, and snap packs.</div><button class="rbtn" style="background:var(--teal-pill);color:#fff;border-color:var(--teal-pill)">✉ SEND MAIL</button></div>'+
@@ -3949,7 +4004,7 @@ function renderLead(){
   });
   renderLeadTab(); renderTimeline();
   wireDetailsBlock(l); wireRelationshipsBlock(l); wireAssignBlock(l);
-  paintLeadTx(l); paintLeadTasks(l); paintLeadPlans(l);
+  paintLeadTx(l); paintLeadTasks(l); paintLeadPlans(l); paintLeadOutreach(l);
 }
 
 /* ===== Profile blocks: Details / Relationships / Assigned To / Tasks /
@@ -5267,6 +5322,482 @@ if(typeof paintSortArrows==="function")paintSortArrows();
   document.querySelector('.rail .r[data-view="plansettings"]').addEventListener("click",load);
   window.apReloadPlans=load;
 })();
+
+
+/* ============== Listing Alerts & Market Reports (contact profile) ==========
+   A Listing Alert keeps a buyer engaged between the first conversation and
+   being ready to make an offer; a Market Report does the same for a homeowner
+   who is not shopping. Both run on the live SABOR feed and both report what
+   the contact actually did with the email — which is the point.
+
+   Every control here is backed by real data. The filter groups are built from
+   /api/mls/facets (the vocabulary the board actually uses), so a checkbox can
+   never be offered for something the feed cannot answer, and the fields Brivity
+   shows that SABOR does not publish are listed as unavailable with the reason
+   rather than rendered and silently ignored. ======================== */
+var MLS_FACETS=null, OUTREACH={alerts:[],reports:[],engagement:[],canSendEmail:false,mlsReady:false};
+
+function loadFacets(){
+  if(MLS_FACETS) return Promise.resolve(MLS_FACETS);
+  return fetch(crmApi("/api/mls/facets")).then(function(r){return r.ok?r.json():null;})
+    .then(function(f){ MLS_FACETS=f||{cities:[],postalCodes:[],counties:[],schoolDistricts:[],
+      propertyTypes:[],subTypes:[],statuses:[],stories:[],interiorFeatures:[],exteriorFeatures:[],unavailable:[],total:0};
+      return MLS_FACETS; })
+    .catch(function(){ MLS_FACETS={cities:[],postalCodes:[],counties:[],schoolDistricts:[],propertyTypes:[],
+      subTypes:[],statuses:[],stories:[],interiorFeatures:[],exteriorFeatures:[],unavailable:[],total:0}; return MLS_FACETS; });
+}
+
+function fmtMoneyShort(n){
+  if(n==null||!isFinite(n)) return "—";
+  if(n>=1000000) return "$"+(n/1000000).toFixed(n>=10000000?0:2).replace(/\.00$/,"")+"M";
+  if(n>=1000) return "$"+Math.round(n/1000)+"k";
+  return "$"+Math.round(n);
+}
+function fmtDay(iso){
+  if(!iso) return "—";
+  var d=new Date(iso); if(isNaN(d)) return "—";
+  return (d.getMonth()+1)+"/"+d.getDate()+"/"+d.getFullYear();
+}
+function agoShort(iso){
+  if(!iso) return "Never";
+  var ms=Date.now()-new Date(iso).getTime();
+  if(!isFinite(ms)) return "—";
+  var d=Math.floor(ms/86400000);
+  if(d<=0){ var h=Math.floor(ms/3600000); return h<=0?"Just now":h+"h ago"; }
+  if(d===1) return "Yesterday";
+  if(d<30) return d+" days ago";
+  return fmtDay(iso);
+}
+
+/* ---- the three rail blocks ------------------------------------------- */
+function paintLeadOutreach(l){
+  var a=document.getElementById("ldAlertsBlk"), r=document.getElementById("ldReportsBlk"), w=document.getElementById("ldWebActBlk");
+  if(!a||!r||!w) return;
+  fetch(crmApi("/api/leads/"+encodeURIComponent(l.id)+"/outreach"))
+    .then(function(res){return res.ok?res.json():null;})
+    .then(function(d){
+      if(!d){ a.textContent="Couldn't load alerts."; r.textContent="Couldn't load reports."; w.textContent=""; return; }
+      OUTREACH=d;
+      paintAlertsBlock(l,d); paintReportsBlock(l,d); paintWebActivity(l,d);
+    })
+    .catch(function(){ a.textContent="Couldn't reach the server."; r.textContent=""; w.textContent=""; });
+  var ab=document.getElementById("ldAlertAdd");
+  if(ab) ab.onclick=function(){ openAlertEditor(l,null); };
+  var rb=document.getElementById("ldReportAdd");
+  if(rb) rb.onclick=function(){ openReportEditor(l,null); };
+}
+
+/* The alert card mirrors Brivity's: name, created, live status, frequency,
+   the search terms, and the two criteria an agent actually glances at. */
+function paintAlertsBlock(l,d){
+  var el=document.getElementById("ldAlertsBlk");
+  if(!d.mlsReady){
+    el.innerHTML='<div style="line-height:1.5">The MLS feed is not connected, so listing alerts cannot be created — nothing would match.</div>';
+    return;
+  }
+  if(!d.alerts.length){
+    el.innerHTML='<div style="line-height:1.5">No listing alert yet.'+
+      (l.email?'':' <b>This contact has no email address</b>, so an alert would have nowhere to send.')+'</div>';
+    return;
+  }
+  el.innerHTML=d.alerts.map(function(a){
+    var st=a.paused?'Paused':(a.sendEmail?'Sending email alerts':'Email off');
+    var stc=a.paused?'#b8860b':(a.sendEmail?'var(--teal-strong)':'#98a2ad');
+    return '<div class="oa-card" data-aid="'+esc(a.id)+'">'+
+      '<div class="oa-top"><span class="oa-name">'+esc(a.name)+'</span>'+
+        '<span class="oa-ic" data-aedit="'+esc(a.id)+'" title="Edit">✎</span>'+
+        '<span class="oa-ic" data-adel="'+esc(a.id)+'" title="Delete">🗑</span></div>'+
+      '<div class="oa-row"><span>Created</span><b>'+esc(fmtDay(a.createdAt))+'</b></div>'+
+      '<div class="oa-row"><span>Status</span><b style="color:'+stc+'">'+esc(st)+'</b></div>'+
+      '<div class="oa-row"><span>Frequency</span><b>'+esc(a.frequency.charAt(0).toUpperCase()+a.frequency.slice(1))+'</b></div>'+
+      '<div class="oa-row"><span>Search</span><b style="max-width:150px;text-align:right">'+esc(a.summary)+'</b></div>'+
+      '<div class="oa-row"><span>Matching now</span><b>'+(a.matchesNow==null?"—":a.matchesNow)+'</b></div>'+
+      '<div class="oa-row"><span>Last sent</span><b>'+esc(agoShort(a.lastSentAt))+'</b></div>'+
+      '<div class="oa-acts"><button class="mini-pill" data-asend="'+esc(a.id)+'">SEND NOW</button></div>'+
+    '</div>';
+  }).join("");
+  el.querySelectorAll("[data-aedit]").forEach(function(b){ b.onclick=function(){
+    openAlertEditor(l, d.alerts.find(function(x){return x.id===b.getAttribute("data-aedit");})); };});
+  el.querySelectorAll("[data-adel]").forEach(function(b){ b.onclick=function(){
+    var id=b.getAttribute("data-adel");
+    if(!confirm("Delete this listing alert? The contact stops receiving it.")) return;
+    fetch(crmApi("/api/listing-alerts/"+encodeURIComponent(id)),{method:"DELETE"})
+      .then(function(r){return r.json();}).then(function(){ crmToast("Alert deleted"); paintLeadOutreach(l); })
+      .catch(function(){ crmToast("Couldn't delete that"); });
+  };});
+  el.querySelectorAll("[data-asend]").forEach(function(b){ b.onclick=function(){
+    var id=b.getAttribute("data-asend"); b.disabled=true; b.textContent="SENDING…";
+    fetch(crmApi("/api/listing-alerts/"+encodeURIComponent(id)+"/send"),
+      {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({force:true})})
+      .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+      .then(function(res){
+        b.disabled=false; b.textContent="SEND NOW";
+        /* The transport's own words. "Sent" is only ever said when the mail
+           server accepted the message. */
+        if(!res.ok){ crmToast(res.j.error?("Not sent — "+res.j.error):"Not sent"); return; }
+        if(res.j.skipped==="no_matches"){ crmToast("Nothing on the market matches this alert right now"); return; }
+        crmToast("Sent — "+res.j.listingCount+" home"+(res.j.listingCount===1?"":"s"));
+        paintLeadOutreach(l);
+      })
+      .catch(function(){ b.disabled=false; b.textContent="SEND NOW"; crmToast("Couldn't reach the server"); });
+  };});
+}
+
+function paintReportsBlock(l,d){
+  var el=document.getElementById("ldReportsBlk");
+  if(!d.mlsReady){ el.innerHTML='<div style="line-height:1.5">The MLS feed is not connected, so a market report has nothing to report on.</div>'; return; }
+  if(!d.reports.length){
+    el.innerHTML='<div style="line-height:1.5">No market report yet.'+
+      (l.email?'':' <b>This contact has no email address.</b>')+'</div>';
+    return;
+  }
+  el.innerHTML=d.reports.map(function(m){
+    var val=m.adjustedValue!=null?m.adjustedValue:null;
+    return '<div class="oa-card">'+
+      '<div class="oa-top"><span class="oa-name">'+esc(m.address)+'</span>'+
+        '<span class="oa-ic" data-redit="'+esc(m.id)+'" title="Edit">✎</span>'+
+        '<span class="oa-ic" data-rdel="'+esc(m.id)+'" title="Delete">🗑</span></div>'+
+      (val!=null?'<div class="oa-val">'+esc(fmtMoneyShort(val))+'<span class="oa-adj">Adjusted</span></div>':'')+
+      '<div class="oa-row"><span>Frequency</span><b>'+esc(m.drip?(m.frequency.charAt(0).toUpperCase()+m.frequency.slice(1)):"One-off")+'</b></div>'+
+      '<div class="oa-row"><span>Created</span><b>'+esc(fmtDay(m.createdAt))+'</b></div>'+
+      '<div class="oa-row"><span>Last sent</span><b>'+esc(agoShort(m.lastSentAt))+'</b></div>'+
+      '<div class="oa-row"><span>Last viewed</span><b>'+esc(agoShort(m.lastViewedAt))+'</b></div>'+
+      '<div class="oa-row"><span>Views</span><b>'+(m.viewCount||0)+'</b></div>'+
+      '<div class="oa-acts"><button class="mini-pill" data-rprev="'+esc(m.id)+'">PREVIEW</button>'+
+        '<button class="mini-pill" data-rsend="'+esc(m.id)+'">SEND NOW</button></div>'+
+    '</div>';
+  }).join("");
+  el.querySelectorAll("[data-redit]").forEach(function(b){ b.onclick=function(){
+    openReportEditor(l, d.reports.find(function(x){return x.id===b.getAttribute("data-redit");})); };});
+  el.querySelectorAll("[data-rdel]").forEach(function(b){ b.onclick=function(){
+    if(!confirm("Delete this market report?")) return;
+    fetch(crmApi("/api/market-reports/"+encodeURIComponent(b.getAttribute("data-rdel"))),{method:"DELETE"})
+      .then(function(){ crmToast("Report deleted"); paintLeadOutreach(l); });
+  };});
+  el.querySelectorAll("[data-rprev]").forEach(function(b){ b.onclick=function(){
+    /* The same page the client sees — previewing anything else would be a
+       different document from the one that goes out. */
+    window.open(crmApi("/r/report?id="+encodeURIComponent(b.getAttribute("data-rprev"))),"_blank","noopener");
+  };});
+  el.querySelectorAll("[data-rsend]").forEach(function(b){ b.onclick=function(){
+    var id=b.getAttribute("data-rsend"); b.disabled=true; b.textContent="SENDING…";
+    fetch(crmApi("/api/market-reports/"+encodeURIComponent(id)+"/send"),{method:"POST"})
+      .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+      .then(function(res){ b.disabled=false; b.textContent="SEND NOW";
+        crmToast(res.ok?"Report sent":(res.j.error?("Not sent — "+res.j.error):"Not sent"));
+        if(res.ok) paintLeadOutreach(l); })
+      .catch(function(){ b.disabled=false; b.textContent="SEND NOW"; crmToast("Couldn't reach the server"); });
+  };});
+}
+
+/* Real web activity: what this contact opened and clicked. This block used to
+   be a sentence promising a feature that did not exist. */
+function paintWebActivity(l,d){
+  var el=document.getElementById("ldWebActBlk");
+  var ev=(d.engagement||[]).filter(function(e){return e.event!=="email_opened";});
+  var opens=(d.engagement||[]).filter(function(e){return e.event==="email_opened";}).length;
+  if(!d.engagement.length){
+    el.innerHTML='<div style="line-height:1.5">Nothing yet. Clicks from listing alerts and market-report views show up here.</div>';
+    return;
+  }
+  var label={listing_clicked:"Viewed a listing",report_viewed:"Opened their market report"};
+  el.innerHTML='<div style="margin-bottom:8px;color:#4a5560;font-weight:600">'+
+      ev.length+' action'+(ev.length===1?'':'s')+(opens?(' · '+opens+' email open'+(opens===1?'':'s')):'')+'</div>'+
+    ev.slice(0,8).map(function(e){
+      return '<div style="display:flex;gap:8px;padding:3px 0;line-height:1.4">'+
+        '<span style="color:var(--teal-strong)">•</span>'+
+        '<span style="flex:1">'+esc(label[e.event]||e.event)+
+          (e.listingKey?' <a href="'+esc(crmApi("/l/"+encodeURIComponent(e.listingKey)))+'" target="_blank" rel="noopener" style="color:var(--teal-strong)">#'+esc(e.listingKey)+'</a>':'')+
+        '</span><span style="color:#98a2ad;white-space:nowrap">'+esc(agoShort(e.at))+'</span></div>';
+    }).join("");
+}
+
+/* ---- the builders ----------------------------------------------------- */
+function oaOverlay(title,bodyHtml,footHtml){
+  var ov=document.getElementById("oaOv");
+  if(!ov){
+    ov=document.createElement("div"); ov.id="oaOv"; ov.className="oa-ov";
+    document.body.appendChild(ov);
+    ov.addEventListener("click",function(e){ if(e.target===ov) closeOa(); });
+  }
+  ov.innerHTML='<div class="oa-modal"><div class="oa-head"><h3>'+esc(title)+'</h3>'+
+    '<button class="oa-x" id="oaClose">×</button></div>'+
+    '<div class="oa-body">'+bodyHtml+'</div>'+
+    '<div class="oa-foot">'+footHtml+'</div></div>';
+  ov.style.display="flex";
+  document.getElementById("oaClose").onclick=closeOa;
+  return ov;
+}
+function closeOa(){ var ov=document.getElementById("oaOv"); if(ov) ov.style.display="none"; }
+
+/** min/max number pair */
+function oaRange(label,idMin,idMax,vMin,vMax,step,ph){
+  return '<div class="oa-f"><label>'+esc(label)+'</label><div class="oa-two">'+
+    '<input type="number" id="'+idMin+'" value="'+(vMin==null?"":vMin)+'" placeholder="'+(ph||"No min")+'" step="'+(step||1)+'">'+
+    '<input type="number" id="'+idMax+'" value="'+(vMax==null?"":vMax)+'" placeholder="No max" step="'+(step||1)+'"></div></div>';
+}
+/** A checkbox group built from real facet values, with counts. */
+function oaChecks(id,label,facets,selected,limit){
+  if(!facets||!facets.length) return "";
+  var sel=selected||[];
+  var items=facets.slice(0,limit||24).map(function(f){
+    var on=sel.indexOf(f.value)>=0;
+    return '<label class="oa-ck"><input type="checkbox" data-grp="'+id+'" value="'+esc(f.value)+'"'+(on?" checked":"")+'> '+
+      esc(f.label)+' <span class="oa-n">'+f.count+'</span></label>';
+  }).join("");
+  return '<div class="oa-f"><label>'+esc(label)+'</label><div class="oa-grid" id="'+id+'">'+items+'</div></div>';
+}
+function oaPicked(id){
+  return Array.prototype.slice.call(document.querySelectorAll('[data-grp="'+id+'"]:checked')).map(function(c){return c.value;});
+}
+function oaNum(id){ var el=document.getElementById(id); if(!el) return undefined;
+  var v=parseFloat(el.value); return isFinite(v)?v:undefined; }
+
+function unavailableNote(f){
+  if(!f.unavailable||!f.unavailable.length) return "";
+  return '<div class="oa-unav"><b>Not offered, because this MLS feed does not carry it:</b><ul>'+
+    f.unavailable.map(function(u){return '<li><b>'+esc(u.field)+'</b> — '+esc(u.reason)+'</li>';}).join("")+
+    '</ul></div>';
+}
+
+function openAlertEditor(l,existing){
+  loadFacets().then(function(f){
+    var c=(existing&&existing.criteria)||{};
+    var body=
+      '<div class="oa-cols"><div>'+
+        '<div class="oa-f"><label>Listing alert name <span class="oa-req">required</span></label>'+
+          '<input id="oaName" value="'+esc(existing?existing.name:"")+'" placeholder="e.g. Alamo Ranch 3-bed under $400k"></div>'+
+        '<div class="oa-f"><label>CC another email <span class="oa-hint">optional</span></label>'+
+          '<input id="oaCc" value="'+esc(existing?(existing.cc||""):"")+'" placeholder="spouse@example.com"></div>'+
+        '<div class="oa-f"><label>Email alerts</label>'+
+          '<label class="oa-ck" style="margin:4px 0"><input type="checkbox" id="oaSend"'+(!existing||existing.sendEmail?" checked":"")+'> Send email alerts</label>'+
+          '<select id="oaFreq">'+["daily","weekly","monthly"].map(function(x){
+            return '<option value="'+x+'"'+((existing&&existing.frequency===x)||(!existing&&x==="daily")?" selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("")+'</select></div>'+
+        oaChecks("oaCity","Cities",f.cities,c.cities,18)+
+        oaChecks("oaZip","Postal codes",f.postalCodes,c.postalCodes,24)+
+        oaChecks("oaSd","School districts",f.schoolDistricts,c.schoolDistricts,14)+
+        '<div class="oa-f"><label>Subdivision contains</label><input id="oaSub" value="'+esc((c.subdivisions||[]).join(", "))+'" placeholder="Alamo Ranch"></div>'+
+      '</div><div>'+
+        oaRange("Price","oaPMin","oaPMax",c.minPrice,c.maxPrice,1000,"No min")+
+        oaRange("Bedrooms","oaBMin","oaBMax",c.minBeds,c.maxBeds,1)+
+        oaRange("Bathrooms","oaBaMin","oaBaMax",c.minBaths,c.maxBaths,0.5)+
+        oaRange("Square feet","oaSMin","oaSMax",c.minSqft,c.maxSqft,50)+
+        oaRange("Lot size (acres)","oaLMin","oaLMax",c.minLotSize,c.maxLotSize,0.1)+
+        oaRange("Year built","oaYMin","oaYMax",c.minYearBuilt,c.maxYearBuilt,1)+
+        oaChecks("oaPt","Property type",f.propertyTypes,c.propertyTypes,10)+
+        oaChecks("oaSt","Storeys",f.stories,(c.stories||[]).map(String),6)+
+        '<div class="oa-f"><label>Pool</label><select id="oaPool">'+
+          '<option value="">Doesn\'t matter</option>'+
+          '<option value="y"'+(c.pool===true?" selected":"")+'>Must have a pool</option>'+
+          '<option value="n"'+(c.pool===false?" selected":"")+'>No pool</option></select></div>'+
+        oaChecks("oaIf","Interior features",f.interiorFeatures,c.interiorFeatures,18)+
+        oaChecks("oaEf","Exterior features",f.exteriorFeatures,c.exteriorFeatures,18)+
+        '<label class="oa-ck"><input type="checkbox" id="oaNoPhoto"'+(c.includeWithoutPhotos?" checked":"")+'> Include properties without photos</label>'+
+      '</div></div>'+
+      unavailableNote(f)+
+      '<div class="oa-note">Saving a new alert sends the first email straight away, then it continues on the frequency above.</div>';
+
+    var foot='<div class="oa-count" id="oaCount">—</div>'+
+      '<div style="flex:1"></div><button class="oa-cancel" id="oaCancel">Cancel</button>'+
+      '<button class="oa-go" id="oaSave">'+(existing?"Save changes":"Create alert")+'</button>';
+    oaOverlay(existing?"Edit Listing Alert":"Create New Listing Alert",body,foot);
+    document.getElementById("oaCancel").onclick=closeOa;
+
+    function gather(){
+      var subs=(document.getElementById("oaSub").value||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
+      var poolV=document.getElementById("oaPool").value;
+      return {
+        cities:oaPicked("oaCity"), postalCodes:oaPicked("oaZip"), schoolDistricts:oaPicked("oaSd"),
+        subdivisions:subs,
+        minPrice:oaNum("oaPMin"), maxPrice:oaNum("oaPMax"),
+        minBeds:oaNum("oaBMin"), maxBeds:oaNum("oaBMax"),
+        minBaths:oaNum("oaBaMin"), maxBaths:oaNum("oaBaMax"),
+        minSqft:oaNum("oaSMin"), maxSqft:oaNum("oaSMax"),
+        minLotSize:oaNum("oaLMin"), maxLotSize:oaNum("oaLMax"),
+        minYearBuilt:oaNum("oaYMin"), maxYearBuilt:oaNum("oaYMax"),
+        propertyTypes:oaPicked("oaPt"),
+        stories:oaPicked("oaSt").map(Number).filter(function(n){return isFinite(n);}),
+        pool: poolV==="y"?true:(poolV==="n"?false:undefined),
+        interiorFeatures:oaPicked("oaIf"), exteriorFeatures:oaPicked("oaEf"),
+        includeWithoutPhotos:document.getElementById("oaNoPhoto").checked
+      };
+    }
+    /* Live match count. Brivity's own form refuses to save until the criteria
+       preview returns something; the same rule here, because an alert that
+       matches nothing is a promise to the client that never arrives. */
+    var pTimer=null, lastCount=null;
+    function preview(){
+      var el=document.getElementById("oaCount"); if(!el) return;
+      el.textContent="Counting…"; el.className="oa-count";
+      fetch(crmApi("/api/outreach/preview"),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({criteria:gather()})})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(d){
+          if(!d){ el.textContent="Couldn't count"; return; }
+          lastCount=d.count;
+          el.textContent=d.count+" listing"+(d.count===1?"":"s")+" match right now";
+          el.className="oa-count"+(d.count===0?" zero":"");
+        }).catch(function(){ el.textContent="Couldn't count"; });
+    }
+    document.querySelector(".oa-body").addEventListener("input",function(){ clearTimeout(pTimer); pTimer=setTimeout(preview,350); });
+    document.querySelector(".oa-body").addEventListener("change",function(){ clearTimeout(pTimer); pTimer=setTimeout(preview,120); });
+    preview();
+
+    document.getElementById("oaSave").onclick=function(){
+      var name=(document.getElementById("oaName").value||"").trim();
+      if(!name){ crmToast("Give the alert a name"); return; }
+      if(lastCount===0 && !confirm("Nothing on the board matches these criteria right now. Save it anyway?")) return;
+      var payload={name:name, cc:(document.getElementById("oaCc").value||"").trim(),
+        sendEmail:document.getElementById("oaSend").checked,
+        frequency:document.getElementById("oaFreq").value, criteria:gather()};
+      var btn=this; btn.disabled=true; btn.textContent="Saving…";
+      var url=existing?("/api/listing-alerts/"+encodeURIComponent(existing.id)):("/api/leads/"+encodeURIComponent(l.id)+"/listing-alerts");
+      fetch(crmApi(url),{method:existing?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+        .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+        .then(function(res){
+          btn.disabled=false; btn.textContent=existing?"Save changes":"Create alert";
+          if(!res.ok){ crmToast(res.j.error||"Couldn't save that"); return; }
+          closeOa();
+          /* Saving and SENDING are separate claims — report each honestly. */
+          if(res.j.firstSend && res.j.firstSend.ok===false){
+            crmToast("Alert saved, but the first email did not send: "+(res.j.firstSend.error||"unknown error"));
+          } else if(res.j.firstSend && res.j.firstSend.listingCount){
+            crmToast("Alert created — first email sent with "+res.j.firstSend.listingCount+" home"+(res.j.firstSend.listingCount===1?"":"s"));
+          } else { crmToast(existing?"Alert updated":"Alert created"); }
+          paintLeadOutreach(l);
+        })
+        .catch(function(){ btn.disabled=false; btn.textContent="Save"; crmToast("Couldn't reach the server"); });
+    };
+  });
+}
+
+function openReportEditor(l,existing){
+  loadFacets().then(function(f){
+    var c=(existing&&existing.criteria)||{};
+    var sub=(existing&&existing.subject)||{};
+    var addr=existing?existing.address:(l.address||"");
+    var body=
+      '<div class="oa-cols"><div>'+
+        '<div class="oa-f"><label>Report name <span class="oa-hint">your contact sees this</span></label>'+
+          '<input id="orName" value="'+esc(existing?existing.name:(l.address||""))+'" placeholder="Defaults to the address"></div>'+
+        '<div class="oa-f"><label>Search area / address <span class="oa-req">required</span></label>'+
+          '<input id="orAddr" value="'+esc(addr)+'" placeholder="1450 Kedros, San Antonio, TX 78245"></div>'+
+        '<div class="oa-f"><label>CC another email <span class="oa-hint">optional</span></label>'+
+          '<input id="orCc" value="'+esc(existing?(existing.cc||""):"")+'" placeholder="spouse@example.com"></div>'+
+        '<div class="oa-f"><label>This home <span class="oa-hint">square footage is what makes a value estimate possible</span></label>'+
+          '<div class="oa-two"><input type="number" id="orSqft" value="'+(sub.sqft||"")+'" placeholder="Sq ft">'+
+          '<input type="number" id="orBeds" value="'+(sub.beds||"")+'" placeholder="Beds"></div></div>'+
+        '<div class="oa-f"><label>Home value</label>'+
+          '<label class="oa-ck"><input type="checkbox" id="orInclVal"'+(!existing||existing.includeHomeValue?" checked":"")+'> Include a home value in the report</label>'+
+          '<div class="oa-two" style="margin-top:8px">'+
+            '<div><div class="oa-sml">Comp-based estimate</div><div id="orAuto" class="oa-auto">—</div></div>'+
+            '<div><div class="oa-sml">Adjusted (yours)</div><input type="number" id="orAdj" value="'+(existing&&existing.adjustedValue!=null?existing.adjustedValue:"")+'" placeholder="Leave blank to use the estimate"></div>'+
+          '</div></div>'+
+        '<div class="oa-f"><label>Schedule</label>'+
+          '<label class="oa-ck"><input type="checkbox" id="orDrip"'+(!existing||existing.drip?" checked":"")+'> Send this on a recurring schedule</label>'+
+          '<select id="orFreq" style="margin-top:6px">'+
+            [["monthly","Monthly"],["quarterly","Quarterly"],["semiannual","Twice a year"],["annual","Yearly"]].map(function(x){
+              return '<option value="'+x[0]+'"'+((existing&&existing.frequency===x[0])||(!existing&&x[0]==="quarterly")?" selected":"")+'>'+x[1]+'</option>';}).join("")+
+          '</select></div>'+
+        '<div class="oa-f"><label>Message on the first email <span class="oa-hint">optional</span></label>'+
+          '<textarea id="orMsg" rows="3" placeholder="Check out this market report I put together for your area.">'+esc(existing?(existing.emailMessage||""):"")+'</textarea></div>'+
+      '</div><div>'+
+        oaRange("Price","orPMin","orPMax",c.minPrice,c.maxPrice,1000)+
+        oaRange("Bedrooms","orBMin","orBMax",c.minBeds,c.maxBeds,1)+
+        oaRange("Bathrooms","orBaMin","orBaMax",c.minBaths,c.maxBaths,0.5)+
+        oaRange("Square feet","orSMin","orSMax",c.minSqft,c.maxSqft,50)+
+        oaRange("Year built","orYMin","orYMax",c.minYearBuilt,c.maxYearBuilt,1)+
+        oaChecks("orPt","Property type",f.propertyTypes,c.propertyTypes,10)+
+        '<div class="oa-live" id="orLive">Enter an address to build the report.</div>'+
+      '</div></div>'+
+      '<div class="oa-note">The search area widens automatically — postal code, then city, then county — until it holds at least 15 comparable listings, and the report says which one it used. This MLS feed carries no map coordinates, so the area is set by place rather than by a drawn radius.</div>';
+
+    var foot='<div style="flex:1"></div><button class="oa-cancel" id="orCancel">Cancel</button>'+
+      '<button class="oa-alt" id="orSave">Save &amp; close</button>'+
+      '<button class="oa-go" id="orSend">Save &amp; send now</button>';
+    oaOverlay(existing?"Edit Market Report":"Create Market Report",body,foot);
+    document.getElementById("orCancel").onclick=closeOa;
+
+    function gather(){
+      return {
+        minPrice:oaNum("orPMin"), maxPrice:oaNum("orPMax"),
+        minBeds:oaNum("orBMin"), maxBeds:oaNum("orBMax"),
+        minBaths:oaNum("orBaMin"), maxBaths:oaNum("orBaMax"),
+        minSqft:oaNum("orSMin"), maxSqft:oaNum("orSMax"),
+        minYearBuilt:oaNum("orYMin"), maxYearBuilt:oaNum("orYMax"),
+        propertyTypes:oaPicked("orPt")
+      };
+    }
+    function subject(){ return {sqft:oaNum("orSqft"), beds:oaNum("orBeds")}; }
+
+    var t=null;
+    function live(){
+      var el=document.getElementById("orLive"); if(!el) return;
+      var address=(document.getElementById("orAddr").value||"").trim();
+      if(!address){ el.textContent="Enter an address to build the report."; return; }
+      el.textContent="Building…";
+      fetch(crmApi("/api/market-reports/preview"),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({address:address,criteria:gather(),subject:subject()})})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(d){
+          if(!d||!d.built){ el.textContent="Couldn't build a preview."; return; }
+          var b=d.built;
+          document.getElementById("orAuto").textContent=b.value.estimate!=null?fmtMoneyShort(b.value.estimate):"—";
+          el.innerHTML='<div class="oa-livehead">'+esc(b.area.label)+' · '+b.stats.count+' listing'+(b.stats.count===1?'':'s')+'</div>'+
+            '<div class="oa-livegrid">'+
+              '<div><b>'+esc(fmtMoneyShort(b.stats.medianPrice))+'</b><span>median asking</span></div>'+
+              '<div><b>'+(b.stats.avgPricePerSqft?("$"+b.stats.avgPricePerSqft):"—")+'</b><span>per sqft</span></div>'+
+              '<div><b>'+(b.stats.avgDaysOnMarket!=null?b.stats.avgDaysOnMarket:"—")+'</b><span>days on market</span></div>'+
+            '</div>'+
+            '<div class="oa-livebasis">'+esc(b.value.basis)+'</div>'+
+            (b.notes.length?'<div class="oa-livenote">'+esc(b.notes.join(" "))+'</div>':'');
+        }).catch(function(){ el.textContent="Couldn't build a preview."; });
+    }
+    document.querySelector(".oa-body").addEventListener("input",function(){ clearTimeout(t); t=setTimeout(live,450); });
+    document.querySelector(".oa-body").addEventListener("change",function(){ clearTimeout(t); t=setTimeout(live,150); });
+    live();
+
+    function save(sendNow,btn){
+      var address=(document.getElementById("orAddr").value||"").trim();
+      if(!address){ crmToast("An address is required"); return; }
+      var adj=oaNum("orAdj");
+      var payload={
+        name:(document.getElementById("orName").value||"").trim()||address,
+        address:address, cc:(document.getElementById("orCc").value||"").trim(),
+        frequency:document.getElementById("orFreq").value,
+        drip:document.getElementById("orDrip").checked,
+        includeHomeValue:document.getElementById("orInclVal").checked,
+        adjustedValue:adj===undefined?null:adj,
+        emailMessage:(document.getElementById("orMsg").value||"").trim(),
+        criteria:gather(), subject:subject(), sendNow:sendNow
+      };
+      btn.disabled=true; var old=btn.textContent; btn.textContent="Saving…";
+      var url=existing?("/api/market-reports/"+encodeURIComponent(existing.id)):("/api/leads/"+encodeURIComponent(l.id)+"/market-reports");
+      fetch(crmApi(url),{method:existing?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+        .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+        .then(function(res){
+          btn.disabled=false; btn.textContent=old;
+          if(!res.ok){ crmToast(res.j.error||"Couldn't save that"); return; }
+          var id=(res.j.report&&res.j.report.id)||(existing&&existing.id);
+          if(sendNow && existing && id){
+            return fetch(crmApi("/api/market-reports/"+encodeURIComponent(id)+"/send"),{method:"POST"})
+              .then(function(r2){return r2.json().then(function(j2){return {ok:r2.ok,j:j2};});})
+              .then(function(s){ closeOa(); crmToast(s.ok?"Report sent":("Saved, but not sent — "+(s.j.error||"unknown error"))); paintLeadOutreach(l); });
+          }
+          closeOa();
+          if(res.j.firstSend && res.j.firstSend.ok===false){
+            crmToast("Report saved, but it did not send: "+(res.j.firstSend.error||"unknown error"));
+          } else if(res.j.firstSend && res.j.firstSend.ok){ crmToast("Report sent"); }
+          else crmToast(existing?"Report updated":"Report saved");
+          paintLeadOutreach(l);
+        })
+        .catch(function(){ btn.disabled=false; btn.textContent=old; crmToast("Couldn't reach the server"); });
+    }
+    document.getElementById("orSave").onclick=function(){ save(false,this); };
+    document.getElementById("orSend").onclick=function(){ save(true,this); };
+  });
+}
+
 
 loadLive();
 

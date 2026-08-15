@@ -100,6 +100,7 @@ import {
   chatUnreadCounts,
 } from "./core/teamStore.js";
 import { listTeamMembers } from "./core/teamRoster.js";
+import { publicShell, renderPublicListing, renderPublicReport } from "./core/outreachPublicPages.js";
 import {
   AUTO_PLAN_ROLES,
   MAX_RECURRING_RUNS,
@@ -1514,6 +1515,476 @@ app.post("/api/quo/webhook", express.json({ limit: "256kb" }), async (req, res) 
     res.json({ ok: true });
   } catch (err) {
     res.status(200).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+/* ============ Listing Alerts & Market Reports — client MLS subscriptions ====
+   A Listing Alert keeps a buyer engaged between the first conversation and
+   being ready to write an offer; a Market Report does the same job for a
+   homeowner who is not shopping. Both run off the live SABOR mirror, both send
+   over SMTP, and both log what the contact did with the email — which is the
+   signal the whole feature exists to produce.
+
+   The /r/* routes are PUBLIC by necessity: they are the links and pixel inside
+   an email a client opens outside the CRM. They take an opaque send id, do one
+   narrow thing, and never expose contact data.
+=========================================================================== */
+
+/** Vocabulary the board actually uses — the builders render only what is here. */
+app.get("/api/mls/facets", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { getMlsFacets } = await import("./core/mlsFacets.js");
+  try {
+    res.json(getMlsFacets(req.query.refresh === "1"));
+  } catch (err) {
+    res.status(503).json({ error: (err as Error).message, hint: "The MLS mirror is not readable — check /api/mls/status." });
+  }
+});
+
+/** Live match count + a sample, so criteria are sanity-checked before saving. */
+app.post("/api/outreach/preview", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { countMatching, findMatching, describeCriteria } = await import("./core/listingCriteria.js");
+  const criteria = (req.body?.criteria && typeof req.body.criteria === "object" ? req.body.criteria : {}) as Record<string, unknown>;
+  try {
+    res.json({
+      ok: true,
+      count: countMatching(criteria),
+      summary: describeCriteria(criteria),
+      sample: findMatching(criteria, Math.min(12, Number(req.body?.limit) || 6)),
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* -------------------------------------------------------- listing alerts -- */
+
+/**
+ * Everything the contact profile's right rail needs, in one call: their alerts,
+ * their market reports, and what they have actually DONE with them.
+ *
+ * One endpoint rather than three because the rail paints as a unit — three
+ * round trips would render the blocks at three different moments, and the
+ * engagement feed is meaningless without the subscriptions it refers to.
+ */
+app.get("/api/leads/:id/outreach", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const leadId = String(req.params.id);
+  const { listAlerts, listReports, listSends, engagementForLead } = await import("./core/outreachStore.js");
+  const { countMatching, describeCriteria } = await import("./core/listingCriteria.js");
+  const { isSmtpConfigured } = await import("./integrations/smtp/index.js");
+  let mlsReady = false;
+  try {
+    const { listingCounts } = await import("./core/listingsStore.js");
+    mlsReady = listingCounts().total > 0;
+  } catch { mlsReady = false; }
+  res.json({
+    ok: true,
+    canSendEmail: isSmtpConfigured(),
+    mlsReady,
+    alerts: listAlerts(leadId).map((a) => ({
+      ...a,
+      summary: describeCriteria(a.criteria),
+      matchesNow: mlsReady ? countMatching(a.criteria) : null,
+      sends: listSends(a.id, 5),
+    })),
+    reports: listReports(leadId).map((r) => ({ ...r, sends: listSends(r.id, 5) })),
+    engagement: engagementForLead(leadId, 40),
+  });
+});
+
+app.post("/api/leads/:id/listing-alerts", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const leadId = String(req.params.id);
+  const lead = await getLeadById(leadId);
+  if (!lead) { res.status(404).json({ error: "No such contact" }); return; }
+  const b = (req.body || {}) as Record<string, unknown>;
+  const name = String(b.name || "").trim();
+  if (!name) { res.status(400).json({ error: "A name for the alert is required" }); return; }
+
+  const { insertAlert, newId } = await import("./core/outreachStore.js");
+  const { nextAlertSend, sendAlertNow } = await import("./core/outreachRunner.js");
+  const freq = ["daily", "weekly", "monthly"].includes(String(b.frequency)) ? String(b.frequency) : "daily";
+  const now = new Date().toISOString();
+  const alert = insertAlert({
+    id: newId("la"),
+    leadId,
+    name,
+    cc: typeof b.cc === "string" && b.cc.trim() ? b.cc.trim() : null,
+    sendEmail: b.sendEmail !== false,
+    frequency: freq as "daily" | "weekly" | "monthly",
+    criteria: (b.criteria && typeof b.criteria === "object" ? b.criteria : {}) as Record<string, unknown>,
+    paused: false,
+    createdAt: now,
+    updatedAt: now,
+    lastSentAt: null,
+    nextSendAt: nextAlertSend(freq as "daily" | "weekly" | "monthly"),
+    lastMatchCount: null,
+    createdBy: (await currentSessionUser(req))?.name ?? null,
+  });
+
+  /* Brivity's form promises an immediate first email on save, and the promise
+     is the useful part — the client sees the alert working the same day. It is
+     opt-out rather than silent, and a delivery failure is reported here rather
+     than swallowed, because "saved" and "sent" are different claims. */
+  let firstSend: unknown = null;
+  if (b.sendNow !== false && alert.sendEmail) {
+    firstSend = await sendAlertNow(alert.id, { force: true });
+  }
+  res.status(201).json({ ok: true, alert, firstSend });
+});
+
+app.patch("/api/listing-alerts/:id", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { getAlert, updateAlert } = await import("./core/outreachStore.js");
+  const { nextAlertSend } = await import("./core/outreachRunner.js");
+  const existing = getAlert(String(req.params.id));
+  if (!existing) { res.status(404).json({ error: "No such listing alert" }); return; }
+  const b = (req.body || {}) as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  if (typeof b.name === "string" && b.name.trim()) patch.name = b.name.trim();
+  if ("cc" in b) patch.cc = typeof b.cc === "string" && b.cc.trim() ? b.cc.trim() : null;
+  if (typeof b.sendEmail === "boolean") patch.sendEmail = b.sendEmail;
+  if (typeof b.paused === "boolean") patch.paused = b.paused;
+  if (b.criteria && typeof b.criteria === "object") patch.criteria = b.criteria;
+  if (["daily", "weekly", "monthly"].includes(String(b.frequency))) {
+    patch.frequency = String(b.frequency);
+    /* Changing the cadence has to move the next send, or a switch from monthly
+       to daily would not take effect for another month. */
+    patch.nextSendAt = nextAlertSend(String(b.frequency) as "daily" | "weekly" | "monthly");
+  }
+  res.json({ ok: true, alert: updateAlert(existing.id, patch) });
+});
+
+app.delete("/api/listing-alerts/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { deleteAlert } = await import("./core/outreachStore.js");
+  res.json({ ok: deleteAlert(String(req.params.id)) });
+});
+
+app.post("/api/listing-alerts/:id/send", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { sendAlertNow } = await import("./core/outreachRunner.js");
+  const out = await sendAlertNow(String(req.params.id), { force: req.body?.force !== false });
+  res.status(out.ok ? 200 : 502).json(out);
+});
+
+/* -------------------------------------------------------- market reports -- */
+
+app.post("/api/leads/:id/market-reports", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const leadId = String(req.params.id);
+  const lead = await getLeadById(leadId);
+  if (!lead) { res.status(404).json({ error: "No such contact" }); return; }
+  const b = (req.body || {}) as Record<string, unknown>;
+  const address = String(b.address || lead.address || "").trim();
+  if (!address) { res.status(400).json({ error: "An address for the report is required" }); return; }
+
+  const { insertReport, newId } = await import("./core/outreachStore.js");
+  const { nextReportSend, sendReportNow } = await import("./core/outreachRunner.js");
+  const freq = ["monthly", "quarterly", "semiannual", "annual"].includes(String(b.frequency))
+    ? String(b.frequency) : "quarterly";
+  const drip = b.drip !== false;
+  const now = new Date().toISOString();
+  const report = insertReport({
+    id: newId("mr"),
+    leadId,
+    name: String(b.name || address).trim(),
+    address,
+    cc: typeof b.cc === "string" && b.cc.trim() ? b.cc.trim() : null,
+    frequency: freq as "monthly" | "quarterly" | "semiannual" | "annual",
+    drip,
+    criteria: (b.criteria && typeof b.criteria === "object" ? b.criteria : {}) as Record<string, unknown>,
+    subject: (b.subject && typeof b.subject === "object" ? b.subject : {}) as Record<string, number>,
+    adjustedValue: typeof b.adjustedValue === "number" && Number.isFinite(b.adjustedValue) ? b.adjustedValue : null,
+    includeHomeValue: b.includeHomeValue !== false,
+    emailMessage: typeof b.emailMessage === "string" && b.emailMessage.trim() ? b.emailMessage.trim() : null,
+    paused: false,
+    createdAt: now,
+    updatedAt: now,
+    lastSentAt: null,
+    /* Save & Close schedules the first drip for one interval out; Send Now
+       delivers immediately and starts the clock from today. */
+    nextSendAt: drip ? nextReportSend(freq as "monthly" | "quarterly" | "semiannual" | "annual") : null,
+    lastViewedAt: null,
+    viewCount: 0,
+    createdBy: (await currentSessionUser(req))?.name ?? null,
+  });
+
+  let firstSend: unknown = null;
+  if (b.sendNow === true) firstSend = await sendReportNow(report.id);
+  res.status(201).json({ ok: true, report, firstSend });
+});
+
+app.patch("/api/market-reports/:id", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { getReport, updateReport } = await import("./core/outreachStore.js");
+  const { nextReportSend } = await import("./core/outreachRunner.js");
+  const existing = getReport(String(req.params.id));
+  if (!existing) { res.status(404).json({ error: "No such market report" }); return; }
+  const b = (req.body || {}) as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  if (typeof b.name === "string" && b.name.trim()) patch.name = b.name.trim();
+  if (typeof b.address === "string" && b.address.trim()) patch.address = b.address.trim();
+  if ("cc" in b) patch.cc = typeof b.cc === "string" && b.cc.trim() ? b.cc.trim() : null;
+  if (typeof b.paused === "boolean") patch.paused = b.paused;
+  if (typeof b.includeHomeValue === "boolean") patch.includeHomeValue = b.includeHomeValue;
+  if ("adjustedValue" in b) {
+    patch.adjustedValue = typeof b.adjustedValue === "number" && Number.isFinite(b.adjustedValue) ? b.adjustedValue : null;
+  }
+  if ("emailMessage" in b) patch.emailMessage = typeof b.emailMessage === "string" && b.emailMessage.trim() ? b.emailMessage.trim() : null;
+  if (b.criteria && typeof b.criteria === "object") patch.criteria = b.criteria;
+  if (b.subject && typeof b.subject === "object") patch.subject = b.subject;
+  if (typeof b.drip === "boolean") {
+    patch.drip = b.drip;
+    patch.nextSendAt = b.drip ? nextReportSend(existing.frequency) : null;
+  }
+  if (["monthly", "quarterly", "semiannual", "annual"].includes(String(b.frequency))) {
+    patch.frequency = String(b.frequency);
+    if (patch.drip !== false && existing.drip) {
+      patch.nextSendAt = nextReportSend(String(b.frequency) as "monthly" | "quarterly" | "semiannual" | "annual");
+    }
+  }
+  res.json({ ok: true, report: updateReport(existing.id, patch) });
+});
+
+app.delete("/api/market-reports/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { deleteReport } = await import("./core/outreachStore.js");
+  res.json({ ok: deleteReport(String(req.params.id)) });
+});
+
+/** What the report currently says — the preview, before anything is sent. */
+app.get("/api/market-reports/:id/preview", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { getReport } = await import("./core/outreachStore.js");
+  const { buildMarketReport } = await import("./core/marketReport.js");
+  const { anchorFor } = await import("./core/outreachRunner.js");
+  const report = getReport(String(req.params.id));
+  if (!report) { res.status(404).json({ error: "No such market report" }); return; }
+  try {
+    res.json({
+      ok: true,
+      report,
+      built: buildMarketReport({
+        criteria: report.criteria, anchor: anchorFor(report),
+        subject: report.subject, adjustedValue: report.adjustedValue,
+      }),
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** Build a report from unsaved criteria — powers the modal's live preview. */
+app.post("/api/market-reports/preview", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { buildMarketReport, postalFromAddress, cityFromAddress } = await import("./core/marketReport.js");
+  const b = (req.body || {}) as Record<string, unknown>;
+  const address = String(b.address || "").trim();
+  const criteria = (b.criteria && typeof b.criteria === "object" ? b.criteria : {}) as Record<string, unknown>;
+  try {
+    res.json({
+      ok: true,
+      built: buildMarketReport({
+        criteria,
+        anchor: {
+          postalCode: (criteria as { postalCodes?: string[] }).postalCodes?.[0] || postalFromAddress(address),
+          city: (criteria as { cities?: string[] }).cities?.[0] || (address ? cityFromAddress(address) : null),
+        },
+        subject: (b.subject && typeof b.subject === "object" ? b.subject : {}) as Record<string, number>,
+        adjustedValue: typeof b.adjustedValue === "number" ? b.adjustedValue : null,
+      }),
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.post("/api/market-reports/:id/send", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { sendReportNow } = await import("./core/outreachRunner.js");
+  const out = await sendReportNow(String(req.params.id));
+  res.status(out.ok ? 200 : 502).json(out);
+});
+
+/* ------------------------------------------------------- run + coverage --- */
+
+app.get("/api/outreach/status", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { outreachCounts, hotEngagement } = await import("./core/outreachStore.js");
+  const { listingCounts, lastSuccessfulSync } = await import("./core/listingsStore.js");
+  const { isSmtpConfigured } = await import("./integrations/smtp/index.js");
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  let mls: unknown = null;
+  try { mls = { ...listingCounts(), lastSyncAt: lastSuccessfulSync()?.finishedAt ?? null }; } catch { mls = null; }
+  res.json({
+    ok: true,
+    ...outreachCounts(),
+    canSendEmail: isSmtpConfigured(),
+    mls,
+    engagedLast14Days: hotEngagement(since, 20),
+  });
+});
+
+app.post("/api/outreach/run", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { runOutreach } = await import("./core/outreachRunner.js");
+  res.json(await runOutreach());
+});
+
+/**
+ * The hygiene check Brivity's "Listing Alerts: None Created" filter exists for:
+ * a buyer-intent contact with no alert running is one you are under-serving.
+ */
+app.get("/api/outreach/coverage", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { listAlerts, listReports } = await import("./core/outreachStore.js");
+  const snap = await getDashboardSnapshot();
+  const withAlert = new Set(listAlerts().map((a) => a.leadId));
+  const withReport = new Set(listReports().map((r) => r.leadId));
+  const dead = new Set(["dead", "unresponsive"]);
+  const buyers = snap.leads.filter(
+    (l) => l.crmIntent !== "seller" && !!l.email && !dead.has(String(l.crmStatus || "")),
+  );
+  const sellers = snap.leads.filter(
+    (l) => l.crmIntent === "seller" && !!l.email && !dead.has(String(l.crmStatus || "")),
+  );
+  const brief = (l: { id: string; name: string | null; email?: string | null; crmStatus?: string | null }) =>
+    ({ id: l.id, name: l.name, email: l.email ?? null, status: l.crmStatus ?? null });
+  res.json({
+    ok: true,
+    buyersTotal: buyers.length,
+    buyersWithoutAlert: buyers.filter((l) => !withAlert.has(l.id)).map(brief),
+    sellersTotal: sellers.length,
+    sellersWithoutReport: sellers.filter((l) => !withReport.has(l.id)).map(brief),
+    note: "Contacts with no email address are excluded — an alert with nowhere to send is not a gap this list can close.",
+  });
+});
+
+/* ------------------------------------------------ public tracking links --- */
+
+const TRACKING_PIXEL = Buffer.from(
+  "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64",
+);
+
+/** Open pixel. Always answers with the image, whatever the id turns out to be. */
+app.get("/r/open", async (req, res) => {
+  try {
+    const sendId = String(req.query.s || "");
+    if (sendId) {
+      const { getOutreachDb, markSendOpened } = await import("./core/outreachStore.js");
+      const row = getOutreachDb()
+        .prepare(`SELECT kind, subscription_id, lead_id FROM outreach_sends WHERE id = ?`)
+        .get(sendId) as Record<string, unknown> | undefined;
+      if (row) {
+        markSendOpened(sendId);
+        const { recordEngagement } = await import("./core/outreachStore.js");
+        recordEngagement({
+          kind: row.kind === "report" ? "report" : "alert",
+          subscriptionId: String(row.subscription_id),
+          leadId: String(row.lead_id),
+          event: "email_opened",
+        });
+      }
+    }
+  } catch { /* tracking must never break the image */ }
+  res.setHeader("Content-Type", "image/gif");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.end(TRACKING_PIXEL);
+});
+
+/** Click-through. Logs intent, then sends the client to the listing page. */
+app.get("/r/click", async (req, res) => {
+  const sendId = String(req.query.s || "");
+  const listingKey = String(req.query.l || "");
+  let target = `/l/${encodeURIComponent(listingKey)}`;
+  try {
+    const { getOutreachDb } = await import("./core/outreachStore.js");
+    const { noteEngagement } = await import("./core/outreachRunner.js");
+    const row = getOutreachDb()
+      .prepare(`SELECT kind, subscription_id, lead_id FROM outreach_sends WHERE id = ?`)
+      .get(sendId) as Record<string, unknown> | undefined;
+    if (row && listingKey) {
+      const { getListing } = await import("./core/listingsStore.js");
+      const l = getListing(listingKey);
+      const where = l ? [l.street, l.city].filter(Boolean).join(", ") : listingKey;
+      await noteEngagement({
+        kind: row.kind === "report" ? "report" : "alert",
+        subscriptionId: String(row.subscription_id),
+        leadId: String(row.lead_id),
+        event: "listing_clicked",
+        listingKey,
+        description: `Clicked into ${where} from a ${row.kind === "report" ? "market report" : "listing alert"}`,
+      });
+    }
+  } catch { /* a tracking failure must not strand the client */ }
+  res.redirect(302, target);
+});
+
+/** One-click stop. Pauses rather than deletes, so the agent still sees it. */
+app.get("/r/stop", async (req, res) => {
+  const kind = String(req.query.k || "");
+  const id = String(req.query.id || "");
+  let done = false;
+  try {
+    const { updateAlert, updateReport, getAlert, getReport } = await import("./core/outreachStore.js");
+    if (kind === "alert" && getAlert(id)) { updateAlert(id, { paused: true, sendEmail: false }); done = true; }
+    if (kind === "report" && getReport(id)) { updateReport(id, { paused: true, drip: false }); done = true; }
+  } catch { /* fall through to the honest message */ }
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:12vh auto;padding:0 20px;color:#1F2933;line-height:1.6">
+<h1 style="font-size:22px">${done ? "You're unsubscribed" : "We couldn't find that subscription"}</h1>
+<p style="color:#6B7280">${done
+    ? "You won't get any more of these emails. If you'd still like to hear from Marco directly, just reply to any earlier message."
+    : "That link may have already been used, or the subscription was removed. Reply to any earlier email and Marco will sort it out."}</p>
+</div>`);
+});
+
+/** The full report a client sees from the email. Logs the view. */
+app.get("/r/report", async (req, res) => {
+  const id = String(req.query.id || "");
+  const sendId = String(req.query.s || "");
+  try {
+    const { getReport, updateReport } = await import("./core/outreachStore.js");
+    const { buildMarketReport } = await import("./core/marketReport.js");
+    const { anchorFor, noteEngagement } = await import("./core/outreachRunner.js");
+    const report = getReport(id);
+    if (!report) { res.status(404).send(publicShell("That report is no longer available.", "")); return; }
+    const built = buildMarketReport({
+      criteria: report.criteria, anchor: anchorFor(report),
+      subject: report.subject, adjustedValue: report.adjustedValue, compLimit: 12,
+    });
+    updateReport(report.id, { lastViewedAt: new Date().toISOString(), viewCount: report.viewCount + 1 });
+    await noteEngagement({
+      kind: "report", subscriptionId: report.id, leadId: report.leadId,
+      event: "report_viewed",
+      description: `Opened their market report for ${report.address}`,
+    });
+    void sendId;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.end(renderPublicReport(report, built));
+  } catch (err) {
+    res.status(500).send(publicShell("We couldn't build that report just now.", (err as Error).message));
+  }
+});
+
+/** Public listing page — where an email click-through lands. */
+app.get("/l/:key", async (req, res) => {
+  try {
+    const { getListing } = await import("./core/listingsStore.js");
+    const found = getListing(String(req.params.key));
+    if (!found) {
+      res.status(404).send(publicShell("That home is no longer on the market.",
+        "It may have gone under contract or been withdrawn. Reply to Marco's email and he'll find you something similar."));
+      return;
+    }
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.end(renderPublicListing(found));
+  } catch (err) {
+    res.status(500).send(publicShell("We couldn't load that listing.", (err as Error).message));
   }
 });
 
@@ -13197,6 +13668,11 @@ httpServer.listen(PORT, "0.0.0.0", () => {
       const { scheduleQuoSync } = await import("./core/quoSync.js");
       const { isQuoConfigured, ensureMessageWebhook } = await import("./integrations/quo/index.js");
       scheduleQuoSync(5);
+      /* Listing alerts and market reports. Hourly is fine granularity for
+         day-scale cadences, and it keeps a restart from bunching every alert
+         onto the same minute. */
+      const { scheduleOutreach } = await import("./core/outreachRunner.js");
+      scheduleOutreach(60);
       /* Register the inbound webhook so a text lands in the CRM in seconds
          rather than on the next poll. Idempotent, and failure is survivable —
          the 5-minute poll is the fallback, so this only ever logs. */
