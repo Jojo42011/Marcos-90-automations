@@ -5292,12 +5292,22 @@ app.get("/api/harvey/voice", async (req, res) => {
 
   /* Recommendations matched against the live library BY NAME — a stock voice id
      can differ per account, and offering one that 404s would leave Harvey
-     mute with nothing pointing at the cause. */
-  const byName = new Map(library.map((v) => [v.name.toLowerCase(), v]));
+     mute with nothing pointing at the cause.
+
+     Matching is on the LEADING NAME ONLY. ElevenLabs returns premade voices as
+     "Sarah - Mature, Reassuring, Confident", so an exact-string compare misses
+     every one of them and the picker greys out voices that are in fact right
+     there — which is worse than not matching at all, because it tells the
+     operator a working voice is unavailable. */
+  const leadName = (n: string) => n.split(/\s+[-–—]\s+/)[0].trim().toLowerCase();
+  const byName = new Map(library.map((v) => [leadName(v.name), v]));
   const recommended = RECOMMENDED_VOICES.map((v) => {
-    const live = byName.get(v.name.toLowerCase());
+    const live = byName.get(leadName(v.name));
     return {
-      name: v.name, note: v.note,
+      name: v.name,
+      /* The account's own descriptor beats our note when there is one — it is
+         ElevenLabs' current wording for that voice, not a copy that can rot. */
+      note: live?.name.includes(" - ") ? `${live.name.split(/\s+[-–—]\s+/).slice(1).join(" - ")} — ${v.note}` : v.note,
       id: live?.id || v.id,
       availableOnAccount: library.length ? Boolean(live) : null,
     };

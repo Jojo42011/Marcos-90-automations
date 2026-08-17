@@ -76,13 +76,16 @@ export interface VoiceCandidate {
 }
 
 export const RECOMMENDED_VOICES: VoiceCandidate[] = [
-  { name: "Sarah",     id: "EXAVITQu4vr4xnSDxMaL", note: "Soft, warm, unhurried American. The closest to a calm personal assistant." },
-  { name: "Lily",      id: "pFZP5JQG7iQjIQuC4Bku", note: "Warm British, gentle and clear." },
-  { name: "Charlotte", id: "XB0fDUnXU5powFXDhCwa", note: "Low, smooth, measured." },
-  { name: "Matilda",   id: "XrExE9yKIg1WjnnlVkGX", note: "Friendly and even, a little brighter." },
-  { name: "Brian",     id: "nPczCjzI2devNBz1zQrb", note: "Deep, calm American male. Reassuring rather than commanding." },
-  { name: "George",    id: "JBFqnCBsd6RMkjVDRZzb", note: "Warm, mature British male. Narrator-steady." },
-  { name: "Daniel",    id: "onwK4e9ZLuTAKqWW03F9", note: "Composed British male, news-reader neutral." },
+  { name: "Sarah",  id: "EXAVITQu4vr4xnSDxMaL", note: "Calm and steady without being flat. The closest thing here to a personal assistant." },
+  { name: "River",  id: "SAz9YHcvj6BLoDVoivEZ", note: "Relaxed and neutral. Reads information without performing it." },
+  { name: "Eric",   id: "cjVigY5qzO86Huf0OWal", note: "Smooth and easy to listen to over a long stretch." },
+  { name: "Brian",  id: "nPczCjzI2devNBz1zQrb", note: "Deep and comforting. Reassuring rather than commanding." },
+  { name: "Will",   id: "bIHbv24MWmeRgasZH58o", note: "Unhurried and even-tempered." },
+  { name: "Lily",   id: "pFZP5JQG7iQjIQuC4Bku", note: "Warm and soft-edged, a little more colour." },
+  { name: "Bill",   id: "pqHfZKP75CvOlQylNhV4", note: "Older, measured, unrushed." },
+  /* Kept last on purpose: George is the storyteller-narrator register — the
+     one that reads as "assistant from a film" rather than a real assistant. */
+  { name: "George", id: "JBFqnCBsd6RMkjVDRZzb", note: "Warm British storyteller. The most theatrical of these." },
 ];
 
 /** Where Harvey lands when nothing has been chosen yet. */

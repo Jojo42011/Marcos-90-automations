@@ -39,8 +39,10 @@ const stub = http.createServer((req, res) => {
     if (req.url === "/v1/voices") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ voices: [
-        { voice_id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah", category: "premade", labels: { accent: "american", description: "soft" } },
-        { voice_id: "nPczCjzI2devNBz1zQrb", name: "Brian", category: "premade", labels: { accent: "american" } },
+        /* ElevenLabs returns premade voices with a descriptor appended, which
+           is exactly what broke the first version of the name matching. */
+        { voice_id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah - Mature, Reassuring, Confident", category: "premade" },
+        { voice_id: "nPczCjzI2devNBz1zQrb", name: "Brian - Deep, Resonant and Comforting", category: "premade" },
         { voice_id: "CUSTOM123", name: "Marco Clone", category: "cloned" },
       ] }));
       return;
@@ -189,6 +191,18 @@ try {
     ok("choosing a preset clears a previous hand-tune",
       vp.effectiveDelivery(vp.getVoiceProfile()).stability === 0.55,
       JSON.stringify(vp.effectiveDelivery(vp.getVoiceProfile())));
+  }
+
+  // ---- the picker must not call a present voice "unavailable" -------------
+  {
+    /* The live account returns "Sarah - Mature, Reassuring, Confident". An
+       exact-string compare misses every premade voice and the panel greys them
+       out as missing — telling the operator a working voice cannot be used. */
+    const lead = (n) => n.split(/\s+[-–—]\s+/)[0].trim().toLowerCase();
+    ok("a recommended name matches a descriptor-suffixed account voice",
+      lead("Sarah - Mature, Reassuring, Confident") === lead("Sarah"));
+    ok("and it does not over-match a different voice",
+      lead("Sarah - Mature") !== lead("Sam - Mature"));
   }
 
   ok("a corrupt profile file does not take the voice out",
