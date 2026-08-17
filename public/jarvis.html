@@ -1297,7 +1297,38 @@
       border-color: #0f172a !important;
       font-weight: 600 !important;
     }
-  </style>
+  
+/* ── Harvey voice picker ── */
+.hv-panel{position:fixed;top:0;right:0;width:min(430px,100%);height:100%;z-index:9500;
+  background:#07090d;border-left:1px solid rgba(0,212,255,.25);display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .22s ease;font-family:monospace;color:#cfe6ef}
+.hv-panel.on{transform:translateX(0)}
+.hv-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;
+  border-bottom:1px solid rgba(0,212,255,.2);font-size:11px;letter-spacing:2px;color:#00d4ff}
+.hv-close{background:none;border:0;color:#5d7480;font-size:22px;line-height:1;cursor:pointer}
+.hv-body{flex:1;overflow:auto;padding:14px 16px 30px}
+.hv-sec{font-size:9.5px;letter-spacing:2px;color:#4d6470;margin:18px 0 8px}
+.hv-sec:first-child{margin-top:0}
+.hv-v{border:1px solid rgba(0,212,255,.16);border-radius:3px;padding:10px 11px;margin-bottom:8px;
+  cursor:pointer;transition:border-color .15s,background .15s}
+.hv-v:hover{border-color:rgba(0,212,255,.4);background:rgba(0,212,255,.04)}
+.hv-v.on{border-color:#00d4ff;background:rgba(0,212,255,.09)}
+.hv-vn{font-size:12.5px;color:#e6f6fb;display:flex;align-items:center;gap:8px}
+.hv-vn .tag{font-size:8.5px;letter-spacing:1px;color:#0b1116;background:#00d4ff;padding:2px 5px;border-radius:2px}
+.hv-vd{font-size:10.5px;color:#6f8792;margin-top:4px;line-height:1.5}
+.hv-row{display:flex;gap:7px;margin-top:9px}
+.hv-btn{flex:1;background:transparent;border:1px solid rgba(0,212,255,.3);color:#00d4ff;
+  padding:6px 8px;font-family:monospace;font-size:9.5px;letter-spacing:1px;cursor:pointer;border-radius:2px}
+.hv-btn:hover{background:rgba(0,212,255,.1)}
+.hv-btn.go{background:#00d4ff;color:#061016;border-color:#00d4ff;font-weight:700}
+.hv-btn[disabled]{opacity:.45;cursor:default}
+.hv-note{font-size:10.5px;color:#6f8792;line-height:1.6}
+.hv-warn{font-size:10.5px;color:#e8b464;line-height:1.6;border:1px solid rgba(232,180,100,.3);
+  border-radius:3px;padding:9px 10px;margin-top:10px}
+.hv-cur{font-size:10.5px;color:#00d4ff;border:1px solid rgba(0,212,255,.25);border-radius:3px;
+  padding:9px 10px;line-height:1.6}
+
+</style>
   <!-- Harvey Core renderer: must load before the inline mount below. -->
   <script src="/harvey-core.js"></script>
 </head>
@@ -1336,6 +1367,17 @@
       <div class="mem-body" id="memBody"></div>
     </div>
 
+    <!-- Harvey's voice: audition and switch without a deploy. The stored
+         setting beats ELEVENLABS_VOICE_ID, so what is chosen here is what
+         actually speaks. -->
+    <div class="hv-panel" id="hvPanel" data-force-dark="true" aria-hidden="true">
+      <div class="hv-head">
+        <span>HARVEY · VOICE</span>
+        <button type="button" class="hv-close" id="hvClose" aria-label="Close">×</button>
+      </div>
+      <div class="hv-body" id="hvBody"><div class="hv-note">Loading…</div></div>
+    </div>
+
     <header class="j-topbar">
       <button type="button" class="j-panel-toggle" id="jToggleOps">OPS</button>
       <div class="j-logo">
@@ -1343,6 +1385,11 @@
         <small>AETHON · MARCO PUGA</small>
       </div>
       <div class="j-spacer"></div>
+      <button id="voice-btn" type="button" onclick="openVoicePanel()"
+        style="background:transparent; border:1px solid rgba(0,212,255,0.3);
+               color:#00d4ff; padding:5px 12px; font-family:monospace;
+               font-size:10px; letter-spacing:1px; cursor:pointer; border-radius:2px;
+               margin-right:8px;">VOICE</button>
       <button id="theme-toggle-btn" type="button" onclick="toggleTheme()"
         style="background:transparent; border:1px solid rgba(0,212,255,0.3);
                color:#00d4ff; padding:5px 12px; font-family:monospace;
@@ -3892,6 +3939,169 @@
     document.addEventListener('DOMContentLoaded', initWakeWordFeature);
   </script>
 
-  <script src="/aethon-voice.js"></script>
+  <script src="/aethon-voice.js">
+</script>
+
+  <script>
+/* ================= Harvey's voice ==================================
+   Audition a voice before it becomes the one that speaks, then save it.
+   The chosen voice is stored server-side and beats ELEVENLABS_VOICE_ID, so
+   switching needs no deploy and no secret change. */
+var HV = { data: null, pick: null, preset: null, busy: false };
+
+function openVoicePanel() {
+  var p = document.getElementById("hvPanel");
+  p.classList.add("on"); p.setAttribute("aria-hidden", "false");
+  loadVoicePanel();
+}
+function closeVoicePanel() {
+  var p = document.getElementById("hvPanel");
+  p.classList.remove("on"); p.setAttribute("aria-hidden", "true");
+}
+
+function loadVoicePanel() {
+  var body = document.getElementById("hvBody");
+  body.innerHTML = '<div class="hv-note">Loading…</div>';
+  fetch("/api/harvey/voice")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d) { body.innerHTML = '<div class="hv-note">Could not load the voice settings.</div>'; return; }
+      HV.data = d; HV.pick = d.current.voiceId; HV.preset = d.current.preset;
+      paintVoicePanel();
+    })
+    .catch(function () { body.innerHTML = '<div class="hv-note">Could not reach the server.</div>'; });
+}
+
+function paintVoicePanel() {
+  var d = HV.data, body = document.getElementById("hvBody");
+  if (!d.configured) {
+    body.innerHTML = '<div class="hv-warn">' + esc2(d.hint || "ElevenLabs is not configured.") + '</div>';
+    return;
+  }
+
+  var cur = d.current;
+  var html = '<div class="hv-cur">Speaking now: <b>' + esc2(cur.voiceName) + '</b> · ' + esc2(cur.preset) +
+    '<br>stability ' + cur.delivery.stability + ' · similarity ' + cur.delivery.similarityBoost +
+    (cur.speed ? ' · speed ' + cur.speed : '') + '</div>';
+
+  /* An env-pinned id is worth surfacing: it is no longer in charge, and that
+     is exactly the kind of thing that wastes an hour later. */
+  if (d.envPinned && d.envPinned !== cur.voiceId) {
+    html += '<div class="hv-warn">ELEVENLABS_VOICE_ID is set to <b>' + esc2(d.envPinned) +
+      '</b> but the saved choice wins. Clear the secret if you want the env var back in control.</div>';
+  }
+  if (d.libraryError) {
+    html += '<div class="hv-warn">Could not read the account voice list (' + esc2(d.libraryError) +
+      '). The recommended voices below still work.</div>';
+  }
+
+  html += '<div class="hv-sec">RECOMMENDED FOR AN ASSISTANT</div>';
+  d.recommended.forEach(function (v) {
+    var missing = v.availableOnAccount === false;
+    html += '<div class="hv-v' + (HV.pick === v.id ? ' on' : '') + '" data-vid="' + esc2(v.id) + '"' +
+      (missing ? ' style="opacity:.45"' : '') + '>' +
+      '<div class="hv-vn">' + esc2(v.name) +
+        (HV.pick === v.id ? '<span class="tag">SELECTED</span>' : '') +
+        (missing ? '<span class="hv-vd" style="margin:0">not on this account</span>' : '') + '</div>' +
+      '<div class="hv-vd">' + esc2(v.note) + '</div></div>';
+  });
+
+  var extras = (d.library || []).filter(function (l) {
+    return !d.recommended.some(function (r) { return r.id === l.id; });
+  });
+  if (extras.length) {
+    html += '<div class="hv-sec">EVERYTHING ELSE ON THE ACCOUNT</div>';
+    extras.forEach(function (v) {
+      html += '<div class="hv-v' + (HV.pick === v.id ? ' on' : '') + '" data-vid="' + esc2(v.id) + '">' +
+        '<div class="hv-vn">' + esc2(v.name) +
+          (HV.pick === v.id ? '<span class="tag">SELECTED</span>' : '') + '</div>' +
+        (v.description ? '<div class="hv-vd">' + esc2(v.description) + '</div>' : '') + '</div>';
+    });
+  }
+
+  html += '<div class="hv-sec">DELIVERY</div>';
+  d.presets.forEach(function (p) {
+    html += '<div class="hv-v' + (HV.preset === p.key ? ' on' : '') + '" data-preset="' + esc2(p.key) + '">' +
+      '<div class="hv-vn">' + esc2(p.label) +
+        (HV.preset === p.key ? '<span class="tag">SELECTED</span>' : '') + '</div>' +
+      '<div class="hv-vd">' + esc2(p.note) + '</div></div>';
+  });
+
+  html += '<div class="hv-row">' +
+    '<button class="hv-btn" id="hvPreview">▶ HEAR IT</button>' +
+    '<button class="hv-btn go" id="hvSave">USE THIS VOICE</button></div>' +
+    '<div class="hv-note" style="margin-top:12px">' + esc2(d.modelNote) + '</div>';
+
+  body.innerHTML = html;
+
+  body.querySelectorAll("[data-vid]").forEach(function (el) {
+    el.onclick = function () { HV.pick = el.getAttribute("data-vid"); paintVoicePanel(); };
+  });
+  body.querySelectorAll("[data-preset]").forEach(function (el) {
+    el.onclick = function () { HV.preset = el.getAttribute("data-preset"); paintVoicePanel(); };
+  });
+  document.getElementById("hvPreview").onclick = previewVoice;
+  document.getElementById("hvSave").onclick = saveVoice;
+}
+
+function esc2(v) {
+  return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/* Plays the sample through the same PCM path Harvey's own speech uses, so what
+   you audition is what you will actually hear. */
+function previewVoice() {
+  if (HV.busy) return;
+  var btn = document.getElementById("hvPreview");
+  HV.busy = true; btn.disabled = true; btn.textContent = "…";
+  fetch("/api/harvey/voice/preview", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ voiceId: HV.pick, preset: HV.preset }),
+  })
+    .then(function (r) {
+      if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || "preview failed"); });
+      var rate = parseInt(r.headers.get("X-Sample-Rate") || "24000", 10);
+      return r.arrayBuffer().then(function (buf) { return { buf: buf, rate: rate }; });
+    })
+    .then(function (a) {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: a.rate });
+      var pcm = new Int16Array(a.buf);
+      var f32 = new Float32Array(pcm.length);
+      for (var i = 0; i < pcm.length; i++) f32[i] = pcm[i] / 32768;
+      var ab = ctx.createBuffer(1, f32.length, a.rate);
+      ab.getChannelData(0).set(f32);
+      var src = ctx.createBufferSource();
+      src.buffer = ab; src.connect(ctx.destination); src.start();
+      src.onended = function () { ctx.close().catch(function () {}); };
+    })
+    .catch(function (e) { alert("Couldn't play that voice: " + e.message); })
+    .then(function () { HV.busy = false; btn.disabled = false; btn.textContent = "▶ HEAR IT"; });
+}
+
+function saveVoice() {
+  var btn = document.getElementById("hvSave");
+  btn.disabled = true; btn.textContent = "SAVING…";
+  var all = (HV.data.recommended || []).concat(HV.data.library || []);
+  var chosen = all.find(function (v) { return v.id === HV.pick; });
+  fetch("/api/harvey/voice", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ voiceId: HV.pick, voiceName: chosen ? chosen.name : undefined, preset: HV.preset }),
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      btn.disabled = false; btn.textContent = "USE THIS VOICE";
+      if (!res.ok) { alert(res.j.error || "Could not save that"); return; }
+      HV.data.current = res.j.current;
+      paintVoicePanel();
+    })
+    .catch(function () { btn.disabled = false; btn.textContent = "USE THIS VOICE"; alert("Could not reach the server"); });
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  var c = document.getElementById("hvClose");
+  if (c) c.onclick = closeVoicePanel;
+});
+  </script>
 </body>
 </html>

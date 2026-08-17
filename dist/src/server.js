@@ -301,6 +301,19 @@ function getDiskInfo() {
         return fallback;
     }
 }
+/** Harvey's current speaking voice, for /health. Never throws — a settings
+    read must not be able to take the health endpoint down. */
+function harveyVoiceName() {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { getVoiceProfile } = require("./hull/voice/voiceProfile.js");
+        const p = getVoiceProfile();
+        return `${p.voiceName} · ${p.preset}`;
+    }
+    catch {
+        return null;
+    }
+}
 app.get("/health", async (_req, res) => {
     const apiKeyConfigured = (0, index_js_21.isAnthropicApiKeyConfigured)();
     const openShortsHealth = await (0, index_js_27.checkOpenShortsHealth)().catch(() => ({ running: false }));
@@ -329,7 +342,13 @@ app.get("/health", async (_req, res) => {
                 engine: process.env.DEEPGRAM_API_KEY ? "deepgram-flux" : "none",
                 deepgram_configured: Boolean(process.env.DEEPGRAM_API_KEY?.trim()),
                 brain: "claude",
-                tts: geminiApiKey() ? "gemini" : "none",
+                /* This said "gemini" regardless of what actually speaks. Harvey's TTS
+                   has been ElevenLabs throughout (hull/voice/tts.ts); the label was
+                   left behind by an earlier migration and told anyone reading /health
+                   the wrong thing about which vendor to check when he went quiet. */
+                tts: process.env.ELEVENLABS_API_KEY?.trim() ? "elevenlabs" : "none",
+                elevenlabs_configured: Boolean(process.env.ELEVENLABS_API_KEY?.trim()),
+                voice_name: harveyVoiceName(),
                 gemini_configured: Boolean(geminiApiKey()),
             },
         },
@@ -4708,6 +4727,157 @@ app.post("/api/jarvis/voice", express_1.default.json({ limit: "256kb" }), async 
     }
     finally {
         ttsInFlight--;
+    }
+});
+/* ===================== Harvey's voice =====================================
+   Which voice Harvey speaks in, and how it delivers. Stored rather than
+   env-only, because ELEVENLABS_VOICE_ID is a Fly secret: a code-side default
+   would be silently overridden in production, and choosing a voice is a thing
+   you do by listening a few times, not by redeploying.
+========================================================================== */
+app.get("/api/harvey/voice", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { getVoiceProfile, effectiveDelivery, DELIVERY_PRESETS, RECOMMENDED_VOICES } = await Promise.resolve().then(() => __importStar(require("./hull/voice/voiceProfile.js")));
+    const profile = getVoiceProfile();
+    const configured = Boolean(process.env.ELEVENLABS_API_KEY?.trim());
+    /* The account's real voice list, so the picker offers what actually exists
+       rather than a hard-coded menu that can drift. Failure here is not fatal —
+       the curated shortlist still works. */
+    let library = [];
+    let libraryError = null;
+    if (configured) {
+        try {
+            const r = await fetch("https://api.elevenlabs.io/v1/voices", {
+                headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY.trim() },
+                signal: AbortSignal.timeout(12000),
+            });
+            if (r.ok) {
+                const body = (await r.json());
+                library = (body.voices || []).map((v) => ({
+                    id: String(v.voice_id ?? ""),
+                    name: String(v.name ?? ""),
+                    category: v.category ? String(v.category) : undefined,
+                    description: (v.labels && typeof v.labels === "object")
+                        ? Object.values(v.labels).filter(Boolean).join(", ")
+                        : undefined,
+                })).filter((v) => v.id);
+            }
+            else {
+                libraryError = `ElevenLabs returned ${r.status}`;
+            }
+        }
+        catch (err) {
+            libraryError = err.message;
+        }
+    }
+    /* Recommendations matched against the live library BY NAME — a stock voice id
+       can differ per account, and offering one that 404s would leave Harvey
+       mute with nothing pointing at the cause. */
+    const byName = new Map(library.map((v) => [v.name.toLowerCase(), v]));
+    const recommended = RECOMMENDED_VOICES.map((v) => {
+        const live = byName.get(v.name.toLowerCase());
+        return {
+            name: v.name, note: v.note,
+            id: live?.id || v.id,
+            availableOnAccount: library.length ? Boolean(live) : null,
+        };
+    });
+    res.json({
+        ok: true,
+        configured,
+        hint: configured ? null : "ELEVENLABS_API_KEY is not set — Harvey has no voice until it is.",
+        current: { ...profile, delivery: effectiveDelivery(profile) },
+        envPinned: process.env.ELEVENLABS_VOICE_ID?.trim() || null,
+        presets: Object.entries(DELIVERY_PRESETS).map(([key, p]) => ({ key, label: p.label, note: p.note, delivery: p.delivery })),
+        recommended,
+        library,
+        libraryError,
+        model: process.env.ELEVENLABS_MODEL_ID?.trim() || "eleven_flash_v2_5",
+        modelNote: "Flash v2.5 on purpose: ElevenLabs' more natural v3 model cannot run in real time, and Harvey speaks mid-conversation.",
+    });
+});
+app.put("/api/harvey/voice", express_1.default.json({ limit: "32kb" }), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { setVoiceProfile, effectiveDelivery } = await Promise.resolve().then(() => __importStar(require("./hull/voice/voiceProfile.js")));
+    const { clearTtsCache } = await Promise.resolve().then(() => __importStar(require("./hull/voice/tts.js")));
+    const b = (req.body || {});
+    try {
+        const who = (await currentSessionUser(req))?.name ?? undefined;
+        const profile = setVoiceProfile(b, who);
+        /* Cached lines were rendered in the OLD voice; keeping them would make the
+           change look half-applied for everything Harvey had already said. */
+        clearTtsCache();
+        res.json({ ok: true, current: { ...profile, delivery: effectiveDelivery(profile) } });
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+/**
+ * Speak a sample line in a candidate voice WITHOUT saving it, so a voice can be
+ * auditioned before it becomes the one clients hear.
+ */
+app.post("/api/harvey/voice/preview", express_1.default.json({ limit: "32kb" }), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const key = process.env.ELEVENLABS_API_KEY?.trim();
+    if (!key) {
+        res.status(503).json({ error: "ELEVENLABS_API_KEY is not set" });
+        return;
+    }
+    const b = (req.body || {});
+    const { getVoiceProfile, effectiveDelivery, DELIVERY_PRESETS } = await Promise.resolve().then(() => __importStar(require("./hull/voice/voiceProfile.js")));
+    const { sanitizeForSpeech } = await Promise.resolve().then(() => __importStar(require("./hull/voice/speakNumbers.js")));
+    const current = getVoiceProfile();
+    const voiceId = typeof b.voiceId === "string" && b.voiceId.trim() ? b.voiceId.trim() : current.voiceId;
+    const presetKey = typeof b.preset === "string" && DELIVERY_PRESETS[b.preset] ? b.preset : current.preset;
+    const delivery = (b.delivery && typeof b.delivery === "object")
+        ? { ...effectiveDelivery(current), ...b.delivery }
+        : (DELIVERY_PRESETS[presetKey] || DELIVERY_PRESETS.soothing).delivery;
+    const sample = typeof b.text === "string" && b.text.trim()
+        ? b.text.trim().slice(0, 300)
+        : "Good morning, Marco. You have three showings today, and the Blanco listing just went under contract. Nothing else needs you right now.";
+    const settings = {
+        stability: delivery.stability,
+        similarity_boost: delivery.similarityBoost,
+        style: delivery.style,
+        use_speaker_boost: delivery.speakerBoost,
+    };
+    const speed = Number(b.speed ?? current.speed);
+    if (Number.isFinite(speed))
+        settings.speed = Math.min(1.2, Math.max(0.7, speed));
+    try {
+        const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=pcm_24000`, {
+            method: "POST",
+            headers: { "xi-api-key": key, "Content-Type": "application/json", Accept: "audio/pcm" },
+            signal: AbortSignal.timeout(30000),
+            body: JSON.stringify({
+                text: sanitizeForSpeech(sample),
+                model_id: process.env.ELEVENLABS_MODEL_ID?.trim() || "eleven_flash_v2_5",
+                voice_settings: settings,
+            }),
+        });
+        if (!r.ok) {
+            const detail = await r.text().catch(() => "");
+            res.status(502).json({ error: `ElevenLabs returned ${r.status}`, detail: detail.slice(0, 300) });
+            return;
+        }
+        const pcm = Buffer.from(await r.arrayBuffer());
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("X-Sample-Rate", "24000");
+        res.setHeader("Cache-Control", "no-store");
+        res.status(200).send(pcm);
+    }
+    catch (err) {
+        res.status(502).json({ error: err.message });
     }
 });
 /** Legacy alias — gemini-tts → hull TTS. */
