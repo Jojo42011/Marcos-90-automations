@@ -4,9 +4,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isAnthropicApiKeyConfigured = isAnthropicApiKeyConfigured;
+exports.classifyAnthropicFailure = classifyAnthropicFailure;
+exports.failOpenReport = failOpenReport;
 exports.complete = complete;
 exports.getAnthropicModel = getAnthropicModel;
 exports.classifyNewLeadBuyingIntent = classifyNewLeadBuyingIntent;
+exports.anthropicLiveCheck = anthropicLiveCheck;
 exports.preflightLeadTurnReview = preflightLeadTurnReview;
 exports.sanitizeOpeningReplyAgainstRecentMarco = sanitizeOpeningReplyAgainstRecentMarco;
 exports.sanitizePipelineReplyAgainstRecentMarco = sanitizePipelineReplyAgainstRecentMarco;
@@ -143,6 +146,43 @@ function isAnthropicApiKeyConfigured() {
 function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
+const FAIL_OPEN_LOG = [];
+const FAIL_OPEN_MAX = 200;
+/** Classify why a call failed, because the answers are different per cause. */
+function classifyAnthropicFailure(e) {
+    const status = anthropicHttpStatus(e);
+    const message = e instanceof Error ? e.message : String(e);
+    const lower = message.toLowerCase();
+    let kind = "other";
+    if (status === 401 || status === 403)
+        kind = "auth";
+    else if (lower.includes("credit balance") || lower.includes("billing") || lower.includes("quota"))
+        kind = "credit";
+    else if (status === 429)
+        kind = "rate_limit";
+    else if (status === 529 || status === 503)
+        kind = "overloaded";
+    else if (status === 400)
+        kind = "bad_request";
+    else if (!status)
+        kind = "network";
+    return { kind, status, message };
+}
+function recordFailOpen(e) {
+    const c = classifyAnthropicFailure(e);
+    FAIL_OPEN_LOG.push({ at: new Date().toISOString(), status: c.status, kind: c.kind, message: c.message.slice(0, 300) });
+    if (FAIL_OPEN_LOG.length > FAIL_OPEN_MAX)
+        FAIL_OPEN_LOG.splice(0, FAIL_OPEN_LOG.length - FAIL_OPEN_MAX);
+}
+/** Recent fail-opens, newest first, with a count per cause. */
+function failOpenReport(sinceMinutes = 120) {
+    const cutoff = Date.now() - sinceMinutes * 60_000;
+    const recent = FAIL_OPEN_LOG.filter((e) => new Date(e.at).getTime() >= cutoff);
+    const byKind = {};
+    for (const e of recent)
+        byKind[e.kind] = (byKind[e.kind] || 0) + 1;
+    return { total: recent.length, sinceMinutes, byKind, recent: recent.slice(-25).reverse() };
+}
 function anthropicHttpStatus(e) {
     if (e && typeof e === "object" && "status" in e) {
         const s = e.status;
@@ -215,6 +255,8 @@ async function classifyNewLeadBuyingIntent(message, opts) {
     const client = getClient();
     if (!client) {
         console.warn("[llm] classifyNewLeadBuyingIntent: ANTHROPIC_API_KEY missing — treating as interested");
+        FAIL_OPEN_LOG.push({ at: new Date().toISOString(), status: undefined, kind: "no_api_key",
+            message: "ANTHROPIC_API_KEY is not set" });
         return true;
     }
     const insta = isInstagramPlatform(opts?.platform);
@@ -287,8 +329,35 @@ or
         return true;
     }
     catch (e) {
+        /* Fail-open is deliberate — a real buyer must not be dropped because the
+           API hiccuped — but it is recorded, because from the outside this is
+           indistinguishable from the agent choosing to reply to everyone. */
+        recordFailOpen(e);
         console.warn("[llm] classifyNewLeadBuyingIntent failed — fail-open:", e);
         return true;
+    }
+}
+/**
+ * One minimal live call, purely to answer "is the key actually working?".
+ *
+ * The /health endpoint reports `api_key_configured`, which only says the
+ * variable is set — it has never proved the key can bill a request. An expired
+ * card or an exhausted rate limit looks identical to a healthy system there,
+ * while every intent check quietly fails open behind it.
+ */
+async function anthropicLiveCheck() {
+    const started = Date.now();
+    const client = getClient();
+    if (!client) {
+        return { ok: false, model, latencyMs: 0, kind: "no_api_key", error: "ANTHROPIC_API_KEY is not set" };
+    }
+    try {
+        await client.messages.create({ model, max_tokens: 1, messages: [{ role: "user", content: "ok" }] });
+        return { ok: true, model, latencyMs: Date.now() - started };
+    }
+    catch (e) {
+        const c = classifyAnthropicFailure(e);
+        return { ok: false, model, latencyMs: Date.now() - started, kind: c.kind, status: c.status, error: c.message.slice(0, 400) };
     }
 }
 function formatConversationHistory(c) {

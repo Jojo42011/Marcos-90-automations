@@ -1056,6 +1056,47 @@ app.post("/api/quo/webhook", express_1.default.json({ limit: "256kb" }), async (
    narrow thing, and never expose contact data.
 =========================================================================== */
 /** Vocabulary the board actually uses — the builders render only what is here. */
+/**
+ * Is the DM agent's intent gate actually working?
+ *
+ * WHY THIS EXISTS. `/health` reports `api_key_configured`, which only proves an
+ * environment variable is set — it has never proved the key can bill a call. If
+ * the Anthropic account is rate-limited or out of credit, every call throws,
+ * `classifyNewLeadBuyingIntent` FAILS OPEN by design (so a real buyer is never
+ * dropped), and the agent answers every inbound message regardless of content.
+ * From the outside that is indistinguishable from the agent deciding to reply
+ * to everyone — which is exactly the symptom it produces. This endpoint makes
+ * the difference visible: one real 1-token call, plus the in-memory ledger of
+ * how often the gate has fallen open recently and why.
+ */
+app.get("/api/llm/health", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { anthropicLiveCheck, failOpenReport } = await Promise.resolve().then(() => __importStar(require("./integrations/llm/index.js")));
+    const minutes = Math.min(1440, Math.max(5, Number(req.query.minutes) || 120));
+    const live = await anthropicLiveCheck();
+    const failOpen = failOpenReport(minutes);
+    /* Say plainly what this means for the DM agent, because the number that
+       matters is "is it replying to people it should be ignoring right now". */
+    let verdict;
+    if (live.ok && failOpen.total === 0) {
+        verdict = "Healthy — the intent gate is deciding normally.";
+    }
+    else if (!live.ok) {
+        verdict =
+            `The Anthropic API is FAILING (${live.kind}${live.status ? " / HTTP " + live.status : ""}). ` +
+                `While this lasts the intent gate fails open, so the DM agent replies to every inbound message ` +
+                `that is not caught by the short-message rules — including spam and social chat.`;
+    }
+    else {
+        verdict =
+            `The API answers now, but the gate has fallen open ${failOpen.total} time(s) in the last ${minutes} minutes. ` +
+                `Each of those was a message the agent replied to without judging whether it was a real lead.`;
+    }
+    res.json({ ok: live.ok, verdict, live, failOpen });
+});
 app.get("/api/mls/facets", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
