@@ -248,6 +248,11 @@ async function run(payload, log) {
                 phone_captured_this_turn: false,
                 email_captured_this_turn: false,
             });
+            (0, intentGateLedger_js_1.recordGateDecision)({
+                outcome: "canned_redirect", reason: "denial_of_inquiry", replied: true,
+                platform: payload.platform, channel: payload.commentOrDm,
+                preview: (0, marcoLog_js_1.previewText)(payload.message),
+            });
             return { lead: null, reply: conversationUtils_js_1.DENIAL_OF_INQUIRY_REPLY };
         }
         if (inboundText && (0, conversationUtils_js_1.isRealtorAndRelocating)(inboundText)) {
@@ -259,6 +264,11 @@ async function run(payload, log) {
                 reply_preview: (0, marcoLog_js_1.previewText)(conversationUtils_js_1.REALTOR_RELOCATION_REPLY),
                 phone_captured_this_turn: false,
                 email_captured_this_turn: false,
+            });
+            (0, intentGateLedger_js_1.recordGateDecision)({
+                outcome: "canned_redirect", reason: "realtor_relocation_ask_new_contact", replied: true,
+                platform: payload.platform, channel: payload.commentOrDm,
+                preview: (0, marcoLog_js_1.previewText)(payload.message),
             });
             return { lead: null, reply: conversationUtils_js_1.REALTOR_RELOCATION_REPLY };
         }
@@ -272,6 +282,11 @@ async function run(payload, log) {
                 phone_captured_this_turn: false,
                 email_captured_this_turn: false,
             });
+            (0, intentGateLedger_js_1.recordGateDecision)({
+                outcome: "canned_redirect", reason: "realtor_redirect_new_contact", replied: true,
+                platform: payload.platform, channel: payload.commentOrDm,
+                preview: (0, marcoLog_js_1.previewText)(payload.message),
+            });
             return { lead: null, reply: conversationUtils_js_1.REALTOR_REDIRECT_REPLY };
         }
         if (inboundText && (0, conversationUtils_js_1.isBusinessPitchInquiry)(inboundText)) {
@@ -283,6 +298,11 @@ async function run(payload, log) {
                 reply_preview: (0, marcoLog_js_1.previewText)(prompts_js_1.MARCO_BUSINESS_COLLAB_REPLY),
                 phone_captured_this_turn: false,
                 email_captured_this_turn: false,
+            });
+            (0, intentGateLedger_js_1.recordGateDecision)({
+                outcome: "canned_redirect", reason: "business_pitch_redirect_new_contact", replied: true,
+                platform: payload.platform, channel: payload.commentOrDm,
+                preview: (0, marcoLog_js_1.previewText)(payload.message),
             });
             return { lead: null, reply: prompts_js_1.MARCO_BUSINESS_COLLAB_REPLY };
         }

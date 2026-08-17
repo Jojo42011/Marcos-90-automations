@@ -31,11 +31,19 @@ export type GateOutcome =
   | "fail_open"
   | "skipped_prev_out"
   | "skipped_wave"
-  | "short_circuit";
+  | "short_circuit"
+  /* Replied WITHOUT reaching the gate at all: the pipeline has canned redirects
+     for realtors, business pitches and explicit declines, each of which returns
+     a reply before the gate is consulted. These are working as designed, but
+     they are indistinguishable from a bug to anyone watching the inbox — the
+     agent is visibly answering people who are plainly not buyers. */
+  | "canned_redirect";
 
 export interface GateDecision {
   at: string;
   outcome: GateOutcome;
+  /** For canned redirects, which one — realtor, business pitch, decline. */
+  reason?: string;
   replied: boolean;
   platform: string;
   channel: string;
@@ -71,7 +79,8 @@ export function gateReport(sinceMinutes = 120): GateReport {
   const byOutcome: Record<string, number> = {};
   for (const r of rows) byOutcome[r.outcome] = (byOutcome[r.outcome] || 0) + 1;
   const ungated =
-    (byOutcome.fail_open || 0) + (byOutcome.skipped_prev_out || 0) + (byOutcome.skipped_wave || 0);
+    (byOutcome.fail_open || 0) + (byOutcome.skipped_prev_out || 0) +
+    (byOutcome.skipped_wave || 0) + (byOutcome.canned_redirect || 0);
   return {
     startedAt: STARTED_AT,
     uptimeMinutes: Math.round((Date.now() - new Date(STARTED_AT).getTime()) / 60_000),

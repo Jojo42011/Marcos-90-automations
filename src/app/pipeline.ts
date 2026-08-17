@@ -332,6 +332,11 @@ export async function run(
         phone_captured_this_turn: false,
         email_captured_this_turn: false,
       });
+      recordGateDecision({
+        outcome: "canned_redirect", reason: "denial_of_inquiry", replied: true,
+        platform: payload.platform, channel: payload.commentOrDm,
+        preview: previewText(payload.message),
+      });
       return { lead: null, reply: DENIAL_OF_INQUIRY_REPLY };
     }
 
@@ -344,6 +349,11 @@ export async function run(
         reply_preview: previewText(REALTOR_RELOCATION_REPLY),
         phone_captured_this_turn: false,
         email_captured_this_turn: false,
+      });
+      recordGateDecision({
+        outcome: "canned_redirect", reason: "realtor_relocation_ask_new_contact", replied: true,
+        platform: payload.platform, channel: payload.commentOrDm,
+        preview: previewText(payload.message),
       });
       return { lead: null, reply: REALTOR_RELOCATION_REPLY };
     }
@@ -358,6 +368,11 @@ export async function run(
         phone_captured_this_turn: false,
         email_captured_this_turn: false,
       });
+      recordGateDecision({
+        outcome: "canned_redirect", reason: "realtor_redirect_new_contact", replied: true,
+        platform: payload.platform, channel: payload.commentOrDm,
+        preview: previewText(payload.message),
+      });
       return { lead: null, reply: REALTOR_REDIRECT_REPLY };
     }
 
@@ -370,6 +385,11 @@ export async function run(
         reply_preview: previewText(MARCO_BUSINESS_COLLAB_REPLY),
         phone_captured_this_turn: false,
         email_captured_this_turn: false,
+      });
+      recordGateDecision({
+        outcome: "canned_redirect", reason: "business_pitch_redirect_new_contact", replied: true,
+        platform: payload.platform, channel: payload.commentOrDm,
+        preview: previewText(payload.message),
       });
       return { lead: null, reply: MARCO_BUSINESS_COLLAB_REPLY };
     }

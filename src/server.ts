@@ -1569,6 +1569,15 @@ app.get("/api/llm/health", async (req, res) => {
       `their inbound payload carried a "marco_previous_outbound" value, which skips the gate entirely ` +
       `for TikTok and Instagram DMs. That is a ManyChat flow setting, not a change in this codebase, ` +
       `and it makes the agent reply to every new contact regardless of what they wrote.`;
+  } else if ((gate.byOutcome.canned_redirect || 0) > 0 &&
+             (gate.byOutcome.canned_redirect || 0) >= gate.total / 2) {
+    const byReason: Record<string, number> = {};
+    for (const r of gate.recent) if (r.outcome === "canned_redirect" && r.reason) byReason[r.reason] = (byReason[r.reason] || 0) + 1;
+    verdict =
+      `The API and the gate are both fine. ${gate.byOutcome.canned_redirect} of ${gate.total} inbound messages ` +
+      `got a CANNED REDIRECT — the pipeline answers realtors, business pitches and explicit declines with a fixed ` +
+      `reply before the intent gate is ever consulted. That is by design, but from the inbox it looks exactly like ` +
+      `the agent replying to anybody. Breakdown: ${JSON.stringify(byReason)}.`;
   } else if (failOpen.total > 0) {
     verdict =
       `The API answers now, but the gate fell open ${failOpen.total} time(s) in the last ${minutes} minutes. ` +

@@ -43,7 +43,8 @@ function gateReport(sinceMinutes = 120) {
     const byOutcome = {};
     for (const r of rows)
         byOutcome[r.outcome] = (byOutcome[r.outcome] || 0) + 1;
-    const ungated = (byOutcome.fail_open || 0) + (byOutcome.skipped_prev_out || 0) + (byOutcome.skipped_wave || 0);
+    const ungated = (byOutcome.fail_open || 0) + (byOutcome.skipped_prev_out || 0) +
+        (byOutcome.skipped_wave || 0) + (byOutcome.canned_redirect || 0);
     return {
         startedAt: STARTED_AT,
         uptimeMinutes: Math.round((Date.now() - new Date(STARTED_AT).getTime()) / 60_000),
