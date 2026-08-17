@@ -197,6 +197,10 @@ export interface FailOpenEvent {
 }
 const FAIL_OPEN_LOG: FailOpenEvent[] = [];
 const FAIL_OPEN_MAX = 200;
+/* Monotonic, and deliberately NOT the array length: the array is capped, so
+   once it fills, its length stops moving and a caller comparing before/after
+   would conclude no failure happened. */
+let failOpenTotal = 0;
 
 /** Classify why a call failed, because the answers are different per cause. */
 export function classifyAnthropicFailure(e: unknown): { kind: FailOpenEvent["kind"]; status: number | undefined; message: string } {
@@ -215,19 +219,25 @@ export function classifyAnthropicFailure(e: unknown): { kind: FailOpenEvent["kin
 
 function recordFailOpen(e: unknown): void {
   const c = classifyAnthropicFailure(e);
+  failOpenTotal++;
   FAIL_OPEN_LOG.push({ at: new Date().toISOString(), status: c.status, kind: c.kind, message: c.message.slice(0, 300) });
   if (FAIL_OPEN_LOG.length > FAIL_OPEN_MAX) FAIL_OPEN_LOG.splice(0, FAIL_OPEN_LOG.length - FAIL_OPEN_MAX);
 }
 
+/** Total fail-opens since boot — used to tell a real "yes" from a waved-through one. */
+export function failOpenCount(): number {
+  return failOpenTotal;
+}
+
 /** Recent fail-opens, newest first, with a count per cause. */
 export function failOpenReport(sinceMinutes = 120): {
-  total: number; sinceMinutes: number; byKind: Record<string, number>; recent: FailOpenEvent[];
+  total: number; totalSinceBoot: number; sinceMinutes: number; byKind: Record<string, number>; recent: FailOpenEvent[];
 } {
   const cutoff = Date.now() - sinceMinutes * 60_000;
   const recent = FAIL_OPEN_LOG.filter((e) => new Date(e.at).getTime() >= cutoff);
   const byKind: Record<string, number> = {};
   for (const e of recent) byKind[e.kind] = (byKind[e.kind] || 0) + 1;
-  return { total: recent.length, sinceMinutes, byKind, recent: recent.slice(-25).reverse() };
+  return { total: recent.length, totalSinceBoot: failOpenTotal, sinceMinutes, byKind, recent: recent.slice(-25).reverse() };
 }
 
 function anthropicHttpStatus(e: unknown): number | undefined {
@@ -320,6 +330,7 @@ export async function classifyNewLeadBuyingIntent(
   const client = getClient();
   if (!client) {
     console.warn("[llm] classifyNewLeadBuyingIntent: ANTHROPIC_API_KEY missing — treating as interested");
+    failOpenTotal++;
     FAIL_OPEN_LOG.push({ at: new Date().toISOString(), status: undefined, kind: "no_api_key",
       message: "ANTHROPIC_API_KEY is not set" });
     return true;

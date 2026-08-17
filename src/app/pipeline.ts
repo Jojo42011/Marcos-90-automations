@@ -10,6 +10,7 @@ import { process as commentDmMonitorProcess } from "../modules/01-comment-dm-mon
 import { process as brivitySyncProcess } from "../modules/08-brivity-auto-sync";
 import {
   classifyNewLeadBuyingIntent,
+  failOpenCount,
   generateMarcoPipelineReply,
   preflightLeadTurnReview,
   sanitizeOpeningReplyAgainstRecentMarco,
@@ -87,6 +88,7 @@ import {
   previewText,
   type MarcoLogContext,
 } from "./marcoLog.js";
+import { recordGateDecision, type GateOutcome } from "./intentGateLedger.js";
 
 export interface PipelineResult {
   reply: string | null;
@@ -378,8 +380,23 @@ export async function run(
         (payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm"));
 
     let interested: boolean;
+    /* Every branch is recorded, not just logged, so "why is it replying to
+       everyone?" can be answered without host log access — the three ways this
+       gate can wave a message through are indistinguishable in the reply itself. */
+    const noteGate = (outcome: GateOutcome, replied: boolean) =>
+      recordGateDecision({
+        outcome, replied,
+        platform: payload.platform,
+        channel: payload.commentOrDm,
+        preview: previewText(payload.message),
+      });
+
     if (skipIntentGateTiktokManualOpener) {
       interested = true;
+      /* NOTE: despite the name this covers Instagram DMs too, and it is driven
+         entirely by a `marco_previous_outbound` value in the inbound payload —
+         so a ManyChat flow change alone can disable the gate for every DM. */
+      noteGate("skipped_prev_out", true);
       marcoLog("intent_gate_skipped", {
         requestId,
         correlationId,
@@ -388,6 +405,7 @@ export async function run(
       });
     } else if (isWaveOnlyMessage(payload.message.trim())) {
       interested = true;
+      noteGate("skipped_wave", true);
       marcoLog("intent_gate", {
         requestId,
         correlationId,
@@ -396,14 +414,20 @@ export async function run(
         message_preview: previewText(payload.message),
       });
     } else {
+      const failOpensBefore = failOpenCount();
       interested = await classifyNewLeadBuyingIntent(payload.message, {
         channel: payload.commentOrDm,
         platform: payload.platform,
       });
+      /* A fail-open returns the same `true` a genuine yes does; the only way to
+         tell them apart is whether the failure ledger moved during the call. */
+      const failedOpen = failOpenCount() > failOpensBefore;
+      noteGate(failedOpen ? "fail_open" : interested ? "allowed_by_model" : "rejected_by_model", interested);
       marcoLog("intent_gate", {
         requestId,
         correlationId,
         interested,
+        fail_open: failedOpen,
         message_preview: previewText(payload.message),
       });
     }

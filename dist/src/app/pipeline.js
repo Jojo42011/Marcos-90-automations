@@ -48,6 +48,7 @@ const funnelDeterministic_js_1 = require("./funnelDeterministic.js");
 const prompts_js_1 = require("../../config/prompts.js");
 const conversationUtils_js_1 = require("./conversationUtils.js");
 const marcoLog_js_1 = require("./marcoLog.js");
+const intentGateLedger_js_1 = require("./intentGateLedger.js");
 /**
  * Out-of-state referral handling. `handled: false` continues the normal funnel.
  */
@@ -289,8 +290,21 @@ async function run(payload, log) {
             (payload.platform.toLowerCase().includes("tik") ||
                 (payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm"));
         let interested;
+        /* Every branch is recorded, not just logged, so "why is it replying to
+           everyone?" can be answered without host log access — the three ways this
+           gate can wave a message through are indistinguishable in the reply itself. */
+        const noteGate = (outcome, replied) => (0, intentGateLedger_js_1.recordGateDecision)({
+            outcome, replied,
+            platform: payload.platform,
+            channel: payload.commentOrDm,
+            preview: (0, marcoLog_js_1.previewText)(payload.message),
+        });
         if (skipIntentGateTiktokManualOpener) {
             interested = true;
+            /* NOTE: despite the name this covers Instagram DMs too, and it is driven
+               entirely by a `marco_previous_outbound` value in the inbound payload —
+               so a ManyChat flow change alone can disable the gate for every DM. */
+            noteGate("skipped_prev_out", true);
             (0, marcoLog_js_1.marcoLog)("intent_gate_skipped", {
                 requestId,
                 correlationId,
@@ -300,6 +314,7 @@ async function run(payload, log) {
         }
         else if ((0, conversationUtils_js_1.isWaveOnlyMessage)(payload.message.trim())) {
             interested = true;
+            noteGate("skipped_wave", true);
             (0, marcoLog_js_1.marcoLog)("intent_gate", {
                 requestId,
                 correlationId,
@@ -309,14 +324,20 @@ async function run(payload, log) {
             });
         }
         else {
+            const failOpensBefore = (0, llm_1.failOpenCount)();
             interested = await (0, llm_1.classifyNewLeadBuyingIntent)(payload.message, {
                 channel: payload.commentOrDm,
                 platform: payload.platform,
             });
+            /* A fail-open returns the same `true` a genuine yes does; the only way to
+               tell them apart is whether the failure ledger moved during the call. */
+            const failedOpen = (0, llm_1.failOpenCount)() > failOpensBefore;
+            noteGate(failedOpen ? "fail_open" : interested ? "allowed_by_model" : "rejected_by_model", interested);
             (0, marcoLog_js_1.marcoLog)("intent_gate", {
                 requestId,
                 correlationId,
                 interested,
+                fail_open: failedOpen,
                 message_preview: (0, marcoLog_js_1.previewText)(payload.message),
             });
         }

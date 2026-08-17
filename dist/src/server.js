@@ -1075,27 +1075,51 @@ app.get("/api/llm/health", async (req, res) => {
         return;
     }
     const { anthropicLiveCheck, failOpenReport } = await Promise.resolve().then(() => __importStar(require("./integrations/llm/index.js")));
+    const { gateReport } = await Promise.resolve().then(() => __importStar(require("./app/intentGateLedger.js")));
     const minutes = Math.min(1440, Math.max(5, Number(req.query.minutes) || 120));
     const live = await anthropicLiveCheck();
     const failOpen = failOpenReport(minutes);
-    /* Say plainly what this means for the DM agent, because the number that
-       matters is "is it replying to people it should be ignoring right now". */
+    const gate = gateReport(minutes);
+    /* Say plainly what this means for the DM agent. There are THREE ways it can
+       reply without judging the message, and they need different answers, so the
+       verdict names which one is actually happening. */
+    const skipped = gate.byOutcome.skipped_prev_out || 0;
     let verdict;
-    if (live.ok && failOpen.total === 0) {
-        verdict = "Healthy — the intent gate is deciding normally.";
-    }
-    else if (!live.ok) {
+    if (!live.ok) {
         verdict =
             `The Anthropic API is FAILING (${live.kind}${live.status ? " / HTTP " + live.status : ""}). ` +
-                `While this lasts the intent gate fails open, so the DM agent replies to every inbound message ` +
-                `that is not caught by the short-message rules — including spam and social chat.`;
+                `While this lasts the intent gate fails open, so the agent replies to every new contact whose ` +
+                `message is not caught by the deterministic short-message rules — spam and social chat included.`;
+    }
+    else if (skipped > 0 && skipped >= gate.total / 2) {
+        verdict =
+            `The API is fine, but the intent gate was BYPASSED on ${skipped} of ${gate.total} new contacts — ` +
+                `their inbound payload carried a "marco_previous_outbound" value, which skips the gate entirely ` +
+                `for TikTok and Instagram DMs. That is a ManyChat flow setting, not a change in this codebase, ` +
+                `and it makes the agent reply to every new contact regardless of what they wrote.`;
+    }
+    else if (failOpen.total > 0) {
+        verdict =
+            `The API answers now, but the gate fell open ${failOpen.total} time(s) in the last ${minutes} minutes. ` +
+                `Each was a new contact the agent replied to without judging whether they were a real lead.`;
+    }
+    else if (gate.total === 0) {
+        verdict =
+            `No new contacts have hit the gate in the last ${minutes} minutes (process has been up ` +
+                `${gate.uptimeMinutes} min). Nothing to judge yet — this is not evidence either way.`;
     }
     else {
-        verdict =
-            `The API answers now, but the gate has fallen open ${failOpen.total} time(s) in the last ${minutes} minutes. ` +
-                `Each of those was a message the agent replied to without judging whether it was a real lead.`;
+        verdict = `Healthy — the gate judged ${gate.total} new contact(s) and rejected ${gate.byOutcome.rejected_by_model || 0}.`;
     }
-    res.json({ ok: live.ok, verdict, live, failOpen });
+    res.json({
+        ok: live.ok && skipped === 0 && failOpen.total === 0,
+        verdict,
+        live,
+        gate,
+        failOpen,
+        note: "Both ledgers are in-memory and reset on deploy, so a zero here means nothing if uptimeMinutes is small. " +
+            "The gate only runs for NEW contacts; an existing conversation always gets a reply by design.",
+    });
 });
 app.get("/api/mls/facets", async (req, res) => {
     if (!dashboardTokenOk(req)) {

@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isAnthropicApiKeyConfigured = isAnthropicApiKeyConfigured;
 exports.classifyAnthropicFailure = classifyAnthropicFailure;
+exports.failOpenCount = failOpenCount;
 exports.failOpenReport = failOpenReport;
 exports.complete = complete;
 exports.getAnthropicModel = getAnthropicModel;
@@ -148,6 +149,10 @@ function sleep(ms) {
 }
 const FAIL_OPEN_LOG = [];
 const FAIL_OPEN_MAX = 200;
+/* Monotonic, and deliberately NOT the array length: the array is capped, so
+   once it fills, its length stops moving and a caller comparing before/after
+   would conclude no failure happened. */
+let failOpenTotal = 0;
 /** Classify why a call failed, because the answers are different per cause. */
 function classifyAnthropicFailure(e) {
     const status = anthropicHttpStatus(e);
@@ -170,9 +175,14 @@ function classifyAnthropicFailure(e) {
 }
 function recordFailOpen(e) {
     const c = classifyAnthropicFailure(e);
+    failOpenTotal++;
     FAIL_OPEN_LOG.push({ at: new Date().toISOString(), status: c.status, kind: c.kind, message: c.message.slice(0, 300) });
     if (FAIL_OPEN_LOG.length > FAIL_OPEN_MAX)
         FAIL_OPEN_LOG.splice(0, FAIL_OPEN_LOG.length - FAIL_OPEN_MAX);
+}
+/** Total fail-opens since boot — used to tell a real "yes" from a waved-through one. */
+function failOpenCount() {
+    return failOpenTotal;
 }
 /** Recent fail-opens, newest first, with a count per cause. */
 function failOpenReport(sinceMinutes = 120) {
@@ -181,7 +191,7 @@ function failOpenReport(sinceMinutes = 120) {
     const byKind = {};
     for (const e of recent)
         byKind[e.kind] = (byKind[e.kind] || 0) + 1;
-    return { total: recent.length, sinceMinutes, byKind, recent: recent.slice(-25).reverse() };
+    return { total: recent.length, totalSinceBoot: failOpenTotal, sinceMinutes, byKind, recent: recent.slice(-25).reverse() };
 }
 function anthropicHttpStatus(e) {
     if (e && typeof e === "object" && "status" in e) {
@@ -255,6 +265,7 @@ async function classifyNewLeadBuyingIntent(message, opts) {
     const client = getClient();
     if (!client) {
         console.warn("[llm] classifyNewLeadBuyingIntent: ANTHROPIC_API_KEY missing — treating as interested");
+        failOpenTotal++;
         FAIL_OPEN_LOG.push({ at: new Date().toISOString(), status: undefined, kind: "no_api_key",
             message: "ANTHROPIC_API_KEY is not set" });
         return true;
