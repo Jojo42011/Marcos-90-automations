@@ -284,7 +284,8 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "browser_scroll",
     description:
-      "Scroll Harvey's tab. Use before reading a search-results page: portals lazy-load listings as you scroll, so a plain read only sees the first few. Defaults to stepping to the bottom until the page stops growing.",
+      "Scroll Harvey's tab. Use before reading a search-results page: portals lazy-load listings as you scroll, so a plain read only sees the first few. " +
+      "Finds whatever actually scrolls — most portals scroll an inner results pane, not the window — and reports whether the content GREW. If it grew, read again; if it says the page does not scroll, that is the whole list and there is no more to fetch.",
     input_schema: {
       type: "object",
       properties: { to: { type: "string", description: '"bottom" (default), "top", or a pixel number.' } },
@@ -308,13 +309,64 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
+    name: "browser_tabs",
+    description:
+      "List the tabs Harvey currently has open. Use before working across several sites, and to find the tabId of a tab you opened earlier or the operator dragged into Harvey's group.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "browser_open_tab",
+    description:
+      "Open a URL in an ADDITIONAL tab, keeping the ones already open. Use this — not browser_navigate — whenever you need to compare pages or hold several open at once: navigate REPLACES the current tab and loses what was there. Harvey's tabs are grouped under a cyan 'Harvey' group so the operator can see and close them together.",
+    input_schema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "URL to open. A bare domain is fine." },
+        focus: { type: "boolean", description: "Bring it to the front. Defaults to true." },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    name: "browser_close_tab",
+    description:
+      "Close one of Harvey's tabs, or all of them when no tabId is given. Only ever closes tabs Harvey opened or adopted — never the operator's own. Tidy up when a comparison is finished.",
+    input_schema: {
+      type: "object",
+      properties: { tabId: { type: "number", description: "Which tab. Omit to close all of Harvey's." } },
+      required: [],
+    },
+  },
+  {
+    name: "browser_use_current_tab",
+    description:
+      "Take the tab the operator is looking at RIGHT NOW as the one to work on — including a tab they dragged into Harvey's group. Use when they say 'this page' or 'the tab I'm on'. Refuses Harvey's own UI, so he never mistakes his shell for the page in question.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "browser_console",
+    description:
+      "Page errors recorded since Harvey opened this tab — uncaught exceptions, unhandled promise rejections, console.error/warn. Use when a click or form submit did not do what it should have: the page usually says why here. Reports plainly when nothing was recorded rather than implying the page is clean.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "browser_check_captcha",
+    description:
+      "Check whether the page is showing a CAPTCHA. Harvey NEVER solves or bypasses one — if this comes back true, call browser_show_tab and ask the operator to complete it, then carry on.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
     name: "browser_read",
     description:
-      "Read the visible text of the current page, or of one region. Call this after navigating so you can see what's actually there before clicking or extracting — never guess a page's structure.",
+      "Read the visible text of the current page, or of one region. Call this after navigating so you can see what's actually there before clicking or extracting — never guess a page's structure. " +
+      "Reads EVERY frame in the tab, including cross-origin ones, and sees inside open shadow roots — embedded frames are labelled in the output. " +
+      "Long pages come back in chunks: when the result says it is truncated it also gives nextOffset, so pass that back as `offset` to read on rather than reporting the tail as missing.",
     input_schema: {
       type: "object",
       properties: {
         selector: { type: "string", description: "Optional CSS selector to read just one part. Omit for the whole page." },
+        offset: { type: "number", description: "Start this many characters in — pass the nextOffset from a previous truncated read." },
+        limit: { type: "number", description: "Characters to return (1000-60000, default 20000)." },
       },
       required: [],
     },
@@ -774,6 +826,30 @@ export async function executePlatformTool(
     case "browser_scroll":
       return groundBrowserResult(await runBrowserCommand({ action: "scroll", to: str(input.to) || "bottom" }, { timeoutMs: 30000, device: str(input.device) || undefined }));
 
+    case "browser_tabs":
+      return groundBrowserResult(await runBrowserCommand({ action: "tabs" }, { device: str(input.device) || undefined }));
+
+    case "browser_open_tab":
+      return groundBrowserResult(await runBrowserCommand(
+        { action: "open_tab", url: str(input.url), focus: input.focus !== false },
+        { timeoutMs: 40000, device: str(input.device) || undefined },
+      ));
+
+    case "browser_close_tab":
+      return groundBrowserResult(await runBrowserCommand(
+        { action: "close_tab", tabId: typeof input.tabId === "number" ? input.tabId : undefined },
+        { device: str(input.device) || undefined },
+      ));
+
+    case "browser_use_current_tab":
+      return groundBrowserResult(await runBrowserCommand({ action: "use_current_tab" }, { device: str(input.device) || undefined }));
+
+    case "browser_console":
+      return groundBrowserResult(await runBrowserCommand({ action: "console" }, { device: str(input.device) || undefined }));
+
+    case "browser_check_captcha":
+      return groundBrowserResult(await runBrowserCommand({ action: "captcha" }, { device: str(input.device) || undefined }));
+
     case "browser_show_tab":
       return groundBrowserResult(await runBrowserCommand({ action: "focus" }, { device: str(input.device) || undefined }));
 
@@ -826,7 +902,12 @@ export async function executePlatformTool(
     }
 
     case "browser_read": {
-      const r = groundBrowserResult(await runBrowserCommand({ action: "read", selector: str(input.selector) || undefined }));
+      const r = groundBrowserResult(await runBrowserCommand({
+        action: "read",
+        selector: str(input.selector) || undefined,
+        offset: typeof input.offset === "number" ? input.offset : undefined,
+        limit: typeof input.limit === "number" ? input.limit : undefined,
+      }));
       const meta = (r.meta || {}) as { needsLogin?: boolean; truncated?: boolean };
       if (r.ok && meta.needsLogin) {
         // Without this, a sign-in wall looks like a thin page and gets
@@ -837,7 +918,9 @@ export async function executePlatformTool(
         };
       }
       if (r.ok && meta.truncated) {
-        return { ...r, hint: "The page was longer than the limit and this is the top of it. Use browser_extract or a selector for anything further down." };
+        const next = (r.meta as { nextOffset?: number } | undefined)?.nextOffset;
+        return { ...r, hint:
+          `This is only part of the page. Call browser_read again with offset=${next} to continue — do NOT report what is below as missing until you have read to the end.` };
       }
       return r;
     }

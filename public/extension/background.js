@@ -209,6 +209,77 @@ async function inPage(tabId, fn, args) {
   return res?.result;
 }
 
+/**
+ * Run a function in EVERY frame of the tab, not just the top one.
+ *
+ * This is what makes a cross-origin iframe readable at all. The in-page walk
+ * can reach same-origin frames through `contentDocument`, but a cross-origin
+ * one throws on access — and the old code simply returned the top frame's text
+ * with no hint that a chunk of the page had been skipped. On a portal that
+ * frames its listing detail, that is the entire answer going missing silently.
+ *
+ * Frames that fail to inject (a sandboxed or about:blank frame) are counted
+ * rather than thrown, because one dead frame must not lose the other five.
+ */
+async function inAllFrames(tabId, fn, args) {
+  let results = [];
+  try {
+    results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: fn,
+      args: args ? [args] : [],
+      world: "MAIN",
+    });
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+  return results
+    .map((r) => r && r.result)
+    .filter((r) => r && r.ok !== false);
+}
+
+/**
+ * Read the whole tab: top frame first, then any child frame that has its own
+ * text. Frames are labelled, because "the price is in a frame from
+ * maps.example.com" is information the operator needs when a selector fails.
+ */
+async function readWholeTab(tabId, opts) {
+  const parts = await inAllFrames(tabId, pageRead, opts || {});
+  if (!Array.isArray(parts)) return parts;            // hard injection failure
+  if (!parts.length) return { ok: false, error: "No frame in this tab could be read." };
+
+  const top = parts.find((p) => p.isTopFrame) || parts[0];
+  /* ANY frame with text counts. An earlier version required 40 characters to
+     filter out chrome and ad frames, which silently dropped the exact case
+     this exists for: a framed listing detail whose whole content is
+     "$512,000 / HOA dues are $45 per month" — 36 characters. Noise is a far
+     cheaper problem than a missing price, so the only things excluded are
+     empty frames and ones whose text the top frame already contains. */
+  const topText = (top.data || "");
+  const others = parts.filter((p) => {
+    if (p === top) return false;
+    const t = (p.data || "").trim();
+    if (!t) return false;
+    return !topText.includes(t);
+  });
+
+  let data = top.data || "";
+  for (const f of others) {
+    data += `\n\n--- embedded frame: ${f.frameUrl} ---\n${f.data}`;
+  }
+  return {
+    ...top,
+    data,
+    frames: parts.length,
+    embeddedFrames: others.map((f) => f.frameUrl),
+    /* Kept from the top frame: paging applies to the main document, and
+       mixing offsets across frames would make nextOffset meaningless. */
+    truncated: top.truncated,
+    nextOffset: top.nextOffset,
+    totalLength: top.totalLength,
+  };
+}
+
 /* ── The page-side implementations ─────────────────────────────────────────
    These are injected with chrome.scripting, so each one must be entirely
    self-contained: no closures over anything in this file, no shared helpers.
@@ -354,11 +425,32 @@ function pageFill(arg) {
     if (!el) { missing.push(sel); continue; }
     const value = rawValue == null ? "" : String(rawValue);
 
-    // Refuse credential boxes outright. This is OUR rule, not a browser
-    // restriction — say so accurately in the reason so nobody goes hunting
-    // for a Chrome setting that would "allow" it.
+    /* Refuse credential and payment boxes outright. These are OUR rules, not
+       browser restrictions — the reason says so, accurately, so nobody goes
+       hunting for a Chrome setting that would "allow" it.
+
+       Matched on the field's own metadata rather than the selector, because
+       the selector is chosen by whoever asked: a caller aiming at a card
+       number would simply target it by id. autocomplete is checked first
+       since it is the one signal sites fill in correctly for browser
+       autofill, then name/id/placeholder/label text as a fallback. */
+    const meta = [
+      el.getAttribute && el.getAttribute("autocomplete"),
+      el.name, el.id,
+      el.getAttribute && el.getAttribute("placeholder"),
+      el.getAttribute && el.getAttribute("aria-label"),
+    ].filter(Boolean).join(" ").toLowerCase();
+
     if (el.type === "password") {
       refused.push(sel + " — password field, refused by Harvey's own safety rule (not a browser limitation). The operator types this themselves.");
+      continue;
+    }
+    if (/\bcc-number\b|\bcc-csc\b|\bcc-exp|card ?number|cardnum|creditcard|\bcvv\b|\bcvc\b|security ?code/.test(meta)) {
+      refused.push(sel + " — payment card field, refused by Harvey's own safety rule. Card numbers and security codes are typed by the operator, never by Harvey.");
+      continue;
+    }
+    if (/\bssn\b|social ?security|tax ?id|\bitin\b/.test(meta)) {
+      refused.push(sel + " — Social Security / tax ID field, refused by Harvey's own safety rule.");
       continue;
     }
 
@@ -418,40 +510,122 @@ function pageFill(arg) {
   };
 }
 
+/**
+ * Injected: read the page as text.
+ *
+ * REWRITTEN after an audit found three separate ways this lied:
+ *
+ *   1. With no selector it read `document.body.innerText` and nothing else, so
+ *      a page whose content lives in a shadow root came back WITHOUT that
+ *      content — and on a body that is mostly <script>, innerText handed back
+ *      the SCRIPT SOURCE as if it were page copy. The README promised
+ *      shadow-root support; only the selector path ever had it.
+ *   2. Cross-origin iframes were invisible and unmentioned. That is handled a
+ *      level up now by injecting into every frame; this function reports its
+ *      own frame and says which one it is.
+ *   3. It cut at 12,000 characters with no way to ask for the rest, so the end
+ *      of a long page was unreachable — `truncated: true` and no next step.
+ */
 function pageRead(arg) {
-  const sel = arg && arg.selector;
-  let root = document.body;
-  if (sel) {
-    const ROOTS = (function collect() {
-      const roots = [document]; const seen = new Set();
-      const walk = (r, d) => {
-        if (!r || d > 8 || seen.has(r)) return; seen.add(r);
-        let all = []; try { all = r.querySelectorAll("*"); } catch (_) { return; }
-        for (const el of all) {
-          if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot, d + 1); }
-          if (el.tagName === "IFRAME") { try { const doc = el.contentDocument; if (doc) { roots.push(doc); walk(doc, d + 1); } } catch (_) {} }
-        }
-      };
-      walk(document, 0); return roots;
-    })();
-    root = null;
-    for (const r of ROOTS) { try { const f = r.querySelector(sel); if (f) { root = f; break; } } catch (_) {} }
-    if (!root) return { ok: false, error: "Nothing matched " + sel };
-  }
-  let text = (root.innerText || root.textContent || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const opts = arg || {};
+  const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "CANVAS", "IFRAME"]);
 
-  // A login wall reads as a nearly empty page, and Harvey would otherwise
-  // report "the listing isn't there" when the real answer is "sign in".
-  const pw = document.querySelector('input[type="password"]');
+  /* Every element that HAS a shadow root, plus every ancestor of one. Computed
+     once: the walk below then asks a Set instead of re-querying the subtree at
+     each node, which turned an O(n) read into O(n^2) on the first attempt. */
+  const onShadowPath = new Set();
+  (function findHosts(root, depth) {
+    if (!root || depth > 10) return;
+    let all = [];
+    try { all = root.querySelectorAll("*"); } catch (_) { return; }
+    for (const el of all) {
+      if (!el.shadowRoot) continue;
+      findHosts(el.shadowRoot, depth + 1);
+      let p = el;
+      while (p && !onShadowPath.has(p)) {
+        onShadowPath.add(p);
+        const rn = p.getRootNode && p.getRootNode();
+        p = p.parentElement || (rn && rn.host) || null;
+      }
+    }
+  })(document, 0);
+
+  function hidden(el) {
+    try {
+      const v = el.ownerDocument && el.ownerDocument.defaultView;
+      if (!v) return false;
+      const st = v.getComputedStyle(el);
+      return st.display === "none" || st.visibility === "hidden";
+    } catch (_) { return false; }
+  }
+
+  /* innerText is the right primitive — it honours visibility and layout — but
+     it stops dead at a shadow boundary. So it is used for any subtree with no
+     shadow root beneath it, and only the path down to a shadow host is walked
+     by hand. */
+  function textOf(node, depth) {
+    if (!node || depth > 14) return "";
+    if (node.nodeType === 3) return node.nodeValue || "";
+    if (node.nodeType !== 1) return "";
+    if (SKIP.has(node.tagName)) return "";
+    if (hidden(node)) return "";
+
+    if (!onShadowPath.has(node)) return node.innerText || node.textContent || "";
+
+    let out = "";
+    if (node.shadowRoot) {
+      for (const c of node.shadowRoot.childNodes) out += textOf(c, depth + 1) + "\n";
+    }
+    for (const c of node.childNodes || []) out += textOf(c, depth + 1) + "\n";
+    return out;
+  }
+
+  let root = document.body || document.documentElement;
+  if (opts.selector) {
+    const roots = [document]; const seen = new Set();
+    (function walk(r, d) {
+      if (!r || d > 8 || seen.has(r)) return; seen.add(r);
+      let all = []; try { all = r.querySelectorAll("*"); } catch (_) { return; }
+      for (const el of all) {
+        if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot, d + 1); }
+        if (el.tagName === "IFRAME") { try { const doc = el.contentDocument; if (doc) { roots.push(doc); walk(doc, d + 1); } } catch (_) {} }
+      }
+    })(document, 0);
+    root = null;
+    for (const r of roots) { try { const f = r.querySelector(opts.selector); if (f) { root = f; break; } } catch (_) {} }
+    if (!root) return { ok: false, error: "Nothing matched " + opts.selector, url: location.href };
+  }
+
+  const text = textOf(root, 0)
+    .replace(/ /g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  /* A login wall reads as a nearly empty page, and Harvey would otherwise
+     report "the listing isn't there" when the real answer is "sign in". */
+  let pw = null;
+  try { pw = document.querySelector('input[type="password"]'); } catch (_) {}
   const loginish = pw && /sign in|log ?in|password|username|email/i.test(text.slice(0, 2000));
 
-  const truncated = text.length > 12000;
+  const limit = Math.min(Math.max(Number(opts.limit) || 20000, 1000), 60000);
+  const offset = Math.max(0, Number(opts.offset) || 0);
+  const slice = text.slice(offset, offset + limit);
+  const end = offset + slice.length;
+
   return {
     ok: true,
-    data: text.slice(0, 12000),
-    truncated,
+    data: slice,
+    /* The caller can now actually GET the rest, which is the difference
+       between "truncated" as information and as a dead end. */
+    totalLength: text.length,
+    offset,
+    nextOffset: end < text.length ? end : null,
+    truncated: end < text.length,
     title: document.title,
     url: location.href,
+    frameUrl: location.href,
+    isTopFrame: window === window.top,
     needsLogin: Boolean(loginish),
   };
 }
@@ -647,23 +821,326 @@ async function captureTab(tab, opts) {
   };
 }
 
-/** Injected: scroll, so lazy-loaded listings actually render before a read. */
+/**
+ * Injected: scroll, so lazy-loaded listings actually render before a read.
+ *
+ * REWRITTEN because the old one scrolled `window` and nothing else. Most
+ * portals put their results in an inner pane with `overflow:auto`; the window
+ * on those pages has nothing to scroll, so every call did nothing — and then
+ * reported `ok: true, "scrolled to bottom"`. A false success is worse than a
+ * failure here, because Harvey then reads the first fifteen rows and reports
+ * them as the whole result set.
+ *
+ * Now it FINDS the thing that actually scrolls, scrolls that, and measures
+ * whether anything changed — reporting honestly when nothing did.
+ */
 async function pageScroll(arg) {
-  const to = arg && arg.to;
+  const opts = arg || {};
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  if (to === "top") { window.scrollTo({ top: 0 }); await sleep(400); return { ok: true, data: "scrolled to top" }; }
-  if (typeof to === "number") { window.scrollBy({ top: to }); await sleep(400); return { ok: true, data: "scrolled " + to + "px" }; }
-  // Default: walk to the bottom in steps, pausing so infinite-scroll handlers
-  // fire. One jump to the bottom loads nothing on most lazy pages.
-  let last = -1;
-  for (let i = 0; i < 12; i++) {
-    window.scrollTo({ top: document.body.scrollHeight });
-    await sleep(450);
-    const h = document.body.scrollHeight;
-    if (h === last) break;
-    last = h;
+
+  /* Candidate scrollers: the document, plus any element with real overflow.
+     Ranked by scrollable distance — the results pane beats a stray 20px
+     sidebar. A selector, when given, pins it. */
+  function scrollers() {
+    const out = [];
+    const doc = document.scrollingElement || document.documentElement;
+    if (doc && doc.scrollHeight > doc.clientHeight + 4) {
+      out.push({ el: doc, slack: doc.scrollHeight - doc.clientHeight, why: "document" });
+    }
+    let all = [];
+    try { all = document.querySelectorAll("*"); } catch (_) { all = []; }
+    for (const el of all) {
+      if (el === doc || el === document.body) continue;
+      let st;
+      try { st = getComputedStyle(el); } catch (_) { continue; }
+      const oy = st.overflowY;
+      if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") continue;
+      const slack = el.scrollHeight - el.clientHeight;
+      if (slack > 40 && el.clientHeight > 80) out.push({ el, slack, why: "inner pane" });
+    }
+    out.sort((a, b) => b.slack - a.slack);
+    return out;
   }
-  return { ok: true, data: "scrolled to bottom; page height " + document.body.scrollHeight };
+
+  let target = null;
+  if (opts.selector) {
+    try {
+      const el = document.querySelector(opts.selector);
+      if (el) target = { el, slack: el.scrollHeight - el.clientHeight, why: "selector" };
+    } catch (_) { /* fall through to auto-detection */ }
+    if (!target) return { ok: false, error: "Nothing matched " + opts.selector };
+  } else {
+    target = scrollers()[0] || null;
+  }
+
+  if (!target) {
+    /* Honest: there was nothing to scroll. Previously this reported success. */
+    return {
+      ok: true, data: "Nothing on this page scrolls — it already fits the window.",
+      scrolled: false, container: "none",
+    };
+  }
+
+  const el = target.el;
+  const isDoc = el === (document.scrollingElement || document.documentElement);
+  const top = () => (isDoc ? (window.scrollY || el.scrollTop || 0) : el.scrollTop);
+  const height = () => el.scrollHeight;
+  const setTop = (v) => { if (isDoc) window.scrollTo({ top: v }); else el.scrollTop = v; };
+
+  const startTop = top(), startHeight = height();
+
+  if (opts.to === "top") {
+    setTop(0); await sleep(350);
+    return { ok: true, data: "scrolled to top", scrolled: top() !== startTop, container: target.why };
+  }
+  if (typeof opts.to === "number") {
+    setTop(top() + opts.to); await sleep(350);
+    return { ok: true, data: "scrolled " + opts.to + "px", scrolled: top() !== startTop, container: target.why };
+  }
+
+  /* Step to the bottom, pausing so infinite-scroll handlers fire. Stops when
+     the content stops growing AND the position stops moving — one jump to the
+     bottom loads nothing on most lazy pages. */
+  let lastHeight = -1, lastTop = -1, steps = 0;
+  const maxSteps = Math.min(Math.max(Number(opts.maxSteps) || 25, 1), 60);
+  for (let i = 0; i < maxSteps; i++) {
+    setTop(height());
+    await sleep(Number(opts.pauseMs) || 450);
+    steps++;
+    const h = height(), t = top();
+    if (h === lastHeight && t === lastTop) break;
+    lastHeight = h; lastTop = t;
+  }
+
+  const grew = height() - startHeight;
+  return {
+    ok: true,
+    data:
+      `scrolled the ${target.why} in ${steps} step(s); ` +
+      (grew > 0
+        ? `content grew by ${grew}px (lazy content loaded) — read again to see it`
+        : `content did not grow, so this looks like the whole list`),
+    scrolled: top() !== startTop || grew > 0,
+    grewBy: grew,
+    steps,
+    container: target.why,
+    scrollHeight: height(),
+  };
+}
+
+/**
+ * Injected once per page: keep the last errors the page produced.
+ *
+ * Chrome gives an extension no way to read a page's console after the fact, so
+ * the only honest options are to listen from the start or to admit there is
+ * nothing to show. This listens from the start, and `console` says plainly
+ * when nothing was recorded rather than implying the page was clean.
+ */
+async function installErrorRecorder(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: function () {
+        if (window.__harveyErrorsInstalled) return;
+        window.__harveyErrorsInstalled = true;
+        window.__harveyErrors = [];
+        const push = (s) => {
+          try {
+            window.__harveyErrors.push(new Date().toISOString().slice(11, 19) + "  " + String(s).slice(0, 400));
+            if (window.__harveyErrors.length > 80) window.__harveyErrors.shift();
+          } catch (_) {}
+        };
+        window.addEventListener("error", (e) => push("ERROR " + (e.message || "") + (e.filename ? " @ " + e.filename + ":" + e.lineno : "")));
+        window.addEventListener("unhandledrejection", (e) => push("UNHANDLED PROMISE " + ((e.reason && e.reason.message) || e.reason || "")));
+        const realErr = console.error;
+        console.error = function () { push("console.error " + Array.from(arguments).join(" ")); return realErr.apply(console, arguments); };
+        const realWarn = console.warn;
+        console.warn = function () { push("console.warn " + Array.from(arguments).join(" ")); return realWarn.apply(console, arguments); };
+      },
+      args: [],
+    });
+  } catch (_) { /* a page that refuses injection simply has no recorder */ }
+}
+
+/* ── Multiple tabs ─────────────────────────────────────────────────────────
+   Claude in Chrome works across several tabs and collects the ones it opens
+   into a colour-coded group you can drag your own tabs into. Harvey had ONE
+   work tab, so "compare these three listings" meant loading them one at a
+   time and losing each before reading the next.
+
+   Harvey's tabs go in a group named "Harvey" so they are visibly his and can
+   be closed in one action — and so a tab the operator drags in becomes
+   something he can read, which is the part that makes cross-site work
+   practical. The group is cosmetic on purpose: losing it (older Chrome, or a
+   window that refuses grouping) must not stop the tabs working. ─────────── */
+
+const TABS_KEY = "harveyTabIds";
+
+async function listWorkTabs() {
+  const { [TABS_KEY]: ids } = await chrome.storage.local.get([TABS_KEY]);
+  const wanted = Array.isArray(ids) ? ids : [];
+  const alive = [];
+  for (const id of wanted) {
+    try {
+      const t = await chrome.tabs.get(id);
+      if (t) alive.push({ id: t.id, url: t.url, title: t.title, active: t.active });
+    } catch (_) { /* closed by the operator — drop it silently */ }
+  }
+  if (alive.length !== wanted.length) {
+    await chrome.storage.local.set({ [TABS_KEY]: alive.map((t) => t.id) });
+  }
+  return alive;
+}
+
+async function rememberWorkTab(id) {
+  const { [TABS_KEY]: ids } = await chrome.storage.local.get([TABS_KEY]);
+  const next = Array.from(new Set([...(Array.isArray(ids) ? ids : []), id]));
+  await chrome.storage.local.set({ [TABS_KEY]: next });
+  await groupWorkTabs(next);
+}
+
+/** Colour-coded group, best-effort. Grouping is a nicety, not a dependency. */
+async function groupWorkTabs(ids) {
+  if (!chrome.tabs.group || !chrome.tabGroups) return;
+  try {
+    const groupId = await chrome.tabs.group({ tabIds: ids });
+    await chrome.tabGroups.update(groupId, { title: "Harvey", color: "cyan" });
+  } catch (_) { /* older Chrome, or tabs across windows — not worth failing */ }
+}
+
+/**
+ * Open a NEW tab Harvey can work in, alongside any he already has.
+ * Returns the tab so the caller can act on it immediately.
+ */
+async function openAdditionalTab(url, focus) {
+  const tab = await chrome.tabs.create({ url, active: Boolean(focus) });
+  await rememberWorkTab(tab.id);
+  return tab;
+}
+
+/** Close one of Harvey's tabs, or all of them. Never touches the operator's. */
+async function closeWorkTabs(tabId) {
+  const tabs = await listWorkTabs();
+  const targets = tabId ? tabs.filter((t) => t.id === tabId) : tabs;
+  if (!targets.length) return { ok: true, data: "No Harvey tabs were open." };
+  for (const t of targets) { try { await chrome.tabs.remove(t.id); } catch (_) {} }
+  const left = tabs.filter((t) => !targets.some((x) => x.id === t.id)).map((t) => t.id);
+  await chrome.storage.local.set({ [TABS_KEY]: left });
+  return { ok: true, data: `Closed ${targets.length} tab(s).`, closed: targets.map((t) => t.url) };
+}
+
+/**
+ * Adopt whatever the operator is looking at, so "read the tab I'm on" works
+ * and a dragged-in tab becomes Harvey's to read. Refuses the Harvey shell
+ * itself — he must never mistake his own UI for the page in question.
+ */
+async function adoptCurrentTab(serverUrl) {
+  const [t] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (!t) return { ok: false, error: "No active tab." };
+  if (isAppTab(t, serverUrl)) {
+    return { ok: false, error: "That's Harvey's own page — switch to the site you mean and ask again." };
+  }
+  if (isInternalUrl(t.url)) {
+    return { ok: false, error: "That's a browser internal page; Chrome does not allow acting on it." };
+  }
+  await rememberWorkTab(t.id);
+  return { ok: true, data: `Working on "${t.title}".`, tabId: t.id, url: t.url };
+}
+
+/* ── Safety envelope ───────────────────────────────────────────────────────
+   Matched to what Claude in Chrome enforces, because the operator asked for
+   the same limits and these are the ones that exist for a reason:
+
+     · adult and piracy sites are blocked outright
+     · financial sites need explicit per-site permission before Harvey acts
+     · sensitive fields — card numbers, CVV, SSN, passwords — are never typed
+     · CAPTCHAs are never solved or bypassed
+
+   These are THIS extension's rules, enforced in the extension rather than on
+   the server, so a compromised or spoofed server still cannot talk Harvey
+   into typing a card number. That is the whole point of putting them here.
+   ─────────────────────────────────────────────────────────────────────── */
+
+const BLOCKED_HOSTS = [
+  /(^|\.)pornhub\.com$/i, /(^|\.)xvideos\.com$/i, /(^|\.)xhamster\.com$/i,
+  /(^|\.)onlyfans\.com$/i, /(^|\.)redtube\.com$/i, /(^|\.)youporn\.com$/i,
+  /(^|\.)thepiratebay/i, /(^|\.)1337x\./i, /(^|\.)rarbg\./i, /(^|\.)nyaa\./i,
+  /(^|\.)fmovies\./i, /(^|\.)123movies/i, /(^|\.)sci-hub\./i,
+];
+
+/** Sites where a wrong click moves money. Allowed, but only once per site. */
+const FINANCIAL_HOSTS = [
+  /(^|\.)chase\.com$/i, /(^|\.)bankofamerica\.com$/i, /(^|\.)wellsfargo\.com$/i,
+  /(^|\.)citi\.com$/i, /(^|\.)capitalone\.com$/i, /(^|\.)usbank\.com$/i,
+  /(^|\.)schwab\.com$/i, /(^|\.)fidelity\.com$/i, /(^|\.)vanguard\.com$/i,
+  /(^|\.)robinhood\.com$/i, /(^|\.)coinbase\.com$/i, /(^|\.)paypal\.com$/i,
+  /(^|\.)venmo\.com$/i, /(^|\.)stripe\.com$/i, /(^|\.)irs\.gov$/i,
+  /(^|\.)ally\.com$/i, /(^|\.)discover\.com$/i, /(^|\.)amex\.com$/i,
+  /(^|\.)navyfederal\.org$/i, /(^|\.)titlecompany/i, /(^|\.)qualiaapp\.com$/i,
+];
+
+function hostOf(url) {
+  try { return new URL(url).hostname; } catch (_) { return ""; }
+}
+function isBlockedSite(url) {
+  const h = hostOf(url);
+  return h ? BLOCKED_HOSTS.some((re) => re.test(h)) : false;
+}
+function isFinancialSite(url) {
+  const h = hostOf(url);
+  return h ? FINANCIAL_HOSTS.some((re) => re.test(h)) : false;
+}
+
+/** Per-site grants live in storage so they survive the service worker dying. */
+async function siteAllowed(url) {
+  const h = hostOf(url);
+  if (!h) return false;
+  const { siteGrants } = await chrome.storage.local.get(["siteGrants"]);
+  return Boolean(siteGrants && siteGrants[h]);
+}
+async function grantSite(url) {
+  const h = hostOf(url);
+  if (!h) return false;
+  const { siteGrants } = await chrome.storage.local.get(["siteGrants"]);
+  const next = { ...(siteGrants || {}) };
+  next[h] = new Date().toISOString();
+  await chrome.storage.local.set({ siteGrants: next });
+  return true;
+}
+
+/**
+ * The gate every action passes through. Reading is allowed on a financial site
+ * — looking at a payoff statement is the normal case — but anything that
+ * CHANGES the page needs the operator to have said yes to that host first.
+ */
+const MUTATING = new Set(["click", "fill", "navigate"]);
+async function guard(action, url) {
+  if (isBlockedSite(url)) {
+    return { blocked: true, reason:
+      `Harvey will not operate on ${hostOf(url)} — adult and piracy sites are blocked outright, the same rule Claude in Chrome applies. This is not a setting.` };
+  }
+  if (isFinancialSite(url) && MUTATING.has(action) && !(await siteAllowed(url))) {
+    return { blocked: true, needsGrant: hostOf(url), reason:
+      `${hostOf(url)} is a financial site. Harvey can read it, but clicking, typing or navigating there needs your explicit permission first — open the Harvey panel and allow this site. Reading it is already allowed.` };
+  }
+  return { blocked: false };
+}
+
+/** Injected: the errors the recorder has collected on this page. */
+function harveyReadErrors() {
+  return (window.__harveyErrors || []).slice(-40);
+}
+
+/** Injected: does this page look like a CAPTCHA? Never solved, only reported. */
+function pageCaptcha() {
+  const sel = [
+    "iframe[src*='recaptcha']", "iframe[src*='hcaptcha']", ".g-recaptcha",
+    "#cf-challenge-running", "iframe[title*='challenge']", "[data-sitekey]",
+  ];
+  for (const s of sel) { try { if (document.querySelector(s)) return true; } catch (_) {} }
+  return /are you a robot|verify you are human|complete the captcha/i.test(
+    (document.body && document.body.innerText || "").slice(0, 3000));
 }
 
 async function execute(cmd, serverUrl) {
@@ -679,6 +1156,10 @@ async function execute(cmd, serverUrl) {
     // it's alive keeps Harvey on one tab instead of littering the window.
     if (cmd.action === "navigate") {
       if (!cmd.url) return { ok: false, error: "navigate needs a url" };
+      /* Checked against the DESTINATION, before a tab is opened — a blocked
+         site must never be loaded at all, not loaded and then refused. */
+      const navGate = await guard("navigate", cmd.url);
+      if (navGate.blocked) return { ok: false, error: navGate.reason, needsGrant: navGate.needsGrant || null };
       // Show the operator what was opened unless explicitly told not to.
       // Silently loading a listing somewhere off-screen is the wrong default:
       // they asked for it, they want to see it.
@@ -691,6 +1172,9 @@ async function execute(cmd, serverUrl) {
         tab = await openWorkTab(cmd.url, wantFocus);
       }
       await waitForLoad(tab.id, cmd.timeoutMs || 20000);
+      /* Start recording page errors immediately: a console read after the
+         fact is useless if nothing was listening while the page ran. */
+      await installErrorRecorder(tab.id);
       // status:"complete" fires when the document loaded, which on a
       // single-page app is long before the listing exists. If the caller named
       // something to wait for, wait for that instead of guessing; otherwise
@@ -773,6 +1257,12 @@ async function execute(cmd, serverUrl) {
       return { ok: false, error: "Can't act on a browser internal page (" + (tab.url || "").split("/")[0] + "). Ask Harvey to open a normal site first." };
     }
 
+    /* Every page-touching action is checked against the page actually in front
+       of Harvey. Reading a financial site is fine; changing one is not, until
+       the operator has allowed that host. */
+    const gate = await guard(cmd.action, tab.url || "");
+    if (gate.blocked) return { ok: false, error: gate.reason, needsGrant: gate.needsGrant || null };
+
     switch (cmd.action) {
       case "click": {
         const r = await inPage(tab.id, pageClick, { selector: cmd.selector, text: cmd.text });
@@ -784,7 +1274,10 @@ async function execute(cmd, serverUrl) {
       case "fill":
         return await inPage(tab.id, pageFill, { fields: cmd.fields || {} });
       case "read":
-        return await inPage(tab.id, pageRead, { selector: cmd.selector });
+        /* Every frame, not just the top one — see readWholeTab. */
+        return await readWholeTab(tab.id, {
+          selector: cmd.selector, offset: cmd.offset, limit: cmd.limit,
+        });
       case "extract":
         return await inPage(tab.id, pageExtract, { schema: cmd.schema || {} });
       case "structured":
@@ -798,6 +1291,42 @@ async function execute(cmd, serverUrl) {
         return found
           ? { ok: true, data: "present" }
           : { ok: false, error: "Still not on the page after " + Math.round((cmd.timeoutMs || 15000) / 1000) + "s: " + (cmd.selector || cmd.text) };
+      }
+      case "tabs": {
+        const list = await listWorkTabs();
+        return { ok: true, data: list.length
+          ? list.map((t) => `${t.id}: ${t.title} — ${t.url}`).join("\n")
+          : "Harvey has no tabs open.", tabs: list };
+      }
+      case "open_tab": {
+        if (!cmd.url) return { ok: false, error: "open_tab needs a url" };
+        const g = await guard("navigate", cmd.url);
+        if (g.blocked) return { ok: false, error: g.reason, needsGrant: g.needsGrant || null };
+        const t = await openAdditionalTab(cmd.url, cmd.focus !== false);
+        await waitForLoad(t.id, cmd.timeoutMs || 20000);
+        await installErrorRecorder(t.id);
+        await settle(t.id, 700);
+        const fresh = await chrome.tabs.get(t.id);
+        return { ok: true, data: `Opened "${fresh.title}" in a new tab.`, tabId: t.id, url: fresh.url };
+      }
+      case "close_tab":
+        return await closeWorkTabs(cmd.tabId);
+      case "use_current_tab":
+        return await adoptCurrentTab(serverUrl);
+      case "console": {
+        /* Claude in Chrome can see console output and page errors; Harvey
+           could not, so "the form didn't submit" had no diagnosis available.
+           Errors are captured from the moment a page is opened. */
+        const errs = await inPage(tab.id, harveyReadErrors, {});
+        return { ok: true, data: (errs && errs.length)
+          ? errs.join("\n")
+          : "No page errors recorded since Harvey opened this tab.", count: (errs || []).length };
+      }
+      case "captcha": {
+        const hit = await inPage(tab.id, pageCaptcha, {});
+        return { ok: true, data: hit
+          ? "This page is showing a CAPTCHA. Harvey does not solve or bypass CAPTCHAs — bring the tab up and complete it yourself, then ask him to carry on."
+          : "No CAPTCHA on this page.", captcha: Boolean(hit) };
       }
       case "focus": {
         // Hand the keyboard back to the human — the login-wall path.
@@ -949,12 +1478,28 @@ async function pollOnce() {
           url: result.url || page.url,
           title: result.title || page.title,
           image: result.image,
-          // Side-signals the page noticed. needsLogin is the important one:
-          // without it a login wall reaches Harvey as a short, content-free
-          // page and he reports "the listing isn't there".
-          meta: (result.needsLogin != null || result.truncated != null || result.notFound != null)
-            ? { needsLogin: result.needsLogin, truncated: result.truncated, notFound: result.notFound }
-            : undefined,
+          /* Side-signals the page noticed. needsLogin is the important one:
+             without it a login wall reaches Harvey as a short, content-free
+             page and he reports "the listing isn't there".
+
+             Built from an explicit list rather than spreading `result`, so a
+             page cannot inject arbitrary keys into what Harvey reads back —
+             but the list has to include everything the caller must act on.
+             nextOffset in particular: without it a truncated read is a dead
+             end again, which is the bug this round set out to fix. Note that
+             fill's filled/refused/missing live inside `data`, not here. */
+          meta: (function () {
+            const keys = [
+              "needsLogin", "truncated", "notFound",
+              "nextOffset", "offset", "totalLength",
+              "frames", "embeddedFrames",
+              "scrolled", "grewBy", "steps", "container", "scrollHeight",
+              "captcha", "count", "tabId",
+            ];
+            const m = {};
+            for (const k of keys) if (result[k] != null) m[k] = result[k];
+            return Object.keys(m).length ? m : undefined;
+          })(),
         }),
       });
     } catch (_) {}

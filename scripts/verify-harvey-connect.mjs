@@ -334,7 +334,7 @@ check("extension: a bot wall is a failed navigate, not a pulled-up site", () => 
 
 check("extension: version bumped so Chrome actually takes the new build", () => {
   const m = JSON.parse(read("public/extension/manifest.json"));
-  assert.equal(m.version, "1.6.2");
+  assert.equal(m.version, "1.7.0");
 });
 
 /* ── Report ──────────────────────────────────────────────────────────────── */

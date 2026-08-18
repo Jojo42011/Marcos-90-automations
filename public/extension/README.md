@@ -81,16 +81,23 @@ reopening it picks up where you left off. **Clear** starts a fresh thread.
 Things worth asking from the panel:
 
 - *"Open this listing and pull the price, address, beds and baths."*
+- *"Open these three listings in tabs and compare the price per square foot."*
+- *"Scroll the results and give me everything under $400k, not just the first page."*
 - *"Fill in the request form with my details and submit it."*
 - *"What does this page say about the HOA?"*
+- *"The form didn't submit — what did the page complain about?"*
 
 Harvey checks whether the extension is connected before trying, and tells you
 what to fix if it isn't.
 
 ## What it can and cannot do
 
-**Can:** open and navigate his own tab, click links and buttons, type into form
-fields, read visible page text, extract named values by selector.
+**Can:** open and navigate his own tabs, work across **several tabs at once**
+(collected into a cyan "Harvey" tab group you can drag your own tabs into),
+click links and buttons, type into form fields, read visible page text, extract
+named values by selector, scroll lazy-loading result panes, read the page's own
+structured data, take a screenshot, and report the page errors a site logged
+when something silently failed.
 
 If Harvey hasn't opened a tab yet and you ask him about a page, he acts on the
 tab you're currently on — so *"what does this page say about the HOA?"* works
@@ -98,8 +105,15 @@ without asking him to open it first. The Harvey shell is excluded from that:
 he'll never treat his own UI as the page in question.
 
 He reads a page's schema.org JSON-LD before guessing at CSS selectors, sees
-through open shadow roots and same-origin iframes, waits for content that
+through open shadow roots **and every iframe including cross-origin ones**
+(embedded frames are labelled in what he reads back), waits for content that
 loads after the page does, and scrolls to pull in lazy-loaded results.
+
+Scrolling finds **whatever actually scrolls** — most portals scroll an inner
+results pane rather than the window — and reports whether the content grew, so
+"that's the whole list" and "there is more below" are different answers rather
+than the same silence. A long page comes back in chunks with an offset to
+continue from, so the bottom of a page is reachable instead of being cut off.
 
 He can also **look** at the page — a screenshot, for things that only make
 sense visually: a map of comps, a scanned disclosure, a floor plan, a number
@@ -107,12 +121,29 @@ baked into an image. Chrome can only photograph the tab that's in front, so
 taking one flicks the screen to his tab for a moment and puts yours straight
 back. That flicker is the API, not a bug.
 
-**Cannot, by design:** read cookies, read `localStorage`, type into password
-fields, or run arbitrary JavaScript. Those turn "fill in this form" into
-"exfiltrate this session", and nothing in the use case needs them.
+**Cannot, by design:** read cookies, read `localStorage`, run arbitrary
+JavaScript, or type into **passwords, card numbers, CVV/security codes, or
+Social Security / tax ID fields**. Those turn "fill in this form" into
+"exfiltrate this session" or "make a payment", and nothing in the use case
+needs them. Sensitive fields are matched on the field's own `autocomplete`,
+name, id and placeholder rather than on the selector asked for, so aiming at a
+card box by id does not get around it.
+
+He also **never solves or bypasses a CAPTCHA**. He can tell you one is there;
+you complete it and he carries on.
+
+**Site rules**, matching what Claude in Chrome enforces:
+
+- **Adult and piracy sites are blocked outright.** Not a setting.
+- **Financial sites** — banks, brokerages, payment and title portals — can be
+  **read**, but clicking, typing or navigating on one needs you to allow that
+  specific host first. A grant covers that host only; allowing Chase does not
+  allow Wells Fargo.
 
 These are *this extension's* rules, not browser restrictions — there is no
-Chrome setting that relaxes them.
+Chrome setting that relaxes them, and they are enforced in the extension rather
+than on the server, so a spoofed or compromised server still cannot talk Harvey
+into typing a card number.
 
 ## Logins
 

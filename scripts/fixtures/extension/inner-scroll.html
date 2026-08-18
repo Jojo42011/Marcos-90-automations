@@ -1,0 +1,14 @@
+<!doctype html><title>Inner scroll results</title>
+<style>body{margin:0;font:14px sans-serif}
+#pane{height:100vh;overflow:auto;border:1px solid #ccc}</style>
+<h3 style="margin:8px">Listings</h3>
+<div id="pane"><div id="list"></div></div>
+<script>
+// Lazy-loads more rows as the INNER pane scrolls — window never scrolls.
+const list=document.getElementById('list'), pane=document.getElementById('pane');
+let n=0;
+function add(k){for(let i=0;i<k;i++){const d=document.createElement('div');
+ d.className='row';d.style.height='60px';d.textContent='Listing '+(++n)+' — $'+(200000+n*1000);list.appendChild(d);}}
+add(15);
+pane.addEventListener('scroll',()=>{ if(pane.scrollTop+pane.clientHeight>list.scrollHeight-100 && n<60) add(15); });
+</script>

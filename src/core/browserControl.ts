@@ -71,7 +71,21 @@ export type BrowserAction =
   /** Scroll to trigger lazy-loaded content before reading. */
   | "scroll"
   /** Capture the tab as an image — for pages that are visual, not textual. */
-  | "screenshot";
+  | "screenshot"
+  /* ── Multi-tab work, matching what Claude in Chrome does. One work tab made
+     "compare these three listings" impossible: each load destroyed the last. */
+  /** List the tabs Harvey currently has open. */
+  | "tabs"
+  /** Open an ADDITIONAL tab rather than replacing the current one. */
+  | "open_tab"
+  /** Close one of Harvey's tabs, or all of them. Never the operator's. */
+  | "close_tab"
+  /** Adopt the tab the operator is looking at — including one dragged in. */
+  | "use_current_tab"
+  /** Page errors recorded since Harvey opened the tab. */
+  | "console"
+  /** Report a CAPTCHA. Harvey never solves or bypasses one. */
+  | "captcha";
 
 export interface BrowserCommand {
   id: string;
@@ -89,6 +103,11 @@ export interface BrowserCommand {
   to?: string | number;
   /** For screenshot: longest edge in px. */
   maxWidth?: number;
+  /** For read: page through a long document rather than losing its tail. */
+  offset?: number;
+  limit?: number;
+  /** For close_tab: which of Harvey's tabs. Omitted closes all of them. */
+  tabId?: number;
   /** For navigate: bring Harvey's window to the front. Defaults to true. */
   focus?: boolean;
   /** Which paired browser runs this. Set at enqueue time, never guessed at
