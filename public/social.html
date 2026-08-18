@@ -1275,32 +1275,10 @@
     .cm-chat-msg { max-width:85%; padding:0.7rem 0.9rem; border-radius:14px; font-size:0.8rem; line-height:1.5; margin-bottom:0.65rem; }
     .cm-chat-msg.user { margin-left:auto; background:var(--surface2); border:1px solid var(--border); }
     .cm-chat-msg.brain { background:var(--surface2); border:1px solid var(--border); }
-    .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
-    .calendar-cell { min-height:96px; border:1px solid var(--border); border-radius:var(--radius-xs); padding:0.4rem; background:var(--surface); cursor:pointer; font-size:0.68rem; display:flex; flex-direction:column; gap:0.3rem; }
-    .calendar-cell:hover { border-color:var(--cyan); }
-    .calendar-cell.has-content { border-color:var(--teal-border); }
-    .calendar-cell-date { font-weight:600; color:var(--text); }
-    .calendar-cell-dots { display:flex; flex-wrap:wrap; gap:3px; }
-    .calendar-cell-meta { margin-top:auto; display:flex; align-items:center; justify-content:space-between; gap:4px; font-size:0.64rem; }
-    .calendar-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin:1px; }
-    .calendar-dot.brand { background:var(--warn); }
-    .calendar-dot.education { background:var(--accent-2); }
-    .calendar-dot.listings { background:var(--success); }
-    .calendar-dot.empty { border:1px solid var(--border); background:transparent; }
+    /* Sprint-pace bar (Overview). The Content Manager's own calendar styles
+       were removed with the tab on 2026-08-18 — /content-planner owns that now. */
     .calendar-sprint-bar { height:10px; background:var(--surface2); border-radius:999px; overflow:hidden; }
     .calendar-sprint-bar div { height:100%; background:var(--cyan); transition:width 0.3s; }
-    .calendar-day-slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:0.6rem; }
-    .calendar-overflow-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:0.6rem; }
-    .calendar-slot { border:1px solid var(--border); border-radius:var(--radius); padding:0.75rem; min-height:88px; display:flex; flex-direction:column; gap:0.4rem; background:var(--surface); }
-    .calendar-slot.filled { border-left:3px solid var(--teal); }
-    .calendar-slot.clickable { cursor:pointer; transition:border-color 0.15s, transform 0.1s; }
-    .calendar-slot.clickable:hover { border-color:var(--cyan); transform:translateY(-1px); }
-    .calendar-slot.empty { border-style:dashed; align-items:center; justify-content:center; text-align:center; background:transparent; }
-    .calendar-slot-num { font-size:1.1rem; font-weight:700; color:var(--muted); }
-    .calendar-slot-empty-label { font-size:0.72rem; }
-    .calendar-slot-title { font-size:0.8rem; font-weight:600; color:var(--text); line-height:1.35; }
-    .calendar-slot-badges { display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:auto; }
-    .calendar-slot-stats { font-size:0.68rem; }
     .analysis-md h3 { color:var(--cyan); margin:1rem 0 0.5rem; font-size:0.9rem; }
     .analysis-md p { margin:0.5rem 0; line-height:1.55; }
     .analysis-md ol, .analysis-md ul { margin:0.5rem 0; padding-left:1.2rem; }
@@ -2071,7 +2049,6 @@
       <button type="button" class="crm-side-btn" data-cm-section="review">Review Queue <span class="crm-count crm-count-danger" id="cm-count-review">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="publishing">Publishing <span class="crm-count" id="cm-count-publishing">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="analytics">Analytics <span class="crm-count">-</span></button>
-      <button type="button" class="crm-side-btn" data-cm-section="calendar">Calendar <span class="crm-count" id="cm-count-calendar">0</span></button>
       <button type="button" class="crm-side-btn" data-cm-section="activity">Activity Log <span class="crm-count" id="cm-count-activity">0</span></button>
       <a href="/dashboard" class="crm-side-btn" style="margin-top:1rem;text-decoration:none;" onclick="goToCommandCenter(); return false;">Command center <span>←</span></a>
     </aside>
@@ -2107,6 +2084,15 @@
           <div class="cm-two-col">
             <div class="cm-panel cm-anim-in" id="cm-pipeline-status"></div>
             <div class="cm-panel cm-anim-in" id="cm-review-alert"></div>
+          </div>
+          <div class="cm-panel cm-anim-in">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+              <h3 style="margin:0;">Sprint pace</h3>
+              <a class="cm-btn" href="/content-planner" style="text-decoration:none;">Content Calendar &rarr;</a>
+            </div>
+            <div id="calendar-sprint-label" class="cm-muted" style="margin:0.5rem 0;"></div>
+            <div class="calendar-sprint-bar"><div id="calendar-sprint-fill"></div></div>
+            <div id="calendar-sprint-sub" class="cm-muted" style="font-size:0.72rem;margin-top:0.35rem;"></div>
           </div>
           <div class="cm-panel cm-anim-in">
             <h3>Weekly Progress</h3>
@@ -2482,39 +2468,6 @@
         </section>
 
         <!-- CALENDAR -->
-        <section id="cm-section-calendar" class="cm-section">
-          <!-- This calendar reports on clips that exist. The editorial plan -
-               ideas, hooks, scripts, owners, dates - lives on its own page. -->
-          <div class="cm-panel" style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
-            <div>
-              <strong>Planning next month's posts?</strong>
-              <div class="cm-muted" style="font-size:0.72rem;">This view shows what was filmed and published. The Content Planner holds the plan: ideas, hooks, scripts, assignees and dates.</div>
-            </div>
-            <a class="cm-btn" href="/content-planner" style="text-decoration:none;">Open Content Planner &rarr;</a>
-          </div>
-          <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-bottom:1rem;">
-            <button type="button" class="cm-subtab active" data-calendar-view="month" id="cal-view-month">Month</button>
-            <button type="button" class="cm-subtab" data-calendar-view="day" id="cal-view-day">Day</button>
-          </div>
-          <div id="calendar-month-view">
-            <div id="calendar-grid" class="calendar-grid"></div>
-            <div class="cm-panel" style="margin-top:1rem;">
-              <div id="calendar-sprint-label" class="cm-muted" style="margin-bottom:0.5rem;"></div>
-              <div class="calendar-sprint-bar"><div id="calendar-sprint-fill"></div></div>
-              <div id="calendar-sprint-sub" class="cm-muted" style="font-size:0.72rem;margin-top:0.35rem;"></div>
-            </div>
-          </div>
-          <div id="calendar-day-view" style="display:none;">
-            <div style="margin-bottom:1rem;">
-              <a href="#" id="calendar-back-month" class="cm-muted">← Back to month</a>
-              <h3 id="calendar-day-title" style="margin:0.5rem 0;"></h3>
-              <div id="calendar-day-summary" class="cm-muted" style="font-size:0.8rem;"></div>
-            </div>
-            <div id="calendar-day-slots" class="calendar-day-slots"></div>
-            <div id="calendar-day-overflow" style="margin-top:1rem;"></div>
-          </div>
-        </section>
-
         <!-- CONTENT MANAGER (strategy + chat) -->
         <section id="cm-section-brain" class="cm-section">
           <h2 class="section-title">Content Manager <span>strategy chat · CM</span></h2>
@@ -5462,8 +5415,6 @@
       }
     }
 
-    let calendarSelectedDate = null;
-    let calendarView = "month";
 
     function simpleMarkdownToHtml(md) {
       if (!md) return "";
@@ -5506,8 +5457,6 @@
         ]);
         const stratEl = document.getElementById("cm-count-strategy");
         if (stratEl) stratEl.textContent = String((recs.recommendations || []).length);
-        const calEl = document.getElementById("cm-count-calendar");
-        if (calEl) calEl.textContent = String((tasks.tasks || []).length);
         const recEl = document.getElementById("cm-count-recording");
         if (recEl) recEl.textContent = String((tasks.tasks || []).filter((t) => t.status !== "filmed").length);
       } catch (_) {}
@@ -5796,7 +5745,7 @@
       try {
         await cmFetch(`/api/content/recording-tasks/${id}`, { method: "PATCH", body: JSON.stringify({ status: "filmed" }) });
       } catch (e) { showToast("Couldn't mark filmed"); }
-      setTimeout(() => { void loadRecordingSection(); void loadCalendarSection(); }, 650);
+      setTimeout(() => { void loadRecordingSection(); }, 650);
     };
 
     async function runCompetitiveAnalysis() {
@@ -6019,7 +5968,6 @@
     window.markTaskFilmed = async (id) => {
       await cmFetch(`/api/content/recording-tasks/${id}`, { method: "PATCH", body: JSON.stringify({ status: "filmed" }) });
       void loadRecordingSection();
-      void loadCalendarSection();
     };
 
     document.getElementById("strategy-run-analysis-btn")?.addEventListener("click", () => void runCompetitiveAnalysis());
@@ -6165,207 +6113,32 @@
       showToast("Chat cleared");
     });
 
-    async function loadCalendarMonth() {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth() + 1;
-      const data = await cmFetch(`/api/content/calendar/month/${year}/${month}`);
-      const grid = document.getElementById("calendar-grid");
-      if (!grid) return;
-      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      let html = dayNames.map((d) => `<div class="cm-muted" style="text-align:center;font-size:0.65rem;">${d}</div>`).join("");
-      const first = new Date(year, month - 1, 1);
-      let startPad = (first.getDay() + 6) % 7;
-      for (let i = 0; i < startPad; i++) html += `<div></div>`;
-      (data.days || []).forEach((day) => {
-        // One dot per pillar actually publishing that day - no empty padding.
-        const pillars = (day.pillarsPublishing || []).slice(0, 7);
-        const dots = pillars
-          .map((p) => `<span class="calendar-dot ${escapeHtml(p)}"></span>`)
-          .join("");
-        const hasContent = day.publishCount > 0 || day.recordingTaskCount > 0;
-        html += `<div class="calendar-cell${hasContent ? " has-content" : ""}" data-cal-date="${day.date}">
-          <div class="calendar-cell-date">${day.date.slice(8)}</div>
-          ${dots ? `<div class="calendar-cell-dots">${dots}</div>` : ""}
-          <div class="calendar-cell-meta">
-            ${day.publishCount > 0 ? `<span class="cm-muted">${day.publishCount}/7</span>` : ""}
-            ${day.recordingTaskCount > 0 ? `<span title="${day.recordingTaskCount} recording task(s) due">🎥${day.recordingTaskCount > 1 ? " " + day.recordingTaskCount : ""}</span>` : ""}
-          </div>
-        </div>`;
-      });
-      grid.innerHTML = html;
-      grid.querySelectorAll("[data-cal-date]").forEach((cell) => {
-        cell.addEventListener("click", () => {
-          calendarSelectedDate = cell.getAttribute("data-cal-date");
-          calendarView = "day";
-          document.getElementById("calendar-month-view").style.display = "none";
-          document.getElementById("calendar-day-view").style.display = "block";
-          void loadCalendarDay(calendarSelectedDate);
-        });
-      });
-      const sprint = data.sprintProgress || {};
+    /*
+     * The Content Manager's own calendar was removed on 2026-08-18 — the
+     * Content Calendar (/content-planner) is the one calendar now, and two
+     * views of "the calendar" in one app had the team guessing which was
+     * authoritative. Publishing a scheduled clip still lives in the
+     * Publishing section, which is where the queue already was.
+     *
+     * The one thing that view carried and nothing else did is the 861-video
+     * sprint pace, so it moved to Overview rather than going with it.
+     */
+    async function loadSprintProgress() {
       const label = document.getElementById("calendar-sprint-label");
-      if (label) label.textContent = `${sprint.totalVideosEver || 0} / 861 videos | ${sprint.daysRemaining || 0} days remaining | Need ${(sprint.videosNeededPerDay || 0).toFixed(1)}/day`;
       const fill = document.getElementById("calendar-sprint-fill");
-      if (fill) fill.style.width = `${Math.min(100, ((sprint.totalVideosEver || 0) / 861) * 100)}%`;
       const sub = document.getElementById("calendar-sprint-sub");
+      if (!label && !fill && !sub) return;
       const prog = await cmFetch("/api/content/sprint-progress").catch(() => null);
-      if (sub && prog) sub.textContent = `${prog.currentPace} videos/day current pace | ${prog.onTrack ? "on track" : `behind by ${(prog.videosNeededPerDay - prog.currentPace).toFixed(1)}/day`}`;
-    }
-
-    const DAILY_VIDEO_TARGET = 7;
-
-    function normalizeCalendarClip(v, kind) {
-      return {
-        videoId: v.videoId || v.id || "",
-        title: v.title || "(untitled clip)",
-        platform: v.platform || "",
-        pillar: v.pillar || "",
-        thumbnail: v.thumbnail || null,
-        status: kind === "published" ? "Published" : (v.status || "Scheduled"),
-        kind,
-        views: typeof v.views === "number" ? v.views : null,
-        score: typeof v.score === "number" ? v.score : null,
-        postUrl: v.postUrl || null,
-      };
-    }
-
-    function toggleEl(id) {
-      const el = document.getElementById(id);
-      if (el) el.style.display = el.style.display === "none" ? "block" : "none";
-    }
-    function reloadCalendarDay() {
-      if (calendarSelectedDate) loadCalendarDay(calendarSelectedDate);
-    }
-
-    function calendarSlotCardHtml(clip) {
-      const badge = clip.kind === "published"
-        ? `<span class="cm-pillar-tag listings">${escapeHtml(clip.status)}</span>`
-        : `<span class="cm-pillar-tag education">${escapeHtml(clip.status)}</span>`;
-      const platform = clip.platform ? `<span class="cm-pillar-tag brand">${escapeHtml(clip.platform)}</span>` : "";
-      const stats = clip.kind === "published" && (clip.views != null || clip.score != null)
-        ? `<div class="calendar-slot-stats cm-muted">${clip.views != null ? `${fmt(clip.views)} views` : ""}${clip.views != null && clip.score != null ? " · " : ""}${clip.score != null ? `score ${clip.score}` : ""}</div>`
-        : "";
-      const clickable = clip.videoId
-        ? `onclick="playClip('${jsStr(clip.videoId)}', '${jsStr(clip.title)}')" role="button" tabindex="0"`
-        : "";
-
-      // Scheduled clips (primary OR bonus) get the SAME publish flow as the
-      // Publishing queue - a platform picker that posts via Upload-Post. Honest
-      // status is inherited (Submitted → Published only on real confirmation).
-      let action = "";
-      if (clip.kind === "scheduled" && clip.videoId) {
-        if (socialsConnected()) {
-          const plats = [...new Set((clip.platform ? [String(clip.platform).toLowerCase()] : ["tiktok", "instagram", "facebook"]).filter(Boolean))];
-          const boxes = plats.map((p) =>
-            `<label style="display:inline-flex;align-items:center;gap:0.3rem;margin-right:0.7rem;font-size:0.72rem;text-transform:capitalize;"><input type="checkbox" value="${escapeHtml(p)}" checked> ${escapeHtml(p)}</label>`
-          ).join("");
-          action = `<div style="margin-top:0.45rem;" onclick="event.stopPropagation()">
-              <button type="button" class="cm-btn-publish-now" onclick="toggleEl('ppc-${clip.videoId}')">PUBLISH</button>
-              <div id="ppc-${clip.videoId}" style="display:none;margin-top:0.45rem;padding:0.55rem;border:1px solid var(--border);border-radius:6px;background:var(--surface2, rgba(255,255,255,0.03));">
-                <div style="font-size:0.68rem;color:var(--muted);margin-bottom:0.35rem;">Publish to which platforms?</div>
-                <div style="margin-bottom:0.45rem;">${boxes}</div>
-                <button type="button" class="cm-btn-publish-now" onclick="doPublish('${clip.videoId}', this, 'ppc-${clip.videoId}', reloadCalendarDay)">Publish selected</button>
-                <button type="button" class="cm-btn" onclick="toggleEl('ppc-${clip.videoId}')">Cancel</button>
-              </div>
-            </div>`;
-        } else {
-          action = `<div class="cm-muted" style="margin-top:0.45rem;font-size:0.66rem;">Publishing not connected</div>`;
-        }
+      if (!prog) {
+        if (label) label.textContent = "Sprint pace unavailable right now.";
+        return;
       }
-
-      // Published clips: link out to the real post. Upload-Post cannot take down
-      // a live post via API, so there is deliberately no "delete" action here.
-      let viewLink = "";
-      if (clip.kind === "published" && clip.postUrl) {
-        viewLink = `<div style="margin-top:0.45rem;" onclick="event.stopPropagation()"><a href="${escapeHtml(clip.postUrl)}" target="_blank" rel="noopener" class="cm-btn" style="text-decoration:none;display:inline-block;">↗ View on ${escapeHtml(clip.platform || "platform")}</a></div>`;
-      }
-
-      return `<div class="calendar-slot filled${clip.videoId ? " clickable" : ""}" ${clickable}>
-          <div class="calendar-slot-title">${escapeHtml(clip.title)}</div>
-          <div class="calendar-slot-badges">${badge}${platform}</div>
-          ${stats}
-          ${action}
-          ${viewLink}
-        </div>`;
+      const total = prog.totalVideosEver || 0;
+      if (label) label.textContent = `${total} / 861 videos | ${prog.daysRemaining || 0} days remaining | Need ${(prog.videosNeededPerDay || 0).toFixed(1)}/day`;
+      if (fill) fill.style.width = `${Math.min(100, (total / 861) * 100)}%`;
+      if (sub) sub.textContent = `${prog.currentPace} videos/day current pace | ${prog.onTrack ? "on track" : `behind by ${((prog.videosNeededPerDay || 0) - (prog.currentPace || 0)).toFixed(1)}/day`}`;
     }
 
-    function calendarEmptySlotHtml(n) {
-      return `<div class="calendar-slot empty">
-          <div class="calendar-slot-num">${n}</div>
-          <div class="calendar-slot-empty-label cm-muted">Not yet filmed</div>
-        </div>`;
-    }
-
-    async function loadCalendarDay(date) {
-      await ensurePublishCaps(); // so the calendar's PUBLISH controls reflect the real connection state
-      const data = await cmFetch(`/api/content/calendar/day/${date}`);
-      document.getElementById("calendar-day-title").textContent = date;
-
-      // Real clip data for this day: published + scheduled, matched by
-      // published_at / scheduled_for in content_videos + content_publish_log.
-      const clips = [
-        ...(data.videosPublished || []).map((v) => normalizeCalendarClip(v, "published")),
-        ...(data.videosScheduled || []).map((v) => normalizeCalendarClip(v, "scheduled")),
-      ];
-
-      const summary = document.getElementById("calendar-day-summary");
-      if (summary) {
-        const filled = clips.length;
-        summary.textContent = filled >= DAILY_VIDEO_TARGET
-          ? `${filled} / ${DAILY_VIDEO_TARGET} recording slots filled${filled > DAILY_VIDEO_TARGET ? ` (+${filled - DAILY_VIDEO_TARGET} bonus)` : ""}`
-          : `${filled} / ${DAILY_VIDEO_TARGET} recording slots - quality-gated, so fewer strong clips is fine`;
-      }
-
-      // Always render exactly 7 target slots: fill with real clips, then label
-      // the remainder "Not yet filmed". Clips beyond 7 go to the overflow list.
-      const slots = document.getElementById("calendar-day-slots");
-      if (slots) {
-        const primary = clips.slice(0, DAILY_VIDEO_TARGET);
-        let html = "";
-        for (let i = 0; i < DAILY_VIDEO_TARGET; i++) {
-          html += primary[i] ? calendarSlotCardHtml(primary[i]) : calendarEmptySlotHtml(i + 1);
-        }
-        slots.innerHTML = html;
-      }
-
-      const overflow = document.getElementById("calendar-day-overflow");
-      if (overflow) {
-        const extras = clips.slice(DAILY_VIDEO_TARGET);
-        overflow.innerHTML = extras.length
-          ? `<div class="cm-panel"><h4 style="margin:0 0 0.5rem;">Bonus / extra clips (${extras.length})</h4>
-              <div class="calendar-overflow-list">${extras.map(calendarSlotCardHtml).join("")}</div></div>`
-          : "";
-      }
-    }
-
-    async function loadCalendarSection() {
-      if (calendarView === "day" && calendarSelectedDate) {
-        document.getElementById("calendar-month-view").style.display = "none";
-        document.getElementById("calendar-day-view").style.display = "block";
-        await loadCalendarDay(calendarSelectedDate);
-      } else {
-        document.getElementById("calendar-month-view").style.display = "block";
-        document.getElementById("calendar-day-view").style.display = "none";
-        await loadCalendarMonth();
-      }
-      void updateStrategyBadges();
-    }
-
-    document.getElementById("cal-view-month")?.addEventListener("click", () => {
-      calendarView = "month";
-      void loadCalendarSection();
-    });
-    document.getElementById("cal-view-day")?.addEventListener("click", () => {
-      calendarView = "day";
-      calendarSelectedDate = calendarSelectedDate || new Date().toISOString().slice(0, 10);
-      void loadCalendarSection();
-    });
-    document.getElementById("calendar-back-month")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      calendarView = "month";
-      void loadCalendarSection();
-    });
     function switchCmSection(section) {
       cmSection = section;
       document.querySelectorAll(".crm-side-btn[data-cm-section]").forEach((b) => {
@@ -6376,7 +6149,7 @@
       });
       const activeSec = document.getElementById("cm-section-" + section);
       if (activeSec) { activeSec.classList.remove("cm-entering"); void activeSec.offsetWidth; activeSec.classList.add("cm-entering"); }
-      if (section === "overview") void loadCmOverview();
+      if (section === "overview") { void loadCmOverview(); void loadSprintProgress(); }
       if (section === "upload") {
         void loadClipPipeline();
         void loadTrendIntel();
@@ -6387,7 +6160,6 @@
       if (section === "analytics") void loadCmAnalytics("performance");
       if (section === "strategy") void loadStrategySection("overview");
       if (section === "recording") void loadRecordingSection();
-      if (section === "calendar") void loadCalendarSection();
       if (section === "brain") void loadBrainSection();
       if (section === "activity") loadActivityLogTab();
     }
