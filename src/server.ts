@@ -952,6 +952,12 @@ app.get("/social", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "social.html"));
 });
 
+// Content Planner — the editorial calendar (plan/backlog/assignment), as
+// distinct from the Content Manager's production calendar of filmed clips.
+app.get("/content-planner", requireAuthPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "content-planner.html"));
+});
+
 app.get("/email-marketing", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "email-marketing.html"));
 });
@@ -8922,6 +8928,355 @@ app.get("/api/content/sprint-progress", (req, res) => {
   res.json(getSprintProgress());
 });
 
+/* ═══════════════════════════════════════════════════════════════════════
+   CONTENT PLANNER — the editorial calendar at /content-planner.
+   Distinct from /api/content/calendar/* above, which reports on clips that
+   already exist. These routes own INTENT: planned items, the unscheduled
+   backlog, who owns each one, and what timezone the times mean.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** Roster + palette + platform list + settings: everything the page boots from. */
+app.get("/api/planner/bootstrap", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const { listPlannerTeam } = await import("./core/plannerTeam.js");
+  const { zoneLabel } = await import("./core/zonedTime.js");
+  const settings = planner.getSettings();
+  res.json({
+    settings,
+    anchorTz: planner.anchorTz(settings),
+    zoneLabels: {
+      primary: zoneLabel(settings.primaryTz),
+      secondary: zoneLabel(settings.secondaryTz),
+    },
+    team: listPlannerTeam(),
+    palette: planner.palette(),
+    platforms: planner.PLATFORMS,
+    backlogStatuses: planner.BACKLOG_STATUSES.map((s) => ({ id: s, label: planner.BACKLOG_STATUS_LABELS[s] })),
+    counts: planner.plannerCounts(),
+    /** Zones offered in the two pickers. Any IANA zone is accepted on save. */
+    timezones: [
+      "America/Chicago",
+      "America/New_York",
+      "America/Denver",
+      "America/Los_Angeles",
+      "America/Phoenix",
+      "Asia/Manila",
+      "Asia/Kolkata",
+      "Europe/London",
+      "Europe/Madrid",
+      "Australia/Sydney",
+      "UTC",
+    ],
+  });
+});
+
+app.get("/api/planner/items", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const from = String(req.query.from || "");
+  const to = String(req.query.to || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    res.status(400).json({ error: "from and to must be YYYY-MM-DD" });
+    return;
+  }
+  const settings = planner.getSettings();
+  res.json({
+    from,
+    to,
+    anchorTz: planner.anchorTz(settings),
+    settings,
+    items: planner.scheduledBetween(from, to, settings),
+    counts: planner.plannerCounts(),
+  });
+});
+
+app.get("/api/planner/backlog", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const items = planner.backlogItems();
+  const columns = planner.BACKLOG_STATUSES.map((status) => ({
+    id: status,
+    label: planner.BACKLOG_STATUS_LABELS[status],
+    items: items.filter((i) => i.backlogStatus === status),
+  }));
+  res.json({ count: items.length, items, columns });
+});
+
+app.post("/api/planner/items", express.json({ limit: "256kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const body = (req.body || {}) as Record<string, unknown>;
+  const title = String(body.title || "").trim();
+  if (!title) {
+    res.status(400).json({ error: "A title is required" });
+    return;
+  }
+  const { item, dst } = planner.createItem({
+    title,
+    hook: typeof body.hook === "string" ? body.hook : "",
+    caption: typeof body.caption === "string" ? body.caption : "",
+    script: typeof body.script === "string" ? body.script : "",
+    color: typeof body.color === "string" ? body.color : undefined,
+    platforms: Array.isArray(body.platforms) ? (body.platforms as string[]) : [],
+    assignedUsers: Array.isArray(body.assignedUsers) ? (body.assignedUsers as Array<{ userId: string; role: string }>) : [],
+    assetDriveUrl: typeof body.assetDriveUrl === "string" ? body.assetDriveUrl : null,
+    date: typeof body.date === "string" ? body.date : null,
+    time: typeof body.time === "string" ? body.time : null,
+    authoredTz: typeof body.authoredTz === "string" ? body.authoredTz : undefined,
+    backlogStatus: typeof body.backlogStatus === "string" ? (body.backlogStatus as never) : undefined,
+    notes: typeof body.notes === "string" ? body.notes : "",
+    createdBy: typeof body.actor === "string" ? body.actor : null,
+  });
+  await notifyPlannerAssignees(item.assignedUsers.map((a) => a.userId), item.title, item.id, typeof body.actor === "string" ? body.actor : "");
+  res.json({ ok: true, item: planner.viewItem(item), dstWarning: dst });
+});
+
+app.patch("/api/planner/items/:id", express.json({ limit: "256kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const before = planner.getItem(String(req.params.id));
+  if (!before) {
+    res.status(404).json({ error: "No such item" });
+    return;
+  }
+  const body = (req.body || {}) as Record<string, unknown>;
+  const result = planner.updateItem(String(req.params.id), {
+    title: typeof body.title === "string" ? body.title : undefined,
+    hook: typeof body.hook === "string" ? body.hook : undefined,
+    caption: typeof body.caption === "string" ? body.caption : undefined,
+    script: typeof body.script === "string" ? body.script : undefined,
+    color: typeof body.color === "string" ? body.color : undefined,
+    platforms: Array.isArray(body.platforms) ? (body.platforms as string[]) : undefined,
+    assignedUsers: Array.isArray(body.assignedUsers)
+      ? (body.assignedUsers as Array<{ userId: string; role: string }>)
+      : undefined,
+    assetDriveUrl: body.assetDriveUrl === undefined ? undefined : (body.assetDriveUrl as string | null),
+    isCompleted: typeof body.isCompleted === "boolean" ? body.isCompleted : undefined,
+    backlogStatus: typeof body.backlogStatus === "string" ? (body.backlogStatus as never) : undefined,
+    sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
+    notes: typeof body.notes === "string" ? body.notes : undefined,
+    date: body.date === undefined ? undefined : (body.date as string | null),
+    time: typeof body.time === "string" ? body.time : undefined,
+    authoredTz: typeof body.authoredTz === "string" ? body.authoredTz : undefined,
+    actor: typeof body.actor === "string" ? body.actor : undefined,
+  });
+  if (!result) {
+    res.status(404).json({ error: "No such item" });
+    return;
+  }
+  const priorIds = before.assignedUsers.map((a) => a.userId);
+  const newlyAssigned = result.item.assignedUsers.map((a) => a.userId).filter((u) => !priorIds.includes(u));
+  await notifyPlannerAssignees(newlyAssigned, result.item.title, result.item.id, typeof body.actor === "string" ? body.actor : "");
+  res.json({ ok: true, item: planner.viewItem(result.item), dstWarning: result.dst });
+});
+
+app.delete("/api/planner/items/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const ok = planner.deleteItem(String(req.params.id), String(req.query.actor || "system"));
+  res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: "No such item" });
+});
+
+/**
+ * What a drop WOULD do. The Domino preview overlay calls this on hover so the
+ * operator sees the ripple before committing to it — nothing is written.
+ */
+app.post("/api/planner/reschedule/preview", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const body = (req.body || {}) as Record<string, unknown>;
+  const plan = planner.planReschedule({
+    itemId: String(body.itemId || ""),
+    toDate: String(body.toDate || ""),
+    time: typeof body.time === "string" ? body.time : null,
+    mode: body.mode === "DIRECT" ? "DIRECT" : body.mode === "DOMINO" ? "DOMINO" : undefined,
+  });
+  if (!plan) {
+    res.status(404).json({ error: "No such item" });
+    return;
+  }
+  res.json({ ok: true, plan });
+});
+
+app.post("/api/planner/reschedule", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const body = (req.body || {}) as Record<string, unknown>;
+  const toDate = String(body.toDate || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+    res.status(400).json({ error: "toDate must be YYYY-MM-DD" });
+    return;
+  }
+  const plan = planner.planReschedule({
+    itemId: String(body.itemId || ""),
+    toDate,
+    time: typeof body.time === "string" ? body.time : null,
+    mode: body.mode === "DIRECT" ? "DIRECT" : body.mode === "DOMINO" ? "DOMINO" : undefined,
+  });
+  if (!plan) {
+    res.status(404).json({ error: "No such item" });
+    return;
+  }
+  const updated = planner.applyReschedule(plan, String(body.actor || "system"));
+  res.json({ ok: true, plan, updated, counts: planner.plannerCounts() });
+});
+
+/** Reverse drag: a scheduled card goes back to the scratchpad, keeping its content. */
+app.post("/api/planner/items/:id/unschedule", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const body = (req.body || {}) as Record<string, unknown>;
+  const result = planner.updateItem(String(req.params.id), {
+    date: null,
+    backlogStatus: typeof body.backlogStatus === "string" ? (body.backlogStatus as never) : undefined,
+    actor: typeof body.actor === "string" ? body.actor : undefined,
+  });
+  if (!result) {
+    res.status(404).json({ error: "No such item" });
+    return;
+  }
+  res.json({ ok: true, item: planner.viewItem(result.item) });
+});
+
+app.get("/api/planner/settings", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  res.json(planner.getSettings());
+});
+
+app.put("/api/planner/settings", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  const { isValidTimeZone, zoneLabel } = await import("./core/zonedTime.js");
+  const body = (req.body || {}) as Record<string, unknown>;
+  for (const key of ["primaryTz", "secondaryTz"]) {
+    const v = body[key];
+    if (v !== undefined && (typeof v !== "string" || !isValidTimeZone(v))) {
+      res.status(400).json({ error: `${key} must be a valid IANA timezone (e.g. America/Chicago)` });
+      return;
+    }
+  }
+  const settings = planner.saveSettings({
+    primaryTz: typeof body.primaryTz === "string" ? body.primaryTz : undefined,
+    secondaryTz: typeof body.secondaryTz === "string" ? body.secondaryTz : undefined,
+    gridAnchor: body.gridAnchor === "primary" || body.gridAnchor === "secondary" ? body.gridAnchor : undefined,
+    dragMode: body.dragMode === "DOMINO" || body.dragMode === "DIRECT" ? body.dragMode : undefined,
+  });
+  res.json({
+    ok: true,
+    settings,
+    anchorTz: planner.anchorTz(settings),
+    zoneLabels: { primary: zoneLabel(settings.primaryTz), secondary: zoneLabel(settings.secondaryTz) },
+  });
+});
+
+app.get("/api/planner/activity", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const planner = await import("./core/contentPlanner.js");
+  res.json({ activity: planner.listActivity(Number(req.query.limit) || 50) });
+});
+
+/**
+ * AI hook assist. Real call to the same Anthropic model the rest of the app
+ * uses — and when no key is configured it says exactly that instead of
+ * returning a canned line dressed up as a suggestion.
+ */
+app.post("/api/planner/hook-assist", express.json(), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const { complete, isAnthropicApiKeyConfigured } = await import("./integrations/llm/index.js");
+  if (!isAnthropicApiKeyConfigured()) {
+    res.status(503).json({
+      error: "Hook assist needs the ANTHROPIC_API_KEY secret — it is not set, so there is nothing to ask.",
+    });
+    return;
+  }
+  const body = (req.body || {}) as Record<string, unknown>;
+  const title = String(body.title || "").trim();
+  const platforms = Array.isArray(body.platforms) ? (body.platforms as string[]).join(", ") : "";
+  try {
+    const text = await complete(
+      `Write 3 short scroll-stopping opening hooks for a real-estate social post.\n` +
+        `Topic: ${title || "(no title yet)"}\nPlatforms: ${platforms || "(unspecified)"}\n` +
+        `Caption so far: ${String(body.caption || "").slice(0, 400)}\n` +
+        `Return them as three plain lines, no numbering, no preamble, under 15 words each.`,
+      "You write hooks for Marco Puga, a San Antonio real-estate agent. Direct, specific, no hype words.",
+    );
+    const hooks = String(text || "")
+      .split("\n")
+      .map((l) => l.replace(/^[-*\d.\s]+/, "").trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    res.json({ ok: true, hooks });
+  } catch (err) {
+    res.status(502).json({ error: `Hook assist failed: ${(err as Error)?.message || err}` });
+  }
+});
+
+/**
+ * An assignment raises a real notification on the Task Command board — the
+ * same feed assignments from the task board land in — so "notify on assign"
+ * means the person actually sees it, not just a row in a log table.
+ */
+async function notifyPlannerAssignees(userIds: string[], title: string, itemId: string, actor: string): Promise<void> {
+  if (!userIds.length) return;
+  try {
+    const { addNotification } = await import("./core/teamStore.js");
+    const { plannerMemberName } = await import("./core/plannerTeam.js");
+    for (const userId of userIds) {
+      addNotification({
+        user: userId,
+        type: "assignment",
+        title: "Assigned a content item",
+        body: `${actor ? plannerMemberName(actor) + " assigned" : "You were assigned"} "${title}" on the content calendar.`,
+        taskId: itemId,
+        from: actor || undefined,
+      });
+    }
+  } catch (err) {
+    console.warn("[planner] assignment notification failed:", err);
+  }
+}
+
 /** Legacy listing status change — maps active/off_market to new intake (uses propertyInquired as address). */
 app.post("/api/activity/listing-status-change", express.json(), async (req, res) => {
   if (!dashboardTokenOk(req)) {
@@ -13946,6 +14301,19 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   } catch (err) {
     console.error("[team] init failed:", err);
   }
+  // Planner activity lines name people, not ids. The roster lives in one file
+  // and the store must not import it directly (it would drag the CRM user
+  // table into every planner query), so the resolver is injected at boot.
+  void (async () => {
+    try {
+      const { setNameResolver, getPlannerDb } = await import("./core/contentPlanner.js");
+      const { plannerMemberName } = await import("./core/plannerTeam.js");
+      setNameResolver(plannerMemberName);
+      getPlannerDb();
+    } catch (err) {
+      console.error("[planner] init failed:", err);
+    }
+  })();
   // A job left 'running' when the process died is not running — nothing resumes
   // it. Mark those interrupted so the UI shows the truth, not a phantom job.
   void (async () => {

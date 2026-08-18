@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Planner · Marco Puga CRM</title>
+<!--
+  THE EDITORIAL CALENDAR.
+
+  This is the plan, not the record. The Content Manager's own calendar
+  (/social → Calendar) reports on clips that exist — filmed, published, scored.
+  This page owns what is INTENDED: an idea, its hook, its caption, its script,
+  the platforms it goes out on, who owns it, and which day it lands.
+
+  Everything on this page is backed by /api/planner/*. Times are stored as UTC
+  instants and rendered in two zones; the day a card sits in is decided by the
+  grid anchor, which is why flipping the anchor genuinely moves cards.
+-->
+<style>
+  :root {
+    --bg-0:#07080c; --bg-1:#0d0f16; --bg-2:#131520; --bg-3:#1a1d2e; --bg-4:#222538;
+    --teal:#2dd4ee; --teal-dim:rgba(45,212,238,0.15); --teal-border:rgba(45,212,238,0.28);
+    --green:#00e87a; --amber:#ffb340; --red:#ff4455; --violet:#a78bfa;
+    --white:#f0f4f8; --dim:rgba(240,244,248,0.55); --dimmer:rgba(240,244,248,0.25);
+    --dimmest:rgba(240,244,248,0.08);
+    --font-body:'Inter',system-ui,-apple-system,sans-serif;
+    --radius:10px; --radius-sm:6px;
+    --ease-out:cubic-bezier(0.16,1,0.3,1);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background:var(--bg-0); color:var(--white); font-family:var(--font-body);
+    font-size:13px; min-height:100vh; display:flex; flex-direction:column;
+  }
+  a { color:var(--teal); }
+  button, select, input, textarea { font-family:inherit; font-size:12px; }
+  .muted { color:var(--dim); }
+  .tiny { font-size:10px; }
+
+  /* ── header ── */
+  .topbar {
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    padding:12px 18px; background:var(--bg-2); border-bottom:1px solid var(--dimmest);
+    flex-wrap:wrap; position:sticky; top:0; z-index:60;
+  }
+  .topbar h1 { font-size:15px; font-weight:800; letter-spacing:0.4px; }
+  .topbar .sub { font-size:10px; color:var(--dim); }
+  .hgroup { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .btn {
+    padding:6px 11px; border-radius:var(--radius-sm); border:1px solid var(--dimmest);
+    background:var(--bg-3); color:var(--white); cursor:pointer; font-weight:500;
+    transition:background 120ms var(--ease-out), border-color 120ms var(--ease-out);
+  }
+  .btn:hover { background:var(--bg-4); border-color:var(--teal-border); }
+  .btn.primary { background:var(--teal); color:#04222a; border-color:transparent; font-weight:700; }
+  .btn.ghost { background:transparent; }
+  .btn.scratch { background:rgba(255,179,64,0.14); border-color:rgba(255,179,64,0.4); color:var(--amber); font-weight:700; }
+  select.pill, input.pill {
+    padding:6px 9px; border-radius:var(--radius-sm); border:1px solid var(--dimmest);
+    background:var(--bg-3); color:var(--white);
+  }
+  label.fieldlabel { font-size:10px; font-weight:700; color:var(--dim); text-transform:uppercase; letter-spacing:0.5px; }
+
+  /* ── toolbar ── */
+  .toolbar {
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:10px 18px; background:var(--bg-1); border-bottom:1px solid var(--dimmest); flex-wrap:wrap;
+  }
+  .nav-center { display:flex; align-items:center; gap:6px; font-weight:700; }
+  #monthLabel { min-width:150px; text-align:center; }
+  .mode-toggle { display:flex; background:var(--bg-3); border-radius:var(--radius-sm); padding:3px; gap:2px; }
+  .mode-toggle button {
+    padding:5px 10px; border:none; background:transparent; color:var(--dim);
+    border-radius:4px; cursor:pointer; font-size:11px; font-weight:600;
+  }
+  .mode-toggle button.active { background:var(--bg-0); color:var(--teal); box-shadow:0 1px 4px rgba(0,0,0,0.5); }
+  .banner {
+    margin:0 18px 10px; padding:7px 12px; border-radius:var(--radius-sm);
+    background:var(--teal-dim); border:1px solid var(--teal-border); color:var(--teal);
+    font-size:11px; display:flex; justify-content:space-between; align-items:center; gap:10px;
+  }
+  .banner.warn { background:rgba(255,179,64,0.12); border-color:rgba(255,179,64,0.35); color:var(--amber); }
+
+  /* ── master/detail split ── */
+  .split { display:flex; flex-direction:column; gap:12px; padding:0 18px 90px; flex:1; }
+  @media (min-width:1200px) {
+    .split { flex-direction:row; align-items:flex-start; }
+    .split > .calendar-pane { flex:1 1 62%; min-width:0; }
+    .split > .detail-pane { flex:1 1 38%; max-width:520px; position:sticky; top:120px; }
+  }
+
+  /* ── calendar grid ── */
+  .grid-head { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:6px; }
+  .grid-head div { text-align:center; font-size:10px; font-weight:700; color:var(--dim); letter-spacing:0.6px; }
+  .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .date-cell {
+    background:var(--bg-2); border:1px solid var(--dimmest); border-radius:var(--radius);
+    min-height:104px; padding:6px; display:flex; flex-direction:column; gap:4px; cursor:pointer;
+    transition:border-color 120ms var(--ease-out), background 120ms var(--ease-out), transform 120ms var(--ease-out);
+    will-change:transform;
+  }
+  .date-cell:hover { border-color:var(--dimmer); }
+  .date-cell.outside { opacity:0.45; }
+  .date-cell.today .date-num { color:var(--teal); }
+  .date-cell.selected { border:2px solid var(--teal); background:rgba(45,212,238,0.06); padding:5px; }
+  .date-cell.drag-over { border:2px dashed var(--teal); background:rgba(45,212,238,0.12); padding:5px; transform:scale(1.02); }
+  .date-cell.ripple-preview { border-color:var(--amber); background:rgba(255,179,64,0.10); }
+  .date-cell.expanded { min-height:230px; background:var(--bg-3); }
+  .date-num { font-size:11px; font-weight:700; color:var(--white); display:flex; justify-content:space-between; align-items:center; }
+  .cell-count { font-size:9px; color:var(--dim); font-weight:500; }
+
+  /* in-cell cards */
+  .cell-card {
+    border-radius:5px; padding:4px 5px; font-size:10px; background:var(--bg-3);
+    border:1px solid var(--dimmest); border-left:4px solid var(--teal);
+    display:flex; flex-direction:column; gap:2px; cursor:grab;
+    transition:opacity 150ms var(--ease-out), transform 120ms var(--ease-out);
+    will-change:transform,opacity;
+  }
+  .cell-card:active { cursor:grabbing; transform:scale(0.98); opacity:0.7; }
+  .cell-card.dragging { opacity:0.35; }
+  .cell-card.completed .card-title { text-decoration:line-through; }
+  .cell-card.completed { opacity:0.6; }
+  /* Declared AFTER .completed on purpose: same specificity, and a card the
+     team filter has dimmed must read as dimmed even when it is also done. */
+  .cell-card.dimmed { opacity:0.3; }
+  .card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:4px; }
+  .card-title { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .card-bottom { display:flex; justify-content:space-between; align-items:center; gap:4px; margin-top:2px; }
+  .plat-badge { padding:1px 4px; border-radius:3px; font-size:8px; font-weight:700; letter-spacing:0.2px; }
+  .time-badge { font-size:8px; color:var(--dim); white-space:nowrap; }
+  .time-badge .delta { color:var(--amber); font-weight:700; }
+  .dst-badge { font-size:8px; color:var(--amber); font-weight:700; }
+  .more-link { font-size:9px; color:var(--teal); font-weight:600; background:none; border:none; cursor:pointer; text-align:left; padding:2px 0 0; }
+
+  /* avatar chips */
+  .chips { display:flex; align-items:center; }
+  .avatar-chip {
+    width:20px; height:20px; border-radius:50%; font-size:8px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; color:#04121a;
+    border:2px solid var(--teal); background:var(--teal); flex-shrink:0;
+  }
+  .chips .avatar-chip + .avatar-chip { margin-left:-6px; }
+  .avatar-chip.more { background:var(--bg-4); color:var(--white); border-color:var(--dimmer); }
+  .avatar-chip.inactive { filter:grayscale(1); opacity:0.6; }
+
+  /* direct-insert hourly timeline */
+  .hour-lane { display:flex; flex-direction:column; gap:0; margin-top:4px; overflow:auto; max-height:180px; }
+  .hour-slot {
+    display:flex; align-items:center; gap:5px; font-size:9px; color:var(--dim);
+    padding:2px 3px; border-top:2px solid transparent; cursor:copy;
+  }
+  .hour-slot .hr { width:44px; flex-shrink:0; }
+  .hour-slot .fill { flex:1; height:1px; background:var(--dimmest); }
+  .hour-slot.insert { border-top:2px solid var(--teal); color:var(--teal); }
+  .hour-slot.insert .fill { background:var(--teal); }
+
+  /* ── detail panel ── */
+  .panel { background:var(--bg-2); border:1px solid var(--dimmest); border-radius:var(--radius); padding:14px; }
+  .metrics-bar { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:10px; color:var(--dim); border-bottom:1px solid var(--dimmest); padding-bottom:8px; margin-bottom:10px; }
+  .panel-title { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; font-weight:700; margin-bottom:8px; flex-wrap:wrap; }
+  .accordion-item { border:1px solid var(--dimmest); border-radius:var(--radius-sm); overflow:hidden; margin-top:8px; }
+  .accordion-header { background:var(--bg-3); padding:9px 11px; font-size:11px; font-weight:700; display:flex; justify-content:space-between; align-items:center; gap:8px; cursor:pointer; }
+  .accordion-body { padding:11px; display:flex; flex-direction:column; gap:10px; background:var(--bg-2); }
+  .accordion-body[hidden] { display:none; }
+  .field-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:700px) { .field-row { grid-template-columns:1fr; } }
+  .field-group { display:flex; flex-direction:column; gap:3px; }
+  .field-group textarea, .field-group input, .field-group select {
+    padding:6px; border:1px solid var(--dimmest); border-radius:4px;
+    background:var(--bg-1); color:var(--white); font-size:11px; width:100%;
+  }
+  .field-group textarea { min-height:52px; resize:vertical; }
+  .save-flag { font-size:9px; color:var(--dim); }
+  .save-flag.saving { color:var(--amber); }
+  .save-flag.saved { color:var(--green); }
+  .empty-state { padding:16px 0; text-align:center; color:var(--dim); font-size:11px; display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .platform-picker { display:flex; flex-wrap:wrap; gap:4px; }
+  .platform-picker label { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border:1px solid var(--dimmest); border-radius:999px; font-size:10px; cursor:pointer; }
+  .platform-picker label.on { border-color:var(--teal); color:var(--teal); background:var(--teal-dim); }
+  .swatches { display:flex; flex-wrap:wrap; gap:4px; }
+  .swatch { width:auto; padding:3px 7px; border-radius:999px; font-size:9px; font-weight:700; border:2px solid transparent; cursor:pointer; }
+  .swatch.on { border-color:var(--white); }
+  .assignee-row { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+  .assignee-toggle { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:999px; border:1px solid var(--dimmest); cursor:pointer; font-size:10px; }
+  .assignee-toggle.on { border-width:2px; }
+
+  /* ── scratchpad drawer ── */
+  .drawer {
+    position:fixed; top:0; right:0; height:100%; width:360px; max-width:92vw;
+    background:var(--bg-1); border-left:1px solid var(--teal-border);
+    box-shadow:-8px 0 28px rgba(0,0,0,0.55); z-index:90;
+    transform:translateX(105%); transition:transform 250ms var(--ease-out);
+    display:flex; flex-direction:column; gap:10px; padding:14px;
+  }
+  .drawer.open { transform:translateX(0); }
+  .drawer-header { display:flex; justify-content:space-between; align-items:center; gap:8px; border-bottom:1px solid var(--dimmest); padding-bottom:9px; }
+  .drawer-tabs { display:flex; gap:4px; }
+  .drawer-tabs button { padding:4px 10px; border-radius:999px; border:1px solid var(--dimmest); background:transparent; color:var(--dim); cursor:pointer; font-size:10px; font-weight:600; }
+  .drawer-tabs button.active { color:var(--teal); border-color:var(--teal-border); background:var(--teal-dim); }
+  .idea-scroll { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+  .idea-card {
+    background:var(--bg-2); border:1px solid var(--dimmest); border-left:4px solid var(--violet);
+    padding:8px; border-radius:var(--radius-sm); font-size:11px; cursor:grab;
+    display:flex; justify-content:space-between; align-items:center; gap:6px;
+    transition:transform 120ms var(--ease-out), border-color 120ms var(--ease-out);
+    will-change:transform;
+  }
+  .idea-card:hover { transform:translateY(-1px); border-color:var(--teal-border); }
+  .idea-card:active { cursor:grabbing; opacity:0.6; }
+  .kanban { display:grid; grid-template-columns:1fr; gap:10px; overflow-y:auto; flex:1; }
+  .kanban-col { background:var(--bg-2); border:1px solid var(--dimmest); border-radius:var(--radius-sm); padding:8px; display:flex; flex-direction:column; gap:6px; min-height:70px; }
+  .kanban-col.drag-over { border-color:var(--teal); background:rgba(45,212,238,0.08); }
+  .kanban-col h4 { font-size:10px; text-transform:uppercase; letter-spacing:0.6px; color:var(--dim); display:flex; justify-content:space-between; }
+  @media (max-width:760px) {
+    .drawer {
+      top:auto; bottom:0; right:0; left:0; width:100%; max-width:100%; height:76vh;
+      border-left:none; border-top:1px solid var(--teal-border);
+      border-radius:16px 16px 0 0; transform:translateY(105%);
+    }
+    .drawer.open { transform:translateY(0); }
+    .drawer::before { content:""; display:block; width:42px; height:4px; border-radius:999px; background:var(--dimmer); margin:0 auto 4px; }
+  }
+
+  /* ── floating drag-mode bubble ── */
+  .bubble {
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+    display:flex; align-items:center; gap:6px; padding:5px 6px 5px 12px;
+    background:var(--bg-3); border:1px solid var(--teal-border); border-radius:999px;
+    box-shadow:0 6px 24px rgba(0,0,0,0.6); z-index:80; font-size:11px;
+  }
+  .bubble .bubble-label { color:var(--dim); font-size:10px; }
+  .bubble .mode-toggle { padding:2px; }
+
+  /* ── ripple preview overlay ── */
+  .ripple-overlay {
+    position:fixed; right:18px; bottom:70px; z-index:85; max-width:320px;
+    background:var(--bg-3); border:1px solid var(--amber); border-radius:var(--radius);
+    padding:10px 12px; font-size:11px; box-shadow:0 8px 26px rgba(0,0,0,0.6);
+    display:none; opacity:0; transition:opacity 150ms var(--ease-out);
+  }
+  .ripple-overlay.show { display:block; opacity:1; }
+  .ripple-overlay h4 { font-size:11px; color:var(--amber); margin-bottom:5px; }
+  .ripple-overlay ul { list-style:none; max-height:150px; overflow:auto; }
+  .ripple-overlay li { font-size:10px; color:var(--dim); padding:1px 0; }
+
+  .toast {
+    position:fixed; left:50%; bottom:70px; transform:translateX(-50%);
+    background:var(--bg-4); border:1px solid var(--teal-border); color:var(--white);
+    padding:8px 14px; border-radius:999px; font-size:11px; z-index:120;
+    opacity:0; pointer-events:none; transition:opacity 200ms var(--ease-out);
+  }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>CONTENT PLANNER</h1>
+    <div class="sub">The plan, not the record — ideas, scripts, owners and dates. <a href="/social">Production calendar →</a></div>
+  </div>
+  <div class="hgroup">
+    <div class="hgroup" title="Times are stored in UTC and shown in both zones">
+      <span class="tiny muted">Creator</span>
+      <select class="pill" id="primaryTz"></select>
+      <span class="tiny muted">Audience</span>
+      <select class="pill" id="secondaryTz"></select>
+      <button class="btn ghost tiny" id="anchorToggle" title="Which timezone decides which day cell a card sits in">Grid anchor: —</button>
+    </div>
+    <button class="btn scratch" id="scratchBtn">💡 Scratchpad (<span id="scratchCount">0</span>)</button>
+    <button class="btn" id="refreshBtn">Refresh</button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="nav-center">
+    <button class="btn" id="prevMonth" aria-label="Previous month">&lt;</button>
+    <span id="monthLabel">—</span>
+    <button class="btn" id="nextMonth" aria-label="Next month">&gt;</button>
+    <button class="btn" id="todayBtn">Today</button>
+    <select class="pill" id="monthSelect"></select>
+    <select class="pill" id="yearSelect"></select>
+  </div>
+
+  <div class="hgroup">
+    <span class="tiny muted">Team member</span>
+    <select class="pill" id="assigneeFilter"><option value="ALL">All team members</option></select>
+  </div>
+
+  <div class="mode-toggle" id="headerModeToggle">
+    <button data-mode="DOMINO">⚡ Domino shift</button>
+    <button data-mode="DIRECT">📍 Direct insert</button>
+  </div>
+</div>
+
+<div class="banner" id="modeBanner"></div>
+
+<div class="split">
+  <div class="calendar-pane">
+    <div class="grid-head">
+      <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+    </div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+  </div>
+
+  <div class="detail-pane">
+    <div class="panel">
+      <div class="metrics-bar">
+        <span id="metricsLeft">—</span>
+        <span id="metricsRight">—</span>
+      </div>
+      <div class="panel-title">
+        <span id="panelDateLabel">Production detail</span>
+        <button class="btn primary" id="addSlotBtn">+ Add content slot</button>
+      </div>
+      <div id="accordionContainer"></div>
+    </div>
+  </div>
+</div>
+
+<div class="bubble">
+  <span class="bubble-label">Drag mode</span>
+  <div class="mode-toggle" id="bubbleModeToggle">
+    <button data-mode="DOMINO">⚡ Domino</button>
+    <button data-mode="DIRECT">📍 Direct</button>
+  </div>
+  <span class="bubble-label" title="Hold Shift while dragging to use the other mode">⇧ holds the other</span>
+</div>
+
+<div class="ripple-overlay" id="rippleOverlay">
+  <h4 id="rippleTitle">Domino preview</h4>
+  <ul id="rippleList"></ul>
+</div>
+
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div>
+      <strong>💡 Unscheduled scratchpad</strong>
+      <div class="tiny muted">Ideas with no date. Drag one onto a day to schedule it.</div>
+    </div>
+    <button class="btn" id="drawerClose">✕</button>
+  </div>
+  <div class="hgroup" style="justify-content:space-between;">
+    <div class="drawer-tabs" id="drawerTabs">
+      <button data-view="list" class="active">List</button>
+      <button data-view="kanban">Kanban</button>
+    </div>
+    <input class="pill" id="ideaSearch" placeholder="Search ideas…" style="flex:1;min-width:120px;">
+  </div>
+  <input class="pill" id="quickIdea" placeholder="Type an idea and press Enter…">
+  <div class="idea-scroll" id="ideaList"></div>
+  <div class="kanban" id="ideaKanban" hidden></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ───────────────────────── plumbing ───────────────────────── */
+
+  const TOKEN = new URLSearchParams(location.search).get("token") || "";
+  const withToken = (p) => (TOKEN ? p + (p.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN) : p);
+
+  async function api(path, opts) {
+    const res = await fetch(withToken(path), {
+      ...(opts || {}),
+      headers: { "Content-Type": "application/json", ...((opts || {}).headers || {}) },
+    });
+    let body = null;
+    try { body = await res.json(); } catch (_) { body = null; }
+    if (!res.ok) throw new Error((body && body.error) || res.status + " " + res.statusText);
+    return body;
+  }
+
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  let toastTimer = null;
+  function toast(msg) {
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+  }
+
+  /*
+   * Black or white type on a colour, decided by WCAG relative luminance — the
+   * same rule the server applies in contentPlanner.readableTextOn, so a chip
+   * looks identical whether it was coloured here or there.
+   */
+  function readableText(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+    if (!m) return "#ffffff";
+    const n = parseInt(m[1], 16);
+    const ch = (c) => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+    const lum = 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
+    const onWhite = (1.05) / (lum + 0.05);
+    const onBlack = (lum + 0.05) / 0.05;
+    return onBlack >= onWhite ? "#000000" : "#ffffff";
+  }
+
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const dateKey = (y, m, d) => `${y}-${pad2(m)}-${pad2(d)}`;
+  function addDaysKey(key, days) {
+    const t = Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10)) + days * 86400000;
+    const d = new Date(t);
+    return dateKey(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  }
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  function prettyDate(key) {
+    const d = new Date(Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10)));
+    const wd = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getUTCDay()];
+    return `${wd}, ${MONTHS[d.getUTCMonth()].slice(0, 3)} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+  }
+
+  /* ───────────────────────── state ───────────────────────── */
+
+  const now = new Date();
+  const state = {
+    booted: false,
+    settings: null,
+    anchorTz: "",
+    zoneLabels: {},
+    team: [],
+    palette: [],
+    platforms: [],
+    backlogStatuses: [],
+    timezones: [],
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+    todayKey: dateKey(now.getFullYear(), now.getMonth() + 1, now.getDate()),
+    selectedDate: dateKey(now.getFullYear(), now.getMonth() + 1, now.getDate()),
+    rangeFrom: "",
+    rangeTo: "",
+    items: [],
+    backlog: [],
+    counts: { scheduled: 0, backlog: 0, completed: 0 },
+    openAccordions: new Set(),
+    assigneeFilter: "ALL",
+    persistedMode: "DOMINO",
+    shiftHeld: false,
+    drawerView: "list",
+    ideaSearch: "",
+    dragging: null,      // { kind:'item'|'idea', id, fromDate }
+    dropTime: null,      // set by the hourly timeline in DIRECT mode
+    expandedCell: null,
+    previewFor: "",
+  };
+
+  /** Holding Shift temporarily flips to the OTHER mode — one of the three
+      synchronised controls, alongside the header switch and the bubble. */
+  const effectiveMode = () =>
+    state.shiftHeld ? (state.persistedMode === "DOMINO" ? "DIRECT" : "DOMINO") : state.persistedMode;
+
+  const memberById = (id) => state.team.find((m) => String(m.userId) === String(id)) || null;
+
+  /* ───────────────────────── boot ───────────────────────── */
+
+  async function boot() {
+    const data = await api("/api/planner/bootstrap");
+    state.settings = data.settings;
+    state.anchorTz = data.anchorTz;
+    state.zoneLabels = data.zoneLabels || {};
+    state.team = data.team || [];
+    state.palette = data.palette || [];
+    state.platforms = data.platforms || [];
+    state.backlogStatuses = data.backlogStatuses || [];
+    state.timezones = data.timezones || [];
+    state.counts = data.counts || state.counts;
+    state.persistedMode = data.settings.dragMode;
+    state.booted = true;
+
+    fillTimezoneSelects();
+    fillMonthYearSelects();
+    fillAssigneeFilter();
+    syncModeControls();
+    syncAnchorButton();
+    await reload();
+  }
+
+  function fillTimezoneSelects() {
+    const zones = state.timezones.slice();
+    for (const tz of [state.settings.primaryTz, state.settings.secondaryTz]) {
+      if (tz && !zones.includes(tz)) zones.push(tz);
+    }
+    for (const [id, value] of [["primaryTz", state.settings.primaryTz], ["secondaryTz", state.settings.secondaryTz]]) {
+      const sel = document.getElementById(id);
+      sel.innerHTML = zones.map((z) => `<option value="${esc(z)}"${z === value ? " selected" : ""}>${esc(z)}</option>`).join("");
+    }
+  }
+
+  function fillMonthYearSelects() {
+    const ms = document.getElementById("monthSelect");
+    ms.innerHTML = MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
+    ms.value = String(state.month);
+    const ys = document.getElementById("yearSelect");
+    const base = new Date().getFullYear();
+    const years = [];
+    for (let y = base - 2; y <= base + 5; y++) years.push(y);
+    if (!years.includes(state.year)) years.push(state.year);
+    years.sort((a, b) => a - b);
+    ys.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join("");
+    ys.value = String(state.year);
+  }
+
+  function fillAssigneeFilter() {
+    const sel = document.getElementById("assigneeFilter");
+    sel.innerHTML =
+      `<option value="ALL">All team members</option>` +
+      `<option value="NONE">Unassigned only</option>` +
+      state.team
+        .map((m) => `<option value="${esc(m.userId)}">${esc(m.fullName)}${m.active ? "" : " (Inactive)"} — ${esc(m.role)}</option>`)
+        .join("");
+    sel.value = state.assigneeFilter;
+  }
+
+  /* The visible grid always shows six whole weeks, Monday first, so the range
+     we load deliberately spills into the neighbouring months. */
+  function visibleRange() {
+    const first = new Date(Date.UTC(state.year, state.month - 1, 1));
+    const offset = (first.getUTCDay() + 6) % 7;
+    const start = new Date(first.getTime() - offset * 86400000);
+    const from = dateKey(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate());
+    return { from, to: addDaysKey(from, 41) };
+  }
+
+  async function reload() {
+    const { from, to } = visibleRange();
+    state.rangeFrom = from;
+    state.rangeTo = to;
+    const [items, backlog] = await Promise.all([
+      api(`/api/planner/items?from=${from}&to=${to}`),
+      api("/api/planner/backlog"),
+    ]);
+    state.items = items.items || [];
+    state.settings = items.settings || state.settings;
+    state.anchorTz = items.anchorTz || state.anchorTz;
+    state.counts = items.counts || state.counts;
+    state.backlog = backlog.items || [];
+    renderAll();
+  }
+
+  function renderAll() {
+    renderGrid();
+    renderDetail();
+    renderScratchpad();
+    renderMetrics();
+    document.getElementById("monthLabel").textContent = `${MONTHS[state.month - 1]} ${state.year}`;
+    document.getElementById("scratchCount").textContent = String(state.backlog.length);
+  }
+
+  function renderMetrics() {
+    document.getElementById("metricsLeft").textContent =
+      `${state.counts.scheduled} scheduled · ${state.counts.backlog} in scratchpad · ${state.counts.completed} complete`;
+    const anchorIsPrimary = state.settings.gridAnchor === "primary";
+    document.getElementById("metricsRight").textContent =
+      `Grid anchored to ${anchorIsPrimary ? "creator" : "audience"} time — ${state.anchorTz}`;
+  }
+
+  /* ───────────────────────── calendar grid ───────────────────────── */
+
+  const MAX_CARDS = 3;
+
+  function itemsFor(key) {
+    return state.items.filter((i) => i.gridDate === key);
+  }
+
+  function isDimmed(item) {
+    if (state.assigneeFilter === "ALL") return false;
+    if (state.assigneeFilter === "NONE") return item.assignedUsers.length > 0;
+    return !item.assignedUsers.some((a) => String(a.userId) === state.assigneeFilter);
+  }
+
+  function chipsHtml(item, max) {
+    const cap = max || 3;
+    const shown = item.assignedUsers.slice(0, cap);
+    const extra = item.assignedUsers.length - shown.length;
+    let html = shown
+      .map((a) => {
+        const m = memberById(a.userId);
+        const color = m ? m.accentColor : "#2dd4ee";
+        const label = m ? m.fullName + (m.active ? "" : " (Inactive)") : a.userId;
+        const initials = m ? m.avatarInitials : String(a.userId).slice(0, 2).toUpperCase();
+        return `<span class="avatar-chip${m && !m.active ? " inactive" : ""}" style="background:${esc(color)};border-color:${esc(color)};color:${readableText(color)};" title="${esc(label)} · ${esc(a.role)}">${esc(initials)}</span>`;
+      })
+      .join("");
+    if (extra > 0) html += `<span class="avatar-chip more" title="${extra} more assigned">+${extra}</span>`;
+    return `<span class="chips">${html}</span>`;
+  }
+
+  function timeBadgeHtml(item) {
+    if (!item.primary) return "";
+    const second = item.secondary
+      ? ` · ${esc(item.secondary.time)}${item.secondary.deltaLabel ? ` <span class="delta">${esc(item.secondary.deltaLabel)}</span>` : ""}`
+      : "";
+    const title = item.secondary
+      ? `${item.primary.time} ${item.primary.tz} · ${item.secondary.time} ${item.secondary.tz}`
+      : item.primary.time;
+    return `<span class="time-badge" title="${esc(title)}">${esc(item.primary.time)}${second}</span>`;
+  }
+
+  function cardHtml(item) {
+    const platform = item.platforms[0] || "";
+    const extraPlatforms = item.platforms.length - 1;
+    const badge = platform
+      ? `<span class="plat-badge" style="background:${esc(item.color)};color:${readableText(item.color)};" title="${esc(item.platforms.join(", "))}">${esc(platform)}${extraPlatforms > 0 ? ` +${extraPlatforms}` : ""}</span>`
+      : "";
+    const dst = item.dstWarning && item.dstWarning !== "ok"
+      ? `<span class="dst-badge" title="${item.dstWarning === "nonexistent" ? "This wall-clock time does not exist on this date — clocks jump forward" : "This time happens twice on this date — clocks fall back"}">⚠ DST</span>`
+      : "";
+    return `<div class="cell-card${item.isCompleted ? " completed" : ""}${isDimmed(item) ? " dimmed" : ""}"
+        style="border-left-color:${esc(item.color)};"
+        draggable="true" data-item-id="${esc(item.id)}" data-from-date="${esc(item.gridDate || "")}">
+        <div class="card-top">
+          <span class="card-title" title="${esc(item.title)}">${esc(item.title)}</span>
+          <input type="checkbox" data-complete-for="${esc(item.id)}"${item.isCompleted ? " checked" : ""} title="Mark complete">
+        </div>
+        <div class="card-bottom">
+          ${badge}${dst}${timeBadgeHtml(item)}
+          ${chipsHtml(item, 3)}
+        </div>
+      </div>`;
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById("calendarGrid");
+    let html = "";
+    for (let i = 0; i < 42; i++) {
+      const key = addDaysKey(state.rangeFrom, i);
+      const inMonth = +key.slice(5, 7) === state.month && +key.slice(0, 4) === state.year;
+      const dayItems = itemsFor(key);
+      const shown = dayItems.slice(0, MAX_CARDS);
+      const hidden = dayItems.length - shown.length;
+      html += `<div class="date-cell${inMonth ? "" : " outside"}${key === state.todayKey ? " today" : ""}${key === state.selectedDate ? " selected" : ""}" data-date="${key}">
+        <div class="date-num"><span>${key.slice(8)}</span>${dayItems.length ? `<span class="cell-count">${dayItems.length}</span>` : ""}</div>
+        ${shown.map(cardHtml).join("")}
+        ${hidden > 0 ? `<button class="more-link" data-more-for="${key}">+${hidden} more</button>` : ""}
+      </div>`;
+    }
+    grid.innerHTML = html;
+  }
+
+  /* ───────────────────────── detail panel ───────────────────────── */
+
+  function renderDetail() {
+    document.getElementById("panelDateLabel").textContent = `📅 ${prettyDate(state.selectedDate)}`;
+    const container = document.getElementById("accordionContainer");
+    const dayItems = itemsFor(state.selectedDate);
+
+    if (!dayItems.length) {
+      container.innerHTML = `<div class="empty-state">
+          <div>Nothing planned for ${esc(prettyDate(state.selectedDate))}.</div>
+          <button class="btn primary" id="createFirstBtn">+ Create first content item for ${esc(state.selectedDate)}</button>
+          <div class="tiny">Or drag an idea across from the scratchpad.</div>
+        </div>`;
+      return;
+    }
+    container.innerHTML = dayItems.map(accordionHtml).join("");
+  }
+
+  function accordionHtml(item) {
+    const open = state.openAccordions.has(item.id);
+    const dstNote = item.dstWarning === "nonexistent"
+      ? `<div class="banner warn tiny" style="margin:0;">This time does not exist on this date in ${esc(item.authoredTz)} — clocks jump forward. It is stored as ${esc(item.primary ? item.primary.time : "")}.</div>`
+      : item.dstWarning === "ambiguous"
+      ? `<div class="banner warn tiny" style="margin:0;">This time happens twice on this date in ${esc(item.authoredTz)} — clocks fall back. Stored as the first occurrence.</div>`
+      : "";
+
+    const swatches = state.palette
+      .map((c) => `<button class="swatch${c.hex.toLowerCase() === item.color.toLowerCase() ? " on" : ""}" style="background:${esc(c.hex)};color:${esc(c.text)};" data-color-for="${esc(item.id)}" data-color="${esc(c.hex)}" title="Contrast ratio ${c.contrast}:1">${esc(c.name)}</button>`)
+      .join("");
+
+    const platforms = state.platforms
+      .map((p) => {
+        const on = item.platforms.includes(p);
+        return `<label class="${on ? "on" : ""}"><input type="checkbox" data-platform-for="${esc(item.id)}" value="${esc(p)}"${on ? " checked" : ""}> ${esc(p)}</label>`;
+      })
+      .join("");
+
+    const assignees = state.team
+      .map((m) => {
+        const on = item.assignedUsers.some((a) => String(a.userId) === String(m.userId));
+        return `<span class="assignee-toggle${on ? " on" : ""}" style="${on ? `border-color:${esc(m.accentColor)};` : ""}" data-assign-for="${esc(item.id)}" data-user="${esc(m.userId)}">
+            <span class="avatar-chip${m.active ? "" : " inactive"}" style="background:${esc(m.accentColor)};border-color:${esc(m.accentColor)};color:${readableText(m.accentColor)};width:16px;height:16px;border-width:1px;">${esc(m.avatarInitials)}</span>
+            ${esc(m.fullName)}${m.active ? "" : " (Inactive)"}
+          </span>`;
+      })
+      .join("");
+
+    const drive = item.assetDriveUrl
+      ? `<a class="btn" href="${esc(item.assetDriveUrl)}" target="_blank" rel="noopener">📁 Open media drive</a>`
+      : `<span class="tiny muted">Paste a Drive/Dropbox link to enable the button</span>`;
+
+    const times = item.primary
+      ? `${esc(item.primary.time)} ${esc(item.primary.label)}${item.secondary ? ` · ${esc(item.secondary.time)} ${esc(item.secondary.label)}${item.secondary.deltaLabel ? " " + esc(item.secondary.deltaLabel) : ""}` : ""}`
+      : "unscheduled";
+
+    return `<div class="accordion-item" data-acc="${esc(item.id)}">
+      <div class="accordion-header" data-toggle-acc="${esc(item.id)}">
+        <span>${item.isCompleted ? "✅" : "🔴"} ${esc(item.primary ? item.primary.time : "—")} — ${esc(item.title)}${item.platforms.length ? ` (${esc(item.platforms.join(", "))})` : ""}</span>
+        <span class="tiny muted">${open ? "▲ Fold" : "▼ Expand"}</span>
+      </div>
+      <div class="accordion-body" id="accBody-${esc(item.id)}"${open ? "" : " hidden"}>
+        ${dstNote}
+        <div class="hgroup" style="justify-content:space-between;">
+          <div class="hgroup">
+            ${drive}
+            <button class="btn" data-hook-assist="${esc(item.id)}">✨ AI hook assist</button>
+          </div>
+          <div class="hgroup">
+            <label class="tiny"><input type="checkbox" data-complete-for="${esc(item.id)}"${item.isCompleted ? " checked" : ""}> Complete</label>
+            <button class="btn" data-unschedule="${esc(item.id)}" title="Send back to the scratchpad, keeping everything else">↩ Unschedule</button>
+            <button class="btn" data-delete="${esc(item.id)}">Delete</button>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-group">
+            <label class="fieldlabel">Title</label>
+            <input value="${esc(item.title)}" data-field="title" data-item="${esc(item.id)}">
+          </div>
+          <div class="field-group">
+            <label class="fieldlabel">Time (${esc(item.authoredTz)})</label>
+            <input type="time" value="${esc(item.primary ? item.primary.input : "09:00")}" data-field="time" data-item="${esc(item.id)}">
+            <span class="tiny muted">${times}</span>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="fieldlabel">Category colour</label>
+          <div class="swatches">${swatches}</div>
+        </div>
+
+        <div class="field-group">
+          <label class="fieldlabel">Platforms</label>
+          <div class="platform-picker">${platforms}</div>
+        </div>
+
+        <div class="field-group">
+          <label class="fieldlabel">Assigned team members</label>
+          <div class="assignee-row">${assignees}</div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-group">
+            <label class="fieldlabel">Hook</label>
+            <textarea data-field="hook" data-item="${esc(item.id)}">${esc(item.hook)}</textarea>
+          </div>
+          <div class="field-group">
+            <label class="fieldlabel">Caption &amp; hashtags</label>
+            <textarea data-field="caption" data-item="${esc(item.id)}">${esc(item.caption)}</textarea>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="fieldlabel">Script outline</label>
+          <textarea data-field="script" data-item="${esc(item.id)}" style="min-height:74px;">${esc(item.script)}</textarea>
+        </div>
+
+        <div class="field-group">
+          <label class="fieldlabel">Media drive link</label>
+          <input value="${esc(item.assetDriveUrl || "")}" placeholder="https://drive.google.com/…" data-field="assetDriveUrl" data-item="${esc(item.id)}">
+        </div>
+
+        <div class="save-flag" id="save-${esc(item.id)}">Saved</div>
+      </div>
+    </div>`;
+  }
+
+  /* ───────────────────────── scratchpad ───────────────────────── */
+
+  function matchesSearch(item) {
+    const q = state.ideaSearch.trim().toLowerCase();
+    if (!q) return true;
+    return [item.title, item.hook, item.caption, item.script, item.platforms.join(" ")]
+      .join(" ").toLowerCase().includes(q);
+  }
+
+  function ideaCardHtml(item) {
+    return `<div class="idea-card" draggable="true" data-idea-id="${esc(item.id)}" style="border-left-color:${esc(item.color)};">
+        <div style="min-width:0;">
+          <strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(item.title)}</strong>
+          <div class="tiny muted">⋮⋮ drag to a day · ${esc(item.platforms.join(", ") || "no platform yet")}</div>
+        </div>
+        <div class="hgroup">
+          ${chipsHtml(item, 2)}
+          <button class="btn tiny" data-schedule-idea="${esc(item.id)}" title="Schedule on the selected day">Schedule ➔</button>
+        </div>
+      </div>`;
+  }
+
+  function renderScratchpad() {
+    const visible = state.backlog.filter(matchesSearch);
+    const list = document.getElementById("ideaList");
+    const kanban = document.getElementById("ideaKanban");
+    const isList = state.drawerView === "list";
+    list.hidden = !isList;
+    kanban.hidden = isList;
+
+    if (isList) {
+      list.innerHTML = visible.length
+        ? visible.map(ideaCardHtml).join("")
+        : `<div class="tiny muted" style="padding:10px 0;">${state.backlog.length ? "Nothing matches that search." : "No unscheduled ideas yet — type one above."}</div>`;
+    } else {
+      kanban.innerHTML = state.backlogStatuses
+        .map((col) => {
+          const inCol = visible.filter((i) => i.backlogStatus === col.id);
+          return `<div class="kanban-col" data-kanban-col="${esc(col.id)}">
+              <h4><span>${esc(col.label)}</span><span>${inCol.length}</span></h4>
+              ${inCol.map(ideaCardHtml).join("") || `<div class="tiny muted">Drop an idea here</div>`}
+            </div>`;
+        })
+        .join("");
+    }
+  }
+
+  /* ───────────────────────── debounced auto-save ───────────────────────── */
+
+  const pending = new Map();   // itemId -> { patch, timer }
+
+  function queuePatch(itemId, patch) {
+    const flag = document.getElementById("save-" + itemId);
+    if (flag) { flag.textContent = "Saving…"; flag.className = "save-flag saving"; }
+    const entry = pending.get(itemId) || { patch: {}, timer: null };
+    Object.assign(entry.patch, patch);
+    clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => flushPatch(itemId), 500);   // 500ms debounce
+    pending.set(itemId, entry);
+  }
+
+  async function flushPatch(itemId) {
+    const entry = pending.get(itemId);
+    if (!entry) return;
+    pending.delete(itemId);
+    try {
+      const res = await api(`/api/planner/items/${itemId}`, { method: "PATCH", body: JSON.stringify(entry.patch) });
+      const idx = state.items.findIndex((i) => i.id === itemId);
+      if (res.item && res.item.scheduledAtUtc) {
+        if (idx >= 0) state.items[idx] = res.item; else state.items.push(res.item);
+      } else if (idx >= 0) {
+        state.items.splice(idx, 1);
+      }
+      const flag = document.getElementById("save-" + itemId);
+      if (flag) { flag.textContent = "Saved"; flag.className = "save-flag saved"; }
+      renderGrid();
+      renderMetrics();
+      if (res.dstWarning && res.dstWarning !== "ok") {
+        toast(res.dstWarning === "nonexistent"
+          ? "That time doesn't exist on this date — clocks jump forward. Saved to the next valid time."
+          : "That time happens twice on this date — saved as the first occurrence.");
+        renderDetail();
+      }
+    } catch (err) {
+      const flag = document.getElementById("save-" + itemId);
+      if (flag) { flag.textContent = "Save failed: " + err.message; flag.className = "save-flag"; }
+      toast("Save failed: " + err.message);
+    }
+  }
+
+  /* ───────────────────────── drag and drop ───────────────────────── */
+
+  let hoverTimer = null;
+  let collapseTimer = null;
+  let previewSeq = 0;
+
+  function clearCellStates() {
+    document.querySelectorAll(".date-cell").forEach((c) => {
+      c.classList.remove("drag-over", "ripple-preview");
+    });
+  }
+
+  function collapseExpanded(immediate) {
+    clearTimeout(collapseTimer);
+    const doIt = () => {
+      if (!state.expandedCell) return;
+      const cell = document.querySelector(`.date-cell[data-date="${state.expandedCell}"]`);
+      state.expandedCell = null;
+      state.dropTime = null;
+      if (cell) {
+        cell.classList.remove("expanded");
+        const lane = cell.querySelector(".hour-lane");
+        if (lane) lane.remove();
+      }
+    };
+    if (immediate) doIt();
+    else collapseTimer = setTimeout(doIt, 150);   // 150ms collapse on drag exit
+  }
+
+  /*
+   * DIRECT insert: after 200ms of hovering a cell the cell grows an hourly
+   * timeline, and the 2px line under the cursor is the hour the post will
+   * land on. Only the dragged post moves — nothing downstream is touched.
+   */
+  function expandCell(cell) {
+    if (state.expandedCell === cell.dataset.date) return;
+    collapseExpanded(true);
+    state.expandedCell = cell.dataset.date;
+    cell.classList.add("expanded");
+    const lane = document.createElement("div");
+    lane.className = "hour-lane";
+    let html = "";
+    for (let h = 6; h <= 22; h++) {
+      const label = `${((h % 12) || 12)}:00 ${h < 12 ? "AM" : "PM"}`;
+      html += `<div class="hour-slot" data-hour="${pad2(h)}:00"><span class="hr">${label}</span><span class="fill"></span></div>`;
+    }
+    lane.innerHTML = html;
+    cell.appendChild(lane);
+    lane.addEventListener("dragover", (e) => {
+      const slot = e.target.closest(".hour-slot");
+      if (!slot) return;
+      e.preventDefault();
+      e.stopPropagation();
+      lane.querySelectorAll(".hour-slot.insert").forEach((s) => s.classList.remove("insert"));
+      slot.classList.add("insert");
+      state.dropTime = slot.dataset.hour;
+    });
+  }
+
+  async function showDominoPreview(itemId, toDate) {
+    const key = itemId + "|" + toDate;
+    if (state.previewFor === key) return;
+    state.previewFor = key;
+    const seq = ++previewSeq;
+    try {
+      const res = await api("/api/planner/reschedule/preview", {
+        method: "POST",
+        body: JSON.stringify({ itemId, toDate, mode: "DOMINO" }),
+      });
+      if (seq !== previewSeq) return;
+      const moves = (res.plan && res.plan.moves) || [];
+      const rippled = moves.filter((m) => !m.dragged);
+      const overlay = document.getElementById("rippleOverlay");
+      document.getElementById("rippleTitle").textContent =
+        rippled.length
+          ? `Domino: ${rippled.length} later post${rippled.length === 1 ? " shifts" : "s shift"} ${res.plan.deltaDays > 0 ? "+" : ""}${res.plan.deltaDays}d`
+          : "Domino: nothing downstream to shift";
+      document.getElementById("rippleList").innerHTML = rippled
+        .slice(0, 12)
+        .map((m) => `<li>${esc(m.title)} · ${esc(m.fromDate)} → ${esc(m.toDate)}</li>`)
+        .join("") + (rippled.length > 12 ? `<li>…and ${rippled.length - 12} more</li>` : "");
+      overlay.classList.add("show");
+      document.querySelectorAll(".date-cell").forEach((c) => c.classList.remove("ripple-preview"));
+      const targets = new Set(rippled.map((m) => m.toDate));
+      document.querySelectorAll(".date-cell").forEach((c) => {
+        if (targets.has(c.dataset.date)) c.classList.add("ripple-preview");
+      });
+    } catch (err) {
+      /* A preview that cannot be fetched is not worth blocking the drag over. */
+    }
+  }
+
+  function hidePreview() {
+    state.previewFor = "";
+    previewSeq++;
+    document.getElementById("rippleOverlay").classList.remove("show");
+    document.querySelectorAll(".date-cell.ripple-preview").forEach((c) => c.classList.remove("ripple-preview"));
+  }
+
+  const grid = document.getElementById("calendarGrid");
+
+  grid.addEventListener("dragstart", (e) => {
+    const card = e.target.closest(".cell-card");
+    if (!card) return;
+    state.dragging = { kind: "item", id: card.dataset.itemId, fromDate: card.dataset.fromDate };
+    state.dropTime = null;
+    e.dataTransfer.setData("text/plain", JSON.stringify(state.dragging));
+    e.dataTransfer.effectAllowed = "move";
+    card.classList.add("dragging");
+  });
+
+  grid.addEventListener("dragend", (e) => {
+    const card = e.target.closest(".cell-card");
+    if (card) card.classList.remove("dragging");
+    state.dragging = null;
+    clearCellStates();
+    hidePreview();
+    collapseExpanded(true);
+  });
+
+  grid.addEventListener("dragover", (e) => {
+    const cell = e.target.closest(".date-cell");
+    if (!cell || !state.dragging) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = state.dragging.kind === "idea" ? "copy" : "move";
+    if (!cell.classList.contains("drag-over")) {
+      clearTimeout(hoverTimer);
+      document.querySelectorAll(".date-cell.drag-over").forEach((c) => c.classList.remove("drag-over"));
+      cell.classList.add("drag-over");
+      const mode = effectiveMode();
+      if (mode === "DOMINO" && state.dragging.kind === "item" && state.dragging.fromDate) {
+        collapseExpanded(true);
+        void showDominoPreview(state.dragging.id, cell.dataset.date);
+      } else {
+        hidePreview();
+        // 200ms dwell before the cell opens, so passing over cells is quiet.
+        hoverTimer = setTimeout(() => expandCell(cell), 200);
+      }
+    }
+  });
+
+  grid.addEventListener("dragleave", (e) => {
+    const cell = e.target.closest(".date-cell");
+    if (!cell) return;
+    if (cell.contains(e.relatedTarget)) return;
+    cell.classList.remove("drag-over");
+    clearTimeout(hoverTimer);
+    if (state.expandedCell === cell.dataset.date) collapseExpanded(false);
+  });
+
+  grid.addEventListener("drop", async (e) => {
+    const cell = e.target.closest(".date-cell");
+    if (!cell) return;
+    e.preventDefault();
+    const raw = e.dataTransfer.getData("text/plain");
+    let payload = state.dragging;
+    try { if (raw) payload = JSON.parse(raw); } catch (_) { /* keep in-memory copy */ }
+    if (!payload || !payload.id) return;
+
+    const mode = effectiveMode();
+    const time = mode === "DIRECT" ? state.dropTime : null;
+    clearCellStates();
+    hidePreview();
+    collapseExpanded(true);
+    await doReschedule(payload.id, cell.dataset.date, mode, time);
+  });
+
+  async function doReschedule(itemId, toDate, mode, time) {
+    try {
+      const res = await api("/api/planner/reschedule", {
+        method: "POST",
+        body: JSON.stringify({ itemId, toDate, mode, time: time || null, actor: "planner-ui" }),
+      });
+      const rippled = (res.plan.moves || []).filter((m) => !m.dragged).length;
+      state.selectedDate = toDate;
+      await reload();
+      (res.plan.warnings || []).forEach(toast);
+      if (!res.plan.warnings.length) {
+        toast(rippled
+          ? `Moved — ${rippled} later post${rippled === 1 ? "" : "s"} shifted with it`
+          : mode === "DIRECT" ? "Moved (direct insert — nothing else changed)" : "Moved");
+      }
+    } catch (err) {
+      toast("Move failed: " + err.message);
+    }
+  }
+
+  /* Reverse drag: scheduled card → the drawer or its button = back to backlog. */
+  function wireUnscheduleTarget(el) {
+    el.addEventListener("dragover", (e) => {
+      if (state.dragging && state.dragging.kind === "item") { e.preventDefault(); el.style.outline = "2px dashed var(--amber)"; }
+    });
+    el.addEventListener("dragleave", () => { el.style.outline = ""; });
+    el.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      el.style.outline = "";
+      const raw = e.dataTransfer.getData("text/plain");
+      let payload = state.dragging;
+      try { if (raw) payload = JSON.parse(raw); } catch (_) {}
+      if (!payload || payload.kind !== "item") return;
+      try {
+        await api(`/api/planner/items/${payload.id}/unschedule`, {
+          method: "POST",
+          body: JSON.stringify({ actor: "planner-ui" }),
+        });
+        await reload();
+        toast("Back in the scratchpad — nothing was deleted");
+      } catch (err) {
+        toast("Unschedule failed: " + err.message);
+      }
+    });
+  }
+  wireUnscheduleTarget(document.getElementById("drawer"));
+  wireUnscheduleTarget(document.getElementById("scratchBtn"));
+
+  /* Idea cards drag out of the drawer onto a day. */
+  document.getElementById("drawer").addEventListener("dragstart", (e) => {
+    const card = e.target.closest(".idea-card");
+    if (!card) return;
+    state.dragging = { kind: "idea", id: card.dataset.ideaId, fromDate: null };
+    e.dataTransfer.setData("text/plain", JSON.stringify(state.dragging));
+    e.dataTransfer.effectAllowed = "copy";
+  });
+
+  /* Kanban columns move an idea between backlog stages. */
+  document.getElementById("ideaKanban").addEventListener("dragover", (e) => {
+    const col = e.target.closest(".kanban-col");
+    if (!col || !state.dragging || state.dragging.kind !== "idea") return;
+    e.preventDefault();
+    e.stopPropagation();
+    document.querySelectorAll(".kanban-col.drag-over").forEach((c) => c.classList.remove("drag-over"));
+    col.classList.add("drag-over");
+  });
+  document.getElementById("ideaKanban").addEventListener("drop", async (e) => {
+    const col = e.target.closest(".kanban-col");
+    if (!col) return;
+    e.preventDefault();
+    e.stopPropagation();
+    col.classList.remove("drag-over");
+    const raw = e.dataTransfer.getData("text/plain");
+    let payload = state.dragging;
+    try { if (raw) payload = JSON.parse(raw); } catch (_) {}
+    if (!payload || payload.kind !== "idea") return;
+    try {
+      await api(`/api/planner/items/${payload.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ backlogStatus: col.dataset.kanbanCol, actor: "planner-ui" }),
+      });
+      await reload();
+    } catch (err) {
+      toast("Move failed: " + err.message);
+    }
+  });
+
+  /* ───────────────────────── events ───────────────────────── */
+
+  grid.addEventListener("click", async (e) => {
+    const complete = e.target.closest("[data-complete-for]");
+    if (complete) {
+      e.stopPropagation();
+      const id = complete.getAttribute("data-complete-for");
+      queuePatch(id, { isCompleted: complete.checked, actor: "planner-ui" });
+      const item = state.items.find((i) => i.id === id);
+      if (item) item.isCompleted = complete.checked;
+      renderGrid();
+      renderDetail();
+      return;
+    }
+    const more = e.target.closest("[data-more-for]");
+    if (more) {
+      e.stopPropagation();
+      state.selectedDate = more.getAttribute("data-more-for");
+      renderGrid();
+      renderDetail();
+      return;
+    }
+    const card = e.target.closest(".cell-card");
+    const cell = e.target.closest(".date-cell");
+    if (cell) {
+      state.selectedDate = cell.dataset.date;
+      if (card) state.openAccordions.add(card.dataset.itemId);
+      renderGrid();
+      renderDetail();
+    }
+  });
+
+  document.getElementById("accordionContainer").addEventListener("click", async (e) => {
+    const toggle = e.target.closest("[data-toggle-acc]");
+    if (toggle) {
+      const id = toggle.getAttribute("data-toggle-acc");
+      if (state.openAccordions.has(id)) state.openAccordions.delete(id); else state.openAccordions.add(id);
+      renderDetail();
+      return;
+    }
+    const first = e.target.closest("#createFirstBtn");
+    if (first) { await createItemOnSelectedDay(); return; }
+
+    const color = e.target.closest("[data-color-for]");
+    if (color) {
+      const id = color.getAttribute("data-color-for");
+      const hex = color.getAttribute("data-color");
+      const item = state.items.find((i) => i.id === id);
+      if (item) item.color = hex;
+      queuePatch(id, { color: hex, actor: "planner-ui" });
+      renderGrid();
+      renderDetail();
+      return;
+    }
+
+    const assign = e.target.closest("[data-assign-for]");
+    if (assign) {
+      const id = assign.getAttribute("data-assign-for");
+      const userId = assign.getAttribute("data-user");
+      const item = state.items.find((i) => i.id === id);
+      if (!item) return;
+      const has = item.assignedUsers.some((a) => String(a.userId) === userId);
+      item.assignedUsers = has
+        ? item.assignedUsers.filter((a) => String(a.userId) !== userId)
+        : item.assignedUsers.concat([{ userId, role: "owner" }]);
+      queuePatch(id, { assignedUsers: item.assignedUsers, actor: "planner-ui" });
+      renderGrid();
+      renderDetail();
+      return;
+    }
+
+    const complete = e.target.closest("[data-complete-for]");
+    if (complete) {
+      const id = complete.getAttribute("data-complete-for");
+      const item = state.items.find((i) => i.id === id);
+      if (item) item.isCompleted = complete.checked;
+      queuePatch(id, { isCompleted: complete.checked, actor: "planner-ui" });
+      renderGrid();
+      renderDetail();
+      return;
+    }
+
+    const unsched = e.target.closest("[data-unschedule]");
+    if (unsched) {
+      const id = unsched.getAttribute("data-unschedule");
+      try {
+        await api(`/api/planner/items/${id}/unschedule`, { method: "POST", body: JSON.stringify({ actor: "planner-ui" }) });
+        await reload();
+        toast("Moved to the scratchpad");
+      } catch (err) { toast("Failed: " + err.message); }
+      return;
+    }
+
+    const del = e.target.closest("[data-delete]");
+    if (del) {
+      const id = del.getAttribute("data-delete");
+      if (!confirm("Delete this content item? This cannot be undone.")) return;
+      try {
+        await api(`/api/planner/items/${id}?actor=planner-ui`, { method: "DELETE" });
+        state.openAccordions.delete(id);
+        await reload();
+      } catch (err) { toast("Delete failed: " + err.message); }
+      return;
+    }
+
+    const assist = e.target.closest("[data-hook-assist]");
+    if (assist) {
+      const id = assist.getAttribute("data-hook-assist");
+      const item = state.items.find((i) => i.id === id);
+      if (!item) return;
+      assist.disabled = true;
+      assist.textContent = "Thinking…";
+      try {
+        const res = await api("/api/planner/hook-assist", {
+          method: "POST",
+          body: JSON.stringify({ title: item.title, caption: item.caption, platforms: item.platforms }),
+        });
+        const hooks = res.hooks || [];
+        if (!hooks.length) { toast("No hooks came back."); return; }
+        const pick = prompt("Pick a hook (edit freely):\n\n" + hooks.map((h, i) => `${i + 1}. ${h}`).join("\n"), hooks[0]);
+        if (pick) {
+          item.hook = pick;
+          queuePatch(id, { hook: pick, actor: "planner-ui" });
+          renderDetail();
+        }
+      } catch (err) {
+        toast(err.message);
+      } finally {
+        assist.disabled = false;
+        assist.textContent = "✨ AI hook assist";
+      }
+    }
+  });
+
+  document.getElementById("accordionContainer").addEventListener("input", (e) => {
+    const field = e.target.getAttribute("data-field");
+    if (!field) return;
+    const id = e.target.getAttribute("data-item");
+    const item = state.items.find((i) => i.id === id);
+    const value = e.target.value;
+    if (item && field !== "time") item[field] = value;
+    queuePatch(id, { [field]: value, actor: "planner-ui" });
+  });
+
+  document.getElementById("accordionContainer").addEventListener("change", (e) => {
+    const plat = e.target.getAttribute("data-platform-for");
+    if (!plat) return;
+    const item = state.items.find((i) => i.id === plat);
+    if (!item) return;
+    const value = e.target.value;
+    item.platforms = e.target.checked
+      ? item.platforms.concat([value])
+      : item.platforms.filter((p) => p !== value);
+    queuePatch(plat, { platforms: item.platforms, actor: "planner-ui" });
+    renderGrid();
+    e.target.closest("label").classList.toggle("on", e.target.checked);
+  });
+
+  async function createItemOnSelectedDay() {
+    try {
+      const res = await api("/api/planner/items", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "New content item",
+          date: state.selectedDate,
+          time: "09:00",
+          color: (state.palette[6] || { hex: "#2dd4ee" }).hex,
+          platforms: [],
+          actor: "planner-ui",
+        }),
+      });
+      state.openAccordions.add(res.item.id);
+      await reload();
+    } catch (err) {
+      toast("Could not create: " + err.message);
+    }
+  }
+
+  document.getElementById("addSlotBtn").addEventListener("click", createItemOnSelectedDay);
+
+  /* month / year navigation */
+  function goMonth(delta) {
+    let m = state.month + delta;
+    let y = state.year;
+    while (m < 1) { m += 12; y -= 1; }
+    while (m > 12) { m -= 12; y += 1; }
+    state.month = m; state.year = y;
+    document.getElementById("monthSelect").value = String(m);
+    const ys = document.getElementById("yearSelect");
+    if (!Array.from(ys.options).some((o) => o.value === String(y))) {
+      ys.add(new Option(String(y), String(y)));
+    }
+    ys.value = String(y);
+    void reload();
+  }
+  document.getElementById("prevMonth").addEventListener("click", () => goMonth(-1));
+  document.getElementById("nextMonth").addEventListener("click", () => goMonth(1));
+  document.getElementById("todayBtn").addEventListener("click", () => {
+    const t = new Date();
+    state.year = t.getFullYear();
+    state.month = t.getMonth() + 1;
+    state.selectedDate = dateKey(t.getFullYear(), t.getMonth() + 1, t.getDate());
+    document.getElementById("monthSelect").value = String(state.month);
+    document.getElementById("yearSelect").value = String(state.year);
+    void reload();
+  });
+  document.getElementById("monthSelect").addEventListener("change", (e) => {
+    state.month = Number(e.target.value); void reload();
+  });
+  document.getElementById("yearSelect").addEventListener("change", (e) => {
+    state.year = Number(e.target.value); void reload();
+  });
+
+  document.getElementById("assigneeFilter").addEventListener("change", (e) => {
+    state.assigneeFilter = e.target.value;
+    renderGrid();
+  });
+
+  document.getElementById("refreshBtn").addEventListener("click", () => void reload());
+
+  /* ── the three synchronised drag-mode controls ── */
+  function syncModeControls() {
+    const mode = effectiveMode();
+    document.querySelectorAll("#headerModeToggle button, #bubbleModeToggle button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.mode === mode);
+    });
+    const banner = document.getElementById("modeBanner");
+    banner.innerHTML = mode === "DOMINO"
+      ? `<span><strong>⚡ Domino shift</strong> — dropping a post on a new day moves every later post by the same number of days. Hold <strong>Shift</strong> for a direct insert.</span><span class="tiny">${state.shiftHeld ? "Shift held" : ""}</span>`
+      : `<span><strong>📍 Direct insert</strong> — only the post you drag moves. Hover a day for a moment to pick the exact hour. Hold <strong>Shift</strong> for a domino shift.</span><span class="tiny">${state.shiftHeld ? "Shift held" : ""}</span>`;
+  }
+
+  async function setMode(mode) {
+    state.persistedMode = mode;
+    syncModeControls();
+    try {
+      await api("/api/planner/settings", { method: "PUT", body: JSON.stringify({ dragMode: mode }) });
+    } catch (err) { toast("Could not save the drag mode: " + err.message); }
+  }
+  ["headerModeToggle", "bubbleModeToggle"].forEach((id) => {
+    document.getElementById(id).addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-mode]");
+      if (btn) void setMode(btn.dataset.mode);
+    });
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Shift" && !state.shiftHeld) { state.shiftHeld = true; syncModeControls(); }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.key === "Shift" && state.shiftHeld) { state.shiftHeld = false; syncModeControls(); }
+  });
+  window.addEventListener("blur", () => { if (state.shiftHeld) { state.shiftHeld = false; syncModeControls(); } });
+
+  /* ── timezone controls ── */
+  async function saveZones(patch) {
+    try {
+      const res = await api("/api/planner/settings", { method: "PUT", body: JSON.stringify(patch) });
+      state.settings = res.settings;
+      state.anchorTz = res.anchorTz;
+      state.zoneLabels = res.zoneLabels || state.zoneLabels;
+      syncAnchorButton();
+      await reload();
+    } catch (err) { toast(err.message); }
+  }
+  document.getElementById("primaryTz").addEventListener("change", (e) => void saveZones({ primaryTz: e.target.value }));
+  document.getElementById("secondaryTz").addEventListener("change", (e) => void saveZones({ secondaryTz: e.target.value }));
+
+  function syncAnchorButton() {
+    const btn = document.getElementById("anchorToggle");
+    const isPrimary = state.settings.gridAnchor === "primary";
+    btn.textContent = `Grid anchor: ${isPrimary ? "creator" : "audience"} (${isPrimary ? state.settings.primaryTz : state.settings.secondaryTz})`;
+    btn.title = "Which timezone decides which day cell a card sits in. Flipping this genuinely re-sorts cards across midnight.";
+  }
+  document.getElementById("anchorToggle").addEventListener("click", () => {
+    void saveZones({ gridAnchor: state.settings.gridAnchor === "primary" ? "secondary" : "primary" });
+  });
+
+  /* ── scratchpad drawer ── */
+  const drawer = document.getElementById("drawer");
+  function toggleDrawer(open) {
+    const willOpen = open === undefined ? !drawer.classList.contains("open") : open;
+    drawer.classList.toggle("open", willOpen);
+    if (willOpen) setTimeout(() => document.getElementById("quickIdea").focus(), 260);
+  }
+  document.getElementById("scratchBtn").addEventListener("click", () => toggleDrawer());
+  document.getElementById("drawerClose").addEventListener("click", () => toggleDrawer(false));
+  document.getElementById("drawerTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-view]");
+    if (!btn) return;
+    state.drawerView = btn.dataset.view;
+    document.querySelectorAll("#drawerTabs button").forEach((b) => b.classList.toggle("active", b === btn));
+    renderScratchpad();
+  });
+  document.getElementById("ideaSearch").addEventListener("input", (e) => {
+    state.ideaSearch = e.target.value;
+    renderScratchpad();
+  });
+  document.getElementById("quickIdea").addEventListener("keydown", async (e) => {
+    if (e.key !== "Enter") return;
+    const title = e.target.value.trim();
+    if (!title) return;
+    e.target.value = "";
+    try {
+      await api("/api/planner/items", {
+        method: "POST",
+        body: JSON.stringify({ title, date: null, backlogStatus: "brainstorm", actor: "planner-ui" }),
+      });
+      await reload();
+      document.getElementById("quickIdea").focus();
+    } catch (err) { toast("Could not capture: " + err.message); }
+  });
+  drawer.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-schedule-idea]");
+    if (!btn) return;
+    await doReschedule(btn.getAttribute("data-schedule-idea"), state.selectedDate, effectiveMode(), null);
+  });
+
+  /* ───────────────────────── go ───────────────────────── */
+
+  boot().catch((err) => {
+    document.getElementById("calendarGrid").innerHTML =
+      `<div class="panel" style="grid-column:1/-1;">Could not load the planner: ${esc(err.message)}</div>`;
+  });
+
+  // Exposed for the verification suite, which drives the real page in Chrome.
+  window.__planner = { state, effectiveMode, reload, api };
+})();
+</script>
+</body>
+</html>
