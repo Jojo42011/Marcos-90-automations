@@ -75,6 +75,14 @@ try {
     const planner = page.frames().find((f) => f.url().includes("/content-planner"));
     ok("the planner actually renders inside the shell frame",
       planner ? (await planner.locator(".date-cell").count()) === 42 : false);
+    /* This IS the calendar now, so the header must not send anyone back to
+       the Content Manager for one — that link was the last thing implying
+       there were still two calendars. */
+    ok("the planner header no longer links to the old production calendar",
+      planner ? (await planner.locator('.topbar a[href="/social"]').count()) === 0 : false);
+    ok("and its subtitle is just what the page is",
+      planner ? (await planner.locator(".topbar .sub").innerText()).trim() === "Ideas, scripts, owners and dates." : false,
+      planner ? await planner.locator(".topbar .sub").innerText() : "no frame");
     ok("still no page errors after opening it", errs.length === 0, errs.slice(0, 2).join(" | "));
     await page.close();
   }
