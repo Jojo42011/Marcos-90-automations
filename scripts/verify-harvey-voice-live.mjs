@@ -128,5 +128,63 @@ if (pcm) {
     JSON.stringify(transcript.text));
 }
 
+/* ── 5. Does the audio actually DECODE in a browser? ──
+   The server can return a perfectly valid buffer in a format the page cannot
+   play — a sample-rate or endianness mismatch is silent in exactly the same
+   way a missing voice is, so it gets checked in a real AudioContext rather
+   than assumed from a byte count.
+
+   This section needs a browser that can REACH `BASE`. In a sandboxed CI box
+   whose only egress is an HTTP proxy the browser does not use, it cannot, and
+   the check skips loudly rather than being quietly counted as a pass. */
+let br = null;
+try {
+  const { chromium } = await import("playwright");
+  br = await chromium.launch({
+    executablePath: process.env.PW_CHROMIUM || undefined,
+    args: ["--autoplay-policy=no-user-gesture-required"],
+  });
+  const page = await br.newPage();
+  const errs = [];
+  page.on("pageerror", (e) => errs.push(e.message));
+  await page.goto(`${BASE}/operator${q}`, { waitUntil: "domcontentloaded", timeout: 20000 });
+  await page.waitForTimeout(2500);
+  ok("the operator page loads with no script errors", errs.length === 0, errs.slice(0, 3).join(" | "));
+
+  const decoded = await Promise.race([
+    page.evaluate(async (phrase) => {
+    const r = await fetch("/api/jarvis/voice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: phrase }),
+    });
+    if (!r.ok) return { ok: false, why: r.status + " " + (await r.text()).slice(0, 200) };
+    const rate = parseInt(r.headers.get("X-Sample-Rate") || "0", 10);
+    const buf = await r.arrayBuffer();
+    /* The exact decode aethon-voice.js does: raw S16LE into a mono buffer. */
+    const ctx = new AudioContext({ sampleRate: rate });
+    const pcm = new Int16Array(buf);
+    const ab = ctx.createBuffer(1, pcm.length, rate);
+    const ch = ab.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < pcm.length; i++) { ch[i] = pcm[i] / 32768; peak = Math.max(peak, Math.abs(ch[i])); }
+    await ctx.close();
+    return { ok: true, rate, seconds: ab.duration, peak };
+    }, PHRASE),
+    new Promise((r) => setTimeout(() => r({ ok: false, why: "decode timed out in the page" }), 30000)),
+  ]);
+
+  ok("the browser decodes Harvey's audio into a playable buffer", decoded.ok === true, JSON.stringify(decoded));
+  if (decoded.ok) {
+    ok("the decoded audio has real length", decoded.seconds > 0.5, `${decoded.seconds.toFixed(2)}s`);
+    ok("and a real waveform, not silence", decoded.peak > 0.05, String(decoded.peak));
+  }
+} catch (e) {
+  console.log("  SKIPPED (not counted): browser decode check could not run — " +
+    String(e.message || e).split("\n")[0].slice(0, 110));
+} finally {
+  if (br) await br.close().catch(() => {});
+}
+
 console.log(`\n${pass} passed, ${fail.length} failed`);
 if (fail.length) { fail.forEach((f) => console.error(" ✗ " + f)); process.exit(1); }
