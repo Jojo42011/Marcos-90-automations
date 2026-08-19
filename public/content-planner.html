@@ -17,9 +17,13 @@
   This page owns what is INTENDED: an idea, its hook, its caption, its script,
   the platforms it goes out on, who owns it, and which day it lands.
 
-  Everything on this page is backed by /api/planner/*. Times are stored as UTC
-  instants and rendered in two zones; the day a card sits in is decided by the
-  grid anchor, which is why flipping the anchor genuinely moves cards.
+  DATES ARE LITERAL. A post typed as August 15 at 10:00 AM sits in the August 15
+  cell and reads 10:00 AM for every person on the team, wherever they are. There
+  is no anchor zone, no conversion at render time and no ±1d badge — the two
+  clocks in the header are a glance at what time it is elsewhere and nothing
+  more. They cannot move a card.
+
+  Everything here is backed by /api/planner/*.
 -->
 <style>
   :root {
@@ -31,6 +35,7 @@
     --font-body:'Inter',system-ui,-apple-system,sans-serif;
     --radius:10px; --radius-sm:6px;
     --ease-out:cubic-bezier(0.16,1,0.3,1);
+    --panel-w:340px;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   body {
@@ -41,6 +46,8 @@
   button, select, input, textarea { font-family:inherit; font-size:12px; }
   .muted { color:var(--dim); }
   .tiny { font-size:10px; }
+  body.dragging-panel, body.resizing { user-select:none; -webkit-user-select:none; cursor:grabbing; }
+  body.resizing { cursor:default; }
 
   /* ── header ── */
   .topbar {
@@ -57,14 +64,47 @@
     transition:background 120ms var(--ease-out), border-color 120ms var(--ease-out);
   }
   .btn:hover { background:var(--bg-4); border-color:var(--teal-border); }
+  .btn:disabled { opacity:0.5; cursor:default; }
   .btn.primary { background:var(--teal); color:#04222a; border-color:transparent; font-weight:700; }
   .btn.ghost { background:transparent; }
+  .btn.danger { color:var(--red); border-color:rgba(255,68,85,0.35); }
+  .btn.danger:hover { background:rgba(255,68,85,0.12); border-color:var(--red); }
   .btn.scratch { background:rgba(255,179,64,0.14); border-color:rgba(255,179,64,0.4); color:var(--amber); font-weight:700; }
+  .btn.mini { padding:3px 7px; font-size:10px; }
   select.pill, input.pill {
     padding:6px 9px; border-radius:var(--radius-sm); border:1px solid var(--dimmest);
     background:var(--bg-3); color:var(--white);
   }
   label.fieldlabel { font-size:10px; font-weight:700; color:var(--dim); text-transform:uppercase; letter-spacing:0.5px; }
+
+  /* ── live reference clocks ── */
+  .clocks {
+    display:flex; align-items:center; gap:9px; padding:5px 10px;
+    background:var(--bg-1); border:1px solid var(--dimmest); border-radius:999px;
+    cursor:pointer; color:var(--white);
+    transition:border-color 120ms var(--ease-out);
+  }
+  .clocks:hover { border-color:var(--teal-border); }
+  .clock { display:flex; align-items:center; gap:5px; font-size:11px; }
+  .clock .zone { font-size:9px; font-weight:700; color:var(--dim); letter-spacing:0.4px; }
+  .clock b { font-variant-numeric:tabular-nums; font-weight:600; letter-spacing:0.3px; }
+  .clock-sep { width:1px; height:14px; background:var(--dimmest); }
+  .clocks .caret { font-size:8px; color:var(--dimmer); }
+
+  /* ── small anchored menus ── */
+  .menu {
+    position:absolute; z-index:130; min-width:200px; padding:8px;
+    background:var(--bg-2); border:1px solid var(--teal-border); border-radius:var(--radius);
+    box-shadow:0 12px 34px rgba(0,0,0,0.6); display:none; flex-direction:column; gap:6px;
+  }
+  .menu.open { display:flex; }
+  .menu h5 { font-size:10px; text-transform:uppercase; letter-spacing:0.6px; color:var(--dim); }
+  .menu button.opt {
+    text-align:left; padding:6px 8px; border-radius:var(--radius-sm); border:1px solid transparent;
+    background:transparent; color:var(--white); cursor:pointer; font-size:11px;
+  }
+  .menu button.opt:hover { background:var(--bg-3); }
+  .menu button.opt.on { border-color:var(--teal-border); color:var(--teal); background:var(--teal-dim); }
 
   /* ── toolbar ── */
   .toolbar {
@@ -86,18 +126,39 @@
   }
   .banner.warn { background:rgba(255,179,64,0.12); border-color:rgba(255,179,64,0.35); color:var(--amber); }
 
-  /* ── master/detail split ── */
-  .split { display:flex; flex-direction:column; gap:12px; padding:0 18px 90px; flex:1; }
-  @media (min-width:1200px) {
-    .split { flex-direction:row; align-items:flex-start; }
-    .split > .calendar-pane { flex:1 1 62%; min-width:0; }
-    .split > .detail-pane { flex:1 1 38%; max-width:520px; position:sticky; top:120px; }
+  /* ── workspace: calendar + dockable production panel ──
+     One grid, three layouts. The dock position is bound straight to the
+     container's data attribute, so a layout change is a single attribute
+     write and the CSS does the rest. */
+  .workspace {
+    display:grid; gap:12px; padding:0 18px 90px; flex:1; align-items:start;
+    transition:grid-template-columns 220ms var(--ease-out);
+  }
+  .workspace[data-dock="RIGHT"]  { grid-template-columns:minmax(0,1fr) var(--panel-w); grid-template-areas:"cal panel"; }
+  .workspace[data-dock="LEFT"]   { grid-template-columns:var(--panel-w) minmax(0,1fr); grid-template-areas:"panel cal"; }
+  .workspace[data-dock="BOTTOM"] { grid-template-columns:minmax(0,1fr); grid-template-rows:1fr auto; grid-template-areas:"cal" "panel"; }
+  .calendar-pane { grid-area:cal; min-width:0; }
+  .production-panel { grid-area:panel; min-width:0; }
+  @media (max-width:1100px) {
+    .workspace[data-dock="RIGHT"], .workspace[data-dock="LEFT"] {
+      grid-template-columns:minmax(0,1fr); grid-template-rows:1fr auto; grid-template-areas:"cal" "panel";
+    }
   }
 
   /* ── calendar grid ── */
-  .grid-head { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:6px; }
+  .calendar-frame {
+    position:relative; display:flex; flex-direction:column; gap:6px;
+    max-width:100%; min-width:0;
+  }
+  .workspace[data-dock="BOTTOM"] .calendar-frame { min-height:220px; }
+  .grid-head { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
   .grid-head div { text-align:center; font-size:10px; font-weight:700; color:var(--dim); letter-spacing:0.6px; }
-  .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
+  /* With a custom height the six week-rows share it evenly and each cell
+     scrolls internally, rather than the grid growing past the box. */
+  .calendar-frame.sized-h { overflow:hidden; }
+  .calendar-frame.sized-h .calendar-grid { grid-template-rows:repeat(6,minmax(0,1fr)); flex:1; min-height:0; }
+  .calendar-frame.sized-h .date-cell { min-height:0; overflow-y:auto; }
   .date-cell {
     background:var(--bg-2); border:1px solid var(--dimmest); border-radius:var(--radius);
     min-height:104px; padding:6px; display:flex; flex-direction:column; gap:4px; cursor:pointer;
@@ -113,6 +174,26 @@
   .date-cell.expanded { min-height:230px; background:var(--bg-3); }
   .date-num { font-size:11px; font-weight:700; color:var(--white); display:flex; justify-content:space-between; align-items:center; }
   .cell-count { font-size:9px; color:var(--dim); font-weight:500; }
+
+  /* resize handles — the calendar box is user-sizable on three edges */
+  .rz { position:absolute; z-index:12; }
+  .rz-r { top:0; right:-4px; width:8px; height:100%; cursor:ew-resize; }
+  .rz-l { top:0; left:-4px; width:8px; height:100%; cursor:ew-resize; }
+  .rz-b { left:0; bottom:-4px; height:8px; width:100%; cursor:ns-resize; }
+  .rz-edge::after {
+    content:""; position:absolute; inset:0; margin:auto; border-radius:2px;
+    background:transparent; transition:background 120ms var(--ease-out);
+  }
+  .rz-r.rz-edge::after, .rz-l.rz-edge::after { width:2px; height:100%; }
+  .rz-b.rz-edge::after { height:2px; width:100%; }
+  .rz-edge:hover::after, .rz-edge.active::after { background:var(--teal); }
+  .rz-corner {
+    width:16px; height:16px; bottom:-5px; display:flex; align-items:flex-end;
+    justify-content:center; font-size:9px; color:var(--dimmer); line-height:1;
+  }
+  .rz-br { right:-5px; cursor:nwse-resize; }
+  .rz-bl { left:-5px; cursor:nesw-resize; transform:scaleX(-1); }
+  .rz-corner:hover, .rz-corner.active { color:var(--teal); }
 
   /* in-cell cards */
   .cell-card {
@@ -131,15 +212,19 @@
   .cell-card.dimmed { opacity:0.3; }
   .card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:4px; }
   .card-title { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .card-bottom { display:flex; justify-content:space-between; align-items:center; gap:4px; margin-top:2px; }
-  .plat-badge { padding:1px 4px; border-radius:3px; font-size:8px; font-weight:700; letter-spacing:0.2px; }
-  .time-badge { font-size:8px; color:var(--dim); white-space:nowrap; }
-  .time-badge .delta { color:var(--amber); font-weight:700; }
-  .dst-badge { font-size:8px; color:var(--amber); font-weight:700; }
+  /* One row, three competing elements. Everything here exists to stop the
+     avatar stack spilling out of the cell on a narrow column: the badge is the
+     only part allowed to shrink, the time and the chips never do. */
+  .card-bottom { display:flex; align-items:center; gap:4px; margin-top:2px; overflow:hidden; }
+  .cat-badge {
+    padding:1px 5px; border-radius:3px; font-size:8px; font-weight:700; letter-spacing:0.2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:0 1 auto; min-width:0;
+  }
+  .time-badge { font-size:8px; color:var(--dim); white-space:nowrap; font-variant-numeric:tabular-nums; flex:0 0 auto; margin-left:auto; }
   .more-link { font-size:9px; color:var(--teal); font-weight:600; background:none; border:none; cursor:pointer; text-align:left; padding:2px 0 0; }
 
   /* avatar chips */
-  .chips { display:flex; align-items:center; }
+  .chips { display:flex; align-items:center; flex:0 0 auto; }
   .avatar-chip {
     width:20px; height:20px; border-radius:50%; font-size:8px; font-weight:700;
     display:flex; align-items:center; justify-content:center; color:#04121a;
@@ -160,8 +245,45 @@
   .hour-slot.insert { border-top:2px solid var(--teal); color:var(--teal); }
   .hour-slot.insert .fill { background:var(--teal); }
 
-  /* ── detail panel ── */
-  .panel { background:var(--bg-2); border:1px solid var(--dimmest); border-radius:var(--radius); padding:14px; }
+  /* ── production panel ── */
+  .panel { background:var(--bg-2); border:1px solid var(--dimmest); border-radius:var(--radius); }
+  .panel-head {
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+    padding:8px 10px; border-bottom:1px solid var(--dimmest); background:var(--bg-3);
+    border-radius:var(--radius) var(--radius) 0 0;
+  }
+  .drag-handle {
+    display:inline-flex; align-items:center; gap:6px; font-size:10px; color:var(--dim);
+    cursor:grab; padding:3px 6px; border-radius:var(--radius-sm); user-select:none;
+    transition:background 120ms var(--ease-out), color 120ms var(--ease-out);
+  }
+  .drag-handle:hover { background:var(--bg-4); color:var(--white); }
+  .drag-handle:active { cursor:grabbing; }
+  .dockswitch { display:flex; background:var(--bg-1); border-radius:var(--radius-sm); padding:2px; gap:2px; }
+  .dockswitch button {
+    padding:3px 7px; border:none; background:transparent; color:var(--dim);
+    border-radius:4px; cursor:pointer; font-size:10px; font-weight:600;
+  }
+  .dockswitch button.on { background:var(--bg-4); color:var(--teal); }
+  .panel-body { padding:12px; overflow-y:auto; }
+  /* Independent scroll: expanding accordions must never move the calendar. */
+  .workspace[data-dock="RIGHT"] .production-panel,
+  .workspace[data-dock="LEFT"]  .production-panel { position:sticky; top:118px; }
+  .workspace[data-dock="RIGHT"] .panel-body,
+  .workspace[data-dock="LEFT"]  .panel-body { max-height:calc(100vh - 190px); }
+  /* The floating drag-mode bubble is fixed to the bottom of the viewport, so
+     bottom-docked it sits over this pane. The padding is what lets any row be
+     scrolled out from under it rather than being permanently half-covered. */
+  .workspace[data-dock="BOTTOM"] .panel-body { max-height:42vh; padding-bottom:64px; }
+  .workspace[data-dock="BOTTOM"] #accordionContainer {
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:10px; align-items:start;
+  }
+  .workspace[data-dock="BOTTOM"] #accordionContainer > .accordion-item { margin-top:0; }
+  /* Side-docked the panel is a fixed 340px, which is too narrow to put two
+     fields side by side — the title collapses to a few characters. Stack them
+     there and keep the two-up layout for the wide bottom dock. */
+  .workspace[data-dock="RIGHT"] .field-row,
+  .workspace[data-dock="LEFT"] .field-row { grid-template-columns:1fr; }
   .metrics-bar { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:10px; color:var(--dim); border-bottom:1px solid var(--dimmest); padding-bottom:8px; margin-bottom:10px; }
   .panel-title { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; font-weight:700; margin-bottom:8px; flex-wrap:wrap; }
   .accordion-item { border:1px solid var(--dimmest); border-radius:var(--radius-sm); overflow:hidden; margin-top:8px; }
@@ -180,17 +302,29 @@
   .save-flag.saving { color:var(--amber); }
   .save-flag.saved { color:var(--green); }
   .empty-state { padding:16px 0; text-align:center; color:var(--dim); font-size:11px; display:flex; flex-direction:column; gap:10px; align-items:center; }
-  .platform-picker { display:flex; flex-wrap:wrap; gap:4px; }
+  .platform-picker { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
   .platform-picker label { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border:1px solid var(--dimmest); border-radius:999px; font-size:10px; cursor:pointer; }
   .platform-picker label.on { border-color:var(--teal); color:var(--teal); background:var(--teal-dim); }
-  .swatches { display:flex; flex-wrap:wrap; gap:4px; }
+  .swatches { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
   .swatch { width:auto; padding:3px 7px; border-radius:999px; font-size:9px; font-weight:700; border:2px solid transparent; cursor:pointer; }
   .swatch.on { border-color:var(--white); }
   .assignee-row { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
   .assignee-toggle { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:999px; border:1px solid var(--dimmest); cursor:pointer; font-size:10px; }
   .assignee-toggle.on { border-width:2px; }
+  /* inline quick-add, so new vocabulary never means leaving the card */
+  .addnew {
+    display:inline-flex; align-items:center; gap:3px; padding:3px 8px; border-radius:999px;
+    border:1px dashed var(--dimmer); background:transparent; color:var(--dim);
+    cursor:pointer; font-size:10px; font-weight:600;
+  }
+  .addnew:hover { border-color:var(--teal); color:var(--teal); }
+  .inline-add { display:inline-flex; align-items:center; gap:4px; }
+  .inline-add input {
+    padding:3px 7px; border-radius:999px; border:1px solid var(--teal-border);
+    background:var(--bg-1); color:var(--white); font-size:10px; width:130px;
+  }
 
-  /* ── scratchpad drawer ── */
+  /* ── drawers ── */
   .drawer {
     position:fixed; top:0; right:0; height:100%; width:360px; max-width:92vw;
     background:var(--bg-1); border-left:1px solid var(--teal-border);
@@ -199,6 +333,7 @@
     display:flex; flex-direction:column; gap:10px; padding:14px;
   }
   .drawer.open { transform:translateX(0); }
+  .drawer.wide { width:440px; }
   .drawer-header { display:flex; justify-content:space-between; align-items:center; gap:8px; border-bottom:1px solid var(--dimmest); padding-bottom:9px; }
   .drawer-tabs { display:flex; gap:4px; }
   .drawer-tabs button { padding:4px 10px; border-radius:999px; border:1px solid var(--dimmest); background:transparent; color:var(--dim); cursor:pointer; font-size:10px; font-weight:600; }
@@ -223,9 +358,52 @@
       border-left:none; border-top:1px solid var(--teal-border);
       border-radius:16px 16px 0 0; transform:translateY(105%);
     }
+    .drawer.wide { width:100%; }
     .drawer.open { transform:translateY(0); }
     .drawer::before { content:""; display:block; width:42px; height:4px; border-radius:999px; background:var(--dimmer); margin:0 auto 4px; }
   }
+
+  /* ── taxonomy rows ── */
+  .tax-scroll { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:7px; padding-right:2px; }
+  .tax-row {
+    display:flex; align-items:center; gap:8px; padding:8px 9px; font-size:11px;
+    background:var(--bg-2); border:1px solid var(--dimmest); border-radius:var(--radius-sm);
+  }
+  .tax-row .grow { flex:1; min-width:0; }
+  .tax-row .name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tax-dot { width:22px; height:22px; border-radius:6px; flex-shrink:0; border:1px solid rgba(255,255,255,0.14); cursor:pointer; }
+  .tax-usage { font-size:9px; color:var(--dim); white-space:nowrap; }
+  .tax-src { font-size:8px; padding:1px 5px; border-radius:999px; border:1px solid var(--dimmest); color:var(--dim); text-transform:uppercase; letter-spacing:0.4px; }
+  .tax-add { display:flex; gap:6px; align-items:center; }
+  .tax-add input { flex:1; }
+  .tax-note { font-size:10px; color:var(--dim); line-height:1.5; }
+  .tax-error { font-size:10px; color:var(--red); }
+
+  /* ── modal ── */
+  .modal-backdrop {
+    position:fixed; inset:0; background:rgba(4,6,11,0.72); z-index:140;
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-backdrop.open { display:flex; }
+  .modal {
+    width:400px; max-width:100%; background:var(--bg-2); border:1px solid var(--teal-border);
+    border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:12px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.7);
+  }
+  .modal h3 { font-size:13px; font-weight:700; }
+  .swatch-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+  /* No text in the swatch: the twenty names collide when truncated to fit
+     (two "Vivid", two "Deep"), and the colour is what is being chosen — the
+     name lives in the tooltip, and the category's own name is what gets typed. */
+  .swatch-cell {
+    aspect-ratio:1.5/1; border-radius:6px; cursor:pointer; border:2px solid transparent;
+    display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;
+    transition:transform 100ms var(--ease-out), box-shadow 100ms var(--ease-out);
+  }
+  .swatch-cell:hover { transform:scale(1.06); box-shadow:0 3px 12px rgba(0,0,0,0.5); }
+  .swatch-cell.on { border-color:var(--white); }
+  .modal-preview { display:flex; align-items:center; gap:8px; font-size:10px; color:var(--dim); }
+  .modal-actions { display:flex; justify-content:flex-end; gap:8px; }
 
   /* ── floating drag-mode bubble ── */
   .bubble {
@@ -236,6 +414,20 @@
   }
   .bubble .bubble-label { color:var(--dim); font-size:10px; }
   .bubble .mode-toggle { padding:2px; }
+
+  /* ── panel dock drop zones ── */
+  .dropzone {
+    position:fixed; z-index:135; display:none; pointer-events:none;
+    background:rgba(45,212,238,0.10); border:2px dashed var(--teal-border);
+    align-items:center; justify-content:center; color:var(--teal);
+    font-size:11px; font-weight:700; letter-spacing:0.6px;
+    transition:background 120ms var(--ease-out), border-color 120ms var(--ease-out);
+  }
+  body.dragging-panel .dropzone { display:flex; }
+  .dropzone.hot { background:rgba(45,212,238,0.26); border-color:var(--teal); box-shadow:inset 0 0 30px rgba(45,212,238,0.35); }
+  .dz-left  { top:0; left:0; width:150px; height:100%; }
+  .dz-right { top:0; right:0; width:150px; height:100%; }
+  .dz-bottom{ bottom:0; left:0; width:100%; height:130px; }
 
   /* ── ripple preview overlay ── */
   .ripple-overlay {
@@ -252,10 +444,15 @@
   .toast {
     position:fixed; left:50%; bottom:70px; transform:translateX(-50%);
     background:var(--bg-4); border:1px solid var(--teal-border); color:var(--white);
-    padding:8px 14px; border-radius:999px; font-size:11px; z-index:120;
+    padding:8px 14px; border-radius:999px; font-size:11px; z-index:150;
     opacity:0; pointer-events:none; transition:opacity 200ms var(--ease-out);
+    max-width:80vw; text-align:center;
   }
   .toast.show { opacity:1; }
+
+  @media (prefers-reduced-motion:reduce) {
+    * { transition-duration:1ms !important; }
+  }
 </style>
 </head>
 <body>
@@ -266,16 +463,33 @@
     <div class="sub">Ideas, scripts, owners and dates.</div>
   </div>
   <div class="hgroup">
-    <div class="hgroup" title="Times are stored in UTC and shown in both zones">
-      <span class="tiny muted">Creator</span>
-      <select class="pill" id="primaryTz"></select>
-      <span class="tiny muted">Audience</span>
-      <select class="pill" id="secondaryTz"></select>
-      <button class="btn ghost tiny" id="anchorToggle" title="Which timezone decides which day cell a card sits in">Grid anchor: —</button>
+    <div class="clocks" id="clockWidget" title="Reference only — these clocks never move a post">
+      <span class="clock"><span>🇵🇭</span><span class="zone">PHT</span><b id="clockPht">--:--</b></span>
+      <span class="clock-sep"></span>
+      <span class="clock"><span>🇺🇸</span><span class="zone" id="clockUsZone">EST</span><b id="clockUs">--:--</b></span>
+      <span class="caret">▼</span>
     </div>
+    <button class="btn ghost" id="calSettingsBtn" title="Calendar display settings">⚙ Calendar Settings</button>
+    <button class="btn ghost" id="taxonomyBtn" title="Categories, platforms and team members">⚙ Manage Taxonomy</button>
     <button class="btn scratch" id="scratchBtn">💡 Scratchpad (<span id="scratchCount">0</span>)</button>
     <button class="btn" id="refreshBtn">Refresh</button>
   </div>
+</div>
+
+<div class="menu" id="clockMenu">
+  <h5>US reference clock</h5>
+  <div id="clockMenuOpts"></div>
+  <div class="tax-note">Display only. Changing this never moves a post.</div>
+</div>
+
+<div class="menu" id="calSettingsMenu">
+  <h5>Calendar settings</h5>
+  <label class="fieldlabel" for="weekStartSelect">Start week on</label>
+  <select class="pill" id="weekStartSelect">
+    <option value="SUNDAY">Sunday (Default)</option>
+    <option value="MONDAY">Monday</option>
+  </select>
+  <div class="tax-note">Cards keep their exact date — only the columns reorder.</div>
 </div>
 
 <div class="toolbar">
@@ -291,6 +505,7 @@
   <div class="hgroup">
     <span class="tiny muted">Team member</span>
     <select class="pill" id="assigneeFilter"><option value="ALL">All team members</option></select>
+    <button class="btn ghost mini" id="resetSizeBtn" title="Restore the default calendar size">⤢ Reset Size</button>
   </div>
 
   <div class="mode-toggle" id="headerModeToggle">
@@ -301,28 +516,47 @@
 
 <div class="banner" id="modeBanner"></div>
 
-<div class="split">
+<div class="workspace" id="workspace" data-dock="RIGHT">
   <div class="calendar-pane">
-    <div class="grid-head">
-      <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+    <div class="calendar-frame" id="calFrame">
+      <div class="grid-head" id="gridHead"></div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+      <div class="rz rz-l rz-edge" data-rz="l" title="Drag to resize"></div>
+      <div class="rz rz-r rz-edge" data-rz="r" title="Drag to resize"></div>
+      <div class="rz rz-b rz-edge" data-rz="b" title="Drag to resize"></div>
+      <div class="rz rz-corner rz-bl" data-rz="bl" title="Drag to resize">◢</div>
+      <div class="rz rz-corner rz-br" data-rz="br" title="Drag to resize">◢</div>
     </div>
-    <div class="calendar-grid" id="calendarGrid"></div>
   </div>
 
-  <div class="detail-pane">
+  <div class="production-panel" id="productionPanel">
     <div class="panel">
-      <div class="metrics-bar">
-        <span id="metricsLeft">—</span>
-        <span id="metricsRight">—</span>
+      <div class="panel-head">
+        <span class="drag-handle" id="panelDragHandle" title="Drag to dock left, right or bottom">⠿ Drag Panel</span>
+        <div class="dockswitch" id="dockSwitch">
+          <button data-dock="LEFT" title="Dock to the left">▮ Left</button>
+          <button data-dock="BOTTOM" title="Dock beneath the calendar">▬ Bottom</button>
+          <button data-dock="RIGHT" title="Dock to the right">▮ Right</button>
+        </div>
       </div>
-      <div class="panel-title">
-        <span id="panelDateLabel">Production detail</span>
-        <button class="btn primary" id="addSlotBtn">+ Add content slot</button>
+      <div class="panel-body">
+        <div class="metrics-bar">
+          <span id="metricsLeft">—</span>
+          <span id="metricsRight">—</span>
+        </div>
+        <div class="panel-title">
+          <span id="panelDateLabel">Production detail</span>
+          <button class="btn primary" id="addSlotBtn">+ Add content slot</button>
+        </div>
+        <div id="accordionContainer"></div>
       </div>
-      <div id="accordionContainer"></div>
     </div>
   </div>
 </div>
+
+<div class="dropzone dz-left" data-zone="LEFT">DOCK LEFT</div>
+<div class="dropzone dz-right" data-zone="RIGHT">DOCK RIGHT</div>
+<div class="dropzone dz-bottom" data-zone="BOTTOM">DOCK BOTTOM</div>
 
 <div class="bubble">
   <span class="bubble-label">Drag mode</span>
@@ -358,6 +592,47 @@
   <div class="kanban" id="ideaKanban" hidden></div>
 </div>
 
+<div class="drawer wide" id="taxDrawer">
+  <div class="drawer-header">
+    <div>
+      <strong>⚙ Manage Taxonomy</strong>
+      <div class="tiny muted">Categories, platforms and who can be assigned.</div>
+    </div>
+    <button class="btn" id="taxClose">✕</button>
+  </div>
+  <div class="drawer-tabs" id="taxTabs">
+    <button data-tab="categories" class="active">🏷 Categories</button>
+    <button data-tab="platforms">📱 Platforms</button>
+    <button data-tab="team">👤 Team Members</button>
+  </div>
+  <div class="tax-error" id="taxError"></div>
+  <div class="tax-scroll" id="taxBody"></div>
+</div>
+
+<div class="modal-backdrop" id="catModal">
+  <div class="modal">
+    <h3 id="catModalTitle">New category</h3>
+    <div class="field-group">
+      <label class="fieldlabel" for="catModalName">Category name</label>
+      <input id="catModalName" placeholder="e.g. Client Case Study">
+    </div>
+    <div class="field-group">
+      <label class="fieldlabel">Colour</label>
+      <div class="swatch-grid" id="catSwatchGrid"></div>
+    </div>
+    <div class="modal-preview">
+      <span>Card badge:</span>
+      <span class="cat-badge" id="catPreview">Preview</span>
+      <span id="catContrast"></span>
+    </div>
+    <div class="tax-error" id="catModalError"></div>
+    <div class="modal-actions">
+      <button class="btn" id="catModalCancel">Cancel</button>
+      <button class="btn primary" id="catModalSave">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -376,7 +651,12 @@
     });
     let body = null;
     try { body = await res.json(); } catch (_) { body = null; }
-    if (!res.ok) throw new Error((body && body.error) || res.status + " " + res.statusText);
+    if (!res.ok) {
+      const err = new Error((body && body.error) || res.status + " " + res.statusText);
+      err.status = res.status;
+      err.body = body || {};
+      throw err;
+    }
     return body;
   }
 
@@ -389,23 +669,30 @@
     el.textContent = msg;
     el.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 3200);
   }
 
   /*
-   * Black or white type on a colour, decided by WCAG relative luminance — the
-   * same rule the server applies in contentPlanner.readableTextOn, so a chip
+   * Black-ish or white type on a colour, decided by WCAG relative luminance —
+   * the same rule the server applies in plannerTaxonomy.badgeTextOn, so a chip
    * looks identical whether it was coloured here or there.
    */
-  function readableText(hex) {
+  const TEXT_DARK = "#0F172A", TEXT_LIGHT = "#FFFFFF";
+  function lumOf(hex) {
     const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
-    if (!m) return "#ffffff";
+    if (!m) return 0;
     const n = parseInt(m[1], 16);
     const ch = (c) => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
-    const lum = 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
-    const onWhite = (1.05) / (lum + 0.05);
-    const onBlack = (lum + 0.05) / 0.05;
-    return onBlack >= onWhite ? "#000000" : "#ffffff";
+    return 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
+  }
+  const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  function readableText(hex) {
+    const l = lumOf(hex);
+    return ratio(l, lumOf(TEXT_DARK)) >= ratio(l, lumOf(TEXT_LIGHT)) ? TEXT_DARK : TEXT_LIGHT;
+  }
+  function contrastOf(hex) {
+    const l = lumOf(hex);
+    return Math.round(Math.max(ratio(l, lumOf(TEXT_DARK)), ratio(l, lumOf(TEXT_LIGHT))) * 100) / 100;
   }
 
   const pad2 = (n) => String(n).padStart(2, "0");
@@ -416,25 +703,32 @@
     return dateKey(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
   }
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const DAY_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   function prettyDate(key) {
     const d = new Date(Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10)));
-    const wd = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getUTCDay()];
-    return `${wd}, ${MONTHS[d.getUTCMonth()].slice(0, 3)} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+    return `${DAY_FULL[d.getUTCDay()]}, ${MONTHS[d.getUTCMonth()].slice(0, 3)} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+  }
+  function timeLabel(t) {
+    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(String(t || ""))) return "";
+    const [h, m] = t.split(":").map(Number);
+    return `${pad2(h % 12 === 0 ? 12 : h % 12)}:${pad2(m)} ${h < 12 ? "AM" : "PM"}`;
   }
 
   /* ───────────────────────── state ───────────────────────── */
 
   const now = new Date();
+  const LS = { dock: "planner.dock", calW: "planner.calW", calH: "planner.calH" };
   const state = {
     booted: false,
     settings: null,
-    anchorTz: "",
-    zoneLabels: {},
     team: [],
-    palette: [],
+    hiddenMembers: [],
+    categories: [],
     platforms: [],
+    palette: [],
     backlogStatuses: [],
-    timezones: [],
+    clocks: { phtTz: "Asia/Manila", usTz: "America/New_York", usOptions: [] },
     year: now.getFullYear(),
     month: now.getMonth() + 1,
     todayKey: dateKey(now.getFullYear(), now.getMonth() + 1, now.getDate()),
@@ -450,10 +744,12 @@
     shiftHeld: false,
     drawerView: "list",
     ideaSearch: "",
+    taxTab: "categories",
     dragging: null,      // { kind:'item'|'idea', id, fromDate }
     dropTime: null,      // set by the hourly timeline in DIRECT mode
     expandedCell: null,
     previewFor: "",
+    dock: "RIGHT",
   };
 
   /** Holding Shift temporarily flips to the OTHER mode — one of the three
@@ -462,40 +758,37 @@
     state.shiftHeld ? (state.persistedMode === "DOMINO" ? "DIRECT" : "DOMINO") : state.persistedMode;
 
   const memberById = (id) => state.team.find((m) => String(m.userId) === String(id)) || null;
+  const categoryById = (id) => state.categories.find((c) => c.id === id) || null;
+  const weekStartIdx = () => (state.settings && state.settings.weekStart === "MONDAY" ? 1 : 0);
 
   /* ───────────────────────── boot ───────────────────────── */
 
   async function boot() {
     const data = await api("/api/planner/bootstrap");
+    applyTaxonomy(data);
     state.settings = data.settings;
-    state.anchorTz = data.anchorTz;
-    state.zoneLabels = data.zoneLabels || {};
-    state.team = data.team || [];
-    state.palette = data.palette || [];
-    state.platforms = data.platforms || [];
     state.backlogStatuses = data.backlogStatuses || [];
-    state.timezones = data.timezones || [];
+    state.clocks = data.clocks || state.clocks;
     state.counts = data.counts || state.counts;
     state.persistedMode = data.settings.dragMode;
     state.booted = true;
 
-    fillTimezoneSelects();
     fillMonthYearSelects();
     fillAssigneeFilter();
     syncModeControls();
-    syncAnchorButton();
+    syncCalendarSettings();
+    startClocks();
+    restoreLayout();
     await reload();
   }
 
-  function fillTimezoneSelects() {
-    const zones = state.timezones.slice();
-    for (const tz of [state.settings.primaryTz, state.settings.secondaryTz]) {
-      if (tz && !zones.includes(tz)) zones.push(tz);
-    }
-    for (const [id, value] of [["primaryTz", state.settings.primaryTz], ["secondaryTz", state.settings.secondaryTz]]) {
-      const sel = document.getElementById(id);
-      sel.innerHTML = zones.map((z) => `<option value="${esc(z)}"${z === value ? " selected" : ""}>${esc(z)}</option>`).join("");
-    }
+  /** Every payload that carries vocabulary refreshes it from one place. */
+  function applyTaxonomy(data) {
+    if (data.team) state.team = data.team;
+    if (data.hiddenMembers) state.hiddenMembers = data.hiddenMembers;
+    if (data.categories) state.categories = data.categories;
+    if (data.platforms) state.platforms = data.platforms;
+    if (data.palette) state.palette = data.palette;
   }
 
   function fillMonthYearSelects() {
@@ -514,20 +807,23 @@
 
   function fillAssigneeFilter() {
     const sel = document.getElementById("assigneeFilter");
+    const keep = sel.value || state.assigneeFilter;
     sel.innerHTML =
       `<option value="ALL">All team members</option>` +
       `<option value="NONE">Unassigned only</option>` +
       state.team
         .map((m) => `<option value="${esc(m.userId)}">${esc(m.fullName)}${m.active ? "" : " (Inactive)"} — ${esc(m.role)}</option>`)
         .join("");
-    sel.value = state.assigneeFilter;
+    sel.value = Array.from(sel.options).some((o) => o.value === keep) ? keep : "ALL";
+    state.assigneeFilter = sel.value;
   }
 
-  /* The visible grid always shows six whole weeks, Monday first, so the range
-     we load deliberately spills into the neighbouring months. */
+  /* The visible grid always shows six whole weeks, so the range we load
+     deliberately spills into the neighbouring months. Which weekday the grid
+     opens on is the operator's setting, hence the offset maths. */
   function visibleRange() {
     const first = new Date(Date.UTC(state.year, state.month - 1, 1));
-    const offset = (first.getUTCDay() + 6) % 7;
+    const offset = (first.getUTCDay() - weekStartIdx() + 7) % 7;
     const start = new Date(first.getTime() - offset * 86400000);
     const from = dateKey(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate());
     return { from, to: addDaysKey(from, 41) };
@@ -543,13 +839,13 @@
     ]);
     state.items = items.items || [];
     state.settings = items.settings || state.settings;
-    state.anchorTz = items.anchorTz || state.anchorTz;
     state.counts = items.counts || state.counts;
     state.backlog = backlog.items || [];
     renderAll();
   }
 
   function renderAll() {
+    renderGridHead();
     renderGrid();
     renderDetail();
     renderScratchpad();
@@ -561,9 +857,43 @@
   function renderMetrics() {
     document.getElementById("metricsLeft").textContent =
       `${state.counts.scheduled} scheduled · ${state.counts.backlog} in scratchpad · ${state.counts.completed} complete`;
-    const anchorIsPrimary = state.settings.gridAnchor === "primary";
+    const n = itemsFor(state.selectedDate).length;
     document.getElementById("metricsRight").textContent =
-      `Grid anchored to ${anchorIsPrimary ? "creator" : "audience"} time — ${state.anchorTz}`;
+      n ? `${n} item${n === 1 ? "" : "s"} on this day` : "Nothing on this day yet";
+  }
+
+  /* ───────────────────────── live reference clocks ─────────────────────────
+     One interval for the whole page. It writes two text nodes and touches
+     nothing else — a clock must never cause the calendar to re-render. */
+
+  let clockTimer = null;
+  function paintClocks() {
+    const write = (tz, timeEl, zoneEl) => {
+      try {
+        const t = new Intl.DateTimeFormat("en-US", {
+          timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: true,
+        }).format(new Date());
+        document.getElementById(timeEl).textContent = t.replace(/ /g, " ");
+        if (zoneEl) {
+          const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(new Date());
+          const abbr = (parts.find((p) => p.type === "timeZoneName") || {}).value || "";
+          document.getElementById(zoneEl).textContent = abbr;
+        }
+      } catch (_) {
+        document.getElementById(timeEl).textContent = "--:--";
+      }
+    };
+    write(state.clocks.phtTz || "Asia/Manila", "clockPht", null);
+    write(state.clocks.usTz || "America/New_York", "clockUs", "clockUsZone");
+  }
+  function startClocks() {
+    paintClocks();
+    clearInterval(clockTimer);
+    clockTimer = setInterval(paintClocks, 1000);
+    const opts = document.getElementById("clockMenuOpts");
+    opts.innerHTML = (state.clocks.usOptions || [])
+      .map((tz) => `<button class="opt${tz === state.clocks.usTz ? " on" : ""}" data-us-tz="${esc(tz)}">${esc(tz.split("/")[1].replace(/_/g, " "))}</button>`)
+      .join("");
   }
 
   /* ───────────────────────── calendar grid ───────────────────────── */
@@ -571,7 +901,7 @@
   const MAX_CARDS = 3;
 
   function itemsFor(key) {
-    return state.items.filter((i) => i.gridDate === key);
+    return state.items.filter((i) => i.date === key);
   }
 
   function isDimmed(item) {
@@ -587,7 +917,7 @@
     let html = shown
       .map((a) => {
         const m = memberById(a.userId);
-        const color = m ? m.accentColor : "#2dd4ee";
+        const color = m ? m.badgeColor : "#06B6D4";
         const label = m ? m.fullName + (m.active ? "" : " (Inactive)") : a.userId;
         const initials = m ? m.avatarInitials : String(a.userId).slice(0, 2).toUpperCase();
         return `<span class="avatar-chip${m && !m.active ? " inactive" : ""}" style="background:${esc(color)};border-color:${esc(color)};color:${readableText(color)};" title="${esc(label)} · ${esc(a.role)}">${esc(initials)}</span>`;
@@ -597,38 +927,35 @@
     return `<span class="chips">${html}</span>`;
   }
 
-  function timeBadgeHtml(item) {
-    if (!item.primary) return "";
-    const second = item.secondary
-      ? ` · ${esc(item.secondary.time)}${item.secondary.deltaLabel ? ` <span class="delta">${esc(item.secondary.deltaLabel)}</span>` : ""}`
-      : "";
-    const title = item.secondary
-      ? `${item.primary.time} ${item.primary.tz} · ${item.secondary.time} ${item.secondary.tz}`
-      : item.primary.time;
-    return `<span class="time-badge" title="${esc(title)}">${esc(item.primary.time)}${second}</span>`;
+  function categoryBadgeHtml(item) {
+    const cat = categoryById(item.categoryId);
+    if (!cat) return "";
+    return `<span class="cat-badge" style="background:${esc(cat.colorHex)};color:${esc(cat.textColor)};" title="Category: ${esc(cat.name)}">${esc(cat.name)}</span>`;
   }
 
   function cardHtml(item) {
-    const platform = item.platforms[0] || "";
-    const extraPlatforms = item.platforms.length - 1;
-    const badge = platform
-      ? `<span class="plat-badge" style="background:${esc(item.color)};color:${readableText(item.color)};" title="${esc(item.platforms.join(", "))}">${esc(platform)}${extraPlatforms > 0 ? ` +${extraPlatforms}` : ""}</span>`
-      : "";
-    const dst = item.dstWarning && item.dstWarning !== "ok"
-      ? `<span class="dst-badge" title="${item.dstWarning === "nonexistent" ? "This wall-clock time does not exist on this date — clocks jump forward" : "This time happens twice on this date — clocks fall back"}">⚠ DST</span>`
-      : "";
+    const cat = categoryById(item.categoryId);
+    const tip = [item.title, cat ? `Category: ${cat.name}` : "", item.platforms.join(", ")]
+      .filter(Boolean).join(" · ");
     return `<div class="cell-card${item.isCompleted ? " completed" : ""}${isDimmed(item) ? " dimmed" : ""}"
         style="border-left-color:${esc(item.color)};"
-        draggable="true" data-item-id="${esc(item.id)}" data-from-date="${esc(item.gridDate || "")}">
+        draggable="true" data-item-id="${esc(item.id)}" data-from-date="${esc(item.date || "")}">
         <div class="card-top">
-          <span class="card-title" title="${esc(item.title)}">${esc(item.title)}</span>
+          <span class="card-title" title="${esc(tip)}">${esc(item.title)}</span>
           <input type="checkbox" data-complete-for="${esc(item.id)}"${item.isCompleted ? " checked" : ""} title="Mark complete">
         </div>
         <div class="card-bottom">
-          ${badge}${dst}${timeBadgeHtml(item)}
+          ${categoryBadgeHtml(item)}
+          <span class="time-badge">${esc(item.timeDisplay || "")}</span>
           ${chipsHtml(item, 3)}
         </div>
       </div>`;
+  }
+
+  function renderGridHead() {
+    const ws = weekStartIdx();
+    document.getElementById("gridHead").innerHTML =
+      Array.from({ length: 7 }, (_, i) => `<div>${DAY_NAMES[(ws + i) % 7]}</div>`).join("");
   }
 
   function renderGrid() {
@@ -649,7 +976,7 @@
     grid.innerHTML = html;
   }
 
-  /* ───────────────────────── detail panel ───────────────────────── */
+  /* ───────────────────────── production panel ───────────────────────── */
 
   function renderDetail() {
     document.getElementById("panelDateLabel").textContent = `📅 ${prettyDate(state.selectedDate)}`;
@@ -669,28 +996,24 @@
 
   function accordionHtml(item) {
     const open = state.openAccordions.has(item.id);
-    const dstNote = item.dstWarning === "nonexistent"
-      ? `<div class="banner warn tiny" style="margin:0;">This time does not exist on this date in ${esc(item.authoredTz)} — clocks jump forward. It is stored as ${esc(item.primary ? item.primary.time : "")}.</div>`
-      : item.dstWarning === "ambiguous"
-      ? `<div class="banner warn tiny" style="margin:0;">This time happens twice on this date in ${esc(item.authoredTz)} — clocks fall back. Stored as the first occurrence.</div>`
-      : "";
 
-    const swatches = state.palette
-      .map((c) => `<button class="swatch${c.hex.toLowerCase() === item.color.toLowerCase() ? " on" : ""}" style="background:${esc(c.hex)};color:${esc(c.text)};" data-color-for="${esc(item.id)}" data-color="${esc(c.hex)}" title="Contrast ratio ${c.contrast}:1">${esc(c.name)}</button>`)
+    const categories = state.categories
+      .map((c) => `<button class="swatch${c.id === item.categoryId ? " on" : ""}" style="background:${esc(c.colorHex)};color:${esc(c.textColor)};" data-category-for="${esc(item.id)}" data-category="${esc(c.id)}" title="Contrast ${c.contrast}:1">${esc(c.name)}</button>`)
       .join("");
 
     const platforms = state.platforms
+      .filter((p) => p.activeStatus || item.platforms.includes(p.name))
       .map((p) => {
-        const on = item.platforms.includes(p);
-        return `<label class="${on ? "on" : ""}"><input type="checkbox" data-platform-for="${esc(item.id)}" value="${esc(p)}"${on ? " checked" : ""}> ${esc(p)}</label>`;
+        const on = item.platforms.includes(p.name);
+        return `<label class="${on ? "on" : ""}"><input type="checkbox" data-platform-for="${esc(item.id)}" value="${esc(p.name)}"${on ? " checked" : ""}> ${esc(p.name)}${p.activeStatus ? "" : " (off)"}</label>`;
       })
       .join("");
 
     const assignees = state.team
       .map((m) => {
         const on = item.assignedUsers.some((a) => String(a.userId) === String(m.userId));
-        return `<span class="assignee-toggle${on ? " on" : ""}" style="${on ? `border-color:${esc(m.accentColor)};` : ""}" data-assign-for="${esc(item.id)}" data-user="${esc(m.userId)}">
-            <span class="avatar-chip${m.active ? "" : " inactive"}" style="background:${esc(m.accentColor)};border-color:${esc(m.accentColor)};color:${readableText(m.accentColor)};width:16px;height:16px;border-width:1px;">${esc(m.avatarInitials)}</span>
+        return `<span class="assignee-toggle${on ? " on" : ""}" style="${on ? `border-color:${esc(m.badgeColor)};` : ""}" data-assign-for="${esc(item.id)}" data-user="${esc(m.userId)}">
+            <span class="avatar-chip${m.active ? "" : " inactive"}" style="background:${esc(m.badgeColor)};border-color:${esc(m.badgeColor)};color:${readableText(m.badgeColor)};width:16px;height:16px;border-width:1px;">${esc(m.avatarInitials)}</span>
             ${esc(m.fullName)}${m.active ? "" : " (Inactive)"}
           </span>`;
       })
@@ -700,17 +1023,12 @@
       ? `<a class="btn" href="${esc(item.assetDriveUrl)}" target="_blank" rel="noopener">📁 Open media drive</a>`
       : `<span class="tiny muted">Paste a Drive/Dropbox link to enable the button</span>`;
 
-    const times = item.primary
-      ? `${esc(item.primary.time)} ${esc(item.primary.label)}${item.secondary ? ` · ${esc(item.secondary.time)} ${esc(item.secondary.label)}${item.secondary.deltaLabel ? " " + esc(item.secondary.deltaLabel) : ""}` : ""}`
-      : "unscheduled";
-
     return `<div class="accordion-item" data-acc="${esc(item.id)}">
       <div class="accordion-header" data-toggle-acc="${esc(item.id)}">
-        <span>${item.isCompleted ? "✅" : "🔴"} ${esc(item.primary ? item.primary.time : "—")} — ${esc(item.title)}${item.platforms.length ? ` (${esc(item.platforms.join(", "))})` : ""}</span>
+        <span>${item.isCompleted ? "✅" : "🔴"} ${esc(item.timeDisplay || "—")} — ${esc(item.title)}${item.platforms.length ? ` (${esc(item.platforms.join(", "))})` : ""}</span>
         <span class="tiny muted">${open ? "▲ Fold" : "▼ Expand"}</span>
       </div>
       <div class="accordion-body" id="accBody-${esc(item.id)}"${open ? "" : " hidden"}>
-        ${dstNote}
         <div class="hgroup" style="justify-content:space-between;">
           <div class="hgroup">
             ${drive}
@@ -729,25 +1047,37 @@
             <input value="${esc(item.title)}" data-field="title" data-item="${esc(item.id)}">
           </div>
           <div class="field-group">
-            <label class="fieldlabel">Time (${esc(item.authoredTz)})</label>
-            <input type="time" value="${esc(item.primary ? item.primary.input : "09:00")}" data-field="time" data-item="${esc(item.id)}">
-            <span class="tiny muted">${times}</span>
+            <label class="fieldlabel">Date &amp; time</label>
+            <div class="hgroup" style="flex-wrap:nowrap;gap:6px;">
+              <input type="date" value="${esc(item.date || "")}" data-field="date" data-item="${esc(item.id)}" style="flex:1;">
+              <input type="time" value="${esc(item.time || "09:00")}" data-field="time" data-item="${esc(item.id)}" style="flex:1;">
+            </div>
+            <span class="tiny muted">Stays exactly here — no timezone shifting.</span>
           </div>
         </div>
 
         <div class="field-group">
           <label class="fieldlabel">Category colour</label>
-          <div class="swatches">${swatches}</div>
+          <div class="swatches">
+            ${categories}
+            <button class="addnew" data-add-category="${esc(item.id)}">＋ Add New…</button>
+          </div>
         </div>
 
         <div class="field-group">
           <label class="fieldlabel">Platforms</label>
-          <div class="platform-picker">${platforms}</div>
+          <div class="platform-picker">
+            ${platforms}
+            <button class="addnew" data-add-platform="${esc(item.id)}">＋ Add New…</button>
+          </div>
         </div>
 
         <div class="field-group">
           <label class="fieldlabel">Assigned team members</label>
-          <div class="assignee-row">${assignees}</div>
+          <div class="assignee-row">
+            ${assignees}
+            <button class="addnew" data-add-member="${esc(item.id)}">＋ Add New…</button>
+          </div>
         </div>
 
         <div class="field-row">
@@ -844,7 +1174,8 @@
     try {
       const res = await api(`/api/planner/items/${itemId}`, { method: "PATCH", body: JSON.stringify(entry.patch) });
       const idx = state.items.findIndex((i) => i.id === itemId);
-      if (res.item && res.item.scheduledAtUtc) {
+      const stillVisible = res.item && res.item.date && res.item.date >= state.rangeFrom && res.item.date <= state.rangeTo;
+      if (stillVisible) {
         if (idx >= 0) state.items[idx] = res.item; else state.items.push(res.item);
       } else if (idx >= 0) {
         state.items.splice(idx, 1);
@@ -853,12 +1184,9 @@
       if (flag) { flag.textContent = "Saved"; flag.className = "save-flag saved"; }
       renderGrid();
       renderMetrics();
-      if (res.dstWarning && res.dstWarning !== "ok") {
-        toast(res.dstWarning === "nonexistent"
-          ? "That time doesn't exist on this date — clocks jump forward. Saved to the next valid time."
-          : "That time happens twice on this date — saved as the first occurrence.");
-        renderDetail();
-      }
+      // A date edit moves the card out of the day being edited, so the panel
+      // has to catch up; a caption edit must not steal focus by re-rendering.
+      if (entry.patch.date !== undefined) renderDetail();
     } catch (err) {
       const flag = document.getElementById("save-" + itemId);
       if (flag) { flag.textContent = "Save failed: " + err.message; flag.className = "save-flag"; }
@@ -1042,12 +1370,9 @@
       const rippled = (res.plan.moves || []).filter((m) => !m.dragged).length;
       state.selectedDate = toDate;
       await reload();
-      (res.plan.warnings || []).forEach(toast);
-      if (!res.plan.warnings.length) {
-        toast(rippled
-          ? `Moved — ${rippled} later post${rippled === 1 ? "" : "s"} shifted with it`
-          : mode === "DIRECT" ? "Moved (direct insert — nothing else changed)" : "Moved");
-      }
+      toast(rippled
+        ? `Moved — ${rippled} later post${rippled === 1 ? "" : "s"} shifted with it`
+        : mode === "DIRECT" ? "Moved (direct insert — nothing else changed)" : "Moved");
     } catch (err) {
       toast("Move failed: " + err.message);
     }
@@ -1120,6 +1445,568 @@
     }
   });
 
+  /* ───────────────────────── dockable panel ─────────────────────────
+     The dock position is one attribute on the workspace; CSS owns every
+     consequence of it, so a move is a single write and a transition. */
+
+  const workspace = document.getElementById("workspace");
+  const MOBILE_DOCK_MAX = 768;
+
+  function effectiveDock() {
+    // Below the mobile breakpoint a side panel would leave the calendar
+    // unreadable, so BOTTOM is forced — without overwriting the preference,
+    // which comes back the moment there is room for it again.
+    return window.innerWidth < MOBILE_DOCK_MAX ? "BOTTOM" : state.dock;
+  }
+
+  function applyDock() {
+    const dock = effectiveDock();
+    workspace.setAttribute("data-dock", dock);
+    document.querySelectorAll("#dockSwitch button").forEach((b) => b.classList.toggle("on", b.dataset.dock === dock));
+    clampCalendarWidth();
+  }
+
+  function setDock(dock, persist) {
+    if (!["LEFT", "RIGHT", "BOTTOM"].includes(dock)) return;
+    state.dock = dock;
+    if (persist !== false) { try { localStorage.setItem(LS.dock, dock); } catch (_) {} }
+    applyDock();
+  }
+
+  function restoreLayout() {
+    let dock = "RIGHT", w = "", h = "";
+    try {
+      dock = localStorage.getItem(LS.dock) || "RIGHT";
+      w = localStorage.getItem(LS.calW) || "";
+      h = localStorage.getItem(LS.calH) || "";
+    } catch (_) {}
+    state.dock = ["LEFT", "RIGHT", "BOTTOM"].includes(dock) ? dock : "RIGHT";
+    applyDock();
+    if (w) applyCalendarSize(Number(w), null);
+    if (h) applyCalendarSize(null, Number(h));
+  }
+
+  document.getElementById("dockSwitch").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-dock]");
+    if (btn) setDock(btn.dataset.dock);
+  });
+
+  /* Drag the panel to a screen edge. Pointer events, not HTML5 drag: the drop
+     zones need to light up live, and the cards already own the drag data. */
+  let panelDragging = false;
+  const zones = Array.from(document.querySelectorAll(".dropzone"));
+  const EDGE = 50;
+
+  function zoneFor(x, y) {
+    if (x <= EDGE) return "LEFT";
+    if (x >= window.innerWidth - EDGE) return "RIGHT";
+    if (y >= window.innerHeight - EDGE) return "BOTTOM";
+    return null;
+  }
+  function highlightZone(zone) {
+    zones.forEach((z) => z.classList.toggle("hot", z.dataset.zone === zone));
+  }
+
+  const panelHandle = document.getElementById("panelDragHandle");
+  panelHandle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    panelDragging = true;
+    document.body.classList.add("dragging-panel");
+    try { panelHandle.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  window.addEventListener("pointermove", (e) => {
+    if (!panelDragging) return;
+    highlightZone(zoneFor(e.clientX, e.clientY));
+  });
+  window.addEventListener("pointerup", (e) => {
+    if (!panelDragging) return;
+    panelDragging = false;
+    document.body.classList.remove("dragging-panel");
+    const zone = zoneFor(e.clientX, e.clientY);
+    highlightZone(null);
+    if (zone) {
+      setDock(zone);
+      toast(`Panel docked ${zone.toLowerCase()}`);
+    }
+  });
+
+  /* ───────────────────────── calendar resizing ─────────────────────────
+     Width and height are CSS pixels on the frame, clamped so the box can
+     never swallow the docked panel or collapse below a usable size. */
+
+  const calFrame = document.getElementById("calFrame");
+  const MIN_W = 550, MIN_H = 400;
+
+  const maxCalWidth = () => {
+    const pane = calFrame.parentElement;
+    return Math.max(MIN_W, pane ? pane.clientWidth : window.innerWidth);
+  };
+  const maxCalHeight = () => Math.round(window.innerHeight * 0.85);
+
+  function applyCalendarSize(w, h) {
+    if (w != null) {
+      const clamped = Math.max(MIN_W, Math.min(w, maxCalWidth()));
+      calFrame.style.width = clamped + "px";
+    }
+    if (h != null) {
+      const clamped = Math.max(MIN_H, Math.min(h, maxCalHeight()));
+      calFrame.style.height = clamped + "px";
+      calFrame.classList.add("sized-h");
+    }
+  }
+
+  /** After a dock change the available track is different; a stored width
+      that no longer fits is clamped rather than left overflowing. */
+  function clampCalendarWidth() {
+    if (!calFrame.style.width) return;
+    const current = parseFloat(calFrame.style.width);
+    const max = maxCalWidth();
+    if (current > max) calFrame.style.width = Math.max(MIN_W, max) + "px";
+  }
+
+  function resetCalendarSize() {
+    calFrame.style.width = "";
+    calFrame.style.height = "";
+    calFrame.classList.remove("sized-h");
+    try { localStorage.removeItem(LS.calW); localStorage.removeItem(LS.calH); } catch (_) {}
+    toast("Calendar size reset");
+  }
+  document.getElementById("resetSizeBtn").addEventListener("click", resetCalendarSize);
+
+  let rz = null, rzFrame = 0, rzLast = { x: 0, y: 0 };
+
+  calFrame.addEventListener("pointerdown", (e) => {
+    const handle = e.target.closest("[data-rz]");
+    if (!handle) return;
+    e.preventDefault();
+    const box = calFrame.getBoundingClientRect();
+    rz = { dir: handle.dataset.rz, x0: e.clientX, y0: e.clientY, w0: box.width, h0: box.height, el: handle };
+    handle.classList.add("active");
+    document.body.classList.add("resizing");
+    try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+
+  window.addEventListener("pointermove", (e) => {
+    if (!rz) return;
+    rzLast = { x: e.clientX, y: e.clientY };
+    if (rzFrame) return;
+    // One write per animation frame: pointermove fires far faster than the
+    // screen refreshes, and resizing a 42-cell grid on every event stutters.
+    rzFrame = requestAnimationFrame(() => {
+      rzFrame = 0;
+      if (!rz) return;
+      const dx = rzLast.x - rz.x0;
+      const dy = rzLast.y - rz.y0;
+      let w = null, h = null;
+      // The left handle mirrors: dragging outward (leftward) widens the box.
+      if (rz.dir === "r" || rz.dir === "br") w = rz.w0 + dx;
+      if (rz.dir === "l" || rz.dir === "bl") w = rz.w0 - dx;
+      if (rz.dir === "b" || rz.dir === "br" || rz.dir === "bl") h = rz.h0 + dy;
+      applyCalendarSize(w, h);
+    });
+  });
+
+  window.addEventListener("pointerup", () => {
+    if (!rz) return;
+    rz.el.classList.remove("active");
+    rz = null;
+    document.body.classList.remove("resizing");
+    try {
+      if (calFrame.style.width) localStorage.setItem(LS.calW, parseFloat(calFrame.style.width));
+      if (calFrame.style.height) localStorage.setItem(LS.calH, parseFloat(calFrame.style.height));
+    } catch (_) {}
+  });
+
+  window.addEventListener("resize", () => {
+    applyDock();
+    if (calFrame.style.height) {
+      const h = parseFloat(calFrame.style.height);
+      if (h > maxCalHeight()) applyCalendarSize(null, maxCalHeight());
+    }
+  });
+
+  /* ───────────────────────── taxonomy drawer ───────────────────────── */
+
+  const taxDrawer = document.getElementById("taxDrawer");
+  const taxError = document.getElementById("taxError");
+
+  function showTaxError(msg) {
+    taxError.textContent = msg || "";
+  }
+
+  async function refreshTaxonomy() {
+    const data = await api("/api/planner/taxonomy");
+    applyTaxonomy(data);
+    fillAssigneeFilter();
+    renderTaxonomy();
+    renderGrid();
+    renderDetail();
+  }
+
+  function toggleTaxDrawer(open) {
+    const willOpen = open === undefined ? !taxDrawer.classList.contains("open") : open;
+    taxDrawer.classList.toggle("open", willOpen);
+    if (willOpen) { showTaxError(""); renderTaxonomy(); }
+  }
+  document.getElementById("taxonomyBtn").addEventListener("click", () => toggleTaxDrawer());
+  document.getElementById("taxClose").addEventListener("click", () => toggleTaxDrawer(false));
+  document.getElementById("taxTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-tab]");
+    if (!btn) return;
+    state.taxTab = btn.dataset.tab;
+    document.querySelectorAll("#taxTabs button").forEach((b) => b.classList.toggle("active", b === btn));
+    showTaxError("");
+    renderTaxonomy();
+  });
+
+  function renderTaxonomy() {
+    const body = document.getElementById("taxBody");
+    if (state.taxTab === "categories") body.innerHTML = taxCategoriesHtml();
+    else if (state.taxTab === "platforms") body.innerHTML = taxPlatformsHtml();
+    else body.innerHTML = taxTeamHtml();
+  }
+
+  function taxCategoriesHtml() {
+    return `
+      <div class="tax-add">
+        <button class="btn primary" id="newCategoryBtn" style="width:100%;">＋ New category</button>
+      </div>
+      <div class="tax-note">Renaming or recolouring a category repaints every card that carries it.</div>
+      ${state.categories.map((c) => `
+        <div class="tax-row">
+          <span class="tax-dot" style="background:${esc(c.colorHex)};" data-edit-category="${esc(c.id)}" title="Edit colour"></span>
+          <span class="grow">
+            <span class="name">${esc(c.name)}</span>
+            <span class="tax-usage">${c.usageCount} item${c.usageCount === 1 ? "" : "s"} · contrast ${c.contrast}:1</span>
+          </span>
+          <button class="btn mini" data-edit-category="${esc(c.id)}">Edit</button>
+          <button class="btn mini danger" data-del-category="${esc(c.id)}">✕</button>
+        </div>`).join("") || `<div class="tax-note">No categories yet.</div>`}
+    `;
+  }
+
+  function taxPlatformsHtml() {
+    return `
+      <div class="tax-add">
+        <input class="pill" id="newPlatformName" placeholder="Add a platform, e.g. Threads">
+        <button class="btn primary" id="newPlatformBtn">Save</button>
+      </div>
+      <div class="tax-note">Switching a platform off hides it from new posts but leaves existing ones tagged.</div>
+      ${state.platforms.map((p) => `
+        <div class="tax-row">
+          <span class="grow">
+            <span class="name">${esc(p.name)}${p.activeStatus ? "" : " · off"}</span>
+            <span class="tax-usage">${p.usageCount} item${p.usageCount === 1 ? "" : "s"} · icon ${esc(p.iconKey || "—")}</span>
+          </span>
+          <button class="btn mini" data-rename-platform="${esc(p.id)}">Rename</button>
+          <button class="btn mini" data-toggle-platform="${esc(p.id)}">${p.activeStatus ? "Turn off" : "Turn on"}</button>
+          <button class="btn mini danger" data-del-platform="${esc(p.id)}">✕</button>
+        </div>`).join("") || `<div class="tax-note">No platforms yet.</div>`}
+    `;
+  }
+
+  function taxTeamHtml() {
+    const hidden = state.hiddenMembers.length
+      ? `<div class="tax-note" style="margin-top:8px;"><strong>Removed from the planner</strong> (still active everywhere else):</div>` +
+        state.hiddenMembers.map((h) => `
+          <div class="tax-row">
+            <span class="grow"><span class="name">${esc(h.fullName)}</span>
+            <span class="tax-usage">${h.mergedInto ? "merged into " + esc(memberById(h.mergedInto) ? memberById(h.mergedInto).fullName : h.mergedInto) : "content unassigned"}</span></span>
+            <button class="btn mini" data-restore-member="${esc(h.userId)}">Restore</button>
+          </div>`).join("")
+      : "";
+    return `
+      <div class="tax-add">
+        <input class="pill" id="newMemberName" placeholder="Add someone, e.g. Jamie Cruz">
+        <button class="btn primary" id="newMemberBtn">Save</button>
+      </div>
+      <div class="tax-note">
+        Removing a duplicate here hands their content to whoever you pick. People from the
+        roster or the CRM are hidden from this calendar only — it never deletes their account.
+      </div>
+      ${state.team.map((m) => `
+        <div class="tax-row">
+          <span class="avatar-chip" style="background:${esc(m.badgeColor)};border-color:${esc(m.badgeColor)};color:${readableText(m.badgeColor)};">${esc(m.avatarInitials)}</span>
+          <span class="grow">
+            <span class="name">${esc(m.fullName)}${m.active ? "" : " (Inactive)"}</span>
+            <span class="tax-usage">${esc(m.role)} · ${m.usageCount} item${m.usageCount === 1 ? "" : "s"}</span>
+          </span>
+          <span class="tax-src">${esc(m.source)}</span>
+          <button class="btn mini" data-rename-member="${esc(m.userId)}">Rename</button>
+          <button class="btn mini danger" data-del-member="${esc(m.userId)}">✕</button>
+        </div>`).join("")}
+      ${hidden}
+    `;
+  }
+
+  /**
+   * One shared refusal flow for all three deletes. The server returns the
+   * usage count with a 409 rather than a bare error, so the question we ask
+   * is the real one: these N items need somewhere to go.
+   */
+  async function deleteWithReassign(opts) {
+    try {
+      await api(opts.url(""), { method: "DELETE" });
+      await refreshTaxonomy();
+      await reload();
+      toast(opts.doneMessage);
+      return;
+    } catch (err) {
+      if (err.status !== 409) { showTaxError(err.message); toast(err.message); return; }
+      const choices = opts.choices();
+      const list = choices.map((c, i) => `${i + 1}. ${c.label}`).join("\n");
+      const answer = prompt(
+        `${err.message}\n\nMove them to:\n${list}\n${choices.length + 1}. ${opts.noneLabel}\n\nType a number:`,
+        "1",
+      );
+      if (answer === null) return;
+      const idx = Number(answer) - 1;
+      const target = idx >= 0 && idx < choices.length ? choices[idx].id : idx === choices.length ? "unassigned" : null;
+      if (!target) { toast("Nothing was deleted."); return; }
+      try {
+        const res = await api(opts.url(target), { method: "DELETE" });
+        await refreshTaxonomy();
+        await reload();
+        toast(`${opts.doneMessage} — ${res.reassigned} item${res.reassigned === 1 ? "" : "s"} moved`);
+      } catch (err2) {
+        showTaxError(err2.message);
+        toast(err2.message);
+      }
+    }
+  }
+
+  document.getElementById("taxBody").addEventListener("click", async (e) => {
+    showTaxError("");
+    const editCat = e.target.closest("[data-edit-category]");
+    if (editCat) { openCategoryModal(editCat.getAttribute("data-edit-category"), null); return; }
+
+    const newCat = e.target.closest("#newCategoryBtn");
+    if (newCat) { openCategoryModal(null, null); return; }
+
+    const delCat = e.target.closest("[data-del-category]");
+    if (delCat) {
+      const id = delCat.getAttribute("data-del-category");
+      const cat = categoryById(id);
+      if (!confirm(`Delete the category "${cat ? cat.name : id}"?`)) return;
+      await deleteWithReassign({
+        url: (t) => `/api/planner/categories/${id}${t ? `?reassignTo=${encodeURIComponent(t)}` : ""}`,
+        choices: () => state.categories.filter((c) => c.id !== id).map((c) => ({ id: c.id, label: c.name })),
+        noneLabel: "Leave them uncategorised",
+        doneMessage: "Category deleted",
+      });
+      return;
+    }
+
+    const newPlat = e.target.closest("#newPlatformBtn");
+    if (newPlat) {
+      const input = document.getElementById("newPlatformName");
+      const name = input.value.trim();
+      if (!name) return;
+      try {
+        await api("/api/planner/platforms", { method: "POST", body: JSON.stringify({ name }) });
+        await refreshTaxonomy();
+        toast(`"${name}" is now a platform option`);
+      } catch (err) { showTaxError(err.message); }
+      return;
+    }
+
+    const renamePlat = e.target.closest("[data-rename-platform]");
+    if (renamePlat) {
+      const id = renamePlat.getAttribute("data-rename-platform");
+      const p = state.platforms.find((x) => x.id === id);
+      const name = prompt("Rename this platform. Posts tagged with it come along.", p ? p.name : "");
+      if (!name) return;
+      try {
+        await api(`/api/planner/platforms/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+        await refreshTaxonomy();
+        await reload();
+      } catch (err) { showTaxError(err.message); }
+      return;
+    }
+
+    const togglePlat = e.target.closest("[data-toggle-platform]");
+    if (togglePlat) {
+      const id = togglePlat.getAttribute("data-toggle-platform");
+      const p = state.platforms.find((x) => x.id === id);
+      try {
+        await api(`/api/planner/platforms/${id}`, { method: "PATCH", body: JSON.stringify({ activeStatus: !(p && p.activeStatus) }) });
+        await refreshTaxonomy();
+      } catch (err) { showTaxError(err.message); }
+      return;
+    }
+
+    const delPlat = e.target.closest("[data-del-platform]");
+    if (delPlat) {
+      const id = delPlat.getAttribute("data-del-platform");
+      const p = state.platforms.find((x) => x.id === id);
+      if (!confirm(`Delete the platform "${p ? p.name : id}"?`)) return;
+      await deleteWithReassign({
+        url: (t) => `/api/planner/platforms/${id}${t ? `?reassignTo=${encodeURIComponent(t)}` : ""}`,
+        choices: () => state.platforms.filter((x) => x.id !== id).map((x) => ({ id: x.id, label: x.name })),
+        noneLabel: "Just remove the tag from those posts",
+        doneMessage: "Platform deleted",
+      });
+      return;
+    }
+
+    const newMember = e.target.closest("#newMemberBtn");
+    if (newMember) {
+      const input = document.getElementById("newMemberName");
+      const fullName = input.value.trim();
+      if (!fullName) return;
+      try {
+        await api("/api/planner/members", { method: "POST", body: JSON.stringify({ fullName }) });
+        await refreshTaxonomy();
+        toast(`${fullName} can now be assigned content`);
+      } catch (err) { showTaxError(err.message); }
+      return;
+    }
+
+    const renameMember = e.target.closest("[data-rename-member]");
+    if (renameMember) {
+      const id = renameMember.getAttribute("data-rename-member");
+      const m = memberById(id);
+      const fullName = prompt("Display name on the content calendar:", m ? m.fullName : "");
+      if (!fullName) return;
+      try {
+        await api(`/api/planner/members/${id}`, { method: "PATCH", body: JSON.stringify({ fullName }) });
+        await refreshTaxonomy();
+      } catch (err) { showTaxError(err.message); }
+      return;
+    }
+
+    const restoreMember = e.target.closest("[data-restore-member]");
+    if (restoreMember) {
+      const id = restoreMember.getAttribute("data-restore-member");
+      try {
+        await api(`/api/planner/members/${id}`, { method: "PATCH", body: JSON.stringify({ restore: true }) });
+        await refreshTaxonomy();
+        toast("Restored to the planner");
+      } catch (err) { showTaxError(err.message); }
+      return;
+    }
+
+    const delMember = e.target.closest("[data-del-member]");
+    if (delMember) {
+      const id = delMember.getAttribute("data-del-member");
+      const m = memberById(id);
+      const note = m && m.source !== "planner"
+        ? `\n\n${m.fullName} comes from the ${m.source === "roster" ? "team roster" : "CRM user list"}. Removing them here hides them from this calendar only — their account is untouched.`
+        : "";
+      if (!confirm(`Remove ${m ? m.fullName : id} from the content calendar?${note}`)) return;
+      await deleteWithReassign({
+        url: (t) => `/api/planner/members/${id}${t ? `?mergeInto=${encodeURIComponent(t)}` : ""}`,
+        choices: () => state.team.filter((x) => x.userId !== id).map((x) => ({ id: x.userId, label: x.fullName })),
+        noneLabel: "Leave that content unassigned",
+        doneMessage: "Removed from the planner",
+      });
+      return;
+    }
+  });
+
+  /* ── category modal: name + the 5×4 palette grid ── */
+
+  let catModalState = { id: null, color: null, applyToItem: null };
+  const catModal = document.getElementById("catModal");
+
+  function renderSwatchGrid() {
+    document.getElementById("catSwatchGrid").innerHTML = state.palette
+      .map((c) => {
+        const on = c.hex.toLowerCase() === String(catModalState.color).toLowerCase();
+        return `<div class="swatch-cell${on ? " on" : ""}"
+          style="background:${esc(c.hex)};color:${esc(c.text)};" data-hex="${esc(c.hex)}"
+          title="${esc(c.name)} · ${c.contrast}:1">${on ? "✓" : ""}</div>`;
+      })
+      .join("");
+    const preview = document.getElementById("catPreview");
+    const name = document.getElementById("catModalName").value.trim() || "Preview";
+    preview.textContent = name;
+    preview.style.background = catModalState.color;
+    preview.style.color = readableText(catModalState.color);
+    document.getElementById("catContrast").textContent = `${contrastOf(catModalState.color)}:1`;
+  }
+
+  function openCategoryModal(id, applyToItem) {
+    const cat = id ? categoryById(id) : null;
+    catModalState = {
+      id: id || null,
+      color: cat ? cat.colorHex : (state.palette[5] || { hex: "#06B6D4" }).hex,
+      applyToItem: applyToItem || null,
+    };
+    document.getElementById("catModalTitle").textContent = cat ? "Edit category" : "New category";
+    document.getElementById("catModalName").value = cat ? cat.name : "";
+    document.getElementById("catModalError").textContent = "";
+    renderSwatchGrid();
+    catModal.classList.add("open");
+    setTimeout(() => document.getElementById("catModalName").focus(), 40);
+  }
+  function closeCategoryModal() { catModal.classList.remove("open"); }
+
+  document.getElementById("catSwatchGrid").addEventListener("click", (e) => {
+    const cell = e.target.closest("[data-hex]");
+    if (!cell) return;
+    catModalState.color = cell.getAttribute("data-hex");
+    renderSwatchGrid();
+  });
+  document.getElementById("catModalName").addEventListener("input", renderSwatchGrid);
+  document.getElementById("catModalCancel").addEventListener("click", closeCategoryModal);
+  catModal.addEventListener("click", (e) => { if (e.target === catModal) closeCategoryModal(); });
+
+  document.getElementById("catModalSave").addEventListener("click", async () => {
+    const name = document.getElementById("catModalName").value.trim();
+    const errEl = document.getElementById("catModalError");
+    if (!name) { errEl.textContent = "A category name is required."; return; }
+    try {
+      const payload = JSON.stringify({ name, colorHex: catModalState.color });
+      const res = catModalState.id
+        ? await api(`/api/planner/categories/${catModalState.id}`, { method: "PATCH", body: payload })
+        : await api("/api/planner/categories", { method: "POST", body: payload });
+      const applyTo = catModalState.applyToItem;
+      closeCategoryModal();
+      await refreshTaxonomy();
+      if (applyTo && res.category) {
+        await api(`/api/planner/items/${applyTo}`, {
+          method: "PATCH",
+          body: JSON.stringify({ categoryId: res.category.id, actor: "planner-ui" }),
+        });
+      }
+      await reload();
+      toast(catModalState.id ? "Category updated" : `"${name}" added`);
+    } catch (err) {
+      errEl.textContent = err.message;
+    }
+  });
+
+  /* ───────────────────────── inline quick-add ─────────────────────────
+     A new platform or teammate can be needed mid-thought while writing a
+     post; this keeps that from being a trip to another screen. */
+
+  function inlineAdd(anchorBtn, placeholder, onSubmit) {
+    if (anchorBtn.dataset.editing === "1") return;
+    anchorBtn.dataset.editing = "1";
+    const wrap = document.createElement("span");
+    wrap.className = "inline-add";
+    wrap.innerHTML = `<input placeholder="${esc(placeholder)}"><button class="btn mini primary" type="button">✓</button><button class="btn mini" type="button">✕</button>`;
+    anchorBtn.after(wrap);
+    anchorBtn.style.display = "none";
+    const [input, okBtn, cancelBtn] = [wrap.querySelector("input"), ...wrap.querySelectorAll("button")];
+    const close = () => { wrap.remove(); anchorBtn.style.display = ""; delete anchorBtn.dataset.editing; };
+    const submit = async () => {
+      const value = input.value.trim();
+      if (!value) { close(); return; }
+      okBtn.disabled = true;
+      try { await onSubmit(value); } catch (err) { toast(err.message); }
+      close();
+    };
+    okBtn.addEventListener("click", submit);
+    cancelBtn.addEventListener("click", close);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); void submit(); }
+      if (e.key === "Escape") { e.preventDefault(); close(); }
+    });
+    input.focus();
+  }
+
   /* ───────────────────────── events ───────────────────────── */
 
   grid.addEventListener("click", async (e) => {
@@ -1140,6 +2027,7 @@
       state.selectedDate = more.getAttribute("data-more-for");
       renderGrid();
       renderDetail();
+      renderMetrics();
       return;
     }
     const card = e.target.closest(".cell-card");
@@ -1149,6 +2037,7 @@
       if (card) state.openAccordions.add(card.dataset.itemId);
       renderGrid();
       renderDetail();
+      renderMetrics();
     }
   });
 
@@ -1163,15 +2052,64 @@
     const first = e.target.closest("#createFirstBtn");
     if (first) { await createItemOnSelectedDay(); return; }
 
-    const color = e.target.closest("[data-color-for]");
-    if (color) {
-      const id = color.getAttribute("data-color-for");
-      const hex = color.getAttribute("data-color");
+    const cat = e.target.closest("[data-category-for]");
+    if (cat) {
+      const id = cat.getAttribute("data-category-for");
+      const categoryId = cat.getAttribute("data-category");
       const item = state.items.find((i) => i.id === id);
-      if (item) item.color = hex;
-      queuePatch(id, { color: hex, actor: "planner-ui" });
-      renderGrid();
-      renderDetail();
+      const chosen = categoryById(categoryId);
+      if (item && chosen) {
+        // Toggling the active category off leaves the item uncategorised.
+        const next = item.categoryId === categoryId ? null : categoryId;
+        item.categoryId = next;
+        if (next) item.color = chosen.colorHex;
+        queuePatch(id, { categoryId: next, actor: "planner-ui" });
+        renderGrid();
+        renderDetail();
+      }
+      return;
+    }
+
+    const addCat = e.target.closest("[data-add-category]");
+    if (addCat) { openCategoryModal(null, addCat.getAttribute("data-add-category")); return; }
+
+    const addPlat = e.target.closest("[data-add-platform]");
+    if (addPlat) {
+      const itemId = addPlat.getAttribute("data-add-platform");
+      inlineAdd(addPlat, "New platform…", async (name) => {
+        await api("/api/planner/platforms", { method: "POST", body: JSON.stringify({ name }) });
+        await refreshTaxonomy();
+        const item = state.items.find((i) => i.id === itemId);
+        if (item && !item.platforms.includes(name)) {
+          item.platforms = item.platforms.concat([name]);
+          await api(`/api/planner/items/${itemId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ platforms: item.platforms, actor: "planner-ui" }),
+          });
+        }
+        await reload();
+        toast(`"${name}" added`);
+      });
+      return;
+    }
+
+    const addMember = e.target.closest("[data-add-member]");
+    if (addMember) {
+      const itemId = addMember.getAttribute("data-add-member");
+      inlineAdd(addMember, "New team member…", async (fullName) => {
+        const res = await api("/api/planner/members", { method: "POST", body: JSON.stringify({ fullName }) });
+        await refreshTaxonomy();
+        const item = state.items.find((i) => i.id === itemId);
+        if (item && res.member) {
+          item.assignedUsers = item.assignedUsers.concat([{ userId: res.member.userId, role: "owner" }]);
+          await api(`/api/planner/items/${itemId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ assignedUsers: item.assignedUsers, actor: "planner-ui" }),
+          });
+        }
+        await reload();
+        toast(`${fullName} added and assigned`);
+      });
       return;
     }
 
@@ -1260,7 +2198,11 @@
     const id = e.target.getAttribute("data-item");
     const item = state.items.find((i) => i.id === id);
     const value = e.target.value;
-    if (item && field !== "time") item[field] = value;
+    if (field === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    if (field === "time" && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) return;
+    if (item && field !== "time" && field !== "date") item[field] = value;
+    if (item && field === "time") { item.time = value; item.timeDisplay = timeLabel(value); }
+    if (item && field === "date") item.date = value;
     queuePatch(id, { [field]: value, actor: "planner-ui" });
   });
 
@@ -1286,7 +2228,6 @@
           title: "New content item",
           date: state.selectedDate,
           time: "09:00",
-          color: (state.palette[6] || { hex: "#2dd4ee" }).hex,
           platforms: [],
           actor: "planner-ui",
         }),
@@ -1338,7 +2279,10 @@
     renderGrid();
   });
 
-  document.getElementById("refreshBtn").addEventListener("click", () => void reload());
+  document.getElementById("refreshBtn").addEventListener("click", async () => {
+    try { await refreshTaxonomy(); } catch (_) {}
+    void reload();
+  });
 
   /* ── the three synchronised drag-mode controls ── */
   function syncModeControls() {
@@ -1367,34 +2311,77 @@
   });
   window.addEventListener("keydown", (e) => {
     if (e.key === "Shift" && !state.shiftHeld) { state.shiftHeld = true; syncModeControls(); }
+    if (e.key === "Escape") { closeMenus(); closeCategoryModal(); }
   });
   window.addEventListener("keyup", (e) => {
     if (e.key === "Shift" && state.shiftHeld) { state.shiftHeld = false; syncModeControls(); }
   });
   window.addEventListener("blur", () => { if (state.shiftHeld) { state.shiftHeld = false; syncModeControls(); } });
 
-  /* ── timezone controls ── */
-  async function saveZones(patch) {
-    try {
-      const res = await api("/api/planner/settings", { method: "PUT", body: JSON.stringify(patch) });
-      state.settings = res.settings;
-      state.anchorTz = res.anchorTz;
-      state.zoneLabels = res.zoneLabels || state.zoneLabels;
-      syncAnchorButton();
-      await reload();
-    } catch (err) { toast(err.message); }
-  }
-  document.getElementById("primaryTz").addEventListener("change", (e) => void saveZones({ primaryTz: e.target.value }));
-  document.getElementById("secondaryTz").addEventListener("change", (e) => void saveZones({ secondaryTz: e.target.value }));
+  /* ── header menus: reference clocks + calendar settings ── */
 
-  function syncAnchorButton() {
-    const btn = document.getElementById("anchorToggle");
-    const isPrimary = state.settings.gridAnchor === "primary";
-    btn.textContent = `Grid anchor: ${isPrimary ? "creator" : "audience"} (${isPrimary ? state.settings.primaryTz : state.settings.secondaryTz})`;
-    btn.title = "Which timezone decides which day cell a card sits in. Flipping this genuinely re-sorts cards across midnight.";
+  function closeMenus() {
+    document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open"));
   }
-  document.getElementById("anchorToggle").addEventListener("click", () => {
-    void saveZones({ gridAnchor: state.settings.gridAnchor === "primary" ? "secondary" : "primary" });
+  function openMenuUnder(menu, anchor) {
+    const wasOpen = menu.classList.contains("open");
+    closeMenus();
+    if (wasOpen) return;
+    const box = anchor.getBoundingClientRect();
+    menu.style.top = `${box.bottom + 6}px`;
+    menu.style.left = `${Math.max(8, Math.min(box.left, window.innerWidth - 232))}px`;
+    menu.classList.add("open");
+  }
+
+  const clockMenu = document.getElementById("clockMenu");
+  const calMenu = document.getElementById("calSettingsMenu");
+  document.getElementById("clockWidget").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openMenuUnder(clockMenu, document.getElementById("clockWidget"));
+  });
+  document.getElementById("calSettingsBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openMenuUnder(calMenu, document.getElementById("calSettingsBtn"));
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".menu")) closeMenus();
+  });
+
+  clockMenu.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-us-tz]");
+    if (!btn) return;
+    const tz = btn.getAttribute("data-us-tz");
+    state.clocks.usTz = tz;
+    startClocks();
+    closeMenus();
+    try {
+      await api("/api/planner/settings", { method: "PUT", body: JSON.stringify({ usClockTz: tz }) });
+    } catch (err) { toast("Could not save the clock choice: " + err.message); }
+  });
+
+  function syncCalendarSettings() {
+    document.getElementById("weekStartSelect").value = state.settings.weekStart || "SUNDAY";
+  }
+
+  document.getElementById("weekStartSelect").addEventListener("change", async (e) => {
+    const weekStart = e.target.value;
+    const previous = state.settings.weekStart;
+    state.settings.weekStart = weekStart;
+    // Repaint the header immediately — the grid must reflow without a reload.
+    renderGridHead();
+    try {
+      // Persist BEFORE reloading. reload() adopts the settings the server
+      // sends back, so a reload racing an unsaved change would repaint the
+      // grid with the old week start and the switch would look broken.
+      await api("/api/planner/settings", { method: "PUT", body: JSON.stringify({ weekStart }) });
+    } catch (err) {
+      state.settings.weekStart = previous;
+      document.getElementById("weekStartSelect").value = previous;
+      renderGridHead();
+      toast("Could not save the week start: " + err.message);
+      return;
+    }
+    await reload();
   });
 
   /* ── scratchpad drawer ── */
@@ -1441,11 +2428,15 @@
 
   boot().catch((err) => {
     document.getElementById("calendarGrid").innerHTML =
-      `<div class="panel" style="grid-column:1/-1;">Could not load the planner: ${esc(err.message)}</div>`;
+      `<div class="panel" style="grid-column:1/-1;padding:14px;">Could not load the planner: ${esc(err.message)}</div>`;
   });
 
   // Exposed for the verification suite, which drives the real page in Chrome.
-  window.__planner = { state, effectiveMode, reload, api };
+  window.__planner = {
+    state, effectiveMode, reload, api, refreshTaxonomy,
+    setDock, effectiveDock, applyCalendarSize, resetCalendarSize,
+    openCategoryModal, weekStartIdx, visibleRange, readableText, timeLabel,
+  };
 })();
 </script>
 </body>

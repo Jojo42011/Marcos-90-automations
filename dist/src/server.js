@@ -8293,35 +8293,42 @@ app.get("/api/planner/bootstrap", async (req, res) => {
         return;
     }
     const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const { listPlannerTeam } = await Promise.resolve().then(() => __importStar(require("./core/plannerTeam.js")));
-    const { zoneLabel } = await Promise.resolve().then(() => __importStar(require("./core/zonedTime.js")));
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
     const settings = planner.getSettings();
     res.json({
         settings,
-        anchorTz: planner.anchorTz(settings),
-        zoneLabels: {
-            primary: zoneLabel(settings.primaryTz),
-            secondary: zoneLabel(settings.secondaryTz),
-        },
-        team: listPlannerTeam(),
-        palette: planner.palette(),
-        platforms: planner.PLATFORMS,
+        team: tax.listMembers(),
+        hiddenMembers: tax.hiddenMembers(),
+        categories: tax.listCategories(),
+        platforms: tax.listPlatforms(),
+        palette: tax.paletteWithText(),
         backlogStatuses: planner.BACKLOG_STATUSES.map((s) => ({ id: s, label: planner.BACKLOG_STATUS_LABELS[s] })),
         counts: planner.plannerCounts(),
-        /** Zones offered in the two pickers. Any IANA zone is accepted on save. */
-        timezones: [
-            "America/Chicago",
-            "America/New_York",
-            "America/Denver",
-            "America/Los_Angeles",
-            "America/Phoenix",
-            "Asia/Manila",
-            "Asia/Kolkata",
-            "Europe/London",
-            "Europe/Madrid",
-            "Australia/Sydney",
-            "UTC",
-        ],
+        /**
+         * Reference clocks only. These never touch a card's date: the Philippines
+         * clock is fixed because that is the half of the team it exists for, and
+         * the US one is swappable purely so whoever is looking sees their own.
+         */
+        clocks: {
+            phtTz: "Asia/Manila",
+            usTz: settings.usClockTz,
+            usOptions: ["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles"],
+        },
+    });
+});
+/** The three editable vocabularies, on their own so the drawer can refresh alone. */
+app.get("/api/planner/taxonomy", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    res.json({
+        categories: tax.listCategories(),
+        platforms: tax.listPlatforms(),
+        team: tax.listMembers(),
+        hiddenMembers: tax.hiddenMembers(),
+        palette: tax.paletteWithText(),
     });
 });
 app.get("/api/planner/items", async (req, res) => {
@@ -8336,13 +8343,11 @@ app.get("/api/planner/items", async (req, res) => {
         res.status(400).json({ error: "from and to must be YYYY-MM-DD" });
         return;
     }
-    const settings = planner.getSettings();
     res.json({
         from,
         to,
-        anchorTz: planner.anchorTz(settings),
-        settings,
-        items: planner.scheduledBetween(from, to, settings),
+        settings: planner.getSettings(),
+        items: planner.scheduledBetween(from, to),
         counts: planner.plannerCounts(),
     });
 });
@@ -8372,12 +8377,14 @@ app.post("/api/planner/items", express_1.default.json({ limit: "256kb" }), async
         res.status(400).json({ error: "A title is required" });
         return;
     }
-    const { item, dst } = planner.createItem({
+    const cat = await resolvePlannerCategory(body.categoryId);
+    const { item } = planner.createItem({
         title,
         hook: typeof body.hook === "string" ? body.hook : "",
         caption: typeof body.caption === "string" ? body.caption : "",
         script: typeof body.script === "string" ? body.script : "",
-        color: typeof body.color === "string" ? body.color : undefined,
+        color: cat ? cat.colorHex : typeof body.color === "string" ? body.color : undefined,
+        categoryId: cat ? cat.id : null,
         platforms: Array.isArray(body.platforms) ? body.platforms : [],
         assignedUsers: Array.isArray(body.assignedUsers) ? body.assignedUsers : [],
         assetDriveUrl: typeof body.assetDriveUrl === "string" ? body.assetDriveUrl : null,
@@ -8389,7 +8396,7 @@ app.post("/api/planner/items", express_1.default.json({ limit: "256kb" }), async
         createdBy: typeof body.actor === "string" ? body.actor : null,
     });
     await notifyPlannerAssignees(item.assignedUsers.map((a) => a.userId), item.title, item.id, typeof body.actor === "string" ? body.actor : "");
-    res.json({ ok: true, item: planner.viewItem(item), dstWarning: dst });
+    res.json({ ok: true, item: planner.viewItem(item) });
 });
 app.patch("/api/planner/items/:id", express_1.default.json({ limit: "256kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -8403,12 +8410,16 @@ app.patch("/api/planner/items/:id", express_1.default.json({ limit: "256kb" }), 
         return;
     }
     const body = (req.body || {});
+    // A category carries its colour: setting one must repaint the card, or the
+    // grid and the taxonomy drawer disagree about what colour that category is.
+    const cat = body.categoryId === undefined ? null : await resolvePlannerCategory(body.categoryId);
     const result = planner.updateItem(String(req.params.id), {
         title: typeof body.title === "string" ? body.title : undefined,
         hook: typeof body.hook === "string" ? body.hook : undefined,
         caption: typeof body.caption === "string" ? body.caption : undefined,
         script: typeof body.script === "string" ? body.script : undefined,
-        color: typeof body.color === "string" ? body.color : undefined,
+        color: cat ? cat.colorHex : typeof body.color === "string" ? body.color : undefined,
+        categoryId: body.categoryId === undefined ? undefined : cat ? cat.id : null,
         platforms: Array.isArray(body.platforms) ? body.platforms : undefined,
         assignedUsers: Array.isArray(body.assignedUsers)
             ? body.assignedUsers
@@ -8430,7 +8441,7 @@ app.patch("/api/planner/items/:id", express_1.default.json({ limit: "256kb" }), 
     const priorIds = before.assignedUsers.map((a) => a.userId);
     const newlyAssigned = result.item.assignedUsers.map((a) => a.userId).filter((u) => !priorIds.includes(u));
     await notifyPlannerAssignees(newlyAssigned, result.item.title, result.item.id, typeof body.actor === "string" ? body.actor : "");
-    res.json({ ok: true, item: planner.viewItem(result.item), dstWarning: result.dst });
+    res.json({ ok: true, item: planner.viewItem(result.item) });
 });
 app.delete("/api/planner/items/:id", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -8522,27 +8533,249 @@ app.put("/api/planner/settings", express_1.default.json(), async (req, res) => {
         return;
     }
     const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const { isValidTimeZone, zoneLabel } = await Promise.resolve().then(() => __importStar(require("./core/zonedTime.js")));
+    const { isValidTimeZone } = await Promise.resolve().then(() => __importStar(require("./core/zonedTime.js")));
     const body = (req.body || {});
-    for (const key of ["primaryTz", "secondaryTz"]) {
+    for (const key of ["authoringTz", "usClockTz"]) {
         const v = body[key];
         if (v !== undefined && (typeof v !== "string" || !isValidTimeZone(v))) {
             res.status(400).json({ error: `${key} must be a valid IANA timezone (e.g. America/Chicago)` });
             return;
         }
     }
+    if (body.weekStart !== undefined && body.weekStart !== "SUNDAY" && body.weekStart !== "MONDAY") {
+        res.status(400).json({ error: "weekStart must be SUNDAY or MONDAY" });
+        return;
+    }
     const settings = planner.saveSettings({
-        primaryTz: typeof body.primaryTz === "string" ? body.primaryTz : undefined,
-        secondaryTz: typeof body.secondaryTz === "string" ? body.secondaryTz : undefined,
-        gridAnchor: body.gridAnchor === "primary" || body.gridAnchor === "secondary" ? body.gridAnchor : undefined,
+        authoringTz: typeof body.authoringTz === "string" ? body.authoringTz : undefined,
+        usClockTz: typeof body.usClockTz === "string" ? body.usClockTz : undefined,
+        weekStart: body.weekStart === "SUNDAY" || body.weekStart === "MONDAY" ? body.weekStart : undefined,
         dragMode: body.dragMode === "DOMINO" || body.dragMode === "DIRECT" ? body.dragMode : undefined,
     });
-    res.json({
-        ok: true,
-        settings,
-        anchorTz: planner.anchorTz(settings),
-        zoneLabels: { primary: zoneLabel(settings.primaryTz), secondary: zoneLabel(settings.secondaryTz) },
-    });
+    res.json({ ok: true, settings });
+});
+/* ── master taxonomy: categories, platforms, team members ──────────────────
+   Every delete here goes through the same contract: content that references
+   the thing being removed must be told where to go, or the request is refused
+   with the count so the UI can ask. Nothing is orphaned quietly. */
+/** Categories and platforms are looked up by id; a bad id is a 400, not a guess. */
+async function resolvePlannerCategory(raw) {
+    if (typeof raw !== "string" || !raw.trim())
+        return null;
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    const cat = tax.getCategory(raw.trim());
+    return cat ? { id: cat.id, colorHex: cat.colorHex } : null;
+}
+/** Turn a TaxonomyError into its own status; anything else is a real 500. */
+function sendTaxonomyError(res, err) {
+    const e = err;
+    if (e && typeof e.status === "number") {
+        res.status(e.status).json({ error: e.message, ...(e.details || {}) });
+        return;
+    }
+    console.error("[planner taxonomy]", err);
+    res.status(500).json({ error: (e && e.message) || "Taxonomy update failed" });
+}
+app.post("/api/planner/categories", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    const body = (req.body || {});
+    try {
+        const category = tax.createCategory({
+            name: String(body.name || ""),
+            colorHex: String(body.colorHex || tax.PALETTE_20[0].hex),
+        });
+        res.json({ ok: true, category, categories: tax.listCategories() });
+    }
+    catch (err) {
+        sendTaxonomyError(res, err);
+    }
+});
+app.patch("/api/planner/categories/:id", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    const body = (req.body || {});
+    try {
+        const category = tax.updateCategory(String(req.params.id), {
+            name: typeof body.name === "string" ? body.name : undefined,
+            colorHex: typeof body.colorHex === "string" ? body.colorHex : undefined,
+            sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
+        });
+        if (!category) {
+            res.status(404).json({ error: "No such category" });
+            return;
+        }
+        // Recolouring a category repaints every card carrying it, in one write.
+        if (typeof body.colorHex === "string") {
+            const { getPlannerDb } = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
+            getPlannerDb()
+                .prepare(`UPDATE planner_items SET color=?, updated_at=? WHERE category_id=?`)
+                .run(category.colorHex, new Date().toISOString(), category.id);
+        }
+        res.json({ ok: true, category, categories: tax.listCategories() });
+    }
+    catch (err) {
+        sendTaxonomyError(res, err);
+    }
+});
+app.delete("/api/planner/categories/:id", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    try {
+        const out = tax.deleteCategory(String(req.params.id), req.query.reassignTo ? String(req.query.reassignTo) : null);
+        if (!out.deleted) {
+            res.status(404).json({ error: "No such category" });
+            return;
+        }
+        res.json({ ok: true, ...out, categories: tax.listCategories() });
+    }
+    catch (err) {
+        sendTaxonomyError(res, err);
+    }
+});
+app.post("/api/planner/platforms", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    const body = (req.body || {});
+    try {
+        const platform = tax.createPlatform({
+            name: String(body.name || ""),
+            iconKey: typeof body.iconKey === "string" ? body.iconKey : undefined,
+            activeStatus: typeof body.activeStatus === "boolean" ? body.activeStatus : undefined,
+        });
+        res.json({ ok: true, platform, platforms: tax.listPlatforms() });
+    }
+    catch (err) {
+        sendTaxonomyError(res, err);
+    }
+});
+app.patch("/api/planner/platforms/:id", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    const body = (req.body || {});
+    try {
+        const platform = tax.updatePlatform(String(req.params.id), {
+            name: typeof body.name === "string" ? body.name : undefined,
+            iconKey: typeof body.iconKey === "string" ? body.iconKey : undefined,
+            activeStatus: typeof body.activeStatus === "boolean" ? body.activeStatus : undefined,
+            sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
+        });
+        if (!platform) {
+            res.status(404).json({ error: "No such platform" });
+            return;
+        }
+        res.json({ ok: true, platform, platforms: tax.listPlatforms() });
+    }
+    catch (err) {
+        sendTaxonomyError(res, err);
+    }
+});
+app.delete("/api/planner/platforms/:id", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    try {
+        const out = tax.deletePlatform(String(req.params.id), req.query.reassignTo ? String(req.query.reassignTo) : null);
+        if (!out.deleted) {
+            res.status(404).json({ error: "No such platform" });
+            return;
+        }
+        res.json({ ok: true, ...out, platforms: tax.listPlatforms() });
+    }
+    catch (err) {
+        sendTaxonomyError(res, err);
+    }
+});
+app.post("/api/planner/members", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    const body = (req.body || {});
+    try {
+        const member = tax.createMember({
+            fullName: String(body.fullName || ""),
+            role: typeof body.role === "string" ? body.role : undefined,
+            avatarInitials: typeof body.avatarInitials === "string" ? body.avatarInitials : undefined,
+            badgeColor: typeof body.badgeColor === "string" ? body.badgeColor : undefined,
+        });
+        res.json({ ok: true, member, team: tax.listMembers() });
+    }
+    catch (err) {
+        sendTaxonomyError(res, err);
+    }
+});
+app.patch("/api/planner/members/:id", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    const body = (req.body || {});
+    try {
+        if (body.restore === true) {
+            tax.restoreMember(String(req.params.id));
+            res.json({ ok: true, team: tax.listMembers(), hiddenMembers: tax.hiddenMembers() });
+            return;
+        }
+        const member = tax.updateMember(String(req.params.id), {
+            fullName: typeof body.fullName === "string" ? body.fullName : undefined,
+            role: typeof body.role === "string" ? body.role : undefined,
+            avatarInitials: typeof body.avatarInitials === "string" ? body.avatarInitials : undefined,
+            badgeColor: typeof body.badgeColor === "string" ? body.badgeColor : undefined,
+            active: typeof body.active === "boolean" ? body.active : undefined,
+        });
+        if (!member) {
+            res.status(404).json({ error: "No such team member" });
+            return;
+        }
+        res.json({ ok: true, member, team: tax.listMembers() });
+    }
+    catch (err) {
+        sendTaxonomyError(res, err);
+    }
+});
+/**
+ * Remove a member from the planner. `mergeInto` is the deduplication path:
+ * their content is reassigned first, then the record goes. A member derived
+ * from the roster or the CRM is HIDDEN here, never deleted there — removing a
+ * duplicate off a content calendar must not sign anybody out of the app.
+ */
+app.delete("/api/planner/members/:id", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+        return;
+    }
+    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
+    try {
+        const out = tax.deleteMember(String(req.params.id), req.query.mergeInto ? String(req.query.mergeInto) : null);
+        if (!out.deleted) {
+            res.status(404).json({ error: "No such team member" });
+            return;
+        }
+        res.json({ ok: true, ...out, team: tax.listMembers(), hiddenMembers: tax.hiddenMembers() });
+    }
+    catch (err) {
+        sendTaxonomyError(res, err);
+    }
 });
 app.get("/api/planner/activity", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -8598,13 +8831,15 @@ async function notifyPlannerAssignees(userIds, title, itemId, actor) {
         return;
     try {
         const { addNotification } = await Promise.resolve().then(() => __importStar(require("./core/teamStore.js")));
-        const { plannerMemberName } = await Promise.resolve().then(() => __importStar(require("./core/plannerTeam.js")));
+        // The taxonomy name, not the roster one: a member renamed or merged in the
+        // planner must be named here the way the calendar names them.
+        const { memberName } = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
         for (const userId of userIds) {
             addNotification({
                 user: userId,
                 type: "assignment",
                 title: "Assigned a content item",
-                body: `${actor ? plannerMemberName(actor) + " assigned" : "You were assigned"} "${title}" on the content calendar.`,
+                body: `${actor ? memberName(actor) + " assigned" : "You were assigned"} "${title}" on the content calendar.`,
                 taskId: itemId,
                 from: actor || undefined,
             });

@@ -3,19 +3,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BACKLOG_STATUS_LABELS = exports.BACKLOG_STATUSES = exports.PLATFORMS = void 0;
-exports.relativeLuminance = relativeLuminance;
-exports.readableTextOn = readableTextOn;
-exports.palette = palette;
+exports.BACKLOG_STATUS_LABELS = exports.BACKLOG_STATUSES = exports.DEFAULT_ITEM_COLOR = void 0;
 exports.getPlannerDb = getPlannerDb;
+exports.settingsDefaults = settingsDefaults;
 exports.getSettings = getSettings;
 exports.saveSettings = saveSettings;
-exports.anchorTz = anchorTz;
 exports.logActivity = logActivity;
 exports.listActivity = listActivity;
 exports.getItem = getItem;
 exports.allItems = allItems;
-exports.resolveWallClock = resolveWallClock;
+exports.timeLabel = timeLabel;
 exports.createItem = createItem;
 exports.updateItem = updateItem;
 exports.deleteItem = deleteItem;
@@ -37,13 +34,26 @@ exports.plannerCounts = plannerCounts;
  * This is the other half — the PLAN. A planner item is a piece of content that
  * is intended, not necessarily made: a title, a hook, a caption, a script, the
  * platforms it is going out on, who owns it, and when. Crucially an item may
- * have NO date at all (`scheduled_at_utc IS NULL`), which is the whole backlog
- * / scratchpad model: capture the idea now, place it on a day later.
+ * have NO date at all, which is the whole backlog / scratchpad model: capture
+ * the idea now, place it on a day later.
  *
- * TIME IS STORED AS A UTC INSTANT, always. `authored_tz` records the zone the
- * human typed the time in, which is not decoration: "move this post three days
- * later, same time" only means anything relative to a wall clock, and across a
- * DST changeover the wall clock and the instant disagree. See zonedTime.ts.
+ * TIME IS A LITERAL WALL CLOCK. `scheduled_date` ("2026-08-20") and
+ * `scheduled_time` ("09:00") are the source of truth for what a card says and
+ * which cell it sits in. A post typed as August 15 at 10:00 AM is August 15 at
+ * 10:00 AM on every screen in every country, full stop — no anchor zone, no
+ * ±1d badge, no conversion at render time.
+ *
+ * WHY THIS REPLACED THE UTC MODEL. The original design stored a UTC instant and
+ * re-derived the day cell from a configurable "grid anchor" zone, which was
+ * correct for a team publishing to one audience clock — and wrong for how this
+ * team actually works, where a date on the calendar is an editorial decision,
+ * not an instant. Under the old model the same card could sit on two different
+ * days for two people looking at the same screen. It cannot now.
+ *
+ * `scheduled_at_utc` is still written, DERIVED from the literal wall clock in
+ * `authored_tz`. Nothing reads it for display or placement; it is kept so an
+ * auto-publish integration has an instant to fire on, and so no data is thrown
+ * away by this change. If the two ever disagree, the literal columns win.
  *
  * Own database file, per the repo convention — the planner is its own
  * subsystem and does not belong inside the content pipeline's tables.
@@ -54,66 +64,8 @@ const path_1 = __importDefault(require("path"));
 const crypto_1 = require("crypto");
 const zonedTime_js_1 = require("./zonedTime.js");
 /* ────────────────────────── vocabulary ────────────────────────── */
-/** The platforms a planner item can be tagged for. An item may carry several. */
-exports.PLATFORMS = [
-    "Instagram",
-    "TikTok",
-    "YouTube",
-    "Facebook",
-    "LinkedIn",
-    "X",
-    "Pinterest",
-    "Blog",
-    "Newsletter",
-];
-const PALETTE_SEED = [
-    { hex: "#ef4444", name: "Paid Ad" },
-    { hex: "#f97316", name: "Testimonial" },
-    { hex: "#f59e0b", name: "Promo" },
-    { hex: "#facc15", name: "Announcement" },
-    { hex: "#22c55e", name: "Listing" },
-    { hex: "#14b8a6", name: "Behind the Scenes" },
-    { hex: "#2dd4ee", name: "Market Update" },
-    { hex: "#1d4ed8", name: "Educational" },
-    { hex: "#8b5cf6", name: "Story" },
-    { hex: "#ec4899", name: "Community" },
-];
-function channelLuminance(c) {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-}
-/** WCAG relative luminance of a #rrggbb string, 0-1. */
-function relativeLuminance(hex) {
-    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
-    if (!m)
-        return 0;
-    const n = parseInt(m[1], 16);
-    const r = channelLuminance((n >> 16) & 255);
-    const g = channelLuminance((n >> 8) & 255);
-    const b = channelLuminance(n & 255);
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-/** Contrast ratio between a colour and black or white, per WCAG 2.1. */
-function contrastWith(lum, otherLum) {
-    const hi = Math.max(lum, otherLum);
-    const lo = Math.min(lum, otherLum);
-    return (hi + 0.05) / (lo + 0.05);
-}
-/**
- * Black or white type on this background, whichever is actually more legible.
- * Returned to the browser so the colour rule lives in exactly one place.
- */
-function readableTextOn(hex) {
-    const lum = relativeLuminance(hex);
-    const onWhite = contrastWith(lum, 1);
-    const onBlack = contrastWith(lum, 0);
-    return onBlack >= onWhite
-        ? { text: "#000000", contrast: Math.round(onBlack * 100) / 100 }
-        : { text: "#ffffff", contrast: Math.round(onWhite * 100) / 100 };
-}
-function palette() {
-    return PALETTE_SEED.map((c) => ({ ...c, ...readableTextOn(c.hex) }));
-}
+/** Fallback colour for an item with no category — the planner's own teal. */
+exports.DEFAULT_ITEM_COLOR = "#06B6D4";
 exports.BACKLOG_STATUSES = ["brainstorm", "drafting", "ready"];
 exports.BACKLOG_STATUS_LABELS = {
     brainstorm: "Brainstorm",
@@ -172,7 +124,45 @@ function getPlannerDb() {
       value TEXT NOT NULL
     );
   `);
+    migrateToLiteralDates(db);
     return db;
+}
+/**
+ * Add the literal wall-clock columns and fill them from the UTC instants.
+ *
+ * The repo's ALTER-migration pattern: add if absent, backfill once, leave the
+ * old column in place. The backfill reads each instant back in the row's OWN
+ * `authored_tz`, which recovers exactly the date and time the human originally
+ * typed — so an item scheduled under the old model keeps the day it was put on,
+ * rather than jumping when the anchor stopped being consulted.
+ */
+function migrateToLiteralDates(d) {
+    const cols = new Set(d.prepare(`PRAGMA table_info(planner_items)`).all().map((c) => c.name));
+    if (!cols.has("scheduled_date"))
+        d.exec(`ALTER TABLE planner_items ADD COLUMN scheduled_date TEXT`);
+    if (!cols.has("scheduled_time"))
+        d.exec(`ALTER TABLE planner_items ADD COLUMN scheduled_time TEXT`);
+    if (!cols.has("category_id"))
+        d.exec(`ALTER TABLE planner_items ADD COLUMN category_id TEXT`);
+    d.exec(`CREATE INDEX IF NOT EXISTS idx_planner_date ON planner_items(scheduled_date)`);
+    const stale = d
+        .prepare(`SELECT id, scheduled_at_utc, authored_tz FROM planner_items
+       WHERE scheduled_at_utc IS NOT NULL AND (scheduled_date IS NULL OR scheduled_date = '')`)
+        .all();
+    if (!stale.length)
+        return;
+    const upd = d.prepare(`UPDATE planner_items SET scheduled_date=?, scheduled_time=? WHERE id=?`);
+    const run = d.transaction(() => {
+        for (const row of stale) {
+            const ms = Date.parse(row.scheduled_at_utc);
+            if (!Number.isFinite(ms))
+                continue;
+            const tz = row.authored_tz && (0, zonedTime_js_1.isValidTimeZone)(row.authored_tz) ? row.authored_tz : "America/Chicago";
+            upd.run((0, zonedTime_js_1.zonedDateKey)(ms, tz), (0, zonedTime_js_1.zonedTimeInput)(ms, tz), row.id);
+        }
+    });
+    run();
+    console.log(`[planner] migrated ${stale.length} scheduled item(s) to literal wall-clock dates`);
 }
 const nowIso = () => new Date().toISOString();
 function parseJsonArray(raw) {
@@ -197,18 +187,22 @@ function rowToItem(row) {
     })
         .filter((a) => !!a);
     const status = String(row.backlog_status || "brainstorm");
+    const date = row.scheduled_date ? String(row.scheduled_date) : null;
     return {
         id: String(row.id),
         title: String(row.title || ""),
         hook: String(row.hook || ""),
         caption: String(row.caption || ""),
         script: String(row.script || ""),
-        color: String(row.color || "#2dd4ee"),
+        color: String(row.color || exports.DEFAULT_ITEM_COLOR),
+        categoryId: row.category_id ? String(row.category_id) : null,
         platforms: parseJsonArray(row.platforms).filter((p) => typeof p === "string"),
         assignedUsers: assigned,
         assetDriveUrl: row.asset_drive_url ? String(row.asset_drive_url) : null,
+        scheduledDate: date,
+        scheduledTime: date ? String(row.scheduled_time || "09:00") : null,
         scheduledAtUtc: row.scheduled_at_utc ? String(row.scheduled_at_utc) : null,
-        authoredTz: String(row.authored_tz || defaultPrimaryTz()),
+        authoredTz: String(row.authored_tz || defaultAuthoringTz()),
         isCompleted: Number(row.is_completed) === 1,
         backlogStatus: exports.BACKLOG_STATUSES.includes(status) ? status : "brainstorm",
         sortOrder: Number(row.sort_order || 0),
@@ -218,30 +212,33 @@ function rowToItem(row) {
         createdBy: row.created_by ? String(row.created_by) : null,
     };
 }
-function defaultPrimaryTz() {
+function defaultAuthoringTz() {
     const env = process.env.PLANNER_PRIMARY_TZ?.trim();
     if (env && (0, zonedTime_js_1.isValidTimeZone)(env))
         return env;
     return "America/Chicago";
 }
-const SETTINGS_DEFAULTS = {
-    primaryTz: defaultPrimaryTz(),
-    secondaryTz: "America/New_York",
-    gridAnchor: "primary",
-    dragMode: "DOMINO",
-};
+function settingsDefaults() {
+    return {
+        authoringTz: defaultAuthoringTz(),
+        weekStart: "SUNDAY",
+        usClockTz: "America/New_York",
+        dragMode: "DOMINO",
+    };
+}
 function getSettings() {
     const rows = getPlannerDb().prepare(`SELECT key, value FROM planner_settings`).all();
     const map = new Map(rows.map((r) => [r.key, r.value]));
-    const primaryTz = map.get("primaryTz");
-    const secondaryTz = map.get("secondaryTz");
-    const gridAnchor = map.get("gridAnchor");
-    const dragMode = map.get("dragMode");
+    const d = settingsDefaults();
+    // `primaryTz` is read as a fallback so a database written by the pre-literal
+    // version keeps authoring in the zone it was already using.
+    const authoringTz = map.get("authoringTz") || map.get("primaryTz");
+    const usClockTz = map.get("usClockTz");
     return {
-        primaryTz: primaryTz && (0, zonedTime_js_1.isValidTimeZone)(primaryTz) ? primaryTz : SETTINGS_DEFAULTS.primaryTz,
-        secondaryTz: secondaryTz && (0, zonedTime_js_1.isValidTimeZone)(secondaryTz) ? secondaryTz : SETTINGS_DEFAULTS.secondaryTz,
-        gridAnchor: gridAnchor === "secondary" ? "secondary" : "primary",
-        dragMode: dragMode === "DIRECT" ? "DIRECT" : "DOMINO",
+        authoringTz: authoringTz && (0, zonedTime_js_1.isValidTimeZone)(authoringTz) ? authoringTz : d.authoringTz,
+        weekStart: map.get("weekStart") === "MONDAY" ? "MONDAY" : "SUNDAY",
+        usClockTz: usClockTz && (0, zonedTime_js_1.isValidTimeZone)(usClockTz) ? usClockTz : d.usClockTz,
+        dragMode: map.get("dragMode") === "DIRECT" ? "DIRECT" : "DOMINO",
     };
 }
 function saveSettings(patch) {
@@ -249,21 +246,17 @@ function saveSettings(patch) {
     const stmt = d.prepare(`INSERT INTO planner_settings (key, value) VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`);
     const write = d.transaction(() => {
-        if (patch.primaryTz && (0, zonedTime_js_1.isValidTimeZone)(patch.primaryTz))
-            stmt.run("primaryTz", patch.primaryTz);
-        if (patch.secondaryTz && (0, zonedTime_js_1.isValidTimeZone)(patch.secondaryTz))
-            stmt.run("secondaryTz", patch.secondaryTz);
-        if (patch.gridAnchor === "primary" || patch.gridAnchor === "secondary")
-            stmt.run("gridAnchor", patch.gridAnchor);
+        if (patch.authoringTz && (0, zonedTime_js_1.isValidTimeZone)(patch.authoringTz))
+            stmt.run("authoringTz", patch.authoringTz);
+        if (patch.weekStart === "SUNDAY" || patch.weekStart === "MONDAY")
+            stmt.run("weekStart", patch.weekStart);
+        if (patch.usClockTz && (0, zonedTime_js_1.isValidTimeZone)(patch.usClockTz))
+            stmt.run("usClockTz", patch.usClockTz);
         if (patch.dragMode === "DOMINO" || patch.dragMode === "DIRECT")
             stmt.run("dragMode", patch.dragMode);
     });
     write();
     return getSettings();
-}
-/** The zone the grid is anchored to right now. */
-function anchorTz(s = getSettings()) {
-    return s.gridAnchor === "secondary" ? s.secondaryTz : s.primaryTz;
 }
 function logActivity(entry) {
     const row = { ...entry, id: (0, crypto_1.randomUUID)(), at: nowIso() };
@@ -294,27 +287,51 @@ function getItem(id) {
 }
 function allItems() {
     const rows = getPlannerDb()
-        .prepare(`SELECT * FROM planner_items ORDER BY COALESCE(scheduled_at_utc, '9999'), sort_order, created_at`)
+        .prepare(`SELECT * FROM planner_items
+       ORDER BY COALESCE(scheduled_date, '9999'), COALESCE(scheduled_time, '99:99'), sort_order, created_at`)
         .all();
     return rows.map(rowToItem);
 }
-/** Resolve a date+time in a zone to a stored instant, reporting DST oddities. */
-function resolveWallClock(date, time, tz) {
-    const [y, m, d] = date.split("-").map(Number);
-    const [hh, mm] = String(time || "09:00").split(":").map(Number);
-    const r = (0, zonedTime_js_1.zonedWallToUtc)({ year: y, month: m, day: d, hour: Number.isFinite(hh) ? hh : 9, minute: Number.isFinite(mm) ? mm : 0, second: 0 }, tz);
-    return { utcIso: r.utcIso, dst: r.dst };
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+/** "09:00" → "09:00 AM". The card label, formatted from the literal clock. */
+function timeLabel(time) {
+    if (!time || !TIME_RE.test(time))
+        return "";
+    const [h, m] = time.split(":").map(Number);
+    const suffix = h < 12 ? "AM" : "PM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${suffix}`;
+}
+/** Anything unparseable becomes 09:00 rather than corrupting the row. */
+function normalizeTime(time, fallback = "09:00") {
+    const t = String(time || "").trim();
+    return TIME_RE.test(t) ? t : fallback;
+}
+/**
+ * The derived UTC instant for a literal wall clock.
+ *
+ * Nothing displays this. It exists so the row still carries an instant a
+ * publisher could fire on. A DST-nonexistent wall clock resolves to the instant
+ * the clock jumps to, which does not change the literal date or time the
+ * operator typed — those are stored verbatim either way.
+ */
+function deriveUtc(date, time, tz) {
+    const [y, mo, d] = date.split("-").map(Number);
+    const [hh, mm] = time.split(":").map(Number);
+    try {
+        return (0, zonedTime_js_1.zonedWallToUtc)({ year: y, month: mo, day: d, hour: hh, minute: mm, second: 0 }, tz).utcIso;
+    }
+    catch {
+        return null;
+    }
 }
 function createItem(input) {
     const settings = getSettings();
-    const tz = input.authoredTz && (0, zonedTime_js_1.isValidTimeZone)(input.authoredTz) ? input.authoredTz : settings.primaryTz;
-    let scheduledAtUtc = null;
-    let dst = "ok";
-    if (input.date && /^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
-        const r = resolveWallClock(input.date, input.time, tz);
-        scheduledAtUtc = r.utcIso;
-        dst = r.dst;
-    }
+    const tz = input.authoredTz && (0, zonedTime_js_1.isValidTimeZone)(input.authoredTz) ? input.authoredTz : settings.authoringTz;
+    const hasDate = !!(input.date && DATE_RE.test(input.date));
+    const scheduledDate = hasDate ? String(input.date) : null;
+    const scheduledTime = hasDate ? normalizeTime(input.time) : null;
     const ts = nowIso();
     const item = {
         id: (0, crypto_1.randomUUID)(),
@@ -322,11 +339,14 @@ function createItem(input) {
         hook: input.hook || "",
         caption: input.caption || "",
         script: input.script || "",
-        color: input.color || PALETTE_SEED[6].hex,
+        color: input.color || exports.DEFAULT_ITEM_COLOR,
+        categoryId: input.categoryId || null,
         platforms: (input.platforms || []).filter((p) => typeof p === "string"),
         assignedUsers: input.assignedUsers || [],
         assetDriveUrl: input.assetDriveUrl || null,
-        scheduledAtUtc,
+        scheduledDate,
+        scheduledTime,
+        scheduledAtUtc: scheduledDate && scheduledTime ? deriveUtc(scheduledDate, scheduledTime, tz) : null,
         authoredTz: tz,
         isCompleted: false,
         backlogStatus: input.backlogStatus && exports.BACKLOG_STATUSES.includes(input.backlogStatus) ? input.backlogStatus : "brainstorm",
@@ -341,12 +361,12 @@ function createItem(input) {
         itemId: item.id,
         itemTitle: item.title,
         actor: item.createdBy || "system",
-        kind: scheduledAtUtc ? "created_scheduled" : "created_backlog",
-        message: scheduledAtUtc
-            ? `Created "${item.title}" for ${(0, zonedTime_js_1.zonedDateKey)(Date.parse(scheduledAtUtc), tz)} ${(0, zonedTime_js_1.zonedTimeLabel)(Date.parse(scheduledAtUtc), tz)} ${(0, zonedTime_js_1.zoneLabel)(tz)}`
+        kind: scheduledDate ? "created_scheduled" : "created_backlog",
+        message: scheduledDate
+            ? `Created "${item.title}" for ${scheduledDate} ${timeLabel(scheduledTime)}`
             : `Captured "${item.title}" in the scratchpad`,
     });
-    return { item, dst };
+    return { item };
 }
 function writeItem(item, isInsert = false) {
     const payload = {
@@ -356,9 +376,12 @@ function writeItem(item, isInsert = false) {
         caption: item.caption,
         script: item.script,
         color: item.color,
+        category_id: item.categoryId,
         platforms: JSON.stringify(item.platforms),
         assigned_users: JSON.stringify(item.assignedUsers),
         asset_drive_url: item.assetDriveUrl,
+        scheduled_date: item.scheduledDate,
+        scheduled_time: item.scheduledTime,
         scheduled_at_utc: item.scheduledAtUtc,
         authored_tz: item.authoredTz,
         is_completed: item.isCompleted ? 1 : 0,
@@ -372,19 +395,20 @@ function writeItem(item, isInsert = false) {
     const d = getPlannerDb();
     if (isInsert) {
         d.prepare(`INSERT INTO planner_items
-        (id, title, hook, caption, script, color, platforms, assigned_users, asset_drive_url,
-         scheduled_at_utc, authored_tz, is_completed, backlog_status, sort_order, notes,
-         created_at, updated_at, created_by)
+        (id, title, hook, caption, script, color, category_id, platforms, assigned_users, asset_drive_url,
+         scheduled_date, scheduled_time, scheduled_at_utc, authored_tz, is_completed, backlog_status,
+         sort_order, notes, created_at, updated_at, created_by)
        VALUES
-        (@id, @title, @hook, @caption, @script, @color, @platforms, @assigned_users, @asset_drive_url,
-         @scheduled_at_utc, @authored_tz, @is_completed, @backlog_status, @sort_order, @notes,
-         @created_at, @updated_at, @created_by)`).run(payload);
+        (@id, @title, @hook, @caption, @script, @color, @category_id, @platforms, @assigned_users, @asset_drive_url,
+         @scheduled_date, @scheduled_time, @scheduled_at_utc, @authored_tz, @is_completed, @backlog_status,
+         @sort_order, @notes, @created_at, @updated_at, @created_by)`).run(payload);
         return;
     }
     d.prepare(`UPDATE planner_items SET
-       title=@title, hook=@hook, caption=@caption, script=@script, color=@color,
+       title=@title, hook=@hook, caption=@caption, script=@script, color=@color, category_id=@category_id,
        platforms=@platforms, assigned_users=@assigned_users, asset_drive_url=@asset_drive_url,
-       scheduled_at_utc=@scheduled_at_utc, authored_tz=@authored_tz, is_completed=@is_completed,
+       scheduled_date=@scheduled_date, scheduled_time=@scheduled_time, scheduled_at_utc=@scheduled_at_utc,
+       authored_tz=@authored_tz, is_completed=@is_completed,
        backlog_status=@backlog_status, sort_order=@sort_order, notes=@notes, updated_at=@updated_at
      WHERE id=@id`).run(payload);
 }
@@ -393,7 +417,6 @@ function updateItem(id, patch) {
     if (!item)
         return null;
     const before = { ...item, assignedUsers: item.assignedUsers.map((a) => ({ ...a })) };
-    let dst = "ok";
     if (typeof patch.title === "string")
         item.title = patch.title.trim() || item.title;
     if (typeof patch.hook === "string")
@@ -404,6 +427,8 @@ function updateItem(id, patch) {
         item.script = patch.script;
     if (typeof patch.color === "string" && /^#[0-9a-f]{6}$/i.test(patch.color))
         item.color = patch.color;
+    if (patch.categoryId !== undefined)
+        item.categoryId = patch.categoryId || null;
     if (Array.isArray(patch.platforms))
         item.platforms = patch.platforms.filter((p) => typeof p === "string");
     if (Array.isArray(patch.assignedUsers)) {
@@ -426,24 +451,24 @@ function updateItem(id, patch) {
     if (patch.date === null) {
         // Reverse-drag: a scheduled post goes back to the backlog, keeping every
         // other field. Nothing is deleted, which is why unscheduling is safe.
-        item.scheduledAtUtc = null;
+        item.scheduledDate = null;
+        item.scheduledTime = null;
     }
-    else if (typeof patch.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(patch.date)) {
-        const keepTime = patch.time || (item.scheduledAtUtc ? (0, zonedTime_js_1.zonedTimeInput)(Date.parse(item.scheduledAtUtc), item.authoredTz) : "09:00");
-        const r = resolveWallClock(patch.date, keepTime, item.authoredTz);
-        item.scheduledAtUtc = r.utcIso;
-        dst = r.dst;
+    else if (typeof patch.date === "string" && DATE_RE.test(patch.date)) {
+        item.scheduledDate = patch.date;
+        item.scheduledTime = normalizeTime(patch.time, item.scheduledTime || "09:00");
     }
-    else if (typeof patch.time === "string" && item.scheduledAtUtc) {
-        const dateKey = (0, zonedTime_js_1.zonedDateKey)(Date.parse(item.scheduledAtUtc), item.authoredTz);
-        const r = resolveWallClock(dateKey, patch.time, item.authoredTz);
-        item.scheduledAtUtc = r.utcIso;
-        dst = r.dst;
+    else if (typeof patch.time === "string" && item.scheduledDate) {
+        item.scheduledTime = normalizeTime(patch.time, item.scheduledTime || "09:00");
     }
+    item.scheduledAtUtc =
+        item.scheduledDate && item.scheduledTime
+            ? deriveUtc(item.scheduledDate, item.scheduledTime, item.authoredTz)
+            : null;
     item.updatedAt = nowIso();
     writeItem(item);
     recordSemanticChanges(before, item, patch.actor || "system");
-    return { item, dst };
+    return { item };
 }
 /** Which field changes are worth a line in the activity feed. */
 function recordSemanticChanges(before, after, actor) {
@@ -478,7 +503,7 @@ function recordSemanticChanges(before, after, actor) {
             message: `"${after.title}" marked ${after.isCompleted ? "complete" : "not complete"}`,
         });
     }
-    if (before.scheduledAtUtc && !after.scheduledAtUtc) {
+    if (before.scheduledDate && !after.scheduledDate) {
         logActivity({
             itemId: after.id,
             itemTitle: after.title,
@@ -487,13 +512,13 @@ function recordSemanticChanges(before, after, actor) {
             message: `"${after.title}" moved back to the scratchpad`,
         });
     }
-    else if (!before.scheduledAtUtc && after.scheduledAtUtc) {
+    else if (!before.scheduledDate && after.scheduledDate) {
         logActivity({
             itemId: after.id,
             itemTitle: after.title,
             actor,
             kind: "scheduled",
-            message: `"${after.title}" scheduled for ${(0, zonedTime_js_1.zonedDateKey)(Date.parse(after.scheduledAtUtc), after.authoredTz)}`,
+            message: `"${after.title}" scheduled for ${after.scheduledDate} ${timeLabel(after.scheduledTime)}`,
         });
     }
     if (before.backlogStatus !== after.backlogStatus) {
@@ -514,57 +539,32 @@ function deleteItem(id, actor = "system") {
     logActivity({ itemId: id, itemTitle: item.title, actor, kind: "deleted", message: `"${item.title}" deleted` });
     return true;
 }
-function describeTimes(item, settings) {
-    if (!item.scheduledAtUtc) {
-        return { ...item, gridDate: null, primary: null, secondary: null, dstWarning: "ok" };
-    }
-    const ms = Date.parse(item.scheduledAtUtc);
-    const anchor = anchorTz(settings);
-    const p = settings.primaryTz;
-    const s = settings.secondaryTz;
-    const delta = (0, zonedTime_js_1.dayDelta)(ms, p, s);
-    // Re-resolving the stored wall clock tells us whether this instant sits on a
-    // DST oddity — worth a badge, because the time on the card is not the time
-    // the operator typed.
-    const round = resolveWallClock((0, zonedTime_js_1.zonedDateKey)(ms, item.authoredTz), (0, zonedTime_js_1.zonedTimeInput)(ms, item.authoredTz), item.authoredTz);
+function describeTimes(item) {
     return {
         ...item,
-        gridDate: (0, zonedTime_js_1.zonedDateKey)(ms, anchor),
-        primary: {
-            tz: p,
-            label: (0, zonedTime_js_1.zoneLabel)(p, ms),
-            time: (0, zonedTime_js_1.zonedTimeLabel)(ms, p),
-            date: (0, zonedTime_js_1.zonedDateKey)(ms, p),
-            input: (0, zonedTime_js_1.zonedTimeInput)(ms, p),
-        },
-        secondary: {
-            tz: s,
-            label: (0, zonedTime_js_1.zoneLabel)(s, ms),
-            time: (0, zonedTime_js_1.zonedTimeLabel)(ms, s),
-            date: (0, zonedTime_js_1.zonedDateKey)(ms, s),
-            dayDelta: delta,
-            deltaLabel: (0, zonedTime_js_1.dayDeltaLabel)(delta),
-        },
-        dstWarning: round.dst,
+        date: item.scheduledDate,
+        time: item.scheduledTime,
+        timeDisplay: timeLabel(item.scheduledTime),
     };
 }
-function viewItem(item, settings = getSettings()) {
-    return describeTimes(item, settings);
+function viewItem(item) {
+    return describeTimes(item);
 }
-/** Every scheduled item whose anchor-zone date falls in [from, to]. */
-function scheduledBetween(from, to, settings = getSettings()) {
+/** Every scheduled item whose literal date falls in [from, to]. */
+function scheduledBetween(from, to) {
     const views = allItems()
-        .filter((i) => i.scheduledAtUtc)
-        .map((i) => describeTimes(i, settings))
-        .filter((v) => v.gridDate && v.gridDate >= from && v.gridDate <= to);
-    views.sort((a, b) => String(a.scheduledAtUtc).localeCompare(String(b.scheduledAtUtc)));
+        .filter((i) => i.scheduledDate && i.scheduledDate >= from && i.scheduledDate <= to)
+        .map(describeTimes);
+    views.sort((a, b) => String(a.scheduledDate).localeCompare(String(b.scheduledDate)) ||
+        String(a.scheduledTime).localeCompare(String(b.scheduledTime)) ||
+        a.createdAt.localeCompare(b.createdAt));
     return views;
 }
-function backlogItems(settings = getSettings()) {
+function backlogItems() {
     return allItems()
-        .filter((i) => !i.scheduledAtUtc)
+        .filter((i) => !i.scheduledDate)
         .sort((a, b) => a.sortOrder - b.sortOrder || b.createdAt.localeCompare(a.createdAt))
-        .map((i) => describeTimes(i, settings));
+        .map(describeTimes);
 }
 /**
  * Work out every date change a drop implies, without writing anything.
@@ -579,6 +579,11 @@ function backlogItems(settings = getSettings()) {
  *
  * An item coming from the backlog has no original date, so there is nothing to
  * ripple from and both modes behave identically: it simply lands.
+ *
+ * Both modes are plain calendar-date arithmetic on YYYY-MM-DD keys. A post
+ * moved three days later keeps its wall clock and lands three days later, on
+ * every date in the year — there is no zone in the calculation to disagree with
+ * it, and no changeover that can turn "+3 days" into 71 or 73 hours on screen.
  */
 function planReschedule(input) {
     const settings = input.settings || getSettings();
@@ -586,60 +591,42 @@ function planReschedule(input) {
     const dragged = getItem(input.itemId);
     if (!dragged)
         return null;
-    const anchor = anchorTz(settings);
     const warnings = [];
     const moves = [];
-    const fromMs = dragged.scheduledAtUtc ? Date.parse(dragged.scheduledAtUtc) : null;
-    const fromDate = fromMs != null ? (0, zonedTime_js_1.zonedDateKey)(fromMs, anchor) : null;
-    const fromTime = fromMs != null ? (0, zonedTime_js_1.zonedTimeInput)(fromMs, dragged.authoredTz) : null;
+    const fromDate = dragged.scheduledDate;
+    const fromTime = dragged.scheduledTime;
     const deltaDays = fromDate ? (0, zonedTime_js_1.dateKeyDiff)(fromDate, input.toDate) : 0;
-    const dropTime = input.time || fromTime || "09:00";
-    const draggedResolved = resolveWallClock(input.toDate, dropTime, dragged.authoredTz);
     moves.push({
         id: dragged.id,
         title: dragged.title,
         fromDate,
-        toDate: (0, zonedTime_js_1.zonedDateKey)(Date.parse(draggedResolved.utcIso), anchor),
+        toDate: input.toDate,
         fromTime,
-        toTime: (0, zonedTime_js_1.zonedTimeInput)(Date.parse(draggedResolved.utcIso), dragged.authoredTz),
+        toTime: normalizeTime(input.time, fromTime || "09:00"),
         dragged: true,
-        dst: draggedResolved.dst,
     });
-    if (draggedResolved.dst === "nonexistent") {
-        warnings.push(`${dropTime} does not exist on ${input.toDate} in ${(0, zonedTime_js_1.zoneLabel)(dragged.authoredTz)} — clocks jump forward. Saved as ${(0, zonedTime_js_1.zonedTimeLabel)(Date.parse(draggedResolved.utcIso), dragged.authoredTz)}.`);
-    }
-    else if (draggedResolved.dst === "ambiguous") {
-        warnings.push(`${dropTime} happens twice on ${input.toDate} in ${(0, zonedTime_js_1.zoneLabel)(dragged.authoredTz)} — clocks fall back. Saved as the first occurrence.`);
-    }
     if (mode === "DOMINO" && fromDate && deltaDays !== 0) {
         for (const other of allItems()) {
-            if (other.id === dragged.id || !other.scheduledAtUtc)
+            if (other.id === dragged.id || !other.scheduledDate)
                 continue;
-            const otherMs = Date.parse(other.scheduledAtUtc);
-            const otherDate = (0, zonedTime_js_1.zonedDateKey)(otherMs, anchor);
-            if (otherDate < fromDate)
+            if (other.scheduledDate < fromDate)
                 continue;
-            const shifted = (0, zonedTime_js_1.shiftDaysInZone)(otherMs, other.authoredTz, deltaDays);
             moves.push({
                 id: other.id,
                 title: other.title,
-                fromDate: otherDate,
-                toDate: (0, zonedTime_js_1.zonedDateKey)(shifted.utcMs, anchor),
-                fromTime: (0, zonedTime_js_1.zonedTimeInput)(otherMs, other.authoredTz),
-                toTime: (0, zonedTime_js_1.zonedTimeInput)(shifted.utcMs, other.authoredTz),
+                fromDate: other.scheduledDate,
+                toDate: (0, zonedTime_js_1.shiftDateKey)(other.scheduledDate, deltaDays),
+                fromTime: other.scheduledTime,
+                // Every rippled post keeps its own wall clock, untouched.
+                toTime: other.scheduledTime || "09:00",
                 dragged: false,
-                dst: shifted.dst,
             });
-            if (shifted.dst !== "ok") {
-                warnings.push(`"${other.title}" lands on a daylight-saving change and was adjusted to ${(0, zonedTime_js_1.zonedTimeLabel)(shifted.utcMs, other.authoredTz)}.`);
-            }
         }
     }
     return { mode, deltaDays, moves, warnings };
 }
 /** Apply a plan. One transaction, so a ripple is all-or-nothing. */
 function applyReschedule(plan, actor = "system") {
-    const settings = getSettings();
     const d = getPlannerDb();
     const touched = [];
     const run = d.transaction(() => {
@@ -647,8 +634,9 @@ function applyReschedule(plan, actor = "system") {
             const item = getItem(move.id);
             if (!item)
                 continue;
-            const r = resolveWallClock(move.toDate, move.toTime, item.authoredTz);
-            item.scheduledAtUtc = r.utcIso;
+            item.scheduledDate = move.toDate;
+            item.scheduledTime = normalizeTime(move.toTime, "09:00");
+            item.scheduledAtUtc = deriveUtc(item.scheduledDate, item.scheduledTime, item.authoredTz);
             item.updatedAt = nowIso();
             writeItem(item);
             touched.push(item);
@@ -667,7 +655,7 @@ function applyReschedule(plan, actor = "system") {
                 (rippled > 0 ? ` — ${rippled} later post${rippled === 1 ? "" : "s"} shifted ${plan.deltaDays > 0 ? "+" : ""}${plan.deltaDays}d with it` : ` (${plan.mode === "DIRECT" ? "direct insert, nothing else moved" : "nothing downstream to shift"})`),
         });
     }
-    return touched.map((i) => describeTimes(i, settings));
+    return touched.map(describeTimes);
 }
 /** Names for the activity feed — resolved lazily so the roster stays one file. */
 let nameResolver = null;
@@ -686,8 +674,8 @@ function plannerCounts() {
     const d = getPlannerDb();
     const row = d
         .prepare(`SELECT
-         SUM(CASE WHEN scheduled_at_utc IS NOT NULL THEN 1 ELSE 0 END) AS scheduled,
-         SUM(CASE WHEN scheduled_at_utc IS NULL THEN 1 ELSE 0 END) AS backlog,
+         SUM(CASE WHEN scheduled_date IS NOT NULL THEN 1 ELSE 0 END) AS scheduled,
+         SUM(CASE WHEN scheduled_date IS NULL THEN 1 ELSE 0 END) AS backlog,
          SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) AS completed
        FROM planner_items`)
         .get();

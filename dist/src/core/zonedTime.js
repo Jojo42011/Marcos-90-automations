@@ -2,9 +2,17 @@
 /**
  * IANA timezone arithmetic, DST included, with no new dependency.
  *
- * WHY THIS FILE EXISTS. The content planner stores every scheduled time as a
- * UTC instant, but a human always types a wall clock ("10:00 AM") in some
- * place ("America/Chicago"). Turning one into the other is the part everybody
+ * SCOPE NOTE, read this first. The content planner no longer converts anything
+ * for display: a card's date and time are stored and shown literally, so
+ * nothing on screen depends on this file. What is left needs it for two narrow
+ * jobs — deriving the `scheduled_at_utc` instant that a future auto-publisher
+ * would fire on, and reading a live wall clock for the reference clocks in the
+ * header. The day-shifting helpers that used to move cards between cells
+ * (dayDelta, dayDeltaLabel, shiftDaysInZone) were deleted with that model;
+ * calendar-date arithmetic is `shiftDateKey`, which has no zone in it at all.
+ *
+ * The hard part it still does. A human types a wall clock ("10:00 AM") in some
+ * place ("America/Chicago"). Turning that into an instant is what everybody
  * gets wrong, because the offset depends on the instant you are converting —
  * which is the thing you do not have yet. Naive `new Date("2026-03-08T02:30")`
  * plus a fixed offset silently produces the wrong hour twice a year.
@@ -21,9 +29,9 @@
  *   ambiguous   — fall back. 1:30 AM happens twice. We return the FIRST
  *                 (pre-transition) occurrence and say so.
  *
- * Callers surface both as a warning on the item rather than guessing quietly,
- * because "your 2:30 post actually goes out at 3:00" is exactly the kind of
- * thing an operator needs told.
+ * Both only affect the DERIVED instant now — the literal date and time the
+ * operator typed are stored verbatim regardless, so neither case can move a
+ * card or change what a card says.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isValidTimeZone = isValidTimeZone;
@@ -33,12 +41,10 @@ exports.zonedWallToUtc = zonedWallToUtc;
 exports.zonedDateKey = zonedDateKey;
 exports.zonedTimeLabel = zonedTimeLabel;
 exports.zonedTimeInput = zonedTimeInput;
-exports.dayDelta = dayDelta;
-exports.dayDeltaLabel = dayDeltaLabel;
-exports.shiftDaysInZone = shiftDaysInZone;
+exports.shiftDateKey = shiftDateKey;
 exports.dateKeyDiff = dateKeyDiff;
 exports.zoneLabel = zoneLabel;
-exports.crossesDstTransition = crossesDstTransition;
+exports.clockNow = clockNow;
 const FORMATTERS = new Map();
 /** True if the runtime accepts this string as an IANA zone. */
 function isValidTimeZone(tz) {
@@ -161,43 +167,17 @@ function zonedTimeInput(utcMs, tz) {
     return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
 }
 /**
- * Whole-day difference between the same instant read in two zones: +1, 0, -1.
- * This is what makes the "+1d" badge on a card honest — a 10 PM Manila post is
- * a 9 AM New York post on the PREVIOUS day, and the card has to say so.
- */
-function dayDelta(utcMs, fromTz, toTz) {
-    const a = zonedDateKey(utcMs, fromTz);
-    const b = zonedDateKey(utcMs, toTz);
-    if (a === b)
-        return 0;
-    const da = Date.UTC(Number(a.slice(0, 4)), Number(a.slice(5, 7)) - 1, Number(a.slice(8, 10)));
-    const db = Date.UTC(Number(b.slice(0, 4)), Number(b.slice(5, 7)) - 1, Number(b.slice(8, 10)));
-    return Math.round((db - da) / 86400000);
-}
-/** "+1d" / "-1d" / "" — the badge suffix itself. */
-function dayDeltaLabel(delta) {
-    if (!delta)
-        return "";
-    return delta > 0 ? `+${delta}d` : `${delta}d`;
-}
-/**
- * Shift an instant by whole days, keeping the wall clock in `tz` intact.
+ * Move a YYYY-MM-DD key by whole days.
  *
- * Adding 86400000 ms is NOT the same thing across a DST boundary: it turns a
- * 10:00 post into a 9:00 or 11:00 post. Moving the calendar date and
- * re-resolving the wall clock is what a person means by "same time, next day".
+ * Deliberately zone-free. The planner's dates are literal calendar dates, so
+ * "three days later" is a question about the calendar and nothing else — no
+ * instant, no offset, no changeover that could make the answer 71 hours. The
+ * arithmetic runs in UTC purely because UTC has no DST to trip over.
  */
-function shiftDaysInZone(utcMs, tz, days) {
-    const p = utcToZonedParts(utcMs, tz);
-    const moved = new Date(Date.UTC(p.year, p.month - 1, p.day + days));
-    return zonedWallToUtc({
-        year: moved.getUTCFullYear(),
-        month: moved.getUTCMonth() + 1,
-        day: moved.getUTCDate(),
-        hour: p.hour,
-        minute: p.minute,
-        second: 0,
-    }, tz);
+function shiftDateKey(key, days) {
+    const ms = Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10))) + days * 86400000;
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 /** Whole days between two YYYY-MM-DD keys (b - a). */
 function dateKeyDiff(a, b) {
@@ -224,15 +204,10 @@ function zoneLabel(tz, atMs = Date.now()) {
     }
     return abbr && !/^GMT/.test(abbr) ? `${abbr} (${offset})` : offset;
 }
-/**
- * Does a DST transition fall between two instants in this zone? Used to warn
- * when a domino shift drags a batch of posts across a changeover, since their
- * offset — not their wall clock — is what moves.
- */
-function crossesDstTransition(fromMs, toMs, tz) {
-    if (fromMs === toMs)
-        return false;
-    const lo = Math.min(fromMs, toMs);
-    const hi = Math.max(fromMs, toMs);
-    return zoneOffsetMinutes(lo, tz) !== zoneOffsetMinutes(hi, tz);
+/** Live wall clock in a zone, e.g. "09:30 PM" — what the reference clocks read. */
+function clockNow(tz, atMs = Date.now()) {
+    const p = utcToZonedParts(atMs, tz);
+    const suffix = p.hour < 12 ? "AM" : "PM";
+    const h12 = p.hour % 12 === 0 ? 12 : p.hour % 12;
+    return `${String(h12).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ${suffix}`;
 }
