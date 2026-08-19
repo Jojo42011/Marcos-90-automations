@@ -4,6 +4,8 @@ exports.DEFAULT_VOICE = exports.RECOMMENDED_VOICES = exports.DEFAULT_PRESET = ex
 exports.getVoiceProfile = getVoiceProfile;
 exports.effectiveDelivery = effectiveDelivery;
 exports.setVoiceProfile = setVoiceProfile;
+exports.voiceExistsOnAccount = voiceExistsOnAccount;
+exports.fallbackVoiceIds = fallbackVoiceIds;
 exports.clearVoiceProfileCache = clearVoiceProfileCache;
 /**
  * Harvey's speaking voice: which voice, and how it delivers.
@@ -55,7 +57,11 @@ exports.DELIVERY_PRESETS = {
 exports.DEFAULT_PRESET = "soothing";
 exports.RECOMMENDED_VOICES = [
     { name: "Sarah", id: "EXAVITQu4vr4xnSDxMaL", note: "Calm and steady without being flat. The closest thing here to a personal assistant." },
-    { name: "River", id: "SAz9YHcvj6BLoDVoivEZ", note: "Relaxed and neutral. Reads information without performing it." },
+    /* This id was WRONG until 2026-08-18 (…BLoDVoivEZ) and it is why Harvey went
+       silent: the picker stored it, every text-to-speech call 404'd, and nothing
+       upstream of the Fly logs said so. Verified against the account's own
+       /v1/voices list, which is now also what validates a save. */
+    { name: "River", id: "SAz9YHcvj6GT2YYXdXww", note: "Relaxed and neutral. Reads information without performing it." },
     { name: "Eric", id: "cjVigY5qzO86Huf0OWal", note: "Smooth and easy to listen to over a long stretch." },
     { name: "Brian", id: "nPczCjzI2devNBz1zQrb", note: "Deep and comforting. Reassuring rather than commanding." },
     { name: "Will", id: "bIHbv24MWmeRgasZH58o", note: "Unhurried and even-tempered." },
@@ -157,6 +163,46 @@ function setVoiceProfile(patch, updatedBy) {
     return next;
 }
 /** Test hook — the file is read once and cached for the process. */
+/**
+ * Does this voice id actually exist on the account?
+ *
+ * The whole point of asking: a voice id that ElevenLabs does not recognise is
+ * INVISIBLE from the outside. Text-to-speech 404s, `generateTTS` returns null,
+ * and Harvey simply stops talking — no error surface, no UI state, nothing in
+ * /health. Checking at save time turns a silent outage into a rejected click.
+ *
+ * Returns null (not false) when the account cannot be reached, so a network
+ * blip never blocks a legitimate save — only a KNOWN-bad id does.
+ */
+async function voiceExistsOnAccount(voiceId) {
+    const key = process.env.ELEVENLABS_API_KEY?.trim();
+    if (!key || !voiceId)
+        return null;
+    try {
+        const r = await fetch("https://api.elevenlabs.io/v1/voices", {
+            headers: { "xi-api-key": key },
+            signal: AbortSignal.timeout(12000),
+        });
+        if (!r.ok)
+            return null;
+        const body = (await r.json());
+        const ids = new Set((body.voices || []).map((v) => String(v.voice_id ?? "")));
+        return ids.has(voiceId);
+    }
+    catch {
+        return null;
+    }
+}
+/** Voices to fall back to, in order, when the chosen one is rejected. */
+function fallbackVoiceIds(excluding) {
+    const out = [];
+    const env = process.env.ELEVENLABS_VOICE_ID?.trim();
+    if (env && env !== excluding)
+        out.push(env);
+    if (exports.DEFAULT_VOICE.id !== excluding && !out.includes(exports.DEFAULT_VOICE.id))
+        out.push(exports.DEFAULT_VOICE.id);
+    return out;
+}
 function clearVoiceProfileCache() {
     cache = null;
 }

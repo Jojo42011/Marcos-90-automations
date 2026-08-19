@@ -152,6 +152,7 @@ const crypto_1 = require("crypto");
 const index_js_22 = require("./harvey/index.js");
 const index_js_23 = require("./hull/index.js");
 const deepgramProxy_js_1 = require("./hull/voice/deepgramProxy.js");
+const tts_js_1 = require("./hull/voice/tts.js");
 const elevenlabsProxy_js_1 = require("./hull/voice/elevenlabsProxy.js");
 const ws_1 = require("ws");
 const smsStore_js_1 = require("./core/smsStore.js");
@@ -339,7 +340,17 @@ app.get("/health", async (_req, res) => {
             api_key_configured: (0, index_js_21.isAnthropicApiKeyConfigured)(),
             hull: "aethon-intelligence",
             voice: {
-                engine: process.env.DEEPGRAM_API_KEY ? "deepgram-flux" : "none",
+                /* HEARING. This used to read the Deepgram key only, and so reported
+                   "none" on a box where Harvey could hear perfectly well — ElevenLabs
+                   Scribe v2 has been the PRIMARY engine since the proxy was written
+                   and Deepgram is only the fallback. Anyone debugging a deaf Harvey
+                   was being pointed at the wrong vendor. */
+                engine: process.env.ELEVENLABS_API_KEY?.trim()
+                    ? "elevenlabs-scribe-v2"
+                    : process.env.DEEPGRAM_API_KEY?.trim()
+                        ? "deepgram-flux"
+                        : "none",
+                stt_fallback: process.env.DEEPGRAM_API_KEY?.trim() ? "deepgram-flux" : "none",
                 deepgram_configured: Boolean(process.env.DEEPGRAM_API_KEY?.trim()),
                 brain: "claude",
                 /* This said "gemini" regardless of what actually speaks. Harvey's TTS
@@ -350,6 +361,11 @@ app.get("/health", async (_req, res) => {
                 elevenlabs_configured: Boolean(process.env.ELEVENLABS_API_KEY?.trim()),
                 voice_name: harveyVoiceName(),
                 gemini_configured: Boolean(geminiApiKey()),
+                /* SPEAKING, as opposed to "configured to speak". A key can be set, a
+                   voice can be named, and every single utterance can still 404 — that
+                   is exactly what happened on 2026-08-17, and nothing here said so.
+                   `ok` is null until Harvey has actually tried to say something. */
+                speech: (0, tts_js_1.ttsHealthReport)(),
             },
         },
         openshorts: {
@@ -4718,7 +4734,14 @@ app.post("/api/jarvis/voice", express_1.default.json({ limit: "256kb" }), async 
     try {
         const audio = await (0, index_js_23.generateTTS)(text);
         if (!audio) {
-            res.status(502).json({ error: "TTS failed" });
+            /* "TTS failed" told the browser nothing and the browser told the operator
+               nothing, which is how Harvey stayed silent for a day without anyone
+               being able to say why. Hand back the actual reason. */
+            const why = (0, tts_js_1.ttsHealthReport)().lastError;
+            res.status(502).json({
+                error: why ? `Text-to-speech failed — ${why}` : "Text-to-speech failed",
+                hint: "Check the voice at /api/harvey/voice; /health reports the last attempt under harvey.voice.speech.",
+            });
             return;
         }
         res.setHeader("Content-Type", "application/octet-stream");
@@ -4819,9 +4842,31 @@ app.put("/api/harvey/voice", express_1.default.json({ limit: "32kb" }), async (r
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const { setVoiceProfile, effectiveDelivery } = await Promise.resolve().then(() => __importStar(require("./hull/voice/voiceProfile.js")));
+    const { setVoiceProfile, effectiveDelivery, voiceExistsOnAccount } = await Promise.resolve().then(() => __importStar(require("./hull/voice/voiceProfile.js")));
     const { clearTtsCache } = await Promise.resolve().then(() => __importStar(require("./hull/voice/tts.js")));
     const b = (req.body || {});
+    /*
+     * A voice id the account does not have is refused HERE, before it is stored.
+     *
+     * This is the check whose absence caused the 2026-08-17 outage: a bad id was
+     * accepted, written to disk, and from that moment Harvey was mute — the
+     * failure only existed at speak time, on a server nobody was tailing. A save
+     * is rare and a person is waiting on it, so one round trip to confirm the
+     * voice is real is cheap insurance against total silence.
+     *
+     * `null` means the account could not be reached; a blip must not block a
+     * legitimate save, so only a KNOWN-bad id is rejected.
+     */
+    if (typeof b.voiceId === "string" && b.voiceId.trim()) {
+        const exists = await voiceExistsOnAccount(b.voiceId.trim());
+        if (exists === false) {
+            res.status(400).json({
+                error: `ElevenLabs has no voice ${b.voiceId.trim()} on this account. ` +
+                    `Saving it would leave Harvey with no voice at all, so it was not saved.`,
+            });
+            return;
+        }
+    }
     try {
         const who = (await currentSessionUser(req))?.name ?? undefined;
         const profile = setVoiceProfile(b, who);
@@ -4909,7 +4954,14 @@ app.post("/api/jarvis/gemini-tts", express_1.default.json({ limit: "256kb" }), a
     try {
         const audio = await (0, index_js_23.generateTTS)(text);
         if (!audio) {
-            res.status(502).json({ error: "TTS failed" });
+            /* "TTS failed" told the browser nothing and the browser told the operator
+               nothing, which is how Harvey stayed silent for a day without anyone
+               being able to say why. Hand back the actual reason. */
+            const why = (0, tts_js_1.ttsHealthReport)().lastError;
+            res.status(502).json({
+                error: why ? `Text-to-speech failed — ${why}` : "Text-to-speech failed",
+                hint: "Check the voice at /api/harvey/voice; /health reports the last attempt under harvey.voice.speech.",
+            });
             return;
         }
         res.setHeader("Content-Type", "application/octet-stream");

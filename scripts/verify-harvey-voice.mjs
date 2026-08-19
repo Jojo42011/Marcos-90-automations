@@ -53,6 +53,13 @@ const stub = http.createServer((req, res) => {
       let parsed = {};
       try { parsed = JSON.parse(body); } catch {}
       calls.push({ voiceId, body: parsed });
+      if (voiceId === "AUTH_FAIL") {
+        /* An account/service failure, NOT a voice failure — another voice id
+           would fail identically, so the fallback must not be burned on it. */
+        res.writeHead(401, { "content-type": "application/json" });
+        res.end(JSON.stringify({ detail: { message: "Invalid API key" } }));
+        return;
+      }
       if (voiceId === "RETIRED_ID") {
         res.writeHead(404, { "content-type": "application/json" });
         res.end(JSON.stringify({ detail: { message: "A voice for voice_id RETIRED_ID was not found." } }));
@@ -165,17 +172,86 @@ try {
     vp.clearVoiceProfileCache();
   }
 
-  // ---- a rejected voice must be loud, not silent -------------------------
+  // ---- a rejected voice must never mean silence --------------------------
+  /* THIS IS THE 2026-08-17 OUTAGE, as a test. A voice id that ElevenLabs does
+     not have was saved; every call 404'd; Harvey said nothing at all for a day
+     and /health reported him healthy the whole time. Three things have to hold
+     now: he keeps talking, the substitution is visible, and the bad id is not
+     retried on every single utterance. */
   {
+    tts.clearTtsCache();
+    process.env.ELEVENLABS_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";   // a voice that works
     vp.setVoiceProfile({ voiceId: "RETIRED_ID", voiceName: "Gone" });
     const errs = [];
     const realErr = console.error;
     console.error = (...a) => errs.push(a.join(" "));
-    const out = await tts.generateTTS("This should fail.");
+    const before = calls.length;
+    const out = await tts.generateTTS("Harvey must still be able to say this.");
     console.error = realErr;
-    ok("a retired voice id yields no audio rather than garbage", out === null);
+
+    ok("a rejected voice falls back instead of going silent", out !== null && out.pcm.length > 0,
+      out ? String(out.pcm.length) : "null");
+    ok("it tried the configured voice first, then the fallback",
+      calls.slice(before).map((c) => c.voiceId).join(",") === "RETIRED_ID,EXAVITQu4vr4xnSDxMaL",
+      calls.slice(before).map((c) => c.voiceId).join(","));
     ok("and it says WHICH voice was rejected and where to fix it",
       errs.some((e) => /RETIRED_ID/.test(e) && /api\/harvey\/voice/.test(e)), errs.join(" | ").slice(0, 200));
+
+    const h = tts.ttsHealthReport();
+    ok("health reports that a substitution is in force",
+      h.lastOk === true && h.substitutedFrom === "RETIRED_ID" && h.substitutedTo === "EXAVITQu4vr4xnSDxMaL",
+      JSON.stringify(h));
+
+    /* Second line: the dead voice must not be attempted again. Paying a doomed
+       round trip per utterance would turn a fixed bug into a latency bug. */
+    const before2 = calls.length;
+    const again = await tts.generateTTS("A second, different line.");
+    ok("a known-bad voice is not retried on later lines",
+      again !== null && !calls.slice(before2).some((c) => c.voiceId === "RETIRED_ID"),
+      calls.slice(before2).map((c) => c.voiceId).join(","));
+
+    /* An ACCOUNT failure is a different class from a bad voice: every other
+       voice id would fail the same way, so trying them is pointless noise —
+       and the outcome has to be recorded rather than looking fine, which is
+       precisely what was missing before. */
+    tts.clearTtsCache();
+    delete process.env.ELEVENLABS_VOICE_ID;
+    vp.setVoiceProfile({ voiceId: "AUTH_FAIL", voiceName: "Bad account" });
+    const before3 = calls.length;
+    console.error = () => {};
+    const dead = await tts.generateTTS("Nothing can speak this.");
+    console.error = realErr;
+    const h2 = tts.ttsHealthReport();
+    ok("an account-level failure yields no audio", dead === null);
+    ok("and does not pointlessly burn the fallback voices",
+      calls.slice(before3).length === 1, calls.slice(before3).map((c) => c.voiceId).join(","));
+    ok("and health records the failure rather than looking fine",
+      h2.lastOk === false && /401/.test(String(h2.lastError)), JSON.stringify(h2));
+    tts.clearTtsCache();
+  }
+
+  // ---- the id list must match the account, not our memory of it ----------
+  /* The outage was ultimately a wrong constant: River's id was written from
+     memory and no code path ever compared it to reality. */
+  {
+    const river = vp.RECOMMENDED_VOICES.find((v) => v.name === "River");
+    ok("the River id is the corrected one, not the id that broke Harvey",
+      river && river.id === "SAz9YHcvj6GT2YYXdXww", JSON.stringify(river));
+    ok("no recommendation still carries the bad id",
+      !vp.RECOMMENDED_VOICES.some((v) => v.id === "SAz9YHcvj6BLoDVoivEZ"));
+  }
+
+  // ---- an id the account does not have is refused BEFORE it is stored -----
+  {
+    ok("a voice the account has is confirmed",
+      (await vp.voiceExistsOnAccount("EXAVITQu4vr4xnSDxMaL")) === true);
+    ok("a voice the account does not have is caught",
+      (await vp.voiceExistsOnAccount("NOT_A_REAL_ID")) === false);
+    const savedKey = process.env.ELEVENLABS_API_KEY;
+    delete process.env.ELEVENLABS_API_KEY;
+    ok("with no key it returns null, so a blip cannot block a real save",
+      (await vp.voiceExistsOnAccount("EXAVITQu4vr4xnSDxMaL")) === null);
+    process.env.ELEVENLABS_API_KEY = savedKey;
   }
 
   // ---- clamping ----------------------------------------------------------

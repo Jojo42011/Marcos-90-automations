@@ -692,7 +692,16 @@
           headers: authHeaders(),
           body: JSON.stringify({ text: text.slice(0, 1200) }),
         });
-        if (!res.ok) continue;
+        if (!res.ok) {
+          /* Do NOT swallow this. A failing text-to-speech call is exactly what
+             "Harvey can't talk" looks like from the outside, and skipping in
+             silence leaves nothing on screen or in the console to go on. */
+          let why = res.status + " " + res.statusText;
+          try { const j = await res.json(); if (j && j.error) why = j.error; } catch (_) {}
+          console.error("[aethon-voice] Harvey could not speak:", why);
+          setHarveyStatus("VOICE ERROR");
+          continue;
+        }
         const sampleRate = parseInt(res.headers.get("X-Sample-Rate") || "24000", 10);
         const buf = await res.arrayBuffer();
         console.log(
