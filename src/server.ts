@@ -9153,14 +9153,90 @@ app.patch("/api/planner/items/:id", express.json({ limit: "256kb" }), async (req
   res.json({ ok: true, item: planner.viewItem(result.item) });
 });
 
+/**
+ * Delete a content item, and say plainly what happens to its tasks.
+ *
+ * `tasks=keep` (the default) leaves them on the Task Command board, unlinked —
+ * work somebody may already have started does not evaporate because the post it
+ * came from was cancelled. `tasks=delete` removes them too. The caller must
+ * choose; nothing is guessed.
+ */
 app.delete("/api/planner/items/:id", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
   }
   const planner = await import("./core/contentPlanner.js");
-  const ok = planner.deleteItem(String(req.params.id), String(req.query.actor || "system"));
-  res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: "No such item" });
+  const id = String(req.params.id);
+  const mode = String(req.query.tasks || "keep") === "delete" ? "delete" : "keep";
+  const linked = getCommandTasks().filter((t) => t.contentSlotId === id);
+  let tasksDeleted = 0;
+  let tasksKept = 0;
+  for (const t of linked) {
+    if (mode === "delete") {
+      if (deleteCommandTask(t.id)) tasksDeleted++;
+    } else {
+      // Unlink rather than leave a dangling reference to a card that is gone.
+      updateCommandTask(t.id, { contentSlotId: undefined });
+      tasksKept++;
+    }
+  }
+  const ok = planner.deleteItem(id, String(req.query.actor || "system"));
+  res.status(ok ? 200 : 404).json(ok ? { ok: true, tasksDeleted, tasksKept } : { error: "No such item" });
+});
+
+/* ── Notebook: long-form notes living in the scratchpad ── */
+
+app.get("/api/planner/notes", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const notes = await import("./core/plannerNotes.js");
+  res.json({ notes: notes.listNotes() });
+});
+
+app.post("/api/planner/notes", express.json({ limit: "2mb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const notes = await import("./core/plannerNotes.js");
+  const body = (req.body || {}) as Record<string, unknown>;
+  const note = notes.createNote({
+    title: typeof body.title === "string" ? body.title : undefined,
+    contentHtml: typeof body.contentHtml === "string" ? body.contentHtml : undefined,
+  });
+  res.json({ ok: true, note, notes: notes.listNotes() });
+});
+
+app.patch("/api/planner/notes/:id", express.json({ limit: "2mb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const notes = await import("./core/plannerNotes.js");
+  const body = (req.body || {}) as Record<string, unknown>;
+  const note = notes.updateNote(String(req.params.id), {
+    title: typeof body.title === "string" ? body.title : undefined,
+    contentHtml: typeof body.contentHtml === "string" ? body.contentHtml : undefined,
+    isPinned: typeof body.isPinned === "boolean" ? body.isPinned : undefined,
+  });
+  if (!note) {
+    res.status(404).json({ error: "No such note" });
+    return;
+  }
+  res.json({ ok: true, note });
+});
+
+app.delete("/api/planner/notes/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const notes = await import("./core/plannerNotes.js");
+  const ok = notes.deleteNote(String(req.params.id));
+  res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: "No such note" });
 });
 
 /**
@@ -10860,6 +10936,13 @@ app.get("/api/tasks", (req, res) => {
   if (status && status !== "both") {
     tasks = tasks.filter((t) => t.status === status);
   }
+  // Scoped read for a Content Planner card's task drawer. Filtering on the
+  // existing endpoint rather than adding a parallel one is the whole point:
+  // the card and the Task Command board are looking at the same rows.
+  const contentSlotId = typeof req.query.contentSlotId === "string" ? req.query.contentSlotId : undefined;
+  if (contentSlotId) {
+    tasks = tasks.filter((t) => t.contentSlotId === contentSlotId);
+  }
   if (assignedTo) {
     tasks = tasks.filter((t) => t.assignedTo === assignedTo);
   }
@@ -11130,6 +11213,60 @@ app.put("/api/settings/table-prefs", express.json({ limit: "32kb" }), async (req
   }
 });
 
+/**
+ * The next instance of a completed recurring task.
+ *
+ * The interval is applied to the task's OWN due date, not to today: a weekly
+ * task finished three days late is still due on its original weekly cadence,
+ * and dating the successor from the completion would let a slipping task drift
+ * further every cycle. A task with no due date has nothing to advance from, so
+ * it is dated from today instead.
+ */
+function spawnNextRecurrence(done: CommandTask): CommandTask | null {
+  const STEP_DAYS: Record<string, number> = {
+    daily: 1, every_3_days: 3, every_5_days: 5, weekly: 7, monthly: 0,
+  };
+  const interval = String(done.recurringInterval || "");
+  if (!(interval in STEP_DAYS)) return null;
+
+  const base = done.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(done.dueDate)
+    ? new Date(`${done.dueDate}T00:00:00Z`)
+    : new Date();
+  const next = new Date(base.getTime());
+  if (interval === "monthly") next.setUTCMonth(next.getUTCMonth() + 1);
+  else next.setUTCDate(next.getUTCDate() + STEP_DAYS[interval]);
+  const dueDate = next.toISOString().slice(0, 10);
+
+  try {
+    const spawned = createCommandTask({
+      title: done.title,
+      description: done.description,
+      // A fresh cycle starts with its checklist unticked — carrying the ticks
+      // over would show the next instance as already part-done.
+      checklist: (done.checklist || []).map((c) => ({ ...c, done: false, taskId: undefined })),
+      column: done.column,
+      status: "pending",
+      color: done.color,
+      recurring: true,
+      recurringInterval: done.recurringInterval,
+      assignedTo: done.assignedTo,
+      dueDate,
+      dueTime: done.dueTime,
+      reminderMinutes: done.reminderMinutes,
+      tags: done.tags,
+      createdBy: done.createdBy,
+      contentSlotId: done.contentSlotId,
+    });
+    console.log("[Tasks] Recurring task regenerated:", spawned.title, "due", dueDate);
+    return spawned;
+  } catch (err) {
+    // A failed respawn must never fail the completion the user actually asked
+    // for; the task they ticked stays done either way.
+    console.error("[Tasks] Could not regenerate recurring task:", err);
+    return null;
+  }
+}
+
 app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
   const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -11165,6 +11302,10 @@ app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
       : undefined,
     createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
     sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : undefined,
+    // Raised from a Content Planner slot. Everything else about the task is
+    // identical to one typed on the board — same store, same notification,
+    // same reminder engine — which is the point: there is one task system.
+    contentSlotId: typeof body.contentSlotId === "string" && body.contentSlotId ? body.contentSlotId : undefined,
   });
   // Assigning someone else's task notifies them (Notifications tab + popup)
   // and emails them from Marco's Gmail. The email is fire-and-forget so a
@@ -11214,11 +11355,35 @@ app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
   if (Array.isArray(body.tags)) {
     updates.tags = body.tags.filter((t): t is string => typeof t === "string");
   }
-  const prevAssignee = getCommandTasks().find((t) => t.id === id)?.assignedTo;
+  if (typeof (body as Record<string, unknown>).contentSlotId === "string") {
+    updates.contentSlotId = String((body as Record<string, unknown>).contentSlotId) || undefined;
+  }
+  const before = getCommandTasks().find((t) => t.id === id);
+  const prevAssignee = before?.assignedTo;
   const task = updateCommandTask(id, updates);
   if (!task) {
     res.status(404).json({ error: "Task not found" });
     return;
+  }
+  /*
+   * Recurrence, which until now was a flag that did nothing. `recurring` and
+   * `recurringInterval` have been stored and round-tripped since the task board
+   * was built, but no code ever acted on them: marking a weekly task done just
+   * ended it. Completing one now spawns the next instance, dated one interval
+   * on from the due date it actually had (falling back to today when it had
+   * none). Deliberately narrow: it fires only on the pending -> done edge, so
+   * re-saving an already-done task cannot mint duplicates, and the new task is
+   * created through the same createCommandTask path as any other.
+   */
+  let recurredTask: CommandTask | null = null;
+  if (
+    task.recurring &&
+    task.recurringInterval &&
+    task.status === "done" &&
+    before &&
+    before.status !== "done"
+  ) {
+    recurredTask = spawnNextRecurrence(task);
   }
   // Reassignment notifies — and emails — the new assignee, same as a fresh
   // assignment: being handed an existing task is still being handed a task.
@@ -11236,7 +11401,7 @@ app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
     void sendAssignmentEmail(task, task.createdBy);
   }
   console.log("[Tasks] Updated:", task.title, "status:", task.status, "column:", task.column);
-  res.json({ task });
+  res.json({ task, recurred: recurredTask });
 });
 
 app.delete("/api/tasks/:id", (req, res) => {

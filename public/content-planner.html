@@ -38,6 +38,10 @@
     --panel-w:340px;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
+  /* The hidden attribute must win. Several panes here are display:flex or
+     display:grid, and an author display rule beats the UA sheet's [hidden] —
+     which is how the idea list stayed on screen underneath the Notebook. */
+  [hidden] { display:none !important; }
   body {
     background:var(--bg-0); color:var(--white); font-family:var(--font-body);
     font-size:13px; min-height:100vh; display:flex; flex-direction:column;
@@ -324,6 +328,133 @@
     background:var(--bg-1); color:var(--white); font-size:10px; width:130px;
   }
 
+  /* ── card window controls (Spec: browser-style header actions) ── */
+  .accordion-header { gap:8px; }
+  .hdr-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hdr-check {
+    flex:0 0 auto; width:18px; height:18px; border-radius:5px; cursor:pointer;
+    border:1.5px solid var(--dimmer); background:transparent; color:transparent;
+    font-size:11px; font-weight:900; line-height:1; display:flex; align-items:center; justify-content:center;
+    transition:background 120ms var(--ease-out), border-color 120ms var(--ease-out), color 120ms var(--ease-out);
+  }
+  .hdr-check:hover { border-color:var(--green); color:rgba(0,232,122,0.45); }
+  .hdr-check.on { background:var(--green); border-color:var(--green); color:#03301a; }
+  .accordion-item.is-complete { border-color:rgba(0,232,122,0.35); }
+  .accordion-item.is-complete .hdr-title { text-decoration:line-through; opacity:0.7; }
+  .win-controls { display:flex; gap:3px; flex:0 0 auto; }
+  .win-btn {
+    width:20px; height:18px; border-radius:4px; cursor:pointer; font-size:11px; line-height:1;
+    border:1px solid transparent; background:var(--bg-4); color:var(--dim);
+    display:flex; align-items:center; justify-content:center;
+    transition:background 120ms var(--ease-out), color 120ms var(--ease-out);
+  }
+  .win-btn:hover { background:var(--bg-2); color:var(--white); }
+  .win-btn.danger:hover { background:rgba(255,68,85,0.9); color:#fff; }
+
+  /* ── embedded task drawer (rows are real Task Command tasks) ── */
+  .task-drawer { display:flex; flex-direction:column; gap:5px; }
+  .task-row {
+    display:flex; align-items:flex-start; gap:6px; padding:6px 7px; font-size:11px;
+    background:var(--bg-1); border:1px solid var(--dimmest); border-radius:var(--radius-sm);
+  }
+  .task-row.done .task-title { text-decoration:line-through; opacity:0.55; }
+  .task-row .grow { flex:1; min-width:0; }
+  .task-title { font-weight:600; overflow:hidden; text-overflow:ellipsis; }
+  .task-meta { font-size:9px; color:var(--dim); display:flex; flex-wrap:wrap; gap:6px; margin-top:2px; }
+  .task-badge { font-size:8px; font-weight:700; padding:1px 5px; border-radius:999px; letter-spacing:0.3px; }
+  .task-badge.urgent { background:rgba(255,68,85,0.16); color:var(--red); border:1px solid rgba(255,68,85,0.4); }
+  .task-badge.recur { background:rgba(167,139,250,0.16); color:var(--violet); border:1px solid rgba(167,139,250,0.4); }
+  .task-badge.label { background:var(--bg-4); color:var(--dim); }
+  .task-check { margin-top:1px; flex:0 0 auto; }
+  .task-sub { font-size:9px; color:var(--dim); }
+
+  /* ── floating scratchpad window (Spec: idea sandbox, not a side drawer) ── */
+  .floatwin {
+    /* A definite height matters: the body is a column flex container, and its
+       flex:1 children (the idea list, the notebook) collapse to nothing without
+       one — which makes their controls present but unclickable. */
+    position:fixed; z-index:1000; width:420px; max-width:94vw;
+    height:min(72vh, 680px); max-height:calc(100vh - 24px);
+    background:var(--bg-1); border:1px solid rgba(255,179,64,0.55); border-radius:12px;
+    box-shadow:0 18px 60px rgba(0,0,0,0.7), 0 0 22px rgba(255,179,64,0.10);
+    display:none; flex-direction:column; overflow:hidden;
+  }
+  .floatwin.open { display:flex; }
+  .floatwin-head {
+    display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:grab; user-select:none;
+    background:linear-gradient(90deg, rgba(255,179,64,0.20), rgba(255,179,64,0.06));
+    border-bottom:1px solid rgba(255,179,64,0.35);
+  }
+  .floatwin-head:active { cursor:grabbing; }
+  .floatwin-badge { font-size:10px; font-weight:800; color:var(--amber); letter-spacing:0.5px; white-space:nowrap; }
+  .floatwin-sub { font-size:9px; color:var(--dim); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .floatwin-body { display:flex; flex-direction:column; gap:9px; padding:11px; overflow:hidden; flex:1; min-height:0; }
+  .floatwin.minimized .floatwin-body { display:none; }
+  .floatwin.minimized { width:260px; height:auto; }
+  .floatwin.expanded { width:min(1080px, 94vw); }
+  .idea-scroll { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; min-height:0; }
+  .floatwin .kanban { max-height:none; }
+  .view-switch { display:flex; background:var(--bg-3); border-radius:var(--radius-sm); padding:3px; gap:2px; }
+  .view-switch button {
+    padding:4px 9px; border:none; background:transparent; color:var(--dim);
+    border-radius:4px; cursor:pointer; font-size:10px; font-weight:600;
+  }
+  .view-switch button.active { background:var(--bg-0); color:var(--amber); }
+
+  /* On a phone a draggable window is the wrong shape — there is nowhere to
+     drag it to. It keeps its chrome and its controls but sits as a bottom
+     sheet, and the inline left/top from a desktop session is overridden. */
+  @media (max-width:760px) {
+    .floatwin.open {
+      left:0 !important; right:0 !important; top:auto !important; bottom:0 !important;
+      width:100% !important; max-width:100%; border-radius:16px 16px 0 0;
+      max-height:80vh;
+    }
+    .floatwin.minimized { width:100% !important; }
+    .floatwin-head { cursor:default; }
+  }
+
+  /* ── notebook: index + document canvas ── */
+  .notebook { display:grid; grid-template-columns:150px 1fr; gap:9px; flex:1; min-height:240px; }
+  .floatwin.expanded .notebook { grid-template-columns:220px 1fr; }
+  .note-index { display:flex; flex-direction:column; gap:5px; overflow-y:auto; min-height:0; }
+  .note-card {
+    text-align:left; padding:6px 7px; border-radius:var(--radius-sm); cursor:pointer; font-size:10px;
+    background:var(--bg-2); border:1px solid var(--dimmest); color:var(--white);
+  }
+  .note-card:hover { border-color:var(--teal-border); }
+  .note-card.on { border-color:var(--amber); background:rgba(255,179,64,0.08); }
+  .note-card .nt { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .note-card .np { color:var(--dim); font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .note-pane { display:flex; flex-direction:column; gap:6px; min-height:0; }
+  .note-toolbar {
+    display:flex; flex-wrap:wrap; gap:2px; padding:4px; background:var(--bg-3);
+    border:1px solid var(--dimmest); border-radius:var(--radius-sm); position:sticky; top:0;
+  }
+  .note-toolbar button {
+    min-width:22px; height:22px; padding:0 5px; border-radius:4px; cursor:pointer; font-size:10px;
+    border:1px solid transparent; background:transparent; color:var(--dim); font-weight:700;
+  }
+  .note-toolbar button:hover { background:var(--bg-1); color:var(--white); }
+  .note-toolbar .sep { width:1px; height:16px; background:var(--dimmest); margin:3px 3px; }
+  .note-editor {
+    flex:1; min-height:180px; overflow-y:auto; padding:10px 11px; font-size:12px; line-height:1.65;
+    background:var(--bg-2); border:1px solid var(--dimmest); border-radius:var(--radius-sm);
+    color:var(--white); outline:none;
+  }
+  .note-editor:focus { border-color:var(--teal-border); }
+  .note-editor h1 { font-size:17px; margin:8px 0 4px; }
+  .note-editor h2 { font-size:15px; margin:8px 0 4px; }
+  .note-editor h3 { font-size:13px; margin:6px 0 3px; }
+  .note-editor p { margin:0 0 6px; }
+  .note-editor ul, .note-editor ol { margin:0 0 6px 18px; }
+  .note-editor blockquote { border-left:2px solid var(--teal-border); margin:0 0 6px; padding-left:9px; color:var(--dim); }
+  .note-editor hr { border:none; border-top:1px solid var(--dimmest); margin:9px 0; }
+  .note-editor mark { background:rgba(255,179,64,0.35); color:inherit; }
+  .note-editor a { color:var(--teal); }
+  .note-editor:empty::before { content:attr(data-placeholder); color:var(--dimmer); }
+  .note-title-input { font-size:12px; font-weight:700; }
+
   /* ── drawers ── */
   .drawer {
     position:fixed; top:0; right:0; height:100%; width:360px; max-width:92vw;
@@ -572,24 +703,73 @@
   <ul id="rippleList"></ul>
 </div>
 
-<div class="drawer" id="drawer">
-  <div class="drawer-header">
-    <div>
-      <strong>💡 Unscheduled scratchpad</strong>
-      <div class="tiny muted">Ideas with no date. Drag one onto a day to schedule it.</div>
-    </div>
-    <button class="btn" id="drawerClose">✕</button>
+<!-- The scratchpad is a floating window, not a side drawer: it is a sandbox
+     that sits OVER the calendar so an idea can be dragged straight onto a day,
+     and the amber chrome is there so nobody mistakes it for a scheduled cell. -->
+<div class="floatwin" id="drawer" role="dialog" aria-label="Idea scratchpad">
+  <div class="floatwin-head" id="scratchDragHandle">
+    <span class="floatwin-badge">💡 IDEA SCRATCHPAD</span>
+    <span class="floatwin-sub" id="scratchSub">Ideas with no date. Drag one onto a day to schedule it.</span>
+    <span class="win-controls">
+      <button class="win-btn" id="scratchMin" title="Minimise to a pill" aria-label="Minimise">−</button>
+      <button class="win-btn" id="scratchMax" title="Expand the window" aria-label="Expand">□</button>
+      <button class="win-btn danger" id="drawerClose" title="Close the scratchpad" aria-label="Close">✕</button>
+    </span>
   </div>
-  <div class="hgroup" style="justify-content:space-between;">
-    <div class="drawer-tabs" id="drawerTabs">
-      <button data-view="list" class="active">List</button>
-      <button data-view="kanban">Kanban</button>
+  <div class="floatwin-body">
+    <div class="hgroup" style="justify-content:space-between;">
+      <div class="view-switch" id="drawerTabs">
+        <button data-view="list" class="active">📋 List</button>
+        <button data-view="kanban">📊 Kanban</button>
+        <button data-view="notebook">📓 Notebook</button>
+      </div>
+      <input class="pill" id="ideaSearch" placeholder="Search…" style="flex:1;min-width:110px;">
     </div>
-    <input class="pill" id="ideaSearch" placeholder="Search ideas…" style="flex:1;min-width:120px;">
+
+    <div id="ideaTools" class="hgroup" style="gap:6px;">
+      <input class="pill" id="quickIdea" placeholder="Type an idea and press Enter…" style="flex:1;">
+      <button class="btn primary" id="createIdeaBtn" title="Create a full idea card">+ Create New Idea</button>
+    </div>
+
+    <div class="idea-scroll" id="ideaList"></div>
+    <div class="kanban" id="ideaKanban" hidden></div>
+
+    <div class="notebook" id="ideaNotebook" hidden>
+      <div class="note-index">
+        <button class="btn primary mini" id="newNoteBtn">＋ New Note</button>
+        <div id="noteList"></div>
+      </div>
+      <div class="note-pane">
+        <input class="pill note-title-input" id="noteTitle" placeholder="Note title…">
+        <div class="note-toolbar" id="noteToolbar">
+          <button data-cmd="bold" title="Bold"><b>B</b></button>
+          <button data-cmd="italic" title="Italic"><i>I</i></button>
+          <button data-cmd="underline" title="Underline"><u>U</u></button>
+          <button data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+          <button data-cmd="hiliteColor" data-arg="#ffb340" title="Highlight">🖍</button>
+          <span class="sep"></span>
+          <button data-block="h1" title="Heading 1">H1</button>
+          <button data-block="h2" title="Heading 2">H2</button>
+          <button data-block="h3" title="Heading 3">H3</button>
+          <button data-block="p" title="Paragraph">¶</button>
+          <button data-block="blockquote" title="Quote">❝</button>
+          <span class="sep"></span>
+          <button data-cmd="insertUnorderedList" title="Bulleted list">•</button>
+          <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
+          <button data-todo="1" title="Checkbox item">☐</button>
+          <span class="sep"></span>
+          <button data-hr="1" title="Divider">―</button>
+          <button data-copyall="1" title="Copy all text">⧉</button>
+          <span class="sep"></span>
+          <button data-pin="1" id="notePinBtn" title="Pin this note">☆</button>
+          <button data-delnote="1" class="danger" title="Delete this note">🗑</button>
+        </div>
+        <div class="note-editor" id="noteEditor" contenteditable="true"
+             data-placeholder="Start writing — headings, lists, checkboxes. Saves as you type."></div>
+        <div class="save-flag" id="noteSaveFlag">No note selected</div>
+      </div>
+    </div>
   </div>
-  <input class="pill" id="quickIdea" placeholder="Type an idea and press Enter…">
-  <div class="idea-scroll" id="ideaList"></div>
-  <div class="kanban" id="ideaKanban" hidden></div>
 </div>
 
 <div class="drawer wide" id="taxDrawer">
@@ -630,6 +810,27 @@
       <button class="btn" id="catModalCancel">Cancel</button>
       <button class="btn primary" id="catModalSave">Save</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal" style="width:360px;">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <div class="tiny muted" id="confirmBody"></div>
+    <div class="modal-actions">
+      <button class="btn" id="confirmCancel">Cancel</button>
+      <button class="btn danger" id="confirmOk">Yes, delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="focusModal">
+  <div class="modal" style="width:min(760px,94vw);max-height:88vh;overflow:auto;">
+    <div class="hgroup" style="justify-content:space-between;">
+      <h3 id="focusTitle">Content slot</h3>
+      <button class="btn" id="focusClose">✕ Close</button>
+    </div>
+    <div id="focusBody"></div>
   </div>
 </div>
 
@@ -693,6 +894,42 @@
   function contrastOf(hex) {
     const l = lumOf(hex);
     return Math.round(Math.max(ratio(l, lumOf(TEXT_DARK)), ratio(l, lumOf(TEXT_LIGHT))) * 100) / 100;
+  }
+
+  /**
+   * A drive link is only useful if it can actually be opened. Anything that is
+   * not http(s) is refused as a launch target rather than rendered as a button
+   * that silently goes nowhere — the field still keeps whatever was typed.
+   */
+  function isLaunchableUrl(u) {
+    return /^https?:\/\/\S+$/i.test(String(u || "").trim());
+  }
+  function driveWarning(url) {
+    const v = String(url || "").trim();
+    if (!v) return "Paste a Drive/Dropbox link to enable the button.";
+    return isLaunchableUrl(v) ? "" : "That is not a link — it needs to start with http:// or https://";
+  }
+
+  /**
+   * The confirmation dialog. Replaces window.confirm so deletion can be
+   * cancelled with Escape and confirmed with Enter, and so the wording is the
+   * one the operator was promised rather than the browser's.
+   */
+  let confirmResolver = null;
+  function confirmDialog(title, body, okLabel) {
+    const modal = document.getElementById("confirmModal");
+    document.getElementById("confirmTitle").textContent = title;
+    document.getElementById("confirmBody").textContent = body || "";
+    document.getElementById("confirmOk").textContent = okLabel || "Yes, delete";
+    modal.classList.add("open");
+    setTimeout(() => document.getElementById("confirmOk").focus(), 30);
+    return new Promise((resolve) => { confirmResolver = resolve; });
+  }
+  function settleConfirm(value) {
+    document.getElementById("confirmModal").classList.remove("open");
+    const r = confirmResolver;
+    confirmResolver = null;
+    if (r) r(value);
   }
 
   const pad2 = (n) => String(n).padStart(2, "0");
@@ -779,6 +1016,7 @@
     syncCalendarSettings();
     startClocks();
     restoreLayout();
+    restoreScratchpad();
     await reload();
   }
 
@@ -843,6 +1081,9 @@
     state.backlog = backlog.items || [];
     renderAll();
   }
+
+  /** Both surfaces render the same editor, so both repaint together. */
+  function renderEditors() { renderDetail(); renderScratchpad(); }
 
   function renderAll() {
     renderGridHead();
@@ -992,6 +1233,9 @@
       return;
     }
     container.innerHTML = dayItems.map(accordionHtml).join("");
+    // Task rows come from the Task Command store, so they load per open card
+    // rather than riding along with the planner payload.
+    dayItems.filter((i) => state.openAccordions.has(i.id)).forEach((i) => void loadTasksFor(i.id));
   }
 
   function accordionHtml(item) {
@@ -1019,14 +1263,27 @@
       })
       .join("");
 
-    const drive = item.assetDriveUrl
-      ? `<a class="btn" href="${esc(item.assetDriveUrl)}" target="_blank" rel="noopener">📁 Open media drive</a>`
-      : `<span class="tiny muted">Paste a Drive/Dropbox link to enable the button</span>`;
+    // A launch button is only offered for a link that can genuinely be opened;
+    // anything else keeps its text but does not pretend to be clickable.
+    const drive = isLaunchableUrl(item.assetDriveUrl)
+      ? `<a class="btn" href="${esc(item.assetDriveUrl)}" target="_blank" rel="noopener">📂 Open Media Drive</a>`
+      : `<span class="tiny muted">${esc(driveWarning(item.assetDriveUrl))}</span>`;
 
-    return `<div class="accordion-item" data-acc="${esc(item.id)}">
+    const unsched = item.date
+      ? `<button class="btn" data-unschedule="${esc(item.id)}" title="Send back to the scratchpad, keeping everything else">↩ Unschedule</button>`
+      : `<span class="tiny muted">In the scratchpad — drag onto a day to schedule it</span>`;
+
+    return `<div class="accordion-item${item.isCompleted ? " is-complete" : ""}" data-acc="${esc(item.id)}">
       <div class="accordion-header" data-toggle-acc="${esc(item.id)}">
-        <span>${item.isCompleted ? "✅" : "🔴"} ${esc(item.timeDisplay || "—")} — ${esc(item.title)}${item.platforms.length ? ` (${esc(item.platforms.join(", "))})` : ""}</span>
-        <span class="tiny muted">${open ? "▲ Fold" : "▼ Expand"}</span>
+        <button class="hdr-check${item.isCompleted ? " on" : ""}" data-complete-for="${esc(item.id)}"
+          title="${item.isCompleted ? "Completed — click to reopen" : "Mark this content complete"}"
+          aria-label="Toggle completed" aria-pressed="${item.isCompleted ? "true" : "false"}">✓</button>
+        <span class="hdr-title">${esc(item.timeDisplay || "Unscheduled")} — ${esc(item.title)}${item.platforms.length ? ` (${esc(item.platforms.join(", "))})` : ""}</span>
+        <span class="win-controls">
+          <button class="win-btn" data-win-fold="${esc(item.id)}" title="${open ? "Collapse this card" : "Expand this card"}" aria-label="Collapse">−</button>
+          <button class="win-btn" data-win-focus="${esc(item.id)}" title="Open in full focus view" aria-label="Focus">□</button>
+          <button class="win-btn danger" data-win-delete="${esc(item.id)}" title="Delete this content item" aria-label="Delete">✕</button>
+        </span>
       </div>
       <div class="accordion-body" id="accBody-${esc(item.id)}"${open ? "" : " hidden"}>
         <div class="hgroup" style="justify-content:space-between;">
@@ -1034,11 +1291,7 @@
             ${drive}
             <button class="btn" data-hook-assist="${esc(item.id)}">✨ AI hook assist</button>
           </div>
-          <div class="hgroup">
-            <label class="tiny"><input type="checkbox" data-complete-for="${esc(item.id)}"${item.isCompleted ? " checked" : ""}> Complete</label>
-            <button class="btn" data-unschedule="${esc(item.id)}" title="Send back to the scratchpad, keeping everything else">↩ Unschedule</button>
-            <button class="btn" data-delete="${esc(item.id)}">Delete</button>
-          </div>
+          <div class="hgroup">${unsched}</div>
         </div>
 
         <div class="field-row">
@@ -1099,11 +1352,275 @@
         <div class="field-group">
           <label class="fieldlabel">Media drive link</label>
           <input value="${esc(item.assetDriveUrl || "")}" placeholder="https://drive.google.com/…" data-field="assetDriveUrl" data-item="${esc(item.id)}">
+          <span class="tiny muted" id="drivewarn-${esc(item.id)}">${driveWarning(item.assetDriveUrl)}</span>
+        </div>
+
+        <div class="field-group">
+          <label class="fieldlabel">Notes</label>
+          <textarea data-field="notes" data-item="${esc(item.id)}" placeholder="Internal notes, references, instructions…">${esc(item.notes || "")}</textarea>
+        </div>
+
+        <div class="field-group">
+          <label class="fieldlabel">Tasks
+            <span class="tiny muted" style="text-transform:none;letter-spacing:0;font-weight:400;">— these live on the Task Command board</span>
+          </label>
+          <div class="task-drawer" id="tasks-${esc(item.id)}" data-tasks-for="${esc(item.id)}">
+            <div class="tiny muted">Loading tasks…</div>
+          </div>
+          <button class="addnew" data-add-task="${esc(item.id)}">＋ Add Task</button>
         </div>
 
         <div class="save-flag" id="save-${esc(item.id)}">Saved</div>
       </div>
     </div>`;
+  }
+
+  /* ─────────────── card window controls + embedded tasks ───────────────
+     Every task here is an ordinary Task Command task carrying a contentSlotId.
+     There is no second task store and no copy of a task's state: the drawer
+     reads /api/tasks and writes /api/tasks, so a change made on the board and
+     a change made here are the same row. */
+
+  const findItem = (id) =>
+    state.items.find((i) => i.id === id) || state.backlog.find((i) => i.id === id) || null;
+
+  /** Fold one card without touching its neighbours. */
+  function toggleFold(id) {
+    const body = document.getElementById("accBody-" + id);
+    if (!body) return;
+    const nowOpen = body.hasAttribute("hidden");
+    if (nowOpen) { body.removeAttribute("hidden"); state.openAccordions.add(id); void loadTasksFor(id); }
+    else { body.setAttribute("hidden", ""); state.openAccordions.delete(id); }
+    const btn = document.querySelector(`[data-win-fold="${cssEsc(id)}"]`);
+    if (btn) btn.title = nowOpen ? "Collapse this card" : "Expand this card";
+  }
+
+  /** CSS.escape isn't universal in older engines; ids here are UUIDs anyway. */
+  const cssEsc = (v) => String(v).replace(/["\\]/g, "\\$&");
+
+  function openFocus(id) {
+    const item = findItem(id);
+    if (!item) return;
+    document.getElementById("focusTitle").textContent = item.title || "Content slot";
+    const body = document.getElementById("focusBody");
+    state.openAccordions.add(id);
+    body.innerHTML = accordionHtml(item);
+    document.getElementById("focusModal").classList.add("open");
+    void loadTasksFor(id);
+  }
+  function closeFocus() {
+    document.getElementById("focusModal").classList.remove("open");
+    document.getElementById("focusBody").innerHTML = "";
+    renderDetail();
+    renderScratchpad();
+  }
+  document.getElementById("focusClose").addEventListener("click", closeFocus);
+  document.getElementById("focusModal").addEventListener("click", (e) => {
+    if (e.target === document.getElementById("focusModal")) closeFocus();
+  });
+
+  /**
+   * Deleting a card asks twice over: once whether to delete at all, and again
+   * about the tasks it raised — work somebody may have started must not vanish
+   * because the post was cancelled, and quietly keeping orphans would be just
+   * as surprising.
+   */
+  async function deleteItemWithConfirm(id) {
+    const item = findItem(id);
+    const okDel = await confirmDialog(
+      "Are you sure you want to delete this content item?",
+      `"${item ? item.title : "This item"}" and everything on it will be removed. This cannot be undone.`,
+      "Yes, delete",
+    );
+    if (!okDel) return;
+
+    let mode = "keep";
+    try {
+      const linked = await api(`/api/tasks?contentSlotId=${encodeURIComponent(id)}`);
+      const n = (linked.tasks || []).length;
+      if (n > 0) {
+        const alsoTasks = await confirmDialog(
+          `Delete the ${n} task${n === 1 ? "" : "s"} raised on this card?`,
+          "Cancel keeps them on the Task Command board, unlinked from the deleted post.",
+          "Delete the tasks too",
+        );
+        mode = alsoTasks ? "delete" : "keep";
+      }
+    } catch (_) { /* a tasks lookup failure must not block the delete */ }
+
+    try {
+      const res = await api(`/api/planner/items/${id}?actor=planner-ui&tasks=${mode}`, { method: "DELETE" });
+      state.openAccordions.delete(id);
+      closeFocusIfOpen(id);
+      await reload();
+      toast(res.tasksDeleted ? `Deleted — ${res.tasksDeleted} task(s) removed`
+        : res.tasksKept ? `Deleted — ${res.tasksKept} task(s) kept on the board`
+        : "Deleted");
+    } catch (err) { toast("Delete failed: " + err.message); }
+  }
+  function closeFocusIfOpen(id) {
+    const body = document.getElementById("focusBody");
+    if (body && body.querySelector(`[data-acc="${cssEsc(id)}"]`)) {
+      document.getElementById("focusModal").classList.remove("open");
+      body.innerHTML = "";
+    }
+  }
+
+  /* ── the task drawer ── */
+
+  const URGENT_COLUMN = "urgent";
+  const taskCache = new Map();   // slotId -> tasks[]
+
+  async function loadTasksFor(slotId) {
+    const holders = document.querySelectorAll(`[data-tasks-for="${cssEsc(slotId)}"]`);
+    if (!holders.length) return;
+    try {
+      const res = await api(`/api/tasks?contentSlotId=${encodeURIComponent(slotId)}`);
+      const tasks = res.tasks || [];
+      taskCache.set(slotId, tasks);
+      holders.forEach((h) => { h.innerHTML = taskRowsHtml(slotId, tasks); });
+    } catch (err) {
+      holders.forEach((h) => { h.innerHTML = `<div class="tiny" style="color:var(--red);">Could not load tasks: ${esc(err.message)}</div>`; });
+    }
+  }
+
+  function taskRowsHtml(slotId, tasks) {
+    if (!tasks.length) return `<div class="tiny muted">No tasks yet. Anything added here also lands on the Task Command board.</div>`;
+    return tasks.map((t) => {
+      const done = t.status === "done";
+      const who = memberById(t.assignedTo);
+      const due = t.dueDate ? `${t.dueDate}${t.dueTime ? " " + t.dueTime : ""}` : "";
+      const checks = (t.checklist || []).length;
+      const ticked = (t.checklist || []).filter((c) => c.done).length;
+      return `<div class="task-row${done ? " done" : ""}">
+        <input class="task-check" type="checkbox" data-task-toggle="${esc(t.id)}" data-task-slot="${esc(slotId)}"${done ? " checked" : ""} title="Mark done">
+        <span class="grow">
+          <span class="task-title">${esc(t.title)}</span>
+          <span class="task-meta">
+            ${t.column === URGENT_COLUMN ? `<span class="task-badge urgent">🔥 URGENT</span>` : ""}
+            ${t.recurring && t.recurringInterval ? `<span class="task-badge recur">↻ ${esc(String(t.recurringInterval).replace(/_/g, " "))}</span>` : ""}
+            ${(t.tags || []).filter((x) => x !== "content").map((x) => `<span class="task-badge label">${esc(x)}</span>`).join("")}
+            ${who ? `<span>${esc(who.fullName)}</span>` : t.assignedTo ? `<span>${esc(t.assignedTo)}</span>` : ""}
+            ${due ? `<span>due ${esc(due)}</span>` : ""}
+            ${checks ? `<span>${ticked}/${checks} checklist</span>` : ""}
+            <span>${esc(String(t.status || "").replace(/_/g, " "))}</span>
+          </span>
+        </span>
+        <button class="win-btn" data-task-edit="${esc(t.id)}" data-task-slot="${esc(slotId)}" title="Edit task">✎</button>
+        <button class="win-btn danger" data-task-delete="${esc(t.id)}" data-task-slot="${esc(slotId)}" title="Delete task">✕</button>
+      </div>`;
+    }).join("");
+  }
+
+  async function toggleTaskDone(taskId, done, slotId) {
+    try {
+      const res = await api(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: done ? "done" : "pending" }),
+      });
+      await loadTasksFor(slotId);
+      if (res.recurred) toast(`Recurring task regenerated — next one due ${res.recurred.dueDate}`);
+    } catch (err) { toast("Could not update the task: " + err.message); }
+  }
+
+  /**
+   * The task editor. Deliberately the same field set the Task Command board
+   * uses, because it writes the same record: title, notes, checklist, due
+   * date/time, assignee, status, recurrence, urgency and a label.
+   */
+  async function openTaskEditor(slotId, taskId) {
+    const existing = taskId ? (taskCache.get(slotId) || []).find((t) => t.id === taskId) : null;
+    const item = findItem(slotId);
+    const members = state.team.map((m) =>
+      `<option value="${esc(m.userId)}"${existing && existing.assignedTo === m.userId ? " selected" : ""}>${esc(m.fullName)}</option>`).join("");
+    const sel = (v, cur) => (String(cur) === v ? " selected" : "");
+    const body = document.getElementById("focusBody");
+    document.getElementById("focusTitle").textContent = existing ? "Edit task" : "New task";
+    body.innerHTML = `
+      <div class="field-group"><label class="fieldlabel">Task title</label>
+        <input id="tkTitle" value="${esc(existing ? existing.title : "")}" placeholder="e.g. Edit the walkthrough clip"></div>
+      <div class="field-group"><label class="fieldlabel">Detailed notes</label>
+        <textarea id="tkNotes">${esc(existing ? existing.description || "" : "")}</textarea></div>
+      <div class="field-group"><label class="fieldlabel">Checklist (one per line)</label>
+        <textarea id="tkChecklist" placeholder="Rough cut&#10;Captions&#10;Thumbnail">${esc((existing && existing.checklist || []).map((c) => (c.done ? "[x] " : "") + c.text).join("\n"))}</textarea></div>
+      <div class="field-row">
+        <div class="field-group"><label class="fieldlabel">Due date</label>
+          <input type="date" id="tkDate" value="${esc(existing && existing.dueDate ? existing.dueDate : (item && item.date) || "")}"></div>
+        <div class="field-group"><label class="fieldlabel">Due time</label>
+          <input type="time" id="tkTime" value="${esc(existing && existing.dueTime ? existing.dueTime : "")}"></div>
+      </div>
+      <div class="field-row">
+        <div class="field-group"><label class="fieldlabel">Assigned to</label>
+          <select id="tkAssignee">${members}</select></div>
+        <div class="field-group"><label class="fieldlabel">Status</label>
+          <select id="tkStatus">
+            <option value="pending"${sel("pending", existing && existing.status)}>To Do</option>
+            <option value="in_progress"${sel("in_progress", existing && existing.status)}>In Progress</option>
+            <option value="done"${sel("done", existing && existing.status)}>Completed</option>
+          </select></div>
+      </div>
+      <div class="field-row">
+        <div class="field-group"><label class="fieldlabel">Recurrence</label>
+          <select id="tkRecur">
+            <option value="">One-time</option>
+            <option value="daily"${sel("daily", existing && existing.recurringInterval)}>Daily</option>
+            <option value="weekly"${sel("weekly", existing && existing.recurringInterval)}>Weekly</option>
+            <option value="monthly"${sel("monthly", existing && existing.recurringInterval)}>Monthly</option>
+          </select></div>
+        <div class="field-group"><label class="fieldlabel">Urgency</label>
+          <select id="tkUrgency">
+            <option value="normal">Normal</option>
+            <option value="urgent"${existing && existing.column === URGENT_COLUMN ? " selected" : ""}>Urgent</option>
+          </select></div>
+      </div>
+      <div class="field-group"><label class="fieldlabel">Label</label>
+        <input id="tkLabel" value="${esc((existing && existing.tags || []).filter((x) => x !== "content")[0] || "")}" placeholder="Editing, Thumbnail, Review…"></div>
+      <div class="tax-error" id="tkError"></div>
+      <div class="modal-actions">
+        <button class="btn" id="tkCancel">Cancel</button>
+        <button class="btn primary" id="tkSave">Save Task</button>
+      </div>`;
+    document.getElementById("focusModal").classList.add("open");
+    setTimeout(() => document.getElementById("tkTitle").focus(), 40);
+
+    document.getElementById("tkCancel").onclick = () => { closeFocus(); };
+    document.getElementById("tkSave").onclick = async () => {
+      const title = document.getElementById("tkTitle").value.trim();
+      if (!title) { document.getElementById("tkError").textContent = "A task title is required."; return; }
+      const recur = document.getElementById("tkRecur").value;
+      const label = document.getElementById("tkLabel").value.trim();
+      const checklist = document.getElementById("tkChecklist").value.split("\n")
+        .map((l) => l.trim()).filter(Boolean)
+        .map((l) => /^\[x\]\s*/i.test(l)
+          ? { text: l.replace(/^\[x\]\s*/i, ""), done: true }
+          : { text: l, done: false });
+      const payload = {
+        title,
+        description: document.getElementById("tkNotes").value,
+        checklist,
+        // Urgency IS the column on this board — that is how the Task Command
+        // screen has always expressed it, so an urgent task lands in Urgent.
+        column: document.getElementById("tkUrgency").value === "urgent" ? URGENT_COLUMN : "this_week",
+        status: document.getElementById("tkStatus").value,
+        assignedTo: document.getElementById("tkAssignee").value,
+        dueDate: document.getElementById("tkDate").value || undefined,
+        dueTime: document.getElementById("tkTime").value || undefined,
+        recurring: !!recur,
+        recurringInterval: recur || undefined,
+        tags: ["content"].concat(label ? [label] : []),
+        contentSlotId: slotId,
+        createdBy: "planner-ui",
+      };
+      try {
+        if (existing) await api(`/api/tasks/${existing.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+        else await api("/api/tasks", { method: "POST", body: JSON.stringify(payload) });
+        closeFocus();
+        await loadTasksFor(slotId);
+        toast(existing ? "Task updated on the Task Command board" : "Task added to the Task Command board");
+      } catch (err) {
+        document.getElementById("tkError").textContent = err.message;
+      }
+    };
   }
 
   /* ───────────────────────── scratchpad ───────────────────────── */
@@ -1115,7 +1632,14 @@
       .join(" ").toLowerCase().includes(q);
   }
 
+  /**
+   * An idea is a content slot that has not been given a day yet — same record,
+   * same editor. Expanding one in the scratchpad shows the identical accordion
+   * a scheduled card shows, which is what makes the parity structural rather
+   * than a second screen that has to be kept in step.
+   */
   function ideaCardHtml(item) {
+    if (state.openAccordions.has(item.id)) return accordionHtml(item);
     return `<div class="idea-card" draggable="true" data-idea-id="${esc(item.id)}" style="border-left-color:${esc(item.color)};">
         <div style="min-width:0;">
           <strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(item.title)}</strong>
@@ -1123,7 +1647,8 @@
         </div>
         <div class="hgroup">
           ${chipsHtml(item, 2)}
-          <button class="btn tiny" data-schedule-idea="${esc(item.id)}" title="Schedule on the selected day">Schedule ➔</button>
+          <button class="btn mini" data-open-idea="${esc(item.id)}" title="Open the full editor">Open</button>
+          <button class="btn mini" data-schedule-idea="${esc(item.id)}" title="Schedule on the selected day">Schedule ➔</button>
         </div>
       </div>`;
   }
@@ -1132,9 +1657,20 @@
     const visible = state.backlog.filter(matchesSearch);
     const list = document.getElementById("ideaList");
     const kanban = document.getElementById("ideaKanban");
+    const notebook = document.getElementById("ideaNotebook");
+    const tools = document.getElementById("ideaTools");
     const isList = state.drawerView === "list";
+    const isKanban = state.drawerView === "kanban";
+    const isNotebook = state.drawerView === "notebook";
     list.hidden = !isList;
-    kanban.hidden = isList;
+    kanban.hidden = !isKanban;
+    notebook.hidden = !isNotebook;
+    // The capture row belongs to the idea views; the Notebook has its own.
+    tools.style.display = isNotebook ? "none" : "";
+    document.getElementById("scratchSub").textContent = isNotebook
+      ? "Long-form notes. Not content slots — no dates, platforms or owners."
+      : "Ideas with no date. Drag one onto a day to schedule it.";
+    if (isNotebook) { void renderNotebook(); return; }
 
     if (isList) {
       list.innerHTML = visible.length
@@ -2041,14 +2577,7 @@
     }
   });
 
-  document.getElementById("accordionContainer").addEventListener("click", async (e) => {
-    const toggle = e.target.closest("[data-toggle-acc]");
-    if (toggle) {
-      const id = toggle.getAttribute("data-toggle-acc");
-      if (state.openAccordions.has(id)) state.openAccordions.delete(id); else state.openAccordions.add(id);
-      renderDetail();
-      return;
-    }
+  async function panelClickHandler(e) {
     const first = e.target.closest("#createFirstBtn");
     if (first) { await createItemOnSelectedDay(); return; }
 
@@ -2065,7 +2594,7 @@
         if (next) item.color = chosen.colorHex;
         queuePatch(id, { categoryId: next, actor: "planner-ui" });
         renderGrid();
-        renderDetail();
+        renderEditors();
       }
       return;
     }
@@ -2129,14 +2658,86 @@
       return;
     }
 
+    /* Header status checkmark — the single completion control now that the
+       duplicate in-body checkbox is gone. */
     const complete = e.target.closest("[data-complete-for]");
     if (complete) {
+      e.stopPropagation();
       const id = complete.getAttribute("data-complete-for");
-      const item = state.items.find((i) => i.id === id);
-      if (item) item.isCompleted = complete.checked;
-      queuePatch(id, { isCompleted: complete.checked, actor: "planner-ui" });
+      const item = findItem(id);
+      if (!item) return;
+      const next = !item.isCompleted;
+      item.isCompleted = next;
+      queuePatch(id, { isCompleted: next, actor: "planner-ui" });
+      // Repaint just this header: a full re-render would collapse whatever the
+      // operator has open elsewhere in the panel.
+      complete.classList.toggle("on", next);
+      complete.setAttribute("aria-pressed", next ? "true" : "false");
+      const card = complete.closest(".accordion-item");
+      if (card) card.classList.toggle("is-complete", next);
       renderGrid();
-      renderDetail();
+      renderMetrics();
+      return;
+    }
+
+    /* − fold / □ focus / ✕ delete. Folding is a targeted DOM toggle on purpose:
+       re-rendering the list would reset every other card's open state. */
+    const fold = e.target.closest("[data-win-fold]");
+    if (fold) {
+      e.stopPropagation();
+      toggleFold(fold.getAttribute("data-win-fold"));
+      return;
+    }
+    const focusBtn = e.target.closest("[data-win-focus]");
+    if (focusBtn) {
+      e.stopPropagation();
+      openFocus(focusBtn.getAttribute("data-win-focus"));
+      return;
+    }
+    const winDel = e.target.closest("[data-win-delete]");
+    if (winDel) {
+      e.stopPropagation();
+      await deleteItemWithConfirm(winDel.getAttribute("data-win-delete"));
+      return;
+    }
+
+    const addTask = e.target.closest("[data-add-task]");
+    if (addTask) {
+      e.stopPropagation();
+      await openTaskEditor(addTask.getAttribute("data-add-task"), null);
+      return;
+    }
+    const taskToggle = e.target.closest("[data-task-toggle]");
+    if (taskToggle) {
+      e.stopPropagation();
+      await toggleTaskDone(taskToggle.getAttribute("data-task-toggle"), taskToggle.checked, taskToggle.getAttribute("data-task-slot"));
+      return;
+    }
+    const taskEdit = e.target.closest("[data-task-edit]");
+    if (taskEdit) {
+      e.stopPropagation();
+      await openTaskEditor(taskEdit.getAttribute("data-task-slot"), taskEdit.getAttribute("data-task-edit"));
+      return;
+    }
+    const taskDel = e.target.closest("[data-task-delete]");
+    if (taskDel) {
+      e.stopPropagation();
+      const okDel = await confirmDialog("Delete this task?", "It will be removed from the Task Command board too.", "Yes, delete");
+      if (!okDel) return;
+      try {
+        await api(`/api/tasks/${taskDel.getAttribute("data-task-delete")}`, { method: "DELETE" });
+        await loadTasksFor(taskDel.getAttribute("data-task-slot"));
+        toast("Task deleted");
+      } catch (err) { toast("Could not delete the task: " + err.message); }
+      return;
+    }
+
+    /* Only now, once every control inside the header has had its turn, does a
+       bare click on the header itself count as fold/unfold. Checking this first
+       is what made the checkmark and the window buttons unreachable. */
+    const toggle = e.target.closest("[data-toggle-acc]");
+    if (toggle) {
+      toggleFold(toggle.getAttribute("data-toggle-acc"));
       return;
     }
 
@@ -2148,18 +2749,6 @@
         await reload();
         toast("Moved to the scratchpad");
       } catch (err) { toast("Failed: " + err.message); }
-      return;
-    }
-
-    const del = e.target.closest("[data-delete]");
-    if (del) {
-      const id = del.getAttribute("data-delete");
-      if (!confirm("Delete this content item? This cannot be undone.")) return;
-      try {
-        await api(`/api/planner/items/${id}?actor=planner-ui`, { method: "DELETE" });
-        state.openAccordions.delete(id);
-        await reload();
-      } catch (err) { toast("Delete failed: " + err.message); }
       return;
     }
 
@@ -2190,9 +2779,9 @@
         assist.textContent = "✨ AI hook assist";
       }
     }
-  });
+  }
 
-  document.getElementById("accordionContainer").addEventListener("input", (e) => {
+  function panelInputHandler(e) {
     const field = e.target.getAttribute("data-field");
     if (!field) return;
     const id = e.target.getAttribute("data-item");
@@ -2203,10 +2792,14 @@
     if (item && field !== "time" && field !== "date") item[field] = value;
     if (item && field === "time") { item.time = value; item.timeDisplay = timeLabel(value); }
     if (item && field === "date") item.date = value;
+    if (field === "assetDriveUrl") {
+      const warn = document.getElementById("drivewarn-" + id);
+      if (warn) warn.textContent = driveWarning(value);
+    }
     queuePatch(id, { [field]: value, actor: "planner-ui" });
-  });
+  }
 
-  document.getElementById("accordionContainer").addEventListener("change", (e) => {
+  function panelChangeHandler(e) {
     const plat = e.target.getAttribute("data-platform-for");
     if (!plat) return;
     const item = state.items.find((i) => i.id === plat);
@@ -2218,7 +2811,17 @@
     queuePatch(plat, { platforms: item.platforms, actor: "planner-ui" });
     renderGrid();
     e.target.closest("label").classList.toggle("on", e.target.checked);
-  });
+  }
+
+  const accHost = document.getElementById("accordionContainer");
+  accHost.addEventListener("click", panelClickHandler);
+  accHost.addEventListener("input", panelInputHandler);
+  accHost.addEventListener("change", panelChangeHandler);
+  // The focus modal hosts the same editor markup, so it gets the same handlers.
+  const focusHost = document.getElementById("focusBody");
+  focusHost.addEventListener("click", (e) => { if (!e.target.closest("#tkSave,#tkCancel")) void panelClickHandler(e); });
+  focusHost.addEventListener("input", panelInputHandler);
+  focusHost.addEventListener("change", panelChangeHandler);
 
   async function createItemOnSelectedDay() {
     try {
@@ -2309,9 +2912,24 @@
       if (btn) void setMode(btn.dataset.mode);
     });
   });
+  document.getElementById("confirmOk").addEventListener("click", () => settleConfirm(true));
+  document.getElementById("confirmCancel").addEventListener("click", () => settleConfirm(false));
+  document.getElementById("confirmModal").addEventListener("click", (e) => {
+    if (e.target === document.getElementById("confirmModal")) settleConfirm(false);
+  });
+
   window.addEventListener("keydown", (e) => {
     if (e.key === "Shift" && !state.shiftHeld) { state.shiftHeld = true; syncModeControls(); }
-    if (e.key === "Escape") { closeMenus(); closeCategoryModal(); }
+    // A deletion prompt answers to the keyboard: Escape cancels, Enter confirms.
+    if (confirmResolver) {
+      if (e.key === "Escape") { e.preventDefault(); settleConfirm(false); return; }
+      if (e.key === "Enter") { e.preventDefault(); settleConfirm(true); return; }
+    }
+    if (e.key === "Escape") {
+      closeMenus();
+      closeCategoryModal();
+      if (document.getElementById("focusModal").classList.contains("open")) closeFocus();
+    }
   });
   window.addEventListener("keyup", (e) => {
     if (e.key === "Shift" && state.shiftHeld) { state.shiftHeld = false; syncModeControls(); }
@@ -2384,15 +3002,125 @@
     await reload();
   });
 
-  /* ── scratchpad drawer ── */
+  /* ── the floating scratchpad window ──
+     Position, size mode and open state all persist, because this is a window
+     the operator arranges around their own work rather than a panel that
+     always reappears in one corner. */
   const drawer = document.getElementById("drawer");
+  const SP = { x: "scratchpad_x", y: "scratchpad_y", open: "is_scratchpad_open", mode: "scratchpad_mode" };
+
+  function clampWin() {
+    const r = drawer.getBoundingClientRect();
+    let x = parseFloat(drawer.style.left);
+    let y = parseFloat(drawer.style.top);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    /*
+     * Keep the WHOLE window on screen, not just a grabbable sliver. Letting it
+     * hang off an edge serves nothing and costs real function: minimising near
+     * the left edge shrinks the window from 420px to 260px, and since the
+     * controls sit at its right edge they walk off the screen with it.
+     */
+    const maxX = Math.max(8, window.innerWidth - r.width - 8);
+    const maxY = Math.max(8, window.innerHeight - Math.min(r.height, window.innerHeight - 16) - 8);
+    x = Math.min(Math.max(x, 8), maxX);
+    y = Math.min(Math.max(y, 8), maxY);
+    drawer.style.left = x + "px";
+    drawer.style.top = y + "px";
+  }
+
+  function placeWin(x, y) {
+    drawer.style.left = x + "px";
+    drawer.style.top = y + "px";
+    drawer.style.right = "auto";
+    drawer.style.bottom = "auto";
+    clampWin();
+    try {
+      localStorage.setItem(SP.x, parseFloat(drawer.style.left));
+      localStorage.setItem(SP.y, parseFloat(drawer.style.top));
+    } catch (_) {}
+  }
+
   function toggleDrawer(open) {
     const willOpen = open === undefined ? !drawer.classList.contains("open") : open;
     drawer.classList.toggle("open", willOpen);
-    if (willOpen) setTimeout(() => document.getElementById("quickIdea").focus(), 260);
+    try { localStorage.setItem(SP.open, willOpen ? "1" : "0"); } catch (_) {}
+    if (willOpen) {
+      if (!drawer.style.left) placeWin(Math.max(12, window.innerWidth - 460), 110);
+      else clampWin();
+      renderScratchpad();
+      setTimeout(() => { const q = document.getElementById("quickIdea"); if (q && state.drawerView !== "notebook") q.focus(); }, 120);
+    }
   }
+
+  function restoreScratchpad() {
+    let x = null, y = null, open = false, mode = "";
+    try {
+      x = parseFloat(localStorage.getItem(SP.x));
+      y = parseFloat(localStorage.getItem(SP.y));
+      open = localStorage.getItem(SP.open) === "1";
+      mode = localStorage.getItem(SP.mode) || "";
+    } catch (_) {}
+    if (Number.isFinite(x) && Number.isFinite(y)) placeWin(x, y);
+    if (mode === "minimized") drawer.classList.add("minimized");
+    if (mode === "expanded") drawer.classList.add("expanded");
+    if (open) toggleDrawer(true);
+  }
+
+  /* Pointer drag on the header. The window is non-blocking by design — there
+     is no backdrop — so the calendar underneath stays usable while it is open. */
+  let winDrag = null;
+  const scratchHandle = document.getElementById("scratchDragHandle");
+  scratchHandle.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".win-btn")) return;
+    const r = drawer.getBoundingClientRect();
+    winDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    try { scratchHandle.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();
+  });
+  window.addEventListener("pointermove", (e) => {
+    if (!winDrag) return;
+    drawer.style.left = (e.clientX - winDrag.dx) + "px";
+    drawer.style.top = (e.clientY - winDrag.dy) + "px";
+    drawer.style.right = "auto";
+    drawer.style.bottom = "auto";
+  });
+  window.addEventListener("pointerup", () => {
+    if (!winDrag) return;
+    winDrag = null;
+    placeWin(parseFloat(drawer.style.left), parseFloat(drawer.style.top));
+  });
+  window.addEventListener("resize", clampWin);
+
+  function setWinMode(mode) {
+    drawer.classList.toggle("minimized", mode === "minimized");
+    drawer.classList.toggle("expanded", mode === "expanded");
+    try { localStorage.setItem(SP.mode, mode); } catch (_) {}
+    clampWin();
+  }
+  document.getElementById("scratchMin").addEventListener("click", (e) => {
+    e.stopPropagation();
+    setWinMode(drawer.classList.contains("minimized") ? "" : "minimized");
+  });
+  document.getElementById("scratchMax").addEventListener("click", (e) => {
+    e.stopPropagation();
+    setWinMode(drawer.classList.contains("expanded") ? "" : "expanded");
+  });
+
   document.getElementById("scratchBtn").addEventListener("click", () => toggleDrawer());
-  document.getElementById("drawerClose").addEventListener("click", () => toggleDrawer(false));
+  document.getElementById("drawerClose").addEventListener("click", (e) => { e.stopPropagation(); toggleDrawer(false); });
+
+  /** A full idea card, created and opened in the scratchpad rather than on a day. */
+  document.getElementById("createIdeaBtn").addEventListener("click", async () => {
+    try {
+      const res = await api("/api/planner/items", {
+        method: "POST",
+        body: JSON.stringify({ title: "New idea", date: null, backlogStatus: "brainstorm", actor: "planner-ui" }),
+      });
+      state.openAccordions.add(res.item.id);
+      await reload();
+      void loadTasksFor(res.item.id);
+    } catch (err) { toast("Could not create the idea: " + err.message); }
+  });
   document.getElementById("drawerTabs").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-view]");
     if (!btn) return;
@@ -2402,7 +3130,7 @@
   });
   document.getElementById("ideaSearch").addEventListener("input", (e) => {
     state.ideaSearch = e.target.value;
-    renderScratchpad();
+    if (state.drawerView === "notebook") renderNoteIndex(); else renderScratchpad();
   });
   document.getElementById("quickIdea").addEventListener("keydown", async (e) => {
     if (e.key !== "Enter") return;
@@ -2419,9 +3147,209 @@
     } catch (err) { toast("Could not capture: " + err.message); }
   });
   drawer.addEventListener("click", async (e) => {
+    const openIdea = e.target.closest("[data-open-idea]");
+    if (openIdea) {
+      const id = openIdea.getAttribute("data-open-idea");
+      state.openAccordions.add(id);
+      renderScratchpad();
+      void loadTasksFor(id);
+      return;
+    }
     const btn = e.target.closest("[data-schedule-idea]");
+    if (btn) {
+      await doReschedule(btn.getAttribute("data-schedule-idea"), state.selectedDate, effectiveMode(), null);
+      return;
+    }
+    // An idea card carries the identical editor, so it needs the identical
+    // handlers — delegating keeps one implementation rather than a copy.
+    await panelClickHandler(e);
+  });
+  drawer.addEventListener("input", (e) => { if (e.target.closest("[data-field]")) panelInputHandler(e); });
+  drawer.addEventListener("change", (e) => { if (e.target.closest("[data-platform-for]")) panelChangeHandler(e); });
+
+  /* ───────────────────────── notebook ─────────────────────────
+     A document workspace that is deliberately NOT a content slot: no date, no
+     platforms, no owners. The editor is the browser's own contenteditable —
+     TipTap, Quill and ProseMirror are npm packages, and per CLAUDE.md the fast
+     overlay deploy path cannot npm install one. The server scrubs what comes
+     back to an allow-list, so a pasted document cannot bring markup with it. */
+
+  const notes = { list: [], activeId: null, saveTimer: null, loaded: false };
+
+  async function renderNotebook() {
+    if (!notes.loaded) {
+      try {
+        const res = await api("/api/planner/notes");
+        notes.list = res.notes || [];
+        notes.loaded = true;
+      } catch (err) {
+        document.getElementById("noteList").innerHTML = `<div class="tiny" style="color:var(--red);">${esc(err.message)}</div>`;
+        return;
+      }
+    }
+    renderNoteIndex();
+    if (!notes.activeId && notes.list.length) selectNote(notes.list[0].id);
+    else if (!notes.list.length) clearEditor();
+  }
+
+  function renderNoteIndex() {
+    const q = state.ideaSearch.trim().toLowerCase();
+    const visible = notes.list.filter((n) =>
+      !q || (n.title + " " + ((n.contentJson && n.contentJson.preview) || "")).toLowerCase().includes(q));
+    document.getElementById("noteList").innerHTML = visible.length
+      ? visible.map((n) => `<button class="note-card${n.id === notes.activeId ? " on" : ""}" data-note="${esc(n.id)}">
+            <div class="nt">${n.isPinned ? "📌 " : ""}${esc(n.title)}</div>
+            <div class="np">${esc((n.contentJson && n.contentJson.preview) || "Empty note")}</div>
+          </button>`).join("")
+      : `<div class="tiny muted">${notes.list.length ? "Nothing matches that search." : "No notes yet."}</div>`;
+  }
+
+  function clearEditor() {
+    notes.activeId = null;
+    document.getElementById("noteTitle").value = "";
+    document.getElementById("noteEditor").innerHTML = "";
+    document.getElementById("noteSaveFlag").textContent = "No note selected";
+    document.getElementById("notePinBtn").textContent = "☆";
+  }
+
+  function selectNote(id) {
+    const n = notes.list.find((x) => x.id === id);
+    if (!n) return;
+    notes.activeId = id;
+    document.getElementById("noteTitle").value = n.title;
+    document.getElementById("noteEditor").innerHTML = n.contentHtml || "";
+    document.getElementById("noteSaveFlag").textContent = "Saved";
+    document.getElementById("noteSaveFlag").className = "save-flag saved";
+    document.getElementById("notePinBtn").textContent = n.isPinned ? "📌" : "☆";
+    renderNoteIndex();
+  }
+
+  /** 500ms after the last keystroke, silently. Same debounce as a content slot. */
+  function queueNoteSave() {
+    if (!notes.activeId) return;
+    const flag = document.getElementById("noteSaveFlag");
+    flag.textContent = "Saving…"; flag.className = "save-flag saving";
+    clearTimeout(notes.saveTimer);
+    notes.saveTimer = setTimeout(flushNote, 500);
+  }
+
+  async function flushNote() {
+    if (!notes.activeId) return;
+    const id = notes.activeId;
+    try {
+      const res = await api(`/api/planner/notes/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: document.getElementById("noteTitle").value,
+          contentHtml: document.getElementById("noteEditor").innerHTML,
+        }),
+      });
+      const idx = notes.list.findIndex((n) => n.id === id);
+      if (idx >= 0) notes.list[idx] = res.note;
+      const flag = document.getElementById("noteSaveFlag");
+      flag.textContent = "Saved"; flag.className = "save-flag saved";
+      renderNoteIndex();
+    } catch (err) {
+      const flag = document.getElementById("noteSaveFlag");
+      flag.textContent = "Save failed: " + err.message; flag.className = "save-flag";
+    }
+  }
+
+  document.getElementById("noteList").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-note]");
+    if (b) selectNote(b.getAttribute("data-note"));
+  });
+
+  document.getElementById("newNoteBtn").addEventListener("click", async () => {
+    try {
+      const res = await api("/api/planner/notes", { method: "POST", body: JSON.stringify({ title: "Untitled note" }) });
+      notes.list = res.notes || notes.list;
+      selectNote(res.note.id);
+      renderNoteIndex();
+      document.getElementById("noteTitle").focus();
+      document.getElementById("noteTitle").select();
+    } catch (err) { toast("Could not create the note: " + err.message); }
+  });
+
+  document.getElementById("noteTitle").addEventListener("input", queueNoteSave);
+  document.getElementById("noteEditor").addEventListener("input", queueNoteSave);
+
+  /* Toolbar. execCommand is deprecated but is the only formatting engine
+     available without a dependency, and it is still implemented everywhere
+     this app runs. Anything it emits is sanitised server-side regardless. */
+  document.getElementById("noteToolbar").addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
     if (!btn) return;
-    await doReschedule(btn.getAttribute("data-schedule-idea"), state.selectedDate, effectiveMode(), null);
+    e.preventDefault();
+    const ed = document.getElementById("noteEditor");
+    ed.focus();
+
+    if (btn.dataset.cmd) {
+      try { document.execCommand(btn.dataset.cmd, false, btn.dataset.arg || null); } catch (_) {}
+      queueNoteSave(); return;
+    }
+    if (btn.dataset.block) {
+      const tag = btn.dataset.block === "p" ? "P" : btn.dataset.block.toUpperCase();
+      try { document.execCommand("formatBlock", false, tag); } catch (_) {}
+      queueNoteSave(); return;
+    }
+    if (btn.dataset.hr) {
+      try { document.execCommand("insertHorizontalRule"); } catch (_) {}
+      queueNoteSave(); return;
+    }
+    if (btn.dataset.todo) {
+      // A checkbox list the sanitiser will keep: a list item carrying a
+      // data-checked flag, toggled by clicking it.
+      try { document.execCommand("insertHTML", false, '<ul><li data-checked="false">☐ </li></ul>'); } catch (_) {}
+      queueNoteSave(); return;
+    }
+    if (btn.dataset.copyall) {
+      const text = ed.innerText;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => toast("Note copied"), () => toast("Could not copy"));
+      } else { toast("Clipboard unavailable in this browser"); }
+      return;
+    }
+    if (btn.dataset.pin) {
+      const n = notes.list.find((x) => x.id === notes.activeId);
+      if (!n) return;
+      void (async () => {
+        try {
+          const res = await api(`/api/planner/notes/${n.id}`, { method: "PATCH", body: JSON.stringify({ isPinned: !n.isPinned }) });
+          const idx = notes.list.findIndex((x) => x.id === n.id);
+          if (idx >= 0) notes.list[idx] = res.note;
+          notes.list.sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0) || b.updatedAt.localeCompare(a.updatedAt));
+          document.getElementById("notePinBtn").textContent = res.note.isPinned ? "📌" : "☆";
+          renderNoteIndex();
+        } catch (err) { toast(err.message); }
+      })();
+      return;
+    }
+    if (btn.dataset.delnote) {
+      const n = notes.list.find((x) => x.id === notes.activeId);
+      if (!n) return;
+      void (async () => {
+        const ok = await confirmDialog("Delete this note?", `"${n.title}" will be removed. This cannot be undone.`, "Yes, delete");
+        if (!ok) return;
+        try {
+          await api(`/api/planner/notes/${n.id}`, { method: "DELETE" });
+          notes.list = notes.list.filter((x) => x.id !== n.id);
+          clearEditor();
+          if (notes.list.length) selectNote(notes.list[0].id); else renderNoteIndex();
+          toast("Note deleted");
+        } catch (err) { toast(err.message); }
+      })();
+    }
+  });
+
+  /* Clicking a checkbox item ticks it. */
+  document.getElementById("noteEditor").addEventListener("click", (e) => {
+    const li = e.target.closest("li[data-checked]");
+    if (!li) return;
+    const checked = li.getAttribute("data-checked") === "true";
+    li.setAttribute("data-checked", checked ? "false" : "true");
+    li.textContent = (checked ? "☐ " : "☑ ") + li.textContent.replace(/^[☐☑]\s*/, "");
+    queueNoteSave();
   });
 
   /* ───────────────────────── go ───────────────────────── */
@@ -2436,6 +3364,9 @@
     state, effectiveMode, reload, api, refreshTaxonomy,
     setDock, effectiveDock, applyCalendarSize, resetCalendarSize,
     openCategoryModal, weekStartIdx, visibleRange, readableText, timeLabel,
+    toggleDrawer, setWinMode, toggleFold, openFocus, closeFocus, loadTasksFor,
+    openTaskEditor, confirmDialog, settleConfirm, renderNotebook, selectNote,
+    notes, isLaunchableUrl, driveWarning, findItem,
   };
 })();
 </script>

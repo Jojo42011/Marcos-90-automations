@@ -215,6 +215,12 @@ function normalizeCommandTask(raw: unknown): CommandTask | null {
     sortOrder: typeof t.sortOrder === "number" && Number.isFinite(t.sortOrder)
       ? t.sortOrder
       : undefined,
+    // Round-tripped deliberately. This normalizer rebuilds every task from a
+    // fixed field list on each boot, so a field missing HERE is stripped from
+    // disk on the next write — which is exactly how checklists were silently
+    // lost for weeks. A content link that vanished on deploy would orphan the
+    // task from its card with no way to recover the association.
+    contentSlotId: typeof t.contentSlotId === "string" && t.contentSlotId ? t.contentSlotId : undefined,
     completedAt: typeof t.completedAt === "string" ? t.completedAt : undefined,
     createdAt: typeof t.createdAt === "string" ? t.createdAt : nowIso(),
     updatedAt: typeof t.updatedAt === "string" ? t.updatedAt : nowIso(),

@@ -545,6 +545,181 @@ try {
     srv2.kill("SIGKILL");
   }
 
+  /* ═════════════════ embedded tasks: ONE task system, not two ═════════════ */
+  let taskSlotId = null;
+  {
+    await wipeItems();
+    const slot = (await create({ title: "Task host", date: "2026-11-12", time: "09:00" })).item;
+    taskSlotId = slot.id;
+
+    const made = await jsend("/api/tasks", "POST", {
+      title: "Edit the walkthrough clip",
+      description: "Rough cut then captions",
+      checklist: [{ text: "Rough cut", done: false }, { text: "Captions", done: true }],
+      column: "urgent", status: "pending", assignedTo: "kendrick",
+      dueDate: "2026-11-13", dueTime: "14:30",
+      recurring: true, recurringInterval: "weekly",
+      tags: ["content", "Editing"],
+      contentSlotId: slot.id, createdBy: "planner-ui",
+    });
+    ok("a task raised on a content card is created through the EXISTING task API",
+      !!made.task && made.task.id, JSON.stringify(made.task && made.task.title));
+    ok("it carries the content link", made.task.contentSlotId === slot.id, made.task.contentSlotId);
+
+    const board = await jget("/api/tasks");
+    ok("IT APPEARS ON THE MAIN TASK COMMAND BOARD, not a private list",
+      (board.tasks || []).some((t) => t.id === made.task.id));
+    const scoped = await jget(`/api/tasks?contentSlotId=${slot.id}`);
+    ok("and the card's drawer reads it back through the same endpoint",
+      scoped.tasks.length === 1 && scoped.tasks[0].id === made.task.id, String(scoped.tasks.length));
+    ok("urgency is the board's own Urgent column, not a parallel field",
+      scoped.tasks[0].column === "urgent");
+    ok("the checklist, due date/time, assignee and label all round-trip",
+      scoped.tasks[0].checklist.length === 2 && scoped.tasks[0].checklist[1].done === true &&
+      scoped.tasks[0].dueDate === "2026-11-13" && scoped.tasks[0].dueTime === "14:30" &&
+      scoped.tasks[0].assignedTo === "kendrick" && (scoped.tasks[0].tags || []).includes("Editing"),
+      JSON.stringify(scoped.tasks[0]));
+
+    /* Two-way: a change made on the board is the change the card shows,
+       because there is only one row. */
+    await jsend(`/api/tasks/${made.task.id}`, "PATCH", { status: "in_progress" });
+    const afterBoard = await jget(`/api/tasks?contentSlotId=${slot.id}`);
+    ok("a change made on the board is what the card reads back",
+      afterBoard.tasks[0].status === "in_progress", afterBoard.tasks[0].status);
+
+    /* Recurrence — a flag that did nothing until now. */
+    const completed = await jsend(`/api/tasks/${made.task.id}`, "PATCH", { status: "done" });
+    ok("completing a recurring task regenerates the next instance", !!completed.recurred);
+    ok("dated exactly one week on from its own due date, not from today",
+      completed.recurred && completed.recurred.dueDate === "2026-11-20", completed.recurred && completed.recurred.dueDate);
+    ok("the successor starts pending with its checklist unticked",
+      completed.recurred.status === "pending" && completed.recurred.checklist.every((c) => !c.done),
+      JSON.stringify(completed.recurred.checklist));
+    ok("and keeps the content link so it stays on the card",
+      completed.recurred.contentSlotId === slot.id);
+    const again = await jsend(`/api/tasks/${made.task.id}`, "PATCH", { status: "done" });
+    ok("re-saving an already-done task does NOT mint another duplicate", !again.recurred);
+
+    const nonRecurring = await jsend("/api/tasks", "POST", {
+      title: "One-off", column: "today", contentSlotId: slot.id, createdBy: "verify",
+    });
+    const oneOff = await jsend(`/api/tasks/${nonRecurring.task.id}`, "PATCH", { status: "done" });
+    ok("a one-time task spawns nothing when completed", !oneOff.recurred);
+  }
+
+  /* ═════════════════ the link must survive a restart ═════════════════ */
+  {
+    /* This is the exact class of bug that silently destroyed every checklist
+       for weeks: normalizeCommandTask rebuilds each task from a fixed field
+       list on boot, so a field it does not know is stripped from disk on the
+       next write. A content link lost on deploy would orphan the task. */
+    srv.kill("SIGKILL");
+    await new Promise((r) => setTimeout(r, 900));
+    const P3 = PORT + 2;
+    const srv3 = spawn(process.execPath, [join(process.cwd(), "dist/src/server.js")], {
+      cwd: process.cwd(),
+      env: { ...process.env, PORT: String(P3), DASHBOARD_TOKEN: TOKEN,
+        DB_JSON_PATH: join(tmp, "db.json"), TASKS_JSON_PATH: join(tmp, "tasks.json"),
+        USERS_JSON_PATH: join(tmp, "users.json"), TEAM_JSON_PATH: join(tmp, "team.json"),
+        CONTENT_PLANNER_DB_PATH: join(tmp, "planner.db"), EMAIL_DB_PATH: join(tmp, "e.db"),
+        TRANSACTIONS_DB_PATH: join(tmp, "x.db"), PLANNER_PRIMARY_TZ: "America/Chicago" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const up = await until(async () => (await fetch(`http://127.0.0.1:${P3}/health`)).ok, 40000);
+    ok("the server restarts on the same task file", up);
+    if (up) {
+      const after = await (await fetch(`http://127.0.0.1:${P3}/api/tasks?contentSlotId=${taskSlotId}&token=${TOKEN}`)).json();
+      ok("THE CONTENT LINK SURVIVES A RESTART — the normalizer round-trips it",
+        (after.tasks || []).length >= 1 && after.tasks.every((t) => t.contentSlotId === taskSlotId),
+        JSON.stringify((after.tasks || []).map((t) => [t.title, t.contentSlotId])));
+      const withChecklist = (after.tasks || []).find((t) => (t.checklist || []).length);
+      ok("and so does the checklist it was created with", !!withChecklist,
+        JSON.stringify((after.tasks || []).map((t) => (t.checklist || []).length)));
+    }
+    srv3.kill("SIGKILL");
+    await new Promise((r) => setTimeout(r, 600));
+    /* Bring the primary server back for the remaining checks. */
+    const srvAgain = spawn(process.execPath, [join(process.cwd(), "dist/src/server.js")], {
+      cwd: process.cwd(),
+      env: { ...process.env, PORT: String(PORT), DASHBOARD_TOKEN: TOKEN,
+        DB_JSON_PATH: join(tmp, "db.json"), TASKS_JSON_PATH: join(tmp, "tasks.json"),
+        USERS_JSON_PATH: join(tmp, "users.json"), TEAM_JSON_PATH: join(tmp, "team.json"),
+        CONTENT_PLANNER_DB_PATH: join(tmp, "planner.db"), EMAIL_DB_PATH: join(tmp, "e.db"),
+        TRANSACTIONS_DB_PATH: join(tmp, "x.db"), PLANNER_PRIMARY_TZ: "America/Chicago" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    srv.kill = srvAgain.kill.bind(srvAgain);
+    await until(async () => (await fetch(B + "/health")).ok, 40000);
+  }
+
+  /* ═════════════════ orphan handling on unschedule / delete ═════════════ */
+  {
+    const keepSlot = (await create({ title: "Keep tasks", date: "2026-11-20", time: "09:00" })).item;
+    await jsend("/api/tasks", "POST", { title: "Keep me", column: "today", contentSlotId: keepSlot.id, createdBy: "verify" });
+
+    await jsend(`/api/planner/items/${keepSlot.id}/unschedule`, "POST", { actor: "verify" });
+    const stillLinked = await jget(`/api/tasks?contentSlotId=${keepSlot.id}`);
+    ok("UNSCHEDULING A CARD LEAVES ITS TASKS ACTIVE AND LINKED",
+      stillLinked.tasks.length === 1 && stillLinked.tasks[0].status !== "done");
+
+    const del = await jsend(`/api/planner/items/${keepSlot.id}?tasks=keep`, "DELETE");
+    ok("deleting with tasks=keep reports what it kept", del.tasksKept === 1, JSON.stringify(del));
+    const orphan = (await jget("/api/tasks")).tasks.find((t) => t.title === "Keep me");
+    ok("the kept task is still on the board", !!orphan);
+    ok("and is unlinked rather than pointing at a card that no longer exists",
+      orphan && !orphan.contentSlotId, orphan && orphan.contentSlotId);
+
+    const dropSlot = (await create({ title: "Drop tasks", date: "2026-11-21", time: "09:00" })).item;
+    await jsend("/api/tasks", "POST", { title: "Delete me too", column: "today", contentSlotId: dropSlot.id, createdBy: "verify" });
+    const del2 = await jsend(`/api/planner/items/${dropSlot.id}?tasks=delete`, "DELETE");
+    ok("deleting with tasks=delete removes them too", del2.tasksDeleted === 1, JSON.stringify(del2));
+    ok("and they are genuinely gone from the board",
+      !(await jget("/api/tasks")).tasks.some((t) => t.title === "Delete me too"));
+  }
+
+  /* ═════════════════ notebook: notes, sanitiser, search ═════════════════ */
+  {
+    const empty = await jget("/api/planner/notes");
+    ok("the notebook starts empty", Array.isArray(empty.notes) && empty.notes.length === 0);
+
+    const n1 = await jsend("/api/planner/notes", "POST", { title: "Q4 Content Strategy Brainstorm" });
+    ok("a note can be created", n1.note.title === "Q4 Content Strategy Brainstorm");
+    ok("it is decoupled from content slots — no date, platform or category on it",
+      !("scheduledDate" in n1.note) && !("platforms" in n1.note) && !("categoryId" in n1.note),
+      JSON.stringify(Object.keys(n1.note)));
+
+    const rich = await jsend(`/api/planner/notes/${n1.note.id}`, "PATCH", {
+      contentHtml: "<h1>Plan</h1><p>Ship <b>more</b> <i>reels</i></p><ul><li>One</li><li>Two</li></ul><blockquote>Quote</blockquote><hr>",
+    });
+    ok("real formatting survives the round trip",
+      /<h1>Plan<\/h1>/.test(rich.note.contentHtml) && /<b>more<\/b>/.test(rich.note.contentHtml) &&
+      /<li>One<\/li>/.test(rich.note.contentHtml) && /<blockquote>/.test(rich.note.contentHtml) && /<hr>/.test(rich.note.contentHtml),
+      rich.note.contentHtml);
+
+    /* The note body is rendered back into the page verbatim, so this is the
+       assertion that matters most: a pasted document cannot bring code with it. */
+    const nasty = await jsend(`/api/planner/notes/${n1.note.id}`, "PATCH", {
+      contentHtml: '<p>safe</p><script>alert(1)</script><img src=x onerror="alert(2)"><a href="javascript:alert(3)">x</a><iframe src="evil"></iframe><b onclick="bad()">bold</b><style>body{display:none}</style>',
+    });
+    const html = nasty.note.contentHtml;
+    ok("A PASTED SCRIPT CANNOT SURVIVE A NOTE", !/<script/i.test(html), html);
+    ok("nor an onerror image", !/onerror/i.test(html) && !/<img/i.test(html), html);
+    ok("nor a javascript: link", !/javascript:/i.test(html), html);
+    ok("nor an iframe or a style block", !/<iframe/i.test(html) && !/<style/i.test(html), html);
+    ok("nor an inline event handler on an allowed tag", !/onclick/i.test(html), html);
+    ok("while the words themselves are kept", /safe/.test(html) && /bold/.test(html), html);
+
+    const pinned = await jsend(`/api/planner/notes/${n1.note.id}`, "PATCH", { isPinned: true });
+    ok("a note can be pinned", pinned.note.isPinned === true);
+    await jsend("/api/planner/notes", "POST", { title: "Second note" });
+    const listed = await jget("/api/planner/notes");
+    ok("pinned notes sort first", listed.notes[0].isPinned === true, JSON.stringify(listed.notes.map((n) => [n.title, n.isPinned])));
+    ok("a preview is stored for the index", typeof listed.notes[0].contentJson.preview === "string");
+
+    ok("deleting a note works", (await jsend(`/api/planner/notes/${n1.note.id}`, "DELETE")).ok === true);
+    ok("a missing note 404s", (await jstatus("/api/planner/notes/nope", "DELETE")) === 404);
+  }
+
   /* ═════════════════ the real page, in a real browser ═════════════════ */
   {
     await wipeItems();
@@ -1089,18 +1264,287 @@ try {
       ok("the panel's Title field is usably wide when side-docked", titleBox > 180, String(titleBox));
     }
 
-    /* ── mobile: the scratchpad becomes a bottom sheet ── */
+    /* ── card window controls, in the browser ── */
     {
-      await page.setViewportSize({ width: 420, height: 900 });
+      await wipeItems();
+      const c1 = (await create({ title: "Card one", date: "2026-08-11", time: "09:00" })).item;
+      const c2 = (await create({ title: "Card two", date: "2026-08-11", time: "11:00" })).item;
+      await page.evaluate(() => {
+        const p = window.__planner;
+        p.state.selectedDate = "2026-08-11"; p.state.openAccordions.clear();
+        return p.reload();
+      });
+      await page.waitForTimeout(700);
+
+      ok("every card header carries the three window controls",
+        (await page.locator(`[data-acc="${c1.id}"] .win-controls .win-btn`).count()) === 3);
+      ok("and a status checkmark on the far left, not a red dot",
+        (await page.locator(`[data-acc="${c1.id}"] .hdr-check`).count()) === 1 &&
+        !(await page.locator("#accordionContainer").innerText()).includes("🔴"));
+
+      /* Completion via the header checkmark. */
+      await page.click(`[data-acc="${c1.id}"] .hdr-check`);
+      await page.waitForTimeout(900);
+      const checkState = await page.evaluate((id) => {
+        const b = document.querySelector(`[data-acc="${id}"] .hdr-check`);
+        return { on: b.classList.contains("on"), bg: getComputedStyle(b).backgroundColor,
+                 pressed: b.getAttribute("aria-pressed"),
+                 struck: getComputedStyle(document.querySelector(`[data-acc="${id}"] .hdr-title`)).textDecorationLine };
+      }, c1.id);
+      ok("clicking the checkmark marks it complete and turns it green",
+        checkState.on && checkState.bg === "rgb(0, 232, 122)" && checkState.pressed === "true", JSON.stringify(checkState));
+      ok("and the header title reads as done", checkState.struck === "line-through", checkState.struck);
+      ok("the completion is persisted",
+        (await jget("/api/planner/items?from=2026-08-01&to=2026-08-31")).items.find((i) => i.id === c1.id).isCompleted === true);
+
+      /* The duplicated in-body controls are gone; Unschedule stays. */
+      await page.evaluate((id) => window.__planner.toggleFold(id), c1.id);
       await page.waitForTimeout(400);
+      const bodyText = await page.locator(`#accBody-${c1.id}`).innerText();
+      ok("no duplicate Complete control inside the card body", !/\bComplete\b/.test(bodyText), bodyText.slice(0, 160));
+      ok("no inner Delete button either",
+        (await page.locator(`#accBody-${c1.id} [data-delete]`).count()) === 0 &&
+        !/^\s*Delete\s*$/m.test(bodyText));
+      ok("but Unschedule is still there", /Unschedule/.test(bodyText));
+
+      /* Folding one card must not disturb its neighbour. */
+      await page.evaluate((id) => window.__planner.toggleFold(id), c2.id);
+      await page.waitForTimeout(300);
+      const both = await page.evaluate((ids) => ({
+        one: !document.getElementById("accBody-" + ids[0]).hasAttribute("hidden"),
+        two: !document.getElementById("accBody-" + ids[1]).hasAttribute("hidden"),
+      }), [c1.id, c2.id]);
+      ok("two cards can be open at once", both.one && both.two, JSON.stringify(both));
+      await page.click(`[data-win-fold="${c2.id}"]`);
+      await page.waitForTimeout(300);
+      const afterFold = await page.evaluate((ids) => ({
+        one: !document.getElementById("accBody-" + ids[0]).hasAttribute("hidden"),
+        two: !document.getElementById("accBody-" + ids[1]).hasAttribute("hidden"),
+      }), [c1.id, c2.id]);
+      ok("MINIMISING ONE CARD LEAVES ITS NEIGHBOUR EXPANDED",
+        afterFold.one === true && afterFold.two === false, JSON.stringify(afterFold));
+
+      /* □ focus view. */
+      await page.click(`[data-win-focus="${c1.id}"]`);
+      await page.waitForTimeout(500);
+      ok("the □ control opens a full-focus view", await page.locator("#focusModal.open").isVisible());
+      ok("carrying the same editor fields",
+        (await page.locator(`#focusBody [data-field="script"]`).count()) === 1);
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(400);
+      ok("Escape closes the focus view", !(await page.locator("#focusModal.open").isVisible()));
+
+      /* ✕ must never delete without confirmation. */
+      await page.click(`[data-win-delete="${c2.id}"]`);
+      await page.waitForTimeout(400);
+      ok("the ✕ control opens a confirmation rather than deleting",
+        await page.locator("#confirmModal.open").isVisible());
+      ok("and asks the question in the operator's words",
+        /Are you sure you want to delete this content item\?/i.test(await page.locator("#confirmTitle").innerText()),
+        await page.locator("#confirmTitle").innerText());
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
+      ok("Escape cancels and THE POST IS NOT DELETED",
+        (await jget("/api/planner/items?from=2026-08-01&to=2026-08-31")).items.some((i) => i.id === c2.id));
+
+      await page.click(`[data-win-delete="${c2.id}"]`);
+      await page.waitForTimeout(400);
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(1200);
+      ok("Enter on the prompt confirms the deletion",
+        !(await jget("/api/planner/items?from=2026-08-01&to=2026-08-31")).items.some((i) => i.id === c2.id));
+    }
+
+    /* ── the embedded task drawer, in the browser ── */
+    {
+      const host = (await jget("/api/planner/items?from=2026-08-01&to=2026-08-31")).items[0];
+      await page.evaluate((id) => {
+        const p = window.__planner;
+        p.state.openAccordions.add(id);
+        return p.reload();
+      }, host.id);
+      await page.waitForTimeout(900);
+      ok("an open card shows a task drawer",
+        (await page.locator(`[data-tasks-for="${host.id}"]`).count()) === 1);
+      ok("which says plainly where the tasks live",
+        /Task Command board/i.test(await page.locator(`#accBody-${host.id}`).innerText()));
+
+      await page.click(`[data-add-task="${host.id}"]`);
+      await page.waitForTimeout(500);
+      ok("＋ Add Task opens the task editor", await page.locator("#focusModal.open #tkTitle").isVisible());
+      ok("offering the existing board's own fields",
+        (await page.locator("#tkChecklist, #tkDate, #tkTime, #tkAssignee, #tkStatus, #tkRecur, #tkUrgency, #tkLabel").count()) === 8);
+      await page.fill("#tkTitle", "Cut the b-roll");
+      await page.selectOption("#tkUrgency", "urgent");
+      await page.fill("#tkLabel", "Editing");
+      await page.click("#tkSave");
+      await page.waitForTimeout(1200);
+      const rows = await page.locator(`[data-tasks-for="${host.id}"] .task-row`).count();
+      ok("saving puts the task in the card's drawer", rows === 1, String(rows));
+      ok("flagged urgent",
+        (await page.locator(`[data-tasks-for="${host.id}"] .task-badge.urgent`).count()) === 1);
+      const onBoard = (await jget("/api/tasks")).tasks.find((t) => t.title === "Cut the b-roll");
+      ok("AND ON THE REAL TASK COMMAND BOARD", !!onBoard && onBoard.contentSlotId === host.id,
+        JSON.stringify(onBoard && [onBoard.column, onBoard.contentSlotId]));
+    }
+
+    /* ── the floating scratchpad window ── */
+    {
+      await page.evaluate(() => window.__planner.toggleDrawer(true));
+      await page.waitForTimeout(500);
+      const win = await page.evaluate(() => {
+        const d = document.getElementById("drawer");
+        const cs = getComputedStyle(d);
+        return { z: cs.zIndex, pos: cs.position, badge: d.querySelector(".floatwin-badge").textContent.trim(),
+                 open: d.classList.contains("open") };
+      });
+      ok("the scratchpad is a floating window, not a docked drawer",
+        win.pos === "fixed" && win.open, JSON.stringify(win));
+      ok("it floats above the grid at z-index 1000", win.z === "1000", win.z);
+      ok("and identifies itself as the idea sandbox", /IDEA SCRATCHPAD/.test(win.badge), win.badge);
+      ok("there is no blocking backdrop over the calendar",
+        (await page.locator(".modal-backdrop.open").count()) === 0);
+
+      /* Drag it by the header and prove the position sticks across a reload. */
+      const h = await page.locator("#scratchDragHandle").boundingBox();
+      await page.mouse.move(h.x + 60, h.y + 10);
+      await page.mouse.down();
+      await page.mouse.move(h.x - 220, h.y + 180, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForTimeout(400);
+      const movedTo = await page.evaluate(() => document.getElementById("drawer").getBoundingClientRect().left);
+      ok("the window can be dragged", Math.abs(movedTo - h.x) > 100, JSON.stringify([h.x, movedTo]));
+      const onScreen = await page.evaluate(() => {
+        const r = document.getElementById("drawer").getBoundingClientRect();
+        return { left: r.left, right: r.right, w: window.innerWidth };
+      });
+      ok("and is always kept fully on screen, controls included",
+        onScreen.left >= 0 && onScreen.right <= onScreen.w + 1, JSON.stringify(onScreen));
+
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForSelector(".date-cell");
+      await page.waitForTimeout(900);
+      const restored = await page.evaluate(() => {
+        const d = document.getElementById("drawer");
+        return { open: d.classList.contains("open"), left: d.getBoundingClientRect().left };
+      });
+      ok("IT REOPENS WHERE IT WAS LEFT AFTER A RELOAD",
+        restored.open && Math.abs(restored.left - movedTo) < 30, JSON.stringify([movedTo, restored]));
+
+      await page.click("#scratchMin");
+      await page.waitForTimeout(400);
+      ok("− minimises it to a pill",
+        await page.evaluate(() => document.getElementById("drawer").classList.contains("minimized") &&
+          getComputedStyle(document.querySelector(".floatwin-body")).display === "none"));
+      await page.click("#scratchMin");
+      await page.waitForTimeout(400);
+      await page.click("#scratchMax");
+      await page.waitForTimeout(400);
+      ok("□ expands it", await page.evaluate(() => document.getElementById("drawer").classList.contains("expanded")));
+      await page.click("#scratchMax");
+      await page.waitForTimeout(300);
+
+      /* Full parity: an idea opens the same editor a scheduled slot has. */
+      await page.fill("#quickIdea", "Reel: closing-cost myths");
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(1200);
+      ok("an idea can be captured in the window",
+        (await page.locator("#ideaList .idea-card").count()) >= 1);
+      await page.click("#ideaList [data-open-idea]");
+      await page.waitForTimeout(700);
+      const parity = await page.evaluate(() => {
+        const root = document.getElementById("ideaList");
+        return {
+          fields: ["title", "hook", "caption", "script", "assetDriveUrl", "notes"]
+            .filter((f) => root.querySelector(`[data-field="${f}"]`)).length,
+          categories: root.querySelectorAll("[data-category-for]").length,
+          platforms: root.querySelectorAll("[data-platform-for]").length,
+          assignees: root.querySelectorAll("[data-assign-for]").length,
+          tasks: root.querySelectorAll("[data-tasks-for]").length,
+          controls: root.querySelectorAll(".win-controls .win-btn").length,
+          check: root.querySelectorAll(".hdr-check").length,
+        };
+      });
+      ok("AN IDEA CARRIES THE FULL CONTENT-SLOT FEATURE SET",
+        parity.fields === 6 && parity.categories >= 10 && parity.platforms >= 9 &&
+        parity.assignees >= 4 && parity.tasks === 1, JSON.stringify(parity));
+      ok("including the same header controls and status checkmark",
+        parity.controls === 3 && parity.check === 1, JSON.stringify(parity));
+    }
+
+    /* ── the notebook ── */
+    {
+      await page.click('#drawerTabs button[data-view="notebook"]');
+      await page.waitForTimeout(700);
+      ok("the scratchpad has a third Notebook view",
+        await page.locator("#ideaNotebook").isVisible());
+      ok("which hides the idea capture row — a note is not a content slot",
+        await page.evaluate(() => getComputedStyle(document.getElementById("ideaTools")).display === "none"));
+      ok("and shows an index beside a writing canvas",
+        (await page.locator("#noteList").count()) === 1 && (await page.locator("#noteEditor").count()) === 1);
+      /* The panes are display:flex/grid, so [hidden] alone does not hide them —
+         found by looking at the window with the ideas still stacked above. */
+      const paneVis = await page.evaluate(() => ({
+        list: getComputedStyle(document.getElementById("ideaList")).display,
+        kanban: getComputedStyle(document.getElementById("ideaKanban")).display,
+        notebook: getComputedStyle(document.getElementById("ideaNotebook")).display,
+      }));
+      ok("THE IDEA PANES ARE GENUINELY HIDDEN BEHIND THE NOTEBOOK, not stacked above it",
+        paneVis.list === "none" && paneVis.kanban === "none" && paneVis.notebook !== "none",
+        JSON.stringify(paneVis));
+
+      await page.click("#newNoteBtn");
+      await page.waitForTimeout(900);
+      await page.fill("#noteTitle", "Q4 Content Strategy Brainstorm");
+      await page.waitForTimeout(900);
+      ok("a note can be created and titled",
+        (await jget("/api/planner/notes")).notes.some((n) => n.title === "Q4 Content Strategy Brainstorm"));
+
+      await page.click("#noteEditor");
+      await page.keyboard.type("Ship more reels in Q4");
+      await page.waitForTimeout(200);
+      const early = await jget("/api/planner/notes");
+      ok("typing does not hit the server immediately",
+        !(early.notes.find((n) => n.title === "Q4 Content Strategy Brainstorm").contentHtml || "").includes("Ship more reels"));
+      ok("the editor says it is saving", /Saving/.test(await page.locator("#noteSaveFlag").innerText()));
+      await page.waitForTimeout(1000);
+      const late = await jget("/api/planner/notes");
+      ok("and 500ms after the last keystroke it is persisted",
+        (late.notes.find((n) => n.title === "Q4 Content Strategy Brainstorm").contentHtml || "").includes("Ship more reels"));
+      ok("the footer confirms the save",
+        (await page.locator("#noteSaveFlag").innerText()).trim() === "Saved");
+
+      ok("a rich-text toolbar is offered",
+        (await page.locator("#noteToolbar button").count()) >= 12);
+      ok("covering headings, lists and a checkbox item",
+        (await page.locator('#noteToolbar [data-block="h1"], #noteToolbar [data-cmd="insertUnorderedList"], #noteToolbar [data-todo]').count()) === 3);
+
+      await page.fill("#ideaSearch", "nothing-matches-this");
+      await page.waitForTimeout(400);
+      ok("the index searches notes", /Nothing matches/i.test(await page.locator("#noteList").innerText()));
+      await page.fill("#ideaSearch", "");
+      await page.waitForTimeout(400);
+      await page.click('#drawerTabs button[data-view="list"]');
+      await page.waitForTimeout(400);
+      ok("switching back to List restores the idea view",
+        await page.locator("#ideaList").isVisible());
+    }
+
+    /* ── mobile: the floating scratchpad grounds itself as a bottom sheet ── */
+    {
+      await page.evaluate(() => window.__planner.toggleDrawer(true));
+      await page.waitForTimeout(300);
+      await page.setViewportSize({ width: 420, height: 900 });
+      await page.waitForTimeout(500);
       const sheet = await page.evaluate(() => {
         const cs = getComputedStyle(document.getElementById("drawer"));
         return { width: cs.width, bottom: cs.bottom, radius: cs.borderTopLeftRadius };
       });
-      ok("on a phone the scratchpad is a full-width bottom sheet",
+      ok("on a phone the floating scratchpad grounds itself as a full-width sheet",
         parseInt(sheet.width) >= 400 && sheet.bottom === "0px" && sheet.radius === "16px", JSON.stringify(sheet));
       await page.setViewportSize({ width: 1600, height: 1100 });
       await page.waitForTimeout(300);
+      await page.evaluate(() => window.__planner.toggleDrawer(false));
     }
 
     ok("still no script errors after the whole run", errs.length === 0, errs.slice(0, 4).join(" | "));

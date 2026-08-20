@@ -926,6 +926,14 @@ export interface CommandTask {
   reminderMinutes?: number[];
   /** Manual drag-and-drop position within a task bar (lower = higher). */
   sortOrder?: number;
+  /**
+   * Set when this task was raised from a Content Planner slot. It is the WHOLE
+   * link between the two: the content card reads its tasks straight out of this
+   * store, so there is no second copy of a task's state to drift. Tasks created
+   * on a content card are ordinary Task Command tasks in every other respect —
+   * same board, same notifications, same reminders.
+   */
+  contentSlotId?: string;
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
