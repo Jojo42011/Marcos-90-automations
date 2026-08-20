@@ -101,3 +101,39 @@ export function listFavorites(leadId: string): FavoriteEntry[] {
     };
   });
 }
+
+/**
+ * Favourite counts for every lead at once, with the average asking price of
+ * what they saved. The average is over the favourites still IN the feed — a
+ * home that has left the market has no current price, and averaging it in as a
+ * zero would drag a buyer's apparent price point down for no reason.
+ */
+export function favoriteSummaryByLead(): Map<string, { favorites: number; avgFavPrice: number | null }> {
+  const rows = getFavoritesDb()
+    .prepare(`SELECT lead_id, listing_key FROM lead_favorites`)
+    .all() as Array<{ lead_id: string; listing_key: string }>;
+  const grouped = new Map<string, string[]>();
+  for (const r of rows) {
+    const id = String(r.lead_id);
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id)!.push(String(r.listing_key));
+  }
+  const out = new Map<string, { favorites: number; avgFavPrice: number | null }>();
+  for (const [leadId, keys] of grouped) {
+    const prices: number[] = [];
+    for (const k of keys) {
+      try {
+        const l = getListing(k);
+        const p = l && typeof (l as { listPrice?: unknown }).listPrice === "number" ? (l as { listPrice: number }).listPrice : null;
+        if (p && p > 0) prices.push(p);
+      } catch {
+        /* the mirror being unavailable must not fail the whole summary */
+      }
+    }
+    out.set(leadId, {
+      favorites: keys.length,
+      avgFavPrice: prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : null,
+    });
+  }
+  return out;
+}

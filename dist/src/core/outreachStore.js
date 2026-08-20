@@ -26,6 +26,7 @@ exports.recordEngagement = recordEngagement;
 exports.engagementForLead = engagementForLead;
 exports.hotEngagement = hotEngagement;
 exports.outreachCounts = outreachCounts;
+exports.outreachSummaryByLead = outreachSummaryByLead;
 /**
  * Listing Alerts and Market Reports — the two client-facing MLS subscriptions.
  *
@@ -429,4 +430,36 @@ function outreachCounts() {
         sends: one(`SELECT COUNT(*) n FROM outreach_sends`),
         engagements: one(`SELECT COUNT(*) n FROM outreach_engagement`),
     };
+}
+function outreachSummaryByLead() {
+    const d = getOutreachDb();
+    const out = new Map();
+    const bump = (leadId) => {
+        let row = out.get(leadId);
+        if (!row) {
+            row = { listingAlerts: 0, marketReports: 0, lastSentAt: null, lastOpenedAlertAt: null, lastOpenedReportAt: null };
+            out.set(leadId, row);
+        }
+        return row;
+    };
+    const later = (a, b) => (!a ? b : !b ? a : a > b ? a : b);
+    for (const r of d.prepare(`SELECT lead_id, COUNT(*) n FROM listing_alerts GROUP BY lead_id`).all()) {
+        bump(String(r.lead_id)).listingAlerts = Number(r.n) || 0;
+    }
+    for (const r of d.prepare(`SELECT lead_id, COUNT(*) n FROM market_reports GROUP BY lead_id`).all()) {
+        bump(String(r.lead_id)).marketReports = Number(r.n) || 0;
+    }
+    const sends = d
+        .prepare(`SELECT lead_id, kind, MAX(sent_at) AS last_sent, MAX(opened_at) AS last_opened
+       FROM outreach_sends WHERE ok = 1 GROUP BY lead_id, kind`)
+        .all();
+    for (const r of sends) {
+        const row = bump(String(r.lead_id));
+        row.lastSentAt = later(row.lastSentAt, r.last_sent);
+        if (String(r.kind) === "alert")
+            row.lastOpenedAlertAt = later(row.lastOpenedAlertAt, r.last_opened);
+        else
+            row.lastOpenedReportAt = later(row.lastOpenedReportAt, r.last_opened);
+    }
+    return out;
 }

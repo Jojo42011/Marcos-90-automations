@@ -518,3 +518,54 @@ export function outreachCounts(): { alerts: number; reports: number; sends: numb
     engagements: one(`SELECT COUNT(*) n FROM outreach_engagement`),
   };
 }
+
+/**
+ * One pass over the whole outreach mirror, keyed by lead.
+ *
+ * The CRM lead table sorts and columns on these, so a per-lead query would be
+ * one round trip per row on a 1,300-contact board. Everything here is a real
+ * measurement — an alert that exists, an email that was actually sent, an open
+ * pixel that actually fired — so a lead with no row is a lead with no outreach,
+ * not a lead we failed to look up.
+ */
+export interface LeadOutreachSummary {
+  listingAlerts: number;
+  marketReports: number;
+  lastSentAt: string | null;
+  lastOpenedAlertAt: string | null;
+  lastOpenedReportAt: string | null;
+}
+
+export function outreachSummaryByLead(): Map<string, LeadOutreachSummary> {
+  const d = getOutreachDb();
+  const out = new Map<string, LeadOutreachSummary>();
+  const bump = (leadId: string): LeadOutreachSummary => {
+    let row = out.get(leadId);
+    if (!row) {
+      row = { listingAlerts: 0, marketReports: 0, lastSentAt: null, lastOpenedAlertAt: null, lastOpenedReportAt: null };
+      out.set(leadId, row);
+    }
+    return row;
+  };
+  const later = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b);
+
+  for (const r of d.prepare(`SELECT lead_id, COUNT(*) n FROM listing_alerts GROUP BY lead_id`).all() as Array<{ lead_id: string; n: number }>) {
+    bump(String(r.lead_id)).listingAlerts = Number(r.n) || 0;
+  }
+  for (const r of d.prepare(`SELECT lead_id, COUNT(*) n FROM market_reports GROUP BY lead_id`).all() as Array<{ lead_id: string; n: number }>) {
+    bump(String(r.lead_id)).marketReports = Number(r.n) || 0;
+  }
+  const sends = d
+    .prepare(
+      `SELECT lead_id, kind, MAX(sent_at) AS last_sent, MAX(opened_at) AS last_opened
+       FROM outreach_sends WHERE ok = 1 GROUP BY lead_id, kind`,
+    )
+    .all() as Array<{ lead_id: string; kind: string; last_sent: string | null; last_opened: string | null }>;
+  for (const r of sends) {
+    const row = bump(String(r.lead_id));
+    row.lastSentAt = later(row.lastSentAt, r.last_sent);
+    if (String(r.kind) === "alert") row.lastOpenedAlertAt = later(row.lastOpenedAlertAt, r.last_opened);
+    else row.lastOpenedReportAt = later(row.lastOpenedReportAt, r.last_opened);
+  }
+  return out;
+}

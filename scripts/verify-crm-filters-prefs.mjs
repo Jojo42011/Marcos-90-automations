@@ -176,13 +176,19 @@ try {
   await page.click("#pChipBar [data-afclear]");
   await page.waitForFunction(() => document.querySelectorAll("#peopleRows tr").length === 4);
 
-  // Web Activity group refuses honestly
+  // Web Activity still refuses honestly — but the filter is a centered modal
+  // now, where every section is expanded and the left tree does the navigating.
+  // So the reason is shown INLINE rather than behind a click that declines.
   await page.click("#pFilterBtn");
   await page.waitForSelector("#afScrim.on");
   const nodataGroups = await page.$$eval(".afg.nodata", (g) => g.length);
   ok("Web Activity group rendered disabled", nodataGroups === 1);
-  await page.click(".afg.nodata .afg-h");
-  ok("clicking it does not open a filter", !(await page.$eval(".afg.nodata", (g) => g.classList.contains("open"))));
+  ok("its heading is still styled as unavailable",
+    await page.$eval(".afg.nodata .afg-h", (h) => getComputedStyle(h).cursor === "not-allowed" || getComputedStyle(h).color === "rgb(170, 178, 186)"));
+  ok("and it states why, without needing a click that refuses",
+    await page.$eval(".afg.nodata", (g) => /not connected/i.test(g.textContent)));
+  ok("it offers no filter controls at all",
+    (await page.$$eval(".afg.nodata input, .afg.nodata select, .afg.nodata .aftri button", (n) => n.length)) === 0);
   await page.click("#afCancel");
 
   // COLUMNS: hide Source on Leads, survive a re-render (the old bug)
@@ -215,16 +221,19 @@ try {
   });
   ok("hidden column stays hidden after re-render (old bug)", !!bodyCellsAligned);
 
-  // SORT BY: name via the pill, verify order + label
+  // SORT BY is a popover now (field + direction + SAVE), not a list menu.
+  // The saved default is what must survive the reload below, so this SAVES.
   const sortBtn = await page.$('#view-leads .pill-btn.ghost:has-text("SORT BY")');
   await sortBtn.scrollIntoViewIfNeeded();
   await sortBtn.click();
-  await page.waitForSelector("#ddMenu button");
-  await page.click('#ddMenu button:has-text("Name")');
-  await page.waitForTimeout(200);
+  await page.waitForSelector("#sortPop.on #spField");
+  await page.selectOption("#spField", "first_name");
+  await page.waitForTimeout(400);
   const firstName = await page.textContent("#leadRows tr .lead-name");
-  ok("sort by name ascending", firstName.trim() === "Alpha Buyer", firstName);
-  ok("pill label updates", (await page.textContent('#view-leads .pill-btn.ghost:has-text("SORT BY")')).includes("NAME"));
+  ok("sort by first name ascending", firstName.trim() === "Alpha Buyer", firstName);
+  ok("pill label updates", (await page.textContent('#view-leads .pill-btn.ghost:has-text("SORT BY")')).includes("FIRST NAME"));
+  await page.click("#sortPop #spSave");
+  await page.waitForTimeout(500);
 
   // persistence: reload — column still hidden, sort still name
   await page.reload({ waitUntil: "domcontentloaded" });

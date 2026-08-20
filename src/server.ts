@@ -8983,6 +8983,79 @@ app.get("/api/content/sprint-progress", (req, res) => {
   res.json(getSprintProgress());
 });
 
+/**
+ * Per-lead engagement metrics for the CRM lead table's Sort By and Columns.
+ *
+ * These live in four different subsystems (lead scores, favourites, listing
+ * alerts / market reports and their send log), none of which belong in the
+ * dashboard snapshot — so they are served here as one map the table joins on
+ * by lead id, loaded only when a sort or column actually needs them.
+ *
+ * `unavailable` is the honest half. Brivity's table also sorts on IDX website
+ * behaviour — visits, page views, average viewed price, last visit, mobile app
+ * adoption, CMA status — and this system has no site-visit tracking connected,
+ * so those fields have NO data to sort on. They are named here with the reason
+ * rather than offered as controls that would silently order every row the same.
+ */
+app.get("/api/crm/lead-metrics", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
+    return;
+  }
+  const metrics: Record<string, Record<string, unknown>> = {};
+  const touch = (id: string) => (metrics[id] = metrics[id] || {});
+
+  try {
+    const { getLatestScoresForAllLeads } = await import("./core/leadScoreStore.js");
+    for (const [leadId, entry] of getLatestScoresForAllLeads()) {
+      const row = touch(leadId);
+      row.hotScore = entry.score;
+      row.hotTier = entry.tier;
+    }
+  } catch (err) {
+    console.warn("[lead-metrics] scores unavailable:", err);
+  }
+
+  try {
+    const { favoriteSummaryByLead } = await import("./core/favoritesStore.js");
+    for (const [leadId, f] of favoriteSummaryByLead()) {
+      const row = touch(leadId);
+      row.favorites = f.favorites;
+      row.avgFavPrice = f.avgFavPrice;
+    }
+  } catch (err) {
+    console.warn("[lead-metrics] favourites unavailable:", err);
+  }
+
+  try {
+    const { outreachSummaryByLead } = await import("./core/outreachStore.js");
+    for (const [leadId, o] of outreachSummaryByLead()) {
+      const row = touch(leadId);
+      row.listingAlerts = o.listingAlerts;
+      row.marketReports = o.marketReports;
+      row.lastSentAt = o.lastSentAt;
+      row.lastOpenedAlertAt = o.lastOpenedAlertAt;
+      row.lastOpenedReportAt = o.lastOpenedReportAt;
+    }
+  } catch (err) {
+    console.warn("[lead-metrics] outreach unavailable:", err);
+  }
+
+  res.json({
+    metrics,
+    count: Object.keys(metrics).length,
+    unavailable: [
+      { field: "homeApp", label: "Home App", reason: "There is no client mobile app, so there is no adoption to report." },
+      { field: "lastVisit", label: "Last Visit", reason: "No website visit tracking is connected." },
+      { field: "visits", label: "Visits", reason: "No website visit tracking is connected." },
+      { field: "views", label: "Views", reason: "No website visit tracking is connected." },
+      { field: "avgViewPrice", label: "Avg. View Price", reason: "Needs viewed-listing history, which the site does not send." },
+      { field: "lastViewed", label: "Last Viewed", reason: "Needs viewed-listing history, which the site does not send." },
+      { field: "cma", label: "CMA", reason: "No CMA generation is wired into this CRM yet." },
+    ],
+  });
+});
+
 /* ═══════════════════════════════════════════════════════════════════════
    CONTENT PLANNER — the editorial calendar at /content-planner.
    Distinct from /api/content/calendar/* above, which reports on clips that

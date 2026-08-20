@@ -353,6 +353,69 @@
   .afd input[type="date"],.afd select{border:1px solid var(--line);border-radius:8px;height:30px;padding:0 8px;font-size:12.5px;color:#414c57;background:#fff}
   .afnote{font-size:11.5px;color:#98a2ac;padding:2px 0 6px;line-height:1.45}
 
+  /* ---- Sort By popover (field + direction + save-as-default) ---- */
+  .sortpop{position:fixed;z-index:120;background:#fff;border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 12px 34px rgba(0,0,0,.16);padding:10px;display:none;gap:8px;align-items:flex-start}
+  .sortpop.on{display:flex}
+  .sortpop .sp-field{min-width:210px}
+  .sortpop select{border:1px solid var(--line);border-radius:8px;height:32px;padding:0 8px;font-size:12.5px;color:#414c57;background:#fff;width:100%}
+  /* A fixed viewport with its own scroll — the field list is 26 long. */
+  .sortpop select[size]{height:auto;max-height:240px;overflow-y:auto;padding:2px}
+  .sortpop select option:disabled{color:#b6bec6}
+  .sortpop .sp-dir{min-width:130px}
+  .sortpop .sp-save{border:none;background:var(--teal);color:#fff;border-radius:999px;padding:7px 16px;
+    font-size:11.5px;font-weight:800;letter-spacing:.4px;cursor:pointer;height:32px}
+  .sortpop .sp-save:hover{filter:brightness(1.06)}
+  .sortpop .sp-note{font-size:10.5px;color:#98a2ac;margin-top:5px;line-height:1.4;max-width:210px}
+
+  /* ---- Columns picker: one scrollbar, drag-to-reorder ----
+     The popover wrapper must NOT scroll; only the inner list does. Two nested
+     scrollable boxes is what produced the double scrollbar. */
+  /* .dd-menu sets max-height + overflow:auto; this must out-specify it or the
+     wrapper scrolls too and two bars render side by side. */
+  .dd-menu.colpop{overflow:hidden;padding:0;max-height:none}
+  .dd-menu.colpop .cp-list{max-height:320px;overflow-y:auto;overscroll-behavior:contain;min-width:250px;padding:4px 0}
+  .dd-menu.colpop .cp-foot{border-top:1px solid var(--line);padding:6px 10px;background:#fff}
+  .cp-row{display:flex;align-items:center;gap:8px;padding:5px 10px;background:#fff}
+  .cp-row.locked{color:#aab2ba}
+  .cp-row .cp-name{flex:1;font-size:12.5px;color:#414c57;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cp-row.locked .cp-name{color:#aab2ba}
+  .cp-row input{accent-color:var(--teal)}
+  .cp-row input:disabled{opacity:.55}
+  .cp-grip{cursor:grab;color:#b6bec6;font-size:13px;line-height:1;letter-spacing:-1px;user-select:none;padding:0 2px}
+  .cp-grip:active{cursor:grabbing}
+  .cp-row.dragging{opacity:.55;background:#f2f4f6;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+  .cp-row.drop-before{box-shadow:inset 0 2px 0 var(--teal)}
+  .cp-row.drop-after{box-shadow:inset 0 -2px 0 var(--teal)}
+  .cp-nodata{font-size:11px;color:#b3bcc4;padding:6px 10px;line-height:1.45;border-top:1px solid #eef1f4}
+
+  /* ---- Centered Filter Leads modal (replaces the right-hand drawer) ---- */
+  .afd-scrim.centered{background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:24px}
+  .afd-scrim.centered.on{display:flex}
+  .afd.modal{position:relative;inset:auto;width:940px;max-width:96vw;height:min(86vh,760px);
+    border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.32);overflow:hidden}
+  .afd.modal .afd-split{flex:1;display:grid;grid-template-columns:220px 1fr;min-height:0}
+  .afd-nav{border-right:1px solid var(--line);overflow-y:auto;padding:8px 0;background:#fcfdfd}
+  .afd-nav .nv-p{display:flex;align-items:center;gap:7px;width:100%;padding:8px 14px;border:none;background:none;
+    font-size:12px;font-weight:800;letter-spacing:.3px;color:#3c4854;cursor:pointer;text-transform:uppercase;text-align:left}
+  .afd-nav .nv-p .car{margin-left:auto;color:#9aa4ae;transition:transform .15s}
+  .afd-nav .nv-p.open .car{transform:rotate(90deg)}
+  .afd-nav .nv-c{display:none;padding:0 0 6px}
+  .afd-nav .nv-p.open + .nv-c{display:block}
+  .afd-nav .nv-s{display:block;width:100%;padding:5px 14px 5px 30px;border:none;background:none;text-align:left;
+    font-size:12px;color:#6b7480;cursor:pointer;border-left:2px solid transparent}
+  .afd-nav .nv-s:hover{background:#f4f7f7}
+  .afd-nav .nv-s.on{color:var(--teal-strong);font-weight:700;border-left-color:var(--teal);background:#f2f9f8}
+  .afd.modal .afd-body{padding:6px 0 20px}
+  .afd.modal .afg-c{display:block}
+  .afd.modal .afg-h .car{display:none}
+  .afd.modal .afg-h{cursor:default}
+  .af-sec{scroll-margin-top:10px}
+  @media (max-width:900px){
+    .afd.modal .afd-split{grid-template-columns:1fr}
+    .afd-nav{display:none}
+  }
+
   /* Filters whose source data (website visit tracking) is not connected yet. */
   .sf-list .sf.sf-nodata{color:#b3bcc4;cursor:help}
   .sf-list .sf.sf-nodata:hover{background:#f7f8f9;color:#9aa4ae}
@@ -734,6 +797,13 @@
               <th class="sortcol" data-sortk="address">Address</th><th class="sortcol" data-sortk="last">Last Interaction</th><th>Next Due Tasks</th>
               <th>Primary Agent</th><th>Auto Plans</th><th>Birthdate</th><th>Home Anniversary</th>
               <th>Source</th><th>Registered</th>
+              <th class="sortcol" data-sortk="hot_score">Hot Score</th>
+              <th class="sortcol" data-sortk="favorites">Favorites</th>
+              <th class="sortcol" data-sortk="avg_fav_price">Avg. Fav. Price</th>
+              <th class="sortcol" data-sortk="listing_alerts">Listing Alerts</th>
+              <th class="sortcol" data-sortk="market_reports">Market Reports</th>
+              <th class="sortcol" data-sortk="last_sent">Last Sent</th>
+              <th>Tag</th>
             </tr></thead>
             <tbody id="leadRows"></tbody>
           </table>
@@ -1029,10 +1099,13 @@
 </div></div>
 
 <!-- Advanced Lead/People filter drawer (Brivity "Filter Leads" side panel). -->
-<div class="afd-scrim" id="afScrim">
-  <aside class="afd" id="afDrawer" role="dialog" aria-label="Filter Leads">
+<div class="afd-scrim centered" id="afScrim">
+  <aside class="afd modal" id="afDrawer" role="dialog" aria-label="Filter Leads">
     <div class="afd-h"><h3>Filter Leads</h3><button class="afd-clear" id="afClearAll">⟲ CLEAR ALL</button><button class="afd-x" id="afClose" aria-label="Close">×</button></div>
-    <div class="afd-body" id="afBody"><!-- groups rendered by buildAdvPanel() --></div>
+    <div class="afd-split">
+      <nav class="afd-nav" id="afNav"><!-- category tree, built from the sections --></nav>
+      <div class="afd-body" id="afBody"><!-- groups rendered by buildAdvPanel() --></div>
+    </div>
     <div class="afd-foot"><button class="btn-plain" id="afCancel">CANCEL</button><button class="pill-btn" id="afApply">APPLY FILTER</button></div>
   </aside>
 </div>
@@ -1249,7 +1322,41 @@ function hitRow(o){ if(!SEARCH)return true; return (_q(o.name)+" "+_q(o.address)
 var STATUS_ORDER={new:0,hot:1,nurture:2,watch:3,unqualified:4,dead:4,unresponsive:5,past_client:6,archived:7};
 var STAGE_ORDER={"NEW LEAD":0,"ATTEMPTED CONTACT":1,"APPOINTMENT SET":2,"SHOWING SET":3,"PENDING":4,"UNDER CONTRACT":5,"CLOSED":6};
 function mdySortable(v){ var m=/^(\d{2})-(\d{2})-(\d{4})$/.exec(String(v||"")); return m?(m[3]+m[1]+m[2]):""; }
+/**
+ * Names are stored as one string, so First/Last are derived rather than
+ * separate fields. Last name is the final whitespace-delimited token, which is
+ * right for "Marco Puga" and honest about being a guess for a social handle
+ * with no surname in it — those simply sort under the whole handle.
+ */
+function nameParts(l){
+  var n=String(l.name||l.address||"").trim();
+  if(!n)return {first:"",last:""};
+  var bits=n.split(/\s+/);
+  return {first:bits[0].toLowerCase(),last:(bits.length>1?bits[bits.length-1]:bits[0]).toLowerCase()};
+}
+/* Missing values sort LAST in both directions rather than clumping at one end
+   as 0 or "", which would put every un-measured lead above the measured ones
+   on an ascending sort and read as a real ranking. */
+var SORT_MISSING_NUM=-1, SORT_MISSING_TXT="\uffff";
+
 function sortKeyVal(l,k){
+  if(k==="first_name")return nameParts(l).first;
+  if(k==="last_name")return nameParts(l).last;
+  if(k==="agent")return String(l.assignedUserName||l.assignedUserId||SORT_MISSING_TXT).toLowerCase();
+  if(k==="autoplans"){
+    var en=l.autoPlanEnrollments||[];
+    if(!en.length)return SORT_MISSING_TXT;
+    var first=en[0]; return String((first&&(first.planName||first.planId))||first||"").toLowerCase();
+  }
+  if(k==="user_type")return String(l.intent||l.crmIntent||SORT_MISSING_TXT).toLowerCase();
+  if(k==="favorites")return leadMetric(l.id,"favorites")!=null?+leadMetric(l.id,"favorites"):SORT_MISSING_NUM;
+  if(k==="avg_fav_price")return leadMetric(l.id,"avgFavPrice")!=null?+leadMetric(l.id,"avgFavPrice"):SORT_MISSING_NUM;
+  if(k==="listing_alerts")return leadMetric(l.id,"listingAlerts")!=null?+leadMetric(l.id,"listingAlerts"):SORT_MISSING_NUM;
+  if(k==="market_reports")return leadMetric(l.id,"marketReports")!=null?+leadMetric(l.id,"marketReports"):SORT_MISSING_NUM;
+  if(k==="hot_score")return leadMetric(l.id,"hotScore")!=null?+leadMetric(l.id,"hotScore"):SORT_MISSING_NUM;
+  if(k==="last_sent")return new Date(leadMetric(l.id,"lastSentAt")||0).getTime();
+  if(k==="last_opened_alerts")return new Date(leadMetric(l.id,"lastOpenedAlertAt")||0).getTime();
+  if(k==="last_opened_reports")return new Date(leadMetric(l.id,"lastOpenedReportAt")||0).getTime();
   if(k==="name")return String(l.name||l.address||"").toLowerCase();
   if(k==="status"){
     if(l.statusDisp||l.crmStatus)return STATUS_ORDER[l.statusDisp||l.crmStatus]!=null?STATUS_ORDER[l.statusDisp||l.crmStatus]:99;
@@ -1935,6 +2042,42 @@ function openThread(i){ openConvIdx=i; pendingAttachments=[]; renderConvos(); pa
 
 /* leads table */
 let page=1;const PER=10;
+/*
+ * Cells for the engagement columns. These are joined in from
+ * /api/crm/lead-metrics rather than the lead snapshot, so before that arrives
+ * they read "…" — a dash would claim we had measured a zero.
+ */
+function fmtMoney(n){ return n==null?"-":"$"+Math.round(n).toLocaleString("en-US"); }
+function fmtDay(iso){
+  if(!iso)return "-";
+  var d=new Date(iso); if(isNaN(d))return "-";
+  return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+}
+function metricCells(l){
+  var pending=!LEAD_METRICS.data;
+  var hs=leadMetric(l.id,"hotScore"), fav=leadMetric(l.id,"favorites"),
+      afp=leadMetric(l.id,"avgFavPrice"), al=leadMetric(l.id,"listingAlerts"),
+      mr=leadMetric(l.id,"marketReports"), ls=leadMetric(l.id,"lastSentAt");
+  var cell=function(html){ return '<td class="mut-cell">'+(pending?'<span style="color:#c2cad1">…</span>':html)+'</td>'; };
+  return cell(hs!=null?String(hs):"-")+
+    cell(fav!=null&&fav>0?String(fav):"-")+
+    cell(fmtMoney(afp))+
+    cell(al!=null&&al>0?String(al):"-")+
+    cell(mr!=null&&mr>0?String(mr):"-")+
+    cell(fmtDay(ls));
+}
+
+/* New columns arrive hidden. They are real, but adding seven columns to a
+   table the team already works from every day would rearrange everyone's view
+   without being asked; the Columns picker is where they get turned on. */
+var DEFAULT_HIDDEN_COLS={leads:["hot_score","favorites","avg_fav_price","listing_alerts","market_reports","last_sent","tag"]};
+function seedDefaultHidden(tkey){
+  var p=tblPrefs(tkey);
+  if(p._seeded)return; p._seeded=true;
+  if(p.hidden.length||p.order.length)return;      // the user already has a view
+  (DEFAULT_HIDDEN_COLS[tkey]||[]).forEach(function(k){ if(p.hidden.indexOf(k)<0)p.hidden.push(k); });
+}
+
 function renderLeads(){
   document.getElementById("lnAll").textContent=LEADS.length.toLocaleString();
   document.getElementById("lnIdx").textContent=LEADS.filter(l=>l.source==="Website IDX").length;
@@ -1965,6 +2108,8 @@ function renderLeads(){
       dtCell(l,"anniversary")+
       '<td class="mut-cell">'+esc(l.source||"-")+'</td>'+
       '<td class="mut-cell">'+esc(reg)+'</td>'+
+      metricCells(l)+
+      '<td class="mut-cell">'+((l.tags&&l.tags.length)?esc(l.tags.slice(0,2).join(", "))+(l.tags.length>2?" +"+(l.tags.length-2):""):"-")+'</td>'+
     '</tr>';
   }).join("");
   // pager
@@ -1974,7 +2119,14 @@ function renderLeads(){
   pg+='<button '+(page>=pages?'disabled':'')+' data-p="'+(page+1)+'">›</button>';
   document.getElementById("pager").innerHTML=pg;
   document.querySelectorAll("#pager button[data-p]").forEach(b=>b.addEventListener("click",()=>{const p=+b.dataset.p;if(p>=1&&p<=pages){page=p;renderLeads();document.querySelector(".tbl-scroll").scrollTop=0;}}));
+  seedDefaultHidden("leads");
   if(typeof applyColPrefs==="function")applyColPrefs(document.querySelector("#view-leads table.leads"),"leads");
+  // If any engagement column is visible, it needs real numbers behind it.
+  if(!LEAD_METRICS.data){
+    var lp=tblPrefs("leads");
+    var wants=(DEFAULT_HIDDEN_COLS.leads||[]).some(function(k){return lp.hidden.indexOf(k)<0;});
+    if(wants)ensureLeadMetrics(function(){renderLeads();});
+  }
 }
 
 /* ===== People ===== */
@@ -3168,11 +3320,11 @@ var ADV=null;         // committed filter (null = nothing active)
 var ADV_DRAFT=null;   // edited in the drawer, committed on APPLY
 var ADV_SRC={loaded:false,tags:[],plans:[],roster:[],tasksByLead:null,tasksErr:false};
 var ADV_OPEN={};   // which drawer groups are expanded, survives panel rebuilds
-function advBlank(){return {leadType:[],status:[],stage:[],assigned:[],source:[],tagsInc:[],tagsExc:[],autoPlan:"",hasEmail:null,hasPhone:null,hasAddress:null,addedFrom:"",addedTo:"",lastFrom:"",lastTo:"",birthdayMonth:0,annivMonth:0,tasks:""};}
+function advBlank(){return {leadType:[],record:[],status:[],stage:[],assigned:[],source:[],tagsInc:[],tagsExc:[],autoPlan:"",alerts:"",reports:"",hasEmail:null,hasPhone:null,hasAddress:null,addedFrom:"",addedTo:"",lastFrom:"",lastTo:"",birthdayMonth:0,annivMonth:0,tasks:""};}
 function advActive(a){
   a=a||ADV; if(!a)return 0; var n=0;
-  ["leadType","status","stage","assigned","source","tagsInc","tagsExc"].forEach(function(k){n+=a[k].length?1:0;});
-  if(a.autoPlan)n++; if(a.hasEmail!==null)n++; if(a.hasPhone!==null)n++; if(a.hasAddress!==null)n++;
+  ["leadType","record","status","stage","assigned","source","tagsInc","tagsExc"].forEach(function(k){n+=(a[k]&&a[k].length)?1:0;});
+  if(a.autoPlan)n++; if(a.alerts)n++; if(a.reports)n++; if(a.hasEmail!==null)n++; if(a.hasPhone!==null)n++; if(a.hasAddress!==null)n++;
   if(a.addedFrom||a.addedTo)n++; if(a.lastFrom||a.lastTo)n++; if(a.birthdayMonth)n++; if(a.annivMonth)n++; if(a.tasks)n++;
   return n;
 }
@@ -3210,6 +3362,20 @@ function advPred(row){
     if(a.autoPlan==="any"){ if(!en.length)return false; }
     else if(a.autoPlan==="none"){ if(en.length)return false; }
     else if(!en.some(function(e){return (e&&(e.planName||e.planId))===a.autoPlan||e===a.autoPlan;}))return false;
+  }
+  if(a.record&&a.record.length){
+    // "Complete" means the record can actually be worked: it has a name and at
+    // least one way to reach the person. Anything else is Partial. Stated here
+    // rather than inferred, because Brivity's own definition is not visible to us.
+    var complete=Boolean(row.name)&&Boolean((row.phone&&String(row.phone).trim())||row.email);
+    if(a.record.indexOf(complete?"complete":"partial")<0)return false;
+  }
+  if(a.alerts||a.reports){
+    var mAl=leadMetric(row.id,"listingAlerts"), mRe=leadMetric(row.id,"marketReports");
+    if(a.alerts==="has"&&!(mAl>0))return false;
+    if(a.alerts==="none"&&mAl>0)return false;
+    if(a.reports==="has"&&!(mRe>0))return false;
+    if(a.reports==="none"&&mRe>0)return false;
   }
   if(a.hasEmail!==null&&Boolean(row.email)!==a.hasEmail)return false;
   if(a.hasPhone!==null&&Boolean(row.phone&&String(row.phone).trim())!==a.hasPhone)return false;
@@ -3313,6 +3479,75 @@ function advDistinctTags(){
   LEADS.forEach(function(l){(l.tags||[]).forEach(function(t){set[t]=1;});});
   return Object.keys(set).sort();
 }
+/**
+ * The modal's left-hand category tree, and the two-way sync that keeps it
+ * honest about where you are.
+ *
+ *   click LEFT  -> smooth-scrolls the right pane to that section or field
+ *   scroll RIGHT -> highlights the matching left entry and opens its parent
+ *
+ * The tree is BUILT FROM the rendered sections rather than hand-listed, so a
+ * group added to buildAdvPanel appears in the navigation automatically and the
+ * two can never drift apart.
+ */
+var ADV_NAV_OBS=null;
+function buildAdvNav(body){
+  var nav=document.getElementById("afNav"); if(!nav)return;
+  var secs=[].slice.call(body.querySelectorAll(".afg"));
+  nav.innerHTML=secs.map(function(sec){
+    var key=sec.getAttribute("data-afgk");
+    var title=sec.getAttribute("data-aftitle")||key;
+    // Sub-entries are the field labels inside the section; they get ids here
+    // so a click has something concrete to scroll to.
+    var labs=[].slice.call(sec.querySelectorAll(".aflab"));
+    labs.forEach(function(l,i){ if(!l.id)l.id="af-fld-"+key+"-"+i; });
+    var kids=labs.map(function(l){
+      return '<button type="button" class="nv-s" data-nvs="'+esc(l.id)+'">'+esc(l.textContent.trim())+'</button>';
+    }).join("");
+    var dis=sec.classList.contains("nodata")?' style="opacity:.55"':"";
+    return '<button type="button" class="nv-p open" data-nvp="'+esc(key)+'"'+dis+'>'+esc(title)+
+      (kids?' <span class="car">›</span>':"")+'</button><div class="nv-c">'+kids+'</div>';
+  }).join("");
+
+  nav.onclick=function(e){
+    var parent=e.target.closest("[data-nvp]");
+    if(parent){
+      var sec=document.getElementById("af-sec-"+parent.getAttribute("data-nvp"));
+      parent.classList.toggle("open");
+      if(sec)sec.scrollIntoView({behavior:"smooth",block:"start"});
+      return;
+    }
+    var kid=e.target.closest("[data-nvs]");
+    if(kid){
+      var el=document.getElementById(kid.getAttribute("data-nvs"));
+      if(el)el.scrollIntoView({behavior:"smooth",block:"start"});
+      markNavActive(kid);
+    }
+  };
+
+  if(ADV_NAV_OBS)ADV_NAV_OBS.disconnect();
+  if(!("IntersectionObserver" in window))return;
+  // Watching the top strip of the pane: whichever section's heading is nearest
+  // the top of the viewport is the one the reader is actually in.
+  ADV_NAV_OBS=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(!en.isIntersecting)return;
+      var key=en.target.getAttribute("data-afgk");
+      var btn=nav.querySelector('[data-nvp="'+key+'"]');
+      if(!btn)return;
+      nav.querySelectorAll(".nv-p").forEach(function(b){b.classList.toggle("cur",b===btn);});
+      btn.classList.add("open");
+      markNavActive(null,btn);
+    });
+  },{root:body,rootMargin:"0px 0px -75% 0px",threshold:0});
+  secs.forEach(function(sec){ADV_NAV_OBS.observe(sec);});
+}
+function markNavActive(kidBtn,parentBtn){
+  var nav=document.getElementById("afNav"); if(!nav)return;
+  nav.querySelectorAll(".nv-s").forEach(function(b){b.classList.toggle("on",b===kidBtn);});
+  if(parentBtn)nav.querySelectorAll(".nv-p").forEach(function(b){b.classList.toggle("on",b===parentBtn);});
+}
+
 function buildAdvPanel(){
   var a=ADV_DRAFT, body=document.getElementById("afBody");
   var MONTHS=["Any month","January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -3329,11 +3564,14 @@ function buildAdvPanel(){
       '<button data-aft="'+key+'" data-aftv="true" class="'+(v===true?"on":"")+'">Has</button>'+
       '<button data-aft="'+key+'" data-aftv="false" class="'+(v===false?"on":"")+'">None</button></div>';
   }
+  /* In the modal every section is expanded and reachable by anchor — the
+     left-hand tree is the navigation, so a collapsed accordion would just be a
+     second, competing way to hide the same content. */
   function group(title,inner,openIt,extra){
     var key=title.replace(/[^a-z]/gi,"");
-    if(openIt&&ADV_OPEN[key]===undefined)ADV_OPEN[key]=1;
-    var isOpen=!!ADV_OPEN[key];
-    return '<div class="afg'+(isOpen?" open":"")+(extra||"")+'" data-afgk="'+key+'"><button type="button" class="afg-h">'+title+' <span class="car">›</span></button><div class="afg-c">'+inner+'</div></div>';
+    ADV_OPEN[key]=1;
+    return '<div class="afg open af-sec'+(extra||"")+'" id="af-sec-'+key+'" data-afgk="'+key+'" data-aftitle="'+esc(title.replace(/&amp;/g,"&"))+'">'+
+      '<button type="button" class="afg-h">'+title+' <span class="car">›</span></button><div class="afg-c">'+inner+'</div></div>';
   }
   var stages=Object.keys(STAGE_ORDER);
   var statuses=[{v:"new",l:"New"},{v:"hot",l:"Hot"},{v:"nurture",l:"Nurture"},{v:"watch",l:"Watch"},{v:"unqualified",l:"Unqualified"}];
@@ -3341,7 +3579,9 @@ function buildAdvPanel(){
   var tagOpts=advDistinctTags(), planOpts=ADV_SRC.plans, srcOpts=advDistinctSources();
   var html="";
   html+=group("General",
-    '<div class="aflab">Lead Type</div>'+checks("leadType",[{v:"buyer",l:"Buyer"},{v:"seller",l:"Seller"}])+
+    '<div class="aflab">Lead Type</div>'+checks("record",[{v:"complete",l:"Complete"},{v:"partial",l:"Partial"}])+
+    '<div class="afnote">Complete = has a name and at least one of phone or email. Partial = anything less.</div>'+
+    '<div class="aflab">Intention</div>'+checks("leadType",[{v:"buyer",l:"Buyer"},{v:"seller",l:"Seller"}])+
     '<div class="aflab">Lead Status</div>'+checks("status",statuses)+
     '<div class="aflab">Stage</div>'+checks("stage",stages.map(function(s){return {v:s,l:s};}))+
     '<div class="aflab">Assigned To</div>'+checks("assigned",[{v:"unassigned",l:"Unassigned"}].concat(roster.map(function(u){return {v:u.id,l:u.name};})))+
@@ -3356,6 +3596,14 @@ function buildAdvPanel(){
     '<button data-afplan="any" class="'+(a.autoPlan==="any"?"on":"")+'">On a plan</button>'+
     '<button data-afplan="none" class="'+(a.autoPlan==="none"?"on":"")+'">No plan</button></div>'+
     (planOpts.length?('<div class="aflab">Specific plan</div><select data-afplansel><option value="">—</option>'+planOpts.map(function(p){return '<option'+(a.autoPlan===p?" selected":"")+'>'+esc(p)+'</option>';}).join("")+'</select>'):""));
+  html+=group("Reports",
+    '<div class="aflab">Listing Alerts</div><div class="aftri">'+
+      [["","Any"],["none","None Created"],["has","Has Alerts"]].map(function(o){
+        return '<button data-afalerts="'+o[0]+'" class="'+(a.alerts===o[0]?"on":"")+'">'+o[1]+'</button>';}).join("")+'</div>'+
+    '<div class="aflab">Market Reports</div><div class="aftri">'+
+      [["","Any"],["none","None Created"],["has","Has Reports"]].map(function(o){
+        return '<button data-afreports="'+o[0]+'" class="'+(a.reports===o[0]?"on":"")+'">'+o[1]+'</button>';}).join("")+'</div>'+
+    (LEAD_METRICS.data?"":'<div class="afnote">Loading subscription counts…</div>'));
   html+=group("Web Activity",
     '<div class="afnote">Website visit tracking is not connected, so these filters have no data to run on. They will light up when Marco\'s site sends visit events.</div>',
     false," nodata");
@@ -3372,6 +3620,7 @@ function buildAdvPanel(){
     '<div class="aflab">Birthday month</div><select data-afm="birthdayMonth">'+MONTHS.map(function(m,i){return '<option value="'+i+'"'+(a.birthdayMonth===i?" selected":"")+'>'+m+'</option>';}).join("")+'</select>'+
     '<div class="aflab">Home anniversary month</div><select data-afm="annivMonth">'+MONTHS.map(function(m,i){return '<option value="'+i+'"'+(a.annivMonth===i?" selected":"")+'>'+m+'</option>';}).join("")+'</select>');
   body.innerHTML=html;
+  buildAdvNav(body);
   body.querySelectorAll(".afg-h").forEach(function(h){h.addEventListener("click",function(){
     var g=h.closest(".afg");
     if(g.classList.contains("nodata")){crmToast("Site visit tracking isn't connected yet, so this filter has no data to run on.");return;}
@@ -3393,6 +3642,12 @@ function buildAdvPanel(){
   });});
   var ps=body.querySelector("select[data-afplansel]");
   if(ps)ps.addEventListener("change",function(){ if(ps.value)a.autoPlan=ps.value; buildAdvPanel(); });
+  body.querySelectorAll("button[data-afalerts]").forEach(function(b){b.addEventListener("click",function(){
+    a.alerts=b.getAttribute("data-afalerts"); buildAdvPanel();
+  });});
+  body.querySelectorAll("button[data-afreports]").forEach(function(b){b.addEventListener("click",function(){
+    a.reports=b.getAttribute("data-afreports"); buildAdvPanel();
+  });});
   body.querySelectorAll("button[data-aftask]").forEach(function(b){b.addEventListener("click",function(){
     a.tasks=b.getAttribute("data-aftask"); buildAdvPanel();
   });});
@@ -3401,11 +3656,15 @@ function buildAdvPanel(){
 }
 function openAdvFilter(){
   ADV_DRAFT=ADV?JSON.parse(JSON.stringify(ADV)):advBlank();
+  ensureLeadMetrics(function(){ if(document.getElementById("afScrim").classList.contains("on"))buildAdvPanel(); });
   loadAdvSources(function(){buildAdvPanel();});
   buildAdvPanel();
   document.getElementById("afScrim").classList.add("on");
 }
-function closeAdvFilter(){document.getElementById("afScrim").classList.remove("on");}
+function closeAdvFilter(){
+  document.getElementById("afScrim").classList.remove("on");
+  if(ADV_NAV_OBS){ADV_NAV_OBS.disconnect();ADV_NAV_OBS=null;}
+}
 (function wireAdvFilter(){
   var l=document.getElementById("lFilterBtn"); if(l)l.addEventListener("click",openAdvFilter);
   var p=document.getElementById("pFilterBtn"); if(p)p.addEventListener("click",openAdvFilter);
@@ -3428,10 +3687,88 @@ document.getElementById("topSearch").addEventListener("input",function(){
 });
 /* SORT BY — a real field picker per table, persisted per user. The pill and
    the clickable column headers write the same TABLE_PREFS state. */
+/*
+ * The sort dictionary. Brivity offers 26 fields; every one of them is listed
+ * here so the vocabulary matches, but a field is only SELECTABLE when this
+ * system actually holds the data behind it. The rest are shown disabled with
+ * the reason — the same rule the Web Activity filters already follow, because
+ * a sort that orders every row identically looks like it worked.
+ *
+ * `need` names the metrics bundle a field depends on (see LEAD_METRICS); those
+ * are real measurements, loaded on demand from /api/crm/lead-metrics.
+ */
 var SORT_FIELDS={
-  leads:[[null,"Most recent (default)"],["name","Name"],["status","Status"],["stage","Stage"],["last","Last Interaction"],["created","Date Added"],["source","Source"],["address","Address"],["birthdate","Birthdate"],["anniversary","Home Anniversary"]],
-  people:[[null,"Most recent (default)"],["name","Name"],["status","Status"],["stage","Stage"],["last","Last Interaction"],["created","Date Added"],["source","Source"],["address","Address"]],
+  leads:[
+    [null,"Most Recent (Default)"],
+    ["first_name","First Name"],
+    ["last_name","Last Name"],
+    ["status","Status"],
+    ["stage","Stage"],
+    ["last","Last Interaction"],
+    ["agent","Primary Agent"],
+    ["autoplans","Auto Plans"],
+    ["birthdate","Birthdate"],
+    ["anniversary","Home Anniversary"],
+    ["home_app","Home App",{off:"There is no client mobile app, so there is nothing to rank."}],
+    ["last_visit","Last Visit",{off:"No website visit tracking is connected."}],
+    ["visits","Visits",{off:"No website visit tracking is connected."}],
+    ["views","Views",{off:"No website visit tracking is connected."}],
+    ["avg_view_price","Avg. View Price",{off:"Needs viewed-listing history the site does not send."}],
+    ["favorites","Favorites",{need:"favorites"}],
+    ["avg_fav_price","Avg. Fav. Price",{need:"avgFavPrice"}],
+    ["listing_alerts","Listing Alerts",{need:"listingAlerts"}],
+    ["last_sent","Last Sent",{need:"lastSentAt"}],
+    ["last_opened_alerts","Last Opened (Alerts)",{need:"lastOpenedAlertAt"}],
+    ["market_reports","Market Reports",{need:"marketReports"}],
+    ["last_opened_reports","Last Opened (Reports)",{need:"lastOpenedReportAt"}],
+    ["last_viewed","Last Viewed",{off:"Needs viewed-listing history the site does not send."}],
+    ["hot_score","Hot Score",{need:"hotScore"}],
+    ["source","Source"],
+    ["created","Registered"],
+    ["user_type","User Type"],
+    ["address","Address"]
+  ],
+  people:[
+    [null,"Most Recent (Default)"],
+    ["first_name","First Name"],
+    ["last_name","Last Name"],
+    ["status","Status"],
+    ["stage","Stage"],
+    ["last","Last Interaction"],
+    ["agent","Primary Agent"],
+    ["source","Source"],
+    ["created","Registered"],
+    ["user_type","User Type"],
+    ["address","Address"]
+  ],
 };
+function sortFieldMeta(tkey,field){
+  var row=(SORT_FIELDS[tkey]||[]).find(function(p){return p[0]===field;});
+  return (row&&row[2])||{};
+}
+
+/* Metrics that live outside the lead snapshot (scores, favourites, outreach).
+   Fetched once, lazily, the first time a sort or column needs one. */
+var LEAD_METRICS={data:null,loading:false,unavailable:[]};
+function leadMetric(id,key){
+  var m=LEAD_METRICS.data&&LEAD_METRICS.data[id];
+  return m&&m[key]!=null?m[key]:null;
+}
+function ensureLeadMetrics(then){
+  if(LEAD_METRICS.data){ then&&then(); return; }
+  if(LEAD_METRICS.loading) return;
+  LEAD_METRICS.loading=true;
+  fetch("/api/crm/lead-metrics").then(function(r){return r.ok?r.json():null;}).then(function(d){
+    LEAD_METRICS.data=(d&&d.metrics)||{};
+    LEAD_METRICS.unavailable=(d&&d.unavailable)||[];
+    LEAD_METRICS.loading=false;
+    then&&then();
+  }).catch(function(){
+    // A failed load leaves data null so a later sort retries, rather than
+    // caching an empty map and quietly ranking everyone equal.
+    LEAD_METRICS.loading=false;
+  });
+}
 function sortViewKey(b){
   /* view-tx deliberately absent: the transactions toolbar is owned by the
      tx-parity module (#txSortBtn/#txColsBtn/#txFilterBtn) with its own state. */
@@ -3451,18 +3788,79 @@ function paintSortPills(){
     b.textContent="SORT BY: "+sortFieldLabel(tkey).toUpperCase()+(st.field?(st.dir>0?" ↑":" ↓"):"")+" ▾";
   });
 }
+/*
+ * The Sort By popover: field, direction, and a SAVE that makes the pair the
+ * default for future sessions.
+ *
+ * Changing either dropdown re-sorts the table IMMEDIATELY but only for this
+ * session; SAVE is what persists it. That split is deliberate — trying five
+ * orderings to answer one question should not quietly redefine what everyone
+ * sees when they next open the CRM.
+ */
+function sortPopEl(){
+  var el=document.getElementById("sortPop");
+  if(!el){ el=document.createElement("div"); el.className="sortpop"; el.id="sortPop"; document.body.appendChild(el); }
+  return el;
+}
+function closeSortPop(){ var el=document.getElementById("sortPop"); if(el)el.classList.remove("on"); }
+document.addEventListener("click",function(e){ if(!e.target.closest("#sortPop"))closeSortPop(); });
+document.addEventListener("keydown",function(e){ if(e.key==="Escape")closeSortPop(); });
 function openSortMenu(anchor,tkey){
   var p=tblPrefs(tkey);
+  var el=sortPopEl();
+  var fields=SORT_FIELDS[tkey]||[];
+  // Any field backed by the metrics bundle needs it loaded before it can rank.
+  if(fields.some(function(f){return f[2]&&f[2].need;})) ensureLeadMetrics(function(){ if(el.classList.contains("on"))openSortMenu(anchor,tkey); });
+
   var rerender=function(){
     page=1;pPage=1;
     if(tkey==="leads")renderLeads(); if(tkey==="people")renderPeople(); if(tkey==="tx")renderTx();
-    paintSortArrows(); paintSortPills(); saveTablePrefs(tkey);
+    paintSortArrows(); paintSortPills();
   };
-  var items=(SORT_FIELDS[tkey]||[]).map(function(pair){
-    return {label:pair[1],cur:(p.sortField||null)===pair[0],fn:function(){ p.sortField=pair[0]; if(!pair[0])p.sortDir=1; rerender(); }};
+
+  el.innerHTML=
+    '<div class="sp-field">'+
+      '<select id="spField" size="8">'+fields.map(function(f){
+        var meta=f[2]||{};
+        var dis=meta.off?" disabled":"";
+        var lbl=f[1]+(meta.off?" — no data":"");
+        return '<option value="'+esc(f[0]==null?"":f[0])+'"'+((p.sortField||null)===f[0]?" selected":"")+dis+
+          (meta.off?' title="'+esc(meta.off)+'"':"")+'>'+esc(lbl)+'</option>';
+      }).join("")+'</select>'+
+      '<div class="sp-note" id="spNote"></div>'+
+    '</div>'+
+    '<div class="sp-dir"><select id="spDir">'+
+      '<option value="1"'+(p.sortDir>0?" selected":"")+'>Ascending</option>'+
+      '<option value="-1"'+(p.sortDir<0?" selected":"")+'>Descending</option>'+
+    '</select></div>'+
+    '<button class="sp-save" id="spSave">SAVE</button>';
+
+  var fieldSel=el.querySelector("#spField"), dirSel=el.querySelector("#spDir"), note=el.querySelector("#spNote");
+  function showNote(){
+    var meta=sortFieldMeta(tkey,fieldSel.value||null);
+    note.textContent=meta.off||"";
+  }
+  fieldSel.addEventListener("change",function(){
+    var v=fieldSel.value||null;
+    if(sortFieldMeta(tkey,v).off){ crmToast(sortFieldMeta(tkey,v).off); fieldSel.value=p.sortField||""; return; }
+    p.sortField=v; if(!v)p.sortDir=1;
+    showNote(); rerender();
   });
-  items.push({label:(p.sortDir>0?"▼ Switch to descending":"▲ Switch to ascending"),fn:function(){ p.sortDir=-p.sortDir; rerender(); }});
-  openActionMenu(anchor,items);
+  dirSel.addEventListener("change",function(){ p.sortDir=+dirSel.value<0?-1:1; rerender(); });
+  el.querySelector("#spSave").addEventListener("click",function(e){
+    e.stopPropagation();
+    saveTablePrefs(tkey);
+    crmToast("Saved — this is your default sort from now on");
+    closeSortPop();
+  });
+  el.addEventListener("click",function(e){e.stopPropagation();});
+  showNote();
+
+  var r=anchor.getBoundingClientRect();
+  el.classList.add("on");
+  var w=el.offsetWidth||420;
+  el.style.left=Math.max(8,Math.min(r.left,window.innerWidth-w-8))+"px";
+  el.style.top=(r.bottom+6)+"px";
 }
 document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
   if(!b.id&&/^SORT BY/i.test(b.textContent)){
@@ -3544,6 +3942,12 @@ function loadTablePrefs(){
         var p=d.tables[k]||{};
         TABLE_PREFS[k]={hidden:p.hidden||[],order:p.order||[],sortField:p.sortField||null,sortDir:p.sortDir===-1?-1:1};
       });
+      // A saved sort on a metric field needs the metrics before it can rank;
+      // without this the table would come back ordered by nothing at all.
+      var needsMetrics=Object.keys(TABLE_PREFS).some(function(k){
+        return sortFieldMeta(k,TABLE_PREFS[k].sortField).need;
+      });
+      if(needsMetrics)ensureLeadMetrics(function(){renderLeads();renderPeople();paintSortArrows();paintSortPills();});
       renderLeads(); renderPeople(); renderTx(); paintSortArrows(); paintSortPills();
     }).catch(function(){});
 }
@@ -3587,8 +3991,12 @@ function openColumnsMenu(anchor,table,tkey){
   // Menu lists columns in their CURRENT display order (prefs already applied).
   var cols=ths.map(function(th){
     var key=colKey(th);
-    var name=(th.textContent||"").replace(/[⇅▾▲▼]/g,"").trim()||key;
-    return {key:key,name:name||"(checkbox)"};
+    var raw=(th.textContent||"").replace(/[⇅▾▲▼]/g,"").trim();
+    // The row-select column has no heading text, only a checkbox. It was
+    // showing up in this menu as a column literally named "col", draggable and
+    // hideable — it is neither a column of data nor something to reorder.
+    var isSelect=!raw&&!!th.querySelector('input[type="checkbox"]');
+    return {key:key,name:raw||(isSelect?"Select rows":key),select:isSelect};
   });
   function rerender(){
     // Recording order = the full current sequence with the moved key applied.
@@ -3598,16 +4006,27 @@ function openColumnsMenu(anchor,table,tkey){
     saveTablePrefs(tkey);
     openColumnsMenu(anchor,table,tkey);
   }
-  ddMenu.innerHTML='<div style="max-height:340px;overflow-y:auto;min-width:230px">'+cols.map(function(c,i){
+  /* THE DOUBLE-SCROLLBAR FIX: the popover wrapper is overflow:hidden and only
+     .cp-list scrolls. The old markup put a scrolling div inside an already
+     scrollable menu, so two bars rendered side by side. */
+  ddMenu.className="dd-menu colpop";
+  ddMenu.innerHTML='<div class="cp-list">'+cols.map(function(c,i){
     var hidden=p.hidden.indexOf(c.key)>=0;
-    return '<div style="display:flex;align-items:center;gap:6px;padding:4px 10px">'+
-      '<input type="checkbox" data-ck="'+esc(c.key)+'"'+(hidden?"":" checked")+' style="accent-color:var(--teal)">'+
-      '<span style="flex:1;font-size:12.5px;color:#414c57">'+esc(c.name)+'</span>'+
-      '<button data-mv="-1" data-i="'+i+'" title="Move up" style="border:none;background:none;cursor:pointer;color:#7d8894"'+(i===0?" disabled":"")+'>▲</button>'+
-      '<button data-mv="1" data-i="'+i+'" title="Move down" style="border:none;background:none;cursor:pointer;color:#7d8894"'+(i===cols.length-1?" disabled":"")+'>▼</button>'+
+    // The Name column anchors the table: it is always first, always visible,
+    // and carries no grip so it cannot be dragged out of position.
+    // Locked: the row-select checkbox (no label, not a data column) and Name,
+    // the anchor the whole table is read against.
+    var locked=c.select||c.key==="name";
+    return '<div class="cp-row'+(locked?" locked":"")+'" data-i="'+i+'" data-key="'+esc(c.key)+'"'+(locked?"":' draggable="true"')+'>'+
+      '<input type="checkbox" data-ck="'+esc(c.key)+'"'+(hidden&&!locked?"":" checked")+(locked?" disabled":"")+
+        (locked?' title="The Name column is the table anchor and cannot be hidden"':"")+'>'+
+      '<span class="cp-name">'+esc(c.name)+'</span>'+
+      (locked?'<span class="cp-grip" style="visibility:hidden">⠿</span>'
+             :'<span class="cp-grip" title="Drag to reorder">⠿</span>')+
     '</div>';
   }).join("")+'</div>'+
-  '<div style="border-top:1px solid var(--line);padding:6px 10px"><button data-colreset style="border:none;background:none;color:var(--teal-strong);font-size:12px;font-weight:700;cursor:pointer">Reset to default</button></div>';
+  '<div class="cp-foot"><button data-colreset style="border:none;background:none;color:var(--teal-strong);font-size:12px;font-weight:700;cursor:pointer">Reset to default</button></div>';
+
   ddMenu.querySelectorAll("input[data-ck]").forEach(function(cb){cb.addEventListener("change",function(e){
     e.stopPropagation();
     var k=cb.getAttribute("data-ck"), idx=p.hidden.indexOf(k);
@@ -3615,15 +4034,49 @@ function openColumnsMenu(anchor,table,tkey){
     if(!cb.checked&&idx<0)p.hidden.push(k);
     rerender();
   });});
-  ddMenu.querySelectorAll("button[data-mv]").forEach(function(b){b.addEventListener("click",function(e){
-    e.stopPropagation();
-    var i=+b.getAttribute("data-i"), d=+b.getAttribute("data-mv"), j=i+d;
-    if(j<0||j>=cols.length)return;
+
+  /* Drag-to-reorder. The dropped sequence becomes the table's left-to-right
+     column order immediately — the menu order IS the table order. */
+  var listEl=ddMenu.querySelector(".cp-list"), dragKey=null;
+  function clearMarks(){ listEl.querySelectorAll(".cp-row").forEach(function(r){r.classList.remove("drop-before","drop-after","dragging");}); }
+  listEl.addEventListener("dragstart",function(e){
+    var row=e.target.closest(".cp-row"); if(!row||row.classList.contains("locked")){e.preventDefault();return;}
+    dragKey=row.getAttribute("data-key");
+    row.classList.add("dragging");
+    e.dataTransfer.effectAllowed="move";
+    try{e.dataTransfer.setData("text/plain",dragKey);}catch(_){/* Safari */}
+  });
+  listEl.addEventListener("dragover",function(e){
+    var row=e.target.closest(".cp-row"); if(!row||!dragKey)return;
+    e.preventDefault(); e.dataTransfer.dropEffect="move";
+    var box=row.getBoundingClientRect(), after=(e.clientY-box.top)>box.height/2;
+    listEl.querySelectorAll(".cp-row").forEach(function(r){r.classList.remove("drop-before","drop-after");});
+    if(row.classList.contains("locked")){ row.classList.add("drop-after"); return; }
+    row.classList.add(after?"drop-after":"drop-before");
+  });
+  listEl.addEventListener("drop",function(e){
+    e.preventDefault(); e.stopPropagation();
+    var row=e.target.closest(".cp-row"); if(!row||!dragKey){clearMarks();return;}
     var seq=cols.map(function(c){return c.key;});
-    var tmp=seq[i]; seq[i]=seq[j]; seq[j]=tmp;
-    p.order=seq;
+    var from=seq.indexOf(dragKey); if(from<0){clearMarks();return;}
+    var box=row.getBoundingClientRect(), after=(e.clientY-box.top)>box.height/2;
+    var target=row.getAttribute("data-key");
+    seq.splice(from,1);
+    var to=seq.indexOf(target); if(to<0)to=seq.length-1;
+    seq.splice(after?to+1:to,0,dragKey);
+    // The anchors stay in front, in their original order, whatever was dropped
+    // where — pinning only Name would push the select-all checkbox behind it.
+    var anchors=cols.filter(function(c){return c.select||c.key==="name";}).map(function(c){return c.key;});
+    // Explicit order, not whatever the current sequence happens to be: the
+    // row-select checkbox comes first, then Name. Deriving it from the live
+    // order lets one bad save keep re-asserting itself.
+    anchors.sort(function(a,b){ return (a==="name"?1:0)-(b==="name"?1:0); });
+    seq=anchors.concat(seq.filter(function(k){return anchors.indexOf(k)<0;}));
+    p.order=seq; dragKey=null; clearMarks();
     rerender();
-  });});
+  });
+  listEl.addEventListener("dragend",function(){ dragKey=null; clearMarks(); });
+
   var rst=ddMenu.querySelector("[data-colreset]");
   if(rst)rst.addEventListener("click",function(e){e.stopPropagation();p.hidden=[];p.order=[];rerender();});
   var r=anchor.getBoundingClientRect();
