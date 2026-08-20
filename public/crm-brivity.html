@@ -650,6 +650,147 @@
   .tl{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line-2)}
   .tl .dot{width:30px;height:30px;border-radius:50%;background:var(--teal-soft);color:var(--teal);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
   .tl .tt{color:#5b6570;font-size:13px}.tl .tm{color:#7a8590;font-size:11.5px;margin-top:2px}
+
+  /* ════════════ Contact record — 3-column layout ════════════
+     Spec widths are min/max, not fixed: column 1 never narrower than 300px
+     nor wider than 360, column 3 never narrower than 320 nor wider than 380,
+     and the middle takes whatever is left down to a 550px floor. Below that
+     the three stack, because a 550px reading column squeezed to 300 is worse
+     than a single wide one. */
+  /* The record's canvas is the page grey the spec calls for. `.pad` already
+     owns the outer padding, so this cancels it and re-applies it inside the
+     grey rather than leaving a white gutter around the columns. */
+  #leadDetail.cr-canvas{background:#F0F2F5;margin:-22px -30px -60px;padding:22px 30px 60px;min-height:calc(100vh - 92px)}
+  .ld-grid.cr3{grid-template-columns:minmax(300px,360px) minmax(550px,1fr) minmax(320px,380px);gap:16px}
+  @media(max-width:1320px){.ld-grid.cr3{grid-template-columns:1fr}}
+  .cr3 .ld-card,.cr3 .ai-panel{border-radius:4px}
+  .cr-col{display:flex;flex-direction:column;gap:16px;min-width:0}
+
+  /* ── accordion card ── */
+  .acc{background:#fff;border:1px solid var(--line);border-radius:4px;box-shadow:var(--shadow);overflow:hidden}
+  .acc-h{display:flex;align-items:center;gap:8px;padding:13px 16px;cursor:pointer;user-select:none;background:#fff}
+  .acc-h .cv{color:#98a2ad;font-size:11px;width:12px;flex:0 0 auto;transition:transform .15s}
+  .acc.open .acc-h .cv{transform:rotate(90deg)}
+  .acc-h .ti{flex:1;font-size:13.5px;font-weight:700;color:#4a5560;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acc-h .ct{font-size:11px;font-weight:700;color:#8b95a0;background:#f1f4f6;border-radius:10px;padding:1px 7px;flex:0 0 auto}
+  .acc-b{padding:0 16px 15px;border-top:1px solid var(--line-2);padding-top:13px}
+  .acc:not(.open) .acc-b{display:none}
+  /* Header buttons must not toggle the accordion when clicked. */
+  .acc-h .mini-pill{flex:0 0 auto}
+
+  /* ── contact rows (emails / phones / addresses) ── */
+  .crx{display:flex;align-items:flex-start;gap:8px;padding:7px 0;font-size:12.5px;border-top:1px solid var(--line-2)}
+  .crx:first-child{border-top:none}
+  .crx .cx-v{flex:1;min-width:0;color:#46515c;word-break:break-word}
+  .crx .cx-t{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b95a0;
+    background:#f1f4f6;border-radius:4px;padding:2px 6px;flex:0 0 auto}
+  .crx .cx-p{font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--teal-strong);background:var(--teal-soft);
+    border-radius:4px;padding:2px 6px;flex:0 0 auto}
+  /* DNC is a legal flag, so it is loud and it is never inferred. */
+  .cx-dnc{font-size:10px;font-weight:800;letter-spacing:.05em;color:#fff;background:#c0392b;border-radius:4px;
+    padding:2px 6px;flex:0 0 auto}
+  .crx .cx-x{color:#c2cad1;cursor:pointer;flex:0 0 auto;font-size:13px;line-height:1}
+  .crx .cx-x:hover{color:#c0392b}
+  .cr-empty{color:#98a2ac;font-size:12px;padding:4px 0}
+  /* Active-input state: the row becomes a field with its own SAVE / Cancel. */
+  .cx-edit{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--line-2)}
+  .cx-edit input,.cx-edit select{border:1px solid var(--teal);border-radius:4px;height:32px;padding:0 8px;font-size:12.5px;
+    font-family:inherit;outline:none;background:#fff;color:#46515c;box-sizing:border-box}
+  .cx-edit input{flex:1 1 130px;min-width:0}
+  .cx-edit select{flex:0 0 auto}
+  .cx-edit .hint{flex:1 0 100%;font-size:10.5px;color:#98a2ad}
+  .cx-sv{border:0;background:var(--teal-pill);color:#fff;border-radius:4px;height:32px;padding:0 12px;font-size:11px;
+    font-weight:700;letter-spacing:.05em;cursor:pointer;flex:0 0 auto}
+  .cx-ca{border:1px solid var(--line);background:#fff;color:#7a8590;border-radius:4px;height:32px;padding:0 10px;
+    font-size:11px;font-weight:700;cursor:pointer;flex:0 0 auto}
+  .cx-dncck{display:flex;align-items:center;gap:5px;font-size:11.5px;color:#6b7480;cursor:pointer;flex:0 0 auto}
+  .cx-dncck input{accent-color:#c0392b}
+
+  /* ── social media icon row ── */
+  .soc-row{display:flex;flex-wrap:wrap;gap:8px}
+  .soc{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:800;border:1px solid var(--line);background:#f7f9fa;color:#b9c2cb;text-decoration:none}
+  .soc.on{color:#fff;border-color:transparent}
+  .soc.on.facebook{background:#1877F2}.soc.on.x{background:#0f1419}.soc.on.linkedin{background:#0A66C2}
+  .soc.on.instagram{background:linear-gradient(45deg,#f09433,#dc2743,#bc1888)}.soc.on.youtube{background:#FF0000}
+  .soc.on.tiktok{background:#010101}.soc.on.pinterest{background:#E60023}
+  .soc-tip{margin-top:9px;font-size:11px;color:#8b95a0;line-height:1.5;background:#f7f9fa;border-radius:4px;padding:8px 10px}
+
+  /* ── details rows with inline SAVE / X ── */
+  .dt-row{padding:9px 0;border-top:1px solid var(--line-2)}
+  .dt-row:first-child{border-top:none}
+  .dt-k{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b95a0;margin-bottom:4px}
+  .dt-v{font-size:12.5px;color:#46515c;cursor:text;min-height:18px;white-space:pre-wrap;word-break:break-word}
+  .dt-v.blank{color:#98a2ac;font-style:italic}
+  .dt-acts{display:flex;gap:6px;margin-top:6px}
+
+  /* ── notes ── */
+  .nt{border:1px solid var(--line-2);border-radius:4px;padding:9px 10px;margin-bottom:8px;background:#fff}
+  .nt-top{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+  .nt-au{font-size:11.5px;font-weight:700;color:#4a5560;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nt-tm{font-size:10.5px;color:#98a2ad;flex:0 0 auto}
+  .nt-star{color:#e0a33a;flex:0 0 auto}
+  .nt-hid{font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#8b95a0;background:#f1f4f6;border-radius:3px;padding:1px 5px;flex:0 0 auto}
+  .nt-b{font-size:12.5px;color:#5b6570;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+  .nt-mn{margin-top:5px;display:flex;flex-wrap:wrap;gap:4px}
+  .nt-mn span{font-size:10.5px;color:var(--teal-strong);background:var(--teal-soft);border-radius:3px;padding:1px 5px}
+
+  /* ── documents ── */
+  /* Two rows, not one: the metadata is long enough that a single flex line
+     squeezed the filename to nothing, which is the one part that identifies
+     the document. */
+  .doc{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;padding:7px 0;
+    border-top:1px solid var(--line-2);font-size:12.5px}
+  .doc:first-child{border-top:none}
+  .doc .dn{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--teal-strong);
+    font-weight:600;cursor:pointer}
+  .doc .dm{flex:1 0 100%;font-size:10.5px;color:#98a2ad;line-height:1.4}
+  .doc-drop{border:2px dashed var(--line);border-radius:6px;padding:26px 14px;text-align:center;color:#8b95a0;
+    font-size:13px;cursor:pointer;background:#fafbfc}
+  .doc-drop.hot{border-color:var(--teal);background:var(--teal-soft);color:var(--teal-strong)}
+  .doc-drop b{display:block;color:#4a5560;font-size:13.5px;margin-bottom:4px}
+
+  /* ── type-picker modal (transaction type / document type) ── */
+  .tp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:640px){.tp-grid{grid-template-columns:1fr}}
+  .tp{border:1px solid var(--line);border-radius:6px;padding:14px 12px;text-align:left;background:#fff;cursor:pointer;
+    font-family:inherit;font-size:13px;font-weight:700;color:#4a5560}
+  .tp:hover{border-color:var(--teal);background:var(--teal-soft)}
+  .tp.on{border-color:var(--teal);background:var(--teal-soft);color:var(--teal-strong)}
+  .tp small{display:block;font-weight:400;color:#8b95a0;font-size:11.5px;margin-top:3px}
+
+  /* ── type-ahead (state / relationship contact / @mention) ── */
+  .ta-wrap{position:relative}
+  .ta-list{position:absolute;left:0;right:0;top:100%;z-index:30;background:#fff;border:1px solid var(--line);
+    border-radius:0 0 6px 6px;max-height:190px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+  .ta-list button{display:block;width:100%;text-align:left;border:0;background:#fff;padding:8px 11px;font-size:13px;
+    color:#54595f;cursor:pointer;font-family:inherit}
+  .ta-list button:hover,.ta-list button.hi{background:var(--teal-soft)}
+  .ta-none{padding:8px 11px;font-size:12.5px;color:#98a2ad}
+
+  /* ── middle column ── */
+  .ai-panel .ai-fold{cursor:pointer;user-select:none}
+  .ai-panel.folded .ai-tabs,.ai-panel.folded ul,.ai-panel.folded .ai-def{display:none}
+  /* The recommendation stream scrolls in place so the widget never pushes the
+     composer off the screen, however much Harvey has to say. */
+  .ai-panel ul.ai-stream{max-height:140px;overflow-y:auto;overscroll-behavior:contain}
+  .ai-def{display:flex;align-items:center;gap:7px;margin-top:10px;font-size:12px;color:#7a8590;cursor:pointer}
+  .ai-def input{accent-color:var(--teal)}
+
+  /* ── activity feed filter bar ── */
+  .ff{display:flex;flex-wrap:wrap;gap:7px;padding:12px 0 4px}
+  .ff button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:#7a8590;
+    border-radius:14px;padding:5px 11px;font-size:12px;font-family:inherit;cursor:pointer}
+  .ff button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+  .ff button .n{font-weight:800;font-size:11px}
+  .ff button[disabled]{opacity:.45;cursor:default}
+
+  /* ── right column widgets ── */
+  .wdg-note{color:#8b95a0;font-size:12px;line-height:1.5}
+  /* A widget for something this system genuinely does not have says so, in
+     its own words, instead of drawing a button that cannot work. */
+  .wdg-off{background:#fdf8ec;border:1px solid #f0e3c2;color:#8a7340;border-radius:4px;padding:9px 10px;
+    font-size:11.5px;line-height:1.5}
 </style>
 
 <header class="topbar">
@@ -4367,61 +4508,69 @@ async function paintLeadMls(leadId){
 }
 
 function openLead(id, tab){ const l=LEADS.find(x=>x.id===id); if(!l)return; currentLeadId=id; ldTab=tab||"note"; ldOutcome=null; ldEditing=false;
-  document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-lead").classList.add("on"); window.scrollTo(0,0); renderLead(); }
+  /* Reset the per-contact view state. Carrying the previous contact's open
+     edit row or activity filter across would show one person's half-typed
+     phone number on the next person's record. */
+  CR_EDIT=null; FEED_FILTER="all"; aiFolded=null;
+  CR.leadId=id; CR.record=null; CR.err=null;
+  document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-lead").classList.add("on"); window.scrollTo(0,0);
+  renderLead();
+  loadContactRecord(id,function(){ if(currentLeadId===id)crRepaint(); }); }
 function backToLeads(){ document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-leads").classList.add("on");
   document.querySelectorAll(".rail .r").forEach(x=>x.classList.remove("on")); document.querySelectorAll('.rail .r[data-view="leads"]').forEach(x=>x.classList.add("on")); }
 function stepLead(dir){ const list=sortRows(LEADS.filter(hitRow),"leads"); const i=list.findIndex(x=>x.id===currentLeadId); const n=list[i+dir]; if(n) openLead(n.id); }
+/**
+ * The contact record.
+ *
+ * Three columns, in the spec's order: identity + the contact's own data on the
+ * left, the AI widget / composer / activity feed in the middle, the widget
+ * stack on the right. Each column is its own flow (`.cr-col`), so a long Notes
+ * accordion cannot push the right-hand widgets down the page.
+ */
 function renderLead(){
   const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
   const sm=STATUS_META[l.statusDisp]||STATUS_META.nurture;
   const intentLabel=l.intent==="seller"?"SELLER":"BUYER";
-  document.getElementById("leadDetail").innerHTML=
+  const host=document.getElementById("leadDetail");
+  host.classList.add("cr-canvas");
+  host.innerHTML=
     '<button class="ld-back" id="ldBack">‹ Back to Leads</button>'+
-    '<div class="ld-grid">'+
-      '<div class="ld-card ld-prof">'+
-        '<div class="ld-editbtn"><button id="ldEdit">'+(ldEditing?"✓ SAVE":"✎ EDIT")+'</button><button id="ldEditAlt">'+(ldEditing?"✕":"▾")+'</button></div>'+
-        '<button class="ld-nav l" id="ldPrev">‹</button><button class="ld-nav r" id="ldNext">›</button>'+
-        '<div class="ld-av'+avClass(l.name)+'">'+esc(initials(l.name))+'</div>'+
-        (ldEditing?'<input id="ldNameIn" class="ld-edit-in" value="'+esc(l.name||"")+'" style="text-align:center;font-size:15px;font-weight:700;margin-top:2px">':'<div class="ld-name">'+esc(l.name)+'</div>')+
-        '<div class="ld-sub">SOURCE: <b>'+esc(l.source||"-")+'</b></div>'+
-        '<div class="ld-sub" style="margin-top:4px">Registered '+esc(fmtReg(l.createdAt))+'</div>'+
-        '<div style="margin-top:16px">'+
-          fieldRow("LAST INTERACTION",'<span class="v">'+(relTime(l.lastActivity)||"-")+'</span>')+
-          fieldRow("STAGE",'<span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' ▾</span>')+
-          fieldRow("STATUS",'<span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span>')+
-          fieldRow("INTENT",'<span class="ld-intent editable" data-lid="'+esc(l.id)+'" data-kind="intent">'+intentLabel+' ▾</span>')+
-          fieldRow("PERSON TYPE","Lead")+
+    '<div class="ld-grid cr3">'+
+      /* ── column 1 ── */
+      '<div class="cr-col">'+
+        '<div class="ld-card ld-prof">'+
+          '<div class="ld-editbtn"><button id="ldEdit">'+(ldEditing?"✓ SAVE":"✎ EDIT")+'</button><button id="ldEditAlt">'+(ldEditing?"✕":"▾")+'</button></div>'+
+          '<button class="ld-nav l" id="ldPrev" title="Previous contact">‹</button><button class="ld-nav r" id="ldNext" title="Next contact">›</button>'+
+          '<div class="ld-av'+avClass(l.name)+'">'+esc(initials(l.name))+'</div>'+
+          (ldEditing?'<input id="ldNameIn" class="ld-edit-in" value="'+esc(l.name||"")+'" style="text-align:center;font-size:15px;font-weight:700;margin-top:2px">':'<div class="ld-name">'+esc(l.name)+'</div>')+
+          '<div class="ld-sub">SOURCE: <b>'+esc(l.source||"-")+'</b></div>'+
+          '<div class="ld-sub" style="margin-top:4px">Registered '+esc(fmtReg(l.createdAt))+'</div>'+
+          '<div style="margin-top:16px">'+
+            fieldRow("LAST INTERACTION",'<span class="v">'+(relTime(l.lastActivity)||"-")+'</span>')+
+            fieldRow("STAGE",'<span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' ▾</span>')+
+            fieldRow("STATUS",'<span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span>')+
+            fieldRow("INTENT",'<span class="ld-intent editable" data-lid="'+esc(l.id)+'" data-kind="intent">'+intentLabel+' ▾</span>')+
+            fieldRow("PERSON TYPE","Lead")+
+          '</div>'+
+          '<label style="display:flex;align-items:center;gap:8px;margin:14px 0 0;font-size:13px;color:#6b7480;cursor:pointer"><input type="checkbox" checked style="accent-color:var(--teal)"> Show in Leads Index?</label>'+
         '</div>'+
-        '<label style="display:flex;align-items:center;gap:8px;margin:14px 0;font-size:13px;color:#6b7480;cursor:pointer"><input type="checkbox" checked style="accent-color:var(--teal)"> Show in Leads Index?</label>'+
-        '<div class="ld-sec-h" style="border-top:1px solid var(--line-2);padding-top:16px">Contact Info</div>'+
-        '<div class="ld-field"><span class="k">EMAIL</span><span class="v">'+(ldEditing?'<input id="ldEmailIn" class="ld-edit-in" value="'+esc(l.email||"")+'" placeholder="email@example.com">':(l.email?esc(l.email):'<a class="addlink" id="ldAddEmail">Add Email Address</a>'))+'</span></div>'+
-        '<div class="ld-field"><span class="k">PHONE</span><span class="v" style="display:flex;align-items:center;gap:8px">'+(ldEditing?'<input id="ldPhoneIn" class="ld-edit-in" value="'+esc(l.phone||"")+'" placeholder="(555) 555-5555">':(actIcon("phone")+actIcon("sms")+esc(l.phone||"-")))+'</span></div>'+
-        (ldEditing?'<div class="ld-field"><span class="k">ADDRESS</span><span class="v" style="max-width:180px;text-align:right"><input id="ldAddrIn" class="ld-edit-in" value="'+esc(l.address||"")+'" placeholder="Street address"></span></div>'
-          :(l.address?'<div class="ld-field"><span class="k">ADDRESS</span><span class="v" style="max-width:180px;text-align:right">'+esc(l.address)+'</span></div>':''))+
-        detailsBlockHTML(l)+
-        relationshipsBlockHTML(l)+
+        /* Emails, phones, addresses, social, details, relationships, notes,
+           transactions and documents all live in the accordion stack. */
+        '<div id="crPanel">'+crAccordionsHTML(l)+'</div>'+
       '</div>'+
-      '<div>'+
-        '<div class="ai-panel"><div class="ai-top"><h4>✦ Harvey AI ▾</h4><span class="ai-upd">↻ Updated: '+esc(fmtUpdated(l.lastActivity||l.updatedAt))+'</span></div><div class="ai-tabs"><button data-ai="rec" class="'+(aiTab==="rec"?"on":"")+'">Harvey Recommends</button><button data-ai="about" class="'+(aiTab==="about"?"on":"")+'">About This Lead</button></div><ul>'+(aiTab==="rec"?leadRecs(l):leadInsights(l)).map(i=>'<li>'+esc(i)+'</li>').join("")+'</ul></div>'+
-        '<div class="ld-card" style="padding:0 22px 18px"><div class="ld-tabs" id="ldTabs">'+["note","email","call","text","appointment","other"].map(t=>'<button class="'+(t===ldTab?"on":"")+'" data-t="'+t+'">'+t.toUpperCase()+'</button>').join("")+'</div><div class="ld-tab-body" id="ldTabBody"></div></div>'+
-        '<div class="ld-card" style="margin-top:18px"><div class="ld-sec-h">Activity</div><div id="ldTimeline"></div></div>'+
+      /* ── column 2 ── */
+      '<div class="cr-col" id="crMiddle">'+
+        aiPanelHTML(l)+
+        '<div class="ld-card" style="padding:0 22px 18px"><div class="ld-tabs" id="ldTabs">'+
+          ["note","email","call","text","appointment","other"].map(t=>'<button class="'+(t===ldTab?"on":"")+'" data-t="'+t+'">'+t.toUpperCase()+'</button>').join("")+
+          '</div><div class="ld-tab-body" id="ldTabBody"></div></div>'+
+        '<div class="ld-card" id="crFeed"></div>'+
       '</div>'+
-      /* Live MLS context sits at the top of the rail: on a property lead it is
-         the first thing worth knowing, and a price cut or a move to Pending
-         outranks anything below it. Empty when there is nothing real. */
-      '<div><div id="ldMls"></div><div class="ld-card">'+
-        '<div class="rblock"><h5>Assigned To: <button class="mini-pill" id="ldAssignBtn">MANAGE</button></h5><div class="assign-row" id="ldAssignRow"><div class="av'+(l.assignedUserName?'':' has-marco-photo')+'">'+(l.assignedUserName?esc(initials(l.assignedUserName)):'')+'</div><div><div style="font-weight:700;color:#4a5560">'+esc(l.assignedUserName||"Marco Puga")+'</div><div style="color:var(--muted);font-size:12px">'+(l.assignedUserName?"Assigned agent":"Primary Agent (default)")+'</div></div></div></div>'+
-        '<div class="rblock"><h5>Transactions</h5><div id="ldTxBlk" style="font-size:12.5px"></div></div>'+
-        '<div class="rblock"><h5>Tasks <button class="mini-pill" id="ldTaskAdd">+ ADD</button></h5><div id="ldTasksBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
-        '<div class="rblock"><h5>Auto Plans <button class="mini-pill" id="ldPlanAdd">+ ADD</button></h5><div id="ldPlansBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
-        '<div class="rblock"><h5>Listing Alerts <button class="mini-pill" id="ldAlertAdd">+ ADD</button></h5><div id="ldAlertsBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
-        '<div class="rblock"><h5>Market Reports <button class="mini-pill" id="ldReportAdd">+ ADD</button></h5><div id="ldReportsBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
-        '<div class="rblock"><h5>Web Activity</h5><div id="ldWebActBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
-        '<div class="rblock"><h5>Agreements</h5><button class="rbtn">+ BUYER</button><button class="rbtn">+ SELLER</button><button class="rbtn">+ REFERRAL</button></div>'+
-        '<div class="rblock"><h5>Appointments <button class="mini-pill">+ ADD</button></h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5">Create an appointment for this contact and assign it to yourself or a teammate.</div></div>'+
-        '<div class="rblock" style="margin-bottom:0"><h5>Marketing</h5><div style="color:var(--muted);font-size:12.5px;line-height:1.5;margin-bottom:12px">Send postcards, bifolds, trifolds, and snap packs.</div><button class="rbtn" style="background:var(--teal-pill);color:#fff;border-color:var(--teal-pill)">✉ SEND MAIL</button></div>'+
-      '</div></div>'+
+      /* ── column 3. Live MLS context sits above the widgets: on a property
+         lead a price cut or a move to Pending outranks anything below it. ── */
+      '<div class="cr-col"><div id="ldMls"></div>'+rightStackHTML(l)+'</div>'+
     '</div>';
+
   void paintLeadMls(l.id);
   document.getElementById("ldBack").addEventListener("click",backToLeads);
   document.getElementById("ldPrev").addEventListener("click",()=>stepLead(-1));
@@ -4429,23 +4578,23 @@ function renderLead(){
   document.querySelectorAll("#ldTabs button[data-t]").forEach(b=>b.addEventListener("click",()=>{ldTab=b.getAttribute("data-t");document.querySelectorAll("#ldTabs button").forEach(x=>x.classList.toggle("on",x.getAttribute("data-t")===ldTab));renderLeadTab();}));
   document.getElementById("ldEdit").addEventListener("click",function(){
     if(!ldEditing){ ldEditing=true; renderLead(); return; }
-    var nm=document.getElementById("ldNameIn"),em=document.getElementById("ldEmailIn"),ph=document.getElementById("ldPhoneIn"),ad=document.getElementById("ldAddrIn");
+    var nm=document.getElementById("ldNameIn");
     var name=nm?nm.value.trim():l.name;
     if(!name){ crmToast("Name can't be empty"); return; }
-    var email=em?em.value.trim():l.email, phone=ph?ph.value.trim():l.phone, address=ad?ad.value.trim():l.address;
-    l.name=name; l.email=email; l.phone=phone; l.address=address;
+    l.name=name;
     var pe=PEOPLE.find(function(x){return x.id===l.id;});
-    if(pe){ pe.name=name; pe.email=email; pe.phone=phone; pe.address=address; }
+    if(pe)pe.name=name;
     ldEditing=false; renderLead(); renderLeads(); renderPeople();
-    fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)),{method:"PATCH",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({name:name,email:email||null,phone:phone||null,address:address||null})})
-      .then(function(r){crmToast(r&&r.ok?"Lead updated":"Updated locally");}).catch(function(){crmToast("Updated locally");});
+    ldPatch(l,{name:name},"Contact updated");
   });
-  document.getElementById("ldEmailIn")&&document.getElementById("ldEmailIn").addEventListener("keydown",function(ev){if(ev.key==="Enter"){ev.preventDefault();document.getElementById("ldEdit").click();}});
   document.getElementById("ldEditAlt").addEventListener("click",function(e){
     e.stopPropagation();
     if(ldEditing){ ldEditing=false; renderLead(); return; }
     openActionMenu(e.currentTarget,[
+      {label:"Add Email Address",fn:function(){ CR_OPEN.contact=true; crSaveOpen(); CR_EDIT={kind:"email",id:null}; crRepaint(); }},
+      {label:"Add Phone Number",fn:function(){ CR_OPEN.contact=true; crSaveOpen(); CR_EDIT={kind:"phone",id:null}; crRepaint(); }},
+      {label:"Add Address",fn:function(){ openAddressModal(l,null); }},
+      {label:"New Note",fn:function(){ openNoteModal(l); }},
       {label:"Delete Lead",fn:function(){
         if(!confirm('Delete "'+l.name+'"? This can\'t be undone.'))return;
         var idx=LEADS.findIndex(function(x){return x.id===l.id;}); if(idx>=0)LEADS.splice(idx,1);
@@ -4455,91 +4604,32 @@ function renderLead(){
       }}
     ]);
   });
-  renderLeadTab(); renderTimeline();
-  wireDetailsBlock(l); wireRelationshipsBlock(l); wireAssignBlock(l);
-  paintLeadTx(l); paintLeadTasks(l); paintLeadPlans(l); paintLeadOutreach(l);
+  renderLeadTab(); renderActivityFeed();
+  wireContactPanel(l); wireAiPanel(l); wireAssignBlock(l); wireRightStack(l);
+  paintLeadTasks(l); paintLeadPlans(l); paintLeadOutreach(l);
 }
 
-/* ===== Profile blocks: Details / Relationships / Assigned To / Tasks /
-   Auto Plans / Transactions. All read and write REAL APIs; the demo rows
-   degrade to a local-only toast rather than pretending to save. ===== */
-function detailsBlockHTML(l){
-  var tags=(l.tags||[]).map(function(t){return '<span class="fchip" style="font-size:11px">'+esc(t)+' <span class="x" data-rmtag="'+esc(t)+'">×</span></span>';}).join(" ");
-  return '<div class="ld-sec-h" style="border-top:1px solid var(--line-2);padding-top:16px;margin-top:14px">Details</div>'+
-    '<div class="ld-flabel">Description</div>'+
-    '<textarea class="ld-note" id="ldDescIn" style="min-height:56px;font-size:12.5px" placeholder="Background on how this lead came in…">'+esc(l.description||"")+'</textarea>'+
-    '<div class="ld-flabel" style="margin-top:8px">Tags</div>'+
-    '<div id="ldTagRow" style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">'+(tags||'<span style="color:#98a2ac;font-size:12px">No tags</span>')+'</div>'+
-    '<div style="display:flex;gap:6px"><input class="ld-input" id="ldTagIn" placeholder="Add a tag" style="flex:1;font-size:12px" list="ldTagOpts"><datalist id="ldTagOpts"></datalist><button class="mini-pill" id="ldTagAdd">+</button></div>'+
-    '<div class="ld-flabel" style="margin-top:8px">Letter Salutation</div><input class="ld-input" id="ldLetSal" style="font-size:12.5px" value="'+esc(l.letterSalutation||"")+'" placeholder="Dear Maria">'+
-    '<div class="ld-flabel" style="margin-top:8px">Envelope Salutation</div><input class="ld-input" id="ldEnvSal" style="font-size:12.5px" value="'+esc(l.envelopeSalutation||"")+'" placeholder="Maria Gonzales">'+
-    '<div class="ld-flabel" style="margin-top:8px">Preferred Language</div><input class="ld-input" id="ldLang" style="font-size:12.5px" value="'+esc(l.preferredLanguage||"")+'" placeholder="English">'+
-    '<div style="margin-top:8px;text-align:right"><button class="mini-pill" id="ldDetSave">SAVE DETAILS</button></div>';
+/** Right-column widgets whose buttons are not owned by an existing painter. */
+function wireRightStack(l){
+  document.querySelectorAll("#leadDetail [data-agree]").forEach(function(b){
+    b.addEventListener("click",function(){ openDocUploadModal(l,b.getAttribute("data-agree")); });
+  });
+  var appt=document.getElementById("ldApptAdd");
+  if(appt)appt.addEventListener("click",function(){
+    ldTab="appointment";
+    document.querySelectorAll("#ldTabs button").forEach(function(x){x.classList.toggle("on",x.getAttribute("data-t")==="appointment");});
+    renderLeadTab();
+    document.getElementById("ldTabBody").scrollIntoView({behavior:"smooth",block:"center"});
+  });
 }
+
+/* ===== Profile writes. These hit REAL APIs; a demo row degrades to a
+   local-only toast rather than pretending to save. ===== */
 function ldPatch(l,body,okMsg){
   if(!l._live){ crmToast(okMsg+" (demo row — not saved)"); return Promise.resolve(false); }
   return fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
     .then(function(r){ crmToast(r.ok?okMsg:"Could not save"); return r.ok; })
     .catch(function(){ crmToast("Could not reach the server"); return false; });
-}
-function wireDetailsBlock(l){
-  var add=document.getElementById("ldTagAdd"); if(!add)return;
-  // datalist offers the tag templates + tags in use
-  fetch(crmApi("/api/tag-templates")).then(function(r){return r.ok?r.json():null;}).then(function(d){
-    var dl=document.getElementById("ldTagOpts"); if(!dl)return;
-    var names={}; (((d&&d.templates)||[])).forEach(function(t){if(t&&t.name)names[t.name]=1;});
-    LEADS.forEach(function(x){(x.tags||[]).forEach(function(t){names[t]=1;});});
-    dl.innerHTML=Object.keys(names).sort().map(function(n){return '<option value="'+esc(n)+'">';}).join("");
-  }).catch(function(){});
-  function saveTags(){ ldPatch(l,{tags:l.tags||[]},"Tags saved").then(function(){ renderLead(); }); }
-  add.addEventListener("click",function(){
-    var inp=document.getElementById("ldTagIn"); var v=(inp.value||"").trim(); if(!v)return;
-    l.tags=l.tags||[]; if(l.tags.indexOf(v)<0)l.tags.push(v);
-    inp.value=""; saveTags();
-  });
-  document.getElementById("ldTagIn").addEventListener("keydown",function(e){ if(e.key==="Enter"){e.preventDefault();add.click();} });
-  document.querySelectorAll("#ldTagRow [data-rmtag]").forEach(function(x){x.addEventListener("click",function(){
-    l.tags=(l.tags||[]).filter(function(t){return t!==x.getAttribute("data-rmtag");}); saveTags();
-  });});
-  document.getElementById("ldDetSave").addEventListener("click",function(){
-    l.description=document.getElementById("ldDescIn").value;
-    l.letterSalutation=document.getElementById("ldLetSal").value.trim();
-    l.envelopeSalutation=document.getElementById("ldEnvSal").value.trim();
-    l.preferredLanguage=document.getElementById("ldLang").value.trim();
-    ldPatch(l,{description:l.description||null,letterSalutation:l.letterSalutation||null,envelopeSalutation:l.envelopeSalutation||null,preferredLanguage:l.preferredLanguage||null},"Details saved");
-  });
-}
-function relationshipsBlockHTML(l){
-  var rows=(l.relationships||[]).map(function(r,i){
-    var linked=r.leadId&&LEADS.some(function(x){return x.id===r.leadId;});
-    return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12.5px">'+
-      '<span style="color:#7d8894">'+esc(r.relation)+':</span>'+
-      (linked?'<a class="ldlink" data-lid="'+esc(r.leadId)+'" style="cursor:pointer;color:var(--teal-strong);font-weight:600">'+esc(r.name)+'</a>':'<span style="font-weight:600;color:#4a5560">'+esc(r.name)+'</span>')+
-      '<span class="x" data-rmrel="'+i+'" style="margin-left:auto;cursor:pointer;color:#c2cad1">×</span></div>';
-  }).join("");
-  return '<div class="ld-sec-h" style="border-top:1px solid var(--line-2);padding-top:16px;margin-top:14px">Relationships</div>'+
-    '<div id="ldRelRows">'+(rows||'<div style="color:#98a2ac;font-size:12px">None linked</div>')+'</div>'+
-    '<div style="display:flex;gap:4px;margin-top:6px"><input class="ld-input" id="ldRelName" placeholder="Name" style="flex:1.2;font-size:12px" list="ldRelOpts"><datalist id="ldRelOpts"></datalist><input class="ld-input" id="ldRelKind" placeholder="Spouse / Referred by…" style="flex:1;font-size:12px"><button class="mini-pill" id="ldRelAdd">+</button></div>';
-}
-function wireRelationshipsBlock(l){
-  var add=document.getElementById("ldRelAdd"); if(!add)return;
-  var dl=document.getElementById("ldRelOpts");
-  if(dl)dl.innerHTML=LEADS.filter(function(x){return x.id!==l.id;}).slice(0,400).map(function(x){return '<option value="'+esc(x.name)+'">';}).join("");
-  add.addEventListener("click",function(){
-    var name=(document.getElementById("ldRelName").value||"").trim();
-    var kind=(document.getElementById("ldRelKind").value||"").trim();
-    if(!name||!kind){ crmToast("Name and relationship are both needed"); return; }
-    var match=LEADS.find(function(x){return x.id!==l.id&&(x.name||"").toLowerCase()===name.toLowerCase();});
-    l.relationships=l.relationships||[];
-    var entry={name:name,relation:kind}; if(match)entry.leadId=match.id;
-    l.relationships.push(entry);
-    ldPatch(l,{relationships:l.relationships},"Relationship added").then(function(){ renderLead(); });
-  });
-  document.querySelectorAll("#ldRelRows [data-rmrel]").forEach(function(x){x.addEventListener("click",function(){
-    l.relationships.splice(+x.getAttribute("data-rmrel"),1);
-    ldPatch(l,{relationships:l.relationships},"Relationship removed").then(function(){ renderLead(); });
-  });});
-  document.querySelectorAll("#ldRelRows .ldlink").forEach(function(a){a.addEventListener("click",function(){ openLead(a.getAttribute("data-lid")); });});
 }
 var LD_ROSTER=null;
 function ensureRoster(cb){
@@ -4566,21 +4656,6 @@ function wireAssignBlock(l){
       }}]));
     });
   });
-}
-function paintLeadTx(l){
-  var el=document.getElementById("ldTxBlk"); if(!el)return;
-  var mine=TX.filter(function(t){return t.leadId&&t.leadId===l.id;});
-  if(!mine.length){ el.innerHTML='<div style="color:var(--muted)">No transactions linked to this contact.</div>'; return; }
-  el.innerHTML=mine.map(function(t){
-    var st=(TX_STATUS[t.status]||{l:t.status,c:"#7c8b98"});
-    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer" data-txopen="'+esc(t.id)+'">'+
-      '<span class="status" style="background:'+st.c+';font-size:9px">'+st.l+'</span>'+
-      '<span style="font-weight:600;color:#4a5560;flex:1">'+esc(t.address)+'</span>'+
-      (t.listPrice?'<span style="color:#7d8894">'+usd(t.listPrice)+'</span>':'')+'</div>';
-  }).join("");
-  el.querySelectorAll("[data-txopen]").forEach(function(row){row.addEventListener("click",function(){
-    if(window.openTxDetail)window.openTxDetail(row.getAttribute("data-txopen"));
-  });});
 }
 function paintLeadTasks(l){
   var el=document.getElementById("ldTasksBlk"); if(!el)return;
@@ -4655,12 +4730,1281 @@ function logActivity(type,text){ const l=LEADS.find(x=>x.id===currentLeadId); if
   var srvType=LOG_TYPE_MAP[type]||"other";
   (l.activity=l.activity||[]).push({type:srvType,description:text||"",timestamp:now}); l.lastActivity=now;
   l.lastLabel=(type==="call"?"Call Logged":type==="text"?"Text Logged":type==="email"?"Email Logged":type==="appointment"?"Appointment":"Note");
-  renderTimeline(); renderLeads(); renderTakeAction(); renderFeed();
+  renderActivityFeed(); renderLeads(); renderTakeAction(); renderFeed();
   if(!l._live){ crmToast("Logged (demo row — not saved)"); return; }
   fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/activity"),{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({type:srvType,description:text||""})})
     .then(function(r){ crmToast(r.ok?"Logged":"Logged locally — server rejected it"); })
     .catch(function(){ crmToast("Logged locally — could not reach the server"); }); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTACT RECORD — left panel, middle panel, right widget stack.
+
+   Everything below hangs off ONE fetch of /api/crm/lead/:id/record, kept in
+   `CR`. The panel renders from that snapshot and every write returns the
+   fresh record, so the screen can never drift from the database — the
+   alternative (patch the local copy and hope) is how a deleted phone number
+   stays visible until a reload.
+
+   WHAT IS AND IS NOT WIRED, stated plainly because this page touches real
+   client contact data:
+     · emails / phones / addresses / social / notes / documents — real rows in
+       contact-records.db, and the primary email/phone/address is written back
+       onto the Lead so the table and the senders see the same value.
+     · transactions — real rows in the existing pipeline store; the contact
+       record does not keep a second copy.
+     · Brivity Home App and CMA Reports — this system has neither. Those two
+       widgets say so instead of drawing a button that cannot do anything.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var CR={leadId:null,record:null,loading:false,docTypes:[],err:null};
+/* Which accordions are open. Kept per browser so the panel opens the way the
+   operator left it rather than resetting on every contact. */
+var CR_OPEN=(function(){
+  try{ var r=JSON.parse(localStorage.getItem("crmContactAcc")||"null"); if(r&&typeof r==="object")return r; }catch(_){}
+  return {contact:true,social:false,details:false,relationships:false,notes:true,transactions:false,documents:false};
+})();
+function crSaveOpen(){ try{ localStorage.setItem("crmContactAcc",JSON.stringify(CR_OPEN)); }catch(_){} }
+/* Which row is in its active-input state, e.g. {kind:"phone",id:"…"} or
+   {kind:"email",id:null} for the add row. One at a time, deliberately: two
+   half-typed phone numbers on screen is how the wrong one gets saved. */
+var CR_EDIT=null;
+var UI_PREFS={};
+
+function crEmpty(){ return {emails:[],phones:[],addresses:[],social:[],notes:[],documents:[]}; }
+
+function loadContactRecord(leadId,then){
+  CR.leadId=leadId; CR.loading=true; CR.err=null;
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(leadId)+"/record"))
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+    .then(function(res){
+      CR.loading=false;
+      if(CR.leadId!==leadId)return;            // the operator moved on mid-flight
+      if(!res.ok){ CR.err=(res.j&&res.j.error)||"Could not load this contact's record"; CR.record=crEmpty(); }
+      else { CR.record=res.j.record||crEmpty(); CR.docTypes=res.j.docTypes||[]; }
+      if(then)then();
+    })
+    .catch(function(){
+      CR.loading=false;
+      if(CR.leadId!==leadId)return;
+      /* Honest failure: an empty panel would read as "this person has no phone
+         number", which is a different and much worse statement. */
+      CR.err="Could not reach the server — this contact's emails, phones and notes are not shown.";
+      CR.record=crEmpty();
+      if(then)then();
+    });
+}
+
+/** Re-render just the left panel from the current CR snapshot. */
+function crRepaint(){
+  var l=LEADS.find(function(x){return x.id===currentLeadId;}); if(!l)return;
+  var host=document.getElementById("crPanel"); if(!host)return;
+  host.innerHTML=crAccordionsHTML(l);
+  wireContactPanel(l);
+}
+
+/** Apply a record returned by a write, then repaint. */
+function crApply(rec){ if(rec)CR.record=rec; crRepaint(); }
+
+function crFetch(url,opts,okMsg,after){
+  return fetch(crmApi(url),opts)
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+    .then(function(res){
+      if(!res.ok){ crmToast((res.j&&res.j.error)||"Could not save"); return null; }
+      if(okMsg)crmToast(okMsg);
+      if(after)after(res.j);
+      return res.j;
+    })
+    .catch(function(){ crmToast("Could not reach the server"); return null; });
+}
+var crJson=function(body){ return {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}; };
+var crPatchJson=function(body){ return {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}; };
+var crPutJson=function(body){ return {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}; };
+
+/* ── phone formatting, the same rule the server uses ───────────────────────
+   A 10-digit US number becomes (817) 995-4677 and an 11-digit one +1 (…).
+   Anything else is left exactly as typed: an international number bent into a
+   US shape looks right and does not dial. */
+function fmtPhoneUs(raw){
+  var t=String(raw==null?"":raw).trim(), d=t.replace(/\D/g,"");
+  if(/^\+/.test(t)&&!/^\+1/.test(t))return t;
+  if(d.length===10)return "("+d.slice(0,3)+") "+d.slice(3,6)+"-"+d.slice(6);
+  if(d.length===11&&d.charAt(0)==="1")return "+1 ("+d.slice(1,4)+") "+d.slice(4,7)+"-"+d.slice(7);
+  return t;
+}
+/** Live formatting while typing — only once there is enough to be sure. */
+function fmtPhoneLive(raw){
+  var t=String(raw==null?"":raw), d=t.replace(/\D/g,"");
+  if(/^\+/.test(t.trim())&&!/^\+1/.test(t.trim()))return t;
+  if(d.length>11)return t;
+  if(d.length===10||d.length===11)return fmtPhoneUs(t);
+  return t;
+}
+
+var EMAIL_KINDS=[["personal","Personal"],["work","Work"],["other","Other"]];
+var PHONE_KINDS=[["mobile","Mobile"],["home","Home"],["work","Work"],["other","Other"]];
+var ADDRESS_KINDS=[["home","Home"],["work","Work"],["mailing","Mailing"],["other","Other"]];
+function kindLabel(list,v){ for(var i=0;i<list.length;i++)if(list[i][0]===v)return list[i][1]; return list[0][1]; }
+function kindOptions(list,cur){
+  return list.map(function(k){ return '<option value="'+k[0]+'"'+(k[0]===cur?" selected":"")+'>'+k[1]+'</option>'; }).join("");
+}
+
+/* ── the country/locale data the Add Address modal switches on ─────────────
+   Only US and CA, because those are the only two the modal offers. Adding a
+   third country means adding its subdivisions here — an empty list would make
+   the type-ahead silently match nothing, which reads as "no such state". */
+var LOCALES={
+  US:{regionLabel:"State",postalLabel:"ZIP Code",postalPlaceholder:"76102",regions:[
+    ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],["CO","Colorado"],
+    ["CT","Connecticut"],["DE","Delaware"],["DC","District of Columbia"],["FL","Florida"],["GA","Georgia"],
+    ["HI","Hawaii"],["ID","Idaho"],["IL","Illinois"],["IN","Indiana"],["IA","Iowa"],["KS","Kansas"],
+    ["KY","Kentucky"],["LA","Louisiana"],["ME","Maine"],["MD","Maryland"],["MA","Massachusetts"],["MI","Michigan"],
+    ["MN","Minnesota"],["MS","Mississippi"],["MO","Missouri"],["MT","Montana"],["NE","Nebraska"],["NV","Nevada"],
+    ["NH","New Hampshire"],["NJ","New Jersey"],["NM","New Mexico"],["NY","New York"],["NC","North Carolina"],
+    ["ND","North Dakota"],["OH","Ohio"],["OK","Oklahoma"],["OR","Oregon"],["PA","Pennsylvania"],["PR","Puerto Rico"],
+    ["RI","Rhode Island"],["SC","South Carolina"],["SD","South Dakota"],["TN","Tennessee"],["TX","Texas"],
+    ["UT","Utah"],["VT","Vermont"],["VA","Virginia"],["WA","Washington"],["WV","West Virginia"],["WI","Wisconsin"],
+    ["WY","Wyoming"]]},
+  CA:{regionLabel:"Province",postalLabel:"Postal Code",postalPlaceholder:"M5H 2N2",regions:[
+    ["AB","Alberta"],["BC","British Columbia"],["MB","Manitoba"],["NB","New Brunswick"],
+    ["NL","Newfoundland and Labrador"],["NS","Nova Scotia"],["NT","Northwest Territories"],["NU","Nunavut"],
+    ["ON","Ontario"],["PE","Prince Edward Island"],["QC","Quebec"],["SK","Saskatchewan"],["YT","Yukon"]]}
+};
+var COUNTRY_NAMES={US:"United States",CA:"Canada"};
+function localeFor(c){ return LOCALES[(c||"US").toUpperCase()]||LOCALES.US; }
+function regionName(country,code){
+  var L=localeFor(country);
+  for(var i=0;i<L.regions.length;i++)if(L.regions[i][0]===code)return L.regions[i][1];
+  return code||"";
+}
+
+/* ────────────────────────── left panel: accordions ────────────────────────── */
+
+function accHTML(key,title,count,headBtns,bodyHtml){
+  var open=!!CR_OPEN[key];
+  return '<div class="acc'+(open?" open":"")+'" data-acc="'+key+'">'+
+    '<div class="acc-h" data-acctoggle="'+key+'"><span class="cv">▶</span><span class="ti">'+esc(title)+'</span>'+
+      (count!=null?'<span class="ct">'+count+'</span>':'')+(headBtns||'')+'</div>'+
+    '<div class="acc-b">'+bodyHtml+'</div></div>';
+}
+
+function crAccordionsHTML(l){
+  var r=CR.record||crEmpty();
+  var banner=CR.err?'<div class="wdg-off" style="margin-bottom:16px">'+esc(CR.err)+'</div>':'';
+  if(CR.loading&&!CR.record)banner='<div class="wdg-note" style="margin-bottom:16px">Loading this contact’s record…</div>';
+  return banner+
+    accHTML("contact","Contact Info",
+      (r.emails.length+r.phones.length+r.addresses.length)||null,"",contactInfoBodyHTML(l,r))+
+    accHTML("social","Social Media",r.social.length||null,
+      '<button class="mini-pill" data-cr="socialEdit">EDIT</button>',socialBodyHTML(r))+
+    accHTML("details","Details",null,"",detailsBodyHTML(l))+
+    accHTML("relationships","Relationships",(l.relationships||[]).length||null,
+      '<button class="mini-pill" data-cr="relAdd">+ ADD</button>',relationshipsBodyHTML(l))+
+    accHTML("notes","Notes",r.notes.length||null,
+      '<button class="mini-pill" data-cr="noteAdd">+ ADD</button>',notesBodyHTML(r))+
+    accHTML("transactions","Transactions",crTxFor(l).length||null,
+      '<button class="mini-pill" data-cr="txAdd">+ ADD</button>',crTxBodyHTML(l))+
+    accHTML("documents","Documents",r.documents.length||null,
+      '<button class="mini-pill" data-cr="docAdd">UPLOAD</button>',documentsBodyHTML(r));
+}
+
+/* ── Contact Info ── */
+
+function contactInfoBodyHTML(l,r){
+  var out="";
+
+  out+='<div class="dt-k" style="margin-bottom:6px">Email Addresses</div>';
+  out+=r.emails.length?r.emails.map(function(e){
+    return '<div class="crx">'+
+      '<span class="cx-v"><a href="mailto:'+esc(e.address)+'" style="color:var(--teal-strong)">'+esc(e.address)+'</a></span>'+
+      '<span class="cx-t">'+esc(kindLabel(EMAIL_KINDS,e.kind))+'</span>'+
+      (e.isPrimary?'<span class="cx-p">PRIMARY</span>':'<span class="cx-x" data-cr="emailPrimary" data-id="'+esc(e.id)+'" title="Make primary">☆</span>')+
+      '<span class="cx-x" data-cr="emailEdit" data-id="'+esc(e.id)+'" title="Edit">✎</span>'+
+      '<span class="cx-x" data-cr="emailDel" data-id="'+esc(e.id)+'" title="Remove">×</span></div>';
+  }).join(""):'<div class="cr-empty">No email address on this contact.</div>';
+  out+=(CR_EDIT&&CR_EDIT.kind==="email")
+    ? emailEditHTML(r.emails.filter(function(e){return e.id===CR_EDIT.id;})[0]||null)
+    : '<div style="padding:6px 0"><a class="addlink" data-cr="emailNew">Add Email Address</a></div>';
+
+  out+='<div class="dt-k" style="margin:12px 0 6px">Phone Numbers</div>';
+  out+=r.phones.length?r.phones.map(function(p){
+    return '<div class="crx">'+
+      '<span class="cx-v">'+esc(p.number)+'</span>'+
+      '<span class="cx-t">'+esc(kindLabel(PHONE_KINDS,p.kind))+'</span>'+
+      (p.dnc?'<span class="cx-dnc">DNC</span>':'')+
+      (p.isPrimary?'<span class="cx-p">PRIMARY</span>':'<span class="cx-x" data-cr="phonePrimary" data-id="'+esc(p.id)+'" title="Make primary">☆</span>')+
+      '<span class="cx-x" data-cr="phoneEdit" data-id="'+esc(p.id)+'" title="Edit">✎</span>'+
+      '<span class="cx-x" data-cr="phoneDel" data-id="'+esc(p.id)+'" title="Remove">×</span></div>';
+  }).join(""):'<div class="cr-empty">No phone number on this contact.</div>';
+  out+=(CR_EDIT&&CR_EDIT.kind==="phone")
+    ? phoneEditHTML(r.phones.filter(function(p){return p.id===CR_EDIT.id;})[0]||null)
+    : '<div style="padding:6px 0"><a class="addlink" data-cr="phoneNew">Add Phone Number</a></div>';
+  /* DNC means "somebody marked this number", never "we checked and it's fine".
+     Saying so stops an unmarked number reading as cleared to call. */
+  if(r.phones.length&&!r.phones.some(function(p){return p.dnc;}))
+    out+='<div style="font-size:10.5px;color:#98a2ad;padding-top:2px">No number here is marked DNC. Nothing has checked a registry — the flag is set by hand.</div>';
+
+  out+='<div class="dt-k" style="margin:12px 0 6px">Addresses <a class="addlink" data-cr="addrNew" style="float:right;font-size:11px">+ ADD</a></div>';
+  out+=r.addresses.length?r.addresses.map(function(a){
+    var line=[a.street+(a.apt?" #"+a.apt:""),[a.city,[regionName(a.country,a.region)||a.region,a.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ")].filter(Boolean).join("\n");
+    // The country is only worth a line when it is not the default one.
+    if(a.country&&a.country!=="US")line+="\n"+(COUNTRY_NAMES[a.country]||a.country);
+    return '<div class="crx">'+
+      '<span class="cx-v" style="white-space:pre-line">'+esc(line)+'</span>'+
+      '<span class="cx-t">'+esc(kindLabel(ADDRESS_KINDS,a.kind))+'</span>'+
+      '<span class="cx-x" data-cr="addrEdit" data-id="'+esc(a.id)+'" title="Edit">✎</span>'+
+      '<span class="cx-x" data-cr="addrDel" data-id="'+esc(a.id)+'" title="Remove">×</span></div>';
+  }).join(""):'<div class="cr-empty">No address on this contact.</div>';
+  return out;
+}
+
+function emailEditHTML(cur){
+  return '<div class="cx-edit" data-crform="email">'+
+    '<input id="crEmailIn" type="email" placeholder="email@example.com" value="'+esc(cur?cur.address:"")+'">'+
+    '<select id="crEmailKind">'+kindOptions(EMAIL_KINDS,cur?cur.kind:"personal")+'</select>'+
+    '<button class="cx-sv" data-cr="emailSave">SAVE</button>'+
+    '<button class="cx-ca" data-cr="cancelEdit">✕</button>'+
+    '<span class="hint">Enter saves · Escape cancels</span></div>';
+}
+function phoneEditHTML(cur){
+  return '<div class="cx-edit" data-crform="phone">'+
+    '<input id="crPhoneIn" type="tel" placeholder="(817) 995-4677" value="'+esc(cur?cur.number:"")+'">'+
+    '<select id="crPhoneKind">'+kindOptions(PHONE_KINDS,cur?cur.kind:"mobile")+'</select>'+
+    '<label class="cx-dncck"><input type="checkbox" id="crPhoneDnc"'+(cur&&cur.dnc?" checked":"")+'> DNC</label>'+
+    '<button class="cx-sv" data-cr="phoneSave">SAVE</button>'+
+    '<button class="cx-ca" data-cr="cancelEdit">✕</button>'+
+    '<span class="hint">Formats as you type · Enter saves · Escape cancels</span></div>';
+}
+
+/* ── Social Media ── */
+
+var SOCIALS=[["facebook","Facebook","f"],["x","X","𝕏"],["linkedin","LinkedIn","in"],["instagram","Instagram","◉"],
+  ["youtube","YouTube","▶"],["tiktok","TikTok","♪"],["pinterest","Pinterest","P"]];
+
+function socialBodyHTML(r){
+  var by={}; (r.social||[]).forEach(function(s){ by[s.platform]=s.url; });
+  var icons=SOCIALS.map(function(p){
+    var url=by[p[0]];
+    return url
+      ? '<a class="soc on '+p[0]+'" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" title="'+esc(p[1])+' — '+esc(url)+'">'+p[2]+'</a>'
+      : '<span class="soc" title="'+esc(p[1])+' — not on file">'+p[2]+'</span>';
+  }).join("");
+  var n=Object.keys(by).length;
+  return '<div class="soc-row">'+icons+'</div>'+
+    '<div class="soc-tip">'+(n?'Coloured icons are live links. ':'No social profiles on file yet. ')+
+      'Paste a full URL or just the handle — <b>EDIT</b> turns <code>@marcopuga</code> into the platform’s profile link for you.</div>';
+}
+
+/* ── Details ── */
+
+function crDetailRow(key,label,value,placeholder,multiline){
+  var blank=!value;
+  return '<div class="dt-row" data-dtrow="'+key+'">'+
+    '<div class="dt-k">'+esc(label)+'</div>'+
+    '<div class="dt-v'+(blank?" blank":"")+'" data-dtedit data-key="'+key+'" data-ml="'+(multiline?1:0)+'" title="Click to edit">'+
+      esc(blank?placeholder:value)+'</div></div>';
+}
+
+function detailsBodyHTML(l){
+  var tags=(l.tags||[]).map(function(t){
+    return '<span class="fchip" style="font-size:11px">'+esc(t)+' <span class="x" data-cr="tagRm" data-tag="'+esc(t)+'">×</span></span>';
+  }).join(" ");
+  return crDetailRow("description","Description",l.description||"","Click to add background on how this lead came in",true)+
+    '<div class="dt-row"><div class="dt-k">Tags</div>'+
+      '<div id="crTagRow" style="display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 6px">'+
+        (tags||'<span class="dt-v blank">No tags</span>')+'</div>'+
+      '<div class="ta-wrap"><input class="ld-input" id="crTagIn" placeholder="Add a tag" style="font-size:12px;height:32px;padding:0 9px" autocomplete="off"></div></div>'+
+    crDetailRow("letterSalutation","Letter Salutation",l.letterSalutation||"","Dear Maria",false)+
+    crDetailRow("envelopeSalutation","Envelope Salutation",l.envelopeSalutation||"","Maria Gonzales",false)+
+    crDetailRow("preferredLanguage","Preferred Language",l.preferredLanguage||"","English",false);
+}
+
+/* ── Relationships ── */
+
+function relationshipsBodyHTML(l){
+  var rows=(l.relationships||[]).map(function(rel,i){
+    var linked=rel.leadId&&LEADS.some(function(x){return x.id===rel.leadId;});
+    return '<div class="crx">'+
+      '<span class="cx-v">'+
+        (linked?'<a class="ldlink" data-cr="relOpen" data-lid="'+esc(rel.leadId)+'" style="color:var(--teal-strong);font-weight:600">'+esc(rel.name)+'</a>'
+               :'<span style="font-weight:600;color:#4a5560">'+esc(rel.name)+'</span>')+
+      '</span>'+
+      '<span class="cx-t">'+esc(rel.relation)+'</span>'+
+      '<span class="cx-x" data-cr="relRm" data-i="'+i+'" title="Remove">×</span></div>';
+  }).join("");
+  return rows||'<div class="cr-empty">Nobody linked to this contact yet.</div>';
+}
+
+/* ── Notes ── */
+
+function notesBodyHTML(r){
+  if(!r.notes.length)return '<div class="cr-empty">No notes on this contact yet.</div>';
+  return r.notes.map(function(n){
+    return '<div class="nt">'+
+      '<div class="nt-top">'+
+        (n.important?'<span class="nt-star" title="Marked important">★</span>':'')+
+        '<span class="nt-au">'+esc(n.author||"Team")+'</span>'+
+        (n.hiddenFromViewers?'<span class="nt-hid" title="Hidden from viewers">INTERNAL</span>':'')+
+        '<span class="nt-tm">'+esc(relTime(n.createdAt)||"")+'</span>'+
+        '<span class="cx-x" data-cr="noteDel" data-id="'+esc(n.id)+'" title="Delete note">×</span>'+
+      '</div>'+
+      '<div class="nt-b">'+esc(n.body)+'</div>'+
+      (n.mentions&&n.mentions.length?'<div class="nt-mn">'+n.mentions.map(function(m){
+        return '<span>@'+esc(m.memberName)+'</span>'; }).join("")+'</div>':'')+
+    '</div>';
+  }).join("");
+}
+
+/* ── Transactions (the real pipeline store, not a second copy) ── */
+
+function crTxFor(l){ return (typeof TX!=="undefined"&&TX?TX:[]).filter(function(t){return t.leadId&&t.leadId===l.id;}); }
+
+function crTxBodyHTML(l){
+  var mine=crTxFor(l);
+  if(!mine.length)return '<div class="cr-empty">No transactions linked to this contact.</div>';
+  return mine.map(function(t){
+    var st=(TX_STATUS[t.status]||{l:t.status,c:"#7c8b98"});
+    return '<div class="crx" style="align-items:center">'+
+      '<span class="status" style="background:'+st.c+';font-size:9px;flex:0 0 auto">'+esc(st.l)+'</span>'+
+      '<span class="cx-v" style="font-weight:600;cursor:pointer" data-cr="txOpen" data-id="'+esc(t.id)+'">'+esc(t.address)+'</span>'+
+      (t.listPrice?'<span class="cx-t" style="background:none;color:#7d8894">'+esc(usd(t.listPrice))+'</span>':'')+
+      '</div>';
+  }).join("");
+}
+
+/* ── Documents ── */
+
+function crBytes(n){
+  if(!n)return "0 KB";
+  if(n<1024)return n+" B";
+  if(n<1024*1024)return Math.round(n/1024)+" KB";
+  return (n/1048576).toFixed(1)+" MB";
+}
+function docTypeLabel(id){
+  for(var i=0;i<CR.docTypes.length;i++)if(CR.docTypes[i].id===id)return CR.docTypes[i].label;
+  return "Other";
+}
+function documentsBodyHTML(r){
+  if(!r.documents.length)return '<div class="cr-empty">No documents uploaded for this contact.</div>';
+  return r.documents.map(function(d){
+    var meta=[docTypeLabel(d.docType),crBytes(d.bytes)];
+    if(d.signedDate)meta.push("signed "+d.signedDate);
+    if(d.expirationDate)meta.push("expires "+d.expirationDate);
+    /* Name and the remove control share the first line; the metadata takes
+       the second. Putting the × after the full-width metadata would strand it
+       alone on a third line. */
+    return '<div class="doc">'+
+      '<span class="dn" data-cr="docOpen" data-id="'+esc(d.id)+'" title="'+esc(d.fileName)+'">'+esc(d.fileName)+'</span>'+
+      '<span class="cx-x" data-cr="docDel" data-id="'+esc(d.id)+'" title="Remove">×</span>'+
+      '<span class="dm">'+esc(meta.join(" · "))+'</span></div>';
+  }).join("");
+}
+
+/* ────────────────────────── left panel: wiring ────────────────────────── */
+
+/**
+ * One delegated handler for the whole panel.
+ *
+ * The panel is rebuilt from scratch on every write, so per-element listeners
+ * would have to be re-attached each time and one missed rebuild leaves a dead
+ * button. Delegation makes that impossible by construction.
+ */
+function wireContactPanel(l){
+  var host=document.getElementById("crPanel"); if(!host)return;
+  /* The two delegated listeners are attached to the container ONCE — the
+     container survives every repaint, so re-attaching would stack duplicate
+     handlers and fire each action twice. Everything below them touches
+     elements the repaint just rebuilt, so it runs every time. */
+  if(!host.__wired){ host.__wired=1; wireContactPanelDelegates(host,l); }
+  wireContactPanelFields(host,l);
+}
+
+function wireContactPanelDelegates(host,l){
+  host.addEventListener("click",function(e){
+    var t=e.target.closest("[data-cr]");
+    var head=e.target.closest("[data-acctoggle]");
+    // A control inside the header acts; the header itself folds.
+    if(head&&!t){
+      var key=head.getAttribute("data-acctoggle");
+      CR_OPEN[key]=!CR_OPEN[key]; crSaveOpen();
+      var card=head.closest(".acc"); if(card)card.classList.toggle("open",!!CR_OPEN[key]);
+      return;
+    }
+    if(!t)return;
+    e.stopPropagation();
+    var act=t.getAttribute("data-cr"), id=t.getAttribute("data-id");
+    var lead=LEADS.find(function(x){return x.id===currentLeadId;})||l;
+    crAction(act,id,t,lead);
+  });
+
+  /* Enter saves and Escape cancels wherever a row is in its active-input
+     state — the spec asks for it on the phone row; every row behaves the
+     same way, because a keyboard rule that works on one field and not the
+     next one below it is worse than none. */
+  host.addEventListener("keydown",function(e){
+    var form=e.target.closest("[data-crform]"); if(!form)return;
+    if(e.key==="Enter"&&e.target.tagName!=="TEXTAREA"){
+      e.preventDefault();
+      var save=form.querySelector(".cx-sv"); if(save)save.click();
+    } else if(e.key==="Escape"){
+      e.preventDefault(); CR_EDIT=null; crRepaint();
+    }
+  });
+}
+
+function wireContactPanelFields(host,l){
+  // Live phone formatting.
+  var ph=document.getElementById("crPhoneIn");
+  if(ph){
+    ph.addEventListener("input",function(){
+      var atEnd=ph.selectionStart===ph.value.length;
+      var next=fmtPhoneLive(ph.value);
+      if(next!==ph.value){ ph.value=next; if(atEnd)ph.setSelectionRange(next.length,next.length); }
+    });
+    ph.focus(); ph.setSelectionRange(ph.value.length,ph.value.length);
+  }
+  var em=document.getElementById("crEmailIn"); if(em){ em.focus(); em.setSelectionRange(em.value.length,em.value.length); }
+
+  // Tag type-ahead in Details.
+  var tagIn=document.getElementById("crTagIn");
+  if(tagIn){
+    var names={}; LEADS.forEach(function(x){(x.tags||[]).forEach(function(tg){names[tg]=1;});});
+    (CR_TAG_TEMPLATES||[]).forEach(function(n){names[n]=1;});
+    attachTypeahead(tagIn,Object.keys(names).sort().map(function(n){return {id:n,label:n};}),function(pick){
+      tagIn.value=pick?pick.label:tagIn.value; crAddTag(l,tagIn.value);
+    });
+    tagIn.addEventListener("keydown",function(e){
+      if(e.key==="Enter"&&!document.querySelector("#crTagIn ~ .ta-list .hi")){ e.preventDefault(); crAddTag(l,tagIn.value); }
+    });
+  }
+
+  // Inline Details editing.
+  host.querySelectorAll("[data-dtedit]").forEach(function(cell){
+    cell.addEventListener("click",function(){ crEditDetail(l,cell); });
+  });
+}
+
+var CR_TAG_TEMPLATES=[];
+function loadTagTemplates(){
+  fetch(crmApi("/api/tag-templates")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    CR_TAG_TEMPLATES=(((d&&d.templates)||[]).map(function(t){return t&&t.name;}).filter(Boolean));
+  }).catch(function(){});
+}
+
+function crAddTag(l,raw){
+  var v=(raw||"").trim(); if(!v)return;
+  l.tags=l.tags||[];
+  if(l.tags.indexOf(v)>=0){ crmToast("Already tagged “"+v+"”"); return; }
+  l.tags.push(v);
+  ldPatch(l,{tags:l.tags},"Tag added").then(function(){ crRepaint(); renderLeads(); });
+}
+
+/**
+ * Turn a Details value into a field with its own SAVE and X, in place.
+ * The whole point of the per-row control is that saving one row cannot
+ * discard what is half-typed in another, which a single panel-wide SAVE does.
+ */
+function crEditDetail(l,cell){
+  if(cell.__editing)return;
+  cell.__editing=1;
+  var key=cell.getAttribute("data-key"), ml=cell.getAttribute("data-ml")==="1";
+  var cur=l[key]||"";
+  var row=cell.closest(".dt-row");
+  var holder=document.createElement("div");
+  holder.setAttribute("data-crform","detail");
+  holder.innerHTML=(ml
+      ? '<textarea class="ld-input" style="min-height:64px;font-size:12.5px;resize:vertical"></textarea>'
+      : '<input class="ld-input" style="height:32px;font-size:12.5px;padding:0 9px">')+
+    '<div class="dt-acts"><button class="cx-sv">SAVE</button><button class="cx-ca">✕</button></div>';
+  var field=holder.querySelector("input,textarea"); field.value=cur;
+  cell.style.display="none"; row.appendChild(holder);
+  field.focus();
+  function done(){ cell.__editing=0; holder.remove(); cell.style.display=""; }
+  holder.querySelector(".cx-ca").addEventListener("click",done);
+  holder.querySelector(".cx-sv").addEventListener("click",function(){
+    var v=field.value.trim(); var body={}; body[key]=v||null;
+    l[key]=v;
+    ldPatch(l,body,"Saved").then(function(){ done(); crRepaint(); });
+  });
+  holder.addEventListener("keydown",function(e){
+    if(e.key==="Escape"){ e.preventDefault(); done(); }
+    else if(e.key==="Enter"&&!ml){ e.preventDefault(); holder.querySelector(".cx-sv").click(); }
+  });
+}
+
+/* ── the actions ── */
+
+function crAction(act,id,el,l){
+  var base="/api/crm/lead/"+encodeURIComponent(l.id);
+  if(act==="emailNew"){ CR_EDIT={kind:"email",id:null}; crRepaint(); return; }
+  if(act==="emailEdit"){ CR_EDIT={kind:"email",id:id}; crRepaint(); return; }
+  if(act==="phoneNew"){ CR_EDIT={kind:"phone",id:null}; crRepaint(); return; }
+  if(act==="phoneEdit"){ CR_EDIT={kind:"phone",id:id}; crRepaint(); return; }
+  if(act==="cancelEdit"){ CR_EDIT=null; crRepaint(); return; }
+
+  if(act==="emailSave"){
+    var addr=(document.getElementById("crEmailIn")||{}).value||"";
+    var kind=(document.getElementById("crEmailKind")||{}).value||"personal";
+    addr=addr.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)){ crmToast("That doesn’t look like an email address"); return; }
+    var editingId=CR_EDIT&&CR_EDIT.id;
+    var req=editingId
+      ? crFetch("/api/crm/contact-email/"+encodeURIComponent(editingId),crPatchJson({address:addr,kind:kind}),"Email saved")
+      : crFetch(base+"/emails",crJson({address:addr,kind:kind}),"Email added");
+    req.then(function(j){ if(j){ CR_EDIT=null; crApply(j.record); crSyncLeadHeader(l); } });
+    return;
+  }
+  if(act==="phoneSave"){
+    var num=((document.getElementById("crPhoneIn")||{}).value||"").trim();
+    var pk=(document.getElementById("crPhoneKind")||{}).value||"mobile";
+    var dnc=!!(document.getElementById("crPhoneDnc")||{}).checked;
+    if(num.replace(/\D/g,"").length<7){ crmToast("A phone number needs at least 7 digits"); return; }
+    var pid=CR_EDIT&&CR_EDIT.id;
+    var preq=pid
+      ? crFetch("/api/crm/contact-phone/"+encodeURIComponent(pid),crPatchJson({number:num,kind:pk,dnc:dnc}),"Phone saved")
+      : crFetch(base+"/phones",crJson({number:num,kind:pk,dnc:dnc}),"Phone added");
+    preq.then(function(j){ if(j){ CR_EDIT=null; crApply(j.record); crSyncLeadHeader(l); } });
+    return;
+  }
+  if(act==="emailPrimary"){
+    crFetch("/api/crm/contact-email/"+encodeURIComponent(id),crPatchJson({isPrimary:true}),"Primary email set")
+      .then(function(j){ if(j){ crApply(j.record); crSyncLeadHeader(l); } });
+    return;
+  }
+  if(act==="phonePrimary"){
+    crFetch("/api/crm/contact-phone/"+encodeURIComponent(id),crPatchJson({isPrimary:true}),"Primary phone set")
+      .then(function(j){ if(j){ crApply(j.record); crSyncLeadHeader(l); } });
+    return;
+  }
+  if(act==="emailDel"||act==="phoneDel"||act==="addrDel"){
+    var what=act==="emailDel"?"email address":act==="phoneDel"?"phone number":"address";
+    if(!confirm("Remove this "+what+" from "+(l.name||"this contact")+"?"))return;
+    var url=act==="emailDel"?"/api/crm/contact-email/":act==="phoneDel"?"/api/crm/contact-phone/":"/api/crm/contact-address/";
+    crFetch(url+encodeURIComponent(id),{method:"DELETE"},"Removed")
+      .then(function(j){ if(j){ crApply(j.record); crSyncLeadHeader(l); } });
+    return;
+  }
+  if(act==="addrNew"){ openAddressModal(l,null); return; }
+  if(act==="addrEdit"){
+    var a=(CR.record.addresses||[]).filter(function(x){return x.id===id;})[0];
+    openAddressModal(l,a||null); return;
+  }
+  if(act==="socialEdit"){ openSocialModal(l); return; }
+  if(act==="relAdd"){ openRelationshipModal(l); return; }
+  if(act==="relRm"){
+    var i=+el.getAttribute("data-i");
+    l.relationships=(l.relationships||[]).slice(); l.relationships.splice(i,1);
+    ldPatch(l,{relationships:l.relationships},"Relationship removed").then(function(){ crRepaint(); });
+    return;
+  }
+  if(act==="relOpen"){ openLead(el.getAttribute("data-lid")); return; }
+  if(act==="noteAdd"){ openNoteModal(l); return; }
+  if(act==="noteDel"){
+    if(!confirm("Delete this note? This can’t be undone."))return;
+    crFetch("/api/crm/contact-note/"+encodeURIComponent(id),{method:"DELETE"},"Note deleted").then(function(){
+      CR.record.notes=(CR.record.notes||[]).filter(function(n){return n.id!==id;}); crRepaint();
+    });
+    return;
+  }
+  if(act==="tagRm"){
+    var tg=el.getAttribute("data-tag");
+    l.tags=(l.tags||[]).filter(function(x){return x!==tg;});
+    ldPatch(l,{tags:l.tags},"Tag removed").then(function(){ crRepaint(); renderLeads(); });
+    return;
+  }
+  if(act==="txAdd"){ openTxTypeModal(l); return; }
+  if(act==="txOpen"){ if(window.openTxDetail)window.openTxDetail(id); return; }
+  if(act==="docAdd"){ openDocTypeModal(l); return; }
+  if(act==="docOpen"){ window.open(crmApi("/api/crm/contact-document/"+encodeURIComponent(id)+"/file"),"_blank","noopener"); return; }
+  if(act==="docDel"){
+    if(!confirm("Delete this document? The file is removed too."))return;
+    crFetch("/api/crm/contact-document/"+encodeURIComponent(id),{method:"DELETE"},"Document deleted").then(function(j){
+      if(j){ CR.record.documents=j.documents||[]; crRepaint(); }
+    });
+    return;
+  }
+}
+
+/**
+ * The primary email/phone/address live on the Lead as well, and the server
+ * has just rewritten them. Mirror that into the in-memory row so the header,
+ * the lead table and the People view do not keep showing the old value until
+ * the next full reload.
+ */
+function crSyncLeadHeader(l){
+  var r=CR.record||crEmpty();
+  var pe=(r.emails||[]).filter(function(e){return e.isPrimary;})[0];
+  var pp=(r.phones||[]).filter(function(p){return p.isPrimary;})[0];
+  var pa=(r.addresses||[])[0];
+  l.email=pe?pe.address:null;
+  l.phone=pp?pp.number:null;
+  l.address=pa?[pa.street+(pa.apt?" #"+pa.apt:""),[pa.city,[pa.region,pa.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ")].filter(Boolean).join(", "):null;
+  var person=PEOPLE.find(function(x){return x.id===l.id;});
+  if(person){ person.email=l.email; person.phone=l.phone; person.address=l.address; }
+  renderLeads(); renderPeople();
+}
+
+/* ── a small reusable type-ahead ───────────────────────────────────────────
+   Filters an in-memory list, keyboard-navigable, and reports a pick. Used by
+   the tag field, the State field and the Add Relationship modal. */
+function attachTypeahead(input,items,onPick,opts){
+  var wrap=input.closest(".ta-wrap")||input.parentNode;
+  if(getComputedStyle(wrap).position==="static")wrap.style.position="relative";
+  var list=null, hi=-1, shown=[];
+  var minChars=(opts&&opts.minChars!=null)?opts.minChars:0;
+  function close(){ if(list){ list.remove(); list=null; hi=-1; shown=[]; } }
+  function open(){
+    var q=input.value.trim().toLowerCase();
+    if(q.length<minChars){ close(); return; }
+    shown=items.filter(function(it){ return !q||it.label.toLowerCase().indexOf(q)>=0||(it.sub||"").toLowerCase().indexOf(q)>=0; }).slice(0,40);
+    if(!list){ list=document.createElement("div"); list.className="ta-list"; wrap.appendChild(list); }
+    list.innerHTML=shown.length
+      ? shown.map(function(it,i){ return '<button type="button" data-i="'+i+'"'+(i===hi?' class="hi"':'')+'>'+esc(it.label)+
+          (it.sub?' <span style="color:#98a2ad">'+esc(it.sub)+'</span>':'')+'</button>'; }).join("")
+      : '<div class="ta-none">'+((opts&&opts.emptyText)||"No match")+'</div>';
+    list.querySelectorAll("button").forEach(function(b){
+      b.addEventListener("mousedown",function(ev){ ev.preventDefault(); pick(shown[+b.getAttribute("data-i")]); });
+    });
+  }
+  function pick(it){ close(); if(it)onPick(it); }
+  input.addEventListener("focus",open);
+  input.addEventListener("input",function(){ hi=-1; open(); });
+  input.addEventListener("blur",function(){ setTimeout(close,120); });
+  input.addEventListener("keydown",function(e){
+    if(!list)return;
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+      e.preventDefault();
+      hi=Math.max(0,Math.min(shown.length-1,hi+(e.key==="ArrowDown"?1:-1)));
+      list.querySelectorAll("button").forEach(function(b,i){ b.classList.toggle("hi",i===hi); });
+      var cur=list.querySelectorAll("button")[hi]; if(cur)cur.scrollIntoView({block:"nearest"});
+    } else if(e.key==="Enter"&&hi>=0){ e.preventDefault(); pick(shown[hi]); }
+    else if(e.key==="Escape"){ close(); }
+  });
+  return {close:close};
+}
+
+/* ────────────────────────── modals ──────────────────────────
+   All of these reuse the .oa-* overlay the Listing Alerts / Market Report
+   builders already use, so the record's modals look and behave exactly like
+   the ones next to them rather than introducing a second modal language. */
+
+/* ── Add / Edit Address ── */
+
+function openAddressModal(l,cur){
+  var country=(cur&&cur.country)||"US";
+  function body(){
+    var L=localeFor(country);
+    return '<div class="oa-cols">'+
+      '<div>'+
+        '<div class="oa-f"><label>Address Type</label><select id="adKind">'+kindOptions(ADDRESS_KINDS,(cur&&cur.kind)||"home")+'</select></div>'+
+        '<div class="oa-f"><label>Street Address <span class="oa-req">required</span></label>'+
+          '<input type="text" id="adStreet" value="'+esc(cur?cur.street:"")+'" placeholder="1234 Main Street"></div>'+
+        '<div class="oa-f"><label>Apt / Suite <span class="oa-hint">optional</span></label>'+
+          '<input type="text" id="adApt" value="'+esc(cur?cur.apt:"")+'" placeholder="Apt 12B"></div>'+
+        '<div class="oa-f"><label>City</label><input type="text" id="adCity" value="'+esc(cur?cur.city:"")+'" placeholder="Fort Worth"></div>'+
+      '</div>'+
+      '<div>'+
+        '<div class="oa-f"><label>Country</label><select id="adCountry">'+
+          '<option value="US"'+(country==="US"?" selected":"")+'>United States</option>'+
+          '<option value="CA"'+(country==="CA"?" selected":"")+'>Canada</option></select></div>'+
+        '<div class="oa-f ta-wrap"><label id="adRegionLbl">'+esc(L.regionLabel)+'</label>'+
+          '<input type="text" id="adRegion" autocomplete="off" value="'+esc(cur?regionName(country,cur.region)||cur.region:"")+'" placeholder="Start typing…"></div>'+
+        '<div class="oa-f"><label id="adPostalLbl">'+esc(L.postalLabel)+'</label>'+
+          '<input type="text" id="adPostal" value="'+esc(cur?cur.postalCode:"")+'" placeholder="'+esc(L.postalPlaceholder)+'"></div>'+
+        '<div class="oa-note" style="margin-top:0">Changing the country swaps the region list and relabels the two fields '+
+          'above it — United States uses State and ZIP Code, Canada uses Province and Postal Code. The first address on a '+
+          'contact is also the one shown in the lead table.</div>'+
+      '</div></div>';
+  }
+  var regionCode=(cur&&cur.region)||"";
+  function wire(){
+    var sel=document.getElementById("adCountry");
+    var input=document.getElementById("adRegion");
+    var ta=attachTypeahead(input,localeFor(country).regions.map(function(r){return {id:r[0],label:r[1],sub:r[0]};}),
+      function(pick){ input.value=pick.label; regionCode=pick.id; },
+      {emptyText:"No "+localeFor(country).regionLabel.toLowerCase()+" by that name"});
+    sel.addEventListener("change",function(){
+      country=sel.value; regionCode="";
+      /* Rebuilding the whole body would throw away the street the operator
+         already typed, so only the locale-dependent bits are swapped. */
+      var L=localeFor(country);
+      document.getElementById("adRegionLbl").textContent=L.regionLabel;
+      document.getElementById("adPostalLbl").textContent=L.postalLabel;
+      var p=document.getElementById("adPostal"); p.placeholder=L.postalPlaceholder; p.value="";
+      input.value=""; ta.close();
+      var fresh=input.cloneNode(true); input.parentNode.replaceChild(fresh,input); input=fresh;
+      ta=attachTypeahead(input,L.regions.map(function(r){return {id:r[0],label:r[1],sub:r[0]};}),
+        function(pick){ input.value=pick.label; regionCode=pick.id; },
+        {emptyText:"No "+L.regionLabel.toLowerCase()+" by that name"});
+      crmToast("Switched to "+(country==="CA"?"Canadian":"US")+" address format");
+    });
+    document.getElementById("adSave").addEventListener("click",function(){
+      var street=document.getElementById("adStreet").value.trim();
+      if(!street){ crmToast("Street address is required"); return; }
+      // A typed name that was never picked still resolves, so "texas" works.
+      if(!regionCode){
+        var typed=input.value.trim().toLowerCase();
+        var m=localeFor(country).regions.filter(function(r){ return r[1].toLowerCase()===typed||r[0].toLowerCase()===typed; })[0];
+        if(m)regionCode=m[0];
+        else if(typed){ crmToast("Pick a "+localeFor(country).regionLabel.toLowerCase()+" from the list"); return; }
+      }
+      var payload={kind:document.getElementById("adKind").value,street:street,
+        apt:document.getElementById("adApt").value.trim(),city:document.getElementById("adCity").value.trim(),
+        region:regionCode,country:country,postalCode:document.getElementById("adPostal").value.trim()};
+      var req=cur
+        ? crFetch("/api/crm/contact-address/"+encodeURIComponent(cur.id),crPatchJson(payload),"Address saved")
+        : crFetch("/api/crm/lead/"+encodeURIComponent(l.id)+"/addresses",crJson(payload),"Address added");
+      req.then(function(j){ if(j){ closeOa(); crApply(j.record); crSyncLeadHeader(l); } });
+    });
+  }
+  oaOverlay(cur?"Edit Address":"Add Address",body(),
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+    '<button class="oa-go" id="adSave">'+(cur?"SAVE":"ADD ADDRESS")+'</button>');
+  wire();
+}
+
+/* ── Edit Social Media ── */
+
+function openSocialModal(l){
+  var by={}; ((CR.record||crEmpty()).social||[]).forEach(function(s){ by[s.platform]=s.url; });
+  var field=function(p){
+    return '<div class="oa-f"><label>'+esc(p[1])+'</label>'+
+      '<input type="text" id="so_'+p[0]+'" value="'+esc(by[p[0]]||"")+'" placeholder="@handle or full URL"></div>';
+  };
+  oaOverlay("Edit Social Media",
+    '<div class="oa-cols">'+
+      '<div>'+SOCIALS.slice(0,4).map(field).join("")+'</div>'+
+      '<div>'+SOCIALS.slice(4).map(field).join("")+'</div>'+
+    '</div>'+
+    '<div class="oa-note">Type a handle and it becomes the platform’s profile link — <code>@marcopuga</code> on Instagram '+
+      'saves as <code>https://instagram.com/marcopuga</code>. A full <code>http(s)</code> URL is kept exactly as pasted. '+
+      'Clear a field to remove that profile.</div>',
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+    '<button class="oa-go" id="soSave">SAVE</button>');
+  document.getElementById("soSave").addEventListener("click",function(){
+    var links={};
+    SOCIALS.forEach(function(p){ links[p[0]]=(document.getElementById("so_"+p[0])||{}).value||""; });
+    crFetch("/api/crm/lead/"+encodeURIComponent(l.id)+"/social",crPutJson({links:links}),"Social profiles saved")
+      .then(function(j){ if(j){ closeOa(); CR.record.social=j.social||[]; crRepaint(); } });
+  });
+}
+
+/* ── Add Relationship ── */
+
+function openRelationshipModal(l){
+  var picked=null;
+  oaOverlay("Add Relationship",
+    '<div class="oa-f ta-wrap"><label>Contact <span class="oa-req">required</span></label>'+
+      '<input type="text" id="rlName" autocomplete="off" placeholder="Start typing a name…"></div>'+
+    '<div class="oa-f"><label>Relationship</label>'+
+      '<input type="text" id="rlKind" placeholder="Spouse, Co-buyer, Referred by…"></div>'+
+    '<div class="oa-note">NEXT stays disabled until you pick somebody from the list. A relationship pointing at a name '+
+      'that is not in the CRM cannot be opened, so it is not worth saving.</div>',
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+    '<button class="oa-go" id="rlNext" disabled>NEXT</button>');
+  var input=document.getElementById("rlName"), next=document.getElementById("rlNext");
+  attachTypeahead(input,
+    LEADS.filter(function(x){return x.id!==l.id;}).slice(0,1200).map(function(x){
+      return {id:x.id,label:x.name||"(no name)",sub:x.email||x.phone||""}; }),
+    function(pick){ picked=pick; input.value=pick.label; next.disabled=false; },
+    {minChars:1,emptyText:"Nobody in the CRM matches that"});
+  input.addEventListener("input",function(){ picked=null; next.disabled=true; });
+  next.addEventListener("click",function(){
+    if(!picked)return;
+    var kind=(document.getElementById("rlKind").value||"").trim()||"Related";
+    l.relationships=(l.relationships||[]).slice();
+    l.relationships.push({name:picked.label,relation:kind,leadId:picked.id});
+    ldPatch(l,{relationships:l.relationships},"Relationship added").then(function(){ closeOa(); crRepaint(); });
+  });
+}
+
+/* ── New Note ── */
+
+function openNoteModal(l){
+  ensureRoster(function(roster){
+    var important=false, hidden=true, mentions=[];
+    oaOverlay("New Note",
+      '<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap">'+
+        '<label class="oa-ck"><input type="checkbox" id="ntHidden" checked> Notes are hidden from viewers</label>'+
+        '<button class="oa-alt" id="ntStar" style="padding:6px 12px">☆ IMPORTANT</button>'+
+        '<div style="flex:1"></div>'+
+        '<button class="oa-alt" id="ntAi" style="padding:6px 12px">✦ AI: HELP ME WRITE</button>'+
+      '</div>'+
+      '<div class="oa-f ta-wrap" style="margin-bottom:6px">'+
+        '<textarea id="ntBody" rows="7" placeholder="Write a note. Type @ to notify someone on the team."></textarea></div>'+
+      '<div id="ntChips" class="nt-mn"></div>'+
+      '<div class="oa-note">A note is logged on the activity feed as well, so the feed never claims silence about somebody '+
+        'who was written up today. “Hidden from viewers” keeps it off any client-facing view.</div>',
+      '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+      '<button class="oa-go" id="ntSave">SAVE NOTE</button>');
+
+    var star=document.getElementById("ntStar"), area=document.getElementById("ntBody");
+    star.addEventListener("click",function(){
+      important=!important;
+      star.textContent=(important?"★":"☆")+" IMPORTANT";
+      star.style.background=important?"var(--teal-soft)":"#fff";
+    });
+    document.getElementById("ntHidden").addEventListener("change",function(){ hidden=this.checked; });
+
+    /* @mention: the popup opens on the token being typed after "@" and
+       inserts the member's name, recording the id so the mention is a real
+       reference and not a string that happens to start with an at sign. */
+    var pop=null;
+    function closePop(){ if(pop){ pop.remove(); pop=null; } }
+    function mentionToken(){
+      var v=area.value.slice(0,area.selectionStart);
+      var m=/@([A-Za-z0-9 _.-]*)$/.exec(v);
+      return m?{q:m[1],start:area.selectionStart-m[0].length}:null;
+    }
+    function showPop(){
+      var tok=mentionToken(); if(!tok){ closePop(); return; }
+      var q=tok.q.toLowerCase();
+      var hits=roster.filter(function(u){ return !q||u.name.toLowerCase().indexOf(q)>=0; }).slice(0,8);
+      if(!hits.length){ closePop(); return; }
+      if(!pop){ pop=document.createElement("div"); pop.className="ta-list"; area.parentNode.appendChild(pop); }
+      pop.innerHTML=hits.map(function(u,i){ return '<button type="button" data-i="'+i+'">'+esc(u.name)+'</button>'; }).join("");
+      pop.querySelectorAll("button").forEach(function(b){
+        b.addEventListener("mousedown",function(ev){
+          ev.preventDefault();
+          var u=hits[+b.getAttribute("data-i")];
+          area.value=area.value.slice(0,tok.start)+"@"+u.name+" "+area.value.slice(area.selectionStart);
+          if(!mentions.some(function(m){return m.memberId===u.id;}))mentions.push({memberId:u.id,memberName:u.name});
+          document.getElementById("ntChips").innerHTML=mentions.map(function(m){return '<span>@'+esc(m.memberName)+'</span>';}).join("");
+          closePop(); area.focus();
+        });
+      });
+    }
+    area.addEventListener("input",showPop);
+    area.addEventListener("blur",function(){ setTimeout(closePop,120); });
+
+    /* AI: HELP ME WRITE drafts from what this system actually knows about the
+       contact. It fills the box; nothing is saved until SAVE NOTE. */
+    document.getElementById("ntAi").addEventListener("click",function(){
+      var lines=leadInsights(l);
+      area.value=(area.value?area.value.replace(/\s+$/,"")+"\n\n":"")+
+        "Draft from the record — edit before saving:\n"+lines.map(function(s){return "• "+s;}).join("\n");
+      crmToast("Drafted from this contact's own record");
+      area.focus();
+    });
+
+    document.getElementById("ntSave").addEventListener("click",function(){
+      var text=area.value.trim();
+      if(!text){ crmToast("A note needs some text"); return; }
+      crFetch("/api/crm/lead/"+encodeURIComponent(l.id)+"/notes",
+        crJson({body:text,hiddenFromViewers:hidden,important:important,author:crmUserId(),mentions:mentions}),"Note saved")
+        .then(function(j){
+          if(!j)return;
+          closeOa(); CR.record.notes=j.notes||[]; CR_OPEN.notes=true; crSaveOpen(); crRepaint();
+          // The note went on the timeline server-side; pull it into this view too.
+          l.activity=(l.activity||[]).concat([{type:"note",description:text.slice(0,200),timestamp:new Date().toISOString()}]);
+          l.lastActivity=new Date().toISOString();
+          renderActivityFeed();
+        });
+    });
+  });
+}
+
+/* ── Select Transaction Type → Add Transaction Information ── */
+
+var TX_TYPES=[
+  ["buyer","Buyer","Representing the person buying."],
+  ["seller","Seller","Representing the person selling."],
+  ["tenant","Tenant","A lease, representing the renter."],
+  ["landlord","Landlord","A lease, representing the owner."],
+  ["referral","Referral","Sent to another agent for a fee."]
+];
+
+function openTxTypeModal(l){
+  var chosen=null;
+  oaOverlay("Select Transaction Type",
+    '<div class="tp-grid">'+TX_TYPES.map(function(t){
+      return '<button class="tp" data-tt="'+t[0]+'">'+esc(t[1])+'<small>'+esc(t[2])+'</small></button>';
+    }).join("")+'</div>'+
+    '<div class="oa-note">This creates a real record in the transaction pipeline and links it to '+esc(l.name||"this contact")+
+      '. It is the same store the Transactions tab reads — the contact record does not keep a second copy.</div>',
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+    '<button class="oa-go" id="ttNext" disabled>NEXT</button>');
+  var next=document.getElementById("ttNext");
+  document.querySelectorAll("#oaOv .tp").forEach(function(b){
+    b.addEventListener("click",function(){
+      chosen=b.getAttribute("data-tt");
+      document.querySelectorAll("#oaOv .tp").forEach(function(x){ x.classList.toggle("on",x===b); });
+      next.disabled=false;
+    });
+  });
+  next.addEventListener("click",function(){ if(chosen)openTxInfoModal(l,chosen); });
+}
+
+function openTxInfoModal(l,dealType){
+  var typeLabel=(TX_TYPES.filter(function(t){return t[0]===dealType;})[0]||["","Transaction"])[1];
+  ensureRoster(function(roster){
+    oaOverlay("Add Transaction Information — "+typeLabel,
+      '<div class="ld-sec-h" style="margin:0 0 8px">Transaction Details</div>'+
+      '<div class="oa-cols">'+
+        '<div>'+
+          '<div class="oa-f"><label>Property Address <span class="oa-req">required</span></label>'+
+            '<input type="text" id="txAddr" value="'+esc(l.address||"")+'" placeholder="1234 Main Street, Fort Worth TX"></div>'+
+          '<div class="oa-f"><label>Status</label><select id="txStatus">'+
+            ["pipeline","active","pending","closed"].map(function(s){
+              return '<option value="'+s+'"'+(s==="pipeline"?" selected":"")+'>'+esc(TX_STATUS[s].l)+'</option>'; }).join("")+
+            '</select></div>'+
+          '<div class="oa-f"><label>Contract Date <span class="oa-hint">optional</span></label>'+
+            '<input type="date" id="txContract"></div>'+
+        '</div>'+
+        '<div>'+
+          '<div class="oa-f"><label>Closing Date <span class="oa-hint">optional</span></label>'+
+            '<input type="date" id="txClosing"></div>'+
+          '<div class="oa-f"><label>Source <span class="oa-hint">optional</span></label>'+
+            '<input type="text" id="txSource" value="'+esc(l.source||"")+'"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="ld-sec-h" style="margin:10px 0 8px;border-top:1px solid var(--line-2);padding-top:14px">Listing Details</div>'+
+      '<div class="oa-cols">'+
+        '<div>'+
+          '<div class="oa-f"><label>MLS Number <span class="oa-hint">optional</span></label><input type="text" id="txMls"></div>'+
+          '<div class="oa-f"><label>List Price <span class="oa-hint">optional</span></label>'+
+            '<input type="number" id="txList" step="1000" placeholder="425000"></div>'+
+        '</div>'+
+        '<div>'+
+          '<div class="oa-f"><label>Sale / Contract Price <span class="oa-hint">optional</span></label>'+
+            '<input type="number" id="txPrice" step="1000" placeholder="418000"></div>'+
+          '<div class="oa-f"><label>Commission % <span class="oa-hint">optional</span></label>'+
+            '<input type="number" id="txComm" step="0.25" placeholder="3"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="ld-sec-h" style="margin:10px 0 8px;border-top:1px solid var(--line-2);padding-top:14px">Roles Assignment</div>'+
+      '<div class="oa-cols">'+
+        '<div>'+
+          '<div class="oa-f"><label>'+(dealType==="seller"||dealType==="landlord"?"Seller / Owner":"Buyer / Tenant")+'</label>'+
+            '<input type="text" id="txParty" value="'+esc(l.name||"")+'"></div>'+
+          '<div class="oa-f"><label>Assigned Agent</label><select id="txAgent">'+
+            roster.map(function(u){ return '<option value="'+esc(u.name)+'"'+(u.name===(l.assignedUserName||"Marco Puga")?" selected":"")+'>'+esc(u.name)+'</option>'; }).join("")+
+            '</select></div>'+
+        '</div>'+
+        '<div>'+
+          '<div class="oa-f"><label>Co-op Agent <span class="oa-hint">optional</span></label><input type="text" id="txCoop"></div>'+
+          '<div class="oa-f"><label>Lender / Title <span class="oa-hint">optional</span></label><input type="text" id="txLender"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="oa-note">Only the address is required. Everything left blank stays blank on the transaction rather than '+
+        'being filled with a guess — a placeholder closing date drives real deadline alerts.</div>',
+      '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+      '<button class="oa-go" id="txSave">CREATE TRANSACTION</button>');
+
+    document.getElementById("txSave").addEventListener("click",function(){
+      var addr=document.getElementById("txAddr").value.trim();
+      if(!addr){ crmToast("A transaction needs a property address"); return; }
+      var num=function(id){ var v=parseFloat((document.getElementById(id)||{}).value); return isFinite(v)?v:undefined; };
+      var str=function(id){ var v=((document.getElementById(id)||{}).value||"").trim(); return v||undefined; };
+      var seller=dealType==="seller"||dealType==="landlord";
+      var party=str("txParty");
+      var parties={leadName:l.name||undefined,phone:l.phone||undefined,email:l.email||undefined,
+        assignedTo:str("txAgent"),commissionPercent:num("txComm"),lenderName:str("txLender")};
+      if(seller){ parties.sellerName=party; parties.buyerAgent=str("txCoop"); }
+      else { parties.buyerName=party; parties.sellerAgent=str("txCoop"); }
+      var payload={address:addr,dealType:dealType,status:document.getElementById("txStatus").value,
+        leadId:l.id,parties:parties,mls:str("txMls"),listPrice:num("txList"),price:num("txPrice"),
+        contractDate:str("txContract"),closingDate:str("txClosing"),source:str("txSource")};
+      crFetch("/api/transactions",crJson(payload),"Transaction created").then(function(j){
+        if(!j)return;
+        closeOa();
+        /* TX holds MAPPED rows, so the new transaction goes through the same
+           mapper the initial load uses — pushing the raw API shape would give
+           this one row a different set of fields from every other. */
+        var tx=j.transaction;
+        if(tx&&tx.id)TX.push(mapApiTx(tx));
+        CR_OPEN.transactions=true; crSaveOpen(); crRepaint();
+        if(typeof renderTx==="function")renderTx();
+      });
+    });
+  });
+}
+
+/* ── Select Document Type → Upload ── */
+
+function openDocTypeModal(l){
+  function paint(types){
+    var chosen=null;
+    oaOverlay("Select Document Type",
+      '<div class="tp-grid">'+types.map(function(t){
+        return '<button class="tp" data-dt="'+esc(t.id)+'">'+esc(t.label)+'</button>'; }).join("")+'</div>',
+      '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+      '<button class="oa-go" id="dtNext" disabled>NEXT</button>');
+    var next=document.getElementById("dtNext");
+    document.querySelectorAll("#oaOv .tp").forEach(function(b){
+      b.addEventListener("click",function(){
+        chosen=b.getAttribute("data-dt");
+        document.querySelectorAll("#oaOv .tp").forEach(function(x){ x.classList.toggle("on",x===b); });
+        next.disabled=false;
+      });
+    });
+    next.addEventListener("click",function(){ if(chosen)openDocUploadModal(l,chosen); });
+  }
+  if(CR.docTypes&&CR.docTypes.length)paint(CR.docTypes);
+  else crmToast("Document types are still loading — try again in a second");
+}
+
+var DOC_MAX_BYTES=15*1024*1024;
+
+function openDocUploadModal(l,docType){
+  var file=null;
+  oaOverlay("Upload — "+docTypeLabel(docType),
+    '<div class="doc-drop" id="dzDrop"><b>Drop a file here, or click to choose one</b>'+
+      'PDF, image or document · up to 15MB</div>'+
+    '<input type="file" id="dzFile" style="display:none">'+
+    '<div id="dzPick" style="margin-top:10px;font-size:12.5px;color:#8b95a0">No file chosen yet.</div>'+
+    '<div class="oa-cols" style="margin-top:14px">'+
+      '<div><div class="oa-f"><label>Signed Date <span class="oa-hint">optional</span></label>'+
+        '<input type="date" id="dzSigned"></div></div>'+
+      '<div><div class="oa-f"><label>Expiration Date <span class="oa-hint">optional</span></label>'+
+        '<input type="date" id="dzExp"></div></div>'+
+    '</div>'+
+    '<label class="oa-ck" style="margin-top:4px"><input type="checkbox" id="dzTx"> Create Pipeline Transaction from this document</label>'+
+    '<div class="oa-note">The toggle opens a real transaction in the pipeline, linked to this contact and to this document. '+
+      'The file itself is stored on the server volume; nothing is sent anywhere else and nothing reads its contents.</div>',
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+    '<button class="oa-go" id="dzGo" disabled>UPLOAD</button>');
+
+  var drop=document.getElementById("dzDrop"), input=document.getElementById("dzFile");
+  var pick=document.getElementById("dzPick"), go=document.getElementById("dzGo");
+  function take(f){
+    if(!f)return;
+    if(f.size>DOC_MAX_BYTES){
+      // Refused here as well as at the server, so a 40MB file never uploads
+      // for thirty seconds just to be rejected at the far end.
+      pick.innerHTML='<span style="color:#c0392b">“'+esc(f.name)+'” is '+crBytes(f.size)+' — larger than the 15MB limit.</span>';
+      file=null; go.disabled=true; return;
+    }
+    file=f; go.disabled=false;
+    pick.innerHTML='Ready to upload: <b style="color:#4a5560">'+esc(f.name)+'</b> · '+crBytes(f.size);
+  }
+  drop.addEventListener("click",function(){ input.click(); });
+  input.addEventListener("change",function(){ take(input.files&&input.files[0]); });
+  ["dragenter","dragover"].forEach(function(ev){
+    drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.add("hot"); });
+  });
+  ["dragleave","drop"].forEach(function(ev){
+    drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.remove("hot"); });
+  });
+  drop.addEventListener("drop",function(e){ take(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]); });
+
+  go.addEventListener("click",function(){
+    if(!file)return;
+    var fd=new FormData();
+    fd.append("file",file);
+    fd.append("docType",docType);
+    var sd=document.getElementById("dzSigned").value, ed=document.getElementById("dzExp").value;
+    if(sd)fd.append("signedDate",sd);
+    if(ed)fd.append("expirationDate",ed);
+    if(document.getElementById("dzTx").checked){
+      fd.append("createTransaction","true");
+      if(l.address)fd.append("transactionAddress",l.address);
+    }
+    go.disabled=true; go.textContent="UPLOADING…";
+    fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/documents"),{method:"POST",body:fd})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+      .then(function(res){
+        if(!res.ok){ crmToast(res.j.error||"Upload failed"); go.disabled=false; go.textContent="UPLOAD"; return; }
+        closeOa();
+        CR.record.documents=res.j.documents||[];
+        CR_OPEN.documents=true; crSaveOpen(); crRepaint();
+        crmToast(res.j.transactionId?"Document uploaded and a transaction opened":"Document uploaded");
+        /* A transaction opened by the upload exists server-side; pull the
+           list again so the Transactions block and tab both show it. */
+        if(res.j.transactionId)refreshTxList();
+      })
+      .catch(function(){ crmToast("Could not reach the server"); go.disabled=false; go.textContent="UPLOAD"; });
+  });
+}
+
+/** Re-read the transaction list from the server and repaint what shows it. */
+function refreshTxList(){
+  fetch(crmApi("/api/transactions")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    var list=(d&&(d.transactions||d.deals))||[];
+    if(!list.length)return;
+    TX=list.map(mapApiTx);
+    crRepaint();
+    if(typeof renderTx==="function")renderTx();
+  }).catch(function(){});
+}
+
+/* ────────────────────────── middle column ────────────────────────── */
+
+/**
+ * The AI widget. Collapsible, and "Collapse by default" is a per-user
+ * preference saved server-side — the same store the Columns picker uses — so
+ * it follows the agent across devices rather than living in one browser.
+ *
+ * Named Harvey, not Gabbi: Harvey is this system's assistant and the one that
+ * actually produces the lines below. Renaming the widget after somebody
+ * else's assistant would put a brand on output it did not write.
+ */
+var aiFolded=null;   // null until prefs load, then true/false for this session
+
+function aiPanelHTML(l){
+  var folded=aiFolded===null?!!UI_PREFS.contactAiCollapsed:aiFolded;
+  var items=(aiTab==="rec"?leadRecs(l):leadInsights(l));
+  return '<div class="ai-panel'+(folded?" folded":"")+'" id="crAiPanel">'+
+    '<div class="ai-top ai-fold" id="crAiFold"><h4>✦ Harvey AI <span style="font-size:11px">'+(folded?"▸":"▾")+'</span></h4>'+
+      '<span class="ai-upd">↻ Updated: '+esc(fmtUpdated(l.lastActivity||l.updatedAt))+'</span></div>'+
+    '<div class="ai-tabs">'+
+      '<button data-ai="rec" class="'+(aiTab==="rec"?"on":"")+'">Harvey Recommends</button>'+
+      '<button data-ai="about" class="'+(aiTab==="about"?"on":"")+'">About This Lead</button></div>'+
+    '<ul class="ai-stream">'+items.map(function(i){return '<li>'+esc(i)+'</li>';}).join("")+'</ul>'+
+    '<label class="ai-def"><input type="checkbox" id="crAiDefault"'+(UI_PREFS.contactAiCollapsed?" checked":"")+
+      '> Collapse by default</label>'+
+  '</div>';
+}
+
+function wireAiPanel(l){
+  var fold=document.getElementById("crAiFold");
+  if(fold)fold.addEventListener("click",function(){
+    var panel=document.getElementById("crAiPanel");
+    aiFolded=!panel.classList.contains("folded");
+    panel.classList.toggle("folded",aiFolded);
+    var caret=panel.querySelector("h4 span"); if(caret)caret.textContent=aiFolded?"▸":"▾";
+  });
+  var def=document.getElementById("crAiDefault");
+  if(def)def.addEventListener("change",function(){
+    UI_PREFS.contactAiCollapsed=def.checked;
+    saveUiPrefs({contactAiCollapsed:def.checked});
+    crmToast(def.checked?"Harvey AI will start collapsed":"Harvey AI will start expanded");
+  });
+  document.querySelectorAll("#crAiPanel [data-ai]").forEach(function(b){
+    b.addEventListener("click",function(e){
+      e.stopPropagation();
+      aiTab=b.getAttribute("data-ai");
+      var host=document.getElementById("crMiddle"); if(!host)return;
+      var lead=LEADS.find(function(x){return x.id===currentLeadId;})||l;
+      host.querySelector(".ai-panel").outerHTML=aiPanelHTML(lead);
+      wireAiPanel(lead);
+    });
+  });
+}
+
+function loadUiPrefs(then){
+  fetch("/api/settings/ui-prefs?user="+encodeURIComponent(crmUserId()))
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){ UI_PREFS=(d&&d.prefs)||{}; if(then)then(); })
+    .catch(function(){ if(then)then(); });
+}
+function saveUiPrefs(patch){
+  fetch("/api/settings/ui-prefs",{method:"PUT",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({user:crmUserId(),prefs:patch})})
+    .catch(function(){ /* stays for this session; the next load simply won't have it */ });
+}
+
+/* ── activity feed with its filter bar ── */
+
+var FEED_FILTER="all";
+var FEED_KINDS=[
+  ["all","All","◍"],["note","Notes","✎"],["call","Calls","☎"],["text","Texts","✉"],
+  ["email","Emails","@"],["appointment","Appointments","◷"],["other","Other","•"]
+];
+/** Which bucket a raw activity type falls in. */
+function feedBucket(t){
+  var s=String(t||"");
+  if(/call/.test(s))return "call";
+  if(/text|sms/.test(s))return "text";
+  if(/email|mail/.test(s))return "email";
+  if(/appointment|showing/.test(s))return "appointment";
+  if(/note/.test(s))return "note";
+  return "other";
+}
+function feedIcon(b){
+  for(var i=0;i<FEED_KINDS.length;i++)if(FEED_KINDS[i][0]===b)return FEED_KINDS[i][2];
+  return "•";
+}
+
+function activityFeedHTML(l){
+  var all=(l.activity||[]).slice();
+  var counts={all:all.length};
+  all.forEach(function(a){ var b=feedBucket(a.type); counts[b]=(counts[b]||0)+1; });
+  var bar=FEED_KINDS.map(function(k){
+    var n=counts[k[0]]||0;
+    /* A filter that would show nothing is disabled rather than hidden: the
+       zero is information — it says this contact has never been called. */
+    return '<button data-ff="'+k[0]+'" class="'+(FEED_FILTER===k[0]?"on":"")+'"'+(n?"":" disabled")+
+      '><span>'+k[2]+'</span> '+esc(k[1])+' <span class="n">'+n+'</span></button>';
+  }).join("");
+  return '<div class="ld-sec-h">Activity</div>'+
+    '<div class="ff" id="crFf">'+bar+'</div>'+
+    '<div id="ldTimeline">'+feedRowsHTML(l)+'</div>';
+}
+
+function feedRowsHTML(l){
+  var items=(l.activity||[]).slice()
+    .filter(function(a){ return FEED_FILTER==="all"||feedBucket(a.type)===FEED_FILTER; })
+    // Newest first, by the timestamp itself rather than array order — imported
+    // history and live logging arrive interleaved.
+    .sort(function(a,b){ return String(b.timestamp||b.at||"").localeCompare(String(a.timestamp||a.at||"")); })
+    .slice(0,40);
+  if(!items.length){
+    return '<div class="empty" style="padding:16px 0">'+
+      (FEED_FILTER==="all"?"No activity logged yet.":"Nothing of that kind on this contact.")+'</div>';
+  }
+  var label=function(t){ return String(t||"activity").replace(/_/g," ").replace(/^./,function(c){return c.toUpperCase();}); };
+  return items.map(function(a){
+    var text=a.description||a.note||"", when=a.timestamp||a.at||"";
+    return '<div class="tl"><div class="dot">'+feedIcon(feedBucket(a.type))+'</div>'+
+      '<div><div class="tt">'+esc(label(a.type))+(text?" — "+esc(text):"")+'</div>'+
+      '<div class="tm">'+(when?esc(relTime(when)):"")+'</div></div></div>';
+  }).join("");
+}
+
+function renderActivityFeed(){
+  var l=LEADS.find(function(x){return x.id===currentLeadId;}); if(!l)return;
+  var host=document.getElementById("crFeed"); if(!host)return;
+  host.innerHTML=activityFeedHTML(l);
+  host.querySelectorAll("#crFf button[data-ff]").forEach(function(b){
+    b.addEventListener("click",function(){
+      if(b.disabled)return;
+      FEED_FILTER=b.getAttribute("data-ff");
+      renderActivityFeed();
+    });
+  });
+}
+
+/* ────────────────────────── right column ────────────────────────── */
+
+function rightStackHTML(l){
+  return '<div class="ld-card">'+
+    '<div class="rblock"><h5>Assigned To: <button class="mini-pill" id="ldAssignBtn">MANAGE</button></h5>'+
+      '<div class="assign-row" id="ldAssignRow"><div class="av'+(l.assignedUserName?'':' has-marco-photo')+'">'+
+        (l.assignedUserName?esc(initials(l.assignedUserName)):'')+'</div><div>'+
+        '<div style="font-weight:700;color:#4a5560">'+esc(l.assignedUserName||"Marco Puga")+'</div>'+
+        '<div style="color:var(--muted);font-size:12px">'+(l.assignedUserName?"Assigned agent":"Primary Agent (default)")+'</div>'+
+      '</div></div></div>'+
+    '<div class="rblock"><h5>Web Activity</h5><div id="ldWebActBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
+    '<div class="rblock"><h5>Agreements</h5>'+
+      /* These three open the real document flow with the agreement type
+         pre-picked, rather than being three buttons that do nothing. */
+      '<button class="rbtn" data-agree="buyer_representation">+ BUYER</button>'+
+      '<button class="rbtn" data-agree="listing_agreement">+ SELLER</button>'+
+      '<button class="rbtn" data-agree="referral_agreement">+ REFERRAL</button>'+
+      '<div class="wdg-note">Each one opens the upload step with that agreement type already chosen.</div></div>'+
+    '<div class="rblock"><h5>Appointments <button class="mini-pill" id="ldApptAdd">+ ADD</button></h5>'+
+      '<div class="wdg-note">Creates a real task on the board, assigned and dated. Same list the Tasks widget shows.</div></div>'+
+    '<div class="rblock"><h5>Marketing</h5>'+
+      '<div class="wdg-note" style="margin-bottom:10px">Send postcards, bifolds, trifolds, and snap packs.</div>'+
+      '<button class="rbtn" style="background:var(--teal-pill);color:#fff;border-color:var(--teal-pill)">✉ SEND MAIL</button></div>'+
+    '<div class="rblock"><h5>Brivity Home App</h5>'+
+      '<div class="wdg-off">There is no client mobile app connected to this system, so there is no adoption to report here. '+
+        'Nothing on this record can invite a contact to one.</div></div>'+
+    '<div class="rblock"><h5>Tasks <button class="mini-pill" id="ldTaskAdd">+ ADD</button></h5>'+
+      '<div id="ldTasksBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
+    '<div class="rblock"><h5>Auto Plans <button class="mini-pill" id="ldPlanAdd">+ ADD</button></h5>'+
+      '<div id="ldPlansBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
+    '<div class="rblock"><h5>Listing Alerts <button class="mini-pill" id="ldAlertAdd">+ ADD</button></h5>'+
+      '<div id="ldAlertsBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
+    '<div class="rblock"><h5>Market Reports <button class="mini-pill" id="ldReportAdd">+ ADD</button></h5>'+
+      '<div id="ldReportsBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
+    '<div class="rblock" style="margin-bottom:0"><h5>CMA Reports</h5>'+
+      '<div class="wdg-off">No CMA generation is wired into this CRM yet, so there are no CMA reports to list. '+
+        'Market Reports above are the live thing this system does send.</div></div>'+
+  '</div>';
+}
+
 function renderLeadTab(){
   const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return; const body=document.getElementById("ldTabBody");
   if(ldTab==="note"){
@@ -4724,16 +6068,6 @@ function renderLeadTab(){
     body.innerHTML='<input class="ld-input" id="ldOtherTitle" placeholder="Log an activity…"><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldLogOther">LOG</button></div>';
     document.getElementById("ldLogOther").addEventListener("click",()=>logActivity("other",document.getElementById("ldOtherTitle").value||"Activity"));
   }
-}
-function renderTimeline(){
-  const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
-  const items=(l.activity||[]).slice().reverse().slice(0,12);
-  const icon=t=>/call/.test(t)?"☎":/text/.test(t)?"✉":/email/.test(t)?"@":/appointment|showing/.test(t)?"◷":t==="note"?"✎":"•";
-  const label=t=>String(t||"activity").replace(/_/g," ").replace(/^./,c=>c.toUpperCase());
-  document.getElementById("ldTimeline").innerHTML=items.length?items.map(a=>{
-    var text=a.description||a.note||"", when=a.timestamp||a.at||"";
-    return '<div class="tl"><div class="dot">'+icon(a.type)+'</div><div><div class="tt">'+esc(label(a.type))+(text?" - "+esc(text):"")+'</div><div class="tm">'+(when?relTime(when):"")+'</div></div></div>';
-  }).join(""):'<div class="empty" style="padding:16px 0">No activity logged yet.</div>';
 }
 document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")&&!e.target.closest("[data-dd]")&&!e.target.closest("select")&&!e.target.closest("#userFilter")) closeDD(); });
 /* Close anchored menus when the page scrolls out from under them — but NOT
@@ -5245,6 +6579,8 @@ renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();re
 refreshEmailConn();
 wireToolbarDropdowns();
 loadTablePrefs();      // per-user Columns + Sort By, saved server-side
+loadUiPrefs();         // per-user UI switches (contact record's AI widget)
+loadTagTemplates();    // tag type-ahead in the contact record's Details block
 paintSortPills();
 if(typeof paintSortArrows==="function")paintSortArrows();
 

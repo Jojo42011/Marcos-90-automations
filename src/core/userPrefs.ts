@@ -22,9 +22,20 @@ export interface TablePrefs {
   sortDir?: 1 | -1;
 }
 
+/**
+ * Small per-user UI switches that are not about a table — today the contact
+ * record's "Collapse by default" for the AI widget. Deliberately a flat
+ * key -> boolean|string|number map rather than a typed struct: these are
+ * one-line view preferences, and every new one should cost a key, not a
+ * migration. Anything that needs structure belongs in its own store.
+ */
+export type UiPrefs = Record<string, boolean | string | number>;
+
 type PrefsFile = {
   /** userId -> tableKey ("leads" | "people" | "tx" | ...) -> prefs */
   tables?: Record<string, Record<string, TablePrefs>>;
+  /** userId -> small UI switches (see UiPrefs). */
+  ui?: Record<string, UiPrefs>;
   updatedAt?: string;
 };
 
@@ -114,4 +125,53 @@ export function setUserTablePrefs(userId: string, tableKey: string, prefs: unkno
   tables[uid] = mine;
   writeFileSafe({ ...data, tables, updatedAt: new Date().toISOString() });
   return clean;
+}
+
+/* ────────────────────────── UI switches ────────────────────────── */
+
+const MAX_UI_KEYS = 40;
+
+function sanitizeUiPrefs(raw: unknown): UiPrefs {
+  const p = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const out: UiPrefs = {};
+  for (const key of Object.keys(p)) {
+    if (Object.keys(out).length >= MAX_UI_KEYS) break;
+    const k = cleanKey(key, 64);
+    if (!k) continue;
+    const v = p[key];
+    if (typeof v === "boolean") out[k] = v;
+    else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+    else if (typeof v === "string") out[k] = v.slice(0, 200);
+    // anything else (objects, null, arrays) is dropped rather than stored as junk
+  }
+  return out;
+}
+
+/** Every UI switch for one user (empty object when none saved). */
+export function getUserUiPrefs(userId: string): UiPrefs {
+  const uid = cleanKey(userId);
+  if (!uid) return {};
+  return readFile().ui?.[uid] ?? {};
+}
+
+/** Merge-write UI switches for one user; returns the full saved set. */
+export function setUserUiPrefs(userId: string, prefs: unknown): UiPrefs {
+  const uid = cleanKey(userId);
+  if (!uid) throw new Error("user is required");
+  const patch = sanitizeUiPrefs(prefs);
+  const data = readFile();
+  const ui = data.ui ?? {};
+  if (!ui[uid] && Object.keys(ui).length >= MAX_USERS) {
+    throw new Error("too many users with saved preferences");
+  }
+  /* Merge, not replace: the contact record saves one key at a time, and a
+     PUT of {aiCollapsed:true} must not wipe a switch some other page owns. */
+  const merged: UiPrefs = { ...(ui[uid] ?? {}), ...patch };
+  const keys = Object.keys(merged);
+  if (keys.length > MAX_UI_KEYS) {
+    for (const k of keys.slice(MAX_UI_KEYS)) delete merged[k];
+  }
+  ui[uid] = merged;
+  writeFileSafe({ ...data, ui, updatedAt: new Date().toISOString() });
+  return merged;
 }

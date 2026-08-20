@@ -3112,6 +3112,453 @@ app.post("/api/crm/lead/:id/activity", express.json({ limit: "64kb" }), async (r
   }
 });
 
+/* ═══════════════════════════════════════════════════════════════════════
+   CONTACT RECORD — emails, phones, addresses, social, notes, documents.
+
+   The Lead keeps its single `email`/`phone`/`address` as the PRIMARY, and
+   these routes keep that field in step whenever the primary row changes.
+   Nothing downstream (the lead table, the senders, the DM pipeline) has to
+   know this store exists, which is the whole point.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** Every contact-record route needs the lead to exist; 404 rather than
+    writing rows for an id that is a typo. */
+async function contactLeadOr404(
+  req: express.Request,
+  res: express.Response,
+): Promise<import("./core/types.js").Lead | null> {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return null;
+  }
+  const id = String(req.params.id || "").trim();
+  if (!id) {
+    res.status(400).json({ error: "Missing lead id" });
+    return null;
+  }
+  const { getLeadById } = await import("./core/db.js");
+  const lead = await getLeadById(id);
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return null;
+  }
+  /* Backfill from the Lead's own single-value fields before anything else
+     touches the record. Every contact predates this store, and seeding only
+     on the GET meant a write that arrived first (an API caller, a second tab)
+     permanently lost the contact's original email and phone. Seeding here
+     runs on the first route of any kind, and only when there are no rows of
+     that kind, so it can never duplicate or resurrect anything. */
+  try {
+    const { seedFromLead } = await import("./core/contactRecordStore.js");
+    seedFromLead({ id: lead.id, email: lead.email, phone: lead.phone, address: lead.address });
+  } catch (err) {
+    console.error("[contactRecord] seed failed:", err);
+  }
+  return lead;
+}
+
+/** Push the current primary email/phone/address back onto the Lead itself. */
+async function syncContactPrimaries(leadId: string): Promise<void> {
+  const store = await import("./core/contactRecordStore.js");
+  const { updateLeadCrmFields } = await import("./core/db.js");
+  const email = store.listEmails(leadId).find((e) => e.isPrimary) || null;
+  const phone = store.listPhones(leadId).find((p) => p.isPrimary) || null;
+  const addr = store.listAddresses(leadId)[0] || null;
+  await updateLeadCrmFields({
+    leadId,
+    email: email ? email.address : null,
+    phone: phone ? phone.number : null,
+    address: addr ? store.addressOneLine(addr) : null,
+  });
+}
+
+app.get("/api/crm/lead/:id/record", async (req, res) => {
+  const lead = await contactLeadOr404(req, res);
+  if (!lead) return;
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    res.json({ ok: true, record: store.getContactRecord(lead.id), docTypes: store.CONTACT_DOC_TYPES });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* ── emails ── */
+
+app.post("/api/crm/lead/:id/emails", express.json({ limit: "8kb" }), async (req, res) => {
+  const lead = await contactLeadOr404(req, res);
+  if (!lead) return;
+  const body = (req.body || {}) as Record<string, unknown>;
+  const address = typeof body.address === "string" ? body.address.trim() : "";
+  if (!address || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    res.status(400).json({ error: "A valid email address is required" });
+    return;
+  }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const row = store.addEmail(lead.id, address, body.kind, body.isPrimary === true);
+    await syncContactPrimaries(lead.id);
+    res.json({ ok: true, email: row, record: store.getContactRecord(lead.id) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.patch("/api/crm/contact-email/:eid", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body || {}) as Record<string, unknown>;
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const patch: { address?: string; kind?: unknown; isPrimary?: boolean } = {};
+    if (typeof body.address === "string") {
+      const a = body.address.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) { res.status(400).json({ error: "A valid email address is required" }); return; }
+      patch.address = a;
+    }
+    if (body.kind !== undefined) patch.kind = body.kind;
+    if (body.isPrimary !== undefined) patch.isPrimary = body.isPrimary === true;
+    const row = store.updateEmail(String(req.params.eid || ""), patch);
+    if (!row) { res.status(404).json({ error: "Email not found" }); return; }
+    await syncContactPrimaries(row.leadId);
+    res.json({ ok: true, email: row, record: store.getContactRecord(row.leadId) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/crm/contact-email/:eid", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const row = store.deleteEmail(String(req.params.eid || ""));
+    if (!row) { res.status(404).json({ error: "Email not found" }); return; }
+    await syncContactPrimaries(row.leadId);
+    res.json({ ok: true, record: store.getContactRecord(row.leadId) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* ── phones ── */
+
+app.post("/api/crm/lead/:id/phones", express.json({ limit: "8kb" }), async (req, res) => {
+  const lead = await contactLeadOr404(req, res);
+  if (!lead) return;
+  const body = (req.body || {}) as Record<string, unknown>;
+  const number = typeof body.number === "string" ? body.number.trim() : "";
+  if (number.replace(/\D/g, "").length < 7) {
+    res.status(400).json({ error: "A phone number needs at least 7 digits" });
+    return;
+  }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const row = store.addPhone(lead.id, number, body.kind, body.dnc === true, body.isPrimary === true);
+    await syncContactPrimaries(lead.id);
+    res.json({ ok: true, phone: row, record: store.getContactRecord(lead.id) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.patch("/api/crm/contact-phone/:pid", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body || {}) as Record<string, unknown>;
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const patch: { number?: string; kind?: unknown; dnc?: boolean; isPrimary?: boolean } = {};
+    if (typeof body.number === "string") {
+      const n = body.number.trim();
+      if (n.replace(/\D/g, "").length < 7) { res.status(400).json({ error: "A phone number needs at least 7 digits" }); return; }
+      patch.number = n;
+    }
+    if (body.kind !== undefined) patch.kind = body.kind;
+    if (body.dnc !== undefined) patch.dnc = body.dnc === true;
+    if (body.isPrimary !== undefined) patch.isPrimary = body.isPrimary === true;
+    const row = store.updatePhone(String(req.params.pid || ""), patch);
+    if (!row) { res.status(404).json({ error: "Phone not found" }); return; }
+    await syncContactPrimaries(row.leadId);
+    res.json({ ok: true, phone: row, record: store.getContactRecord(row.leadId) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/crm/contact-phone/:pid", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const row = store.deletePhone(String(req.params.pid || ""));
+    if (!row) { res.status(404).json({ error: "Phone not found" }); return; }
+    await syncContactPrimaries(row.leadId);
+    res.json({ ok: true, record: store.getContactRecord(row.leadId) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* ── addresses ── */
+
+app.post("/api/crm/lead/:id/addresses", express.json({ limit: "8kb" }), async (req, res) => {
+  const lead = await contactLeadOr404(req, res);
+  if (!lead) return;
+  const body = (req.body || {}) as Record<string, unknown>;
+  const street = typeof body.street === "string" ? body.street.trim() : "";
+  if (!street) { res.status(400).json({ error: "Street address is required" }); return; }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const row = store.addAddress(lead.id, {
+      kind: body.kind,
+      street,
+      apt: typeof body.apt === "string" ? body.apt : "",
+      city: typeof body.city === "string" ? body.city : "",
+      region: typeof body.region === "string" ? body.region : "",
+      country: typeof body.country === "string" ? body.country : "US",
+      postalCode: typeof body.postalCode === "string" ? body.postalCode : "",
+    });
+    await syncContactPrimaries(lead.id);
+    res.json({ ok: true, address: row, record: store.getContactRecord(lead.id) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.patch("/api/crm/contact-address/:aid", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body || {}) as Record<string, unknown>;
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const str = (k: string) => (typeof body[k] === "string" ? (body[k] as string) : undefined);
+    const row = store.updateAddress(String(req.params.aid || ""), {
+      kind: body.kind, street: str("street"), apt: str("apt"), city: str("city"),
+      region: str("region"), country: str("country"), postalCode: str("postalCode"),
+    });
+    if (!row) { res.status(404).json({ error: "Address not found" }); return; }
+    await syncContactPrimaries(row.leadId);
+    res.json({ ok: true, address: row, record: store.getContactRecord(row.leadId) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/crm/contact-address/:aid", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const cur = store.getAddress(String(req.params.aid || ""));
+    if (!cur) { res.status(404).json({ error: "Address not found" }); return; }
+    store.deleteAddress(cur.id);
+    await syncContactPrimaries(cur.leadId);
+    res.json({ ok: true, record: store.getContactRecord(cur.leadId) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* ── social links ── */
+
+app.put("/api/crm/lead/:id/social", express.json({ limit: "8kb" }), async (req, res) => {
+  const lead = await contactLeadOr404(req, res);
+  if (!lead) return;
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const links = (body.links && typeof body.links === "object" ? body.links : body) as Record<string, unknown>;
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    res.json({ ok: true, social: store.setSocial(lead.id, links) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* ── notes ── */
+
+app.post("/api/crm/lead/:id/notes", express.json({ limit: "64kb" }), async (req, res) => {
+  const lead = await contactLeadOr404(req, res);
+  if (!lead) return;
+  const body = (req.body || {}) as Record<string, unknown>;
+  const text = typeof body.body === "string" ? body.body.trim() : "";
+  if (!text) { res.status(400).json({ error: "A note needs some text" }); return; }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const mentions = Array.isArray(body.mentions)
+      ? (body.mentions as unknown[])
+          .map((m) => (m && typeof m === "object" ? (m as Record<string, unknown>) : {}))
+          .filter((m) => typeof m.memberId === "string" && m.memberId)
+          .map((m) => ({ memberId: String(m.memberId), memberName: String(m.memberName || m.memberId) }))
+      : [];
+    const note = store.addNote(lead.id, {
+      body: text,
+      hiddenFromViewers: body.hiddenFromViewers === undefined ? true : body.hiddenFromViewers === true,
+      important: body.important === true,
+      author: typeof body.author === "string" ? body.author : "",
+      mentions,
+    });
+    /* A note is an interaction, so it belongs on the activity feed too —
+       otherwise the feed says "no contact in 30 days" about someone who was
+       written up yesterday. */
+    try {
+      const { appendLeadActivity } = await import("./core/db.js");
+      await appendLeadActivity(lead.id, [
+        { type: "note", description: text.slice(0, 200), timestamp: note.createdAt },
+      ]);
+    } catch (err) {
+      console.error("[contactRecord] note logged but activity append failed:", err);
+    }
+    res.json({ ok: true, note, notes: store.listNotes(lead.id) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.patch("/api/crm/contact-note/:nid", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body || {}) as Record<string, unknown>;
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const note = store.updateNote(String(req.params.nid || ""), {
+      body: typeof body.body === "string" ? body.body : undefined,
+      hiddenFromViewers: body.hiddenFromViewers === undefined ? undefined : body.hiddenFromViewers === true,
+      important: body.important === undefined ? undefined : body.important === true,
+    });
+    if (!note) { res.status(404).json({ error: "Note not found" }); return; }
+    res.json({ ok: true, note, notes: store.listNotes(note.leadId) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/crm/contact-note/:nid", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    res.json({ ok: store.deleteNote(String(req.params.nid || "")) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* ── documents ──
+   15MB is the spec's ceiling and multer enforces it, so an oversized file is
+   rejected at the door instead of after the volume has already taken it. */
+const CONTACT_DOC_MAX_BYTES = 15 * 1024 * 1024;
+const contactDocUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      void import("./core/contactRecordStore.js")
+        .then((m) => cb(null, m.resolveContactDocsDir()))
+        .catch((err) => cb(err as Error, ""));
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || "").slice(0, 12).replace(/[^A-Za-z0-9.]/g, "");
+      cb(null, `${Date.now()}-${randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: CONTACT_DOC_MAX_BYTES, files: 1 },
+});
+
+app.post("/api/crm/lead/:id/documents", (req, res) => {
+  contactDocUpload.single("file")(req, res, (uploadErr) => {
+    void (async () => {
+      if (uploadErr) {
+        const tooBig = (uploadErr as { code?: string }).code === "LIMIT_FILE_SIZE";
+        res.status(tooBig ? 413 : 400).json({
+          error: tooBig ? "That file is larger than the 15MB limit." : (uploadErr as Error).message,
+        });
+        return;
+      }
+      const lead = await contactLeadOr404(req, res);
+      if (!lead) {
+        // The bytes already landed; a rejected upload must not leave a stray file.
+        if (req.file) { try { fs.rmSync(req.file.path); } catch { /* best effort */ } }
+        return;
+      }
+      if (!req.file) { res.status(400).json({ error: "No file was uploaded" }); return; }
+      const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+      try {
+        const store = await import("./core/contactRecordStore.js");
+        let transactionId: string | null = null;
+        /* "Create Pipeline Transaction" is either real or absent: when it is
+           on we open an actual transaction in the pipeline store, and the
+           document carries its id. It never draws a toggle that does nothing. */
+        if (String(body.createTransaction) === "true" || body.createTransaction === true) {
+          const { createTransaction } = await import("./core/transactionsStore.js");
+          const tx = createTransaction({
+            address: typeof body.transactionAddress === "string" && body.transactionAddress.trim()
+              ? body.transactionAddress.trim()
+              : (lead.address || `${lead.name || "Contact"} — from document`),
+            dealType: lead.crmIntent === "seller" ? "seller" : "buyer",
+            status: "active",
+            leadId: lead.id,
+            parties: { leadName: lead.name || undefined, phone: lead.phone || undefined, email: lead.email || undefined },
+          });
+          transactionId = tx.id || null;
+        }
+        const doc = store.addDocument(lead.id, {
+          docType: body.docType,
+          fileName: req.file.originalname || req.file.filename,
+          mime: req.file.mimetype || "application/octet-stream",
+          bytes: req.file.size,
+          storedPath: req.file.path,
+          signedDate: body.signedDate,
+          expirationDate: body.expirationDate,
+          transactionId,
+        });
+        res.json({ ok: true, document: doc, documents: store.listDocuments(lead.id), transactionId });
+      } catch (err) {
+        if (req.file) { try { fs.rmSync(req.file.path); } catch { /* best effort */ } }
+        res.status(500).json({ error: (err as Error).message });
+      }
+    })();
+  });
+});
+
+app.get("/api/crm/contact-document/:did/file", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const doc = store.getDocument(String(req.params.did || ""));
+    if (!doc || !fs.existsSync(doc.storedPath)) { res.status(404).json({ error: "Document not found" }); return; }
+    res.setHeader("Content-Type", doc.mime);
+    res.setHeader("Content-Disposition", `inline; filename="${doc.fileName.replace(/[^\w. -]/g, "_")}"`);
+    fs.createReadStream(doc.storedPath).pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/crm/contact-document/:did", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/contactRecordStore.js");
+    const doc = store.deleteDocument(String(req.params.did || ""));
+    if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
+    res.json({ ok: true, documents: store.listDocuments(doc.leadId) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* Per-user UI switches (contact record's "Collapse by default", and whatever
+   one-line view preference comes next). Table layout lives in table-prefs. */
+app.get("/api/settings/ui-prefs", async (req, res) => {
+  const user = String(req.query.user || "").trim();
+  if (!user) { res.status(400).json({ ok: false, error: "user required" }); return; }
+  const { getUserUiPrefs } = await import("./core/userPrefs.js");
+  res.json({ ok: true, prefs: getUserUiPrefs(user) });
+});
+
+app.put("/api/settings/ui-prefs", express.json({ limit: "8kb" }), async (req, res) => {
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const user = typeof body.user === "string" ? body.user.trim() : "";
+  if (!user) { res.status(400).json({ ok: false, error: "user required" }); return; }
+  try {
+    const { setUserUiPrefs } = await import("./core/userPrefs.js");
+    res.json({ ok: true, prefs: setUserUiPrefs(user, body.prefs) });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+
 app.post("/api/crm/lead/:id/mark-phone-seen", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });

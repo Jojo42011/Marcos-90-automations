@@ -93,24 +93,41 @@ try {
   const tl = await page.textContent("#ldTimeline");
   ok("timeline renders server activity with text and time", /Saturday/.test(tl));
 
-  // details block round trip through the UI
-  await page.fill("#ldDescIn", "Updated background note");
-  await page.fill("#ldLang", "Spanish");
-  await page.click("#ldDetSave");
-  await page.waitForTimeout(400);
+  /* Details, Relationships and Notes now live in the left accordion stack
+     (contact-record phase). openAcc opens one by its key. */
+  const openAcc = async (key) => {
+    await page.waitForSelector(`#crPanel .acc[data-acc="${key}"]`);
+    const isOpen = await page.$eval(`#crPanel .acc[data-acc="${key}"]`, (e) => e.classList.contains("open"));
+    if (!isOpen) await page.click(`#crPanel .acc[data-acc="${key}"] .acc-h`);
+    await page.waitForFunction((k) => document.querySelector(`#crPanel .acc[data-acc="${k}"]`).classList.contains("open"), key);
+  };
+
+  // details block round trip through the UI — one row at a time, inline
+  await openAcc("details");
+  await page.click('#crPanel [data-dtedit][data-key="description"]');
+  await page.fill('#crPanel [data-dtrow="description"] textarea', "Updated background note");
+  await page.click('#crPanel [data-dtrow="description"] .cx-sv');
+  await page.waitForTimeout(500);
+  await openAcc("details");
+  await page.click('#crPanel [data-dtedit][data-key="preferredLanguage"]');
+  await page.fill('#crPanel [data-dtrow="preferredLanguage"] input', "Spanish");
+  await page.click('#crPanel [data-dtrow="preferredLanguage"] .cx-sv');
+  await page.waitForTimeout(500);
   snap = await J(await fetch(B + "/api/dashboard/data"));
   row = snap.leads.find((l) => l.id === "lead_1");
-  ok("details saved from the UI", row.description === "Updated background note" && row.preferredLanguage === "Spanish");
+  ok("details saved from the UI", row.description === "Updated background note" && row.preferredLanguage === "Spanish", JSON.stringify({ d: row.description, l: row.preferredLanguage }));
 
   // tags: add + persists
-  await page.fill("#ldTagIn", "Investor");
-  await page.click("#ldTagAdd");
-  await page.waitForTimeout(400);
+  await openAcc("details");
+  await page.fill("#crTagIn", "Investor");
+  await page.press("#crTagIn", "Enter");
+  await page.waitForTimeout(500);
   snap = await J(await fetch(B + "/api/dashboard/data"));
   ok("tag added persists", snap.leads.find((l) => l.id === "lead_1").tags.includes("Investor"));
 
   // relationships rendered, linked name navigates
-  const relLink = await page.$('#ldRelRows .ldlink:has-text("Spouse Person")');
+  await openAcc("relationships");
+  const relLink = await page.$('#crPanel .acc[data-acc="relationships"] .ldlink:has-text("Spouse Person")');
   ok("linked relationship renders as a link", !!relLink);
   if (relLink) {
     await relLink.click();
@@ -133,9 +150,10 @@ try {
   ok("assigned name shown on the card", /Carlos/.test(await page.textContent("#ldAssignRow")));
 
   // transactions block lists the linked deal and opens the detail view
-  const txBlk = await page.textContent("#ldTxBlk");
+  await openAcc("transactions");
+  const txBlk = await page.textContent('#crPanel .acc[data-acc="transactions"] .acc-b');
   ok("transactions block lists the linked deal", /77 Cibolo Ridge/.test(txBlk), txBlk.slice(0, 80));
-  await page.click('#ldTxBlk [data-txopen]');
+  await page.click('#crPanel [data-cr="txOpen"]');
   await page.waitForTimeout(400);
   const detVisible = await page.$eval("#txDetailOv", (o) => o.style.display !== "none");
   ok("clicking it opens the transaction detail", detVisible);
@@ -191,9 +209,11 @@ try {
   const tl2 = await page.textContent("#ldTimeline");
   ok("logged call survives reload", /Saturday/.test(tl2));
   ok("appointment log survives reload", /Cibolo Ridge/.test(tl2));
-  ok("details survive reload", (await page.inputValue("#ldDescIn")) === "Updated background note");
-  ok("tag survives reload", /Investor/.test(await page.textContent("#ldTagRow")));
-  ok("relationship survives reload", /Spouse Person/.test(await page.textContent("#ldRelRows")));
+  await openAcc("details");
+  ok("details survive reload", /Updated background note/.test(await page.textContent('#crPanel [data-dtrow="description"]')));
+  ok("tag survives reload", /Investor/.test(await page.textContent("#crTagRow")));
+  await openAcc("relationships");
+  ok("relationship survives reload", /Spouse Person/.test(await page.textContent('#crPanel .acc[data-acc="relationships"] .acc-b')));
 
   ok("no page errors", errs.length === 0, errs.slice(0, 3).join(" | "));
   await br.close();

@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUserTablePrefs = getUserTablePrefs;
 exports.setUserTablePrefs = setUserTablePrefs;
+exports.getUserUiPrefs = getUserUiPrefs;
+exports.setUserUiPrefs = setUserUiPrefs;
 const fs_1 = require("fs");
 const path_1 = require("path");
 const MAX_USERS = 50;
@@ -95,4 +97,56 @@ function setUserTablePrefs(userId, tableKey, prefs) {
     tables[uid] = mine;
     writeFileSafe({ ...data, tables, updatedAt: new Date().toISOString() });
     return clean;
+}
+/* ────────────────────────── UI switches ────────────────────────── */
+const MAX_UI_KEYS = 40;
+function sanitizeUiPrefs(raw) {
+    const p = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const out = {};
+    for (const key of Object.keys(p)) {
+        if (Object.keys(out).length >= MAX_UI_KEYS)
+            break;
+        const k = cleanKey(key, 64);
+        if (!k)
+            continue;
+        const v = p[key];
+        if (typeof v === "boolean")
+            out[k] = v;
+        else if (typeof v === "number" && Number.isFinite(v))
+            out[k] = v;
+        else if (typeof v === "string")
+            out[k] = v.slice(0, 200);
+        // anything else (objects, null, arrays) is dropped rather than stored as junk
+    }
+    return out;
+}
+/** Every UI switch for one user (empty object when none saved). */
+function getUserUiPrefs(userId) {
+    const uid = cleanKey(userId);
+    if (!uid)
+        return {};
+    return readFile().ui?.[uid] ?? {};
+}
+/** Merge-write UI switches for one user; returns the full saved set. */
+function setUserUiPrefs(userId, prefs) {
+    const uid = cleanKey(userId);
+    if (!uid)
+        throw new Error("user is required");
+    const patch = sanitizeUiPrefs(prefs);
+    const data = readFile();
+    const ui = data.ui ?? {};
+    if (!ui[uid] && Object.keys(ui).length >= MAX_USERS) {
+        throw new Error("too many users with saved preferences");
+    }
+    /* Merge, not replace: the contact record saves one key at a time, and a
+       PUT of {aiCollapsed:true} must not wipe a switch some other page owns. */
+    const merged = { ...(ui[uid] ?? {}), ...patch };
+    const keys = Object.keys(merged);
+    if (keys.length > MAX_UI_KEYS) {
+        for (const k of keys.slice(MAX_UI_KEYS))
+            delete merged[k];
+    }
+    ui[uid] = merged;
+    writeFileSafe({ ...data, ui, updatedAt: new Date().toISOString() });
+    return merged;
 }
