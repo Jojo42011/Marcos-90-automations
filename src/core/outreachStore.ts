@@ -22,8 +22,23 @@ import { existsSync, mkdirSync } from "fs";
 import path from "path";
 import type { ListingCriteria } from "./listingCriteria.js";
 
-export type AlertFrequency = "daily" | "weekly" | "monthly";
-export type ReportFrequency = "monthly" | "quarterly" | "semiannual" | "annual";
+/* Brivity's six. The runner sweeps hourly, so "multiple_per_day" means every
+   four hours rather than "instantly" — the schedule this system can actually
+   keep, named as such. */
+export type AlertFrequency =
+  | "daily" | "twice_daily" | "multiple_per_day" | "weekly" | "every_2_weeks" | "monthly";
+
+export const ALERT_FREQUENCIES: string[] = [
+  "daily", "twice_daily", "multiple_per_day", "weekly", "every_2_weeks", "monthly",
+];
+export const REPORT_FREQUENCIES: string[] = [
+  "never", "weekly", "every_2_weeks", "monthly", "quarterly", "semiannual", "annual",
+];
+/* Brivity's drip menu, plus the two this store already had. "never" is the
+   drip switched off — kept as a frequency value so a paused schedule still
+   round-trips through the same field instead of needing a second flag. */
+export type ReportFrequency =
+  | "never" | "weekly" | "every_2_weeks" | "monthly" | "quarterly" | "semiannual" | "annual";
 
 export interface ListingAlert {
   id: string;
@@ -179,6 +194,19 @@ export function getOutreachDb(): Database.Database {
     /* Every click-through and report open. This is the buyer/seller
        temperature signal the whole feature exists to produce — a contact who
        keeps opening is the one to call. */
+    /* Saved listing-alert search profiles. A template is criteria only — no
+       contact, no schedule — so the same search can be reused on any lead
+       without dragging one contact's cadence onto another. */
+    CREATE TABLE IF NOT EXISTS alert_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      criteria TEXT NOT NULL DEFAULT '{}',
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_alert_templates_name ON alert_templates(name);
+
     CREATE TABLE IF NOT EXISTS outreach_engagement (
       id TEXT PRIMARY KEY,
       kind TEXT NOT NULL,
@@ -212,7 +240,7 @@ function rowToAlert(r: Record<string, unknown>): ListingAlert {
     name: String(r.name),
     cc: r.cc ? String(r.cc) : null,
     sendEmail: Number(r.send_email) === 1,
-    frequency: (["daily", "weekly", "monthly"].includes(String(r.frequency)) ? String(r.frequency) : "daily") as AlertFrequency,
+    frequency: (ALERT_FREQUENCIES.includes(String(r.frequency)) ? String(r.frequency) : "daily") as AlertFrequency,
     criteria: json<ListingCriteria>(r.criteria, {}),
     paused: Number(r.paused) === 1,
     createdAt: String(r.created_at),
@@ -339,7 +367,7 @@ function rowToReport(r: Record<string, unknown>): MarketReport {
     name: String(r.name),
     address: String(r.address),
     cc: r.cc ? String(r.cc) : null,
-    frequency: (["monthly", "quarterly", "semiannual", "annual"].includes(freq) ? freq : "quarterly") as ReportFrequency,
+    frequency: (REPORT_FREQUENCIES.includes(freq) ? freq : "quarterly") as ReportFrequency,
     drip: Number(r.drip) === 1,
     criteria: json<ListingCriteria>(r.criteria, {}),
     subject: json<MarketReport["subject"]>(r.subject, {}),
@@ -568,4 +596,61 @@ export function outreachSummaryByLead(): Map<string, LeadOutreachSummary> {
     else row.lastOpenedReportAt = later(row.lastOpenedReportAt, r.last_opened);
   }
   return out;
+}
+
+
+/* ────────────────────────── alert templates ────────────────────────── */
+
+export interface AlertTemplate {
+  id: string;
+  name: string;
+  criteria: ListingCriteria;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+type TemplateRow = {
+  id: string; name: string; criteria: string; created_by: string | null;
+  created_at: string; updated_at: string;
+};
+const toTemplate = (r: TemplateRow): AlertTemplate => ({
+  id: r.id, name: r.name, criteria: json<ListingCriteria>(r.criteria, {} as ListingCriteria),
+  createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
+});
+
+export function listAlertTemplates(): AlertTemplate[] {
+  return (getOutreachDb()
+    .prepare(`SELECT * FROM alert_templates ORDER BY name COLLATE NOCASE`)
+    .all() as TemplateRow[]).map(toTemplate);
+}
+
+export function getAlertTemplate(id: string): AlertTemplate | null {
+  const r = getOutreachDb().prepare(`SELECT * FROM alert_templates WHERE id = ?`).get(id) as
+    | TemplateRow
+    | undefined;
+  return r ? toTemplate(r) : null;
+}
+
+export function saveAlertTemplate(input: {
+  id?: string; name: string; criteria: ListingCriteria; createdBy?: string | null;
+}): AlertTemplate {
+  const d = getOutreachDb();
+  const at = new Date().toISOString();
+  const id = input.id && getAlertTemplate(input.id) ? input.id : `tpl_${Math.random().toString(36).slice(2, 10)}`;
+  const name = input.name.trim().slice(0, 150);
+  const criteria = JSON.stringify(input.criteria || {});
+  if (input.id && getAlertTemplate(input.id)) {
+    d.prepare(`UPDATE alert_templates SET name = ?, criteria = ?, updated_at = ? WHERE id = ?`)
+      .run(name, criteria, at, id);
+  } else {
+    d.prepare(
+      `INSERT INTO alert_templates (id, name, criteria, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?)`,
+    ).run(id, name, criteria, input.createdBy || null, at, at);
+  }
+  return getAlertTemplate(id)!;
+}
+
+export function deleteAlertTemplate(id: string): boolean {
+  return getOutreachDb().prepare(`DELETE FROM alert_templates WHERE id = ?`).run(id).changes > 0;
 }

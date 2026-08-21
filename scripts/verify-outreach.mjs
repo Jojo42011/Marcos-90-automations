@@ -430,8 +430,17 @@ try {
     ok("no page errors on the profile", errs.length === 0, errs.slice(0, 2).join(" | "));
     ok("the Listing Alerts block is on the rail", await page.locator("#ldAlertsBlk").count() === 1);
     ok("the Market Reports block is on the rail", await page.locator("#ldReportsBlk").count() === 1);
+    /* The card collapses its metadata behind MORE INFO (reports phase), which
+       is the spec's summary state. Expand it, then read the real counts. */
+    ok("the collapsed card shows the report's address and a MORE INFO toggle",
+      /MORE INFO/.test(await page.textContent("#ldReportsBlk")), (await page.textContent("#ldReportsBlk")).slice(0, 120));
+    await page.click("#ldReportsBlk [data-mrtoggle]");
+    await page.waitForTimeout(300);
+    const mrTxt = await page.textContent("#ldReportsBlk");
     ok("the market report card shows real engagement counts",
-      /Last viewed|Views/i.test(await page.textContent("#ldReportsBlk")), (await page.textContent("#ldReportsBlk")).slice(0, 120));
+      /Last Viewed/i.test(mrTxt) && /Last Opened/i.test(mrTxt) && /View History/i.test(mrTxt), mrTxt.slice(0, 200));
+    ok("and the drip frequency it is actually on", /Frequency/i.test(mrTxt));
+    ok("VIEW ALL opens the reports list", (await page.$("#ldReportsBlk [data-mrall]")) !== null);
 
     const web = await page.textContent("#ldWebActBlk");
     ok("Web Activity is a real feed now, not a promise",
@@ -447,8 +456,15 @@ try {
       (await page.locator('#oaCity .oa-ck').count()) > 0 && /San Antonio/.test(await page.textContent("#oaCity")));
     ok("feature checkboxes come from the feed",
       /Island Kitchen/.test(await page.textContent("#oaIf")));
+    /* The financing note now lives in the modal's unavailable block; there is
+       more than one .oa-unav on the upgraded form (Home App, map), so read
+       them all rather than only the first. */
+    const unav = (await page.$$eval("#oaOv .oa-unav", (els) => els.map((e) => e.textContent).join(" | ")));
     ok("fields this feed cannot answer are named, not rendered as dead controls",
-      /Financial options/i.test(await page.textContent(".oa-unav")));
+      /Financial options/i.test(unav), unav.slice(0, 200));
+    ok("the missing map provider is stated where the Map pill is", /No map provider is configured/.test(await page.textContent("#oaOv")));
+    ok("the Map mode is offered but disabled, not silently dropped",
+      await page.$eval('#oaModes button[data-lamode="map"]', (b) => b.disabled));
     ok("there is no map-draw control offered",
       (await page.locator("#oaOv canvas, #oaOv .map, #oaOv [data-draw]").count()) === 0);
 
@@ -457,40 +473,50 @@ try {
     await page.fill("#oaPMax", "300000");
     await page.waitForTimeout(900);
     const cnt = await page.textContent("#oaCount");
-    ok("the builder shows a live match count", /\d+ listings? match/.test(cnt), cnt);
+    // The count became the spec's "VIEW N LISTINGS" action.
+    ok("the builder shows a live match count", /VIEW \d+ LISTINGS?/.test(cnt), cnt);
 
     // A criteria set that matches nothing must say so, in red.
     await page.fill("#oaPMin", "99000000");
     await page.waitForTimeout(900);
     const zero = await page.textContent("#oaCount");
-    ok("impossible criteria report zero rather than looking fine", /^0 listings match/.test(zero), zero);
+    ok("impossible criteria report zero rather than looking fine", /No listings match/.test(zero), zero);
     ok("and the zero state is flagged", (await page.getAttribute("#oaCount", "class") || "").includes("zero"));
 
     await page.evaluate(() => closeOa());
 
-    // The report builder's live preview.
+    /* The report builder became the spec's two-step wizard (reports phase):
+       Search Criteria, then Preview and Send. */
     await page.evaluate(() => openLead("L2"));
     await page.waitForTimeout(1200);
     await page.click("#ldReportAdd");
+    await page.waitForSelector("#mwAddr", { timeout: 10000 });
+    ok("the wizard opens on step 1 with the contact's address prefilled",
+      (await page.inputValue("#mwAddr")).includes("Test Street"), await page.inputValue("#mwAddr"));
+    ok("the stepper names both steps", /Search Criteria/.test(await page.textContent("#oaOv .mw-steps")) && /Preview and Send/.test(await page.textContent("#oaOv .mw-steps")));
+    ok("the missing map provider is stated, not drawn as a dead canvas",
+      /No map provider is configured/.test(await page.textContent("#oaOv")) &&
+      (await page.locator("#oaOv canvas, #oaOv [data-draw]").count()) === 0);
+    await page.waitForTimeout(1400);
+    ok("step 1 counts the listings the criteria match", /\d+ listings? in this area/.test(await page.textContent("#mwCount")), await page.textContent("#mwCount"));
+
+    // No square footage: the estimate must say so, not guess.
+    await page.click("#mwAdjToggle").catch(() => {});
+    ok("with no square footage the estimate asks for it rather than inventing one",
+      /Add square footage/.test((await page.textContent("#mwAuto")).trim()), await page.textContent("#mwAuto"));
+    await page.fill("#mwSqft", "2200");
     await page.waitForTimeout(1600);
-    ok("the report builder opens with the contact's address prefilled",
-      (await page.inputValue("#orAddr")).includes("Test Street"), await page.inputValue("#orAddr"));
-    const live = await page.textContent("#orLive");
-    ok("the report preview builds from live listings", /listing/.test(live), live.slice(0, 120));
-
-    // Clear the square footage: the estimate must disappear, not be guessed.
-    await page.fill("#orSqft", "");
-    await page.waitForTimeout(1200);
-    const noEst = await page.textContent("#orLive");
-    ok("with no square footage the builder refuses to show a value",
-      /square footage is not on file/i.test(noEst), noEst.slice(0, 160));
-    ok("and the automated-estimate field shows a dash, not a number",
-      (await page.textContent("#orAuto")).trim() === "—", await page.textContent("#orAuto"));
-
-    await page.fill("#orSqft", "2200");
-    await page.waitForTimeout(1200);
     ok("adding the square footage produces an estimate",
-      /^\$/.test((await page.textContent("#orAuto")).trim()), await page.textContent("#orAuto"));
+      /^\$/.test((await page.textContent("#mwAuto")).trim()), await page.textContent("#mwAuto"));
+
+    // Step 2 carries the drip menu and the two distinct save actions.
+    await page.click("#mwNext");
+    await page.waitForSelector("#mwName", { timeout: 8000 });
+    const freqs = await page.$$eval("#mwFreq option", (els) => els.map((e) => e.textContent.trim()));
+    ok("the drip menu is the spec's six", freqs.join(",") === "Never,Weekly,Every 2 weeks,Every month,Quarterly,Annually", freqs.join(","));
+    ok("SAVE & CLOSE and SEND NOW are separate actions",
+      (await page.$("#mwSaveClose")) !== null && (await page.$("#mwSend")) !== null);
+    await page.evaluate(() => closeOa());
 
     await page.close();
     await br.close();

@@ -1007,6 +1007,100 @@
     transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
   .sw.on i{background:var(--teal-pill)}
   .sw.on i:after{transform:translateX(17px)}
+  /* A switch used as an .oa-f's own label inherits that rule's block display
+     and uppercase, which stacked the knob on top of the words. */
+  .oa-f>label.sw{display:inline-flex;text-transform:none;letter-spacing:0;font-size:13px;font-weight:400;
+    color:#5b6570;margin-bottom:0}
+
+  /* ════════════ Auto plan apply + preview ════════════ */
+  .ap-two{display:grid;grid-template-columns:30% 70%;gap:0;border:1px solid var(--line-2);border-radius:6px;overflow:hidden;
+    min-height:340px;max-height:56vh}
+  @media(max-width:760px){.ap-two{grid-template-columns:1fr;max-height:none}}
+  .ap-tl{border-right:1px solid var(--line-2);background:#fafbfc;overflow-y:auto;padding:6px 0}
+  .ap-day{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8b95a0;
+    padding:10px 12px 5px;position:sticky;top:0;background:#fafbfc}
+  .ap-step{display:flex;gap:8px;padding:8px 12px;cursor:pointer;border-left:3px solid transparent;align-items:flex-start}
+  .ap-step:hover{background:#f2f5f6}
+  .ap-step.on{background:#eef2f4;border-left-color:var(--teal)}
+  .ap-step .ic{flex:0 0 auto;font-size:12px;line-height:1.4}
+  /* .bd/.ti/.tm are spans, so they need an explicit block: without it the
+     execution time ran straight on from the end of the step's title. */
+  .ap-step .bd{flex:1;min-width:0;display:block}
+  .ap-step .ti{display:block;font-size:12.5px;color:#46515c;line-height:1.35;word-break:break-word}
+  .ap-step .tm{display:block;font-size:10.5px;color:#98a2ad;margin-top:3px}
+  .ap-step.blocked .ti{color:#a8442f}
+  .ap-det{overflow-y:auto;padding:14px 16px}
+  .ap-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;border-bottom:1px solid var(--line-2);
+    padding-bottom:12px;margin-bottom:12px}
+  @media(max-width:620px){.ap-meta{grid-template-columns:1fr}}
+  .ap-meta .k{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#8b95a0}
+  .ap-meta .v{font-size:12.5px;color:#46515c;margin-top:3px;word-break:break-word}
+  .ap-card{border:1px solid var(--line-2);border-radius:6px;padding:12px 14px;background:#fff;font-size:13px;
+    line-height:1.6;color:#46515c;white-space:pre-wrap;word-break:break-word}
+  .ap-card .subj{font-weight:700;color:#3f4a55;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line-2)}
+  /* Merge fields are shown as written; highlighting them says so at a glance. */
+  .ap-mf{background:#f3f0fd;color:#7b5cf0;border-radius:3px;padding:0 3px;font-weight:600}
+
+  /* ════════════ Listing alert / market report editors ════════════ */
+  .la-warn{background:#fdecea;border:1px solid #f5c6c0;color:#a8442f;border-radius:6px;padding:10px 12px;
+    font-size:12.5px;line-height:1.5;margin-bottom:14px}
+  .la-modes{display:flex;gap:0;margin-bottom:10px}
+  .la-modes button{border:1px solid var(--line);background:#fff;color:#6b7480;padding:6px 18px;font-size:12.5px;
+    cursor:pointer;font-family:inherit;margin-left:-1px}
+  .la-modes button:first-child{border-radius:14px 0 0 14px;margin-left:0}
+  .la-modes button:last-child{border-radius:0 14px 14px 0}
+  .la-modes button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong);font-weight:700;position:relative;z-index:1}
+  .la-modes button[disabled]{opacity:.5;cursor:not-allowed}
+  .la-grp{border:1px solid var(--line-2);border-radius:6px;margin-bottom:10px;overflow:hidden}
+  .la-grp>h6{margin:0;padding:9px 12px;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    color:#6b7480;background:#fafbfc;display:flex;align-items:center;gap:8px;cursor:pointer}
+  .la-grp>h6 .more{margin-left:auto;color:var(--teal-strong);font-size:10.5px;font-weight:700}
+  .la-grp .la-body{padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:2px 10px}
+  @media(max-width:620px){.la-grp .la-body{grid-template-columns:1fr}}
+  .la-grp:not(.open) .la-body{max-height:74px;overflow:hidden}
+  .la-mm{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .la-mm select{width:100%;border:1px solid var(--line);border-radius:6px;height:36px;padding:0 8px;font-size:12.5px;
+    font-family:inherit;color:#46515c;background:#fff}
+  .la-count{font-size:12.5px;font-weight:700;color:var(--teal-strong);cursor:pointer}
+  .la-count.zero{color:#c0616a;cursor:default}
+  .la-foot-note{font-size:11.5px;color:#8b95a0;line-height:1.5;margin-top:12px}
+  .la-tpl-row{display:flex;align-items:baseline;gap:10px}
+  .la-tpl-row a{margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--teal-strong);cursor:pointer}
+
+  /* Market report wizard */
+  .mw-steps{display:flex;gap:8px;align-items:center;font-size:12px;color:#98a2ad;margin-bottom:16px}
+  .mw-steps b{color:var(--teal-strong)}
+  .mw-steps span.sep{color:#c9d1d8}
+  .mr-card{border:1px solid var(--line-2);border-radius:6px;padding:11px 12px;margin-bottom:8px;background:#fff}
+  .mr-top{display:flex;align-items:flex-start;gap:8px}
+  .mr-top .nm{flex:1;min-width:0;font-weight:700;color:#3f4a55;font-size:12.5px;line-height:1.35;word-break:break-word}
+  .mr-top .dots{cursor:pointer;color:#b3bcc5;padding:0 3px;flex:0 0 auto}
+  .mr-sub{font-size:11.5px;color:#8b95a1;margin-top:2px;word-break:break-word}
+  .mr-kv{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;margin-top:9px}
+  .mr-kv .k{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b95a0}
+  .mr-kv .v{font-size:12px;color:#46515c;margin-bottom:5px}
+  .mr-more{display:block;text-align:center;font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--teal-strong);
+    cursor:pointer;padding-top:8px;border-top:1px solid var(--line-2);margin-top:8px}
+  .mr-pager{display:flex;flex-direction:column;gap:4px;align-items:center;flex:0 0 auto;color:#c2cad1}
+  .mr-pager button{border:0;background:none;color:#b3bcc5;cursor:pointer;font-size:11px;padding:1px}
+  .mr-pager button[disabled]{opacity:.35;cursor:default}
+  .mr-pager span{font-size:9.5px;color:#98a2ad}
+
+  /* Reports dashboard */
+  .rd-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+  @media(max-width:760px){.rd-kpis{grid-template-columns:1fr}}
+  .rd-kpi{border:1px solid var(--line);border-radius:6px;background:#fff;padding:16px;text-align:center}
+  .rd-kpi .k{font-size:12.5px;color:#6b7480}
+  .rd-kpi .n{font-size:30px;font-weight:800;color:#3f4a55;margin:6px 0 4px}
+  .rd-kpi .n.none{font-size:20px;color:#c2cad1}
+  .rd-kpi .t{font-size:11px;color:#8b95a0}
+  .rd-kpi .t.up{color:#1f7a45}.rd-kpi .t.down{color:#c0392b}
+  .rd-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  .rd-tbl th{text-align:left;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#8b95a0;
+    padding:8px 10px;border-bottom:1px solid var(--line)}
+  .rd-tbl td{padding:9px 10px;border-bottom:1px solid var(--line-2);color:#46515c;vertical-align:top}
+  .rd-tbl td a{color:var(--teal-strong);font-weight:600;cursor:pointer}
+  .rd-tbl tr:hover td{background:#fafbfc}
 </style>
 
 <header class="topbar">
@@ -4858,6 +4952,7 @@ function wireRightStack(l){
     openWebActivityModal(l);
   });
   wireAssignBlock(l);
+  wireCmaWidget(l);
 }
 
 /* ===== Profile writes. These hit REAL APIs; a demo row degrades to a
@@ -4903,7 +4998,7 @@ function paintLeadPlans(l){
         '<span style="font-size:10px;color:'+(paused?"#b8860b":"var(--teal-strong)")+'">'+(paused?"PAUSED":"ACTIVE")+'</span>'+
         '<button class="mini-pill" data-ptoggle="'+esc(e.planId)+'" data-paused="'+(paused?1:0)+'">'+(paused?"RESUME":"PAUSE")+'</button>'+
         '<button class="mini-pill" data-premove="'+esc(e.planId)+'">✕</button></div>';
-    }).join(""):'<div style="color:var(--muted)">Not on any plan.</div>';
+    }).join(""):'<div style="color:var(--muted);line-height:1.5">Use Auto Plans to automate email, text, and tasks to save time.</div>';
     function act(url,msg){
       fetch(crmApi(url),{method:"POST"}).then(function(r){return r.ok?r.json().catch(function(){return {};}):null;})
         .then(function(res){ if(res){ crmToast(msg);
@@ -4923,11 +5018,16 @@ function paintLeadPlans(l){
     });});
     if(addBtn&&!addBtn.__wired){ addBtn.__wired=1; addBtn.addEventListener("click",function(e){
       e.stopPropagation();
-      var available=plans.filter(function(pl){return pl.active!==false&&!active.some(function(en){return en.planId===pl.id;});});
-      if(!available.length){ crmToast("No other plans to apply — manage plans in Auto Plans settings"); return; }
-      openActionMenu(addBtn,available.map(function(pl){
-        return {label:pl.name,fn:function(){ act("/api/auto-plans/"+encodeURIComponent(pl.id)+"/enroll/"+encodeURIComponent(l.id),"Applied "+pl.name); }};
-      }));
+      /* A modal rather than a menu: applying a plan starts real email and
+         text on a schedule, and PREVIEW is what makes that a decision rather
+         than a guess. */
+      openApplyPlanModal(l,plans,active,function(){
+        fetch(crmApi("/api/dashboard/data")).then(function(x){return x.ok?x.json():null;}).then(function(snap){
+          var fresh=snap&&snap.leads&&snap.leads.find(function(x){return x.id===l.id;});
+          if(fresh){ l.autoPlanEnrollments=fresh.autoPlanEnrollments||[]; paintLeadPlans(l); }
+          reloadTimeline();
+        });
+      });
     }); }
   }).catch(function(){ el.innerHTML='<div style="color:var(--muted)">Auto plans unavailable.</div>'; });
 }
@@ -8089,6 +8189,756 @@ function createSchedItem(l,payload,markComplete,go,label,okMsg){
     .catch(function(){ go.disabled=false; go.textContent=label; crmToast("Could not reach the server"); });
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AUTO PLAN — apply and preview.
+
+   The point of the preview is that the operator is about to start something
+   that sends real email and text on a schedule. So it shows the REAL send
+   times, computed from the plan's own offsets against the moment it would be
+   applied, the REAL sender each step resolves to (including its fallbacks),
+   and — stated rather than discovered later — any step that cannot run
+   because this contact has no email address or no phone number.
+
+   Merge fields stay unresolved on purpose. The runner substitutes them at
+   send time; showing a filled-in draft here would imply the wording is final
+   when a missing field can still stop the send.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var AP_ICON={email:"✉",text:"💬",task:"☑"};
+
+/** Highlight `{{merge_fields}}` without letting anything else through as HTML. */
+function apMergeHtml(text){
+  return esc(String(text==null?"":text))
+    .replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g,function(m){ return '<span class="ap-mf">'+m+'</span>'; });
+}
+
+function openApplyPlanModal(l,plans,active,onApplied){
+  var available=plans.filter(function(pl){
+    return pl.active!==false&&!active.some(function(en){return en.planId===pl.id;});
+  });
+  var chosen="";
+  oaOverlay("Apply an Auto Plan",
+    (available.length
+      ? '<div class="oa-f"><label>Auto Plan <span class="oa-req">required</span></label>'+
+          '<select id="apPlan"><option value="">Select an auto plan</option>'+
+          available.map(function(pl){
+            var n=(pl.steps||[]).length;
+            return '<option value="'+esc(pl.id)+'">'+esc(pl.name)+' — '+n+' step'+(n===1?"":"s")+'</option>'; }).join("")+
+          '</select></div>'+
+        '<div class="oa-note">PREVIEW shows every step with the time it would actually go out, who it comes from, and '+
+          'anything that cannot run for this contact. APPLY starts the plan — the first step can fire immediately.</div>'
+      : '<div class="cr-empty">'+(plans.length
+          ? "This contact is already on every active plan."
+          : "No active auto plans exist yet — build one in Auto Plans settings.")+'</div>'),
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+    '<button class="oa-alt" id="apPreview" disabled>PREVIEW</button>'+
+    '<button class="oa-go" id="apApply" disabled>APPLY</button>');
+
+  var sel=document.getElementById("apPlan");
+  if(sel)sel.addEventListener("change",function(){
+    chosen=sel.value;
+    document.getElementById("apPreview").disabled=!chosen;
+    document.getElementById("apApply").disabled=!chosen;
+  });
+  document.getElementById("apPreview").addEventListener("click",function(){
+    if(!chosen)return;
+    var plan=available.filter(function(p){return p.id===chosen;})[0];
+    openPlanPreviewModal(l,plan,function(){ openApplyPlanModal(l,plans,active,onApplied); },onApplied);
+  });
+  document.getElementById("apApply").addEventListener("click",function(){
+    if(!chosen)return;
+    var plan=available.filter(function(p){return p.id===chosen;})[0];
+    applyAutoPlan(l,plan,onApplied,document.getElementById("apApply"));
+  });
+}
+
+function applyAutoPlan(l,plan,onApplied,btn){
+  if(btn){ btn.disabled=true; btn.textContent="APPLYING…"; }
+  fetch(crmApi("/api/auto-plans/"+encodeURIComponent(plan.id)+"/enroll/"+encodeURIComponent(l.id)),{method:"POST"})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+    .then(function(res){
+      if(btn){ btn.disabled=false; btn.textContent="APPLY"; }
+      if(!res.ok){ crmToast(res.j.error||"The server refused that"); return; }
+      closeOa();
+      crmToast('Applied "'+plan.name+'"');
+      if(onApplied)onApplied();
+    })
+    .catch(function(){ if(btn){ btn.disabled=false; btn.textContent="APPLY"; } crmToast("Could not reach the server"); });
+}
+
+function openPlanPreviewModal(l,plan,onBack,onApplied){
+  oaOverlay("Auto Plan: "+plan.name,'<div class="wdg-note">Working out when each step would send…</div>',
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+  fetch(crmApi("/api/auto-plans/"+encodeURIComponent(plan.id)+"/preview?leadId="+encodeURIComponent(l.id)))
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:false,j:{}}; }); })
+    .then(function(res){
+      if(!res.ok){
+        oaOverlay("Auto Plan: "+plan.name,
+          '<div class="wdg-off">'+esc((res.j&&res.j.error)||"Could not load this plan's steps.")+'</div>',
+          '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+        return;
+      }
+      paintPlanPreview(l,plan,res.j,onBack,onApplied);
+    })
+    .catch(function(){
+      oaOverlay("Auto Plan: "+plan.name,
+        '<div class="wdg-off">Could not reach the server, so the schedule is not shown.</div>',
+        '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+    });
+}
+
+function paintPlanPreview(l,plan,data,onBack,onApplied){
+  var steps=data.steps||[];
+  var pick=0;
+  function timeLabel(s){
+    if(!s.sendAt)return s.offsetLabel;
+    var d=new Date(s.sendAt);
+    var h=d.getHours(), ap=h<12?"am":"pm", h12=h%12===0?12:h%12;
+    var tz="";
+    try{ tz=(new Intl.DateTimeFormat("en-US",{timeZoneName:"short"}).formatToParts(d)
+      .filter(function(p){return p.type==="timeZoneName";})[0]||{}).value||""; }catch(_){}
+    return h12+":"+String(d.getMinutes()).padStart(2,"0")+" "+ap+(tz?" "+tz:"");
+  }
+  function body(){
+    var groups=[],seen={};
+    steps.forEach(function(s,i){
+      if(!seen[s.dayLabel]){ seen[s.dayLabel]=[]; groups.push([s.dayLabel,seen[s.dayLabel]]); }
+      seen[s.dayLabel].push(i);
+    });
+    var tl=groups.map(function(g){
+      return '<div class="ap-day">'+esc(g[0])+'</div>'+g[1].map(function(i){
+        var s=steps[i];
+        return '<div class="ap-step'+(i===pick?" on":"")+(s.blocked?" blocked":"")+'" data-apstep="'+i+'">'+
+          '<span class="ic">'+(AP_ICON[s.type]||"•")+'</span>'+
+          '<span class="bd"><span class="ti">'+esc(s.title)+'</span>'+
+          '<span class="tm">'+esc(timeLabel(s))+'</span></span></div>';
+      }).join("");
+    }).join("");
+
+    var s=steps[pick];
+    var det=s?('<div class="ap-meta">'+
+        '<div><div class="k">Send From</div><div class="v">'+esc(s.sendFrom)+
+          (s.sendFromFallback?'<br><span style="color:#8a7340;font-size:11px">stood in for '+esc(s.sendFromFallback)+'</span>':'')+'</div></div>'+
+        '<div><div class="k">Send To</div><div class="v">'+esc(s.sendTo||"—")+'</div></div>'+
+        '<div><div class="k">Send At</div><div class="v">'+
+          (s.sendAt?esc(new Date(s.sendAt).toLocaleString()):esc(s.offsetLabel+" its trigger"))+'</div></div>'+
+      '</div>'+
+      (s.blocked?'<div class="qa-off" style="margin:0 0 12px">'+esc(s.blocked)+'</div>':'')+
+      '<div class="ap-card">'+(s.subject?'<div class="subj">'+apMergeHtml(s.subject)+'</div>':'')+
+        apMergeHtml(s.content||"(no content on this step)")+'</div>'+
+      (s.instructions?'<div class="qa-lbl">Instructions</div><div class="ap-card">'+apMergeHtml(s.instructions)+'</div>':'')
+      ):'<div class="cr-empty">This plan has no steps.</div>';
+
+    return '<div class="ap-two"><div class="ap-tl">'+(tl||'<div class="cr-empty" style="padding:12px">No steps.</div>')+'</div>'+
+      '<div class="ap-det">'+det+'</div></div>'+
+      '<div class="oa-note">'+esc(data.note||"")+
+        (steps.some(function(x){return x.blocked;})
+          ? ' <b>Some steps cannot run for this contact</b> — they are marked in the timeline.' : '')+'</div>';
+  }
+  function paint(){
+    oaOverlay("Auto Plan: "+plan.name,body(),
+      '<div style="flex:1"></div>'+
+      (onBack?'<button class="oa-cancel" id="apBack">← BACK</button>':'')+
+      '<button class="oa-cancel" onclick="closeOa()">CLOSE</button>'+
+      '<button class="oa-go" id="apApply2">APPLY PLAN</button>');
+    document.querySelectorAll("#oaOv [data-apstep]").forEach(function(el){
+      el.addEventListener("click",function(){ pick=+el.getAttribute("data-apstep"); paint(); });
+    });
+    var back=document.getElementById("apBack");
+    if(back)back.addEventListener("click",function(){ onBack(); });
+    document.getElementById("apApply2").addEventListener("click",function(){
+      applyAutoPlan(l,plan,onApplied,document.getElementById("apApply2"));
+    });
+  }
+  paint();
+}
+
+/* ── listing-alert template manager and the matching-listings peek ── */
+
+function openAlertTemplateManager(l,gather){
+  loadAlertTemplates(function(tpls){
+    var current=gather?gather():{};
+    oaOverlay("Manage Listing Alert Templates",
+      '<div class="oa-f"><label>Save the criteria currently in the form as a template</label>'+
+        '<div class="oa-two"><input type="text" id="tplName" placeholder="e.g. Luxury San Antonio">'+
+        '<button class="oa-alt" id="tplSave">SAVE AS TEMPLATE</button></div>'+
+        '<div class="oa-sml" style="margin-top:5px">A template stores search criteria only — never a contact or a '+
+        'schedule, so applying one to a second person cannot drag the first person’s cadence along.</div></div>'+
+      '<div class="qa-lbl">Saved templates</div>'+
+      (tpls.length
+        ? '<div>'+tpls.map(function(t){
+            return '<div class="crx"><span class="cx-v">'+esc(t.name)+'</span>'+
+              '<span class="cx-t">'+esc(describeCriteriaShort(t.criteria))+'</span>'+
+              '<span class="cx-x" data-tpldel="'+esc(t.id)+'" title="Delete">×</span></div>'; }).join("")+'</div>'
+        : '<div class="cr-empty">No templates saved yet.</div>'),
+      '<div style="flex:1"></div><button class="oa-cancel" id="tplBack">← BACK</button>');
+
+    document.getElementById("tplBack").addEventListener("click",function(){ closeOa(); openAlertEditor(l,null); });
+    document.getElementById("tplSave").addEventListener("click",function(){
+      var name=(document.getElementById("tplName").value||"").trim();
+      if(!name){ crmToast("Give the template a name"); return; }
+      crFetch("/api/outreach/alert-templates",crJson({name:name,criteria:current,createdBy:crmUserId()}),"Template saved")
+        .then(function(j){ if(j){ LA_TEMPLATES=j.templates||[]; openAlertTemplateManager(l,gather); } });
+    });
+    document.querySelectorAll("#oaOv [data-tpldel]").forEach(function(x){
+      x.addEventListener("click",function(){
+        if(!confirm("Delete this template? Alerts already created from it are not affected."))return;
+        crFetch("/api/outreach/alert-templates/"+encodeURIComponent(x.getAttribute("data-tpldel")),{method:"DELETE"},"Template deleted")
+          .then(function(j){ if(j){ LA_TEMPLATES=j.templates||[]; openAlertTemplateManager(l,gather); } });
+      });
+    });
+  });
+}
+
+/** A one-line summary of stored criteria, for the template list. */
+function describeCriteriaShort(c){
+  c=c||{};
+  var bits=[];
+  if(c.cities&&c.cities.length)bits.push(c.cities.slice(0,2).join(", ")+(c.cities.length>2?" +"+(c.cities.length-2):""));
+  if(c.minPrice||c.maxPrice)bits.push((c.minPrice?shortMoney(c.minPrice):"any")+"–"+(c.maxPrice?shortMoney(c.maxPrice):"any"));
+  if(c.minBeds)bits.push(c.minBeds+"+ bd");
+  if(c.propertyTypes&&c.propertyTypes.length)bits.push(c.propertyTypes.length+" types");
+  return bits.join(" · ")||"no criteria";
+}
+
+/** The VIEW N LISTINGS peek — the real rows the criteria match right now. */
+function openMatchingListings(criteria,count){
+  oaOverlay("Matching Listings","<div class=\"wdg-note\">Loading…</div>",
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+  fetch(crmApi("/api/outreach/preview"),{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({criteria:criteria,limit:24})})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      var rows=(d&&d.sample)||(d&&d.listings)||[];
+      oaOverlay("Matching Listings — "+((d&&d.count)!=null?d.count:count),
+        rows.length
+          ? '<div class="wa-grid">'+rows.map(function(x){
+              var addr=x.unparsedAddress||x.address||("Listing "+(x.listingKey||""));
+              var spec=[x.bedroomsTotal!=null?(x.bedroomsTotal+" Bed"):"",x.bathroomsTotalInteger!=null?(x.bathroomsTotalInteger+" Bath"):""].filter(Boolean).join(" | ");
+              var photo=(x.media&&x.media[0])||null;
+              return '<div class="wa-card"><div class="wa-thumb">'+
+                (photo?'<img src="'+esc(photo)+'" alt="" loading="lazy">':'No photo on this listing')+
+                '<div class="ov"><b>'+esc(x.listPrice?("$"+Number(x.listPrice).toLocaleString()):"Price not on the listing")+'</b>'+
+                '<span>'+esc(addr)+(spec?" · "+esc(spec):"")+'</span></div></div>'+
+                '<div class="wa-foot"><a data-lsopen="'+esc(x.listingKey||"")+'">VIEW LISTING</a>'+
+                '<span style="margin-left:auto">'+esc(x.city||"")+'</span></div></div>';
+            }).join("")+'</div>'+
+            ((d&&d.count>rows.length)?'<div class="oa-note">Showing the first '+rows.length+' of '+d.count+'.</div>':'')
+          : '<div class="cr-empty">Nothing matches these criteria right now.</div>',
+        '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+      document.querySelectorAll("#oaOv [data-lsopen]").forEach(function(a){
+        a.addEventListener("click",function(){
+          var k=a.getAttribute("data-lsopen"); if(!k)return;
+          window.open(crmApi("/l/"+encodeURIComponent(k)),"_blank","noopener");
+        });
+      });
+    })
+    .catch(function(){
+      oaOverlay("Matching Listings",'<div class="wdg-off">Could not reach the server.</div>',
+        '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+    });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MARKET REPORTS — the sidebar card and the two-step creation wizard.
+
+   The reports themselves are real: this system builds them from the MLS
+   mirror, emails them, and measures opens and views with its own pixel. The
+   card shows those measurements; the wizard writes a real subscription with a
+   real drip schedule the hourly runner honours.
+
+   What is NOT here is the map. No map provider is configured for this system,
+   so the polygon draw tool and the live status markers cannot be drawn. The
+   search area is an address plus a radius, which is what the report generator
+   actually uses.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var MR_FREQS=[["never","Never"],["weekly","Weekly"],["every_2_weeks","Every 2 weeks"],
+  ["monthly","Every month"],["quarterly","Quarterly"],["annual","Annually"]];
+function mrFreqLabel(v){
+  for(var i=0;i<MR_FREQS.length;i++)if(MR_FREQS[i][0]===v)return MR_FREQS[i][1];
+  return v==="semiannual"?"Twice yearly":v||"—";
+}
+/** Which report the sidebar card is paged to, and whether it is expanded. */
+var MR_VIEW={index:0,expanded:false};
+
+function paintReportsBlock(l,d){
+  var el=document.getElementById("ldReportsBlk"); if(!el)return;
+  if(!d.mlsReady){
+    el.innerHTML='<div style="line-height:1.5">The MLS feed is not connected, so a market report has nothing to report on.</div>';
+    return;
+  }
+  var list=d.reports||[];
+  if(!list.length){
+    el.innerHTML='<div style="line-height:1.5">Send Market Reports to contacts to let them know what’s happening in the '+
+      'real estate market in their area.</div>';
+    return;
+  }
+  if(MR_VIEW.index>=list.length)MR_VIEW.index=0;
+  var r=list[MR_VIEW.index];
+  el.innerHTML='<div class="mr-card"><div style="display:flex;gap:8px">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div class="mr-top"><span class="nm">'+esc(r.address||r.name)+'</span>'+
+          '<span class="dots" data-mrmenu="'+esc(r.id)+'">⋯</span></div>'+
+        (r.name&&r.name!==r.address?'<div class="mr-sub">'+esc(r.name)+'</div>':'')+
+        (MR_VIEW.expanded
+          ? '<div class="mr-kv">'+
+              '<div><div class="k">Last Viewed</div><div class="v">'+esc(r.lastViewedAt?relTime(r.lastViewedAt):"N/A")+'</div></div>'+
+              '<div><div class="k">Last Opened</div><div class="v">'+esc(r.lastOpenedAt?relTime(r.lastOpenedAt):"N/A")+'</div></div>'+
+              '<div><div class="k">Frequency</div><div class="v">'+esc(r.drip?mrFreqLabel(r.frequency):"No frequency")+'</div></div>'+
+              '<div><div class="k">Created</div><div class="v">'+esc(mdySlash(r.createdAt))+'</div></div>'+
+            '</div>'+
+            '<div class="mr-sub" style="margin-top:6px">View History ('+(r.viewCount||0)+')</div>'
+          : '')+
+      '</div>'+
+      (list.length>1?'<div class="mr-pager">'+
+        '<button data-mrup'+(MR_VIEW.index===0?" disabled":"")+'>▲</button>'+
+        '<span>'+(MR_VIEW.index+1)+'/'+list.length+'</span>'+
+        '<button data-mrdown'+(MR_VIEW.index===list.length-1?" disabled":"")+'>▼</button></div>':'')+
+    '</div>'+
+    '<span class="mr-more" data-mrtoggle>'+(MR_VIEW.expanded?"LESS INFO ^":"MORE INFO v")+'</span></div>'+
+    '<span class="wdg-all" data-mrall>VIEW ALL</span>';
+
+  var up=el.querySelector("[data-mrup]"); if(up)up.addEventListener("click",function(){ MR_VIEW.index--; paintReportsBlock(l,d); });
+  var dn=el.querySelector("[data-mrdown]"); if(dn)dn.addEventListener("click",function(){ MR_VIEW.index++; paintReportsBlock(l,d); });
+  el.querySelector("[data-mrtoggle]").addEventListener("click",function(){ MR_VIEW.expanded=!MR_VIEW.expanded; paintReportsBlock(l,d); });
+  el.querySelector("[data-mrall]").addEventListener("click",function(){ openReportsDashboard(l); });
+  el.querySelectorAll("[data-mrmenu]").forEach(function(x){ x.addEventListener("click",function(e){
+    e.stopPropagation();
+    var id=x.getAttribute("data-mrmenu");
+    openActionMenu(x,[
+      {label:"Edit report",fn:function(){ openReportEditor(l,r); }},
+      {label:"Send now",fn:function(){
+        crFetch("/api/market-reports/"+encodeURIComponent(id)+"/send",{method:"POST"},"Sending…")
+          .then(function(){ paintLeadOutreach(l); }); }},
+      {label:"Preview what the client sees",fn:function(){
+        window.open(crmApi("/r/report?id="+encodeURIComponent(id)),"_blank","noopener"); }},
+      {label:"Delete report",fn:function(){
+        if(!confirm("Delete this market report? The drip stops immediately."))return;
+        crFetch("/api/market-reports/"+encodeURIComponent(id),{method:"DELETE"},"Report deleted")
+          .then(function(){ MR_VIEW.index=0; paintLeadOutreach(l); }); }}
+    ]);
+  });});
+}
+
+/* ── the two-step wizard ── */
+
+function openReportWizard(l,existing){
+  loadFacets().then(function(f){
+    var c=(existing&&existing.criteria)||{};
+    var sub=(existing&&existing.subject)||{};
+    var st={
+      step:1,
+      name:existing?existing.name:(l.address||""),
+      address:existing?existing.address:(l.address||""),
+      cc:existing?(existing.cc||""):"",
+      smartRadius:true,
+      includeValue:!existing||existing.includeHomeValue!==false,
+      adjust:existing&&existing.adjustedValue!=null?existing.adjustedValue:"",
+      adjustUnit:"$",
+      sqft:sub.sqft||"",
+      beds:sub.beds||"",
+      propertyTypes:(c.propertyTypes||[]).slice(),
+      minPrice:c.minPrice||"", maxPrice:c.maxPrice||"",
+      bedsPick:c.minBeds||"", bathsPick:c.minBaths||"",
+      minSqft:c.minSqft||"", maxSqft:c.maxSqft||"",
+      minLot:c.minLotSize||"", maxLot:c.maxLotSize||"",
+      minYear:c.minYearBuilt||"", maxYear:c.maxYearBuilt||"",
+      specsOpen:false,
+      message:(existing&&existing.emailMessage)||
+        "Check out this Market Report I created for you that shows what's going on in the real estate market in your area.",
+      drip:!existing||existing.drip!==false,
+      frequency:existing?existing.frequency:"every_2_weeks"
+    };
+    var auto=null;
+
+    function criteria(){
+      var num=function(v){ var n=parseFloat(v); return isFinite(n)?n:undefined; };
+      return {
+        propertyTypes:st.propertyTypes,
+        minPrice:num(st.minPrice), maxPrice:num(st.maxPrice),
+        minBeds:num(st.bedsPick), minBaths:num(st.bathsPick),
+        minSqft:num(st.minSqft), maxSqft:num(st.maxSqft),
+        minLotSize:num(st.minLot), maxLotSize:num(st.maxLot),
+        minYearBuilt:num(st.minYear), maxYearBuilt:num(st.maxYear)
+      };
+    }
+
+    function step1(){
+      return '<div class="mw-steps"><b>Search Criteria</b><span class="sep">›</span><span>Preview and Send</span></div>'+
+        '<div class="oa-cols"><div>'+
+          '<div class="oa-f"><label>Contact Email</label>'+
+            '<select id="mwEmail">'+(((CR.record||crEmpty()).emails||[]).map(function(e){
+              return '<option value="'+esc(e.address)+'"'+(e.isPrimary?" selected":"")+'>'+esc(e.address)+'</option>'; }).join("")
+              ||'<option value="">'+esc(l.email||"No email on this contact")+'</option>')+'</select></div>'+
+          '<div class="oa-f"><label>Search Area <span class="oa-req">required</span></label>'+
+            '<input type="text" id="mwAddr" value="'+esc(st.address)+'" placeholder="Search by Address, Neighborhood, County, City, or Zip Code"></div>'+
+          '<div class="oa-f"><label class="sw'+(st.smartRadius?" on":"")+'" id="mwSmart"><i></i> Use Smart Radius</label>'+
+            '<div class="oa-sml" style="margin-top:5px">Smart radius widens the search until the report has enough comparable '+
+            'sales to be worth sending.</div></div>'+
+          /* No map provider is configured, so the polygon tool and the live
+             status markers cannot be drawn. Said plainly, in place. */
+          '<div class="oa-unav" style="margin-top:0">No map provider is configured for this system, so the draw-a-polygon '+
+            'tool and the map’s status markers are not available. The search area is the address above plus the radius, '+
+            'which is what the report generator actually uses.</div>'+
+        '</div><div>'+
+          '<div class="oa-f"><label class="sw'+(st.includeValue?" on":"")+'" id="mwIncl"><i></i> Include Home Value in Market Report</label></div>'+
+          (st.includeValue?
+            '<div class="oa-f"><div class="oa-two">'+
+              '<input type="number" id="mwSqft" value="'+esc(st.sqft)+'" placeholder="Sq ft of this home">'+
+              '<input type="number" id="mwBeds" value="'+esc(st.beds)+'" placeholder="Beds"></div>'+
+              '<div class="oa-sml" style="margin-top:5px">Square footage is what makes a comp-based estimate possible.</div></div>'+
+            '<div class="oa-f"><div class="oa-sml">Automated Est.</div><div class="oa-auto" id="mwAuto">—</div>'+
+              '<a class="ldlink" id="mwAdjToggle" style="color:var(--teal-strong);font-weight:700;font-size:11px">'+
+                (st.adjustOpen?"HIDE ESTIMATE ADJUSTMENT":"SHOW ESTIMATE ADJUSTMENT")+'</a></div>'+
+            (st.adjustOpen?'<div class="qa-sub"><div class="fee-row">'+
+              '<input type="number" id="mwAdj" value="'+esc(st.adjust)+'" placeholder="0">'+
+              '<span class="fee-unit"><button data-mwunit="$"'+(st.adjustUnit==="$"?' class="on"':'')+'>$</button>'+
+              '<button data-mwunit="%"'+(st.adjustUnit==="%"?' class="on"':'')+'>%</button></span></div>'+
+              '<div class="oa-sml" style="margin-top:6px">The adjusted estimate takes the most recent automated estimate and '+
+              'adds or subtracts this amount. It is what appears on the home value section of the report.</div></div>':'')
+            :'')+
+          '<div class="oa-f"><label>Property Types</label><div class="qa-pills" id="mwTypes">'+
+            (f.propertyTypes||[]).slice(0,6).map(function(t){
+              return '<button data-mwtype="'+esc(t.value)+'"'+(st.propertyTypes.indexOf(t.value)>=0?' class="on"':'')+'>'+
+                esc(t.label)+'</button>'; }).join("")+'</div></div>'+
+          '<div class="oa-f"><label>Price Range</label><div class="oa-two">'+
+            '<input type="number" id="mwPMin" value="'+esc(st.minPrice)+'" placeholder="No min">'+
+            '<input type="number" id="mwPMax" value="'+esc(st.maxPrice)+'" placeholder="No max"></div></div>'+
+          '<div class="oa-f"><label>Bedrooms</label><div class="qa-pills" id="mwBeds2">'+
+            [["","Any"],["1","1+"],["2","2+"],["3","3+"],["4","4+"],["5","5+"]].map(function(b){
+              return '<button data-mwbeds="'+b[0]+'"'+(String(st.bedsPick)===b[0]?' class="on"':'')+'>'+b[1]+'</button>'; }).join("")+'</div></div>'+
+          '<div class="oa-f"><label>Bathrooms</label><div class="qa-pills" id="mwBaths">'+
+            [["","Any"],["1","1+"],["1.5","1.5+"],["2","2+"],["2.5","2.5+"],["3","3+"]].map(function(b){
+              return '<button data-mwbaths="'+b[0]+'"'+(String(st.bathsPick)===b[0]?' class="on"':'')+'>'+b[1]+'</button>'; }).join("")+'</div></div>'+
+          '<a class="ldlink" id="mwSpecs" style="color:var(--teal-strong);font-weight:700;font-size:11px">'+
+            (st.specsOpen?"SHOW LESS":"SHOW MORE")+'</a>'+
+          (st.specsOpen?'<div class="qa-sub">'+
+            oaRange("Square Feet","mwSMin","mwSMax",st.minSqft,st.maxSqft,50)+
+            oaRange("Lot Size (acres)","mwLMin","mwLMax",st.minLot,st.maxLot,0.1)+
+            oaRange("Year Built","mwYMin","mwYMax",st.minYear,st.maxYear,1)+'</div>':'')+
+        '</div></div>'+
+        '<div class="la-count" id="mwCount">—</div>';
+    }
+
+    function step2(){
+      return '<div class="mw-steps"><span class="ldlink" id="mwBack1">Search Criteria</span><span class="sep">›</span><b>Preview and Send</b></div>'+
+        '<div class="oa-cols"><div>'+
+          '<div class="oa-live"><div class="oa-livehead">Your report is ready.</div>'+
+            '<div id="mwStats">Counting what is in this area…</div>'+
+            '<button class="oa-alt" id="mwPreview" style="margin-top:10px">PREVIEW REPORT</button></div>'+
+        '</div><div>'+
+          '<div class="oa-f"><label>Market Report Name</label>'+
+            '<input type="text" id="mwName" value="'+esc(st.name)+'">'+
+            '<div class="oa-sml" style="margin-top:4px">This field is visible to your contacts.</div></div>'+
+          '<div class="oa-f"><label>Email Message <span class="oa-hint">optional</span></label>'+
+            '<textarea id="mwMsg" rows="4">'+esc(st.message)+'</textarea>'+
+            '<div class="oa-sml" style="margin-top:4px">Added to the first email for this report.</div></div>'+
+          '<div class="oa-f"><label class="sw'+(st.drip?" on":"")+'" id="mwDrip"><i></i> Schedule a Drip Campaign</label>'+
+            '<div class="oa-sml" style="margin:5px 0">A drip sends a new Market Report with these search criteria at the '+
+            'interval below.</div>'+
+            '<select id="mwFreq"'+(st.drip?"":" disabled")+'>'+MR_FREQS.map(function(x){
+              return '<option value="'+x[0]+'"'+(st.frequency===x[0]?" selected":"")+'>'+esc(x[1])+'</option>'; }).join("")+'</select></div>'+
+        '</div></div>'+
+        '<div class="oa-note">SAVE &amp; CLOSE stores the report and its schedule without emailing anything. SEND NOW also '+
+          'sends the first email immediately — a real email, to the address above.</div>';
+    }
+
+    function foot(){
+      return st.step===1
+        ? '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+          '<button class="oa-go" id="mwNext">NEXT</button>'
+        : '<button class="oa-cancel" id="mwBack">← BACK</button><div style="flex:1"></div>'+
+          '<button class="oa-alt" id="mwSaveClose">SAVE &amp; CLOSE</button>'+
+          '<button class="oa-go" id="mwSend">SEND NOW</button>';
+    }
+
+    function paint(){
+      oaOverlay(existing?"Edit Market Report":"Create a Market Report",st.step===1?step1():step2(),foot());
+      if(st.step===1)wire1(); else wire2();
+    }
+
+    function wire1(){
+      var addr=document.getElementById("mwAddr");
+      addr.addEventListener("input",function(){ st.address=addr.value; if(!existing)st.name=addr.value; });
+      document.getElementById("mwSmart").addEventListener("click",function(){ st.smartRadius=!st.smartRadius; this.classList.toggle("on",st.smartRadius); });
+      document.getElementById("mwIncl").addEventListener("click",function(){ st.includeValue=!st.includeValue; paint(); });
+      var adjT=document.getElementById("mwAdjToggle");
+      if(adjT)adjT.addEventListener("click",function(){ st.adjustOpen=!st.adjustOpen; paint(); });
+      var adj=document.getElementById("mwAdj"); if(adj)adj.addEventListener("input",function(){ st.adjust=this.value; });
+      document.querySelectorAll("#oaOv [data-mwunit]").forEach(function(b){
+        b.addEventListener("click",function(){ st.adjustUnit=b.getAttribute("data-mwunit");
+          document.querySelectorAll("#oaOv [data-mwunit]").forEach(function(x){x.classList.toggle("on",x===b);}); });
+      });
+      var sq=document.getElementById("mwSqft"); if(sq)sq.addEventListener("input",function(){ st.sqft=this.value; estimate(); });
+      var bd=document.getElementById("mwBeds"); if(bd)bd.addEventListener("input",function(){ st.beds=this.value; });
+      document.querySelectorAll("#mwTypes button").forEach(function(b){
+        b.addEventListener("click",function(){
+          var v=b.getAttribute("data-mwtype"), i=st.propertyTypes.indexOf(v);
+          if(i>=0)st.propertyTypes.splice(i,1); else st.propertyTypes.push(v);
+          b.classList.toggle("on",i<0); count();
+        });
+      });
+      ["mwPMin","mwPMax","mwSMin","mwSMax","mwLMin","mwLMax","mwYMin","mwYMax"].forEach(function(id){
+        var el=document.getElementById(id); if(!el)return;
+        el.addEventListener("input",function(){
+          var map={mwPMin:"minPrice",mwPMax:"maxPrice",mwSMin:"minSqft",mwSMax:"maxSqft",
+                   mwLMin:"minLot",mwLMax:"maxLot",mwYMin:"minYear",mwYMax:"maxYear"};
+          st[map[id]]=el.value; count();
+        });
+      });
+      document.querySelectorAll("#mwBeds2 button").forEach(function(b){
+        b.addEventListener("click",function(){ st.bedsPick=b.getAttribute("data-mwbeds");
+          document.querySelectorAll("#mwBeds2 button").forEach(function(x){x.classList.toggle("on",x===b);}); count(); });
+      });
+      document.querySelectorAll("#mwBaths button").forEach(function(b){
+        b.addEventListener("click",function(){ st.bathsPick=b.getAttribute("data-mwbaths");
+          document.querySelectorAll("#mwBaths button").forEach(function(x){x.classList.toggle("on",x===b);}); count(); });
+      });
+      document.getElementById("mwSpecs").addEventListener("click",function(){ st.specsOpen=!st.specsOpen; paint(); });
+      document.getElementById("mwNext").addEventListener("click",function(){
+        if(!(st.address||"").trim()){ crmToast("A market report needs a search area"); return; }
+        st.step=2; paint();
+      });
+      count(); estimate();
+    }
+
+    function count(){
+      var el=document.getElementById("mwCount"); if(!el)return;
+      el.textContent="Counting…"; el.className="la-count";
+      fetch(crmApi("/api/outreach/preview"),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({criteria:criteria()})})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(d){
+          if(!d){ el.textContent="Couldn't count"; return; }
+          el.textContent=d.count+" listing"+(d.count===1?"":"s")+" in this area match these filters";
+          el.className="la-count"+(d.count===0?" zero":"");
+        }).catch(function(){ el.textContent="Couldn't count"; });
+    }
+
+    /* The same builder the saved report runs on, so the number shown here is
+       the number the client will see rather than a second estimate. */
+    function estimate(){
+      var el=document.getElementById("mwAuto"); if(!el)return;
+      var sqft=parseFloat(st.sqft);
+      if(!isFinite(sqft)||sqft<=0){ el.textContent="Add square footage"; return; }
+      if(!(st.address||"").trim()){ el.textContent="Add a search area"; return; }
+      el.textContent="Working it out…";
+      fetch(crmApi("/api/market-reports/preview"),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({address:st.address,criteria:criteria(),
+          subject:{sqft:sqft,beds:parseFloat(st.beds)||undefined}})})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(d){
+          var b=d&&d.built;
+          auto=b&&b.value&&b.value.estimate!=null?b.value.estimate:null;
+          el.textContent=auto!=null?("$ "+Number(auto).toLocaleString()):"Not enough comparable listings nearby";
+        }).catch(function(){ el.textContent="Couldn't work it out"; });
+    }
+
+    function wire2(){
+      document.getElementById("mwBack").addEventListener("click",function(){ st.step=1; paint(); });
+      document.getElementById("mwBack1").addEventListener("click",function(){ st.step=1; paint(); });
+      var nm=document.getElementById("mwName"); nm.addEventListener("input",function(){ st.name=nm.value; });
+      var msg=document.getElementById("mwMsg"); msg.addEventListener("input",function(){ st.message=msg.value; });
+      document.getElementById("mwDrip").addEventListener("click",function(){ st.drip=!st.drip; paint(); });
+      var fr=document.getElementById("mwFreq"); if(fr)fr.addEventListener("change",function(){ st.frequency=fr.value; });
+      document.getElementById("mwPreview").addEventListener("click",function(){
+        if(existing&&existing.id){ window.open(crmApi("/r/report?id="+encodeURIComponent(existing.id)),"_blank","noopener"); return; }
+        crmToast("Save the report first — the client-facing page exists once it does");
+      });
+      fetch(crmApi("/api/outreach/preview"),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({criteria:criteria()})})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(d){
+          var el=document.getElementById("mwStats"); if(!el)return;
+          el.innerHTML=d?('<div class="oa-livegrid"><div><b>'+d.count+'</b><span>matching now</span></div>'+
+            '<div><b>'+esc(st.address||"—")+'</b><span>search area</span></div>'+
+            '<div><b>'+esc(st.drip?mrFreqLabel(st.frequency):"one-off")+'</b><span>schedule</span></div></div>'+
+            '<div class="oa-livebasis">'+esc(d.summary||"")+'</div>'+
+            '<div class="oa-livenote">Prices come from active listings — this feed carries no sold data, so the report '+
+            'describes what is on the market, not what has closed.</div>'):"Couldn't load the area summary.";
+        }).catch(function(){});
+      document.getElementById("mwSaveClose").addEventListener("click",function(){ save(false,this); });
+      document.getElementById("mwSend").addEventListener("click",function(){ save(true,this); });
+    }
+
+    function save(sendNow,btn){
+      if(!(st.name||"").trim()){ crmToast("Give the report a name"); return; }
+      var adjValue=null;
+      if(st.adjust!==""&&isFinite(parseFloat(st.adjust))){
+        var n=parseFloat(st.adjust);
+        /* A percentage adjustment only means something against a real
+           estimate; without one it is stored as nothing rather than as a
+           number that would be read as dollars. */
+        adjValue=st.adjustUnit==="%"?(auto!=null?Math.round(auto*(1+n/100)):null):(auto!=null?Math.round(auto+n):n);
+      }
+      var payload={name:st.name.trim(),address:(st.address||"").trim(),cc:st.cc||"",
+        frequency:st.drip?st.frequency:"never",drip:st.drip,
+        includeHomeValue:st.includeValue,adjustedValue:adjValue,
+        emailMessage:st.message,criteria:criteria(),
+        subject:{sqft:parseFloat(st.sqft)||undefined,beds:parseFloat(st.beds)||undefined},
+        sendNow:sendNow};
+      btn.disabled=true; var old=btn.textContent; btn.textContent="SAVING…";
+      var url=existing?("/api/market-reports/"+encodeURIComponent(existing.id))
+                      :("/api/leads/"+encodeURIComponent(l.id)+"/market-reports");
+      fetch(crmApi(url),{method:existing?"PATCH":"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+        .then(function(res){
+          btn.disabled=false; btn.textContent=old;
+          if(!res.ok){ crmToast(res.j.error||"Couldn't save that"); return; }
+          closeOa();
+          /* Saving and SENDING are separate claims. */
+          if(res.j.firstSend&&res.j.firstSend.ok===false){
+            crmToast("Report saved, but the first email did not send: "+(res.j.firstSend.error||"unknown error"));
+          } else if(sendNow&&res.j.firstSend){ crmToast("Report saved and the first email went out"); }
+          else { crmToast(existing?"Report updated":"Report saved"); }
+          MR_VIEW.index=0; paintLeadOutreach(l);
+        })
+        .catch(function(){ btn.disabled=false; btn.textContent=old; crmToast("Couldn't reach the server"); });
+    }
+
+    paint();
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CMA REPORTS and the reports dashboard.
+
+   Brivity's CMA product puts CMAs and market reports side by side. Half of
+   that exists here and half does not, and the split is the whole design:
+
+     · Market reports are real — built from the MLS mirror, emailed, and
+       measured with this system's own open/view pixel. The dashboard shows
+       every one with its real dates and counts, and an open rate computed
+       from sends it actually measured.
+     · CMA generation is not wired into this CRM at all. So the CMA widget's
+       + ADD does not open a builder that cannot build: it says what is
+       missing and offers the market report, which is the live thing.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function wireCmaWidget(l){
+  var add=document.getElementById("ldCmaAdd");
+  if(add&&!add.__wired){ add.__wired=1; add.addEventListener("click",function(e){
+    e.stopPropagation();
+    openActionMenu(add,[
+      {label:"+ New CMA Report",fn:function(){
+        oaOverlay("New CMA Report",
+          '<div class="oa-unav" style="margin-top:0">No CMA generation is wired into this CRM. There is no comparable-sales '+
+            'engine behind this button, and the MLS feed this system reads carries active listings only — no sold prices — '+
+            'which is what a CMA is built from.</div>'+
+          '<div class="oa-note">The live thing this system does send is a <b>Market Report</b>: what is on the market around '+
+            'an address, with a comp-based value estimate, emailed on a schedule and tracked for opens.</div>',
+          '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>'+
+          '<button class="oa-go" id="cmaToReport">CREATE A MARKET REPORT INSTEAD</button>');
+        document.getElementById("cmaToReport").addEventListener("click",function(){ closeOa(); openReportWizard(l,null); });
+      }},
+      {label:"👁 View Report Status",fn:function(){ openReportsDashboard(l); }}
+    ]);
+  }); }
+}
+
+/** The Market Reports / CMA dashboard, with the real numbers and the gap. */
+function openReportsDashboard(l){
+  oaOverlay("Reports",'<div class="wdg-note">Loading…</div>',
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+  fetch(crmApi("/api/outreach/reports-dashboard"))
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:false,j:{}}; }); })
+    .then(function(res){
+      if(!res.ok){
+        oaOverlay("Reports",'<div class="wdg-off">'+esc((res.j&&res.j.error)||"Could not load the reports.")+'</div>',
+          '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+        return;
+      }
+      var d=res.j, k=d.kpis||{}, rows=d.reports||[];
+      var trend=k.marketReportsTrendPct;
+      var kpis=
+        '<div class="rd-kpis">'+
+          '<div class="rd-kpi"><div class="k">Market Reports Created</div>'+
+            '<div class="n">'+k.marketReportsCreated+'</div>'+
+            '<div class="t'+(trend==null?"":(trend>=0?" up":" down"))+'">'+
+              (trend==null
+                ? (k.marketReportsCreatedLast30+" in the last 30 days · no earlier period to compare")
+                : ((trend>=0?"↑ ":"↓ ")+Math.abs(trend)+"% from the last 30 days"))+
+            '</div></div>'+
+          '<div class="rd-kpi"><div class="k">Market Report Open Rate</div>'+
+            (k.openRatePct==null
+              ? '<div class="n none">—</div><div class="t">Nothing has been sent yet, so there is no rate to report</div>'
+              : '<div class="n">'+k.openRatePct+'%</div><div class="t">across '+k.totalSends+' send'+(k.totalSends===1?"":"s")+' this system measured</div>')+
+          '</div>'+
+          '<div class="rd-kpi"><div class="k">CMA Reports Created</div>'+
+            '<div class="n none">n/a</div>'+
+            '<div class="t">No CMA generator is wired into this CRM</div></div>'+
+        '</div>';
+
+      var table=rows.length
+        ? '<div style="overflow-x:auto"><table class="rd-tbl"><thead><tr>'+
+            ["Created","Assigned To","Name","Location","Contact","Last Sent","Last Opened","Views","Last Viewed",""]
+              .map(function(h){return '<th>'+esc(h)+'</th>';}).join("")+
+          '</tr></thead><tbody>'+rows.map(function(r){
+            return '<tr>'+
+              '<td>'+esc(mdySlash(r.created))+'</td>'+
+              '<td>'+esc(r.assignedTo)+'</td>'+
+              '<td><a data-rdopen="'+esc(r.id)+'">'+esc(r.name)+'</a></td>'+
+              '<td>'+esc(r.location||"—")+'</td>'+
+              '<td><a data-rdlead="'+esc(r.leadId)+'">'+esc(r.contact)+'</a></td>'+
+              '<td>'+esc(r.lastSent?mdySlash(r.lastSent):"—")+'</td>'+
+              '<td>'+esc(r.lastOpened?mdySlash(r.lastOpened):"—")+'</td>'+
+              '<td>'+(r.views||0)+'</td>'+
+              '<td>'+esc(r.lastViewed?mdySlash(r.lastViewed):"—")+'</td>'+
+              '<td><span class="dots" data-rdmenu="'+esc(r.id)+'" style="cursor:pointer;color:#b3bcc5">⋯</span></td>'+
+            '</tr>';
+          }).join("")+'</tbody></table></div>'
+        : '<div class="cr-empty">No market reports have been created yet.</div>';
+
+      oaOverlay("Reports",
+        kpis+'<div class="ld-sec-h" style="margin:4px 0 8px">Market Reports</div>'+table+
+        '<div class="ld-sec-h" style="margin:18px 0 8px">CMA Reports</div>'+
+        '<div class="oa-unav" style="margin-top:0">'+esc((d.cma&&d.cma.reason)||"CMA reports are not available.")+'</div>'+
+        '<div class="oa-note">Views and opens count only what this system’s own tracking measured — the report page and '+
+          'the pixel in the emails it sent. Nothing else reports back.</div>',
+        '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>'+
+        (l?'<button class="oa-go" id="rdNew">+ NEW MARKET REPORT</button>':''));
+
+      var nw=document.getElementById("rdNew");
+      if(nw)nw.addEventListener("click",function(){ closeOa(); openReportWizard(l,null); });
+      document.querySelectorAll("#oaOv [data-rdopen]").forEach(function(a){
+        a.addEventListener("click",function(){
+          window.open(crmApi("/r/report?id="+encodeURIComponent(a.getAttribute("data-rdopen"))),"_blank","noopener");
+        });
+      });
+      document.querySelectorAll("#oaOv [data-rdlead]").forEach(function(a){
+        a.addEventListener("click",function(){
+          var id=a.getAttribute("data-rdlead");
+          if(!LEADS.some(function(x){return x.id===id;})){ crmToast("That contact is not in the loaded list"); return; }
+          closeOa(); openLead(id);
+        });
+      });
+      document.querySelectorAll("#oaOv [data-rdmenu]").forEach(function(x){
+        x.addEventListener("click",function(e){
+          e.stopPropagation();
+          var id=x.getAttribute("data-rdmenu");
+          openActionMenu(x,[
+            {label:"Open the client's view",fn:function(){
+              window.open(crmApi("/r/report?id="+encodeURIComponent(id)),"_blank","noopener"); }},
+            {label:"Resend now",fn:function(){
+              crFetch("/api/market-reports/"+encodeURIComponent(id)+"/send",{method:"POST"},"Sending…")
+                .then(function(){ openReportsDashboard(l); }); }},
+            {label:"Delete report",fn:function(){
+              if(!confirm("Delete this market report? The drip stops immediately."))return;
+              crFetch("/api/market-reports/"+encodeURIComponent(id),{method:"DELETE"},"Report deleted")
+                .then(function(){ openReportsDashboard(l); }); }}
+          ]);
+        });
+      });
+    })
+    .catch(function(){
+      oaOverlay("Reports",'<div class="wdg-off">Could not reach the server.</div>',
+        '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+    });
+}
+
 function rightStackHTML(l){
   return '<div class="ld-card">'+
     '<div class="rblock"><h5>Assigned To: <button class="mini-pill" id="ldAssignBtn">MANAGE</button></h5>'+
@@ -8120,9 +8970,10 @@ function rightStackHTML(l){
       '<div id="ldAlertsBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
     '<div class="rblock"><h5>Market Reports <button class="mini-pill" id="ldReportAdd">+ ADD</button></h5>'+
       '<div id="ldReportsBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
-    '<div class="rblock" style="margin-bottom:0"><h5>CMA Reports</h5>'+
-      '<div class="wdg-off">No CMA generation is wired into this CRM yet, so there are no CMA reports to list. '+
-        'Market Reports above are the live thing this system does send.</div></div>'+
+    '<div class="rblock" style="margin-bottom:0"><h5>CMA Reports <button class="mini-pill" id="ldCmaAdd">+ ADD</button></h5>'+
+      '<div class="wdg-note">Create a new Comparative Market Analysis to create a detailed report of the property.</div>'+
+      '<div class="wdg-off" style="margin-top:8px">No CMA generation is wired into this CRM, so there are no CMA reports '+
+        'to list. Market Reports above are the live thing this system does send.</div></div>'+
   '</div>';
 }
 
@@ -9245,7 +10096,7 @@ function paintLeadOutreach(l){
   var ab=document.getElementById("ldAlertAdd");
   if(ab) ab.onclick=function(){ openAlertEditor(l,null); };
   var rb=document.getElementById("ldReportAdd");
-  if(rb) rb.onclick=function(){ openReportEditor(l,null); };
+  if(rb) rb.onclick=function(){ openReportWizard(l,null); };
 }
 
 /* The alert card mirrors Brivity's: name, created, live status, frequency,
@@ -9304,52 +10155,6 @@ function paintAlertsBlock(l,d){
   };});
 }
 
-function paintReportsBlock(l,d){
-  var el=document.getElementById("ldReportsBlk");
-  if(!d.mlsReady){ el.innerHTML='<div style="line-height:1.5">The MLS feed is not connected, so a market report has nothing to report on.</div>'; return; }
-  if(!d.reports.length){
-    el.innerHTML='<div style="line-height:1.5">No market report yet.'+
-      (l.email?'':' <b>This contact has no email address.</b>')+'</div>';
-    return;
-  }
-  el.innerHTML=d.reports.map(function(m){
-    var val=m.adjustedValue!=null?m.adjustedValue:null;
-    return '<div class="oa-card">'+
-      '<div class="oa-top"><span class="oa-name">'+esc(m.address)+'</span>'+
-        '<span class="oa-ic" data-redit="'+esc(m.id)+'" title="Edit">✎</span>'+
-        '<span class="oa-ic" data-rdel="'+esc(m.id)+'" title="Delete">🗑</span></div>'+
-      (val!=null?'<div class="oa-val">'+esc(fmtMoneyShort(val))+'<span class="oa-adj">Adjusted</span></div>':'')+
-      '<div class="oa-row"><span>Frequency</span><b>'+esc(m.drip?(m.frequency.charAt(0).toUpperCase()+m.frequency.slice(1)):"One-off")+'</b></div>'+
-      '<div class="oa-row"><span>Created</span><b>'+esc(fmtDay(m.createdAt))+'</b></div>'+
-      '<div class="oa-row"><span>Last sent</span><b>'+esc(agoShort(m.lastSentAt))+'</b></div>'+
-      '<div class="oa-row"><span>Last viewed</span><b>'+esc(agoShort(m.lastViewedAt))+'</b></div>'+
-      '<div class="oa-row"><span>Views</span><b>'+(m.viewCount||0)+'</b></div>'+
-      '<div class="oa-acts"><button class="mini-pill" data-rprev="'+esc(m.id)+'">PREVIEW</button>'+
-        '<button class="mini-pill" data-rsend="'+esc(m.id)+'">SEND NOW</button></div>'+
-    '</div>';
-  }).join("");
-  el.querySelectorAll("[data-redit]").forEach(function(b){ b.onclick=function(){
-    openReportEditor(l, d.reports.find(function(x){return x.id===b.getAttribute("data-redit");})); };});
-  el.querySelectorAll("[data-rdel]").forEach(function(b){ b.onclick=function(){
-    if(!confirm("Delete this market report?")) return;
-    fetch(crmApi("/api/market-reports/"+encodeURIComponent(b.getAttribute("data-rdel"))),{method:"DELETE"})
-      .then(function(){ crmToast("Report deleted"); paintLeadOutreach(l); });
-  };});
-  el.querySelectorAll("[data-rprev]").forEach(function(b){ b.onclick=function(){
-    /* The same page the client sees — previewing anything else would be a
-       different document from the one that goes out. */
-    window.open(crmApi("/r/report?id="+encodeURIComponent(b.getAttribute("data-rprev"))),"_blank","noopener");
-  };});
-  el.querySelectorAll("[data-rsend]").forEach(function(b){ b.onclick=function(){
-    var id=b.getAttribute("data-rsend"); b.disabled=true; b.textContent="SENDING…";
-    fetch(crmApi("/api/market-reports/"+encodeURIComponent(id)+"/send"),{method:"POST"})
-      .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
-      .then(function(res){ b.disabled=false; b.textContent="SEND NOW";
-        crmToast(res.ok?"Report sent":(res.j.error?("Not sent — "+res.j.error):"Not sent"));
-        if(res.ok) paintLeadOutreach(l); })
-      .catch(function(){ b.disabled=false; b.textContent="SEND NOW"; crmToast("Couldn't reach the server"); });
-  };});
-}
 
 
 /* ---- the builders ----------------------------------------------------- */
@@ -9374,8 +10179,52 @@ function closeOa(){ var ov=document.getElementById("oaOv"); if(ov) ov.style.disp
 function oaRange(label,idMin,idMax,vMin,vMax,step,ph){
   return '<div class="oa-f"><label>'+esc(label)+'</label><div class="oa-two">'+
     '<input type="number" id="'+idMin+'" value="'+(vMin==null?"":vMin)+'" placeholder="'+(ph||"No min")+'" step="'+(step||1)+'">'+
-    '<input type="number" id="'+idMax+'" value="'+(vMax==null?"":vMax)+'" placeholder="No max" step="'+(step||1)+'"></div></div>';
+    '<input type="number" id="'+idMax+'" value="'+(vMax==null?"":vMax)+'" placeholder="No Max" step="'+(step||1)+'"></div></div>';
 }
+
+/* The option ladders Brivity's listing-alert form offers. Dropdowns rather
+   than free number entry: "3 bedrooms" is a choice from a short list, and a
+   typed 3.5 would silently match nothing. */
+var LA_LADDERS={
+  beds:[1,2,3,4,5,6,7],
+  baths:[1,1.5,1.75,2,3,4,5],
+  sqft:[600,800,1000,1200,1400,1600,1800,2000,2500,3000,4000,5000],
+  lot:[0.1,0.2,0.25,0.33,0.5,0.75,1,2,5,10],
+  year:[1800,1900,1910,1920,1930,1940,1950,1960,1970,1980,1990,2000,2010,2020],
+  garage:[1,2,3,4,5,6,7]
+};
+/** A min/max pair rendered as two dropdowns off one ladder of values. */
+function oaLadder(label,idMin,idMax,vMin,vMax,values,fmt){
+  var f=fmt||function(v){return String(v);};
+  var opt=function(v,sel){ return '<option value="'+v+'"'+(String(sel)===String(v)?" selected":"")+'>'+esc(f(v))+'</option>'; };
+  return '<div class="oa-f"><label>'+esc(label)+'</label><div class="la-mm">'+
+    '<select id="'+idMin+'"><option value="">No Min</option>'+values.map(function(v){return opt(v,vMin);}).join("")+'</select>'+
+    '<select id="'+idMax+'"><option value="">No Max</option>'+values.map(function(v){return opt(v,vMax);}).join("")+'</select>'+
+  '</div></div>';
+}
+
+/**
+ * A checkbox group that collapses past two rows behind MORE / LESS.
+ * Brivity's form has a dozen of these and an expanded page is unusable; the
+ * count in the header is what tells you whether it is worth opening.
+ */
+function oaGroup(id,label,facets,selected,limit){
+  if(!facets||!facets.length) return "";
+  var sel=selected||[];
+  var items=facets.slice(0,limit||30).map(function(f){
+    var on=sel.indexOf(f.value)>=0;
+    return '<label class="oa-ck"><input type="checkbox" data-grp="'+id+'" value="'+esc(f.value)+'"'+(on?" checked":"")+'> '+
+      esc(f.label)+' <span class="oa-n">'+f.count+'</span></label>';
+  }).join("");
+  var picked=facets.filter(function(f){return sel.indexOf(f.value)>=0;}).length;
+  return '<div class="la-grp'+(picked?" open":"")+'" data-lagrp="'+id+'">'+
+    '<h6 data-latoggle="'+id+'">'+esc(label)+(picked?' <span class="oa-count" style="font-size:10px">'+picked+' selected</span>':'')+
+      '<span class="more">'+(picked?"LESS ^":"MORE v")+'</span></h6>'+
+    '<div class="la-body" id="'+id+'">'+items+'</div></div>';
+}
+function oaSel(id){ var el=document.getElementById(id); if(!el)return undefined;
+  var v=parseFloat(el.value); return isFinite(v)?v:undefined; }
+
 /** A checkbox group built from real facet values, with counts. */
 function oaChecks(id,label,facets,selected,limit){
   if(!facets||!facets.length) return "";
@@ -9400,48 +10249,116 @@ function unavailableNote(f){
     '</ul></div>';
 }
 
+var LA_FREQS=[["daily","Daily"],["twice_daily","Twice Daily"],["multiple_per_day","Multiple Times Per Day"],
+  ["weekly","Weekly"],["every_2_weeks","Every 2 Weeks"],["monthly","Monthly"]];
+var LA_TEMPLATES=null;
+function loadAlertTemplates(then){
+  fetch(crmApi("/api/outreach/alert-templates")).then(function(r){return r.ok?r.json():null;})
+    .then(function(d){ LA_TEMPLATES=(d&&d.templates)||[]; if(then)then(LA_TEMPLATES); })
+    .catch(function(){ LA_TEMPLATES=[]; if(then)then(LA_TEMPLATES); });
+}
+
 function openAlertEditor(l,existing){
   loadFacets().then(function(f){
     var c=(existing&&existing.criteria)||{};
+    var searchMode="terms";
     var body=
+      /* The banner Brivity shows when no MLS is connected. Here it is driven
+         by whether the mirror actually has listings — an alert built against
+         an empty feed can never match anything. */
+      (f.total===0?'<div class="la-warn">No MLS listings are available to this account right now, so an alert saved '+
+        'here would have nothing to match. Check the MLS sync before relying on it.</div>':'')+
+      '<div class="oa-f la-tpl-row"><label style="margin:0">Template</label>'+
+        '<a id="oaTplManage">+ MANAGE TEMPLATES</a></div>'+
+      '<div class="oa-f" style="margin-top:-6px"><select id="oaTpl"><option value="">Custom Listing Alert</option></select>'+
+        '<div class="oa-sml" style="margin-top:4px">Start with a saved search, or build a custom one.</div></div>'+
       '<div class="oa-cols"><div>'+
-        '<div class="oa-f"><label>Listing alert name <span class="oa-req">required</span></label>'+
+        '<div class="oa-f"><label>Listing Alert Name <span class="oa-req">required</span></label>'+
           '<input id="oaName" value="'+esc(existing?existing.name:"")+'" placeholder="e.g. Alamo Ranch 3-bed under $400k"></div>'+
-        '<div class="oa-f"><label>CC another email <span class="oa-hint">optional</span></label>'+
+        '<div class="oa-f"><label>CC <span class="oa-hint">optional</span></label>'+
           '<input id="oaCc" value="'+esc(existing?(existing.cc||""):"")+'" placeholder="spouse@example.com"></div>'+
-        '<div class="oa-f"><label>Email alerts</label>'+
-          '<label class="oa-ck" style="margin:4px 0"><input type="checkbox" id="oaSend"'+(!existing||existing.sendEmail?" checked":"")+'> Send email alerts</label>'+
-          '<select id="oaFreq">'+["daily","weekly","monthly"].map(function(x){
-            return '<option value="'+x+'"'+((existing&&existing.frequency===x)||(!existing&&x==="daily")?" selected":"")+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</option>';}).join("")+'</select></div>'+
-        oaChecks("oaCity","Cities",f.cities,c.cities,18)+
-        oaChecks("oaZip","Postal codes",f.postalCodes,c.postalCodes,24)+
-        oaChecks("oaSd","School districts",f.schoolDistricts,c.schoolDistricts,14)+
+        '<div class="oa-f"><label>Email Alert Status</label>'+
+          '<label class="oa-ck" style="margin:4px 0"><input type="checkbox" id="oaSend"'+(!existing||existing.sendEmail?" checked":"")+'> Send Email Alerts</label></div>'+
+        '<div class="oa-f"><label>Email Alerts Frequency</label>'+
+          '<select id="oaFreq">'+LA_FREQS.map(function(x){
+            return '<option value="'+x[0]+'"'+((existing&&existing.frequency===x[0])||(!existing&&x[0]==="daily")?" selected":"")+'>'+esc(x[1])+'</option>';}).join("")+'</select>'+
+          '<div class="oa-sml" style="margin-top:4px">The sweep runs hourly, so “multiple times per day” means every four hours.</div></div>'+
+        /* Brivity's Home App checkbox has no counterpart here, and saying so
+           beats a checkbox that saves a preference nothing reads. */
+        '<div class="oa-f"><label>Home App Alerts Status</label>'+
+          '<div class="oa-unav" style="margin:0">There is no client mobile app connected to this system, so app alerts '+
+          'cannot be sent. Email is the delivery this system actually has.</div></div>'+
+        '<div class="oa-f"><label>Search By</label>'+
+          '<div class="la-modes" id="oaModes">'+
+            '<button data-lamode="terms" class="on">Terms</button>'+
+            '<button data-lamode="map" disabled title="No map provider is configured">Map</button>'+
+          '</div>'+
+          '<div class="oa-sml">No map provider is configured for this system, so the polygon draw tool is not available. '+
+          'Terms search runs against the real feed — city, postal code, school district and subdivision.</div></div>'+
+        oaGroup("oaCity","Cities",f.cities,c.cities,60)+
+        oaGroup("oaZip","Postal Codes",f.postalCodes,c.postalCodes,80)+
+        oaGroup("oaSd","School Districts",f.schoolDistricts,c.schoolDistricts,40)+
         '<div class="oa-f"><label>Subdivision contains</label><input id="oaSub" value="'+esc((c.subdivisions||[]).join(", "))+'" placeholder="Alamo Ranch"></div>'+
       '</div><div>'+
-        oaRange("Price","oaPMin","oaPMax",c.minPrice,c.maxPrice,1000,"No min")+
-        oaRange("Bedrooms","oaBMin","oaBMax",c.minBeds,c.maxBeds,1)+
-        oaRange("Bathrooms","oaBaMin","oaBaMax",c.minBaths,c.maxBaths,0.5)+
-        oaRange("Square feet","oaSMin","oaSMax",c.minSqft,c.maxSqft,50)+
-        oaRange("Lot size (acres)","oaLMin","oaLMax",c.minLotSize,c.maxLotSize,0.1)+
-        oaRange("Year built","oaYMin","oaYMax",c.minYearBuilt,c.maxYearBuilt,1)+
-        oaChecks("oaPt","Property type",f.propertyTypes,c.propertyTypes,10)+
-        oaChecks("oaSt","Storeys",f.stories,(c.stories||[]).map(String),6)+
+        oaRange("Price","oaPMin","oaPMax",c.minPrice,c.maxPrice,1000,"No Min")+
+        oaLadder("Bedrooms","oaBMin","oaBMax",c.minBeds,c.maxBeds,LA_LADDERS.beds)+
+        oaLadder("Bathrooms","oaBaMin","oaBaMax",c.minBaths,c.maxBaths,LA_LADDERS.baths)+
+        oaLadder("Square Feet","oaSMin","oaSMax",c.minSqft,c.maxSqft,LA_LADDERS.sqft,
+          function(v){return v.toLocaleString();})+
+        oaLadder("Lot Size (acres)","oaLMin","oaLMax",c.minLotSize,c.maxLotSize,LA_LADDERS.lot)+
+        oaLadder("Year Built","oaYMin","oaYMax",c.minYearBuilt,c.maxYearBuilt,LA_LADDERS.year)+
+        oaGroup("oaPt","Property Type",f.propertyTypes,c.propertyTypes,30)+
+        oaGroup("oaSt","Stories",f.stories,(c.stories||[]).map(String),10)+
         '<div class="oa-f"><label>Pool</label><select id="oaPool">'+
-          '<option value="">Doesn\'t matter</option>'+
+          '<option value="">Any</option>'+
           '<option value="y"'+(c.pool===true?" selected":"")+'>Must have a pool</option>'+
           '<option value="n"'+(c.pool===false?" selected":"")+'>No pool</option></select></div>'+
-        oaChecks("oaIf","Interior features",f.interiorFeatures,c.interiorFeatures,18)+
-        oaChecks("oaEf","Exterior features",f.exteriorFeatures,c.exteriorFeatures,18)+
-        '<label class="oa-ck"><input type="checkbox" id="oaNoPhoto"'+(c.includeWithoutPhotos?" checked":"")+'> Include properties without photos</label>'+
+        oaGroup("oaIf","Interior Features",f.interiorFeatures,c.interiorFeatures,40)+
+        oaGroup("oaEf","Exterior Features",f.exteriorFeatures,c.exteriorFeatures,40)+
+        '<label class="oa-ck"><input type="checkbox" id="oaNoPhoto"'+(c.includeWithoutPhotos?" checked":"")+'> Include Properties without Photos</label>'+
       '</div></div>'+
       unavailableNote(f)+
-      '<div class="oa-note">Saving a new alert sends the first email straight away, then it continues on the frequency above.</div>';
+      '<div class="la-foot-note">Note: when you create and save a new Listing Alert, it sends an initial email '+
+        'immediately, then continues on the frequency above.</div>';
 
-    var foot='<div class="oa-count" id="oaCount">—</div>'+
-      '<div style="flex:1"></div><button class="oa-cancel" id="oaCancel">Cancel</button>'+
-      '<button class="oa-go" id="oaSave">'+(existing?"Save changes":"Create alert")+'</button>';
+    var foot='<div class="oa-count" id="oaCount">Add search terms to preview listings</div>'+
+      '<div style="flex:1"></div><button class="oa-cancel" id="oaCancel">CANCEL</button>'+
+      '<button class="oa-go" id="oaSave">SAVE</button>';
     oaOverlay(existing?"Edit Listing Alert":"Create New Listing Alert",body,foot);
     document.getElementById("oaCancel").onclick=closeOa;
+
+    /* Feature groups collapse past two rows; the header toggles them. */
+    document.querySelectorAll("#oaOv [data-latoggle]").forEach(function(h){
+      h.addEventListener("click",function(){
+        var grp=h.closest(".la-grp"); if(!grp)return;
+        grp.classList.toggle("open");
+        var m=h.querySelector(".more"); if(m)m.textContent=grp.classList.contains("open")?"LESS ^":"MORE v";
+      });
+    });
+    /* Map mode has no provider; the disabled pill explains itself on click. */
+    document.querySelectorAll("#oaModes button").forEach(function(b){
+      b.addEventListener("click",function(){
+        if(b.disabled){ crmToast("No map provider is configured — use Terms"); return; }
+        searchMode=b.getAttribute("data-lamode");
+        document.querySelectorAll("#oaModes button").forEach(function(x){ x.classList.toggle("on",x===b); });
+      });
+    });
+    /* Templates: apply one, or save the current criteria as a new one. */
+    loadAlertTemplates(function(tpls){
+      var sel=document.getElementById("oaTpl"); if(!sel)return;
+      sel.innerHTML='<option value="">Custom Listing Alert</option>'+
+        tpls.map(function(t){ return '<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>'; }).join("");
+      sel.addEventListener("change",function(){
+        var t=tpls.filter(function(x){return x.id===sel.value;})[0];
+        if(!t)return;
+        closeOa();
+        openAlertEditor(l,{id:existing?existing.id:null,name:existing?existing.name:t.name,
+          cc:existing?existing.cc:"",sendEmail:existing?existing.sendEmail:true,
+          frequency:existing?existing.frequency:"daily",criteria:t.criteria,__fromTemplate:t.name});
+        crmToast('Loaded template "'+t.name+'"');
+      });
+    });
+    document.getElementById("oaTplManage").addEventListener("click",function(){ openAlertTemplateManager(l,gather); });
 
     function gather(){
       var subs=(document.getElementById("oaSub").value||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
@@ -9450,11 +10367,11 @@ function openAlertEditor(l,existing){
         cities:oaPicked("oaCity"), postalCodes:oaPicked("oaZip"), schoolDistricts:oaPicked("oaSd"),
         subdivisions:subs,
         minPrice:oaNum("oaPMin"), maxPrice:oaNum("oaPMax"),
-        minBeds:oaNum("oaBMin"), maxBeds:oaNum("oaBMax"),
-        minBaths:oaNum("oaBaMin"), maxBaths:oaNum("oaBaMax"),
-        minSqft:oaNum("oaSMin"), maxSqft:oaNum("oaSMax"),
-        minLotSize:oaNum("oaLMin"), maxLotSize:oaNum("oaLMax"),
-        minYearBuilt:oaNum("oaYMin"), maxYearBuilt:oaNum("oaYMax"),
+        minBeds:oaSel("oaBMin"), maxBeds:oaSel("oaBMax"),
+        minBaths:oaSel("oaBaMin"), maxBaths:oaSel("oaBaMax"),
+        minSqft:oaSel("oaSMin"), maxSqft:oaSel("oaSMax"),
+        minLotSize:oaSel("oaLMin"), maxLotSize:oaSel("oaLMax"),
+        minYearBuilt:oaSel("oaYMin"), maxYearBuilt:oaSel("oaYMax"),
         propertyTypes:oaPicked("oaPt"),
         stories:oaPicked("oaSt").map(Number).filter(function(n){return isFinite(n);}),
         pool: poolV==="y"?true:(poolV==="n"?false:undefined),
@@ -9468,15 +10385,16 @@ function openAlertEditor(l,existing){
     var pTimer=null, lastCount=null;
     function preview(){
       var el=document.getElementById("oaCount"); if(!el) return;
-      el.textContent="Counting…"; el.className="oa-count";
+      el.textContent="Counting…"; el.className="la-count"; el.onclick=null;
       fetch(crmApi("/api/outreach/preview"),{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({criteria:gather()})})
         .then(function(r){return r.ok?r.json():null;})
         .then(function(d){
           if(!d){ el.textContent="Couldn't count"; return; }
           lastCount=d.count;
-          el.textContent=d.count+" listing"+(d.count===1?"":"s")+" match right now";
-          el.className="oa-count"+(d.count===0?" zero":"");
+          el.textContent=d.count?("VIEW "+d.count+" LISTING"+(d.count===1?"":"S")):"No listings match these criteria";
+          el.className="la-count"+(d.count===0?" zero":"");
+          el.onclick=d.count?function(){ openMatchingListings(gather(),d.count); }:null;
         }).catch(function(){ el.textContent="Couldn't count"; });
     }
     document.querySelector(".oa-body").addEventListener("input",function(){ clearTimeout(pTimer); pTimer=setTimeout(preview,350); });
@@ -9490,12 +10408,12 @@ function openAlertEditor(l,existing){
       var payload={name:name, cc:(document.getElementById("oaCc").value||"").trim(),
         sendEmail:document.getElementById("oaSend").checked,
         frequency:document.getElementById("oaFreq").value, criteria:gather()};
-      var btn=this; btn.disabled=true; btn.textContent="Saving…";
+      var btn=this; btn.disabled=true; btn.textContent="SAVING…";
       var url=existing?("/api/listing-alerts/"+encodeURIComponent(existing.id)):("/api/leads/"+encodeURIComponent(l.id)+"/listing-alerts");
       fetch(crmApi(url),{method:existing?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
         .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
         .then(function(res){
-          btn.disabled=false; btn.textContent=existing?"Save changes":"Create alert";
+          btn.disabled=false; btn.textContent="SAVE";
           if(!res.ok){ crmToast(res.j.error||"Couldn't save that"); return; }
           closeOa();
           /* Saving and SENDING are separate claims — report each honestly. */
@@ -9506,7 +10424,7 @@ function openAlertEditor(l,existing){
           } else { crmToast(existing?"Alert updated":"Alert created"); }
           paintLeadOutreach(l);
         })
-        .catch(function(){ btn.disabled=false; btn.textContent="Save"; crmToast("Couldn't reach the server"); });
+        .catch(function(){ btn.disabled=false; btn.textContent="SAVE"; crmToast("Couldn't reach the server"); });
     };
   });
 }

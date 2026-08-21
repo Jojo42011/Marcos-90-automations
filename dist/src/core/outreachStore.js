@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.REPORT_FREQUENCIES = exports.ALERT_FREQUENCIES = void 0;
 exports.getOutreachDb = getOutreachDb;
 exports.newId = newId;
 exports.listAlerts = listAlerts;
@@ -27,6 +28,10 @@ exports.engagementForLead = engagementForLead;
 exports.hotEngagement = hotEngagement;
 exports.outreachCounts = outreachCounts;
 exports.outreachSummaryByLead = outreachSummaryByLead;
+exports.listAlertTemplates = listAlertTemplates;
+exports.getAlertTemplate = getAlertTemplate;
+exports.saveAlertTemplate = saveAlertTemplate;
+exports.deleteAlertTemplate = deleteAlertTemplate;
 /**
  * Listing Alerts and Market Reports — the two client-facing MLS subscriptions.
  *
@@ -49,6 +54,12 @@ exports.outreachSummaryByLead = outreachSummaryByLead;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
+exports.ALERT_FREQUENCIES = [
+    "daily", "twice_daily", "multiple_per_day", "weekly", "every_2_weeks", "monthly",
+];
+exports.REPORT_FREQUENCIES = [
+    "never", "weekly", "every_2_weeks", "monthly", "quarterly", "semiannual", "annual",
+];
 function resolveDbPath() {
     const env = process.env.OUTREACH_DB_PATH?.trim();
     if (env) {
@@ -142,6 +153,19 @@ function getOutreachDb() {
     /* Every click-through and report open. This is the buyer/seller
        temperature signal the whole feature exists to produce — a contact who
        keeps opening is the one to call. */
+    /* Saved listing-alert search profiles. A template is criteria only — no
+       contact, no schedule — so the same search can be reused on any lead
+       without dragging one contact's cadence onto another. */
+    CREATE TABLE IF NOT EXISTS alert_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      criteria TEXT NOT NULL DEFAULT '{}',
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_alert_templates_name ON alert_templates(name);
+
     CREATE TABLE IF NOT EXISTS outreach_engagement (
       id TEXT PRIMARY KEY,
       kind TEXT NOT NULL,
@@ -176,7 +200,7 @@ function rowToAlert(r) {
         name: String(r.name),
         cc: r.cc ? String(r.cc) : null,
         sendEmail: Number(r.send_email) === 1,
-        frequency: (["daily", "weekly", "monthly"].includes(String(r.frequency)) ? String(r.frequency) : "daily"),
+        frequency: (exports.ALERT_FREQUENCIES.includes(String(r.frequency)) ? String(r.frequency) : "daily"),
         criteria: json(r.criteria, {}),
         paused: Number(r.paused) === 1,
         createdAt: String(r.created_at),
@@ -283,7 +307,7 @@ function rowToReport(r) {
         name: String(r.name),
         address: String(r.address),
         cc: r.cc ? String(r.cc) : null,
-        frequency: (["monthly", "quarterly", "semiannual", "annual"].includes(freq) ? freq : "quarterly"),
+        frequency: (exports.REPORT_FREQUENCIES.includes(freq) ? freq : "quarterly"),
         drip: Number(r.drip) === 1,
         criteria: json(r.criteria, {}),
         subject: json(r.subject, {}),
@@ -462,4 +486,35 @@ function outreachSummaryByLead() {
             row.lastOpenedReportAt = later(row.lastOpenedReportAt, r.last_opened);
     }
     return out;
+}
+const toTemplate = (r) => ({
+    id: r.id, name: r.name, criteria: json(r.criteria, {}),
+    createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
+});
+function listAlertTemplates() {
+    return getOutreachDb()
+        .prepare(`SELECT * FROM alert_templates ORDER BY name COLLATE NOCASE`)
+        .all().map(toTemplate);
+}
+function getAlertTemplate(id) {
+    const r = getOutreachDb().prepare(`SELECT * FROM alert_templates WHERE id = ?`).get(id);
+    return r ? toTemplate(r) : null;
+}
+function saveAlertTemplate(input) {
+    const d = getOutreachDb();
+    const at = new Date().toISOString();
+    const id = input.id && getAlertTemplate(input.id) ? input.id : `tpl_${Math.random().toString(36).slice(2, 10)}`;
+    const name = input.name.trim().slice(0, 150);
+    const criteria = JSON.stringify(input.criteria || {});
+    if (input.id && getAlertTemplate(input.id)) {
+        d.prepare(`UPDATE alert_templates SET name = ?, criteria = ?, updated_at = ? WHERE id = ?`)
+            .run(name, criteria, at, id);
+    }
+    else {
+        d.prepare(`INSERT INTO alert_templates (id, name, criteria, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?)`).run(id, name, criteria, input.createdBy || null, at, at);
+    }
+    return getAlertTemplate(id);
+}
+function deleteAlertTemplate(id) {
+    return getOutreachDb().prepare(`DELETE FROM alert_templates WHERE id = ?`).run(id).changes > 0;
 }

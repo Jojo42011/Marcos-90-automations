@@ -32,9 +32,11 @@ import {
 import type { Listing } from "./listingsStore.js";
 
 export const ALERT_FREQUENCY_LABELS: Record<AlertFrequency, string> = {
-  daily: "daily", weekly: "weekly", monthly: "monthly",
+  daily: "daily", twice_daily: "twice daily", multiple_per_day: "several times a day",
+  weekly: "weekly", every_2_weeks: "every two weeks", monthly: "monthly",
 };
 export const REPORT_FREQUENCY_LABELS: Record<ReportFrequency, string> = {
+  never: "not on a schedule", weekly: "weekly", every_2_weeks: "every two weeks",
   monthly: "monthly", quarterly: "quarterly", semiannual: "twice-yearly", annual: "yearly",
 };
 
@@ -46,12 +48,30 @@ function ccList(cc: string | null): string[] | undefined {
   return parts.length ? parts : undefined;
 }
 
+/* The sweep runs hourly, so anything shorter than an hour cannot be honoured
+   and is not offered. "Several times a day" is four-hourly — the fastest
+   cadence this scheduler can actually keep. */
+const ALERT_INTERVAL_MS: Record<AlertFrequency, number> = {
+  daily: DAY_MS,
+  twice_daily: DAY_MS / 2,
+  multiple_per_day: DAY_MS / 6,
+  weekly: 7 * DAY_MS,
+  every_2_weeks: 14 * DAY_MS,
+  monthly: 30 * DAY_MS,
+};
+
 export function nextAlertSend(frequency: AlertFrequency, from = new Date()): string {
-  const days = frequency === "daily" ? 1 : frequency === "weekly" ? 7 : 30;
-  return new Date(from.getTime() + days * DAY_MS).toISOString();
+  const step = ALERT_INTERVAL_MS[frequency] ?? DAY_MS;
+  return new Date(from.getTime() + step).toISOString();
 }
 
 export function nextReportSend(frequency: ReportFrequency, from = new Date()): string {
+  /* "never" means the drip is off. Returning a date far out rather than null
+     keeps the column's type simple; `drip` is what the runner actually gates
+     on, and this only decides where an un-dripped report sorts. */
+  if (frequency === "never") return new Date(from.getTime() + 3650 * DAY_MS).toISOString();
+  if (frequency === "weekly") return new Date(from.getTime() + 7 * DAY_MS).toISOString();
+  if (frequency === "every_2_weeks") return new Date(from.getTime() + 14 * DAY_MS).toISOString();
   const months = frequency === "monthly" ? 1 : frequency === "quarterly" ? 3 : frequency === "semiannual" ? 6 : 12;
   const d = new Date(from.getTime());
   d.setMonth(d.getMonth() + months);

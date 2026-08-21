@@ -1663,7 +1663,9 @@ app.post("/api/outreach/preview", express.json({ limit: "64kb" }), async (req, r
       ok: true,
       count: countMatching(criteria),
       summary: describeCriteria(criteria),
-      sample: findMatching(criteria, Math.min(12, Number(req.body?.limit) || 6)),
+      /* 24 so the "VIEW N LISTINGS" peek can show a full grid; the count
+         above is exact regardless of how many rows come back here. */
+      sample: findMatching(criteria, Math.min(24, Number(req.body?.limit) || 6)),
     });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -1717,7 +1719,8 @@ app.post("/api/leads/:id/listing-alerts", express.json({ limit: "64kb" }), async
 
   const { insertAlert, newId } = await import("./core/outreachStore.js");
   const { nextAlertSend, sendAlertNow } = await import("./core/outreachRunner.js");
-  const freq = ["daily", "weekly", "monthly"].includes(String(b.frequency)) ? String(b.frequency) : "daily";
+  const { ALERT_FREQUENCIES } = await import("./core/outreachStore.js");
+  const freq = ALERT_FREQUENCIES.includes(String(b.frequency)) ? String(b.frequency) : "daily";
   const now = new Date().toISOString();
   const alert = insertAlert({
     id: newId("la"),
@@ -1725,13 +1728,13 @@ app.post("/api/leads/:id/listing-alerts", express.json({ limit: "64kb" }), async
     name,
     cc: typeof b.cc === "string" && b.cc.trim() ? b.cc.trim() : null,
     sendEmail: b.sendEmail !== false,
-    frequency: freq as "daily" | "weekly" | "monthly",
+    frequency: freq as import("./core/outreachStore.js").AlertFrequency,
     criteria: (b.criteria && typeof b.criteria === "object" ? b.criteria : {}) as Record<string, unknown>,
     paused: false,
     createdAt: now,
     updatedAt: now,
     lastSentAt: null,
-    nextSendAt: nextAlertSend(freq as "daily" | "weekly" | "monthly"),
+    nextSendAt: nextAlertSend(freq as import("./core/outreachStore.js").AlertFrequency),
     lastMatchCount: null,
     createdBy: (await currentSessionUser(req))?.name ?? null,
   });
@@ -1795,7 +1798,8 @@ app.post("/api/leads/:id/market-reports", express.json({ limit: "64kb" }), async
 
   const { insertReport, newId } = await import("./core/outreachStore.js");
   const { nextReportSend, sendReportNow } = await import("./core/outreachRunner.js");
-  const freq = ["monthly", "quarterly", "semiannual", "annual"].includes(String(b.frequency))
+  const { REPORT_FREQUENCIES } = await import("./core/outreachStore.js");
+  const freq = REPORT_FREQUENCIES.includes(String(b.frequency))
     ? String(b.frequency) : "quarterly";
   const drip = b.drip !== false;
   const now = new Date().toISOString();
@@ -1805,7 +1809,7 @@ app.post("/api/leads/:id/market-reports", express.json({ limit: "64kb" }), async
     name: String(b.name || address).trim(),
     address,
     cc: typeof b.cc === "string" && b.cc.trim() ? b.cc.trim() : null,
-    frequency: freq as "monthly" | "quarterly" | "semiannual" | "annual",
+    frequency: freq as import("./core/outreachStore.js").ReportFrequency,
     drip,
     criteria: (b.criteria && typeof b.criteria === "object" ? b.criteria : {}) as Record<string, unknown>,
     subject: (b.subject && typeof b.subject === "object" ? b.subject : {}) as Record<string, number>,
@@ -1818,7 +1822,7 @@ app.post("/api/leads/:id/market-reports", express.json({ limit: "64kb" }), async
     lastSentAt: null,
     /* Save & Close schedules the first drip for one interval out; Send Now
        delivers immediately and starts the clock from today. */
-    nextSendAt: drip ? nextReportSend(freq as "monthly" | "quarterly" | "semiannual" | "annual") : null,
+    nextSendAt: drip ? nextReportSend(freq as import("./core/outreachStore.js").ReportFrequency) : null,
     lastViewedAt: null,
     viewCount: 0,
     createdBy: (await currentSessionUser(req))?.name ?? null,
@@ -1852,10 +1856,11 @@ app.patch("/api/market-reports/:id", express.json({ limit: "64kb" }), async (req
     patch.drip = b.drip;
     patch.nextSendAt = b.drip ? nextReportSend(existing.frequency) : null;
   }
-  if (["monthly", "quarterly", "semiannual", "annual"].includes(String(b.frequency))) {
+  const { REPORT_FREQUENCIES: RF } = await import("./core/outreachStore.js");
+  if (RF.includes(String(b.frequency))) {
     patch.frequency = String(b.frequency);
     if (patch.drip !== false && existing.drip) {
-      patch.nextSendAt = nextReportSend(String(b.frequency) as "monthly" | "quarterly" | "semiannual" | "annual");
+      patch.nextSendAt = nextReportSend(String(b.frequency) as import("./core/outreachStore.js").ReportFrequency);
     }
   }
   res.json({ ok: true, report: updateReport(existing.id, patch) });
@@ -3904,6 +3909,228 @@ app.delete("/api/crm/agreement/:aid", async (req, res) => {
        lifetimes; removing the agreement row must not silently delete a signed
        contract or close a live deal. */
     res.json({ ok: true, agreements: store.listAgreements(gone.leadId), keptDocumentId: gone.documentId, keptTransactionId: gone.transactionId });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AUTO PLAN PREVIEW.
+
+   What the operator is deciding is "if I apply this plan to this person,
+   what actually goes out and when". So the preview computes real send times
+   from the plan's own step offsets against a real enrollment moment, and
+   resolves each step's sender through the same `resolveSender` the runner
+   uses — including its fallbacks, which are reported rather than hidden.
+
+   Merge fields are deliberately left UNRESOLVED in the body. The spec asks
+   for it and it is also the honest render: the runner substitutes them at
+   send time, and showing a filled-in draft here would imply this text is
+   final when a missing field can still block the send.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+app.get("/api/auto-plans/:id/preview", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const planId = String(req.params.id || "").trim();
+  const leadId = typeof req.query.leadId === "string" ? req.query.leadId.trim() : "";
+  try {
+    const { getAutoPlans } = await import("./core/autoPlans.js");
+    const plan = getAutoPlans().find((p) => p.id === planId);
+    if (!plan) { res.status(404).json({ error: "Auto plan not found" }); return; }
+
+    const { getLeadById } = await import("./core/db.js");
+    const lead = leadId ? await getLeadById(leadId) : null;
+    if (leadId && !lead) { res.status(404).json({ error: "Lead not found" }); return; }
+
+    const { offsetMs, describeOffset, resolveSender } = await import("./core/autoPlanScheduling.js");
+    const startMs = Date.now();
+
+    const steps = (plan.steps || []).map((step, i) => {
+      const anchor = step.anchor || "enrollment";
+      const ms = offsetMs(step);
+      /* Only enrollment-anchored steps have a knowable clock time before the
+         plan is applied. A step hanging off a prior step's COMPLETION, or off
+         a contract date this contact does not have, is shown with its rule
+         instead of a fabricated timestamp. */
+      const datable = anchor === "enrollment";
+      const at = datable ? new Date(startMs + ms).toISOString() : null;
+      const dayIndex = datable ? Math.max(0, Math.floor(ms / 86400000)) : null;
+      const sender = resolveSender(step.sendFrom, lead);
+      const sendTo =
+        step.type === "email"
+          ? (lead?.email || null)
+          : step.type === "text"
+            ? (lead?.phone || null)
+            : (step.assignedTo || "Marco Puga");
+      return {
+        index: i,
+        id: step.id,
+        type: step.type,
+        title: step.subject || (step.content || "").split("\n")[0].slice(0, 90) || `${step.type} step`,
+        subject: step.subject || null,
+        content: step.content || "",
+        instructions: step.instructions || null,
+        anchor,
+        offsetLabel: describeOffset(step),
+        /* "Today", "Day 1", "Day 3" — the timeline's own grouping. */
+        dayLabel: dayIndex === null ? "When its trigger fires" : dayIndex === 0 ? "Today" : `Day ${dayIndex}`,
+        dayIndex,
+        sendAt: at,
+        sendFrom: sender.name,
+        sendFromFallback: sender.fallbackFrom || null,
+        sendTo,
+        /* Named, not silently skipped: a text step for somebody with no phone
+           will not go out, and the operator should see that before applying. */
+        blocked:
+          step.type === "email" && !lead?.email
+            ? "This contact has no email address, so this step cannot send."
+            : step.type === "text" && !lead?.phone
+              ? "This contact has no phone number, so this step cannot send."
+              : null,
+        taskPriority: step.taskPriority ?? null,
+        cc: step.cc || [],
+      };
+    });
+
+    res.json({
+      ok: true,
+      plan: { id: plan.id, name: plan.name, stepCount: steps.length },
+      contact: lead ? { id: lead.id, name: lead.name, email: lead.email ?? null, phone: lead.phone ?? null } : null,
+      steps,
+      note: "Merge fields are shown as written. They are filled in when the step actually sends, so the wording here is the template, not the finished message.",
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LISTING ALERT TEMPLATES — reusable saved search criteria.
+   A template carries criteria only: no contact and no cadence, so applying
+   one to a second lead cannot drag the first lead's schedule along with it.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+app.get("/api/outreach/alert-templates", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { listAlertTemplates } = await import("./core/outreachStore.js");
+    res.json({ ok: true, templates: listAlertTemplates() });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.post("/api/outreach/alert-templates", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) { res.status(400).json({ error: "A template needs a name" }); return; }
+  try {
+    const { saveAlertTemplate, listAlertTemplates } = await import("./core/outreachStore.js");
+    /* Criteria are stored as the alert routes store them — an object, keys
+       validated where they are USED (buildCriteriaSql ignores what it does not
+       know). A second validator here would be a second place to keep in step. */
+    const saved = saveAlertTemplate({
+      id: typeof body.id === "string" ? body.id : undefined,
+      name,
+      criteria: (body.criteria && typeof body.criteria === "object"
+        ? body.criteria
+        : {}) as import("./core/listingCriteria.js").ListingCriteria,
+      createdBy: typeof body.createdBy === "string" ? body.createdBy : null,
+    });
+    res.json({ ok: true, template: saved, templates: listAlertTemplates() });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/outreach/alert-templates/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { deleteAlertTemplate, listAlertTemplates } = await import("./core/outreachStore.js");
+    const gone = deleteAlertTemplate(String(req.params.id || ""));
+    if (!gone) { res.status(404).json({ error: "Template not found" }); return; }
+    res.json({ ok: true, templates: listAlertTemplates() });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   THE REPORTS DASHBOARD.
+
+   Brivity's CMA product puts market reports and CMAs side by side with
+   headline counts. Half of that is real here: every market report this
+   system has sent, with its own opens, views and last-sent dates, plus an
+   open rate computed from the sends it measured. The CMA half is not — no
+   CMA generator is wired into this CRM — so the payload says so in the same
+   shape rather than returning a zero that would read as "none created".
+   ═══════════════════════════════════════════════════════════════════════ */
+
+app.get("/api/outreach/reports-dashboard", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const outreach = await import("./core/outreachStore.js");
+    const snap = await getDashboardSnapshot();
+    const leadName = new Map(snap.leads.map((l) => [l.id, l.name] as const));
+    const leadAgent = new Map(snap.leads.map((l) => [l.id, l.assignedUserName || "Marco Puga"] as const));
+
+    const reports = outreach.listReports().map((r) => {
+      const sends = outreach.listSends(r.id, 200);
+      const opened = sends.filter((s) => s.openCount > 0);
+      const lastOpened = opened.map((s) => s.openedAt).filter(Boolean).sort().pop() || null;
+      return {
+        id: r.id,
+        created: r.createdAt,
+        assignedTo: leadAgent.get(r.leadId) || "Marco Puga",
+        name: r.name,
+        location: r.address,
+        contact: leadName.get(r.leadId) || r.leadId,
+        leadId: r.leadId,
+        lastSent: r.lastSentAt,
+        lastOpened,
+        views: r.viewCount,
+        lastViewed: r.lastViewedAt,
+        frequency: r.frequency,
+        drip: r.drip,
+        sends: sends.length,
+        opens: opened.length,
+      };
+    });
+
+    const totalSends = reports.reduce((a, r) => a + r.sends, 0);
+    const totalOpens = reports.reduce((a, r) => a + r.opens, 0);
+    const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
+    const createdLast30 = reports.filter((r) => r.created >= cutoff).length;
+    const priorCutoff = new Date(Date.now() - 60 * 86400000).toISOString();
+    const createdPrior30 = reports.filter((r) => r.created >= priorCutoff && r.created < cutoff).length;
+    /* A percentage change needs a non-zero base. From zero it is not "+100%",
+       it is "no previous period to compare with", and the card says so. */
+    const trend =
+      createdPrior30 === 0
+        ? null
+        : Math.round(((createdLast30 - createdPrior30) / createdPrior30) * 100);
+
+    res.json({
+      ok: true,
+      reports,
+      kpis: {
+        marketReportsCreated: reports.length,
+        marketReportsCreatedLast30: createdLast30,
+        marketReportsTrendPct: trend,
+        /* Only counts sends this system's own pixel measured. */
+        openRatePct: totalSends ? Math.round((totalOpens / totalSends) * 100) : null,
+        totalSends,
+      },
+      cma: {
+        available: false,
+        reason: "No CMA generation is wired into this CRM, so there are no CMA reports to count. Market Reports are the live thing this system creates and sends.",
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

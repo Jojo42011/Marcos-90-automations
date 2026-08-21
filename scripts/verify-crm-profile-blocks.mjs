@@ -199,18 +199,20 @@ try {
   await page.waitForFunction(() => /No open tasks/.test(document.getElementById("ldTasksBlk").textContent), null, { timeout: 8000 });
   ok("completing from the widget works", true);
 
-  // auto plans: apply, pause, remove
+  /* Auto plans: + ADD now opens the Apply an Auto Plan modal (plan-preview
+     phase) rather than a bare menu. Apply, pause, remove still. */
   await page.click("#ldPlanAdd");
-  await page.waitForSelector("#ddMenu button");
-  const planName = (await page.textContent("#ddMenu button")).trim();
-  await page.click("#ddMenu button");
-  await page.waitForFunction(() => /ACTIVE/.test(document.getElementById("ldPlansBlk").textContent), null, { timeout: 6000 });
+  await page.waitForSelector("#apPlan");
+  const planName = (await page.$$eval("#apPlan option", (els) => els.map((e) => e.textContent.trim()).filter((t) => t && !/^Select/.test(t))))[0];
+  await page.selectOption("#apPlan", { index: 1 });
+  await page.click("#apApply");
+  await page.waitForFunction(() => /ACTIVE/.test(document.getElementById("ldPlansBlk").textContent), null, { timeout: 8000 });
   ok("plan applied and shown active", true, planName);
   await page.click('#ldPlansBlk [data-ptoggle]');
   await page.waitForFunction(() => /PAUSED/.test(document.getElementById("ldPlansBlk").textContent), null, { timeout: 6000 });
   ok("pause works", true);
   await page.click('#ldPlansBlk [data-premove]');
-  await page.waitForFunction(() => /Not on any plan/.test(document.getElementById("ldPlansBlk").textContent), null, { timeout: 6000 });
+  await page.waitForFunction(() => /Use Auto Plans to automate/.test(document.getElementById("ldPlansBlk").textContent), null, { timeout: 6000 });
   ok("remove works", true);
   snap = await J(await fetch(B + "/api/dashboard/data"));
   const enr = snap.leads.find((l) => l.id === "lead_1").autoPlanEnrollments || [];
