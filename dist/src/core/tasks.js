@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.resolveContingentDue = resolveContingentDue;
 exports.getTasks = getTasks;
 exports.saveTasks = saveTasks;
 exports.getTaskById = getTaskById;
@@ -26,7 +27,30 @@ function resolveTasksPath() {
 const TASKS_PATH = resolveTasksPath();
 const PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
 const STATUSES = new Set(types_js_1.CRM_TASK_STATUSES);
-const TYPES = new Set(["call", "text", "email", "appointment", "follow_up", "other"]);
+const TYPES = new Set([
+    "call", "text", "email", "appointment", "follow_up", "other",
+    "to_do", "mail", "social_media", "door_knock",
+]);
+const APPT_STATUSES = new Set(["scheduled", "completed", "cancelled"]);
+const APPT_OUTCOMES = new Set(["none", "held", "no_show", "rescheduled"]);
+const CONTINGENT_EVENTS = new Set([
+    "birthday", "anniversary", "organization_end_date", "licensed_since", "organization_start_date",
+]);
+/** A contingency is kept only when all three parts are usable. */
+function normalizeContingency(raw) {
+    if (!raw || typeof raw !== "object")
+        return undefined;
+    const c = raw;
+    const days = typeof c.days === "number" && Number.isFinite(c.days) ? Math.round(c.days) : NaN;
+    if (!Number.isFinite(days) || days < 0 || days > 3650)
+        return undefined;
+    const direction = c.direction === "before" ? "before" : c.direction === "after" ? "after" : null;
+    if (!direction)
+        return undefined;
+    if (typeof c.event !== "string" || !CONTINGENT_EVENTS.has(c.event))
+        return undefined;
+    return { days, direction, event: c.event };
+}
 const SOURCES = new Set(["manual", "auto_plan", "dial_session", "automation"]);
 function nowIso() {
     return new Date().toISOString();
@@ -77,7 +101,58 @@ function normalizeTask(raw) {
         updatedAt: typeof t.updatedAt === "string" ? t.updatedAt : nowIso(),
         source,
         reminderMinutes: typeof t.reminderMinutes === "number" ? t.reminderMinutes : undefined,
+        /* Everything below MUST be listed here. This function rebuilds each task
+           from a fixed field list on every read, so a key it does not know about
+           is destroyed on the next write — which is exactly how checklists were
+           silently lost (FORAI, 2026-08-09). */
+        location: typeof t.location === "string" && t.location.trim() ? t.location.trim().slice(0, 400) : undefined,
+        instructions: typeof t.instructions === "string" && t.instructions.trim() ? t.instructions.slice(0, 4000) : undefined,
+        taskNotes: typeof t.taskNotes === "string" && t.taskNotes.trim() ? t.taskNotes.slice(0, 4000) : undefined,
+        recurring: t.recurring === true ? true : undefined,
+        recurringInterval: typeof t.recurringInterval === "string" && t.recurringInterval.trim() ? t.recurringInterval.trim() : undefined,
+        contingent: normalizeContingency(t.contingent),
+        appointmentType: typeof t.appointmentType === "string" && t.appointmentType.trim() ? t.appointmentType.trim().slice(0, 120) : undefined,
+        appointmentStatus: APPT_STATUSES.has(t.appointmentStatus)
+            ? t.appointmentStatus
+            : undefined,
+        outcome: APPT_OUTCOMES.has(t.outcome)
+            ? t.outcome
+            : undefined,
     };
+}
+/**
+ * Resolve a contingent rule into a real due date using a date on the contact.
+ *
+ * Returns null when the contact has no such date — and that is the whole point
+ * of returning null rather than defaulting to today: "3 days before their
+ * anniversary" for somebody with no anniversary on file is not a task due
+ * today, it is a task that cannot be dated, and the caller has to say so.
+ */
+function resolveContingentDue(rule, dates) {
+    const pick = {
+        birthday: dates.birthday,
+        anniversary: dates.homeAnniversary,
+        licensed_since: dates.licensedSince,
+        organization_start_date: dates.organizationStartDate,
+        organization_end_date: dates.organizationEndDate,
+    };
+    const base = pick[rule.event];
+    if (typeof base !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(base))
+        return null;
+    const ms = Date.UTC(Number(base.slice(0, 4)), Number(base.slice(5, 7)) - 1, Number(base.slice(8, 10)));
+    /* Birthdays and anniversaries recur, so the rule means the NEXT one — a task
+       three days before a birthday that already passed this year is due next
+       year, not eleven months ago. Fixed one-off dates are used as they are. */
+    const recurs = rule.event === "birthday" || rule.event === "anniversary";
+    let target = ms;
+    if (recurs) {
+        const now = new Date();
+        const thisYear = Date.UTC(now.getUTCFullYear(), Number(base.slice(5, 7)) - 1, Number(base.slice(8, 10)));
+        const todayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+        target = thisYear >= todayMs ? thisYear : Date.UTC(now.getUTCFullYear() + 1, Number(base.slice(5, 7)) - 1, Number(base.slice(8, 10)));
+    }
+    const shifted = target + (rule.direction === "before" ? -1 : 1) * rule.days * 86400000;
+    return new Date(shifted).toISOString().slice(0, 10);
 }
 function writeTasksFile(tasks) {
     (0, fs_1.mkdirSync)((0, path_1.dirname)(TASKS_PATH), { recursive: true });

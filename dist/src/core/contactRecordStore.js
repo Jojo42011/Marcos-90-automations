@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CONTACT_DOC_TYPES = exports.SOCIAL_PLATFORMS = void 0;
+exports.CLIENT_INTENTS = exports.PROPERTY_TYPES = exports.AGREEMENT_KINDS = exports.TEAM_ROLES = exports.CONTACT_DOC_TYPES = exports.SOCIAL_PLATFORMS = void 0;
 exports.resolveContactDocsDir = resolveContactDocsDir;
 exports.getContactRecordDb = getContactRecordDb;
 exports.normEmailKind = normEmailKind;
@@ -41,6 +41,12 @@ exports.addDocument = addDocument;
 exports.deleteDocument = deleteDocument;
 exports.getContactRecord = getContactRecord;
 exports.seedFromLead = seedFromLead;
+exports.listAssignments = listAssignments;
+exports.setAssignments = setAssignments;
+exports.listAgreements = listAgreements;
+exports.getAgreement = getAgreement;
+exports.addAgreement = addAgreement;
+exports.deleteAgreement = deleteAgreement;
 /**
  * The contact record's own data: emails, phones, addresses, social links,
  * notes and documents for one CRM contact.
@@ -168,6 +174,47 @@ function getContactRecordDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_note_mentions_note ON note_mentions(note_id);
     CREATE INDEX IF NOT EXISTS idx_note_mentions_member ON note_mentions(member_id);
+
+    /* Secondary team access on one contact. The PRIMARY agent is not in here:
+       it stays on the Lead's assignedUserId/assignedUserName, which is what
+       the lead table, the round-robin and every notification already read.
+       This table is the people who additionally get to see and edit, and the
+       functional role they hold on this contact. */
+    CREATE TABLE IF NOT EXISTS contact_assignments (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT NOT NULL DEFAULT '',
+      role_name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (lead_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_contact_assignments ON contact_assignments(lead_id);
+
+    /* An agreement is the paperwork; the transaction it opens lives in the
+       pipeline store and the file lives in contact_documents. This row is the
+       metadata that belongs to neither: the fee, its unit, and who referred. */
+    CREATE TABLE IF NOT EXISTS referral_agreements (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'referral',
+      document_id TEXT,
+      transaction_id TEXT,
+      title TEXT NOT NULL DEFAULT '',
+      fee_value REAL,
+      fee_type TEXT NOT NULL DEFAULT 'percentage',
+      referring_agent TEXT NOT NULL DEFAULT '',
+      partner_lead_id TEXT,
+      partner_name TEXT NOT NULL DEFAULT '',
+      client_intent TEXT NOT NULL DEFAULT 'Buyer',
+      property_type TEXT NOT NULL DEFAULT 'Residential',
+      signed_date TEXT,
+      expiration_date TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_referral_agreements ON referral_agreements(lead_id, created_at);
 
     CREATE TABLE IF NOT EXISTS contact_documents (
       id TEXT PRIMARY KEY,
@@ -571,4 +618,103 @@ function seedFromLead(lead) {
         // line and the operator can correct it — better than three empty fields.
         addAddress(lead.id, { kind: "home", street: lead.address.trim(), country: "US" });
     }
+}
+/* ────────────────────────── team assignments ────────────────────────── */
+/** Functional roles the Manage Team modal offers, in Brivity's order. */
+exports.TEAM_ROLES = [
+    "Broker",
+    "Buyer's Agent",
+    "Listing Agent",
+    "Listing Coordinator",
+    "Listing Representative",
+    "Marketing Manager",
+    "Referring Agent",
+    "Team Owner",
+    "Transaction Coordinator",
+];
+function listAssignments(leadId) {
+    return getContactRecordDb()
+        .prepare(`SELECT * FROM contact_assignments WHERE lead_id = ? ORDER BY created_at ASC`)
+        .all(leadId)
+        .map((r) => ({
+        id: r.id, leadId: r.lead_id, userId: r.user_id, userName: r.user_name,
+        roleName: r.role_name, createdAt: r.created_at,
+    }));
+}
+/**
+ * Replace the whole team for one contact, as the modal's SAVE TEAM does.
+ *
+ * Whole-set replacement rather than add/remove deltas because the modal edits
+ * a list and saves it once: computing a diff on the client would let a row the
+ * operator deleted survive a race with one they added.
+ */
+function setAssignments(leadId, members) {
+    const d = getContactRecordDb();
+    const at = nowIso();
+    d.transaction(() => {
+        d.prepare(`DELETE FROM contact_assignments WHERE lead_id = ?`).run(leadId);
+        const put = d.prepare(`INSERT INTO contact_assignments (id, lead_id, user_id, user_name, role_name, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?)
+       ON CONFLICT(lead_id, user_id) DO UPDATE SET role_name = excluded.role_name, updated_at = excluded.updated_at`);
+        const seen = new Set();
+        for (const m of members.slice(0, 25)) {
+            const uid = String(m?.userId || "").trim().slice(0, 80);
+            // One row per person: the same member twice with two roles is a mistake,
+            // and the UNIQUE constraint should never be the thing that reports it.
+            if (!uid || seen.has(uid))
+                continue;
+            seen.add(uid);
+            const role = String(m.roleName || "").trim().slice(0, 100);
+            put.run((0, crypto_1.randomUUID)(), leadId, uid, String(m.userName || uid).slice(0, 120), role, at, at);
+        }
+    })();
+    return listAssignments(leadId);
+}
+/* ────────────────────────── agreements ────────────────────────── */
+exports.AGREEMENT_KINDS = ["buyer", "seller", "referral"];
+/** Property classifications the agreement modal offers; Residential is default. */
+exports.PROPERTY_TYPES = [
+    "Residential",
+    "Commercial",
+    "Manufactured Home",
+    "Rental",
+    "Business Opportunity",
+    "Multi-Family",
+    "Vacant Land",
+    "Condominium",
+];
+exports.CLIENT_INTENTS = ["Buyer", "Seller", "Tenant", "Landlord"];
+const toAgreement = (r) => ({
+    id: r.id, leadId: r.lead_id, kind: exports.AGREEMENT_KINDS.includes(r.kind) ? r.kind : "referral",
+    documentId: r.document_id, transactionId: r.transaction_id, title: r.title, feeValue: r.fee_value,
+    feeType: r.fee_type, referringAgent: r.referring_agent, partnerLeadId: r.partner_lead_id,
+    partnerName: r.partner_name, clientIntent: r.client_intent, propertyType: r.property_type,
+    signedDate: r.signed_date, expirationDate: r.expiration_date, isActive: !!r.is_active, createdAt: r.created_at,
+});
+function listAgreements(leadId) {
+    return getContactRecordDb()
+        .prepare(`SELECT * FROM referral_agreements WHERE lead_id = ? ORDER BY created_at DESC`)
+        .all(leadId).map(toAgreement);
+}
+function getAgreement(id) {
+    const r = getContactRecordDb().prepare(`SELECT * FROM referral_agreements WHERE id = ?`).get(id);
+    return r ? toAgreement(r) : null;
+}
+const oneOf = (list, v, fallback) => typeof v === "string" && list.includes(v) ? v : fallback;
+function addAgreement(leadId, input) {
+    const id = (0, crypto_1.randomUUID)();
+    getContactRecordDb()
+        .prepare(`INSERT INTO referral_agreements
+       (id, lead_id, kind, document_id, transaction_id, title, fee_value, fee_type, referring_agent,
+        partner_lead_id, partner_name, client_intent, property_type, signed_date, expiration_date, is_active, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(id, leadId, oneOf(exports.AGREEMENT_KINDS, input.kind, "referral"), input.documentId || null, input.transactionId || null, (input.title || "").trim().slice(0, 255), typeof input.feeValue === "number" && Number.isFinite(input.feeValue) ? input.feeValue : null, input.feeType === "flat" ? "flat" : "percentage", (input.referringAgent || "").trim().slice(0, 120), input.partnerLeadId || null, (input.partnerName || "").trim().slice(0, 160), oneOf(exports.CLIENT_INTENTS, input.clientIntent, "Buyer"), oneOf(exports.PROPERTY_TYPES, input.propertyType, "Residential"), normDay(input.signedDate), normDay(input.expirationDate), 1, nowIso());
+    return getAgreement(id);
+}
+function deleteAgreement(id) {
+    const cur = getAgreement(id);
+    if (!cur)
+        return null;
+    getContactRecordDb().prepare(`DELETE FROM referral_agreements WHERE id = ?`).run(id);
+    return cur;
 }

@@ -914,6 +914,99 @@
   .tl-pill.sub{background:var(--teal-soft);color:var(--teal-strong)}
   .tl-pill.dir{background:#eef2f4;color:#7a8590}
   .tl-note{font-size:11px;color:#8b95a0;line-height:1.5;background:#f7f9fa;border-radius:4px;padding:8px 10px;margin-top:10px}
+
+  /* ════════════ Right-stack widgets ════════════ */
+  .as-row{display:flex;align-items:center;gap:10px}
+  .as-row .nm{flex:1;min-width:0}
+  .as-row .nm b{display:block;font-weight:700;color:#4a5560;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .as-row .nm span{color:var(--muted);font-size:11.5px}
+  .as-caret{border:0;background:none;color:#98a2ad;cursor:pointer;font-size:11px;padding:4px}
+  .as-team{margin-top:9px;display:flex;flex-direction:column;gap:6px}
+  .as-mem{display:flex;align-items:center;gap:8px;font-size:12px;color:#5b6570}
+  .as-mem .rl{margin-left:auto;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:#8b95a0;background:#f1f4f6;border-radius:4px;padding:2px 6px;flex:0 0 auto}
+
+  /* Web Activity summary */
+  .wa-top{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#8b95a0;margin-bottom:8px}
+  .wa-top b{color:#4a5560;font-weight:700}
+  .wa-box{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;border:1px solid var(--line-2);border-radius:4px;padding:9px 8px}
+  .wa-box div{text-align:center;min-width:0}
+  .wa-box .k{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b95a0}
+  .wa-box .v{font-size:17px;font-weight:800;color:var(--teal);margin-top:2px;overflow:hidden;text-overflow:ellipsis}
+  /* A metric nothing measures is dashed and grey, never a confident zero. */
+  .wa-box .v.none{color:#c2cad1;font-weight:700;font-size:15px}
+
+  /* Distribution bar in the Web Activity modal */
+  .wa-bar{display:flex;height:26px;border-radius:4px;overflow:hidden;border:1px solid var(--line-2)}
+  .wa-bar span{display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#fff;
+    min-width:0;overflow:hidden;white-space:nowrap}
+  .wa-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:11.5px;color:#5b6570}
+  .wa-legend i{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:5px}
+  .wa-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  @media(max-width:700px){.wa-grid{grid-template-columns:1fr}}
+  .wa-card{border:1px solid var(--line-2);border-radius:6px;overflow:hidden;background:#fff}
+  .wa-thumb{position:relative;height:130px;background:#eef2f4;display:flex;align-items:center;justify-content:center;
+    color:#b3bcc5;font-size:12px}
+  .wa-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .wa-thumb .ov{position:absolute;left:0;right:0;bottom:0;padding:8px 10px;color:#fff;
+    background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.72))}
+  .wa-thumb .ov b{display:block;font-size:15px;font-weight:800}
+  .wa-thumb .ov span{font-size:11.5px;opacity:.9}
+  .wa-foot{display:flex;align-items:center;gap:8px;padding:8px 10px;font-size:11px;color:#8b95a1}
+  .wa-foot a{color:var(--teal-strong);font-weight:700;cursor:pointer}
+  .wa-sv{font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#b2495c;background:#fdeef0;border-radius:3px;padding:2px 6px}
+
+  /* Appointment + task cards in the sidebar */
+  .apc{border:1px solid var(--line-2);border-radius:6px;padding:9px 10px;margin-bottom:8px;background:#fff}
+  .apc-h{display:flex;align-items:center;gap:7px;font-size:11.5px;color:#8b95a0;margin-bottom:6px}
+  .apc-h .ti{flex:1;font-weight:700;color:#4a5560}
+  .apc-h .dots{cursor:pointer;color:#b3bcc5;padding:0 3px}
+  .apc-when{display:inline-flex;align-items:center;gap:5px;background:var(--teal-soft);color:var(--teal-strong);
+    border-radius:12px;padding:3px 10px;font-size:11.5px;font-weight:700;margin-bottom:7px}
+  .apc-kv{display:flex;gap:6px;font-size:11.5px;color:#8b95a1;padding:1px 0}
+  .apc-kv b{color:#5b6570;font-weight:600;min-width:52px}
+  .tkc{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--line-2)}
+  .tkc:first-child{border-top:none}
+  .tkc input[type=checkbox]{accent-color:var(--teal);margin-top:2px;flex:0 0 auto}
+  .tkc .bd{flex:1;min-width:0}
+  .tkc .tt{font-size:12.5px;color:#4a5560;line-height:1.35;word-break:break-word}
+  .tkc .sub{font-size:11px;color:var(--teal-strong);margin-top:2px}
+  .tkc.done .tt{text-decoration:line-through;color:#a8b2bb}
+  .wdg-all{display:inline-block;margin-top:8px;font-size:11px;font-weight:700;letter-spacing:.05em;
+    color:var(--teal-strong);cursor:pointer}
+
+  /* Manage Team modal rows */
+  .mt-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .mt-row select{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;height:38px;padding:0 10px;
+    font-size:13px;font-family:inherit;color:#46515c;background:#fff}
+  .mt-row .rm{border:0;background:none;color:#b3bcc5;cursor:pointer;font-size:15px;padding:4px 6px;flex:0 0 auto}
+  .mt-row .rm:hover{color:#c0392b}
+  .mt-help{background:#f7f9fa;border-radius:6px;padding:10px 12px;font-size:12px;color:#6b7480;line-height:1.55;
+    margin-bottom:14px}
+
+  /* Fee value + unit toggle */
+  .fee-row{display:flex;gap:0;align-items:stretch}
+  .fee-row input{flex:1;min-width:0;border:1px solid var(--line);border-right:0;border-radius:6px 0 0 6px;height:38px;
+    padding:0 10px;font-size:13px;font-family:inherit;box-sizing:border-box}
+  .fee-unit{display:flex;flex:0 0 auto}
+  .fee-unit button{width:42px;border:1px solid var(--line);background:#fff;color:#7a8590;font-size:13px;font-weight:700;
+    cursor:pointer;font-family:inherit}
+  .fee-unit button:last-child{border-radius:0 6px 6px 0}
+  .fee-unit button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+  /* 4-way segmented group (client intent) */
+  .seg4{display:flex;gap:0}
+  .seg4 button{flex:1;border:1px solid var(--line);background:#fff;color:#6b7480;height:38px;font-size:12.5px;
+    cursor:pointer;font-family:inherit;margin-left:-1px}
+  .seg4 button:first-child{border-radius:6px 0 0 6px;margin-left:0}
+  .seg4 button:last-child{border-radius:0 6px 6px 0}
+  .seg4 button.on{border-color:var(--teal);background:var(--teal-soft);color:var(--teal-strong);font-weight:700;position:relative;z-index:1}
+  /* Toggle switch */
+  .sw{display:inline-flex;align-items:center;gap:9px;cursor:pointer;font-size:13px;color:#5b6570}
+  .sw i{width:38px;height:21px;border-radius:11px;background:#d5dbdb;position:relative;transition:background .15s;flex:0 0 auto}
+  .sw i:after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;
+    transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .sw.on i{background:var(--teal-pill)}
+  .sw.on i:after{transform:translateX(17px)}
 </style>
 
 <header class="topbar">
@@ -4643,6 +4736,12 @@ function openLead(id, tab){ const l=LEADS.find(x=>x.id===id); if(!l)return; curr
      gets the wrong message. */
   qaReset(); QA_THREAD=null;
   TL.leadId=id; TL.items=[]; TL.counts={}; TL.err=null;
+  /* Widget state is per contact too — the previous person's team, engagement
+     and task list must not flash up under this one's name. */
+  LDTEAM={leadId:id,primary:null,members:[],roles:LDTEAM.roles||[],roster:LDTEAM.roster||[]};
+  WEBACT={leadId:id,summary:null,properties:[],loading:true,err:null};
+  AGREE={leadId:id,list:[],propertyTypes:AGREE.propertyTypes,clientIntents:AGREE.clientIntents};
+  LDTASKS={leadId:id,list:[],loading:true,err:null};
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-lead").classList.add("on"); window.scrollTo(0,0);
   renderLead();
   loadContactRecord(id,function(){ if(currentLeadId===id)crRepaint(); }); }
@@ -4735,22 +4834,30 @@ function renderLead(){
     ]);
   });
   renderLeadTab(); renderActivityFeed(); reloadTimeline();
-  wireContactPanel(l); wireAiPanel(l); wireAssignBlock(l); wireRightStack(l);
-  paintLeadTasks(l); paintLeadPlans(l); paintLeadOutreach(l);
+  wireContactPanel(l); wireAiPanel(l); wireRightStack(l);
+  paintLeadPlans(l); paintLeadOutreach(l);
+  /* The right-stack widgets each own a fetch. They repaint themselves when
+     they land, so a slow one cannot hold up the rest of the record. */
+  loadContactTeam(l.id,function(){ paintAssignedTo(l); });
+  loadWebActivity(l.id,function(){ paintWebActivityWidget(); });
+  loadAgreements(l.id,function(){ paintAgreements(l); });
+  loadLeadTasks(l.id,function(){ paintLeadTasks(l); });
 }
 
 /** Right-column widgets whose buttons are not owned by an existing painter. */
 function wireRightStack(l){
   document.querySelectorAll("#leadDetail [data-agree]").forEach(function(b){
-    b.addEventListener("click",function(){ openDocUploadModal(l,b.getAttribute("data-agree")); });
+    b.addEventListener("click",function(){ openAgreementModal(l,b.getAttribute("data-agree")); });
   });
-  var appt=document.getElementById("ldApptAdd");
-  if(appt)appt.addEventListener("click",function(){
-    ldTab="appointment";
-    document.querySelectorAll("#ldTabs button").forEach(function(x){x.classList.toggle("on",x.getAttribute("data-t")==="appointment");});
-    renderLeadTab();
-    document.getElementById("ldTabBody").scrollIntoView({behavior:"smooth",block:"center"});
+  var view=document.getElementById("ldWebActView");
+  if(view)view.addEventListener("click",function(){
+    if(!(WEBACT.properties&&WEBACT.properties.length)){
+      crmToast("No listing engagement on this contact yet — nothing to break down");
+      return;
+    }
+    openWebActivityModal(l);
   });
+  wireAssignBlock(l);
 }
 
 /* ===== Profile writes. These hit REAL APIs; a demo row degrades to a
@@ -4762,52 +4869,25 @@ function ldPatch(l,body,okMsg){
     .catch(function(){ crmToast("Could not reach the server"); return false; });
 }
 var LD_ROSTER=null;
+/* The roster endpoint returns {members:[…]} — it always has. This read `d.roster`,
+   so every caller silently fell through to the hard-coded four below, which
+   carry the wrong display names and none of the real roles or colours. */
+var LD_ROSTER_FALLBACK=[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"},{id:"kendrick",name:"Kendrick"}];
 function ensureRoster(cb){
   if(LD_ROSTER){cb(LD_ROSTER);return;}
   fetch(crmApi("/api/team/roster")).then(function(r){return r.ok?r.json():null;}).then(function(d){
-    LD_ROSTER=((d&&d.roster)||[]).map(function(u){return {id:u.id,name:u.name};});
-    if(!LD_ROSTER.length)LD_ROSTER=[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"},{id:"kendrick",name:"Kendrick"}];
+    LD_ROSTER=(((d&&(d.members||d.roster))||[])).map(function(u){
+      return {id:u.id,name:u.name,role:u.role||"",color:u.color||""}; });
+    if(!LD_ROSTER.length)LD_ROSTER=LD_ROSTER_FALLBACK.slice();
     cb(LD_ROSTER);
-  }).catch(function(){ LD_ROSTER=[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"},{id:"kendrick",name:"Kendrick"}]; cb(LD_ROSTER); });
+  }).catch(function(){ LD_ROSTER=LD_ROSTER_FALLBACK.slice(); cb(LD_ROSTER); });
 }
-function wireAssignBlock(l){
-  var btn=document.getElementById("ldAssignBtn"); if(!btn)return;
-  btn.addEventListener("click",function(e){
-    e.stopPropagation();
-    ensureRoster(function(roster){
-      openActionMenu(btn,roster.map(function(u){
-        return {label:u.name,cur:l.assignedUserId===u.id,fn:function(){
-          l.assignedUserId=u.id; l.assignedUserName=u.name;
-          ldPatch(l,{assignedUserId:u.id,assignedUserName:u.name},"Assigned to "+u.name).then(function(){ renderLead(); });
-        }};
-      }).concat([{label:"Unassign",fn:function(){
-        l.assignedUserId=null; l.assignedUserName=null;
-        ldPatch(l,{assignedUserId:null,assignedUserName:null},"Unassigned").then(function(){ renderLead(); });
-      }}]));
-    });
-  });
-}
-function paintLeadTasks(l){
-  var el=document.getElementById("ldTasksBlk"); if(!el)return;
-  var addBtn=document.getElementById("ldTaskAdd");
-  fetch(crmApi("/api/crm-tasks?leadId="+encodeURIComponent(l.id))).then(function(r){return r.ok?r.json():null;}).then(function(d){
-    var tasks=((d&&d.tasks)||[]).filter(function(t){return t.status!=="completed"&&t.status!=="cancelled";});
-    el.innerHTML=tasks.length?tasks.map(function(t){
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0">'+
-        '<input type="checkbox" data-tdone="'+esc(t.id)+'" style="accent-color:var(--teal)" title="Mark complete">'+
-        '<span style="flex:1;color:#4a5560">'+esc(t.title)+'</span>'+
-        '<span style="color:#98a2ac;font-size:11px">'+esc(t.dueDate||"")+(t.dueTime?" "+esc(t.dueTime):"")+'</span></div>';
-    }).join(""):'<div style="color:var(--muted)">No open tasks.</div>';
-    el.querySelectorAll("[data-tdone]").forEach(function(cb){cb.addEventListener("change",function(){
-      fetch(crmApi("/api/crm-tasks/"+encodeURIComponent(cb.getAttribute("data-tdone"))+"/complete"),{method:"POST"})
-        .then(function(r){ if(r.ok){crmToast("Task completed");paintLeadTasks(l);} else crmToast("Could not complete task"); })
-        .catch(function(){ crmToast("Could not reach the server"); });
-    });});
-  }).catch(function(){ el.innerHTML='<div style="color:var(--muted)">Task list unavailable.</div>'; });
-  if(addBtn&&!addBtn.__wired){ addBtn.__wired=1; addBtn.addEventListener("click",function(){ ldTab="appointment";
-    document.querySelectorAll("#ldTabs button").forEach(function(x){x.classList.toggle("on",x.getAttribute("data-t")==="appointment");});
-    renderLeadTab(); document.getElementById("ldTabBody").scrollIntoView({behavior:"smooth",block:"center"});
-  }); }
+/** Initials + a stable colour for a roster member, for the little avatars. */
+function rosterAvatar(name,color,size){
+  var px=size||26;
+  return '<span style="width:'+px+'px;height:'+px+'px;border-radius:50%;flex:0 0 auto;display:inline-flex;'+
+    'align-items:center;justify-content:center;font-size:'+Math.round(px*0.4)+'px;font-weight:700;color:#fff;'+
+    'background:'+(color||"#7d8894")+'">'+esc(initials(name||"?"))+'</span>';
 }
 function paintLeadPlans(l){
   var el=document.getElementById("ldPlansBlk"); if(!el)return;
@@ -5005,7 +5085,22 @@ function accHTML(key,title,count,headBtns,bodyHtml){
 function crAccordionsHTML(l){
   var r=CR.record||crEmpty();
   var banner=CR.err?'<div class="wdg-off" style="margin-bottom:16px">'+esc(CR.err)+'</div>':'';
-  if(CR.loading&&!CR.record)banner='<div class="wdg-note" style="margin-bottom:16px">Loading this contact’s record…</div>';
+  /* While the record is still in flight the panel must not render its empty
+     state: "No email address on this contact" is a statement of fact, and it
+     is not one this page can make before the answer has arrived. */
+  if(CR.loading&&!CR.record){
+    var wait='<div class="cr-empty">Loading…</div>';
+    return '<div class="wdg-note" style="margin-bottom:16px">Loading this contact’s record…</div>'+
+      accHTML("contact","Contact Info",null,"",wait)+
+      accHTML("social","Social Media",null,"",wait)+
+      accHTML("details","Details",null,"",detailsBodyHTML(l))+
+      accHTML("relationships","Relationships",(l.relationships||[]).length||null,
+        '<button class="mini-pill" data-cr="relAdd">+ ADD</button>',relationshipsBodyHTML(l))+
+      accHTML("notes","Notes",null,"",wait)+
+      accHTML("transactions","Transactions",crTxFor(l).length||null,
+        '<button class="mini-pill" data-cr="txAdd">+ ADD</button>',crTxBodyHTML(l))+
+      accHTML("documents","Documents",null,"",wait);
+  }
   return banner+
     accHTML("contact","Contact Info",
       (r.emails.length+r.phones.length+r.addresses.length)||null,"",contactInfoBodyHTML(l,r))+
@@ -6714,7 +6809,10 @@ function qaApptTab(l,body){
           var made=res.j.task||res.j;
           var after=function(){
             crmToast(d.markComplete?"Task created and marked complete":"Appointment task created");
-            QA.appointment=null; renderLeadTab(); paintLeadTasks(l); reloadTimeline();
+            /* Re-fetch, don't just repaint: the widget renders from LDTASKS,
+               which was loaded before this appointment existed. */
+            QA.appointment=null; renderLeadTab();
+            loadLeadTasks(l.id,function(){ paintLeadTasks(l); }); reloadTimeline();
           };
           /* "Mark as complete" is a real completion through the same endpoint
              the Tasks widget uses, not a flag that only looks done here. */
@@ -6976,24 +7074,1038 @@ function renderActivityFeed(){
 
 /* ────────────────────────── right column ────────────────────────── */
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RIGHT-STACK WIDGETS — Assigned To, Web Activity, Agreements, Appointments,
+   Tasks.
+
+   All five hang off real stores. The one that needed the most care is Web
+   Activity: Brivity's reads an IDX website, and this system has none. What it
+   does have is engagement it generates and measures itself — clicks inside the
+   listing alerts and market reports it sends, and the homes a contact has
+   favourited. So VIEWS, FAVORITES and AVG. PRICE are real numbers, and VISITS
+   is a dash with a reason rather than a zero, because nothing counts sessions
+   and "0 visits" would be a claim this system cannot make.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var LDTEAM={leadId:null,primary:null,members:[],roles:[],roster:[]};
+var WEBACT={leadId:null,summary:null,properties:[],loading:false,err:null};
+var AGREE={leadId:null,list:[]};
+var LDTASKS={leadId:null,list:[],loading:false,err:null};
+
+function loadContactTeam(leadId,then){
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(leadId)+"/team"))
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(currentLeadId!==leadId)return;
+      LDTEAM={leadId:leadId,primary:(d&&d.primary)||null,members:(d&&d.members)||[],
+            roles:(d&&d.roles)||[],roster:(d&&d.roster)||[]};
+      if(then)then();
+    }).catch(function(){ if(then)then(); });
+}
+
+function loadWebActivity(leadId,then){
+  WEBACT={leadId:leadId,summary:null,properties:[],loading:true,err:null};
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(leadId)+"/web-activity"))
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:false,j:{}}; }); })
+    .then(function(res){
+      if(currentLeadId!==leadId)return;
+      WEBACT.loading=false;
+      if(!res.ok){ WEBACT.err=(res.j&&res.j.error)||"Could not load web activity"; }
+      else { WEBACT.summary=res.j.summary||null; WEBACT.properties=res.j.properties||[];
+             WEBACT.unavailable=res.j.unavailable||[]; }
+      if(then)then();
+    })
+    .catch(function(){
+      if(currentLeadId!==leadId)return;
+      WEBACT.loading=false;
+      WEBACT.err="Could not reach the server — this contact's engagement is not shown.";
+      if(then)then();
+    });
+}
+
+function loadAgreements(leadId,then){
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(leadId)+"/agreements"))
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(currentLeadId!==leadId)return;
+      AGREE={leadId:leadId,list:(d&&d.agreements)||[],
+             propertyTypes:(d&&d.propertyTypes)||[],clientIntents:(d&&d.clientIntents)||[]};
+      if(then)then();
+    }).catch(function(){ if(then)then(); });
+}
+
+function loadLeadTasks(leadId,then){
+  LDTASKS={leadId:leadId,list:[],loading:true,err:null};
+  fetch(crmApi("/api/crm-tasks?leadId="+encodeURIComponent(leadId)))
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(currentLeadId!==leadId)return;
+      LDTASKS.loading=false; LDTASKS.list=(d&&d.tasks)||[];
+      if(then)then();
+    })
+    .catch(function(){
+      if(currentLeadId!==leadId)return;
+      LDTASKS.loading=false; LDTASKS.err="Task list unavailable.";
+      if(then)then();
+    });
+}
+
+/* ── Assigned To ── */
+
+function assignedToHTML(l){
+  var primaryName=(LDTEAM.primary&&LDTEAM.primary.userName)||l.assignedUserName||"Marco Puga";
+  var primaryId=(LDTEAM.primary&&LDTEAM.primary.userId)||l.assignedUserId||"marco";
+  var member=(LDTEAM.roster||[]).filter(function(u){return u.id===primaryId;})[0];
+  var members=LDTEAM.members||[];
+  return '<div class="as-row">'+
+      rosterAvatar(primaryName,(member&&member.color)||"",38)+
+      '<div class="nm"><b>'+esc(primaryName)+'</b><span>Primary Agent</span></div>'+
+      '<button class="as-caret" id="ldAssignCaret" title="Quick reassign">▾</button>'+
+    '</div>'+
+    (members.length
+      ? '<div class="as-team">'+members.map(function(m){
+          var r=(LDTEAM.roster||[]).filter(function(u){return u.id===m.userId;})[0];
+          return '<div class="as-mem">'+rosterAvatar(m.userName,(r&&r.color)||"",22)+
+            '<span>'+esc(m.userName)+'</span>'+
+            (m.roleName?'<span class="rl">'+esc(m.roleName)+'</span>':'<span class="rl">Team member</span>')+
+          '</div>'; }).join("")+'</div>'
+      : '');
+}
+
+function wireAssignBlock(l){
+  var manage=document.getElementById("ldAssignBtn");
+  if(manage)manage.addEventListener("click",function(e){ e.stopPropagation(); openManageTeamModal(l); });
+  var caret=document.getElementById("ldAssignCaret");
+  if(caret)caret.addEventListener("click",function(e){
+    e.stopPropagation();
+    ensureRoster(function(roster){
+      openActionMenu(caret,roster.map(function(u){
+        return {label:u.name+(u.role?" — "+u.role:""),cur:(LDTEAM.primary&&LDTEAM.primary.userId)===u.id,fn:function(){
+          savePrimaryAgent(l,u.id,u.name);
+        }};
+      }).concat([{label:"Unassign",fn:function(){ savePrimaryAgent(l,"",""); }},
+                 {label:"Manage team…",fn:function(){ openManageTeamModal(l); }}]));
+    });
+  });
+}
+
+function savePrimaryAgent(l,userId,userName){
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/team"),{method:"PUT",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({primary:{userId:userId,userName:userName},members:LDTEAM.members||[]})})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(!d){ crmToast("Could not save the assignment"); return; }
+      LDTEAM.primary=d.primary; LDTEAM.members=d.members||[];
+      l.assignedUserId=d.primary?d.primary.userId:null;
+      l.assignedUserName=d.primary?d.primary.userName:null;
+      crmToast(userId?("Assigned to "+userName):"Unassigned");
+      paintAssignedTo(l); renderLeads(); renderPeople();
+    })
+    .catch(function(){ crmToast("Could not reach the server"); });
+}
+
+function paintAssignedTo(l){
+  var el=document.getElementById("ldAssignRow"); if(!el)return;
+  el.innerHTML=assignedToHTML(l);
+  wireAssignBlock(l);
+}
+
+/** Manage Team — reassign the primary and edit the member rows. */
+function openManageTeamModal(l){
+  ensureRoster(function(roster){
+    var rolesList=(LDTEAM.roles&&LDTEAM.roles.length)?LDTEAM.roles:[
+      "Broker","Buyer's Agent","Listing Agent","Listing Coordinator","Listing Representative",
+      "Marketing Manager","Referring Agent","Team Owner","Transaction Coordinator"];
+    var rows=(LDTEAM.members||[]).map(function(m){ return {userId:m.userId,roleName:m.roleName||""}; });
+    var primaryId=(LDTEAM.primary&&LDTEAM.primary.userId)||l.assignedUserId||"";
+
+    function rowHTML(r,i){
+      return '<div class="mt-row" data-mtrow="'+i+'">'+
+        '<select data-mtuser="'+i+'"><option value="">Select a team member</option>'+
+          roster.map(function(u){ return '<option value="'+esc(u.id)+'"'+(u.id===r.userId?" selected":"")+'>'+
+            esc(u.name)+(u.role?" — "+esc(u.role):"")+'</option>'; }).join("")+'</select>'+
+        '<select data-mtrole="'+i+'"><option value="">Select a Role</option>'+
+          rolesList.map(function(x){ return '<option value="'+esc(x)+'"'+(x===r.roleName?" selected":"")+'>'+esc(x)+'</option>'; }).join("")+
+        '</select>'+
+        '<button class="rm" data-mtdel="'+i+'" title="Remove">🗑</button></div>';
+    }
+    function paintRows(){
+      var host=document.getElementById("mtRows"); if(!host)return;
+      host.innerHTML=rows.map(rowHTML).join("")||'<div class="cr-empty">No team members yet.</div>';
+      host.querySelectorAll("[data-mtuser]").forEach(function(sel){
+        sel.addEventListener("change",function(){ rows[+sel.getAttribute("data-mtuser")].userId=sel.value; });
+      });
+      host.querySelectorAll("[data-mtrole]").forEach(function(sel){
+        sel.addEventListener("change",function(){ rows[+sel.getAttribute("data-mtrole")].roleName=sel.value; });
+      });
+      host.querySelectorAll("[data-mtdel]").forEach(function(b){
+        b.addEventListener("click",function(){ rows.splice(+b.getAttribute("data-mtdel"),1); paintRows(); });
+      });
+    }
+
+    oaOverlay("Manage Team",
+      '<div class="mt-help">Making another user a team member gives them the ability to view and edit this '+
+        'person’s information. Team members do not need a role to gain access. Access can be revoked only for '+
+        'team members with the user type of agent — the account owner and admins have access to everyone.</div>'+
+      '<div class="oa-f"><label>Primary Agent</label>'+
+        '<select id="mtPrimary"><option value="">Unassigned</option>'+
+          roster.map(function(u){ return '<option value="'+esc(u.id)+'"'+(u.id===primaryId?" selected":"")+'>'+
+            esc(u.name)+(u.role?" ("+esc(u.role)+")":"")+'</option>'; }).join("")+'</select></div>'+
+      '<div class="oa-f"><label>Team Members</label><div id="mtRows"></div>'+
+        '<button class="oa-alt" id="mtAdd" style="padding:7px 14px">+ ADD TEAM MEMBER</button></div>',
+      '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+      '<button class="oa-go" id="mtSave">SAVE TEAM</button>');
+
+    paintRows();
+    document.getElementById("mtAdd").addEventListener("click",function(){ rows.push({userId:"",roleName:""}); paintRows(); });
+    document.getElementById("mtSave").addEventListener("click",function(){
+      var picked=rows.filter(function(r){return r.userId;});
+      // Same person twice is a mistake the modal should catch, not the DB.
+      var seen={},dupe=null;
+      picked.forEach(function(r){ if(seen[r.userId])dupe=r.userId; seen[r.userId]=1; });
+      if(dupe){
+        var who=(roster.filter(function(u){return u.id===dupe;})[0]||{}).name||dupe;
+        crmToast(who+" is listed twice — one row per person"); return;
+      }
+      var pid=document.getElementById("mtPrimary").value;
+      var pname=(roster.filter(function(u){return u.id===pid;})[0]||{}).name||"";
+      var go=document.getElementById("mtSave"); go.disabled=true; go.textContent="SAVING…";
+      fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/team"),{method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({primary:{userId:pid,userName:pname},
+          members:picked.map(function(r){
+            return {userId:r.userId,userName:(roster.filter(function(u){return u.id===r.userId;})[0]||{}).name||r.userId,
+                    roleName:r.roleName}; })})})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+        .then(function(res){
+          go.disabled=false; go.textContent="SAVE TEAM";
+          if(!res.ok){ crmToast(res.j.error||"Could not save the team"); return; }
+          LDTEAM.primary=res.j.primary; LDTEAM.members=res.j.members||[];
+          l.assignedUserId=LDTEAM.primary?LDTEAM.primary.userId:null;
+          l.assignedUserName=LDTEAM.primary?LDTEAM.primary.userName:null;
+          closeOa(); crmToast("Team saved");
+          paintAssignedTo(l); renderLeads(); renderPeople();
+        })
+        .catch(function(){ go.disabled=false; go.textContent="SAVE TEAM"; crmToast("Could not reach the server"); });
+    });
+  });
+}
+
+/* ── Web Activity ── */
+
+function shortMoney(n){
+  if(n==null)return "—";
+  if(n>=1000000)return "$"+(n/1000000).toFixed(n%1000000?1:0)+"M";
+  if(n>=1000)return "$"+Math.round(n/1000)+"K";
+  return "$"+n;
+}
+
+function webActivityHTML(){
+  if(WEBACT.err)return '<div class="wdg-off">'+esc(WEBACT.err)+'</div>';
+  if(WEBACT.loading&&!WEBACT.summary)return '<div class="wdg-note">Loading…</div>';
+  var s=WEBACT.summary;
+  if(!s)return '<div class="wdg-note">Nothing yet. Clicks from listing alerts and market-report views show up here.</div>';
+  /* VISITS is null on purpose — nothing counts sessions. A dash with a title
+     is the honest render; a 0 would say they have never been to the site. */
+  var visits=s.visits==null
+    ? '<b title="No IDX website or client portal sends session data to this system.">—</b>'
+    : '<b>'+s.visits+'</b>';
+  return '<div class="wa-top"><span>VISITS: '+visits+'</span>'+
+      '<span>LAST ACTIVITY: <b>'+esc(s.lastActivityAt?(relTime(s.lastActivityAt)||"—"):"none yet")+'</b></span></div>'+
+    '<div class="wa-box">'+
+      '<div><div class="k">Views</div><div class="v">'+s.views+'</div></div>'+
+      '<div><div class="k">Favorites</div><div class="v">'+s.favorites+'</div></div>'+
+      '<div><div class="k">Avg. Price</div><div class="v'+(s.avgPrice==null?" none":"")+'">'+
+        (s.avgPrice==null?"—":esc(shortMoney(s.avgPrice)))+'</div></div>'+
+    '</div>'+
+    '<div class="wdg-note" style="margin-top:8px;font-size:10.5px">Views are listing clicks inside the alerts and '+
+      'reports this system sends. There is no website visit tracking connected, so VISITS has no number.</div>';
+}
+
+function paintWebActivityWidget(){
+  var el=document.getElementById("ldWebActBlk"); if(!el)return;
+  el.innerHTML=webActivityHTML();
+  var view=document.getElementById("ldWebActView");
+  if(view)view.disabled=!(WEBACT.properties&&WEBACT.properties.length);
+}
+
+/* Distribution buckets for the detail modal's bar chart. */
+var WA_GROUPS=[["price","Price"],["beds","Beds"],["baths","Baths"],["city","City"],["zip","Zip Code"]];
+var WA_COLORS=["#2EC4B6","#E05A45","#5B6FAE","#B3812F","#3F8B52","#7B5CF0","#C0392B","#2F7FA8"];
+
+function waBucket(p,group){
+  if(group==="price")return p.price?shortMoney(p.price):"No price";
+  if(group==="beds")return p.beds!=null?(p.beds+" bed"+(p.beds===1?"":"s")):"Beds unknown";
+  if(group==="baths")return p.baths!=null?(p.baths+" bath"+(p.baths===1?"":"s")):"Baths unknown";
+  if(group==="city")return p.city||"City unknown";
+  return p.zip||"Zip unknown";
+}
+
+function openWebActivityModal(l){
+  var group="price", sort="recent", showSaved=false;
+  function body(){
+    var all=WEBACT.properties||[];
+    var list=all.filter(function(p){ return showSaved?p.saved:true; });
+    list=list.slice().sort(function(a,b){
+      if(sort==="views")return b.views-a.views;
+      if(sort==="oldest")return String(a.lastViewedAt).localeCompare(String(b.lastViewedAt));
+      return String(b.lastViewedAt).localeCompare(String(a.lastViewedAt));
+    });
+    var counts={};
+    list.forEach(function(p){ var k=waBucket(p,group); counts[k]=(counts[k]||0)+1; });
+    var keys=Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; });
+    var total=list.length||1;
+    var bar=keys.length
+      ? '<div class="wa-bar">'+keys.map(function(k,i){
+          var pct=Math.round(counts[k]/total*100);
+          return '<span style="width:'+pct+'%;background:'+WA_COLORS[i%WA_COLORS.length]+'" title="'+esc(k)+' — '+pct+'%">'+
+            (pct>=12?pct+"%":"")+'</span>'; }).join("")+'</div>'+
+        '<div class="wa-legend">'+keys.map(function(k,i){
+          return '<span><i style="background:'+WA_COLORS[i%WA_COLORS.length]+'"></i>'+esc(k)+' ('+counts[k]+')</span>'; }).join("")+'</div>'
+      : '<div class="cr-empty">Nothing to distribute yet.</div>';
+
+    var cards=list.length?list.map(function(p){
+      var addr=[p.address,[p.city,p.state].filter(Boolean).join(", "),p.zip].filter(Boolean).join(" · ");
+      var spec=[p.beds!=null?(p.beds+" Bed"):"",p.baths!=null?(p.baths+" Bath"):""].filter(Boolean).join(" | ");
+      return '<div class="wa-card">'+
+        '<div class="wa-thumb">'+(p.photo?'<img src="'+esc(p.photo)+'" alt="" loading="lazy">':'No photo on this listing')+
+          '<div class="ov"><b>'+esc(p.price?("$"+p.price.toLocaleString()):"Price not on the listing")+'</b>'+
+          '<span>'+esc(addr||("Listing "+p.listingKey))+(spec?" · "+esc(spec):"")+'</span></div></div>'+
+        '<div class="wa-foot">'+
+          '<a data-waopen="'+esc(p.listingKey)+'">VIEW LISTING</a>'+
+          '<span>VIEWS: '+p.views+'</span>'+
+          (p.saved?'<span class="wa-sv">SAVED</span>':'')+
+          '<span style="margin-left:auto">'+esc(relTime(p.lastViewedAt)||"")+'</span>'+
+        '</div></div>';
+    }).join(""):'<div class="cr-empty">'+(showSaved?"No saved listings on this contact.":"No listing activity on this contact yet.")+'</div>';
+
+    var s=WEBACT.summary||{views:0,favorites:0,lastActivityAt:null};
+    return '<div class="wa-top" style="font-size:12px">'+
+        '<span>VIEWS: <b>'+s.views+'</b></span><span>FAVORITES: <b>'+s.favorites+'</b></span>'+
+        '<span>VISITS: <b title="No website visit tracking is connected.">—</b></span>'+
+        '<span>LAST ACTIVITY: <b>'+esc(s.lastActivityAt?(relTime(s.lastActivityAt)||"—"):"none yet")+'</b></span></div>'+
+      '<div class="oa-f" style="margin-top:12px"><label>Show distribution by</label>'+
+        '<select id="waGroup">'+WA_GROUPS.map(function(g){
+          return '<option value="'+g[0]+'"'+(g[0]===group?" selected":"")+'>'+g[1]+'</option>'; }).join("")+'</select></div>'+
+      bar+
+      '<div class="qa-head" style="padding:14px 0 6px">'+
+        '<div class="qa-pills">'+
+          '<button data-wasaved="0" class="'+(showSaved?"":"on")+'">Unique Properties Viewed ('+all.length+')</button>'+
+          '<button data-wasaved="1" class="'+(showSaved?"on":"")+'">Saved Listings ('+all.filter(function(p){return p.saved;}).length+')</button>'+
+        '</div><div class="qa-spacer"></div>'+
+        '<select id="waSort" class="qa-sel" style="height:32px">'+
+          [["recent","Most Recent"],["views","Most Views"],["oldest","Oldest"]].map(function(o){
+            return '<option value="'+o[0]+'"'+(o[0]===sort?" selected":"")+'>'+o[1]+'</option>'; }).join("")+'</select>'+
+      '</div>'+
+      '<div class="wa-grid">'+cards+'</div>'+
+      '<div class="oa-unav">Every number here is engagement this system generated and measured itself — clicks inside '+
+        'the listing alerts and market reports it sent, and the homes this contact favourited. There is no IDX website '+
+        'or client portal feeding it session data, so there is no visit count and no page-view history beyond those clicks.</div>';
+  }
+  function paint(){
+    oaOverlay("Web Activity",body(),
+      '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+    document.getElementById("waGroup").addEventListener("change",function(){ group=this.value; paint(); });
+    document.getElementById("waSort").addEventListener("change",function(){ sort=this.value; paint(); });
+    document.querySelectorAll("#oaOv [data-wasaved]").forEach(function(b){
+      b.addEventListener("click",function(){ showSaved=b.getAttribute("data-wasaved")==="1"; paint(); });
+    });
+    document.querySelectorAll("#oaOv [data-waopen]").forEach(function(a){
+      a.addEventListener("click",function(){
+        window.open(crmApi("/l/"+encodeURIComponent(a.getAttribute("data-waopen"))),"_blank","noopener");
+      });
+    });
+  }
+  paint();
+}
+
+/* ── Agreements ── */
+
+var AGREEMENT_LABELS={buyer:"Buyer Agreement",seller:"Listing Agreement",referral:"Referral Agreement"};
+
+function agreementsHTML(){
+  var list=AGREE.list||[];
+  if(!list.length)return "";
+  return '<div style="margin-bottom:10px">'+list.map(function(a){
+    var fee=a.feeValue==null?"":(a.feeType==="flat"?("$"+a.feeValue.toLocaleString()):(a.feeValue+"%"));
+    return '<div class="apc" style="margin-bottom:6px">'+
+      '<div class="apc-h"><span class="ti">'+esc(AGREEMENT_LABELS[a.kind]||a.kind)+'</span>'+
+        '<span class="cx-x" data-agdel="'+esc(a.id)+'" title="Remove">×</span></div>'+
+      '<div class="apc-kv"><b>Title</b><span>'+esc(a.title)+'</span></div>'+
+      (fee?'<div class="apc-kv"><b>Fee</b><span>'+esc(fee)+'</span></div>':'')+
+      (a.partnerName?'<div class="apc-kv"><b>Partner</b><span>'+esc(a.partnerName)+'</span></div>':'')+
+      (a.signedDate?'<div class="apc-kv"><b>Signed</b><span>'+esc(a.signedDate)+'</span></div>':'')+
+      (a.expirationDate?'<div class="apc-kv"><b>Expires</b><span>'+esc(a.expirationDate)+'</span></div>':'')+
+      (a.transactionId?'<div class="apc-kv"><b>Deal</b><span><a class="ldlink" data-agtx="'+esc(a.transactionId)+'" style="color:var(--teal-strong);font-weight:600">Open transaction</a></span></div>':'')+
+      (a.documentId?'<div class="apc-kv"><b>File</b><span><a class="ldlink" data-agdoc="'+esc(a.documentId)+'" style="color:var(--teal-strong);font-weight:600">Open document</a></span></div>':'')+
+    '</div>';
+  }).join("")+'</div>';
+}
+
+function paintAgreements(l){
+  var el=document.getElementById("ldAgreeBlk"); if(!el)return;
+  el.innerHTML=agreementsHTML();
+  el.querySelectorAll("[data-agdel]").forEach(function(x){ x.addEventListener("click",function(){
+    if(!confirm("Remove this agreement? The uploaded file and any transaction it opened are kept."))return;
+    crFetch("/api/crm/agreement/"+encodeURIComponent(x.getAttribute("data-agdel")),{method:"DELETE"},"Agreement removed")
+      .then(function(j){ if(j){ AGREE.list=j.agreements||[]; paintAgreements(l); } });
+  });});
+  el.querySelectorAll("[data-agtx]").forEach(function(a){ a.addEventListener("click",function(){
+    if(window.openTxDetail)window.openTxDetail(a.getAttribute("data-agtx"));
+  });});
+  el.querySelectorAll("[data-agdoc]").forEach(function(a){ a.addEventListener("click",function(){
+    window.open(crmApi("/api/crm/contact-document/"+encodeURIComponent(a.getAttribute("data-agdoc"))+"/file"),"_blank","noopener");
+  });});
+}
+
+/** Add Agreement — upload, dates, and for a referral the fee and the partner. */
+function openAgreementModal(l,kind){
+  ensureRoster(function(roster){
+    var isReferral=kind==="referral";
+    var file=null, feeType="percentage", intent=isReferral?"Buyer":(l.intent==="seller"?"Seller":"Buyer");
+    var partner=null, createTx=isReferral;
+    var propTypes=(AGREE.propertyTypes&&AGREE.propertyTypes.length)?AGREE.propertyTypes:
+      ["Residential","Commercial","Manufactured Home","Rental","Business Opportunity","Multi-Family","Vacant Land","Condominium"];
+    var intents=(AGREE.clientIntents&&AGREE.clientIntents.length)?AGREE.clientIntents:["Buyer","Seller","Tenant","Landlord"];
+
+    oaOverlay("Add Agreement — "+(AGREEMENT_LABELS[kind]||kind),
+      '<div class="qa-lbl" style="margin-top:0">Upload '+esc(AGREEMENT_LABELS[kind]||"Agreement")+' <span class="oa-hint">optional</span></div>'+
+      '<div class="doc-drop" id="agDrop"><b>Drop a file here, or click to choose one</b>File Size Limit 15MB</div>'+
+      '<input type="file" id="agFile" style="display:none">'+
+      '<div id="agPick" style="margin-top:8px;font-size:12.5px;color:#8b95a0">No file chosen.</div>'+
+      '<div class="oa-cols" style="margin-top:14px">'+
+        '<div class="oa-f"><label>Agreement Signed Date</label><input type="date" id="agSigned"></div>'+
+        '<div class="oa-f"><label>Agreement Expiration Date</label><input type="date" id="agExp"></div>'+
+      '</div>'+
+      '<label class="sw'+(createTx?" on":"")+'" id="agTxSw"><i></i> Create Active '+
+        (isReferral?"Referral ":"")+'Transaction</label>'+
+      '<div id="agSub" style="margin-top:14px;'+(createTx?"":"display:none")+'">'+
+        '<div class="oa-f"><label>Transaction Title <span class="oa-req">required</span></label>'+
+          '<input type="text" id="agTitle" value="'+esc((l.name||"Contact")+(isReferral?" Referral":" Agreement"))+'"></div>'+
+        (isReferral?
+          '<div class="oa-cols">'+
+            '<div class="oa-f"><label>Referral Fee</label><div class="fee-row">'+
+              '<input type="number" id="agFee" step="0.25" value="25" min="0">'+
+              '<span class="fee-unit"><button data-fee="flat">$</button><button data-fee="percentage" class="on">%</button></span>'+
+            '</div></div>'+
+            '<div class="oa-f"><label>Referring Agent <span class="oa-req">required</span></label>'+
+              '<select id="agAgent">'+roster.map(function(u){
+                return '<option value="'+esc(u.name)+'"'+(u.name===(l.assignedUserName||"Marco Puga")?" selected":"")+'>'+esc(u.name)+'</option>'; }).join("")+
+            '</select></div>'+
+          '</div>'+
+          '<div class="oa-f ta-wrap"><label>Referral Partner <span class="oa-req">required</span></label>'+
+            '<input type="text" id="agPartner" autocomplete="off" placeholder="Begin typing a person’s name"></div>'+
+          '<div class="oa-note" style="margin-top:0">Don’t have the referral partner as a contact in your CRM? '+
+            '<a class="ldlink" id="agQuickAdd" style="color:var(--teal-strong);font-weight:600">Add them here</a>.</div>'
+          :'')+
+        '<div class="oa-f"><label>Client Intent</label><div class="seg4" id="agIntent">'+
+          intents.map(function(x){ return '<button data-int="'+esc(x)+'"'+(x===intent?' class="on"':'')+'>'+esc(x)+'</button>'; }).join("")+
+        '</div></div>'+
+        '<div class="oa-f"><label>Property Type</label><select id="agProp">'+
+          propTypes.map(function(x){ return '<option value="'+esc(x)+'"'+(x==="Residential"?" selected":"")+'>'+esc(x)+'</option>'; }).join("")+
+        '</select></div>'+
+      '</div>'+
+      '<div class="oa-note">The toggle opens a real transaction in the pipeline, linked to this contact and to the '+
+        'agreement. A percentage fee is carried onto the transaction as its commission; a flat fee is kept on the '+
+        'agreement only, because the deal’s GCI maths reads that field as a percentage.</div>',
+      '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+      '<button class="oa-go" id="agSave">SAVE AGREEMENT</button>');
+
+    var drop=document.getElementById("agDrop"), input=document.getElementById("agFile");
+    var pick=document.getElementById("agPick");
+    function take(f){
+      if(!f)return;
+      if(f.size>DOC_MAX_BYTES){
+        pick.innerHTML='<span style="color:#c0392b">“'+esc(f.name)+'” is '+crBytes(f.size)+' — larger than the 15MB limit.</span>';
+        file=null; return;
+      }
+      file=f; pick.innerHTML='Ready to upload: <b style="color:#4a5560">'+esc(f.name)+'</b> · '+crBytes(f.size);
+    }
+    drop.addEventListener("click",function(){ input.click(); });
+    input.addEventListener("change",function(){ take(input.files&&input.files[0]); });
+    ["dragenter","dragover"].forEach(function(ev){ drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.add("hot"); }); });
+    ["dragleave","drop"].forEach(function(ev){ drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.remove("hot"); }); });
+    drop.addEventListener("drop",function(e){ take(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]); });
+
+    var sw=document.getElementById("agTxSw");
+    sw.addEventListener("click",function(){
+      createTx=!createTx; sw.classList.toggle("on",createTx);
+      document.getElementById("agSub").style.display=createTx?"":"none";
+    });
+    document.querySelectorAll("#oaOv [data-fee]").forEach(function(b){
+      b.addEventListener("click",function(){
+        feeType=b.getAttribute("data-fee");
+        document.querySelectorAll("#oaOv [data-fee]").forEach(function(x){ x.classList.toggle("on",x===b); });
+      });
+    });
+    document.querySelectorAll("#agIntent button").forEach(function(b){
+      b.addEventListener("click",function(){
+        intent=b.getAttribute("data-int");
+        document.querySelectorAll("#agIntent button").forEach(function(x){ x.classList.toggle("on",x===b); });
+      });
+    });
+    var pIn=document.getElementById("agPartner");
+    if(pIn){
+      attachTypeahead(pIn,LEADS.filter(function(x){return x.id!==l.id;}).slice(0,1200).map(function(x){
+        return {id:x.id,label:x.name||"(no name)",sub:x.email||x.phone||""}; }),
+        function(p){ partner=p; pIn.value=p.label; },{minChars:1,emptyText:"Nobody in the CRM matches that"});
+      pIn.addEventListener("input",function(){ partner=null; });
+    }
+    var quick=document.getElementById("agQuickAdd");
+    if(quick)quick.addEventListener("click",function(){
+      /* Honest about what this can do: there is no quick-add-contact modal in
+         this CRM, and the partner is stored as typed when it is not a match. */
+      crmToast("No contact record is created from here — the name is stored on the agreement as typed");
+      if(pIn)pIn.focus();
+    });
+
+    document.getElementById("agSave").addEventListener("click",function(){
+      var title=(document.getElementById("agTitle")||{}).value||"";
+      if(createTx&&!title.trim()){ crmToast("A transaction needs a title"); return; }
+      if(createTx&&isReferral&&!(pIn&&pIn.value.trim())){ crmToast("A referral needs a partner"); return; }
+      var fd=new FormData();
+      if(file)fd.append("file",file);
+      fd.append("kind",kind);
+      fd.append("title",title.trim());
+      var sd=document.getElementById("agSigned").value, ed=document.getElementById("agExp").value;
+      if(sd)fd.append("signedDate",sd);
+      if(ed)fd.append("expirationDate",ed);
+      if(createTx){
+        fd.append("createTransaction","true");
+        fd.append("clientIntent",intent);
+        fd.append("propertyType",(document.getElementById("agProp")||{}).value||"Residential");
+        if(l.address)fd.append("address",l.address);
+        if(isReferral){
+          fd.append("feeValue",(document.getElementById("agFee")||{}).value||"");
+          fd.append("feeType",feeType);
+          fd.append("referringAgent",(document.getElementById("agAgent")||{}).value||"");
+          fd.append("partnerName",pIn?pIn.value.trim():"");
+          if(partner)fd.append("partnerLeadId",partner.id);
+        }
+      }
+      var go=document.getElementById("agSave"); go.disabled=true; go.textContent="SAVING…";
+      fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/agreements"),{method:"POST",body:fd})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+        .then(function(res){
+          go.disabled=false; go.textContent="SAVE AGREEMENT";
+          if(!res.ok){ crmToast(res.j.error||"Could not save the agreement"); return; }
+          closeOa();
+          AGREE.list=res.j.agreements||[];
+          if(res.j.documents)CR.record.documents=res.j.documents;
+          crmToast(res.j.transactionId?"Agreement saved and a transaction opened":"Agreement saved");
+          paintAgreements(l); crRepaint();
+          if(res.j.transactionId)refreshTxList();
+        })
+        .catch(function(){ go.disabled=false; go.textContent="SAVE AGREEMENT"; crmToast("Could not reach the server"); });
+    });
+  });
+}
+
+/* ── Appointments and Tasks ──────────────────────────────────────────────
+   Both read the SAME store. An appointment here is a task of type
+   "appointment" carrying its own type/status/outcome, exactly as the
+   composer's Appointment tab already creates one. That is deliberate: this
+   repo has been bitten before by a second task store nobody's board reads
+   (FORAI, 2026-07-29), and a contact's appointments must show up for the
+   person they were assigned to. */
+
+var TASK_TYPES_UI=[["to_do","To-Do"],["call","Call"],["text","Text"],["email","Email"],
+  ["mail","Mail"],["social_media","Social Media"],["door_knock","Door Knock"]];
+function taskTypeLabel(t){
+  for(var i=0;i<TASK_TYPES_UI.length;i++)if(TASK_TYPES_UI[i][0]===t)return TASK_TYPES_UI[i][1];
+  return t==="appointment"?"Appointment":t==="follow_up"?"Follow Up":"To-Do";
+}
+var APPT_OUTCOMES=[["none","—"],["held","Held"],["no_show","No Show"],["rescheduled","Rescheduled"]];
+function outcomeLabel(o){
+  for(var i=0;i<APPT_OUTCOMES.length;i++)if(APPT_OUTCOMES[i][0]===o)return APPT_OUTCOMES[i][1];
+  return "—";
+}
+function mdySlash(key){
+  if(!key)return "";
+  var p=String(key).slice(0,10).split("-");
+  return p.length===3?(p[1]+"/"+p[2]+"/"+p[0].slice(2)):key;
+}
+function timeLabel12(t){
+  if(!t)return "";
+  var p=String(t).split(":"), h=+p[0], m=p[1]||"00";
+  var ap=h<12?"AM":"PM", h12=h%12===0?12:h%12;
+  return h12+":"+m+" "+ap;
+}
+function leadAppointments(){ return (LDTASKS.list||[]).filter(function(t){return t.type==="appointment";}); }
+function leadPlainTasks(){ return (LDTASKS.list||[]).filter(function(t){return t.type!=="appointment";}); }
+
+function appointmentsHTML(){
+  if(LDTASKS.loading&&!LDTASKS.list.length)return '<div class="wdg-note">Loading…</div>';
+  if(LDTASKS.err)return '<div class="wdg-off">'+esc(LDTASKS.err)+'</div>';
+  var list=leadAppointments();
+  if(!list.length)return '<div class="wdg-note">No appointments on this contact yet.</div>';
+  return list.slice(0,6).map(function(t){
+    var done=t.status==="completed";
+    var status=t.appointmentStatus||(done?"completed":"scheduled");
+    return '<div class="apc" data-apid="'+esc(t.id)+'">'+
+      '<div class="apc-h">🗓 <span class="ti">Appointment</span>'+
+        '<span class="dots" data-apmenu="'+esc(t.id)+'">⋯</span></div>'+
+      '<div class="apc-when">🕐 '+esc(mdySlash(t.dueDate))+(t.dueTime?" @ "+esc(timeLabel12(t.dueTime)):"")+'</div>'+
+      (t.appointmentType?'<div class="apc-kv"><b>Type</b><span>'+esc(t.appointmentType)+'</span></div>':'')+
+      '<div class="apc-kv"><b>Status</b><span>'+esc(status.charAt(0).toUpperCase()+status.slice(1))+'</span></div>'+
+      '<div class="apc-kv"><b>Outcome</b><span>'+esc(outcomeLabel(t.outcome||"none"))+'</span></div>'+
+      (t.location?'<div class="apc-kv"><b>Where</b><span>'+esc(t.location)+'</span></div>':'')+
+    '</div>';
+  }).join("");
+}
+
+function tasksWidgetHTML(){
+  if(LDTASKS.loading&&!LDTASKS.list.length)return '<div class="wdg-note">Loading…</div>';
+  if(LDTASKS.err)return '<div class="wdg-off">'+esc(LDTASKS.err)+'</div>';
+  var open=leadPlainTasks().filter(function(t){return t.status!=="completed"&&t.status!=="cancelled";});
+  if(!open.length)return '<div class="wdg-note">No open tasks.</div>';
+  return open.slice(0,5).map(function(t){
+    var r=(LDTEAM.roster||[]).filter(function(u){return u.id===t.assignedUserId;})[0];
+    return '<div class="tkc">'+
+      '<input type="checkbox" data-tkdone="'+esc(t.id)+'" title="Mark complete">'+
+      '<div class="bd"><div class="tt">'+esc(t.title)+'</div>'+
+        '<div class="sub">'+esc(taskTypeLabel(t.type))+' — '+esc(mdySlash(t.dueDate))+
+        (t.dueTime?' '+esc(timeLabel12(t.dueTime)):'')+
+        (t.recurring?' · repeats':'')+'</div></div>'+
+      (t.assignedUserName?rosterAvatar(t.assignedUserName,(r&&r.color)||"",24):'')+
+    '</div>';
+  }).join("")+
+  (open.length>5?'<span class="wdg-all" data-tkall>VIEW ALL ('+open.length+')</span>':'<span class="wdg-all" data-tkall>VIEW ALL</span>');
+}
+
+function paintLeadTasks(l){
+  var a=document.getElementById("ldApptBlk"), t=document.getElementById("ldTasksBlk");
+  if(a){
+    a.innerHTML=appointmentsHTML();
+    a.querySelectorAll("[data-apmenu]").forEach(function(x){ x.addEventListener("click",function(e){
+      e.stopPropagation();
+      var id=x.getAttribute("data-apmenu");
+      var task=(LDTASKS.list||[]).filter(function(z){return z.id===id;})[0];
+      openActionMenu(x,[
+        {label:"Mark held",fn:function(){ patchTask(l,id,{appointmentStatus:"completed",outcome:"held",status:"completed"}); }},
+        {label:"Mark no show",fn:function(){ patchTask(l,id,{appointmentStatus:"completed",outcome:"no_show",status:"completed"}); }},
+        {label:"Mark rescheduled",fn:function(){ patchTask(l,id,{outcome:"rescheduled"}); }},
+        {label:"Cancel appointment",fn:function(){ patchTask(l,id,{appointmentStatus:"cancelled",status:"cancelled"}); }},
+        {label:"Delete",fn:function(){
+          if(!confirm("Delete this appointment?"))return;
+          fetch(crmApi("/api/crm-tasks/"+encodeURIComponent(id)),{method:"DELETE"})
+            .then(function(r){ crmToast(r.ok?"Appointment deleted":"Could not delete it");
+              loadLeadTasks(l.id,function(){ paintLeadTasks(l); reloadTimeline(); }); })
+            .catch(function(){ crmToast("Could not reach the server"); });
+        }}
+      ].concat(task&&task.location?[{label:"Copy location",fn:function(){
+        try{ navigator.clipboard.writeText(task.location); crmToast("Location copied"); }catch(_){ crmToast("Could not copy"); }
+      }}]:[]));
+    });});
+  }
+  if(t){
+    t.innerHTML=tasksWidgetHTML();
+    t.querySelectorAll("[data-tkdone]").forEach(function(cb){ cb.addEventListener("change",function(){
+      fetch(crmApi("/api/crm-tasks/"+encodeURIComponent(cb.getAttribute("data-tkdone"))+"/complete"),{method:"POST"})
+        .then(function(r){
+          if(!r.ok){ crmToast("Could not complete task"); cb.checked=false; return; }
+          crmToast("Task completed");
+          loadLeadTasks(l.id,function(){ paintLeadTasks(l); reloadTimeline(); });
+        })
+        .catch(function(){ crmToast("Could not reach the server"); cb.checked=false; });
+    });});
+    var all=t.querySelector("[data-tkall]");
+    if(all)all.addEventListener("click",function(){ openTaskListModal(l); });
+  }
+  var addA=document.getElementById("ldApptAdd");
+  if(addA&&!addA.__wired){ addA.__wired=1; addA.addEventListener("click",function(){ openAppointmentModal(l); }); }
+  var addT=document.getElementById("ldTaskAdd");
+  if(addT&&!addT.__wired){ addT.__wired=1; addT.addEventListener("click",function(){ openTaskModal(l); }); }
+}
+
+function patchTask(l,id,body){
+  fetch(crmApi("/api/crm-tasks/"+encodeURIComponent(id)),{method:"PATCH",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+    .then(function(res){
+      if(!res.ok){ crmToast(res.j.error||"Could not update"); return; }
+      crmToast("Updated");
+      loadLeadTasks(l.id,function(){ paintLeadTasks(l); reloadTimeline(); });
+    })
+    .catch(function(){ crmToast("Could not reach the server"); });
+}
+
+/** The full task log for this contact, open and done. */
+function openTaskListModal(l){
+  var all=(LDTASKS.list||[]).slice().sort(function(a,b){ return String(b.dueDate).localeCompare(String(a.dueDate)); });
+  oaOverlay("Tasks — "+(l.name||"this contact"),
+    all.length?('<div>'+all.map(function(t){
+      var done=t.status==="completed";
+      return '<div class="tkc'+(done?" done":"")+'">'+
+        '<input type="checkbox" '+(done?"checked disabled":'data-tlall="'+esc(t.id)+'"')+'>'+
+        '<div class="bd"><div class="tt">'+esc(t.title)+'</div>'+
+          '<div class="sub">'+esc(taskTypeLabel(t.type))+' — '+esc(mdySlash(t.dueDate))+
+          (t.assignedUserName?' · '+esc(t.assignedUserName):'')+
+          (t.contingent?' · '+t.contingent.days+' days '+esc(t.contingent.direction)+' '+esc(String(t.contingent.event).replace(/_/g," ")):'')+
+          '</div></div></div>';
+    }).join("")+'</div>'):'<div class="cr-empty">No tasks on this contact yet.</div>',
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>');
+  document.querySelectorAll("#oaOv [data-tlall]").forEach(function(cb){
+    cb.addEventListener("change",function(){
+      fetch(crmApi("/api/crm-tasks/"+encodeURIComponent(cb.getAttribute("data-tlall"))+"/complete"),{method:"POST"})
+        .then(function(r){ if(!r.ok){ cb.checked=false; crmToast("Could not complete task"); return; }
+          crmToast("Task completed");
+          loadLeadTasks(l.id,function(){ paintLeadTasks(l); reloadTimeline(); openTaskListModal(l); }); })
+        .catch(function(){ cb.checked=false; crmToast("Could not reach the server"); });
+    });
+  });
+}
+
+/* ── shared scheduling controls (date presets, time presets, priority) ── */
+
+var CONTINGENT_EVENTS=[["birthday","Birthdate"],["anniversary","Anniversary"],
+  ["organization_end_date","Organization End Date"],["licensed_since","Licensed Since"],
+  ["organization_start_date","Organization Start Date"]];
+/* Only two of the five have a field on a contact in this system. The other
+   three are offered and then refused with a reason rather than hidden, so the
+   operator learns why instead of wondering where they went. */
+var CONTINGENT_SUPPORTED={birthday:1,anniversary:1};
+
+function quarterHourOptions(sel){
+  var out=[];
+  for(var h=0;h<24;h++)for(var m=0;m<60;m+=15){
+    var v=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");
+    out.push('<option value="'+v+'"'+(v===sel?" selected":"")+'>'+timeLabel12(v)+'</option>');
+  }
+  return out.join("");
+}
+
+function datePresetHTML(id,state){
+  return '<div class="qa-pills" id="'+id+'">'+
+    DATE_PILLS.map(function(p){
+      var key=shiftDay(p[1]);
+      return '<button data-days="'+p[1]+'"'+((state.mode==="preset"&&state.date===key)?' class="on"':'')+'>'+esc(p[0])+'</button>'; }).join("")+
+    '<button data-mode="custom"'+(state.mode==="custom"?' class="on"':'')+'>Custom 📅</button>'+
+    '<button data-mode="contingent"'+(state.mode==="contingent"?' class="on"':'')+'>Contingent</button>'+
+  '</div>';
+}
+
+function contingentHTML(state){
+  var ev=state.event||"birthday";
+  var unsupported=!CONTINGENT_SUPPORTED[ev];
+  return '<div class="qa-sub" style="margin-top:8px">'+
+    '<div class="oa-cols">'+
+      '<div class="oa-f"><label># of days <span class="oa-req">required</span></label>'+
+        '<input type="number" id="ctDays" min="0" max="3650" value="'+(state.days==null?1:state.days)+'"></div>'+
+      '<div class="oa-f"><label>Event <span class="oa-req">required</span></label>'+
+        '<select id="ctEvent">'+CONTINGENT_EVENTS.map(function(e){
+          return '<option value="'+e[0]+'"'+(e[0]===ev?" selected":"")+'>'+e[1]+'</option>'; }).join("")+'</select></div>'+
+    '</div>'+
+    '<div class="qa-pills" id="ctDir">'+
+      '<button data-dir="after"'+((state.direction||"after")==="after"?' class="on"':'')+'>After</button>'+
+      '<button data-dir="before"'+(state.direction==="before"?' class="on"':'')+'>Before</button>'+
+    '</div>'+
+    (unsupported
+      ? '<div class="qa-off" style="margin-top:8px">Nothing on a contact records that date in this system, so a task '+
+        'cannot be dated from it. Birthdate and Anniversary are the two that work — everything else needs a picked date.</div>'
+      : '<div class="qa-note" id="ctPreview">The due date is worked out from this contact’s '+
+        esc(ev==="birthday"?"birthday":"home anniversary")+' when the task is created.</div>')+
+  '</div>';
+}
+
+function timePresetHTML(id,state){
+  return '<div class="qa-pills" id="'+id+'">'+
+    '<button data-t=""'+(!state.time?' class="on"':'')+'>Any Time</button>'+
+    TIME_PILLS.map(function(p){
+      return '<button data-t="'+p[1]+'"'+(state.time===p[1]?' class="on"':'')+'>'+esc(p[0])+'</button>'; }).join("")+
+    '<button data-tcustom'+((state.time&&!TIME_PILLS.some(function(p){return p[1]===state.time;}))?' class="on"':'')+'>Custom 🕐</button>'+
+  '</div>';
+}
+
+function prioHTML(id,value){
+  return '<div class="qa-prio" id="'+id+'">'+[1,2,3,4,5,6,7,8,9].map(function(n){
+    return '<button data-p="'+n+'"'+(value===n?' class="on"':'')+'>'+n+'</button>'; }).join("")+'</div>';
+}
+function prioToPriority(n){ return n<=2?"urgent":n<=4?"high":n<=6?"normal":"low"; }
+
+/** Wire the date/time/priority controls of a scheduling modal. */
+function wireScheduling(state,repaint){
+  document.querySelectorAll("#schDate button").forEach(function(b){
+    b.addEventListener("click",function(){
+      var mode=b.getAttribute("data-mode");
+      if(mode){ state.mode=mode; }
+      else { state.mode="preset"; state.date=shiftDay(+b.getAttribute("data-days")); }
+      repaint();
+    });
+  });
+  var dIn=document.getElementById("schDateIn");
+  if(dIn)dIn.addEventListener("change",function(){ state.date=this.value; });
+  var days=document.getElementById("ctDays");
+  if(days)days.addEventListener("input",function(){ state.days=+this.value; });
+  var ev=document.getElementById("ctEvent");
+  if(ev)ev.addEventListener("change",function(){ state.event=this.value; repaint(); });
+  document.querySelectorAll("#ctDir button").forEach(function(b){
+    b.addEventListener("click",function(){
+      state.direction=b.getAttribute("data-dir");
+      document.querySelectorAll("#ctDir button").forEach(function(x){ x.classList.toggle("on",x===b); });
+    });
+  });
+  document.querySelectorAll("#schTime button").forEach(function(b){
+    b.addEventListener("click",function(){
+      if(b.hasAttribute("data-tcustom")){ state.time=state.time||"09:00"; state.timeCustom=true; repaint(); return; }
+      state.time=b.getAttribute("data-t")||""; state.timeCustom=false; repaint();
+    });
+  });
+  var tIn=document.getElementById("schTimeIn");
+  if(tIn)tIn.addEventListener("change",function(){ state.time=this.value; });
+  document.querySelectorAll("#schPrio button").forEach(function(b){
+    b.addEventListener("click",function(){
+      state.priority=+b.getAttribute("data-p");
+      document.querySelectorAll("#schPrio button").forEach(function(x){ x.classList.toggle("on",x===b); });
+    });
+  });
+}
+
+/** Read the date rule out of a scheduling state, or explain why it cannot. */
+function schedulingDue(state){
+  if(state.mode==="contingent"){
+    var ev=state.event||"birthday";
+    if(!CONTINGENT_SUPPORTED[ev]){
+      return {error:"Nothing on a contact records that date in this system. Pick Birthdate or Anniversary, or choose a date."};
+    }
+    return {contingent:{days:state.days==null?1:state.days,direction:state.direction||"after",event:ev}};
+  }
+  if(!state.date)return {error:"Pick a date — the task needs a due date."};
+  return {dueDate:state.date};
+}
+
+/* ── Add Appointment ── */
+
+function openAppointmentModal(l){
+  ensureRoster(function(roster){
+    var state={mode:"preset",date:todayKey(),time:"",timeCustom:false,priority:9,event:"birthday",direction:"after",days:1};
+    var d={title:"",type:"",assignee:(roster.filter(function(u){return u.name===(l.assignedUserName||"Marco Puga");})[0]||roster[0]||null),
+           location:"",instructions:null,notes:null,markComplete:false,outcome:"none"};
+    var first=(l.name||"this contact").split(" ")[0];
+
+    function body(){
+      return '<div class="qa-lbl" style="margin-top:0">Task Details (max 255 characters) <i>*</i></div>'+
+        '<textarea class="qa-area" id="apTitle" rows="2" maxlength="255" placeholder="What is this appointment for?">'+esc(d.title)+'</textarea>'+
+        '<div class="oa-cols" style="margin-top:10px">'+
+          '<div class="oa-f"><label>Appointment Type <span class="oa-req">required</span></label>'+
+            '<select id="apType"><option value="">Select</option>'+
+              APPT_TYPES.map(function(g){
+                return '<optgroup label="'+esc(g[0])+'">'+g[1].map(function(t){
+                  return '<option value="'+esc(t)+'"'+(t===d.type?" selected":"")+'>'+esc(t)+'</option>'; }).join("")+'</optgroup>';
+              }).join("")+'</select></div>'+
+          '<div class="oa-f"><label>Assigned To</label><select id="apWho"><option value="">Anyone</option>'+
+            roster.map(function(u){ return '<option value="'+esc(u.id)+'"'+((d.assignee&&u.id===d.assignee.id)?" selected":"")+'>'+
+              esc(u.name)+'</option>'; }).join("")+'</select></div>'+
+        '</div>'+
+        '<div class="oa-f"><label>Location</label><input type="text" id="apLoc" value="'+esc(d.location)+'" placeholder="Address or a video-call link"></div>'+
+        '<div class="qa-lbl">Date <i>*</i></div>'+datePresetHTML("schDate",state)+
+        (state.mode==="custom"?'<input class="qa-in" type="date" id="schDateIn" style="margin-top:8px;max-width:190px" value="'+esc(state.date)+'">'
+          :state.mode==="contingent"?contingentHTML(state)
+          :'<div class="qa-seen" style="margin-top:6px">'+esc(mdy(state.date))+'</div>')+
+        '<div class="qa-lbl">Time <i>*</i></div>'+timePresetHTML("schTime",state)+
+        (state.timeCustom?'<select class="qa-sel" id="schTimeIn" style="margin-top:8px;max-width:180px">'+quarterHourOptions(state.time)+'</select>':'')+
+        '<div class="qa-lbl">Priority (1: highest, 9: lowest) <i>*</i></div>'+prioHTML("schPrio",state.priority)+
+        '<div class="qa-row" style="margin-top:12px">'+
+          '<button class="qa-exp" id="apAddInstr">+ ADD INSTRUCTIONS</button>'+
+          '<button class="qa-exp" id="apAddNotes">+ ADD NOTES</button></div>'+
+        (d.instructions!==null?'<div class="qa-sub"><span class="x" id="apRmInstr">×</span>'+
+          '<div class="qa-lbl" style="margin-top:0">Instructions <button class="qa-ai" id="apAi" style="float:right">✦ AI: HELP ME WRITE</button></div>'+
+          '<textarea class="qa-area" id="apInstr" rows="3">'+esc(d.instructions)+'</textarea></div>':'')+
+        (d.notes!==null?'<div class="qa-sub"><span class="x" id="apRmNotes">×</span>'+
+          '<div class="qa-lbl" style="margin-top:0">Notes</div>'+
+          '<textarea class="qa-area" id="apNotes" rows="3">'+esc(d.notes)+'</textarea></div>':'')+
+        '<div class="qa-off">'+esc(channelReason("calendar"))+' The appointment itself is real: it lands on the board, '+
+          'assigned and dated, and shows in both this widget and the Tasks list.</div>';
+    }
+    function paint(){
+      oaOverlay("Add Appointment for "+first,body(),
+        '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+        '<label class="qa-copy" style="margin-right:12px"><input type="checkbox" id="apDone"'+(d.markComplete?" checked":"")+'> Mark as complete</label>'+
+        '<button class="oa-go" id="apCreate">CREATE</button>');
+      var t=document.getElementById("apTitle");
+      t.addEventListener("input",function(){ d.title=t.value; });
+      document.getElementById("apType").addEventListener("change",function(){ d.type=this.value; });
+      document.getElementById("apWho").addEventListener("change",function(){
+        var id=this.value; d.assignee=id?(roster.filter(function(u){return u.id===id;})[0]||null):null; });
+      document.getElementById("apLoc").addEventListener("input",function(){ d.location=this.value; });
+      document.getElementById("apAddInstr").addEventListener("click",function(){ if(d.instructions===null){d.instructions="";paint();} });
+      document.getElementById("apAddNotes").addEventListener("click",function(){ if(d.notes===null){d.notes="";paint();} });
+      var ri=document.getElementById("apRmInstr"); if(ri)ri.addEventListener("click",function(){ d.instructions=null; paint(); });
+      var rn=document.getElementById("apRmNotes"); if(rn)rn.addEventListener("click",function(){ d.notes=null; paint(); });
+      var ie=document.getElementById("apInstr"); if(ie)ie.addEventListener("input",function(){ d.instructions=this.value; });
+      var ne=document.getElementById("apNotes"); if(ne)ne.addEventListener("input",function(){ d.notes=this.value; });
+      var ai=document.getElementById("apAi");
+      if(ai)ai.addEventListener("click",function(e){
+        e.preventDefault();
+        var box=document.getElementById("apInstr");
+        box.value=(box.value?box.value.replace(/\s+$/,"")+"\n":"")+
+          "Drafted from the record — edit before saving:\n"+leadRecs(l).slice(0,3).map(function(s){return "• "+s;}).join("\n");
+        d.instructions=box.value;
+        crmToast("Drafted from this contact's own record");
+      });
+      document.getElementById("apDone").addEventListener("change",function(){ d.markComplete=this.checked; });
+      wireScheduling(state,paint);
+
+      document.getElementById("apCreate").addEventListener("click",function(){
+        if(!d.title.trim()){ crmToast("Task details are required"); return; }
+        var due=schedulingDue(state);
+        if(due.error){ crmToast(due.error); return; }
+        var go=document.getElementById("apCreate"); go.disabled=true; go.textContent="CREATING…";
+        var payload={title:d.title.trim(),type:"appointment",priority:prioToPriority(state.priority),
+          dueTime:state.time||undefined,leadId:l.id,leadName:l.name,
+          assignedUserId:d.assignee?d.assignee.id:undefined,assignedUserName:d.assignee?d.assignee.name:undefined,
+          appointmentType:d.type||undefined,appointmentStatus:d.markComplete?"completed":"scheduled",
+          outcome:d.markComplete?"held":"none",
+          location:d.location||undefined,instructions:d.instructions||undefined,taskNotes:d.notes||undefined};
+        if(due.dueDate)payload.dueDate=due.dueDate;
+        if(due.contingent)payload.contingent=due.contingent;
+        createSchedItem(l,payload,d.markComplete,go,"CREATE","Appointment created");
+      });
+    }
+    paint();
+  });
+}
+
+/* ── Add Task ── */
+
+function openTaskModal(l){
+  ensureRoster(function(roster){
+    var state={mode:"preset",date:todayKey(),time:"",timeCustom:false,priority:9,event:"birthday",direction:"after",days:1};
+    var d={title:"",type:"to_do",assignee:(roster.filter(function(u){return u.name===(l.assignedUserName||"Marco Puga");})[0]||roster[0]||null),
+           recurring:false,instructions:null,notes:null,markComplete:false};
+    var first=(l.name||"this contact").split(" ")[0];
+
+    function body(){
+      return '<div class="qa-lbl" style="margin-top:0">Task Details (max 255 characters) <i>*</i></div>'+
+        '<input class="qa-in" id="tkTitle" style="width:100%" maxlength="255" value="'+esc(d.title)+'" placeholder="What needs to happen?">'+
+        '<div class="oa-cols" style="margin-top:10px">'+
+          '<div class="oa-f"><label>Type <span class="oa-req">required</span></label><select id="tkType">'+
+            TASK_TYPES_UI.map(function(t){ return '<option value="'+t[0]+'"'+(t[0]===d.type?" selected":"")+'>'+t[1]+'</option>'; }).join("")+
+          '</select></div>'+
+          '<div class="oa-f"><label>Assigned To</label><select id="tkWho"><option value="">Anyone</option>'+
+            roster.map(function(u){ return '<option value="'+esc(u.id)+'"'+((d.assignee&&u.id===d.assignee.id)?" selected":"")+'>'+
+              esc(u.name)+'</option>'; }).join("")+'</select></div>'+
+        '</div>'+
+        '<div class="qa-lbl">Date <i>*</i></div>'+datePresetHTML("schDate",state)+
+        (state.mode==="custom"?'<input class="qa-in" type="date" id="schDateIn" style="margin-top:8px;max-width:190px" value="'+esc(state.date)+'">'
+          :state.mode==="contingent"?contingentHTML(state)
+          :'<div class="qa-seen" style="margin-top:6px">'+esc(mdy(state.date))+'</div>')+
+        '<div class="qa-lbl">Time</div>'+timePresetHTML("schTime",state)+
+        (state.timeCustom?'<select class="qa-sel" id="schTimeIn" style="margin-top:8px;max-width:180px">'+quarterHourOptions(state.time)+'</select>':'')+
+        '<div style="margin-top:12px"><label class="sw'+(d.recurring?" on":"")+'" id="tkRec"><i></i> Recurring</label></div>'+
+        (d.recurring?'<div class="qa-note">On completion the next instance is created, dated from this one’s own due date '+
+          'so a task finished late does not drift.</div>':'')+
+        '<div class="qa-lbl">Priority (1: highest, 9: lowest) <i>*</i></div>'+prioHTML("schPrio",state.priority)+
+        '<div class="qa-row" style="margin-top:12px">'+
+          '<button class="qa-exp" id="tkAddInstr">+ ADD INSTRUCTIONS</button>'+
+          '<button class="qa-exp" id="tkAddNotes">+ ADD NOTES</button></div>'+
+        (d.instructions!==null?'<div class="qa-sub"><span class="x" id="tkRmInstr">×</span>'+
+          '<div class="qa-lbl" style="margin-top:0">Instructions <button class="qa-ai" id="tkAi" style="float:right">✦ AI: HELP ME WRITE</button></div>'+
+          '<textarea class="qa-area" id="tkInstr" rows="3">'+esc(d.instructions)+'</textarea></div>':'')+
+        (d.notes!==null?'<div class="qa-sub"><span class="x" id="tkRmNotes">×</span>'+
+          '<div class="qa-lbl" style="margin-top:0">Notes</div>'+
+          '<textarea class="qa-area" id="tkNotes" rows="3">'+esc(d.notes)+'</textarea></div>':'');
+    }
+    function paint(){
+      oaOverlay("Add Task for "+first,body(),
+        '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
+        '<label class="qa-copy" style="margin-right:12px"><input type="checkbox" id="tkDone"'+(d.markComplete?" checked":"")+'> Mark as complete</label>'+
+        '<button class="oa-go" id="tkCreate"'+(d.title.trim()?"":" disabled")+'>CREATE</button>');
+      var t=document.getElementById("tkTitle");
+      t.addEventListener("input",function(){
+        d.title=t.value;
+        document.getElementById("tkCreate").disabled=!t.value.trim();
+      });
+      document.getElementById("tkType").addEventListener("change",function(){ d.type=this.value; });
+      document.getElementById("tkWho").addEventListener("change",function(){
+        var id=this.value; d.assignee=id?(roster.filter(function(u){return u.id===id;})[0]||null):null; });
+      document.getElementById("tkRec").addEventListener("click",function(){ d.recurring=!d.recurring; paint(); });
+      document.getElementById("tkAddInstr").addEventListener("click",function(){ if(d.instructions===null){d.instructions="";paint();} });
+      document.getElementById("tkAddNotes").addEventListener("click",function(){ if(d.notes===null){d.notes="";paint();} });
+      var ri=document.getElementById("tkRmInstr"); if(ri)ri.addEventListener("click",function(){ d.instructions=null; paint(); });
+      var rn=document.getElementById("tkRmNotes"); if(rn)rn.addEventListener("click",function(){ d.notes=null; paint(); });
+      var ie=document.getElementById("tkInstr"); if(ie)ie.addEventListener("input",function(){ d.instructions=this.value; });
+      var ne=document.getElementById("tkNotes"); if(ne)ne.addEventListener("input",function(){ d.notes=this.value; });
+      var ai=document.getElementById("tkAi");
+      if(ai)ai.addEventListener("click",function(e){
+        e.preventDefault();
+        var box=document.getElementById("tkInstr");
+        box.value=(box.value?box.value.replace(/\s+$/,"")+"\n":"")+
+          "Drafted from the record — edit before saving:\n"+leadRecs(l).slice(0,3).map(function(s){return "• "+s;}).join("\n");
+        d.instructions=box.value;
+        crmToast("Drafted from this contact's own record");
+      });
+      document.getElementById("tkDone").addEventListener("change",function(){ d.markComplete=this.checked; });
+      wireScheduling(state,paint);
+
+      document.getElementById("tkCreate").addEventListener("click",function(){
+        if(!d.title.trim()){ crmToast("Task details are required"); return; }
+        var due=schedulingDue(state);
+        if(due.error){ crmToast(due.error); return; }
+        var go=document.getElementById("tkCreate"); go.disabled=true; go.textContent="CREATING…";
+        var payload={title:d.title.trim(),type:d.type,priority:prioToPriority(state.priority),
+          dueTime:state.time||undefined,leadId:l.id,leadName:l.name,
+          assignedUserId:d.assignee?d.assignee.id:undefined,assignedUserName:d.assignee?d.assignee.name:undefined,
+          recurring:d.recurring,recurringInterval:d.recurring?"weekly":undefined,
+          instructions:d.instructions||undefined,taskNotes:d.notes||undefined};
+        if(due.dueDate)payload.dueDate=due.dueDate;
+        if(due.contingent)payload.contingent=due.contingent;
+        createSchedItem(l,payload,d.markComplete,go,"CREATE","Task created");
+      });
+    }
+    paint();
+  });
+}
+
+/**
+ * POST a task or appointment, optionally complete it, then refresh everything
+ * that shows it. Shared so the two modals cannot drift on what happens after.
+ */
+function createSchedItem(l,payload,markComplete,go,label,okMsg){
+  fetch(crmApi("/api/crm-tasks"),{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(payload)})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+    .then(function(res){
+      if(!res.ok){
+        go.disabled=false; go.textContent=label;
+        crmToast(res.j.error||"Could not create it");
+        return;
+      }
+      var made=res.j.task||res.j;
+      var after=function(){
+        closeOa();
+        crmToast(markComplete?(okMsg+" and marked complete"):okMsg);
+        loadLeadTasks(l.id,function(){ paintLeadTasks(l); crRepaint(); reloadTimeline(); });
+      };
+      /* "Mark as complete" goes through the same endpoint the widget's
+         checkbox uses, so a retroactive log is a real completion. */
+      if(markComplete&&made&&made.id){
+        fetch(crmApi("/api/crm-tasks/"+encodeURIComponent(made.id)+"/complete"),{method:"POST"})
+          .then(after).catch(after);
+      } else after();
+    })
+    .catch(function(){ go.disabled=false; go.textContent=label; crmToast("Could not reach the server"); });
+}
+
 function rightStackHTML(l){
   return '<div class="ld-card">'+
     '<div class="rblock"><h5>Assigned To: <button class="mini-pill" id="ldAssignBtn">MANAGE</button></h5>'+
-      '<div class="assign-row" id="ldAssignRow"><div class="av'+(l.assignedUserName?'':' has-marco-photo')+'">'+
-        (l.assignedUserName?esc(initials(l.assignedUserName)):'')+'</div><div>'+
-        '<div style="font-weight:700;color:#4a5560">'+esc(l.assignedUserName||"Marco Puga")+'</div>'+
-        '<div style="color:var(--muted);font-size:12px">'+(l.assignedUserName?"Assigned agent":"Primary Agent (default)")+'</div>'+
-      '</div></div></div>'+
-    '<div class="rblock"><h5>Web Activity</h5><div id="ldWebActBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
+      '<div id="ldAssignRow">'+assignedToHTML(l)+'</div></div>'+
+    '<div class="rblock"><h5>Web Activity <button class="mini-pill" id="ldWebActView">VIEW</button></h5>'+
+      '<div id="ldWebActBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
     '<div class="rblock"><h5>Agreements</h5>'+
-      /* These three open the real document flow with the agreement type
-         pre-picked, rather than being three buttons that do nothing. */
-      '<button class="rbtn" data-agree="buyer_representation">+ BUYER</button>'+
-      '<button class="rbtn" data-agree="listing_agreement">+ SELLER</button>'+
-      '<button class="rbtn" data-agree="referral_agreement">+ REFERRAL</button>'+
-      '<div class="wdg-note">Each one opens the upload step with that agreement type already chosen.</div></div>'+
+      '<div id="ldAgreeBlk"></div>'+
+      /* data-live marks a button the page's placeholder-toast catch-all must
+         leave alone. Without it these three opened the real Add Agreement
+         modal AND toasted "will create records once live data is finalized"
+         underneath it — two contradictory answers to one click. */
+      '<button class="rbtn" data-live="1" data-agree="buyer">+ BUYER</button>'+
+      '<button class="rbtn" data-live="1" data-agree="seller">+ SELLER</button>'+
+      '<button class="rbtn" data-live="1" data-agree="referral">+ REFERRAL</button></div>'+
     '<div class="rblock"><h5>Appointments <button class="mini-pill" id="ldApptAdd">+ ADD</button></h5>'+
-      '<div class="wdg-note">Creates a real task on the board, assigned and dated. Same list the Tasks widget shows.</div></div>'+
+      '<div id="ldApptBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
     '<div class="rblock"><h5>Marketing</h5>'+
       '<div class="wdg-note" style="margin-bottom:10px">Send postcards, bifolds, trifolds, and snap packs.</div>'+
       '<button class="rbtn" style="background:var(--teal-pill);color:#fff;border-color:var(--teal-pill)">✉ SEND MAIL</button></div>'+
@@ -8118,16 +9230,18 @@ function agoShort(iso){
 
 /* ---- the three rail blocks ------------------------------------------- */
 function paintLeadOutreach(l){
-  var a=document.getElementById("ldAlertsBlk"), r=document.getElementById("ldReportsBlk"), w=document.getElementById("ldWebActBlk");
-  if(!a||!r||!w) return;
+  var a=document.getElementById("ldAlertsBlk"), r=document.getElementById("ldReportsBlk");
+  if(!a||!r) return;
   fetch(crmApi("/api/leads/"+encodeURIComponent(l.id)+"/outreach"))
     .then(function(res){return res.ok?res.json():null;})
     .then(function(d){
-      if(!d){ a.textContent="Couldn't load alerts."; r.textContent="Couldn't load reports."; w.textContent=""; return; }
+      if(!d){ a.textContent="Couldn't load alerts."; r.textContent="Couldn't load reports."; return; }
       OUTREACH=d;
-      paintAlertsBlock(l,d); paintReportsBlock(l,d); paintWebActivity(l,d);
+      /* Web Activity has its own endpoint now (favourites + measured clicks);
+         this one only owns the alerts and reports it loaded. */
+      paintAlertsBlock(l,d); paintReportsBlock(l,d);
     })
-    .catch(function(){ a.textContent="Couldn't reach the server."; r.textContent=""; w.textContent=""; });
+    .catch(function(){ a.textContent="Couldn't reach the server."; r.textContent=""; });
   var ab=document.getElementById("ldAlertAdd");
   if(ab) ab.onclick=function(){ openAlertEditor(l,null); };
   var rb=document.getElementById("ldReportAdd");
@@ -8237,27 +9351,6 @@ function paintReportsBlock(l,d){
   };});
 }
 
-/* Real web activity: what this contact opened and clicked. This block used to
-   be a sentence promising a feature that did not exist. */
-function paintWebActivity(l,d){
-  var el=document.getElementById("ldWebActBlk");
-  var ev=(d.engagement||[]).filter(function(e){return e.event!=="email_opened";});
-  var opens=(d.engagement||[]).filter(function(e){return e.event==="email_opened";}).length;
-  if(!d.engagement.length){
-    el.innerHTML='<div style="line-height:1.5">Nothing yet. Clicks from listing alerts and market-report views show up here.</div>';
-    return;
-  }
-  var label={listing_clicked:"Viewed a listing",report_viewed:"Opened their market report"};
-  el.innerHTML='<div style="margin-bottom:8px;color:#4a5560;font-weight:600">'+
-      ev.length+' action'+(ev.length===1?'':'s')+(opens?(' · '+opens+' email open'+(opens===1?'':'s')):'')+'</div>'+
-    ev.slice(0,8).map(function(e){
-      return '<div style="display:flex;gap:8px;padding:3px 0;line-height:1.4">'+
-        '<span style="color:var(--teal-strong)">•</span>'+
-        '<span style="flex:1">'+esc(label[e.event]||e.event)+
-          (e.listingKey?' <a href="'+esc(crmApi("/l/"+encodeURIComponent(e.listingKey)))+'" target="_blank" rel="noopener" style="color:var(--teal-strong)">#'+esc(e.listingKey)+'</a>':'')+
-        '</span><span style="color:#98a2ad;white-space:nowrap">'+esc(agoShort(e.at))+'</span></div>';
-    }).join("");
-}
 
 /* ---- the builders ----------------------------------------------------- */
 function oaOverlay(title,bodyHtml,footHtml){

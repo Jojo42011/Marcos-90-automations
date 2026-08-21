@@ -3275,6 +3275,347 @@ app.delete("/api/crm/contact-document/:did", async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+/* ═══════════════════════════════════════════════════════════════════════
+   TEAM ACCESS ON ONE CONTACT.
+
+   The PRIMARY agent does not move: it stays on the Lead's assignedUserId /
+   assignedUserName, which the lead table, the round-robin and every
+   notification already read. Reassigning through this route writes there.
+   The secondary members and their functional roles are the new part.
+   ═══════════════════════════════════════════════════════════════════════ */
+app.get("/api/crm/lead/:id/team", async (req, res) => {
+    const lead = await contactLeadOr404(req, res);
+    if (!lead)
+        return;
+    try {
+        const store = await Promise.resolve().then(() => __importStar(require("./core/contactRecordStore.js")));
+        res.json({
+            ok: true,
+            primary: { userId: lead.assignedUserId ?? null, userName: lead.assignedUserName ?? null },
+            members: store.listAssignments(lead.id),
+            roles: store.TEAM_ROLES,
+            roster: (0, teamRoster_js_1.listTeamMembers)(),
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+app.put("/api/crm/lead/:id/team", express_1.default.json({ limit: "16kb" }), async (req, res) => {
+    const lead = await contactLeadOr404(req, res);
+    if (!lead)
+        return;
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    try {
+        const store = await Promise.resolve().then(() => __importStar(require("./core/contactRecordStore.js")));
+        /* The primary is optional on this call: SAVE TEAM can change the member
+           list without touching ownership, and an absent key must not clear it. */
+        if (body.primary !== undefined) {
+            const p = (body.primary && typeof body.primary === "object" ? body.primary : {});
+            const userId = typeof p.userId === "string" ? p.userId.trim() : "";
+            const { updateLeadCrmFields } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+            if (userId) {
+                const member = (0, teamRoster_js_1.listTeamMembers)().find((m) => m.id === userId);
+                await updateLeadCrmFields({
+                    leadId: lead.id,
+                    assignedUserId: userId,
+                    assignedUserName: member?.name || (typeof p.userName === "string" ? p.userName.trim() : userId),
+                });
+            }
+            else {
+                await updateLeadCrmFields({ leadId: lead.id, assignedUserId: null, assignedUserName: null });
+            }
+        }
+        const raw = Array.isArray(body.members) ? body.members : [];
+        const roster = (0, teamRoster_js_1.listTeamMembers)();
+        const members = raw
+            .map((m) => (m && typeof m === "object" ? m : {}))
+            .filter((m) => typeof m.userId === "string" && m.userId.trim())
+            .map((m) => {
+            const uid = String(m.userId).trim();
+            return {
+                userId: uid,
+                // The roster's name wins over whatever the client sent.
+                userName: roster.find((r) => r.id === uid)?.name || String(m.userName || uid),
+                roleName: typeof m.roleName === "string" ? m.roleName : "",
+            };
+        });
+        const saved = store.setAssignments(lead.id, members);
+        const { getLeadById } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+        const fresh = await getLeadById(lead.id);
+        res.json({
+            ok: true,
+            primary: { userId: fresh?.assignedUserId ?? null, userName: fresh?.assignedUserName ?? null },
+            members: saved,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+/* ═══════════════════════════════════════════════════════════════════════
+   WEB ACTIVITY.
+
+   Brivity's version reads an IDX website. This system has no site tracking
+   connected, and the lead table's Web Activity filter has said so since it
+   was built. What it DOES have is engagement it generates and measures
+   itself: clicks inside the listing alerts and market reports it sends
+   (outreach_engagement, with the listing key), and the homes a contact has
+   favourited (favoritesStore, priced from the MLS mirror).
+
+   So this endpoint reports those, and names the difference. `visits` is
+   deliberately null rather than 0 — nothing counts sessions, and a zero
+   would read as "they have never been to the site", which is a claim this
+   system is in no position to make.
+   ═══════════════════════════════════════════════════════════════════════ */
+app.get("/api/crm/lead/:id/web-activity", async (req, res) => {
+    const lead = await contactLeadOr404(req, res);
+    if (!lead)
+        return;
+    try {
+        const outreach = await Promise.resolve().then(() => __importStar(require("./core/outreachStore.js")));
+        const favs = await Promise.resolve().then(() => __importStar(require("./core/favoritesStore.js")));
+        const { getListing } = await Promise.resolve().then(() => __importStar(require("./core/listingsStore.js")));
+        const events = outreach.engagementForLead(lead.id, 300);
+        const clicks = events.filter((e) => e.event === "listing_clicked");
+        const opens = events.filter((e) => e.event === "email_opened");
+        const reportViews = events.filter((e) => e.event === "report_viewed");
+        const byKey = new Map();
+        for (const e of clicks) {
+            if (!e.listingKey)
+                continue;
+            const cur = byKey.get(e.listingKey);
+            if (cur) {
+                cur.views += 1;
+                if (e.at > cur.lastViewedAt)
+                    cur.lastViewedAt = e.at;
+                continue;
+            }
+            let l = null;
+            try {
+                l = getListing(e.listingKey) || null;
+            }
+            catch {
+                l = null;
+            }
+            const num = (k) => (typeof l?.[k] === "number" ? l[k] : null);
+            const str = (k) => (typeof l?.[k] === "string" ? l[k] : "");
+            const media = Array.isArray(l?.media) ? l.media : [];
+            byKey.set(e.listingKey, {
+                listingKey: e.listingKey,
+                address: str("unparsedAddress") || str("address") || "",
+                city: str("city"), state: str("stateOrProvince") || str("state"), zip: str("postalCode"),
+                price: num("listPrice"), beds: num("bedroomsTotal") ?? num("beds"),
+                baths: num("bathroomsTotalInteger") ?? num("baths"),
+                photo: typeof media[0] === "string" ? media[0] : null,
+                views: 1, lastViewedAt: e.at, saved: false,
+            });
+        }
+        const favourites = favs.listFavorites(lead.id);
+        for (const f of favourites) {
+            const key = f.listingKey;
+            const existing = byKey.get(key);
+            if (existing) {
+                existing.saved = true;
+                continue;
+            }
+            let l = null;
+            try {
+                l = getListing(key) || null;
+            }
+            catch {
+                l = null;
+            }
+            const num = (k) => (typeof l?.[k] === "number" ? l[k] : null);
+            const str = (k) => (typeof l?.[k] === "string" ? l[k] : "");
+            const media = Array.isArray(l?.media) ? l.media : [];
+            byKey.set(key, {
+                listingKey: key,
+                address: str("unparsedAddress") || str("address") || "",
+                city: str("city"), state: str("stateOrProvince") || str("state"), zip: str("postalCode"),
+                price: num("listPrice"), beds: num("bedroomsTotal") ?? num("beds"),
+                baths: num("bathroomsTotalInteger") ?? num("baths"),
+                photo: typeof media[0] === "string" ? media[0] : null,
+                /* Favourited but never clicked from an email: it has 0 measured views,
+                   and that zero is real because clicks ARE counted. */
+                views: 0, lastViewedAt: f.addedAt || new Date().toISOString(), saved: true,
+            });
+        }
+        const properties = [...byKey.values()].sort((a, b) => b.lastViewedAt.localeCompare(a.lastViewedAt));
+        const pricesViewed = properties.filter((p) => p.views > 0 && p.price).map((p) => p.price);
+        const lastAt = events.length ? events.map((e) => e.at).sort().pop() : null;
+        res.json({
+            ok: true,
+            summary: {
+                /* null, not 0 — see the note above this route. */
+                visits: null,
+                views: clicks.length,
+                favorites: favourites.length,
+                avgPrice: pricesViewed.length
+                    ? Math.round(pricesViewed.reduce((a, b) => a + b, 0) / pricesViewed.length)
+                    : null,
+                emailOpens: opens.length,
+                reportViews: reportViews.length,
+                lastActivityAt: lastAt,
+            },
+            properties,
+            unavailable: [
+                { scope: "visits", reason: "No IDX website or client portal sends session data to this system, so there is no visit count. VIEWS below counts listing clicks inside the alerts and reports this system sends and measures itself." },
+            ],
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+/* ═══════════════════════════════════════════════════════════════════════
+   AGREEMENTS — buyer, seller, referral.
+
+   One flow: optional file upload, dates, and (for a referral) a fee and a
+   partner. "Create Active Referral Transaction" opens a REAL transaction in
+   the pipeline store, so the agreement, the document and the deal are three
+   rows that point at each other rather than three copies of the same claim.
+   ═══════════════════════════════════════════════════════════════════════ */
+app.get("/api/crm/lead/:id/agreements", async (req, res) => {
+    const lead = await contactLeadOr404(req, res);
+    if (!lead)
+        return;
+    try {
+        const store = await Promise.resolve().then(() => __importStar(require("./core/contactRecordStore.js")));
+        res.json({
+            ok: true,
+            agreements: store.listAgreements(lead.id),
+            propertyTypes: store.PROPERTY_TYPES,
+            clientIntents: store.CLIENT_INTENTS,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+app.post("/api/crm/lead/:id/agreements", (req, res) => {
+    contactDocUpload.single("file")(req, res, (uploadErr) => {
+        void (async () => {
+            if (uploadErr) {
+                const tooBig = uploadErr.code === "LIMIT_FILE_SIZE";
+                res.status(tooBig ? 413 : 400).json({
+                    error: tooBig ? "That file is larger than the 15MB limit." : uploadErr.message,
+                });
+                return;
+            }
+            const lead = await contactLeadOr404(req, res);
+            if (!lead) {
+                if (req.file) {
+                    try {
+                        fs_1.default.rmSync(req.file.path);
+                    }
+                    catch { /* best effort */ }
+                }
+                return;
+            }
+            const body = (req.body && typeof req.body === "object" ? req.body : {});
+            const kindRaw = typeof body.kind === "string" ? body.kind : "referral";
+            const title = typeof body.title === "string" && body.title.trim()
+                ? body.title.trim()
+                : `${lead.name || "Contact"} ${kindRaw === "referral" ? "Referral" : kindRaw === "buyer" ? "Buyer Agreement" : "Listing Agreement"}`;
+            try {
+                const store = await Promise.resolve().then(() => __importStar(require("./core/contactRecordStore.js")));
+                let documentId = null;
+                if (req.file) {
+                    const doc = store.addDocument(lead.id, {
+                        docType: kindRaw === "buyer" ? "buyer_representation" : kindRaw === "seller" ? "listing_agreement" : "referral_agreement",
+                        fileName: req.file.originalname || req.file.filename,
+                        mime: req.file.mimetype || "application/octet-stream",
+                        bytes: req.file.size,
+                        storedPath: req.file.path,
+                        signedDate: body.signedDate,
+                        expirationDate: body.expirationDate,
+                        transactionId: null,
+                    });
+                    documentId = doc.id;
+                }
+                let transactionId = null;
+                if (String(body.createTransaction) === "true" || body.createTransaction === true) {
+                    const { createTransaction } = await Promise.resolve().then(() => __importStar(require("./core/transactionsStore.js")));
+                    const feeNum = Number(body.feeValue);
+                    const intent = typeof body.clientIntent === "string" ? body.clientIntent : "Buyer";
+                    const dealType = kindRaw === "referral" ? "referral"
+                        : intent === "Seller" ? "seller"
+                            : intent === "Tenant" ? "tenant"
+                                : intent === "Landlord" ? "landlord"
+                                    : "buyer";
+                    const tx = createTransaction({
+                        address: typeof body.address === "string" && body.address.trim() ? body.address.trim() : (lead.address || title),
+                        dealType: dealType,
+                        status: "pipeline",
+                        leadId: lead.id,
+                        parties: {
+                            leadName: lead.name || undefined,
+                            phone: lead.phone || undefined,
+                            email: lead.email || undefined,
+                            assignedTo: typeof body.referringAgent === "string" ? body.referringAgent : undefined,
+                            /* Only a PERCENTAGE fee belongs in commissionPercent. A flat fee
+                               stored there would be read as 2500% by the GCI maths. */
+                            commissionPercent: body.feeType !== "flat" && Number.isFinite(feeNum) ? feeNum : undefined,
+                        },
+                    });
+                    transactionId = tx.id || null;
+                }
+                const feeNum = Number(body.feeValue);
+                const agreement = store.addAgreement(lead.id, {
+                    kind: kindRaw,
+                    documentId,
+                    transactionId,
+                    title,
+                    feeValue: Number.isFinite(feeNum) ? feeNum : null,
+                    feeType: body.feeType,
+                    referringAgent: typeof body.referringAgent === "string" ? body.referringAgent : "",
+                    partnerLeadId: typeof body.partnerLeadId === "string" && body.partnerLeadId ? body.partnerLeadId : null,
+                    partnerName: typeof body.partnerName === "string" ? body.partnerName : "",
+                    clientIntent: body.clientIntent,
+                    propertyType: body.propertyType,
+                    signedDate: body.signedDate,
+                    expirationDate: body.expirationDate,
+                });
+                res.json({
+                    ok: true, agreement, transactionId, documentId,
+                    agreements: store.listAgreements(lead.id),
+                    documents: store.listDocuments(lead.id),
+                });
+            }
+            catch (err) {
+                if (req.file) {
+                    try {
+                        fs_1.default.rmSync(req.file.path);
+                    }
+                    catch { /* best effort */ }
+                }
+                res.status(500).json({ error: err.message });
+            }
+        })();
+    });
+});
+app.delete("/api/crm/agreement/:aid", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const store = await Promise.resolve().then(() => __importStar(require("./core/contactRecordStore.js")));
+        const gone = store.deleteAgreement(String(req.params.aid || ""));
+        if (!gone) {
+            res.status(404).json({ error: "Agreement not found" });
+            return;
+        }
+        /* The document and the transaction are separate records with their own
+           lifetimes; removing the agreement row must not silently delete a signed
+           contract or close a live deal. */
+        res.json({ ok: true, agreements: store.listAgreements(gone.leadId), keptDocumentId: gone.documentId, keptTransactionId: gone.transactionId });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 /* Per-user UI switches (contact record's "Collapse by default", and whatever
    one-line view preference comes next). Table layout lives in table-prefs. */
 app.get("/api/settings/ui-prefs", async (req, res) => {
@@ -11055,7 +11396,13 @@ app.post("/api/auto-plans/execute-due-steps", async (req, res) => {
 const TASK_PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
 const TASK_STATUSES = new Set(types_js_2.CRM_TASK_STATUSES);
 const COMMAND_STATUS_SET = new Set(types_js_2.COMMAND_TASK_STATUSES);
-const TASK_TYPES = new Set(["call", "text", "email", "appointment", "follow_up", "other"]);
+/* Must match TYPES in core/tasks.ts — this Set is what the API accepts, that
+   one is what survives a write, and a type in only one of them silently
+   becomes "other" somewhere along the way. */
+const TASK_TYPES = new Set([
+    "call", "text", "email", "appointment", "follow_up", "other",
+    "to_do", "mail", "social_media", "door_knock",
+]);
 const TASK_SOURCES = new Set(["manual", "auto_plan", "dial_session", "automation"]);
 function taskUserCanDelete(req) {
     const userId = String(req.query.userId || req.body?.userId || "").trim();
@@ -11089,6 +11436,98 @@ function normalizeTaskInput(body) {
         assignedUserName: typeof body.assignedUserName === "string" ? body.assignedUserName : undefined,
         source,
         reminderMinutes: typeof body.reminderMinutes === "number" ? body.reminderMinutes : undefined,
+        ...taskExtras(body),
+    };
+}
+/**
+ * The Add Task / Add Appointment fields that are not part of the original
+ * task shape. Split out so the POST and the PATCH cannot drift apart.
+ */
+function taskExtras(body) {
+    const out = {};
+    /* A key the caller did not send is OMITTED, never set to undefined. The
+       PATCH route merges this object over the stored task, so an explicit
+       `undefined` would erase a field the edit never mentioned — which is how
+       patching an appointment's outcome silently wiped its type. */
+    const str = (k, max) => {
+        const v = body[k];
+        if (typeof v !== "string")
+            return;
+        const trimmed = v.trim();
+        out[k] = trimmed ? trimmed.slice(0, max) : undefined;
+    };
+    str("location", 400);
+    str("instructions", 4000);
+    str("taskNotes", 4000);
+    str("appointmentType", 120);
+    if (body.recurring === true)
+        out.recurring = true;
+    else if (body.recurring === false)
+        out.recurring = undefined;
+    if (typeof body.recurringInterval === "string" && body.recurringInterval.trim()) {
+        out.recurringInterval = body.recurringInterval.trim().slice(0, 40);
+    }
+    if (typeof body.appointmentStatus === "string" &&
+        ["scheduled", "completed", "cancelled"].includes(body.appointmentStatus)) {
+        out.appointmentStatus = body.appointmentStatus;
+    }
+    if (typeof body.outcome === "string" &&
+        ["none", "held", "no_show", "rescheduled"].includes(body.outcome)) {
+        out.outcome = body.outcome;
+    }
+    if (body.contingent && typeof body.contingent === "object") {
+        const c = body.contingent;
+        const days = typeof c.days === "number" ? Math.round(c.days) : NaN;
+        if (Number.isFinite(days) && days >= 0 && days <= 3650 &&
+            (c.direction === "before" || c.direction === "after") &&
+            typeof c.event === "string") {
+            out.contingent = { days, direction: c.direction, event: c.event };
+        }
+    }
+    return out;
+}
+/**
+ * Turn a contingent rule into a real due date using the contact's own dates.
+ *
+ * Returns `{ dueDate: null, reason }` when the contact has no such date on
+ * file. That case is a 400 rather than a silent fallback to today: "three
+ * days before their anniversary" for somebody with no anniversary recorded is
+ * a task nobody can date, and quietly dating it today would put it on the
+ * board as due now.
+ */
+async function resolveTaskContingency(leadId, rule) {
+    if (!leadId)
+        return { dueDate: null, reason: "A contingent due date needs a contact to measure from." };
+    const { getLeadById } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+    const lead = await getLeadById(leadId);
+    if (!lead)
+        return { dueDate: null, reason: "Lead not found" };
+    const { resolveContingentDue } = await Promise.resolve().then(() => __importStar(require("./core/tasks.js")));
+    const due = resolveContingentDue(rule, {
+        birthday: lead.birthday ?? null,
+        homeAnniversary: lead.homeAnniversary ?? null,
+        /* This system stores no licence or organization dates on a contact, so
+           those three rules cannot resolve. Saying which one is missing is more
+           useful than a generic failure. */
+        licensedSince: null,
+        organizationStartDate: null,
+        organizationEndDate: null,
+    });
+    if (due)
+        return { dueDate: due };
+    const LABEL = {
+        birthday: "a birthday",
+        anniversary: "a home anniversary",
+        licensed_since: "a licensed-since date",
+        organization_start_date: "an organization start date",
+        organization_end_date: "an organization end date",
+    };
+    const known = rule.event === "birthday" || rule.event === "anniversary";
+    return {
+        dueDate: null,
+        reason: known
+            ? `This contact has no ${LABEL[rule.event]} on file, so the task cannot be dated from it. Add one on the record, or pick a date.`
+            : `Nothing on a contact records ${LABEL[rule.event]} in this system, so that rule cannot be used. Pick a date instead.`,
     };
 }
 const COMMAND_COLUMNS = new Set([
@@ -12598,13 +13037,28 @@ app.post("/api/crm-tasks", express_1.default.json({ limit: "1mb" }), (req, res) 
         return;
     }
     const body = (req.body && typeof req.body === "object" ? req.body : {});
-    const data = normalizeTaskInput(body);
-    if (!data) {
-        res.status(400).json({ error: "Missing title or dueDate" });
-        return;
-    }
-    const task = (0, tasks_js_1.createTask)(data);
-    res.status(201).json({ task });
+    void (async () => {
+        /* A contingent task arrives with a RULE and no date. Resolve it here so
+           everything downstream — the board, the reminder engine, the deadline
+           sweep — still sees an ordinary dated task. */
+        const extras = taskExtras(body);
+        if (extras.contingent && !(typeof body.dueDate === "string" && body.dueDate.trim())) {
+            const leadId = typeof body.leadId === "string" ? body.leadId.trim() : undefined;
+            const resolved = await resolveTaskContingency(leadId, extras.contingent);
+            if (!resolved.dueDate) {
+                res.status(400).json({ error: resolved.reason || "That contingent rule cannot be dated." });
+                return;
+            }
+            body.dueDate = resolved.dueDate;
+        }
+        const data = normalizeTaskInput(body);
+        if (!data) {
+            res.status(400).json({ error: "Missing title or dueDate" });
+            return;
+        }
+        const task = (0, tasks_js_1.createTask)(data);
+        res.status(201).json({ task });
+    })();
 });
 app.patch("/api/crm-tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -12640,6 +13094,8 @@ app.patch("/api/crm-tasks/:id", express_1.default.json({ limit: "1mb" }), (req, 
         updates.assignedUserName = body.assignedUserName;
     if (typeof body.reminderMinutes === "number")
         updates.reminderMinutes = body.reminderMinutes;
+    // Same extras as the POST, so an edit cannot quietly drop what a create kept.
+    Object.assign(updates, taskExtras(body));
     const task = (0, tasks_js_1.updateTask)(id, updates);
     if (!task) {
         res.status(404).json({ error: "Task not found" });

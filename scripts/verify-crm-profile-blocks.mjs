@@ -48,6 +48,7 @@ let srvLog = ""; srv.stdout.on("data", (d) => (srvLog += d)); srv.stderr.on("dat
 const until = async (fn, ms = 20000) => { const t0 = Date.now(); for (;;) { try { if (await fn()) return; } catch {} if (Date.now() - t0 > ms) throw new Error("timeout"); await new Promise((r) => setTimeout(r, 300)); } };
 await until(async () => (await fetch(B + "/health")).ok);
 const J = (r) => r.json();
+const post = (u, b) => fetch(B + u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
 
 try {
   // ---- API layer -----------------------------------------------------------
@@ -141,11 +142,13 @@ try {
     await page.waitForSelector("#ldTimeline");
   }
 
-  // assigned-to via the MANAGE menu
-  await page.click("#ldAssignBtn");
+  /* Assigned To gained a Manage Team modal (widgets phase). MANAGE opens the
+     modal; the caret beside the primary agent is the quick reassign. */
+  await page.waitForSelector("#ldAssignCaret");
+  await page.click("#ldAssignCaret");
   await page.waitForSelector('#ddMenu button:has-text("Carlos")');
   await page.click('#ddMenu button:has-text("Carlos")');
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(700);
   snap = await J(await fetch(B + "/api/dashboard/data"));
   ok("assignment persisted", snap.leads.find((l) => l.id === "lead_1").assignedUserId === "carlos");
   ok("assigned name shown on the card", /Carlos/.test(await page.textContent("#ldAssignRow")));
@@ -180,12 +183,21 @@ try {
   if (t0) {
     ok("task carries the picked fields", t0.type === "appointment" && t0.priority === "urgent" && t0.dueDate === "2026-08-20" && t0.dueTime === "14:00" && t0.assignedUserId === "carlos" && /Showing/.test(t0.description || ""), JSON.stringify(t0));
   }
-  // tasks block shows it; completing it works
-  await page.waitForFunction(() => /Cibolo/.test(document.getElementById("ldTasksBlk").textContent), null, { timeout: 5000 });
-  ok("tasks block lists the new task", true);
-  await page.click('#ldTasksBlk [data-tdone]');
-  await page.waitForFunction(() => /No open tasks/.test(document.getElementById("ldTasksBlk").textContent), null, { timeout: 5000 });
-  ok("completing from the block works", true);
+  /* Appointments and Tasks are two widgets now (widgets phase): an
+     appointment lands in Appointments, and Tasks holds everything else. */
+  await page.waitForFunction(() => /Cibolo|Appointment/.test(document.getElementById("ldApptBlk").textContent), null, { timeout: 8000 });
+  ok("appointments widget lists the new appointment", /Showing Appointment|Appointment/.test(await page.textContent("#ldApptBlk")));
+  ok("tasks widget does not double-list it", !/Cibolo/.test(await page.textContent("#ldTasksBlk")), await page.textContent("#ldTasksBlk"));
+  // a plain task, so the Tasks widget and its checkbox are exercised too
+  await post("/api/crm-tasks", { title: "Send the Cibolo comps", type: "to_do", priority: "normal", dueDate: "2026-08-21", leadId: "lead_1", leadName: "Prime Lead" });
+  await page.click("#ldBack");
+  await page.waitForSelector("#leadRows tr");
+  await page.click('#leadRows .ldlink:has-text("Prime Lead")');
+  await page.waitForFunction(() => /Cibolo comps/.test(document.getElementById("ldTasksBlk").textContent), null, { timeout: 8000 });
+  ok("tasks widget lists a plain task with its type and date", /To-Do — 08\/21\/26/.test(await page.textContent("#ldTasksBlk")), await page.textContent("#ldTasksBlk"));
+  await page.click('#ldTasksBlk [data-tkdone]');
+  await page.waitForFunction(() => /No open tasks/.test(document.getElementById("ldTasksBlk").textContent), null, { timeout: 8000 });
+  ok("completing from the widget works", true);
 
   // auto plans: apply, pause, remove
   await page.click("#ldPlanAdd");

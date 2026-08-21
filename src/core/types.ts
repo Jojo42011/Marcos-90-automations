@@ -729,7 +729,40 @@ export const CRM_TASK_STATUSES: TaskStatus[] = [
   "cancelled",
 ];
 
-export type TaskType = "call" | "text" | "email" | "appointment" | "follow_up" | "other";
+/* The four at the end come from Brivity's Add Task dialog (team feature list,
+   Aug 2026). They are kinds of touch, not kinds of task: a door knock and a
+   postcard are both work somebody has to do and tick off. */
+export type TaskType =
+  | "call"
+  | "text"
+  | "email"
+  | "appointment"
+  | "follow_up"
+  | "other"
+  | "to_do"
+  | "mail"
+  | "social_media"
+  | "door_knock";
+
+/** A due date expressed relative to a date on the contact, not as a calendar day. */
+export type ContingentEvent =
+  | "birthday"
+  | "anniversary"
+  | "organization_end_date"
+  | "licensed_since"
+  | "organization_start_date";
+
+export interface TaskContingency {
+  /** Whole days between the event and the due date. */
+  days: number;
+  direction: "before" | "after";
+  event: ContingentEvent;
+}
+
+/** Appointment lifecycle, separate from the task's own workflow status. */
+export type AppointmentStatus = "scheduled" | "completed" | "cancelled";
+/** What actually happened. "none" until somebody says. */
+export type AppointmentOutcome = "none" | "held" | "no_show" | "rescheduled";
 
 export type TaskSource = "manual" | "auto_plan" | "dial_session" | "automation";
 
@@ -754,6 +787,27 @@ export interface Task {
   updatedAt: string;
   source: TaskSource;
   reminderMinutes?: number;
+  /** Physical address or a video-call link. */
+  location?: string;
+  /** Steps for whoever picks this up. Kept apart from `description` so the
+      Add Task dialog's two boxes stay two boxes on the way back out. */
+  instructions?: string;
+  /** Internal notes on the task itself. */
+  taskNotes?: string;
+  /** Repeats on completion. The engine is spawnNextRecurrence in server.ts. */
+  recurring?: boolean;
+  recurringInterval?: string;
+  /**
+   * Set when the due date was derived from a date on the contact rather than
+   * picked off a calendar. Stored so the rule is visible afterwards — "3 days
+   * before their anniversary" is the thing the operator wrote, and a bare
+   * date cannot be corrected when the anniversary moves.
+   */
+  contingent?: TaskContingency;
+  /** Appointment-only fields. Present when `type === "appointment"`. */
+  appointmentType?: string;
+  appointmentStatus?: AppointmentStatus;
+  outcome?: AppointmentOutcome;
 }
 
 export interface TasksSummary {

@@ -422,6 +422,8 @@ try {
   await page.waitForSelector("#leadRows tr");
   await page.click('#leadRows .ldlink:has-text("Record Lead")');
   await page.waitForSelector("#crPanel .acc");
+  // The panel says "Loading…" until the record lands; wait for the real state.
+  await page.waitForFunction(() => !/Loading/.test(document.getElementById("crPanel").textContent), null, { timeout: 10000 });
   await openAcc("contact");
   const contactTxt = await page.textContent('#crPanel .acc[data-acc="contact"] .acc-b');
   ok("phones survive reload", /\(512\) 555-0143/.test(contactTxt), contactTxt.slice(0, 160));
