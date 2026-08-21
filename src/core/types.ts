@@ -603,6 +603,22 @@ export interface LeadActivity {
   timestamp: string;
   /** Agent notes (power dialer / call logging). */
   notes?: string;
+  /**
+   * A narrower kind within `type`, chosen by a human in the composer.
+   * The OTHER tab's Pop By / Mail / Social Media, and the CALL tab's outcome
+   * (Talked, Left Message, No Answer …). Kept separate from `description`
+   * because the timeline filters and colours on it, and parsing it back out
+   * of a free-text sentence is exactly how a category quietly goes wrong.
+   */
+  subType?: string;
+  /** Who logged it. Absent on entries the system generated for itself. */
+  author?: string;
+  /**
+   * Flat, display-only detail the timeline card renders — subject, recipient,
+   * duration, call source, message direction. Deliberately flat scalars: this
+   * is what a card SHOWS, never state anything reads back to make a decision.
+   */
+  meta?: Record<string, string | number | boolean | null>;
 }
 
 export interface Criteria {

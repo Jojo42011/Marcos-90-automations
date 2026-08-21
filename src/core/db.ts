@@ -825,6 +825,29 @@ export function normalizeCrmActivity(raw: unknown): LeadActivity[] {
       timestamp: typeof a.timestamp === "string" && a.timestamp ? a.timestamp : nowIso(),
     };
     if (typeof a.notes === "string" && a.notes.trim()) entry.notes = a.notes.trim();
+    if (typeof a.subType === "string" && a.subType.trim()) entry.subType = a.subType.trim().slice(0, 60);
+    if (typeof a.author === "string" && a.author.trim()) entry.author = a.author.trim().slice(0, 120);
+    /* `meta` MUST be round-tripped here. This function rebuilds every activity
+       entry from a fixed field list on each write, so a key it does not know
+       about is destroyed — the same way normalizeCommandTask silently stripped
+       task checklists until one write made the loss permanent (FORAI,
+       2026-08-09). Flat scalars only, and capped, because this is display
+       detail on a card and not a place to smuggle state. */
+    if (a.meta && typeof a.meta === "object" && !Array.isArray(a.meta)) {
+      const src = a.meta as Record<string, unknown>;
+      const meta: Record<string, string | number | boolean | null> = {};
+      for (const key of Object.keys(src)) {
+        if (Object.keys(meta).length >= 16) break;
+        const k = key.trim().slice(0, 40);
+        if (!k) continue;
+        const v = src[key];
+        if (v === null) meta[k] = null;
+        else if (typeof v === "string") meta[k] = v.slice(0, 600);
+        else if (typeof v === "number" && Number.isFinite(v)) meta[k] = v;
+        else if (typeof v === "boolean") meta[k] = v;
+      }
+      if (Object.keys(meta).length) entry.meta = meta;
+    }
     out.push(entry);
   }
   return out;

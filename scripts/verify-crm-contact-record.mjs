@@ -402,16 +402,18 @@ try {
   const activeBorder = await page.$eval("#ldTabs button.on", (e) => getComputedStyle(e).borderBottomColor);
   ok("the active composer tab carries the teal underline", activeBorder !== "rgba(0, 0, 0, 0)", activeBorder);
 
-  const pills = await page.$$eval("#crFf button", (els) => els.map((e) => e.textContent.replace(/\s+/g, " ").trim()));
-  ok("filter bar shows every kind with a count", pills.length === 7 && /All \d/.test(pills[0]), JSON.stringify(pills));
-  const noteCount = Number((pills.find((p) => /^✎ Notes/.test(p)) || "0").replace(/\D+/g, "").slice(-1) || 0);
-  ok("the Notes pill has a non-zero count", noteCount > 0, JSON.stringify(pills));
-  await page.click('#crFf button[data-ff="note"]');
+  /* The feed is the server-built timeline as of the composer phase — nine
+     pills, not seven, and the ids moved from data-ff to data-tl. */
+  await page.waitForFunction(() => document.querySelectorAll("#tlBar button").length === 9, null, { timeout: 8000 });
+  const pills = await page.$$eval("#tlBar button", (els) => els.map((e) => e.textContent.replace(/\s+/g, " ").trim()));
+  ok("filter bar shows every kind with a count", pills.length === 9 && /All \d/.test(pills[0]), JSON.stringify(pills));
+  ok("the Notes pill has a non-zero count", /Notes [1-9]/.test(pills.join("|")), JSON.stringify(pills));
+  await page.click('#tlBar button[data-tl="note"]');
   await page.waitForTimeout(300);
-  ok("filtering to Notes keeps only notes", (await page.$$eval("#ldTimeline .tl .tt", (els) => els.map((e) => e.textContent))).every((t) => /^Note/.test(t)));
-  const disabled = await page.$$eval("#crFf button[disabled]", (els) => els.map((e) => e.getAttribute("data-ff")));
+  ok("filtering to Notes keeps only notes", (await page.$$eval("#ldTimeline .ico", (els) => els.map((e) => e.className))).every((c) => /\bnote\b/.test(c)));
+  const disabled = await page.$$eval("#tlBar button[disabled]", (els) => els.map((e) => e.getAttribute("data-tl")));
   ok("kinds with nothing logged are disabled, not hidden", disabled.length > 0, JSON.stringify(disabled));
-  await page.click('#crFf button[data-ff="all"]');
+  await page.click('#tlBar button[data-tl="all"]');
 
   /* ── reload: the record is server state, not client memory ── */
   await page.reload({ waitUntil: "domcontentloaded" });

@@ -3100,11 +3100,60 @@ app.post("/api/crm/lead/:id/activity", express.json({ limit: "64kb" }), async (r
     return;
   }
   const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 2000) : undefined;
+  const subType = typeof body.subType === "string" && body.subType.trim() ? body.subType.trim().slice(0, 60) : undefined;
+  const author = typeof body.author === "string" && body.author.trim() ? body.author.trim().slice(0, 120) : undefined;
+  /* The OTHER tab logs an interaction that happened on a day the operator
+     picks, so a back-dated entry is the normal case, not an edge one. It is
+     accepted only as YYYY-MM-DD and only in the past — a "logged" activity
+     dated next Tuesday is a scheduled thing, and that is what a task is for. */
+  let timestamp = new Date().toISOString();
+  if (typeof body.activityDate === "string" && body.activityDate.trim()) {
+    const day = body.activityDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      res.status(400).json({ error: "activityDate must be YYYY-MM-DD" });
+      return;
+    }
+    const when = new Date(day + "T12:00:00Z");
+    if (Number.isNaN(when.getTime())) { res.status(400).json({ error: "activityDate is not a real date" }); return; }
+    if (when.getTime() > Date.now() + 86400000) {
+      res.status(400).json({ error: "An activity cannot be logged in the future — schedule a task instead." });
+      return;
+    }
+    timestamp = when.toISOString();
+  }
+  const meta =
+    body.meta && typeof body.meta === "object" && !Array.isArray(body.meta)
+      ? (body.meta as Record<string, unknown>)
+      : undefined;
   try {
     const { appendLeadActivity } = await import("./core/db.js");
-    const entry: import("./core/types.js").LeadActivity = { type: type as import("./core/types.js").LeadActivityType, description, timestamp: new Date().toISOString() };
+    const entry: import("./core/types.js").LeadActivity = { type: type as import("./core/types.js").LeadActivityType, description, timestamp };
     if (notes) entry.notes = notes;
-    const lead = await appendLeadActivity(id, [entry]);
+    if (subType) entry.subType = subType;
+    if (author) entry.author = author;
+    if (meta) entry.meta = meta as import("./core/types.js").LeadActivity["meta"];
+    /* A back-dated entry must not move "last touched" forward — the nurture
+       cadence reads that field, and logging a pop-by from three weeks ago
+       would otherwise reset the clock as if it happened today. Passing the
+       lead's CURRENT value is what pins it; omitting the option would stamp
+       `now`, which is the bug this is avoiding. */
+    const backdated = timestamp < new Date(Date.now() - 60000).toISOString();
+    let pin: { lastActivity?: string } | undefined;
+    if (backdated) {
+      const { getLeadById, normalizeCrmActivity } = await import("./core/db.js");
+      const before = await getLeadById(id);
+      /* "Last touched" is the most recent REAL touch. Prefer the stored value;
+         fall back to the newest activity already on the record; and if there
+         is nothing at all, the entry being logged is itself the most recent
+         touch — which is still its own date, never today. */
+      const priorNewest = normalizeCrmActivity(before?.activity)
+        .map((a) => a.timestamp)
+        .filter(Boolean)
+        .sort()
+        .pop();
+      pin = { lastActivity: before?.lastActivity || priorNewest || timestamp };
+    }
+    const lead = await appendLeadActivity(id, [entry], pin);
     if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
     res.json({ ok: true, activity: lead.activity ?? [] });
   } catch (err) {
@@ -3558,6 +3607,351 @@ app.put("/api/settings/ui-prefs", express.json({ limit: "8kb" }), async (req, re
   }
 });
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   THE UNIFIED ACTIVITY TIMELINE.
+
+   Brivity's contact timeline is one reverse-chronological feed over every
+   channel, with a filter bar that counts each kind. This builds the same feed
+   out of the four places this system actually keeps that history:
+
+     · the lead's own `activity[]`   — notes, calls, logged and sent messages,
+                                       appointments, auto-plan and web events
+     · the Quo SMS thread            — real two-way texts with their direction
+     · outreach sends + engagement   — market-report and listing-alert drips,
+                                       with the opens THIS system's own pixel
+                                       recorded
+     · the task board                — tasks raised on the contact
+
+   WHAT IS DELIBERATELY NOT IN IT, and why the endpoint says so out loud in
+   `unavailable` rather than rendering an empty pill that reads as a zero:
+
+     · Open/click counts on ordinary Gmail sends. Brivity's come from its own
+       tracked sending domain. Mail sent from here goes out through Marco's
+       Gmail, which reports nothing back, so an email card shows "no tracking"
+       instead of "0 opens" — those two statements are not the same, and the
+       second one is a lie about a message that may well have been read.
+     · Website visit and property-view events. There is no site tracking
+       connected; the WEB category counts only the outreach engagement that is
+       real.
+     · Field-level profile change history. Nothing writes an audit row per
+       lead field, so there is no "Status changed HOT → NURT" card to draw.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** The nine buckets the filter bar offers, in the order it renders them. */
+type TimelineCategory = "note" | "email" | "call" | "text" | "appointment" | "task" | "other" | "web";
+
+interface TimelineItem {
+  id: string;
+  category: TimelineCategory;
+  /** The card's headline. */
+  title: string;
+  /** Body/preview text under the headline. */
+  body?: string;
+  at: string;
+  /** Narrower kind inside the category (call outcome, OTHER sub-type…). */
+  subType?: string;
+  author?: string;
+  /** Flat display detail the card renders as labelled lines. */
+  detail?: Record<string, string | number | boolean | null>;
+  /** Set on outreach cards this system's own pixel actually measured. */
+  opens?: number;
+  /** True when the channel genuinely carries no open/click tracking. */
+  noTracking?: boolean;
+  /** Outgoing vs incoming, for text bubbles. */
+  direction?: "in" | "out";
+}
+
+/**
+ * The card's headline, written the way the feed reads: an action with an
+ * actor, not a type name. "Call" tells the reader nothing they cannot see
+ * from the icon; "Marco Puga called this contact" is the line they scan for.
+ */
+function timelineTitleFor(type: string, actor: string, contact: string, subType?: string): string {
+  /* Older entries carry no author. Naming a phantom ("Someone called this
+     contact") is worse than the passive voice, which claims nothing. */
+  const by = actor ? ` by ${actor}` : "";
+  const who = actor || "";
+  const did = (verb: string, rest = "") => (actor ? `${who} ${verb}${rest}` : `${verb.replace(/^(\w+)/, (m) => m.charAt(0).toUpperCase() + m.slice(1))}${rest}`);
+  switch (type) {
+    case "note": return did("added a note");
+    case "email_sent": return did("emailed ", contact);
+    case "email_logged": return did("logged an email to ", contact);
+    case "email_pending": return `Email queued to ${contact}`;
+    case "call":
+    case "call_made": return did("called this contact");
+    case "text_sent": return `Text sent to ${contact}`;
+    case "text_received": return `${contact} texted back`;
+    case "text_logged": return did("logged a text to ", contact);
+    case "appointment": return "Appointment";
+    case "task": return "Task";
+    case "web_visit": return `${contact} visited the site`;
+    case "home_hearted": return `${contact} favourited a home`;
+    case "home_clicked": return `${contact} opened a listing`;
+    case "listing_active": return "Their listing went Active";
+    case "listing_off_market": return "Their listing went off market";
+    case "auto_plan": return "Auto plan step";
+    case "skip_trace": return "Skip trace run";
+    case "re_engagement": return "Re-engagement sent";
+    /* OTHER is the one place the sub-type IS the headline: "Pop By" and
+       "Mail" are the whole point of the entry. */
+    default: return subType ? `${subType} logged${by}` : did("logged an activity");
+  }
+}
+
+/** Which bucket a stored LeadActivity type belongs to. */
+function timelineCategoryFor(type: string): TimelineCategory {
+  if (type === "note") return "note";
+  if (type === "email_sent" || type === "email_logged" || type === "email_pending") return "email";
+  if (type === "call" || type === "call_made") return "call";
+  if (type === "text_sent" || type === "text_received" || type === "text_logged") return "text";
+  if (type === "appointment") return "appointment";
+  if (type === "task") return "task";
+  if (type === "web_visit" || type === "home_hearted" || type === "home_clicked") return "web";
+  return "other";
+}
+
+app.get("/api/crm/lead/:id/timeline", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
+    return;
+  }
+  const id = String(req.params.id || "").trim();
+  if (!id) { res.status(400).json({ error: "Missing lead id" }); return; }
+  try {
+    const { getLeadById, normalizeCrmActivity } = await import("./core/db.js");
+    const lead = await getLeadById(id);
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+
+    const items: TimelineItem[] = [];
+    const push = (it: TimelineItem) => { if (it.at) items.push(it); };
+
+    /* ── 1. the lead's own activity ── */
+    const contactName = lead.name || "this contact";
+    const activity = normalizeCrmActivity(lead.activity);
+    activity.forEach((a, i) => {
+      const category = timelineCategoryFor(a.type);
+      const detail: Record<string, string | number | boolean | null> = { ...(a.meta || {}) };
+      /* The sub-type is already a pill on the card; repeating it as a detail
+         line makes every OTHER and CALL card say the same word three times. */
+      if (a.subType) {
+        for (const key of Object.keys(detail)) {
+          if (String(detail[key]) === a.subType) delete detail[key];
+        }
+      }
+      if (a.notes) detail.Notes = a.notes;
+      push({
+        id: `act_${i}_${a.timestamp}`,
+        category,
+        title: timelineTitleFor(a.type, a.author || "", contactName, a.subType),
+        body: a.description || undefined,
+        at: a.timestamp,
+        subType: a.subType,
+        author: a.author,
+        detail: Object.keys(detail).length ? detail : undefined,
+        /* An email this system sent through Gmail carries no open data at all,
+           and saying so is different from reporting zero. */
+        noTracking: category === "email" ? true : undefined,
+        direction: a.type === "text_received" ? "in" : a.type === "text_sent" ? "out" : undefined,
+      });
+    });
+
+    /* ── 2. the real SMS thread ── */
+    try {
+      const thread = getThreadForLead(id);
+      (thread || []).forEach((m, i) => {
+        const at = String(m.sentAt || "");
+        if (!at || !m.messageBody) return;
+        const outbound = m.direction !== "inbound";
+        push({
+          id: `sms_${i}_${at}`,
+          category: "text",
+          title: outbound ? "Text sent" : "Text received",
+          body: m.messageBody,
+          at,
+          direction: outbound ? "out" : "in",
+          detail: m.threadType ? { Source: m.threadType } : undefined,
+        });
+      });
+    } catch (err) {
+      console.error("[timeline] SMS thread unavailable:", err);
+    }
+
+    /* ── 3. outreach: what went out, and the opens the pixel measured ── */
+    let outreachTracked = 0;
+    try {
+      const outreach = await import("./core/outreachStore.js");
+      const subs = [
+        ...outreach.listAlerts(id).map((a) => ({ kind: "alert" as const, id: a.id, name: a.name, address: "", frequency: a.frequency })),
+        ...outreach.listReports(id).map((r) => ({ kind: "report" as const, id: r.id, name: r.name, address: r.address, frequency: r.frequency })),
+      ];
+      for (const sub of subs) {
+        for (const send of outreach.listSends(sub.id, 40)) {
+          outreachTracked++;
+          const detail: Record<string, string | number | boolean | null> = {
+            [sub.kind === "report" ? "Report Name" : "Alert Name"]: sub.name,
+          };
+          if (sub.address) detail.Location = sub.address;
+          if (sub.frequency) detail["Scheduled Drip"] = String(sub.frequency);
+          if (send.listingCount) detail.Listings = send.listingCount;
+          if (!send.ok && send.error) detail.Error = send.error;
+          push({
+            id: `send_${send.id}`,
+            category: "web",
+            title: sub.kind === "report" ? "Market Report sent via drip" : "Listing Alert sent",
+            at: send.sentAt,
+            detail,
+            /* Real, because this system's own tracking pixel recorded it. */
+            opens: send.openCount || 0,
+          });
+        }
+      }
+      for (const e of outreach.engagementForLead(id, 60)) {
+        push({
+          id: `eng_${e.id}`,
+          category: "web",
+          title: `${e.kind === "report" ? "Market report" : "Listing alert"} — ${String(e.event).replace(/_/g, " ")}`,
+          at: e.at,
+          detail: e.listingKey ? { Listing: e.listingKey } : undefined,
+        });
+      }
+    } catch (err) {
+      console.error("[timeline] outreach unavailable:", err);
+    }
+
+    /* ── 4. tasks raised on this contact ──
+       The CRM task store (tasks.json), not the COMMAND board — these are the
+       rows the contact record's Tasks widget and the appointment tab write,
+       and mixing in a different store here would show the contact tasks that
+       were never about them. */
+    try {
+      const { filterTasks } = await import("./core/tasks.js");
+      for (const t of filterTasks({ leadId: id })) {
+        const detail: Record<string, string | number | boolean | null> = {};
+        if (t.dueDate) detail.Due = t.dueDate + (t.dueTime ? " " + t.dueTime : "");
+        if (t.assignedUserName) detail["Assigned To"] = t.assignedUserName;
+        if (t.priority) detail.Priority = t.priority;
+        if (t.type) detail.Type = t.type;
+        const done = t.status === "completed";
+        push({
+          id: `task_${t.id}`,
+          category: "task",
+          title: done ? "Task completed" : "Task created",
+          body: t.title,
+          at: (done && t.completedAt) || t.createdAt,
+          detail: Object.keys(detail).length ? detail : undefined,
+          author: t.assignedUserName || undefined,
+        });
+      }
+    } catch (err) {
+      console.error("[timeline] tasks unavailable:", err);
+    }
+
+    items.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+
+    const counts: Record<string, number> = { all: items.length, note: 0, email: 0, call: 0, text: 0, appointment: 0, task: 0, other: 0, web: 0 };
+    for (const it of items) counts[it.category] = (counts[it.category] || 0) + 1;
+
+    /* Named limits, not silence. Each line says what the category cannot
+       cover and why, so a low count is read correctly. */
+    const unavailable: Array<{ scope: string; reason: string }> = [
+      { scope: "email", reason: "Mail goes out through Marco's Gmail, which reports no opens or clicks back — email cards show no tracking rather than a zero." },
+      { scope: "web", reason: "There is no website visit tracking connected. This counts only listing-alert and market-report activity, which this system sends and measures itself." },
+      { scope: "profile", reason: "Nothing records a per-field change log on a lead, so there are no status/address change entries to show." },
+    ];
+
+    res.json({ ok: true, items: items.slice(0, 400), counts, unavailable, outreachTracked });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * Send a real email to this contact and log it on the timeline.
+ *
+ * This exists rather than the page calling `/api/crm/email/send` directly so
+ * the send and the timeline entry cannot come apart: the entry is written only
+ * after Gmail accepts, and it is typed `email_sent` (delivered) rather than
+ * `email_logged` (written down), which are different claims.
+ */
+app.post("/api/crm/lead/:id/send-email", express.json({ limit: "2mb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const id = String(req.params.id || "").trim();
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const subject = typeof body.subject === "string" ? body.subject.trim() : "";
+  const html = typeof body.html === "string" ? body.html.trim() : "";
+  const to = typeof body.to === "string" ? body.to.trim() : "";
+  if (!subject || !html) { res.status(400).json({ error: "subject and html are required" }); return; }
+  if (!/\S+@\S+\.\S+/.test(to)) { res.status(400).json({ error: "A valid recipient email is required" }); return; }
+  const cc = (Array.isArray(body.cc) ? body.cc : [])
+    .map((v) => String(v || "").trim())
+    .filter((v) => /\S+@\S+\.\S+/.test(v))
+    .slice(0, 10);
+  try {
+    const { getLeadById, appendLeadActivity } = await import("./core/db.js");
+    const lead = await getLeadById(id);
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    const { sendEmail } = await import("./integrations/gmail/index.js");
+    const recipients = [to, ...cc];
+    // Self-copy is a real extra recipient, so it goes through the same send.
+    if (body.copyMe === true) {
+      const self = process.env.GMAIL_USER?.trim() || process.env.SMTP_USER?.trim();
+      if (self && /\S+@\S+\.\S+/.test(self) && !recipients.includes(self)) recipients.push(self);
+    }
+    for (const recipient of recipients) {
+      await sendEmail({ to: recipient, subject, body: html, html: true });
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    const plain = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const meta: Record<string, string | number | boolean | null> = { To: to, Subject: subject };
+    if (cc.length) meta.CC = cc.join(", ");
+    await appendLeadActivity(id, [{
+      type: "email_sent",
+      description: subject,
+      timestamp: new Date().toISOString(),
+      author: typeof body.author === "string" ? body.author.slice(0, 120) : undefined,
+      notes: plain.slice(0, 600) || undefined,
+      meta,
+    }]);
+    res.json({ ok: true, sent: recipients.length, to, cc });
+  } catch (err) {
+    /* Gmail's own words: "not connected" and "recipient rejected" need
+       different things done about them. */
+    res.status(502).json({ error: (err as Error).message || "Gmail rejected the send" });
+  }
+});
+
+/** Whether the composer's send buttons can actually send, and if not, why. */
+app.get("/api/crm/messaging-status", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const out: Record<string, unknown> = {};
+  try {
+    const { isGmailConfigured, isGmailOAuthConfigured } = await import("./integrations/gmail/index.js");
+    const ok = isGmailConfigured() || isGmailOAuthConfigured();
+    out.email = { ok, reason: ok ? null : "Gmail is not connected on the server, so email cannot be sent from here." };
+  } catch {
+    out.email = { ok: false, reason: "The Gmail integration could not be loaded." };
+  }
+  try {
+    const quo = await import("./integrations/quo/index.js");
+    const ok = quo.isQuoConfigured();
+    out.text = { ok, reason: ok ? null : "Quo is not configured, so texts cannot be sent from here." };
+    /* The composer names the line a text will go out from. "the business line"
+       is a guess; the actual number is not. */
+    if (ok) {
+      const num = quo.getQuoPhoneNumber();
+      if (num) out.textNumber = num;
+    }
+  } catch {
+    out.text = { ok: false, reason: "The Quo integration could not be loaded." };
+  }
+  /* Click-to-dial has no softphone behind it. The button is not drawn rather
+     than drawn and dead; this is what tells the page that. */
+  out.call = { ok: false, reason: "No softphone or click-to-dial is connected — calls are placed on your own phone and logged here." };
+  out.calendar = { ok: false, reason: "No Google Calendar account is connected, so an appointment cannot be pushed to one." };
+  res.json({ ok: true, channels: out });
+});
 
 app.post("/api/crm/lead/:id/mark-phone-seen", async (req, res) => {
   if (!dashboardTokenOk(req)) {

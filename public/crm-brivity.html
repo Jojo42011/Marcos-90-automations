@@ -791,6 +791,129 @@
      its own words, instead of drawing a button that cannot work. */
   .wdg-off{background:#fdf8ec;border:1px solid #f0e3c2;color:#8a7340;border-radius:4px;padding:9px 10px;
     font-size:11.5px;line-height:1.5}
+
+  /* ════════════ Quick Action Composer ════════════ */
+  /* The active tab's teal underline is the spec's; it is also the only thing
+     distinguishing the live channel, so it is 2px and full-strength. */
+  .qa-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 0 10px}
+  .qa-vis{display:flex;align-items:center;gap:6px;font-size:12px;color:#8b95a0}
+  .qa-spacer{flex:1;min-width:0}
+  .qa-ai{border:1px solid #b9a6f2;background:#fff;color:#7b5cf0;border-radius:14px;padding:5px 12px;font-size:11px;
+    font-weight:700;letter-spacing:.04em;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .qa-ai:hover{background:#f4f0ff}
+  .qa-ai[disabled]{opacity:.55;cursor:default}
+  .qa-star{display:flex;align-items:center;gap:5px;font-size:12px;color:#8b95a0;cursor:pointer;white-space:nowrap}
+  .qa-star .st{font-size:15px;color:#c9d1d8}
+  .qa-star.on .st{color:#e0a33a}
+  .qa-star.on{color:#6b7480}
+  .qa-foot{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .qa-clear{border:1px solid var(--line);background:#f2f4f4;color:#7a8590;border-radius:16px;padding:8px 18px;
+    font-size:12px;font-weight:700;letter-spacing:.05em;cursor:pointer;font-family:inherit}
+  .qa-go{border:0;background:var(--teal-pill);color:#fff;border-radius:16px;padding:9px 22px;font-size:12px;
+    font-weight:700;letter-spacing:.05em;cursor:pointer;font-family:inherit}
+  .qa-go[disabled]{opacity:.45;cursor:default}
+  .qa-copy{display:flex;align-items:center;gap:6px;font-size:12px;color:#7a8590;cursor:pointer}
+  .qa-copy input{accent-color:var(--teal)}
+  .qa-lbl{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b95a0;margin:10px 0 5px}
+  .qa-lbl i{color:#e05a45;font-style:normal}
+  .qa-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .qa-in,.qa-sel{border:1px solid var(--line);border-radius:6px;height:38px;padding:0 10px;font-size:13px;
+    font-family:inherit;color:#46515c;background:#fff;outline:none;box-sizing:border-box}
+  .qa-in:focus,.qa-sel:focus,.qa-area:focus{border-color:var(--teal)}
+  .qa-in{flex:1;min-width:0}
+  .qa-area{width:100%;border:1px solid var(--line);border-radius:6px;padding:10px 11px;font-family:inherit;
+    font-size:13px;color:#46515c;outline:none;resize:vertical;box-sizing:border-box;background:#fafbfb}
+  /* A pill row the operator picks one of (call outcome, date shortcut, time). */
+  .qa-pills{display:flex;flex-wrap:wrap;gap:7px}
+  .qa-pills button{border:1px solid var(--line);background:#fff;color:#6b7480;border-radius:15px;padding:6px 13px;
+    font-size:12px;cursor:pointer;font-family:inherit}
+  .qa-pills button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong);font-weight:600}
+  .qa-pills button[disabled]{opacity:.45;cursor:default}
+  /* Priority 1-9 — small square pills, 1 highest. */
+  .qa-prio{display:flex;flex-wrap:wrap;gap:5px}
+  .qa-prio button{width:30px;height:30px;border:1px solid var(--line);background:#fff;color:#6b7480;border-radius:6px;
+    font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+  .qa-prio button.on{background:var(--teal-pill);border-color:var(--teal-pill);color:#fff}
+  .qa-exp{border:1px dashed var(--line);background:#fff;color:var(--teal-strong);border-radius:6px;padding:7px 13px;
+    font-size:11.5px;font-weight:700;letter-spacing:.04em;cursor:pointer;font-family:inherit}
+  .qa-sub{border:1px solid var(--line-2);border-radius:6px;padding:10px;margin-top:8px;background:#fafbfb;position:relative}
+  .qa-sub .x{position:absolute;top:6px;right:8px;color:#b3bcc5;cursor:pointer;font-size:14px;line-height:1}
+  .qa-note{font-size:11px;color:#8b95a0;line-height:1.5;margin-top:8px}
+  /* A channel that genuinely cannot send says so here, in amber, next to the
+     button that would have sent it. */
+  .qa-off{background:#fdf8ec;border:1px solid #f0e3c2;color:#8a7340;border-radius:6px;padding:8px 10px;
+    font-size:11.5px;line-height:1.5;margin-top:10px}
+  .qa-warn{color:#a8442f;font-size:11.5px;line-height:1.5;margin-top:8px}
+  .qa-warn a{color:var(--teal-strong)}
+  .qa-to{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:#5b6570}
+  .qa-to b{color:#3f4a55;font-weight:700}
+  .qa-addpill{border:1px solid var(--line);background:#fff;color:var(--teal-strong);border-radius:13px;padding:4px 11px;
+    font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+  /* Rich-text toolbar. execCommand is the only formatter available without a
+     new npm package, which the fast deploy path cannot install. */
+  .qa-tb{display:flex;flex-wrap:wrap;gap:3px;border:1px solid var(--line);border-bottom:0;border-radius:6px 6px 0 0;
+    padding:5px 6px;background:#fafbfb}
+  .qa-tb button{width:28px;height:26px;border:1px solid transparent;background:none;color:#6b7480;border-radius:4px;
+    font-size:12px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center}
+  .qa-tb button:hover{background:#eef2f4;border-color:var(--line)}
+  .qa-tb select{height:26px;border:1px solid var(--line);border-radius:4px;font-size:11.5px;font-family:inherit;
+    color:#6b7480;background:#fff;padding:0 4px}
+  .qa-tb .sep{width:1px;background:var(--line);margin:2px 3px}
+  .qa-rt{border:1px solid var(--line);border-radius:0 0 6px 6px;min-height:190px;max-height:340px;overflow-y:auto;
+    padding:12px 13px;font-size:13px;line-height:1.6;color:#46515c;outline:none;background:#fff}
+  .qa-rt:focus{border-color:var(--teal)}
+  .qa-rt img{max-width:100%}
+  .qa-sig{color:#8b95a0;font-size:12px}
+  .qa-att{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .qa-att span{background:#f1f4f6;border-radius:4px;padding:3px 8px;font-size:11px;color:#5b6570;display:inline-flex;
+    align-items:center;gap:6px}
+  .qa-att span i{cursor:pointer;color:#98a2ad;font-style:normal}
+  /* Text tab: the live 2-way thread. */
+  .qa-chat{border:1px solid var(--line-2);border-radius:6px;background:#fafbfb;max-height:240px;overflow-y:auto;
+    padding:10px;display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+  .qa-bub{max-width:78%;border-radius:12px;padding:8px 11px;font-size:12.5px;line-height:1.45;word-break:break-word}
+  .qa-bub .tm{display:block;font-size:10px;margin-top:4px;opacity:.7}
+  .qa-bub.in{align-self:flex-start;background:#fff;border:1px solid var(--line);color:#46515c}
+  .qa-bub.out{align-self:flex-end;background:var(--teal-soft);border:1px solid var(--teal);color:#2a5f58}
+  .qa-seen{font-size:11px;color:#98a2ad}
+
+  /* ════════════ Activity timeline ════════════ */
+  .tlbar{display:flex;flex-wrap:wrap;gap:7px;align-items:center;padding:12px 0 6px}
+  .tlbar button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;
+    color:#7a8590;border-radius:14px;padding:5px 11px;font-size:12px;font-family:inherit;cursor:pointer}
+  .tlbar button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+  .tlbar button .n{font-weight:800;font-size:11px}
+  .tlbar button[disabled]{opacity:.45;cursor:default}
+  .tlbar .ic{font-size:12px;line-height:1}
+  /* Entry cards. The icon circle is colour-coded per category so the feed can
+     be scanned without reading a word of it. */
+  .tlc{display:flex;gap:12px;padding:13px 0;border-top:1px solid var(--line-2)}
+  .tlc:first-child{border-top:none}
+  .tlc .ico{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;font-size:13px;background:#eef2f4;color:#7a8590}
+  .tlc .ico.note{background:#eef2ff;color:#5b6fae}
+  .tlc .ico.email{background:#e8f4fb;color:#2f7fa8}
+  .tlc .ico.call{background:#eaf6f2;color:#2f7d74}
+  .tlc .ico.text{background:#f3f0fd;color:#7b5cf0}
+  .tlc .ico.appointment{background:#fdf3e6;color:#b3812f}
+  .tlc .ico.task{background:#eef7ee;color:#3f8b52}
+  .tlc .ico.web{background:#fdeef0;color:#b2495c}
+  .tlc .bd{flex:1;min-width:0}
+  .tlc .hd{display:flex;gap:10px;align-items:baseline}
+  .tlc .ti{flex:1;min-width:0;font-size:13px;color:#3f4a55;font-weight:600}
+  .tlc .tm{flex:0 0 auto;font-size:11px;color:#98a2ad;white-space:nowrap}
+  .tlc .bodytx{font-size:12.5px;color:#5b6570;line-height:1.5;margin-top:3px;word-break:break-word;white-space:pre-wrap}
+  .tlc .kv{display:flex;gap:6px;font-size:11.5px;color:#8b95a1;margin-top:2px}
+  .tlc .kv b{color:#5b6570;font-weight:600}
+  .tlc .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;align-items:center}
+  .tl-pill{font-size:9.5px;font-weight:800;letter-spacing:.05em;border-radius:3px;padding:2px 6px;text-transform:uppercase}
+  .tl-pill.open{background:#e6f6ec;color:#1f7a45}
+  .tl-pill.zero{background:#f1f4f6;color:#8b95a0}
+  /* "No tracking" is not "0 opens", and it must not look like it. */
+  .tl-pill.untracked{background:#fdf8ec;color:#8a7340}
+  .tl-pill.sub{background:var(--teal-soft);color:var(--teal-strong)}
+  .tl-pill.dir{background:#eef2f4;color:#7a8590}
+  .tl-note{font-size:11px;color:#8b95a0;line-height:1.5;background:#f7f9fa;border-radius:4px;padding:8px 10px;margin-top:10px}
 </style>
 
 <header class="topbar">
@@ -4056,6 +4179,8 @@ function openActionMenu(anchor,items){
   ddMenu.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+"px";
   ddMenu.style.top=(r.bottom+4)+"px";
   ddMenu.classList.add("on"); ddMenu._for=anchor;
+  // Remembered so the scroll closer can tell a real scroll from a repaint.
+  ddMenu._anchorAt={top:r.top,left:r.left};
 }
 /* Column show/hide: toggles the Nth <th>/<td> across a table. */
 /* ===== Per-user table preferences: Columns picker + Sort By =====
@@ -4339,7 +4464,7 @@ document.addEventListener("click",function(e){
 const STATUS_OPTIONS=[["new","NEW","var(--st-new)"],["hot","HOT","var(--st-hot)"],["nurture","NURTURE","var(--st-nurture)"],["watch","WATCH","var(--st-watch)"],["dead","UNQUALIFIED","var(--st-unq)"],["unresponsive","INACTIVE","#aab2ba"]];
 const STAGE_OPTIONS=[["new","New Lead"],["hot","Hot"],["warm","Warm"],["cold","Cold"],["pending","Pending"],["appointment_set","Appointment Set"],["showing_set","Showing Set"],["under_contract","Under Contract"],["closed","Closed"]];
 const ddMenu=document.getElementById("ddMenu");
-function closeDD(){ ddMenu.className="dd-menu"; ddMenu.style.bottom="auto"; ddMenu.style.minWidth=""; }
+function closeDD(){ ddMenu.className="dd-menu"; ddMenu.style.bottom="auto"; ddMenu.style.minWidth=""; ddMenu._for=null; ddMenu._anchorAt=null; }
 function crmToast(msg){ const t=document.getElementById("crmToast"); t.textContent=msg; t.classList.add("on"); clearTimeout(window.__tt); window.__tt=setTimeout(()=>t.classList.remove("on"),1700); }
 const INTENT_OPTIONS=[["buyer","Buyer"],["seller","Seller"],["buyer_seller","Buyer & Seller"]];
 function setLeadField(id,kind,val){
@@ -4511,8 +4636,13 @@ function openLead(id, tab){ const l=LEADS.find(x=>x.id===id); if(!l)return; curr
   /* Reset the per-contact view state. Carrying the previous contact's open
      edit row or activity filter across would show one person's half-typed
      phone number on the next person's record. */
-  CR_EDIT=null; FEED_FILTER="all"; aiFolded=null;
+  CR_EDIT=null; TL_FILTER="all"; aiFolded=null;
   CR.leadId=id; CR.record=null; CR.err=null;
+  /* Composer drafts and the text thread belong to ONE contact. Carrying a
+     half-written email onto the next person's record is how the wrong client
+     gets the wrong message. */
+  qaReset(); QA_THREAD=null;
+  TL.leadId=id; TL.items=[]; TL.counts={}; TL.err=null;
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-lead").classList.add("on"); window.scrollTo(0,0);
   renderLead();
   loadContactRecord(id,function(){ if(currentLeadId===id)crRepaint(); }); }
@@ -4604,7 +4734,7 @@ function renderLead(){
       }}
     ]);
   });
-  renderLeadTab(); renderActivityFeed();
+  renderLeadTab(); renderActivityFeed(); reloadTimeline();
   wireContactPanel(l); wireAiPanel(l); wireAssignBlock(l); wireRightStack(l);
   paintLeadTasks(l); paintLeadPlans(l); paintLeadOutreach(l);
 }
@@ -4721,22 +4851,6 @@ function paintLeadPlans(l){
     }); }
   }).catch(function(){ el.innerHTML='<div style="color:var(--muted)">Auto plans unavailable.</div>'; });
 }
-/* Manual activity logging. Persisted through POST /api/crm/lead/:id/activity —
-   the old version appended to a client array that vanished on reload. The
-   server types are the honest "logged" variants: this page sends nothing. */
-var LOG_TYPE_MAP={note:"note",call:"call",text:"text_logged",email:"email_logged",appointment:"appointment",other:"other"};
-function logActivity(type,text){ const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return;
-  var now=new Date().toISOString();
-  var srvType=LOG_TYPE_MAP[type]||"other";
-  (l.activity=l.activity||[]).push({type:srvType,description:text||"",timestamp:now}); l.lastActivity=now;
-  l.lastLabel=(type==="call"?"Call Logged":type==="text"?"Text Logged":type==="email"?"Email Logged":type==="appointment"?"Appointment":"Note");
-  renderActivityFeed(); renderLeads(); renderTakeAction(); renderFeed();
-  if(!l._live){ crmToast("Logged (demo row — not saved)"); return; }
-  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/activity"),{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({type:srvType,description:text||""})})
-    .then(function(r){ crmToast(r.ok?"Logged":"Logged locally — server rejected it"); })
-    .catch(function(){ crmToast("Logged locally — could not reach the server"); }); }
-
 /* ═══════════════════════════════════════════════════════════════════════════
    CONTACT RECORD — left panel, middle panel, right widget stack.
 
@@ -5369,7 +5483,11 @@ function attachTypeahead(input,items,onPick,opts){
   function pick(it){ close(); if(it)onPick(it); }
   input.addEventListener("focus",open);
   input.addEventListener("input",function(){ hi=-1; open(); });
-  input.addEventListener("blur",function(){ setTimeout(close,120); });
+  /* Same re-check as the composer's mention popup: a stale blur timer must
+     not close a list the operator has already come back to. */
+  input.addEventListener("blur",function(){
+    setTimeout(function(){ if(document.activeElement!==input)close(); },120);
+  });
   input.addEventListener("keydown",function(e){
     if(!list)return;
     if(e.key==="ArrowDown"||e.key==="ArrowUp"){
@@ -5575,7 +5693,9 @@ function openNoteModal(l){
       });
     }
     area.addEventListener("input",showPop);
-    area.addEventListener("blur",function(){ setTimeout(closePop,120); });
+    area.addEventListener("blur",function(){
+      setTimeout(function(){ if(document.activeElement!==area)closePop(); },120);
+    });
 
     /* AI: HELP ME WRITE drafts from what this system actually knows about the
        contact. It fills the box; nothing is saved until SAVE NOTE. */
@@ -5894,72 +6014,961 @@ function saveUiPrefs(patch){
     .catch(function(){ /* stays for this session; the next load simply won't have it */ });
 }
 
-/* ── activity feed with its filter bar ── */
 
-var FEED_FILTER="all";
-var FEED_KINDS=[
-  ["all","All","◍"],["note","Notes","✎"],["call","Calls","☎"],["text","Texts","✉"],
-  ["email","Emails","@"],["appointment","Appointments","◷"],["other","Other","•"]
-];
-/** Which bucket a raw activity type falls in. */
-function feedBucket(t){
-  var s=String(t||"");
-  if(/call/.test(s))return "call";
-  if(/text|sms/.test(s))return "text";
-  if(/email|mail/.test(s))return "email";
-  if(/appointment|showing/.test(s))return "appointment";
-  if(/note/.test(s))return "note";
-  return "other";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE QUICK ACTION COMPOSER — NOTE / EMAIL / CALL / TEXT / APPOINTMENT / OTHER.
+
+   Six channels behind one tab bar. What separates them is not styling, it is
+   what each one is ALLOWED to claim it did:
+
+     · EMAIL genuinely sends, through Marco's connected Gmail, and is logged as
+       `email_sent`. If Gmail is not connected the button is disabled with the
+       reason next to it — never enabled-and-failing.
+     · TEXT genuinely sends, over Quo, which owns the phone line. Same rule.
+     · CALL cannot dial: no softphone is connected. It logs a call that the
+       operator placed on their own phone, and says exactly that instead of
+       drawing a green CALL button that does nothing.
+     · APPOINTMENT creates a real task on the board.
+     · NOTE and OTHER write real activity entries.
+
+   `email_sent`/`text_sent` mean delivered. `email_logged`/`text_logged` mean
+   written down. The composer never uses the first pair unless the send was
+   accepted, because the timeline is read as a record of what reached the
+   client.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Per-channel send capability, from the server. Null until it answers. */
+var MSG_STATUS=null;
+function loadMessagingStatus(then){
+  fetch(crmApi("/api/crm/messaging-status"))
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(d){ MSG_STATUS=(d&&d.channels)||{}; if(then)then(); })
+    .catch(function(){
+      /* Unknown is not "works". Leaving it null makes the send buttons render
+         disabled with an honest reason rather than optimistically live. */
+      MSG_STATUS={}; if(then)then();
+    });
 }
-function feedIcon(b){
-  for(var i=0;i<FEED_KINDS.length;i++)if(FEED_KINDS[i][0]===b)return FEED_KINDS[i][2];
+function channelOk(name){ return !!(MSG_STATUS&&MSG_STATUS[name]&&MSG_STATUS[name].ok); }
+function channelReason(name){
+  if(!MSG_STATUS)return "Checking whether this channel can send…";
+  var c=MSG_STATUS[name];
+  return (c&&c.reason)||"This channel is not connected on the server.";
+}
+
+/* Draft state, per tab, so switching tabs to check something does not throw
+   away a half-written email. Cleared when the contact changes. */
+var QA={note:null,email:null,call:null,text:null,appointment:null,other:null};
+function qaReset(){ QA={note:null,email:null,call:null,text:null,appointment:null,other:null}; }
+
+function todayKey(){
+  var d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function mdy(key){
+  if(!key)return "";
+  var p=key.split("-");
+  return p.length===3?(p[1]+"/"+p[2]+"/"+p[0]):key;
+}
+function shiftDay(days){
+  var d=new Date(); d.setDate(d.getDate()+days);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+/** The composer's own phone picker — every number on the record, DNC marked. */
+function qaPhoneOptions(sel){
+  var phones=((CR.record||crEmpty()).phones||[]);
+  if(!phones.length)return "";
+  return phones.map(function(p){
+    return '<option value="'+esc(p.number)+'"'+(p.number===sel?" selected":"")+'>'+
+      esc(p.number+" — "+kindLabel(PHONE_KINDS,p.kind)+(p.dnc?" [DNC]":""))+'</option>';
+  }).join("");
+}
+function qaPrimaryPhone(){
+  var phones=((CR.record||crEmpty()).phones||[]);
+  var p=phones.filter(function(x){return x.isPrimary;})[0]||phones[0];
+  return p||null;
+}
+function qaPhoneByNumber(num){
+  return ((CR.record||crEmpty()).phones||[]).filter(function(p){return p.number===num;})[0]||null;
+}
+function qaEmailOptions(sel){
+  var emails=((CR.record||crEmpty()).emails||[]);
+  return emails.map(function(e){
+    return '<option value="'+esc(e.address)+'"'+(e.address===sel?" selected":"")+'>'+
+      esc(e.address+" — "+kindLabel(EMAIL_KINDS,e.kind))+'</option>';
+  }).join("");
+}
+function qaPrimaryEmail(l){
+  var emails=((CR.record||crEmpty()).emails||[]);
+  var e=emails.filter(function(x){return x.isPrimary;})[0]||emails[0];
+  return e?e.address:(l.email||"");
+}
+
+/** Shared footer: CLEAR on the left, the primary action on the right. */
+function qaFoot(goLabel,goId,extra,disabled){
+  return '<div class="qa-foot"><button class="qa-clear" id="qaClear">CLEAR</button>'+
+    (extra||'')+'<div class="qa-spacer"></div>'+
+    '<button class="qa-go" id="'+goId+'"'+(disabled?" disabled":"")+'>'+esc(goLabel)+'</button></div>';
+}
+
+/**
+ * @mention on a plain textarea. The popup opens on the token after "@" and
+ * inserts the member's name, recording the id — a mention has to be a real
+ * reference, not a string that happens to start with an at sign.
+ */
+function qaMentions(area,onPick){
+  ensureRoster(function(roster){
+    var pop=null;
+    function close(){ if(pop){ pop.remove(); pop=null; } }
+    area.addEventListener("input",function(){
+      var v=area.value.slice(0,area.selectionStart);
+      var m=/@([A-Za-z0-9 _.-]*)$/.exec(v);
+      if(!m){ close(); return; }
+      var q=m[1].toLowerCase(), start=area.selectionStart-m[0].length;
+      var hits=roster.filter(function(u){ return !q||u.name.toLowerCase().indexOf(q)>=0; }).slice(0,8);
+      if(!hits.length){ close(); return; }
+      var host=area.closest(".ta-wrap")||area.parentNode;
+      if(!pop){
+        pop=document.createElement("div"); pop.className="ta-list";
+        if(getComputedStyle(host).position==="static")host.style.position="relative";
+        host.appendChild(pop);
+      }
+      /* Rebuilt only when the list actually changes. Replacing the markup on
+         every keystroke detached the button the operator was reaching for. */
+      var html=hits.map(function(u,i){ return '<button type="button" data-i="'+i+'">'+esc(u.name)+'</button>'; }).join("");
+      if(pop.__html===html)return;
+      pop.__html=html; pop.innerHTML=html;
+      pop.querySelectorAll("button").forEach(function(b){
+        b.addEventListener("mousedown",function(ev){
+          ev.preventDefault();
+          var u=hits[+b.getAttribute("data-i")];
+          area.value=area.value.slice(0,start)+"@"+u.name+" "+area.value.slice(area.selectionStart);
+          close(); area.focus();
+          if(onPick)onPick(u);
+        });
+      });
+    });
+    /* The delay lets a click on a suggestion land before the popup goes away.
+       It must re-check focus when it fires: blur, click back in and start
+       typing again inside 120ms and the OLD timer would otherwise tear down
+       the popup that was just built. */
+    area.addEventListener("blur",function(){
+      setTimeout(function(){ if(document.activeElement!==area)close(); },120);
+    });
+  });
+}
+
+/** Enable/disable the primary button from whether there is anything to send. */
+function qaGate(goId,test){
+  var go=document.getElementById(goId); if(!go)return function(){};
+  var fn=function(){ go.disabled=!test(); };
+  fn(); return fn;
+}
+
+/* ────────────────────────── NOTE tab ────────────────────────── */
+
+function qaNoteTab(l,body){
+  var d=QA.note||(QA.note={text:"",important:false,hidden:true,mentions:[]});
+  body.innerHTML=
+    '<div class="qa-head">'+
+      '<span class="qa-vis" id="qaVis">'+(d.hidden?"👁 Notes are hidden from viewers":"👁 Note is visible to viewers")+'</span>'+
+      '<div class="qa-spacer"></div>'+
+      '<button class="qa-ai" id="qaAi">✦ AI: HELP ME WRITE</button>'+
+      '<span class="qa-star'+(d.important?" on":"")+'" id="qaStar"><span class="st">'+(d.important?"★":"☆")+'</span> Mark as important</span>'+
+    '</div>'+
+    '<div class="ta-wrap"><textarea class="qa-area" id="qaNote" rows="6" placeholder="Write a note or use @ to mention someone...">'+esc(d.text)+'</textarea></div>'+
+    '<div id="qaNoteChips" class="nt-mn"></div>'+
+    qaFoot("SAVE","qaSave",'',!d.text.trim())+
+    '<div class="qa-note">Saved to this contact’s Notes and to the activity feed. '+
+      '<b>Hidden from viewers</b> keeps it off any client-facing view — click the eye to change it.</div>';
+
+  var area=document.getElementById("qaNote");
+  var gate=qaGate("qaSave",function(){ return !!area.value.trim(); });
+  area.addEventListener("input",function(){ d.text=area.value; gate(); });
+  qaMentions(area,function(u){
+    if(!d.mentions.some(function(m){return m.memberId===u.id;}))d.mentions.push({memberId:u.id,memberName:u.name});
+    document.getElementById("qaNoteChips").innerHTML=d.mentions.map(function(m){return '<span>@'+esc(m.memberName)+'</span>';}).join("");
+  });
+  document.getElementById("qaNoteChips").innerHTML=d.mentions.map(function(m){return '<span>@'+esc(m.memberName)+'</span>';}).join("");
+
+  document.getElementById("qaVis").addEventListener("click",function(){
+    d.hidden=!d.hidden;
+    this.textContent=d.hidden?"👁 Notes are hidden from viewers":"👁 Note is visible to viewers";
+  });
+  document.getElementById("qaStar").addEventListener("click",function(){
+    d.important=!d.important;
+    this.classList.toggle("on",d.important);
+    this.querySelector(".st").textContent=d.important?"★":"☆";
+  });
+  document.getElementById("qaAi").addEventListener("click",function(){
+    area.value=(area.value?area.value.replace(/\s+$/,"")+"\n\n":"")+
+      "Draft from the record — edit before saving:\n"+leadInsights(l).map(function(s){return "• "+s;}).join("\n");
+    d.text=area.value; gate(); area.focus();
+    crmToast("Drafted from this contact's own record");
+  });
+  document.getElementById("qaClear").addEventListener("click",function(){ QA.note=null; renderLeadTab(); });
+  document.getElementById("qaSave").addEventListener("click",function(){
+    var text=area.value.trim(); if(!text)return;
+    var go=document.getElementById("qaSave"); go.disabled=true; go.textContent="SAVING…";
+    crFetch("/api/crm/lead/"+encodeURIComponent(l.id)+"/notes",
+      crJson({body:text,hiddenFromViewers:d.hidden,important:d.important,author:crmUserId(),mentions:d.mentions}),"Note saved")
+      .then(function(j){
+        if(!j){ go.disabled=false; go.textContent="SAVE"; return; }
+        CR.record.notes=j.notes||[]; CR_OPEN.notes=true; crSaveOpen(); crRepaint();
+        QA.note=null; renderLeadTab(); reloadTimeline();
+      });
+  });
+}
+
+/* ────────────────────────── EMAIL tab ────────────────────────── */
+
+var QA_TEMPLATES=null;
+function loadEmailTemplates(then){
+  if(QA_TEMPLATES){ if(then)then(QA_TEMPLATES); return; }
+  fetch(crmApi("/api/email/templates")).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    QA_TEMPLATES=((d&&d.templates)||[]).filter(function(t){return t&&t.name;});
+    if(then)then(QA_TEMPLATES);
+  }).catch(function(){ QA_TEMPLATES=[]; if(then)then(QA_TEMPLATES); });
+}
+
+/** Marco's signature, appended to a fresh draft the way Brivity pre-loads one. */
+function qaSignature(){
+  return '<p><br></p><p style="color:#8b95a0;font-size:12px;line-height:1.6">'+
+    '— Marco Puga<br>Happiness Begins At Home<br>'+
+    '<a href="mailto:pmarcopuga@gmail.com">pmarcopuga@gmail.com</a></p>';
+}
+
+function qaEmailTab(l,body){
+  var addr=qaPrimaryEmail(l);
+  var d=QA.email||(QA.email={to:addr,cc:[],bcc:[],subject:"",html:qaSignature(),copyMe:false,attachments:[],showCc:false,showBcc:false});
+  if(!d.to)d.to=addr;
+  var can=channelOk("email");
+  var emailOpts=qaEmailOptions(d.to);
+
+  body.innerHTML=
+    '<div class="qa-lbl">To <i>*</i></div>'+
+    '<div class="qa-to">'+
+      (emailOpts?'<select class="qa-sel" id="qaTo" style="flex:1;min-width:200px">'+emailOpts+'</select>'
+                :'<input class="qa-in" id="qaTo" placeholder="email@example.com" value="'+esc(d.to||"")+'">')+
+      '<button class="qa-addpill" id="qaCcBtn">+ CC</button>'+
+      '<button class="qa-addpill" id="qaBccBtn">+ BCC</button>'+
+    '</div>'+
+    (d.showCc?'<div class="qa-lbl">CC</div><input class="qa-in" id="qaCc" style="width:100%" placeholder="Comma-separated" value="'+esc(d.cc.join(", "))+'">':'')+
+    (d.showBcc?'<div class="qa-lbl">BCC</div><input class="qa-in" id="qaBcc" style="width:100%" placeholder="Comma-separated" value="'+esc(d.bcc.join(", "))+'">':'')+
+    '<div class="qa-lbl">Subject <i>*</i></div>'+
+    '<input class="qa-in" id="qaSubj" style="width:100%" placeholder="Subject" value="'+esc(d.subject)+'">'+
+    '<div class="qa-lbl">Email Template</div>'+
+    '<div class="ta-wrap"><input class="qa-in" id="qaTpl" style="width:100%" placeholder="Type to search templates" autocomplete="off"></div>'+
+    '<div class="qa-lbl" style="margin-top:12px">Message</div>'+
+    '<div class="qa-tb" id="qaTb">'+
+      '<button data-cmd="undo" title="Undo">↶</button><button data-cmd="redo" title="Redo">↷</button>'+
+      '<span class="sep"></span>'+
+      '<select data-block title="Format"><option value="p">Normal</option><option value="h2">Heading</option><option value="blockquote">Quote</option></select>'+
+      '<button data-cmd="bold" title="Bold"><b>B</b></button>'+
+      '<button data-cmd="italic" title="Italic"><i>I</i></button>'+
+      '<button data-cmd="underline" title="Underline"><u>U</u></button>'+
+      '<span class="sep"></span>'+
+      '<button data-cmd="insertUnorderedList" title="Bulleted list">•≡</button>'+
+      '<button data-cmd="insertOrderedList" title="Numbered list">1≡</button>'+
+      '<button data-cmd="justifyLeft" title="Align left">≡</button>'+
+      '<span class="sep"></span>'+
+      '<button data-link title="Insert link">🔗</button>'+
+      '<button data-emoji title="Emoji">😊</button>'+
+      '<button data-merge title="Insert placeholder">{ }</button>'+
+      '<span class="sep"></span>'+
+      '<button data-cmd="removeFormat" title="Clear formatting">✕</button>'+
+    '</div>'+
+    '<div class="qa-rt" id="qaBody" contenteditable="true"></div>'+
+    '<div class="qa-att" id="qaAttRow"></div>'+
+    '<input type="file" id="qaAttFile" multiple style="display:none">'+
+    '<div class="qa-head" style="padding:10px 0 0">'+
+      '<button class="qa-addpill" id="qaAttBtn">+ ADD ATTACHMENT</button>'+
+      '<div class="qa-spacer"></div>'+
+      '<button class="qa-ai" id="qaAi">✦ AI: HELP ME WRITE</button>'+
+    '</div>'+
+    qaFoot(can?"SEND":"SEND","qaSend",
+      '<label class="qa-copy"><input type="checkbox" id="qaCopy"'+(d.copyMe?" checked":"")+'> Send me a copy</label>',
+      !can)+
+    (can?'<div class="qa-note">Sends for real through Marco’s connected Gmail and logs it on the timeline as sent. '+
+          'Gmail reports no open or click tracking back, so the timeline card will say so rather than show a zero.</div>'
+        :'<div class="qa-off">'+esc(channelReason("email"))+' The draft is kept here; nothing will go out.</div>');
+
+  var rt=document.getElementById("qaBody");
+  rt.innerHTML=d.html||qaSignature();
+
+  var toEl=document.getElementById("qaTo");
+  var subj=document.getElementById("qaSubj");
+  var gate=qaGate("qaSend",function(){
+    return can && !!subj.value.trim() && !!(rt.textContent||"").trim() && /\S+@\S+\.\S+/.test(toEl.value||"");
+  });
+  toEl.addEventListener("input",function(){ d.to=toEl.value; gate(); });
+  toEl.addEventListener("change",function(){ d.to=toEl.value; gate(); });
+  subj.addEventListener("input",function(){ d.subject=subj.value; gate(); });
+  rt.addEventListener("input",function(){ d.html=rt.innerHTML; gate(); });
+
+  document.getElementById("qaCcBtn").addEventListener("click",function(){ d.showCc=!d.showCc; d.html=rt.innerHTML; renderLeadTab(); });
+  document.getElementById("qaBccBtn").addEventListener("click",function(){ d.showBcc=!d.showBcc; d.html=rt.innerHTML; renderLeadTab(); });
+  var ccEl=document.getElementById("qaCc"); if(ccEl)ccEl.addEventListener("input",function(){ d.cc=splitAddrs(ccEl.value); });
+  var bccEl=document.getElementById("qaBcc"); if(bccEl)bccEl.addEventListener("input",function(){ d.bcc=splitAddrs(bccEl.value); });
+  document.getElementById("qaCopy").addEventListener("change",function(){ d.copyMe=this.checked; });
+
+  /* execCommand is deprecated but it is the only rich-text engine available:
+     TipTap/Quill/ProseMirror are npm packages and the fast deploy path cannot
+     run `npm install` (CLAUDE.md). It works in every browser this is used in. */
+  document.querySelectorAll("#qaTb [data-cmd]").forEach(function(b){
+    b.addEventListener("mousedown",function(e){ e.preventDefault(); });
+    b.addEventListener("click",function(){ rt.focus(); document.execCommand(b.getAttribute("data-cmd"),false,null); d.html=rt.innerHTML; gate(); });
+  });
+  document.querySelector("#qaTb [data-block]").addEventListener("change",function(){
+    rt.focus(); document.execCommand("formatBlock",false,this.value); d.html=rt.innerHTML;
+  });
+  document.querySelector("#qaTb [data-link]").addEventListener("click",function(){
+    var url=prompt("Link URL:","https://"); if(!url)return;
+    if(!/^https?:\/\//i.test(url)){ crmToast("Only http(s) links can be inserted"); return; }
+    rt.focus(); document.execCommand("createLink",false,url); d.html=rt.innerHTML;
+  });
+  document.querySelector("#qaTb [data-emoji]").addEventListener("click",function(e){
+    openEmojiMenu(e.currentTarget,function(ch){ rt.focus(); document.execCommand("insertText",false,ch); d.html=rt.innerHTML; gate(); });
+  });
+  document.querySelector("#qaTb [data-merge]").addEventListener("click",function(e){
+    openActionMenu(e.currentTarget,[
+      {label:"First name",fn:function(){ insertText(rt,(l.name||"").split(" ")[0]||""); d.html=rt.innerHTML; gate(); }},
+      {label:"Full name",fn:function(){ insertText(rt,l.name||""); d.html=rt.innerHTML; gate(); }},
+      {label:"Their property",fn:function(){ insertText(rt,l.address||l.propertyInquired||""); d.html=rt.innerHTML; gate(); }},
+      {label:"My name",fn:function(){ insertText(rt,"Marco Puga"); d.html=rt.innerHTML; gate(); }}
+    ]);
+  });
+
+  // Attachments are named in the body; nothing here can upload a file to Gmail.
+  paintAtt();
+  document.getElementById("qaAttBtn").addEventListener("click",function(){ document.getElementById("qaAttFile").click(); });
+  document.getElementById("qaAttFile").addEventListener("change",function(){
+    Array.prototype.forEach.call(this.files||[],function(f){ d.attachments.push({name:f.name,size:f.size}); });
+    paintAtt(); crmToast("Listed on the draft — Gmail attachments aren't wired, so the file itself is not sent");
+  });
+  function paintAtt(){
+    var row=document.getElementById("qaAttRow");
+    row.innerHTML=d.attachments.map(function(a,i){
+      return '<span>📎 '+esc(a.name)+' <i data-rm="'+i+'">×</i></span>'; }).join("");
+    row.querySelectorAll("[data-rm]").forEach(function(x){ x.addEventListener("click",function(){
+      d.attachments.splice(+x.getAttribute("data-rm"),1); paintAtt(); }); });
+  }
+
+  loadEmailTemplates(function(tpls){
+    var input=document.getElementById("qaTpl"); if(!input)return;
+    if(!tpls.length){ input.placeholder="No saved email templates yet"; input.disabled=true; return; }
+    attachTypeahead(input,tpls.map(function(t){ return {id:t.id,label:t.name,sub:t.type||""}; }),function(pick){
+      var t=tpls.filter(function(x){return String(x.id)===String(pick.id);})[0]; if(!t)return;
+      if(t.subject&&!subj.value.trim()){ subj.value=t.subject; d.subject=t.subject; }
+      var content=t.html||t.body||t.content||"";
+      if(content){ rt.innerHTML=content+qaSignature(); d.html=rt.innerHTML; }
+      input.value=t.name; gate();
+      crmToast('Loaded template "'+t.name+'"');
+    },{emptyText:"No template by that name"});
+  });
+
+  document.getElementById("qaAi").addEventListener("click",function(){
+    if(!subj.value.trim()){ subj.value="Following up on your home search"; d.subject=subj.value; }
+    rt.innerHTML='<p>Hi '+esc((l.name||"there").split(" ")[0])+',</p><p>'+
+      esc(leadRecs(l)[0]||"Checking in on where things stand with your search.")+'</p>'+
+      '<p>Let me know a good time this week and I’ll set it up.</p>'+qaSignature();
+    d.html=rt.innerHTML; gate();
+    crmToast("Drafted from this contact's own record — read it before sending");
+  });
+
+  document.getElementById("qaClear").addEventListener("click",function(){ QA.email=null; renderLeadTab(); });
+  document.getElementById("qaSend").addEventListener("click",function(){
+    var to=(toEl.value||"").trim();
+    if(!confirm('Send "'+subj.value.trim()+'" to '+to+' now?\n\nThis sends real email through Marco\'s connected Gmail account.'))return;
+    var go=document.getElementById("qaSend"); go.disabled=true; go.textContent="SENDING…";
+    fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/send-email"),{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({to:to,cc:d.cc,subject:subj.value.trim(),html:rt.innerHTML,copyMe:d.copyMe,author:crmUserId()})})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+      .then(function(res){
+        go.disabled=false; go.textContent="SEND";
+        if(!res.ok){ crmToast(res.j.error||"Not sent"); return; }
+        crmToast("Sent to "+to);
+        l.activity=(l.activity||[]).concat([{type:"email_sent",description:subj.value.trim(),timestamp:new Date().toISOString()}]);
+        l.lastActivity=new Date().toISOString();
+        QA.email=null; renderLeadTab(); reloadTimeline(); renderLeads();
+      })
+      .catch(function(){ go.disabled=false; go.textContent="SEND"; crmToast("Couldn't reach the server — nothing was sent"); });
+  });
+}
+
+function splitAddrs(v){
+  return String(v||"").split(/[,;\s]+/).map(function(x){return x.trim();}).filter(function(x){return /\S+@\S+\.\S+/.test(x);});
+}
+function insertText(el,txt){ el.focus(); document.execCommand("insertText",false,txt); }
+
+var QA_EMOJI=["😊","👍","🙏","🎉","🏠","🔑","📍","📅","☎️","✉️","💬","✅","⭐","🔥","💡","👀"];
+function openEmojiMenu(anchor,onPick){
+  openActionMenu(anchor,QA_EMOJI.map(function(ch){ return {label:ch+"  ",fn:function(){ onPick(ch); }}; }));
+}
+
+/* ────────────────────────── CALL tab ────────────────────────── */
+
+var CALL_OUTCOMES=["Talked","Left Message","Busy","Failed","No Answer","Wrong Number"];
+
+function qaCallTab(l,body){
+  var prim=qaPrimaryPhone();
+  var d=QA.call||(QA.call={number:prim?prim.number:(l.phone||""),outcome:null,notes:"",mentions:[]});
+  var phoneOpts=qaPhoneOptions(d.number);
+  var picked=qaPhoneByNumber(d.number);
+  var dnc=!!(picked&&picked.dnc);
+
+  body.innerHTML=
+    '<div class="qa-to" style="margin-bottom:4px">Calling <b>'+esc(l.name||"this contact")+'</b></div>'+
+    '<div class="qa-lbl">Phone</div>'+
+    (phoneOpts
+      ? '<div class="qa-row"><select class="qa-sel" id="qaCallNum" style="flex:1;min-width:200px">'+phoneOpts+'</select>'+
+        (dnc?'<span class="cx-dnc">DNC</span>':'')+'</div>'
+      : '<div class="cr-empty">No phone number on this contact — add one in Contact Info first.</div>')+
+    /* No softphone is connected, so there is no dial button. Saying what the
+       tab does do is more useful than a green CALL that goes nowhere. */
+    '<div class="qa-off">Calls are placed on your own phone — nothing here dials. '+
+      'This logs the call and its outcome on the timeline once you have made it.</div>'+
+    '<div class="qa-lbl" style="margin-top:12px">Call Outcome <i>*</i></div>'+
+    '<div class="qa-pills" id="qaOut">'+CALL_OUTCOMES.map(function(o){
+      return '<button data-o="'+esc(o)+'"'+(o===d.outcome?' class="on"':'')+'>'+esc(o)+'</button>'; }).join("")+'</div>'+
+    '<div class="qa-head" style="padding:12px 0 4px">'+
+      '<span class="qa-lbl" style="margin:0">Notes</span><div class="qa-spacer"></div>'+
+      '<button class="qa-ai" id="qaAi">✦ AI: HELP ME WRITE</button></div>'+
+    '<div class="ta-wrap"><textarea class="qa-area" id="qaCallNote" rows="5" placeholder="What was said? Use @ to notify someone.">'+esc(d.notes)+'</textarea></div>'+
+    qaFoot("SAVE & LOG CALL","qaLogCall",'',!d.outcome)+
+    (dnc
+      ? '<div class="qa-warn">⚠ This number is marked <b>Do Not Call</b> on this contact. Somebody set that flag by hand — check before dialling.</div>'
+      : '<div class="qa-note">No number on this contact is marked DNC, but nothing here checks a registry — the flag is set by hand in Contact Info.</div>');
+
+  var sel=document.getElementById("qaCallNum");
+  if(sel)sel.addEventListener("change",function(){ d.number=sel.value; QA.call=d; renderLeadTab(); });
+  var area=document.getElementById("qaCallNote");
+  area.addEventListener("input",function(){ d.notes=area.value; });
+  qaMentions(area,function(u){ if(!d.mentions.some(function(m){return m.memberId===u.id;}))d.mentions.push({memberId:u.id,memberName:u.name}); });
+
+  var gate=qaGate("qaLogCall",function(){ return !!d.outcome; });
+  document.querySelectorAll("#qaOut button").forEach(function(b){
+    b.addEventListener("click",function(){
+      d.outcome=b.getAttribute("data-o");
+      document.querySelectorAll("#qaOut button").forEach(function(x){ x.classList.toggle("on",x===b); });
+      gate();
+    });
+  });
+  document.getElementById("qaAi").addEventListener("click",function(){
+    area.value=(area.value?area.value.replace(/\s+$/,"")+"\n":"")+
+      "Suggested follow-up: "+(leadRecs(l)[0]||"Confirm their timeline and next step.");
+    d.notes=area.value; area.focus();
+  });
+  document.getElementById("qaClear").addEventListener("click",function(){ QA.call=null; renderLeadTab(); });
+  document.getElementById("qaLogCall").addEventListener("click",function(){
+    if(!d.outcome){ crmToast("Pick a call outcome first"); return; }
+    var go=document.getElementById("qaLogCall"); go.disabled=true; go.textContent="SAVING…";
+    logComposerActivity(l,{
+      type:"call", description:d.outcome+(d.notes.trim()?": "+d.notes.trim().slice(0,300):""),
+      subType:d.outcome, notes:d.notes.trim()||undefined,
+      meta:{Number:d.number||"",Outcome:d.outcome,Source:"Logged from the contact record"}
+    },function(ok){
+      go.disabled=false; go.textContent="SAVE & LOG CALL";
+      if(ok){ QA.call=null; renderLeadTab(); }
+    });
+  });
+}
+
+/* ────────────────────────── TEXT tab ────────────────────────── */
+
+var QA_THREAD=null;
+function loadQaThread(leadId,then){
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(leadId)+"/timeline"))
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      QA_THREAD=((d&&d.items)||[]).filter(function(i){return i.category==="text";})
+        .slice().sort(function(a,b){ return String(a.at).localeCompare(String(b.at)); });
+      if(then)then();
+    }).catch(function(){ QA_THREAD=[]; if(then)then(); });
+}
+
+function qaTextTab(l,body){
+  var prim=qaPrimaryPhone();
+  var d=QA.text||(QA.text={number:prim?prim.number:(l.phone||""),text:""});
+  var can=channelOk("text");
+  var phoneOpts=qaPhoneOptions(d.number);
+  var picked=qaPhoneByNumber(d.number);
+  var dnc=!!(picked&&picked.dnc);
+  var lastSeen=l.lastActivity?("Last activity "+relTime(l.lastActivity)):"No activity on record yet";
+
+  var chat=QA_THREAD===null
+    ? '<div class="cr-empty">Loading this contact’s texts…</div>'
+    : (QA_THREAD.length
+        ? QA_THREAD.slice(-40).map(function(m){
+            return '<div class="qa-bub '+(m.direction==="in"?"in":"out")+'">'+esc(m.body||"")+
+              '<span class="tm">'+esc(relTime(m.at)||"")+'</span></div>'; }).join("")
+        : '<div class="cr-empty">No texts with this contact yet.</div>');
+
+  body.innerHTML=
+    '<div class="qa-head" style="padding:0 0 8px">'+
+      '<span class="qa-lbl" style="margin:0">To</span>'+
+      (phoneOpts?'<select class="qa-sel" id="qaTextNum" style="min-width:210px">'+phoneOpts+'</select>':'<span class="cr-empty">No phone number on file</span>')+
+      (dnc?'<span class="cx-dnc">DNC</span>':'')+
+      '<div class="qa-spacer"></div><span class="qa-seen">'+esc(lastSeen)+'</span></div>'+
+    '<div class="qa-chat" id="qaChat">'+chat+'</div>'+
+    '<div class="qa-head" style="padding:0 0 6px"><div class="qa-spacer"></div>'+
+      '<button class="qa-ai" id="qaAi">✦ AI: HELP ME WRITE</button></div>'+
+    '<textarea class="qa-area" id="qaTextMsg" rows="3" placeholder="Compose message">'+esc(d.text)+'</textarea>'+
+    '<div class="qa-head" style="padding:8px 0 0">'+
+      '<button class="qa-addpill" id="qaTextEmoji">😊</button>'+
+      '<span class="qa-seen" id="qaLen"></span>'+
+    '</div>'+
+    qaFoot(can?"SEND MESSAGE":"SEND MESSAGE","qaSendText",'',!can)+
+    (can?'<div class="qa-note">Sends for real over Quo from '+esc((MSG_STATUS&&MSG_STATUS.textNumber)||"the connected business line")+
+          '. The bubble appears only once Quo accepts it — a text that failed must never sit in the thread looking delivered.</div>'
+        :'<div class="qa-off">'+esc(channelReason("text"))+' The draft stays here; nothing will go out.</div>')+
+    (dnc?'<div class="qa-warn">⚠ This number is marked <b>Do Not Call</b> on this contact.</div>':'');
+
+  var chatBox=document.getElementById("qaChat"); if(chatBox)chatBox.scrollTop=chatBox.scrollHeight;
+  if(QA_THREAD===null)loadQaThread(l.id,function(){ if(ldTab==="text")renderLeadTab(); });
+
+  var sel=document.getElementById("qaTextNum");
+  if(sel)sel.addEventListener("change",function(){ d.number=sel.value; QA.text=d; renderLeadTab(); });
+  var area=document.getElementById("qaTextMsg");
+  var len=document.getElementById("qaLen");
+  var gate=qaGate("qaSendText",function(){ return can && !!area.value.trim() && !!d.number; });
+  function paintLen(){
+    var n=area.value.length;
+    // 160 is one SMS segment; past it the carrier bills more than one.
+    len.textContent=n?(n+" characters · "+Math.ceil(n/160)+" segment"+(n>160?"s":"")):"";
+  }
+  area.addEventListener("input",function(){ d.text=area.value; gate(); paintLen(); });
+  paintLen();
+  document.getElementById("qaTextEmoji").addEventListener("click",function(e){
+    openEmojiMenu(e.currentTarget,function(ch){ area.value+=ch; d.text=area.value; gate(); paintLen(); area.focus(); });
+  });
+  document.getElementById("qaAi").addEventListener("click",function(){
+    area.value="Hi "+((l.name||"there").split(" ")[0])+" — "+(leadRecs(l)[0]||"checking in on your search.")+" Any time this week work for a quick call?";
+    d.text=area.value; gate(); paintLen(); area.focus();
+    crmToast("Drafted from this contact's own record — read it before sending");
+  });
+  document.getElementById("qaClear").addEventListener("click",function(){ QA.text=null; renderLeadTab(); });
+  document.getElementById("qaSendText").addEventListener("click",function(){
+    var t=area.value.trim(); if(!t||!d.number)return;
+    if(dnc&&!confirm("This number is marked Do Not Call. Send the text anyway?"))return;
+    var go=document.getElementById("qaSendText"); go.disabled=true; go.textContent="SENDING…";
+    fetch(crmApi("/api/quo/send"),{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({to:d.number,text:t})})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+      .then(function(res){
+        go.disabled=false; go.textContent="SEND MESSAGE";
+        // Quo's own words: an A2P registration problem and a bad number need
+        // different things done about them.
+        if(!res.ok){ crmToast(res.j.error?("Not sent — "+res.j.error):"Not sent"); return; }
+        crmToast("Text sent");
+        QA.text=null; QA_THREAD=null;
+        loadQaThread(l.id,function(){ if(ldTab==="text")renderLeadTab(); });
+        reloadTimeline();
+      })
+      .catch(function(){ go.disabled=false; go.textContent="SEND MESSAGE"; crmToast("Couldn't reach the server — nothing was sent"); });
+  });
+}
+
+/* ────────────────────────── APPOINTMENT / TASK tab ────────────────────────── */
+
+/* Grouped exactly as the spec lists them, because the two groups are different
+   kinds of work and a flat list of eleven hides that. */
+var APPT_TYPES=[
+  ["Real Estate Consultation",["Buyer Consultation","Listing Consultation","Buyer/Listing Consultation",
+    "Showing Appointment","Client Meeting","General","Follow Up"]],
+  ["Recruiting / Administrative",["Recruiting","Meet & Greet","Screening","Recruiting Appointment",
+    "Signing Appointment","Recruiting Follow Up"]]
+];
+var DATE_PILLS=[["Today",0],["Tomorrow",1],["7 Days",7],["30 Days",30],["90 Days",90]];
+var TIME_PILLS=[["Morning 8 am","08:00"],["Afternoon 12 pm","12:00"],["Evening 5 pm","17:00"],["11:00 PM","23:00"]];
+
+function qaApptTab(l,body){
+  var d=QA.appointment||(QA.appointment={
+    title:"",type:"",assignee:null,location:"",date:todayKey(),time:"",priority:9,
+    instructions:null,notes:null,markComplete:false,customDate:false});
+
+  ensureRoster(function(roster){
+    if(!d.assignee)d.assignee=(roster.filter(function(u){return u.name===(l.assignedUserName||"Marco Puga");})[0]||roster[0]||{id:"marco",name:"Marco Puga"});
+    body.innerHTML=
+      '<div class="qa-lbl">Task Details (max 255 characters) <i>*</i></div>'+
+      '<textarea class="qa-area" id="qaApTitle" rows="2" maxlength="255" placeholder="What needs to happen?">'+esc(d.title)+'</textarea>'+
+      '<div class="qa-lbl">Appointment Type <i>*</i></div>'+
+      '<select class="qa-sel" id="qaApType" style="width:100%">'+
+        '<option value="">Select</option>'+
+        APPT_TYPES.map(function(g){
+          return '<optgroup label="'+esc(g[0])+'">'+g[1].map(function(t){
+            return '<option value="'+esc(t)+'"'+(t===d.type?" selected":"")+'>'+esc(t)+'</option>'; }).join("")+'</optgroup>';
+        }).join("")+'</select>'+
+      '<div class="qa-lbl">Assigned To</div>'+
+      '<select class="qa-sel" id="qaApWho" style="width:100%">'+
+        '<option value="">Anyone</option>'+
+        roster.map(function(u){ return '<option value="'+esc(u.id)+'"'+(d.assignee&&u.id===d.assignee.id?" selected":"")+'>'+esc(u.name)+'</option>'; }).join("")+
+      '</select>'+
+      '<div class="qa-lbl">Location</div>'+
+      '<input class="qa-in" id="qaApLoc" style="width:100%" placeholder="Address or place" value="'+esc(d.location)+'">'+
+      '<div class="qa-lbl">Date <i>*</i></div>'+
+      '<div class="qa-pills" id="qaApDate">'+
+        DATE_PILLS.map(function(p){
+          var key=shiftDay(p[1]);
+          return '<button data-days="'+p[1]+'"'+((!d.customDate&&d.date===key)?' class="on"':'')+'>'+esc(p[0])+'</button>'; }).join("")+
+        '<button data-custom'+(d.customDate?' class="on"':'')+'>Custom 📅</button>'+
+      '</div>'+
+      (d.customDate?'<input class="qa-in" type="date" id="qaApDateIn" style="margin-top:8px" value="'+esc(d.date)+'">':
+        '<div class="qa-seen" style="margin-top:6px">'+esc(mdy(d.date))+'</div>')+
+      '<div class="qa-lbl">Time <i>*</i></div>'+
+      '<div class="qa-pills" id="qaApTime">'+
+        TIME_PILLS.map(function(p){
+          return '<button data-t="'+p[1]+'"'+(d.time===p[1]?' class="on"':'')+'>'+esc(p[0])+'</button>'; }).join("")+
+        '<button data-tcustom'+((d.time&&!TIME_PILLS.some(function(p){return p[1]===d.time;}))?' class="on"':'')+'>Custom 🕐</button>'+
+      '</div>'+
+      /* Only rendered when the operator is off the quick pills — an empty
+         --:-- sitting under a chosen pill reads as "no time picked". */
+      ((!d.time||!TIME_PILLS.some(function(p){return p[1]===d.time;}))
+        ? '<input class="qa-in" type="time" id="qaApTimeIn" style="margin-top:8px;max-width:150px" value="'+esc(d.time)+'">'
+        : '')+
+      '<div class="qa-lbl">Priority (1: highest, 9: lowest) <i>*</i></div>'+
+      '<div class="qa-prio" id="qaApPrio">'+[1,2,3,4,5,6,7,8,9].map(function(n){
+        return '<button data-p="'+n+'"'+(d.priority===n?' class="on"':'')+'>'+n+'</button>'; }).join("")+'</div>'+
+      '<div class="qa-row" style="margin-top:12px">'+
+        '<button class="qa-exp" id="qaApAddInstr">+ ADD INSTRUCTIONS</button>'+
+        '<button class="qa-exp" id="qaApAddNotes">+ ADD NOTES</button></div>'+
+      (d.instructions!==null?'<div class="qa-sub"><span class="x" id="qaApRmInstr">×</span>'+
+        '<div class="qa-lbl" style="margin-top:0">Instructions</div>'+
+        '<textarea class="qa-area" id="qaApInstr" rows="3" placeholder="Steps for whoever picks this up">'+esc(d.instructions)+'</textarea></div>':'')+
+      (d.notes!==null?'<div class="qa-sub"><span class="x" id="qaApRmNotes">×</span>'+
+        '<div class="qa-lbl" style="margin-top:0">Notes</div>'+
+        '<textarea class="qa-area" id="qaApNotes" rows="3" placeholder="Context worth keeping">'+esc(d.notes)+'</textarea></div>':'')+
+      qaFoot("CREATE","qaApCreate",
+        '<label class="qa-copy"><input type="checkbox" id="qaApDone"'+(d.markComplete?" checked":"")+'> Mark as complete</label>',
+        !d.title.trim()||!d.date)+
+      /* No Google account is connected, so the calendar toggle is stated as
+         absent rather than drawn and ignored. */
+      '<div class="qa-off">'+esc(channelReason("calendar"))+
+        ' The task itself is real: it lands on the board, assigned and dated, and shows in the Tasks widget.</div>';
+
+    var titleEl=document.getElementById("qaApTitle");
+    var gate=qaGate("qaApCreate",function(){ return !!titleEl.value.trim()&&!!d.date; });
+    titleEl.addEventListener("input",function(){ d.title=titleEl.value; gate(); });
+    document.getElementById("qaApType").addEventListener("change",function(){ d.type=this.value; });
+    document.getElementById("qaApWho").addEventListener("change",function(){
+      var id=this.value;
+      d.assignee=id?(roster.filter(function(u){return u.id===id;})[0]||null):null;
+    });
+    document.getElementById("qaApLoc").addEventListener("input",function(){ d.location=this.value; });
+
+    document.querySelectorAll("#qaApDate button").forEach(function(b){
+      b.addEventListener("click",function(){
+        if(b.hasAttribute("data-custom")){ d.customDate=true; }
+        else { d.customDate=false; d.date=shiftDay(+b.getAttribute("data-days")); }
+        renderLeadTab();
+      });
+    });
+    var dateIn=document.getElementById("qaApDateIn");
+    if(dateIn)dateIn.addEventListener("change",function(){ d.date=this.value; gate(); });
+
+    var timeIn=document.getElementById("qaApTimeIn");
+    document.querySelectorAll("#qaApTime button").forEach(function(b){
+      b.addEventListener("click",function(){
+        if(b.hasAttribute("data-tcustom")){ d.time=""; renderLeadTab();
+          var el=document.getElementById("qaApTimeIn"); if(el)el.focus(); return; }
+        d.time=b.getAttribute("data-t"); renderLeadTab();
+      });
+    });
+    if(timeIn)timeIn.addEventListener("change",function(){ d.time=this.value; renderLeadTab(); });
+
+    document.querySelectorAll("#qaApPrio button").forEach(function(b){
+      b.addEventListener("click",function(){
+        d.priority=+b.getAttribute("data-p");
+        document.querySelectorAll("#qaApPrio button").forEach(function(x){ x.classList.toggle("on",x===b); });
+      });
+    });
+    document.getElementById("qaApAddInstr").addEventListener("click",function(){ if(d.instructions===null){d.instructions="";renderLeadTab();} });
+    document.getElementById("qaApAddNotes").addEventListener("click",function(){ if(d.notes===null){d.notes="";renderLeadTab();} });
+    var rmI=document.getElementById("qaApRmInstr"); if(rmI)rmI.addEventListener("click",function(){ d.instructions=null; renderLeadTab(); });
+    var rmN=document.getElementById("qaApRmNotes"); if(rmN)rmN.addEventListener("click",function(){ d.notes=null; renderLeadTab(); });
+    var iEl=document.getElementById("qaApInstr"); if(iEl)iEl.addEventListener("input",function(){ d.instructions=this.value; });
+    var nEl=document.getElementById("qaApNotes"); if(nEl)nEl.addEventListener("input",function(){ d.notes=this.value; });
+    document.getElementById("qaApDone").addEventListener("change",function(){ d.markComplete=this.checked; });
+
+    document.getElementById("qaClear").addEventListener("click",function(){ QA.appointment=null; renderLeadTab(); });
+    document.getElementById("qaApCreate").addEventListener("click",function(){
+      if(!d.title.trim()){ crmToast("Task details are required"); return; }
+      if(!d.date){ crmToast("Pick a date — the task needs a due date"); return; }
+      var go=document.getElementById("qaApCreate"); go.disabled=true; go.textContent="CREATING…";
+      // 1-9 maps onto the board's own four levels; inventing a fifth would
+      // make this contact's tasks sort differently from everybody else's.
+      var priority=d.priority<=2?"urgent":d.priority<=4?"high":d.priority<=6?"normal":"low";
+      var desc=[d.type?("Type: "+d.type):"",d.location?("Location: "+d.location):"",
+        d.instructions?("Instructions: "+d.instructions):"",d.notes?("Notes: "+d.notes):""].filter(Boolean).join("\n");
+      fetch(crmApi("/api/crm-tasks"),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({title:d.title.trim(),type:"appointment",priority:priority,dueDate:d.date,
+          dueTime:d.time||undefined,leadId:l.id,leadName:l.name,
+          assignedUserId:d.assignee?d.assignee.id:undefined,assignedUserName:d.assignee?d.assignee.name:undefined,
+          description:desc||undefined})})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+        .then(function(res){
+          if(!res.ok){ go.disabled=false; go.textContent="CREATE"; crmToast(res.j.error||"Could not create the task"); return; }
+          var made=res.j.task||res.j;
+          var after=function(){
+            crmToast(d.markComplete?"Task created and marked complete":"Appointment task created");
+            QA.appointment=null; renderLeadTab(); paintLeadTasks(l); reloadTimeline();
+          };
+          /* "Mark as complete" is a real completion through the same endpoint
+             the Tasks widget uses, not a flag that only looks done here. */
+          if(d.markComplete&&made&&made.id){
+            fetch(crmApi("/api/crm-tasks/"+encodeURIComponent(made.id)+"/complete"),{method:"POST"})
+              .then(after).catch(after);
+          } else after();
+        })
+        .catch(function(){ go.disabled=false; go.textContent="CREATE"; crmToast("Couldn't reach the server"); });
+    });
+  });
+}
+
+/* ────────────────────────── OTHER tab ────────────────────────── */
+
+/* The four kinds Brivity offers. `Other` is the fallback and the default. */
+var OTHER_TYPES=[
+  ["Other","A general interaction that isn’t a call, text or email"],
+  ["Pop By","An in-person drop-in, home visit or gift delivery"],
+  ["Mail","A physical letter, postcard or marketing mail merge"],
+  ["Social Media","A DM, comment or outreach on a social platform"]
+];
+
+function qaOtherTab(l,body){
+  var d=QA.other||(QA.other={date:todayKey(),type:"Other",notes:""});
+  body.innerHTML=
+    '<div class="qa-lbl">Date <i>*</i></div>'+
+    '<div class="qa-row"><input class="qa-in" type="date" id="qaOtDate" style="max-width:190px" value="'+esc(d.date)+'" max="'+esc(todayKey())+'">'+
+      '<span class="qa-seen" id="qaOtMdy">'+esc(mdy(d.date))+'</span></div>'+
+    '<div class="qa-lbl">Type</div>'+
+    '<select class="qa-sel" id="qaOtType" style="width:100%">'+OTHER_TYPES.map(function(t){
+      return '<option value="'+esc(t[0])+'"'+(t[0]===d.type?" selected":"")+'>'+esc(t[0])+'</option>'; }).join("")+'</select>'+
+    '<div class="qa-seen" id="qaOtHint" style="margin-top:5px">'+
+      esc((OTHER_TYPES.filter(function(t){return t[0]===d.type;})[0]||OTHER_TYPES[0])[1])+'</div>'+
+    '<div class="qa-lbl">Notes</div>'+
+    '<textarea class="qa-area" id="qaOtNotes" rows="5" placeholder="Leave a note...">'+esc(d.notes)+'</textarea>'+
+    qaFoot("SAVE","qaOtSave",'',!d.notes.trim())+
+    '<div class="qa-note">Logged on the activity feed under <b>Other</b> with the type you picked. '+
+      'A date in the past is kept as the date it happened and does <b>not</b> move this contact’s “last touched” forward — '+
+      'the nurture cadence reads that field.</div>';
+
+  var dateEl=document.getElementById("qaOtDate");
+  var notesEl=document.getElementById("qaOtNotes");
+  var gate=qaGate("qaOtSave",function(){ return !!notesEl.value.trim()&&!!dateEl.value; });
+  dateEl.addEventListener("change",function(){
+    d.date=dateEl.value;
+    document.getElementById("qaOtMdy").textContent=mdy(d.date);
+    gate();
+  });
+  document.getElementById("qaOtType").addEventListener("change",function(){
+    d.type=this.value;
+    document.getElementById("qaOtHint").textContent=(OTHER_TYPES.filter(function(t){return t[0]===d.type;})[0]||OTHER_TYPES[0])[1];
+  });
+  notesEl.addEventListener("input",function(){ d.notes=notesEl.value; gate(); });
+
+  // CLEAR resets NOTES, puts DATE back to today and TYPE back to Other.
+  document.getElementById("qaClear").addEventListener("click",function(){ QA.other=null; renderLeadTab(); });
+  document.getElementById("qaOtSave").addEventListener("click",function(){
+    var text=notesEl.value.trim(); if(!text)return;
+    var go=document.getElementById("qaOtSave"); go.disabled=true; go.textContent="SAVING…";
+    logComposerActivity(l,{
+      type:"other", description:text.slice(0,600), subType:d.type, activityDate:d.date,
+      meta:{Type:d.type,Date:mdy(d.date)}
+    },function(ok){
+      go.disabled=false; go.textContent="SAVE";
+      if(ok){ QA.other=null; renderLeadTab(); }
+    });
+  });
+}
+
+/**
+ * Write one composer activity entry, then refresh what shows it.
+ * Every tab that logs rather than sends goes through here, so the local copy,
+ * the feed and the lead table can never disagree about what was recorded.
+ */
+function logComposerActivity(l,entry,then){
+  if(!l._live){
+    crmToast("Logged (demo row — not saved)");
+    if(then)then(false);
+    return;
+  }
+  var payload={type:entry.type,description:entry.description,author:crmUserId()};
+  if(entry.subType)payload.subType=entry.subType;
+  if(entry.notes)payload.notes=entry.notes;
+  if(entry.meta)payload.meta=entry.meta;
+  if(entry.activityDate)payload.activityDate=entry.activityDate;
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/activity"),{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
+    .then(function(res){
+      if(!res.ok){ crmToast(res.j.error||"Could not save"); if(then)then(false); return; }
+      crmToast("Logged");
+      l.activity=res.j.activity||l.activity;
+      // A back-dated entry must not look like a fresh touch on the lead table.
+      if(!entry.activityDate||entry.activityDate===todayKey())l.lastActivity=new Date().toISOString();
+      reloadTimeline(); renderLeads(); renderTakeAction(); renderFeed();
+      if(then)then(true);
+    })
+    .catch(function(){ crmToast("Couldn't reach the server"); if(then)then(false); });
+}
+
+/** The tab router. */
+function renderLeadTab(){
+  var l=LEADS.find(function(x){return x.id===currentLeadId;}); if(!l)return;
+  var body=document.getElementById("ldTabBody"); if(!body)return;
+  if(ldTab==="note")qaNoteTab(l,body);
+  else if(ldTab==="email")qaEmailTab(l,body);
+  else if(ldTab==="call")qaCallTab(l,body);
+  else if(ldTab==="text")qaTextTab(l,body);
+  else if(ldTab==="appointment")qaApptTab(l,body);
+  else qaOtherTab(l,body);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE ACTIVITY TIMELINE.
+
+   One reverse-chronological feed over every channel, from the server's
+   /timeline endpoint — which merges the lead's activity, the real Quo SMS
+   thread, outreach sends and their measured opens, and the contact's tasks.
+
+   The filter bar counts each kind. A kind with nothing in it is DISABLED and
+   still shows its zero: the zero is information ("this contact has never been
+   called"), and hiding the pill would turn that into an absence of a question.
+
+   Open/click badges are drawn ONLY where this system measured them — its own
+   outreach pixel. Mail sent through Gmail reports nothing back, so those cards
+   say "no tracking" in amber rather than "0 opens" in grey. They are different
+   statements and the second one is a lie about a message that may well have
+   been read.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var TL={leadId:null,items:[],counts:{},unavailable:[],loading:false,err:null};
+var TL_FILTER="all";
+
+/* Icon, label and order for the filter bar. `web` is Brivity's WEB/MARKET —
+   here it is the outreach this system genuinely sends and measures. */
+var TL_KINDS=[
+  ["all","All","◍"],
+  ["note","Notes","✎"],
+  ["email","Emails","✉"],
+  ["call","Calls","☎"],
+  ["text","Texts","💬"],
+  ["appointment","Appointments","🗓"],
+  ["task","Tasks","＋"],
+  ["other","Other","≡"],
+  ["web","Reports","🖥"]
+];
+function tlIcon(cat){
+  for(var i=0;i<TL_KINDS.length;i++)if(TL_KINDS[i][0]===cat)return TL_KINDS[i][2];
   return "•";
 }
 
-function activityFeedHTML(l){
-  var all=(l.activity||[]).slice();
-  var counts={all:all.length};
-  all.forEach(function(a){ var b=feedBucket(a.type); counts[b]=(counts[b]||0)+1; });
-  var bar=FEED_KINDS.map(function(k){
-    var n=counts[k[0]]||0;
-    /* A filter that would show nothing is disabled rather than hidden: the
-       zero is information — it says this contact has never been called. */
-    return '<button data-ff="'+k[0]+'" class="'+(FEED_FILTER===k[0]?"on":"")+'"'+(n?"":" disabled")+
-      '><span>'+k[2]+'</span> '+esc(k[1])+' <span class="n">'+n+'</span></button>';
-  }).join("");
-  return '<div class="ld-sec-h">Activity</div>'+
-    '<div class="ff" id="crFf">'+bar+'</div>'+
-    '<div id="ldTimeline">'+feedRowsHTML(l)+'</div>';
+function reloadTimeline(){
+  var id=currentLeadId; if(!id)return;
+  TL.loading=true; TL.err=null; TL.leadId=id;
+  fetch(crmApi("/api/crm/lead/"+encodeURIComponent(id)+"/timeline"))
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:false,j:{}}; }); })
+    .then(function(res){
+      TL.loading=false;
+      if(TL.leadId!==id)return;                 // the operator moved on mid-flight
+      if(!res.ok){ TL.err=(res.j&&res.j.error)||"Could not load this contact's history"; TL.items=[]; TL.counts={}; }
+      else { TL.items=res.j.items||[]; TL.counts=res.j.counts||{}; TL.unavailable=res.j.unavailable||[]; }
+      renderActivityFeed();
+    })
+    .catch(function(){
+      TL.loading=false;
+      if(TL.leadId!==id)return;
+      /* An empty feed would read as "nothing ever happened with this person",
+         which is a very different and much worse statement than "we could not
+         load it". */
+      TL.err="Could not reach the server — this contact's history is not shown.";
+      TL.items=[]; TL.counts={};
+      renderActivityFeed();
+    });
 }
 
-function feedRowsHTML(l){
-  var items=(l.activity||[]).slice()
-    .filter(function(a){ return FEED_FILTER==="all"||feedBucket(a.type)===FEED_FILTER; })
-    // Newest first, by the timestamp itself rather than array order — imported
-    // history and live logging arrive interleaved.
-    .sort(function(a,b){ return String(b.timestamp||b.at||"").localeCompare(String(a.timestamp||a.at||"")); })
-    .slice(0,40);
-  if(!items.length){
-    return '<div class="empty" style="padding:16px 0">'+
-      (FEED_FILTER==="all"?"No activity logged yet.":"Nothing of that kind on this contact.")+'</div>';
-  }
-  var label=function(t){ return String(t||"activity").replace(/_/g," ").replace(/^./,function(c){return c.toUpperCase();}); };
-  return items.map(function(a){
-    var text=a.description||a.note||"", when=a.timestamp||a.at||"";
-    return '<div class="tl"><div class="dot">'+feedIcon(feedBucket(a.type))+'</div>'+
-      '<div><div class="tt">'+esc(label(a.type))+(text?" — "+esc(text):"")+'</div>'+
-      '<div class="tm">'+(when?esc(relTime(when)):"")+'</div></div></div>';
+function tlBarHTML(){
+  return TL_KINDS.map(function(k){
+    var n=TL.counts[k[0]]||0;
+    return '<button data-tl="'+k[0]+'" class="'+(TL_FILTER===k[0]?"on":"")+'"'+(n?"":" disabled")+
+      ' title="'+esc(k[1])+'"><span class="ic">'+k[2]+'</span> '+esc(k[1])+' <span class="n">'+n+'</span></button>';
   }).join("");
+}
+
+function tlDetailHTML(detail){
+  if(!detail)return "";
+  return Object.keys(detail).map(function(k){
+    var v=detail[k];
+    if(v===null||v==="")return "";
+    return '<div class="kv"><b>'+esc(k)+':</b> <span>'+esc(String(v))+'</span></div>';
+  }).join("");
+}
+
+function tlCardHTML(it){
+  var tags=[];
+  if(it.subType)tags.push('<span class="tl-pill sub">'+esc(it.subType)+'</span>');
+  if(it.direction)tags.push('<span class="tl-pill dir">'+(it.direction==="in"?"INCOMING":"OUTGOING")+'</span>');
+  if(typeof it.opens==="number"){
+    // Measured by this system's own pixel, so the number means something.
+    tags.push('<span class="tl-pill '+(it.opens?"open":"zero")+'">'+it.opens+' OPEN'+(it.opens===1?"":"S")+'</span>');
+  } else if(it.noTracking){
+    tags.push('<span class="tl-pill untracked" title="Gmail reports no open or click data back to this system">NO TRACKING</span>');
+  }
+  return '<div class="tlc">'+
+    '<div class="ico '+esc(it.category)+'">'+tlIcon(it.category)+'</div>'+
+    '<div class="bd">'+
+      /* The author is only appended when the headline does not already name
+         them — "Marco Puga emailed Darla · Marco Puga" says it twice. */
+      '<div class="hd"><span class="ti">'+esc(it.title)+
+        ((it.author&&String(it.title).indexOf(it.author)<0)?' <span style="font-weight:400;color:#98a2ad">· '+esc(it.author)+'</span>':'')+'</span>'+
+        '<span class="tm">'+esc(tlStamp(it.at))+'</span></div>'+
+      (it.body?'<div class="bodytx">'+esc(it.body)+'</div>':'')+
+      tlDetailHTML(it.detail)+
+      (tags.length?'<div class="tags">'+tags.join("")+'</div>':'')+
+    '</div></div>';
+}
+
+/** "08/17/26 at 7:03 pm" — the spec's exact-timestamp format. */
+function tlStamp(iso){
+  if(!iso)return "";
+  var d=new Date(iso); if(isNaN(d.getTime()))return String(iso);
+  var mm=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+  var yy=String(d.getFullYear()).slice(2);
+  var h=d.getHours(), ap=h<12?"am":"pm", h12=h%12===0?12:h%12;
+  return mm+"/"+dd+"/"+yy+" at "+h12+":"+String(d.getMinutes()).padStart(2,"0")+" "+ap;
+}
+
+function activityFeedHTML(){
+  var rows;
+  if(TL.err)rows='<div class="wdg-off">'+esc(TL.err)+'</div>';
+  else if(TL.loading&&!TL.items.length)rows='<div class="wdg-note" style="padding:14px 0">Loading this contact’s history…</div>';
+  else {
+    var list=TL.items.filter(function(i){ return TL_FILTER==="all"||i.category===TL_FILTER; });
+    rows=list.length?list.map(tlCardHTML).join("")
+      :'<div class="empty" style="padding:16px 0">'+
+        (TL_FILTER==="all"?"No activity logged yet.":"Nothing of that kind on this contact.")+'</div>';
+  }
+  /* The limits are named next to the feed, not buried, because two of the
+     pills would otherwise be read as counts of something that is simply not
+     being collected. */
+  var note=(TL.unavailable||[]).map(function(u){ return "<b>"+esc(u.scope)+":</b> "+esc(u.reason); }).join("<br>");
+  return '<div class="ld-sec-h">Activity</div>'+
+    '<div class="tlbar" id="tlBar">'+tlBarHTML()+'</div>'+
+    '<div id="ldTimeline">'+rows+'</div>'+
+    (note?'<div class="tl-note">'+note+'</div>':'');
 }
 
 function renderActivityFeed(){
-  var l=LEADS.find(function(x){return x.id===currentLeadId;}); if(!l)return;
   var host=document.getElementById("crFeed"); if(!host)return;
-  host.innerHTML=activityFeedHTML(l);
-  host.querySelectorAll("#crFf button[data-ff]").forEach(function(b){
+  host.innerHTML=activityFeedHTML();
+  host.querySelectorAll("#tlBar button[data-tl]").forEach(function(b){
     b.addEventListener("click",function(){
       if(b.disabled)return;
-      FEED_FILTER=b.getAttribute("data-ff");
+      TL_FILTER=b.getAttribute("data-tl");
       renderActivityFeed();
     });
   });
@@ -6005,77 +7014,25 @@ function rightStackHTML(l){
   '</div>';
 }
 
-function renderLeadTab(){
-  const l=LEADS.find(x=>x.id===currentLeadId); if(!l)return; const body=document.getElementById("ldTabBody");
-  if(ldTab==="note"){
-    body.innerHTML='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="mini-pill" style="background:#fff;border:1px solid var(--line);color:var(--teal)">✦ AI: Help Me Write</button></div><textarea class="ld-note" id="ldNote" placeholder="Write a note or use @ to notify someone on your team">'+esc(l.crmNotes||"")+'</textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSaveNote">SAVE NOTE</button></div>';
-    document.getElementById("ldSaveNote").addEventListener("click",()=>{ l.crmNotes=document.getElementById("ldNote").value; logActivity("note","Note updated");
-      fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({crmNotes:l.crmNotes})}).catch(()=>{}); });
-  } else if(ldTab==="call"){
-    const outs=["Talked","Left Message","Busy","Failed","No Answer","Wrong Number"];
-    body.innerHTML='<div style="color:var(--label);font-size:13px;font-weight:600;margin-bottom:10px">Call Outcome</div><div class="outcome" id="ldOut">'+outs.map(o=>'<button class="'+(o===ldOutcome?"on":"")+'" data-o="'+o+'">'+o+'</button>').join("")+'</div><textarea class="ld-note" id="ldCallNote" placeholder="Call notes…" style="min-height:90px"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldLogCall">LOG CALL</button></div>';
-    document.querySelectorAll("#ldOut button").forEach(b=>b.addEventListener("click",()=>{ldOutcome=b.getAttribute("data-o");document.querySelectorAll("#ldOut button").forEach(x=>x.classList.toggle("on",x===b));}));
-    document.getElementById("ldLogCall").addEventListener("click",()=>logActivity("call",(ldOutcome||"Call")+(document.getElementById("ldCallNote").value?": "+document.getElementById("ldCallNote").value:"")));
-  } else if(ldTab==="text"){
-    body.innerHTML='<textarea class="ld-note" id="ldTxt" placeholder="Type a text message…" style="min-height:90px"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSendTxt">LOG TEXT</button></div><div style="font-size:11px;color:#98a2ac;text-align:right;margin-top:4px">Logs the text on the timeline — to actually send, use the Message Center.</div>';
-    document.getElementById("ldSendTxt").addEventListener("click",()=>{const v=document.getElementById("ldTxt").value.trim();if(v)logActivity("text",v);});
-  } else if(ldTab==="email"){
-    body.innerHTML='<input class="ld-input" id="ldSubj" placeholder="Subject" style="margin-bottom:10px"><textarea class="ld-note" id="ldMail" placeholder="Write your email…"></textarea><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldSendMail">LOG EMAIL</button></div><div style="font-size:11px;color:#98a2ac;text-align:right;margin-top:4px">Logs the email on the timeline — nothing is sent from here.</div>';
-    document.getElementById("ldSendMail").addEventListener("click",()=>{
-      var subj=document.getElementById("ldSubj").value.trim(), bodyTxt=document.getElementById("ldMail").value.trim();
-      logActivity("email",(subj||"Email")+(bodyTxt?" — "+bodyTxt.slice(0,200):""));
-    });
-  } else if(ldTab==="appointment"){
-    body.innerHTML=
-      '<div class="ld-flabel">Task Details (max 255 characters) <span style="color:#e05a45">*</span></div>'+
-      '<textarea class="ld-note" id="ldApptTask" maxlength="255" placeholder="" style="min-height:60px"></textarea>'+
-      '<div style="display:flex;gap:10px;margin:10px 0"><button class="rbtn" style="width:auto;padding:6px 14px">ADD INSTRUCTIONS +</button><button class="rbtn" style="width:auto;padding:6px 14px">ADD NOTES +</button></div>'+
-      '<div class="ld-flabel">Priority (1: highest, 9: lowest) <span style="color:#e05a45">*</span></div>'+
-      '<div class="prio" id="ldPrio">'+[1,2,3,4,5,6,7,8,9].map(n=>'<label><input type="radio" name="ldprio" value="'+n+'"'+(n===9?" checked":"")+'> '+n+'</label>').join("")+'</div>'+
-      '<div class="ld-flabel" style="margin-top:12px">Appointment Type <span style="color:#e05a45">*</span></div>'+
-      '<select class="ld-input" id="ldApptType"><option>Select</option><option>Buyer Consultation</option><option>Listing Presentation</option><option>Showing</option><option>Closing</option><option>Follow-up Call</option></select>'+
-      '<div class="ld-flabel" style="margin-top:12px">Assigned To</div>'+
-      '<select class="ld-input" id="ldApptWho"><option value="marco">Marco Puga</option><option value="wesley">Wesley</option><option value="kendrick">Kendrick</option><option value="carlos">Carlos</option></select>'+
-      '<div class="ld-flabel" style="margin-top:12px">Location</div>'+
-      '<input class="ld-input" id="ldApptLoc" placeholder="Address or place">'+
-      '<div class="ld-flabel" style="margin-top:12px">Date &amp; time</div>'+
-      '<div style="display:flex;gap:10px"><input class="ld-input" type="date" id="ldDate"><input class="ld-input" type="time" id="ldTime"></div>'+
-      '<div style="margin-top:12px;text-align:right"><button class="pill-btn" id="ldSched">SCHEDULE</button></div>';
-    /* SCHEDULE creates a REAL task via /api/crm-tasks — the old handler
-       collapsed everything into one timeline line and silently discarded the
-       priority, type, assignee, date and time the user had just picked. */
-    document.getElementById("ldSched").addEventListener("click",()=>{
-      const task=document.getElementById("ldApptTask").value.trim();
-      const loc=document.getElementById("ldApptLoc").value.trim();
-      const typ=document.getElementById("ldApptType").value;
-      const whoSel=document.getElementById("ldApptWho");
-      const who=whoSel.value, whoName=whoSel.options[whoSel.selectedIndex].textContent;
-      const date=document.getElementById("ldDate").value, time=document.getElementById("ldTime").value;
-      if(!task){ crmToast("Task details are required"); return; }
-      if(!date){ crmToast("Pick a date — the task needs a due date"); return; }
-      const pr=+(document.querySelector('#ldPrio input:checked')||{value:9}).value;
-      const priority=pr<=2?"urgent":pr<=4?"high":pr<=6?"normal":"low";
-      const desc=[typ&&typ!=="Select"?("Type: "+typ):"",loc?("Location: "+loc):""].filter(Boolean).join("\n");
-      fetch(crmApi("/api/crm-tasks"),{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({title:task,type:"appointment",priority:priority,dueDate:date,dueTime:time||undefined,
-          leadId:l.id,leadName:l.name,assignedUserId:who,assignedUserName:whoName,description:desc||undefined})})
-        .then(r=>{ if(r.ok){ logActivity("appointment",task+(loc?" @ "+loc:"")+(date?" on "+date+(time?" "+time:""):""));
-            crmToast("Appointment task created"); paintLeadTasks(l); }
-          else crmToast("Could not create the task"); })
-        .catch(()=>crmToast("Could not reach the server"));
-    });
-  } else {
-    body.innerHTML='<input class="ld-input" id="ldOtherTitle" placeholder="Log an activity…"><div style="margin-top:10px;text-align:right"><button class="pill-btn" id="ldLogOther">LOG</button></div>';
-    document.getElementById("ldLogOther").addEventListener("click",()=>logActivity("other",document.getElementById("ldOtherTitle").value||"Activity"));
-  }
-}
 document.addEventListener("click",e=>{ if(!e.target.closest("#ddMenu")&&!e.target.closest(".editable")&&!e.target.closest("[data-dd]")&&!e.target.closest("select")&&!e.target.closest("#userFilter")) closeDD(); });
 /* Close anchored menus when the page scrolls out from under them — but NOT
    when the scroll happens INSIDE the menu (the Columns picker has its own
-   scrollable list; scrolling it must not close it). */
+   scrollable list; scrolling it must not close it), and NOT when the "scroll"
+   was a side effect of the page repainting itself.
+   That second case is real: the contact record loads its activity feed
+   asynchronously, and the feed growing from one loading line to forty cards
+   changes the document height, which fires a scroll event. Closing on that
+   shut the Assigned-To menu a moment after the operator opened it. The test
+   is whether the menu's own anchor actually MOVED — if it is still in the
+   same place on screen, nothing scrolled out from under anything. */
 window.addEventListener("scroll",function(e){
   var t=e.target;
   if(t&&t.nodeType===1&&ddMenu.contains(t))return;
+  var anchor=ddMenu._for;
+  if(anchor&&anchor.isConnected){
+    var r=anchor.getBoundingClientRect();
+    if(ddMenu._anchorAt&&Math.abs(r.top-ddMenu._anchorAt.top)<1&&Math.abs(r.left-ddMenu._anchorAt.left)<1)return;
+  }
   closeDD();
 },true);
 /* Clicks inside the menu never bubble to the document-level closer. Without
@@ -6580,6 +7537,7 @@ refreshEmailConn();
 wireToolbarDropdowns();
 loadTablePrefs();      // per-user Columns + Sort By, saved server-side
 loadUiPrefs();         // per-user UI switches (contact record's AI widget)
+loadMessagingStatus(); // whether the composer's SEND buttons can really send
 loadTagTemplates();    // tag type-ahead in the contact record's Details block
 paintSortPills();
 if(typeof paintSortArrows==="function")paintSortArrows();

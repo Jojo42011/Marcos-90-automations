@@ -90,6 +90,7 @@ try {
   await page.waitForSelector("#ldTimeline");
 
   // timeline shows the server-side activity (the reload-persistence fix)
+  await page.waitForFunction(() => /Saturday/.test(document.getElementById("ldTimeline").textContent), null, { timeout: 8000 }).catch(() => {});
   const tl = await page.textContent("#ldTimeline");
   ok("timeline renders server activity with text and time", /Saturday/.test(tl));
 
@@ -160,15 +161,19 @@ try {
   await page.evaluate(() => { document.getElementById("txDetailOv").style.display = "none"; });
 
   // appointment tab creates a REAL task with the picked fields
+  // (composer phase: the tab is now the spec's Appointment/Task form)
   await page.click('#ldTabs button[data-t="appointment"]');
-  await page.fill("#ldApptTask", "Showing at 77 Cibolo Ridge");
-  await page.selectOption("#ldApptType", "Showing");
-  await page.selectOption("#ldApptWho", "carlos");
-  await page.fill("#ldDate", "2026-08-20");
-  await page.fill("#ldTime", "14:00");
-  await page.check('#ldPrio input[value="2"]');
-  await page.click("#ldSched");
-  await page.waitForTimeout(500);
+  await page.waitForSelector("#qaApTitle");
+  await page.fill("#qaApTitle", "Showing at 77 Cibolo Ridge");
+  await page.selectOption("#qaApType", "Showing Appointment");
+  await page.selectOption("#qaApWho", "carlos");
+  await page.click('#qaApDate button[data-custom]');
+  await page.waitForSelector("#qaApDateIn");
+  await page.fill("#qaApDateIn", "2026-08-20");
+  await page.fill("#qaApTimeIn", "14:00");
+  await page.click('#qaApPrio button[data-p="2"]');
+  await page.click("#qaApCreate");
+  await page.waitForTimeout(700);
   const tasks = await J(await fetch(B + "/api/crm-tasks?leadId=lead_1"));
   const t0 = (tasks.tasks || [])[0];
   ok("appointment created a real task", !!t0, JSON.stringify(tasks).slice(0, 120));
@@ -206,9 +211,10 @@ try {
   await page.waitForSelector("#leadRows tr");
   await page.click('#leadRows .ldlink:has-text("Prime Lead")');
   await page.waitForSelector("#ldTimeline");
+  await page.waitForFunction(() => /Saturday/.test(document.getElementById("ldTimeline").textContent), null, { timeout: 8000 }).catch(() => {});
   const tl2 = await page.textContent("#ldTimeline");
   ok("logged call survives reload", /Saturday/.test(tl2));
-  ok("appointment log survives reload", /Cibolo Ridge/.test(tl2));
+  ok("the appointment task shows on the timeline", /Cibolo Ridge/.test(tl2), tl2.slice(0, 200));
   await openAcc("details");
   ok("details survive reload", /Updated background note/.test(await page.textContent('#crPanel [data-dtrow="description"]')));
   ok("tag survives reload", /Investor/.test(await page.textContent("#crTagRow")));
