@@ -937,6 +937,13 @@ app.get("/listings", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "listings.html"));
 });
 
+/* The CMA wizard. Not a sidebar tab, for the same reason MLS is not one: a
+   CMA is built for a contact, and opening it standalone loses that. The CRM's
+   CMA widget links here with ?leadId=. */
+app.get("/cma", requireAuthPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "cma.html"));
+});
+
 /** One listing, in full — where a click in the MLS tab lands. */
 app.get("/listing", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "listing.html"));
@@ -2085,6 +2092,29 @@ app.get("/r/report", async (req, res) => {
     res.end(renderPublicReport(report, built));
   } catch (err) {
     res.status(500).send(publicShell("We couldn't build that report just now.", (err as Error).message));
+  }
+});
+
+/** Published CMA — the client-facing page step 7 creates. */
+app.get("/c/:id", async (req, res) => {
+  try {
+    const store = await import("./core/cmaStore.js");
+    const { cmaResults } = await import("./core/cmaComps.js");
+    const { renderPublicCma } = await import("./core/outreachPublicPages.js");
+    const session = store.getSession(String(req.params.id));
+    /* A draft is deliberately indistinguishable from a missing one out here.
+       An unpublished CMA is unfinished work on a client's house, and "this
+       exists but you may not see it" is itself a disclosure. */
+    if (!session || session.status !== "published") {
+      res.status(404).send(publicShell("That report is not available.",
+        "The link may have expired, or the report may not have been published yet. Reply to Marco and he'll re-send it."));
+      return;
+    }
+    const comps = store.listComparables(session.id);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.end(renderPublicCma(session, comps, cmaResults(session, comps)));
+  } catch (err) {
+    res.status(500).send(publicShell("We couldn't load that report.", (err as Error).message));
   }
 });
 
@@ -4071,6 +4101,39 @@ app.delete("/api/outreach/alert-templates/:id", async (req, res) => {
    shape rather than returning a zero that would read as "none created".
    ═══════════════════════════════════════════════════════════════════════ */
 
+/**
+ * The CMA half of the reports dashboard.
+ *
+ * This block used to say no CMA generator existed, which was true until the
+ * wizard was built. What stays true is the shape of the data behind it: the
+ * board publishes no solds, so `soldFromFeed` is false and the count of CMAs
+ * carrying a sold comparable is reported separately — a CMA built on asking
+ * prices alone is a weaker document and the dashboard should not hide that.
+ */
+function cmaKpi(): Record<string, unknown> {
+  try {
+     
+    const store = require("./core/cmaStore.js") as typeof import("./core/cmaStore.js");
+    const sessions = store.listSessions({ limit: 500 });
+    let withSold = 0;
+    for (const s of sessions) {
+      if (store.listComparables(s.id, "SOLD").length > 0) withSold++;
+    }
+    return {
+      available: true,
+      created: sessions.length,
+      published: sessions.filter((s) => s.status === "published").length,
+      withSoldComps: withSold,
+      soldFromFeed: false,
+      note:
+        "Sold comparables do not come from the MLS feed — it publishes Active and Pending only. They come from " +
+        "Marco's own closed transactions or are typed in, so a CMA with no sold comps is built on asking prices.",
+    };
+  } catch (err) {
+    return { available: false, reason: (err as Error).message };
+  }
+}
+
 app.get("/api/outreach/reports-dashboard", async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
@@ -4126,10 +4189,494 @@ app.get("/api/outreach/reports-dashboard", async (req, res) => {
         openRatePct: totalSends ? Math.round((totalOpens / totalSends) * 100) : null,
         totalSends,
       },
-      cma: {
-        available: false,
-        reason: "No CMA generation is wired into this CRM, so there are no CMA reports to count. Market Reports are the live thing this system creates and sends.",
+      cma: cmaKpi(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CMA — the Comparative Market Analysis wizard.
+
+   Seven steps: Start, then one selection step for each of Active, Pending,
+   Sold and Off Market, then Results and Publish. The selection steps look
+   identical and are not: see src/core/cmaComps.ts for which of them has a
+   board behind it and which is hand entry, and why.
+
+   The three things this wizard is asked for and cannot do, each answered in
+   place rather than drawn as dead furniture:
+
+     · THE MAP. Every one of the ~32k rows in the mirror has geo.lat null —
+       counted, not sampled (mlsFacets runs that check on every refresh). So
+       there are no pins, no "redo search here" against map bounds, no
+       distance sort and no mile radius. The area is resolved by the market
+       report's widening place ladder (postal → city → county → board) and the
+       wizard reports which rung it settled on.
+     · STREET VIEW AND ADDRESS AUTOCOMPLETE. Both are Google Maps Platform
+       products and this system has no key for any of them. The subject
+       address is typed and validated against the cities the board actually
+       covers; the subject image is the MLS photo when the address matches a
+       listing, and otherwise nothing.
+     · A BOARD-WIDE SOLD SEARCH. The feed has no solds. Marco's own closed
+       transactions do carry real list-and-sold pairs and are offered as what
+       they are.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Ladder builders for the step-1 dropdowns. Values are what the SQL sees. */
+function cmaPriceLadder(): number[] {
+  const out: number[] = [];
+  for (let v = 50000; v <= 700000; v += 25000) out.push(v);
+  return out;
+}
+function cmaBathLadder(): number[] {
+  const out: number[] = [];
+  for (let v = 1; v <= 10; v += 0.5) out.push(v);
+  return out;
+}
+function cmaSqftLadder(): number[] {
+  const out: number[] = [];
+  for (let v = 500; v <= 9500; v += 500) out.push(v);
+  return out;
+}
+/* The spec's lot ladder mixes square feet with acres. The feed publishes
+   acres (`property.acres`), so the square-foot rungs are converted rather than
+   compared against a different unit — 2,000 sqft against a column holding
+   0.046 would match every lot on the board. */
+const CMA_LOT_LADDER: Array<{ value: number; label: string }> = [
+  { value: 2000 / 43560, label: "2,000 sqft" },
+  { value: 4500 / 43560, label: "4,500 sqft" },
+  { value: 6500 / 43560, label: "6,500 sqft" },
+  { value: 8000 / 43560, label: "8,000 sqft" },
+  ...[0.25, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 10, 15, 20, 25].map((a) => ({
+    value: a,
+    label: `${a} acre${a === 1 ? "" : "s"}`,
+  })),
+];
+
+const CMA_YEAR_BUILT: Array<{ value: number | null; label: string }> = [
+  { value: null, label: "Any" },
+  { value: 1, label: "Last 1 year" },
+  { value: 5, label: "Last 5 years" },
+  { value: 10, label: "Last 10 years" },
+  { value: 20, label: "Last 20 years" },
+  { value: 30, label: "Last 30 years" },
+  { value: 50, label: "Last 50 years" },
+  { value: 100, label: "Last 100 years" },
+];
+
+const CMA_STATUS_DATE: Array<{ value: number | null; label: string }> = [
+  { value: null, label: "Any" },
+  { value: 30, label: "Last 30 days" },
+  { value: 60, label: "Last 60 days" },
+  { value: 90, label: "Last 90 days" },
+  { value: 180, label: "Last 180 days" },
+  { value: 365, label: "Last 1 year" },
+  { value: 730, label: "Last 2 years" },
+];
+
+app.get("/api/cma/meta", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { getMlsFacets } = await import("./core/mlsFacets.js");
+    const { CANDIDATE_SORTS, UNAVAILABLE_SORT } = await import("./core/cmaComps.js");
+    const facets = getMlsFacets();
+    res.json({
+      ok: true,
+      /* One board, named rather than implied. A second MLS would appear here
+         without the form learning a new shape. */
+      mlsOptions: [
+        { value: "SABOR", label: "TX - SABOR - San Antonio Board of REALTORS", connected: true },
+      ],
+      propertyTypes: facets.propertyTypes,
+      subTypes: facets.subTypes.slice(0, 20),
+      cities: facets.cities.slice(0, 60),
+      statuses: facets.statuses,
+      ladders: {
+        price: cmaPriceLadder(),
+        beds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        baths: cmaBathLadder(),
+        sqft: cmaSqftLadder(),
+        lotSize: CMA_LOT_LADDER,
+        yearBuilt: CMA_YEAR_BUILT,
+        statusDate: CMA_STATUS_DATE,
       },
+      sorts: CANDIDATE_SORTS,
+      unavailableSort: UNAVAILABLE_SORT,
+      /* Everything the spec asks for that this data cannot answer, named
+         once so the page renders the reasons instead of hard-coding them. */
+      unavailable: [
+        {
+          field: "Search radius (0.25 – 100 miles)",
+          reason:
+            "Listings on this feed carry no latitude or longitude, so a radius around the subject cannot be " +
+            "measured. The comp area widens by place instead — postal code, then city, then county, then the " +
+            "whole board — and stops at the first rung with enough comparables. The wizard reports which one it used.",
+        },
+        {
+          field: "Map view, price pins and “Redo search here”",
+          reason:
+            "A map view, geocoded price pins and re-searching against map bounds all need a coordinate on every " +
+            "listing. There is none on any of the ~32,000 rows in this mirror, so no map is drawn rather than an " +
+            "empty one. What the rail shows instead is built from data the feed does publish.",
+        },
+        {
+          field: "Google Street View image of the subject",
+          reason:
+            "No Google Maps Platform key is configured for this system. When the subject address matches a " +
+            "listing in the feed, that listing's own photo is used; otherwise the image is left empty.",
+        },
+        {
+          field: "Address autocomplete and geocoding",
+          reason:
+            "No Google Maps Platform key, so there is nothing to autocomplete or geocode against. Type the address " +
+            "in full — it is checked against the cities and postal codes this board actually covers, so a typo is " +
+            "caught before the comp search runs.",
+        },
+        ...facets.unavailable,
+      ],
+      facetsComputedAt: facets.computedAt,
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** Every CMA, newest first. `?leadId=` narrows to one contact's. */
+app.get("/api/cma/sessions", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const leadId = String(req.query.leadId || "").trim() || null;
+    const sessions = store.listSessions({ leadId, limit: Number(req.query.limit) || 100 });
+    /* Selected counts come back with the list so the dashboard can show "3 of
+       20 slots filled" without a request per row. */
+    const withCounts = sessions.map((s) => {
+      const comps = store.listComparables(s.id);
+      return {
+        ...s,
+        selectedCount: comps.length,
+        selectedByStatus: {
+          ACTIVE: comps.filter((c) => c.listingStatus === "ACTIVE").length,
+          PENDING: comps.filter((c) => c.listingStatus === "PENDING").length,
+          SOLD: comps.filter((c) => c.listingStatus === "SOLD").length,
+          OFF_MKT: comps.filter((c) => c.listingStatus === "OFF_MKT").length,
+        },
+      };
+    });
+    res.json({ ok: true, sessions: withCounts });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * Step 1 submit: create the session.
+ *
+ * The subject address is checked against the board's own city list before the
+ * session is created. Without geocoding there is no other way to catch a typo,
+ * and a CMA anchored on a place the feed does not cover returns comps from
+ * nowhere near the house — which looks like a working report.
+ */
+app.post("/api/cma/sessions", express.json({ limit: "256kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const { cityFromAddress, postalFromAddress, resolveArea } = await import("./core/marketReport.js");
+    const b = (req.body || {}) as Record<string, unknown>;
+
+    const clientName = String(b.clientName || "").trim();
+    const subjectAddress = String(b.subjectAddress || "").trim();
+    if (!clientName) { res.status(400).json({ error: "A client name is required — the CMA is prepared for someone." }); return; }
+    if (!subjectAddress) { res.status(400).json({ error: "A subject property address is required." }); return; }
+
+    const city = String(b.subjectCity || "").trim() || cityFromAddress(subjectAddress);
+    const postalCode = String(b.subjectPostalCode || "").trim() || postalFromAddress(subjectAddress);
+    if (!city && !postalCode) {
+      res.status(400).json({
+        error:
+          "That address does not contain a city or postal code this board covers. There is no geocoder wired " +
+          "into this system, so the city or ZIP has to be readable from the address itself for the comp search " +
+          "to know where to look.",
+      });
+      return;
+    }
+
+    const criteria = (b.criteria && typeof b.criteria === "object" ? b.criteria : {}) as Record<string, unknown>;
+    const session = store.createSession({
+      clientName,
+      leadId: (b.leadId as string) || null,
+      mls: (b.mls as string) || "SABOR",
+      subjectAddress,
+      subjectCity: city,
+      subjectState: (b.subjectState as string) || "TX",
+      subjectPostalCode: postalCode,
+      subjectPropertyType: (b.subjectPropertyType as string) || "RES",
+      subjectBeds: b.subjectBeds as number,
+      subjectBaths: b.subjectBaths as number,
+      subjectSqft: b.subjectSqft as number,
+      subjectLotSize: b.subjectLotSize as number,
+      subjectYearBuilt: b.subjectYearBuilt as number,
+      criteria,
+    });
+
+    /* Resolve the comp area now, so step 2 opens on a set that already clears
+       the floor and the header can say how wide it had to go. */
+    /* includeWithoutPhotos matters here too: the ladder picks its rung by
+       COUNTING matches, so excluding photo-less listings would widen the area
+       past a postal code that actually has enough comparables in it. */
+    const area = resolveArea(
+      { postalCode, city },
+      { ...(criteria as Record<string, never>), statuses: ["Active"], includeWithoutPhotos: true },
+    );
+    const withArea = store.updateSession(session.id, {
+      criteria: { ...criteria, ...area.criteria, statuses: undefined },
+      areaRung: area.rung,
+      areaLabel: area.label,
+    });
+    res.json({ ok: true, session: withArea || session, area });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.get("/api/cma/sessions/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const session = store.getSession(String(req.params.id));
+    if (!session) { res.status(404).json({ error: "That CMA no longer exists." }); return; }
+    const comps = store.listComparables(session.id);
+    res.json({
+      ok: true,
+      session,
+      comparables: comps,
+      trays: {
+        ACTIVE: comps.filter((c) => c.listingStatus === "ACTIVE"),
+        PENDING: comps.filter((c) => c.listingStatus === "PENDING"),
+        SOLD: comps.filter((c) => c.listingStatus === "SOLD"),
+        OFF_MKT: comps.filter((c) => c.listingStatus === "OFF_MKT"),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.patch("/api/cma/sessions/:id", express.json({ limit: "256kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const b = (req.body || {}) as Record<string, unknown>;
+    /* Only forward keys the caller actually sent — updateSession writes what it
+       is given and nothing else, which is the point. */
+    const patch: Record<string, unknown> = {};
+    for (const k of [
+      "clientName", "mls", "subjectAddress", "subjectCity", "subjectState", "subjectPostalCode",
+      "subjectPropertyType", "subjectBeds", "subjectBaths", "subjectSqft", "subjectLotSize",
+      "subjectYearBuilt", "criteria", "currentStep", "areaRung", "areaLabel",
+    ]) {
+      if (k in b) patch[k] = b[k];
+    }
+    const updated = store.updateSession(String(req.params.id), patch);
+    if (!updated) { res.status(404).json({ error: "That CMA no longer exists." }); return; }
+    res.json({ ok: true, session: updated });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/cma/sessions/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    res.json({ ok: store.deleteSession(String(req.params.id)) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** The left-rail feed for one selection step. */
+app.get("/api/cma/sessions/:id/candidates", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const { candidateFeed } = await import("./core/cmaComps.js");
+    const session = store.getSession(String(req.params.id));
+    if (!session) { res.status(404).json({ error: "That CMA no longer exists." }); return; }
+
+    const status = String(req.query.status || "ACTIVE").toUpperCase();
+    if (!["ACTIVE", "PENDING", "SOLD", "OFF_MKT"].includes(status)) {
+      res.status(400).json({ error: `Unknown step status "${status}".` });
+      return;
+    }
+    const feed = candidateFeed(session, status as import("./core/cmaStore.js").CompStatus, {
+      sort: req.query.sort as import("./core/cmaComps.js").CandidateSort,
+      limit: Number(req.query.limit) || 40,
+      offset: Number(req.query.offset) || 0,
+      days: Number(req.query.days) || null,
+    });
+    /* Mark what is already in the tray so the feed renders minus buttons on
+       the right rows without the page having to cross-reference two lists. */
+    const selected = new Set(
+      store
+        .listComparables(session.id, status as import("./core/cmaStore.js").CompStatus)
+        .map((c) => c.sourceKey)
+        .filter(Boolean) as string[],
+    );
+    res.json({
+      ok: true,
+      ...feed,
+      rows: feed.rows.map((r) => ({ ...r, selected: selected.has(r.key) })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** Select a comparable into the first open tray slot for that step. */
+app.post("/api/cma/sessions/:id/comparables", express.json({ limit: "256kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const session = store.getSession(String(req.params.id));
+    if (!session) { res.status(404).json({ error: "That CMA no longer exists." }); return; }
+
+    const b = (req.body || {}) as Record<string, unknown>;
+    const status = String(b.listingStatus || "").toUpperCase();
+    if (!["ACTIVE", "PENDING", "SOLD", "OFF_MKT"].includes(status)) {
+      res.status(400).json({ error: `Unknown step status "${status}".` });
+      return;
+    }
+    const source = String(b.source || "manual");
+    if (!["mls", "transaction", "manual"].includes(source)) {
+      res.status(400).json({ error: `Unknown comparable source "${source}".` });
+      return;
+    }
+    const address = String(b.address || "").trim();
+    if (!address) { res.status(400).json({ error: "A comparable needs an address." }); return; }
+
+    const comp = store.addComparable({
+      sessionId: session.id,
+      listingStatus: status as import("./core/cmaStore.js").CompStatus,
+      source: source as import("./core/cmaStore.js").CompSource,
+      sourceKey: (b.sourceKey as string) || null,
+      mlsNumber: (b.mlsNumber as string) || null,
+      address,
+      city: (b.city as string) || null,
+      postalCode: (b.postalCode as string) || null,
+      price: b.price as number,
+      originalListPrice: b.originalListPrice as number,
+      soldPrice: b.soldPrice as number,
+      sellerConcessions: b.sellerConcessions as number,
+      beds: b.beds as number,
+      baths: b.baths as number,
+      sqft: b.sqft as number,
+      lotSize: b.lotSize as number,
+      yearBuilt: b.yearBuilt as number,
+      listDate: (b.listDate as string) || null,
+      statusDate: (b.statusDate as string) || null,
+      estimatedClosingDate: (b.estimatedClosingDate as string) || null,
+      daysOnMarket: b.daysOnMarket as number,
+      offMarketType: (b.offMarketType as import("./core/cmaStore.js").OffMarketType) || null,
+      photoUrl: (b.photoUrl as string) || null,
+      notes: (b.notes as string) || null,
+    });
+    res.json({ ok: true, comparable: comp });
+  } catch (err) {
+    const name = (err as Error).name;
+    /* A full tray and a duplicate pick are both the operator doing something
+       reasonable, not a server fault — 409, with the sentence to show them. */
+    if (name === "TrayFullError" || name === "DuplicateComparableError") {
+      res.status(409).json({ error: (err as Error).message });
+      return;
+    }
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** Step 5's inline `edit`, and how a transaction-sourced sold gets its size. */
+app.patch("/api/cma/comparables/:compId", express.json({ limit: "256kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const b = (req.body || {}) as Record<string, unknown>;
+    const patch: Record<string, unknown> = {};
+    for (const k of [
+      "mlsNumber", "address", "city", "postalCode", "price", "originalListPrice", "soldPrice",
+      "sellerConcessions", "beds", "baths", "sqft", "lotSize", "yearBuilt", "listDate",
+      "statusDate", "estimatedClosingDate", "daysOnMarket", "offMarketType", "photoUrl", "notes",
+    ]) {
+      if (k in b) patch[k] = b[k];
+    }
+    const updated = store.updateComparable(String(req.params.compId), patch);
+    if (!updated) { res.status(404).json({ error: "That comparable is no longer in this CMA." }); return; }
+    res.json({ ok: true, comparable: updated });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/cma/comparables/:compId", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    res.json({ ok: store.removeComparable(String(req.params.compId)) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** Step 6: what the selected comps actually say. */
+app.get("/api/cma/sessions/:id/results", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const { cmaResults } = await import("./core/cmaComps.js");
+    const session = store.getSession(String(req.params.id));
+    if (!session) { res.status(404).json({ error: "That CMA no longer exists." }); return; }
+    const comps = store.listComparables(session.id);
+    res.json({ ok: true, session, comparables: comps, results: cmaResults(session, comps) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * Step 7: publish.
+ *
+ * Publishing means one specific thing here — the CMA gets a client-facing page
+ * at /c/:id that anybody with the link can read. It does not email anyone. The
+ * step says which of those it did, because "Published" that quietly also sent
+ * mail to a client is the kind of surprise this system must not spring.
+ */
+app.post("/api/cma/sessions/:id/publish", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const session = store.getSession(String(req.params.id));
+    if (!session) { res.status(404).json({ error: "That CMA no longer exists." }); return; }
+    const comps = store.listComparables(session.id);
+    if (!comps.length) {
+      res.status(400).json({
+        error: "Nothing is selected yet — a CMA with no comparables has nothing to show a client.",
+      });
+      return;
+    }
+    const unpublish = (req.body || {}).unpublish === true;
+    const updated = store.updateSession(session.id, {
+      status: unpublish ? "draft" : "published",
+      publishedAt: unpublish ? null : new Date().toISOString(),
+      currentStep: 7,
+    });
+    res.json({
+      ok: true,
+      session: updated,
+      url: unpublish ? null : `/c/${session.id}`,
+      note: unpublish
+        ? "Unpublished. The client link now returns a not-available page."
+        : "Published. The link below is live and readable by anyone who has it. Nothing was emailed — sending is a separate action.",
     });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });

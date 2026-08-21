@@ -1,0 +1,1219 @@
+<!-- ============================================================================
+     CMA — the Comparative Market Analysis wizard.
+
+     Seven steps: Start, then a selection step each for Active, Pending, Sold
+     and Off Market, then Results and Publish. Standalone page, no build step,
+     no framework — same as every other page in public/.
+
+     THE THREE THINGS THIS PAGE IS ASKED FOR AND DOES NOT DRAW, and why they
+     are stated instead:
+
+       · The map rail on steps 2-5. Every row in the MLS mirror has
+         geo.lat === null — that is counted across all ~32,000 rows on every
+         facet refresh, not sampled. Price pins, "redo search here" against map
+         bounds, distance sort and the mile-radius dropdown all rest on a
+         coordinate that is not there. The right rail instead shows what the
+         data CAN answer about placement: which rung of the place ladder the
+         comp search settled on, where the feed's prices actually sit, and how
+         each selected comp compares with the subject on price per square foot.
+       · Google Street View of the subject, and address autocomplete. Both are
+         Google Maps Platform products; no key is configured. The subject photo
+         is the MLS photo when the typed address matches a listing, and blank
+         otherwise.
+       · A board-wide sold search on step 4. The feed has no solds at all. That
+         step reads Marco's own closed transactions, which do carry a real list
+         price and a real sold price, and says on the step that this is his
+         book rather than the board.
+
+     Everything else here is real: the active and pending feeds are the live
+     SABOR mirror, the tray is persisted per step, and the value on step 6 is
+     the median price per square foot of the comps actually selected.
+     ============================================================================ -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CMA · Marco Puga Realty</title>
+<style>
+  :root{
+    --teal:#59c4c4; --teal-strong:#4ca7a7; --teal-soft:#f3fdfd;
+    --ink:#333333; --title:#5c6166; --muted:#62686e; --label:#62686e;
+    --line:#edf0f0; --line-2:#f2f4f4; --bg:#f9fbfb; --card:#fff;
+    /* One accent per selection step, matching the spec's empty-slot borders:
+       active green, pending amber, sold coral, off-market grey. */
+    --c-active:#3fb27f; --c-pending:#e0a83e; --c-sold:#e4553f; --c-off:#8b95a0;
+    --sans:"Helvetica Neue",Helvetica,Arial,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --shadow:0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.06);
+    --head:64px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
+  button{font-family:inherit;cursor:pointer}
+  a{color:var(--teal-strong);text-decoration:none}
+
+  /* ── wizard header ─────────────────────────────────────────────── */
+  .wz-head{position:fixed;top:0;left:0;right:0;height:var(--head);background:#e9edee;
+    border-bottom:1px solid #dbe1e2;display:flex;align-items:center;padding:0 16px;gap:16px;z-index:30}
+  .wz-exit{background:#fff;border:1px solid #cfd6d7;border-radius:4px;height:32px;padding:0 30px;
+    color:var(--teal-strong);font-size:13px;font-weight:600;letter-spacing:.02em}
+  .wz-exit:hover{border-color:var(--teal)}
+  .wz-steps{flex:1;display:flex;justify-content:center;gap:2px}
+  .wz-step{background:none;border:0;padding:6px 16px;text-align:center;line-height:1.15;border-radius:4px;color:#7b858c}
+  .wz-step b{display:block;font-size:16px;font-weight:600}
+  .wz-step span{display:block;font-size:11px;margin-top:2px}
+  .wz-step.on{background:#fff;color:var(--teal-strong)}
+  .wz-step.on.sold{color:var(--c-sold)}
+  .wz-step.done{color:#5c6166}
+  .wz-step:disabled{color:#b6bec3;cursor:not-allowed}
+  .wz-arrows{display:flex;gap:6px}
+  .wz-arrow{width:32px;height:30px;background:#fff;border:1px solid #cfd6d7;border-radius:4px;color:#7b858c;font-size:14px}
+  .wz-arrow:disabled{opacity:.4;cursor:not-allowed}
+  .wz-arrow:not(:disabled):hover{color:var(--teal-strong);border-color:var(--teal)}
+
+  .wz-body{padding-top:var(--head);height:100%}
+
+  /* ── step 1 form ───────────────────────────────────────────────── */
+  .s1{max-width:1080px;margin:0 auto;padding:22px 24px 80px}
+  .s1 h1{font-size:26px;font-weight:400;color:#4a5054;text-align:center;margin:8px 0 26px}
+  .s1row{display:grid;grid-template-columns:170px 1fr;gap:22px;padding:18px 0;border-bottom:1px solid var(--line)}
+  .s1row:last-of-type{border-bottom:0}
+  .s1lab{font-size:13px;color:var(--label);padding-top:8px}
+  .fgrid{display:grid;gap:14px 18px}
+  .f{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .f>label{font-size:11px;color:var(--label)}
+  .f .ctl{position:relative;display:flex;align-items:center}
+  input.t,select.t{width:100%;height:36px;border:1px solid #d8dee0;border-radius:3px;background:#fff;
+    padding:0 30px 0 10px;font-size:13px;color:var(--ink);outline:none;font-family:inherit}
+  input.t:focus,select.t:focus{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-soft)}
+  input.t::placeholder{color:#a6aeb3}
+  .ok{position:absolute;right:9px;color:#3fb27f;font-weight:700;font-size:14px;display:none;pointer-events:none}
+  .ctl.good .ok{display:block}
+  .unit{position:absolute;right:1px;top:1px;bottom:1px;display:flex;align-items:center;padding:0 10px;
+    background:#f4f6f6;border-left:1px solid #e4e9ea;color:#8a939a;font-size:12px;border-radius:0 3px 3px 0}
+  .radios{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+  .radios label{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink);cursor:pointer}
+  .radios input{accent-color:var(--teal);margin:0}
+  .radios label.off{color:#a6aeb3;cursor:not-allowed}
+  .rng{display:grid;grid-template-columns:1fr 12px 1fr;align-items:center;gap:6px}
+  .rng .dash{text-align:center;color:#a6aeb3}
+  .subj-img{width:240px;height:120px;border:1px solid #e0e6e7;border-radius:3px;background:#f4f6f6;
+    display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;
+    color:#98a1a7;font-size:11px;line-height:1.45;overflow:hidden}
+  .subj-img img{width:100%;height:100%;object-fit:cover;display:block}
+  .s1foot{display:flex;justify-content:flex-end;padding-top:22px}
+  .btn-next{background:var(--teal);border:0;color:#fff;height:34px;padding:0 46px;border-radius:3px;
+    font-size:13px;font-weight:600;letter-spacing:.02em}
+  .btn-next:hover{background:var(--teal-strong)}
+  .btn-next:disabled{background:#cfe6e6;cursor:not-allowed}
+
+  /* ── selection steps ──────────────────────────────────────────── */
+  .sel{display:flex;flex-direction:column;height:100%}
+  .sel-top{display:flex;align-items:flex-start;gap:16px;padding:12px 18px 0}
+  .sel-top h2{font-size:19px;font-weight:400;color:#4a5054;margin:2px 0 0;flex:0 0 auto}
+  .subj-bar{flex:1;text-align:right;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .subj-bar b{color:#4a5054}
+  .sel-acts{display:flex;gap:6px}
+  .sq{width:30px;height:28px;border-radius:3px;border:1px solid var(--teal);background:var(--teal);
+    color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .sq.ghost{background:#fff;color:var(--teal-strong)}
+  .sq:hover{background:var(--teal-strong);border-color:var(--teal-strong);color:#fff}
+
+  .tray{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:10px 18px 0}
+  .slot{height:104px;border:1px solid var(--line);border-radius:3px;background:#fff;position:relative;overflow:hidden}
+  .slot.empty{display:flex;align-items:center;justify-content:center;border-width:2px}
+  .slot.empty svg{display:block}
+  .slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  /* A comp with no photo still has to be readable: white caption text over a
+     gradient on a white card is not. The backdrop sits under the image, so a
+     photo that loads (or 404s away) is handled by the same rule. */
+  .slot.filled{background:#7a848b}
+  .slot .veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05) 30%,rgba(0,0,0,.62) 100%)}
+  .slot .cap{position:absolute;left:0;right:0;bottom:26px;padding:0 8px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+  .slot .cap .a{font-size:11px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .slot .cap .p{font-size:11px;opacity:.95}
+  .slot .banner{position:absolute;top:0;left:0;right:0;background:rgba(255,255,255,.92);color:#4a5054;
+    font-size:10px;font-weight:600;padding:2px 6px}
+  .slot .spec{position:absolute;left:0;right:0;bottom:0;height:26px;background:#fff;border-top:1px solid var(--line);
+    display:grid;grid-template-columns:repeat(3,1fr);align-items:center;text-align:center}
+  .slot .spec div{font-size:10px;color:#4a5054;line-height:1.05}
+  .slot .spec div small{display:block;font-size:8px;color:#98a1a7}
+  .slot .drop{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:3px;border:1px solid #d8dee0;
+    background:#fff;color:#7b858c;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:2}
+  .slot .drop:hover{border-color:var(--c-sold);color:var(--c-sold)}
+  .slot .drop.pen{right:28px;font-size:11px}
+  .slot .drop.pen:hover{border-color:var(--teal);color:var(--teal-strong)}
+
+  .sel-main{flex:1;display:grid;grid-template-columns:340px 1fr;gap:12px;padding:10px 18px 18px;min-height:0}
+  .rail{display:flex;flex-direction:column;min-height:0;border:1px solid var(--line);border-radius:3px;background:#fff}
+  .rail-h{padding:8px 10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .rail-h .cnt{font-size:12px;color:var(--muted)}
+  .rail-h .cnt b{color:#4a5054}
+  .rail-h select{height:28px;border:1px solid #d8dee0;border-radius:3px;font-size:12px;padding:0 6px;background:#fff;color:var(--ink);font-family:inherit}
+  .rail-note{padding:8px 10px;border-bottom:1px solid var(--line);background:#fbfdfd;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .add-row{padding:6px 10px;border-bottom:1px solid var(--line)}
+  .add-btn{width:100%;height:28px;border:0;border-radius:3px;background:var(--teal);color:#fff;font-size:11.5px;font-weight:600;letter-spacing:.02em}
+  .add-btn:hover{background:var(--teal-strong)}
+  .feed{flex:1;overflow:auto;min-height:0}
+  .fi{display:grid;grid-template-columns:64px 1fr 26px;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line-2);align-items:start}
+  .fi:hover{background:#fbfdfd}
+  .fi.sel-on{background:var(--teal-soft)}
+  .fi .thumb{position:relative;width:64px;height:48px;border-radius:2px;background:#eef1f2;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;font-size:8px;color:#a6aeb3;text-align:center;line-height:1.2}
+  .fi .thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .fi .a{font-size:12px;font-weight:600;color:#3f4549;line-height:1.25}
+  .fi .p{font-size:12.5px;font-weight:700;color:#2f3538;margin-top:1px}
+  .fi .p .was{font-weight:400;color:#8a939a;font-size:11px}
+  .fi .sp{display:flex;gap:10px;font-size:11px;color:var(--muted);margin-top:2px}
+  .fi .dt{font-size:10.5px;color:#98a1a7;margin-top:2px}
+  .fi .dt em{font-style:normal;color:#b0b8bd}
+  .fi .edit{font-size:10.5px;color:var(--teal-strong);cursor:pointer;margin-top:2px;display:inline-block}
+  .tog{width:24px;height:24px;border-radius:3px;border:1px solid var(--teal);background:#fff;color:var(--teal-strong);
+    font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center}
+  .tog.on{border-color:#c9d1d4;color:#7b858c}
+  .tog:hover{background:var(--teal-soft)}
+  .empty-feed{padding:22px 14px;color:var(--muted);font-size:12.5px;line-height:1.6;text-align:center}
+
+  /* right rail — what replaces the map */
+  .panel{flex:1;min-width:0;border:1px solid var(--line);border-radius:3px;background:#fff;overflow:auto;padding:14px 16px}
+  .pblock{margin-bottom:20px}
+  .pblock:last-child{margin-bottom:0}
+  .pblock h4{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a939a;margin:0 0 8px;font-weight:600}
+  .why{background:#fbfdfd;border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:3px;
+    padding:10px 12px;font-size:12px;color:var(--muted);line-height:1.6}
+  .why b{color:#4a5054}
+  .ladder{display:flex;flex-direction:column;gap:4px}
+  .lr{display:grid;grid-template-columns:1fr auto;gap:8px;font-size:12px;padding:5px 8px;border-radius:3px;background:#f7fafa;color:var(--muted)}
+  .lr.on{background:var(--teal-soft);color:#3f4549;font-weight:600}
+  .lr .n{color:#8a939a;font-weight:400}
+  .lr.on .n{color:#4a5054}
+  .hist{display:flex;align-items:flex-end;gap:3px;height:78px}
+  .hb{flex:1;background:#dfeeee;border-radius:2px 2px 0 0;position:relative;min-height:2px}
+  .hb.hot{background:var(--teal)}
+  .hax{display:flex;justify-content:space-between;font-size:10px;color:#98a1a7;margin-top:4px}
+  .ppsf{display:flex;flex-direction:column;gap:7px}
+  .pp{font-size:11.5px}
+  .pp .t{display:flex;justify-content:space-between;color:var(--muted)}
+  .pp .t b{color:#3f4549;font-weight:600}
+  .pp .bar{height:7px;border-radius:4px;background:#eef2f2;margin-top:3px;overflow:hidden}
+  .pp .bar i{display:block;height:100%;background:var(--teal);border-radius:4px}
+  .pp.subject .bar i{background:#3f4549}
+  .pp .miss{color:#b0863a}
+
+  /* ── results / publish ────────────────────────────────────────── */
+  .res{max-width:1080px;margin:0 auto;padding:22px 24px 80px}
+  .res h1{font-size:26px;font-weight:400;color:#4a5054;text-align:center;margin:8px 0 6px}
+  .res .lede{text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px}
+  .est{border:1px solid #bfe4dd;background:#f4fbf9;border-radius:6px;padding:22px;text-align:center;margin-bottom:20px}
+  .est .big{font-size:40px;font-weight:700;color:#20685c;line-height:1.1}
+  .est .band{color:#3f8a7c;font-size:13px;margin-top:4px}
+  .est .basis{color:#4a6f68;font-size:12px;margin-top:10px;line-height:1.6}
+  .est.none{border-color:#e6dcc2;background:#fdfaf2}
+  .est.none .basis{color:#8a6d2f}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:20px}
+  .kpi{border:1px solid var(--line);border-radius:4px;background:#fff;padding:12px 14px}
+  .kpi .k{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#8a939a;font-weight:600}
+  .kpi .v{font-size:20px;font-weight:600;color:#3f4549;margin-top:5px}
+  .kpi .s{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.45}
+  .rtbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:4px}
+  .rtbl th{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:#8a939a;font-weight:600;
+    padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  .rtbl td{padding:8px 10px;border-bottom:1px solid var(--line-2);font-size:12.5px;color:#3f4549}
+  .rtbl tr:last-child td{border-bottom:0}
+  .pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:10px;color:#fff}
+  .pill.ACTIVE{background:var(--c-active)} .pill.PENDING{background:var(--c-pending)}
+  .pill.SOLD{background:var(--c-sold)} .pill.OFF_MKT{background:var(--c-off)}
+  .src{display:inline-block;font-size:9.5px;letter-spacing:.04em;padding:1px 6px;border-radius:9px;
+    border:1px solid #d8dee0;color:#8a939a;margin-left:6px}
+  .notes{margin-top:18px;border-left:3px solid var(--teal);background:#fbfdfd;padding:12px 14px;
+    font-size:12px;color:var(--muted);line-height:1.65}
+  .notes p{margin:0 0 8px} .notes p:last-child{margin:0}
+  .pubrow{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
+  .btn-ghost{background:#fff;border:1px solid #cfd6d7;color:#5c6166;height:34px;padding:0 20px;border-radius:3px;font-size:13px;font-weight:600}
+  .btn-ghost:hover{border-color:var(--teal);color:var(--teal-strong)}
+  .linkbox{display:flex;gap:8px;align-items:center;margin-top:14px;background:#f7fafa;border:1px solid var(--line);
+    border-radius:3px;padding:10px 12px;font-size:12.5px;word-break:break-all}
+  .linkbox b{color:#3f4549}
+
+  /* ── modal ─────────────────────────────────────────────────────── */
+  .ov{position:fixed;inset:0;background:rgba(30,38,42,.42);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:60px 16px}
+  .ovc{background:#fff;border-radius:5px;box-shadow:0 12px 40px rgba(16,24,40,.22);width:100%;max-width:640px;max-height:calc(100vh - 120px);display:flex;flex-direction:column}
+  .ovh{padding:14px 18px;border-bottom:1px solid var(--line);font-size:15px;color:#4a5054}
+  .ovb{padding:16px 18px;overflow:auto}
+  .ovf{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center}
+  .unav{background:#fdfaf2;border:1px solid #eadfc4;border-radius:3px;padding:10px 12px;font-size:12px;color:#8a6d2f;line-height:1.6;margin-top:10px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#2f3538;color:#fff;
+    padding:9px 18px;border-radius:4px;font-size:12.5px;z-index:90;box-shadow:var(--shadow);max-width:560px;line-height:1.5}
+</style>
+
+<div class="wz-head">
+  <button class="wz-exit" id="wzExit">Exit</button>
+  <div class="wz-steps" id="wzSteps"></div>
+  <div class="wz-arrows">
+    <button class="wz-arrow" id="wzPrev" title="Previous step">&lsaquo;</button>
+    <button class="wz-arrow" id="wzNext" title="Next step">&rsaquo;</button>
+  </div>
+</div>
+<div class="wz-body" id="wzBody"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   State. One session object, one tray per selection step, one meta payload of
+   ladders and reasons from the server.
+   ═══════════════════════════════════════════════════════════════════════════ */
+var TOKEN = new URLSearchParams(location.search).get("token") || "";
+var LEAD_ID = new URLSearchParams(location.search).get("leadId") || "";
+var S = {
+  step: 1,
+  meta: null,
+  session: null,
+  trays: { ACTIVE: [], PENDING: [], SOLD: [], OFF_MKT: [] },
+  feed: { rows: [], total: 0, sort: "recent", offset: 0, source: "", note: "", unavailable: null, label: "" },
+  area: null,
+  results: null,
+  publishUrl: null
+};
+
+var STEPS = [
+  { n: 1, key: null,      label: "Start"   },
+  { n: 2, key: "ACTIVE",  label: "Active"  },
+  { n: 3, key: "PENDING", label: "Pending" },
+  { n: 4, key: "SOLD",    label: "Sold"    },
+  { n: 5, key: "OFF_MKT", label: "Off Mkt" },
+  { n: 6, key: null,      label: "Results" },
+  { n: 7, key: null,      label: "Publish" }
+];
+var ACCENT = { ACTIVE: "var(--c-active)", PENDING: "var(--c-pending)", SOLD: "var(--c-sold)", OFF_MKT: "var(--c-off)" };
+
+/* ── helpers ─────────────────────────────────────────────────────── */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function money(n){ return (n==null||!isFinite(n)) ? "—" : "$"+Math.round(n).toLocaleString(); }
+function moneyK(n){ return (n==null||!isFinite(n)) ? "—" : "$"+Math.round(n/1000)+"k"; }
+function num(v){ var n=Number(v); return isFinite(n)&&String(v).trim()!=="" ? n : null; }
+function fmtDate(s){
+  if(!s) return null;
+  var d=new Date(s); if(isNaN(d)) return null;
+  return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+}
+function q(sel){ return document.querySelector(sel); }
+function url(p){ return p + (p.indexOf("?")>=0?"&":"?") + "token=" + encodeURIComponent(TOKEN); }
+function api(path, opts){
+  opts = opts || {};
+  if(opts.body && typeof opts.body !== "string"){
+    opts.headers = Object.assign({"Content-Type":"application/json"}, opts.headers||{});
+    opts.body = JSON.stringify(opts.body);
+  }
+  return fetch(url(path), opts).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if(!r.ok) throw new Error(j.error || ("Request failed ("+r.status+")"));
+      return j;
+    });
+  });
+}
+var toastT = null;
+function toast(msg){
+  var el = q(".toast"); if(el) el.remove();
+  var d = document.createElement("div"); d.className="toast"; d.textContent=msg;
+  document.body.appendChild(d);
+  clearTimeout(toastT); toastT = setTimeout(function(){ d.remove(); }, 5200);
+}
+function closeOv(){ var o=q(".ov"); if(o) o.remove(); }
+function overlay(title, bodyHtml, footHtml){
+  closeOv();
+  var d = document.createElement("div");
+  d.className = "ov";
+  d.innerHTML = '<div class="ovc"><div class="ovh">'+esc(title)+'</div>'+
+    '<div class="ovb">'+bodyHtml+'</div><div class="ovf">'+(footHtml||'')+'</div></div>';
+  d.addEventListener("click", function(e){ if(e.target===d) closeOv(); });
+  document.body.appendChild(d);
+  return d;
+}
+
+/* ── header ──────────────────────────────────────────────────────── */
+function paintStepper(){
+  /* Steps 2-7 stay disabled until a session exists, exactly as the spec says:
+     nothing downstream of Start means anything without saved criteria. */
+  var have = !!S.session;
+  q("#wzSteps").innerHTML = STEPS.map(function(st){
+    var on = st.n === S.step;
+    var cls = "wz-step" + (on ? " on" : "") + (on && st.key==="SOLD" ? " sold" : "") +
+      (!on && have && st.n < S.step ? " done" : "");
+    var dis = (!have && st.n > 1) ? " disabled" : "";
+    return '<button class="'+cls+'" data-step="'+st.n+'"'+dis+'><b>'+st.n+'</b><span>'+esc(st.label)+'</span></button>';
+  }).join("");
+  Array.prototype.forEach.call(document.querySelectorAll(".wz-step"), function(b){
+    b.addEventListener("click", function(){ goStep(Number(b.dataset.step)); });
+  });
+  q("#wzPrev").disabled = S.step <= 1;
+  q("#wzNext").disabled = S.step >= 7 || !S.session;
+}
+
+function goStep(n){
+  if(n > 1 && !S.session){ toast("Fill in the Start step first — the comp search needs a subject property."); return; }
+  S.step = Math.max(1, Math.min(7, n));
+  paintStepper();
+  if(S.session) api("/api/cma/sessions/"+S.session.id, { method:"PATCH", body:{ currentStep: S.step } })
+    .catch(function(){ /* a lost step marker is not worth interrupting the agent */ });
+  render();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STEP 1 — Start.
+
+   Two things here are not what the spec draws, and both say why in place: the
+   address is typed rather than autocompleted (no geocoding key), and Search
+   Radius is replaced by the place ladder (no coordinates to measure from).
+   ═══════════════════════════════════════════════════════════════════════════ */
+function opts(list, sel, blank){
+  var out = blank ? '<option value="">'+esc(blank)+'</option>' : '';
+  return out + list.map(function(o){
+    var v = (o && typeof o === "object") ? o.value : o;
+    var l = (o && typeof o === "object") ? o.label : o;
+    return '<option value="'+esc(v==null?"":v)+'"'+(String(sel)===String(v)?" selected":"")+'>'+esc(l)+'</option>';
+  }).join("");
+}
+function priceOpts(sel, blank){
+  return opts(S.meta.ladders.price.map(function(p, i, arr){
+    return { value: p, label: "$" + p.toLocaleString() + (i === arr.length-1 ? "+" : "") };
+  }), sel, blank);
+}
+function bedOpts(sel, blank){
+  return opts(S.meta.ladders.beds.map(function(b){ return { value:b, label:b+" Beds" }; }), sel, blank);
+}
+function bathOpts(sel, blank){
+  return opts(S.meta.ladders.baths.map(function(b){ return { value:b, label:b+" Baths" }; }), sel, blank);
+}
+function sqftOpts(sel, blank){
+  return opts(S.meta.ladders.sqft.map(function(v){ return { value:v, label:v.toLocaleString()+" sqft" }; }), sel, blank);
+}
+function lotOpts(sel, blank){ return opts(S.meta.ladders.lotSize, sel, blank); }
+
+function renderStep1(){
+  var m = S.meta;
+  var radiusReason = (m.unavailable.find(function(u){ return /Search radius/i.test(u.field); })||{}).reason || "";
+  var streetReason = (m.unavailable.find(function(u){ return /Street View/i.test(u.field); })||{}).reason || "";
+  var autoReason  = (m.unavailable.find(function(u){ return /autocomplete/i.test(u.field); })||{}).reason || "";
+
+  q("#wzBody").innerHTML =
+  '<div class="s1">'+
+    '<h1>Start Comparative Market Analysis</h1>'+
+
+    '<div class="s1row"><div class="s1lab">Prepared For</div>'+
+      '<div class="fgrid" style="grid-template-columns:1fr 1fr">'+
+        '<div class="f"><label>Client Name</label><div class="ctl" id="cnCtl">'+
+          '<input class="t" id="cnName" placeholder="Enter Name" autocomplete="off"><span class="ok">&#10003;</span></div></div>'+
+        '<div class="f"><label>MLS</label><select class="t" id="cnMls">'+
+          opts(m.mlsOptions.map(function(o){ return {value:o.value,label:o.label}; }), "SABOR")+'</select></div>'+
+      '</div></div>'+
+
+    '<div class="s1row"><div class="s1lab">Subject Property Criteria</div><div>'+
+      '<div class="radios" style="margin-bottom:10px">'+
+        '<label><input type="radio" name="sTyp" value="addr" checked> Search By Address</label>'+
+        '<label><input type="radio" name="sTyp" value="mls"> Search By MLS number</label>'+
+      '</div>'+
+      '<div class="f" style="margin-bottom:12px"><div class="ctl" id="adCtl">'+
+        '<input class="t" id="sAddr" placeholder="Enter Location — street, city TX ZIP" autocomplete="off">'+
+        '<span class="ok">&#10003;</span></div>'+
+        '<div style="font-size:11px;color:#98a1a7;line-height:1.5;margin-top:4px" id="adHint">'+esc(autoReason)+'</div></div>'+
+      '<div class="f" style="margin-bottom:12px;display:none" id="mlsWrap"><label>MLS number</label>'+
+        '<div class="ctl"><input class="t" id="sMls" placeholder="e.g. 1994259" autocomplete="off"><span class="ok">&#10003;</span></div>'+
+        '<div style="font-size:11px;color:#98a1a7;margin-top:4px">Looks the property up in the SABOR mirror and fills the fields below.</div></div>'+
+
+      '<div class="radios" style="margin-bottom:10px">'+
+        '<label class="off" title="'+esc(streetReason)+'"><input type="radio" disabled> Use Google Street View image</label>'+
+        '<label><input type="radio" name="sImg" value="mls" checked> Use the listing photo, when there is one</label>'+
+      '</div>'+
+      '<div class="subj-img" id="subjImg">No photo yet. '+esc(streetReason)+'</div>'+
+
+      '<div class="fgrid" style="grid-template-columns:repeat(5,1fr);margin-top:14px">'+
+        '<div class="f"><label>Property Type</label><select class="t" id="sType">'+
+          opts(m.propertyTypes.map(function(p){ return {value:p.value,label:p.label}; }), "RES")+'</select></div>'+
+        '<div class="f"><label>Beds</label><select class="t" id="sBeds">'+bedOpts(3)+'</select></div>'+
+        '<div class="f"><label>Baths</label><select class="t" id="sBaths">'+bathOpts(2)+'</select></div>'+
+        '<div class="f"><label>Sqft</label><div class="ctl">'+
+          '<input class="t" id="sSqft" placeholder="Area" inputmode="numeric"><span class="unit">sqft</span></div></div>'+
+        '<div class="f"><label>Lot Size</label><div class="ctl">'+
+          '<input class="t" id="sLot" placeholder="Lot" inputmode="decimal"><span class="unit">acres</span></div></div>'+
+      '</div>'+
+      '<div style="font-size:11px;color:#98a1a7;margin-top:6px">The subject square footage is what the step 6 estimate is applied to. '+
+        'Lot size is in acres because that is the unit this feed publishes.</div>'+
+    '</div></div>'+
+
+    '<div class="s1row"><div class="s1lab">Comparable Search Criteria</div><div>'+
+      '<div class="fgrid" style="grid-template-columns:repeat(3,1fr)">'+
+        '<div class="f"><label>Price</label><div class="rng">'+
+          '<select class="t" id="cMinPrice">'+priceOpts("", "No min")+'</select><span class="dash">-</span>'+
+          '<select class="t" id="cMaxPrice">'+priceOpts("", "No max")+'</select></div></div>'+
+        '<div class="f"><label>Beds</label><div class="rng">'+
+          '<select class="t" id="cMinBeds">'+bedOpts("", "No min")+'</select><span class="dash">-</span>'+
+          '<select class="t" id="cMaxBeds">'+bedOpts("", "No max")+'</select></div></div>'+
+        '<div class="f"><label>Baths</label><div class="rng">'+
+          '<select class="t" id="cMinBaths">'+bathOpts("", "No min")+'</select><span class="dash">-</span>'+
+          '<select class="t" id="cMaxBaths">'+bathOpts("", "No max")+'</select></div></div>'+
+        '<div class="f"><label>Sqft</label><div class="rng">'+
+          '<select class="t" id="cMinSqft">'+sqftOpts("", "No min")+'</select><span class="dash">-</span>'+
+          '<select class="t" id="cMaxSqft">'+sqftOpts("", "No max")+'</select></div></div>'+
+        '<div class="f"><label>Lot Size</label><div class="rng">'+
+          '<select class="t" id="cMinLot">'+lotOpts("", "No min")+'</select><span class="dash">-</span>'+
+          '<select class="t" id="cMaxLot">'+lotOpts("", "No max")+'</select></div></div>'+
+        '<div class="f"><label>Year Built</label><select class="t" id="cYear">'+
+          opts(m.ladders.yearBuilt.map(function(y){ return {value:y.value==null?"":y.value,label:y.label}; }), "")+'</select></div>'+
+      '</div>'+
+      '<div class="fgrid" style="grid-template-columns:repeat(2,1fr);margin-top:14px">'+
+        '<div class="f"><label>Sold / Off Market Date</label><select class="t" id="cStatusDate">'+
+          opts(m.ladders.statusDate.map(function(y){ return {value:y.value==null?"":y.value,label:y.label}; }), "")+'</select>'+
+          '<div style="font-size:11px;color:#98a1a7;margin-top:4px">Applies to steps 4 and 5, where the rows carry a status date.</div></div>'+
+        '<div class="f"><label>Search Area</label>'+
+          '<div class="why" style="margin-top:2px"><b>There is no mile radius on this board.</b> '+esc(radiusReason)+'</div></div>'+
+      '</div>'+
+    '</div></div>'+
+
+    '<div class="s1foot"><button class="btn-next" id="s1Next">Next</button></div>'+
+  '</div>';
+
+  /* Inline green tick on valid input, per the spec's validation indicator. */
+  function tick(inputId, ctlId, test){
+    var i = q("#"+inputId), c = q("#"+ctlId);
+    function upd(){ c.classList.toggle("good", test(i.value)); }
+    i.addEventListener("input", upd); upd();
+  }
+  tick("cnName", "cnCtl", function(v){ return v.trim().length >= 2; });
+  /* The address is "valid" when it carries a 5-digit ZIP or a city the board
+     covers. Without a geocoder that is the only real check available, and it
+     is a better one than "not empty". */
+  var cityNames = S.meta.cities.map(function(c){ return String(c.value||"").toLowerCase(); }).filter(Boolean);
+  tick("sAddr", "adCtl", function(v){
+    var s = String(v||"").toLowerCase();
+    if(/\b\d{5}\b/.test(s)) return true;
+    return cityNames.some(function(c){ return c && s.indexOf(c) >= 0; });
+  });
+
+  Array.prototype.forEach.call(document.getElementsByName("sTyp"), function(r){
+    r.addEventListener("change", function(){
+      var byMls = q('input[name="sTyp"]:checked').value === "mls";
+      q("#mlsWrap").style.display = byMls ? "" : "none";
+      q("#sAddr").parentElement.parentElement.style.display = byMls ? "none" : "";
+    });
+  });
+  q("#sMls").addEventListener("change", lookupByMls);
+  q("#sAddr").addEventListener("change", lookupByAddress);
+  q("#s1Next").addEventListener("click", submitStep1);
+}
+
+/* Fill the subject fields from a real listing when one matches — the closest
+   thing to Brivity's geocode-and-populate that this data supports. */
+function fillSubjectFrom(l){
+  if(!l) return;
+  if(l.street) q("#sAddr").value = [l.street, l.city, l.state, l.postalCode].filter(Boolean).join(", ");
+  if(l.beds != null) q("#sBeds").value = String(l.beds);
+  if(l.baths != null) q("#sBaths").value = String(l.baths);
+  if(l.livingArea) q("#sSqft").value = String(Math.round(l.livingArea));
+  if(l.lotSize) q("#sLot").value = String(l.lotSize);
+  if(l.propertyType) q("#sType").value = l.propertyType;
+  var img = q("#subjImg");
+  if(l.photoUrl) img.innerHTML = '<img src="'+esc(l.photoUrl)+'" alt="" '+
+    'onerror="this.parentElement.textContent=\'That listing\\u2019s photo could not be loaded.\'">';
+  q("#sAddr").dispatchEvent(new Event("input"));
+}
+function lookupByMls(){
+  var v = q("#sMls").value.trim(); if(!v) return;
+  api("/api/mls/listings?limit=1&q="+encodeURIComponent(v)).then(function(d){
+    var l = (d.listings||[])[0];
+    if(!l){ toast("No listing with that MLS number is in the mirror. The feed holds active and pending only."); return; }
+    fillSubjectFrom(l);
+    toast("Filled from MLS " + v + ".");
+  }).catch(function(e){ toast(e.message); });
+}
+function lookupByAddress(){
+  var v = q("#sAddr").value.trim(); if(v.length < 6) return;
+  /* Best-effort only: if the subject happens to be on the market its own
+     photo and specs are right there. A miss is silent — most subjects of a
+     CMA are not currently listed, which is the whole point of one. */
+  api("/api/mls/listings?limit=1&q="+encodeURIComponent(v.split(",")[0])).then(function(d){
+    var l = (d.listings||[])[0];
+    if(l && l.street && v.toLowerCase().indexOf(String(l.street).toLowerCase().slice(0,10)) >= 0) fillSubjectFrom(l);
+  }).catch(function(){});
+}
+
+function collectCriteria(){
+  var c = {};
+  var map = [
+    ["cMinPrice","minPrice"],["cMaxPrice","maxPrice"],["cMinBeds","minBeds"],["cMaxBeds","maxBeds"],
+    ["cMinBaths","minBaths"],["cMaxBaths","maxBaths"],["cMinSqft","minSqft"],["cMaxSqft","maxSqft"],
+    ["cMinLot","minLotSize"],["cMaxLot","maxLotSize"]
+  ];
+  map.forEach(function(p){ var v = num(q("#"+p[0]).value); if(v != null) c[p[1]] = v; });
+  var yrs = num(q("#cYear").value);
+  if(yrs != null) c.minYearBuilt = new Date().getFullYear() - yrs;
+  var t = q("#sType").value; if(t) c.propertyTypes = [t];
+  /* The Sold / Off Market window lives on the criteria rather than in a page
+     variable: steps 4 and 5 need it after the step-1 form is gone, and a
+     resumed session has no form to read it back from. */
+  var days = num(q("#cStatusDate").value);
+  if(days != null) c.statusDateDays = days;
+  return c;
+}
+
+function submitStep1(){
+  var btn = q("#s1Next");
+  var body = {
+    clientName: q("#cnName").value.trim(),
+    leadId: LEAD_ID || null,
+    mls: q("#cnMls").value,
+    subjectAddress: q("#sAddr").value.trim(),
+    subjectPropertyType: q("#sType").value,
+    subjectBeds: num(q("#sBeds").value),
+    subjectBaths: num(q("#sBaths").value),
+    subjectSqft: num(q("#sSqft").value),
+    subjectLotSize: num(q("#sLot").value),
+    criteria: collectCriteria()
+  };
+  if(!body.clientName){ toast("Who is this CMA for? A client name is required."); return; }
+  if(!body.subjectAddress){ toast("Enter the subject property address."); return; }
+  btn.disabled = true; btn.textContent = "Working…";
+  api("/api/cma/sessions", { method:"POST", body: body }).then(function(d){
+    S.session = d.session; S.area = d.area;
+    toast("CMA started for " + d.session.clientName + ".");
+    goStep(2);
+  }).catch(function(e){
+    btn.disabled = false; btn.textContent = "Next";
+    toast(e.message);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STEPS 2-5 — selection.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function houseSvg(n, color){
+  return '<svg width="52" height="46" viewBox="0 0 52 46" fill="none" stroke="'+color+'" stroke-width="2.4">'+
+    '<path d="M4 20L26 4l22 16v22a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V20z" stroke-linejoin="round"/>'+
+    '<text x="26" y="34" text-anchor="middle" font-size="17" font-weight="700" fill="'+color+'" stroke="none" '+
+    'font-family="Helvetica,Arial,sans-serif">'+n+'</text></svg>';
+}
+
+function subjectBar(){
+  var s = S.session;
+  var line2 = [
+    s.subjectPropertyType === "RES" ? "Residential" : (s.subjectPropertyType || ""),
+    s.subjectBeds != null ? s.subjectBeds + " beds" : "",
+    s.subjectBaths != null ? s.subjectBaths + " baths" : "",
+    s.areaLabel ? "comps from " + s.areaLabel : ""
+  ].filter(Boolean).join(", ");
+  return '<div class="subj-bar"><div><b>Subject Property:</b> '+esc(s.subjectAddress)+'</div>'+
+    '<div>'+esc(line2)+'</div></div>';
+}
+
+function trayHtml(key){
+  var rows = S.trays[key] || [];
+  var byslot = {};
+  rows.forEach(function(r){ byslot[r.traySlotIndex] = r; });
+  var out = "";
+  for(var i=1;i<=5;i++){
+    var c = byslot[i];
+    if(!c){
+      out += '<div class="slot empty" style="border-color:'+ACCENT[key]+'">'+houseSvg(i, ACCENT[key])+'</div>';
+      continue;
+    }
+    var price = key === "SOLD" ? (c.soldPrice != null ? c.soldPrice : c.price) : c.price;
+    var banner = "";
+    if(key === "SOLD" && c.statusDate) banner = "Sold: " + (fmtDate(c.statusDate) || c.statusDate);
+    if(key === "PENDING" && c.statusDate) banner = "Pending: " + (fmtDate(c.statusDate) || c.statusDate);
+    if(key === "OFF_MKT") banner = (c.offMarketType || "Off market") + (c.statusDate ? ": " + (fmtDate(c.statusDate)||"") : "");
+    out += '<div class="slot filled">'+
+      (c.photoUrl ? '<img src="'+esc(c.photoUrl)+'" alt="" onerror="this.remove()">' : '') +
+      '<div class="veil"></div>'+
+      (banner ? '<div class="banner">'+esc(banner)+'</div>' : '')+
+      '<button class="drop" data-drop="'+esc(c.id)+'" title="Remove from slot '+i+'">&minus;</button>'+
+      '<button class="drop pen" data-edit="'+esc(c.id)+'" title="Edit this comparable">&#9998;</button>'+
+      '<div class="cap"><div class="a">'+esc(c.address.split(",")[0])+'</div>'+
+        '<div class="p">'+esc(money(price))+'</div></div>'+
+      '<div class="spec">'+
+        '<div>'+(c.beds!=null?esc(c.beds):"—")+'<small>beds</small></div>'+
+        '<div>'+(c.baths!=null?esc(c.baths):"—")+'<small>baths</small></div>'+
+        '<div>'+(c.sqft?esc(c.sqft.toLocaleString()):"—")+'<small>sqft</small></div>'+
+      '</div></div>';
+  }
+  return out;
+}
+
+function feedItemHtml(r, key){
+  var specs = [
+    r.beds != null ? r.beds + " beds" : null,
+    r.baths != null ? r.baths + " baths" : null,
+    r.sqft ? Math.round(r.sqft).toLocaleString() + " sqft" : null
+  ].filter(Boolean);
+  var price;
+  if(key === "SOLD"){
+    /* Dual price, per the spec. When only one of the two is on file the row
+       says which one it is instead of printing it twice. */
+    price = r.originalListPrice && r.soldPrice
+      ? '<span class="was">list: '+esc(money(r.originalListPrice))+'</span> &nbsp;sold: '+esc(money(r.soldPrice))
+      : esc(money(r.soldPrice != null ? r.soldPrice : r.price)) + ' <span class="was">'+
+        (r.soldPrice != null ? "sold" : "price") + '</span>';
+  } else {
+    price = esc(money(r.price));
+  }
+  var dateLabel = key === "PENDING" ? "Status updated" : key === "SOLD" ? "Sold date" :
+                  key === "OFF_MKT" ? "Off market date" : "List date";
+  var d = fmtDate(r.statusDate) || fmtDate(r.listDate);
+  return '<div class="fi'+(r.selected?" sel-on":"")+'" data-key="'+esc(r.key)+'">'+
+    '<div class="thumb">no photo<br>on file'+
+      (r.photoUrl ? '<img src="'+esc(r.photoUrl)+'" alt="" loading="lazy" onerror="this.remove()">' : '')+
+    '</div>'+
+    '<div><div class="a">'+esc(r.address.split(",")[0])+'</div>'+
+      '<div class="p">'+price+'</div>'+
+      (specs.length ? '<div class="sp">'+specs.map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'
+                    : '<div class="sp"><em style="font-style:normal;color:#b0863a">no beds/baths/sqft on this record</em></div>')+
+      '<div class="dt">'+esc(dateLabel)+': '+(d ? esc(d) : '<em>not published</em>')+'</div>'+
+      (key === "OFF_MKT" || r.source === "transaction"
+        ? '<span class="edit" data-editkey="'+esc(r.key)+'">edit</span>' : '')+
+    '</div>'+
+    '<button class="tog'+(r.selected?" on":"")+'" data-key="'+esc(r.key)+'">'+(r.selected?"&minus;":"+")+'</button>'+
+  '</div>';
+}
+
+/* ── the right rail: what replaces the map ───────────────────────── */
+function railHtml(key){
+  var m = S.meta;
+  var mapReason = (m.unavailable.find(function(u){ return /Map view/i.test(u.field); })||{}).reason || "";
+  var rows = S.feed.rows || [];
+  var prices = rows.map(function(r){ return key==="SOLD" ? (r.soldPrice!=null?r.soldPrice:r.price) : r.price; })
+                   .filter(function(n){ return n != null && isFinite(n) && n > 0; });
+
+  /* Histogram of what is actually loaded. Labelled with that count — it is a
+     picture of the rows on screen, not of the whole result set. */
+  var hist = "";
+  if(prices.length >= 4){
+    var lo = Math.min.apply(null, prices), hi = Math.max.apply(null, prices);
+    var BINS = 14, span = Math.max(hi - lo, 1), counts = new Array(BINS).fill(0);
+    prices.forEach(function(p){
+      var i = Math.min(BINS-1, Math.floor((p - lo) / span * BINS));
+      counts[i]++;
+    });
+    var peak = Math.max.apply(null, counts) || 1;
+    /* Where the subject's own indicated price sits, if there is anything to
+       place it with. Highlighted rather than annotated with a fake number. */
+    var subjP = null;
+    if(S.session.subjectSqft){
+      var ppsfs = rows.map(function(r){
+        var p = key==="SOLD" ? (r.soldPrice!=null?r.soldPrice:r.price) : r.price;
+        return (p && r.sqft) ? p / r.sqft : null;
+      }).filter(function(n){ return n != null; }).sort(function(a,b){ return a-b; });
+      if(ppsfs.length) subjP = ppsfs[Math.floor(ppsfs.length/2)] * S.session.subjectSqft;
+    }
+    var subjBin = subjP == null ? -1 : Math.min(BINS-1, Math.max(0, Math.floor((subjP - lo) / span * BINS)));
+    hist = '<div class="hist">'+counts.map(function(c, i){
+        return '<div class="hb'+(i===subjBin?" hot":"")+'" style="height:'+Math.round(c/peak*100)+'%" '+
+               'title="'+c+' listing'+(c===1?"":"s")+'"></div>';
+      }).join("")+'</div>'+
+      '<div class="hax"><span>'+esc(moneyK(lo))+'</span><span>'+esc(moneyK(hi))+'</span></div>'+
+      '<div style="font-size:11px;color:#98a1a7;margin-top:6px">'+prices.length+' of '+S.feed.total+
+        ' loaded'+(subjBin>=0?'. The highlighted bar is where this subject lands at the comps’ median price per sqft.':'.')+'</div>';
+  } else {
+    hist = '<div style="font-size:12px;color:#98a1a7">Not enough rows loaded to draw a distribution.</div>';
+  }
+
+  /* Selected comps against the subject, on price per square foot. */
+  var sel = S.trays[key] || [];
+  var pp = "";
+  if(sel.length){
+    var vals = sel.map(function(c){
+      var p = key==="SOLD" ? (c.soldPrice!=null?c.soldPrice:c.price) : c.price;
+      return { c: c, v: (p && c.sqft) ? p / c.sqft : null };
+    });
+    var known = vals.map(function(x){ return x.v; }).filter(function(v){ return v != null; });
+    var max = known.length ? Math.max.apply(null, known) : 1;
+    pp = '<div class="ppsf">' + vals.map(function(x){
+      if(x.v == null){
+        return '<div class="pp"><div class="t"><b>'+esc(x.c.address.split(",")[0])+'</b>'+
+          '<span class="miss">no sqft</span></div>'+
+          '<div class="bar"></div></div>';
+      }
+      return '<div class="pp"><div class="t"><b>'+esc(x.c.address.split(",")[0])+'</b><span>$'+
+        x.v.toFixed(0)+'/sqft</span></div><div class="bar"><i style="width:'+
+        Math.max(4, Math.round(x.v/max*100))+'%"></i></div></div>';
+    }).join("") + '</div>';
+  } else {
+    pp = '<div style="font-size:12px;color:#98a1a7">Nothing selected in this step yet.</div>';
+  }
+
+  var ladder = "";
+  if(S.area && S.area.ladder){
+    ladder = '<div class="ladder">' + S.area.ladder.map(function(r){
+      return '<div class="lr'+(r.rung === S.session.areaRung ? " on" : "")+'">'+
+        '<span>'+esc(r.label)+'</span><span class="n">'+r.count+'</span></div>';
+    }).join("") + '</div>';
+  } else if(S.session.areaLabel){
+    ladder = '<div class="lr on"><span>'+esc(S.session.areaLabel)+'</span><span class="n">'+S.feed.total+'</span></div>';
+  }
+
+  return '<div class="panel">'+
+    '<div class="pblock"><h4>Why there is no map</h4>'+
+      '<div class="why">'+esc(mapReason)+'</div></div>'+
+    (ladder ? '<div class="pblock"><h4>Comp area — the ladder it climbed</h4>'+ladder+
+      '<div style="font-size:11px;color:#98a1a7;margin-top:6px">It stops at the first rung with at least 15 matches. '+
+      'The highlighted row is the one this CMA is using.</div></div>' : '')+
+    '<div class="pblock"><h4>'+esc(S.feed.label || "")+' prices in this area</h4>'+hist+'</div>'+
+    '<div class="pblock"><h4>Selected comps vs price per sqft</h4>'+pp+
+      (S.session.subjectSqft
+        ? '<div style="font-size:11px;color:#98a1a7;margin-top:7px">Subject is '+
+            esc(S.session.subjectSqft.toLocaleString())+' sqft.</div>'
+        : '<div style="font-size:11px;color:#b0863a;margin-top:7px">The subject has no square footage on file, '+
+          'so there is nothing to compare these against. Add it on step 1.</div>')+
+    '</div>'+
+  '</div>';
+}
+
+function renderSelect(key){
+  var st = STEPS.find(function(s){ return s.key === key; });
+  q("#wzBody").innerHTML =
+  '<div class="sel">'+
+    '<div class="sel-top">'+
+      '<h2>Select '+esc(st.label)+' Listings</h2>'+
+      subjectBar()+
+      '<div class="sel-acts">'+
+        '<button class="sq ghost" id="btnFilter" title="Refine the comparable search">&#9660;</button>'+
+        '<button class="sq" id="btnManual" title="Add a listing by hand">+</button>'+
+      '</div>'+
+    '</div>'+
+    '<div class="tray" id="tray">'+trayHtml(key)+'</div>'+
+    '<div class="sel-main">'+
+      '<div class="rail">'+
+        '<div class="rail-h">'+
+          '<span class="cnt" id="feedCnt">Loading…</span>'+
+          '<span style="font-size:12px;color:#98a1a7">sorted by</span>'+
+          '<select id="feedSort" title="'+esc(S.meta.unavailableSort.reason)+'">'+
+            opts(S.meta.sorts, S.feed.sort)+
+            '<option value="distance" disabled>'+esc(S.meta.unavailableSort.label)+' — not available on this feed</option>'+
+          '</select>'+
+        '</div>'+
+        '<div class="rail-note" id="feedNote"></div>'+
+        '<div class="add-row"><button class="add-btn" id="btnManual2">&#9679; Manually Add Listing</button></div>'+
+        '<div class="feed" id="feed"><div class="empty-feed">Loading…</div></div>'+
+      '</div>'+
+      '<div id="rail2" style="min-height:0;display:flex"></div>'+
+    '</div>'+
+  '</div>';
+
+  q("#btnManual").addEventListener("click", function(){ openManual(key); });
+  q("#btnManual2").addEventListener("click", function(){ openManual(key); });
+  q("#btnFilter").addEventListener("click", openFilters);
+  q("#feedSort").addEventListener("change", function(){
+    S.feed.sort = this.value; S.feed.offset = 0; loadFeed(key, false);
+  });
+  wireTray();
+  loadFeed(key, false);
+}
+
+function wireTray(){
+  var key = STEPS[S.step-1].key;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-edit]"), function(b){
+    b.addEventListener("click", function(){
+      var comp = (S.trays[key]||[]).find(function(c){ return c.id === b.dataset.edit; });
+      if(comp) openEdit(key, comp);
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-drop]"), function(b){
+    b.addEventListener("click", function(){
+      api("/api/cma/comparables/"+b.dataset.drop, { method:"DELETE" }).then(function(){
+        return refreshTrays();
+      }).then(function(){
+        q("#tray").innerHTML = trayHtml(key);
+        wireTray();
+        loadFeed(key, false);
+      }).catch(function(e){ toast(e.message); });
+    });
+  });
+}
+
+function refreshTrays(){
+  return api("/api/cma/sessions/"+S.session.id).then(function(d){
+    S.session = d.session; S.trays = d.trays;
+  });
+}
+
+function loadFeed(key, append){
+  var sort = S.feed.sort;
+  var offset = append ? S.feed.offset : 0;
+  var extra = "";
+  /* Steps 4 and 5 honour the Sold/Off Market date window chosen on step 1. */
+  var days = (S.session.criteria || {}).statusDateDays;
+  if(days && (key === "SOLD" || key === "OFF_MKT")) extra = "&days=" + days;
+  api("/api/cma/sessions/"+S.session.id+"/candidates?status="+key+"&sort="+sort+"&limit=60&offset="+offset+extra)
+  .then(function(d){
+    S.feed.total = d.total;
+    S.feed.source = d.source;
+    S.feed.note = d.sourceNote;
+    S.feed.unavailable = d.unavailable;
+    S.feed.label = d.statusLabel;
+    S.feed.rows = append ? S.feed.rows.concat(d.rows) : d.rows;
+    S.feed.offset = (append ? offset : 0) + d.rows.length;
+    paintFeed(key);
+  }).catch(function(e){
+    q("#feed").innerHTML = '<div class="empty-feed">'+esc(e.message)+'</div>';
+  });
+}
+
+function paintFeed(key){
+  var f = S.feed;
+  q("#feedCnt").innerHTML = '<b>'+f.total+'</b> '+esc(f.label)+' listing'+(f.total===1?"":"s");
+  /* When the step has no source at all, the reason belongs in the feed where
+     the rows would have been — printing it in the header band as well just
+     says the same sentence twice on one screen. */
+  var noteBand = q("#feedNote");
+  noteBand.textContent = f.unavailable ? "" : (f.note || "");
+  noteBand.style.display = noteBand.textContent ? "" : "none";
+  var feed = q("#feed");
+  if(!f.rows.length){
+    feed.innerHTML = '<div class="empty-feed">'+
+      esc(f.unavailable || "Nothing matches the comparable criteria in this step.")+
+      '<br><br>Use <b>Manually Add Listing</b> above to enter one.</div>';
+  } else {
+    feed.innerHTML = f.rows.map(function(r){ return feedItemHtml(r, key); }).join("") +
+      (f.rows.length < f.total
+        ? '<div style="padding:10px"><button class="btn-ghost" style="width:100%" id="feedMore">Load more ('+
+          (f.total - f.rows.length)+' left)</button></div>'
+        : '');
+    var more = q("#feedMore");
+    if(more) more.addEventListener("click", function(){ loadFeed(key, true); });
+  }
+  Array.prototype.forEach.call(feed.querySelectorAll(".tog"), function(b){
+    b.addEventListener("click", function(){ toggleRow(key, b.dataset.key); });
+  });
+  Array.prototype.forEach.call(feed.querySelectorAll("[data-editkey]"), function(b){
+    b.addEventListener("click", function(){ editCandidate(key, b.dataset.editkey); });
+  });
+  q("#rail2").innerHTML = railHtml(key);
+}
+
+function toggleRow(key, rowKey){
+  var row = S.feed.rows.find(function(r){ return String(r.key) === String(rowKey); });
+  if(!row) return;
+  if(row.selected){
+    var existing = (S.trays[key]||[]).find(function(c){ return String(c.sourceKey) === String(rowKey); });
+    if(!existing) return;
+    api("/api/cma/comparables/"+existing.id, { method:"DELETE" }).then(afterTrayChange(key)).catch(function(e){ toast(e.message); });
+    return;
+  }
+  api("/api/cma/sessions/"+S.session.id+"/comparables", { method:"POST", body:{
+    listingStatus: key,
+    source: row.source,
+    sourceKey: row.key,
+    mlsNumber: row.mlsNumber,
+    address: row.address,
+    city: row.city,
+    postalCode: row.postalCode,
+    price: row.price,
+    originalListPrice: row.originalListPrice,
+    soldPrice: row.soldPrice,
+    beds: row.beds, baths: row.baths, sqft: row.sqft, lotSize: row.lotSize,
+    yearBuilt: row.yearBuilt, listDate: row.listDate, statusDate: row.statusDate,
+    daysOnMarket: row.daysOnMarket, photoUrl: row.photoUrl
+  }}).then(afterTrayChange(key)).catch(function(e){ toast(e.message); });
+}
+
+function afterTrayChange(key){
+  return function(){
+    return refreshTrays().then(function(){
+      q("#tray").innerHTML = trayHtml(key);
+      wireTray();
+      S.feed.rows.forEach(function(r){
+        r.selected = (S.trays[key]||[]).some(function(c){ return String(c.sourceKey) === String(r.key); });
+      });
+      paintFeed(key);
+    });
+  };
+}
+
+/* ── manual entry / edit ─────────────────────────────────────────── */
+function compFormHtml(key, v){
+  v = v || {};
+  var offRow = key === "OFF_MKT"
+    ? '<div class="f"><label>Off market as</label><select class="t" id="mOff">'+
+        opts([{value:"EXPIRED",label:"Expired"},{value:"WITHDRAWN",label:"Withdrawn"},{value:"CANCELED",label:"Canceled"}],
+             v.offMarketType || "EXPIRED")+'</select></div>' : '';
+  var soldRow = key === "SOLD"
+    ? '<div class="f"><label>Sold price</label><input class="t" id="mSold" inputmode="numeric" value="'+
+        esc(v.soldPrice==null?"":v.soldPrice)+'"></div>'+
+      '<div class="f"><label>Seller concessions</label><input class="t" id="mConc" inputmode="numeric" value="'+
+        esc(v.sellerConcessions==null?"":v.sellerConcessions)+'"></div>' : '';
+  var dateLabel = key === "SOLD" ? "Sold date" : key === "PENDING" ? "Pending date"
+                : key === "OFF_MKT" ? "Off market date" : "List date";
+  return '<div class="fgrid" style="grid-template-columns:1fr 1fr">'+
+    '<div class="f" style="grid-column:1/-1"><label>Address</label>'+
+      '<input class="t" id="mAddr" placeholder="1450 Kedros, San Antonio, TX 78245" value="'+esc(v.address||"")+'"></div>'+
+    '<div class="f"><label>'+esc(key==="SOLD"?"Original list price":"Price")+'</label>'+
+      '<input class="t" id="mPrice" inputmode="numeric" value="'+
+        esc((key==="SOLD" ? v.originalListPrice : v.price)==null ? "" : (key==="SOLD"?v.originalListPrice:v.price))+'"></div>'+
+    '<div class="f"><label>MLS number</label><input class="t" id="mMls" value="'+esc(v.mlsNumber||"")+'"></div>'+
+    soldRow +
+    '<div class="f"><label>Beds</label><input class="t" id="mBeds" inputmode="decimal" value="'+esc(v.beds==null?"":v.beds)+'"></div>'+
+    '<div class="f"><label>Baths</label><input class="t" id="mBaths" inputmode="decimal" value="'+esc(v.baths==null?"":v.baths)+'"></div>'+
+    '<div class="f"><label>Sqft</label><div class="ctl"><input class="t" id="mSqft" inputmode="numeric" value="'+
+      esc(v.sqft==null?"":v.sqft)+'"><span class="unit">sqft</span></div></div>'+
+    '<div class="f"><label>Year built</label><input class="t" id="mYear" inputmode="numeric" value="'+esc(v.yearBuilt==null?"":v.yearBuilt)+'"></div>'+
+    '<div class="f"><label>'+esc(dateLabel)+'</label><input class="t" id="mDate" type="date" value="'+
+      esc(v.statusDate ? String(v.statusDate).slice(0,10) : "")+'"></div>'+
+    offRow +
+    '<div class="f" style="grid-column:1/-1"><label>Photo URL (optional)</label>'+
+      '<input class="t" id="mPhoto" value="'+esc(v.photoUrl||"")+'"></div>'+
+    '<div class="f" style="grid-column:1/-1"><label>Notes</label><input class="t" id="mNotes" value="'+esc(v.notes||"")+'"></div>'+
+  '</div>'+
+  '<div class="unav">Square footage is what makes a comparable count toward the step 6 estimate. A row without it '+
+    'still shows in the price ranges, but it cannot contribute a price per square foot.</div>';
+}
+
+function readCompForm(key){
+  var out = {
+    address: q("#mAddr").value.trim(),
+    mlsNumber: q("#mMls").value.trim() || null,
+    beds: num(q("#mBeds").value), baths: num(q("#mBaths").value),
+    sqft: num(q("#mSqft").value), yearBuilt: num(q("#mYear").value),
+    statusDate: q("#mDate").value || null,
+    photoUrl: q("#mPhoto").value.trim() || null,
+    notes: q("#mNotes").value.trim() || null
+  };
+  var p = num(q("#mPrice").value);
+  if(key === "SOLD"){
+    out.originalListPrice = p;
+    out.soldPrice = num(q("#mSold").value);
+    out.sellerConcessions = num(q("#mConc").value);
+    /* The headline price for a sold row is what it sold for. */
+    out.price = out.soldPrice != null ? out.soldPrice : p;
+  } else {
+    out.price = p;
+  }
+  if(key === "OFF_MKT") out.offMarketType = q("#mOff").value;
+  return out;
+}
+
+function openManual(key){
+  var st = STEPS.find(function(s){ return s.key === key; });
+  /* The full reason is already on the step behind this modal; repeating the
+     paragraph here would be the same sentence twice on one screen. */
+  var lead = key === "OFF_MKT"
+    ? '<div style="font-size:12px;color:#62686e;line-height:1.6">There is no off-market search to run on this '+
+      'feed, so typing it in is the only way one gets into the CMA.</div>'
+    : '<div style="font-size:12px;color:#62686e;line-height:1.6">For a home that is not on this feed — an '+
+      'unrepresented sale, a pocket listing, or one from another board.</div>';
+  overlay("Manually Add " + st.label + " Listing", lead + compFormHtml(key, null),
+    '<div style="flex:1"></div><button class="btn-ghost" id="mCancel">CANCEL</button>'+
+    '<button class="btn-next" id="mSave" style="padding:0 26px">ADD TO TRAY</button>');
+  q("#mCancel").addEventListener("click", closeOv);
+  q("#mSave").addEventListener("click", function(){
+    var body = readCompForm(key);
+    if(!body.address){ toast("A comparable needs an address."); return; }
+    body.listingStatus = key; body.source = "manual";
+    api("/api/cma/sessions/"+S.session.id+"/comparables", { method:"POST", body: body })
+      .then(function(){ closeOv(); return afterTrayChange(key)(); })
+      .then(function(){ toast("Added to the "+st.label+" tray."); })
+      .catch(function(e){ toast(e.message); });
+  });
+}
+
+/* The feed row's `edit` — for rows whose source cannot supply the specs. */
+function editCandidate(key, rowKey){
+  var existing = (S.trays[key]||[]).find(function(c){ return String(c.sourceKey) === String(rowKey); });
+  if(!existing){
+    toast("Add it to the tray first — editing writes onto the selected comparable, not the source record.");
+    return;
+  }
+  openEdit(key, existing);
+}
+
+function openEdit(key, comp){
+  var st = STEPS.find(function(s){ return s.key === key; });
+  var lead = comp.source === "transaction"
+    ? '<div class="unav" style="margin-top:0">This row came from a closed transaction, which records the deal and '+
+      'not the listing — so it has a real price and no beds, baths or square footage. Filling those in is what lets '+
+      'it count toward the estimate. Edits stay on this CMA and do not touch the transaction.</div>'
+    : '<div style="font-size:12px;color:#62686e;line-height:1.6">Edits apply to this CMA only.</div>';
+  overlay("Edit " + st.label + " comparable", lead + compFormHtml(key, comp),
+    '<div style="flex:1"></div><button class="btn-ghost" id="mCancel">CANCEL</button>'+
+    '<button class="btn-next" id="mSave" style="padding:0 26px">SAVE</button>');
+  q("#mCancel").addEventListener("click", closeOv);
+  q("#mSave").addEventListener("click", function(){
+    var body = readCompForm(key);
+    if(!body.address){ toast("A comparable needs an address."); return; }
+    api("/api/cma/comparables/"+comp.id, { method:"PATCH", body: body })
+      .then(function(){ closeOv(); return afterTrayChange(key)(); })
+      .then(function(){ toast("Saved."); })
+      .catch(function(e){ toast(e.message); });
+  });
+}
+
+/* ── refine filters (the ▼ button) ───────────────────────────────── */
+function openFilters(){
+  var c = S.session.criteria || {};
+  overlay("Refine comparable search",
+    '<div class="fgrid" style="grid-template-columns:repeat(2,1fr)">'+
+      '<div class="f"><label>Min price</label><select class="t" id="fMinP">'+priceOpts(c.minPrice==null?"":c.minPrice,"No min")+'</select></div>'+
+      '<div class="f"><label>Max price</label><select class="t" id="fMaxP">'+priceOpts(c.maxPrice==null?"":c.maxPrice,"No max")+'</select></div>'+
+      '<div class="f"><label>Min beds</label><select class="t" id="fMinB">'+bedOpts(c.minBeds==null?"":c.minBeds,"No min")+'</select></div>'+
+      '<div class="f"><label>Max beds</label><select class="t" id="fMaxB">'+bedOpts(c.maxBeds==null?"":c.maxBeds,"No max")+'</select></div>'+
+      '<div class="f"><label>Min baths</label><select class="t" id="fMinBa">'+bathOpts(c.minBaths==null?"":c.minBaths,"No min")+'</select></div>'+
+      '<div class="f"><label>Max baths</label><select class="t" id="fMaxBa">'+bathOpts(c.maxBaths==null?"":c.maxBaths,"No max")+'</select></div>'+
+      '<div class="f"><label>Min sqft</label><select class="t" id="fMinS">'+sqftOpts(c.minSqft==null?"":c.minSqft,"No min")+'</select></div>'+
+      '<div class="f"><label>Max sqft</label><select class="t" id="fMaxS">'+sqftOpts(c.maxSqft==null?"":c.maxSqft,"No max")+'</select></div>'+
+    '</div>'+
+    '<div class="unav">Changing these re-runs the search on steps 2 and 3. Comparables already in a tray stay there — '+
+      'a pick you made deliberately is not dropped because a filter moved.</div>',
+    '<div style="flex:1"></div><button class="btn-ghost" id="fCancel">CANCEL</button>'+
+    '<button class="btn-next" id="fApply" style="padding:0 26px">APPLY</button>');
+  q("#fCancel").addEventListener("click", closeOv);
+  q("#fApply").addEventListener("click", function(){
+    var next = Object.assign({}, S.session.criteria || {});
+    [["fMinP","minPrice"],["fMaxP","maxPrice"],["fMinB","minBeds"],["fMaxB","maxBeds"],
+     ["fMinBa","minBaths"],["fMaxBa","maxBaths"],["fMinS","minSqft"],["fMaxS","maxSqft"]].forEach(function(p){
+      var v = num(q("#"+p[0]).value);
+      if(v == null) delete next[p[1]]; else next[p[1]] = v;
+    });
+    api("/api/cma/sessions/"+S.session.id, { method:"PATCH", body:{ criteria: next } }).then(function(d){
+      S.session = d.session; closeOv();
+      S.feed.offset = 0;
+      loadFeed(STEPS[S.step-1].key, false);
+      toast("Search updated.");
+    }).catch(function(e){ toast(e.message); });
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STEP 6 — Results, and STEP 7 — Publish.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function renderResults(){
+  q("#wzBody").innerHTML = '<div class="res"><h1>Results</h1><p class="lede">Working…</p></div>';
+  api("/api/cma/sessions/"+S.session.id+"/results").then(function(d){
+    S.results = d.results; S.comps = d.comparables;
+    var r = d.results;
+    var est = r.estimate != null
+      ? '<div class="est"><div style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#3f8a7c;font-weight:700">Indicated value</div>'+
+        '<div class="big">'+esc(money(r.estimate))+'</div>'+
+        (r.estimateLow != null ? '<div class="band">'+esc(money(r.estimateLow))+' – '+esc(money(r.estimateHigh))+'</div>' : '')+
+        '<div class="basis">'+esc(r.totalSelected)+' comparable'+(r.totalSelected===1?"":"s")+
+          (r.pricePerSqft != null ? ' at a median of $'+r.pricePerSqft.toFixed(0)+' per square foot' : '')+
+          (S.session.subjectSqft ? ', applied to '+esc(S.session.subjectSqft.toLocaleString())+' sqft.' : '.')+
+        '</div></div>'
+      : '<div class="est none"><div style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#8a6d2f;font-weight:700">No value figure</div>'+
+        '<div class="basis" style="font-size:13px;margin-top:8px">'+esc(r.estimateBlockedReason||"")+'</div></div>';
+
+    var kpis = r.buckets.map(function(b){
+      return '<div class="kpi"><div class="k">'+esc(b.label)+'</div>'+
+        '<div class="v">'+esc(b.count ? money(b.medianPrice) : "—")+'</div>'+
+        '<div class="s">'+(b.count
+          ? esc(b.count+' selected'+(b.minPrice!=null?' · '+money(b.minPrice)+'–'+money(b.maxPrice):"")+
+                (b.listToSalePct!=null?' · sold at '+Math.round(b.listToSalePct)+'% of list':""))
+          : 'none selected')+'</div></div>';
+    }).join("");
+
+    var rows = (d.comparables||[]).map(function(c){
+      var price = c.listingStatus === "SOLD" ? (c.soldPrice != null ? c.soldPrice : c.price) : c.price;
+      var ppsf = (price && c.sqft) ? "$"+Math.round(price/c.sqft) : '<span style="color:#b0863a">no sqft</span>';
+      return '<tr><td><span class="pill '+esc(c.listingStatus)+'">'+esc(c.listingStatus.replace("_"," "))+'</span></td>'+
+        '<td>'+esc(c.address)+'<span class="src">'+esc(c.source)+'</span></td>'+
+        '<td>'+esc(money(price))+(c.listingStatus==="SOLD"&&c.originalListPrice
+          ? '<div style="font-size:11px;color:#8a939a">list '+esc(money(c.originalListPrice))+'</div>' : '')+'</td>'+
+        '<td>'+(c.beds!=null?esc(c.beds):"—")+' / '+(c.baths!=null?esc(c.baths):"—")+'</td>'+
+        '<td>'+(c.sqft?esc(c.sqft.toLocaleString()):"—")+'</td>'+
+        '<td>'+ppsf+'</td>'+
+        '<td>'+esc(fmtDate(c.statusDate)||"—")+'</td></tr>';
+    }).join("");
+
+    q("#wzBody").innerHTML =
+    '<div class="res"><h1>Results</h1>'+
+      '<p class="lede">'+esc(S.session.subjectAddress)+' · prepared for '+esc(S.session.clientName)+'</p>'+
+      est +
+      '<div class="kpis">'+kpis+'</div>'+
+      (rows ? '<table class="rtbl"><thead><tr><th>Step</th><th>Address</th><th>Price</th><th>Bd / Ba</th>'+
+        '<th>Sqft</th><th>$/sqft</th><th>Status date</th></tr></thead><tbody>'+rows+'</tbody></table>'
+            : '<div class="empty-feed">No comparables selected yet. Go back to steps 2 through 5.</div>')+
+      '<div class="notes">'+r.notes.map(function(n){ return '<p>'+esc(n)+'</p>'; }).join("")+'</div>'+
+      '<div class="pubrow"><button class="btn-ghost" id="rBack">BACK TO OFF MARKET</button>'+
+        '<button class="btn-next" id="rNext" style="padding:0 30px">CONTINUE TO PUBLISH</button></div>'+
+    '</div>';
+    q("#rBack").addEventListener("click", function(){ goStep(5); });
+    q("#rNext").addEventListener("click", function(){ goStep(7); });
+  }).catch(function(e){
+    q("#wzBody").innerHTML = '<div class="res"><h1>Results</h1><p class="lede">'+esc(e.message)+'</p></div>';
+  });
+}
+
+function renderPublish(){
+  var published = S.session.status === "published";
+  var link = location.origin + "/c/" + S.session.id;
+  q("#wzBody").innerHTML =
+  '<div class="res"><h1>Publish</h1>'+
+    '<p class="lede">'+esc(S.session.subjectAddress)+' · prepared for '+esc(S.session.clientName)+'</p>'+
+    '<div class="kpi" style="padding:18px">'+
+      '<div class="k">What publishing does</div>'+
+      '<div class="s" style="font-size:12.5px;margin-top:8px">Publishing puts this CMA on a client-facing page '+
+        (published ? 'at the link below' : 'and gives you the link')+', readable by anyone who has it. '+
+        '<b>It does not email anybody.</b> Sending is a separate action, so that "Published" never quietly means '+
+        '"sent to your seller".</div>'+
+    '</div>'+
+    (published
+      ? '<div class="linkbox"><b>Live at</b> <a href="'+esc(link)+'" target="_blank" rel="noopener">'+esc(link)+'</a></div>'+
+        '<div style="font-size:12px;color:#62686e;margin-top:8px">Published '+esc(fmtDate(S.session.publishedAt)||"")+'.</div>'
+      : '<div class="unav">Not published yet, so there is no client link — and the one this will create returns a '+
+        'not-available page until you publish, because a draft CMA on '+
+        'somebody’s house is not something to leave readable.</div>')+
+    '<div class="notes"><p>The client page shows the comparables you selected, the indicated value and its basis, and '+
+      'states that it is a pricing opinion rather than an appraisal. It carries no contact record and no CRM data.</p></div>'+
+    '<div class="pubrow"><button class="btn-ghost" id="pBack">BACK TO RESULTS</button>'+
+      (published
+        ? '<button class="btn-ghost" id="pUn">UNPUBLISH</button><button class="btn-next" id="pView" style="padding:0 30px">VIEW CLIENT PAGE</button>'
+        : '<button class="btn-next" id="pGo" style="padding:0 30px">PUBLISH</button>')+
+    '</div>'+
+  '</div>';
+  q("#pBack").addEventListener("click", function(){ goStep(6); });
+  var go = q("#pGo"), un = q("#pUn"), view = q("#pView");
+  if(go) go.addEventListener("click", function(){
+    api("/api/cma/sessions/"+S.session.id+"/publish", { method:"POST", body:{} }).then(function(d){
+      S.session = d.session; toast(d.note); renderPublish();
+    }).catch(function(e){ toast(e.message); });
+  });
+  if(un) un.addEventListener("click", function(){
+    api("/api/cma/sessions/"+S.session.id+"/publish", { method:"POST", body:{ unpublish:true } }).then(function(d){
+      S.session = d.session; toast(d.note); renderPublish();
+    }).catch(function(e){ toast(e.message); });
+  });
+  if(view) view.addEventListener("click", function(){ window.open(link, "_blank", "noopener"); });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Boot.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function render(){
+  var st = STEPS[S.step - 1];
+  if(S.step === 1) return renderStep1();
+  if(st.key) return renderSelect(st.key);
+  if(S.step === 6) return renderResults();
+  return renderPublish();
+}
+
+q("#wzExit").addEventListener("click", function(){
+  /* Back to wherever this was opened from. Embedded in the CRM that is the
+     CRM; opened directly it is the app shell. */
+  if(window.parent && window.parent !== window){ window.parent.postMessage({ type:"cma-exit" }, "*"); return; }
+  location.href = url("/crm");
+});
+q("#wzPrev").addEventListener("click", function(){ goStep(S.step - 1); });
+q("#wzNext").addEventListener("click", function(){ goStep(S.step + 1); });
+
+(function boot(){
+  paintStepper();
+  q("#wzBody").innerHTML = '<div class="res"><p class="lede">Loading the board’s own vocabulary…</p></div>';
+  api("/api/cma/meta").then(function(m){
+    S.meta = m;
+    var existing = new URLSearchParams(location.search).get("id");
+    if(existing){
+      return api("/api/cma/sessions/"+existing).then(function(d){
+        S.session = d.session; S.trays = d.trays;
+        S.step = Math.max(1, Math.min(7, d.session.currentStep || 2));
+        paintStepper(); render();
+      });
+    }
+    render();
+  }).catch(function(e){
+    q("#wzBody").innerHTML = '<div class="res"><h1>CMA</h1><p class="lede">'+esc(e.message)+'</p></div>';
+  });
+})();
+</script>

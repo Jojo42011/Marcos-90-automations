@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.publicShell = publicShell;
 exports.renderPublicListing = renderPublicListing;
 exports.renderPublicReport = renderPublicReport;
+exports.renderPublicCma = renderPublicCma;
 const outreachEmail_js_1 = require("./outreachEmail.js");
 const money = (n) => n == null || !Number.isFinite(n) ? "—" : "$" + Math.round(n).toLocaleString();
 const CSS = `
@@ -136,6 +137,106 @@ ${homes ? `<div class="card"><h2>On the market nearby</h2><div class="homes">${h
   <div class="note" style="margin:0;padding:0;border:0">${(0, outreachEmail_js_1.esc)(r.notes.join(" "))}
   Figures are asking prices on live listings from the San Antonio Board of REALTORS, not an appraisal.
   Want a proper valuation on this home? Reply to Marco's email any time.</div>
+</div>
+</div></body></html>`;
+}
+/**
+ * The client-facing CMA — what step 7 publishes.
+ *
+ * Same rules as the market report page, plus one specific to this document: a
+ * CMA is a pricing opinion a seller may act on, so the page states what the
+ * number is built from and, where the data is thin, says so on the page rather
+ * than only in the CRM. A seller reading "estimated value" is entitled to know
+ * that it came from four comparables and no solds, if that is the case.
+ */
+function renderPublicCma(session, comps, results) {
+    const statusName = {
+        ACTIVE: "For sale now",
+        PENDING: "Under contract",
+        SOLD: "Sold",
+        OFF_MKT: "Came off the market",
+    };
+    const tile = (l, v, s) => `<div class="tile"><div class="l">${(0, outreachEmail_js_1.esc)(l)}</div><div class="v">${(0, outreachEmail_js_1.esc)(v)}</div><div class="s">${(0, outreachEmail_js_1.esc)(s)}</div></div>`;
+    const bucketTiles = results.buckets
+        .filter((b) => b.count > 0)
+        .map((b) => tile(statusName[b.status] || b.label, b.medianPrice == null ? "—" : money(b.medianPrice), `${b.count} compared${b.listToSalePct != null ? ` · sold at ${Math.round(b.listToSalePct)}% of asking` : ""}`))
+        .join("");
+    const compCard = (c) => {
+        const price = c.listingStatus === "SOLD" ? c.soldPrice ?? c.price : c.price;
+        const specs = [
+            c.beds != null ? `${c.beds} bd` : "",
+            c.baths != null ? `${c.baths} ba` : "",
+            c.sqft ? `${Math.round(c.sqft).toLocaleString()} sqft` : "",
+        ]
+            .filter(Boolean)
+            .join(" · ");
+        /* A sold row shows both numbers when both exist. One number labelled
+           "sold" that is actually the asking price is the error this guards. */
+        const dual = c.listingStatus === "SOLD" && c.originalListPrice && c.soldPrice
+            ? `<div class="s">Asked ${(0, outreachEmail_js_1.esc)(money(c.originalListPrice))} · sold ${(0, outreachEmail_js_1.esc)(money(c.soldPrice))}</div>`
+            : "";
+        /* MLS photo URLs do go missing, and a broken-image glyph on a document a
+           seller is reading is worse than no photo at all — the card degrades to
+           text rather than showing the browser's placeholder. */
+        return `<div class="home">
+      ${c.photoUrl ? `<img src="${(0, outreachEmail_js_1.esc)(c.photoUrl)}" alt="" loading="lazy" onerror="this.remove()">` : ""}
+      <div class="b">
+        <div class="p">${(0, outreachEmail_js_1.esc)(money(price))}</div>
+        <div class="a">${(0, outreachEmail_js_1.esc)(c.address)}</div>
+        ${specs ? `<div class="s">${(0, outreachEmail_js_1.esc)(specs)}</div>` : ""}
+        ${dual}
+        <div class="s">${(0, outreachEmail_js_1.esc)(statusName[c.listingStatus] || c.listingStatus)}</div>
+      </div></div>`;
+    };
+    const groups = ["SOLD", "PENDING", "ACTIVE", "OFF_MKT"]
+        .map((st) => {
+        const rows = comps.filter((c) => c.listingStatus === st);
+        if (!rows.length)
+            return "";
+        return `<div class="card"><h2>${(0, outreachEmail_js_1.esc)(statusName[st])}</h2>
+        <div class="homes">${rows.map(compCard).join("")}</div></div>`;
+    })
+        .join("");
+    const valueCard = results.estimate != null
+        ? `<div class="card"><div class="value">
+          <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#047857;font-weight:800">Indicated value</div>
+          <div class="big">${(0, outreachEmail_js_1.esc)(money(results.estimate))}</div>
+          ${results.estimateLow != null && results.estimateHigh != null
+            ? `<div class="rng">Range ${(0, outreachEmail_js_1.esc)(money(results.estimateLow))} – ${(0, outreachEmail_js_1.esc)(money(results.estimateHigh))}</div>`
+            : ""}
+          <div class="basis">${(0, outreachEmail_js_1.esc)(`Based on ${results.sizedCount} comparable home${results.sizedCount === 1 ? "" : "s"}` +
+            (results.pricePerSqft != null ? ` at a median of $${results.pricePerSqft.toFixed(0)} per square foot` : "") +
+            (session.subjectSqft ? `, applied to ${session.subjectSqft.toLocaleString()} sqft.` : ".") +
+            (results.sizedCount < results.totalSelected
+                ? ` ${results.totalSelected} homes were compared in total; the rest had no square footage on file.`
+                : ""))}</div>
+        </div></div>`
+        : `<div class="card"><p class="sub">${(0, outreachEmail_js_1.esc)(results.estimateBlockedReason ||
+            "There is no value figure on this report yet.")}</p></div>`;
+    const subjectLine = [
+        session.subjectBeds != null ? `${session.subjectBeds} beds` : "",
+        session.subjectBaths != null ? `${session.subjectBaths} baths` : "",
+        session.subjectSqft ? `${session.subjectSqft.toLocaleString()} sqft` : "",
+    ]
+        .filter(Boolean)
+        .join(" · ");
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comparative market analysis — ${(0, outreachEmail_js_1.esc)(session.subjectAddress)}</title>
+<style>${CSS}</style></head>
+<body><div class="wrap">
+<div class="brand">Marco Puga · Real Estate</div>
+<div class="card">
+  <h1>${(0, outreachEmail_js_1.esc)(session.subjectAddress)}</h1>
+  <p class="sub">Comparative market analysis prepared for ${(0, outreachEmail_js_1.esc)(session.clientName)}${subjectLine ? ` · ${(0, outreachEmail_js_1.esc)(subjectLine)}` : ""}${session.publishedAt ? ` · ${(0, outreachEmail_js_1.esc)(session.publishedAt.slice(0, 10))}` : ""}</p>
+</div>
+${valueCard}
+${bucketTiles ? `<div class="card"><h2>What the comparables show</h2><div class="grid">${bucketTiles}</div></div>` : ""}
+${groups}
+<div class="card">
+  <div class="note" style="margin:0;padding:0;border:0">${(0, outreachEmail_js_1.esc)(results.notes.join(" "))}
+  Comparables are chosen by Marco, not by an algorithm. This is a pricing opinion, not an appraisal, and it is
+  not a guarantee of what the home will sell for. Questions about any home on this page? Reply to Marco any time.</div>
 </div>
 </div></body></html>`;
 }

@@ -209,8 +209,16 @@ try {
   ok("cards are white with a 4px radius", cardCss[0] === "rgb(255, 255, 255)" && cardCss[1] === "4px", JSON.stringify(cardCss));
   const rightOrder = await page.$$eval(".ld-grid.cr3 > .cr-col:last-child .rblock h5", (els) => els.map((e) => e.childNodes[0].textContent.trim().replace(/:$/, "")));
   ok("right stack is in the spec's order", rightOrder.join("|") === "Assigned To|Web Activity|Agreements|Appointments|Marketing|Brivity Home App|Tasks|Auto Plans|Listing Alerts|Market Reports|CMA Reports", rightOrder.join("|"));
+  /* The CMA block used to say no generator existed. It does now (the seven-step
+     wizard at /cma), so this waits for the block to load and asserts the real
+     empty state — a contact with no CMA yet — rather than the old refusal. */
+  await page.waitForFunction(() => !/Loading/.test(document.querySelector("#ldCmaBlk")?.textContent || "x"), null, { timeout: 8000 });
   const offTxt = await page.$$eval(".ld-grid.cr3 > .cr-col:last-child .wdg-off", (els) => els.map((e) => e.textContent));
-  ok("Home App and CMA say what is missing instead of faking a button", offTxt.length === 2 && /no client mobile app/i.test(offTxt[0]) && /No CMA generation/i.test(offTxt[1]), JSON.stringify(offTxt).slice(0, 120));
+  ok("the Home App block still says what is missing instead of faking a button",
+    offTxt.some((t) => /no client mobile app/i.test(t)), JSON.stringify(offTxt).slice(0, 120));
+  ok("and the CMA block shows this contact's real (empty) CMA list",
+    /No CMA has been built for this contact yet/i.test(await page.textContent("#ldCmaBlk")),
+    (await page.textContent("#ldCmaBlk")).slice(0, 120));
 
   /* ── spec 2: phone add with type, formatting, Enter to save ── */
   await openAcc("contact");

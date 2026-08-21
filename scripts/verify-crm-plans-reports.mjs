@@ -196,7 +196,12 @@ try {
      "0%" would read as "nobody opens them". */
   ok("the open rate is null, not 0%, with nothing sent", dash.kpis.openRatePct === null, String(dash.kpis.openRatePct));
   ok("a percentage trend with no prior period is null, not +100%", dash.kpis.marketReportsTrendPct === null, String(dash.kpis.marketReportsTrendPct));
-  ok("CMA is reported as unavailable with a reason", dash.cma.available === false && /No CMA generation is wired/i.test(dash.cma.reason), JSON.stringify(dash.cma));
+  /* CMAs are a live subsystem now. What the dashboard must keep saying is
+     where their sold comparables can and cannot come from. */
+  ok("CMA is reported as available, with a real count", dash.cma.available === true && dash.cma.created === 0,
+    JSON.stringify(dash.cma));
+  ok("and it still names the feed's missing solds",
+    dash.cma.soldFromFeed === false && /publishes Active and Pending only/i.test(dash.cma.note), dash.cma.note);
 
   /* ═══════════ browser layer ═══════════ */
 
@@ -326,12 +331,17 @@ try {
   await page.waitForSelector('#ddMenu button:has-text("New CMA Report")');
   ok("+ ADD offers New CMA Report and View Report Status",
     (await page.$$eval("#ddMenu button", (els) => els.map((e) => e.textContent.trim()))).join("|").includes("View Report Status"));
-  await page.click('#ddMenu button:has-text("New CMA Report")');
-  await page.waitForSelector("#cmaToReport");
-  ok("New CMA Report explains what is missing instead of opening a dead builder",
-    /No CMA generation is wired/.test(await page.textContent("#oaOv")));
-  ok("and offers the market report, which is the live thing", (await page.$("#cmaToReport")) !== null);
-  await page.click("#oaOv .oa-cancel");
+  /* This used to assert the refusal. The CMA builder exists now, so + ADD
+     opens it — in a new tab, because the wizard is a full-page workflow and
+     losing the contact record behind it is not what the operator asked for. */
+  const href = await page.$eval('#ddMenu button:has-text("New CMA Report")', () => {
+    /* The menu item calls window.open; read the URL the page would use. */
+    return window.cmaHref({ id: "lead_1" }, null);
+  });
+  ok("New CMA Report opens the real wizard, scoped to this contact",
+    /^\/cma\?leadId=lead_1/.test(href), href);
+  await page.keyboard.press("Escape");
+  await page.click("body", { position: { x: 5, y: 5 } });
   await page.waitForTimeout(250);
 
   await page.click("#ldCmaAdd");
@@ -344,7 +354,12 @@ try {
   ok("it lists the reports that exist", (await page.$$("#oaOv .rd-tbl tbody tr")).length === 3, String((await page.$$("#oaOv .rd-tbl tbody tr")).length));
   const kpiTxt = await page.textContent("#oaOv .rd-kpis");
   ok("the open rate is a dash with its reason, not 0%", /—/.test(kpiTxt) && /Nothing has been sent yet/.test(kpiTxt), kpiTxt.replace(/\s+/g, " ").slice(0, 220));
-  ok("the CMA KPI says n/a rather than a zero", /n\/a/i.test(kpiTxt) && /No CMA generator is wired/.test(kpiTxt));
+  /* The KPI has a real number behind it now. What must stay true is that the
+     dashboard keeps saying solds do not come from the feed. */
+  ok("the CMA KPI reports a real count", /CMA Reports Created/.test(kpiTxt) && /published/.test(kpiTxt),
+    kpiTxt.replace(/\s+/g, " ").slice(0, 240));
+  ok("and the CMA panel still says solds are not from the feed",
+    /publishes Active and Pending only/i.test(await page.textContent("#oaOv")));
 
   ok("no page errors", errs.length === 0, errs.slice(0, 3).join(" | "));
   await br.close();

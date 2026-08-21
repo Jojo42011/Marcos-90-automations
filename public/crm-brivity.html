@@ -8806,37 +8806,68 @@ function openReportWizard(l,existing){
 /* ═══════════════════════════════════════════════════════════════════════════
    CMA REPORTS and the reports dashboard.
 
-   Brivity's CMA product puts CMAs and market reports side by side. Half of
-   that exists here and half does not, and the split is the whole design:
+   Brivity's CMA product puts CMAs and market reports side by side, and both
+   are now real here — but they rest on different data and the widget does not
+   let that blur:
 
-     · Market reports are real — built from the MLS mirror, emailed, and
-       measured with this system's own open/view pixel. The dashboard shows
-       every one with its real dates and counts, and an open rate computed
-       from sends it actually measured.
-     · CMA generation is not wired into this CRM at all. So the CMA widget's
-       + ADD does not open a builder that cannot build: it says what is
-       missing and offers the market report, which is the live thing.
+     · Market reports are built from the live MLS mirror, emailed on a
+       schedule and measured with this system's own open/view pixel.
+     · CMAs are built in the seven-step wizard at /cma. Its active and pending
+       comparables are the same live mirror; its SOLD comparables are not,
+       because the feed publishes no solds at all — they come from Marco's own
+       closed transactions or are typed in. The list below says so on any CMA
+       that has no sold comp, because a CMA priced only off what sellers are
+       asking is a weaker document than one priced off what buyers paid.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+function cmaHref(l, id){
+  var qs = "leadId=" + encodeURIComponent(l && l.id ? l.id : "");
+  if(id) qs += "&id=" + encodeURIComponent(id);
+  return crmApi("/cma?" + qs);
+}
+
 function wireCmaWidget(l){
+  paintCmaBlock(l);
   var add=document.getElementById("ldCmaAdd");
   if(add&&!add.__wired){ add.__wired=1; add.addEventListener("click",function(e){
     e.stopPropagation();
     openActionMenu(add,[
-      {label:"+ New CMA Report",fn:function(){
-        oaOverlay("New CMA Report",
-          '<div class="oa-unav" style="margin-top:0">No CMA generation is wired into this CRM. There is no comparable-sales '+
-            'engine behind this button, and the MLS feed this system reads carries active listings only — no sold prices — '+
-            'which is what a CMA is built from.</div>'+
-          '<div class="oa-note">The live thing this system does send is a <b>Market Report</b>: what is on the market around '+
-            'an address, with a comp-based value estimate, emailed on a schedule and tracked for opens.</div>',
-          '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>'+
-          '<button class="oa-go" id="cmaToReport">CREATE A MARKET REPORT INSTEAD</button>');
-        document.getElementById("cmaToReport").addEventListener("click",function(){ closeOa(); openReportWizard(l,null); });
-      }},
+      {label:"+ New CMA Report",fn:function(){ window.open(cmaHref(l,null),"_blank","noopener"); }},
       {label:"👁 View Report Status",fn:function(){ openReportsDashboard(l); }}
     ]);
   }); }
+}
+
+/** This contact's CMAs, newest first. */
+function paintCmaBlock(l){
+  var box=document.getElementById("ldCmaBlk"); if(!box) return;
+  fetch(crmApi("/api/cma/sessions?leadId="+encodeURIComponent(l.id))).then(r=>r.json()).then(function(d){
+    var rows=(d&&d.sessions)||[];
+    if(!rows.length){
+      box.innerHTML='<div class="wdg-note">Create a new Comparative Market Analysis to create a detailed report '+
+        'of the property.</div>'+
+        '<div class="wdg-off" style="margin-top:8px">No CMA has been built for this contact yet. '+
+        '<b>+ ADD</b> opens the seven-step builder.</div>';
+      return;
+    }
+    box.innerHTML=rows.map(function(s){
+      var soldN=(s.selectedByStatus&&s.selectedByStatus.SOLD)||0;
+      return '<div class="wdg-row" style="align-items:flex-start">'+
+        '<div style="flex:1;min-width:0">'+
+          '<a href="'+esc(cmaHref(l,s.id))+'" target="_blank" rel="noopener" style="font-weight:600">'+
+            esc(s.subjectAddress)+'</a>'+
+          '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">'+
+            esc(s.selectedCount)+' comparable'+(s.selectedCount===1?'':'s')+' · '+
+            (s.status==="published"?'published':'draft')+' · step '+esc(s.currentStep)+' of 7</div>'+
+          (soldN===0
+            ? '<div style="font-size:11px;color:#b0863a;margin-top:2px">No sold comparables — priced on asking '+
+              'prices only. The MLS feed carries no solds; add them from closed transactions in step 4.</div>'
+            : '')+
+        '</div></div>';
+    }).join("");
+  }).catch(function(){
+    box.innerHTML='<div class="wdg-off">Could not load this contact\'s CMAs just now.</div>';
+  });
 }
 
 /** The Market Reports / CMA dashboard, with the real numbers and the gap. */
@@ -8868,8 +8899,12 @@ function openReportsDashboard(l){
               : '<div class="n">'+k.openRatePct+'%</div><div class="t">across '+k.totalSends+' send'+(k.totalSends===1?"":"s")+' this system measured</div>')+
           '</div>'+
           '<div class="rd-kpi"><div class="k">CMA Reports Created</div>'+
-            '<div class="n none">n/a</div>'+
-            '<div class="t">No CMA generator is wired into this CRM</div></div>'+
+            (d.cma&&d.cma.available
+              ? '<div class="n">'+esc(d.cma.created)+'</div>'+
+                '<div class="t">'+esc(d.cma.published)+' published · '+esc(d.cma.withSoldComps)+
+                  ' built on at least one sold comparable</div>'
+              : '<div class="n none">n/a</div><div class="t">'+esc((d.cma&&d.cma.reason)||"unavailable")+'</div>')+
+          '</div>'+
         '</div>';
 
       var table=rows.length
@@ -8895,7 +8930,11 @@ function openReportsDashboard(l){
       oaOverlay("Reports",
         kpis+'<div class="ld-sec-h" style="margin:4px 0 8px">Market Reports</div>'+table+
         '<div class="ld-sec-h" style="margin:18px 0 8px">CMA Reports</div>'+
-        '<div class="oa-unav" style="margin-top:0">'+esc((d.cma&&d.cma.reason)||"CMA reports are not available.")+'</div>'+
+        (d.cma&&d.cma.available
+          ? '<div class="wdg-note">'+esc(d.cma.created)+' built, '+esc(d.cma.published)+' published, '+
+              esc(d.cma.withSoldComps)+' with at least one sold comparable.</div>'+
+            '<div class="oa-note" style="margin-top:6px">'+esc(d.cma.note)+'</div>'
+          : '<div class="oa-unav" style="margin-top:0">'+esc((d.cma&&d.cma.reason)||"CMA reports are not available.")+'</div>')+
         '<div class="oa-note">Views and opens count only what this system’s own tracking measured — the report page and '+
           'the pixel in the emails it sent. Nothing else reports back.</div>',
         '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>'+
@@ -8971,9 +9010,7 @@ function rightStackHTML(l){
     '<div class="rblock"><h5>Market Reports <button class="mini-pill" id="ldReportAdd">+ ADD</button></h5>'+
       '<div id="ldReportsBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
     '<div class="rblock" style="margin-bottom:0"><h5>CMA Reports <button class="mini-pill" id="ldCmaAdd">+ ADD</button></h5>'+
-      '<div class="wdg-note">Create a new Comparative Market Analysis to create a detailed report of the property.</div>'+
-      '<div class="wdg-off" style="margin-top:8px">No CMA generation is wired into this CRM, so there are no CMA reports '+
-        'to list. Market Reports above are the live thing this system does send.</div></div>'+
+      '<div id="ldCmaBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
   '</div>';
 }
 
