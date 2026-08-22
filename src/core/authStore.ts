@@ -44,6 +44,11 @@ function initSchema(database: Database.Database): void {
       ip TEXT,
       at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS security_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      at TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_login_history_at ON login_history(at);
     CREATE INDEX IF NOT EXISTS idx_audit_log_at ON audit_log(at);
@@ -226,4 +231,37 @@ export function getAuditLog(limit = 200): AuditRow[] {
        FROM audit_log ORDER BY at DESC LIMIT ?`,
     )
     .all(Math.max(1, Math.min(1000, limit))) as AuditRow[];
+}
+
+
+/* ────────────────────────── security state ──────────────────────────
+   A tiny key/value table used to make a security action happen exactly ONCE
+   per deploy rather than on every restart.
+
+   The problem it solves: revoking every session and resetting the admin
+   password has to happen when a lockdown ships, but Fly restarts machines for
+   its own reasons, and a reset that ran on every boot would silently undo the
+   operator's own password whenever the VM bounced.
+   ──────────────────────────────────────────────────────────────────── */
+
+export function getSecurityState(key: string): string | null {
+  const row = getDb().prepare(`SELECT value FROM security_state WHERE key = ?`).get(key) as
+    | { value: string }
+    | undefined;
+  return row ? row.value : null;
+}
+
+export function setSecurityState(key: string, value: string): void {
+  getDb()
+    .prepare(
+      `INSERT INTO security_state (key, value, at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, at = excluded.at`,
+    )
+    .run(key, value, new Date().toISOString());
+}
+
+/** Sign everybody out, everywhere. Returns how many sessions were killed. */
+export function destroyAllSessions(): number {
+  const info = getDb().prepare(`DELETE FROM sessions`).run();
+  return info.changes;
 }

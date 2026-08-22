@@ -53,7 +53,12 @@ writeFileSync(join(tmp, "db.json"), JSON.stringify(db));
    All data paths are redirected into the temp dir via env instead. */
 const srv = spawn(process.execPath, [join(process.cwd(), "dist/src/server.js")], {
   cwd: process.cwd(),
-  env: { ...process.env, PORT: String(PORT), DB_JSON_PATH: join(tmp, "db.json"), TASKS_JSON_PATH: join(tmp, "tasks.json") },
+  env: { ...process.env, PORT: String(PORT),
+    /* The site lock defaults to ON as of 2026-08-22. These suites exercise the
+       app, not the door, so it is switched off explicitly here rather than
+       every fixture growing a login step. scripts/verify-site-lock.mjs is the
+       one that tests the lock, and deliberately sets nothing. */
+    SITE_LOGIN_ENABLED: "0", DB_JSON_PATH: join(tmp, "db.json"), TASKS_JSON_PATH: join(tmp, "tasks.json") },
   stdio: ["ignore", "pipe", "pipe"],
 });
 let srvLog = "";

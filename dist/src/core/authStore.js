@@ -15,6 +15,9 @@ exports.recordLogin = recordLogin;
 exports.getLoginHistory = getLoginHistory;
 exports.recordAudit = recordAudit;
 exports.getAuditLog = getAuditLog;
+exports.getSecurityState = getSecurityState;
+exports.setSecurityState = setSecurityState;
+exports.destroyAllSessions = destroyAllSessions;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
@@ -57,6 +60,11 @@ function initSchema(database) {
       action TEXT NOT NULL,
       detail TEXT,
       ip TEXT,
+      at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS security_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
       at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
@@ -170,4 +178,28 @@ function getAuditLog(limit = 200) {
         .prepare(`SELECT id, user_id as userId, user_name as userName, action, detail, ip, at
        FROM audit_log ORDER BY at DESC LIMIT ?`)
         .all(Math.max(1, Math.min(1000, limit)));
+}
+/* ────────────────────────── security state ──────────────────────────
+   A tiny key/value table used to make a security action happen exactly ONCE
+   per deploy rather than on every restart.
+
+   The problem it solves: revoking every session and resetting the admin
+   password has to happen when a lockdown ships, but Fly restarts machines for
+   its own reasons, and a reset that ran on every boot would silently undo the
+   operator's own password whenever the VM bounced.
+   ──────────────────────────────────────────────────────────────────── */
+function getSecurityState(key) {
+    const row = getDb().prepare(`SELECT value FROM security_state WHERE key = ?`).get(key);
+    return row ? row.value : null;
+}
+function setSecurityState(key, value) {
+    getDb()
+        .prepare(`INSERT INTO security_state (key, value, at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, at = excluded.at`)
+        .run(key, value, new Date().toISOString());
+}
+/** Sign everybody out, everywhere. Returns how many sessions were killed. */
+function destroyAllSessions() {
+    const info = getDb().prepare(`DELETE FROM sessions`).run();
+    return info.changes;
 }

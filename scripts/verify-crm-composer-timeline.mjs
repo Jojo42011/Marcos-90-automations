@@ -49,6 +49,11 @@ writeFileSync(join(tmp, "db.json"), JSON.stringify(db));
 /* Deliberately no GMAIL_* / QUO_* / TWILIO_* in the child env: the composer's
    behaviour when a channel cannot send is half of what this suite checks. */
 const env = { ...process.env, PORT: String(PORT),
+  /* These suites exercise the app, not the door. The site lock defaults to ON
+     as of 2026-08-22, so it is switched off explicitly here rather than every
+     fixture growing a login step. scripts/verify-site-lock.mjs is the one that
+     tests the lock, and it deliberately sets nothing. */
+  SITE_LOGIN_ENABLED: "0",
   DB_JSON_PATH: join(tmp, "db.json"), TASKS_JSON_PATH: join(tmp, "tasks.json"),
   AUTO_PLANS_JSON_PATH: join(tmp, "auto-plans.json"), USER_PREFS_JSON_PATH: join(tmp, "user-prefs.json"),
   TRANSACTIONS_DB_PATH: join(tmp, "transactions.db"), CONTACT_RECORD_DB_PATH: join(tmp, "contact-records.db"),

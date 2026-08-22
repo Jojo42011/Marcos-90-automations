@@ -138,7 +138,12 @@ writeFileSync(join(tmp, "db.json"), JSON.stringify({ idCounter: 1, leadsById: {}
 const srv = spawn(process.execPath, [join(process.cwd(), "dist/src/server.js")], {
   cwd: process.cwd(),
   env: {
-    ...process.env, PORT: String(PORT), DASHBOARD_TOKEN: "",
+    ...process.env, PORT: String(PORT),
+    /* The site lock defaults to ON as of 2026-08-22. These suites exercise the
+       app, not the door, so it is switched off explicitly here rather than
+       every fixture growing a login step. scripts/verify-site-lock.mjs is the
+       one that tests the lock, and deliberately sets nothing. */
+    SITE_LOGIN_ENABLED: "0", DASHBOARD_TOKEN: "",
     DB_JSON_PATH: join(tmp, "db.json"), TASKS_JSON_PATH: join(tmp, "t.json"),
     EMAIL_DB_PATH: join(tmp, "e.db"), TRANSACTIONS_DB_PATH: txDb, TRACKER_DB_PATH: trackerDb,
     LISTINGS_DB_PATH: join(tmp, "l.db"), OUTREACH_DB_PATH: join(tmp, "o.db"),

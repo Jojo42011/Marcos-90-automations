@@ -609,8 +609,90 @@ import {
   resolveVoiceCloneDataRoot,
 } from "./core/voiceCloneStore.js";
 
+import { makeLockdown } from "./core/lockdown.js";
+import { getSession as authGetSession } from "./core/authStore.js";
+import { getUserById as authGetUserById } from "./core/users.js";
+
 const app = express();
 const PORT = parseInt(process.env.PORT || "3000", 10);
+
+/* Behind Fly's proxy every request arrives over plain HTTP on the internal
+   network, so `req.protocol` reads "http" and the session cookie would never
+   get its Secure flag. Trusting the proxy's X-Forwarded-Proto fixes that and
+   also makes the IP recorded in login_history the caller's, not the router's. */
+app.set("trust proxy", 1);
+
+/* ── THE SITE LOCK ──────────────────────────────────────────────────────────
+   Registered here, before every route and before express.static, because a
+   gate that is mounted after the thing it guards is not a gate. See
+   src/core/lockdown.ts for what stays public and why.
+   ────────────────────────────────────────────────────────────────────────── */
+app.use(
+  makeLockdown({
+    enabled: () => siteLoginEnabled(),
+    sessionUser: (req) => sessionUserSync(req as express.Request),
+    machineTokenOk: (req) => machineTokenOk(req as express.Request),
+  }),
+);
+
+/**
+ * The signed-in user, resolved synchronously.
+ *
+ * `currentSessionUser` is async only because it uses dynamic imports; the two
+ * stores underneath it are ordinary synchronous SQLite/JSON reads. The lock
+ * runs on every single request, so it uses the static imports and stays sync —
+ * an async gate would have to be awaited by every caller and is one forgotten
+ * `await` away from letting a request through.
+ */
+function sessionUserSync(req: express.Request): import("./core/types.js").CRMUser | null {
+  try {
+    const token = getCookieValue(req, SESSION_COOKIE);
+    if (!token) return null;
+    const session = authGetSession(token);
+    if (!session) return null;
+    const user = authGetUserById(session.userId);
+    if (!user || user.active === false) return null;
+    return user;
+  } catch {
+    /* A broken auth database must fail CLOSED. Returning null sends the caller
+       to the login page; returning a user here would be the whole lock. */
+    return null;
+  }
+}
+
+/**
+ * A configured machine credential.
+ *
+ * Differs from the old `dashboardTokenOkIncoming` in exactly one way, which was
+ * the bug: when no DASHBOARD_TOKEN is configured this returns FALSE. "Nobody
+ * set a token" now means "no machine access", not "let everyone in".
+ */
+function machineTokenOk(req: express.Request | IncomingMessage): boolean {
+  const expected = process.env.DASHBOARD_TOKEN?.trim();
+  if (!expected) return false;
+  let q = "";
+  if ("query" in req && req.query && typeof req.query.token === "string") {
+    q = req.query.token;
+  } else {
+    try {
+      const host = req.headers.host || "localhost";
+      q = new URL(req.url || "/", `http://${host}`).searchParams.get("token") || "";
+    } catch {
+      q = "";
+    }
+  }
+  const auth = req.headers.authorization;
+  const bearer = typeof auth === "string" && auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+  /* Constant-time-ish: compare length first, then every byte. */
+  const eq = (a: string) => a.length === expected.length && timingSafeEqualStr(a, expected);
+  return eq(q) || eq(bearer);
+}
+
+function timingSafeEqualStr(a: string, b: string): boolean {
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
 
 app.use(
   "/openshorts",
@@ -1051,13 +1133,26 @@ app.get("/crm-followup-tasks.js", (_req, res) => {
   res.sendFile(path.join(publicDir, "crm-followup-tasks.js"));
 });
 
+/**
+ * The per-route check, kept as a second layer behind the site lock.
+ *
+ * It used to be the ONLY layer, and it passed everyone whenever DASHBOARD_TOKEN
+ * was unset. Now a request satisfies it by being signed in or by carrying a
+ * configured machine token — and with neither, it fails.
+ */
 function dashboardTokenOk(req: express.Request): boolean {
-  return dashboardTokenOkIncoming(req);
+  if (sessionUserSync(req)) return true;
+  if (machineTokenOk(req)) return true;
+  /* Only when the lock is deliberately disabled does the legacy behaviour
+     apply, so a local dev run without secrets still works. */
+  return !siteLoginEnabled() && dashboardTokenOkIncoming(req);
 }
 
 function dashboardTokenOkIncoming(req: IncomingMessage | express.Request): boolean {
+  /* Kept for the WebSocket upgrade path and for unlocked local runs. When the
+     lock is armed this is never the deciding check — see dashboardTokenOk. */
   const expected = process.env.DASHBOARD_TOKEN?.trim();
-  if (!expected) return true;
+  if (!expected) return !siteLoginEnabled();
   let q = "";
   if ("query" in req && req.query && typeof req.query.token === "string") {
     q = req.query.token;
@@ -1116,7 +1211,12 @@ async function currentSessionUser(req: express.Request): Promise<import("./core/
 // it on later with `fly secrets set SITE_LOGIN_ENABLED=1` — no code changes,
 // no redeploy of this logic needed.
 function siteLoginEnabled(): boolean {
-  return process.env.SITE_LOGIN_ENABLED === "1";
+  /* Locked by default as of 2026-08-22. It used to be the reverse — the login
+     system was fully built but only enforced when SITE_LOGIN_ENABLED was "1",
+     and it never was, so the whole app was reachable by anyone with the URL.
+     Unlocking is now an explicit, deliberate act rather than the default state
+     of a machine nobody remembered to configure. */
+  return process.env.SITE_LOGIN_ENABLED !== "0";
 }
 
 /** Gate a page route: redirect to /login (preserving the destination) if not signed in. */
@@ -1175,6 +1275,12 @@ function requireAuthAdminApi(req: express.Request, res: express.Response, next: 
   });
 }
 
+/* Reachable while signed in with a temporary password, and only then — the
+   lock funnels such an account here and nowhere else. */
+app.get("/change-password", (_req, res) => {
+  res.sendFile(path.join(publicDir, "change-password.html"));
+});
+
 // The login page itself must never be gated (that would be an infinite redirect loop).
 app.get("/login", (req, res) => {
   void currentSessionUser(req).then((user) => {
@@ -1209,7 +1315,7 @@ app.post("/api/auth/login", express.json(), async (req, res) => {
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: req.protocol === "https",
+    secure: req.secure || req.protocol === "https",
     maxAge: 30 * 24 * 60 * 60 * 1000,
     path: "/",
   });
@@ -1313,8 +1419,14 @@ app.post("/api/auth/change-password", express.json(), async (req, res) => {
     res.status(401).json({ error: "Current password is incorrect" });
     return;
   }
-  if (newPassword.length < 8) {
-    res.status(400).json({ error: "New password must be at least 8 characters" });
+  /* Raised from 8 to 12 with the site lock. The server is the one that
+     decides; the page's own check is only there for a fast answer. */
+  if (newPassword.length < 12) {
+    res.status(400).json({ error: "New password must be at least 12 characters" });
+    return;
+  }
+  if (newPassword === currentPassword) {
+    res.status(400).json({ error: "That is the password you were issued. Pick a different one." });
     return;
   }
   const { updateUser } = await import("./core/users.js");
@@ -11799,7 +11911,9 @@ app.get("/api/users", (req, res) => {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
     return;
   }
-  res.status(200).json({ users: getUsers() });
+  /* Never ship the hash. This endpoint was returning every account's scrypt
+     hash to anyone who asked, unauthenticated, until 2026-08-22. */
+  res.status(200).json({ users: getUsers().map(({ passwordHash, ...safe }) => { void passwordHash; return safe; }) });
 });
 
 app.post("/api/users", express.json(), async (req, res) => {
@@ -16821,6 +16935,29 @@ httpServer.on("error", (err) => {
   console.error("[Server] HTTP listen error:", err);
   process.exit(1);
 });
+
+/* Arm the site lock before the listener opens: everyone signed out, admin
+   credential rotated. Once per marker, not once per boot — see
+   src/core/initialAdmin.ts for why that distinction matters. */
+{
+   
+  const lock = require("./core/initialAdmin.js") as typeof import("./core/initialAdmin.js");
+  try {
+    const r = lock.runLockdownBootStep();
+    if (r.ran) {
+      console.log(
+        `[security] Site lock armed. ${r.sessionsRevoked} session(s) revoked; ` +
+          `admin credential rotated on ${r.adminEmail ?? "NO ADMIN FOUND"}. ` +
+          `Every page, API and static file now requires a signed-in session.`,
+      );
+      if (!r.adminEmail) {
+        console.error("[security] No admin account was found to rotate. Nobody can sign in — fix users.json.");
+      }
+    }
+  } catch (err) {
+    console.error("[security] Lockdown boot step FAILED — check auth.db:", (err as Error).message);
+  }
+}
 
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`[Server] Listening on 0.0.0.0:${PORT}`);

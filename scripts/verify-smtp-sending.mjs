@@ -288,6 +288,11 @@ try {
       cwd: process.cwd(),
       env: {
         ...process.env, PORT: String(PORT),
+    /* The site lock defaults to ON as of 2026-08-22. These suites exercise the
+       app, not the door, so it is switched off explicitly here rather than
+       every fixture growing a login step. scripts/verify-site-lock.mjs is the
+       one that tests the lock, and deliberately sets nothing. */
+    SITE_LOGIN_ENABLED: "0",
         DB_JSON_PATH: join(tmpRun, "db.json"), TASKS_JSON_PATH: join(tmpRun, "tasks.json"),
         AUTO_PLANS_JSON_PATH: join(tmpRun, "auto-plans.json"),
         AUTO_PLAN_TRIGGERS_JSON_PATH: join(tmpRun, "triggers.json"),
