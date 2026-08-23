@@ -84,6 +84,14 @@ export interface CmaSession {
   /** Which rung of the place ladder the comp search settled on. */
   areaRung: string | null;
   areaLabel: string | null;
+  /* Step 6's "Estimated Pricing and Days on Market" — the agent's own
+     recommendation, seeded from the comp averages and then editable. Stored on
+     the session because it IS the opinion the CMA delivers; recomputing it from
+     the comps later would silently overwrite what the agent decided. */
+  suggestedMinListPrice: number | null;
+  suggestedMaxListPrice: number | null;
+  estimatedDomMin: number | null;
+  estimatedDomMax: number | null;
   currentStep: number;
   status: "draft" | "published";
   publishedAt: string | null;
@@ -156,6 +164,10 @@ export function initCmaSchema(database: Database.Database): void {
       subject_lot_size REAL,
       subject_year_built INTEGER,
       criteria TEXT NOT NULL DEFAULT '{}',
+      suggested_min_list_price INTEGER,
+      suggested_max_list_price INTEGER,
+      estimated_dom_min INTEGER,
+      estimated_dom_max INTEGER,
       area_rung TEXT,
       area_label TEXT,
       current_step INTEGER NOT NULL DEFAULT 1,
@@ -202,6 +214,26 @@ export function initCmaSchema(database: Database.Database): void {
     )
   `);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_cma_comps_session ON cma_comparables(session_id, listing_status)`);
+
+  /* Every send, successful or not. A failed send that leaves no row is
+     indistinguishable from one nobody tried, and "did the client get it?" is
+     the first question asked when a seller says they never saw it. */
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS cma_deliveries (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES cma_sessions(id) ON DELETE CASCADE,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      market_drip_scheduled INTEGER NOT NULL DEFAULT 0,
+      report_id TEXT,
+      lead_id TEXT,
+      ok INTEGER NOT NULL DEFAULT 0,
+      error TEXT,
+      sent_at TEXT NOT NULL
+    )
+  `);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_cma_deliveries_session ON cma_deliveries(session_id, sent_at DESC)`);
   /* Partial unique index rather than a plain UNIQUE: a hand-typed row has no
      source key, and several NULLs in one column would collide under some
      engines while meaning "these are all different rows" here. */
@@ -210,6 +242,22 @@ export function initCmaSchema(database: Database.Database): void {
       ON cma_comparables(session_id, listing_status, source_key)
       WHERE source_key IS NOT NULL
   `);
+}
+
+export interface CmaDelivery {
+  id: string;
+  sessionId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  /** True only when a market report was really created and enrolled. */
+  marketDripScheduled: boolean;
+  /** The report the drip runs on, when one was created. */
+  reportId: string | null;
+  leadId: string | null;
+  ok: boolean;
+  error: string | null;
+  sentAt: string;
 }
 
 export function getCmaDb(): Database.Database {
@@ -264,6 +312,10 @@ function rowToSession(r: Record<string, unknown>): CmaSession {
     subjectLotSize: (r.subject_lot_size as number) ?? null,
     subjectYearBuilt: (r.subject_year_built as number) ?? null,
     criteria,
+    suggestedMinListPrice: (r.suggested_min_list_price as number) ?? null,
+    suggestedMaxListPrice: (r.suggested_max_list_price as number) ?? null,
+    estimatedDomMin: (r.estimated_dom_min as number) ?? null,
+    estimatedDomMax: (r.estimated_dom_max as number) ?? null,
     areaRung: (r.area_rung as string) ?? null,
     areaLabel: (r.area_label as string) ?? null,
     currentStep: Number(r.current_step ?? 1),
@@ -397,6 +449,10 @@ export function updateSession(
   id: string,
   patch: Partial<CreateSessionInput> & {
     currentStep?: number;
+    suggestedMinListPrice?: number | null;
+    suggestedMaxListPrice?: number | null;
+    estimatedDomMin?: number | null;
+    estimatedDomMax?: number | null;
     status?: "draft" | "published";
     publishedAt?: string | null;
     areaRung?: string | null;
@@ -420,6 +476,10 @@ export function updateSession(
     subjectSqft: "subject_sqft",
     subjectLotSize: "subject_lot_size",
     subjectYearBuilt: "subject_year_built",
+    suggestedMinListPrice: "suggested_min_list_price",
+    suggestedMaxListPrice: "suggested_max_list_price",
+    estimatedDomMin: "estimated_dom_min",
+    estimatedDomMax: "estimated_dom_max",
     currentStep: "current_step",
     status: "status",
     publishedAt: "published_at",
@@ -427,7 +487,10 @@ export function updateSession(
     areaLabel: "area_label",
   };
   const numeric = new Set(["subjectBeds", "subjectBaths", "subjectLotSize"]);
-  const integer = new Set(["subjectSqft", "subjectYearBuilt", "currentStep"]);
+  const integer = new Set([
+    "subjectSqft", "subjectYearBuilt", "currentStep",
+    "suggestedMinListPrice", "suggestedMaxListPrice", "estimatedDomMin", "estimatedDomMax",
+  ]);
 
   const sets: string[] = [];
   const params: Record<string, unknown> = { id: String(id), now: new Date().toISOString() };
@@ -655,4 +718,53 @@ function touchSession(sessionId: string): void {
   getCmaDb()
     .prepare(`UPDATE cma_sessions SET updated_at = ? WHERE id = ?`)
     .run(new Date().toISOString(), String(sessionId));
+}
+
+
+/* ────────────────────────── deliveries ────────────────────────── */
+
+export function recordDelivery(d: Omit<CmaDelivery, "id" | "sentAt"> & { sentAt?: string }): CmaDelivery {
+  const id = `cmad_${randomUUID()}`;
+  const sentAt = d.sentAt || new Date().toISOString();
+  getCmaDb()
+    .prepare(
+      `INSERT INTO cma_deliveries (
+         id, session_id, first_name, last_name, email, market_drip_scheduled,
+         report_id, lead_id, ok, error, sent_at
+       ) VALUES (@id, @sessionId, @firstName, @lastName, @email, @drip, @reportId, @leadId, @ok, @error, @sentAt)`,
+    )
+    .run({
+      id,
+      sessionId: d.sessionId,
+      firstName: d.firstName,
+      lastName: d.lastName,
+      email: d.email,
+      drip: d.marketDripScheduled ? 1 : 0,
+      reportId: d.reportId,
+      leadId: d.leadId,
+      ok: d.ok ? 1 : 0,
+      error: d.error,
+      sentAt,
+    });
+  return { ...d, id, sentAt };
+}
+
+export function listDeliveries(sessionId: string): CmaDelivery[] {
+  return (
+    getCmaDb()
+      .prepare(`SELECT * FROM cma_deliveries WHERE session_id = ? ORDER BY sent_at DESC`)
+      .all(String(sessionId)) as Record<string, unknown>[]
+  ).map((r) => ({
+    id: String(r.id),
+    sessionId: String(r.session_id),
+    firstName: String(r.first_name),
+    lastName: String(r.last_name),
+    email: String(r.email),
+    marketDripScheduled: Number(r.market_drip_scheduled) === 1,
+    reportId: (r.report_id as string) ?? null,
+    leadId: (r.lead_id as string) ?? null,
+    ok: Number(r.ok) === 1,
+    error: (r.error as string) ?? null,
+    sentAt: String(r.sent_at),
+  }));
 }

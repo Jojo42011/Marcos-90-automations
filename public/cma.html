@@ -233,6 +233,64 @@
     border-radius:3px;padding:10px 12px;font-size:12.5px;word-break:break-all}
   .linkbox b{color:#3f4549}
 
+  /* ── step 6: category accordions, totals, pricing ─────────────── */
+  .res-top{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px}
+  .res-top h2{font-size:20px;font-weight:400;color:#4a5054;margin:2px 0 0;flex:0 0 auto}
+  .res .sec{font-size:14px;font-weight:500;color:#4a5054;margin:24px 0 10px}
+  .acc{border:1px solid var(--line);border-radius:4px;background:#fff;margin-bottom:8px;overflow:hidden}
+  .acc-h{width:100%;display:flex;align-items:center;gap:10px;background:#fff;border:0;
+    padding:12px 14px;font-size:14px;color:#4a5054;text-align:left}
+  .acc-h:hover{background:#fbfdfd}
+  .acc-h .chev{color:#98a1a7;font-size:11px;width:12px}
+  .acc-h .cnt{margin-left:auto;font-size:11px;color:#8a939a;background:#f2f5f5;border-radius:10px;padding:2px 9px}
+  .acc.open .acc-h{border-bottom:1px solid var(--line)}
+  .acc-b{padding:0}
+  .rtwrap{overflow-x:auto}
+  .restbl{width:100%;border-collapse:collapse;font-size:12px}
+  .restbl th{font-size:10px;letter-spacing:.03em;color:#98a1a7;font-weight:600;padding:8px 8px;
+    border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  .restbl td{padding:7px 8px;border-bottom:1px solid var(--line-2);color:#3f4549;vertical-align:middle}
+  .restbl td.num{text-align:left;white-space:nowrap}
+  .restbl tr:last-child td{border-bottom:0}
+  .restbl .avgrow td{background:#f7fafa;color:#5c6166;font-weight:600;border-top:1px solid var(--line)}
+  .rphoto{position:relative;width:44px;height:34px;border-radius:2px;background:#eef1f2;overflow:hidden}
+  .rphoto img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .raddr{font-size:12px;line-height:1.3;min-width:150px}
+  .raddr small{display:block;color:#98a1a7;font-size:10.5px}
+  .raddr .src{display:inline-block;margin-top:2px;font-size:9px;letter-spacing:.03em;
+    border:1px solid #d8dee0;color:#8a939a;border-radius:9px;padding:0 6px}
+  .res-empty{padding:16px 14px;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .thin{padding:7px 12px 10px;font-size:11px;color:#98a1a7;line-height:1.5}
+  .totals{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .tc{background:#fff;padding:12px 14px}
+  .tc .l{font-size:10.5px;color:#98a1a7}
+  .tc .v{font-size:17px;font-weight:600;color:#3f4549;margin-top:3px}
+  .tc .n{font-size:10px;color:#b0863a;margin-top:2px}
+  .pricing{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:14px;align-items:end}
+  .pricing .f>label{font-size:11px;color:var(--label);display:block;margin-bottom:5px}
+  /* Sized to its label: "SAVE & CONTINUE" is wider than "Publish CMA" and was
+     overflowing a fixed-width button. */
+  .pricing .btn-next{height:36px;white-space:nowrap;padding:0 22px;width:auto}
+  .rng2{display:grid;grid-template-columns:1fr 10px 1fr;align-items:center;gap:6px}
+  .rng2 span{text-align:center;color:#a6aeb3}
+  .basisline{font-size:11.5px;color:#98a1a7;margin-top:8px;line-height:1.5}
+
+  /* ── step 7: publish + send ───────────────────────────────────── */
+  .pubhead{display:flex;align-items:center;justify-content:center;gap:9px;margin:14px 0 4px;
+    font-size:20px;font-weight:500;color:#4a5054}
+  .pubprev{text-align:center;font-size:12.5px}
+  .pubprev a{color:var(--teal-strong)}
+  .sendgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .sendgrid .f>label{font-size:11px;color:var(--label);display:block;margin-bottom:5px}
+  .sendfoot{display:flex;align-items:center;gap:12px;margin-top:16px}
+  .ck{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);cursor:pointer}
+  .ck input{accent-color:var(--teal);margin:0}
+  .ck .tip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;
+    border-radius:50%;border:1px solid #cfd6d7;color:#98a1a7;font-size:9.5px;cursor:help}
+  .unavbox{background:#fdfaf2;border:1px solid #eadfc4;border-radius:4px;padding:12px 14px;
+    font-size:12.5px;color:#8a6d2f;line-height:1.6}
+
   /* ── modal ─────────────────────────────────────────────────────── */
   .ov{position:fixed;inset:0;background:rgba(30,38,42,.42);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:60px 16px}
   .ovc{background:#fff;border-radius:5px;box-shadow:0 12px 40px rgba(16,24,40,.22);width:100%;max-width:640px;max-height:calc(100vh - 120px);display:flex;flex-direction:column}
@@ -1079,108 +1137,325 @@ function openFilters(){
 /* ═══════════════════════════════════════════════════════════════════════════
    STEP 6 — Results, and STEP 7 — Publish.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   STEP 6 — CMA Results.
+
+   Four collapsible category tables with an averages footer each, a Total
+   Listings Summary card, and the agent's own pricing recommendation.
+
+   Every average is a mean over the rows that HAVE that value, and the footer
+   says how many that was where it differs from the row count. Averaging a
+   missing square footage as zero would drag the mean down and quietly
+   understate every price per foot in the report.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var RES_OPEN = { ACTIVE: true, PENDING: false, SOLD: false, OFF_MKT: false };
+
+function money0(n){ return (n==null||!isFinite(n)) ? "—" : "$"+Math.round(n).toLocaleString(); }
+function money2(n){ return (n==null||!isFinite(n)) ? "—" : "$"+n.toFixed(2); }
+function int0(n){ return (n==null||!isFinite(n)) ? "—" : Math.round(n).toLocaleString(); }
+function pct1(n){ return (n==null||!isFinite(n)) ? "—" : n.toFixed(1)+"%"; }
+
+/* The Sold-only columns are rendered for every table so the tables line up,
+   but they read "—" where the status cannot have them. A Sold Price on an
+   active listing would be a fabrication, not a blank. */
+var RES_COLS = [
+  { k:"photo",   h:"Photo",      w:"56px" },
+  { k:"address", h:"Address",    w:"auto" },
+  { k:"beds",    h:"Beds",       w:"52px" },
+  { k:"baths",   h:"Baths",      w:"52px" },
+  { k:"listPrice", h:"List Price", w:"92px" },
+  { k:"soldPrice", h:"Sold Price", w:"92px", soldOnly:true },
+  { k:"pricePct",  h:"Price %",    w:"70px", soldOnly:true },
+  { k:"sqft",    h:"Sqft",       w:"70px" },
+  { k:"pricePerSqft", h:"$/Sqft", w:"78px" },
+  { k:"lotSqft", h:"Lot Sqft",   w:"78px" },
+  { k:"pricePerLotSqft", h:"$/Lot Sqft", w:"84px" },
+  { k:"dom",     h:"DOM",        w:"56px" }
+];
+
+function resCell(row, col, status){
+  if(col.soldOnly && status !== "SOLD") return "—";
+  var v = row[col.k];
+  if(col.k === "beds" || col.k === "baths") return v==null ? "—" : esc(v);
+  if(col.k === "sqft" || col.k === "lotSqft" || col.k === "dom") return int0(v);
+  if(col.k === "pricePct") return pct1(v);
+  if(col.k === "pricePerSqft" || col.k === "pricePerLotSqft") return money2(v);
+  return money0(v);
+}
+
+function resTable(b){
+  if(!b.rows.length){
+    return '<div class="res-empty">Nothing selected in this step. '+
+      'It contributes nothing to the averages below.</div>';
+  }
+  var head = RES_COLS.map(function(c){
+    return '<th'+(c.w!=="auto"?' style="width:'+c.w+'"':'')+'>'+esc(c.h)+'</th>';
+  }).join("");
+  var body = b.rows.map(function(r){
+    var photo = '<div class="rphoto">'+
+      (r.photoUrl ? '<img src="'+esc(r.photoUrl)+'" alt="" loading="lazy" onerror="this.remove()">' : '')+
+      '</div>';
+    var addr = '<div class="raddr">'+esc(r.address.split(",")[0])+
+      '<small>'+esc(r.address.split(",").slice(1).join(",").trim())+'</small>'+
+      (r.isManualEntry ? '<span class="src">typed in</span>'
+        : r.source === "transaction" ? '<span class="src">closed deal</span>' : '')+
+      '</div>';
+    return '<tr>'+RES_COLS.map(function(c){
+      if(c.k === "photo") return '<td>'+photo+'</td>';
+      if(c.k === "address") return '<td>'+addr+'</td>';
+      return '<td class="num">'+resCell(r, c, b.status)+'</td>';
+    }).join("")+'</tr>';
+  }).join("");
+  var a = b.averages;
+  var avg = '<tr class="avgrow"><td></td><td>Averages</td><td class="num">—</td><td class="num">—</td>'+
+    '<td class="num">'+money0(a.listPrice)+'</td>'+
+    '<td class="num">'+(b.status==="SOLD"?money0(a.soldPrice):"—")+'</td>'+
+    '<td class="num">'+(b.status==="SOLD"?pct1(a.pricePct):"—")+'</td>'+
+    '<td class="num">'+int0(a.sqft)+'</td>'+
+    '<td class="num">'+money2(a.pricePerSqft)+'</td>'+
+    '<td class="num">'+int0(a.lotSqft)+'</td>'+
+    '<td class="num">'+money2(a.pricePerLotSqft)+'</td>'+
+    '<td class="num">'+int0(a.dom)+'</td></tr>';
+
+  /* Name the columns whose average rests on fewer rows than the table has.
+     An average of 5 homes and an average of 1 look identical otherwise. */
+  var thin = [];
+  ["listPrice","sqft","pricePerSqft","lotSqft","dom"].forEach(function(k){
+    if(a.n[k] > 0 && a.n[k] < b.rows.length){
+      thin.push(RES_COLS.filter(function(c){return c.k===k;})[0].h+" ("+a.n[k]+" of "+b.rows.length+")");
+    }
+  });
+
+  return '<div class="rtwrap"><table class="restbl"><thead><tr>'+head+'</tr></thead>'+
+    '<tbody>'+body+avg+'</tbody></table></div>'+
+    (thin.length ? '<div class="thin">Averaged over the rows that carry the value: '+esc(thin.join(", "))+
+      '. The rest are blank on those records.</div>' : '');
+}
+
+function totalsCard(t){
+  /* The count is only worth showing when there IS a number and it rests on
+     fewer rows than were selected. Under a dash it just repeats the dash. */
+  var cell = function(l, v, n, total){
+    var showN = v !== "—" && n != null && total != null && n < total;
+    return '<div class="tc"><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div>'+
+      (showN ? '<div class="n">from '+n+' of '+total+'</div>' : '')+'</div>';
+  };
+  var N = S.results.totalSelected;
+  return '<div class="totals">'+
+    cell("List Price", money0(t.listPrice), t.n.listPrice, N)+
+    cell("Sold Price", money0(t.soldPrice), t.n.soldPrice, N)+
+    cell("Price %", pct1(t.pricePct), t.n.pricePct, N)+
+    cell("Sqft", int0(t.sqft), t.n.sqft, N)+
+    cell("$/Sqft", money2(t.pricePerSqft), t.n.pricePerSqft, N)+
+    cell("Lot Sqft", int0(t.lotSqft), t.n.lotSqft, N)+
+    cell("$/Lot Sqft", money2(t.pricePerLotSqft), t.n.pricePerLotSqft, N)+
+    cell("Days On Market", int0(t.dom), t.n.dom, N)+
+  '</div>';
+}
+
 function renderResults(){
-  q("#wzBody").innerHTML = '<div class="res"><h1>Results</h1><p class="lede">Working…</p></div>';
+  q("#wzBody").innerHTML = '<div class="res"><div class="lede">Working…</div></div>';
   api("/api/cma/sessions/"+S.session.id+"/results").then(function(d){
     S.results = d.results; S.comps = d.comparables;
     var r = d.results;
-    var est = r.estimate != null
-      ? '<div class="est"><div style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#3f8a7c;font-weight:700">Indicated value</div>'+
-        '<div class="big">'+esc(money(r.estimate))+'</div>'+
-        (r.estimateLow != null ? '<div class="band">'+esc(money(r.estimateLow))+' – '+esc(money(r.estimateHigh))+'</div>' : '')+
-        '<div class="basis">'+esc(r.totalSelected)+' comparable'+(r.totalSelected===1?"":"s")+
-          (r.pricePerSqft != null ? ' at a median of $'+r.pricePerSqft.toFixed(0)+' per square foot' : '')+
-          (S.session.subjectSqft ? ', applied to '+esc(S.session.subjectSqft.toLocaleString())+' sqft.' : '.')+
-        '</div></div>'
-      : '<div class="est none"><div style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#8a6d2f;font-weight:700">No value figure</div>'+
-        '<div class="basis" style="font-size:13px;margin-top:8px">'+esc(r.estimateBlockedReason||"")+'</div></div>';
 
-    var kpis = r.buckets.map(function(b){
-      return '<div class="kpi"><div class="k">'+esc(b.label)+'</div>'+
-        '<div class="v">'+esc(b.count ? money(b.medianPrice) : "—")+'</div>'+
-        '<div class="s">'+(b.count
-          ? esc(b.count+' selected'+(b.minPrice!=null?' · '+money(b.minPrice)+'–'+money(b.maxPrice):"")+
-                (b.listToSalePct!=null?' · sold at '+Math.round(b.listToSalePct)+'% of list':""))
-          : 'none selected')+'</div></div>';
+    var accordions = r.buckets.map(function(b){
+      var open = RES_OPEN[b.status];
+      return '<div class="acc'+(open?" open":"")+'" data-acc="'+b.status+'">'+
+        '<button class="acc-h" data-toggle="'+b.status+'">'+
+          '<span class="chev">'+(open?"&#9662;":"&#9656;")+'</span>'+
+          esc(b.label)+' Listings Summary'+
+          '<span class="cnt">'+b.count+'</span>'+
+        '</button>'+
+        '<div class="acc-b">'+(open ? resTable(b) : '')+'</div>'+
+      '</div>';
     }).join("");
 
-    var rows = (d.comparables||[]).map(function(c){
-      var price = c.listingStatus === "SOLD" ? (c.soldPrice != null ? c.soldPrice : c.price) : c.price;
-      var ppsf = (price && c.sqft) ? "$"+Math.round(price/c.sqft) : '<span style="color:#b0863a">no sqft</span>';
-      return '<tr><td><span class="pill '+esc(c.listingStatus)+'">'+esc(c.listingStatus.replace("_"," "))+'</span></td>'+
-        '<td>'+esc(c.address)+'<span class="src">'+esc(c.source)+'</span></td>'+
-        '<td>'+esc(money(price))+(c.listingStatus==="SOLD"&&c.originalListPrice
-          ? '<div style="font-size:11px;color:#8a939a">list '+esc(money(c.originalListPrice))+'</div>' : '')+'</td>'+
-        '<td>'+(c.beds!=null?esc(c.beds):"—")+' / '+(c.baths!=null?esc(c.baths):"—")+'</td>'+
-        '<td>'+(c.sqft?esc(c.sqft.toLocaleString()):"—")+'</td>'+
-        '<td>'+ppsf+'</td>'+
-        '<td>'+esc(fmtDate(c.statusDate)||"—")+'</td></tr>';
-    }).join("");
-
+    var sg = r.suggested;
     q("#wzBody").innerHTML =
-    '<div class="res"><h1>Results</h1>'+
-      '<p class="lede">'+esc(S.session.subjectAddress)+' · prepared for '+esc(S.session.clientName)+'</p>'+
-      est +
-      '<div class="kpis">'+kpis+'</div>'+
-      (rows ? '<table class="rtbl"><thead><tr><th>Step</th><th>Address</th><th>Price</th><th>Bd / Ba</th>'+
-        '<th>Sqft</th><th>$/sqft</th><th>Status date</th></tr></thead><tbody>'+rows+'</tbody></table>'
-            : '<div class="empty-feed">No comparables selected yet. Go back to steps 2 through 5.</div>')+
+    '<div class="res">'+
+      '<div class="res-top"><h2>CMA Results</h2>'+subjectBar()+'</div>'+
+      accordions +
+      '<h3 class="sec">Total Listings Summary</h3>'+
+      totalsCard(r.totals)+
+      '<h3 class="sec">Estimated Pricing and Days on Market</h3>'+
+      '<div class="pricing">'+
+        '<div class="f"><label>Suggested Min List Price</label>'+
+          '<input class="t" id="pMin" inputmode="numeric" value="'+
+            (sg.minListPrice!=null?esc(sg.minListPrice):"")+'" placeholder="No suggestion yet"></div>'+
+        '<div class="f"><label>Suggested Max List Price</label>'+
+          '<input class="t" id="pMax" inputmode="numeric" value="'+
+            (sg.maxListPrice!=null?esc(sg.maxListPrice):"")+'" placeholder="Optional"></div>'+
+        '<div class="f"><label>Estimated Days on Market</label>'+
+          '<div class="rng2"><input class="t" id="pDomMin" inputmode="numeric" value="'+
+            (sg.domMin!=null?esc(sg.domMin):"")+'" placeholder="Min"><span>-</span>'+
+            '<input class="t" id="pDomMax" inputmode="numeric" value="'+
+            (sg.domMax!=null?esc(sg.domMax):"")+'" placeholder="Max"></div></div>'+
+        '<div class="f"><label>&nbsp;</label>'+
+          '<button class="btn-next" id="pPublish">'+
+          (S.session.status==="published"?"SAVE &amp; CONTINUE":"Publish CMA")+'</button></div>'+
+      '</div>'+
+      '<div class="basisline">'+esc(sg.basis)+'</div>'+
+      (r.estimateBlockedReason
+        ? '<div class="notes"><p>'+esc(r.estimateBlockedReason)+'</p></div>'
+        : '<div class="notes"><p>The comp-based indicated value is <b>'+esc(money0(r.estimate))+'</b>'+
+          (r.estimateLow!=null?' (range '+esc(money0(r.estimateLow))+' – '+esc(money0(r.estimateHigh))+')':'')+
+          '. The suggested list price above is your own number and is what the client sees.</p></div>')+
       '<div class="notes">'+r.notes.map(function(n){ return '<p>'+esc(n)+'</p>'; }).join("")+'</div>'+
-      '<div class="pubrow"><button class="btn-ghost" id="rBack">BACK TO OFF MARKET</button>'+
-        '<button class="btn-next" id="rNext" style="padding:0 30px">CONTINUE TO PUBLISH</button></div>'+
     '</div>';
-    q("#rBack").addEventListener("click", function(){ goStep(5); });
-    q("#rNext").addEventListener("click", function(){ goStep(7); });
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-toggle]"), function(btn){
+      btn.addEventListener("click", function(){
+        RES_OPEN[btn.dataset.toggle] = !RES_OPEN[btn.dataset.toggle];
+        renderResults();
+      });
+    });
+    q("#pPublish").addEventListener("click", savePricingAndPublish);
   }).catch(function(e){
-    q("#wzBody").innerHTML = '<div class="res"><h1>Results</h1><p class="lede">'+esc(e.message)+'</p></div>';
+    q("#wzBody").innerHTML = '<div class="res"><h2>CMA Results</h2><div class="lede">'+esc(e.message)+'</div></div>';
   });
 }
 
+function savePricingAndPublish(){
+  var btn = q("#pPublish");
+  var body = {
+    suggestedMinListPrice: num(q("#pMin").value),
+    suggestedMaxListPrice: num(q("#pMax").value),
+    estimatedDomMin: num(q("#pDomMin").value),
+    estimatedDomMax: num(q("#pDomMax").value)
+  };
+  /* A max below a min is a typo, not a price band. Caught here rather than
+     shown to a seller. */
+  if(body.suggestedMinListPrice != null && body.suggestedMaxListPrice != null &&
+     body.suggestedMaxListPrice < body.suggestedMinListPrice){
+    toast("The maximum list price is below the minimum."); return;
+  }
+  if(body.estimatedDomMin != null && body.estimatedDomMax != null &&
+     body.estimatedDomMax < body.estimatedDomMin){
+    toast("The maximum days on market is below the minimum."); return;
+  }
+  btn.disabled = true; btn.textContent = "Working…";
+  api("/api/cma/sessions/"+S.session.id, { method:"PATCH", body: body }).then(function(d){
+    S.session = d.session;
+    if(S.session.status === "published"){ goStep(7); return null; }
+    return api("/api/cma/sessions/"+S.session.id+"/publish", { method:"POST", body:{} })
+      .then(function(p){ S.session = p.session; toast(p.note); goStep(7); });
+  }).catch(function(e){
+    btn.disabled = false; btn.textContent = "Publish CMA";
+    toast(e.message);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STEP 7 — Publish & lead delivery.
+   ═══════════════════════════════════════════════════════════════════════════ */
 function renderPublish(){
   var published = S.session.status === "published";
   var link = location.origin + "/c/" + S.session.id;
+
+  if(!published){
+    /* Reaching step 7 without publishing means arriving by the stepper rather
+       than by the button. Say what is missing instead of showing a send form
+       that would mail a dead link. */
+    q("#wzBody").innerHTML =
+    '<div class="res"><div class="res-top"><h2>Publish</h2>'+subjectBar()+'</div>'+
+      '<div class="unavbox">This CMA is not published yet, so there is nothing to send — the client link '+
+        'returns a not-available page until it is. Go back to Results and use <b>Publish CMA</b>.</div>'+
+      '<div class="pubrow"><button class="btn-ghost" id="pBack">BACK TO RESULTS</button></div></div>';
+    q("#pBack").addEventListener("click", function(){ goStep(6); });
+    return;
+  }
+
   q("#wzBody").innerHTML =
-  '<div class="res"><h1>Publish</h1>'+
-    '<p class="lede">'+esc(S.session.subjectAddress)+' · prepared for '+esc(S.session.clientName)+'</p>'+
-    '<div class="kpi" style="padding:18px">'+
-      '<div class="k">What publishing does</div>'+
-      '<div class="s" style="font-size:12.5px;margin-top:8px">Publishing puts this CMA on a client-facing page '+
-        (published ? 'at the link below' : 'and gives you the link')+', readable by anyone who has it. '+
-        '<b>It does not email anybody.</b> Sending is a separate action, so that "Published" never quietly means '+
-        '"sent to your seller".</div>'+
+  '<div class="res">'+
+    '<div class="pubhead">'+
+      '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3fb27f" stroke-width="2.2">'+
+        '<circle cx="12" cy="12" r="10"/><polyline points="8 12.5 11 15.5 16.5 9"/></svg>'+
+      '<span>Your CMA is Published</span>'+
     '</div>'+
-    (published
-      ? '<div class="linkbox"><b>Live at</b> <a href="'+esc(link)+'" target="_blank" rel="noopener">'+esc(link)+'</a></div>'+
-        '<div style="font-size:12px;color:#62686e;margin-top:8px">Published '+esc(fmtDate(S.session.publishedAt)||"")+'.</div>'
-      : '<div class="unav">Not published yet, so there is no client link — and the one this will create returns a '+
-        'not-available page until you publish, because a draft CMA on '+
-        'somebody’s house is not something to leave readable.</div>')+
-    '<div class="notes"><p>The client page shows the comparables you selected, the indicated value and its basis, and '+
-      'states that it is a pricing opinion rather than an appraisal. It carries no contact record and no CRM data.</p></div>'+
-    '<div class="pubrow"><button class="btn-ghost" id="pBack">BACK TO RESULTS</button>'+
-      (published
-        ? '<button class="btn-ghost" id="pUn">UNPUBLISH</button><button class="btn-next" id="pView" style="padding:0 30px">VIEW CLIENT PAGE</button>'
-        : '<button class="btn-next" id="pGo" style="padding:0 30px">PUBLISH</button>')+
+    '<div class="pubprev"><a href="'+esc(link)+'" target="_blank" rel="noopener">Preview Report</a></div>'+
+
+    '<h3 class="sec" style="margin-top:26px">Send CMA</h3>'+
+    '<div class="sendgrid">'+
+      '<div class="f"><label>First Name</label><input class="t" id="sdFirst" autocomplete="off"></div>'+
+      '<div class="f"><label>Last Name</label><input class="t" id="sdLast" autocomplete="off"></div>'+
+      '<div class="f"><label>Email Address</label><input class="t" id="sdEmail" type="email" autocomplete="off"></div>'+
+    '</div>'+
+    '<div class="sendfoot">'+
+      '<label class="ck"><input type="checkbox" id="sdDrip"> Schedule Market Report Drip'+
+        '<span class="tip" title="Creates a real monthly market report for the subject address and enrols this '+
+        'contact. It only works if someone in the CRM already has this email address — there is nothing here that '+
+        'creates a contact from a send.">?</span></label>'+
+      '<div style="flex:1"></div>'+
+      '<button class="btn-next" id="sdSend" style="padding:0 34px">Send Report</button>'+
+    '</div>'+
+    '<div class="notes" style="margin-top:16px"><p>The email links to the client page above. It carries the '+
+      'comparables you selected, your suggested list price, and a line saying it is a pricing opinion rather than '+
+      'an appraisal.</p></div>'+
+    '<div id="sdLog"></div>'+
+    '<div class="pubrow">'+
+      '<button class="btn-ghost" id="pBack">BACK TO RESULTS</button>'+
+      '<button class="btn-ghost" id="pUn">UNPUBLISH</button>'+
+      '<button class="btn-ghost" id="pView">VIEW CLIENT PAGE</button>'+
     '</div>'+
   '</div>';
+
   q("#pBack").addEventListener("click", function(){ goStep(6); });
-  var go = q("#pGo"), un = q("#pUn"), view = q("#pView");
-  if(go) go.addEventListener("click", function(){
-    api("/api/cma/sessions/"+S.session.id+"/publish", { method:"POST", body:{} }).then(function(d){
-      S.session = d.session; toast(d.note); renderPublish();
-    }).catch(function(e){ toast(e.message); });
-  });
-  if(un) un.addEventListener("click", function(){
+  q("#pView").addEventListener("click", function(){ window.open(link, "_blank", "noopener"); });
+  q("#pUn").addEventListener("click", function(){
     api("/api/cma/sessions/"+S.session.id+"/publish", { method:"POST", body:{ unpublish:true } }).then(function(d){
       S.session = d.session; toast(d.note); renderPublish();
     }).catch(function(e){ toast(e.message); });
   });
-  if(view) view.addEventListener("click", function(){ window.open(link, "_blank", "noopener"); });
+  q("#sdSend").addEventListener("click", sendCma);
+  loadDeliveries();
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   Boot.
-   ═══════════════════════════════════════════════════════════════════════════ */
+function loadDeliveries(){
+  api("/api/cma/sessions/"+S.session.id+"/deliveries").then(function(d){
+    var rows = d.deliveries || [];
+    if(!rows.length){ q("#sdLog").innerHTML = ""; return; }
+    /* Failed sends are listed too. A failure that leaves no trace looks
+       identical to a send nobody attempted. */
+    q("#sdLog").innerHTML = '<h3 class="sec" style="margin-top:24px">Sent to</h3>'+
+      '<table class="rtbl"><thead><tr><th>When</th><th>Name</th><th>Email</th><th>Drip</th><th>Result</th></tr></thead><tbody>'+
+      rows.map(function(r){
+        return '<tr><td>'+esc(fmtDate(r.sentAt)||"—")+'</td>'+
+          '<td>'+esc([r.firstName,r.lastName].filter(Boolean).join(" "))+'</td>'+
+          '<td>'+esc(r.email)+'</td>'+
+          '<td>'+(r.marketDripScheduled?"monthly":"—")+'</td>'+
+          '<td>'+(r.ok?'<span style="color:#3fb27f">sent</span>'
+                     :'<span style="color:#e4553f">failed</span> <small>'+esc(r.error||"")+'</small>')+'</td></tr>';
+      }).join("")+'</tbody></table>';
+  }).catch(function(){});
+}
+
+function sendCma(){
+  var btn = q("#sdSend");
+  var body = {
+    firstName: q("#sdFirst").value.trim(),
+    lastName: q("#sdLast").value.trim(),
+    email: q("#sdEmail").value.trim(),
+    scheduleMarketDrip: q("#sdDrip").checked
+  };
+  if(!body.firstName){ toast("Who is this going to? A first name is required."); return; }
+  if(!body.email){ toast("An email address is required."); return; }
+  btn.disabled = true; btn.textContent = "Sending…";
+  api("/api/cma/sessions/"+S.session.id+"/send", { method:"POST", body: body }).then(function(d){
+    btn.disabled = false; btn.textContent = "Send Report";
+    q("#sdFirst").value = ""; q("#sdLast").value = ""; q("#sdEmail").value = "";
+    q("#sdDrip").checked = false;
+    toast(d.dripNote || d.note);
+    loadDeliveries();
+  }).catch(function(e){
+    btn.disabled = false; btn.textContent = "Send Report";
+    toast(e.message);
+    loadDeliveries();
+  });
+}
+
+
 function render(){
   var st = STEPS[S.step - 1];
   if(S.step === 1) return renderStep1();

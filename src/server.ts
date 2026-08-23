@@ -4588,6 +4588,7 @@ app.patch("/api/cma/sessions/:id", express.json({ limit: "256kb" }), async (req,
       "clientName", "mls", "subjectAddress", "subjectCity", "subjectState", "subjectPostalCode",
       "subjectPropertyType", "subjectBeds", "subjectBaths", "subjectSqft", "subjectLotSize",
       "subjectYearBuilt", "criteria", "currentStep", "areaRung", "areaLabel",
+      "suggestedMinListPrice", "suggestedMaxListPrice", "estimatedDomMin", "estimatedDomMax",
     ]) {
       if (k in b) patch[k] = b[k];
     }
@@ -4763,6 +4764,170 @@ app.get("/api/cma/sessions/:id/results", async (req, res) => {
  * step says which of those it did, because "Published" that quietly also sent
  * mail to a client is the kind of surprise this system must not spring.
  */
+/**
+ * Step 7: send the published CMA to a client.
+ *
+ * Three things this refuses to fake:
+ *   · It will not send an unpublished CMA. The email links to the client page,
+ *     and an unpublished one returns "not available" — mailing somebody a dead
+ *     link is worse than not mailing them.
+ *   · The delivery row is written whether the send SUCCEEDED OR FAILED. A
+ *     failure that leaves no trace is indistinguishable from one nobody tried,
+ *     and "did my seller get it?" is the first question asked afterwards.
+ *   · "Schedule Market Report Drip" creates a REAL market report subscription
+ *     against the subject address and enrols the recipient, or it reports why
+ *     it could not. It never records a drip that does not exist.
+ */
+app.post("/api/cma/sessions/:id/send", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    const session = store.getSession(String(req.params.id));
+    if (!session) { res.status(404).json({ error: "That CMA no longer exists." }); return; }
+    if (session.status !== "published") {
+      res.status(400).json({
+        error: "Publish the CMA first. The email links to the client page, and an unpublished one is not readable.",
+      });
+      return;
+    }
+
+    const b = (req.body || {}) as Record<string, unknown>;
+    const firstName = String(b.firstName || "").trim();
+    const lastName = String(b.lastName || "").trim();
+    const email = String(b.email || "").trim();
+    const wantsDrip = b.scheduleMarketDrip === true;
+    if (!firstName) { res.status(400).json({ error: "A first name is required." }); return; }
+    /* Deliberately not a full RFC validator — just enough to catch the typo
+       that would otherwise bounce silently. */
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ error: "That email address does not look valid." });
+      return;
+    }
+
+    const comps = store.listComparables(session.id);
+    const { cmaResults } = await import("./core/cmaComps.js");
+    const results = cmaResults(session, comps);
+    const { publicBaseUrl, esc } = await import("./core/outreachEmail.js");
+    const viewUrl = `${publicBaseUrl()}/c/${encodeURIComponent(session.id)}`;
+    const money = (n: number | null) => (n == null ? null : "$" + Math.round(n).toLocaleString());
+
+    const range =
+      session.suggestedMinListPrice != null && session.suggestedMaxListPrice != null
+        ? `${money(session.suggestedMinListPrice)} – ${money(session.suggestedMaxListPrice)}`
+        : session.suggestedMinListPrice != null
+          ? String(money(session.suggestedMinListPrice))
+          : results.estimate != null
+            ? String(money(results.estimate))
+            : null;
+
+    const subject = `Your market analysis for ${session.subjectAddress}`;
+    const html =
+      `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1F2933;line-height:1.6">` +
+      `<p>Hi ${esc(firstName)},</p>` +
+      `<p>Here is the comparative market analysis I put together for <b>${esc(session.subjectAddress)}</b>.</p>` +
+      (range ? `<p>Based on ${results.totalSelected} comparable home${results.totalSelected === 1 ? "" : "s"}, ` +
+        `my suggested list price is <b>${esc(range)}</b>.</p>` : "") +
+      `<p><a href="${esc(viewUrl)}" style="display:inline-block;background:#0F766E;color:#fff;text-decoration:none;` +
+      `font-weight:600;padding:12px 20px;border-radius:8px">View the full analysis</a></p>` +
+      `<p style="font-size:13px;color:#6B7280">This is a pricing opinion based on comparable homes, not an appraisal. ` +
+      `Reply to this email with any questions.</p>` +
+      `<p>— Marco Puga</p></div>`;
+
+    /* The drip is attempted BEFORE the email, so the email can honestly say
+       whether one was scheduled. */
+    let reportId: string | null = null;
+    let leadId: string | null = session.leadId;
+    let dripNote: string | null = null;
+    if (wantsDrip) {
+      try {
+        const db = await import("./core/db.js");
+        const snap = await db.getDashboardSnapshot();
+        const match = snap.leads.find((l) => (l.email || "").toLowerCase() === email.toLowerCase());
+        leadId = match?.id || session.leadId || null;
+        if (!leadId) {
+          dripNote =
+            "No contact in the CRM has that email address, so there is nobody to enrol. " +
+            "The CMA was still sent. Add them as a contact and start the drip from their record.";
+        } else {
+          const outreach = await import("./core/outreachStore.js");
+          const { nextReportSend } = await import("./core/outreachRunner.js");
+          const now = new Date().toISOString();
+          /* Monthly, and the first one lands a month out rather than
+             immediately — they have just been sent the CMA. */
+          const created = outreach.insertReport({
+            id: `mr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+            leadId,
+            name: `Market updates — ${session.subjectAddress}`,
+            address: session.subjectAddress,
+            cc: null,
+            frequency: "monthly",
+            drip: true,
+            criteria: session.criteria,
+            subject: {
+              beds: session.subjectBeds ?? undefined,
+              baths: session.subjectBaths ?? undefined,
+              sqft: session.subjectSqft ?? undefined,
+            } as Record<string, number>,
+            adjustedValue: null,
+            includeHomeValue: true,
+            emailMessage: null,
+            paused: false,
+            createdAt: now,
+            updatedAt: now,
+            lastSentAt: null,
+            nextSendAt: nextReportSend("monthly"),
+            lastViewedAt: null,
+            viewCount: 0,
+            createdBy: (await currentSessionUser(req))?.name ?? null,
+          });
+          reportId = created.id;
+        }
+      } catch (err) {
+        dripNote = `The CMA was sent, but the market drip could not be scheduled: ${(err as Error).message}`;
+      }
+    }
+
+    let ok = true;
+    let error: string | null = null;
+    try {
+      const { sendEmail } = await import("./integrations/gmail/index.js");
+      await sendEmail({ to: email, subject, body: html, html: true });
+    } catch (err) {
+      ok = false;
+      error = (err as Error).message;
+    }
+
+    const delivery = store.recordDelivery({
+      sessionId: session.id,
+      firstName, lastName, email,
+      marketDripScheduled: !!reportId,
+      reportId, leadId,
+      ok, error,
+    });
+
+    if (!ok) { res.status(502).json({ error: `The CMA could not be emailed: ${error}`, delivery }); return; }
+    res.json({
+      ok: true,
+      delivery,
+      dripScheduled: !!reportId,
+      dripNote,
+      note: `Sent to ${email}.` + (reportId ? " A monthly market drip is scheduled for that contact." : ""),
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.get("/api/cma/sessions/:id/deliveries", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const store = await import("./core/cmaStore.js");
+    res.json({ ok: true, deliveries: store.listDeliveries(String(req.params.id)) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 app.post("/api/cma/sessions/:id/publish", express.json({ limit: "64kb" }), async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {

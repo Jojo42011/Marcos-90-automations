@@ -1480,10 +1480,12 @@
   <!-- LEAD DETAIL -->
   <section class="view" id="view-plansettings"><div class="pad" style="max-width:1150px">
     <div class="page-head"><h1>Settings · Auto Plans</h1><button class="pill-btn" id="apAddPlan">ADD PLAN</button></div>
-    <div style="background:#fff8ec;border:1px solid #f0dcae;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#7a5c1e;margin-bottom:14px">
-      <b>SMS compliance:</b> phone carriers cap how many texts one number can send per day; exceeding it (or non-compliant content) risks the number being flagged or blocked. Double-check a plan's steps before turning a trigger on — once live it enrolls contacts with no manual review in between.
+    <div id="apSmsBanner" style="background:#fff8ec;border:1px solid #f0dcae;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#7a5c1e;margin-bottom:14px;display:flex;align-items:flex-start;gap:14px">
+      <div style="flex:1"><b>SMS Compliance &amp; Sending Mass Texts:</b> phone carriers cap how many texts one number can send per day; exceeding it — or sending content that violates SMS compliance — risks the number being flagged or blocked. Please consider this when setting up Auto Plan steps (texts) and triggers. Double-check a plan's steps before turning a trigger on: once live it enrolls contacts with no manual review in between.</div>
+      <button class="pill-btn ghost" id="apSmsOk" style="flex:0 0 auto;white-space:nowrap">I UNDERSTAND</button>
     </div>
-    <div class="tabs" style="margin-bottom:14px"><button class="on" id="apTabPeople">PEOPLE PLANS</button><button id="apTabTx">TRANSACTION PLANS</button></div>
+    <div class="tabs" style="margin-bottom:14px"><button class="on" id="apTabPeople">PEOPLE PLANS</button><button id="apTabTx">TRANSACTION PLANS</button><button id="apTabShared" title="This is a single-office system — every plan already belongs to this team, so there is no second account to be shared from.">SHARED WITH ME</button></div>
+    <div id="apSharedNote" style="display:none;background:#f7fafa;border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;padding:12px 14px;font-size:12.5px;color:#62686e;line-height:1.6;margin-bottom:14px">Brivity's <b>Shared With Me</b> lists plans another brokerage account shared into yours. This system runs a single office — every plan here already belongs to this team, and there is no second account to receive one from. Nothing is hidden behind this tab; there is nothing to put in it.</div>
     <div id="apTriggersWrap" class="card" style="padding:16px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-size:14px">People Auto Plan Triggers</b><button class="pill-btn ghost" id="apAddTrigger">ADD TRIGGER</button></div>
       <div style="font-size:11.5px;color:#8a939c;margin-bottom:8px">Conditions combine (AND). Triggers fire on organic changes only — never on bulk CSV imports — and never stack a second plan onto a contact already on an active one.</div>
@@ -9798,8 +9800,16 @@ if(typeof paintSortArrows==="function")paintSortArrows();
     if(!AP.triggers.length) tb.innerHTML="<tr><td colspan='5' style='color:#98a1aa;padding:10px'>No triggers yet — contacts only enroll manually until one is added.</td></tr>";
     var q=(document.getElementById("apPlanSearch").value||"").toLowerCase();
     var pb=document.querySelector("#apPlansTable tbody"); pb.innerHTML="";
-    document.getElementById("apPlansTitle").textContent=AP.tab==="people"?"People Plans":"Transaction Plans";
+    var shared=AP.tab==="shared";
+    document.getElementById("apPlansTitle").textContent=AP.tab==="people"?"People Plans":shared?"Shared Plans":"Transaction Plans";
     document.getElementById("apTriggersWrap").style.display=AP.tab==="people"?"":"none";
+    /* Nothing is hidden behind the Shared tab — the note explains that there
+       is no second account to share from, and the plans table stays empty
+       rather than re-listing this team's own plans as if they were shared. */
+    document.getElementById("apSharedNote").style.display=shared?"":"none";
+    document.getElementById("apPlansTable").style.display=shared?"none":"";
+    document.getElementById("apPlanSearch").style.display=shared?"none":"";
+    if(shared) return;
     AP.plans.filter(function(p){ return ((p.planType||"people")===AP.tab)&&!p.archived&&(!q||p.name.toLowerCase().indexOf(q)>=0); }).forEach(function(p){
       var tr=document.createElement("tr");
       tr.innerHTML="<td>"+esc(p.name)+"</td><td style='text-align:center'>"+(p.steps||[]).length+"</td><td style='text-align:center'>"+(p.enrolled||0)+
@@ -9809,8 +9819,26 @@ if(typeof paintSortArrows==="function")paintSortArrows();
       pb.appendChild(tr);
     });
   }
-  document.getElementById("apTabPeople").onclick=function(){ AP.tab="people"; this.classList.add("on"); document.getElementById("apTabTx").classList.remove("on"); render(); };
-  document.getElementById("apTabTx").onclick=function(){ AP.tab="transaction"; this.classList.add("on"); document.getElementById("apTabPeople").classList.remove("on"); render(); };
+  function apSetTab(tab){
+    AP.tab=tab;
+    [["people","apTabPeople"],["transaction","apTabTx"],["shared","apTabShared"]].forEach(function(pair){
+      document.getElementById(pair[1]).classList.toggle("on",pair[0]===tab);
+    });
+    render();
+  }
+  document.getElementById("apTabPeople").onclick=function(){ apSetTab("people"); };
+  document.getElementById("apTabTx").onclick=function(){ apSetTab("transaction"); };
+  document.getElementById("apTabShared").onclick=function(){ apSetTab("shared"); };
+
+  /* The compliance banner's I UNDERSTAND, per the spec. Dismissal is per
+     browser session on purpose: it is a reminder before you build a texting
+     plan, not a notice to be cleared once and never seen again. */
+  (function(){
+    var bn=document.getElementById("apSmsBanner"), ok=document.getElementById("apSmsOk");
+    if(!bn||!ok) return;
+    try{ if(sessionStorage.getItem("apSmsAck")==="1") bn.style.display="none"; }catch(_){}
+    ok.onclick=function(){ bn.style.display="none"; try{ sessionStorage.setItem("apSmsAck","1"); }catch(_){} };
+  })();
   document.getElementById("apPlanSearch").oninput=render;
   document.addEventListener("click",function(e){
     var a=e.target.closest("[data-tgl],[data-del],[data-edt],[data-ptgl],[data-pedt],[data-pdup],[data-parc]"); if(!a)return;
@@ -9959,7 +9987,13 @@ if(typeof paintSortArrows==="function")paintSortArrows();
         (p.planType!=="transaction"?
           "<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;background:#f7fafa;border:1px solid var(--line);border-radius:8px;padding:10px'>"+
           "<label style='font-size:12px'>Auto-pause when lead replies by text? <select id='plPauseReply'><option value='yes' "+(p.autoPauseOnReply!==false?"selected":"")+">Yes</option><option value='no' "+(p.autoPauseOnReply===false?"selected":"")+">No</option></select></label>"+
-          "<label style='font-size:12px'>Auto-pause when status changes to "+sel(STATUSES,p.autoPauseOnStatus,"id='plPauseStatus'").replace(">Any<",">No<")+"</label>"+
+          "<label style='font-size:12px'>Auto-pause when status changes to "+
+            sel(STATUSES,p.autoPauseOnStatus,"id='plPauseStatus'")
+              .replace(">Any<",">No<")
+              /* "Any status change" is a different rule from a named status,
+                 not a wildcard over the list, so it is its own option. */
+              .replace("</select>","<option value='any' "+(p.autoPauseOnStatus==="any"?"selected":"")+">Any status change</option></select>")+
+          "</label>"+
           "<label style='font-size:12px'>On completion, change status to "+sel(STATUSES,p.completionStatus,"id='plDoneStatus'").replace(">Any<",">Don\u2019t change<")+"</label></div>"
         :"<div style='font-size:12px;color:#8a939c;margin-bottom:10px'>Transaction plan steps anchor to the deal\u2019s real dates (close, contract, expiration, inspection); negative offsets mean before. Steps land as tasks — text goes out only when the deal is linked to a lead with a phone, and email steps become hand-off tasks because email automation is not connected.</div>")+
         "<div id='plSteps'>"+(p.steps.map(function(st,i){return stepRow(st,i,p.planType,p.steps);}).join(""))+"</div>"+

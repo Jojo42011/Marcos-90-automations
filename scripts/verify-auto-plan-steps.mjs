@@ -76,6 +76,9 @@ const leads = [
     name: "Birthday Person", birthday: bdayStr,
     enrollments: [{ planId: "plan_bday", planName: "Birthday plan", enrolledAt, currentStepIndex: 0, completedSteps: [], status: "active" }],
   }),
+  /* Untouched by the other checks, so the auto-pause test can move its status
+     without disturbing the birthday or role assertions. */
+  mkLead(3, { name: "Pause Subject" }),
 ];
 const db = { idCounter: 10, leadsById: {}, leadKeyToId: {}, conversationsByLeadId: {}, commandTasks: [] };
 for (const l of leads) { db.leadsById[l.id] = l; db.leadKeyToId[l.platform + "::" + l.userId] = l.id; db.conversationsByLeadId[l.id] = { messages: [] }; }
@@ -167,6 +170,43 @@ try {
   // ---- browser: the editor exposes every spec field ------------------------
   /* Same override the other CRM suites use: the container pre-installs
      Chromium but a version-mismatched playwright looks for another revision. */
+  /* ── auto-pause on ANY status change (spec 4.4) ──────────────────────────
+     The engine already paused on ONE named status. Brivity's other shape —
+     pause whenever the status moves at all — is the safety valve that matters,
+     because a status that just changed is one a human just touched, and a drip
+     that keeps firing over that is the complaint. Driven end to end here
+     rather than asserted on the dropdown, because a plan that stores the word
+     without changing behaviour would pass a UI-only check. */
+  {
+    const anyPlan = await J(await fetch(B + "/api/auto-plans", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Pause on any change", planType: "people", active: true,
+        autoPauseOnStatus: "any",
+        steps: [{ type: "text", dayOffset: 3, content: "still looking?" }],
+      }),
+    }));
+    const planId = anyPlan.plan?.id || anyPlan.id;
+    ok("a plan can store the 'any status change' pause rule", !!planId, JSON.stringify(anyPlan).slice(0, 120));
+
+    await fetch(B + `/api/auto-plans/${planId}/enroll/lead_3`, { method: "POST" });
+    let snap2 = await J(await fetch(B + "/api/dashboard/data"));
+    let enr = (snap2.leads.find((l) => l.id === "lead_3")?.autoPlanEnrollments || [])
+      .find((e) => e.planId === planId);
+    ok("the contact enrols active", enr && enr.status === "active", JSON.stringify(enr));
+
+    /* Move the status to something the plan never named. */
+    await fetch(B + "/api/crm/lead/lead_3", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ crmStatus: "nurture" }),
+    });
+    snap2 = await J(await fetch(B + "/api/dashboard/data"));
+    enr = (snap2.leads.find((l) => l.id === "lead_3")?.autoPlanEnrollments || [])
+      .find((e) => e.planId === planId);
+    ok("and ANY status change pauses it, not just the one named status",
+      enr && enr.status === "paused", JSON.stringify(enr));
+  }
+
   const br = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {});
   const page = await br.newPage();
   const errs = [];
@@ -177,9 +217,33 @@ try {
   await page.click('.rail .r[data-view="plansettings"]');
   await page.waitForSelector("#apPlansTable tbody tr");
   await page.waitForTimeout(600); // meta fetch
+  /* ── the Auto Plans admin surface, per the 2026-08-22 spec ── */
+  ok("the SMS compliance banner carries the spec's heading",
+    /SMS Compliance & Sending Mass Texts/.test(await page.textContent("#apSmsBanner")));
+  ok("with an I UNDERSTAND control", !!(await page.$("#apSmsOk")));
+  await page.click("#apSmsOk");
+  ok("which dismisses it", (await page.$eval("#apSmsBanner", (e) => e.style.display)) === "none");
+
+  /* Sharing does not exist in a single-office system. The tab is offered and
+     then explains itself rather than listing this team's own plans as shared. */
+  ok("a SHARED WITH ME tab exists", !!(await page.$("#apTabShared")));
+  await page.click("#apTabShared");
+  ok("it says why there is nothing in it",
+    /no second account to receive one from/.test(await page.textContent("#apSharedNote")),
+    (await page.textContent("#apSharedNote")).slice(0, 120));
+  ok("and it does NOT re-list this team's own plans as shared",
+    (await page.$eval("#apPlansTable", (e) => e.style.display)) === "none");
+  await page.click("#apTabPeople");
+  await page.waitForSelector("#apPlansTable tbody tr");
+
   await page.click('[data-pedt="' + PLAN_ID + '"]');
   await page.waitForSelector(".apStep");
 
+  /* Brivity's auto-pause has two shapes; the "any status change" one is the
+     safety valve, and it was missing entirely. */
+  const pauseOpts = await page.$$eval("#plPauseStatus option", (n) => n.map((o) => o.value));
+  ok("auto-pause offers 'any status change', not just one named status",
+    pauseOpts.includes("any"), pauseOpts.join(","));
   ok("unit dropdown present on a step", (await page.$$(".apStep .stUnit")).length > 0);
   ok("unit reflects the saved value", (await page.$eval(".apStep .stUnit", (e) => e.value)) === "minutes");
   ok("Send From offers roles", (await page.$eval(".apStep .stFrom", (e) => e.innerHTML)).includes("Primary Agent"));

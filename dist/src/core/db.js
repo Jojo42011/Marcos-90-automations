@@ -574,7 +574,12 @@ function applyAutoPlanAutomations(prev, next) {
                 const plan = planById.get(enr.planId);
                 if (!plan?.autoPauseOnStatus)
                     return enr;
-                if (String(plan.autoPauseOnStatus).toLowerCase() !== String(next.crmStatus).toLowerCase())
+                /* Brivity's rule has two shapes: pause on ONE named status, or on ANY
+                   status change at all. The second is the safety valve that matters —
+                   a contact whose status moved for any reason is one a human just
+                   touched, and a drip that keeps firing over that is the complaint. */
+                const rule = String(plan.autoPauseOnStatus).toLowerCase();
+                if (rule !== "any" && rule !== String(next.crmStatus).toLowerCase())
                     return enr;
                 return { ...enr, status: "paused" };
             });

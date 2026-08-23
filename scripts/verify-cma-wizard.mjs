@@ -547,6 +547,19 @@ try {
   ok("a sold comp selects into the sold tray", (await page2.$$(".slot.empty")).length === 4);
   ok("and its slot banner carries the sold date", /Sold:/.test(await page2.textContent(".slot:not(.empty) .banner")));
 
+  /* A second sold comp, this one WITH a square footage. The transaction-sourced
+     one has none, so step 6's averages footer has a column resting on fewer
+     rows than the table shows — which is the thing that must be visible. */
+  await page2.click("#btnManual2");
+  await page2.waitForSelector(".ov", { timeout: 8000 });
+  await page2.fill("#mAddr", "42 Sized Ln, San Antonio, TX 78245");
+  await page2.fill("#mPrice", "410000");
+  await page2.fill("#mSold", "400000");
+  await page2.fill("#mSqft", "2100");
+  await page2.click("#mSave");
+  await page2.waitForFunction(() => document.querySelectorAll(".slot.empty").length === 3, null, { timeout: 8000 });
+  ok("a second sold comp saves alongside it", (await page2.$$(".slot.empty")).length === 3);
+
   /* Step 5 — no source at all. */
   await page2.click('.wz-step[data-step="5"]');
   await page2.waitForSelector(".tray", { timeout: 15000 });
@@ -579,21 +592,92 @@ try {
 
   /* Results and publish in the browser. */
   await page2.click('.wz-step[data-step="6"]');
-  await page2.waitForSelector(".rtbl", { timeout: 15000 });
-  const resTxt = await page2.textContent(".res");
-  ok("results shows an indicated value", /Indicated value/.test(resTxt));
-  ok("with its basis spelled out", /per square foot/.test(resTxt));
-  ok("a bucket card per step", (await page2.$$(".kpi")).length === 4);
-  ok("and a row per selected comparable", (await page2.$$(".rtbl tbody tr")).length === 2,
-    String((await page2.$$(".rtbl tbody tr")).length));
-  ok("each row is badged with the step it came from", (await page2.$$(".rtbl .pill")).length === 2);
-  ok("and with where the data came from", /transaction/.test(await page2.textContent(".rtbl")));
+  await page2.waitForSelector(".acc", { timeout: 15000 });
 
-  await page2.click('.wz-step[data-step="7"]');
-  await page2.waitForSelector(".pubrow", { timeout: 15000 });
+  /* Spec: four collapsible category accordions. */
+  const accHeads = await page2.$$eval(".acc-h", (n) => n.map((e) => e.textContent.replace(/\s+/g, " ").trim()));
+  ok("results shows the four category summaries", accHeads.length === 4, accHeads.join(" | "));
+  ok("named as the spec names them",
+    /Active Listings Summary/.test(accHeads[0]) && /Pending Listings Summary/.test(accHeads[1]) &&
+    /Sold Listings Summary/.test(accHeads[2]) && /Off Mkt Listings Summary/.test(accHeads[3]), accHeads.join(" | "));
+  ok("only the first is open by default", (await page2.$$(".acc.open")).length === 1);
+  await page2.click('[data-toggle="SOLD"]');
+  await page2.waitForSelector('.acc[data-acc="SOLD"] .restbl', { timeout: 8000 });
+  ok("clicking a header expands its table", (await page2.$$(".acc.open")).length === 2);
+
+  const cols = await page2.$$eval('.acc[data-acc="SOLD"] .restbl th', (n) => n.map((e) => e.textContent.trim()));
+  ok("the table carries the spec's twelve columns",
+    cols.join(",") === "Photo,Address,Beds,Baths,List Price,Sold Price,Price %,Sqft,$/Sqft,Lot Sqft,$/Lot Sqft,DOM",
+    cols.join(","));
+  const soldTbl = await page2.textContent('.acc[data-acc="SOLD"] .restbl');
+  ok("a sold row shows both prices and the ratio", /\$445,000/.test(soldTbl) && /\$435,000/.test(soldTbl) && /97\.8%/.test(soldTbl),
+    soldTbl.replace(/\s+/g, " ").slice(0, 200));
+  ok("the expanded table has an averages footer", (await page2.$$('.acc[data-acc="SOLD"] .avgrow')).length === 1);
+  /* Averaging a missing square footage as zero would drag every mean down, so
+     the footer names the columns that rest on fewer rows than the table shows. */
+  const thinTxt = await page2.textContent('.acc[data-acc="SOLD"] .thin');
+  ok("and it names the columns averaged over fewer rows than the table has",
+    /Sqft \(1 of 2\)/.test(thinTxt), thinTxt.replace(/\s+/g, " ").slice(0, 160));
+
+  /* Off-market rows must not display a Sold Price — that would be invented. */
+  await page2.click('[data-toggle="OFF_MKT"]');
+  await page2.waitForSelector('.acc[data-acc="OFF_MKT"] .restbl', { timeout: 8000 });
+  const offCells = await page2.$$eval('.acc[data-acc="OFF_MKT"] .restbl tbody tr:first-child td',
+    (n) => n.map((e) => e.textContent.trim()));
+  ok("an off-market row leaves the sold-only columns blank rather than inventing them",
+    offCells[5] === "—" && offCells[6] === "—", JSON.stringify(offCells));
+  ok("both expanded tables now carry an averages footer", (await page2.$$(".avgrow")).length === 2,
+    String((await page2.$$(".avgrow")).length));
+
+  const totTxt = await page2.textContent(".totals");
+  ok("the Total Listings Summary card carries the spec's eight metrics",
+    (await page2.$$(".tc")).length === 8, String((await page2.$$(".tc")).length));
+  ok("including $/Lot Sqft and Days On Market", /\$\/Lot Sqft/.test(totTxt) && /Days On Market/.test(totTxt));
+
+  /* Suggested Min List Price is seeded from the comp average, per the spec. */
+  const seeded = await page2.inputValue("#pMin");
+  ok("Suggested Min List Price is auto-populated from the comps", Number(seeded) > 0, seeded);
+  ok("and says what it was seeded from", /Seeded from the average list price/.test(await page2.textContent(".basisline")));
+  ok("Suggested Max List Price is optional and starts empty", (await page2.inputValue("#pMax")) === "");
+  ok("Estimated Days on Market is a min-max pair", !!(await page2.$("#pDomMin")) && !!(await page2.$("#pDomMax")));
+
+  /* A max below a min is a typo, not a band. */
+  await page2.fill("#pMax", "1");
+  await page2.click("#pPublish");
+  await page2.waitForSelector(".toast", { timeout: 6000 });
+  ok("a maximum below the minimum is refused", /below the minimum/i.test(await page2.textContent(".toast")));
+  await page2.fill("#pMax", String(Number(seeded) + 25000));
+  await page2.fill("#pDomMin", "30"); await page2.fill("#pDomMax", "60");
+  await page2.click("#pPublish");
+  await page2.waitForSelector(".pubhead", { timeout: 15000 });
+
+  /* Step 7. */
   const pubTxt = await page2.textContent(".res");
-  ok("publish explains what publishing does", /client-facing page/i.test(pubTxt));
-  ok("and states plainly that it does not email anyone", /does not email anybody/i.test(pubTxt));
+  ok("publish confirms with the spec's headline", /Your CMA is Published/.test(pubTxt));
+  ok("there is a Preview Report link to the client page",
+    /\/c\//.test(await page2.getAttribute(".pubprev a", "href")), await page2.getAttribute(".pubprev a", "href"));
+  ok("the Send CMA form has first name, last name and email",
+    !!(await page2.$("#sdFirst")) && !!(await page2.$("#sdLast")) && !!(await page2.$("#sdEmail")));
+  ok("with the market-drip checkbox", !!(await page2.$("#sdDrip")));
+  /* The drip only works for a contact the CRM already knows; the tooltip has
+     to say so rather than implying it creates one. */
+  ok("and a tooltip saying what the drip can and cannot do",
+    /already has this email address/.test(await page2.getAttribute(".ck .tip", "title")));
+
+  ok("sending with no email is refused", await (async () => {
+    await page2.fill("#sdFirst", "Test");
+    await page2.click("#sdSend");
+    await page2.waitForSelector(".toast", { timeout: 6000 });
+    return /email address is required/i.test(await page2.textContent(".toast"));
+  })());
+
+  /* The agent's saved pricing must survive a round trip through step 6. */
+  await page2.click('.wz-step[data-step="6"]');
+  await page2.waitForSelector(".acc", { timeout: 15000 });
+  ok("the agent's own pricing is saved, not recomputed over",
+    (await page2.inputValue("#pDomMin")) === "30" && (await page2.inputValue("#pDomMax")) === "60",
+    JSON.stringify([await page2.inputValue("#pDomMin"), await page2.inputValue("#pDomMax")]));
+  ok("and the basis line now credits the agent", /Your own numbers/.test(await page2.textContent(".basisline")));
 
   /* ── screenshots, so the layout gets looked at and not only asserted ── */
   if (process.env.SHOT_DIR) {
@@ -608,7 +692,11 @@ try {
       await page2.screenshot({ path: D + "/" + name + ".png" });
     }
     await page2.click('.wz-step[data-step="6"]');
-    await page2.waitForSelector(".rtbl", { timeout: 15000 });
+    await page2.waitForSelector(".acc", { timeout: 15000 });
+    /* SOLD may already be expanded from the assertions above — the page keeps
+       its own open/closed state — so only click when it is closed. */
+    if (!(await page2.$('.acc[data-acc="SOLD"].open'))) await page2.click('[data-toggle="SOLD"]');
+    await page2.waitForSelector('.acc[data-acc="SOLD"] .restbl', { timeout: 8000 });
     await page2.screenshot({ path: D + "/06-results.png", fullPage: true });
     await page2.click('.wz-step[data-step="7"]');
     await page2.waitForSelector(".pubrow", { timeout: 15000 });

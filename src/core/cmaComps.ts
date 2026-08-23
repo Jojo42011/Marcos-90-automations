@@ -148,6 +148,29 @@ function listingToCandidate(l: Listing, status: CompStatus): CandidateRow {
   };
 }
 
+/** Days on market, in order of what the row can actually support. */
+function domFor(opts: {
+  raw?: unknown;
+  listDate?: string | null;
+  statusDate?: string | null;
+  status: CompStatus;
+}): number | null {
+  /* The feed publishes it directly for active and pending rows. */
+  const raw = opts.raw && typeof opts.raw === "object" ? (opts.raw as Record<string, unknown>) : null;
+  const mls = raw && typeof raw.mls === "object" ? (raw.mls as Record<string, unknown>) : null;
+  const published = Number(mls?.daysOnMarket);
+  if (Number.isFinite(published) && published >= 0) return Math.round(published);
+
+  /* Otherwise derive it, but ONLY from two real dates. A sold comp typed in
+     without a list date has no days on market, and 0 would read as "sold the
+     day it listed" — a claim about the market, not a missing field. */
+  if (!opts.listDate || !opts.statusDate) return null;
+  const a = Date.parse(opts.listDate);
+  const b = Date.parse(opts.statusDate);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return null;
+  return Math.round((b - a) / 86400000);
+}
+
 /**
  * Comparable criteria plus the step's status, run against the mirror.
  *
@@ -181,10 +204,15 @@ function mlsCandidates(
   const rows = database
     .prepare(`SELECT * FROM listings ${where} ORDER BY ${ORDER_BY[sort]} LIMIT @lim OFFSET @off`)
     .all({ ...params, lim: limit, off: offset }) as Record<string, unknown>[];
+  const withDom = (row: Record<string, unknown>, c: CandidateRow): CandidateRow => {
+    let raw: unknown = null;
+    try { raw = JSON.parse(String(row.raw || "{}")); } catch { raw = null; }
+    return { ...c, daysOnMarket: domFor({ raw, listDate: c.listDate, statusDate: c.statusDate, status }) };
+  };
   return {
     total,
     rows: rows.map((r) =>
-      listingToCandidate(
+      withDom(r, listingToCandidate(
         {
           listingKey: String(r.listing_key),
           mlsNumber: (r.mls_number as string) ?? null,
@@ -212,7 +240,7 @@ function mlsCandidates(
           syncedAt: String(r.synced_at),
         },
         status,
-      ),
+      )),
     ),
   };
 }
@@ -274,7 +302,11 @@ function transactionCandidates(
       yearBuilt: null,
       listDate: (t.dateListed as string) || null,
       statusDate: (t.closingDate as string) || (t.statusChangedAt as string) || null,
-      daysOnMarket: null,
+      daysOnMarket: domFor({
+        listDate: (t.dateListed as string) || null,
+        statusDate: (t.closingDate as string) || (t.statusChangedAt as string) || null,
+        status: "SOLD",
+      }),
       photoUrl: null,
     });
   }
@@ -380,6 +412,49 @@ function percentile(sorted: number[], p: number): number | null {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
 }
 
+/** Square feet in an acre. The feed publishes acres; the spec's table is sqft. */
+const SQFT_PER_ACRE = 43560;
+
+/** One row of a step-6 summary table, with every derived column resolved. */
+export interface SummaryRow {
+  id: string;
+  photoUrl: string | null;
+  address: string;
+  beds: number | null;
+  baths: number | null;
+  listPrice: number | null;
+  soldPrice: number | null;
+  /** Sold ÷ list, as a percentage. Needs BOTH numbers or it is null. */
+  pricePct: number | null;
+  sqft: number | null;
+  pricePerSqft: number | null;
+  lotSqft: number | null;
+  pricePerLotSqft: number | null;
+  dom: number | null;
+  source: string;
+  isManualEntry: boolean;
+}
+
+/**
+ * The averages row under each table.
+ *
+ * Every field is a mean over the rows that HAVE that value, and `n` records how
+ * many that was. Averaging a missing square footage as zero would drag the mean
+ * toward nothing and quietly understate every price per foot in the report.
+ */
+export interface SummaryAverages {
+  listPrice: number | null;
+  soldPrice: number | null;
+  pricePct: number | null;
+  sqft: number | null;
+  pricePerSqft: number | null;
+  lotSqft: number | null;
+  pricePerLotSqft: number | null;
+  dom: number | null;
+  /** How many rows each average was computed from, per column. */
+  n: Record<string, number>;
+}
+
 export interface BucketSummary {
   status: CompStatus;
   label: string;
@@ -392,6 +467,10 @@ export interface BucketSummary {
   listToSalePct: number | null;
   /** How many rows in this bucket have no square footage on file. */
   missingSqft: number;
+  /** The spec's data table for this category. */
+  rows: SummaryRow[];
+  /** The soft grey footer under it. */
+  averages: SummaryAverages;
 }
 
 export interface CmaResults {
@@ -413,8 +492,68 @@ export interface CmaResults {
   estimateHigh: number | null;
   /** Why there is no estimate. Null when there is one. */
   estimateBlockedReason: string | null;
+  /** The Total Listings Summary card — averages across every selected comp. */
+  totals: SummaryAverages;
+  /** What the Suggested Min List Price field is seeded with, and from what. */
+  suggested: {
+    minListPrice: number | null;
+    maxListPrice: number | null;
+    domMin: number | null;
+    domMax: number | null;
+    /** True once the agent has saved their own numbers over the seeds. */
+    fromAgent: boolean;
+    basis: string;
+  };
   /** Sentences about what the numbers rest on. Always rendered. */
   notes: string[];
+}
+
+/** Mean over the values that exist. Returns null when none do. */
+function mean(values: Array<number | null>): { v: number | null; n: number } {
+  const nums = values.filter((x): x is number => typeof x === "number" && Number.isFinite(x));
+  if (!nums.length) return { v: null, n: 0 };
+  return { v: nums.reduce((a, b) => a + b, 0) / nums.length, n: nums.length };
+}
+
+function toSummaryRow(c: CmaComparable): SummaryRow {
+  const price = effectivePrice(c);
+  const listPrice = c.originalListPrice ?? (c.listingStatus === "SOLD" ? null : c.price);
+  const lotSqft = c.lotSize && c.lotSize > 0 ? Math.round(c.lotSize * SQFT_PER_ACRE) : null;
+  return {
+    id: c.id,
+    photoUrl: c.photoUrl,
+    address: c.address,
+    beds: c.beds,
+    baths: c.baths,
+    listPrice,
+    soldPrice: c.soldPrice,
+    pricePct:
+      c.soldPrice && c.originalListPrice && c.originalListPrice > 0
+        ? (c.soldPrice / c.originalListPrice) * 100
+        : null,
+    sqft: c.sqft,
+    pricePerSqft: price && c.sqft && c.sqft > 0 ? price / c.sqft : null,
+    lotSqft,
+    pricePerLotSqft: price && lotSqft ? price / lotSqft : null,
+    dom: c.daysOnMarket,
+    source: c.source,
+    isManualEntry: c.isManualEntry,
+  };
+}
+
+function averagesOf(rows: SummaryRow[]): SummaryAverages {
+  const col = (k: keyof SummaryRow) => mean(rows.map((r) => r[k] as number | null));
+  const lp = col("listPrice"), sp = col("soldPrice"), pc = col("pricePct");
+  const sf = col("sqft"), pps = col("pricePerSqft");
+  const ls = col("lotSqft"), ppl = col("pricePerLotSqft"), dm = col("dom");
+  return {
+    listPrice: lp.v, soldPrice: sp.v, pricePct: pc.v, sqft: sf.v,
+    pricePerSqft: pps.v, lotSqft: ls.v, pricePerLotSqft: ppl.v, dom: dm.v,
+    n: {
+      listPrice: lp.n, soldPrice: sp.n, pricePct: pc.n, sqft: sf.n,
+      pricePerSqft: pps.n, lotSqft: ls.n, pricePerLotSqft: ppl.n, dom: dm.n,
+    },
+  };
 }
 
 /** The price that represents a comp for valuation: sold if sold, else list. */
@@ -427,8 +566,12 @@ export function cmaResults(session: CmaSession, comps: CmaComparable[]): CmaResu
   const buckets: BucketSummary[] = [];
   const notes: string[] = [];
 
+  const allRows: SummaryRow[] = [];
+
   for (const status of ["ACTIVE", "PENDING", "SOLD", "OFF_MKT"] as CompStatus[]) {
     const rows = comps.filter((c) => c.listingStatus === status);
+    const summaryRows = rows.map(toSummaryRow);
+    allRows.push(...summaryRows);
     const prices = rows.map(effectivePrice).filter((n): n is number => typeof n === "number" && n > 0);
     const sortedPrices = [...prices].sort((a, b) => a - b);
     const ppsf = rows
@@ -460,6 +603,8 @@ export function cmaResults(session: CmaSession, comps: CmaComparable[]): CmaResu
       medianPricePerSqft: percentile(ppsf, 0.5),
       listToSalePct: status === "SOLD" ? percentile(ratios, 0.5) : null,
       missingSqft: rows.filter((c) => !c.sqft).length,
+      rows: summaryRows,
+      averages: averagesOf(summaryRows),
     });
   }
 
@@ -529,8 +674,36 @@ export function cmaResults(session: CmaSession, comps: CmaComparable[]): CmaResu
       "comps chosen above, applied to the subject's size, with the band from the quartiles.",
   );
 
+  const totals = averagesOf(allRows);
+
+  /* Step 6's pricing fields are SEEDED from the comps and then owned by the
+     agent. Once they have saved their own numbers the seeds stop being used —
+     recomputing over a saved opinion would silently replace it the next time a
+     comp changed. */
+  const fromAgent =
+    session.suggestedMinListPrice != null ||
+    session.suggestedMaxListPrice != null ||
+    session.estimatedDomMin != null ||
+    session.estimatedDomMax != null;
+  const seedMin = totals.listPrice != null ? Math.round(totals.listPrice) : null;
+  const seedDom = totals.dom != null ? Math.round(totals.dom) : null;
+
   return {
     buckets,
+    totals,
+    suggested: {
+      minListPrice: fromAgent ? session.suggestedMinListPrice : seedMin,
+      maxListPrice: fromAgent ? session.suggestedMaxListPrice : null,
+      domMin: fromAgent ? session.estimatedDomMin : seedDom,
+      domMax: fromAgent ? session.estimatedDomMax : null,
+      fromAgent,
+      basis: fromAgent
+        ? "Your own numbers, saved on this CMA."
+        : seedMin != null
+          ? `Seeded from the average list price of the ${totals.n.listPrice} selected comparable` +
+            `${totals.n.listPrice === 1 ? "" : "s"} that carry one. Edit before publishing.`
+          : "No comparable carries a list price yet, so there is nothing to seed this from.",
+    },
     totalSelected: comps.length,
     pricePerSqft: medianPpsf === null ? null : Math.round(medianPpsf * 100) / 100,
     sizedCount: allPpsf.length,
