@@ -10708,6 +10708,123 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
     catch (err) {
         console.warn("[lead-metrics] outreach unavailable:", err);
     }
+    /* ── the facts the Filter Leads panel runs on ─────────────────────────
+       All of these are per-lead and all come from stores this system already
+       writes. They ride along with the metrics rather than becoming six more
+       endpoints: the filter panel needs every one of them at once, and six
+       round trips would show the operator a panel that fills in piecemeal. */
+    try {
+        const cma = await Promise.resolve().then(() => __importStar(require("./core/cmaStore.js")));
+        for (const sess of cma.listSessions({ limit: 500 })) {
+            if (!sess.leadId)
+                continue;
+            const row = touch(sess.leadId);
+            row.cmaCount = Number(row.cmaCount || 0) + 1;
+            if (sess.status === "published")
+                row.cmaPublished = Number(row.cmaPublished || 0) + 1;
+        }
+    }
+    catch (err) {
+        console.warn("[lead-metrics] CMAs unavailable:", err);
+    }
+    try {
+        const outreach = await Promise.resolve().then(() => __importStar(require("./core/outreachStore.js")));
+        /* "Last Market Report View" is the client OPENING the report page, which
+           this system measures itself with its own view counter — not an email
+           open, which Gmail does not report. */
+        for (const r of outreach.listReports()) {
+            if (!r.lastViewedAt)
+                continue;
+            const row = touch(r.leadId);
+            const cur = row.lastReportViewAt || null;
+            if (!cur || r.lastViewedAt > cur)
+                row.lastReportViewAt = r.lastViewedAt;
+        }
+    }
+    catch (err) {
+        console.warn("[lead-metrics] report views unavailable:", err);
+    }
+    try {
+        const cr = await Promise.resolve().then(() => __importStar(require("./core/contactRecordStore.js")));
+        const snap = await (0, db_js_1.getDashboardSnapshot)();
+        for (const lead of snap.leads) {
+            const phones = cr.listPhones(lead.id);
+            const agreements = cr.listAgreements(lead.id);
+            const team = cr.listAssignments(lead.id);
+            if (!phones.length && !agreements.length && !team.length)
+                continue;
+            const row = touch(lead.id);
+            if (phones.length) {
+                /* DNC is a legal flag a human set on a row. It is never inferred, and
+                   a number nobody has checked is "not marked", not "cleared to call". */
+                row.phoneCount = phones.length;
+                row.phoneDnc = phones.some((p) => p.dnc);
+                row.phoneAllDnc = phones.every((p) => p.dnc);
+            }
+            if (agreements.length) {
+                row.agreementTypes = Array.from(new Set(agreements.map((a) => a.kind)));
+                /* Active vs expired is derived from the agreement's OWN dates, not from
+                   a status column it does not have: expired means an expiration date
+                   that has passed. Anything else stays "active" only if the row says so. */
+                const today = new Date().toISOString().slice(0, 10);
+                row.agreementStatuses = Array.from(new Set(agreements.map((a) => !a.isActive ? "inactive" : a.expirationDate && a.expirationDate < today ? "expired" : "active")));
+            }
+            if (team.length)
+                row.collaborators = team.map((t) => t.userId);
+        }
+    }
+    catch (err) {
+        console.warn("[lead-metrics] contact record facets unavailable:", err);
+    }
+    try {
+        const { getTasks } = await Promise.resolve().then(() => __importStar(require("./core/tasks.js")));
+        const now = Date.now();
+        for (const t of getTasks()) {
+            if (!t.leadId || t.type !== "appointment")
+                continue;
+            const row = touch(t.leadId);
+            const st = row.appointmentStatuses || [];
+            const status = t.appointmentStatus || "scheduled";
+            if (st.indexOf(status) < 0)
+                st.push(status);
+            row.appointmentStatuses = st;
+            const due = t.dueDate ? Date.parse(t.dueDate) : NaN;
+            if (Number.isFinite(due)) {
+                row.appointmentCount = Number(row.appointmentCount || 0) + 1;
+                if (due >= now) {
+                    const cur = row.nextAppointmentAt || null;
+                    if (!cur || t.dueDate < cur)
+                        row.nextAppointmentAt = t.dueDate;
+                }
+                else {
+                    const cur = row.lastAppointmentAt || null;
+                    if (!cur || t.dueDate > cur)
+                        row.lastAppointmentAt = t.dueDate;
+                }
+            }
+        }
+    }
+    catch (err) {
+        console.warn("[lead-metrics] appointments unavailable:", err);
+    }
+    try {
+        const sms = await Promise.resolve().then(() => __importStar(require("./core/smsStore.js")));
+        const db = sms.getSmsDb();
+        for (const r of db
+            .prepare(`SELECT lead_id, direction, COUNT(*) n FROM sms_threads GROUP BY lead_id, direction`)
+            .all()) {
+            if (!r.lead_id)
+                continue;
+            const row = touch(String(r.lead_id));
+            if (String(r.direction) === "outbound")
+                row.textsSent = Number(r.n) || 0;
+            else
+                row.textsReceived = Number(r.n) || 0;
+        }
+    }
+    catch (err) {
+        console.warn("[lead-metrics] SMS counts unavailable:", err);
+    }
     res.json({
         metrics,
         count: Object.keys(metrics).length,
@@ -10718,7 +10835,12 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
             { field: "views", label: "Views", reason: "No website visit tracking is connected." },
             { field: "avgViewPrice", label: "Avg. View Price", reason: "Needs viewed-listing history, which the site does not send." },
             { field: "lastViewed", label: "Last Viewed", reason: "Needs viewed-listing history, which the site does not send." },
-            { field: "cma", label: "CMA", reason: "No CMA generation is wired into this CRM yet." },
+            /* The CMA entry that used to sit here is gone — CMAs are real now and
+               `cmaCount` above is a live number. */
+            { field: "phoneLineType", label: "Landline / VoIP / mobile",
+                reason: "Detecting a line type needs a carrier lookup (Twilio Lookup line-type intelligence), which is a paid per-number API and is not enabled on this account. Nothing here guesses it from the area code." },
+            { field: "dncRegistry", label: "National DNC registry",
+                reason: "The DNC flag on a phone row is set by a human and is trusted as such. This system does not subscribe to the federal registry, so an unmarked number means 'nobody has checked', not 'cleared to call'." },
         ],
     });
 });

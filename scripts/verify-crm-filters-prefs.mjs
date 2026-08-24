@@ -125,7 +125,8 @@ try {
   await page.click("#lFilterBtn");
   await page.waitForSelector("#afScrim.on");
   ok("filter drawer opens", true);
-  await page.check('input[data-afk="leadType"][data-afv="seller"]');
+  /* Intention became a BUTTON row (the meeting's ask), not a checkbox list. */
+  await page.click('button[data-afb="leadType"][data-afbv="seller"]');
   await page.click("#afApply");
   await page.waitForFunction(() => document.querySelectorAll("#leadRows tr").length === 1);
   const nm = await page.textContent("#leadRows tr .lead-name");
@@ -153,6 +154,8 @@ try {
   await page.click("#lFilterBtn");
   await page.waitForSelector("#afScrim.on");
   await page.click('.afg-h:has-text("Tags")');
+  /* Include Tags is a dropdown now; open it before ticking. */
+  await page.click('.afdd[data-afdd="tagsInc"] .afdd-b');
   const invSel = 'input[data-afk="tagsInc"][data-afv="Investor"]';
   const hasTagOpt = await page.$(invSel);
   ok("Investor tag offered from lead data", !!hasTagOpt);
@@ -172,7 +175,7 @@ try {
   await page.waitForSelector("#peopleRows tr");
   await page.click("#pFilterBtn");
   await page.waitForSelector("#afScrim.on");
-  await page.check('input[data-afk="leadType"][data-afv="seller"]');
+  await page.click('button[data-afb="leadType"][data-afbv="seller"]');
   await page.click("#afApply");
   await page.waitForFunction(() => document.querySelectorAll("#peopleRows tr").length === 1);
   ok("People table honors the same filter", true);
@@ -266,6 +269,148 @@ try {
     const snap3 = await J(await fetch(B + "/api/dashboard/data"));
     ok("birthdate edit persisted as ISO", snap3.leads.find((l) => l.id === "lead_3").birthday === "1985-07-04",
       JSON.stringify(snap3.leads.find((l) => l.id === "lead_3").birthday));
+  }
+
+  /* ═══════════ the 24 August meeting's changes ═══════════ */
+
+  /* Rows per page. Was a hard-coded 10 — 1,300 live leads across 130 pages. */
+  await page.click('.rail .r[data-view="leads"]');
+  await page.waitForSelector("#leadRows tr");
+  ok("a rows-per-page control exists on the pager", !!(await page.$("#perPageSel")));
+  ok("and it defaults to 50, not 10", (await page.inputValue("#perPageSel")) === "50",
+    await page.inputValue("#perPageSel"));
+  const perOpts = await page.$$eval("#perPageSel option", (n) => n.map((o) => o.value));
+  ok("offering 25 / 50 / 100", perOpts.join(",") === "25,50,100", perOpts.join(","));
+
+  /* The filter panel: checkboxes became dropdowns and buttons. */
+  await page.click("#lFilterBtn");
+  await page.waitForSelector("#afScrim.on");
+  for (const k of ["status", "stage", "assigned", "source", "tagsInc", "tagsExc"]) {
+    ok(`${k} is a dropdown now, not a checkbox wall`, !!(await page.$(`.afdd[data-afdd="${k}"]`)));
+  }
+  for (const k of ["record", "leadType", "collaborators", "apptStatus", "agreementType", "agreementStatus"]) {
+    ok(`${k} is a button row`, !!(await page.$(`button[data-afb="${k}"]`)));
+  }
+
+  /* Intention: the four options this CRM has no field for are refused with a
+     reason rather than offered as filters that would match nothing. */
+  const intentBtns = await page.$$eval('button[data-afb="leadType"]', (n) => n.map((b) => b.textContent.trim()));
+  ok("Intention offers Seller, Buyer and Not Applicable",
+    intentBtns.join(",") === "Seller,Buyer,Not Applicable", intentBtns.join(","));
+  const genTxt = await page.textContent('.afg[data-afgk="General"]');
+  ok("and says why Tenant / Landlord / Recruit / Candidate are not there",
+    /not fields on a contact in this CRM/.test(genTxt));
+
+  /* Tags gained Any/All on both include and exclude. */
+  ok("Include Tags has an Any/All switch", !!(await page.$('button[data-afaa="tagsIncMode"]')));
+  ok("Exclude Tags has one too", !!(await page.$('button[data-afaa="tagsExcMode"]')));
+  ok("Any is the default", await page.$eval('button[data-afaa="tagsIncMode"][data-afaav="any"]',
+    (b) => b.classList.contains("on")));
+
+  /* Auto Plans: "Specific Plan" became "Auto Plan Name" plus status buttons. */
+  const apTxt = await page.textContent('.afg[data-afgk="AutoPlans"]');
+  ok("Auto Plans names the plan field per the meeting", /Auto Plan Name/.test(apTxt), apTxt.slice(0, 120));
+  const apStat = await page.$$eval('button[data-afo="autoPlanStatus"]', (n) => n.map((b) => b.textContent.trim()));
+  ok("with the meeting's status buttons",
+    apStat.join(",") === "Any,Applied,Running,Paused,Completed", apStat.join(","));
+  /* Deleted was on the list and has no state to filter on here. */
+  ok("and Deleted is refused with its reason, not silently dropped",
+    /removing a contact from a plan drops the enrollment/.test(apTxt));
+
+  /* Reports: Last Market Report View. */
+  const rvBtns = await page.$$eval('button[data-afo="reportView"]', (n) => n.map((b) => b.textContent.trim()));
+  ok("Last Market Report View offers the date windows and Never",
+    rvBtns.includes("Today") && rvBtns.includes("Last 30 days") && rvBtns.includes("Never"), rvBtns.join(","));
+  ok("and says a view is a page open, not an email open",
+    /not an email open/i.test(await page.textContent('.afg[data-afgk="Reports"]')));
+
+  /* Contact Info gained Communication, Text Status, Phone Status, Address. */
+  ok("Communication filter exists", !!(await page.$('button[data-afo="comms"]')));
+  ok("Text Status filter exists", !!(await page.$('button[data-afo="textStatus"]')));
+  ok("Phone Status filter exists", !!(await page.$('button[data-afo="phoneStatus"]')));
+  ok("Home Address Location search exists", !!(await page.$("input[data-afaddr]")));
+  const ciTxt = await page.textContent('.afg[data-afgk="ContactInfo"]');
+  /* The meeting asked for landline/VoIP/DNC detection. That needs a paid
+     carrier lookup that is not enabled, and guessing from an area code would
+     be worse than not offering it. */
+  ok("landline / VoIP detection is refused with its reason",
+    /does not detect landline or VoIP/.test(ciTxt), ciTxt.slice(0, 200));
+  ok("and the DNC flag is described as human-set, not registry-checked",
+    /flag a human set/.test(ciTxt));
+  ok("the address search says it does not call the MLS", /No MLS call is involved/.test(ciTxt));
+
+  /* Appointments and Agreements are new groups. */
+  const apptTxt = await page.textContent('.afg[data-afgk="AppointmentsTasks"]');
+  ok("Appointments has status buttons and a date range",
+    /Set \/ Scheduled/.test(apptTxt) && !!(await page.$('input[data-afd="apptFrom"]')), apptTxt.slice(0, 120));
+  ok("Tasks offers Non-created / Overdue / Upcoming",
+    /Non-created/.test(apptTxt) && /Overdue/.test(apptTxt) && /Upcoming/.test(apptTxt));
+  ok("an Agreements group exists", !!(await page.$('.afg[data-afgk="Agreements"]')));
+  ok("with Buyer / Seller / Referral types",
+    (await page.$$eval('button[data-afb="agreementType"]', (n) => n.map((b) => b.textContent.trim()))).join(",")
+      === "Buyer,Seller,Referral");
+
+  /* Web Activity stays disabled — pointing it at the IDX needs a feed that
+     does not exist, and the panel must say that rather than run on nothing. */
+  ok("Web Activity says what connecting the IDX would take",
+    /no such feed exists yet/.test(await page.textContent('.afg[data-afgk="WebActivity"]')));
+
+  /* Archive / Trash. */
+  const statusOpts = await page.$$eval('.afdd[data-afdd="status"] .afopt', (n) => n.map((e) => e.textContent.trim()));
+  ok("Lead Status offers Archive and Trash",
+    statusOpts.includes("Archive") && statusOpts.includes("Trash"), statusOpts.join(","));
+  await page.click("#afClose");
+  await page.waitForTimeout(200);
+
+  /* Archiving a lead removes it from the default view WITHOUT deleting it. */
+  await fetch(B + "/api/crm/lead/lead_4", {
+    method: "PATCH", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ crmStatus: "archived" }),
+  });
+  const arch = await J(await fetch(B + "/api/dashboard/data"));
+  ok("the API accepts 'archived' as a status",
+    arch.leads.find((l) => l.id === "lead_4").crmStatus === "archived",
+    arch.leads.find((l) => l.id === "lead_4").crmStatus);
+  /* The record is still there — that was the explicit requirement. */
+  ok("and the lead still exists in full", !!arch.leads.find((l) => l.id === "lead_4").name);
+
+  /* The sort fix. A column whose values mix numbers and strings used to
+     compare as equal in both directions, so those rows never moved. */
+  const sorted = await page.evaluate(() => {
+    const rows = [
+      { id: "a", name: "Zed" }, { id: "b", name: "" }, { id: "c", name: "alpha" }, { id: "d", name: "Mid" },
+    ];
+    window.TABLE_PREFS = window.TABLE_PREFS || {};
+    window.TABLE_PREFS.t = { hidden: [], order: [], sortField: "name", sortDir: 1 };
+    const asc = sortRows(rows, "t").map((r) => r.id).join("");
+    window.TABLE_PREFS.t.sortDir = -1;
+    const desc = sortRows(rows, "t").map((r) => r.id).join("");
+    return { asc, desc };
+  });
+  ok("ascending sorts case-insensitively", sorted.asc.startsWith("cd"), JSON.stringify(sorted));
+  ok("descending actually reverses it", sorted.desc.startsWith("ad"), JSON.stringify(sorted));
+  /* Blanks sank in BOTH directions — the old sentinel floated them to the top
+     on reverse and buried whatever was being looked for. */
+  ok("and blanks stay last whichever way it points",
+    sorted.asc.endsWith("b") && sorted.desc.endsWith("b"), JSON.stringify(sorted));
+
+  /* The CMA column. */
+  const cmaTh = await page.$('#view-leads th[data-sortk="cma"]');
+  ok("CMA is a selectable, sortable column", !!cmaTh);
+
+  if (process.env.SHOT_DIR) {
+    const D = process.env.SHOT_DIR;
+    await page.setViewportSize({ width: 1500, height: 1000 });
+    await page.click("#lFilterBtn");
+    await page.waitForSelector("#afScrim.on");
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: D + "/flt-01-panel.png" });
+    await page.click('.afdd[data-afdd="status"] .afdd-b');
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: D + "/flt-02-dropdown.png" });
+    await page.click("#afClose");
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: D + "/flt-03-leads.png" });
   }
 
   ok("no page errors", errs.length === 0, errs.slice(0, 3).join(" | "));

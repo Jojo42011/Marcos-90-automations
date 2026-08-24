@@ -1,7 +1,16 @@
 import type { FunnelStage } from "./state.js";
 import type { MessageChannel } from "./messageChannels.js";
 
-export type CrmStatus = "new" | "hot" | "nurture" | "watch" | "dead" | "unresponsive";
+/**
+ * `archived` and `trashed` were added 2026-08-24 at the operator's request.
+ *
+ * A lead is NEVER deleted here — that was explicit. Trash is a status, not a
+ * removal: the record, its history and its transactions all stay, and the
+ * lead table simply stops showing it by default. That way "we trashed it by
+ * mistake" is one dropdown change rather than a restore from backup.
+ */
+export type CrmStatus =
+  | "new" | "hot" | "nurture" | "watch" | "dead" | "unresponsive" | "archived" | "trashed";
 
 /** Legacy status strings (pipeline / old DB rows) — normalized on read in db. */
 export type CrmStatusLegacy = "not_contacted" | "contacted";
@@ -9,7 +18,9 @@ export type CrmStatusLegacy = "not_contacted" | "contacted";
 export type CrmStatusValue = CrmStatus | CrmStatusLegacy;
 
 /** Valid CRM status values (dashboard + API). */
-export const CRM_STATUSES: CrmStatus[] = ["new", "hot", "nurture", "watch", "dead", "unresponsive"];
+export const CRM_STATUSES: CrmStatus[] = [
+  "new", "hot", "nurture", "watch", "dead", "unresponsive", "archived", "trashed",
+];
 export type CrmStage =
   | "new"
   | "hot"

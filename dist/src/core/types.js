@@ -2,7 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MARCO_TASK_STATUSES = exports.SELLER_STAGES = exports.BUYER_STAGES = exports.TRACKER_STATUSES = exports.COMMAND_TASK_STATUSES = exports.CRM_TASK_STATUSES = exports.ROLE_PERMISSIONS = exports.CRM_STAGES = exports.CRM_STATUSES = void 0;
 /** Valid CRM status values (dashboard + API). */
-exports.CRM_STATUSES = ["new", "hot", "nurture", "watch", "dead", "unresponsive"];
+exports.CRM_STATUSES = [
+    "new", "hot", "nurture", "watch", "dead", "unresponsive", "archived", "trashed",
+];
 exports.CRM_STAGES = [
     "new",
     "hot",

@@ -84,8 +84,23 @@ try {
     ok("the website-behaviour fields are the ones declared unavailable",
       ["lastVisit", "visits", "views", "avgViewPrice", "lastViewed", "homeApp"].every((f) => fields.includes(f)),
       JSON.stringify(fields));
+    /* Checks that each reason is a real explanation rather than matching a
+       fixed vocabulary — the old keyword list went stale the moment a new gap
+       was declared, which is exactly what a check like this must not do. */
     ok("each carries a reason a person could act on",
-      (m.unavailable || []).every((u) => /tracking|history|app|CMA/i.test(u.reason)));
+      (m.unavailable || []).every((u) =>
+        typeof u.reason === "string" &&
+        u.reason.length >= 30 &&
+        u.reason.trim().toLowerCase() !== String(u.label || "").trim().toLowerCase()),
+      JSON.stringify((m.unavailable || []).filter((u) => !u.reason || u.reason.length < 30).map((u) => u.field)));
+    /* The two gaps the 24 August meeting asked about specifically. */
+    const byField = Object.fromEntries((m.unavailable || []).map((u) => [u.field, u.reason]));
+    ok("landline / VoIP detection is declared unavailable with what it would take",
+      /carrier lookup/i.test(byField.phoneLineType || ""), byField.phoneLineType);
+    ok("and the DNC flag is described as human-set, not registry-checked",
+      /set by a human/i.test(byField.dncRegistry || ""), byField.dncRegistry);
+    /* CMAs are real now, so the stale "no CMA generator" entry must be gone. */
+    ok("CMA is no longer declared unavailable", !("cma" in byField), JSON.stringify(Object.keys(byField)));
   }
 
   /* ═══════════ the real page in a real browser ═══════════ */

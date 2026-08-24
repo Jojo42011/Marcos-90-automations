@@ -347,6 +347,32 @@
   .afopt input{accent-color:var(--teal)}
   .afopt.dis{color:#b6bec6;cursor:not-allowed}
   .aflab{font-size:11px;font-weight:700;color:#7d8894;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.4px}
+  /* Filter panel: dropdowns and button rows replace the checkbox walls. */
+  .afdd{position:relative;margin:4px 0 10px}
+  .afdd-b{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 10px;
+    font-size:12.5px;color:#5b6570;cursor:pointer;text-align:left}
+  .afdd-b:hover{border-color:var(--teal)}
+  .afdd-b.on{border-color:var(--teal);color:var(--teal-strong);font-weight:600}
+  .afdd-b span{color:#9aa4ae;font-size:10px}
+  .afdd-m{display:none;position:absolute;z-index:5;left:0;right:0;top:calc(100% + 3px);
+    background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);
+    max-height:230px;overflow:auto;padding:4px}
+  .afdd.open .afdd-m{display:block}
+  .afdd-m .afopt{display:block;padding:5px 8px;border-radius:4px;font-size:12.5px}
+  .afdd-m .afopt:hover{background:#f4f9f9}
+  .afbtns{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+  .afbtns button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;
+    font-size:11.5px;font-weight:700;color:#5b6570;cursor:pointer}
+  .afbtns button:hover{border-color:var(--teal)}
+  .afbtns button.on{background:var(--teal);border-color:var(--teal);color:#fff}
+  .afaa{display:flex;align-items:center;gap:6px;margin:-4px 0 10px;font-size:11px;color:#8a939c}
+  .afaa button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:2px 10px;
+    font-size:10.5px;font-weight:700;color:#5b6570;cursor:pointer}
+  .afaa button.on{background:var(--teal);border-color:var(--teal);color:#fff}
+  .afd-body input[type=text]{width:100%;border:1px solid var(--line);border-radius:6px;
+    padding:7px 10px;font-size:12.5px;color:var(--ink);outline:none}
+  .afd-body input[type=text]:focus{border-color:var(--teal)}
   .aftri{display:flex;gap:6px;margin:4px 0 8px}
   .aftri button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;color:#5b6570;cursor:pointer}
   .aftri button.on{background:var(--teal);border-color:var(--teal);color:#fff}
@@ -1253,6 +1279,7 @@
               <th class="sortcol" data-sortk="avg_fav_price">Avg. Fav. Price</th>
               <th class="sortcol" data-sortk="listing_alerts">Listing Alerts</th>
               <th class="sortcol" data-sortk="market_reports">Market Reports</th>
+              <th class="sortcol" data-sortk="cma">CMA</th>
               <th class="sortcol" data-sortk="last_sent">Last Sent</th>
               <th>Tag</th>
             </tr></thead>
@@ -1597,7 +1624,7 @@ const SOURCES=["Mojo","Zillow","Website IDX","Home Valuation","Realtor.com","Ope
 const STATUSES=["hot","nurture","unqualified","new","hot","nurture"];
 const STAGES=["new_lead","attempted_contact","spoke_with","appointment_set","attempted_contact","new_lead"];
 const STAGE_LABEL={new_lead:"NEW LEAD",attempted_contact:"ATTEMPTED CONTACT",spoke_with:"SPOKE WITH",appointment_set:"APPOINTMENT SET",met_with:"MET WITH"};
-const STATUS_META={new:{l:"NEW",c:"var(--st-new)"},hot:{l:"HOT",c:"var(--st-hot)"},nurture:{l:"NURTURE",c:"var(--st-nurture)"},unqualified:{l:"UNQUALIFIED",c:"var(--st-unq)"},watch:{l:"WATCH",c:"var(--st-watch)"}};
+const STATUS_META={new:{l:"NEW",c:"var(--st-new)"},hot:{l:"HOT",c:"var(--st-hot)"},nurture:{l:"NURTURE",c:"var(--st-nurture)"},unqualified:{l:"UNQUALIFIED",c:"var(--st-unq)"},watch:{l:"WATCH",c:"var(--st-watch)"},archived:{l:"ARCHIVE",c:"#8a939c"},trashed:{l:"TRASH",c:"#b4707a"}};
 const LASTLAB=["Texted","Call Logged","Emailed","Text Received","Appointment"];
 const N=54;
 let LEADS=[];
@@ -1772,7 +1799,7 @@ function hitRow(o){ if(!SEARCH)return true; return (_q(o.name)+" "+_q(o.address)
    var hoisting makes it visible here). Header clicks and the SORT BY pill
    write the same state, so they can never disagree. No column chosen falls
    back to the legacy pill default (recent / name A-Z). */
-var STATUS_ORDER={new:0,hot:1,nurture:2,watch:3,unqualified:4,dead:4,unresponsive:5,past_client:6,archived:7};
+var STATUS_ORDER={new:0,hot:1,nurture:2,watch:3,unqualified:4,dead:4,unresponsive:5,past_client:6,archived:7,trashed:8};
 var STAGE_ORDER={"NEW LEAD":0,"ATTEMPTED CONTACT":1,"APPOINTMENT SET":2,"SHOWING SET":3,"PENDING":4,"UNDER CONTRACT":5,"CLOSED":6};
 function mdySortable(v){ var m=/^(\d{2})-(\d{2})-(\d{4})$/.exec(String(v||"")); return m?(m[3]+m[1]+m[2]):""; }
 /**
@@ -1795,7 +1822,10 @@ var SORT_MISSING_NUM=-1, SORT_MISSING_TXT="\uffff";
 function sortKeyVal(l,k){
   if(k==="first_name")return nameParts(l).first;
   if(k==="last_name")return nameParts(l).last;
-  if(k==="agent")return String(l.assignedUserName||l.assignedUserId||SORT_MISSING_TXT).toLowerCase();
+  /* One branch, not two: a second `k==="agent"` further down was unreachable,
+     so the transactions table's own agent column silently sorted on the lead's
+     assigned user instead of the deal's agent. */
+  if(k==="agent")return String(l.assignedUserName||l.assignedUserId||l.agent||SORT_MISSING_TXT).toLowerCase();
   if(k==="autoplans"){
     var en=l.autoPlanEnrollments||[];
     if(!en.length)return SORT_MISSING_TXT;
@@ -1806,6 +1836,7 @@ function sortKeyVal(l,k){
   if(k==="avg_fav_price")return leadMetric(l.id,"avgFavPrice")!=null?+leadMetric(l.id,"avgFavPrice"):SORT_MISSING_NUM;
   if(k==="listing_alerts")return leadMetric(l.id,"listingAlerts")!=null?+leadMetric(l.id,"listingAlerts"):SORT_MISSING_NUM;
   if(k==="market_reports")return leadMetric(l.id,"marketReports")!=null?+leadMetric(l.id,"marketReports"):SORT_MISSING_NUM;
+  if(k==="cma")return leadMetric(l.id,"cmaCount")!=null?+leadMetric(l.id,"cmaCount"):SORT_MISSING_NUM;
   if(k==="hot_score")return leadMetric(l.id,"hotScore")!=null?+leadMetric(l.id,"hotScore"):SORT_MISSING_NUM;
   if(k==="last_sent")return new Date(leadMetric(l.id,"lastSentAt")||0).getTime();
   if(k==="last_opened_alerts")return new Date(leadMetric(l.id,"lastOpenedAlertAt")||0).getTime();
@@ -1829,20 +1860,53 @@ function sortKeyVal(l,k){
   if(k==="date_listed")return mdySortable(l.dateListed);
   if(k==="expiration")return mdySortable(l.expiration);
   if(k==="last_updated")return mdySortable(l.lastUpdated);
-  if(k==="agent")return String(l.agent||"").toLowerCase();
   return 0;
 }
 function sortStateFor(tkey){
   var p=(typeof TABLE_PREFS==="object"&&TABLE_PREFS[tkey])||null;
   return p?{field:p.sortField||null,dir:p.sortDir===-1?-1:1}:{field:null,dir:1};
 }
+/**
+ * Compare two column values.
+ *
+ * TWO BUGS THIS FIXES, both of which read to the operator as "sort is broken":
+ *
+ *  1. MIXED TYPES. `sortKeyVal` returns a number for some rows and a string for
+ *     others in the same column — `status` is a rank when the status is known
+ *     and a raw string when it is not. `3 < "unknown"` and `3 > "unknown"` are
+ *     BOTH false in JavaScript, so the comparator called them equal and those
+ *     rows never moved, in either direction.
+ *  2. BLANKS FLIPPING TO THE TOP. Missing values were sentinels ("\uffff", -1)
+ *     that sort like ordinary data, so reversing the direction floated every
+ *     empty row to the top and buried the rows being looked for.
+ *
+ * So: types are normalised per comparison, and missing values always sink,
+ * whichever way the column is pointing.
+ */
+function sortMissing(v){
+  return v==null||v===""||v===SORT_MISSING_TXT||v===SORT_MISSING_NUM;
+}
+function sortCmp(vx,vy,d){
+  var mx=sortMissing(vx), my=sortMissing(vy);
+  if(mx&&my)return 0;
+  if(mx)return 1;          // blanks last, ascending or descending
+  if(my)return -1;
+  if(typeof vx==="number"&&typeof vy==="number"){
+    return vx<vy?-1*d:vx>vy?1*d:0;
+  }
+  /* One of them is not a number: compare both as text so the pair is
+     always comparable, and use localeCompare so "Álvarez" lands where a
+     person expects rather than after "Z". */
+  var sx=String(vx), sy=String(vy);
+  var r=sx.localeCompare(sy,undefined,{numeric:true,sensitivity:"base"});
+  return r<0?-1*d:r>0?1*d:0;
+}
 function sortRows(a,tkey){
   var st=sortStateFor(tkey||"leads");
   if(st.field){
     var k=st.field,d=st.dir;
     return a.slice().sort(function(x,y){
-      var vx=sortKeyVal(x,k),vy=sortKeyVal(y,k);
-      if(vx<vy)return -1*d; if(vx>vy)return 1*d; return 0;
+      return sortCmp(sortKeyVal(x,k),sortKeyVal(y,k),d);
     });
   }
   return leadSort==="name"
@@ -2494,7 +2558,19 @@ function openThread(i){ openConvIdx=i; pendingAttachments=[]; renderConvos(); pa
 }
 
 /* leads table */
-let page=1;const PER=10;
+let page=1;
+/* Rows per page. Was a hard-coded 10, which meant 1,300 live leads across 130
+   pages; the meeting asked for 50-100. Default is 50, the operator can pick,
+   and the choice is remembered per browser. */
+var PER_CHOICES=[25,50,100];
+var PER=50;
+try{ var savedPer=+localStorage.getItem("crmPerPage"); if(PER_CHOICES.indexOf(savedPer)>=0)PER=savedPer; }catch(_){}
+function setPerPage(n){
+  if(PER_CHOICES.indexOf(n)<0)return;
+  PER=n; page=1; pPage=1;
+  try{ localStorage.setItem("crmPerPage",String(n)); }catch(_){}
+  renderLeads(); renderPeople();
+}
 /*
  * Cells for the engagement columns. These are joined in from
  * /api/crm/lead-metrics rather than the lead snapshot, so before that arrives
@@ -2512,18 +2588,22 @@ function metricCells(l){
       afp=leadMetric(l.id,"avgFavPrice"), al=leadMetric(l.id,"listingAlerts"),
       mr=leadMetric(l.id,"marketReports"), ls=leadMetric(l.id,"lastSentAt");
   var cell=function(html){ return '<td class="mut-cell">'+(pending?'<span style="color:#c2cad1">…</span>':html)+'</td>'; };
+  var cm=leadMetric(l.id,"cmaCount"), cmp=leadMetric(l.id,"cmaPublished");
   return cell(hs!=null?String(hs):"-")+
     cell(fav!=null&&fav>0?String(fav):"-")+
     cell(fmtMoney(afp))+
     cell(al!=null&&al>0?String(al):"-")+
     cell(mr!=null&&mr>0?String(mr):"-")+
+    /* Built vs published are different claims — a draft CMA has not been shown
+       to anybody, so the count says so rather than implying delivery. */
+    cell(cm!=null&&cm>0?(String(cm)+(cmp?' <span style="color:#3fb27f" title="'+cmp+' published">•</span>':"")):"-")+
     cell(fmtDay(ls));
 }
 
 /* New columns arrive hidden. They are real, but adding seven columns to a
    table the team already works from every day would rearrange everyone's view
    without being asked; the Columns picker is where they get turned on. */
-var DEFAULT_HIDDEN_COLS={leads:["hot_score","favorites","avg_fav_price","listing_alerts","market_reports","last_sent","tag"]};
+var DEFAULT_HIDDEN_COLS={leads:["hot_score","favorites","avg_fav_price","listing_alerts","market_reports","cma","last_sent","tag"]};
 function seedDefaultHidden(tkey){
   var p=tblPrefs(tkey);
   if(p._seeded)return; p._seeded=true;
@@ -2535,7 +2615,13 @@ function renderLeads(){
   document.getElementById("lnAll").textContent=LEADS.length.toLocaleString();
   document.getElementById("lnIdx").textContent=LEADS.filter(l=>l.source==="Website IDX").length;
   const zEl=document.getElementById("lnZillow"); if(zEl) zEl.textContent=LEADS.filter(l=>/zillow/i.test(l.source||"")).length;
-  const src=sortRows(LEADS.filter(leadBucketPred).filter(leadSmartPred).filter(advPred).filter(hitRow),"leads");
+  /* Archived and trashed contacts drop out of the default view but are NOT
+     gone: filter for that status and they come straight back. Nothing here
+     deletes a record. */
+  const hidingParked=!(ADV&&ADV.status&&(ADV.status.indexOf("archived")>=0||ADV.status.indexOf("trashed")>=0));
+  const src=sortRows(LEADS
+    .filter(l=>!hidingParked||["archived","trashed"].indexOf(l.statusDisp||l.crmStatus)<0)
+    .filter(leadBucketPred).filter(leadSmartPred).filter(advPred).filter(hitRow),"leads");
   const total=src.length;
   document.getElementById("ltCount").textContent="("+total.toLocaleString()+")";
   const pages=Math.max(1,Math.ceil(total/PER));
@@ -2570,8 +2656,13 @@ function renderLeads(){
   const nums=[];for(let p=1;p<=Math.min(5,pages);p++)nums.push(p);if(pages>5){nums.push("…");nums.push(pages);}
   pg+=nums.map(p=>p==="…"?'<span style="padding:0 4px;color:#7a8590">…</span>':'<button class="'+(p===page?"on":"")+'" data-p="'+p+'">'+p+'</button>').join("");
   pg+='<button '+(page>=pages?'disabled':'')+' data-p="'+(page+1)+'">›</button>';
+  pg+='<span class="perpage">Rows <select id="perPageSel">'+
+      PER_CHOICES.map(function(n){return '<option value="'+n+'"'+(n===PER?" selected":"")+'>'+n+'</option>';}).join("")+
+      '</select></span>';
   document.getElementById("pager").innerHTML=pg;
   document.querySelectorAll("#pager button[data-p]").forEach(b=>b.addEventListener("click",()=>{const p=+b.dataset.p;if(p>=1&&p<=pages){page=p;renderLeads();document.querySelector(".tbl-scroll").scrollTop=0;}}));
+  var perSel=document.getElementById("perPageSel");
+  if(perSel)perSel.addEventListener("change",function(){ setPerPage(+perSel.value); });
   seedDefaultHidden("leads");
   if(typeof applyColPrefs==="function")applyColPrefs(document.querySelector("#view-leads table.leads"),"leads");
   // If any engagement column is visible, it needs real numbers behind it.
@@ -3773,12 +3864,29 @@ var ADV=null;         // committed filter (null = nothing active)
 var ADV_DRAFT=null;   // edited in the drawer, committed on APPLY
 var ADV_SRC={loaded:false,tags:[],plans:[],roster:[],tasksByLead:null,tasksErr:false};
 var ADV_OPEN={};   // which drawer groups are expanded, survives panel rebuilds
-function advBlank(){return {leadType:[],record:[],status:[],stage:[],assigned:[],source:[],tagsInc:[],tagsExc:[],autoPlan:"",alerts:"",reports:"",hasEmail:null,hasPhone:null,hasAddress:null,addedFrom:"",addedTo:"",lastFrom:"",lastTo:"",birthdayMonth:0,annivMonth:0,tasks:""};}
+function advBlank(){return {
+  leadType:[],record:[],status:[],stage:[],assigned:[],source:[],collaborators:[],
+  tagsInc:[],tagsExc:[],tagsIncMode:"any",tagsExcMode:"any",
+  autoPlan:"",autoPlanStatus:"",
+  alerts:"",reports:"",reportView:"",
+  hasEmail:null,hasPhone:null,hasAddress:null,
+  comms:"",textStatus:"",phoneStatus:"",addressQuery:"",
+  apptStatus:[],apptFrom:"",apptTo:"",
+  addedFrom:"",addedTo:"",lastFrom:"",lastTo:"",birthdayMonth:0,annivMonth:0,
+  tasks:"",agreementType:[],agreementStatus:[]
+};}
 function advActive(a){
   a=a||ADV; if(!a)return 0; var n=0;
-  ["leadType","record","status","stage","assigned","source","tagsInc","tagsExc"].forEach(function(k){n+=(a[k]&&a[k].length)?1:0;});
-  if(a.autoPlan)n++; if(a.alerts)n++; if(a.reports)n++; if(a.hasEmail!==null)n++; if(a.hasPhone!==null)n++; if(a.hasAddress!==null)n++;
-  if(a.addedFrom||a.addedTo)n++; if(a.lastFrom||a.lastTo)n++; if(a.birthdayMonth)n++; if(a.annivMonth)n++; if(a.tasks)n++;
+  ["leadType","record","status","stage","assigned","source","collaborators",
+   "tagsInc","tagsExc","apptStatus","agreementType","agreementStatus"]
+    .forEach(function(k){n+=(a[k]&&a[k].length)?1:0;});
+  ["autoPlan","autoPlanStatus","alerts","reports","reportView","comms","textStatus","phoneStatus","tasks"]
+    .forEach(function(k){ if(a[k])n++; });
+  if(a.hasEmail!==null)n++; if(a.hasPhone!==null)n++; if(a.hasAddress!==null)n++;
+  if(a.addressQuery)n++;
+  if(a.addedFrom||a.addedTo)n++; if(a.lastFrom||a.lastTo)n++;
+  if(a.apptFrom||a.apptTo)n++;
+  if(a.birthdayMonth)n++; if(a.annivMonth)n++;
   return n;
 }
 function advInRange(iso,from,to){
@@ -3808,13 +3916,44 @@ function advPred(row){
     if(!a.source.some(function(x){x=x.toLowerCase();return src===x||plat===x;}))return false;
   }
   var tags=row.tags||[];
-  if(a.tagsInc.length&&!a.tagsInc.some(function(t){return tags.indexOf(t)>=0;}))return false;
-  if(a.tagsExc.length&&a.tagsExc.some(function(t){return tags.indexOf(t)>=0;}))return false;
+  /* Any = at least one of the chosen tags; All = every one of them. The
+     meeting asked for both because "buyer OR investor" and "buyer AND
+     pre-approved" are different questions and one setting cannot answer both. */
+  if(a.tagsInc.length){
+    var hitInc=a.tagsIncMode==="all"
+      ? a.tagsInc.every(function(t){return tags.indexOf(t)>=0;})
+      : a.tagsInc.some(function(t){return tags.indexOf(t)>=0;});
+    if(!hitInc)return false;
+  }
+  if(a.tagsExc.length){
+    /* Exclude ALL means "drop only rows carrying every one of these"; exclude
+       ANY means "drop a row carrying any of them". */
+    var hitExc=a.tagsExcMode==="all"
+      ? a.tagsExc.every(function(t){return tags.indexOf(t)>=0;})
+      : a.tagsExc.some(function(t){return tags.indexOf(t)>=0;});
+    if(hitExc)return false;
+  }
+  if(a.collaborators.length){
+    var collab=leadMetric(row.id,"collaborators")||[];
+    if(!a.collaborators.some(function(u){return collab.indexOf(u)>=0;}))return false;
+  }
+  var en=row.autoPlanEnrollments||[];
   if(a.autoPlan){
-    var en=row.autoPlanEnrollments||[];
     if(a.autoPlan==="any"){ if(!en.length)return false; }
     else if(a.autoPlan==="none"){ if(en.length)return false; }
     else if(!en.some(function(e){return (e&&(e.planName||e.planId))===a.autoPlan||e===a.autoPlan;}))return false;
+  }
+  if(a.autoPlanStatus){
+    /* "Applied" is any enrollment at all; the rest are the enrollment's own
+       status. "Deleted" is a plan the contact was removed from, which this
+       system records by dropping the enrollment — so it is offered and
+       refused rather than silently matching nothing. */
+    if(a.autoPlanStatus==="applied"){ if(!en.length)return false; }
+    else if(!en.some(function(e){
+      var st=String((e&&e.status)||"active").toLowerCase();
+      if(a.autoPlanStatus==="running")return st==="active";
+      return st===a.autoPlanStatus;
+    }))return false;
   }
   if(a.record&&a.record.length){
     // "Complete" means the record can actually be worked: it has a name and at
@@ -3845,6 +3984,67 @@ function advPred(row){
     if(a.tasks==="overdue"&&!ts.overdue)return false;
     if(a.tasks==="due_today"&&!ts.dueToday)return false;
     if(a.tasks==="upcoming"&&!ts.upcoming)return false;
+  }
+  /* Last Market Report View — the client OPENING the report page, which this
+     system measures with its own counter. Not an email open: Gmail reports
+     none, and treating "not opened" as "never viewed" would be a fabrication. */
+  if(a.reportView){
+    var lv=leadMetric(row.id,"lastReportViewAt");
+    if(a.reportView==="never"){ if(lv)return false; }
+    else{
+      if(!lv)return false;
+      var days={today:1,d7:7,d30:30,d90:90}[a.reportView]||0;
+      if(days&&(Date.now()-new Date(lv).getTime())>days*86400000)return false;
+    }
+  }
+  if(a.comms){
+    var sent=+leadMetric(row.id,"textsSent")||0, got=+leadMetric(row.id,"textsReceived")||0;
+    var mailed=+leadMetric(row.id,"listingAlerts")||0, lastSent=leadMetric(row.id,"lastSentAt");
+    if(a.comms==="text_sent"&&!sent)return false;
+    if(a.comms==="no_text_sent"&&sent)return false;
+    if(a.comms==="text_received"&&!got)return false;
+    if(a.comms==="email_sent"&&!lastSent)return false;
+    if(a.comms==="no_email_sent"&&lastSent)return false;
+    void mailed;
+  }
+  if(a.textStatus){
+    var hasPhone=Boolean(row.phone&&String(row.phone).trim());
+    var allDnc=leadMetric(row.id,"phoneAllDnc")===true;
+    if(a.textStatus==="can"&&(!hasPhone||allDnc))return false;
+    if(a.textStatus==="opted_out"&&!allDnc)return false;
+    if(a.textStatus==="no_number"&&hasPhone)return false;
+  }
+  if(a.phoneStatus){
+    var hp=Boolean(row.phone&&String(row.phone).trim());
+    var anyDnc=leadMetric(row.id,"phoneDnc")===true;
+    if(a.phoneStatus==="can"&&(!hp||anyDnc))return false;
+    if(a.phoneStatus==="dnc"&&!anyDnc)return false;
+    if(a.phoneStatus==="no_number"&&hp)return false;
+  }
+  if(a.addressQuery){
+    /* City, ZIP or state, matched against the address already on the contact.
+       No MLS call is involved — this searches the CRM's own addresses, and the
+       panel says so, because "via the MLS" would imply a lookup that is not
+       happening. */
+    var hay=String(row.address||"").toLowerCase();
+    if(hay.indexOf(a.addressQuery.toLowerCase())<0)return false;
+  }
+  if(a.apptStatus.length){
+    var st2=leadMetric(row.id,"appointmentStatuses")||[];
+    if(a.apptStatus.indexOf("none")>=0){ if(st2.length)return false; }
+    else if(!a.apptStatus.some(function(x){return st2.indexOf(x)>=0;}))return false;
+  }
+  if(a.apptFrom||a.apptTo){
+    var nx=leadMetric(row.id,"nextAppointmentAt")||leadMetric(row.id,"lastAppointmentAt");
+    if(!advInRange(nx,a.apptFrom,a.apptTo))return false;
+  }
+  if(a.agreementType.length){
+    var at=leadMetric(row.id,"agreementTypes")||[];
+    if(!a.agreementType.some(function(x){return at.indexOf(x)>=0;}))return false;
+  }
+  if(a.agreementStatus.length){
+    var as2=leadMetric(row.id,"agreementStatuses")||[];
+    if(!a.agreementStatus.some(function(x){return as2.indexOf(x)>=0;}))return false;
   }
   return true;
 }
@@ -4010,6 +4210,50 @@ function buildAdvPanel(){
       return '<label class="afopt"><input type="checkbox" data-afk="'+key+'" data-afv="'+esc(o.v)+'"'+(on?" checked":"")+'> '+esc(o.l)+'</label>';
     }).join("");
   }
+  /* The meeting's core ask: checkboxes become dropdowns and buttons. A
+     twelve-item checkbox list is a scrolling wall; a dropdown that says
+     "3 selected" is one line and still shows what is on. */
+  function ddMulti(key,label,opts,placeholder){
+    var sel=a[key]||[];
+    var summary=!sel.length?(placeholder||"Any")
+      :sel.length===1?(function(){var o=opts.filter(function(x){return x.v===sel[0];})[0];return o?o.l:sel[0];})()
+      :sel.length+" selected";
+    return '<div class="aflab">'+esc(label)+'</div>'+
+      '<div class="afdd" data-afdd="'+key+'">'+
+        '<button type="button" class="afdd-b'+(sel.length?" on":"")+'">'+esc(summary)+'<span>▾</span></button>'+
+        '<div class="afdd-m">'+
+          (opts.length
+            ? opts.map(function(o){
+                return '<label class="afopt"><input type="checkbox" data-afk="'+key+'" data-afv="'+esc(o.v)+'"'+
+                  (sel.indexOf(o.v)>=0?" checked":"")+'> '+esc(o.l)+'</label>';
+              }).join("")
+            : '<div class="afnote" style="margin:0">Nothing to choose from yet.</div>')+
+        '</div></div>';
+  }
+  /* Buttons where the meeting asked for buttons: a short, fixed set the
+     operator picks from at a glance rather than opening anything. */
+  function btnMulti(key,label,opts){
+    var sel=a[key]||[];
+    return '<div class="aflab">'+esc(label)+'</div><div class="afbtns">'+
+      opts.map(function(o){
+        return '<button type="button" data-afb="'+key+'" data-afbv="'+esc(o.v)+'" class="'+
+          (sel.indexOf(o.v)>=0?"on":"")+'">'+esc(o.l)+'</button>';
+      }).join("")+'</div>';
+  }
+  function btnOne(key,label,opts){
+    return '<div class="aflab">'+esc(label)+'</div><div class="afbtns">'+
+      opts.map(function(o){
+        return '<button type="button" data-afo="'+key+'" data-afov="'+esc(o.v)+'" class="'+
+          (a[key]===o.v?"on":"")+'">'+esc(o.l)+'</button>';
+      }).join("")+'</div>';
+  }
+  function anyAll(key,label){
+    return '<div class="afaa"><span>'+esc(label)+'</span>'+
+      ['any','all'].map(function(m){
+        return '<button type="button" data-afaa="'+key+'" data-afaav="'+m+'" class="'+
+          (a[key]===m?"on":"")+'">'+(m==="any"?"Any":"All")+'</button>';
+      }).join("")+'</div>';
+  }
   function tri(key,label){
     var v=a[key];
     return '<div class="aflab">'+label+'</div><div class="aftri">'+
@@ -4021,34 +4265,54 @@ function buildAdvPanel(){
      left-hand tree is the navigation, so a collapsed accordion would just be a
      second, competing way to hide the same content. */
   function group(title,inner,openIt,extra){
-    var key=title.replace(/[^a-z]/gi,"");
+    /* De-entity before keying: "Appointments &amp; Tasks" was producing the
+       key "AppointmentsampTasks", with the HTML entity's own letters baked
+       into it. Harmless until something needs to address the group by name. */
+    var key=title.replace(/&amp;/g,"&").replace(/[^a-z]/gi,"");
     ADV_OPEN[key]=1;
     return '<div class="afg open af-sec'+(extra||"")+'" id="af-sec-'+key+'" data-afgk="'+key+'" data-aftitle="'+esc(title.replace(/&amp;/g,"&"))+'">'+
       '<button type="button" class="afg-h">'+title+' <span class="car">›</span></button><div class="afg-c">'+inner+'</div></div>';
   }
   var stages=Object.keys(STAGE_ORDER);
-  var statuses=[{v:"new",l:"New"},{v:"hot",l:"Hot"},{v:"nurture",l:"Nurture"},{v:"watch",l:"Watch"},{v:"unqualified",l:"Unqualified"}];
+  var statuses=[{v:"new",l:"New"},{v:"hot",l:"Hot"},{v:"nurture",l:"Nurture"},{v:"watch",l:"Watch"},{v:"unqualified",l:"Unqualified"},{v:"archived",l:"Archive"},{v:"trashed",l:"Trash"}];
   var roster=ADV_SRC.roster.length?ADV_SRC.roster:[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"},{id:"kendrick",name:"Kendrick"}];
   var tagOpts=advDistinctTags(), planOpts=ADV_SRC.plans, srcOpts=advDistinctSources();
   var html="";
+  var collabOpts=roster.map(function(u){return {v:u.id,l:u.name};});
   html+=group("General",
-    '<div class="aflab">Lead Type</div>'+checks("record",[{v:"complete",l:"Complete"},{v:"partial",l:"Partial"}])+
+    btnMulti("record","Lead Type",[{v:"complete",l:"Complete"},{v:"partial",l:"Partial"}])+
     '<div class="afnote">Complete = has a name and at least one of phone or email. Partial = anything less.</div>'+
-    '<div class="aflab">Intention</div>'+checks("leadType",[{v:"buyer",l:"Buyer"},{v:"seller",l:"Seller"}])+
-    '<div class="aflab">Lead Status</div>'+checks("status",statuses)+
-    '<div class="aflab">Stage</div>'+checks("stage",stages.map(function(s){return {v:s,l:s};}))+
-    '<div class="aflab">Assigned To</div>'+checks("assigned",[{v:"unassigned",l:"Unassigned"}].concat(roster.map(function(u){return {v:u.id,l:u.name};})))+
-    '<div class="aflab">Source</div>'+(srcOpts.length?checks("source",srcOpts.map(function(s){return {v:s,l:s};})):'<div class="afnote">No sources recorded on the current leads.</div>'),
+    /* The meeting's Intention list. Only Buyer and Seller exist on a contact
+       here; the other four are offered and refused rather than silently
+       matching nothing, because a filter that returns zero rows looks like a
+       quiet week rather than a field this CRM does not have. */
+    btnMulti("leadType","Intention",[{v:"seller",l:"Seller"},{v:"buyer",l:"Buyer"},{v:"__na",l:"Not Applicable"}])+
+    '<div class="afnote">Tenant, Landlord, Recruit and Candidate are not fields on a contact in this CRM yet, so they are not offered — a filter that matched nothing would read as an empty market.</div>'+
+    btnMulti("collaborators","Collaborators",collabOpts)+
+    '<div class="afnote">Secondary team members with access to the contact, from Manage Team. The primary agent is Assigned To, below.</div>'+
+    ddMulti("status","Lead Status",statuses)+
+    ddMulti("stage","Stage",stages.map(function(s){return {v:s,l:s};}))+
+    ddMulti("assigned","Assigned To",[{v:"unassigned",l:"Unassigned"}].concat(roster.map(function(u){return {v:u.id,l:u.name};})))+
+    ddMulti("source","Source",srcOpts.map(function(s){return {v:s,l:s};}))+
+    '<div class="afnote">Sources are the ones actually recorded on these contacts. A full Rivity source list has not been supplied yet — when it arrives these become a managed list with custom entries.</div>',
     true);
   html+=group("Tags",
-    '<div class="aflab">Include tags</div>'+(tagOpts.length?checks("tagsInc",tagOpts.map(function(t){return {v:t,l:t};})):'<div class="afnote">No tags yet — add tags to leads or create tag templates first.</div>')+
-    '<div class="aflab">Exclude tags</div>'+(tagOpts.length?checks("tagsExc",tagOpts.map(function(t){return {v:t,l:t};})):""));
+    ddMulti("tagsInc","Include Tags",tagOpts.map(function(t){return {v:t,l:t};}))+
+    anyAll("tagsIncMode","Match")+
+    ddMulti("tagsExc","Exclude Tags",tagOpts.map(function(t){return {v:t,l:t};}))+
+    anyAll("tagsExcMode","Match")+
+    (tagOpts.length?"":'<div class="afnote">No tags yet — add tags to leads or create tag templates first.</div>'));
   html+=group("Auto Plans",
-    '<div class="aftri">'+
-    '<button data-afplan="" class="'+(a.autoPlan===""?"on":"")+'">Any</button>'+
-    '<button data-afplan="any" class="'+(a.autoPlan==="any"?"on":"")+'">On a plan</button>'+
-    '<button data-afplan="none" class="'+(a.autoPlan==="none"?"on":"")+'">No plan</button></div>'+
-    (planOpts.length?('<div class="aflab">Specific plan</div><select data-afplansel><option value="">—</option>'+planOpts.map(function(p){return '<option'+(a.autoPlan===p?" selected":"")+'>'+esc(p)+'</option>';}).join("")+'</select>'):""));
+    (planOpts.length
+      ? '<div class="aflab">Auto Plan Name</div><select data-afplansel><option value="">Any plan</option>'+
+        '<option value="any"'+(a.autoPlan==="any"?" selected":"")+'>On any plan</option>'+
+        '<option value="none"'+(a.autoPlan==="none"?" selected":"")+'>Not on a plan</option>'+
+        planOpts.map(function(p){return '<option'+(a.autoPlan===p?" selected":"")+'>'+esc(p)+'</option>';}).join("")+'</select>'
+      : '<div class="afnote">No Auto Plans exist yet.</div>')+
+    btnOne("autoPlanStatus","Status",[
+      {v:"",l:"Any"},{v:"applied",l:"Applied"},{v:"running",l:"Running"},
+      {v:"paused",l:"Paused"},{v:"completed",l:"Completed"}])+
+    '<div class="afnote">Deleted is not offered: removing a contact from a plan drops the enrollment here rather than flagging it, so there is no deleted state left to filter on.</div>');
   html+=group("Reports",
     '<div class="aflab">Listing Alerts</div><div class="aftri">'+
       [["","Any"],["none","None Created"],["has","Has Alerts"]].map(function(o){
@@ -4056,17 +4320,47 @@ function buildAdvPanel(){
     '<div class="aflab">Market Reports</div><div class="aftri">'+
       [["","Any"],["none","None Created"],["has","Has Reports"]].map(function(o){
         return '<button data-afreports="'+o[0]+'" class="'+(a.reports===o[0]?"on":"")+'">'+o[1]+'</button>';}).join("")+'</div>'+
+    btnOne("reportView","Last Market Report View",[
+      {v:"",l:"Any"},{v:"today",l:"Today"},{v:"d7",l:"Last 7 days"},
+      {v:"d30",l:"Last 30 days"},{v:"d90",l:"Last 90 days"},{v:"never",l:"Never"}])+
+    '<div class="afnote">A view is the client opening the report page, which this system counts itself. It is not an email open — Gmail reports none, so treating "not opened" as "never viewed" would be a guess.</div>'+
     (LEAD_METRICS.data?"":'<div class="afnote">Loading subscription counts…</div>'));
   html+=group("Web Activity",
-    '<div class="afnote">Website visit tracking is not connected, so these filters have no data to run on. They will light up when Marco\'s site sends visit events.</div>',
+    '<div class="afnote">Website visit tracking is not connected, so these filters have no data to run on. Pointing them at Marco\'s IDX needs that site to send visit events to this system — no such feed exists yet, and a filter running on nothing would silently match every row or none.</div>',
     false," nodata");
-  html+=group("Contact Info",tri("hasEmail","Email")+tri("hasPhone","Phone")+tri("hasAddress","Address"));
+  html+=group("Contact Info",
+    tri("hasEmail","Email")+tri("hasPhone","Phone")+tri("hasAddress","Address")+
+    btnOne("comms","Communication",[
+      {v:"",l:"Any"},{v:"text_sent",l:"Has received text"},{v:"no_text_sent",l:"Has not received text"},
+      {v:"text_received",l:"Has replied by text"},{v:"email_sent",l:"Has received email"},
+      {v:"no_email_sent",l:"Has not received email"}])+
+    '<div class="afnote">Counted from texts this system actually sent or received, and from outreach emails it measured. Gmail reports no opens, so "received" means sent and accepted, not read.</div>'+
+    btnOne("textStatus","Text Status",[
+      {v:"",l:"Any"},{v:"can",l:"Can be texted"},{v:"opted_out",l:"Opted out"},{v:"no_number",l:"No number"}])+
+    btnOne("phoneStatus","Phone Status",[
+      {v:"",l:"Any"},{v:"can",l:"Can be called"},{v:"dnc",l:"Do Not Call"},{v:"no_number",l:"No number"}])+
+    '<div class="afnote">Do Not Call is the flag a human set on the number. This system does not subscribe to the federal registry and does not detect landline or VoIP lines — that needs a paid per-number carrier lookup which is not enabled, and nothing here guesses it from an area code.</div>'+
+    '<div class="aflab">Home Address Location</div>'+
+    '<input type="text" data-afaddr placeholder="City, ZIP or state" value="'+esc(a.addressQuery||"")+'">'+
+    '<div class="afnote">Searches the address already on the contact. No MLS call is involved.</div>');
   html+=group("Appointments &amp; Tasks",
-    ADV_SRC.tasksByLead===null&&ADV_SRC.tasksErr
-      ?'<div class="afnote">Task data could not be loaded — this filter is off rather than guessing.</div>'
-      :'<div class="aftri" style="flex-wrap:wrap">'+
-        [["","Any"],["has","Has tasks"],["none","No tasks"],["overdue","Overdue"],["due_today","Due today"],["upcoming","Upcoming"]].map(function(p){
-          return '<button data-aftask="'+p[0]+'" class="'+(a.tasks===p[0]?"on":"")+'">'+p[1]+'</button>';}).join("")+'</div>');
+    btnMulti("apptStatus","Appointments",[
+      {v:"scheduled",l:"Set / Scheduled"},{v:"completed",l:"Held"},
+      {v:"cancelled",l:"Cancelled"},{v:"none",l:"None"}])+
+    '<div class="aflab">Appointment date</div><div style="display:flex;gap:6px">'+
+      '<input type="date" data-afd="apptFrom" value="'+esc(a.apptFrom)+'">'+
+      '<input type="date" data-afd="apptTo" value="'+esc(a.apptTo)+'"></div>'+
+    (ADV_SRC.tasksByLead===null&&ADV_SRC.tasksErr
+      ?'<div class="afnote">Task data could not be loaded — the task filter is off rather than guessing.</div>'
+      : btnOne("tasks","Tasks",[
+          {v:"",l:"Any"},{v:"none",l:"Non-created"},{v:"has",l:"Has tasks"},
+          {v:"overdue",l:"Overdue"},{v:"due_today",l:"Due today"},{v:"upcoming",l:"Upcoming"}])));
+  html+=group("Agreements",
+    btnMulti("agreementType","Type",[
+      {v:"buyer",l:"Buyer"},{v:"seller",l:"Seller"},{v:"referral",l:"Referral"}])+
+    btnMulti("agreementStatus","Status",[
+      {v:"active",l:"Active"},{v:"expired",l:"Expired"},{v:"inactive",l:"Inactive"}])+
+    '<div class="afnote">Expired is computed from the agreement\'s own expiration date, not from a status column it does not have.</div>');
   html+=group("Dates",
     '<div class="aflab">Date added</div><div style="display:flex;gap:6px"><input type="date" data-afd="addedFrom" value="'+esc(a.addedFrom)+'"><input type="date" data-afd="addedTo" value="'+esc(a.addedTo)+'"></div>'+
     '<div class="aflab">Last contact</div><div style="display:flex;gap:6px"><input type="date" data-afd="lastFrom" value="'+esc(a.lastFrom)+'"><input type="date" data-afd="lastTo" value="'+esc(a.lastTo)+'"></div>'+
@@ -4084,6 +4378,15 @@ function buildAdvPanel(){
     var k=cb.getAttribute("data-afk"),v=cb.getAttribute("data-afv");
     var arr=a[k]; var i=arr.indexOf(v);
     if(cb.checked&&i<0)arr.push(v); if(!cb.checked&&i>=0)arr.splice(i,1);
+    /* Update the closing summary ("3 selected") without rebuilding the panel,
+       which would close the dropdown the operator is still ticking through. */
+    var wrap=cb.closest(".afdd");
+    if(wrap){
+      var btn=wrap.querySelector(".afdd-b"), n=a[k].length;
+      var lbl=n===0?"Any":n===1?String(cb.parentElement.textContent).trim():n+" selected";
+      btn.firstChild.nodeValue=lbl;
+      btn.classList.toggle("on",n>0);
+    }
   });});
   body.querySelectorAll("button[data-aft]").forEach(function(b){b.addEventListener("click",function(){
     var k=b.getAttribute("data-aft"),v=b.getAttribute("data-aftv");
@@ -4094,7 +4397,46 @@ function buildAdvPanel(){
     a.autoPlan=b.getAttribute("data-afplan"); buildAdvPanel();
   });});
   var ps=body.querySelector("select[data-afplansel]");
-  if(ps)ps.addEventListener("change",function(){ if(ps.value)a.autoPlan=ps.value; buildAdvPanel(); });
+  /* An empty selection means "any plan" and must CLEAR the filter. The old
+     version only assigned when a value was truthy, so choosing the blank
+     option left the previous plan silently applied. */
+  if(ps)ps.addEventListener("change",function(){ a.autoPlan=ps.value; buildAdvPanel(); });
+
+  /* Dropdowns open on click and close when something else is clicked. Kept
+     local to the panel so it cannot fight the table's own anchored menus. */
+  body.querySelectorAll(".afdd .afdd-b").forEach(function(b){
+    b.addEventListener("click",function(e){
+      e.stopPropagation();
+      var wrap=b.closest(".afdd"), was=wrap.classList.contains("open");
+      body.querySelectorAll(".afdd.open").forEach(function(o){o.classList.remove("open");});
+      if(!was)wrap.classList.add("open");
+    });
+  });
+  body.querySelectorAll(".afdd-m").forEach(function(m){
+    m.addEventListener("click",function(e){ e.stopPropagation(); });
+  });
+  if(!body.__ddClose){
+    body.__ddClose=1;
+    body.addEventListener("click",function(){
+      body.querySelectorAll(".afdd.open").forEach(function(o){o.classList.remove("open");});
+    });
+  }
+  /* Multi-select buttons toggle; single-select buttons set. Both repaint so
+     the summary line on a dropdown stays true. */
+  body.querySelectorAll("button[data-afb]").forEach(function(b){b.addEventListener("click",function(){
+    var k=b.getAttribute("data-afb"),v=b.getAttribute("data-afbv");
+    var arr=a[k], i=arr.indexOf(v);
+    if(i>=0)arr.splice(i,1); else arr.push(v);
+    buildAdvPanel();
+  });});
+  body.querySelectorAll("button[data-afo]").forEach(function(b){b.addEventListener("click",function(){
+    a[b.getAttribute("data-afo")]=b.getAttribute("data-afov"); buildAdvPanel();
+  });});
+  body.querySelectorAll("button[data-afaa]").forEach(function(b){b.addEventListener("click",function(){
+    a[b.getAttribute("data-afaa")]=b.getAttribute("data-afaav"); buildAdvPanel();
+  });});
+  var addrIn=body.querySelector("input[data-afaddr]");
+  if(addrIn)addrIn.addEventListener("input",function(){ a.addressQuery=addrIn.value.trim(); });
   body.querySelectorAll("button[data-afalerts]").forEach(function(b){b.addEventListener("click",function(){
     a.alerts=b.getAttribute("data-afalerts"); buildAdvPanel();
   });});
@@ -4650,7 +4992,10 @@ document.addEventListener("click",function(e){
 });
 
 /* ---- editable status/stage dropdowns → persist to /api/crm/lead/:id ---- */
-const STATUS_OPTIONS=[["new","NEW","var(--st-new)"],["hot","HOT","var(--st-hot)"],["nurture","NURTURE","var(--st-nurture)"],["watch","WATCH","var(--st-watch)"],["dead","UNQUALIFIED","var(--st-unq)"],["unresponsive","INACTIVE","#aab2ba"]];
+/* Archive and Trash added 2026-08-24. Nothing is ever deleted — Trash is a
+   status, so the record, its history and its deals all stay put and the lead
+   table simply stops showing it by default. */
+const STATUS_OPTIONS=[["new","NEW","var(--st-new)"],["hot","HOT","var(--st-hot)"],["nurture","NURTURE","var(--st-nurture)"],["watch","WATCH","var(--st-watch)"],["dead","UNQUALIFIED","var(--st-unq)"],["unresponsive","INACTIVE","#aab2ba"],["archived","ARCHIVE","#8a939c"],["trashed","TRASH","#b4707a"]];
 const STAGE_OPTIONS=[["new","New Lead"],["hot","Hot"],["warm","Warm"],["cold","Cold"],["pending","Pending"],["appointment_set","Appointment Set"],["showing_set","Showing Set"],["under_contract","Under Contract"],["closed","Closed"]];
 const ddMenu=document.getElementById("ddMenu");
 function closeDD(){ ddMenu.className="dd-menu"; ddMenu.style.bottom="auto"; ddMenu.style.minWidth=""; ddMenu._for=null; ddMenu._anchorAt=null; }
