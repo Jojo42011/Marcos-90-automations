@@ -974,12 +974,43 @@ export const COMMAND_TASK_STATUSES: CommandTaskStatus[] = [
 
 export type CommandTaskColor = "red" | "amber" | "green" | "blue" | "purple" | "gray";
 
+/**
+ * Recurrence cadences, widened 2026-08-25 to the operator's own list.
+ *
+ * `every_N_days` and `day_of_week_N` are PATTERNS, not fixed members: the count
+ * and the weekday travel inside the string so the store keeps one interval
+ * column instead of gaining two more that only one option each would ever
+ * fill. `isRecurringInterval` is what validates them — a plain Set cannot.
+ */
 export type CommandTaskRecurringInterval =
   | "daily"
   | "every_3_days"
   | "every_5_days"
   | "weekly"
-  | "monthly";
+  | "biweekly"
+  | "monthly"
+  | "every_3_months"
+  | "every_6_months"
+  | "yearly"
+  /* every_<n>_days, 1..365 */
+  | `every_${number}_days`
+  /* day_of_week_<0..6>, Sunday = 0 */
+  | `day_of_week_${number}`;
+
+/** Fixed cadences. The two patterns above are checked separately. */
+export const COMMAND_TASK_INTERVALS: string[] = [
+  "daily", "every_3_days", "every_5_days", "weekly", "biweekly",
+  "monthly", "every_3_months", "every_6_months", "yearly",
+];
+
+export function isRecurringInterval(v: unknown): v is CommandTaskRecurringInterval {
+  if (typeof v !== "string") return false;
+  if (COMMAND_TASK_INTERVALS.includes(v)) return true;
+  const days = /^every_(\d{1,3})_days$/.exec(v);
+  if (days) { const n = Number(days[1]); return n >= 1 && n <= 365; }
+  const dow = /^day_of_week_([0-6])$/.exec(v);
+  return !!dow;
+}
 
 /* ===== Buyers & Sellers Tracker =====
    Buyers and sellers run on separate pipelines, so stages are two distinct

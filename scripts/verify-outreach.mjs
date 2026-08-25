@@ -233,7 +233,10 @@ writeFileSync(join(tmp, "db.json"), JSON.stringify({
   idCounter: 3, leadKeyToId: { "buyer@example.com": "L1", "owner@example.com": "L2" },
   conversationsByLeadId: {}, commandTasks: [],
   leadsById: {
-    L1: { id: "L1", name: "Dana Buyer", email: "buyer@example.com", phone: "2105551234", crmIntent: "buyer", crmStatus: "hot", createdAt: "2026-08-01T00:00:00Z", activity: [] },
+    /* The address matters as of 2026-08-25: the alert builder refuses to open
+       for a contact with none, so a fixture without one would be testing the
+       guard rather than the builder. */
+    L1: { id: "L1", name: "Dana Buyer", email: "buyer@example.com", phone: "2105551234", address: "12 Alamo Ranch Pkwy, San Antonio, TX 78253", crmIntent: "buyer", crmStatus: "hot", createdAt: "2026-08-01T00:00:00Z", activity: [] },
     L2: { id: "L2", name: "Sam Owner", email: "owner@example.com", phone: "2105559999", crmIntent: "seller", crmStatus: "nurture", address: "123 Test Street, San Antonio, TX 78253", createdAt: "2026-08-01T00:00:00Z", activity: [] },
     L3: { id: "L3", name: "No Email Buyer", phone: "2105550000", crmIntent: "buyer", crmStatus: "new", createdAt: "2026-08-01T00:00:00Z", activity: [] },
   },

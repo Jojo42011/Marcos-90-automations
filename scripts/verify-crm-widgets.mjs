@@ -22,7 +22,8 @@ const tmp = mkdtempSync(join(tmpdir(), "crm-wdg-"));
 const mkLead = (n, over) => ({
   id: "lead_" + n, platform: "tiktok", userId: "u" + n, username: "user" + n,
   name: over.name, phone: over.phone ?? null, email: over.email ?? null, address: over.address ?? null,
-  state: "new", source: "TikTok", adCampaign: null, propertyInquired: null, criteria: null, brivityId: null,
+  state: "new", source: "TikTok", adCampaign: null,
+  propertyInquired: over.propertyInquired ?? null, criteria: over.criteria ?? null, brivityId: null,
   crmStatus: "new", crmStage: "new", crmPriority: "normal", crmIntent: "buyer", crmCallQueue: "none", crmNotes: null,
   tags: [], createdAt: "2026-08-01T12:00:00.000Z", updatedAt: "2026-08-08T12:00:00.000Z",
   birthday: over.birthday ?? null, homeAnniversary: over.homeAnniversary ?? null,
@@ -34,6 +35,12 @@ const leads = [
     birthday: "1985-12-24", assignedUserId: "marco", assignedUserName: "Marco" }),
   mkLead(2, { name: "Partner Person", phone: "2105550210", email: "partner@example.com" }),
   mkLead(3, { name: "No Dates Person", phone: "2105550211", email: "nodates@example.com" }),
+  /* Address shows in the TABLE (from the funnel's guess) but the contact has
+     no address of its own — the discrepancy reported on 25 Aug. */
+  mkLead(4, { name: "Guessed Address", phone: "2105550212", email: "guess@example.com",
+    criteria: { location: "77 Guessed Ave, Boerne TX" } }),
+  /* No address and no email at all: the listing-alert guard's subject. */
+  mkLead(5, { name: "Nothing Person", phone: "2105550213" }),
 ];
 const db = { idCounter: 10, leadsById: {}, leadKeyToId: {}, conversationsByLeadId: {}, commandTasks: [] };
 for (const l of leads) { db.leadsById[l.id] = l; db.leadKeyToId[l.platform + "::" + l.userId] = l.id; db.conversationsByLeadId[l.id] = { messages: [] }; }
@@ -519,6 +526,141 @@ try {
       evs.join(","));
     await page.evaluate(() => closeOa());
     await page.waitForTimeout(200);
+  }
+
+  /* ── recurrence, the 25 Aug list ── */
+  {
+    /* Every cadence the picker offers must actually advance a date. Before
+       this, anything outside five hard-coded values stored the word and the
+       task silently never came back. */
+    const cases = [
+      ["daily", "2026-03-10", "2026-03-11"],
+      ["weekly", "2026-03-10", "2026-03-17"],
+      ["biweekly", "2026-03-10", "2026-03-24"],
+      ["monthly", "2026-03-10", "2026-04-10"],
+      ["every_3_months", "2026-03-10", "2026-06-10"],
+      ["every_6_months", "2026-03-10", "2026-09-10"],
+      ["yearly", "2026-03-10", "2027-03-10"],
+      ["every_45_days", "2026-03-10", "2026-04-24"],
+      /* 31 Jan + 1 month must clamp to 28 Feb, not overflow into March. */
+      ["monthly", "2026-01-31", "2026-02-28"],
+    ];
+    for (const [interval, due, expect] of cases) {
+      let mk = await fetch(B + "/api/tasks", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Recur " + interval + " " + due, column: "today", recurring: true,
+          recurringInterval: interval, dueDate: due }),
+      });
+      const made = await J(mk);
+      const tid = made.task ? made.task.id : made.id;
+      ok(`${interval} is accepted on write`, !!tid, JSON.stringify(made).slice(0, 120));
+      if (!tid) continue;
+      await fetch(B + "/api/tasks/" + tid, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done" }),
+      });
+      const all = (await J(await fetch(B + "/api/tasks"))).tasks || [];
+      const spawned = all.filter((t) => t.title === "Recur " + interval + " " + due && t.status !== "done");
+      ok(`${interval} regenerates from ${due} to ${expect}`,
+        spawned.length === 1 && spawned[0].dueDate === expect,
+        JSON.stringify(spawned.map((x) => x.dueDate)));
+    }
+    /* Day-of-week must never land on the day just completed. */
+    let mk = await fetch(B + "/api/tasks", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Recur dow", column: "today", recurring: true,
+        recurringInterval: "day_of_week_2", dueDate: "2026-03-10" }),
+    });
+    const dowTask = await J(mk);
+    const dowId = dowTask.task ? dowTask.task.id : dowTask.id;
+    await fetch(B + "/api/tasks/" + dowId, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "done" }),
+    });
+    const all2 = (await J(await fetch(B + "/api/tasks"))).tasks || [];
+    const dowNext = all2.filter((t) => t.title === "Recur dow" && t.status !== "done")[0];
+    /* 2026-03-10 is a Tuesday; the next Tuesday is a week out, not the same day. */
+    ok("day-of-week recurrence moves a full week rather than repeating today",
+      dowNext && dowNext.dueDate === "2026-03-17", dowNext && dowNext.dueDate);
+
+    /* Junk must not be stored as a cadence. */
+    const bad = await J(await (await fetch(B + "/api/tasks", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Bad cadence", column: "today", recurring: true, recurringInterval: "every_999_days" }),
+    })));
+    const badTask = bad.task || bad;
+    ok("an out-of-range cadence is refused rather than stored",
+      !badTask.recurringInterval, JSON.stringify(badTask.recurringInterval));
+  }
+
+  /* ── the 25 Aug profile fixes, in the browser ── */
+  {
+    await page.evaluate(() => { if (typeof closeOa === "function") closeOa(); });
+    await page.waitForTimeout(200);
+
+    /* Recurring: the operator's full cadence list, plus the open-ended one. */
+    await page.click("#ldTaskAdd");
+    await page.waitForSelector("#tkRec", { timeout: 8000 });
+    await page.click("#tkRec");
+    await page.waitForSelector("#tkRecEvery", { timeout: 6000 });
+    const recs = await page.$$eval("#tkRecEvery option", (n) => n.map((o) => o.textContent.trim()));
+    ok("the Recurring dropdown carries every cadence on the list",
+      recs.join(",") === "Day of Week,Daily,Weekly,Biweekly,Monthly,Every 3 Months,Every 6 Months,Yearly,Every ___ Days",
+      recs.join(","));
+    await page.selectOption("#tkRecEvery", "every_n_days");
+    await page.waitForSelector("#tkRecDays", { timeout: 6000 });
+    ok("choosing 'Every ___ Days' reveals a number to type in", !!(await page.$("#tkRecDays")));
+    await page.selectOption("#tkRecEvery", "day_of_week");
+    await page.waitForSelector("#tkRecDow", { timeout: 6000 });
+    const dows = await page.$$eval("#tkRecDow option", (n) => n.map((o) => o.textContent.trim()));
+    ok("and 'Day of Week' reveals the weekday picker", dows.length === 7, dows.join(","));
+    await page.evaluate(() => closeOa());
+    await page.waitForTimeout(200);
+
+    /* Listing alert: refuses to open without an address, and says which field
+       is missing rather than opening a form that would fail on save. */
+    await page.click('#leadRows .ldlink:has-text("Nothing Person")').catch(async () => {
+      await page.click('.rail .r[data-view="leads"]');
+      await page.waitForSelector("#leadRows tr");
+      await page.click('#leadRows .ldlink:has-text("Nothing Person")');
+    });
+    await page.waitForSelector("#ldAlertAdd", { timeout: 10000 });
+    await page.click("#ldAlertAdd");
+    await page.waitForSelector("#oaOv .oa-unav", { timeout: 8000 });
+    const guard = await page.textContent("#oaOv");
+    ok("a listing alert will not open for a contact with no address",
+      /no address and email address on file|no address/i.test(guard), guard.slice(0, 160));
+    ok("and it names the email problem too, since alerts are emailed",
+      /nothing could be sent/i.test(guard));
+    ok("with a direct way to add the address", !!(await page.$("#laAddAddr")));
+    await page.evaluate(() => closeOa());
+    await page.waitForTimeout(250);
+
+    /* The address discrepancy: the table shows the funnel's guess, so the
+       profile must surface it too — labelled, and not auto-adopted. */
+    await page.click('.rail .r[data-view="leads"]');
+    await page.waitForSelector("#leadRows tr");
+    await page.click('#leadRows .ldlink:has-text("Guessed Address")');
+    await page.waitForSelector("#ldTabBody", { timeout: 10000 });
+    await page.waitForTimeout(900);
+    /* Contact Info starts collapsed and the addresses live inside it. Set the
+       open flag and repaint rather than clicking, so a record reload landing
+       mid-click cannot collapse it again. */
+    await page.evaluate(() => {
+      if (typeof CR_OPEN === "object") CR_OPEN.contact = 1;
+      if (typeof crRepaint === "function") crRepaint();
+    });
+    await page.waitForTimeout(600);
+    const crTxt = await page.textContent("#leadDetail");
+    ok("a funnel-guessed address is shown in the profile rather than 'no address'",
+      /77 Guessed Ave/.test(crTxt), crTxt.slice(0, 200));
+    ok("marked as not saved, with where it came from",
+      /Not saved as an address yet/.test(crTxt) && /property criteria/.test(crTxt));
+    ok("and offering to make it real", !!(await page.$('[data-cr="addrAdopt"]')));
+    /* It must NOT have been written into the contact's address book. */
+    const rec = await J(await fetch(B + "/api/crm/lead/lead_4/record"));
+    ok("but it is NOT auto-saved as a confirmed address",
+      (rec.record.addresses || []).length === 0, JSON.stringify(rec.record.addresses));
   }
 
   if (process.env.SHOT_DIR) {

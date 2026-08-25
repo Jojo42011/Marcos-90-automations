@@ -305,6 +305,7 @@ import {
 } from "./core/tagTemplates.js";
 import { filterDashboardLeads } from "./core/leadFilter.js";
 import type { LeadFilter, CrmStatusValue } from "./core/types.js";
+import { isRecurringInterval } from "./core/types.js";
 import {
   APPOINTMENT_TYPE_GROUPS,
   CRM_STAGES,
@@ -13432,18 +13433,11 @@ const COMMAND_COLORS = new Set<CommandTaskColor>([
   "purple",
   "gray",
 ]);
-const COMMAND_INTERVALS = new Set<CommandTaskRecurringInterval>([
-  "daily",
-  "every_3_days",
-  "every_5_days",
-  "weekly",
-  "monthly",
-]);
+/* Replaced by isRecurringInterval in core/types.ts: two of the cadences carry
+   a number inside the string, which a Set cannot express. */
 
 function parseRecurringInterval(raw: unknown): CommandTaskRecurringInterval | undefined {
-  return typeof raw === "string" && COMMAND_INTERVALS.has(raw as CommandTaskRecurringInterval)
-    ? (raw as CommandTaskRecurringInterval)
-    : undefined;
+  return isRecurringInterval(raw) ? raw : undefined;
 }
 
 /** Validate a "HH:MM" 24-hour time-of-day; returns undefined if malformed/empty. */
@@ -13812,18 +13806,40 @@ app.put("/api/settings/table-prefs", express.json({ limit: "32kb" }), async (req
  * it is dated from today instead.
  */
 function spawnNextRecurrence(done: CommandTask): CommandTask | null {
-  const STEP_DAYS: Record<string, number> = {
-    daily: 1, every_3_days: 3, every_5_days: 5, weekly: 7, monthly: 0,
-  };
+  /* Every cadence the picker offers has to advance a real date here. An
+     interval this function does not recognise returns null and the task
+     SILENTLY NEVER RECURS — which is what "Every 3 Months" and "Yearly" did
+     before 2026-08-25: the word was stored and nothing ever came back. */
   const interval = String(done.recurringInterval || "");
-  if (!(interval in STEP_DAYS)) return null;
+  const DAYS: Record<string, number> = { daily: 1, every_3_days: 3, every_5_days: 5, weekly: 7, biweekly: 14 };
+  const MONTHS: Record<string, number> = { monthly: 1, every_3_months: 3, every_6_months: 6, yearly: 12 };
+  const everyN = /^every_(\d{1,3})_days$/.exec(interval);
+  const dow = /^day_of_week_([0-6])$/.exec(interval);
+  if (!(interval in DAYS) && !(interval in MONTHS) && !everyN && !dow) return null;
 
   const base = done.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(done.dueDate)
     ? new Date(`${done.dueDate}T00:00:00Z`)
     : new Date();
   const next = new Date(base.getTime());
-  if (interval === "monthly") next.setUTCMonth(next.getUTCMonth() + 1);
-  else next.setUTCDate(next.getUTCDate() + STEP_DAYS[interval]);
+  if (interval in MONTHS) {
+    /* setUTCMonth overflows a short month — 31 Jan + 1 month lands on 2 or 3
+       March. Clamp to the last day of the target month instead, so a task due
+       on the 31st stays end-of-month rather than skipping one. */
+    const day = next.getUTCDate();
+    next.setUTCDate(1);
+    next.setUTCMonth(next.getUTCMonth() + MONTHS[interval]);
+    const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+    next.setUTCDate(Math.min(day, lastDay));
+  } else if (dow) {
+    /* Next occurrence of that weekday, always at least 7 days out so the
+       successor never lands on the day just completed. */
+    const target = Number(dow[1]);
+    let delta = (target - next.getUTCDay() + 7) % 7;
+    if (delta === 0) delta = 7;
+    next.setUTCDate(next.getUTCDate() + delta);
+  } else {
+    next.setUTCDate(next.getUTCDate() + (everyN ? Number(everyN[1]) : DAYS[interval]));
+  }
   const dueDate = next.toISOString().slice(0, 10);
 
   try {

@@ -108,13 +108,14 @@ const autoPlanTriggers_js_1 = require("./core/autoPlanTriggers.js");
 const tagTemplates_js_1 = require("./core/tagTemplates.js");
 const leadFilter_js_1 = require("./core/leadFilter.js");
 const types_js_1 = require("./core/types.js");
-const users_js_1 = require("./core/users.js");
 const types_js_2 = require("./core/types.js");
+const users_js_1 = require("./core/users.js");
 const types_js_3 = require("./core/types.js");
+const types_js_4 = require("./core/types.js");
 const tasks_js_1 = require("./core/tasks.js");
 const marcoTasks_js_1 = require("./core/marcoTasks.js");
 const harveyNotes_js_1 = require("./core/harveyNotes.js");
-const types_js_4 = require("./core/types.js");
+const types_js_5 = require("./core/types.js");
 const trackerStore_js_1 = require("./core/trackerStore.js");
 const trackerTasks_js_1 = require("./core/trackerTasks.js");
 const trackerMigration_js_1 = require("./core/trackerMigration.js");
@@ -5324,7 +5325,7 @@ app.post("/api/crm/lead", express_1.default.json(), async (req, res) => {
        array here is the exact bug FORAI records for TASK_TYPES: the two lists
        drift, and a stage the UI offers is silently downgraded on write — the
        operator sets "Listing Agreement", it saves as "new", and nothing says so. */
-    const crmStage = (types_js_1.CRM_STAGES.includes(String(body.crmStage || ""))
+    const crmStage = (types_js_2.CRM_STAGES.includes(String(body.crmStage || ""))
         ? body.crmStage
         : "new_lead");
     const crmIntent = (0, db_js_1.normalizeCrmIntent)(body.crmIntent);
@@ -6194,7 +6195,7 @@ app.post("/api/marco-tasks", express_1.default.json({ limit: "64kb" }), (req, re
     const priority = body.priority === "high" || body.priority === "medium" || body.priority === "low"
         ? body.priority
         : "medium";
-    const status = types_js_3.MARCO_TASK_STATUSES.includes(body.status)
+    const status = types_js_4.MARCO_TASK_STATUSES.includes(body.status)
         ? body.status
         : "pending";
     const task = (0, marcoTasks_js_1.createMarcoTask)({
@@ -6224,7 +6225,7 @@ app.patch("/api/marco-tasks/:id", express_1.default.json({ limit: "64kb" }), (re
     if (body.priority === "high" || body.priority === "medium" || body.priority === "low") {
         updates.priority = body.priority;
     }
-    if (types_js_3.MARCO_TASK_STATUSES.includes(body.status)) {
+    if (types_js_4.MARCO_TASK_STATUSES.includes(body.status)) {
         updates.status = body.status;
         updates.previousStatus = undefined;
     }
@@ -10724,12 +10725,12 @@ app.get("/api/crm/vocabulary", (req, res) => {
     }
     res.json({
         ok: true,
-        stageGroups: types_js_1.CRM_STAGE_GROUPS,
-        stages: types_js_1.CRM_STAGES,
+        stageGroups: types_js_2.CRM_STAGE_GROUPS,
+        stages: types_js_2.CRM_STAGES,
         /* Old values still stored on rows, and what each displays as. Nothing
            rewrites them — a stored value must never become unreadable. */
-        stageLegacy: types_js_1.CRM_STAGE_LEGACY,
-        appointmentTypeGroups: types_js_1.APPOINTMENT_TYPE_GROUPS,
+        stageLegacy: types_js_2.CRM_STAGE_LEGACY,
+        appointmentTypeGroups: types_js_2.APPOINTMENT_TYPE_GROUPS,
         appointmentOutcomes: [
             { value: "none", label: "No outcome yet" },
             { value: "held", label: "Held" },
@@ -11739,8 +11740,8 @@ app.post("/api/users", express_1.default.json(), async (req, res) => {
         ? body.role
         : "agent";
     const permissions = body.permissions && typeof body.permissions === "object"
-        ? { ...types_js_2.ROLE_PERMISSIONS.custom, ...body.permissions }
-        : { ...types_js_2.ROLE_PERMISSIONS[role] };
+        ? { ...types_js_3.ROLE_PERMISSIONS.custom, ...body.permissions }
+        : { ...types_js_3.ROLE_PERMISSIONS[role] };
     const assignedLeadIds = Array.isArray(body.assignedLeadIds)
         ? body.assignedLeadIds.filter((id) => typeof id === "string")
         : undefined;
@@ -12722,8 +12723,8 @@ app.post("/api/auto-plans/execute-due-steps", async (req, res) => {
 });
 /* ===================== Tasks ===================== */
 const TASK_PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
-const TASK_STATUSES = new Set(types_js_3.CRM_TASK_STATUSES);
-const COMMAND_STATUS_SET = new Set(types_js_3.COMMAND_TASK_STATUSES);
+const TASK_STATUSES = new Set(types_js_4.CRM_TASK_STATUSES);
+const COMMAND_STATUS_SET = new Set(types_js_4.COMMAND_TASK_STATUSES);
 /* Must match TYPES in core/tasks.ts — this Set is what the API accepts, that
    one is what survives a write, and a type in only one of them silently
    becomes "other" somewhere along the way. */
@@ -12873,17 +12874,10 @@ const COMMAND_COLORS = new Set([
     "purple",
     "gray",
 ]);
-const COMMAND_INTERVALS = new Set([
-    "daily",
-    "every_3_days",
-    "every_5_days",
-    "weekly",
-    "monthly",
-]);
+/* Replaced by isRecurringInterval in core/types.ts: two of the cadences carry
+   a number inside the string, which a Set cannot express. */
 function parseRecurringInterval(raw) {
-    return typeof raw === "string" && COMMAND_INTERVALS.has(raw)
-        ? raw
-        : undefined;
+    return (0, types_js_1.isRecurringInterval)(raw) ? raw : undefined;
 }
 /** Validate a "HH:MM" 24-hour time-of-day; returns undefined if malformed/empty. */
 function parseDueTime(raw) {
@@ -13016,9 +13010,9 @@ app.put("/api/settings/command", express_1.default.json({ limit: "16kb" }), asyn
 app.get("/api/tracker/schema", (_req, res) => {
     res.json({
         ok: true,
-        statuses: types_js_4.TRACKER_STATUSES,
-        buyerStages: types_js_4.BUYER_STAGES,
-        sellerStages: types_js_4.SELLER_STAGES,
+        statuses: types_js_5.TRACKER_STATUSES,
+        buyerStages: types_js_5.BUYER_STAGES,
+        sellerStages: types_js_5.SELLER_STAGES,
     });
 });
 app.get("/api/tracker/records", (req, res) => {
@@ -13269,20 +13263,43 @@ app.put("/api/settings/table-prefs", express_1.default.json({ limit: "32kb" }), 
  * it is dated from today instead.
  */
 function spawnNextRecurrence(done) {
-    const STEP_DAYS = {
-        daily: 1, every_3_days: 3, every_5_days: 5, weekly: 7, monthly: 0,
-    };
+    /* Every cadence the picker offers has to advance a real date here. An
+       interval this function does not recognise returns null and the task
+       SILENTLY NEVER RECURS — which is what "Every 3 Months" and "Yearly" did
+       before 2026-08-25: the word was stored and nothing ever came back. */
     const interval = String(done.recurringInterval || "");
-    if (!(interval in STEP_DAYS))
+    const DAYS = { daily: 1, every_3_days: 3, every_5_days: 5, weekly: 7, biweekly: 14 };
+    const MONTHS = { monthly: 1, every_3_months: 3, every_6_months: 6, yearly: 12 };
+    const everyN = /^every_(\d{1,3})_days$/.exec(interval);
+    const dow = /^day_of_week_([0-6])$/.exec(interval);
+    if (!(interval in DAYS) && !(interval in MONTHS) && !everyN && !dow)
         return null;
     const base = done.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(done.dueDate)
         ? new Date(`${done.dueDate}T00:00:00Z`)
         : new Date();
     const next = new Date(base.getTime());
-    if (interval === "monthly")
-        next.setUTCMonth(next.getUTCMonth() + 1);
-    else
-        next.setUTCDate(next.getUTCDate() + STEP_DAYS[interval]);
+    if (interval in MONTHS) {
+        /* setUTCMonth overflows a short month — 31 Jan + 1 month lands on 2 or 3
+           March. Clamp to the last day of the target month instead, so a task due
+           on the 31st stays end-of-month rather than skipping one. */
+        const day = next.getUTCDate();
+        next.setUTCDate(1);
+        next.setUTCMonth(next.getUTCMonth() + MONTHS[interval]);
+        const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+        next.setUTCDate(Math.min(day, lastDay));
+    }
+    else if (dow) {
+        /* Next occurrence of that weekday, always at least 7 days out so the
+           successor never lands on the day just completed. */
+        const target = Number(dow[1]);
+        let delta = (target - next.getUTCDay() + 7) % 7;
+        if (delta === 0)
+            delta = 7;
+        next.setUTCDate(next.getUTCDate() + delta);
+    }
+    else {
+        next.setUTCDate(next.getUTCDate() + (everyN ? Number(everyN[1]) : DAYS[interval]));
+    }
     const dueDate = next.toISOString().slice(0, 10);
     try {
         const spawned = (0, db_js_1.createCommandTask)({

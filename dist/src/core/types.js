@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MARCO_TASK_STATUSES = exports.SELLER_STAGES = exports.BUYER_STAGES = exports.TRACKER_STATUSES = exports.COMMAND_TASK_STATUSES = exports.CRM_TASK_STATUSES = exports.ROLE_PERMISSIONS = exports.APPOINTMENT_TYPES = exports.APPOINTMENT_TYPE_GROUPS = exports.CRM_STAGES = exports.CRM_STAGE_LEGACY = exports.CRM_STAGE_GROUPS = exports.CRM_CANDIDATE_STAGES = exports.CRM_LEAD_STAGES = exports.CRM_STATUSES = void 0;
+exports.MARCO_TASK_STATUSES = exports.SELLER_STAGES = exports.BUYER_STAGES = exports.TRACKER_STATUSES = exports.COMMAND_TASK_INTERVALS = exports.COMMAND_TASK_STATUSES = exports.CRM_TASK_STATUSES = exports.ROLE_PERMISSIONS = exports.APPOINTMENT_TYPES = exports.APPOINTMENT_TYPE_GROUPS = exports.CRM_STAGES = exports.CRM_STAGE_LEGACY = exports.CRM_STAGE_GROUPS = exports.CRM_CANDIDATE_STAGES = exports.CRM_LEAD_STAGES = exports.CRM_STATUSES = void 0;
 exports.crmStageLabel = crmStageLabel;
+exports.isRecurringInterval = isRecurringInterval;
 /** Valid CRM status values (dashboard + API). */
 exports.CRM_STATUSES = [
     "new", "hot", "nurture", "watch", "dead", "unresponsive", "archived", "trashed",
@@ -165,6 +166,24 @@ exports.COMMAND_TASK_STATUSES = [
     "overdue",
     "done",
 ];
+/** Fixed cadences. The two patterns above are checked separately. */
+exports.COMMAND_TASK_INTERVALS = [
+    "daily", "every_3_days", "every_5_days", "weekly", "biweekly",
+    "monthly", "every_3_months", "every_6_months", "yearly",
+];
+function isRecurringInterval(v) {
+    if (typeof v !== "string")
+        return false;
+    if (exports.COMMAND_TASK_INTERVALS.includes(v))
+        return true;
+    const days = /^every_(\d{1,3})_days$/.exec(v);
+    if (days) {
+        const n = Number(days[1]);
+        return n >= 1 && n <= 365;
+    }
+    const dow = /^day_of_week_([0-6])$/.exec(v);
+    return !!dow;
+}
 exports.TRACKER_STATUSES = [
     "new", "unqualified", "watch", "nurture", "hot", "pending",
 ];

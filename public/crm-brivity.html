@@ -5734,8 +5734,43 @@ function contactInfoBodyHTML(l,r){
       '<span class="cx-t">'+esc(kindLabel(ADDRESS_KINDS,a.kind))+'</span>'+
       '<span class="cx-x" data-cr="addrEdit" data-id="'+esc(a.id)+'" title="Edit">✎</span>'+
       '<span class="cx-x" data-cr="addrDel" data-id="'+esc(a.id)+'" title="Remove">×</span></div>';
-  }).join(""):'<div class="cr-empty">No address on this contact.</div>';
+  }).join(""):addressStandIn();
   return out;
+}
+
+/**
+ * What to show when the contact has no address ROW.
+ *
+ * The lead table's Address column is `l.address || criteria.location ||
+ * criteria.address || propertyInquired` — the last three are what the DM
+ * funnel GUESSED from a conversation, not something anybody confirmed. Only
+ * the first is a real address on the contact, and only the first is what gets
+ * seeded into this block. That is why an address could show in the table and
+ * the filter while this section said "No address on this contact": both were
+ * telling the truth about different things.
+ *
+ * So the guess is surfaced here, labelled as a guess, with one click to make
+ * it real. It is deliberately NOT auto-promoted: writing a parsed-from-a-DM
+ * string into a contact's address book as a confirmed address is the kind of
+ * quiet fabrication this system does not do.
+ */
+function addressStandIn(){
+  var l=LEADS.filter(function(x){return x.id===currentLeadId;})[0];
+  var guess=l?String(l.address||"").trim():"";
+  if(!guess||(l&&String(l.addressSaved||"").trim()))
+    return '<div class="cr-empty">No address on this contact.</div>';
+  var c=(l&&l.criteria)||{};
+  var src=guess===c.location?"the property criteria on this lead"
+    :guess===c.address?"the property criteria on this lead"
+    :guess===l.propertyInquired?"the property they asked about"
+    :"this lead's record";
+  return '<div class="crx" style="align-items:flex-start">'+
+    '<span class="cx-v" style="white-space:pre-line">'+esc(guess)+
+      '<small style="display:block;color:#b0863a;margin-top:3px">Not saved as an address yet — this is from '+
+      esc(src)+'.</small></span>'+
+    '<span class="cx-t">unconfirmed</span>'+
+    '<span class="cx-x" data-cr="addrAdopt" title="Save as this contact\u2019s address" '+
+      'style="width:auto;padding:0 8px;font-size:10.5px;font-weight:700;color:var(--teal-strong)">SAVE</span></div>';
 }
 
 function emailEditHTML(cur){
@@ -6065,6 +6100,14 @@ function crAction(act,id,el,l){
     return;
   }
   if(act==="addrNew"){ openAddressModal(l,null); return; }
+  if(act==="addrAdopt"){
+    /* Promote the funnel's guess to a real address, through the same form the
+       operator would fill in by hand — so it is reviewed before it is saved,
+       not silently accepted. */
+    openAddressModal(l,{id:null,kind:"home",street:String(l.address||"").trim(),
+      apt:"",city:"",region:"",postalCode:"",country:"US"});
+    return;
+  }
   if(act==="addrEdit"){
     var a=(CR.record.addresses||[]).filter(function(x){return x.id===id;})[0];
     openAddressModal(l,a||null); return;
@@ -6235,15 +6278,18 @@ function openAddressModal(l,cur){
       var payload={kind:document.getElementById("adKind").value,street:street,
         apt:document.getElementById("adApt").value.trim(),city:document.getElementById("adCity").value.trim(),
         region:regionCode,country:country,postalCode:document.getElementById("adPostal").value.trim()};
-      var req=cur
+      /* Branch on the ID, not on `cur` being present: the form is also opened
+         PRE-FILLED with an unsaved stand-in (the funnel's guessed address), and
+         that has no id to PATCH. */
+      var req=(cur&&cur.id)
         ? crFetch("/api/crm/contact-address/"+encodeURIComponent(cur.id),crPatchJson(payload),"Address saved")
         : crFetch("/api/crm/lead/"+encodeURIComponent(l.id)+"/addresses",crJson(payload),"Address added");
       req.then(function(j){ if(j){ closeOa(); crApply(j.record); crSyncLeadHeader(l); } });
     });
   }
-  oaOverlay(cur?"Edit Address":"Add Address",body(),
+  oaOverlay((cur&&cur.id)?"Edit Address":"Add Address",body(),
     '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
-    '<button class="oa-go" id="adSave">'+(cur?"SAVE":"ADD ADDRESS")+'</button>');
+    '<button class="oa-go" id="adSave">'+((cur&&cur.id)?"SAVE":"ADD ADDRESS")+'</button>');
   wire();
 }
 
@@ -8485,6 +8531,14 @@ function openTaskListModal(l){
 
 /* ── shared scheduling controls (date presets, time presets, priority) ── */
 
+/* Recurrence options, from the operator's own list (25 Aug). "Every N days"
+   is the open-ended one: it takes a number rather than being a fixed cadence,
+   which is why it carries its own input rather than being another word. */
+var RECUR_OPTIONS=[
+  ["day_of_week","Day of Week"],["daily","Daily"],["weekly","Weekly"],["biweekly","Biweekly"],
+  ["monthly","Monthly"],["every_3_months","Every 3 Months"],["every_6_months","Every 6 Months"],
+  ["yearly","Yearly"],["every_n_days","Every ___ Days"]
+];
 var CONTINGENT_EVENTS=[["birthday","Birthdate"],["anniversary","Anniversary"],
   ["organization_end_date","Organization End Date"],["licensed_since","Licensed Since"],
   ["organization_start_date","Organization Start Date"]];
@@ -8699,7 +8753,8 @@ function openTaskModal(l){
   ensureRoster(function(roster){
     var state={mode:"preset",date:todayKey(),time:"",timeCustom:false,priority:9,event:"birthday",direction:"after",days:1};
     var d={title:"",type:"to_do",assignee:(roster.filter(function(u){return u.name===(l.assignedUserName||"Marco Puga");})[0]||roster[0]||null),
-           recurring:false,instructions:null,notes:null,markComplete:false};
+           recurring:false,recurInterval:"weekly",recurDays:1,recurDow:1,
+           instructions:null,notes:null,markComplete:false};
     var first=(l.name||"this contact").split(" ")[0];
 
     function body(){
@@ -8720,8 +8775,25 @@ function openTaskModal(l){
         '<div class="qa-lbl">Time</div>'+timePresetHTML("schTime",state)+
         (state.timeCustom?'<select class="qa-sel" id="schTimeIn" style="margin-top:8px;max-width:180px">'+quarterHourOptions(state.time)+'</select>':'')+
         '<div style="margin-top:12px"><label class="sw'+(d.recurring?" on":"")+'" id="tkRec"><i></i> Recurring</label></div>'+
-        (d.recurring?'<div class="qa-note">On completion the next instance is created, dated from this one’s own due date '+
-          'so a task finished late does not drift.</div>':'')+
+        (d.recurring
+          ? '<div class="oa-cols" style="margin-top:8px">'+
+              '<div class="oa-f"><label>Recurring</label><select id="tkRecEvery">'+
+                RECUR_OPTIONS.map(function(o){
+                  return '<option value="'+o[0]+'"'+(o[0]===d.recurInterval?" selected":"")+'>'+esc(o[1])+'</option>';
+                }).join("")+'</select></div>'+
+              (d.recurInterval==="every_n_days"
+                ? '<div class="oa-f"><label># of days <span class="oa-req">required</span></label>'+
+                  '<input type="number" id="tkRecDays" min="1" max="365" value="'+(d.recurDays||1)+'"></div>'
+                : d.recurInterval==="day_of_week"
+                  ? '<div class="oa-f"><label>Day</label><select id="tkRecDow">'+
+                      ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map(function(dn,i){
+                        return '<option value="'+i+'"'+(i===(d.recurDow==null?1:d.recurDow)?" selected":"")+'>'+dn+'</option>';
+                      }).join("")+'</select></div>'
+                  : '<div class="oa-f"></div>')+
+            '</div>'+
+            '<div class="qa-note">On completion the next instance is created, dated from this one’s own due date '+
+            'so a task finished late does not drift.</div>'
+          : '')+
         '<div class="qa-lbl">Priority (1: highest, 9: lowest) <i>*</i></div>'+prioHTML("schPrio",state.priority)+
         '<div class="qa-row" style="margin-top:12px">'+
           '<button class="qa-exp" id="tkAddInstr">+ ADD INSTRUCTIONS</button>'+
@@ -8747,6 +8819,14 @@ function openTaskModal(l){
       document.getElementById("tkWho").addEventListener("change",function(){
         var id=this.value; d.assignee=id?(roster.filter(function(u){return u.id===id;})[0]||null):null; });
       document.getElementById("tkRec").addEventListener("click",function(){ d.recurring=!d.recurring; paint(); });
+      var rEv=document.getElementById("tkRecEvery");
+      /* Repaint on change: "Every ___ Days" and "Day of Week" each bring their
+         own second field, so the row has to be rebuilt. */
+      if(rEv)rEv.addEventListener("change",function(){ d.recurInterval=rEv.value; paint(); });
+      var rDy=document.getElementById("tkRecDays");
+      if(rDy)rDy.addEventListener("input",function(){ d.recurDays=Math.max(1,Math.min(365,+rDy.value||1)); });
+      var rDw=document.getElementById("tkRecDow");
+      if(rDw)rDw.addEventListener("change",function(){ d.recurDow=+rDw.value; });
       document.getElementById("tkAddInstr").addEventListener("click",function(){ if(d.instructions===null){d.instructions="";paint();} });
       document.getElementById("tkAddNotes").addEventListener("click",function(){ if(d.notes===null){d.notes="";paint();} });
       var ri=document.getElementById("tkRmInstr"); if(ri)ri.addEventListener("click",function(){ d.instructions=null; paint(); });
@@ -8773,7 +8853,15 @@ function openTaskModal(l){
         var payload={title:d.title.trim(),type:d.type,priority:prioToPriority(state.priority),
           dueTime:state.time||undefined,leadId:l.id,leadName:l.name,
           assignedUserId:d.assignee?d.assignee.id:undefined,assignedUserName:d.assignee?d.assignee.name:undefined,
-          recurring:d.recurring,recurringInterval:d.recurring?"weekly":undefined,
+          recurring:d.recurring,
+          /* "every_n_days" carries its count in the value, because the store
+             keeps one interval string and a second column for the number would
+             be a field only this one option ever fills. */
+          recurringInterval:d.recurring
+            ? (d.recurInterval==="every_n_days"?("every_"+(d.recurDays||1)+"_days")
+              :d.recurInterval==="day_of_week"?("day_of_week_"+(d.recurDow==null?1:d.recurDow))
+              :d.recurInterval)
+            : undefined,
           instructions:d.instructions||undefined,taskNotes:d.notes||undefined};
         if(due.dueDate)payload.dueDate=due.dueDate;
         if(due.contingent)payload.contingent=due.contingent;
@@ -10953,6 +11041,39 @@ function loadAlertTemplates(then){
 }
 
 function openAlertEditor(l,existing){
+  /* An alert cannot be delivered without somewhere to send it and something to
+     anchor the search on. Both are checked BEFORE the modal opens, because a
+     form that fills in and then refuses on save wastes the operator's typing.
+     Editing an existing alert is exempt — it already exists and may predate
+     whatever is missing now. */
+  if(!existing){
+    var missing=[];
+    if(!String(l.address||"").trim())missing.push("address");
+    if(!String(l.email||"").trim())missing.push("email address");
+    if(missing.length){
+      oaOverlay("Can’t create a listing alert yet",
+        '<div class="oa-unav" style="margin-top:0">This contact has no '+esc(missing.join(" and "))+
+          ' on file.'+
+          (missing.indexOf("address")>=0
+            ? ' A listing alert is anchored to where they are looking, and there is nothing here to anchor it to.'
+            : '')+
+          (missing.indexOf("email address")>=0
+            ? ' Alerts are delivered by email, so without one nothing could be sent.'
+            : '')+
+        '</div>'+
+        '<div class="oa-note">Add what is missing on this contact and open this again.</div>',
+        '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CLOSE</button>'+
+        (missing.indexOf("address")>=0?'<button class="oa-go" id="laAddAddr">ADD AN ADDRESS</button>':''));
+      var aa=document.getElementById("laAddAddr");
+      if(aa)aa.addEventListener("click",function(){ closeOa(); openAddressModal(l,null); });
+      return;
+    }
+  }
+  /* Open IMMEDIATELY on a placeholder rather than waiting on the facets fetch.
+     The editor used to be built inside that promise, so on a cold cache the
+     button appeared to do nothing at all for as long as the request took. */
+  oaOverlay("Listing Alert",'<div class="wdg-note">Loading the board’s cities and features…</div>',
+    '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>');
   loadFacets().then(function(f){
     var c=(existing&&existing.criteria)||{};
     var searchMode="terms";
