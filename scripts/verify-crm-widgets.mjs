@@ -148,6 +148,67 @@ try {
   ok("a flat fee is NOT stored as a 2500% commission", tx && tx.parties.commissionPercent === undefined, JSON.stringify(tx && tx.parties));
   ok("the flat fee is kept on the agreement", flat.agreement.feeValue === 2500 && flat.agreement.feeType === "flat");
 
+  /* ── the 25 Aug additions to Add Agreement ── */
+  const fd3 = new FormData();
+  fd3.append("kind", "buyer"); fd3.append("title", "Buyer with money");
+  fd3.append("createTransaction", "true");
+  fd3.append("primaryAgent", "Wesley");
+  fd3.append("source", "Open House");
+  fd3.append("estClosePrice", "425000");
+  fd3.append("commissionValue", "3");
+  fd3.append("commissionType", "percentage");
+  fd3.append("clientIntent", "Buyer");
+  fd3.append("propertyType", "Residential");
+  r = await fetch(B + "/api/crm/lead/lead_1/agreements", { method: "POST", body: fd3 });
+  ok("an agreement accepts primary agent, source, close price and commission", r.ok, String(r.status));
+  const money = await J(r);
+  ok("all four round-trip onto the agreement",
+    money.agreement.primaryAgent === "Wesley" && money.agreement.source === "Open House" &&
+    money.agreement.estClosePrice === 425000 && money.agreement.commissionValue === 3,
+    JSON.stringify(money.agreement));
+  txs = (await J(await fetch(B + "/api/transactions"))).transactions || [];
+  tx = txs.find((t) => t.id === money.transactionId);
+  /* Primary Agent owns the deal; on a referral that is a different person from
+     the referring agent, so the transaction must take THIS one. */
+  ok("the transaction is assigned to the primary agent", tx && tx.parties.assignedTo === "Wesley",
+    JSON.stringify(tx && tx.parties));
+  ok("and carries the estimated close price", tx && tx.price === 425000, JSON.stringify(tx && tx.price));
+  ok("a percentage commission rides along", tx && tx.parties.commissionPercent === 3);
+
+  /* A FLAT commission must be refused the same way a flat referral fee is. */
+  const fd4 = new FormData();
+  fd4.append("kind", "buyer"); fd4.append("title", "Flat commission");
+  fd4.append("createTransaction", "true");
+  fd4.append("commissionValue", "9000"); fd4.append("commissionType", "flat");
+  r = await fetch(B + "/api/crm/lead/lead_1/agreements", { method: "POST", body: fd4 });
+  const flatComm = await J(r);
+  txs = (await J(await fetch(B + "/api/transactions"))).transactions || [];
+  tx = txs.find((t) => t.id === flatComm.transactionId);
+  ok("a flat commission is NOT written as a 9000% rate",
+    tx && tx.parties.commissionPercent === undefined, JSON.stringify(tx && tx.parties));
+  ok("but is kept on the agreement",
+    flatComm.agreement.commissionValue === 9000 && flatComm.agreement.commissionType === "flat");
+
+  /* The referral migration list: client alongside the partner. */
+  const fd5 = new FormData();
+  fd5.append("kind", "referral"); fd5.append("title", "Referral with client");
+  fd5.append("createTransaction", "true");
+  fd5.append("referringAgent", "Marco");
+  fd5.append("partnerName", "Partner Person"); fd5.append("partnerLeadId", "lead_2");
+  fd5.append("clientName", "Widget Lead"); fd5.append("clientLeadId", "lead_1");
+  r = await fetch(B + "/api/crm/lead/lead_1/agreements", { method: "POST", body: fd5 });
+  const withClient = await J(r);
+  ok("a referral records the client separately from the partner",
+    withClient.agreement.clientLeadId === "lead_1" && withClient.agreement.partnerLeadId === "lead_2",
+    JSON.stringify(withClient.agreement));
+
+  /* Rows written before these columns existed must still read back. */
+  const older = (await J(await fetch(B + "/api/crm/lead/lead_1/agreements"))).agreements
+    .find((x) => x.title === "Widget Lead Referral");
+  ok("an agreement saved before the new columns still reads back",
+    older && older.primaryAgent === "" && older.estClosePrice === null && older.commissionType === "percentage",
+    JSON.stringify(older && { p: older.primaryAgent, e: older.estClosePrice, c: older.commissionType }));
+
   const before = (await J(await fetch(B + "/api/crm/lead/lead_1/agreements"))).agreements.length;
   r = await fetch(B + "/api/crm/agreement/" + ag.agreement.id, { method: "DELETE" });
   const del = await J(r);
@@ -389,6 +450,96 @@ try {
   await page.waitForSelector("#oaOv .tkc");
   ok("VIEW ALL opens the full task log", (await page.$$("#oaOv .tkc")).length >= 3);
   ok("and shows the contingent rule in words", /days before birthday/.test(await page.textContent("#oaOv")), (await page.textContent("#oaOv")).slice(0, 300));
+
+  /* ── Add Agreement and Add Task in the browser (25 Aug) ── */
+  {
+    /* An earlier block may have left an overlay up; it swallows clicks. */
+    await page.evaluate(() => { if (typeof closeOa === "function") closeOa(); });
+    await page.waitForTimeout(250);
+    await page.click('#leadDetail [data-agree="buyer"]');
+    await page.waitForSelector("#agProp", { timeout: 8000, state: "attached" });
+    /* Property Type used to live INSIDE the "Create Active Transaction" block,
+       so on a buyer agreement — where that toggle starts off — it was never
+       rendered. Reported as the dropdown "opening behind the popup". */
+    ok("Property Type is on screen without toggling anything",
+      await page.isVisible("#agProp"));
+    ok("with the full property-type list",
+      (await page.$$eval("#agProp option", (n) => n.length)) === 8);
+    ok("Source is a dropdown", !!(await page.$("#agSource")));
+    /* Live data spells the same source two ways (source column vs platform). */
+    const srcs = await page.$$eval("#agSource option", (n) => n.map((o) => o.value).filter(Boolean));
+    const lowered = srcs.filter((x) => x !== "__other").map((x) => x.toLowerCase());
+    ok("and its options are de-duplicated case-insensitively",
+      lowered.length === new Set(lowered).size, srcs.join(","));
+    ok("Other lets a new source be typed", srcs.includes("__other"));
+
+    await page.click("#agTxSw");
+    await page.waitForTimeout(200);
+    ok("Primary Agent lists the roster", !!(await page.$("#agPrimary")));
+    const agents = await page.$$eval("#agPrimary option", (n) => n.map((o) => o.textContent.trim()));
+    ok("including Wesley", agents.includes("Wesley"), agents.join(","));
+    ok("Est. Close Price is there", !!(await page.$("#agClose")));
+    ok("Commission has a $ / % switch", (await page.$$("[data-comm]")).length === 2);
+    await page.evaluate(() => closeOa());
+    await page.waitForTimeout(200);
+
+    /* The referral form must carry every field on the migration list. */
+    await page.click('#leadDetail [data-agree="referral"]');
+    await page.waitForSelector("#agClient", { timeout: 8000 });
+    for (const [id, label] of [["agTitle", "transaction title"], ["agFee", "referral fee"],
+      ["agAgent", "referring agent"], ["agClient", "client"], ["agPartner", "referral partner"]]) {
+      ok(`referral carries ${label}`, !!(await page.$("#" + id)));
+    }
+    ok("client intent is on the referral too", !!(await page.$("#agIntent")));
+    /* The client field suggests contacts already in the CRM. */
+    await page.fill("#agClient", "Widget");
+    await page.waitForTimeout(350);
+    const sugg = await page.$$eval(".ta-list button", (n) => n.map((e) => e.textContent.trim()));
+    ok("and suggests leads from the CRM", sugg.length > 0, sugg.slice(0, 3).join(" | "));
+    await page.evaluate(() => closeOa());
+    await page.waitForTimeout(200);
+
+    /* Add Task: Type, Assigned To and the contingent Event are all live. */
+    await page.click("#ldTaskAdd");
+    await page.waitForSelector("#tkType", { timeout: 8000 });
+    const tkTypes = await page.$$eval("#tkType option", (n) => n.map((o) => o.textContent.trim()));
+    ok("the task Type dropdown carries every type",
+      tkTypes.join(",") === "To-Do,Call,Text,Email,Mail,Social Media,Door Knock", tkTypes.join(","));
+    await page.selectOption("#tkType", "door_knock");
+    ok("and is actually selectable", (await page.inputValue("#tkType")) === "door_knock");
+    const tkWho = await page.$$eval("#tkWho option", (n) => n.map((o) => o.textContent.trim()));
+    ok("Assigned To lists the roster including Wesley", tkWho.includes("Wesley"), tkWho.join(","));
+    await page.selectOption("#tkWho", { label: "Wesley" });
+    ok("and is selectable too", !!(await page.inputValue("#tkWho")));
+    await page.click('#schDate button[data-mode="contingent"]');
+    await page.waitForSelector("#ctEvent", { timeout: 6000 });
+    const evs = await page.$$eval("#ctEvent option", (n) => n.map((o) => o.textContent.trim()));
+    ok("the contingent Event dropdown carries all five events",
+      evs.join(",") === "Birthdate,Anniversary,Organization End Date,Licensed Since,Organization Start Date",
+      evs.join(","));
+    await page.evaluate(() => closeOa());
+    await page.waitForTimeout(200);
+  }
+
+  if (process.env.SHOT_DIR) {
+    const D = process.env.SHOT_DIR;
+    await page.setViewportSize({ width: 1400, height: 1050 });
+    await page.evaluate(() => { if (typeof closeOa === "function") closeOa(); });
+    await page.waitForTimeout(200);
+    await page.click('#leadDetail [data-agree="buyer"]');
+    await page.waitForSelector("#agProp", { timeout: 8000 });
+    await page.click("#agTxSw");
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: D + "/ag-01-buyer.png" });
+    await page.evaluate(() => closeOa());
+    await page.waitForTimeout(200);
+    await page.click('#leadDetail [data-agree="referral"]');
+    await page.waitForSelector("#agClient", { timeout: 8000 });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: D + "/ag-02-referral.png" });
+    await page.evaluate(() => closeOa());
+    await page.waitForTimeout(200);
+  }
 
   ok("no page errors", errs.length === 0, errs.slice(0, 3).join(" | "));
   await br.close();

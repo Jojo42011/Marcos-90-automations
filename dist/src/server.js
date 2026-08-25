@@ -3700,11 +3700,22 @@ app.post("/api/crm/lead/:id/agreements", (req, res) => {
                             leadName: lead.name || undefined,
                             phone: lead.phone || undefined,
                             email: lead.email || undefined,
-                            assignedTo: typeof body.referringAgent === "string" ? body.referringAgent : undefined,
-                            /* Only a PERCENTAGE fee belongs in commissionPercent. A flat fee
-                               stored there would be read as 2500% by the GCI maths. */
-                            commissionPercent: body.feeType !== "flat" && Number.isFinite(feeNum) ? feeNum : undefined,
+                            /* Primary Agent is who owns the DEAL. Referring Agent is who sent
+                               it — different people on a referral, and conflating them would
+                               put the wrong name on the pipeline. */
+                            assignedTo: (typeof body.primaryAgent === "string" && body.primaryAgent) ||
+                                (typeof body.referringAgent === "string" ? body.referringAgent : undefined) || undefined,
+                            /* Only a PERCENTAGE belongs in commissionPercent. A flat amount
+                               stored there would be read as 2500% by the GCI maths. The
+                               agreement's own commission field wins over the referral fee,
+                               because a referral has both and they are not the same number. */
+                            commissionPercent: body.commissionType !== "flat" && Number.isFinite(Number(body.commissionValue))
+                                ? Number(body.commissionValue)
+                                : body.feeType !== "flat" && Number.isFinite(feeNum) ? feeNum : undefined,
                         },
+                        price: Number.isFinite(Number(body.estClosePrice)) && String(body.estClosePrice) !== ""
+                            ? Number(body.estClosePrice) : undefined,
+                        source: typeof body.source === "string" && body.source ? body.source : undefined,
                     });
                     transactionId = tx.id || null;
                 }
@@ -3721,6 +3732,15 @@ app.post("/api/crm/lead/:id/agreements", (req, res) => {
                     partnerName: typeof body.partnerName === "string" ? body.partnerName : "",
                     clientIntent: body.clientIntent,
                     propertyType: body.propertyType,
+                    primaryAgent: typeof body.primaryAgent === "string" ? body.primaryAgent : "",
+                    source: typeof body.source === "string" ? body.source : "",
+                    estClosePrice: Number.isFinite(Number(body.estClosePrice)) && String(body.estClosePrice) !== ""
+                        ? Number(body.estClosePrice) : null,
+                    commissionValue: Number.isFinite(Number(body.commissionValue)) && String(body.commissionValue) !== ""
+                        ? Number(body.commissionValue) : null,
+                    commissionType: body.commissionType,
+                    clientLeadId: typeof body.clientLeadId === "string" && body.clientLeadId ? body.clientLeadId : null,
+                    clientName: typeof body.clientName === "string" ? body.clientName : "",
                     signedDate: body.signedDate,
                     expirationDate: body.expirationDate,
                 });

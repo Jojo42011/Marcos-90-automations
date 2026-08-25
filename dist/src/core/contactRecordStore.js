@@ -104,6 +104,28 @@ function resolveContactDocsDir() {
     return dir;
 }
 let db = null;
+/**
+ * Columns added to `referral_agreements` after it shipped.
+ *
+ * ALTER TABLE ADD COLUMN, not a rebuild: the table already holds signed
+ * agreements on live contacts, and dropping and recreating it to change a
+ * shape would take those with it. Each add is guarded by what the table
+ * already has, so this is safe to run on every boot.
+ */
+function migrateAgreementColumns(database) {
+    const have = new Set(database.prepare(`PRAGMA table_info(referral_agreements)`).all().map((r) => r.name));
+    const add = (col, decl) => {
+        if (!have.has(col))
+            database.exec(`ALTER TABLE referral_agreements ADD COLUMN ${col} ${decl}`);
+    };
+    add("primary_agent", "TEXT NOT NULL DEFAULT ''");
+    add("source", "TEXT NOT NULL DEFAULT ''");
+    add("est_close_price", "REAL");
+    add("commission_value", "REAL");
+    add("commission_type", "TEXT NOT NULL DEFAULT 'percentage'");
+    add("client_lead_id", "TEXT");
+    add("client_name", "TEXT NOT NULL DEFAULT ''");
+}
 function getContactRecordDb() {
     if (db)
         return db;
@@ -231,6 +253,7 @@ function getContactRecordDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_contact_documents_lead ON contact_documents(lead_id, created_at);
   `);
+    migrateAgreementColumns(db);
     return db;
 }
 const nowIso = () => new Date().toISOString();
@@ -689,6 +712,13 @@ const toAgreement = (r) => ({
     documentId: r.document_id, transactionId: r.transaction_id, title: r.title, feeValue: r.fee_value,
     feeType: r.fee_type, referringAgent: r.referring_agent, partnerLeadId: r.partner_lead_id,
     partnerName: r.partner_name, clientIntent: r.client_intent, propertyType: r.property_type,
+    /* Defaulted on read, not assumed present: rows written before these columns
+       existed come back with them undefined. */
+    primaryAgent: r.primary_agent || "", source: r.source || "",
+    estClosePrice: r.est_close_price ?? null,
+    commissionValue: r.commission_value ?? null,
+    commissionType: r.commission_type || "percentage",
+    clientLeadId: r.client_lead_id ?? null, clientName: r.client_name || "",
     signedDate: r.signed_date, expirationDate: r.expiration_date, isActive: !!r.is_active, createdAt: r.created_at,
 });
 function listAgreements(leadId) {
@@ -706,9 +736,11 @@ function addAgreement(leadId, input) {
     getContactRecordDb()
         .prepare(`INSERT INTO referral_agreements
        (id, lead_id, kind, document_id, transaction_id, title, fee_value, fee_type, referring_agent,
-        partner_lead_id, partner_name, client_intent, property_type, signed_date, expiration_date, is_active, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-        .run(id, leadId, oneOf(exports.AGREEMENT_KINDS, input.kind, "referral"), input.documentId || null, input.transactionId || null, (input.title || "").trim().slice(0, 255), typeof input.feeValue === "number" && Number.isFinite(input.feeValue) ? input.feeValue : null, input.feeType === "flat" ? "flat" : "percentage", (input.referringAgent || "").trim().slice(0, 120), input.partnerLeadId || null, (input.partnerName || "").trim().slice(0, 160), oneOf(exports.CLIENT_INTENTS, input.clientIntent, "Buyer"), oneOf(exports.PROPERTY_TYPES, input.propertyType, "Residential"), normDay(input.signedDate), normDay(input.expirationDate), 1, nowIso());
+        partner_lead_id, partner_name, client_intent, property_type, primary_agent, source,
+        est_close_price, commission_value, commission_type, client_lead_id, client_name,
+        signed_date, expiration_date, is_active, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(id, leadId, oneOf(exports.AGREEMENT_KINDS, input.kind, "referral"), input.documentId || null, input.transactionId || null, (input.title || "").trim().slice(0, 255), typeof input.feeValue === "number" && Number.isFinite(input.feeValue) ? input.feeValue : null, input.feeType === "flat" ? "flat" : "percentage", (input.referringAgent || "").trim().slice(0, 120), input.partnerLeadId || null, (input.partnerName || "").trim().slice(0, 160), oneOf(exports.CLIENT_INTENTS, input.clientIntent, "Buyer"), oneOf(exports.PROPERTY_TYPES, input.propertyType, "Residential"), (input.primaryAgent || "").trim().slice(0, 120), (input.source || "").trim().slice(0, 120), typeof input.estClosePrice === "number" && Number.isFinite(input.estClosePrice) ? input.estClosePrice : null, typeof input.commissionValue === "number" && Number.isFinite(input.commissionValue) ? input.commissionValue : null, input.commissionType === "flat" ? "flat" : "percentage", input.clientLeadId || null, (input.clientName || "").trim().slice(0, 160), normDay(input.signedDate), normDay(input.expirationDate), 1, nowIso());
     return getAgreement(id);
 }
 function deleteAgreement(id) {

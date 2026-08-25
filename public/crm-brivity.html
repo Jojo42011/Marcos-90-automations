@@ -1026,6 +1026,9 @@
   .fee-unit button:last-child{border-radius:0 6px 6px 0}
   .fee-unit button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
   /* 4-way segmented group (client intent) */
+  .fee-pre{display:inline-flex;align-items:center;padding:0 10px;border:1px solid var(--line);
+    border-right:0;border-radius:6px 0 0 6px;background:#f7fafa;color:#8a939c;font-size:12.5px;height:38px}
+  .fee-row .fee-pre + input{border-radius:0 6px 6px 0}
   .seg4{display:flex;gap:0}
   .seg4 button{flex:1;border:1px solid var(--line);background:#fff;color:#6b7480;height:38px;font-size:12.5px;
     cursor:pointer;font-family:inherit;margin-left:-1px}
@@ -4193,9 +4196,20 @@ function loadAdvSources(cb){
   }).catch(function(){ADV_SRC.tasksByLead=null;ADV_SRC.tasksErr=true;}).finally(fin);
 }
 function advDistinctSources(){
-  var set={};
-  LEADS.forEach(function(l){ if(l.source)set[l.source.trim()]=1; if(l.platform&&/insta|tik/i.test(l.platform))set[l.platform.trim()]=1; });
-  return Object.keys(set).sort();
+  /* Case-folded on the KEY, first spelling kept for display. Live data has
+     both "TikTok" and "tiktok" (the source column and the platform column
+     disagree), and offering both made the filter look like two sources when
+     it is one — pick the wrong one and rows go missing. */
+  var seen={};
+  LEADS.forEach(function(l){
+    [l.source,(l.platform&&/insta|tik/i.test(l.platform))?l.platform:null].forEach(function(v){
+      if(!v)return;
+      var t=String(v).trim(); if(!t)return;
+      var k=t.toLowerCase();
+      if(!seen[k])seen[k]=t;
+    });
+  });
+  return Object.keys(seen).sort().map(function(k){ return seen[k]; });
 }
 function advDistinctTags(){
   var set={}; ADV_SRC.tags.forEach(function(t){set[t]=1;});
@@ -8093,8 +8107,13 @@ function paintAgreements(l){
 function openAgreementModal(l,kind){
   ensureRoster(function(roster){
     var isReferral=kind==="referral";
-    var file=null, feeType="percentage", intent=isReferral?"Buyer":(l.intent==="seller"?"Seller":"Buyer");
-    var partner=null, createTx=isReferral;
+    var file=null, feeType="percentage", commType="percentage";
+    var intent=isReferral?"Buyer":(l.intent==="seller"?"Seller":"Buyer");
+    var partner=null, client=null, createTx=isReferral;
+    /* Sources actually recorded on these contacts, plus an Other escape. The
+       full Rivity list has not arrived; when it does this becomes a managed
+       list and Other stays for anything new. */
+    var srcOpts=(typeof advDistinctSources==="function"?advDistinctSources():[])||[];
     var propTypes=(AGREE.propertyTypes&&AGREE.propertyTypes.length)?AGREE.propertyTypes:
       ["Residential","Commercial","Manufactured Home","Rental","Business Opportunity","Multi-Family","Vacant Land","Condominium"];
     var intents=(AGREE.clientIntents&&AGREE.clientIntents.length)?AGREE.clientIntents:["Buyer","Seller","Tenant","Landlord"];
@@ -8111,8 +8130,18 @@ function openAgreementModal(l,kind){
       '<label class="sw'+(createTx?" on":"")+'" id="agTxSw"><i></i> Create Active '+
         (isReferral?"Referral ":"")+'Transaction</label>'+
       '<div id="agSub" style="margin-top:14px;'+(createTx?"":"display:none")+'">'+
-        '<div class="oa-f"><label>Transaction Title <span class="oa-req">required</span></label>'+
-          '<input type="text" id="agTitle" value="'+esc((l.name||"Contact")+(isReferral?" Referral":" Agreement"))+'"></div>'+
+        '<div class="oa-cols">'+
+          '<div class="oa-f"><label>Transaction Title <span class="oa-req">required</span></label>'+
+            '<input type="text" id="agTitle" value="'+esc((l.name||"Contact")+(isReferral?" Referral":" Agreement"))+'"></div>'+
+          /* Primary Agent owns the DEAL; Referring Agent (below, on a referral)
+             is who sent it. On a referral those are different people, so they
+             are different fields and the transaction is assigned from this one. */
+          '<div class="oa-f"><label>Primary Agent</label><select id="agPrimary">'+
+            roster.map(function(u){
+              return '<option value="'+esc(u.name)+'"'+(u.name===(l.assignedUserName||"Marco Puga")?" selected":"")+'>'+
+                esc(u.name)+'</option>'; }).join("")+
+          '</select></div>'+
+        '</div>'+
         (isReferral?
           '<div class="oa-cols">'+
             '<div class="oa-f"><label>Referral Fee</label><div class="fee-row">'+
@@ -8124,21 +8153,52 @@ function openAgreementModal(l,kind){
                 return '<option value="'+esc(u.name)+'"'+(u.name===(l.assignedUserName||"Marco Puga")?" selected":"")+'>'+esc(u.name)+'</option>'; }).join("")+
             '</select></div>'+
           '</div>'+
+          '<div class="oa-f ta-wrap"><label>Client <span class="oa-req">required</span></label>'+
+            '<input type="text" id="agClient" autocomplete="off" placeholder="Begin typing a person’s name"></div>'+
+          '<div class="oa-hint" style="margin:-8px 0 12px">Suggestions come from contacts already in this CRM. '+
+            'A name that matches nobody is stored as typed.</div>'+
           '<div class="oa-f ta-wrap"><label>Referral Partner <span class="oa-req">required</span></label>'+
             '<input type="text" id="agPartner" autocomplete="off" placeholder="Begin typing a person’s name"></div>'+
           '<div class="oa-note" style="margin-top:0">Don’t have the referral partner as a contact in your CRM? '+
             '<a class="ldlink" id="agQuickAdd" style="color:var(--teal-strong);font-weight:600">Add them here</a>.</div>'
           :'')+
-        '<div class="oa-f"><label>Client Intent</label><div class="seg4" id="agIntent">'+
-          intents.map(function(x){ return '<button data-int="'+esc(x)+'"'+(x===intent?' class="on"':'')+'>'+esc(x)+'</button>'; }).join("")+
-        '</div></div>'+
+      '</div>'+
+      /* Client Intent and Property Type describe the AGREEMENT, not the
+         transaction, so they sit outside the toggle. They used to live inside
+         it, which meant Property Type was simply not on screen unless "Create
+         Active Transaction" happened to be on — reported as the dropdown
+         "opening behind the popup" when it was never rendered at all. */
+      '<div class="oa-f"><label>Client Intent</label><div class="seg4" id="agIntent">'+
+        intents.map(function(x){ return '<button data-int="'+esc(x)+'"'+(x===intent?' class="on"':'')+'>'+esc(x)+'</button>'; }).join("")+
+      '</div></div>'+
+      '<div class="oa-cols">'+
         '<div class="oa-f"><label>Property Type</label><select id="agProp">'+
           propTypes.map(function(x){ return '<option value="'+esc(x)+'"'+(x==="Residential"?" selected":"")+'>'+esc(x)+'</option>'; }).join("")+
         '</select></div>'+
+        '<div class="oa-f"><label>Source</label><select id="agSource">'+
+          '<option value="">Select…</option>'+
+          srcOpts.map(function(x){ return '<option value="'+esc(x)+'">'+esc(x)+'</option>'; }).join("")+
+          '<option value="__other">Other — type it in</option>'+
+        '</select>'+
+        '<input type="text" id="agSourceOther" placeholder="Source name" style="display:none;margin-top:6px">'+
+        '<div class="oa-hint" style="margin-top:4px">Sources are the ones already in use on these contacts. The full '+
+          'Rivity list has not been supplied yet — until it is, anything new goes in through Other.</div></div>'+
       '</div>'+
+      '<div id="agMoney" style="'+(createTx?"":"display:none")+'">'+
+        '<div class="oa-cols">'+
+          '<div class="oa-f"><label>Est. Close Price</label>'+
+            '<div class="fee-row"><span class="fee-pre">$</span>'+
+            '<input type="number" id="agClose" min="0" step="1000" placeholder="0.00"></div></div>'+
+          '<div class="oa-f"><label>Commission</label><div class="fee-row">'+
+            '<input type="number" id="agComm" min="0" step="0.25" placeholder="0.00">'+
+            '<span class="fee-unit"><button data-comm="flat">$</button>'+
+            '<button data-comm="percentage" class="on">%</button></span></div></div>'+
+        '</div></div>'+
       '<div class="oa-note">The toggle opens a real transaction in the pipeline, linked to this contact and to the '+
-        'agreement. A percentage fee is carried onto the transaction as its commission; a flat fee is kept on the '+
-        'agreement only, because the deal’s GCI maths reads that field as a percentage.</div>',
+        'agreement, assigned to the Primary Agent above. A <b>percentage</b> commission'+
+        (isReferral?' (or referral fee, if no commission is set)':'')+' is carried onto that transaction as its rate; '+
+        'a <b>flat</b> amount is kept on the agreement only, because the deal’s GCI maths reads that field as a '+
+        'percentage and $9,000 stored there is 9,000%.</div>',
       '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
       '<button class="oa-go" id="agSave">SAVE AGREEMENT</button>');
 
@@ -8162,6 +8222,7 @@ function openAgreementModal(l,kind){
     sw.addEventListener("click",function(){
       createTx=!createTx; sw.classList.toggle("on",createTx);
       document.getElementById("agSub").style.display=createTx?"":"none";
+      document.getElementById("agMoney").style.display=createTx?"":"none";
     });
     document.querySelectorAll("#oaOv [data-fee]").forEach(function(b){
       b.addEventListener("click",function(){
@@ -8175,6 +8236,28 @@ function openAgreementModal(l,kind){
         document.querySelectorAll("#agIntent button").forEach(function(x){ x.classList.toggle("on",x===b); });
       });
     });
+    document.querySelectorAll("#oaOv [data-comm]").forEach(function(b){
+      b.addEventListener("click",function(){
+        commType=b.getAttribute("data-comm");
+        document.querySelectorAll("#oaOv [data-comm]").forEach(function(x){ x.classList.toggle("on",x===b); });
+      });
+    });
+    var srcSel=document.getElementById("agSource"), srcOther=document.getElementById("agSourceOther");
+    if(srcSel)srcSel.addEventListener("change",function(){
+      srcOther.style.display=srcSel.value==="__other"?"":"none";
+      if(srcSel.value==="__other")srcOther.focus();
+    });
+    var cIn=document.getElementById("agClient");
+    if(cIn){
+      /* Suggested from contacts already in the CRM. The contact whose record
+         this is comes first — on a referral they are usually the client. */
+      var pool=[{id:l.id,label:l.name||"(no name)",sub:"this contact"}].concat(
+        LEADS.filter(function(x){return x.id!==l.id;}).slice(0,1200).map(function(x){
+          return {id:x.id,label:x.name||"(no name)",sub:x.email||x.phone||""}; }));
+      attachTypeahead(cIn,pool,function(p){ client=p; cIn.value=p.label; },
+        {minChars:1,emptyText:"Nobody in the CRM matches that — it will be stored as typed"});
+      cIn.addEventListener("input",function(){ client=null; });
+    }
     var pIn=document.getElementById("agPartner");
     if(pIn){
       attachTypeahead(pIn,LEADS.filter(function(x){return x.id!==l.id;}).slice(0,1200).map(function(x){
@@ -8201,10 +8284,21 @@ function openAgreementModal(l,kind){
       var sd=document.getElementById("agSigned").value, ed=document.getElementById("agExp").value;
       if(sd)fd.append("signedDate",sd);
       if(ed)fd.append("expirationDate",ed);
+      /* Client Intent, Property Type and Source describe the AGREEMENT, so
+         they are sent whether or not a transaction is opened. Only the money
+         and the referral parties are transaction-side. */
+      fd.append("clientIntent",intent);
+      fd.append("propertyType",(document.getElementById("agProp")||{}).value||"Residential");
+      var srcVal=(document.getElementById("agSource")||{}).value||"";
+      if(srcVal==="__other")srcVal=((document.getElementById("agSourceOther")||{}).value||"").trim();
+      if(srcVal)fd.append("source",srcVal);
       if(createTx){
         fd.append("createTransaction","true");
-        fd.append("clientIntent",intent);
-        fd.append("propertyType",(document.getElementById("agProp")||{}).value||"Residential");
+        fd.append("primaryAgent",(document.getElementById("agPrimary")||{}).value||"");
+        var closeV=(document.getElementById("agClose")||{}).value||"";
+        if(closeV)fd.append("estClosePrice",closeV);
+        var commV=(document.getElementById("agComm")||{}).value||"";
+        if(commV){ fd.append("commissionValue",commV); fd.append("commissionType",commType); }
         if(l.address)fd.append("address",l.address);
         if(isReferral){
           fd.append("feeValue",(document.getElementById("agFee")||{}).value||"");
@@ -8212,6 +8306,8 @@ function openAgreementModal(l,kind){
           fd.append("referringAgent",(document.getElementById("agAgent")||{}).value||"");
           fd.append("partnerName",pIn?pIn.value.trim():"");
           if(partner)fd.append("partnerLeadId",partner.id);
+          fd.append("clientName",cIn?cIn.value.trim():"");
+          if(client)fd.append("clientLeadId",client.id);
         }
       }
       var go=document.getElementById("agSave"); go.disabled=true; go.textContent="SAVING…";
