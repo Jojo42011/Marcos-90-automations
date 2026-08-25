@@ -276,11 +276,24 @@ try {
   ok("bedrooms is a No Min ladder, not a free number", bedOpts[0] === "No Min" && bedOpts.includes("7"), JSON.stringify(bedOpts));
   const bathOpts = await page.$$eval("#oaBaMin option", (els) => els.map((e) => e.textContent.trim()));
   ok("bathrooms carries the half steps", bathOpts.includes("1.5") && bathOpts.includes("1.75"), JSON.stringify(bathOpts));
-  ok("feature groups collapse behind MORE", (await page.$$("#oaOv .la-grp")).length >= 3 &&
-    /MORE v/.test(await page.textContent("#oaOv .la-grp .more")));
-  await page.click("#oaOv .la-grp h6");
-  await page.waitForTimeout(200);
-  ok("clicking the header expands one", await page.$eval("#oaOv .la-grp", (e) => e.classList.contains("open")));
+  /* MORE is offered exactly where a group has more than the two visible rows.
+     It used to be on every group, including ones with a single checkbox, where
+     it was a control that did nothing. */
+  ok("checkbox groups are rendered", (await page.$$("#oaOv .la-grp")).length >= 3);
+  ok("MORE appears on the groups that overflow, and only those",
+    await page.$$eval("#oaOv .la-grp", (gs) => gs.every((g) =>
+      (g.querySelectorAll(".oa-ck").length > 4) === !!g.querySelector(".more"))));
+  const collapsed = await page.$("#oaOv .la-grp:not(.open) h6[data-latoggle]");
+  if (collapsed) {
+    const key = await collapsed.evaluate((h) => h.getAttribute("data-latoggle"));
+    await collapsed.click();
+    await page.waitForTimeout(200);
+    ok("clicking the header expands one",
+      await page.$eval(`#oaOv [data-lagrp="${key}"]`, (e) => e.classList.contains("open")));
+  } else {
+    ok("nothing is hidden when no group overflows",
+      await page.$$eval("#oaOv .la-grp", (gs) => gs.every((g) => g.classList.contains("open"))));
+  }
   ok("the footer states the immediate first email", /sends an initial email/i.test(await page.textContent("#oaOv .la-foot-note")));
   await page.waitForTimeout(1200);
   ok("the count reads as VIEW N LISTINGS", /VIEW \d+ LISTINGS?/.test(await page.textContent("#oaCount")), await page.textContent("#oaCount"));

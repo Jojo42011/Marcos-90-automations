@@ -36,6 +36,12 @@ export interface ListingCriteria {
   counties?: string[];
   schoolDistricts?: string[];
   subdivisions?: string[];
+  /**
+   * Free-text street match, for the "search terms" box: a person typing
+   * "Rolling Oaks" wants the street, not the subdivision field. Contains, not
+   * equals — the feed writes full street lines ("1234 Rolling Oaks Dr").
+   */
+  streetContains?: string;
 
   minPrice?: number;
   maxPrice?: number;
@@ -128,6 +134,11 @@ export function buildCriteriaSql(c: ListingCriteria): CriteriaSql {
   /* Subdivision is a contains-OR: the feed writes "Alamo Ranch Unit 12" where a
      person types "Alamo Ranch". */
   push(orContains("subdivision", clean(c.subdivisions), "sub", params, "or"));
+  const street = String(c.streetContains ?? "").trim();
+  if (street) {
+    params.street0 = `%${street.toLowerCase()}%`;
+    where.push(`LOWER(COALESCE(street,'')) LIKE @street0`);
+  }
 
   const range = (col: string, min: unknown, max: unknown, key: string) => {
     if (isNum(min)) { params[key + "Min"] = min; where.push(`${col} >= @${key}Min`); }

@@ -1,6 +1,6 @@
 # FORAI — Marcos-90-automations (marco-90-automation)
 
-Last updated: 2026-08-21 by Claude Code
+Last updated: 2026-08-25 by Claude Code
 
 FORAI = "For AI." This is the living architectural summary of this repo — the source of truth agents read before working here, and the source the AETHON Chronicler pulls nightly to keep the master architecture docs current. Keep it short: current state, recent changes, known gaps. Not a commit log.
 
@@ -27,6 +27,18 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 - **Auth (built, not enforced)** — session cookie `mp_sid` + scrypt passwords + `sessions`/`login_history`/`audit_log` in `auth.db`, gated behind the `SITE_LOGIN_ENABLED` env kill switch. Legacy API auth is `DASHBOARD_TOKEN`. See Known gaps.
 
 ## Recent changes (most recent first)
+
+- [2026-08-25c] — **The Edit Listing Alert form at Brivity parity, and the managed Source / Tag vocabulary** (`src/core/crmVocabulary.ts` NEW, `src/core/mlsFacets.ts`, `src/core/listingCriteria.ts`, `src/server.ts`, `public/crm-brivity.html`, `scripts/verify-listing-alert-parity.mjs` NEW).
+
+  **Brivity's feature groups, filled with the board's own vocabulary.** The alert form had two flat lists, Interior Features and Exterior Features. It now renders Brivity's categories — Popular Features, Community Features, Pool, Cooling, Heating, Parking, Home Style, Lot, Exterior, Property, Interior — in Brivity's order, each collapsing behind MORE / LESS. What goes *inside* each category is not Brivity's fixed checkbox list but whatever the SABOR mirror actually publishes, bucketed by `groupFeatures()` in `mlsFacets.ts`, so a category the board has nothing for does not render and a checkbox can never match zero listings by construction. Each option carries which feed column it must be matched on (`side: interior | exterior`), because the two live in different strings on the record. Popular Features deliberately repeats options from the categories below it, and ticking either copy ticks the other — a buyer who wants a pool should not have to know which drawer it is filed under.
+
+  **Every range is a dropdown now.** Price, Bedrooms, Bathrooms, Square Feet, Lot Size and Year Built are min/max ladders; **Stories** is new (Any / 1 / 2 / 3+, where "3+" expands to the storey counts the board really has, never a hard-coded list). A value stored before a ladder existed — `$412,500` typed into the old free-text price box — is spliced into the options rather than rounded away, because a dropdown that quietly changes someone's saved search changes what their client receives. **Garage is the one that cannot be offered:** SABOR publishes no garage-space count, so the row renders a disabled control that says so where the dropdown would have been, instead of vanishing (which reads as an oversight) or working (which would silently match everything). The same ladders replaced the free-number fields in both market-report builders, and the report wizard's Property Types list no longer `slice(0,6)`s away Farm/Ranch, Manufactured Home, Multi-Family and Vacant Land.
+
+  **Search terms.** A term box narrows the Cities / Postal Codes / School Districts lists as you type, and a new `streetContains` criterion matches the listing's street line — for one road, not an area. Map mode is still offered-and-disabled: the feed has no coordinates on any listing, so there is nothing a drawn boundary could be evaluated against.
+
+  **The Source and Tag lists are real lists now.** Both dropdowns were built from `DISTINCT` over what was already recorded, which is fine for reading data back and useless for entering it — a source Marco had not used yet could not be picked, so it got typed freehand and "Zillow"/"zillow"/"Zillow.com" became three sources. `crmVocabulary.ts` seeds **357 sources and 81 tags exactly as exported from Brivity**, each with the number of people carrying it at export time (a snapshot, shown as such, never used as this system's own count). Custom entries live in `/data/crm-vocabulary.db`, added from the filter panel itself; a seeded entry cannot be deleted, because contacts still carry it and removing it here would not change theirs. Both dropdowns group "On these contacts" above "From the Brivity import" and carry a search box — 329 of the 357 sources had nobody on them, and interleaving them would bury the eight that matter. Served by `GET /api/crm/vocabulary`, with `POST/DELETE /api/crm/vocabulary/:kind`. Note the seeds are keyed by **exact name**: the export really does contain both "Appointment" (9 people) and "appointment" (1), on different contacts, and tag matching is case-sensitive, so folding them together would silently miss one spelling's people.
+
+  Covered by `scripts/verify-listing-alert-parity.mjs` (68 checks). All thirteen suites green.
 
 - [2026-08-25b] — **Recurrence cadences that actually recur, the address discrepancy explained, and the listing-alert guard** (`src/core/types.ts`, `src/server.ts`, `public/crm-brivity.html`, `scripts/verify-crm-widgets.mjs`, `scripts/verify-outreach.mjs`).
 

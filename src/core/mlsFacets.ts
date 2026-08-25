@@ -21,6 +21,17 @@ export interface Facet {
   count: number;
 }
 
+/** A feature option, tagged with which feed column it has to be matched on. */
+export interface GroupedFeature extends Facet {
+  side: "interior" | "exterior";
+}
+
+export interface FeatureGroup {
+  key: string;
+  label: string;
+  options: GroupedFeature[];
+}
+
 export interface MlsFacets {
   /** Total listings the facets were computed from. */
   total: number;
@@ -34,6 +45,13 @@ export interface MlsFacets {
   stories: Facet[];
   interiorFeatures: Facet[];
   exteriorFeatures: Facet[];
+  /**
+   * The same feature values, arranged into the categories Brivity's listing
+   * alert form uses. Every option is still a real value counted off the board;
+   * only the grouping is borrowed. A category the board has nothing for does
+   * not appear at all.
+   */
+  featureGroups: FeatureGroup[];
   /** Fields present in the schema but empty on this board — reported, not offered. */
   unavailable: Array<{ field: string; reason: string }>;
   computedAt: string;
@@ -92,6 +110,102 @@ function featureFacets(jsonPath: string, minCount: number): Facet[] {
     .map(([value, count]) => ({ value, label: value, count }));
 }
 
+
+/**
+ * Brivity's feature categories, and the words that put a real feed value into
+ * one.
+ *
+ * WHY MATCH RATHER THAN HARD-CODE. Brivity's form lists a fixed set of
+ * checkboxes ("Boat Ramp", "1st Seller Carry") whether or not the board carries
+ * them, so ticking one can silently match nothing. The categories below are
+ * Brivity's, in Brivity's order, but what goes inside each one is whatever the
+ * feed actually publishes — so the form looks like the one being migrated from
+ * and still cannot offer a filter this data can't answer.
+ *
+ * Order matters: the first category whose pattern matches wins, which is why
+ * Community sits above Pool (a "Community Pool" is an amenity of the
+ * neighbourhood, and that is the drawer Brivity files it in) and Parking above
+ * Exterior (a "Detached Garage" is parking, not siding).
+ */
+const FEATURE_CATEGORIES: Array<{ key: string; label: string; test: RegExp }> = [
+  {
+    key: "community",
+    label: "Community Features",
+    test: /communit|clubhouse|basketball|bbq|barbe|boat ramp|controlled access|gated|park|playground|tennis|volleyball|golf course|jogging|trail|waterfront access/i,
+  },
+  { key: "pool", label: "Pool", test: /\bpool\b|\bspa\b|hot tub/i },
+  { key: "cooling", label: "Cooling", test: /cooling|air condition|\ba\/?c\b|evaporative/i },
+  { key: "heating", label: "Heating", test: /heating|furnace|heat pump|zoned heat|radiant/i },
+  { key: "parking", label: "Parking", test: /garage|carport|parking|driveway|side entry|oversized|attached|detached/i },
+  {
+    key: "style",
+    label: "Home Style",
+    test: /mediterranean|\branch\b|split level|traditional|contemporary|colonial|craftsman|victorian|tudor|farmhouse/i,
+  },
+  {
+    key: "lot",
+    label: "Lot",
+    /* Deliberately narrow. A bare "level" or "corner" here swept up "Laundry
+       Main Level" and filed it under Lot — the words that describe a plot of
+       land are also ordinary English, so only the unambiguous ones qualify and
+       everything else falls through to Interior. */
+    test: /\blot\b|\bacres?\b|horses|on waterfront|cul-?de-?sac|greenbelt|\bbluff\b|wooded/i,
+  },
+  {
+    key: "exterior",
+    label: "Exterior",
+    test: /patio|deck|balcony|porch|fence|shed|storage building|workshop|sprinkler|gutter|roof|siding|brick|stucco|masonry|exterior|outdoor kitchen/i,
+  },
+  {
+    key: "property",
+    label: "Property",
+    test: /\bview\b|city view|county view|water view|hill country/i,
+  },
+];
+
+/** Bucket the real feature vocabulary into Brivity's categories. */
+function groupFeatures(interior: Facet[], exterior: Facet[]): FeatureGroup[] {
+  const tagged: GroupedFeature[] = [
+    ...interior.map((f) => ({ ...f, side: "interior" as const })),
+    ...exterior.map((f) => ({ ...f, side: "exterior" as const })),
+  ];
+  const buckets = new Map<string, GroupedFeature[]>();
+  const other: GroupedFeature[] = [];
+
+  for (const f of tagged) {
+    const cat = FEATURE_CATEGORIES.find((c) => c.test.test(f.label));
+    if (!cat) { other.push(f); continue; }
+    const list = buckets.get(cat.key) || [];
+    list.push(f);
+    buckets.set(cat.key, list);
+  }
+
+  /* "Popular Features" is Brivity's shortcut row, not a category of its own —
+     it repeats the handful of things buyers ask for by name. Repeated
+     deliberately: ticking it here and ticking it in Pool are the same filter,
+     and a buyer who wants a pool should not have to know which group it is
+     filed under. */
+  const popular = tagged
+    .filter((f) => /\bpool\b|waterfront|\bview\b|open floor plan|walk.?in closet/i.test(f.label))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  const groups: FeatureGroup[] = [];
+  if (popular.length) groups.push({ key: "popular", label: "Popular Features", options: popular });
+  for (const c of FEATURE_CATEGORIES) {
+    const opts = (buckets.get(c.key) || []).sort((a, b) => b.count - a.count);
+    if (opts.length) groups.push({ key: c.key, label: c.label, options: opts });
+  }
+  /* Everything the board publishes that Brivity has no drawer for. Dropping it
+     would hide real, searchable features purely because the form being copied
+     never had a box for them. */
+  const interiorOther = other.filter((f) => f.side === "interior").sort((a, b) => b.count - a.count);
+  const exteriorOther = other.filter((f) => f.side === "exterior").sort((a, b) => b.count - a.count);
+  if (interiorOther.length) groups.push({ key: "interior", label: "Interior", options: interiorOther });
+  if (exteriorOther.length) groups.push({ key: "exteriorOther", label: "Other Exterior Features", options: exteriorOther });
+  return groups;
+}
+
 export function getMlsFacets(force = false): MlsFacets {
   if (!force && cache && Date.now() - cache.at < TTL_MS) return cache.facets;
   const db = getListingsDb();
@@ -113,9 +227,12 @@ export function getMlsFacets(force = false): MlsFacets {
       `SELECT json_extract(raw,'$.property.stories') v, COUNT(*) n FROM listings GROUP BY v ORDER BY n DESC LIMIT @lim`, 10),
     interiorFeatures: featureFacets("$.property.interiorFeatures", 25),
     exteriorFeatures: featureFacets("$.property.exteriorFeatures", 25),
+    featureGroups: [],
     unavailable: [],
     computedAt: new Date().toISOString(),
   };
+
+  facets.featureGroups = groupFeatures(facets.interiorFeatures, facets.exteriorFeatures);
 
   facets.propertyTypes = facets.propertyTypes.map((f) => ({ ...f, label: PROPERTY_TYPE_LABELS[f.value] || f.value }));
   facets.subTypes = facets.subTypes.map((f) => ({ ...f, label: spaceCamel(f.value) }));

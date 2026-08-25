@@ -81,6 +81,11 @@ function buildCriteriaSql(c) {
     /* Subdivision is a contains-OR: the feed writes "Alamo Ranch Unit 12" where a
        person types "Alamo Ranch". */
     push(orContains("subdivision", clean(c.subdivisions), "sub", params, "or"));
+    const street = String(c.streetContains ?? "").trim();
+    if (street) {
+        params.street0 = `%${street.toLowerCase()}%`;
+        where.push(`LOWER(COALESCE(street,'')) LIKE @street0`);
+    }
     const range = (col, min, max, key) => {
         if (isNum(min)) {
             params[key + "Min"] = min;

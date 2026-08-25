@@ -359,8 +359,16 @@
     background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);
     max-height:230px;overflow:auto;padding:4px}
   .afdd.open .afdd-m{display:block}
+  .afdd.up .afdd-m{top:auto;bottom:calc(100% + 3px)}
   .afdd-g{padding:6px 8px 3px;font-size:10px;letter-spacing:.05em;text-transform:uppercase;
     color:#98a1a7;font-weight:700;background:#f7fafa;border-radius:4px;margin-top:2px}
+  /* With a search box the OUTER menu must not scroll, or the box scrolls away
+     with the options it is filtering. The inner list scrolls instead. */
+  .afdd-m.has-s{max-height:none;overflow:visible}
+  .afdd-s{width:calc(100% - 12px);margin:6px 6px 4px;border:1px solid var(--line);border-radius:6px;
+    height:30px;padding:0 8px;font-size:12.5px;outline:none}
+  .afdd-s:focus{border-color:var(--teal)}
+  .afdd-l{max-height:230px;overflow:auto}
   .afdd-m .afopt{display:block;padding:5px 8px;border-radius:4px;font-size:12.5px}
   .afdd-m .afopt:hover{background:#f4f9f9}
   .afbtns{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
@@ -1090,6 +1098,7 @@
   .la-grp>h6{margin:0;padding:9px 12px;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
     color:#6b7480;background:#fafbfc;display:flex;align-items:center;gap:8px;cursor:pointer}
   .la-grp>h6 .more{margin-left:auto;color:var(--teal-strong);font-size:10.5px;font-weight:700}
+  .la-grp>h6.static{cursor:default}
   .la-grp .la-body{padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:2px 10px}
   @media(max-width:620px){.la-grp .la-body{grid-template-columns:1fr}}
   .la-grp:not(.open) .la-body{max-height:74px;overflow:hidden}
@@ -4217,6 +4226,27 @@ function advDistinctTags(){
   return Object.keys(set).sort();
 }
 /**
+ * The managed list and what is actually on the contacts, in two labelled
+ * sections.
+ *
+ * Split rather than merged because the two answer different questions. "On
+ * these contacts" is what will return rows today; the imported list is the
+ * vocabulary Marco is migrating with, most of which nobody carries — 329 of the
+ * 357 sources had nobody on them in Brivity. Showing them interleaved would
+ * bury the eight sources that matter under a catalogue.
+ */
+function advVocabGroups(managed,inUse){
+  var usedKeys={}; inUse.forEach(function(v){ usedKeys[String(v).toLowerCase()]=1; });
+  var rest=(managed||[]).filter(function(m){ return !usedKeys[m.name.toLowerCase()]; })
+    .map(function(m){
+      return { v:m.name, l:m.name+(m.brivityPeople?" · "+m.brivityPeople+" in Brivity":(m.seeded?"":" · added here")) };
+    });
+  var groups=[];
+  if(inUse.length) groups.push(["On these contacts", inUse.map(function(v){return {v:v,l:v};})]);
+  if(rest.length) groups.push([(managed&&managed.length?"From the Brivity import":"Other"), rest]);
+  return groups;
+}
+/**
  * The modal's left-hand category tree, and the two-way sync that keeps it
  * honest about where you are.
  *
@@ -4336,6 +4366,35 @@ function buildAdvPanel(){
           }).join("");
         }).join("")+'</div></div>';
   }
+  /**
+   * ddGrouped with a type-to-filter box.
+   *
+   * The Brivity source list is 357 entries. A dropdown that long is a scroll
+   * bar, not a choice, so the ones with a search box get one — and the box is
+   * the first thing focus lands on when the menu opens.
+   */
+  function ddSearch(key,label,groups,note,plural){
+    var sel=a[key]||[];
+    var flat=groups.reduce(function(acc,g){ return acc.concat(g[1]); },[]);
+    var total=flat.length;
+    var summary=!sel.length?"Any"
+      :sel.length===1?(function(){var o=flat.filter(function(x){return x.v===sel[0];})[0];return o?o.l:sel[0];})()
+      :sel.length+" selected";
+    return '<div class="aflab">'+esc(label)+'</div>'+
+      '<div class="afdd" data-afdd="'+key+'">'+
+        '<button type="button" class="afdd-b'+(sel.length?" on":"")+'">'+esc(summary)+'<span>▾</span></button>'+
+        '<div class="afdd-m has-s">'+
+          '<input class="afdd-s" data-afsearch="'+key+'" placeholder="Search '+esc(String(total))+' '+esc(plural||label.toLowerCase())+'…">'+
+          '<div class="afdd-l">'+groups.map(function(g){
+            return '<div class="afdd-g">'+esc(g[0])+'</div>'+g[1].map(function(o){
+              return '<label class="afopt"><input type="checkbox" data-afk="'+key+'" data-afv="'+esc(o.v)+'"'+
+                (sel.indexOf(o.v)>=0?" checked":"")+'> '+esc(o.l)+'</label>';
+            }).join("");
+          }).join("")+
+          (total?"":'<div class="afnote" style="margin:0">Nothing to choose from yet.</div>')+
+          '</div></div></div>'+
+      (note?'<div class="afnote">'+note+'</div>':"");
+  }
   function btnMulti(key,label,opts){
     var sel=a[key]||[];
     return '<div class="aflab">'+esc(label)+'</div><div class="afbtns">'+
@@ -4397,15 +4456,18 @@ function buildAdvPanel(){
     ddMulti("status","Lead Status",statuses)+
     ddGrouped("stage","Stage",STAGE_GROUPS)+
     ddMulti("assigned","Assigned To",[{v:"unassigned",l:"Unassigned"}].concat(roster.map(function(u){return {v:u.id,l:u.name};})))+
-    ddMulti("source","Source",srcOpts.map(function(s){return {v:s,l:s};}))+
-    '<div class="afnote">Sources are the ones actually recorded on these contacts. A full Rivity source list has not been supplied yet — when it arrives these become a managed list with custom entries.</div>',
+    ddSearch("source","Source",advVocabGroups(CRM_SOURCES,srcOpts),
+      'The managed list: every source from the Brivity export, plus anything added here. '+
+      '<a href="#" data-afvocab="sources">Add a custom source</a>.',"sources")+
+    '',
     true);
   html+=group("Tags",
-    ddMulti("tagsInc","Include Tags",tagOpts.map(function(t){return {v:t,l:t};}))+
+    ddSearch("tagsInc","Include Tags",advVocabGroups(CRM_TAGS,tagOpts),"","tags")+
     anyAll("tagsIncMode","Match")+
-    ddMulti("tagsExc","Exclude Tags",tagOpts.map(function(t){return {v:t,l:t};}))+
+    ddSearch("tagsExc","Exclude Tags",advVocabGroups(CRM_TAGS,tagOpts),"","tags")+
     anyAll("tagsExcMode","Match")+
-    (tagOpts.length?"":'<div class="afnote">No tags yet — add tags to leads or create tag templates first.</div>'));
+    '<div class="afnote">The managed list: every tag from the Brivity export, plus anything on these contacts. '+
+      '<a href="#" data-afvocab="tags">Add a custom tag</a>.</div>');
   html+=group("Auto Plans",
     (planOpts.length
       ? '<div class="aflab">Auto Plan Name</div><select data-afplansel><option value="">Any plan</option>'+
@@ -4516,12 +4578,62 @@ function buildAdvPanel(){
     b.addEventListener("click",function(e){
       e.stopPropagation();
       var wrap=b.closest(".afdd"), was=wrap.classList.contains("open");
-      body.querySelectorAll(".afdd.open").forEach(function(o){o.classList.remove("open");});
-      if(!was)wrap.classList.add("open");
+      body.querySelectorAll(".afdd.open").forEach(function(o){o.classList.remove("open","up");});
+      if(was) return;
+      /* Open upward when there is not room below. The panel scrolls, so a menu
+         that opened downward near the bottom showed two options and its own
+         search box half off the edge — the list was there, but you had to know
+         to scroll the panel to reach it. */
+      var menu=wrap.querySelector(".afdd-m");
+      var need=Math.min(menu.scrollHeight||300,300);
+      var room=body.getBoundingClientRect().bottom-b.getBoundingClientRect().bottom;
+      wrap.classList.add("open");
+      if(room<need&&b.getBoundingClientRect().top-body.getBoundingClientRect().top>need) wrap.classList.add("up");
     });
   });
   body.querySelectorAll(".afdd-m").forEach(function(m){
     m.addEventListener("click",function(e){ e.stopPropagation(); });
+  });
+  /* Type-to-filter inside the long dropdowns. Section headers hide with their
+     section, so an empty "From the Brivity import" heading never sits over
+     nothing. */
+  body.querySelectorAll("input[data-afsearch]").forEach(function(inp){
+    inp.addEventListener("click",function(e){ e.stopPropagation(); });
+    inp.addEventListener("input",function(){
+      var q=inp.value.trim().toLowerCase();
+      var list=inp.parentElement.querySelector(".afdd-l"); if(!list) return;
+      var head=null, shown=0;
+      Array.prototype.slice.call(list.children).forEach(function(el){
+        if(el.classList.contains("afdd-g")){
+          if(head)head.style.display=shown?"":"none";
+          head=el; shown=0; return;
+        }
+        var hit=!q||el.textContent.toLowerCase().indexOf(q)>=0;
+        el.style.display=hit?"":"none";
+        if(hit)shown++;
+      });
+      if(head)head.style.display=shown?"":"none";
+    });
+  });
+  /* Adding to the managed list. Kept here rather than in a settings page
+     because the moment you need a source is the moment you are filtering for
+     it and it is not there. */
+  body.querySelectorAll("a[data-afvocab]").forEach(function(link){
+    link.addEventListener("click",function(e){
+      e.preventDefault();
+      var kind=link.getAttribute("data-afvocab");
+      var name=prompt("Add a custom "+(kind==="tags"?"tag":"source")+":");
+      if(!name||!name.trim())return;
+      fetch(crmApi("/api/crm/vocabulary/"+kind),{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name.trim()})})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+        .then(function(res){
+          if(!res.ok){ crmToast(res.j.error||"Could not add it"); return; }
+          if(kind==="tags")CRM_TAGS=res.j.list; else CRM_SOURCES=res.j.list;
+          crmToast('Added "'+res.j.name+'"');
+          buildAdvPanel();
+        }).catch(function(){ crmToast("Could not add it"); });
+    });
   });
   if(!body.__ddClose){
     body.__ddClose=1;
@@ -4562,9 +4674,9 @@ function openAdvFilter(){
   ensureLeadMetrics(function(){ if(document.getElementById("afScrim").classList.contains("on"))buildAdvPanel(); });
   /* Correct the baked-in stage and appointment lists against the server's,
      then repaint whatever is showing them. */
-  if(typeof loadCrmVocabulary==="function"&&!openAdvFilter.__vocab){
+  if(typeof ensureVocabulary==="function"&&!openAdvFilter.__vocab){
     openAdvFilter.__vocab=1;
-    loadCrmVocabulary().then(function(){
+    ensureVocabulary().then(function(){
       rebuildStageOrder();
       STAGE_OPTIONS=stageOptionsFlat();
       if(document.getElementById("afScrim").classList.contains("on"))buildAdvPanel();
@@ -7349,9 +7461,28 @@ var APPT_OUTCOMES=[["none","No outcome yet"],["held","Held"],["no_show","No Show
 
 /* Corrects the baked-in copies against the server so the two can never drift
    — the failure this repo has already had once (TASK_TYPES vs TYPES). */
+/* The managed Source and Tag lists, from the Brivity export plus anything
+   added here. Empty until the vocabulary call lands; every reader falls back to
+   what is recorded on the contacts, so the filter never comes up blank. */
+var CRM_SOURCES=[], CRM_TAGS=[], CRM_VOCAB_STATS=null, CRM_VOCAB_P=null;
+/**
+ * Load the shared vocabulary once, and hand every later caller the same
+ * promise.
+ *
+ * It used to be fetched only when the filter panel opened, which meant the Add
+ * Agreement source list was empty for anyone who had not opened the filter
+ * first — the same list, present or absent depending on where you had been.
+ */
+function ensureVocabulary(then){
+  if(!CRM_VOCAB_P)CRM_VOCAB_P=loadCrmVocabulary();
+  return then?CRM_VOCAB_P.then(then):CRM_VOCAB_P;
+}
 function loadCrmVocabulary(){
   return fetch(crmApi("/api/crm/vocabulary")).then(function(r){ return r.ok?r.json():null; }).then(function(d){
     if(!d||!d.ok)return;
+    if(d.sources&&d.sources.length)CRM_SOURCES=d.sources;
+    if(d.tags&&d.tags.length)CRM_TAGS=d.tags;
+    if(d.vocabularyStats)CRM_VOCAB_STATS=d.vocabularyStats;
     if(d.stageGroups&&d.stageGroups.length){
       STAGE_GROUPS=d.stageGroups.map(function(g){
         return [g.group,(g.stages||[]).map(function(x){return [x.value,x.label];})];
@@ -8151,6 +8282,7 @@ function paintAgreements(l){
 
 /** Add Agreement — upload, dates, and for a referral the fee and the partner. */
 function openAgreementModal(l,kind){
+  ensureVocabulary();
   ensureRoster(function(roster){
     var isReferral=kind==="referral";
     var file=null, feeType="percentage", commType="percentage";
@@ -8173,7 +8305,7 @@ function openAgreementModal(l,kind){
         '<div class="oa-f"><label>Agreement Signed Date</label><input type="date" id="agSigned"></div>'+
         '<div class="oa-f"><label>Agreement Expiration Date</label><input type="date" id="agExp"></div>'+
       '</div>'+
-      '<label class="sw'+(createTx?" on":"")+'" id="agTxSw"><i></i> Create Active '+
+      '<label class="sw'+(createTx?" on":"")+'" id="agTxSw" style="margin-bottom:14px"><i></i> Create Active '+
         (isReferral?"Referral ":"")+'Transaction</label>'+
       '<div id="agSub" style="margin-top:14px;'+(createTx?"":"display:none")+'">'+
         '<div class="oa-cols">'+
@@ -8221,14 +8353,27 @@ function openAgreementModal(l,kind){
         '<div class="oa-f"><label>Property Type</label><select id="agProp">'+
           propTypes.map(function(x){ return '<option value="'+esc(x)+'"'+(x==="Residential"?" selected":"")+'>'+esc(x)+'</option>'; }).join("")+
         '</select></div>'+
+        /* The managed Source list. Grouped so the handful already in use here
+           sit above the imported catalogue instead of being lost inside it. */
         '<div class="oa-f"><label>Source</label><select id="agSource">'+
           '<option value="">Select…</option>'+
-          srcOpts.map(function(x){ return '<option value="'+esc(x)+'">'+esc(x)+'</option>'; }).join("")+
+          (srcOpts.length?'<optgroup label="On these contacts">'+
+            srcOpts.map(function(x){ return '<option value="'+esc(x)+'">'+esc(x)+'</option>'; }).join("")+
+          '</optgroup>':"")+
+          (CRM_SOURCES.length?'<optgroup label="From the Brivity import">'+
+            CRM_SOURCES.filter(function(m){
+              return srcOpts.every(function(u){ return String(u).toLowerCase()!==m.name.toLowerCase(); });
+            }).map(function(m){ return '<option value="'+esc(m.name)+'">'+esc(m.name)+'</option>'; }).join("")+
+          '</optgroup>':"")+
           '<option value="__other">Other — type it in</option>'+
         '</select>'+
         '<input type="text" id="agSourceOther" placeholder="Source name" style="display:none;margin-top:6px">'+
-        '<div class="oa-hint" style="margin-top:4px">Sources are the ones already in use on these contacts. The full '+
-          'Rivity list has not been supplied yet — until it is, anything new goes in through Other.</div></div>'+
+        '<div class="oa-hint" style="margin-top:4px">'+
+          (CRM_SOURCES.length
+            ? esc(CRM_SOURCES.length+" sources from the Brivity import, plus any already in use here. ")+
+              'Anything else goes in through Other and is saved on the transaction as typed.'
+            : 'Sources are the ones already in use on these contacts — the managed list has not loaded yet.')+
+        '</div></div>'+
       '</div>'+
       '<div id="agMoney" style="'+(createTx?"":"display:none")+'">'+
         '<div class="oa-cols">'+
@@ -9312,13 +9457,15 @@ function openReportWizard(l,existing){
               '<div class="oa-sml" style="margin-top:6px">The adjusted estimate takes the most recent automated estimate and '+
               'adds or subtracts this amount. It is what appears on the home value section of the report.</div></div>':'')
             :'')+
+          /* Every type the board publishes, not the first six. Farm/Ranch,
+             Manufactured Home, Multi-Family and Vacant Land were all being cut
+             off by that slice — present in the data, absent from the form. */
           '<div class="oa-f"><label>Property Types</label><div class="qa-pills" id="mwTypes">'+
-            (f.propertyTypes||[]).slice(0,6).map(function(t){
+            (f.propertyTypes||[]).map(function(t){
               return '<button data-mwtype="'+esc(t.value)+'"'+(st.propertyTypes.indexOf(t.value)>=0?' class="on"':'')+'>'+
                 esc(t.label)+'</button>'; }).join("")+'</div></div>'+
-          '<div class="oa-f"><label>Price Range</label><div class="oa-two">'+
-            '<input type="number" id="mwPMin" value="'+esc(st.minPrice)+'" placeholder="No min">'+
-            '<input type="number" id="mwPMax" value="'+esc(st.maxPrice)+'" placeholder="No max"></div></div>'+
+          oaLadder("Price Range","mwPMin","mwPMax",st.minPrice,st.maxPrice,LA_LADDERS.price,
+            function(v){return "$"+Number(v).toLocaleString();})+
           '<div class="oa-f"><label>Bedrooms</label><div class="qa-pills" id="mwBeds2">'+
             [["","Any"],["1","1+"],["2","2+"],["3","3+"],["4","4+"],["5","5+"]].map(function(b){
               return '<button data-mwbeds="'+b[0]+'"'+(String(st.bedsPick)===b[0]?' class="on"':'')+'>'+b[1]+'</button>'; }).join("")+'</div></div>'+
@@ -9328,9 +9475,10 @@ function openReportWizard(l,existing){
           '<a class="ldlink" id="mwSpecs" style="color:var(--teal-strong);font-weight:700;font-size:11px">'+
             (st.specsOpen?"SHOW LESS":"SHOW MORE")+'</a>'+
           (st.specsOpen?'<div class="qa-sub">'+
-            oaRange("Square Feet","mwSMin","mwSMax",st.minSqft,st.maxSqft,50)+
-            oaRange("Lot Size (acres)","mwLMin","mwLMax",st.minLot,st.maxLot,0.1)+
-            oaRange("Year Built","mwYMin","mwYMax",st.minYear,st.maxYear,1)+'</div>':'')+
+            oaLadder("Square Feet","mwSMin","mwSMax",st.minSqft,st.maxSqft,LA_LADDERS.sqft,
+              function(v){return v.toLocaleString();})+
+            oaLadder("Lot Size (acres)","mwLMin","mwLMax",st.minLot,st.maxLot,LA_LADDERS.lot)+
+            oaLadder("Year Built","mwYMin","mwYMax",st.minYear,st.maxYear,LA_LADDERS.year)+'</div>':'')+
         '</div></div>'+
         '<div class="la-count" id="mwCount">—</div>';
     }
@@ -9395,10 +9543,14 @@ function openReportWizard(l,existing){
       });
       ["mwPMin","mwPMax","mwSMin","mwSMax","mwLMin","mwLMax","mwYMin","mwYMax"].forEach(function(id){
         var el=document.getElementById(id); if(!el)return;
-        el.addEventListener("input",function(){
-          var map={mwPMin:"minPrice",mwPMax:"maxPrice",mwSMin:"minSqft",mwSMax:"maxSqft",
-                   mwLMin:"minLot",mwLMax:"maxLot",mwYMin:"minYear",mwYMax:"maxYear"};
-          st[map[id]]=el.value; count();
+        /* Both events: these are dropdowns now, and a keyboard selection in a
+           <select> fires "change" where the old number input fired "input". */
+        ["input","change"].forEach(function(ev){
+          el.addEventListener(ev,function(){
+            var map={mwPMin:"minPrice",mwPMax:"maxPrice",mwSMin:"minSqft",mwSMax:"maxSqft",
+                     mwLMin:"minLot",mwLMax:"maxLot",mwYMin:"minYear",mwYMax:"maxYear"};
+            st[map[id]]=el.value; count();
+          });
         });
       });
       document.querySelectorAll("#mwBeds2 button").forEach(function(b){
@@ -10968,6 +11120,10 @@ function oaRange(label,idMin,idMax,vMin,vMax,step,ph){
    than free number entry: "3 bedrooms" is a choice from a short list, and a
    typed 3.5 would silently match nothing. */
 var LA_LADDERS={
+  /* Brivity's own price steps: fine near the bottom of this market and coarse
+     above it, because nobody searches "between $1,240,000 and $1,260,000". */
+  price:[50000,100000,150000,200000,225000,250000,275000,300000,325000,350000,375000,400000,
+    450000,500000,600000,700000,800000,900000,1000000,1500000,2000000,3000000,5000000],
   beds:[1,2,3,4,5,6,7],
   baths:[1,1.5,1.75,2,3,4,5],
   sqft:[600,800,1000,1200,1400,1600,1800,2000,2500,3000,4000,5000],
@@ -10978,6 +11134,16 @@ var LA_LADDERS={
 /** A min/max pair rendered as two dropdowns off one ladder of values. */
 function oaLadder(label,idMin,idMax,vMin,vMax,values,fmt){
   var f=fmt||function(v){return String(v);};
+  /* An alert saved before this ladder existed can hold a number that is not on
+     it — $412,500 typed into the old free-text price box. Splice it in rather
+     than dropping it: a dropdown that quietly rounds someone's saved search is
+     worse than one with an odd entry in it. */
+  values=values.slice();
+  [vMin,vMax].forEach(function(v){
+    if(v==null||v==="")return;
+    var n=Number(v); if(!isFinite(n))return;
+    if(values.indexOf(n)<0){ values.push(n); values.sort(function(a,b){return a-b;}); }
+  });
   var opt=function(v,sel){ return '<option value="'+v+'"'+(String(sel)===String(v)?" selected":"")+'>'+esc(f(v))+'</option>'; };
   return '<div class="oa-f"><label>'+esc(label)+'</label><div class="la-mm">'+
     '<select id="'+idMin+'"><option value="">No Min</option>'+values.map(function(v){return opt(v,vMin);}).join("")+'</select>'+
@@ -10999,13 +11165,62 @@ function oaGroup(id,label,facets,selected,limit){
       esc(f.label)+' <span class="oa-n">'+f.count+'</span></label>';
   }).join("");
   var picked=facets.filter(function(f){return sel.indexOf(f.value)>=0;}).length;
-  return '<div class="la-grp'+(picked?" open":"")+'" data-lagrp="'+id+'">'+
-    '<h6 data-latoggle="'+id+'">'+esc(label)+(picked?' <span class="oa-count" style="font-size:10px">'+picked+' selected</span>':'')+
-      '<span class="more">'+(picked?"LESS ^":"MORE v")+'</span></h6>'+
+  var shownCount=Math.min(facets.length,limit||30);
+  var overflows=shownCount>4;
+  var open=picked>0||!overflows;
+  return '<div class="la-grp'+(open?" open":"")+'" data-lagrp="'+id+'">'+
+    '<h6'+(overflows?' data-latoggle="'+id+'"':' class="static"')+'>'+esc(label)+
+      (picked?' <span class="oa-count" style="font-size:10px">'+picked+' selected</span>':'')+
+      (overflows?'<span class="more">'+(open?"LESS ^":"MORE v")+'</span>':'')+'</h6>'+
     '<div class="la-body" id="'+id+'">'+items+'</div></div>';
 }
 function oaSel(id){ var el=document.getElementById(id); if(!el)return undefined;
   var v=parseFloat(el.value); return isFinite(v)?v:undefined; }
+
+/**
+ * One of Brivity's feature categories, rendered as its checkbox grid.
+ *
+ * Every box is a value the board actually publishes, with the number of
+ * listings carrying it, and each remembers which feed column it has to be
+ * matched on (`data-side`) — interior and exterior features live in two
+ * different strings on the record, so a single flat list could not be saved.
+ */
+function oaFeatGroup(g,selInt,selExt){
+  if(!g||!g.options||!g.options.length) return "";
+  var sel=function(o){ return (o.side==="interior"?selInt:selExt).indexOf(o.value)>=0; };
+  var picked=g.options.filter(sel).length;
+  var items=g.options.map(function(o){
+    return '<label class="oa-ck"><input type="checkbox" data-grp="oaFeat" data-side="'+o.side+'" '+
+      'value="'+esc(o.value)+'"'+(sel(o)?" checked":"")+'> '+esc(o.label)+
+      ' <span class="oa-n">'+o.count+'</span></label>';
+  }).join("");
+  /* MORE only where there is more. The collapsed height is two rows of two,
+     so a group of four or fewer is already fully visible and a MORE link on it
+     is a control that does nothing. */
+  var overflows=g.options.length>4;
+  var open=picked>0||!overflows;
+  return '<div class="la-grp'+(open?" open":"")+'" data-lagrp="feat-'+esc(g.key)+'">'+
+    '<h6'+(overflows?' data-latoggle="feat-'+esc(g.key)+'"':' class="static"')+'>'+esc(g.label)+
+      (picked?' <span class="oa-count" style="font-size:10px">'+picked+' selected</span>':'')+
+      (overflows?'<span class="more">'+(open?"LESS ^":"MORE v")+'</span>':'')+'</h6>'+
+    '<div class="la-body">'+items+'</div></div>';
+}
+/** A single-value dropdown off one ladder — used where only a minimum makes sense. */
+function oaOne(label,id,value,values,fmt,anyLabel){
+  var f=fmt||function(v){return String(v);};
+  return '<div class="oa-f"><label>'+esc(label)+'</label><select id="'+id+'">'+
+    '<option value="">'+esc(anyLabel||"Any")+'</option>'+
+    values.map(function(v){
+      return '<option value="'+v+'"'+(String(value)===String(v)?" selected":"")+'>'+esc(f(v))+'</option>';
+    }).join("")+'</select></div>';
+}
+/** Checked feature values for one side, de-duplicated. */
+function oaFeatPicked(side){
+  var seen={},out=[];
+  Array.prototype.slice.call(document.querySelectorAll('[data-grp="oaFeat"][data-side="'+side+'"]:checked'))
+    .forEach(function(c){ if(!seen[c.value]){ seen[c.value]=1; out.push(c.value); } });
+  return out;
+}
 
 /** A checkbox group built from real facet values, with counts. */
 function oaChecks(id,label,facets,selected,limit){
@@ -11077,6 +11292,12 @@ function openAlertEditor(l,existing){
   loadFacets().then(function(f){
     var c=(existing&&existing.criteria)||{};
     var searchMode="terms";
+    /* The facets report which schema fields this board leaves empty. Garage is
+       the one that changes what the form can offer, so it is read here rather
+       than assumed either way. */
+    var garageGap=(f.unavailable||[]).filter(function(u){return /garage/i.test(u.field);})[0];
+    var garageOk=!garageGap;
+    var garageReason=garageGap?garageGap.reason:"";
     var body=
       /* The banner Brivity shows when no MLS is connected. Here it is driven
          by whether the mirror actually has listings — an alert built against
@@ -11110,27 +11331,71 @@ function openAlertEditor(l,existing){
           '</div>'+
           '<div class="oa-sml">No map provider is configured for this system, so the polygon draw tool is not available. '+
           'Terms search runs against the real feed — city, postal code, school district and subdivision.</div></div>'+
+        /* Brivity's search-terms box. Here it narrows the three place lists
+           below rather than creating chips: the places are a closed set that
+           comes from the board, so a typed term that matches none of them is a
+           typo, and showing that immediately beats saving it and matching
+           nothing. */
+        '<div class="oa-f"><label>Search Terms</label>'+
+          '<input id="oaTerm" placeholder="Type a city, postal code or school district…">'+
+          '<div class="oa-sml" style="margin-top:4px">Narrows the three lists below. Tick what you want — '+
+          'a term that matches nothing here is not on this board.</div></div>'+
         oaGroup("oaCity","Cities",f.cities,c.cities,60)+
         oaGroup("oaZip","Postal Codes",f.postalCodes,c.postalCodes,80)+
         oaGroup("oaSd","School Districts",f.schoolDistricts,c.schoolDistricts,40)+
         '<div class="oa-f"><label>Subdivision contains</label><input id="oaSub" value="'+esc((c.subdivisions||[]).join(", "))+'" placeholder="Alamo Ranch"></div>'+
+        '<div class="oa-f"><label>Street Address contains</label>'+
+          '<input id="oaStreet" value="'+esc(c.streetContains||"")+'" placeholder="Rolling Oaks">'+
+          '<div class="oa-sml" style="margin-top:4px">Matches the street line on the listing — use it for one road, not a whole area.</div></div>'+
       '</div><div>'+
-        oaRange("Price","oaPMin","oaPMax",c.minPrice,c.maxPrice,1000,"No Min")+
+        oaLadder("Price","oaPMin","oaPMax",c.minPrice,c.maxPrice,LA_LADDERS.price,
+          function(v){return "$"+Number(v).toLocaleString();})+
         oaLadder("Bedrooms","oaBMin","oaBMax",c.minBeds,c.maxBeds,LA_LADDERS.beds)+
         oaLadder("Bathrooms","oaBaMin","oaBaMax",c.minBaths,c.maxBaths,LA_LADDERS.baths)+
         oaLadder("Square Feet","oaSMin","oaSMax",c.minSqft,c.maxSqft,LA_LADDERS.sqft,
           function(v){return v.toLocaleString();})+
         oaLadder("Lot Size (acres)","oaLMin","oaLMax",c.minLotSize,c.maxLotSize,LA_LADDERS.lot)+
         oaLadder("Year Built","oaYMin","oaYMax",c.minYearBuilt,c.maxYearBuilt,LA_LADDERS.year)+
+        /* Stories as Brivity has it — one dropdown, not a checkbox list.
+           "3+" expands to every storey count the board actually publishes at or
+           above three, so it cannot select a value no listing has. */
+        (function(){
+          var real=(f.stories||[]).map(function(x){return Number(x.value);}).filter(function(n){return isFinite(n);});
+          if(!real.length) return "";
+          var cur=(c.stories||[]).slice().sort(function(a,b){return a-b;});
+          var isPlus=cur.length>1;
+          var one=(!isPlus&&cur.length===1)?String(cur[0]):"";
+          var opts='<option value="">Any</option>';
+          [1,2].forEach(function(n){
+            if(real.indexOf(n)<0) return;
+            opts+='<option value="'+n+'"'+(one===String(n)?" selected":"")+'>'+(n===1?"1 storey":"2 storeys")+'</option>';
+          });
+          if(real.some(function(n){return n>=3;}))
+            opts+='<option value="3plus"'+(isPlus||one==="3"?" selected":"")+'>3+ storeys</option>';
+          return '<div class="oa-f"><label>Stories</label><select id="oaStories">'+opts+'</select></div>';
+        })()+
         oaGroup("oaPt","Property Type",f.propertyTypes,c.propertyTypes,30)+
-        oaGroup("oaSt","Stories",f.stories,(c.stories||[]).map(String),10)+
+        /* Garage. The feed either publishes a space count or it does not, and
+           which one is true is decided by the facets rather than assumed —
+           a dropdown that always renders would be a filter that silently
+           matches every listing on a board that leaves the field empty. */
+        (garageOk
+          ? oaOne("Garage (minimum spaces)","oaGMin",c.minGarage,LA_LADDERS.garage,
+              function(v){return v+"+ space"+(v===1?"":"s");})
+          : '<div class="oa-f"><label>Garage</label>'+
+              '<select disabled title="Not published on this feed"><option>Not available on this feed</option></select>'+
+              '<div class="oa-sml" style="margin-top:4px">'+esc(garageReason)+'</div></div>')+
         '<div class="oa-f"><label>Pool</label><select id="oaPool">'+
           '<option value="">Any</option>'+
           '<option value="y"'+(c.pool===true?" selected":"")+'>Must have a pool</option>'+
           '<option value="n"'+(c.pool===false?" selected":"")+'>No pool</option></select></div>'+
-        oaGroup("oaIf","Interior Features",f.interiorFeatures,c.interiorFeatures,40)+
-        oaGroup("oaEf","Exterior Features",f.exteriorFeatures,c.exteriorFeatures,40)+
-        '<label class="oa-ck"><input type="checkbox" id="oaNoPhoto"'+(c.includeWithoutPhotos?" checked":"")+'> Include Properties without Photos</label>'+
+        /* Brivity's feature categories, in Brivity's order, filled with the
+           board's own vocabulary. */
+        (f.featureGroups||[]).map(function(g){
+          return oaFeatGroup(g,c.interiorFeatures||[],c.exteriorFeatures||[]);
+        }).join("")+
+        ((f.featureGroups||[]).length?"":'<div class="oa-sml">This feed publishes no feature list on its listings, so there is nothing to tick.</div>')+
+        '<label class="oa-ck" style="margin-top:8px"><input type="checkbox" id="oaNoPhoto"'+(c.includeWithoutPhotos?" checked":"")+'> Include Properties without Photos</label>'+
       '</div></div>'+
       unavailableNote(f)+
       '<div class="la-foot-note">Note: when you create and save a new Listing Alert, it sends an initial email '+
@@ -11150,6 +11415,34 @@ function openAlertEditor(l,existing){
         var m=h.querySelector(".more"); if(m)m.textContent=grp.classList.contains("open")?"LESS ^":"MORE v";
       });
     });
+    /* The search-terms box narrows the place lists, and opens whichever group
+       still has a hit so the match is visible without hunting for it. */
+    var termEl=document.getElementById("oaTerm");
+    if(termEl) termEl.addEventListener("input",function(){
+      var q=termEl.value.trim().toLowerCase();
+      ["oaCity","oaZip","oaSd"].forEach(function(id){
+        var box=document.getElementById(id); if(!box) return;
+        var shown=0;
+        box.querySelectorAll(".oa-ck").forEach(function(lab){
+          var hit=!q||lab.textContent.toLowerCase().indexOf(q)>=0;
+          lab.style.display=hit?"":"none";
+          if(hit)shown++;
+        });
+        var grp=box.closest(".la-grp");
+        if(grp&&q) grp.classList.toggle("open",shown>0);
+      });
+    });
+
+    /* The same feature can appear in Popular and in its own category. Ticking
+       one has to tick the other, or the box a person did not touch would read
+       as "not wanted" while the saved alert says otherwise. */
+    document.querySelector(".oa-body").addEventListener("change",function(e){
+      var t=e.target;
+      if(!t||t.getAttribute("data-grp")!=="oaFeat") return;
+      document.querySelectorAll('[data-grp="oaFeat"][data-side="'+t.getAttribute("data-side")+'"]')
+        .forEach(function(o){ if(o!==t&&o.value===t.value) o.checked=t.checked; });
+    });
+
     /* Map mode has no provider; the disabled pill explains itself on click. */
     document.querySelectorAll("#oaModes button").forEach(function(b){
       b.addEventListener("click",function(){
@@ -11175,22 +11468,37 @@ function openAlertEditor(l,existing){
     });
     document.getElementById("oaTplManage").addEventListener("click",function(){ openAlertTemplateManager(l,gather); });
 
+    /* "3+" is one option to the operator and a list of storey counts to the
+       query, because the feed stores a number per listing and there is no
+       ">=" in the saved criteria. Expanded against the counts the board really
+       has, so it can never ask for a 7-storey house that does not exist. */
+    function gatherStories(){
+      var el=document.getElementById("oaStories");
+      if(!el||!el.value) return [];
+      var real=(f.stories||[]).map(function(x){return Number(x.value);}).filter(function(n){return isFinite(n);});
+      if(el.value==="3plus") return real.filter(function(n){return n>=3;});
+      var n=Number(el.value);
+      return isFinite(n)?[n]:[];
+    }
     function gather(){
       var subs=(document.getElementById("oaSub").value||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
       var poolV=document.getElementById("oaPool").value;
+      var street=((document.getElementById("oaStreet")||{}).value||"").trim();
       return {
         cities:oaPicked("oaCity"), postalCodes:oaPicked("oaZip"), schoolDistricts:oaPicked("oaSd"),
         subdivisions:subs,
+        streetContains:street||undefined,
         minPrice:oaNum("oaPMin"), maxPrice:oaNum("oaPMax"),
         minBeds:oaSel("oaBMin"), maxBeds:oaSel("oaBMax"),
         minBaths:oaSel("oaBaMin"), maxBaths:oaSel("oaBaMax"),
         minSqft:oaSel("oaSMin"), maxSqft:oaSel("oaSMax"),
         minLotSize:oaSel("oaLMin"), maxLotSize:oaSel("oaLMax"),
         minYearBuilt:oaSel("oaYMin"), maxYearBuilt:oaSel("oaYMax"),
+        minGarage:oaSel("oaGMin"),
         propertyTypes:oaPicked("oaPt"),
-        stories:oaPicked("oaSt").map(Number).filter(function(n){return isFinite(n);}),
+        stories:gatherStories(),
         pool: poolV==="y"?true:(poolV==="n"?false:undefined),
-        interiorFeatures:oaPicked("oaIf"), exteriorFeatures:oaPicked("oaEf"),
+        interiorFeatures:oaFeatPicked("interior"), exteriorFeatures:oaFeatPicked("exterior"),
         includeWithoutPhotos:document.getElementById("oaNoPhoto").checked
       };
     }
@@ -11275,12 +11583,15 @@ function openReportEditor(l,existing){
         '<div class="oa-f"><label>Message on the first email <span class="oa-hint">optional</span></label>'+
           '<textarea id="orMsg" rows="3" placeholder="Check out this market report I put together for your area.">'+esc(existing?(existing.emailMessage||""):"")+'</textarea></div>'+
       '</div><div>'+
-        oaRange("Price","orPMin","orPMax",c.minPrice,c.maxPrice,1000)+
-        oaRange("Bedrooms","orBMin","orBMax",c.minBeds,c.maxBeds,1)+
-        oaRange("Bathrooms","orBaMin","orBaMax",c.minBaths,c.maxBaths,0.5)+
-        oaRange("Square feet","orSMin","orSMax",c.minSqft,c.maxSqft,50)+
-        oaRange("Year built","orYMin","orYMax",c.minYearBuilt,c.maxYearBuilt,1)+
-        oaChecks("orPt","Property type",f.propertyTypes,c.propertyTypes,10)+
+        oaLadder("Price","orPMin","orPMax",c.minPrice,c.maxPrice,LA_LADDERS.price,
+          function(v){return "$"+Number(v).toLocaleString();})+
+        oaLadder("Bedrooms","orBMin","orBMax",c.minBeds,c.maxBeds,LA_LADDERS.beds)+
+        oaLadder("Bathrooms","orBaMin","orBaMax",c.minBaths,c.maxBaths,LA_LADDERS.baths)+
+        oaLadder("Square feet","orSMin","orSMax",c.minSqft,c.maxSqft,LA_LADDERS.sqft,
+          function(v){return v.toLocaleString();})+
+        oaLadder("Lot size (acres)","orLMin","orLMax",c.minLotSize,c.maxLotSize,LA_LADDERS.lot)+
+        oaLadder("Year built","orYMin","orYMax",c.minYearBuilt,c.maxYearBuilt,LA_LADDERS.year)+
+        oaChecks("orPt","Property type",f.propertyTypes,c.propertyTypes,30)+
         '<div class="oa-live" id="orLive">Enter an address to build the report.</div>'+
       '</div></div>'+
       '<div class="oa-note">The search area widens automatically — postal code, then city, then county — until it holds at least 15 comparable listings, and the report says which one it used. This MLS feed carries no map coordinates, so the area is set by place rather than by a drawn radius.</div>';
@@ -11297,6 +11608,7 @@ function openReportEditor(l,existing){
         minBeds:oaNum("orBMin"), maxBeds:oaNum("orBMax"),
         minBaths:oaNum("orBaMin"), maxBaths:oaNum("orBaMax"),
         minSqft:oaNum("orSMin"), maxSqft:oaNum("orSMax"),
+        minLotSize:oaNum("orLMin"), maxLotSize:oaNum("orLMax"),
         minYearBuilt:oaNum("orYMin"), maxYearBuilt:oaNum("orYMax"),
         propertyTypes:oaPicked("orPt")
       };
@@ -11373,6 +11685,10 @@ function openReportEditor(l,existing){
 
 
 loadLive();
+/* The shared vocabulary — stages, appointment types, and the managed Source and
+   Tag lists. Fetched at boot rather than on first use so every form that reads
+   it is populated the first time it opens, not the second. */
+ensureVocabulary();
 
 /* Quo SMS. Loaded after the lead snapshot so names resolve, then refreshed on
    a timer — the server polls Quo every 5 minutes and takes webhooks, so this

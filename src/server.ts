@@ -305,6 +305,7 @@ import {
 } from "./core/tagTemplates.js";
 import { filterDashboardLeads } from "./core/leadFilter.js";
 import type { LeadFilter, CrmStatusValue } from "./core/types.js";
+import { addVocabulary, listVocabulary, removeVocabulary, vocabularyStats } from "./core/crmVocabulary.js";
 import { isRecurringInterval } from "./core/types.js";
 import {
   APPOINTMENT_TYPE_GROUPS,
@@ -11284,7 +11285,42 @@ app.get("/api/crm/vocabulary", (req, res) => {
       { value: "no_show", label: "No Show" },
       { value: "rescheduled", label: "Rescheduled" },
     ],
+    /* The managed lists. Seeded from the Brivity export so a source that exists
+       in the account being migrated from can be picked here on day one, rather
+       than only appearing once someone has typed it onto a contact. */
+    sources: listVocabulary("source"),
+    tags: listVocabulary("tag"),
+    vocabularyStats: vocabularyStats(),
   });
+});
+
+/** Add a custom source or tag to the managed list. */
+app.post("/api/crm/vocabulary/:kind", express.json(), (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const kind = req.params.kind === "sources" ? "source" : req.params.kind === "tags" ? "tag" : null;
+  if (!kind) { res.status(400).json({ error: "kind must be sources or tags" }); return; }
+  const name = String((req.body || {}).name || "").trim();
+  if (!name) { res.status(400).json({ error: "A name is required" }); return; }
+  if (name.length > 80) { res.status(400).json({ error: "Keep it under 80 characters" }); return; }
+  const added = addVocabulary(kind, name, sessionUserSync(req)?.email || undefined);
+  if (!added) { res.status(409).json({ error: `"${name}" is already on the list` }); return; }
+  res.json({ ok: true, name: added, list: listVocabulary(kind) });
+});
+
+/** Remove a custom source or tag. Seeded entries are refused, with the reason. */
+app.delete("/api/crm/vocabulary/:kind/:name", (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const kind = req.params.kind === "sources" ? "source" : req.params.kind === "tags" ? "tag" : null;
+  if (!kind) { res.status(400).json({ error: "kind must be sources or tags" }); return; }
+  const name = decodeURIComponent(req.params.name || "");
+  if (!removeVocabulary(kind, name)) {
+    res.status(400).json({
+      error: `"${name}" came from the Brivity import and cannot be removed — ` +
+        `contacts still carry it, and deleting it here would not change theirs.`,
+    });
+    return;
+  }
+  res.json({ ok: true, list: listVocabulary(kind) });
 });
 
 app.get("/api/crm/lead-metrics", async (req, res) => {

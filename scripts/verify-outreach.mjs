@@ -462,8 +462,12 @@ try {
     ok("the alert builder opens", await page.locator("#oaOv .oa-modal").isVisible());
     ok("filters are built from the real MLS vocabulary",
       (await page.locator('#oaCity .oa-ck').count()) > 0 && /San Antonio/.test(await page.textContent("#oaCity")));
+    /* Features moved out of two flat lists into Brivity's named categories.
+       The assertion is the same one it always was — the vocabulary has to come
+       off the board — read through the grouped boxes instead. */
     ok("feature checkboxes come from the feed",
-      /Island Kitchen/.test(await page.textContent("#oaIf")));
+      (await page.$$eval("#oaOv [data-grp='oaFeat']", (cs) => cs.map((c) => c.value)))
+        .some((v) => /Island Kitchen/.test(v)));
     /* The financing note now lives in the modal's unavailable block; there is
        more than one .oa-unav on the upgraded form (Home App, map), so read
        them all rather than only the first. */
@@ -477,15 +481,25 @@ try {
       (await page.locator("#oaOv canvas, #oaOv .map, #oaOv [data-draw]").count()) === 0);
 
     // Live match count reacts to criteria.
-    await page.fill("#oaPMin", "250000");
-    await page.fill("#oaPMax", "300000");
+    /* Price is a ladder now, like every other range on this form. */
+    await page.selectOption("#oaPMin", "250000");
+    await page.selectOption("#oaPMax", "300000");
     await page.waitForTimeout(900);
     const cnt = await page.textContent("#oaCount");
     // The count became the spec's "VIEW N LISTINGS" action.
     ok("the builder shows a live match count", /VIEW \d+ LISTINGS?/.test(cnt), cnt);
 
     // A criteria set that matches nothing must say so, in red.
-    await page.fill("#oaPMin", "99000000");
+    await page.evaluate(() => {
+      /* No ladder step is above every listing on the board, so the
+         impossible-criteria case is made by splicing one in — the same way an
+         alert saved with an odd price keeps it. */
+      const el = document.getElementById("oaPMin");
+      const o = document.createElement("option");
+      o.value = "99000000"; o.textContent = "$99,000,000";
+      el.appendChild(o); el.value = "99000000";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await page.waitForTimeout(900);
     const zero = await page.textContent("#oaCount");
     ok("impossible criteria report zero rather than looking fine", /No listings match/.test(zero), zero);
