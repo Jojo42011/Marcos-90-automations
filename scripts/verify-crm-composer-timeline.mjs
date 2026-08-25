@@ -190,9 +190,12 @@ try {
   ok("a signature is pre-loaded", /Marco Puga/.test(await page.textContent("#qaBody")));
   ok("ADD ATTACHMENT present", (await page.$("#qaAttBtn")) !== null);
   ok("'Send me a copy' present", (await page.$("#qaCopy")) !== null);
-  // Gmail is not connected here, so SEND must be disabled with the reason shown.
-  ok("SEND is disabled because Gmail is not connected", await page.$eval("#qaSend", (b) => b.disabled));
-  ok("the reason is shown next to it", /Gmail is not connected/.test(await page.textContent("#ldTabBody")));
+  // No email transport is configured here, so SEND must be disabled with the
+  // reason shown — and the reason must name what to SET, not just what is off.
+  ok("SEND is disabled because no email transport is configured", await page.$eval("#qaSend", (b) => b.disabled));
+  ok("the reason names the credentials that would fix it",
+    /GMAIL_SMTP_USER/.test(await page.textContent("#ldTabBody")),
+    (await page.textContent("#ldTabBody")).slice(-200));
   // Formatting actually applies
   await page.click("#qaBody");
   await page.evaluate(() => { const e = document.getElementById("qaBody"); e.innerHTML = "<p>plain</p>"; const r = document.createRange(); r.selectNodeContents(e); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
@@ -205,7 +208,12 @@ try {
   const outs = await page.$$eval("#qaOut button", (els) => els.map((e) => e.textContent.trim()));
   ok("all six call outcomes offered", outs.join(",") === "Talked,Left Message,Busy,Failed,No Answer,Wrong Number", outs.join(","));
   ok("the phone selector lists the contact's numbers", (await page.$("#qaCallNum")) !== null);
-  ok("no dial button is drawn, and the tab says why", (await page.$("#qaCallBtn")) === null && /nothing here dials/i.test(await page.textContent("#ldTabBody")));
+  /* Was: "no dial button is drawn". There is one now — a tel: handoff, which
+     places a real call on the operator's own device. What must stay true is
+     that nothing claims the SERVER dialled. */
+  ok("a dial handoff is offered", (await page.$("#qaDial")) !== null);
+  ok("and the tab still says nothing is placed server-side",
+    /nothing is placed server-side/i.test(await page.textContent("#ldTabBody")));
   ok("SAVE & LOG CALL is disabled until an outcome is picked", await page.$eval("#qaLogCall", (b) => b.disabled));
   await page.click('#qaOut button[data-o="Left Message"]');
   ok("picking an outcome enables it", !(await page.$eval("#qaLogCall", (b) => b.disabled)));
@@ -351,6 +359,59 @@ try {
   const tlNote = await page.textContent("#crFeed");
   ok("the feed names what it cannot show", /no opens or clicks/i.test(tlNote) && /no website visit tracking/i.test(tlNote), tlNote.slice(-260));
   ok("no email card claims a zero-open count", !/0 OPENS/.test(await page.textContent("#ldTimeline")));
+
+  /* ═══════ the composer tabs actually reach their transports (24 Aug) ═══════
+     All three were already wired to real endpoints. What made them look broken
+     from a lead profile was that /api/crm/messaging-status is fetched once at
+     boot with no repaint, so a profile opened before it landed rendered with
+     MSG_STATUS still null — every SEND disabled, "Checking whether this
+     channel can send…", and nothing re-rendered. */
+  {
+    const st = await J(await fetch(B + "/api/crm/messaging-status"));
+    ok("messaging-status reports a per-channel verdict",
+      st.ok === true && st.channels && st.channels.text && st.channels.email);
+    /* The composer used to say it sent "through Marco's connected Gmail" while
+       the real path is SMTP with an app password — and the OAuth token has
+       been dead since July, so it named the one transport that could NOT have
+       carried it. */
+    ok("email reports WHICH transport would carry a send",
+      ["smtp", "oauth", "none"].includes(st.channels.email.transport),
+      JSON.stringify(st.channels.email));
+    ok("and when nothing is configured it says what to set",
+      st.channels.email.ok || /GMAIL_SMTP_USER/.test(st.channels.email.reason || ""),
+      st.channels.email.reason);
+    ok("calls are declared un-placeable server-side, honestly",
+      st.channels.call.ok === false && /no softphone|click-to-dial/i.test(st.channels.call.reason));
+
+    /* The race itself: null status must resolve to a rendered, non-stuck tab. */
+    await page.evaluate(() => { window.MSG_STATUS = null; window.MSG_STATUS_INFLIGHT = false; });
+    await tab("text");
+    await page.waitForFunction(() => window.MSG_STATUS !== null, null, { timeout: 8000 });
+    await page.waitForTimeout(400);
+    const textTxt = await page.textContent("#ldTabBody");
+    ok("the Text tab does not sit on 'Checking whether this channel can send'",
+      !/Checking whether this channel can send/.test(textTxt), textTxt.slice(0, 160));
+    ok("and it names the line a text would go out from, or why it cannot",
+      /Sends for real over Quo|not configured|could not be loaded/i.test(textTxt), textTxt.slice(-200));
+
+    /* Email tab names its real transport. */
+    await tab("email");
+    const emailTxt = await page.textContent("#ldTabBody");
+    ok("the Email tab no longer claims Gmail regardless of transport",
+      !/connected Gmail/.test(emailTxt) || /oauth/i.test(JSON.stringify(st.channels.email)),
+      emailTxt.slice(-200));
+
+    /* Call tab hands off to the device dialler — a real call, not a dead button. */
+    await tab("call");
+    const dial = await page.$("#qaDial");
+    ok("the Call tab offers a real dial handoff", !!dial);
+    if (dial) {
+      const href = await dial.getAttribute("href");
+      ok("which is a tel: link to this contact's number", /^tel:\+?[0-9]+$/.test(href), href);
+    }
+    ok("and says plainly that nothing is placed server-side",
+      /nothing is placed server-side/.test(await page.textContent("#ldTabBody")));
+  }
 
   ok("no page errors", errs.length === 0, errs.slice(0, 3).join(" | "));
   await br.close();

@@ -21,28 +21,158 @@ export type CrmStatusValue = CrmStatus | CrmStatusLegacy;
 export const CRM_STATUSES: CrmStatus[] = [
   "new", "hot", "nurture", "watch", "dead", "unresponsive", "archived", "trashed",
 ];
-export type CrmStage =
-  | "new"
-  | "hot"
-  | "warm"
-  | "cold"
-  | "pending"
+/**
+ * Pipeline stages, replaced 2026-08-24 with the two real lists the operator
+ * supplied (Brivity's own "Lead Stages" and "Candidate Recruit Stages").
+ *
+ * TWO PIPELINES, NOT ONE LIST. Recruiting a candidate agent and working a
+ * buyer are different funnels that happen to share three step NAMES —
+ * Attempted Contact, Appointment Set, and the nurture/rejected ends. Giving
+ * them one shared key would make a candidate at "Attempted Contact"
+ * indistinguishable from a lead at it, and every stage count would silently
+ * mix the two. So the keys are distinct and carry their pipeline, and the UI
+ * renders them under the same two headers the operator sees in Brivity.
+ *
+ * THE LEGACY VALUES ARE NOT DROPPED. `hot`, `warm`, `cold`, `pending`,
+ * `showing_set` and `closed` were the old list. Every production lead is
+ * `new` (the stage field has never actually been used here — see Known gaps),
+ * but a stored value must never become unreadable, so they stay accepted and
+ * map to their nearest new stage for display via CRM_STAGE_LEGACY.
+ */
+export type CrmLeadStage =
+  | "new_lead"
+  | "attempted_contact"
+  | "spoke_with_customer"
   | "appointment_set"
-  | "showing_set"
+  | "met_with_customer"
+  | "showing_homes"
+  | "listing_agreement"
+  | "active_listing"
+  | "submitting_offers"
   | "under_contract"
-  | "closed";
+  | "sale_closed"
+  | "nurture"
+  | "rejected";
 
-export const CRM_STAGES: CrmStage[] = [
-  "new",
-  "hot",
-  "warm",
-  "cold",
-  "pending",
-  "appointment_set",
-  "showing_set",
-  "under_contract",
-  "closed",
+export type CrmCandidateStage =
+  | "new_candidate"
+  | "attempted_contact_candidate"
+  | "spoke_with_candidate"
+  | "appointment_set_candidate"
+  | "met_with_candidate"
+  | "screening"
+  | "signing_appt_set"
+  | "signed"
+  | "nurture_candidate"
+  | "rejected_candidate"
+  | "declined_offer";
+
+/** Still accepted on read so no stored row becomes unreadable. */
+export type CrmStageLegacy =
+  | "new" | "hot" | "warm" | "cold" | "pending" | "showing_set" | "closed";
+
+export type CrmStage = CrmLeadStage | CrmCandidateStage | CrmStageLegacy;
+
+export const CRM_LEAD_STAGES: Array<{ value: CrmLeadStage; label: string }> = [
+  { value: "new_lead", label: "New Lead" },
+  { value: "attempted_contact", label: "Attempted Contact" },
+  { value: "spoke_with_customer", label: "Spoke With Customer" },
+  { value: "appointment_set", label: "Appointment Set" },
+  { value: "met_with_customer", label: "Met With Customer" },
+  { value: "showing_homes", label: "Showing Homes" },
+  { value: "listing_agreement", label: "Listing Agreement" },
+  { value: "active_listing", label: "Active Listing" },
+  { value: "submitting_offers", label: "Submitting Offers" },
+  { value: "under_contract", label: "Under Contract" },
+  { value: "sale_closed", label: "Sale Closed" },
+  { value: "nurture", label: "Nurture" },
+  { value: "rejected", label: "Rejected" },
 ];
+
+export const CRM_CANDIDATE_STAGES: Array<{ value: CrmCandidateStage; label: string }> = [
+  { value: "new_candidate", label: "New Candidate" },
+  { value: "attempted_contact_candidate", label: "Attempted Contact" },
+  { value: "spoke_with_candidate", label: "Spoke With Candidate" },
+  { value: "appointment_set_candidate", label: "Appointment Set" },
+  { value: "met_with_candidate", label: "Met With Candidate" },
+  { value: "screening", label: "Screening" },
+  { value: "signing_appt_set", label: "Signing Appt Set" },
+  { value: "signed", label: "Signed" },
+  { value: "nurture_candidate", label: "Nurture Candidate" },
+  { value: "rejected_candidate", label: "Rejected Candidate" },
+  { value: "declined_offer", label: "Declined Offer" },
+];
+
+/** The two groups, in the order and under the headers the operator sees. */
+export const CRM_STAGE_GROUPS: Array<{ group: string; stages: Array<{ value: string; label: string }> }> = [
+  { group: "Lead Stages", stages: CRM_LEAD_STAGES },
+  { group: "Candidate Recruit Stages", stages: CRM_CANDIDATE_STAGES },
+];
+
+/** Old value → nearest new stage. Read-only: nothing rewrites stored rows. */
+export const CRM_STAGE_LEGACY: Record<string, CrmLeadStage> = {
+  new: "new_lead",
+  hot: "attempted_contact",
+  warm: "attempted_contact",
+  cold: "nurture",
+  pending: "under_contract",
+  showing_set: "showing_homes",
+  closed: "sale_closed",
+};
+
+export const CRM_STAGES: CrmStage[] = ([] as CrmStage[]).concat(
+  CRM_LEAD_STAGES.map((s) => s.value),
+  CRM_CANDIDATE_STAGES.map((s) => s.value),
+  Object.keys(CRM_STAGE_LEGACY) as CrmStageLegacy[],
+);
+
+/** Display label for any stage value, legacy included. Never returns blank. */
+export function crmStageLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  const all = CRM_LEAD_STAGES.concat(CRM_CANDIDATE_STAGES as Array<{ value: string; label: string }> as never);
+  const hit = (all as Array<{ value: string; label: string }>).find((s) => s.value === value);
+  if (hit) return hit.label;
+  const legacy = CRM_STAGE_LEGACY[value];
+  if (legacy) {
+    const l = CRM_LEAD_STAGES.find((s) => s.value === legacy);
+    if (l) return l.label;
+  }
+  return String(value);
+}
+
+/**
+ * Appointment types, exactly the twelve the operator listed.
+ *
+ * The previous list carried a thirteenth, "Recruiting", that is not on theirs;
+ * it is dropped from the picker but still renders on any appointment already
+ * saved with it, because deleting an option must not blank a record.
+ */
+export const APPOINTMENT_TYPE_GROUPS: Array<{ group: string; types: string[] }> = [
+  {
+    group: "Real Estate Consultation",
+    types: [
+      "Buyer Consultation",
+      "Listing Consultation",
+      "Buyer/Listing Consultation",
+      "Showing Appointment",
+      "Client Meeting",
+      "General",
+      "Follow Up",
+    ],
+  },
+  {
+    group: "Recruiting / Administrative",
+    types: [
+      "Meet & Greet",
+      "Screening",
+      "Recruiting Appointment",
+      "Signing Appointment",
+      "Recruiting Follow Up",
+    ],
+  },
+];
+
+export const APPOINTMENT_TYPES: string[] = APPOINTMENT_TYPE_GROUPS.flatMap((g) => g.types);
 export type CrmPriority = "low" | "normal" | "high";
 /** Buyer vs seller vs both — drives dashboard funnels and colored views. */
 export type CrmIntent = "buyer" | "seller" | "buyer_seller";

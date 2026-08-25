@@ -306,6 +306,12 @@ import {
 import { filterDashboardLeads } from "./core/leadFilter.js";
 import type { LeadFilter, CrmStatusValue } from "./core/types.js";
 import {
+  APPOINTMENT_TYPE_GROUPS,
+  CRM_STAGES,
+  CRM_STAGE_GROUPS,
+  CRM_STAGE_LEGACY,
+} from "./core/types.js";
+import {
   createUser,
   deleteUser,
   getUserById,
@@ -5301,9 +5307,24 @@ app.get("/api/crm/messaging-status", async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   const out: Record<string, unknown> = {};
   try {
-    const { isGmailConfigured, isGmailOAuthConfigured } = await import("./integrations/gmail/index.js");
+    const { isGmailConfigured, isGmailOAuthConfigured, getEmailTransport, getMarcoEmail } =
+      await import("./integrations/gmail/index.js");
     const ok = isGmailConfigured() || isGmailOAuthConfigured();
-    out.email = { ok, reason: ok ? null : "Gmail is not connected on the server, so email cannot be sent from here." };
+    const transport = getEmailTransport();
+    /* Which transport is reported, not just whether one exists. The composer
+       used to tell the operator it was sending "through Marco's connected
+       Gmail account" while the actual path was SMTP with an app password —
+       and the OAuth token has been dead since July, so that sentence named
+       the one transport that could NOT have sent it. */
+    out.email = {
+      ok,
+      transport,
+      from: getMarcoEmail(),
+      reason: ok
+        ? null
+        : "No email transport is configured on the server — set GMAIL_SMTP_USER and GMAIL_SMTP_APP_PASSWORD, " +
+          "or reconnect Gmail OAuth. Nothing can be sent from here until one of those exists.",
+    };
   } catch {
     out.email = { ok: false, reason: "The Gmail integration could not be loaded." };
   }
@@ -5530,13 +5551,13 @@ app.post("/api/crm/lead", express.json(), async (req, res) => {
   }
   const email = typeof body.email === "string" && body.email.trim() ? body.email.trim() : null;
   const crmStatus = normalizeCrmStatus(body.crmStatus);
-  const crmStage = (
-    ["new", "hot", "warm", "cold", "pending", "appointment_set", "showing_set", "under_contract", "closed"].includes(
-      String(body.crmStage || ""),
-    )
-      ? body.crmStage
-      : "new"
-  ) as CrmStage;
+  /* Validated against CRM_STAGES, not a second copy of the list. A hard-coded
+     array here is the exact bug FORAI records for TASK_TYPES: the two lists
+     drift, and a stage the UI offers is silently downgraded on write — the
+     operator sets "Listing Agreement", it saves as "new", and nothing says so. */
+  const crmStage = ((CRM_STAGES as string[]).includes(String(body.crmStage || ""))
+    ? body.crmStage
+    : "new_lead") as CrmStage;
   const crmIntent = normalizeCrmIntent(body.crmIntent);
   const source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : "Manual";
   const personType = typeof body.personType === "string" ? body.personType.trim() : "Lead";
@@ -11212,6 +11233,38 @@ app.get("/api/content/sprint-progress", (req, res) => {
  * so those fields have NO data to sort on. They are named here with the reason
  * rather than offered as controls that would silently order every row the same.
  */
+/**
+ * The CRM's shared vocabulary: pipeline stages and appointment types.
+ *
+ * Served rather than hard-coded in the page for one reason. This repo has
+ * already been bitten once by two copies of the same list drifting apart —
+ * `TASK_TYPES` in server.ts against `TYPES` in core/tasks.ts, where a type in
+ * only one silently became "other" somewhere between the API and the write.
+ * Stages carry the same hazard and a worse consequence: a lead's stage is what
+ * the pipeline counts run on.
+ *
+ * The page keeps a baked-in copy purely as a first-paint fallback, and this is
+ * what it corrects itself to.
+ */
+app.get("/api/crm/vocabulary", (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  res.json({
+    ok: true,
+    stageGroups: CRM_STAGE_GROUPS,
+    stages: CRM_STAGES,
+    /* Old values still stored on rows, and what each displays as. Nothing
+       rewrites them — a stored value must never become unreadable. */
+    stageLegacy: CRM_STAGE_LEGACY,
+    appointmentTypeGroups: APPOINTMENT_TYPE_GROUPS,
+    appointmentOutcomes: [
+      { value: "none", label: "No outcome yet" },
+      { value: "held", label: "Held" },
+      { value: "no_show", label: "No Show" },
+      { value: "rescheduled", label: "Rescheduled" },
+    ],
+  });
+});
+
 app.get("/api/crm/lead-metrics", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -11335,6 +11388,19 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
       const status = t.appointmentStatus || "scheduled";
       if (st.indexOf(status) < 0) st.push(status);
       row.appointmentStatuses = st;
+      if (t.appointmentType) {
+        const ty = (row.appointmentTypes as string[]) || [];
+        if (ty.indexOf(t.appointmentType) < 0) ty.push(t.appointmentType);
+        row.appointmentTypes = ty;
+      }
+      /* Only a recorded outcome counts. An appointment nobody has closed out
+         has no outcome, which is different from "none" meaning it went
+         nowhere — so the absent case simply does not appear. */
+      if (t.outcome) {
+        const oc = (row.appointmentOutcomes as string[]) || [];
+        if (oc.indexOf(t.outcome) < 0) oc.push(t.outcome);
+        row.appointmentOutcomes = oc;
+      }
       const due = t.dueDate ? Date.parse(t.dueDate) : NaN;
       if (Number.isFinite(due)) {
         row.appointmentCount = Number(row.appointmentCount || 0) + 1;

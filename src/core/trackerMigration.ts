@@ -18,8 +18,14 @@ import {
  * eye before the tracker is treated as authoritative.
  */
 
+/* These two maps are keyed by the stage values that existed when the tracker
+   backfill was written. The stage list was replaced 2026-08-24 with the two
+   real pipelines, so the type is now a PARTIAL record: a stage with no entry
+   simply does not map, which `stageFor` already handles by leaving the record
+   unstaged. Forcing every new stage in here would be inventing tracker
+   placements nobody asked for. */
 /** Legacy CRM stage -> buyer pipeline. */
-const BUYER_FROM_LEGACY: Record<CrmStage, BuyerStage | undefined> = {
+const BUYER_FROM_LEGACY: Partial<Record<CrmStage, BuyerStage | undefined>> = {
   new: undefined,                    // not yet in the pipeline; buyer track starts at Contacted
   hot: "contacted",
   warm: "contacted",
@@ -32,7 +38,7 @@ const BUYER_FROM_LEGACY: Record<CrmStage, BuyerStage | undefined> = {
 };
 
 /** Legacy CRM stage -> seller pipeline. */
-const SELLER_FROM_LEGACY: Record<CrmStage, SellerStage | undefined> = {
+const SELLER_FROM_LEGACY: Partial<Record<CrmStage, SellerStage | undefined>> = {
   new: "new",
   hot: "contacted",
   warm: "contacted",

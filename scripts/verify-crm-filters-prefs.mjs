@@ -398,6 +398,77 @@ try {
   const cmaTh = await page.$('#view-leads th[data-sortk="cma"]');
   ok("CMA is a selectable, sortable column", !!cmaTh);
 
+  /* ═══════════ the stage + appointment-type lists (25 Aug) ═══════════ */
+  {
+    const v = await J(await fetch(B + "/api/crm/vocabulary"));
+    ok("the CRM serves one shared vocabulary", v.ok === true && Array.isArray(v.stageGroups));
+    const groups = Object.fromEntries(v.stageGroups.map((g) => [g.group, g.stages.map((x) => x.label)]));
+    ok("the two pipelines are named as the operator sees them",
+      Object.keys(groups).join("|") === "Lead Stages|Candidate Recruit Stages", Object.keys(groups).join("|"));
+    ok("Lead Stages is the full thirteen, in order",
+      groups["Lead Stages"].join(",") ===
+      "New Lead,Attempted Contact,Spoke With Customer,Appointment Set,Met With Customer,Showing Homes," +
+      "Listing Agreement,Active Listing,Submitting Offers,Under Contract,Sale Closed,Nurture,Rejected",
+      groups["Lead Stages"].join(","));
+    ok("Candidate Recruit Stages is the full eleven, in order",
+      groups["Candidate Recruit Stages"].join(",") ===
+      "New Candidate,Attempted Contact,Spoke With Candidate,Appointment Set,Met With Candidate,Screening," +
+      "Signing Appt Set,Signed,Nurture Candidate,Rejected Candidate,Declined Offer",
+      groups["Candidate Recruit Stages"].join(","));
+    /* The two pipelines share three step NAMES. Distinct VALUES are what stop
+       a candidate at "Attempted Contact" being counted as a lead at it. */
+    const leadVals = v.stageGroups[0].stages.map((x) => x.value);
+    const candVals = v.stageGroups[1].stages.map((x) => x.value);
+    ok("shared step names still carry distinct values per pipeline",
+      leadVals.includes("attempted_contact") && candVals.includes("attempted_contact_candidate") &&
+      !leadVals.some((x) => candVals.includes(x)),
+      JSON.stringify([leadVals.filter((x) => candVals.includes(x))]));
+    /* Old stored values must stay readable — nothing rewrites a row. */
+    ok("legacy stage values still map to a label",
+      v.stageLegacy && v.stageLegacy.new === "new_lead" && v.stageLegacy.closed === "sale_closed",
+      JSON.stringify(v.stageLegacy));
+
+    const types = v.appointmentTypeGroups.flatMap((g) => g.types);
+    ok("appointment types are the twelve supplied",
+      types.join(",") ===
+      "Buyer Consultation,Listing Consultation,Buyer/Listing Consultation,Showing Appointment,Client Meeting," +
+      "General,Follow Up,Meet & Greet,Screening,Recruiting Appointment,Signing Appointment,Recruiting Follow Up",
+      types.join(","));
+    /* This page had invented a thirteenth. */
+    ok("and the invented 'Recruiting' entry is gone", !types.includes("Recruiting"));
+
+    /* The write path must accept every stage it offers. A hard-coded list on
+       the server silently downgraded anything new to "new" — the exact
+       TASK_TYPES drift this repo has already been bitten by. */
+    let r2 = await fetch(B + "/api/crm/lead/lead_1", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ crmStage: "listing_agreement" }),
+    });
+    ok("a new stage is accepted on write", r2.ok, String(r2.status));
+    const back = await J(await fetch(B + "/api/dashboard/data"));
+    ok("and round-trips instead of being downgraded",
+      back.leads.find((l) => l.id === "lead_1").crmStage === "listing_agreement",
+      back.leads.find((l) => l.id === "lead_1").crmStage);
+
+    /* In the panel: grouped, with headers. */
+    await page.click("#lFilterBtn");
+    await page.waitForSelector("#afScrim.on");
+    await page.waitForFunction(() =>
+      document.querySelectorAll('.afdd[data-afdd="stage"] .afdd-g').length === 2, null, { timeout: 8000 });
+    const hdrs = await page.$$eval('.afdd[data-afdd="stage"] .afdd-g', (n) => n.map((e) => e.textContent.trim()));
+    ok("the Stage dropdown carries both group headers",
+      hdrs.join("|") === "Lead Stages|Candidate Recruit Stages", hdrs.join("|"));
+    const stOpts = await page.$$eval('.afdd[data-afdd="stage"] .afopt', (n) => n.length);
+    ok("with all twenty-four stages under them", stOpts === 24, String(stOpts));
+
+    ok("Appointments gained a Type dropdown", !!(await page.$('.afdd[data-afdd="apptType"]')));
+    ok("and an Outcome dropdown", !!(await page.$('.afdd[data-afdd="apptOutcome"]')));
+    const apptTypeOpts = await page.$$eval('.afdd[data-afdd="apptType"] .afopt', (n) => n.length);
+    ok("the Type dropdown lists the twelve", apptTypeOpts === 12, String(apptTypeOpts));
+    await page.click("#afClose");
+    await page.waitForTimeout(200);
+  }
+
   if (process.env.SHOT_DIR) {
     const D = process.env.SHOT_DIR;
     await page.setViewportSize({ width: 1500, height: 1000 });

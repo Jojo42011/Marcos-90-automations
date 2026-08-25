@@ -14,6 +14,12 @@ const trackerStore_js_1 = require("./trackerStore.js");
  * Judgement calls are marked BEST-GUESS below; those are the ones worth a human
  * eye before the tracker is treated as authoritative.
  */
+/* These two maps are keyed by the stage values that existed when the tracker
+   backfill was written. The stage list was replaced 2026-08-24 with the two
+   real pipelines, so the type is now a PARTIAL record: a stage with no entry
+   simply does not map, which `stageFor` already handles by leaving the record
+   unstaged. Forcing every new stage in here would be inventing tracker
+   placements nobody asked for. */
 /** Legacy CRM stage -> buyer pipeline. */
 const BUYER_FROM_LEGACY = {
     new: undefined, // not yet in the pipeline; buyer track starts at Contacted

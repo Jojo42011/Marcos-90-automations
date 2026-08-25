@@ -359,6 +359,8 @@
     background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);
     max-height:230px;overflow:auto;padding:4px}
   .afdd.open .afdd-m{display:block}
+  .afdd-g{padding:6px 8px 3px;font-size:10px;letter-spacing:.05em;text-transform:uppercase;
+    color:#98a1a7;font-weight:700;background:#f7fafa;border-radius:4px;margin-top:2px}
   .afdd-m .afopt{display:block;padding:5px 8px;border-radius:4px;font-size:12.5px}
   .afdd-m .afopt:hover{background:#f4f9f9}
   .afbtns{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
@@ -373,6 +375,10 @@
   .afd-body input[type=text]{width:100%;border:1px solid var(--line);border-radius:6px;
     padding:7px 10px;font-size:12.5px;color:var(--ink);outline:none}
   .afd-body input[type=text]:focus{border-color:var(--teal)}
+  .qa-dial{display:inline-flex;align-items:center;gap:7px;background:var(--teal);color:#fff;
+    border-radius:6px;padding:8px 16px;font-size:12.5px;font-weight:700;letter-spacing:.02em;
+    text-decoration:none}
+  .qa-dial:hover{background:var(--teal-strong)}
   .aftri{display:flex;gap:6px;margin:4px 0 8px}
   .aftri button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;color:#5b6570;cursor:pointer}
   .aftri button.on{background:var(--teal);border-color:var(--teal);color:#fff}
@@ -1800,7 +1806,54 @@ function hitRow(o){ if(!SEARCH)return true; return (_q(o.name)+" "+_q(o.address)
    write the same state, so they can never disagree. No column chosen falls
    back to the legacy pill default (recent / name A-Z). */
 var STATUS_ORDER={new:0,hot:1,nurture:2,watch:3,unqualified:4,dead:4,unresponsive:5,past_client:6,archived:7,trashed:8};
-var STAGE_ORDER={"NEW LEAD":0,"ATTEMPTED CONTACT":1,"APPOINTMENT SET":2,"SHOWING SET":3,"PENDING":4,"UNDER CONTRACT":5,"CLOSED":6};
+/* Rank for sorting, derived from the pipeline order rather than a second
+   hand-kept list. Labels are upper-cased because the table renders them that
+   way; unknown labels sort last instead of colliding at 0. */
+/* The two pipelines, grouped exactly as the operator sees them. Lead and
+   candidate share three step NAMES; the VALUES differ so a candidate at
+   "Attempted Contact" is never counted as a lead at it. */
+var STAGE_GROUPS=[
+  ["Lead Stages",[
+    ["new_lead","New Lead"],["attempted_contact","Attempted Contact"],
+    ["spoke_with_customer","Spoke With Customer"],["appointment_set","Appointment Set"],
+    ["met_with_customer","Met With Customer"],["showing_homes","Showing Homes"],
+    ["listing_agreement","Listing Agreement"],["active_listing","Active Listing"],
+    ["submitting_offers","Submitting Offers"],["under_contract","Under Contract"],
+    ["sale_closed","Sale Closed"],["nurture","Nurture"],["rejected","Rejected"]]],
+  ["Candidate Recruit Stages",[
+    ["new_candidate","New Candidate"],["attempted_contact_candidate","Attempted Contact"],
+    ["spoke_with_candidate","Spoke With Candidate"],["appointment_set_candidate","Appointment Set"],
+    ["met_with_candidate","Met With Candidate"],["screening","Screening"],
+    ["signing_appt_set","Signing Appt Set"],["signed","Signed"],
+    ["nurture_candidate","Nurture Candidate"],["rejected_candidate","Rejected Candidate"],
+    ["declined_offer","Declined Offer"]]]
+];
+/* Values stored before 2026-08-24. Displayed as their nearest new stage;
+   nothing rewrites the stored row. */
+var STAGE_LEGACY={new:"new_lead",hot:"attempted_contact",warm:"attempted_contact",
+  cold:"nurture",pending:"under_contract",showing_set:"showing_homes",closed:"sale_closed"};
+function stageLabel(v){
+  if(!v)return "";
+  for(var i=0;i<STAGE_GROUPS.length;i++){
+    var hit=STAGE_GROUPS[i][1].filter(function(p){return p[0]===v;})[0];
+    if(hit)return hit[1];
+  }
+  var leg=STAGE_LEGACY[v];
+  if(leg){ var l=STAGE_GROUPS[0][1].filter(function(p){return p[0]===leg;})[0]; if(l)return l[1]; }
+  return String(v);
+}
+var STAGE_ORDER={};
+function rebuildStageOrder(){
+  STAGE_ORDER={}; var n=0;
+  STAGE_GROUPS.forEach(function(g){
+    g[1].forEach(function(pair){ if(STAGE_ORDER[pair[1].toUpperCase()]==null)STAGE_ORDER[pair[1].toUpperCase()]=n++; });
+  });
+  /* Old labels the table may still be rendering from stored rows. */
+  ["PENDING","SHOWING SET","CLOSED","HOT","WARM","COLD"].forEach(function(l){
+    if(STAGE_ORDER[l]==null)STAGE_ORDER[l]=n++;
+  });
+}
+rebuildStageOrder();
 function mdySortable(v){ var m=/^(\d{2})-(\d{2})-(\d{4})$/.exec(String(v||"")); return m?(m[3]+m[1]+m[2]):""; }
 /**
  * Names are stored as one string, so First/Last are derived rather than
@@ -3871,14 +3924,14 @@ function advBlank(){return {
   alerts:"",reports:"",reportView:"",
   hasEmail:null,hasPhone:null,hasAddress:null,
   comms:"",textStatus:"",phoneStatus:"",addressQuery:"",
-  apptStatus:[],apptFrom:"",apptTo:"",
+  apptStatus:[],apptType:[],apptOutcome:[],apptFrom:"",apptTo:"",
   addedFrom:"",addedTo:"",lastFrom:"",lastTo:"",birthdayMonth:0,annivMonth:0,
   tasks:"",agreementType:[],agreementStatus:[]
 };}
 function advActive(a){
   a=a||ADV; if(!a)return 0; var n=0;
   ["leadType","record","status","stage","assigned","source","collaborators",
-   "tagsInc","tagsExc","apptStatus","agreementType","agreementStatus"]
+   "tagsInc","tagsExc","apptStatus","apptType","apptOutcome","agreementType","agreementStatus"]
     .forEach(function(k){n+=(a[k]&&a[k].length)?1:0;});
   ["autoPlan","autoPlanStatus","alerts","reports","reportView","comms","textStatus","phoneStatus","tasks"]
     .forEach(function(k){ if(a[k])n++; });
@@ -3905,7 +3958,16 @@ function advPred(row){
   var a=ADV; if(!a)return true;
   if(a.leadType.length&&a.leadType.indexOf(row.intent)<0)return false;
   if(a.status.length&&a.status.indexOf(row.statusDisp||row.crmStatus)<0)return false;
-  if(a.stage.length&&a.stage.indexOf(row.stageLabel)<0)return false;
+  /* Rows carry a stage VALUE (crmStage) and the table renders a LABEL. The
+     filter stores values now, so match on either — a row whose label was
+     built from a legacy value must still be findable. */
+  if(a.stage.length){
+    var rowStage=row.crmStage||"", rowLabel=row.stageLabel||"";
+    var stageHit=a.stage.some(function(v){
+      return v===rowStage||stageLabel(v)===rowLabel||STAGE_LEGACY[rowStage]===v;
+    });
+    if(!stageHit)return false;
+  }
   if(a.assigned.length){
     var uid=row.assignedUserId||"";
     var hit=a.assigned.some(function(x){return x==="unassigned"?!uid:x===uid;});
@@ -4033,6 +4095,14 @@ function advPred(row){
     var st2=leadMetric(row.id,"appointmentStatuses")||[];
     if(a.apptStatus.indexOf("none")>=0){ if(st2.length)return false; }
     else if(!a.apptStatus.some(function(x){return st2.indexOf(x)>=0;}))return false;
+  }
+  if(a.apptType.length){
+    var at2=leadMetric(row.id,"appointmentTypes")||[];
+    if(!a.apptType.some(function(x){return at2.indexOf(x)>=0;}))return false;
+  }
+  if(a.apptOutcome.length){
+    var ao=leadMetric(row.id,"appointmentOutcomes")||[];
+    if(!a.apptOutcome.some(function(x){return ao.indexOf(x)>=0;}))return false;
   }
   if(a.apptFrom||a.apptTo){
     var nx=leadMetric(row.id,"nextAppointmentAt")||leadMetric(row.id,"lastAppointmentAt");
@@ -4232,6 +4302,26 @@ function buildAdvPanel(){
   }
   /* Buttons where the meeting asked for buttons: a short, fixed set the
      operator picks from at a glance rather than opening anything. */
+  /* Same dropdown, with the operator's own group headers. Lead and candidate
+     pipelines repeat three step names, so the headers are what tells them
+     apart on screen — a flat list would show "Appointment Set" twice with
+     nothing to distinguish them. */
+  function ddGrouped(key,label,groups){
+    var sel=a[key]||[];
+    var flat=groups.reduce(function(acc,g){ return acc.concat(g[1]); },[]);
+    var summary=!sel.length?"Any"
+      :sel.length===1?(function(){var o=flat.filter(function(x){return x[0]===sel[0];})[0];return o?o[1]:sel[0];})()
+      :sel.length+" selected";
+    return '<div class="aflab">'+esc(label)+'</div>'+
+      '<div class="afdd" data-afdd="'+key+'">'+
+        '<button type="button" class="afdd-b'+(sel.length?" on":"")+'">'+esc(summary)+'<span>▾</span></button>'+
+        '<div class="afdd-m">'+groups.map(function(g){
+          return '<div class="afdd-g">'+esc(g[0])+'</div>'+g[1].map(function(o){
+            return '<label class="afopt"><input type="checkbox" data-afk="'+key+'" data-afv="'+esc(o[0])+'"'+
+              (sel.indexOf(o[0])>=0?" checked":"")+'> '+esc(o[1])+'</label>';
+          }).join("");
+        }).join("")+'</div></div>';
+  }
   function btnMulti(key,label,opts){
     var sel=a[key]||[];
     return '<div class="aflab">'+esc(label)+'</div><div class="afbtns">'+
@@ -4291,7 +4381,7 @@ function buildAdvPanel(){
     btnMulti("collaborators","Collaborators",collabOpts)+
     '<div class="afnote">Secondary team members with access to the contact, from Manage Team. The primary agent is Assigned To, below.</div>'+
     ddMulti("status","Lead Status",statuses)+
-    ddMulti("stage","Stage",stages.map(function(s){return {v:s,l:s};}))+
+    ddGrouped("stage","Stage",STAGE_GROUPS)+
     ddMulti("assigned","Assigned To",[{v:"unassigned",l:"Unassigned"}].concat(roster.map(function(u){return {v:u.id,l:u.name};})))+
     ddMulti("source","Source",srcOpts.map(function(s){return {v:s,l:s};}))+
     '<div class="afnote">Sources are the ones actually recorded on these contacts. A full Rivity source list has not been supplied yet — when it arrives these become a managed list with custom entries.</div>',
@@ -4347,7 +4437,11 @@ function buildAdvPanel(){
     btnMulti("apptStatus","Appointments",[
       {v:"scheduled",l:"Set / Scheduled"},{v:"completed",l:"Held"},
       {v:"cancelled",l:"Cancelled"},{v:"none",l:"None"}])+
-    '<div class="aflab">Appointment date</div><div style="display:flex;gap:6px">'+
+    ddGrouped("apptType","Type",APPT_TYPES.map(function(g){
+      return [g[0],g[1].map(function(t){return [t,t];})];
+    }))+
+    ddMulti("apptOutcome","Outcome",APPT_OUTCOMES.map(function(o){return {v:o[0],l:o[1]};}))+
+    '<div class="aflab">Date Range</div><div style="display:flex;gap:6px">'+
       '<input type="date" data-afd="apptFrom" value="'+esc(a.apptFrom)+'">'+
       '<input type="date" data-afd="apptTo" value="'+esc(a.apptTo)+'"></div>'+
     (ADV_SRC.tasksByLead===null&&ADV_SRC.tasksErr
@@ -4452,6 +4546,16 @@ function buildAdvPanel(){
 function openAdvFilter(){
   ADV_DRAFT=ADV?JSON.parse(JSON.stringify(ADV)):advBlank();
   ensureLeadMetrics(function(){ if(document.getElementById("afScrim").classList.contains("on"))buildAdvPanel(); });
+  /* Correct the baked-in stage and appointment lists against the server's,
+     then repaint whatever is showing them. */
+  if(typeof loadCrmVocabulary==="function"&&!openAdvFilter.__vocab){
+    openAdvFilter.__vocab=1;
+    loadCrmVocabulary().then(function(){
+      rebuildStageOrder();
+      STAGE_OPTIONS=stageOptionsFlat();
+      if(document.getElementById("afScrim").classList.contains("on"))buildAdvPanel();
+    });
+  }
   loadAdvSources(function(){buildAdvPanel();});
   buildAdvPanel();
   document.getElementById("afScrim").classList.add("on");
@@ -4996,7 +5100,12 @@ document.addEventListener("click",function(e){
    status, so the record, its history and its deals all stay put and the lead
    table simply stops showing it by default. */
 const STATUS_OPTIONS=[["new","NEW","var(--st-new)"],["hot","HOT","var(--st-hot)"],["nurture","NURTURE","var(--st-nurture)"],["watch","WATCH","var(--st-watch)"],["dead","UNQUALIFIED","var(--st-unq)"],["unresponsive","INACTIVE","#aab2ba"],["archived","ARCHIVE","#8a939c"],["trashed","TRASH","#b4707a"]];
-const STAGE_OPTIONS=[["new","New Lead"],["hot","Hot"],["warm","Warm"],["cold","Cold"],["pending","Pending"],["appointment_set","Appointment Set"],["showing_set","Showing Set"],["under_contract","Under Contract"],["closed","Closed"]];
+/* Flattened from STAGE_GROUPS so the profile dropdown and the filter panel
+   can never offer different stages. Rebuilt after the vocabulary loads. */
+function stageOptionsFlat(){
+  return STAGE_GROUPS.reduce(function(acc,g){ return acc.concat(g[1]); },[]);
+}
+var STAGE_OPTIONS=stageOptionsFlat();
 const ddMenu=document.getElementById("ddMenu");
 function closeDD(){ ddMenu.className="dd-menu"; ddMenu.style.bottom="auto"; ddMenu.style.minWidth=""; ddMenu._for=null; ddMenu._anchorAt=null; }
 function crmToast(msg){ const t=document.getElementById("crmToast"); t.textContent=msg; t.classList.add("on"); clearTimeout(window.__tt); window.__tt=setTimeout(()=>t.classList.remove("on"),1700); }
@@ -5017,6 +5126,7 @@ function setLeadField(id,kind,val){
 }
 function openEditMenu(el){
   const id=el.getAttribute("data-lid"), kind=el.getAttribute("data-kind");
+  if(kind==="stage")STAGE_OPTIONS=stageOptionsFlat();
   const opts=kind==="status"?STATUS_OPTIONS:kind==="stage"?STAGE_OPTIONS:INTENT_OPTIONS;
   ddMenu.innerHTML=opts.map(o=>'<button data-v="'+o[0]+'">'+(kind==="status"?'<span class="sw" style="background:'+o[2]+'"></span>':'')+esc(o[1])+'</button>').join("");
   ddMenu.querySelectorAll("button").forEach(b=>b.addEventListener("click",ev=>{ ev.stopPropagation(); setLeadField(id,kind,b.getAttribute("data-v")); closeDD(); }));
@@ -6582,15 +6692,34 @@ function saveUiPrefs(patch){
 
 /** Per-channel send capability, from the server. Null until it answers. */
 var MSG_STATUS=null;
+var MSG_STATUS_INFLIGHT=false;
 function loadMessagingStatus(then){
+  if(MSG_STATUS_INFLIGHT){ if(then)then(); return; }
+  MSG_STATUS_INFLIGHT=true;
   fetch(crmApi("/api/crm/messaging-status"))
     .then(function(r){ return r.ok?r.json():null; })
-    .then(function(d){ MSG_STATUS=(d&&d.channels)||{}; if(then)then(); })
+    .then(function(d){ MSG_STATUS=(d&&d.channels)||{}; })
     .catch(function(){
-      /* Unknown is not "works". Leaving it null makes the send buttons render
+      /* Unknown is not "works". An empty object makes the send buttons render
          disabled with an honest reason rather than optimistically live. */
-      MSG_STATUS={}; if(then)then();
+      MSG_STATUS={};
+    })
+    .then(function(){
+      MSG_STATUS_INFLIGHT=false;
+      /* REPAINT. This was fire-and-forget with no callback at boot, so a lead
+         profile opened before the fetch landed rendered its Text tab with
+         MSG_STATUS still null — SEND disabled, "Checking whether this channel
+         can send…", and nothing ever re-rendered. Texting worked in the
+         Messages tab and looked broken in the profile, which is exactly the
+         symptom that got reported. */
+      if(typeof ldTab!=="undefined"&&typeof renderLeadTab==="function"&&
+         document.getElementById("ldTabBody"))renderLeadTab();
+      if(then)then();
     });
+}
+/** Called by the composer tabs: if the answer never arrived, ask again. */
+function ensureMessagingStatus(){
+  if(MSG_STATUS===null&&!MSG_STATUS_INFLIGHT)loadMessagingStatus();
 }
 function channelOk(name){ return !!(MSG_STATUS&&MSG_STATUS[name]&&MSG_STATUS[name].ok); }
 function channelReason(name){
@@ -6782,7 +6911,16 @@ function qaSignature(){
     '<a href="mailto:pmarcopuga@gmail.com">pmarcopuga@gmail.com</a></p>';
 }
 
+/** "SMTP as marco@…" / "Gmail OAuth" — what a send would actually use. */
+function emailTransportLabel(){
+  var c=MSG_STATUS&&MSG_STATUS.email;
+  if(!c||!c.ok)return null;
+  if(c.transport==="smtp")return "SMTP"+(c.from?(" as "+c.from):"");
+  if(c.transport==="oauth")return "the connected Gmail account";
+  return "the configured email transport";
+}
 function qaEmailTab(l,body){
+  ensureMessagingStatus();
   var addr=qaPrimaryEmail(l);
   var d=QA.email||(QA.email={to:addr,cc:[],bcc:[],subject:"",html:qaSignature(),copyMe:false,attachments:[],showCc:false,showBcc:false});
   if(!d.to)d.to=addr;
@@ -6833,7 +6971,8 @@ function qaEmailTab(l,body){
     qaFoot(can?"SEND":"SEND","qaSend",
       '<label class="qa-copy"><input type="checkbox" id="qaCopy"'+(d.copyMe?" checked":"")+'> Send me a copy</label>',
       !can)+
-    (can?'<div class="qa-note">Sends for real through Marco’s connected Gmail and logs it on the timeline as sent. '+
+    (can?'<div class="qa-note">Sends for real over '+esc(emailTransportLabel()||"the configured transport")+
+          ' and logs it on the timeline as sent. '+
           'Gmail reports no open or click tracking back, so the timeline card will say so rather than show a zero.</div>'
         :'<div class="qa-off">'+esc(channelReason("email"))+' The draft is kept here; nothing will go out.</div>');
 
@@ -6923,7 +7062,12 @@ function qaEmailTab(l,body){
   document.getElementById("qaClear").addEventListener("click",function(){ QA.email=null; renderLeadTab(); });
   document.getElementById("qaSend").addEventListener("click",function(){
     var to=(toEl.value||"").trim();
-    if(!confirm('Send "'+subj.value.trim()+'" to '+to+' now?\n\nThis sends real email through Marco\'s connected Gmail account.'))return;
+    /* Name the transport that will actually carry it. Saying "Gmail" while
+       sending over SMTP was wrong in the one direction that matters: the OAuth
+       token has been dead since July, so it named the path that could not
+       have worked. */
+    if(!confirm('Send "'+subj.value.trim()+'" to '+to+' now?\n\nThis sends a real email over '+
+      (emailTransportLabel()||"the configured transport")+'.'))return;
     var go=document.getElementById("qaSend"); go.disabled=true; go.textContent="SENDING…";
     fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/send-email"),{method:"POST",
       headers:{"Content-Type":"application/json"},
@@ -6956,6 +7100,7 @@ function openEmojiMenu(anchor,onPick){
 var CALL_OUTCOMES=["Talked","Left Message","Busy","Failed","No Answer","Wrong Number"];
 
 function qaCallTab(l,body){
+  ensureMessagingStatus();
   var prim=qaPrimaryPhone();
   var d=QA.call||(QA.call={number:prim?prim.number:(l.phone||""),outcome:null,notes:"",mentions:[]});
   var phoneOpts=qaPhoneOptions(d.number);
@@ -6969,10 +7114,20 @@ function qaCallTab(l,body){
       ? '<div class="qa-row"><select class="qa-sel" id="qaCallNum" style="flex:1;min-width:200px">'+phoneOpts+'</select>'+
         (dnc?'<span class="cx-dnc">DNC</span>':'')+'</div>'
       : '<div class="cr-empty">No phone number on this contact — add one in Contact Info first.</div>')+
-    /* No softphone is connected, so there is no dial button. Saying what the
-       tab does do is more useful than a green CALL that goes nowhere. */
-    '<div class="qa-off">Calls are placed on your own phone — nothing here dials. '+
-      'This logs the call and its outcome on the timeline once you have made it.</div>'+
+    /* There is no softphone and no outbound-call API on Quo or Twilio, so the
+       server cannot place a call. What DOES work is handing the number to
+       whatever dials on this device — that is a real call, not a dead button,
+       and it is how every CRM without a softphone does it. The outcome is
+       logged here afterwards either way. */
+    (d.number
+      ? '<div class="qa-row" style="margin:8px 0 2px">'+
+          '<a class="qa-dial" id="qaDial" href="tel:'+esc(String(d.number).replace(/[^0-9+]/g,""))+'">'+
+            '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">'+
+            '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.7 2z"/></svg>'+
+            'CALL '+esc(d.number)+'</a></div>'
+      : "")+
+    '<div class="qa-off">This opens the dialler on whatever device you are on — no softphone is connected, so '+
+      'nothing is placed server-side. Log the outcome below once you have made the call.</div>'+
     '<div class="qa-lbl" style="margin-top:12px">Call Outcome <i>*</i></div>'+
     '<div class="qa-pills" id="qaOut">'+CALL_OUTCOMES.map(function(o){
       return '<button data-o="'+esc(o)+'"'+(o===d.outcome?' class="on"':'')+'>'+esc(o)+'</button>'; }).join("")+'</div>'+
@@ -7033,6 +7188,7 @@ function loadQaThread(leadId,then){
 }
 
 function qaTextTab(l,body){
+  ensureMessagingStatus();
   var prim=qaPrimaryPhone();
   var d=QA.text||(QA.text={number:prim?prim.number:(l.phone||""),text:""});
   var can=channelOk("text");
@@ -7118,12 +7274,38 @@ function qaTextTab(l,body){
 
 /* Grouped exactly as the spec lists them, because the two groups are different
    kinds of work and a flat list of eleven hides that. */
+/* The twelve the operator supplied on 2026-08-24. "Recruiting" was a
+   thirteenth this page had invented; it is gone from the picker but any
+   appointment already saved with it still renders — dropping an option must
+   not blank a record. Corrected from /api/crm/vocabulary on load, so this copy
+   is only the first-paint fallback. */
 var APPT_TYPES=[
   ["Real Estate Consultation",["Buyer Consultation","Listing Consultation","Buyer/Listing Consultation",
     "Showing Appointment","Client Meeting","General","Follow Up"]],
-  ["Recruiting / Administrative",["Recruiting","Meet & Greet","Screening","Recruiting Appointment",
+  ["Recruiting / Administrative",["Meet & Greet","Screening","Recruiting Appointment",
     "Signing Appointment","Recruiting Follow Up"]]
 ];
+var APPT_OUTCOMES=[["none","No outcome yet"],["held","Held"],["no_show","No Show"],["rescheduled","Rescheduled"]];
+
+/* Corrects the baked-in copies against the server so the two can never drift
+   — the failure this repo has already had once (TASK_TYPES vs TYPES). */
+function loadCrmVocabulary(){
+  return fetch(crmApi("/api/crm/vocabulary")).then(function(r){ return r.ok?r.json():null; }).then(function(d){
+    if(!d||!d.ok)return;
+    if(d.stageGroups&&d.stageGroups.length){
+      STAGE_GROUPS=d.stageGroups.map(function(g){
+        return [g.group,(g.stages||[]).map(function(x){return [x.value,x.label];})];
+      });
+    }
+    if(d.stageLegacy)STAGE_LEGACY=d.stageLegacy;
+    if(d.appointmentTypeGroups&&d.appointmentTypeGroups.length){
+      APPT_TYPES=d.appointmentTypeGroups.map(function(g){ return [g.group,g.types||[]]; });
+    }
+    if(d.appointmentOutcomes&&d.appointmentOutcomes.length){
+      APPT_OUTCOMES=d.appointmentOutcomes.map(function(o){ return [o.value,o.label]; });
+    }
+  }).catch(function(){ /* first-paint fallback stands */ });
+}
 var DATE_PILLS=[["Today",0],["Tomorrow",1],["7 Days",7],["30 Days",30],["90 Days",90]];
 var TIME_PILLS=[["Morning 8 am","08:00"],["Afternoon 12 pm","12:00"],["Evening 5 pm","17:00"],["11:00 PM","23:00"]];
 

@@ -107,13 +107,14 @@ const autoPlans_js_1 = require("./core/autoPlans.js");
 const autoPlanTriggers_js_1 = require("./core/autoPlanTriggers.js");
 const tagTemplates_js_1 = require("./core/tagTemplates.js");
 const leadFilter_js_1 = require("./core/leadFilter.js");
-const users_js_1 = require("./core/users.js");
 const types_js_1 = require("./core/types.js");
+const users_js_1 = require("./core/users.js");
 const types_js_2 = require("./core/types.js");
+const types_js_3 = require("./core/types.js");
 const tasks_js_1 = require("./core/tasks.js");
 const marcoTasks_js_1 = require("./core/marcoTasks.js");
 const harveyNotes_js_1 = require("./core/harveyNotes.js");
-const types_js_3 = require("./core/types.js");
+const types_js_4 = require("./core/types.js");
 const trackerStore_js_1 = require("./core/trackerStore.js");
 const trackerTasks_js_1 = require("./core/trackerTasks.js");
 const trackerMigration_js_1 = require("./core/trackerMigration.js");
@@ -5057,9 +5058,23 @@ app.get("/api/crm/messaging-status", async (req, res) => {
     }
     const out = {};
     try {
-        const { isGmailConfigured, isGmailOAuthConfigured } = await Promise.resolve().then(() => __importStar(require("./integrations/gmail/index.js")));
+        const { isGmailConfigured, isGmailOAuthConfigured, getEmailTransport, getMarcoEmail } = await Promise.resolve().then(() => __importStar(require("./integrations/gmail/index.js")));
         const ok = isGmailConfigured() || isGmailOAuthConfigured();
-        out.email = { ok, reason: ok ? null : "Gmail is not connected on the server, so email cannot be sent from here." };
+        const transport = getEmailTransport();
+        /* Which transport is reported, not just whether one exists. The composer
+           used to tell the operator it was sending "through Marco's connected
+           Gmail account" while the actual path was SMTP with an app password —
+           and the OAuth token has been dead since July, so that sentence named
+           the one transport that could NOT have sent it. */
+        out.email = {
+            ok,
+            transport,
+            from: getMarcoEmail(),
+            reason: ok
+                ? null
+                : "No email transport is configured on the server — set GMAIL_SMTP_USER and GMAIL_SMTP_APP_PASSWORD, " +
+                    "or reconnect Gmail OAuth. Nothing can be sent from here until one of those exists.",
+        };
     }
     catch {
         out.email = { ok: false, reason: "The Gmail integration could not be loaded." };
@@ -5285,9 +5300,13 @@ app.post("/api/crm/lead", express_1.default.json(), async (req, res) => {
     }
     const email = typeof body.email === "string" && body.email.trim() ? body.email.trim() : null;
     const crmStatus = (0, db_js_2.normalizeCrmStatus)(body.crmStatus);
-    const crmStage = (["new", "hot", "warm", "cold", "pending", "appointment_set", "showing_set", "under_contract", "closed"].includes(String(body.crmStage || ""))
+    /* Validated against CRM_STAGES, not a second copy of the list. A hard-coded
+       array here is the exact bug FORAI records for TASK_TYPES: the two lists
+       drift, and a stage the UI offers is silently downgraded on write — the
+       operator sets "Listing Agreement", it saves as "new", and nothing says so. */
+    const crmStage = (types_js_1.CRM_STAGES.includes(String(body.crmStage || ""))
         ? body.crmStage
-        : "new");
+        : "new_lead");
     const crmIntent = (0, db_js_1.normalizeCrmIntent)(body.crmIntent);
     const source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : "Manual";
     const personType = typeof body.personType === "string" ? body.personType.trim() : "Lead";
@@ -6155,7 +6174,7 @@ app.post("/api/marco-tasks", express_1.default.json({ limit: "64kb" }), (req, re
     const priority = body.priority === "high" || body.priority === "medium" || body.priority === "low"
         ? body.priority
         : "medium";
-    const status = types_js_2.MARCO_TASK_STATUSES.includes(body.status)
+    const status = types_js_3.MARCO_TASK_STATUSES.includes(body.status)
         ? body.status
         : "pending";
     const task = (0, marcoTasks_js_1.createMarcoTask)({
@@ -6185,7 +6204,7 @@ app.patch("/api/marco-tasks/:id", express_1.default.json({ limit: "64kb" }), (re
     if (body.priority === "high" || body.priority === "medium" || body.priority === "low") {
         updates.priority = body.priority;
     }
-    if (types_js_2.MARCO_TASK_STATUSES.includes(body.status)) {
+    if (types_js_3.MARCO_TASK_STATUSES.includes(body.status)) {
         updates.status = body.status;
         updates.previousStatus = undefined;
     }
@@ -10665,6 +10684,40 @@ app.get("/api/content/sprint-progress", (req, res) => {
  * so those fields have NO data to sort on. They are named here with the reason
  * rather than offered as controls that would silently order every row the same.
  */
+/**
+ * The CRM's shared vocabulary: pipeline stages and appointment types.
+ *
+ * Served rather than hard-coded in the page for one reason. This repo has
+ * already been bitten once by two copies of the same list drifting apart —
+ * `TASK_TYPES` in server.ts against `TYPES` in core/tasks.ts, where a type in
+ * only one silently became "other" somewhere between the API and the write.
+ * Stages carry the same hazard and a worse consequence: a lead's stage is what
+ * the pipeline counts run on.
+ *
+ * The page keeps a baked-in copy purely as a first-paint fallback, and this is
+ * what it corrects itself to.
+ */
+app.get("/api/crm/vocabulary", (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    res.json({
+        ok: true,
+        stageGroups: types_js_1.CRM_STAGE_GROUPS,
+        stages: types_js_1.CRM_STAGES,
+        /* Old values still stored on rows, and what each displays as. Nothing
+           rewrites them — a stored value must never become unreadable. */
+        stageLegacy: types_js_1.CRM_STAGE_LEGACY,
+        appointmentTypeGroups: types_js_1.APPOINTMENT_TYPE_GROUPS,
+        appointmentOutcomes: [
+            { value: "none", label: "No outcome yet" },
+            { value: "held", label: "Held" },
+            { value: "no_show", label: "No Show" },
+            { value: "rescheduled", label: "Rescheduled" },
+        ],
+    });
+});
 app.get("/api/crm/lead-metrics", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -10788,6 +10841,21 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
             if (st.indexOf(status) < 0)
                 st.push(status);
             row.appointmentStatuses = st;
+            if (t.appointmentType) {
+                const ty = row.appointmentTypes || [];
+                if (ty.indexOf(t.appointmentType) < 0)
+                    ty.push(t.appointmentType);
+                row.appointmentTypes = ty;
+            }
+            /* Only a recorded outcome counts. An appointment nobody has closed out
+               has no outcome, which is different from "none" meaning it went
+               nowhere — so the absent case simply does not appear. */
+            if (t.outcome) {
+                const oc = row.appointmentOutcomes || [];
+                if (oc.indexOf(t.outcome) < 0)
+                    oc.push(t.outcome);
+                row.appointmentOutcomes = oc;
+            }
             const due = t.dueDate ? Date.parse(t.dueDate) : NaN;
             if (Number.isFinite(due)) {
                 row.appointmentCount = Number(row.appointmentCount || 0) + 1;
@@ -11651,8 +11719,8 @@ app.post("/api/users", express_1.default.json(), async (req, res) => {
         ? body.role
         : "agent";
     const permissions = body.permissions && typeof body.permissions === "object"
-        ? { ...types_js_1.ROLE_PERMISSIONS.custom, ...body.permissions }
-        : { ...types_js_1.ROLE_PERMISSIONS[role] };
+        ? { ...types_js_2.ROLE_PERMISSIONS.custom, ...body.permissions }
+        : { ...types_js_2.ROLE_PERMISSIONS[role] };
     const assignedLeadIds = Array.isArray(body.assignedLeadIds)
         ? body.assignedLeadIds.filter((id) => typeof id === "string")
         : undefined;
@@ -12634,8 +12702,8 @@ app.post("/api/auto-plans/execute-due-steps", async (req, res) => {
 });
 /* ===================== Tasks ===================== */
 const TASK_PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
-const TASK_STATUSES = new Set(types_js_2.CRM_TASK_STATUSES);
-const COMMAND_STATUS_SET = new Set(types_js_2.COMMAND_TASK_STATUSES);
+const TASK_STATUSES = new Set(types_js_3.CRM_TASK_STATUSES);
+const COMMAND_STATUS_SET = new Set(types_js_3.COMMAND_TASK_STATUSES);
 /* Must match TYPES in core/tasks.ts — this Set is what the API accepts, that
    one is what survives a write, and a type in only one of them silently
    becomes "other" somewhere along the way. */
@@ -12928,9 +12996,9 @@ app.put("/api/settings/command", express_1.default.json({ limit: "16kb" }), asyn
 app.get("/api/tracker/schema", (_req, res) => {
     res.json({
         ok: true,
-        statuses: types_js_3.TRACKER_STATUSES,
-        buyerStages: types_js_3.BUYER_STAGES,
-        sellerStages: types_js_3.SELLER_STAGES,
+        statuses: types_js_4.TRACKER_STATUSES,
+        buyerStages: types_js_4.BUYER_STAGES,
+        sellerStages: types_js_4.SELLER_STAGES,
     });
 });
 app.get("/api/tracker/records", (req, res) => {

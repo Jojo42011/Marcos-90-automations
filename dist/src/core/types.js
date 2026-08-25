@@ -1,21 +1,103 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MARCO_TASK_STATUSES = exports.SELLER_STAGES = exports.BUYER_STAGES = exports.TRACKER_STATUSES = exports.COMMAND_TASK_STATUSES = exports.CRM_TASK_STATUSES = exports.ROLE_PERMISSIONS = exports.CRM_STAGES = exports.CRM_STATUSES = void 0;
+exports.MARCO_TASK_STATUSES = exports.SELLER_STAGES = exports.BUYER_STAGES = exports.TRACKER_STATUSES = exports.COMMAND_TASK_STATUSES = exports.CRM_TASK_STATUSES = exports.ROLE_PERMISSIONS = exports.APPOINTMENT_TYPES = exports.APPOINTMENT_TYPE_GROUPS = exports.CRM_STAGES = exports.CRM_STAGE_LEGACY = exports.CRM_STAGE_GROUPS = exports.CRM_CANDIDATE_STAGES = exports.CRM_LEAD_STAGES = exports.CRM_STATUSES = void 0;
+exports.crmStageLabel = crmStageLabel;
 /** Valid CRM status values (dashboard + API). */
 exports.CRM_STATUSES = [
     "new", "hot", "nurture", "watch", "dead", "unresponsive", "archived", "trashed",
 ];
-exports.CRM_STAGES = [
-    "new",
-    "hot",
-    "warm",
-    "cold",
-    "pending",
-    "appointment_set",
-    "showing_set",
-    "under_contract",
-    "closed",
+exports.CRM_LEAD_STAGES = [
+    { value: "new_lead", label: "New Lead" },
+    { value: "attempted_contact", label: "Attempted Contact" },
+    { value: "spoke_with_customer", label: "Spoke With Customer" },
+    { value: "appointment_set", label: "Appointment Set" },
+    { value: "met_with_customer", label: "Met With Customer" },
+    { value: "showing_homes", label: "Showing Homes" },
+    { value: "listing_agreement", label: "Listing Agreement" },
+    { value: "active_listing", label: "Active Listing" },
+    { value: "submitting_offers", label: "Submitting Offers" },
+    { value: "under_contract", label: "Under Contract" },
+    { value: "sale_closed", label: "Sale Closed" },
+    { value: "nurture", label: "Nurture" },
+    { value: "rejected", label: "Rejected" },
 ];
+exports.CRM_CANDIDATE_STAGES = [
+    { value: "new_candidate", label: "New Candidate" },
+    { value: "attempted_contact_candidate", label: "Attempted Contact" },
+    { value: "spoke_with_candidate", label: "Spoke With Candidate" },
+    { value: "appointment_set_candidate", label: "Appointment Set" },
+    { value: "met_with_candidate", label: "Met With Candidate" },
+    { value: "screening", label: "Screening" },
+    { value: "signing_appt_set", label: "Signing Appt Set" },
+    { value: "signed", label: "Signed" },
+    { value: "nurture_candidate", label: "Nurture Candidate" },
+    { value: "rejected_candidate", label: "Rejected Candidate" },
+    { value: "declined_offer", label: "Declined Offer" },
+];
+/** The two groups, in the order and under the headers the operator sees. */
+exports.CRM_STAGE_GROUPS = [
+    { group: "Lead Stages", stages: exports.CRM_LEAD_STAGES },
+    { group: "Candidate Recruit Stages", stages: exports.CRM_CANDIDATE_STAGES },
+];
+/** Old value → nearest new stage. Read-only: nothing rewrites stored rows. */
+exports.CRM_STAGE_LEGACY = {
+    new: "new_lead",
+    hot: "attempted_contact",
+    warm: "attempted_contact",
+    cold: "nurture",
+    pending: "under_contract",
+    showing_set: "showing_homes",
+    closed: "sale_closed",
+};
+exports.CRM_STAGES = [].concat(exports.CRM_LEAD_STAGES.map((s) => s.value), exports.CRM_CANDIDATE_STAGES.map((s) => s.value), Object.keys(exports.CRM_STAGE_LEGACY));
+/** Display label for any stage value, legacy included. Never returns blank. */
+function crmStageLabel(value) {
+    if (!value)
+        return "";
+    const all = exports.CRM_LEAD_STAGES.concat(exports.CRM_CANDIDATE_STAGES);
+    const hit = all.find((s) => s.value === value);
+    if (hit)
+        return hit.label;
+    const legacy = exports.CRM_STAGE_LEGACY[value];
+    if (legacy) {
+        const l = exports.CRM_LEAD_STAGES.find((s) => s.value === legacy);
+        if (l)
+            return l.label;
+    }
+    return String(value);
+}
+/**
+ * Appointment types, exactly the twelve the operator listed.
+ *
+ * The previous list carried a thirteenth, "Recruiting", that is not on theirs;
+ * it is dropped from the picker but still renders on any appointment already
+ * saved with it, because deleting an option must not blank a record.
+ */
+exports.APPOINTMENT_TYPE_GROUPS = [
+    {
+        group: "Real Estate Consultation",
+        types: [
+            "Buyer Consultation",
+            "Listing Consultation",
+            "Buyer/Listing Consultation",
+            "Showing Appointment",
+            "Client Meeting",
+            "General",
+            "Follow Up",
+        ],
+    },
+    {
+        group: "Recruiting / Administrative",
+        types: [
+            "Meet & Greet",
+            "Screening",
+            "Recruiting Appointment",
+            "Signing Appointment",
+            "Recruiting Follow Up",
+        ],
+    },
+];
+exports.APPOINTMENT_TYPES = exports.APPOINTMENT_TYPE_GROUPS.flatMap((g) => g.types);
 exports.ROLE_PERMISSIONS = {
     admin: {
         canDeleteTasks: true,
