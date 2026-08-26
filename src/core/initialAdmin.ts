@@ -27,7 +27,7 @@ import { destroyAllSessions, getSecurityState, recordAudit, setSecurityState } f
 import { getUsers, updateUser } from "./users.js";
 
 /** Bump this to force another rotation: all sessions die, the admin resets. */
-export const LOCKDOWN_MARKER = "2026-08-22-initial-lock";
+export const LOCKDOWN_MARKER = "2026-08-26-rotate-2";
 
 /** The account the rotation targets, by the address it was seeded under. */
 const ADMIN_EMAIL = "marco@example.com";
@@ -39,9 +39,9 @@ const ADMIN_EMAIL = "marco@example.com";
  * account it belongs to cannot do anything until the password is changed.
  */
 const FALLBACK_HASH =
-  "61c97b5d895e58f7a72892006624d371:" +
-  "9ea55935d15f6386aa8431ac5e745c46a4b7f6f70ef64637bce1a76a3c88cd71" +
-  "d0823e5c61132d80af4237c7572ada7693a266054dd1f7078c519b2f6661e4af";
+  "ec16e2b47bf98fe3140caf0b776fc42f:" +
+  "7660e3e02ab71899fdfd5086c8f5637a2c7263d0322b136adcbd5931fce70849" +
+  "2b0cb042c6d9b170b644bd5226c5b9ad7d6e4893ed83cc7b742a94cddac894df";
 
 export interface LockdownResult {
   ran: boolean;
