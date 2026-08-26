@@ -85,6 +85,13 @@ function makeLockdown(deps) {
             next();
             return;
         }
+        /* Checked before the session so it cannot be confused by whatever cookie
+           happens to be lying around, and before the change-password wall: Harvey
+           is not a person and has no password to set. */
+        if (deps.internalCall?.(req)) {
+            next();
+            return;
+        }
         const user = deps.sessionUser(req);
         if (user) {
             if (user.mustChangePassword && !CHANGE_PASSWORD_ALLOWED.has(pathname)) {

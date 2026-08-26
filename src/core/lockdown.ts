@@ -83,6 +83,13 @@ export interface LockdownDeps {
   sessionUser: (req: Request) => { mustChangePassword?: boolean } | null;
   /** A configured machine credential, or null when none is set. */
   machineTokenOk: (req: Request) => boolean;
+  /**
+   * This server calling its own API from inside this process — Harvey reaching
+   * the CRM. Loopback socket plus a token minted at boot and held only in
+   * memory; see src/core/internalCall.ts. Optional so the gate can be
+   * constructed without it.
+   */
+  internalCall?: (req: Request) => boolean;
 }
 
 /**
@@ -129,6 +136,13 @@ export function makeLockdown(deps: LockdownDeps) {
        could be walked past with `/api/users?x=/login`. */
     const pathname = req.path || "/";
     if (isPublicPath(pathname)) {
+      next();
+      return;
+    }
+    /* Checked before the session so it cannot be confused by whatever cookie
+       happens to be lying around, and before the change-password wall: Harvey
+       is not a person and has no password to set. */
+    if (deps.internalCall?.(req)) {
       next();
       return;
     }

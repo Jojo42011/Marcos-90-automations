@@ -108,6 +108,8 @@ const autoPlanTriggers_js_1 = require("./core/autoPlanTriggers.js");
 const tagTemplates_js_1 = require("./core/tagTemplates.js");
 const leadFilter_js_1 = require("./core/leadFilter.js");
 const crmVocabulary_js_1 = require("./core/crmVocabulary.js");
+const internalCall_js_1 = require("./core/internalCall.js");
+const crmApiSurface_js_1 = require("./core/crmApiSurface.js");
 const types_js_1 = require("./core/types.js");
 const types_js_2 = require("./core/types.js");
 const users_js_1 = require("./core/users.js");
@@ -191,6 +193,7 @@ app.use((0, lockdown_js_1.makeLockdown)({
     enabled: () => siteLoginEnabled(),
     sessionUser: (req) => sessionUserSync(req),
     machineTokenOk: (req) => machineTokenOk(req),
+    internalCall: (req) => (0, internalCall_js_1.isInternalCall)(req),
 }));
 /**
  * The signed-in user, resolved synchronously.
@@ -648,6 +651,11 @@ function dashboardTokenOk(req) {
     if (sessionUserSync(req))
         return true;
     if (machineTokenOk(req))
+        return true;
+    /* Harvey calling this server's own CRM API from inside this process. See
+       src/core/internalCall.ts — loopback socket plus a token that only exists
+       in this process's memory. */
+    if ((0, internalCall_js_1.isInternalCall)(req))
         return true;
     /* Only when the lock is deliberately disabled does the legacy behaviour
        apply, so a local dev run without secrets still works. */
@@ -16660,8 +16668,49 @@ httpServer.on("error", (err) => {
         console.error("[security] Lockdown boot step FAILED — check auth.db:", err.message);
     }
 }
+/* Seed the team's SOPs into the Knowledge Center. Once per library version —
+   after that the Knowledge Center owns them and edits there are never
+   overwritten. See src/core/sopImport.ts. */
+{
+    const sops = require("./core/sopImport.js");
+    try {
+        const r = sops.runSopImportStep();
+        if (r.ran) {
+            console.log(`[knowledge] SOP import: ${r.imported.length} added, ${r.skipped.length} already present ` +
+                `(library ${require("./data/sopLibrary.js").SOP_LIBRARY_VERSION}).`);
+        }
+    }
+    catch (err) {
+        console.error("[knowledge] SOP import FAILED — the Knowledge Center will be missing the SOPs:", err.message);
+    }
+}
 httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`[Server] Listening on 0.0.0.0:${PORT}`);
+    /* Publish the real routing table to Harvey's CRM bridge. Read from Express
+       itself rather than hand-listed, so the catalogue Harvey is shown cannot
+       describe an endpoint that does not exist or miss one that does. */
+    try {
+        /* Express 5 moved the routing table from `app._router` to `app.router`.
+           Both are read so this keeps working either side of that change rather
+           than silently publishing an empty catalogue. */
+        const appAny = app;
+        const stack = appAny.router?.stack || appAny._router?.stack || [];
+        const routes = [];
+        for (const layer of stack) {
+            const p = layer.route?.path;
+            if (typeof p !== "string")
+                continue;
+            for (const [m, on] of Object.entries(layer.route?.methods || {})) {
+                if (on)
+                    routes.push({ method: m.toUpperCase(), path: p });
+            }
+        }
+        (0, crmApiSurface_js_1.setCrmApiCatalogue)(routes, `http://127.0.0.1:${PORT}`);
+        console.log(`[Harvey] CRM bridge: ${(0, crmApiSurface_js_1.getCrmApiCatalogue)().length} of ${routes.length} routes reachable.`);
+    }
+    catch (err) {
+        console.error("[Harvey] CRM bridge catalogue failed — crm_api will report an empty index:", err);
+    }
     try {
         (0, contentDb_js_1.getContentDb)();
         (0, jobs_js_1.scheduleContentJobs)();

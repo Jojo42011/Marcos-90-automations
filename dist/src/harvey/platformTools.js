@@ -39,7 +39,12 @@ exports.executePlatformTool = executePlatformTool;
 exports.executeExecTool = executeExecTool;
 exports.executeWorkspaceTool = executeWorkspaceTool;
 const houseStyle_js_1 = require("../core/houseStyle.js");
+const crmApiSurface_js_1 = require("../core/crmApiSurface.js");
+const internalCall_js_1 = require("../core/internalCall.js");
+const crmVocabulary_js_1 = require("../core/crmVocabulary.js");
+const users_js_1 = require("../core/users.js");
 const types_js_1 = require("../core/types.js");
+const types_js_2 = require("../core/types.js");
 const trackerStore_js_1 = require("../core/trackerStore.js");
 const trackerTasks_js_1 = require("../core/trackerTasks.js");
 const db_js_1 = require("../core/db.js");
@@ -83,8 +88,8 @@ function groundBrowserResult(r) {
  * and notes, task create/update — because those are the actions someone would
  * genuinely delegate out loud. Deleting anything is not offered.
  */
-const BUYER_STAGE_KEYS = types_js_1.BUYER_STAGES.map((s) => s.key);
-const SELLER_STAGE_KEYS = types_js_1.SELLER_STAGES.map((s) => s.key);
+const BUYER_STAGE_KEYS = types_js_2.BUYER_STAGES.map((s) => s.key);
+const SELLER_STAGE_KEYS = types_js_2.SELLER_STAGES.map((s) => s.key);
 const TASK_COLUMNS = ["urgent", "today", "tomorrow", "this_week", "this_month"];
 const TASK_STATUSES = ["pending", "in_progress", "on_hold", "due_soon", "overdue", "done"];
 /** Cards carry a lot of noise for a language model; this is the useful part. */
@@ -434,20 +439,65 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
         },
     },
     {
+        name: "get_crm_vocabulary",
+        description: "The CRM's own controlled lists: pipeline stages (lead and candidate), appointment types, and the managed Source and Tag lists seeded from the Brivity import. Read this before setting a stage, source or tag so you use the spelling the rest of the CRM uses — a source typed freehand becomes a second source that filters miss.",
+        input_schema: {
+            type: "object",
+            properties: {
+                kind: { type: "string", enum: ["all", "stages", "sources", "tags", "appointmentTypes"], description: "Default all." },
+                contains: { type: "string", description: "Only entries containing this text — the source list is 357 long." },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "crm_api_index",
+        description: "List every CRM endpoint you can reach with crm_api, read from this server's real routing table. Call this FIRST whenever you need to do something in the CRM that no other tool covers — do not guess a path. Filter with `contains` to narrow it, e.g. 'listing-alerts', 'auto-plans', 'transactions', 'knowledge'.",
+        input_schema: {
+            type: "object",
+            properties: {
+                contains: { type: "string", description: "Only paths containing this text." },
+                limit: { type: "number", description: "Default 60." },
+            },
+            required: [],
+        },
+    },
+    {
+        name: "crm_api",
+        description: "Call the CRM dashboard's own API — the same endpoints the CRM page itself uses, so anything a person can do on that page, you can do here: listing alerts, market reports, Auto Plan enrolments, tasks and appointments, transactions and agreements, contact addresses and documents, tags and sources, CMA sessions, sending a text from a contact's profile, and reading or filing a Knowledge Center document. Use the purpose-built tools (update_lead, create_task, search_leads, schedule_message) when one fits — they are clearer and validate their input. Use this for everything else. Call crm_api_index first to find the path; never invent one. GET is free; POST/PATCH/PUT/DELETE CHANGE REAL DATA belonging to real clients, so say what you are about to change and get the operator's agreement before you send one. If the response is an error, report it as it is — never describe a change as done because you called the tool.",
+        input_schema: {
+            type: "object",
+            properties: {
+                method: { type: "string", enum: ["GET", "POST", "PATCH", "PUT", "DELETE"] },
+                path: { type: "string", description: "Path only, e.g. /api/leads/lead_123/listing-alerts. Not a full URL." },
+                body: { type: "object", description: "JSON body for POST/PATCH/PUT." },
+            },
+            required: ["method", "path"],
+        },
+    },
+    {
         name: "update_lead",
-        description: "Change a contact's CRM fields: status, pipeline stage, intent, priority, name, phone, email, or notes. Only pass the fields you are actually changing — anything omitted is left alone. Call search_leads first to get the id. Use log_lead_activity (not this) to record that a call or text happened.",
+        description: "Change a contact's CRM fields: status, pipeline stage, intent, priority, name, phone, email, notes, tags, source, address, or who it is assigned to. Only pass the fields you are actually changing — anything omitted is left alone. Call search_leads first to get the id. Use log_lead_activity (not this) to record that a call or text happened.",
         input_schema: {
             type: "object",
             properties: {
                 leadId: { type: "string", description: "Lead id from search_leads." },
-                crmStatus: { type: "string", enum: [...types_js_1.CRM_STATUSES], description: "Lead temperature." },
-                crmStage: { type: "string", enum: [...types_js_1.CRM_STAGES], description: "Pipeline stage." },
+                crmStatus: { type: "string", enum: [...types_js_2.CRM_STATUSES], description: "Lead temperature." },
+                crmStage: { type: "string", enum: [...types_js_2.CRM_STAGES], description: "Pipeline stage." },
                 crmIntent: { type: "string", enum: ["buyer", "seller", "buyer_seller"] },
                 crmPriority: { type: "string", enum: ["low", "normal", "high"] },
                 name: { type: "string" },
                 phone: { type: "string" },
                 email: { type: "string" },
                 notes: { type: "string", description: "REPLACES the notes field. To add without losing what's there, read the lead first and send the combined text." },
+                tags: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "REPLACES the whole tag list. Read the lead first and send the full set, or you will drop the tags you did not mention. Use get_crm_vocabulary for the spellings the rest of the CRM uses.",
+                },
+                source: { type: "string", description: "Where the contact came from. Pick from get_crm_vocabulary rather than inventing a spelling — 'Zillow' and 'zillow.com' become two sources." },
+                address: { type: "string", description: "Their address, only when it has been confirmed by the contact. Never write in one guessed from a conversation." },
+                assignedUserId: { type: "string", description: "Team member id to assign to. get_team_status lists them." },
             },
             required: ["leadId"],
         },
@@ -553,7 +603,7 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
             properties: {
                 query: { type: "string", description: "Name, phone, email or address fragment." },
                 side: { type: "string", enum: ["buyer", "seller"] },
-                status: { type: "string", description: `One of: ${types_js_1.TRACKER_STATUSES.join(", ")}` },
+                status: { type: "string", description: `One of: ${types_js_2.TRACKER_STATUSES.join(", ")}` },
                 buyerStage: { type: "string", description: `One of: ${BUYER_STAGE_KEYS.join(", ")}` },
                 sellerStage: { type: "string", description: `One of: ${SELLER_STAGE_KEYS.join(", ")}` },
                 source: { type: "string" },
@@ -600,7 +650,7 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
             type: "object",
             properties: {
                 id: { type: "string" },
-                status: { type: "string", description: `One of: ${types_js_1.TRACKER_STATUSES.join(", ")}` },
+                status: { type: "string", description: `One of: ${types_js_2.TRACKER_STATUSES.join(", ")}` },
                 notes: { type: "string" },
                 assignedTo: { type: "string" },
                 contactedNow: { type: "boolean", description: "Stamp last contact as right now." },
@@ -936,6 +986,94 @@ async function executePlatformTool(name, input) {
                 })),
             };
         }
+        case "get_crm_vocabulary": {
+            const kind = str(input.kind) || "all";
+            const needle = str(input.contains).toLowerCase();
+            const want = (k) => kind === "all" || kind === k;
+            const trim = (rows) => needle ? rows.filter((r) => r.name.toLowerCase().includes(needle)) : rows;
+            const out = {};
+            if (want("stages"))
+                out.stageGroups = types_js_1.CRM_STAGE_GROUPS;
+            if (want("appointmentTypes"))
+                out.appointmentTypeGroups = types_js_1.APPOINTMENT_TYPE_GROUPS;
+            if (want("sources")) {
+                const rows = trim((0, crmVocabulary_js_1.listVocabulary)("source"));
+                /* The full source list is 357 entries and most carry nobody. Sending
+                   all of it every time buries the handful that are actually in use, so
+                   an unfiltered read is capped and says it was capped. */
+                out.sources = rows.slice(0, 60);
+                if (rows.length > 60)
+                    out.sourcesNote = `${rows.length} sources match; showing the first 60. Pass \`contains\` to narrow.`;
+            }
+            if (want("tags"))
+                out.tags = trim((0, crmVocabulary_js_1.listVocabulary)("tag"));
+            return out;
+        }
+        case "crm_api_index": {
+            const routes = (0, crmApiSurface_js_1.getCrmApiCatalogue)();
+            if (!routes.length) {
+                return { error: "The route catalogue is empty — the server publishes it when it starts listening, so this means the bridge did not initialise. Report it rather than guessing paths." };
+            }
+            const needle = str(input.contains).toLowerCase();
+            const hits = needle ? routes.filter((r) => r.path.toLowerCase().includes(needle)) : routes;
+            const limit = Math.max(1, Math.min(Number(input.limit) || 60, 400));
+            return {
+                total: routes.length,
+                matched: hits.length,
+                showing: Math.min(hits.length, limit),
+                routes: hits.slice(0, limit),
+                note: hits.length > limit ? "Narrow with `contains` to see the rest." : undefined,
+            };
+        }
+        case "crm_api": {
+            const method = str(input.method).toUpperCase();
+            const rawPath = str(input.path);
+            /* Split the query off before checking, so a path can never be widened by
+               hiding an allowed prefix in the query string. */
+            const qIndex = rawPath.indexOf("?");
+            const pathname = qIndex >= 0 ? rawPath.slice(0, qIndex) : rawPath;
+            const verdict = (0, crmApiSurface_js_1.checkCrmApiPath)(method, pathname);
+            if (!verdict.ok)
+                return { error: verdict.reason };
+            const base = (0, crmApiSurface_js_1.getInternalBaseUrl)();
+            if (!base)
+                return { error: "The CRM bridge has no base URL — the server publishes it when it starts listening. Report it rather than retrying." };
+            const hasBody = method !== "GET" && method !== "DELETE" && input.body && typeof input.body === "object";
+            let response;
+            try {
+                response = await fetch(base + rawPath, {
+                    method,
+                    headers: {
+                        ...(0, internalCall_js_1.internalCallHeaders)(),
+                        ...(hasBody ? { "Content-Type": "application/json" } : {}),
+                    },
+                    body: hasBody ? JSON.stringify(input.body) : undefined,
+                });
+            }
+            catch (err) {
+                return { error: `Could not reach ${pathname}: ${err.message}` };
+            }
+            const text = await response.text();
+            let parsed = text;
+            try {
+                parsed = text ? JSON.parse(text) : null;
+            }
+            catch { /* not JSON — hand back the text */ }
+            if (!response.ok) {
+                /* Failures are returned, never thrown, and are worded for the model's
+                   next sentence: the failure mode this guards against is narrating a
+                   change that the server refused. */
+                return {
+                    ok: false,
+                    status: response.status,
+                    path: pathname,
+                    response: parsed,
+                    hint: "This did NOT happen. Say what failed and why; do not describe the change as made.",
+                };
+            }
+            const changed = crmApiSurface_js_1.CRM_API_WRITE_METHODS.includes(method);
+            return { ok: true, status: response.status, path: pathname, changed, response: parsed };
+        }
         case "get_lead": {
             const lead = await (0, db_js_2.getLeadById)(str(input.leadId));
             if (!lead)
@@ -982,11 +1120,11 @@ async function executePlatformTool(name, input) {
                 changed.push(`${key}=${value}`);
                 return true;
             };
-            if (!setIf("crmStatus", str(input.crmStatus), types_js_1.CRM_STATUSES)) {
-                return { error: `Invalid crmStatus. Use one of: ${types_js_1.CRM_STATUSES.join(", ")}` };
+            if (!setIf("crmStatus", str(input.crmStatus), types_js_2.CRM_STATUSES)) {
+                return { error: `Invalid crmStatus. Use one of: ${types_js_2.CRM_STATUSES.join(", ")}` };
             }
-            if (!setIf("crmStage", str(input.crmStage), types_js_1.CRM_STAGES)) {
-                return { error: `Invalid crmStage. Use one of: ${types_js_1.CRM_STAGES.join(", ")}` };
+            if (!setIf("crmStage", str(input.crmStage), types_js_2.CRM_STAGES)) {
+                return { error: `Invalid crmStage. Use one of: ${types_js_2.CRM_STAGES.join(", ")}` };
             }
             if (!setIf("crmIntent", str(input.crmIntent), ["buyer", "seller", "buyer_seller"])) {
                 return { error: "Invalid crmIntent. Use buyer, seller or buyer_seller." };
@@ -997,9 +1135,31 @@ async function executePlatformTool(name, input) {
             setIf("name", str(input.name));
             setIf("phone", str(input.phone));
             setIf("email", str(input.email));
+            setIf("source", str(input.source));
+            setIf("address", str(input.address));
             if (str(input.notes)) {
                 patch.crmNotes = str(input.notes);
                 changed.push("notes");
+            }
+            /* Tags REPLACE rather than merge, and the tool description says so — but
+               an empty array would silently strip every tag a contact has, which is
+               far more likely to be a mistake than an intention, so it is refused. */
+            if (Array.isArray(input.tags)) {
+                const tags = input.tags.map((t) => String(t).trim()).filter(Boolean);
+                if (!tags.length) {
+                    return { error: "An empty tags array would remove every tag on this contact. To clear them deliberately, say so and use crm_api." };
+                }
+                patch.tags = tags;
+                changed.push(`tags=${tags.join("|")}`);
+            }
+            if (str(input.assignedUserId)) {
+                const uid = str(input.assignedUserId);
+                const member = (0, users_js_1.getUsers)().find((u) => u.id === uid);
+                if (!member)
+                    return { error: `No team member with id ${uid}. Call get_team_status for the roster.` };
+                patch.assignedUserId = member.id;
+                patch.assignedUserName = member.name;
+                changed.push(`assignedTo=${member.name}`);
             }
             if (changed.length === 0)
                 return { error: "Nothing to change — pass at least one field." };
@@ -1187,9 +1347,9 @@ async function executePlatformTool(name, input) {
         }
         case "get_tracker_pipelines":
             return {
-                statuses: types_js_1.TRACKER_STATUSES,
-                buyerStages: types_js_1.BUYER_STAGES,
-                sellerStages: types_js_1.SELLER_STAGES,
+                statuses: types_js_2.TRACKER_STATUSES,
+                buyerStages: types_js_2.BUYER_STAGES,
+                sellerStages: types_js_2.SELLER_STAGES,
                 note: "Stages are per side and move independently; a person can be both a buyer and a seller.",
             };
         case "search_tracker": {
@@ -1254,8 +1414,8 @@ async function executePlatformTool(name, input) {
             const id = str(input.id);
             const patch = {};
             if (str(input.status)) {
-                if (!types_js_1.TRACKER_STATUSES.includes(str(input.status))) {
-                    return { error: `'${input.status}' is not a status.`, validStatuses: types_js_1.TRACKER_STATUSES };
+                if (!types_js_2.TRACKER_STATUSES.includes(str(input.status))) {
+                    return { error: `'${input.status}' is not a status.`, validStatuses: types_js_2.TRACKER_STATUSES };
                 }
                 patch.status = str(input.status);
             }

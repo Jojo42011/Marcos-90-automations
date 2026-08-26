@@ -67,6 +67,11 @@
   .md h3{font-size:14.5px;margin:16px 0 6px;color:var(--text)}
   .md p{margin:9px 0}
   .md ul,.md ol{margin:9px 0 9px 22px}
+  /* Wide field-mapping tables scroll inside their own box rather than pushing
+     the whole reader sideways. */
+  .md table{border-collapse:collapse;margin:12px 0;width:100%;font-size:13px;display:block;overflow-x:auto}
+  .md th,.md td{border:1px solid #e5e9ec;padding:7px 10px;text-align:left;vertical-align:top}
+  .md th{background:#f7fafa;font-weight:700;color:#374151}
   .md li{margin:4px 0}
   .md code{font-family:var(--mono);font-size:12.5px;background:#f3f6f6;padding:1px 5px;border-radius:4px}
   .md strong{font-weight:700;color:var(--text)}
@@ -149,6 +154,34 @@ function md(src){
     if(ol){ if(list!=="ol"){ closeList(); out.push("<ol>"); list="ol"; } out.push("<li>"+inline(ol[2])+"</li>"); continue; }
     var ul=/^[-*+]\s+(.*)$/.exec(t);
     if(ul){ if(list!=="ul"){ closeList(); out.push("<ul>"); list="ul"; } out.push("<li>"+inline(ul[1])+"</li>"); continue; }
+    /* Pipe tables. The SOPs use them for the field-by-field mapping that is the
+       actual instruction ("Source -> Mojo or Mojo FL"), so rendering them as
+       literal "| First Name | From Mojo |" lines loses the one thing the reader
+       came for. Header row, separator, then rows until the block ends. */
+    if(t.charAt(0)==="|" && /^\|[\s:-]+\|/.test((lines[i+1]||"").trim())){
+      closeList();
+      var cells=function(row){
+        return row.trim().replace(/^\||\|$/g,"").split("|").map(function(c){ return inline(c.trim()); });
+      };
+      var rows=[cells(t)];
+      i+=2;
+      for(;i<lines.length;i++){
+        var r=lines[i].trim();
+        if(r.charAt(0)!=="|") break;
+        rows.push(cells(r));
+      }
+      i--;
+      /* Google Docs exports a table with an EMPTY header row and the real
+         column labels as the first body row. Rendering that literally puts a
+         blank strip above every table and demotes the headings, so an all-empty
+         header row is dropped and the next row promoted. */
+      if(rows.length>1 && rows[0].every(function(c){ return !c.trim(); })) rows.shift();
+      var head=rows.shift();
+      out.push("<table><thead><tr>"+head.map(function(c){ return "<th>"+c+"</th>"; }).join("")+"</tr></thead><tbody>"+
+        rows.map(function(rr){ return "<tr>"+rr.map(function(c){ return "<td>"+c+"</td>"; }).join("")+"</tr>"; }).join("")+
+        "</tbody></table>");
+      continue;
+    }
     closeList(); out.push("<p>"+inline(t)+"</p>");
   }
   closeList();
