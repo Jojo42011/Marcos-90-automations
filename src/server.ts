@@ -7825,6 +7825,138 @@ app.post("/reset", resetCors, (req, res) => {
 // read-only endpoints power the DM Agent tab's inbox. Note: DM leads often
 // have no phone, so they never appear in /api/dashboard/data (which filters to
 // phone-holding leads) — this reads the full conversation store directly.
+/**
+ * WHEN DID INBOUND DMs LAST ACTUALLY ARRIVE, per platform and per day.
+ *
+ * WHY THIS EXISTS. "The TikTok automation stopped replying" has two causes that
+ * look identical from the inbox and need opposite fixes:
+ *
+ *   1. Messages ARE reaching this server and something here declines to answer.
+ *   2. Messages are NOT reaching this server at all, because the chain upstream
+ *      — TikTok -> ManyChat -> External Request -> /webhook — is broken
+ *      somewhere. Nothing in this codebase can be wrong in that case, and no
+ *      amount of reading this codebase will show it.
+ *
+ * Every other diagnostic here answers "what did we do with the message". This
+ * one answers the question that has to come first: was there a message. It is
+ * computed from stored conversations rather than a live counter, so it can look
+ * BACKWARDS through a takedown that happened before anyone thought to
+ * instrument it — the day-by-day histogram shows the cliff and its date.
+ *
+ * Counts and timestamps only: no message text, no names, no handles.
+ */
+app.get("/api/dm/inbound-report", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const days = Math.min(365, Math.max(7, Number(req.query.days) || 60));
+    const { listAllLeads: allLeads, getConversation: getConv } = await import("./core/db.js");
+    const leads = await allLeads();
+    const now = Date.now();
+    const cutoff = now - days * 86400000;
+
+    interface PlatformStat {
+      lastInboundAt: string | null;
+      inbound24h: number;
+      inbound7d: number;
+      inbound30d: number;
+      inboundInWindow: number;
+      contactsWithInbound: number;
+      firstInboundInWindow: string | null;
+      byDay: Record<string, number>;
+    }
+    const stats = new Map<string, PlatformStat>();
+    const touch = (p: string): PlatformStat => {
+      let s = stats.get(p);
+      if (!s) {
+        s = { lastInboundAt: null, inbound24h: 0, inbound7d: 0, inbound30d: 0,
+              inboundInWindow: 0, contactsWithInbound: 0, firstInboundInWindow: null, byDay: {} };
+        stats.set(p, s);
+      }
+      return s;
+    };
+
+    for (const lead of leads) {
+      const platform = String(lead.platform || "unknown").toLowerCase();
+      const conv = await getConv(lead.id);
+      let sawInbound = false;
+      for (const m of conv.messages || []) {
+        /* role "user" is the person writing to us. Assistant messages are our
+           own replies and would make a dead channel look alive. */
+        if (m.role !== "user") continue;
+        const t = Date.parse(m.at || "");
+        if (!Number.isFinite(t)) continue;
+        const s = touch(platform);
+        if (!s.lastInboundAt || m.at > s.lastInboundAt) s.lastInboundAt = m.at;
+        if (now - t <= 86400000) s.inbound24h++;
+        if (now - t <= 7 * 86400000) s.inbound7d++;
+        if (now - t <= 30 * 86400000) s.inbound30d++;
+        if (t >= cutoff) {
+          s.inboundInWindow++;
+          const day = new Date(t).toISOString().slice(0, 10);
+          s.byDay[day] = (s.byDay[day] || 0) + 1;
+          if (!s.firstInboundInWindow || m.at < s.firstInboundInWindow) s.firstInboundInWindow = m.at;
+          sawInbound = true;
+        }
+      }
+      if (sawInbound) touch(platform).contactsWithInbound++;
+    }
+
+    const platforms: Record<string, unknown> = {};
+    for (const [p, s] of stats) {
+      platforms[p] = {
+        ...s,
+        hoursSinceLastInbound: s.lastInboundAt
+          ? Number(((now - Date.parse(s.lastInboundAt)) / 3600000).toFixed(1))
+          : null,
+        /* Sorted, and only days that had traffic — a run of missing dates is
+           the signal, and printing 60 zeroes would bury it. */
+        byDay: Object.fromEntries(Object.entries(s.byDay).sort(([a], [b]) => a.localeCompare(b))),
+      };
+    }
+
+    /* Say what it means for the reported symptom, naming the platform asked
+       about rather than leaving the reader to work it out from the numbers. */
+    const focus = String(req.query.platform || "tiktok").toLowerCase();
+    const f = stats.get(focus);
+    let verdict: string;
+    if (!f || !f.lastInboundAt) {
+      verdict =
+        `No inbound ${focus} message has EVER reached this server. Nothing in this codebase can be ` +
+        `the cause — the break is upstream, between ${focus} and ManyChat, or in the ManyChat flow's ` +
+        `External Request step, which is what calls this server.`;
+    } else {
+      const hrs = (now - Date.parse(f.lastInboundAt)) / 3600000;
+      if (hrs <= 24) {
+        verdict =
+          `Inbound ${focus} messages ARE reaching this server — ${f.inbound24h} in the last 24 hours, ` +
+          `most recent ${hrs.toFixed(1)}h ago. So ManyChat is calling the webhook, and whatever is wrong ` +
+          `is either this server's decision not to reply (see /api/llm/health) or the send-back leg ` +
+          `inside ManyChat. It is NOT a broken connection.`;
+      } else {
+        verdict =
+          `Inbound ${focus} messages have STOPPED. The last one arrived ${(hrs / 24).toFixed(1)} days ago ` +
+          `(${f.lastInboundAt}); ${f.inbound7d} in the last 7 days, ${f.inbound30d} in the last 30. ` +
+          `This server is idle on that channel, so the break is upstream of it — ${focus} to ManyChat, ` +
+          `or the ManyChat flow that calls this webhook. Check byDay below for the date it stopped.`;
+      }
+    }
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      windowDays: days,
+      focus,
+      verdict,
+      note: "Counts inbound (role=user) messages only. Synthetic test traffic appears in byDay like any other.",
+      platforms,
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 app.get("/api/dm/conversations", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized" });
