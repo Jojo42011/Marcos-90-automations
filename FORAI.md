@@ -28,6 +28,18 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-08-31b] — **Forensic UI/API audit: one layering scale, and five popups that were opening behind other things** (`public/crm-brivity.html`, `src/server.ts`, `scripts/audit-crm-modals.mjs` NEW, `scripts/audit-api-routes.mjs` NEW).
+
+  **The reported symptom** — "I click Auto Plans on a lead profile and it pops up on the backend, you can't even see or access it" — was a stacking bug, and a whole class of them. z-indexes had been assigned ad hoc over time (80, 81, 90, 120, 9000), so anything opened from inside an `.oa-ov` modal (z-9000) rendered *underneath* it: `display:block`, correct rect, completely unreachable. Every test that asks "did the modal open?" passes on that. Only a hit test catches it.
+
+  Five real defects, all confirmed by A/B against the unfixed file: the **Auto Plan editor**, **transaction modal** and **transaction detail** all opened behind any open modal; **every toast** fired from inside a modal painted behind it (so "Give the alert a name" and Quo's own send errors were invisible); and **anchored dropdown menus** (`.dd-menu`) opened behind modal content — the same complaint as the old "property type dropdown opens behind the popup".
+
+  Fixed structurally rather than by bumping numbers again. `:root` now carries **one named layering scale** — `--z-chrome / --z-topbar / --z-drawer / --z-modal / --z-menu / --z-toast` — with menus and toasts in permanent lanes *above* modals, because a menu belongs to a control inside one and a toast is worthless painted behind the thing that produced it. Modal-over-modal is settled by open ORDER: `raiseOverlay()` assigns an incrementing z at open time, since a fixed number cannot express "whatever is newest". A `MutationObserver` on the overlay containers raises anything that becomes visible by some other path, so the rule does not depend on every future call site remembering it.
+
+  **`scripts/audit-crm-modals.mjs`** (32 checks) is the instrument: it asks the question the operator is actually asking — *if I click the middle of this, do I hit it?* — and asserts that the overlay **just opened** is the topmost, not merely that something is. That distinction matters: a "topmost is clickable" rule passes happily on the broken code. It also walks all 14 rail views and all 6 lead-profile tabs for render errors. **`scripts/audit-api-routes.mjs`** exercises every GET route read from Express's own table: 250 routes, 210 OK, 39 legitimately asking for input, **0 handlers throwing**. It found one wrong status code — `/api/email/gmail/:messageId` answered **500** for "Gmail not configured", where every other integration here answers 503; a 500 sends whoever reads the network tab hunting for a bug in the handler. Now 503 with a hint.
+
+  All 16 verify suites re-run green (1,231 checks).
+
 - [2026-08-31] — **Per-user sending numbers: each team member texts from their own Quo line** (`src/core/sendingIdentity.ts` NEW, `src/core/types.ts`, `src/server.ts`, `public/team.html`, `public/crm-brivity.html`, `scripts/verify-sending-line.mjs` NEW).
 
   **The bug this fixes is invisible from inside the CRM.** Every text sent from the CRM left on one global number (`QUO_PHONE_NUMBER_ID`). Marco and Carlos now have separate Quo lines — Carlos (737) 283-4703, Marco (726) 200-1548 — so a text Carlos sent went out signed as Marco's line, the client replied to Marco, and the client saved the wrong person as their realtor. The message sends successfully either way, which is why nothing surfaced it.

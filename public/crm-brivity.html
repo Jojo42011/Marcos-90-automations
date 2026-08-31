@@ -27,6 +27,25 @@
     --rail:56px; --topbar:56px;
     --sans:"Helvetica Neue",Helvetica,Arial,-apple-system,"Segoe UI",Roboto,sans-serif;
     --shadow:0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.06);
+
+    /* ONE LAYERING SCALE. Every overlay's z-index comes from here, in the order
+       things must sit on top of each other:
+
+         chrome  — the rail and topbar
+         drawer  — side panels that sit over the page but under a modal
+         modal   — the base for every modal overlay. Modals opened from other
+                   modals are raised ABOVE this by raiseOverlay() at open time,
+                   because a fixed number cannot express "whatever is newest".
+         menu    — anchored dropdowns and popovers. ALWAYS above modals: a menu
+                   belongs to a control, and that control is usually inside one.
+         toast   — always last. A toast that says "Give the alert a name" is
+                   worthless painted behind the modal that produced it.
+
+       These were previously ad hoc (80, 81, 90, 120, 9000) which put the Auto
+       Plan editor, the transaction modals, every anchored menu and every toast
+       BEHIND any open modal — visible in the DOM, unreachable on screen. */
+    --z-chrome:35; --z-topbar:40; --z-drawer:60;
+    --z-modal:9000; --z-menu:20000; --z-toast:30000;
   }
   /* Marco's headshot, painted onto any avatar element for a profile that is
      Marco's. Applied via the .has-marco-photo class wherever Marco appears. */
@@ -74,7 +93,7 @@
   .me b{font-weight:600;color:#6b7480;font-size:13px}
 
   /* icon rail */
-  .rail{position:fixed;top:var(--topbar);left:0;bottom:0;width:var(--rail);background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px;z-index:35}
+  .rail{position:fixed;top:var(--topbar);left:0;bottom:0;width:var(--rail);background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px;z-index:var(--z-chrome)}
   .rail .r{position:relative;width:44px;height:42px;border:none;background:none;color:#7d8894;border-radius:8px;display:flex;align-items:center;justify-content:center}
   .rail .r:hover{color:var(--teal);background:var(--teal-soft)}
   .rail .r.on{color:var(--teal)}
@@ -326,7 +345,7 @@
   .sf-list .sf:hover{background:#f2f6f5;color:var(--teal)}
   .sf-list .sf.on{background:#eaf3f2;color:var(--teal-strong);font-weight:600}
   /* ---- Advanced filter drawer (Brivity "Filter Leads" side panel) ---- */
-  .afd-scrim{position:fixed;inset:0;background:rgba(20,28,36,.35);z-index:80;display:none}
+  .afd-scrim{position:fixed;inset:0;background:rgba(20,28,36,.35);z-index:var(--z-modal);display:none}
   .afd-scrim.on{display:block}
   .afd{position:fixed;top:0;right:0;bottom:0;width:400px;max-width:94vw;background:#fff;box-shadow:-8px 0 30px rgba(0,0,0,.14);display:flex;flex-direction:column}
   .afd-h{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
@@ -398,7 +417,7 @@
   .afnote{font-size:11.5px;color:#98a2ac;padding:2px 0 6px;line-height:1.45}
 
   /* ---- Sort By popover (field + direction + save-as-default) ---- */
-  .sortpop{position:fixed;z-index:120;background:#fff;border:1px solid var(--line);border-radius:10px;
+  .sortpop{position:fixed;z-index:var(--z-menu);background:#fff;border:1px solid var(--line);border-radius:10px;
     box-shadow:0 12px 34px rgba(0,0,0,.16);padding:10px;display:none;gap:8px;align-items:flex-start}
   .sortpop.on{display:flex}
   .sortpop .sp-field{min-width:210px}
@@ -530,7 +549,7 @@
   @keyframes txflash{0%{background:var(--teal-soft)}100%{background:transparent}}
   tr.flash-row{animation:txflash 1.6s ease-out}
   /* modal */
-  .scrim{position:fixed;inset:0;background:rgba(20,28,38,.35);z-index:60;display:none;align-items:flex-start;justify-content:center}
+  .scrim{position:fixed;inset:0;background:rgba(20,28,38,.35);z-index:var(--z-modal);display:none;align-items:flex-start;justify-content:center}
   .scrim.on{display:flex}
   .modal{background:#fff;border-radius:12px;box-shadow:0 20px 50px rgba(16,24,40,.25);width:520px;max-width:92vw;margin-top:8vh;padding:22px 24px}
   .modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
@@ -554,7 +573,7 @@
   .em-card .l{color:var(--muted);font-size:12px}.em-card .n{color:var(--teal);font-size:24px;font-weight:600;margin-top:6px}
   /* editable status/stage dropdowns */
   .editable{cursor:pointer}
-  .dd-menu{position:fixed;z-index:80;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px rgba(16,24,40,.18);padding:6px;min-width:160px;display:none;max-height:280px;overflow:auto}
+  .dd-menu{position:fixed;z-index:var(--z-menu);background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px rgba(16,24,40,.18);padding:6px;min-width:160px;display:none;max-height:280px;overflow:auto}
   .dd-menu.on{display:block}
   .dd-menu button{display:flex;align-items:center;gap:9px;width:100%;border:none;background:none;padding:8px 10px;border-radius:6px;font-size:13px;color:#5b6570;text-align:left;cursor:pointer}
   .dd-menu button:hover{background:var(--teal-soft)}
@@ -577,7 +596,7 @@
   .na-in{width:100%;height:40px;border:1px solid var(--line);border-radius:4px;background:#fafbfb;color:#54595f;font-size:14px;padding:0 12px;outline:none;font-family:inherit}
   select.na-in{padding-right:34px}
   textarea.na-in{height:auto}
-  .crm-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#2c3540;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;z-index:90;opacity:0;transition:opacity .2s;pointer-events:none}
+  .crm-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#2c3540;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;z-index:var(--z-toast);opacity:0;transition:opacity .2s;pointer-events:none}
   .crm-toast.on{opacity:1}
   .ldlink{cursor:pointer}.ldlink:hover{color:var(--teal)}
   /* lead detail */
@@ -632,7 +651,7 @@
   .oa-val{font-size:21px;font-weight:800;color:#2f7d74;margin:2px 0 6px}
   .oa-adj{font-size:10px;font-weight:700;color:#7a8b96;margin-left:7px;letter-spacing:.05em}
   .oa-acts{display:flex;gap:6px;margin-top:9px}
-  .oa-ov{display:none;position:fixed;inset:0;background:rgba(20,28,36,.5);z-index:9000;align-items:center;justify-content:center;padding:24px}
+  .oa-ov{display:none;position:fixed;inset:0;background:rgba(20,28,36,.5);z-index:var(--z-modal);align-items:center;justify-content:center;padding:24px}
   .oa-modal{background:#fff;border-radius:12px;width:min(980px,100%);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.28)}
   .oa-head{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line-2)}
   .oa-head h3{margin:0;flex:1;font-size:16px;color:#3f4a55}
@@ -1545,9 +1564,9 @@
       <table class="tbl" style="width:100%;font-size:13px" id="apPlansTable"><thead><tr><th style="text-align:left">Name</th><th>Steps</th><th>Enrolled</th><th>Created</th><th>Last Updated</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
     </div>
   </div></section>
-  <div id="apEditorOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:80;overflow:auto"><div style="background:#fff;border-radius:10px;max-width:760px;margin:40px auto;padding:22px" id="apEditorBox"></div></div>
-  <div id="txOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:81;overflow:auto"><div style="background:#fff;border-radius:10px;max-width:640px;margin:40px auto;padding:22px" id="txOvBox"></div></div>
-  <div id="txDetailOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:80;overflow:auto"><div style="background:#fff;border-radius:10px;max-width:900px;margin:30px auto;padding:0" id="txDetailBox"></div></div>
+  <div id="apEditorOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:var(--z-modal);overflow:auto"><div style="background:#fff;border-radius:10px;max-width:760px;margin:40px auto;padding:22px" id="apEditorBox"></div></div>
+  <div id="txOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:var(--z-modal);overflow:auto"><div style="background:#fff;border-radius:10px;max-width:640px;margin:40px auto;padding:22px" id="txOvBox"></div></div>
+  <div id="txDetailOv" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:var(--z-modal);overflow:auto"><div style="background:#fff;border-radius:10px;max-width:900px;margin:30px auto;padding:0" id="txDetailBox"></div></div>
   <section class="view" id="view-lead"><div class="pad" id="leadDetail"></div></section>
 </main>
 
@@ -4689,7 +4708,7 @@ function openAdvFilter(){
   }
   loadAdvSources(function(){buildAdvPanel();});
   buildAdvPanel();
-  document.getElementById("afScrim").classList.add("on");
+  raiseOverlay(document.getElementById("afScrim")).classList.add("on");
 }
 function closeAdvFilter(){
   document.getElementById("afScrim").classList.remove("on");
@@ -5239,6 +5258,62 @@ function stageOptionsFlat(){
 var STAGE_OPTIONS=stageOptionsFlat();
 const ddMenu=document.getElementById("ddMenu");
 function closeDD(){ ddMenu.className="dd-menu"; ddMenu.style.bottom="auto"; ddMenu.style.minWidth=""; ddMenu._for=null; ddMenu._anchorAt=null; }
+/**
+ * Put an overlay on top of whatever is already open.
+ *
+ * The CSS scale gives every modal the same base (--z-modal). That is correct
+ * for one modal, and a tie for two — and on a tie the later DOM node wins,
+ * which is not the same as the one the operator just opened. This counter makes
+ * open ORDER the tiebreak, so a transaction opened from inside Add Agreement,
+ * or the Auto Plan editor opened over anything, is always the thing in front.
+ *
+ * Deliberately never resets: it only has to be monotonic within a page life,
+ * and the numbers stay far below --z-menu so an anchored dropdown belonging to
+ * a control inside the newest modal still opens above it.
+ */
+var __ovZ = 0;
+function raiseOverlay(el){
+  if(!el) return el;
+  /* Cap well under --z-menu (20000) so menus and toasts keep their lanes even
+     after an implausible number of stacked modals. */
+  __ovZ = Math.min(__ovZ + 1, 9000);
+  el.style.zIndex = String(9000 + __ovZ);
+  return el;
+}
+/**
+ * Keep every overlay raised WITHOUT depending on each call site remembering.
+ *
+ * raiseOverlay() is called explicitly where overlays are opened, which is
+ * correct and synchronous. This observer is the safety net: any of these
+ * containers that becomes visible by some other path — a future call site, a
+ * direct style assignment — is raised too. Without it, the stacking rule is a
+ * convention that silently rots the first time somebody adds a modal.
+ */
+(function watchOverlays(){
+  var IDS = ["oaOv", "apEditorOv", "txOv", "txDetailOv", "afScrim"];
+  var seen = new WeakMap();
+  function check(el){
+    if(!el) return;
+    var shown = getComputedStyle(el).display !== "none";
+    /* Only on the transition into visible, or every repaint would renumber. */
+    if(shown && !seen.get(el)) raiseOverlay(el);
+    seen.set(el, shown);
+  }
+  function attach(){
+    IDS.forEach(function(id){
+      var el = document.getElementById(id);
+      if(!el || el.__ovWatched) return;
+      el.__ovWatched = 1;
+      check(el);
+      new MutationObserver(function(){ check(el); })
+        .observe(el, { attributes: true, attributeFilter: ["style", "class"] });
+    });
+  }
+  attach();
+  /* #oaOv is created on first use, so watch the body for it arriving. */
+  new MutationObserver(attach).observe(document.body, { childList: true });
+})();
+
 function crmToast(msg){ const t=document.getElementById("crmToast"); t.textContent=msg; t.classList.add("on"); clearTimeout(window.__tt); window.__tt=setTimeout(()=>t.classList.remove("on"),1700); }
 const INTENT_OPTIONS=[["buyer","Buyer"],["seller","Seller"],["buyer_seller","Buyer & Seller"]];
 function setLeadField(id,kind,val){
@@ -10527,7 +10602,7 @@ if(typeof paintSortArrows==="function")paintSortArrows();
     var el=document.getElementById("txColCss"); if(!el){ el=document.createElement("style"); el.id="txColCss"; document.head.appendChild(el); }
     el.textContent=css;
   }
-  function ov(html){ document.getElementById("txOvBox").innerHTML=html; document.getElementById("txOv").style.display="block"; }
+  function ov(html){ document.getElementById("txOvBox").innerHTML=html; var o=document.getElementById("txOv"); o.style.display="block"; raiseOverlay(o); }
   function closeOv(){ document.getElementById("txOv").style.display="none"; }
   document.getElementById("txOv").addEventListener("click",function(e){ if(e.target===this) closeOv(); });
   /* SORT */
@@ -10639,7 +10714,7 @@ if(typeof paintSortArrows==="function")paintSortArrows();
       "<div style='border-left:1px solid var(--line);padding:16px 18px'><b style='font-size:13px'>Dates</b>"+
         DETAIL_DATES.map(function(dd){ var v=(t[dd[0]]||"").slice(0,10); return "<label style='display:block;font-size:11.5px;color:#8a939c;margin-top:8px'>"+dd[1]+"<input type='date' data-dfield='"+dd[0]+"' value='"+v+"' style='width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:12px;margin-top:2px'></label>"; }).join("")+
         "<div style='text-align:right;margin-top:10px'><button class='pill-btn' id='txDetSaveDates'>Save dates</button></div></div></div>";
-    document.getElementById("txDetailOv").style.display="block";
+    raiseOverlay(document.getElementById("txDetailOv")).style.display="block";
     document.getElementById("txDetClose").onclick=function(){ document.getElementById("txDetailOv").style.display="none"; };
     document.getElementById("txDetSaveNotes").onclick=function(){
       fetch(crmApi("/api/transactions/"+t.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({notes:document.getElementById("txDetNotes").value})}).then(function(r){ if(!r.ok)alert("Save failed"); });
@@ -10773,7 +10848,7 @@ if(typeof paintSortArrows==="function")paintSortArrows();
       "<label style='display:block;margin-top:10px'>Apply Auto Plan <select id='trgPlan'>"+peoplePlans.map(function(p){return "<option value='"+p.id+"' "+(t.planId===p.id?"selected":"")+">"+esc(p.name)+"</option>";}).join("")+"</select></label>"+
       "<div style='margin-top:16px;text-align:right'><button class='pill-btn ghost' id='apCancel'>Cancel</button> <button class='pill-btn' id='trgSave'>Save</button></div>";
     styleEditorInputs(box);
-    document.getElementById("apEditorOv").style.display="block";
+    raiseOverlay(document.getElementById("apEditorOv")).style.display="block";
     document.getElementById("trgSave").onclick=function(){
       var body={intent:val("trgIntent"),status:val("trgStatus"),source:val("trgSource"),tag:val("trgTag"),planId:document.getElementById("trgPlan").value};
       var req=t.id?fetch(api("/api/auto-plan-triggers/"+t.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
@@ -10995,7 +11070,7 @@ if(typeof paintSortArrows==="function")paintSortArrows();
       });
     }
     paint();
-    document.getElementById("apEditorOv").style.display="block";
+    raiseOverlay(document.getElementById("apEditorOv")).style.display="block";
   }
   function styleEditorInputs(box){
     box.querySelectorAll("input:not([type=checkbox]):not([type=number]),select,textarea").forEach(function(el){ el.style.cssText+=";border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px;font-family:inherit;display:block;width:"+(el.tagName==="TEXTAREA"||el.style.width?el.style.width||"100%":"100%")+";box-sizing:border-box;margin-top:3px"; });
@@ -11148,6 +11223,7 @@ function oaOverlay(title,bodyHtml,footHtml){
     '<div class="oa-body">'+bodyHtml+'</div>'+
     '<div class="oa-foot">'+footHtml+'</div></div>';
   ov.style.display="flex";
+  raiseOverlay(ov);
   document.getElementById("oaClose").onclick=closeOa;
   return ov;
 }

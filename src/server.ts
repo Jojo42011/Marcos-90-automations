@@ -7531,7 +7531,15 @@ app.get("/api/email/gmail/:messageId", async (req, res) => {
     res.json({ message: msg, cached });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: message });
+    /* "Gmail is not connected" is not a crash, and a 500 says it is. Every
+       other integration here answers 503 for an unconfigured transport (Quo,
+       Twilio), and the difference matters to whoever is reading the network
+       tab: a 500 sends them looking for a bug in this handler. */
+    const unconfigured = /not configured/i.test(message);
+    res.status(unconfigured ? 503 : 500).json({
+      error: message,
+      ...(unconfigured ? { hint: "Connect Gmail in Settings — no message can be read until then." } : {}),
+    });
   }
 });
 
