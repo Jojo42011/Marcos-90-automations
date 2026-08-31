@@ -11,6 +11,8 @@
  * unknown, and the CRM reloads on every page open.
  */
 
+import { mapVocabulary, recordKind } from "./brivityMapping.js";
+
 const CORE_BASE = (process.env.BRIVITY_CORE_URL || "https://api.brivity.com").replace(/\/$/, "");
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const FETCH_LIMIT = 5000;
@@ -18,6 +20,17 @@ const FETCH_LIMIT = 5000;
 export interface BrivityLeadRow {
   id: string;
   brivityId: string;
+  /** Brivity's other identifiers, kept so history can be attached later. */
+  brivityLeadId: string | null;
+  brivityUuid: string | null;
+  /** Deep link to the original record in Brivity. */
+  brivityUrl: string | null;
+  /** lead | collaborator | team — only `lead` is a contact. */
+  recordKind: string;
+  /** A confirmed postal address, not a guess parsed from a conversation. */
+  address: string | null;
+  /** Values Brivity sent that no mapping table knows. Reported, never absorbed. */
+  unmapped: Array<{ field: string; value: string }>;
   platform: string;
   name: string;
   username: string | null;
@@ -26,7 +39,7 @@ export interface BrivityLeadRow {
   source: string;
   crmStatus: string;
   crmStage: string;
-  crmIntent: "buyer" | "seller";
+  crmIntent: "buyer" | "seller" | "buyer_seller" | null;
   crmPriority: string | null;
   crmCallQueue: string | null;
   crmNotes: string | null;
@@ -35,6 +48,7 @@ export interface BrivityLeadRow {
   tags: string[];
   alerts: number;
   reports: number;
+  activeReports: number;
   createdAt: string | null;
   updatedAt: string | null;
   lastActivity: string | null;
@@ -44,23 +58,46 @@ export interface BrivityLeadRow {
   autoPlanEnrollments: unknown[];
 }
 
+/**
+ * The 28 fields `/api/people` actually returns, confirmed against the live
+ * account on 2026-08-31 across all 2,855 records.
+ *
+ * NOTE THE ABSENCES. There is no `created_at` and no `updated_at`. The previous
+ * version read both, so every imported contact carried a null timestamp and the
+ * "newest first" sort did nothing at all. Brivity's integration API simply does
+ * not date these records.
+ */
 interface BrivityPerson {
   id?: string | number;
+  /** Brivity's other two identifiers. Preserved so history can be attached later. */
+  lead_id?: string | number;
+  uuid?: string;
+  account_id?: string | number;
+  agent_id?: string | number;
+  agent_uuid?: string;
+  /** Deep link back to the original record — the migration's escape hatch. */
+  brivity_contact_detail_url?: string;
   first_name?: string;
   last_name?: string;
   phone_number?: string;
   email_address?: string;
+  company?: string;
+  job_title?: string;
   source?: string;
   status?: string;
   stage?: string;
+  stage_type?: string;
+  type?: string;
   lead_type?: string;
   description?: string;
   street_address?: string;
   city?: string;
   locality?: string;
+  postal_code?: string;
+  country?: string;
+  market_report_count?: number | null;
+  active_market_report_count?: number | null;
   tags?: unknown;
-  created_at?: string;
-  updated_at?: string;
 }
 
 let cache: { rows: BrivityLeadRow[]; fetchedAt: number } | null = null;
@@ -75,62 +112,62 @@ export function brivityConfigured(): boolean {
   return apiKey().length > 0;
 }
 
-/** Brivity status strings → the CRM's crmStatus vocabulary. */
-function mapStatus(raw: unknown): string {
-  const s = String(raw || "").toLowerCase();
-  if (!s) return "nurture";
-  if (s.includes("new")) return "new";
-  if (s.includes("hot")) return "hot";
-  if (s.includes("nurture") || s.includes("warm")) return "nurture";
-  if (s.includes("watch") || s.includes("cold") || s.includes("inactive")) return "watch";
-  if (s.includes("past") || s.includes("client") || s.includes("closed")) return "watch";
-  if (s.includes("trash") || s.includes("archiv") || s.includes("unqualified") || s.includes("dead")) return "dead";
-  return "nurture";
-}
-
-/** Brivity stage strings → the CRM's crmStage vocabulary. */
-function mapStage(raw: unknown): string {
-  const s = String(raw || "").toLowerCase().replace(/[\s-]+/g, "_");
-  const known = ["new", "hot", "warm", "cold", "pending", "appointment_set", "showing_set", "under_contract", "closed"];
-  if (known.includes(s)) return s;
-  if (s.includes("appointment")) return "appointment_set";
-  if (s.includes("showing")) return "showing_set";
-  if (s.includes("contract")) return "under_contract";
-  if (s.includes("close")) return "closed";
-  if (s.includes("pend")) return "pending";
-  if (s.includes("hot")) return "hot";
-  return "new";
-}
-
 function personToRow(p: BrivityPerson): BrivityLeadRow | null {
   const name = `${(p.first_name || "").trim()} ${(p.last_name || "").trim()}`.trim();
   const phone = (p.phone_number || "").trim() || null;
   const email = (p.email_address || "").trim() || null;
   if (!name && !phone && !email) return null;
-  const address = [p.street_address, p.city, p.locality].map((x) => (x || "").trim()).filter(Boolean).join(", ");
+
+  /* A CONFIRMED postal address. It used to be written to `criteria.location`,
+     which is the slot for an address GUESSED out of a DM conversation — so the
+     CRM deliberately never promoted it to the contact's address book, and
+     Brivity's real address never appeared on the profile. It goes to `address`
+     now, which is what that field is for. Postal code and country were dropped
+     entirely before. */
+  const address = [p.street_address, p.city, p.locality, p.postal_code, p.country]
+    .map((x) => String(x ?? "").trim()).filter(Boolean).join(", ") || null;
+
+  const v = mapVocabulary(p);
+  const tags = Array.isArray(p.tags) ? (p.tags as unknown[]).map(String).filter(Boolean) : [];
+  for (const t of v.addTags) if (!tags.includes(t)) tags.push(t);
+
   return {
     id: `brivity-${p.id ?? `${name}-${phone || email || ""}`}`,
     brivityId: String(p.id ?? ""),
+    brivityLeadId: p.lead_id != null ? String(p.lead_id) : null,
+    brivityUuid: p.uuid ? String(p.uuid) : null,
+    brivityUrl: p.brivity_contact_detail_url ? String(p.brivity_contact_detail_url) : null,
+    recordKind: recordKind(p.type),
     platform: "brivity",
     name: name || "Unknown",
     username: null,
     phone,
     email,
     source: (p.source || "").trim() || "Brivity CRM",
-    crmStatus: mapStatus(p.status),
-    crmStage: mapStage(p.stage),
-    crmIntent: String(p.lead_type || "").toLowerCase().includes("sell") ? "seller" : "buyer",
+    crmStatus: v.status,
+    crmStage: v.stage,
+    /* Brivity said nothing for 1,353 of these. Defaulting to "buyer" invented an
+       intention for half the database, so the null is carried and the caller
+       decides. */
+    crmIntent: v.intent,
     crmPriority: null,
     crmCallQueue: null,
     crmNotes: (p.description || "").trim() || null,
     propertyInquired: null,
-    criteria: address ? { location: address } : {},
-    tags: Array.isArray(p.tags) ? (p.tags as unknown[]).map(String) : [],
+    criteria: {},
+    address,
+    tags,
+    /* The real counts, which were hard-coded to zero before even though both
+       numbers are on every record. */
     alerts: 0,
-    reports: 0,
-    createdAt: p.created_at || null,
-    updatedAt: p.updated_at || null,
-    lastActivity: p.updated_at || p.created_at || null,
+    reports: Number(p.market_report_count ?? 0) || 0,
+    activeReports: Number(p.active_market_report_count ?? 0) || 0,
+    unmapped: v.unmapped,
+    /* Brivity's integration API returns no timestamps at all — see the
+       BrivityPerson note. Nulls here are honest, not missing data. */
+    createdAt: null,
+    updatedAt: null,
+    lastActivity: null,
     lastMessageAt: null,
     messages: [],
     activity: [],
@@ -172,8 +209,9 @@ async function fetchFromBrivity(): Promise<BrivityLeadRow[]> {
       ? ((data as { people: BrivityPerson[] }).people)
       : [];
   const rows = list.map(personToRow).filter((r): r is BrivityLeadRow => r !== null);
-  // Newest activity first so the CRM's default sort reads naturally.
-  rows.sort((a, b) => String(b.lastActivity || "").localeCompare(String(a.lastActivity || "")));
+  /* Brivity returns no timestamps, so there is nothing to sort by. The old
+     sort compared two nulls on every pair and did nothing; leaving the API's
+     own order is at least honest about that. */
   return rows;
 }
 

@@ -70,12 +70,25 @@ export interface BrivityImportOptions {
 
 export interface PlannedCreate {
   brivityId: string;
+  brivityLeadId: string | null;
+  brivityUuid: string | null;
+  /** Deep link back to the original record. */
+  brivityUrl: string | null;
   name: string;
   phone: string | null;
   email: string | null;
-  intent: CrmIntent;
+  /** null when Brivity never said — not the same as "buyer". */
+  intent: CrmIntent | null;
   status: CrmStatusValue;
+  /** Brivity's real stage, mapped 1:1. Was hard-coded to "new" before. */
+  stage: string;
   source: string | null;
+  /** Brivity's `description`, populated on 41% of contacts. Was dropped. */
+  notes: string | null;
+  /** A confirmed postal address. Was written to the guessed-address slot. */
+  address: string | null;
+  tags: string[];
+  marketReports: number;
 }
 
 export interface PlannedMerge {
@@ -106,8 +119,16 @@ function statusOf(p: BrivityLeadRow): CrmStatusValue {
   return (p.crmStatus || "new") as CrmStatusValue;
 }
 
-function intentOf(p: BrivityLeadRow): CrmIntent {
-  return p.crmIntent === "seller" ? "seller" : "buyer";
+/**
+ * Brivity's intention, or null when it never said.
+ *
+ * The previous version returned "buyer" for anything that was not "seller",
+ * which invented an intention for the 1,353 contacts Brivity marks "n/a" and
+ * silently downgraded the 202 marked "seller/buyer". Null is carried through so
+ * the merge path can decline to overwrite what we already know.
+ */
+function intentOf(p: BrivityLeadRow): CrmIntent | null {
+  return (p.crmIntent as CrmIntent | null) ?? null;
 }
 
 /**
@@ -221,12 +242,20 @@ export async function planBrivityImport(
       if (isDead && !options.includeDead) { plan.skipped.dead++; continue; }
       plan.creates.push({
         brivityId: bid,
+        brivityLeadId: p.brivityLeadId ?? null,
+        brivityUuid: p.brivityUuid ?? null,
+        brivityUrl: p.brivityUrl ?? null,
         name: usableName(p.name) || p.phone || p.email || "Unnamed",
         phone: p.phone || null,
         email: p.email || null,
         intent: intentOf(p),
         status: statusOf(p),
+        stage: p.crmStage || "new_lead",
         source: p.source || null,
+        notes: p.crmNotes || null,
+        address: p.address ?? null,
+        tags: Array.isArray(p.tags) ? p.tags : [],
+        marketReports: Number(p.reports || 0),
       });
       continue;
     }
@@ -248,9 +277,11 @@ export async function planBrivityImport(
     if (bid && String(match.brivityId || "") !== bid) {
       changes.push({ field: "brivityId", from: match.brivityId, to: bid });
     }
-    // Brivity is the system of record for whether someone is buying or selling.
+    /* Brivity is the system of record for buying vs selling — but only when it
+       actually says. A null means "not stated", and overwriting a known intent
+       with it would erase what this CRM already learned in conversation. */
     const bIntent = intentOf(p);
-    if (bIntent !== match.crmIntent) {
+    if (bIntent && bIntent !== match.crmIntent) {
       changes.push({ field: "crmIntent", from: match.crmIntent, to: bIntent });
     }
     /*
@@ -353,10 +384,18 @@ export function leadFromPlannedCreate(c: PlannedCreate): Omit<Lead, "id" | "crea
     criteria: null,
     brivityId: c.brivityId,
     crmStatus: c.status,
-    crmStage: "new",
+    /* Brivity's real stage. This was hard-coded to "new", which threw away the
+       stage on 1,394 contacts at the write layer even when the read layer had
+       it right. */
+    crmStage: c.stage as Lead["crmStage"],
     crmPriority: "normal",
-    crmIntent: c.intent,
+    /* The schema requires a value; "buyer" is the storage default for a contact
+       whose intention Brivity never stated. It is NOT evidence they are a
+       buyer, which is why the merge path refuses to write it over a known one. */
+    crmIntent: c.intent ?? "buyer",
     crmCallQueue: "none",
-    crmNotes: null,
+    crmNotes: c.notes,
+    address: c.address,
+    tags: c.tags,
   } as Omit<Lead, "id" | "createdAt" | "updatedAt">;
 }

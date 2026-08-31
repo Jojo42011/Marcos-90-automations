@@ -91,8 +91,16 @@ function usableName(raw) {
 function statusOf(p) {
     return (p.crmStatus || "new");
 }
+/**
+ * Brivity's intention, or null when it never said.
+ *
+ * The previous version returned "buyer" for anything that was not "seller",
+ * which invented an intention for the 1,353 contacts Brivity marks "n/a" and
+ * silently downgraded the 202 marked "seller/buyer". Null is carried through so
+ * the merge path can decline to overwrite what we already know.
+ */
 function intentOf(p) {
-    return p.crmIntent === "seller" ? "seller" : "buyer";
+    return p.crmIntent ?? null;
 }
 /**
  * Pick the better of two Brivity rows sharing a phone: the one with more filled
@@ -210,12 +218,20 @@ async function planBrivityImport(opts = {}) {
             }
             plan.creates.push({
                 brivityId: bid,
+                brivityLeadId: p.brivityLeadId ?? null,
+                brivityUuid: p.brivityUuid ?? null,
+                brivityUrl: p.brivityUrl ?? null,
                 name: usableName(p.name) || p.phone || p.email || "Unnamed",
                 phone: p.phone || null,
                 email: p.email || null,
                 intent: intentOf(p),
                 status: statusOf(p),
+                stage: p.crmStage || "new_lead",
                 source: p.source || null,
+                notes: p.crmNotes || null,
+                address: p.address ?? null,
+                tags: Array.isArray(p.tags) ? p.tags : [],
+                marketReports: Number(p.reports || 0),
             });
             continue;
         }
@@ -238,9 +254,11 @@ async function planBrivityImport(opts = {}) {
         if (bid && String(match.brivityId || "") !== bid) {
             changes.push({ field: "brivityId", from: match.brivityId, to: bid });
         }
-        // Brivity is the system of record for whether someone is buying or selling.
+        /* Brivity is the system of record for buying vs selling — but only when it
+           actually says. A null means "not stated", and overwriting a known intent
+           with it would erase what this CRM already learned in conversation. */
         const bIntent = intentOf(p);
-        if (bIntent !== match.crmIntent) {
+        if (bIntent && bIntent !== match.crmIntent) {
             changes.push({ field: "crmIntent", from: match.crmIntent, to: bIntent });
         }
         /*
@@ -333,10 +351,18 @@ function leadFromPlannedCreate(c) {
         criteria: null,
         brivityId: c.brivityId,
         crmStatus: c.status,
-        crmStage: "new",
+        /* Brivity's real stage. This was hard-coded to "new", which threw away the
+           stage on 1,394 contacts at the write layer even when the read layer had
+           it right. */
+        crmStage: c.stage,
         crmPriority: "normal",
-        crmIntent: c.intent,
+        /* The schema requires a value; "buyer" is the storage default for a contact
+           whose intention Brivity never stated. It is NOT evidence they are a
+           buyer, which is why the merge path refuses to write it over a known one. */
+        crmIntent: c.intent ?? "buyer",
         crmCallQueue: "none",
-        crmNotes: null,
+        crmNotes: c.notes,
+        address: c.address,
+        tags: c.tags,
     };
 }
