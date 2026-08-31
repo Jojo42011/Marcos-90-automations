@@ -13,6 +13,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.brivityConfigured = brivityConfigured;
+exports.personToRow = personToRow;
 exports.getBrivityPeople = getBrivityPeople;
 exports.getBrivityImportStatus = getBrivityImportStatus;
 const brivityMapping_js_1 = require("./brivityMapping.js");
@@ -28,6 +29,8 @@ function apiKey() {
 function brivityConfigured() {
     return apiKey().length > 0;
 }
+/** Exported so the import suites can run the real export through the real
+ *  mapper, rather than a reimplementation of it that can drift. */
 function personToRow(p) {
     const name = `${(p.first_name || "").trim()} ${(p.last_name || "").trim()}`.trim();
     const phone = (p.phone_number || "").trim() || null;

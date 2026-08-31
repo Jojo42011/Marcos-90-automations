@@ -104,22 +104,26 @@ function intentOf(p) {
 }
 /**
  * Pick the better of two Brivity rows sharing a phone: the one with more filled
- * fields, breaking ties on the more recently updated.
+ * fields.
+ *
+ * There is no recency tie-break, because there is nothing to break it with —
+ * Brivity's people API returns no timestamps at all, so `updatedAt` is always
+ * null. A tie therefore keeps the row seen first, which at least makes the
+ * outcome deterministic across runs rather than dependent on fetch order.
  */
 function richer(a, b) {
     const score = (x) => (usableName(x.name) ? 2 : 0) + (x.email ? 1 : 0) + (x.phone ? 1 : 0) + (x.source ? 1 : 0);
     const sa = score(a), sb = score(b);
-    if (sa !== sb)
-        return sa > sb ? a : b;
-    return String(b.updatedAt || "") > String(a.updatedAt || "") ? b : a;
+    return sb > sa ? b : a;
 }
-async function planBrivityImport(opts = {}) {
+async function planBrivityImport(opts = {}, deps = {}) {
     const options = {
         includeDead: opts.includeDead === true,
         enrichDeadMatches: opts.enrichDeadMatches !== false,
         preferBrivityName: opts.preferBrivityName !== false,
+        includeNonLeads: opts.includeNonLeads === true,
     };
-    const people = await (0, brivityPeople_js_1.getBrivityPeople)(false);
+    const people = deps.fetchPeople ? await deps.fetchPeople() : await (0, brivityPeople_js_1.getBrivityPeople)(false);
     /*
      * getBrivityPeople swallows fetch failures and returns [] (it is built to
      * degrade for the CRM view). For an import plan that is dangerous: an empty
@@ -132,7 +136,7 @@ async function planBrivityImport(opts = {}) {
             ? `Brivity fetch failed (${st.lastError}) — refusing to plan against an empty result`
             : "Brivity returned no contacts — refusing to plan against an empty result");
     }
-    const leads = await (0, db_js_1.listAllLeads)();
+    const leads = deps.loadLeads ? deps.loadLeads() : await (0, db_js_1.listAllLeads)();
     // Existing leads indexed for matching. A phone shared by two leads is a
     // conflict we refuse to guess at rather than merging into the wrong one.
     const byPhone = new Map();
@@ -155,7 +159,7 @@ async function planBrivityImport(opts = {}) {
         dryRun: opts.dryRun !== false,
         options,
         fetched: people.length,
-        skipped: { dead: 0, noContactInfo: 0, duplicateWithinBrivity: 0 },
+        skipped: { dead: 0, noContactInfo: 0, duplicateWithinBrivity: 0, nonLead: 0 },
         creates: [],
         merges: [],
         unchanged: 0,
@@ -210,10 +214,20 @@ async function planBrivityImport(opts = {}) {
             matchedOn = "email";
         }
         const isDead = statusOf(p) === "dead";
+        /* `lead` is the only Brivity type that is a contact. `collaborator` and
+           `team` are lenders, co-op agents and Marco's own staff seats; `unknown`
+           is a type Brivity added that we have not mapped, which is not something
+           to guess about when the guess lands on the call list. */
+        const isNonLead = p.recordKind !== "lead";
         if (!match) {
             // Nothing to enrich, so a dead contact is simply not imported.
             if (isDead && !options.includeDead) {
                 plan.skipped.dead++;
+                continue;
+            }
+            // Same for a record that was never a lead in the first place.
+            if (isNonLead && !options.includeNonLeads) {
+                plan.skipped.nonLead++;
                 continue;
             }
             plan.creates.push({

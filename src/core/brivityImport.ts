@@ -65,6 +65,18 @@ export interface BrivityImportOptions {
   enrichDeadMatches?: boolean;
   /** Overwrite a DM handle with Brivity's real name. Default true. */
   preferBrivityName?: boolean;
+  /**
+   * Create leads for Brivity records that are not contacts at all. Default
+   * false. Brivity's `type` marks 125 `collaborator` rows (lenders, co-op
+   * agents, title reps) and 3 `team` rows (Marco's own staff seats). They are
+   * real people, but they are not leads, and importing them puts 128 non-leads
+   * on the call list — someone eventually cold-calls their own lender.
+   *
+   * Like dead contacts, they are held back from CREATE only. If one already
+   * matches a lead we hold, enrichment still runs: that adds no rows and only
+   * fills in a name or email we were missing.
+   */
+  includeNonLeads?: boolean;
   dryRun?: boolean;
 }
 
@@ -104,7 +116,7 @@ export interface BrivityImportPlan {
   options: Required<Omit<BrivityImportOptions, "dryRun">>;
   fetched: number;
   /** Reasons a Brivity contact is not imported. */
-  skipped: { dead: number; noContactInfo: number; duplicateWithinBrivity: number };
+  skipped: { dead: number; noContactInfo: number; duplicateWithinBrivity: number; nonLead: number };
   creates: PlannedCreate[];
   merges: PlannedMerge[];
   /** Matched an existing lead but nothing would change. */
@@ -133,26 +145,43 @@ function intentOf(p: BrivityLeadRow): CrmIntent | null {
 
 /**
  * Pick the better of two Brivity rows sharing a phone: the one with more filled
- * fields, breaking ties on the more recently updated.
+ * fields.
+ *
+ * There is no recency tie-break, because there is nothing to break it with —
+ * Brivity's people API returns no timestamps at all, so `updatedAt` is always
+ * null. A tie therefore keeps the row seen first, which at least makes the
+ * outcome deterministic across runs rather than dependent on fetch order.
  */
 function richer(a: BrivityLeadRow, b: BrivityLeadRow): BrivityLeadRow {
   const score = (x: BrivityLeadRow) =>
     (usableName(x.name) ? 2 : 0) + (x.email ? 1 : 0) + (x.phone ? 1 : 0) + (x.source ? 1 : 0);
   const sa = score(a), sb = score(b);
-  if (sa !== sb) return sa > sb ? a : b;
-  return String(b.updatedAt || "") > String(a.updatedAt || "") ? b : a;
+  return sb > sa ? b : a;
+}
+
+/**
+ * Seams for testing. A migration plan is only trustworthy if it can be run over
+ * the real export without touching the live Brivity account or the live lead
+ * store, and ESM exports cannot be monkeypatched — so the two external reads
+ * are injectable. Production passes nothing and gets the real ones.
+ */
+export interface BrivityImportDeps {
+  fetchPeople?: () => Promise<BrivityLeadRow[]>;
+  loadLeads?: () => Lead[];
 }
 
 export async function planBrivityImport(
   opts: BrivityImportOptions = {},
+  deps: BrivityImportDeps = {},
 ): Promise<BrivityImportPlan> {
   const options = {
     includeDead: opts.includeDead === true,
     enrichDeadMatches: opts.enrichDeadMatches !== false,
     preferBrivityName: opts.preferBrivityName !== false,
+    includeNonLeads: opts.includeNonLeads === true,
   };
 
-  const people = await getBrivityPeople(false);
+  const people = deps.fetchPeople ? await deps.fetchPeople() : await getBrivityPeople(false);
   /*
    * getBrivityPeople swallows fetch failures and returns [] (it is built to
    * degrade for the CRM view). For an import plan that is dangerous: an empty
@@ -167,7 +196,7 @@ export async function planBrivityImport(
         : "Brivity returned no contacts — refusing to plan against an empty result",
     );
   }
-  const leads = await listAllLeads();
+  const leads = deps.loadLeads ? deps.loadLeads() : await listAllLeads();
 
   // Existing leads indexed for matching. A phone shared by two leads is a
   // conflict we refuse to guess at rather than merging into the wrong one.
@@ -186,7 +215,7 @@ export async function planBrivityImport(
     dryRun: opts.dryRun !== false,
     options,
     fetched: people.length,
-    skipped: { dead: 0, noContactInfo: 0, duplicateWithinBrivity: 0 },
+    skipped: { dead: 0, noContactInfo: 0, duplicateWithinBrivity: 0, nonLead: 0 },
     creates: [],
     merges: [],
     unchanged: 0,
@@ -236,10 +265,17 @@ export async function planBrivityImport(
     if (!match && ek) { match = byEmail.get(ek); matchedOn = "email"; }
 
     const isDead = statusOf(p) === "dead";
+    /* `lead` is the only Brivity type that is a contact. `collaborator` and
+       `team` are lenders, co-op agents and Marco's own staff seats; `unknown`
+       is a type Brivity added that we have not mapped, which is not something
+       to guess about when the guess lands on the call list. */
+    const isNonLead = p.recordKind !== "lead";
 
     if (!match) {
       // Nothing to enrich, so a dead contact is simply not imported.
       if (isDead && !options.includeDead) { plan.skipped.dead++; continue; }
+      // Same for a record that was never a lead in the first place.
+      if (isNonLead && !options.includeNonLeads) { plan.skipped.nonLead++; continue; }
       plan.creates.push({
         brivityId: bid,
         brivityLeadId: p.brivityLeadId ?? null,

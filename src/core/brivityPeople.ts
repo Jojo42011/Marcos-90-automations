@@ -112,7 +112,9 @@ export function brivityConfigured(): boolean {
   return apiKey().length > 0;
 }
 
-function personToRow(p: BrivityPerson): BrivityLeadRow | null {
+/** Exported so the import suites can run the real export through the real
+ *  mapper, rather than a reimplementation of it that can drift. */
+export function personToRow(p: BrivityPerson): BrivityLeadRow | null {
   const name = `${(p.first_name || "").trim()} ${(p.last_name || "").trim()}`.trim();
   const phone = (p.phone_number || "").trim() || null;
   const email = (p.email_address || "").trim() || null;
