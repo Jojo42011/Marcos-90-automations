@@ -28,6 +28,18 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-08-31e] — **Merge safety for the Brivity import: two ways it could have made the CRM worse than it was** (`src/core/brivityImport.ts`, `scripts/verify-brivity-plan.mjs`).
+
+  Against Marco's real CRM most Brivity contacts match a lead he already has, so the *merge* path — not the create path — is where a migration destroys data. Two defects there, one of them introduced by the mapping change two entries above:
+
+  1. **A stale Brivity row could bury a live conversation.** The status gap-fill guarded with `bStatus !== "dead"`, which was only ever sufficient because the old mapping collapsed `archived` and `trash` *into* `dead`. Splitting them into their own statuses (correct, and what [2026-08-31c] did) let a Brivity "trash" row sail past a one-value check and set an actively-DMed lead to `trashed` — 431 leads exposed. The guard is now a set, `BURYING_STATUSES = {dead, archived, trashed}`, so splitting a status out of `dead` again cannot silently reopen it. Burying statuses are still honoured for CREATES; a contact nobody has spoken to belongs in whatever bucket Brivity had it in.
+
+  2. **Email was overwritten rather than filled.** A lead carries one `email` field, so replacing a different address destroyed the only copy — and since Brivity returns no timestamps there is no basis for calling its address the fresher one, while the CRM's typically came from an actual conversation. Email now fills a gap only, which is how `phone` already worked; the two were inconsistent.
+
+  The rule the merge path now follows throughout: **a merge may only ADD what is missing.** Name is the single deliberate exception (`preferBrivityName`, on by default) because a real name beating a DM handle like "purple kitty 22" is the point of the enrichment.
+
+  `scripts/verify-brivity-plan.mjs` grew 13 merge-safety checks (30 total), including that Brivity's `n/a` never erases an intent the CRM learned, that an ambiguous phone match is escalated rather than guessed, and — importantly for a migration anyone may need to retry — that **re-running after an import creates nothing and churns nothing**. A/B against the pre-fix code produced 3 failures on real records (a live TikTok lead archived, a real email overwritten); the fixed code passes 30/30.
+
 - [2026-08-31d] — **The import planner was ignoring the mapping it was given: 128 non-leads would have been created as leads** (`src/core/brivityImport.ts`, `src/core/brivityPeople.ts`, `scripts/verify-brivity-plan.mjs` NEW).
 
   Immediately after shipping the mapping above, driving the *planner* over the real export showed the mapping was not actually reaching the write path. `recordKind` was computed on every row and then never read by `planBrivityImport()`, so the 125 `collaborator` records (lenders, co-op agents, title reps) and 3 `team` records (Marco's own staff seats) were still queued as new leads. `scripts/verify-brivity-mapping.mjs` passed the whole time — it proves the tables are correct, and cannot see that the importer throws them away. **A mapping test is not an import test.**

@@ -126,6 +126,15 @@ export interface BrivityImportPlan {
   counts: { create: number; merge: number; renames: number };
 }
 
+/**
+ * Statuses that take a lead off the working board. Brivity may hold any of
+ * these for a contact this CRM is actively talking to, and importing one would
+ * hide a live conversation, so none of them is ever merged onto an existing
+ * lead. They are still honoured for CREATES — a contact we have never spoken to
+ * belongs in whatever bucket Brivity had it in.
+ */
+const BURYING_STATUSES = new Set<CrmStatusValue>(["dead", "archived", "trashed"] as CrmStatusValue[]);
+
 /** Brivity status → the CRM's status vocabulary, already normalised upstream. */
 function statusOf(p: BrivityLeadRow): CrmStatusValue {
   return (p.crmStatus || "new") as CrmStatusValue;
@@ -304,7 +313,12 @@ export async function planBrivityImport(
     if (options.preferBrivityName && bName && bName !== (match.name || "")) {
       changes.push({ field: "name", from: match.name, to: bName });
     }
-    if (p.email && emailKey(p.email) !== emailKey(match.email)) {
+    /* Email FILLS A GAP; it does not overwrite. A lead carries one email field,
+       so replacing a different address destroys the only copy — and Brivity
+       returns no timestamps, so there is no basis for calling its address the
+       fresher one. The CRM's value typically came from an actual conversation.
+       (Phone already worked this way; email did not, which was inconsistent.) */
+    if (p.email && !match.email) {
       changes.push({ field: "email", from: match.email, to: p.email });
     }
     if (p.phone && !match.phone) {
@@ -321,13 +335,21 @@ export async function planBrivityImport(
       changes.push({ field: "crmIntent", from: match.crmIntent, to: bIntent });
     }
     /*
-     * Status only fills a gap, and never imports "dead". A lead we have talked
-     * to in the DMs should not be marked dead because a Brivity row nobody has
-     * touched in a year says so — that would quietly bury live conversations.
-     * Identity (name, email) is still enriched from those rows.
+     * Status only fills a gap, and never imports one that BURIES the lead. A
+     * lead we have talked to in the DMs should not be filed away because a
+     * Brivity row nobody has touched in a year says so — that would quietly
+     * hide live conversations. Identity (name, email) is still enriched from
+     * those rows.
+     *
+     * This guard used to read `!== "dead"` and that was sufficient only because
+     * the old mapping collapsed archived and trash INTO dead. Now that they map
+     * to their own statuses (which is correct), a Brivity "trash" row would
+     * otherwise sail past a one-value check and bury 431 live leads. The guard
+     * is a set, so splitting a status out of `dead` again cannot silently
+     * reopen this.
      */
     const bStatus = statusOf(p);
-    if (match.crmStatus === "new" && bStatus !== "new" && bStatus !== "dead") {
+    if (match.crmStatus === "new" && bStatus !== "new" && !BURYING_STATUSES.has(bStatus)) {
       changes.push({ field: "crmStatus", from: match.crmStatus, to: bStatus });
     }
     if (p.source && !match.source) {

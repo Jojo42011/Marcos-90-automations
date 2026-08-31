@@ -114,5 +114,129 @@ ok("not one of the 2,855 real records hits an unmapped value",
   unmappedRows.length === 0,
   JSON.stringify(unmappedRows.slice(0, 5).map((r) => r.unmapped)));
 
+/* ──────────────────────────────────────────────────────────────────────────
+ * MERGE SAFETY.
+ *
+ * Against Marco's real CRM most of these contacts match a lead he already has,
+ * so the merge path — not the create path — is where a migration destroys
+ * data. Everything below asks the same question: can importing a stale Brivity
+ * row make the CRM worse than it was? A merge may only ADD what is missing.
+ * ────────────────────────────────────────────────────────────────────────── */
+console.log("\n  --- merge safety ---");
+
+const pick = (fn) => rows.find(fn);
+const trashRow = pick((r) => r.crmStatus === "trashed" && r.phone);
+const deadRow = pick((r) => r.crmStatus === "dead" && r.phone);
+const archRow = pick((r) => r.crmStatus === "archived" && r.phone);
+const emailRow = pick((r) => r.email && r.phone);
+
+const lead = (over) => ({
+  id: "L" + Math.random().toString(36).slice(2, 8), name: "Existing Name",
+  phone: null, email: null, source: null, crmStatus: "new", crmIntent: null,
+  brivityId: null, tags: [], ...over,
+});
+const changed = (m, field) => (m?.changes || []).find((c) => c.field === field);
+
+/* A live conversation must not be filed away by a stale Brivity row. */
+for (const [label, row] of [["trashed", trashRow], ["dead", deadRow], ["archived", archRow]]) {
+  if (!row) { ok(`a Brivity '${label}' row exists to test with`, false, "none in export"); continue; }
+  const p2 = await planBrivityImport({}, {
+    fetchPeople: async () => [row],
+    loadLeads: () => [lead({ phone: row.phone, name: "Live DM Lead" })],
+  });
+  const m = p2.merges[0];
+  ok(`a Brivity '${label}' row never buries a lead we are talking to`,
+    !changed(m, "crmStatus"), JSON.stringify(m?.changes));
+}
+
+/* The status gap-fill must still WORK for statuses that don't bury. */
+const warmRow = pick((r) => r.crmStatus === "hot" && r.phone) || pick((r) => r.crmStatus === "nurture" && r.phone);
+if (warmRow) {
+  const p2 = await planBrivityImport({}, {
+    fetchPeople: async () => [warmRow],
+    loadLeads: () => [lead({ phone: warmRow.phone })],
+  });
+  ok("a warm Brivity status still fills an empty status",
+    changed(p2.merges[0], "crmStatus")?.to === warmRow.crmStatus,
+    JSON.stringify(p2.merges[0]?.changes));
+}
+
+/* And it must only ever FILL, never overwrite a status the CRM already set. */
+if (warmRow) {
+  const p2 = await planBrivityImport({}, {
+    fetchPeople: async () => [warmRow],
+    loadLeads: () => [lead({ phone: warmRow.phone, crmStatus: "watch" })],
+  });
+  ok("a status the CRM already decided is not overwritten",
+    !changed(p2.merges[0], "crmStatus"), JSON.stringify(p2.merges[0]?.changes));
+}
+
+/* Email: fill a gap, never replace. A lead holds ONE email. */
+if (emailRow) {
+  const fill = await planBrivityImport({}, {
+    fetchPeople: async () => [emailRow],
+    loadLeads: () => [lead({ phone: emailRow.phone })],
+  });
+  ok("a missing email is filled in from Brivity",
+    changed(fill.merges[0], "email")?.to === emailRow.email, JSON.stringify(fill.merges[0]?.changes));
+
+  const keep = await planBrivityImport({}, {
+    fetchPeople: async () => [emailRow],
+    loadLeads: () => [lead({ phone: emailRow.phone, email: "real@fromconversation.com" })],
+  });
+  ok("an email we already hold is NOT overwritten by Brivity's",
+    !changed(keep.merges[0], "email"), JSON.stringify(keep.merges[0]?.changes));
+}
+
+/* Intent: Brivity is authoritative when it speaks, silent when it does not. */
+const naRow = pick((r) => r.crmIntent === null && r.phone);
+if (naRow) {
+  const p2 = await planBrivityImport({}, {
+    fetchPeople: async () => [naRow],
+    loadLeads: () => [lead({ phone: naRow.phone, crmIntent: "seller" })],
+  });
+  ok("a Brivity 'n/a' never erases an intent the CRM learned",
+    !changed(p2.merges[0], "crmIntent"), JSON.stringify(p2.merges[0]?.changes));
+}
+
+/* Phone is the match key, but a lead matched on EMAIL may have no phone. */
+if (emailRow) {
+  const p2 = await planBrivityImport({}, {
+    fetchPeople: async () => [emailRow],
+    loadLeads: () => [lead({ email: emailRow.email })],
+  });
+  ok("a lead matched on email gets its missing phone filled",
+    changed(p2.merges[0], "phone")?.to === emailRow.phone, JSON.stringify(p2.merges[0]?.changes));
+  const p3 = await planBrivityImport({}, {
+    fetchPeople: async () => [emailRow],
+    loadLeads: () => [lead({ email: emailRow.email, phone: "(210) 555-0000" })],
+  });
+  ok("a phone we already hold is not overwritten",
+    !changed(p3.merges[0], "phone"), JSON.stringify(p3.merges[0]?.changes));
+}
+
+/* Two leads sharing a phone is a human decision, not a coin flip. */
+if (emailRow) {
+  const p2 = await planBrivityImport({}, {
+    fetchPeople: async () => [emailRow],
+    loadLeads: () => [lead({ phone: emailRow.phone }), lead({ phone: emailRow.phone })],
+  });
+  ok("an ambiguous phone match is escalated, not guessed",
+    p2.ambiguous.length === 1 && p2.merges.length === 0, JSON.stringify(p2.ambiguous));
+}
+
+/* Re-running the import must be a no-op, or a migration cannot be retried. */
+const first = await plan_({});
+const asLeads = first.creates.map((c) => lead({
+  id: "L" + c.brivityId, name: c.name, phone: c.phone, email: c.email,
+  source: c.source, crmStatus: c.status, crmIntent: c.intent, brivityId: c.brivityId,
+}));
+const second = await planBrivityImport({}, { fetchPeople: async () => rows, loadLeads: () => asLeads });
+ok("re-running after an import creates nothing new (idempotent)",
+  second.counts.create === 0, `${second.counts.create} duplicate creates`);
+ok("and it does not churn the records it just wrote",
+  second.counts.merge === 0, `${second.counts.merge} merges: ` +
+  JSON.stringify(second.merges.slice(0, 3)));
+
 console.log(`\n${pass} passed, ${fail.length} failed`);
 if (fail.length) { console.error(fail.map((f) => " - " + f).join("\n")); process.exit(1); }
