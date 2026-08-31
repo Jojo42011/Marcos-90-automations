@@ -365,6 +365,10 @@
   /* With a search box the OUTER menu must not scroll, or the box scrolls away
      with the options it is filtering. The inner list scrolls instead. */
   .afdd-m.has-s{max-height:none;overflow:visible}
+  .sendline{font-size:11.5px;line-height:1.5;margin:6px 0 0;padding:5px 8px;border-radius:6px}
+  .sendline.sl-ok{background:#f2faf8;border:1px solid #cfeae3;color:#3d7a6c}
+  .sendline.sl-warn{background:#fdfaf2;border:1px solid #eadfc4;color:#8a6d2f}
+  .sendline.sl-bad{background:#fdf1f1;border:1px solid #f0cdcd;color:#a8442f}
   .afdd-s{width:calc(100% - 12px);margin:6px 6px 4px;border:1px solid var(--line);border-radius:6px;
     height:30px;padding:0 8px;font-size:12.5px;outline:none}
   .afdd-s:focus{border-color:var(--teal)}
@@ -2339,6 +2343,7 @@ function paintThread(i){
       '<button class="rb sug" id="threadSuggestBtn" title="Suggest a reply — reads the whole conversation"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg></button>'+
       '<button class="rb" id="threadLaterBtn" title="Send later"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>'+
       '<button class="snd" id="threadSend"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button></div>'+
+      (c.channel==="sms"?sendingLineNote():"")+
     '<div class="sug-pop" id="sugPop">'+
       '<div class="sg-head"><span>Suggested reply</span><button class="sg-x" id="sugClose">✕</button></div>'+
       '<div class="sg-body" id="sugBody"></div>'+
@@ -7392,8 +7397,12 @@ function qaTextTab(l,body){
       '<span class="qa-seen" id="qaLen"></span>'+
     '</div>'+
     qaFoot(can?"SEND MESSAGE":"SEND MESSAGE","qaSendText",'',!can)+
-    (can?'<div class="qa-note">Sends for real over Quo from '+esc((MSG_STATUS&&MSG_STATUS.textNumber)||"the connected business line")+
-          '. The bubble appears only once Quo accepts it — a text that failed must never sit in the thread looking delivered.</div>'
+    /* The line named here is the one THIS user will actually send on, resolved
+       per signed-in user — not the account-wide number. Sending as somebody
+       else is a warning, not a detail. */
+    (can?sendingLineNote()+
+         '<div class="qa-note">Sends for real over Quo. '+
+          'The bubble appears only once Quo accepts it — a text that failed must never sit in the thread looking delivered.</div>'
         :'<div class="qa-off">'+esc(channelReason("text"))+' The draft stays here; nothing will go out.</div>')+
     (dnc?'<div class="qa-warn">⚠ This number is marked <b>Do Not Call</b> on this contact.</div>':'');
 
@@ -7404,6 +7413,9 @@ function qaTextTab(l,body){
   if(sel)sel.addEventListener("change",function(){ d.number=sel.value; QA.text=d; renderLeadTab(); });
   var area=document.getElementById("qaTextMsg");
   var len=document.getElementById("qaLen");
+  /* Fetch the sending line once, then repaint so the badge appears without
+     the operator having to reopen the tab. */
+  if(!MY_LINE) loadMyLine().then(function(){ if(ldTab==="text") renderLeadTab(); });
   var gate=qaGate("qaSendText",function(){ return can && !!area.value.trim() && !!d.number; });
   function paintLen(){
     var n=area.value.length;
@@ -7477,6 +7489,35 @@ function ensureVocabulary(then){
   if(!CRM_VOCAB_P)CRM_VOCAB_P=loadCrmVocabulary();
   return then?CRM_VOCAB_P.then(then):CRM_VOCAB_P;
 }
+/**
+ * Which Quo line the signed-in user's texts go out on.
+ *
+ * Cached for the page. Shown next to every send button, because the operator
+ * needs to know whose number a client will see BEFORE they hit send — and if
+ * they are falling back to somebody else's line, that has to be visible rather
+ * than discovered when the client replies to the wrong person.
+ */
+var MY_LINE=null, MY_LINE_P=null;
+function loadMyLine(){
+  if(!MY_LINE_P){
+    MY_LINE_P=fetch(crmApi("/api/quo/my-line"))
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(d){ if(d&&d.line)MY_LINE=d.line; return MY_LINE; })
+      .catch(function(){ return null; });
+  }
+  return MY_LINE_P;
+}
+/** A one-line badge naming the sending number, or the problem with it. */
+function sendingLineNote(){
+  if(!MY_LINE) return "";
+  var cls = MY_LINE.reason==="user_assigned" ? "sl-ok"
+          : MY_LINE.reason==="unconfigured"  ? "sl-bad" : "sl-warn";
+  var label = MY_LINE.reason==="user_assigned"
+    ? ("Sending from "+esc(MY_LINE.number||"your line"))
+    : esc(MY_LINE.explain);
+  return '<div class="sendline '+cls+'">'+label+'</div>';
+}
+
 function loadCrmVocabulary(){
   return fetch(crmApi("/api/crm/vocabulary")).then(function(r){ return r.ok?r.json():null; }).then(function(d){
     if(!d||!d.ok)return;
@@ -8283,6 +8324,9 @@ function paintAgreements(l){
 /** Add Agreement — upload, dates, and for a referral the fee and the partner. */
 function openAgreementModal(l,kind){
   ensureVocabulary();
+/* Which Quo line this user texts from — read once at boot so every composer can
+   show it without its own round trip. */
+loadMyLine();
   ensureRoster(function(roster){
     var isReferral=kind==="referral";
     var file=null, feeType="percentage", commType="percentage";

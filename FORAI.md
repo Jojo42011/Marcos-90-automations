@@ -28,6 +28,18 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-08-31] — **Per-user sending numbers: each team member texts from their own Quo line** (`src/core/sendingIdentity.ts` NEW, `src/core/types.ts`, `src/server.ts`, `public/team.html`, `public/crm-brivity.html`, `scripts/verify-sending-line.mjs` NEW).
+
+  **The bug this fixes is invisible from inside the CRM.** Every text sent from the CRM left on one global number (`QUO_PHONE_NUMBER_ID`). Marco and Carlos now have separate Quo lines — Carlos (737) 283-4703, Marco (726) 200-1548 — so a text Carlos sent went out signed as Marco's line, the client replied to Marco, and the client saved the wrong person as their realtor. The message sends successfully either way, which is why nothing surfaced it.
+
+  `CRMUser` gains `quoPhoneNumberId` / `quoPhoneNumber`, and `resolveSendingLine()` decides the line for every send in one place, returning **why** it chose. Assigned user → their own line. Unassigned → the account default, *reported as a fallback in words the operator can act on* ("… has no Quo line assigned, so this will go out on the account default — which is somebody else's number"), because a silent fallback is exactly how this survived. Nothing configured → refuses rather than guessing. `POST /api/quo/send` is the single choke point both composers already used, so one change covers the Message Center and every lead profile; it now returns `sentFrom` and records the number on the lead's timeline.
+
+  New: `GET /api/quo/numbers` (Quo's live number list plus who each is assigned to, with Quo's own seat owners as a *suggestion* only — Quo seats and CRM accounts are different lists), `POST /api/quo/numbers/assign` (verifies the id against Quo before storing, so a bad assignment fails at assign-time rather than on every future send; refuses to give one line to two people), `GET /api/quo/my-line`. Assignment UI is a "Texts from" column in Team & Activity; both composers show the line before you send.
+
+  **Calling is deliberately NOT covered, and the UI says so.** The call button is a `tel:` handoff to the device's dialler — there is no server-side calling — so the caller ID is whatever the operator's phone sends. Making calls originate from a specific Quo line would need Quo's calling API, which this codebase does not integrate. Claiming otherwise would be the exact kind of button-that-lies this system avoids.
+
+  Covered by `scripts/verify-sending-line.mjs` (20 checks, resolver tested pure). Note `verify-crm-composer-timeline` is intermittently flaky at the DNC call-tab step on `#qaCallNum` — reproduced on unmodified `master`, so it predates this change.
+
 - [2026-08-27] — **`GET /api/dm/inbound-report` — when did inbound DMs last actually arrive, per platform and per day** (`src/server.ts`, `scripts/verify-inbound-report.mjs` NEW).
 
   **The question no existing diagnostic answered.** "The TikTok automation stopped replying" has two causes that look identical from the inbox and need opposite fixes: messages are arriving and this server declines to answer them, or no message is arriving at all because the chain upstream — TikTok → ManyChat → the flow's External Request → `/webhook` — is broken. `/api/llm/health` and the intent-gate ledger both answer "what did we do with the message"; neither can answer "was there a message", and the ledger is in-memory so it cannot look back past a deploy. This one is computed from stored conversations, so it sees **backwards through a takedown that happened before anyone thought to instrument it** — the day-by-day histogram shows the cliff and its date.

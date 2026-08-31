@@ -109,6 +109,7 @@ const tagTemplates_js_1 = require("./core/tagTemplates.js");
 const leadFilter_js_1 = require("./core/leadFilter.js");
 const crmVocabulary_js_1 = require("./core/crmVocabulary.js");
 const internalCall_js_1 = require("./core/internalCall.js");
+const sendingIdentity_js_1 = require("./core/sendingIdentity.js");
 const crmApiSurface_js_1 = require("./core/crmApiSurface.js");
 const types_js_1 = require("./core/types.js");
 const types_js_2 = require("./core/types.js");
@@ -1070,6 +1071,128 @@ app.get("/api/quo/threads/:peer", async (req, res) => {
     }
     res.json({ ok: true, peerKey: key, messages: getQuoThread(key, 300) });
 });
+/**
+ * The Quo lines on the account, and which CRM user each is assigned to.
+ *
+ * Read-only. Reads the live list from Quo rather than a stored copy, so a
+ * number added or removed in Quo shows up here without anyone re-syncing.
+ */
+app.get("/api/quo/numbers", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { listPhoneNumbers, isQuoConfigured, getQuoPhoneNumberId, getQuoPhoneNumber } = await Promise.resolve().then(() => __importStar(require("./integrations/quo/index.js")));
+    const users = (0, users_js_1.getUsers)().filter((u) => u.active !== false);
+    const assignedBy = new Map();
+    for (const u of users)
+        if (u.quoPhoneNumberId)
+            assignedBy.set(u.quoPhoneNumberId, u.name);
+    if (!isQuoConfigured()) {
+        res.json({
+            ok: false,
+            configured: false,
+            error: "Quo is not configured on this server, so its numbers cannot be listed.",
+            numbers: [],
+            users: users.map((u) => ({ id: u.id, name: u.name, quoPhoneNumberId: u.quoPhoneNumberId || null, quoPhoneNumber: u.quoPhoneNumber || null })),
+        });
+        return;
+    }
+    try {
+        const numbers = await listPhoneNumbers();
+        res.json({
+            ok: true,
+            configured: true,
+            defaultId: getQuoPhoneNumberId(),
+            defaultNumber: getQuoPhoneNumber(),
+            numbers: numbers.map((n) => ({
+                id: n.id,
+                number: n.number,
+                label: n.name || n.formattedNumber || n.number,
+                /* Quo's own idea of who owns the line, by email. Only a SUGGESTION for
+                   the operator — the CRM's assignment is what actually decides, because
+                   Quo seats and CRM accounts are different lists that need not agree. */
+                quoUsers: (n.users || []).map((x) => ({ email: x.email, name: [x.firstName, x.lastName].filter(Boolean).join(" ") || x.email })),
+                assignedTo: assignedBy.get(n.id) || null,
+            })),
+            users: users.map((u) => ({ id: u.id, name: u.name, email: u.email, quoPhoneNumberId: u.quoPhoneNumberId || null, quoPhoneNumber: u.quoPhoneNumber || null })),
+        });
+    }
+    catch (err) {
+        res.status(502).json({ ok: false, configured: true, error: err.message, numbers: [] });
+    }
+});
+/** Assign (or clear) the Quo line a CRM user texts from. */
+app.post("/api/quo/numbers/assign", express_1.default.json(), async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const b = (req.body || {});
+    const userId = String(b.userId || "").trim();
+    const phoneNumberId = String(b.quoPhoneNumberId || "").trim();
+    if (!userId) {
+        res.status(400).json({ error: "userId is required" });
+        return;
+    }
+    const target = (0, users_js_1.getUsers)().find((u) => u.id === userId);
+    if (!target) {
+        res.status(404).json({ error: `No user with id ${userId}` });
+        return;
+    }
+    /* Clearing is explicit — an empty id means "back to the account default",
+       which is a real choice and not the same as a failed lookup. */
+    if (!phoneNumberId) {
+        const cleared = (0, users_js_1.updateUser)(userId, { quoPhoneNumberId: undefined, quoPhoneNumber: undefined });
+        res.json({ ok: true, cleared: true, user: cleared });
+        return;
+    }
+    const { listPhoneNumbers, isQuoConfigured } = await Promise.resolve().then(() => __importStar(require("./integrations/quo/index.js")));
+    if (!isQuoConfigured()) {
+        res.status(503).json({ error: "Quo is not configured on this server." });
+        return;
+    }
+    let numbers;
+    try {
+        numbers = await listPhoneNumbers();
+    }
+    catch (err) {
+        res.status(502).json({ error: `Could not read Quo's numbers: ${err.message}` });
+        return;
+    }
+    /* Verified against Quo before it is stored. An id that Quo does not have
+       would be accepted here and then fail on every send, at which point the
+       operator would be debugging a message that never left. */
+    const match = numbers.find((n) => n.id === phoneNumberId);
+    if (!match) {
+        res.status(400).json({ error: `Quo has no phone number with id ${phoneNumberId}. Pick one from /api/quo/numbers.` });
+        return;
+    }
+    /* One line per person. Two CRM users sharing a number would make replies
+       ambiguous, which is the problem this feature exists to solve. */
+    const clash = (0, users_js_1.getUsers)().find((u) => u.id !== userId && u.quoPhoneNumberId === phoneNumberId && u.active !== false);
+    if (clash) {
+        res.status(409).json({ error: `${match.number} is already assigned to ${clash.name}. Clear theirs first.` });
+        return;
+    }
+    const saved = (0, users_js_1.updateUser)(userId, { quoPhoneNumberId: match.id, quoPhoneNumber: match.number });
+    res.json({ ok: true, user: saved, number: { id: match.id, number: match.number } });
+});
+/** Which line the signed-in user's texts will go out on, and why. */
+app.get("/api/quo/my-line", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { getQuoPhoneNumberId, getQuoPhoneNumber } = await Promise.resolve().then(() => __importStar(require("./integrations/quo/index.js")));
+    res.json({
+        ok: true,
+        line: (0, sendingIdentity_js_1.resolveSendingLine)(sessionUserSync(req), {
+            defaultId: getQuoPhoneNumberId(),
+            defaultNumber: getQuoPhoneNumber(),
+        }),
+    });
+});
 /** Send an SMS from Marco's Quo line. */
 app.post("/api/quo/send", express_1.default.json({ limit: "64kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -1092,8 +1215,20 @@ app.post("/api/quo/send", express_1.default.json({ limit: "64kb" }), async (req,
         res.status(400).json({ error: "Message text is required" });
         return;
     }
+    /* WHOSE LINE. Resolved from the signed-in user, not from a global. See
+       src/core/sendingIdentity.ts — a text that goes out on the wrong number
+       sends the client's reply to the wrong person. */
+    const { getQuoPhoneNumberId, getQuoPhoneNumber } = await Promise.resolve().then(() => __importStar(require("./integrations/quo/index.js")));
+    const line = (0, sendingIdentity_js_1.resolveSendingLine)(sessionUserSync(req), {
+        defaultId: getQuoPhoneNumberId(),
+        defaultNumber: getQuoPhoneNumber(),
+    });
+    if (!line.id) {
+        res.status(503).json({ error: line.explain });
+        return;
+    }
     try {
-        const sent = await sendText({ to, content: text });
+        const sent = await sendText({ to, content: text, from: line.id });
         /* Store our own copy immediately so the thread updates without waiting
            for the next sync — same id Quo will report, so the sync de-dupes. */
         const { upsertQuoMessage } = await Promise.resolve().then(() => __importStar(require("./core/quoStore.js")));
@@ -1118,17 +1253,19 @@ app.post("/api/quo/send", express_1.default.json({ limit: "64kb" }), async (req,
                 const { appendLeadActivity } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
                 await appendLeadActivity(lead.id, [{
                         type: "text_sent",
-                        description: `SMS (Quo): ${text}`,
+                        description: `SMS (Quo${line.number ? " from " + line.number : ""}): ${text}`,
                         timestamp: new Date().toISOString(),
                     }]);
             }
         }
         catch { /* the text went out; timeline mirroring is best-effort */ }
-        res.json({ ok: true, id: sent.id, to, status: sent.status });
+        /* Report the line back. The operator should be able to see which number a
+           message actually left on without opening Quo. */
+        res.json({ ok: true, id: sent.id, to, status: sent.status, sentFrom: line });
     }
     catch (err) {
         const e = err;
-        res.status(502).json({ error: e.message || String(err), status: e.status ?? null });
+        res.status(502).json({ error: e.message || String(err), status: e.status ?? null, sentFrom: line });
     }
 });
 /**

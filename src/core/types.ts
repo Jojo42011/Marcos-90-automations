@@ -287,6 +287,22 @@ export interface CRMUser {
   passwordHash?: string;
   /** true if the account still needs to change its (temp, admin-issued) password. */
   mustChangePassword?: boolean;
+  /**
+   * The Quo line this person texts from.
+   *
+   * Marco and Carlos have different numbers, and a text from the CRM has to go
+   * out on the sender's own line — a client who replies to Carlos's number
+   * expects Carlos. Before this, every message left on one global number
+   * (`QUO_PHONE_NUMBER_ID`), so the CRM signed everyone's texts as whoever that
+   * number belonged to.
+   *
+   * `quoPhoneNumberId` is what Quo's API needs; `quoPhoneNumber` is the E.164
+   * kept alongside it purely so the UI can say which line it is about to use
+   * without a round trip to Quo. Unset means "fall back to the global default",
+   * which is the old behaviour and stays correct for a one-number account.
+   */
+  quoPhoneNumberId?: string;
+  quoPhoneNumber?: string;
 }
 
 /** Customizable tag template (badge color + label). */

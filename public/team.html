@@ -112,6 +112,9 @@ function loadAll(){
     ME=res[0]&&res[0].user; USERS=res[1].users||[]; LOGINS=res[2].rows||[]; AUDIT=res[3].rows||[];
     if(ME) document.getElementById("whoami").textContent="Signed in as "+ME.name+" ("+ME.role+")";
     render();
+    /* Loaded after the first paint so the table appears immediately; the
+       "Texts from" column fills in when Quo answers. */
+    loadQuoNumbers(render);
   });
 }
 
@@ -123,12 +126,57 @@ function render(){
   bind();
 }
 
+/* The Quo lines on the account, loaded alongside the users so each person's
+   texting number can be set from the same place their account is managed. */
+var QUO={loaded:false,configured:false,numbers:[],error:null,defaultNumber:null};
+function loadQuoNumbers(then){
+  api("/api/quo/numbers").then(function(r){return r.json();}).then(function(d){
+    QUO.loaded=true;
+    QUO.configured=!!(d&&d.configured);
+    QUO.numbers=(d&&d.numbers)||[];
+    QUO.error=(d&&d.error)||null;
+    QUO.defaultNumber=(d&&d.defaultNumber)||null;
+    /* The server's view of assignments is authoritative — it reads the same
+       user records the send path does. */
+    if(d&&d.users) d.users.forEach(function(x){
+      var u=USERS.find(function(y){return y.id===x.id;});
+      if(u){ u.quoPhoneNumberId=x.quoPhoneNumberId; u.quoPhoneNumber=x.quoPhoneNumber; }
+    });
+    if(then)then();
+  }).catch(function(){ QUO.loaded=true; QUO.error="Could not reach the server."; if(then)then(); });
+}
+
+function lineCell(u){
+  if(!QUO.loaded) return '<span class="muted">…</span>';
+  if(!QUO.configured){
+    /* Never render a dropdown that cannot save. */
+    return '<span class="muted" title="'+esc(QUO.error||"")+'">Quo not connected</span>';
+  }
+  var opts='<option value="">Account default'+(QUO.defaultNumber?" ("+esc(QUO.defaultNumber)+")":"")+'</option>'+
+    QUO.numbers.map(function(n){
+      var takenBy=n.assignedTo&&n.assignedTo!==u.name?" — "+esc(n.assignedTo):"";
+      return '<option value="'+esc(n.id)+'"'+(u.quoPhoneNumberId===n.id?" selected":"")+
+        (takenBy?" disabled":"")+'>'+esc(n.number)+takenBy+'</option>';
+    }).join("");
+  return '<select class="act" data-line="'+esc(u.id)+'">'+opts+'</select>';
+}
+
 function renderTeam(){
   if(!USERS.length) return '<div class="card"><div class="empty">No team members yet.</div></div>';
-  return '<div class="card"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead><tbody>'+
+  var note='';
+  if(QUO.loaded&&!QUO.configured){
+    note='<div class="empty" style="text-align:left">Quo is not connected on this server, so texting numbers cannot be assigned here. '+
+      'Until it is, every text goes out on whichever line the server is configured with.</div>';
+  } else if(QUO.loaded&&QUO.configured){
+    note='<div class="empty" style="text-align:left">Each person texts from their own line. Anyone left on <b>Account default</b> '+
+      'sends on somebody else\'s number — the client\'s reply goes to that person, not to them. '+
+      'Calling is not affected: the call button hands off to your phone\'s dialler, so the caller ID is your device\'s, not Quo\'s.</div>';
+  }
+  return '<div class="card">'+note+'<table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Texts from</th><th>Status</th><th>Last login</th><th></th></tr></thead><tbody>'+
     USERS.map(function(u){
       return '<tr><td><span class="name">'+esc(u.name)+'</span></td><td class="muted">'+esc(u.email)+'</td>'+
         '<td><span class="badge '+u.role+'">'+u.role+'</span></td>'+
+        '<td>'+lineCell(u)+'</td>'+
         '<td><span class="badge '+(u.active?"active":"inactive")+'">'+(u.active?"Active":"Inactive")+'</span></td>'+
         '<td class="muted">'+fmtDate(u.lastLogin)+'</td>'+
         '<td style="white-space:nowrap">'+
@@ -160,6 +208,30 @@ function renderAudit(){
 }
 
 function bind(){
+  document.querySelectorAll("[data-line]").forEach(function(sel){
+    sel.onchange=function(){
+      var id=sel.getAttribute("data-line");
+      var u=USERS.find(function(x){return x.id===id;});
+      var prev=u?(u.quoPhoneNumberId||""):"";
+      sel.disabled=true;
+      api("/api/quo/numbers/assign",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({userId:id,quoPhoneNumberId:sel.value})})
+        .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+        .then(function(res){
+          sel.disabled=false;
+          if(!res.ok){
+            /* Put the control back to the truth rather than leaving it showing
+               a choice the server refused. */
+            sel.value=prev;
+            toast(res.j.error||"Could not set the number");
+            return;
+          }
+          toast(sel.value?("Now texting from "+(res.j.number&&res.j.number.number||"the selected line")):"Back to the account default");
+          loadQuoNumbers(render);
+        })
+        .catch(function(){ sel.disabled=false; sel.value=prev; toast("Could not reach the server"); });
+    };
+  });
   document.querySelectorAll("[data-reset]").forEach(function(b){
     b.onclick=function(){
       var id=b.getAttribute("data-reset"); var u=USERS.find(function(x){return x.id===id;}); if(!u)return;
