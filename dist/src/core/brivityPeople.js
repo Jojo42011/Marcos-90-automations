@@ -31,6 +31,33 @@ function brivityConfigured() {
 }
 /** Exported so the import suites can run the real export through the real
  *  mapper, rather than a reimplementation of it that can drift. */
+/**
+ * Brivity's notes, plus the two fields this CRM has nowhere else to put.
+ *
+ * `company` (148 contacts) and `job_title` (14) have no counterpart here, and
+ * dropping them would lose real information — among the messier entries are
+ * actual title companies and brokerages ("Nu World Title", "KWCV") that say who
+ * a contact is. Adding schema fields for 162 records, most of a free-text field
+ * Marco filled inconsistently ("Buyer", "cold call"), would cost more than it
+ * returns. They are appended to the notes instead, labelled as coming from
+ * Brivity so nobody mistakes them for something typed here.
+ */
+function notesFrom(p) {
+    const parts = [];
+    const desc = (p.description || "").trim();
+    if (desc)
+        parts.push(desc);
+    const extra = [];
+    const company = (p.company || "").trim();
+    const title = (p.job_title || "").trim();
+    if (company)
+        extra.push(`Company: ${company}`);
+    if (title)
+        extra.push(`Title: ${title}`);
+    if (extra.length)
+        parts.push(`[from Brivity] ${extra.join(" · ")}`);
+    return parts.join("\n\n") || null;
+}
 function personToRow(p) {
     const name = `${(p.first_name || "").trim()} ${(p.last_name || "").trim()}`.trim();
     const phone = (p.phone_number || "").trim() || null;
@@ -71,7 +98,7 @@ function personToRow(p) {
         crmIntent: v.intent,
         crmPriority: null,
         crmCallQueue: null,
-        crmNotes: (p.description || "").trim() || null,
+        crmNotes: notesFrom(p),
         propertyInquired: null,
         criteria: {},
         address,

@@ -28,6 +28,14 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-01c] — **Brivity's `company` and `job_title` were being dropped; they now survive as labelled notes** (`src/core/brivityPeople.ts`, `scripts/verify-brivity-plan.mjs`).
+
+  Auditing all 28 Brivity fields against what the importer actually reads showed two carrying real data that nothing mapped: `company` (148 contacts) and `job_title` (14). The field is messy — Marco used it for "Buyer" and "cold call" as often as for a company — but it also holds the title companies and brokerages that identify a contact ("Nu World Title", "KWCV"), and a migration that silently drops them is not the thorough transfer that was asked for.
+
+  Adding schema fields for 162 records was not worth what it would cost across the CRM UI, so `notesFrom()` appends them to the contact's notes as `[from Brivity] Company: … · Title: …`, below whatever note Brivity already held. The label matters: without it these read as something typed in this CRM.
+
+  Fields deliberately **not** mapped, for the record: `account_id` and `stage_type` (Brivity bookkeeping, no meaning here) and `agent_id`/`agent_uuid` — 2,854 of 2,855 contacts sit on a single agent, and there is no Brivity-user → CRM-user mapping to resolve the ownership against, so inventing an assignment would be worse than leaving it unset.
+
 - [2026-09-01b] — **The inbound report described a three-week outage as a working channel** (`src/server.ts` `/api/dm/inbound-report`, `scripts/verify-inbound-report.mjs`).
 
   During the TikTok diagnosis this endpoint reported "last inbound 4 days ago", which reads as a healthy channel. It was not: the channel had been dead for over two weeks and one subscriber had got a single message through. Recency is the misleading number — it produces the same sentence for a healthy channel and for a dead one the moment anybody tests it, and it sent that investigation the wrong way.

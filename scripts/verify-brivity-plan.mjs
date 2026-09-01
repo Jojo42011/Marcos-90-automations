@@ -118,6 +118,22 @@ ok("a nameless contact is instead labelled with their formatted number",
   phoneNamed.length > 0, String(phoneNamed.length));
 ok("every planned contact has some label", plan.creates.every((c) => c.name && c.name.trim()));
 
+/* Brivity's company/job_title have no field here. They must survive anyway —
+   among them are the title companies and brokerages that say who someone is. */
+const withCompany = rows.filter((r) => /\[from Brivity\] Company:/.test(r.crmNotes || ""));
+ok("company survives the transfer instead of being dropped",
+  withCompany.length >= 140, String(withCompany.length));
+ok("and it is labelled as Brivity's, not passed off as a note typed here",
+  withCompany.every((r) => r.crmNotes.includes("[from Brivity]")));
+const both = rows.filter((r) => /Company:.*·.*Title:/.test(r.crmNotes || ""));
+ok("a job title rides along with the company when both exist", both.length > 0, String(both.length));
+/* The notes Brivity already held must not be clobbered by the addition. */
+const merged = rows.find((r) => /\[from Brivity\]/.test(r.crmNotes || "") &&
+  r.crmNotes.split("\n\n").length > 1);
+ok("an existing Brivity note is kept above the appended fields",
+  !!merged && merged.crmNotes.indexOf("[from Brivity]") > 0,
+  merged ? merged.crmNotes.slice(0, 80) : "none");
+
 /* Nothing may reach the CRM carrying a value no table understood. */
 const unmappedRows = rows.filter((r) => (r.unmapped || []).length);
 ok("not one of the 2,855 real records hits an unmapped value",
