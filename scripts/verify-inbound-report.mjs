@@ -77,6 +77,19 @@ add("tt_2", "tiktok", [
   { role: "user", text: "beautiful", at: iso(11) },
 ]);
 
+/* snapchat: THE TRAP THIS SUITE EXISTS FOR.
+   Healthy traffic that stops 20 days ago, then a SINGLE message today from one
+   person testing. Recency alone calls this channel alive ("last inbound today"),
+   which is precisely how a 16-day TikTok outage got described as "4 days ago"
+   during the real diagnosis and sent it the wrong way. The 20-day hole is the
+   fact; the one recent message is not evidence of recovery. */
+add("sc_1", "snapchat", [
+  { role: "user", text: "hi", at: iso(26) },
+  { role: "user", text: "info?", at: iso(25) },
+  { role: "user", text: "cost", at: iso(24) },
+  { role: "user", text: "just a test", at: iso(0, 2) },
+]);
+
 /* facebook: never had a single inbound message. */
 add("fb_1", "facebook", [{ role: "assistant", text: "opener", at: iso(3) }]);
 
@@ -146,6 +159,42 @@ try {
     /has EVER reached/.test(never.verdict) && !/STOPPED/.test(never.verdict), never.verdict.slice(0, 110));
   const unknown = await (await fetch(B + "/api/dm/inbound-report?platform=whatsapp")).json();
   ok("an unknown platform says so plainly rather than erroring", /No inbound whatsapp message has EVER/.test(unknown.verdict));
+
+  // ---- an outage must not hide behind one recent message -------------------
+  /* The whole point. A single test message arriving today must not make a
+     20-day hole read as a working channel. */
+  const sc = await (await fetch(B + "/api/dm/inbound-report?days=60&platform=snapchat")).json();
+  const scp = sc.platforms.snapchat;
+  ok("a recent isolated message does NOT get called a working channel",
+    !/ARE reaching this server/.test(sc.verdict), sc.verdict.slice(0, 120));
+  ok("the verdict says plainly that it is not healthy",
+    /NOT healthy/.test(sc.verdict), sc.verdict.slice(0, 120));
+  ok("it names the silence before the recent message rather than the recency",
+    /silent for 2[0-9] days/.test(sc.verdict), sc.verdict.slice(0, 220));
+  ok("it calls the recent message what it is — one person, probably a test",
+    /probably a test/.test(sc.verdict));
+  ok("it reports distinct contacts, not just message count",
+    /1 distinct contact/.test(sc.verdict), sc.verdict.slice(0, 260));
+  ok("the longest silence is reported as a number, with its dates",
+    /longest silence in this window is 2[0-9] days/.test(sc.verdict) &&
+    /20\d\d-\d\d-\d\d → 20\d\d-\d\d-\d\d/.test(sc.verdict), sc.verdict.slice(0, 300));
+  ok("it still points upstream", /upstream of this server/.test(sc.verdict));
+
+  // the machine-readable fields behind that sentence
+  ok("longestGapDays is exposed for the caller", scp.longestGapDays >= 20, String(scp.longestGapDays));
+  ok("the gap is dated at both ends", !!scp.gapStart && !!scp.gapEnd, JSON.stringify([scp.gapStart, scp.gapEnd]));
+  ok("the isolated last day is flagged", scp.lastDayIsolated === true, String(scp.lastDayIsolated));
+  ok("distinct 7-day contacts are counted, not messages", scp.contacts7d === 1, String(scp.contacts7d));
+
+  /* And the inverse: a genuinely busy channel must not be smeared as unhealthy
+     just because it had a quiet stretch a month ago. */
+  ok("a genuinely live channel is still called live", /ARE reaching this server/.test(live.verdict));
+  ok("a live channel is not flagged as isolated", ig.lastDayIsolated !== true, String(ig.lastDayIsolated));
+
+  /* A channel that is simply dead reports how long it has been dead. */
+  ok("a dead channel reports its trailing silence", tt.trailingSilentDays >= 9, String(tt.trailingSilentDays));
+  ok("and the stopped verdict states the ongoing silence",
+    /Silent for \d+ day\(s\) and counting/.test(r.verdict), r.verdict.slice(0, 260));
 
   // ---- it must not leak what people wrote ---------------------------------
   const body = JSON.stringify(r);

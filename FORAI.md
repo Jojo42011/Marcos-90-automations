@@ -28,6 +28,16 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-01b] — **The inbound report described a three-week outage as a working channel** (`src/server.ts` `/api/dm/inbound-report`, `scripts/verify-inbound-report.mjs`).
+
+  During the TikTok diagnosis this endpoint reported "last inbound 4 days ago", which reads as a healthy channel. It was not: the channel had been dead for over two weeks and one subscriber had got a single message through. Recency is the misleading number — it produces the same sentence for a healthy channel and for a dead one the moment anybody tests it, and it sent that investigation the wrong way.
+
+  The report now computes gap analysis per platform: `longestGapDays` with `gapStart`/`gapEnd` dates, `trailingSilentDays`, `activeDays`, and `lastDayIsolated` — set when the most recent active day carried at most 3 messages after a silence of a week or more, i.e. somebody testing rather than traffic resuming. It also counts `contacts7d`, **distinct people rather than messages**, since one person testing repeatedly is indistinguishable from a healthy channel by message count alone.
+
+  The verdict checks `lastDayIsolated` *before* recency and, when it holds, says the channel is NOT healthy despite the recent message, names the silence that preceded it, and reports the longest gap with its dates. A genuinely live channel is still called live, but now mentions any earlier week-plus silence rather than hiding it. A dead channel states how long it has been silent and counting.
+
+  `scripts/verify-inbound-report.mjs` grew a fixture that reproduces exactly this trap — 20+ days of healthy traffic, then silence, then one message today — plus 14 checks (38 total). Writing them caught a live bug: the verdict interpolated the raw `Set` of contacts, printing `[object Set]` into the sentence a human reads.
+
 - [2026-09-01] — **A migration console, so the Brivity import can actually be run — and reviewed before it is** (`public/brivity-import.html` NEW, `public/shell.html`, `src/server.ts`, `src/core/brivityImport.ts`, `scripts/verify-brivity-console.mjs` NEW).
 
   The import had no user interface at all: `/api/brivity/import/plan` and `/api/brivity/import/apply` were reachable only by an authenticated API call, so the person whose CRM it is could not run his own migration, or see what it would do. `GET /brivity-import` (admin-only, `requireAuthAdminPage`) is now a review-then-apply screen: preview the plan, read what would happen and what is being held back and why, then Apply behind a typed `IMPORT` confirmation.

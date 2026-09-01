@@ -7998,13 +7998,17 @@ app.get("/api/dm/inbound-report", async (req, res) => {
       contactsWithInbound: number;
       firstInboundInWindow: string | null;
       byDay: Record<string, number>;
+      /* Distinct people, not messages. One subscriber testing repeatedly looks
+         identical to a healthy channel if you only count messages. */
+      contacts7d: Set<string>;
     }
     const stats = new Map<string, PlatformStat>();
     const touch = (p: string): PlatformStat => {
       let s = stats.get(p);
       if (!s) {
         s = { lastInboundAt: null, inbound24h: 0, inbound7d: 0, inbound30d: 0,
-              inboundInWindow: 0, contactsWithInbound: 0, firstInboundInWindow: null, byDay: {} };
+              inboundInWindow: 0, contactsWithInbound: 0, firstInboundInWindow: null, byDay: {},
+              contacts7d: new Set<string>() };
         stats.set(p, s);
       }
       return s;
@@ -8023,7 +8027,7 @@ app.get("/api/dm/inbound-report", async (req, res) => {
         const s = touch(platform);
         if (!s.lastInboundAt || m.at > s.lastInboundAt) s.lastInboundAt = m.at;
         if (now - t <= 86400000) s.inbound24h++;
-        if (now - t <= 7 * 86400000) s.inbound7d++;
+        if (now - t <= 7 * 86400000) { s.inbound7d++; s.contacts7d.add(lead.id); }
         if (now - t <= 30 * 86400000) s.inbound30d++;
         if (t >= cutoff) {
           s.inboundInWindow++;
@@ -8036,13 +8040,50 @@ app.get("/api/dm/inbound-report", async (req, res) => {
       if (sawInbound) touch(platform).contactsWithInbound++;
     }
 
+    /*
+     * The longest run of silence in the window, and the silence still running.
+     *
+     * WHY THIS EXISTS. "Last inbound 4 days ago" reads as a healthy channel. It
+     * is the same sentence a 16-day outage produces the moment one person gets
+     * a single message through — which is exactly what happened while
+     * diagnosing TikTok, and it sent the investigation the wrong way for a
+     * while. The recent message is real; it just is not evidence the channel
+     * works. The longest gap is what actually describes the outage, so it is
+     * reported next to the recency rather than left for a human to spot in a
+     * list of dates.
+     */
+    const DAY = 86400000;
+    const dayNum = (d: string) => Math.round(Date.parse(d + "T00:00:00Z") / DAY);
+    function gapsOf(s: PlatformStat) {
+      const days = Object.keys(s.byDay).sort();
+      let longestGapDays = 0, gapStart: string | null = null, gapEnd: string | null = null;
+      for (let i = 1; i < days.length; i++) {
+        const g = dayNum(days[i]) - dayNum(days[i - 1]) - 1;   // whole silent days between
+        if (g > longestGapDays) { longestGapDays = g; gapStart = days[i - 1]; gapEnd = days[i]; }
+      }
+      const today = new Date(now).toISOString().slice(0, 10);
+      const trailingSilentDays = days.length ? dayNum(today) - dayNum(days[days.length - 1]) : null;
+      const lastDay = days[days.length - 1];
+      /* A day that carried a message or two after a week or more of nothing is
+         somebody testing, not traffic resuming. */
+      const gapBeforeLastDay = days.length > 1
+        ? dayNum(lastDay) - dayNum(days[days.length - 2]) - 1 : null;
+      const lastDayIsolated = days.length > 1 && (gapBeforeLastDay || 0) >= 7 && s.byDay[lastDay] <= 3;
+      return { longestGapDays, gapStart, gapEnd, trailingSilentDays, activeDays: days.length,
+               lastDayIsolated, lastDayCount: days.length ? s.byDay[lastDay] : 0,
+               gapBeforeLastDay };
+    }
+
     const platforms: Record<string, unknown> = {};
     for (const [p, s] of stats) {
+      const { contacts7d, ...rest } = s;
       platforms[p] = {
-        ...s,
+        ...rest,
+        contacts7d: contacts7d.size,
         hoursSinceLastInbound: s.lastInboundAt
           ? Number(((now - Date.parse(s.lastInboundAt)) / 3600000).toFixed(1))
           : null,
+        ...gapsOf(s),
         /* Sorted, and only days that had traffic — a run of missing dates is
            the signal, and printing 60 zeroes would bury it. */
         byDay: Object.fromEntries(Object.entries(s.byDay).sort(([a], [b]) => a.localeCompare(b))),
@@ -8061,18 +8102,41 @@ app.get("/api/dm/inbound-report", async (req, res) => {
         `External Request step, which is what calls this server.`;
     } else {
       const hrs = (now - Date.parse(f.lastInboundAt)) / 3600000;
-      if (hrs <= 24) {
+      const g = gapsOf(f);
+      /*
+       * Recency is checked LAST, because it is the misleading number. A channel
+       * that has been dead for weeks still reports a recent message the moment
+       * one person gets through, and answering "is it working?" from recency
+       * alone gives the wrong answer at exactly the moment someone is testing.
+       */
+      if (g.lastDayIsolated) {
         verdict =
-          `Inbound ${focus} messages ARE reaching this server — ${f.inbound24h} in the last 24 hours, ` +
-          `most recent ${hrs.toFixed(1)}h ago. So ManyChat is calling the webhook, and whatever is wrong ` +
-          `is either this server's decision not to reply (see /api/llm/health) or the send-back leg ` +
-          `inside ManyChat. It is NOT a broken connection.`;
+          `Inbound ${focus} traffic is NOT healthy, despite a recent message. The last activity was ` +
+          `${g.lastDayCount} message(s) on ${Object.keys(f.byDay).slice(-1)[0]}, and before that the ` +
+          `channel was silent for ${g.gapBeforeLastDay} days. That is one person getting through — ` +
+          `probably a test — not traffic resuming. Only ${f.contacts7d.size} distinct contact(s) have sent ` +
+          `anything in the last 7 days. The longest silence in this window is ${g.longestGapDays} days ` +
+          `(${g.gapStart} → ${g.gapEnd}), which is the outage to explain; the break is upstream of this ` +
+          `server, between ${focus} and ManyChat or in the ManyChat flow that calls this webhook.`;
+      } else if (hrs <= 24) {
+        verdict =
+          `Inbound ${focus} messages ARE reaching this server — ${f.inbound24h} in the last 24 hours ` +
+          `from ${f.contacts7d.size} distinct contact(s) in the last 7 days, most recent ${hrs.toFixed(1)}h ` +
+          `ago. So ManyChat is calling the webhook, and whatever is wrong is either this server's ` +
+          `decision not to reply (see /api/llm/health) or the send-back leg inside ManyChat. It is NOT ` +
+          `a broken connection.` +
+          (g.longestGapDays >= 7
+            ? ` Note: there was a ${g.longestGapDays}-day silence earlier in this window ` +
+              `(${g.gapStart} → ${g.gapEnd}), so the channel has been broken before.`
+            : "");
       } else {
         verdict =
           `Inbound ${focus} messages have STOPPED. The last one arrived ${(hrs / 24).toFixed(1)} days ago ` +
-          `(${f.lastInboundAt}); ${f.inbound7d} in the last 7 days, ${f.inbound30d} in the last 30. ` +
+          `(${f.lastInboundAt}); ${f.inbound7d} in the last 7 days, ${f.inbound30d} in the last 30, from ` +
+          `${f.contacts7d.size} distinct contact(s). Silent for ${g.trailingSilentDays} day(s) and counting; ` +
+          `the longest silence in this window is ${g.longestGapDays} days (${g.gapStart} → ${g.gapEnd}). ` +
           `This server is idle on that channel, so the break is upstream of it — ${focus} to ManyChat, ` +
-          `or the ManyChat flow that calls this webhook. Check byDay below for the date it stopped.`;
+          `or the ManyChat flow that calls this webhook.`;
       }
     }
 
