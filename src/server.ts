@@ -1455,6 +1455,12 @@ app.get("/team", requireAuthAdminPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "team.html"));
 });
 
+/* The Brivity migration console. Admin-only: it can write thousands of leads,
+   and the review-before-apply step is the whole point of it existing. */
+app.get("/brivity-import", requireAuthAdminPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "brivity-import.html"));
+});
+
 // One-time setup: sets the very first password on a matching admin account.
 // Permanently refuses once ANY user in the system already has a password set,
 // so it can never be replayed as a backdoor after initial setup.
@@ -2421,6 +2427,7 @@ app.post("/api/brivity/import/plan", express.json({ limit: "16kb" }), async (req
     const { planBrivityImport } = await import("./core/brivityImport.js");
     const plan = await planBrivityImport({
       includeDead: body.includeDead === true,
+      includeNonLeads: body.includeNonLeads === true,
       preferBrivityName: body.preferBrivityName !== false,
     });
     // Full lists are large; callers asking for a summary get counts only.
@@ -2451,6 +2458,7 @@ app.post("/api/brivity/import/apply", express.json({ limit: "16kb" }), async (re
     const { planBrivityImport, applyBrivityImport } = await import("./core/brivityImport.js");
     const plan = await planBrivityImport({
       includeDead: body.includeDead === true,
+      includeNonLeads: body.includeNonLeads === true,
       enrichDeadMatches: body.enrichDeadMatches !== false,
       preferBrivityName: body.preferBrivityName !== false,
     });

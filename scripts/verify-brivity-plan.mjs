@@ -108,6 +108,16 @@ ok("every create has something to contact them on",
 ok("no create is planned twice for the same Brivity id",
   new Set(plan.creates.map((c) => c.brivityId)).size === plan.creates.length);
 
+/* 339 leads have no name in Brivity. What they get called matters: a name
+   column full of raw digit strings reads as a data error. */
+const digitNames = plan.creates.filter((c) => /^\d{7,}$/.test(c.name));
+ok("no contact is named as a raw string of digits", digitNames.length === 0,
+  JSON.stringify(digitNames.slice(0, 5).map((c) => c.name)));
+const phoneNamed = plan.creates.filter((c) => /^\(\d{3}\) \d{3}-\d{4}$/.test(c.name));
+ok("a nameless contact is instead labelled with their formatted number",
+  phoneNamed.length > 0, String(phoneNamed.length));
+ok("every planned contact has some label", plan.creates.every((c) => c.name && c.name.trim()));
+
 /* Nothing may reach the CRM carrying a value no table understood. */
 const unmappedRows = rows.filter((r) => (r.unmapped || []).length);
 ok("not one of the 2,855 real records hits an unmapped value",

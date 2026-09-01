@@ -40,6 +40,7 @@ exports.leadFromPlannedCreate = leadFromPlannedCreate;
 const state_js_1 = require("./state.js");
 const brivityPeople_js_1 = require("./brivityPeople.js");
 const db_js_1 = require("./db.js");
+const contactRecordStore_js_1 = require("./contactRecordStore.js");
 /**
  * Plan (and later apply) an import of Marco's real Brivity contacts into the
  * lead store, so they reach the CRM and the Buyers & Sellers Tracker.
@@ -86,6 +87,26 @@ const JUNK_NAMES = new Set(["", "unknown", "n/a", "na", "none", "no name", "-"])
 function usableName(raw) {
     const s = tidyName(raw);
     return JUNK_NAMES.has(s.toLowerCase()) ? "" : s;
+}
+/**
+ * What a contact is called on a card when Brivity has no name for them — 339 of
+ * the 2,727 leads, almost all inbound calls that were never named.
+ *
+ * The fallback is their phone number, which is genuinely the most useful handle
+ * for a phone-only contact. It is FORMATTED, though: a bare "7863760614" in a
+ * name column reads as a data error, while "(786) 376-0614" reads as what it
+ * is. Email is next, and only then a placeholder — but "Unnamed" for every one
+ * of them would make 339 contacts indistinguishable from each other.
+ */
+function displayName(p) {
+    const real = usableName(p.name);
+    if (real)
+        return real;
+    if (p.phone)
+        return (0, contactRecordStore_js_1.formatUsPhone)(p.phone);
+    if (p.email)
+        return p.email;
+    return "Unnamed contact";
 }
 /**
  * Statuses that take a lead off the working board. Brivity may hold any of
@@ -243,7 +264,7 @@ async function planBrivityImport(opts = {}, deps = {}) {
                 brivityLeadId: p.brivityLeadId ?? null,
                 brivityUuid: p.brivityUuid ?? null,
                 brivityUrl: p.brivityUrl ?? null,
-                name: usableName(p.name) || p.phone || p.email || "Unnamed",
+                name: displayName(p),
                 phone: p.phone || null,
                 email: p.email || null,
                 intent: intentOf(p),

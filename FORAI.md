@@ -28,6 +28,25 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-01] — **A migration console, so the Brivity import can actually be run — and reviewed before it is** (`public/brivity-import.html` NEW, `public/shell.html`, `src/server.ts`, `src/core/brivityImport.ts`, `scripts/verify-brivity-console.mjs` NEW).
+
+  The import had no user interface at all: `/api/brivity/import/plan` and `/api/brivity/import/apply` were reachable only by an authenticated API call, so the person whose CRM it is could not run his own migration, or see what it would do. `GET /brivity-import` (admin-only, `requireAuthAdminPage`) is now a review-then-apply screen: preview the plan, read what would happen and what is being held back and why, then Apply behind a typed `IMPORT` confirmation.
+
+  What the page is careful about, because a screen that misreports an import manufactures confidence:
+  * Preview is read-only and says so; the suite asserts it never calls the apply endpoint.
+  * Apply is unreachable until a plan is on screen, and **changing any option discards the plan** rather than leaving stale numbers above a live button.
+  * The reconciliation is shown, not just the totals: creates + fill-ins + unchanged + ambiguous + every skip reason must equal the number fetched, and if it ever doesn't the page says "do not apply this" and disables the button.
+  * Every held-back group is listed with the reason in plain language, alongside a sample of what would actually be written.
+  * Contacts that need a human decision (two existing leads share one phone) get their own table instead of being silently skipped.
+
+  `includeNonLeads` was not being passed through by either server route, so the toggle would have been inert — fixed. The console is linked from the command centre for admins.
+
+  Also: 339 of the 2,727 leads have no name in Brivity, and the create path used their raw phone digits as the name. `displayName()` now formats it (`(786) 376-0614`, via the existing `formatUsPhone`), because a name column full of bare digit strings reads as a data error rather than as a phone-only contact.
+
+  Verified in a real browser against the live Brivity account: `scripts/verify-brivity-console.mjs`, 24 checks, plus the full CRM regression battery (mapping 30, plan 33, widgets 170, contact record 119, filters 98, table controls 54, sending line 20, inbound report 23, modal audit 32) all green.
+
+  **The import has still not been run.** Everything is in place for Marco to run it himself from the console; the 1,549 creates it currently plans are against his live CRM and that is his call to make.
+
 - [2026-08-31e] — **Merge safety for the Brivity import: two ways it could have made the CRM worse than it was** (`src/core/brivityImport.ts`, `scripts/verify-brivity-plan.mjs`).
 
   Against Marco's real CRM most Brivity contacts match a lead he already has, so the *merge* path — not the create path — is where a migration destroys data. Two defects there, one of them introduced by the mapping change two entries above:

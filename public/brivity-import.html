@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Brivity Migration · Marco Puga</title>
+<style>
+  :root{
+    --bg:#f9fbfb; --panel:#ffffff; --text:#333; --muted:#5f6b78; --line:#edf0f0; --line-2:#e3e8e8;
+    --teal:#59c4c4; --teal-2:#4ca7a7; --soft:#eef7f7; --bad:#c0616a; --ok:#3fae86; --warn:#d99a3d;
+    --font:"Helvetica Neue",Helvetica,Arial,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:var(--bg);color:var(--text)}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 26px 60px}
+  h1{font-size:26px;font-weight:400;color:#3a3f45}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px}
+  .pill-btn{border:1px solid var(--teal);color:#fff;background:linear-gradient(135deg,var(--teal),var(--teal-2));border-radius:20px;padding:9px 18px;font-weight:700;letter-spacing:.02em;font-size:12.5px;cursor:pointer}
+  .pill-btn.ghost{background:#fff;color:var(--teal-2)}
+  .pill-btn.danger{background:linear-gradient(135deg,#d0737c,var(--bad));border-color:var(--bad)}
+  .pill-btn[disabled]{opacity:.45;cursor:not-allowed}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px}
+  .card h2{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:14px 18px;border-bottom:1px solid var(--line)}
+  .card .body{padding:18px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:12px 16px;border-bottom:1px solid var(--line)}
+  td{padding:11px 16px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .name{font-weight:700;color:#3a3f45}
+  .muted{color:var(--muted)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  .badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#fff}
+  .badge.ok{background:var(--ok)} .badge.warn{background:var(--warn)} .badge.bad{background:var(--bad)}
+  .badge.neutral{background:#9aa6b2}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line-2)}
+  .stat{background:#fff;padding:16px 18px}
+  .stat .n{font-size:26px;font-weight:300;color:#3a3f45;line-height:1.1}
+  .stat .n.big{color:var(--teal-2)}
+  .stat .l{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-top:5px;font-weight:600}
+  .stat .h{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.45}
+  .opts{display:flex;flex-wrap:wrap;gap:18px}
+  .opt{display:flex;gap:9px;align-items:flex-start;font-size:13px;max-width:320px}
+  .opt input{margin-top:2px;accent-color:var(--teal-2)}
+  .opt .t{font-weight:600;color:#3a3f45}
+  .opt .d{font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:2px}
+  .note{background:var(--soft);border:1px solid rgba(89,196,196,.3);border-radius:9px;padding:12px 14px;font-size:12.5px;line-height:1.55;color:#3a4a4a}
+  .note.warn{background:#fdf6ec;border-color:rgba(217,154,61,.35);color:#6b5327}
+  .note.bad{background:#fdf0f1;border-color:rgba(192,97,106,.3);color:#7d3b42}
+  .note b{font-weight:700}
+  .empty{padding:30px;text-align:center;color:var(--muted);font-size:13px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 26px;border-bottom:1px solid var(--line);background:#fff}
+  .topbar a{color:var(--teal-2);text-decoration:none;font-size:13px;font-weight:600}
+  .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-24px);background:#26313a;color:#fff;font-size:13px;padding:11px 18px;border-radius:11px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:99}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .modal-scrim{position:fixed;inset:0;background:rgba(20,26,32,.4);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal-scrim.on{display:flex}
+  .modal{background:#fff;border-radius:14px;padding:26px;width:100%;max-width:440px;box-shadow:0 30px 80px -30px rgba(0,0,0,.4)}
+  .modal h3{font-size:16px;margin-bottom:12px;color:#3a3f45}
+  .modal p{font-size:13px;line-height:1.6;color:var(--muted);margin-bottom:14px}
+  .modal input{width:100%;height:38px;border:1px solid var(--line);border-radius:8px;padding:0 12px;font-size:13px;margin-bottom:14px}
+  .modal .row{display:flex;gap:10px;justify-content:flex-end}
+  .chg{font-size:11.5px;color:var(--muted);line-height:1.6}
+  .chg s{color:var(--bad);text-decoration:line-through;opacity:.75}
+  .chg b{color:var(--ok);font-weight:600}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="/shell">&larr; Back to command center</a>
+    <span class="muted" id="whoami" style="font-size:12px"></span>
+  </div>
+  <div class="wrap">
+    <div class="head">
+      <div>
+        <h1>Brivity migration</h1>
+        <div class="sub">Bring the old CRM's contacts across. Review the plan, then apply it.</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="pill-btn ghost" id="btnPlan">Preview the plan</button>
+        <button class="pill-btn danger" id="btnApply" disabled>Apply&hellip;</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>What to bring across</h2>
+      <div class="body">
+        <div class="opts">
+          <label class="opt">
+            <input type="checkbox" id="optName" checked />
+            <span><span class="t">Prefer Brivity's name</span>
+            <span class="d">Replaces a social handle like &ldquo;purple kitty 22&rdquo; with the real name Brivity has.</span></span>
+          </label>
+          <label class="opt">
+            <input type="checkbox" id="optDead" />
+            <span><span class="t">Include unqualified contacts</span>
+            <span class="d">Brivity marked these unqualified. Off by default; they still fill in details for leads you already have.</span></span>
+          </label>
+          <label class="opt">
+            <input type="checkbox" id="optNonLeads" />
+            <span><span class="t">Include lenders &amp; staff</span>
+            <span class="d">Collaborators and team seats. They are real people but not leads &mdash; importing them puts them on the call list.</span></span>
+          </label>
+        </div>
+        <div class="note" style="margin-top:16px">
+          Previewing is <b>read-only</b> &mdash; nothing is written until you press Apply and confirm.
+          The importer never texts or emails anyone: these are existing contacts being filed, not new leads arriving.
+        </div>
+      </div>
+    </div>
+
+    <div id="out"></div>
+  </div>
+
+  <div class="modal-scrim" id="confirmScrim">
+    <div class="modal">
+      <h3>Apply this import?</h3>
+      <p id="confirmText"></p>
+      <p style="margin-bottom:8px">Type <b style="color:#3a3f45">IMPORT</b> to confirm.</p>
+      <input id="confirmInput" placeholder="IMPORT" autocomplete="off" />
+      <div class="row">
+        <button class="pill-btn ghost" id="confirmCancel">Cancel</button>
+        <button class="pill-btn danger" id="confirmGo" disabled>Write to the CRM</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+var lastPlan = null;
+var out = document.getElementById("out");
+
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function n(v){ return Number(v || 0).toLocaleString(); }
+function toast(msg){
+  var t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(function(){ t.classList.remove("show"); }, 3200);
+}
+function opts(){
+  return {
+    preferBrivityName: document.getElementById("optName").checked,
+    includeDead: document.getElementById("optDead").checked,
+    includeNonLeads: document.getElementById("optNonLeads").checked,
+  };
+}
+
+/* The plan's own numbers must add up to the number of contacts fetched. If they
+   ever don't, a contact went missing for no stated reason, and that is exactly
+   the kind of silent loss a migration must not have — so it is shown, not hidden. */
+function reconcile(p){
+  var s = p.skipped || {};
+  var sum = (p.counts.create||0) + (p.counts.merge||0) + (p.unchanged||0) +
+            ((p.ambiguous||[]).length) + (s.dead||0) + (s.nonLead||0) +
+            (s.noContactInfo||0) + (s.duplicateWithinBrivity||0);
+  return { sum: sum, ok: sum === p.fetched };
+}
+
+function renderPlan(p){
+  lastPlan = p;
+  var s = p.skipped || {};
+  var rec = reconcile(p);
+  var amb = p.ambiguous || [];
+  var h = "";
+
+  h += '<div class="card"><h2>What would happen</h2><div class="stats">';
+  h += '<div class="stat"><div class="n big">' + n(p.counts.create) + '</div><div class="l">New contacts</div>' +
+       '<div class="h">Added to the CRM with their Brivity status, stage and tags.</div></div>';
+  h += '<div class="stat"><div class="n big">' + n(p.counts.merge) + '</div><div class="l">Filled in</div>' +
+       '<div class="h">Leads you already have, gaining a real name, email or phone. Nothing you already hold is replaced.</div></div>';
+  h += '<div class="stat"><div class="n">' + n(p.unchanged) + '</div><div class="l">Already correct</div>' +
+       '<div class="h">Matched a lead that needs nothing.</div></div>';
+  h += '<div class="stat"><div class="n">' + n(p.fetched) + '</div><div class="l">Read from Brivity</div>' +
+       '<div class="h">Every contact in the old CRM.</div></div>';
+  h += '</div></div>';
+
+  h += '<div class="card"><h2>Held back &mdash; and why</h2><div class="body">';
+  h += '<table><tbody>';
+  function row(cnt, label, why){
+    return '<tr><td style="width:90px" class="name">' + n(cnt) + '</td><td class="name">' + label +
+           '</td><td class="muted" style="font-size:12px">' + why + '</td></tr>';
+  }
+  h += row(s.dead, "Unqualified", "Brivity marked them unqualified. They still fill in details for leads you already have.");
+  h += row(s.nonLead, "Lenders, agents &amp; staff", "Not leads &mdash; importing them would put them on the call list.");
+  h += row(s.noContactInfo, "No phone or email", "Nothing to reach them on, so nothing the CRM can do with them.");
+  h += row(s.duplicateWithinBrivity, "Duplicates inside Brivity", "Same phone or email twice; the richer record is kept.");
+  h += row(amb.length, "Need a decision", "Two different leads already share this phone. A person should pick.");
+  h += '</tbody></table>';
+  h += '<div class="note ' + (rec.ok ? "" : "bad") + '" style="margin-top:14px">' +
+    (rec.ok
+      ? "Every one of the " + n(p.fetched) + " contacts is accounted for &mdash; imported, filled in, or held back for a stated reason. None were dropped silently."
+      : "<b>These numbers do not add up.</b> " + n(rec.sum) + " accounted for against " + n(p.fetched) +
+        " read. Do not apply this &mdash; report it.") +
+    '</div></div></div>';
+
+  if (amb.length) {
+    h += '<div class="card"><h2>Need a decision (' + n(amb.length) + ')</h2><div class="body">' +
+      '<div class="note warn" style="margin-bottom:12px">These are skipped either way. Two leads in the CRM share the ' +
+      'phone number on this Brivity contact, and picking the wrong one merges a stranger\'s details into someone\'s record.</div>' +
+      '<table><thead><tr><th>Brivity contact</th><th>Phone</th><th>Matches</th></tr></thead><tbody>';
+    amb.slice(0, 25).forEach(function(a){
+      h += '<tr><td class="name">' + esc(a.name) + '</td><td class="mono">' + esc(a.phone) +
+           '</td><td class="mono muted">' + esc((a.leadIds || []).join(", ")) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    if (amb.length > 25) h += '<div class="empty">&hellip; and ' + n(amb.length - 25) + ' more</div>';
+    h += '</div></div>';
+  }
+
+  var sc = p.sampleCreates || [];
+  if (sc.length) {
+    h += '<div class="card"><h2>Sample of what gets added</h2>' +
+      '<table><thead><tr><th>Name</th><th>Reach them on</th><th>Status</th><th>Stage</th><th>Looking to</th><th>Source</th></tr></thead><tbody>';
+    sc.forEach(function(c){
+      h += '<tr><td class="name">' + esc(c.name) + '</td>' +
+        '<td class="mono muted">' + esc(c.phone || c.email || "&mdash;") + '</td>' +
+        '<td><span class="badge neutral">' + esc(c.status) + '</span></td>' +
+        '<td class="muted">' + esc(String(c.stage || "").replace(/_/g, " ")) + '</td>' +
+        '<td class="muted">' + (c.intent ? esc(String(c.intent).replace(/_/g, "/")) : '<span class="muted">not stated</span>') + '</td>' +
+        '<td class="muted">' + esc(c.source || "&mdash;") + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+
+  var sm = p.sampleMerges || [];
+  if (sm.length) {
+    h += '<div class="card"><h2>Sample of what gets filled in</h2>' +
+      '<table><thead><tr><th>Existing lead</th><th>Matched on</th><th>Changes</th></tr></thead><tbody>';
+    sm.forEach(function(m){
+      var chg = (m.changes || []).map(function(c){
+        var from = (c.from === null || c.from === undefined || c.from === "") ? "(empty)" : String(c.from);
+        return esc(c.field) + ": <s>" + esc(from) + "</s> &rarr; <b>" + esc(c.to) + "</b>";
+      }).join("<br>");
+      h += '<tr><td class="mono muted">' + esc(m.leadId) + '</td><td class="muted">' + esc(m.matchedOn) +
+           '</td><td class="chg">' + chg + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+
+  out.innerHTML = h;
+  document.getElementById("btnApply").disabled = !rec.ok ||
+    ((p.counts.create || 0) + (p.counts.merge || 0)) === 0;
+}
+
+function renderResult(r, planned){
+  var h = '<div class="card"><h2>Import complete</h2><div class="stats">';
+  h += '<div class="stat"><div class="n big">' + n(r.created) + '</div><div class="l">Contacts added</div></div>';
+  h += '<div class="stat"><div class="n big">' + n(r.merged) + '</div><div class="l">Leads filled in</div></div>';
+  h += '<div class="stat"><div class="n">' + n((r.failures || []).length) + '</div><div class="l">Failed</div></div>';
+  h += '</div>';
+  var fw = r.fieldsWritten || {};
+  var keys = Object.keys(fw);
+  if (keys.length) {
+    h += '<div class="body"><div class="muted" style="font-size:12px;margin-bottom:8px">Fields written on existing leads</div><table><tbody>';
+    keys.forEach(function(k){ h += '<tr><td class="name" style="width:160px">' + esc(k) + '</td><td class="muted">' + n(fw[k]) + '</td></tr>'; });
+    h += '</tbody></table></div>';
+  }
+  if ((r.failures || []).length) {
+    h += '<div class="body"><div class="note bad"><b>' + n(r.failures.length) + ' record(s) failed.</b> ' +
+      'Nothing else was affected &mdash; each record is written on its own, so the rest of the import stands. ' +
+      'Re-running is safe: it will not duplicate what already landed.</div>' +
+      '<table style="margin-top:12px"><thead><tr><th>Record</th><th>Error</th></tr></thead><tbody>';
+    r.failures.slice(0, 30).forEach(function(f){
+      h += '<tr><td class="mono">' + esc(f.ref) + '</td><td class="muted">' + esc(f.error) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  } else {
+    h += '<div class="body"><div class="note">Every planned record was written. Re-running this page is safe &mdash; ' +
+      'a second import finds nothing left to do.</div></div>';
+  }
+  h += '</div>';
+  out.innerHTML = h + out.innerHTML;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function loadPlan(){
+  var b = document.getElementById("btnPlan");
+  var old = b.innerHTML;
+  b.disabled = true; b.innerHTML = '<span class="spin"></span>Reading Brivity&hellip;';
+  document.getElementById("btnApply").disabled = true;
+  out.innerHTML = '<div class="card"><div class="empty">Pulling every contact from Brivity. This takes about 30 seconds.</div></div>';
+  try {
+    var body = opts(); body.summary = true;
+    var r = await fetch("/api/brivity/import/plan", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      credentials: "same-origin", body: JSON.stringify(body),
+    });
+    var j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    renderPlan(j);
+    toast("Plan ready — nothing has been written.");
+  } catch (e) {
+    out.innerHTML = '<div class="card"><div class="body"><div class="note bad"><b>Could not build a plan.</b><br>' +
+      esc(e.message) + '</div></div></div>';
+  } finally { b.disabled = false; b.innerHTML = old; }
+}
+
+async function apply(){
+  var b = document.getElementById("confirmGo");
+  b.disabled = true; b.innerHTML = '<span class="spin"></span>Writing&hellip;';
+  try {
+    var body = opts(); body.apply = true;
+    var r = await fetch("/api/brivity/import/apply", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      credentials: "same-origin", body: JSON.stringify(body),
+    });
+    var j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    closeConfirm();
+    renderResult(j, j.planned || {});
+    document.getElementById("btnApply").disabled = true;
+    toast("Import finished.");
+  } catch (e) {
+    closeConfirm();
+    out.innerHTML = '<div class="card"><div class="body"><div class="note bad"><b>The import failed.</b><br>' +
+      esc(e.message) + '<br><br>Re-running is safe — anything already written will not be duplicated.</div></div></div>' + out.innerHTML;
+  } finally { b.disabled = false; b.innerHTML = "Write to the CRM"; }
+}
+
+function openConfirm(){
+  if (!lastPlan) return;
+  document.getElementById("confirmText").innerHTML =
+    "This adds <b>" + n(lastPlan.counts.create) + "</b> new contacts and fills in <b>" +
+    n(lastPlan.counts.merge) + "</b> leads you already have. It re-checks Brivity first, so the " +
+    "final numbers may differ slightly. Nobody is texted or emailed.";
+  var i = document.getElementById("confirmInput");
+  i.value = ""; document.getElementById("confirmGo").disabled = true;
+  document.getElementById("confirmScrim").classList.add("on");
+  i.focus();
+}
+function closeConfirm(){ document.getElementById("confirmScrim").classList.remove("on"); }
+
+document.getElementById("btnPlan").addEventListener("click", loadPlan);
+document.getElementById("btnApply").addEventListener("click", openConfirm);
+document.getElementById("confirmCancel").addEventListener("click", closeConfirm);
+document.getElementById("confirmGo").addEventListener("click", apply);
+document.getElementById("confirmInput").addEventListener("input", function(e){
+  document.getElementById("confirmGo").disabled = e.target.value.trim() !== "IMPORT";
+});
+document.getElementById("confirmScrim").addEventListener("click", function(e){
+  if (e.target === e.currentTarget) closeConfirm();
+});
+/* Changing an option invalidates the plan on screen: applying it would then
+   write something other than what is displayed. */
+["optName","optDead","optNonLeads"].forEach(function(id){
+  document.getElementById(id).addEventListener("change", function(){
+    if (lastPlan) {
+      lastPlan = null;
+      document.getElementById("btnApply").disabled = true;
+      out.innerHTML = '<div class="card"><div class="body"><div class="note warn">' +
+        'Options changed. Preview the plan again to see what these settings would do.</div></div></div>';
+    }
+  });
+});
+
+fetch("/api/auth/me", { credentials: "same-origin" }).then(function(r){ return r.json(); })
+  .then(function(j){ if (j && j.user) document.getElementById("whoami").textContent = j.user.name || j.user.email || ""; })
+  .catch(function(){});
+</script>
+</body>
+</html>
