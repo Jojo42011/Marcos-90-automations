@@ -28,6 +28,20 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-02] — **The CRM was showing 54 FABRICATED leads and calling it a working board** (`public/crm-brivity.html`, `scripts/verify-no-fake-leads.mjs` NEW).
+
+  Marco reported "we only have 54 leads". The number was the tell: `const N=54` — the count of placeholder rows this page generates in a loop at boot, with invented names, invented addresses and invented activity. He was not looking at a subset of his data. He was looking at people who do not exist, in a CRM that touches real calls, real texts and real ad spend.
+
+  `loadLive()` bailed at `if(rawLeads.length<3) return;  // too sparse - keep the demo set` and said nothing. The only signal was a corner chip reading *"Demo data · swaps to live clients on finalize"* — which reads as a pending launch step, not as "your real data failed to load", and is exactly why a board of invented people went unquestioned for weeks.
+
+  Why it bailed is [2026-09-01d]: his real leads are mostly phoneless DM leads, the snapshot filtered every one of them out, fewer than 3 came back, and the fabricated set stayed. **Two independently reasonable decisions — filter to textable contacts, fall back to sample data — combined into the app confidently displaying fiction.**
+
+  Now: `LIVE_DATA` flips true only once real rows actually replace the placeholders. Until then the Leads view carries a **non-dismissible** red banner — "These are sample leads, not your data… none of them are real… Nothing here should be called, texted or acted on" — naming why live data did not load. It is painted *before* the fetch resolves (the Brivity pull can take 30s, and that whole window showed fiction as ordinary), repainted on success, and painted again if `loadLive()` throws. The corner chip now reads "Sample data — not your leads". No dismiss button: the entire failure was a person believing these rows.
+
+  `scripts/verify-no-fake-leads.mjs` (13 checks) asserts both directions — an empty store must announce itself as fake, and five real phoneless leads must replace the placeholders and never be labelled sample data. That second assertion only passes because of [2026-09-01d]; before it, five phoneless leads produced zero rows and the fiction stayed.
+
+  **This is the single most dangerous state this app can be in, and it now cannot happen silently.**
+
 - [2026-09-01e] — **A missing Brivity key reported itself as "Brivity is empty", which is the one lie a migration must not tell** (`src/core/brivityImport.ts`, `src/core/brivityPeople.ts`, `public/brivity-import.html`, `scripts/verify-brivity-unconfigured.mjs` NEW).
 
   `getBrivityPeople()` returns `[]` for an unconfigured server **without setting `lastError`** — deliberately, so the CRM degrades quietly instead of erroring on every page load. For a migration that quiet is dangerous: the planner's empty-result guard then produced *"Brivity returned no contacts"*, which reads as **Brivity is empty** rather than **Brivity is not connected**, and would reasonably be acted on as though the transfer were already done.
