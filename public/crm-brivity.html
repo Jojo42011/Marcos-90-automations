@@ -1270,6 +1270,9 @@
 
   <!-- LEADS -->
   <section class="view" id="view-leads">
+    <!-- A broken Brivity connection used to be invisible here: the CRM simply
+         showed fewer leads, which looks exactly like having fewer leads. -->
+    <div id="brvBanner" style="display:none"></div>
     <div class="leads-wrap">
       <div class="leads-nav">
         <div class="h"><b>Leads</b><span class="add">+</span></div>
@@ -1734,6 +1737,12 @@ function actIcon(kind,mut){const paths={
   mail:'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
   other:'<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>'};
   const titles={email:"Email",phone:"Log a call",sms:"Text",appt:"Set appointment",mail:"Send mail",other:"Log activity"};
+  /* `mut` dims an action the contact cannot receive. Phone and SMS were never
+     dimmed, which was invisible while the board only ever held phone-holding
+     leads — the snapshot filtered the rest out. Now that DM leads (handle, a
+     real conversation, no number) are on the board, an undimmed Call/Text on a
+     contact with no number is a button that cannot do what it looks like it
+     does, which this system does not ship. */
   return '<span class="ai'+(mut?' mut':'')+'" data-act="'+kind+'" title="'+titles[kind]+'" style="cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+paths[kind]+'</svg></span>';}
 /* Contact-action icons → open the lead profile on the matching tab (Brivity
    behavior). Works in the feed and any table row that carries a lead id. */
@@ -1807,7 +1816,7 @@ function renderFeed(){
     const c=l.criteria||{};const bb=(c.beds!=null)?'<b>Bed:</b> '+c.beds+' <b>Bath:</b> '+c.baths:'';const sq=(c.sqft!=null)?'<b>Sqft:</b> '+c.sqft:'';
     return '<div class="feed-item" data-lid="'+esc(l.id)+'"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="feed-body">'+
       '<div class="feed-top"><div class="feed-name"><b class="ldlink" data-lid="'+esc(l.id)+'" style="cursor:pointer">'+esc(l.name)+'</b> '+deriveAction(l)+';</div><div class="feed-time">'+relTime(l.lastActivity)+'</div></div>'+
-      '<div class="act-row">'+actIcon("email",!l.email)+actIcon("phone")+actIcon("sms",l.activity.every(a=>a.type!=="text"))+actIcon("appt")+actIcon("other")+'</div>'+
+      '<div class="act-row">'+actIcon("email",!l.email)+actIcon("phone",!l.phone)+actIcon("sms",!l.phone)+actIcon("appt")+actIcon("other")+'</div>'+
       (c.location?'<div class="feed-meta"><b>Address:</b> '+esc(c.location)+'<a class="lk">See home value estimate</a>'+bb+(bb&&sq?'<br>':'')+sq+'</div>':'<div class="feed-meta">'+esc(l.phone)+'  ·  '+esc(l.source)+'</div>')+
       '</div></div>';
   }).join(""):'<div class="empty" style="padding:26px 4px">No activity matches the current filter.</div>';
@@ -2726,7 +2735,7 @@ function renderLeads(){
       '<td><span class="intent '+(l.intent==="buyer"?"b":"s")+'">'+(l.intent==="buyer"?"B":"S")+'</span></td>'+
       '<td><span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
       '<td><span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
-      '<td>'+actIcon("email",noEmail)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!l.address)+'</td><td>'+actIcon("other")+'</td>'+
+      '<td>'+actIcon("email",noEmail)+'</td><td>'+actIcon("phone",!l.phone)+'</td><td>'+actIcon("sms",!l.phone)+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!l.address)+'</td><td>'+actIcon("other")+'</td>'+
       '<td>'+(l.address?'<div class="addr">'+esc(l.address)+'</div>':'<span style="color:#c2cad1">-</span>')+'</td>'+
       '<td><div class="li"><span class="lab">'+esc(l.lastLabel)+'</span> <span class="tm">'+relTime(l.lastActivity)+'</span></div></td>'+
       '<td><div class="due '+(l.due.label==="Due Today"?"today":"up")+'">'+l.due.label+'<span class="d">'+l.due.date+'</span></div></td>'+
@@ -2901,7 +2910,7 @@ function renderPeople(){
       '<td><span class="intent '+(p.intent==="buyer"?"b":"s")+'">'+(p.intent==="buyer"?"B":"S")+'</span></td>'+
       '<td>'+personStatusPill(p.status).replace('class="status"','class="status editable" data-lid="'+esc(p.id)+'" data-kind="status"')+'</td>'+
       '<td><span class="stage editable" data-lid="'+esc(p.id)+'" data-kind="stage">'+esc(p.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
-      '<td>'+actIcon("email",!p.email)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!p.address)+'</td><td>'+actIcon("other")+'</td>'+
+      '<td>'+actIcon("email",!p.email)+'</td><td>'+actIcon("phone",!p.phone)+'</td><td>'+actIcon("sms",!p.phone)+'</td><td>'+actIcon("appt")+'</td><td>'+actIcon("mail",!p.address)+'</td><td>'+actIcon("other")+'</td>'+
       '<td>'+(p.address?'<div class="addr">'+esc(p.address)+'</div>':'<span style="color:#c2cad1">-</span>')+'</td>'+
       '<td>'+(p.lastActivity?'<div class="li"><div class="lab">'+esc(p.lastLabel)+'</div><div class="tm">'+relTime(p.lastActivity)+'</div></div>':'<span style="color:#c2cad1">-</span>')+'</td>'+
       '<td><div class="due '+(p.due.label==="Due Today"?"today":"up")+'">'+p.due.label+'<span class="d">'+p.due.date+'</span></div></td></tr>';
@@ -2950,7 +2959,7 @@ function renderOpps(){
       '<td style="color:#6b7480">'+o.dom+' days</td>'+
       '<td style="color:#5b6570">'+esc(o.owner)+'</td>'+
       '<td style="color:#6b7480">'+esc(o.phone)+'</td>'+
-      '<td><div class="aicons">'+actIcon("phone")+actIcon("sms")+actIcon("other")+'</div></td>'+
+      '<td><div class="aicons">'+actIcon("phone",!o.phone)+actIcon("sms",!o.phone)+actIcon("other")+'</div></td>'+
       '<td><span class="status" style="background:'+stC+'">'+o.status+'</span></td></tr>';
   }).join("");
 }
@@ -3885,11 +3894,15 @@ async function loadLive(opts){
   // either source alone is enough to switch off the demo data.
   const brvUrl="/api/brivity/people"+(opts.refresh?"?refresh=1":"");
   const [body,brv]=await Promise.all([
-    fetch(crmApi("/api/dashboard/data")).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(crmApi("/api/dashboard/data?includePhoneless=1")).then(r=>r.ok?r.json():null).catch(()=>null),
     fetch(crmApi(brvUrl)).then(r=>r.ok?r.json():null).catch(()=>null)
   ]);
   window.__brivity=(brv&&typeof brv==="object")?{configured:brv.configured,count:brv.count,lastError:brv.lastError,fetchedAt:brv.fetchedAt}:null;
-  let rawLeads=(body&&Array.isArray(body.leads))?body.leads.filter(l=>l&&(l.name||l.phone)):[];
+  /* A DM lead often has NO name and NO phone — just a handle and a real
+     conversation. Requiring name-or-phone here dropped those rows a second
+     time, client-side, after the server had finally started sending them.
+     Anything we can identify a person by counts: handle and email included. */
+  let rawLeads=(body&&Array.isArray(body.leads))?body.leads.filter(l=>l&&(l.name||l.phone||l.username||l.email)):[];
   const brvPeople=(brv&&brv.ok&&Array.isArray(brv.people))?brv.people.filter(l=>l&&(l.name||l.phone||l.email)):[];
   if(brvPeople.length){
     // dedupe: skip Brivity rows whose phone or email already exists locally
@@ -3912,6 +3925,7 @@ async function loadLive(opts){
 
   LEADS=rawLeads.map(mapLeadRow);
   PEOPLE=mapPeopleLive(LEADS);
+  paintBrivityBanner();
   /* Keep any Quo SMS threads already loaded — they are a different source
      from the lead snapshot, and swapping the demo set for live leads must not
      take real text messages off the board. */
@@ -4928,6 +4942,37 @@ document.getElementById("emBody").addEventListener("change",e=>{ if(e.target.tag
 })();
 
 /* ---- Refresh button → re-pull the live Brivity import ---- */
+/* ---- Brivity connection state, stated on the page ---------------------------
+   This existed only as a toast on the manual refresh button, so on a normal
+   page load a failed or unconfigured Brivity connection said nothing at all —
+   the CRM just showed fewer leads. Fewer leads is indistinguishable from
+   "you have fewer leads", which is how a near-empty board went unquestioned.
+   An integration that is not working now says so where the leads are. ---- */
+function paintBrivityBanner(){
+  var el=document.getElementById("brvBanner"); if(!el) return;
+  var b=window.__brivity;
+  if(sessionStorage.getItem("brvBannerHidden")==="1"){ el.style.display="none"; return; }
+  var imported=LEADS.filter(function(l){return l.source&&/brivity/i.test(l.source);}).length;
+  var msg="",tone="warn";
+  if(!b){
+    msg="Could not reach this server's Brivity endpoint, so no Brivity contacts are on this board.";
+  } else if(b.lastError){
+    msg="Brivity is connected but the last pull failed: "+String(b.lastError).slice(0,140)+
+        " — any Brivity contact not already imported is missing from this board.";
+  } else if(b.configured===false){
+    msg="Brivity is not connected on this server (no API key set), so nothing is being pulled live. "+
+        (imported?("The "+imported.toLocaleString()+" Brivity contacts below are the imported copies."):
+         "Run the migration from Brivity migration in the command centre to bring the old CRM's contacts in.");
+  } else return void(el.style.display="none");
+  el.style.display="block";
+  el.innerHTML='<div style="margin:10px 14px 0;padding:10px 14px;border-radius:9px;font-size:12.5px;line-height:1.55;'+
+    'background:#fdf6ec;border:1px solid rgba(217,154,61,.4);color:#6b5327;display:flex;gap:10px;align-items:flex-start">'+
+    '<span style="font-weight:700">Brivity</span><span style="flex:1">'+esc(msg)+'</span>'+
+    '<button id="brvBannerX" style="background:none;border:none;color:#6b5327;cursor:pointer;font-size:15px;line-height:1;padding:0 2px">&times;</button></div>';
+  var x=document.getElementById("brvBannerX");
+  if(x) x.addEventListener("click",function(){ sessionStorage.setItem("brvBannerHidden","1"); el.style.display="none"; });
+}
+
 (function(){
   var btn=document.getElementById("crmRefresh"); if(!btn) return;
   btn.addEventListener("click",function(){
@@ -5665,7 +5710,7 @@ function paintLeadPlans(l){
     function act(url,msg){
       fetch(crmApi(url),{method:"POST"}).then(function(r){return r.ok?r.json().catch(function(){return {};}):null;})
         .then(function(res){ if(res){ crmToast(msg);
-          fetch(crmApi("/api/dashboard/data")).then(function(x){return x.ok?x.json():null;}).then(function(snap){
+          fetch(crmApi("/api/dashboard/data?includePhoneless=1")).then(function(x){return x.ok?x.json():null;}).then(function(snap){
             var fresh=snap&&snap.leads&&snap.leads.find(function(x){return x.id===l.id;});
             if(fresh){ l.autoPlanEnrollments=fresh.autoPlanEnrollments||[]; paintLeadPlans(l); }
           });
@@ -5685,7 +5730,7 @@ function paintLeadPlans(l){
          text on a schedule, and PREVIEW is what makes that a decision rather
          than a guess. */
       openApplyPlanModal(l,plans,active,function(){
-        fetch(crmApi("/api/dashboard/data")).then(function(x){return x.ok?x.json():null;}).then(function(snap){
+        fetch(crmApi("/api/dashboard/data?includePhoneless=1")).then(function(x){return x.ok?x.json():null;}).then(function(snap){
           var fresh=snap&&snap.leads&&snap.leads.find(function(x){return x.id===l.id;});
           if(fresh){ l.autoPlanEnrollments=fresh.autoPlanEnrollments||[]; paintLeadPlans(l); }
           reloadTimeline();
@@ -10069,7 +10114,7 @@ function renderNurture(){
       '<td style="color:#5b6570;font-weight:600">'+(CADENCE[l.statusDisp]||"Weekly")+'</td>'+
       '<td><div class="li"><span class="lab">'+esc(l.lastLabel)+'</span> <span class="tm">'+relTime(l.lastActivity)+'</span></div></td>'+
       '<td><div class="due '+(l.due.label==="Due Today"?"today":"up")+'">'+l.due.label+'<span class="d">'+l.due.date+'</span></div></td>'+
-      '<td>'+actIcon("email",!l.email)+'</td><td>'+actIcon("phone")+'</td><td>'+actIcon("sms")+'</td>'+
+      '<td>'+actIcon("email",!l.email)+'</td><td>'+actIcon("phone",!l.phone)+'</td><td>'+actIcon("sms",!l.phone)+'</td>'+
       '<td>'+((l.autoPlanEnrollments||[]).length?'<span class="stage" style="background:var(--teal-soft);color:var(--teal-strong)">ENROLLED</span>':'<span class="addlink">Enroll</span>')+'</td>'+
       dtCell(l,"birthdate")+dtCell(l,"anniversary")+
     '</tr>';

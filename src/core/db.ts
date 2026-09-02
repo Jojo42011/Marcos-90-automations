@@ -1178,7 +1178,28 @@ function normalizeCrmDefaults(lead: Lead): Lead {
  * Snapshot of all leads + message counts for dashboard UI (read-only).
  * For the DM Agent table, we only SHOW leads that have a phone number on file.
  */
-export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
+export interface DashboardSnapshotOptions {
+  /**
+   * Include leads that have no phone number. Default false, which is the
+   * behaviour every existing caller was written against.
+   *
+   * WHY THIS IS AN OPTION AND NOT JUST THE BEHAVIOUR. The phone filter below
+   * came from this being an SMS-outreach dashboard, where a contact you cannot
+   * text is not actionable. But the CRM builds its ENTIRE lead list from this
+   * snapshot, and a DM lead arrives with a platform, a username and a real
+   * conversation and no phone number — the phone only appears later, if the
+   * person gives one. So every DM lead was invisible in the CRM: not filtered,
+   * not greyed out, absent. Marco counted 54 leads in a CRM that held far more.
+   *
+   * The outreach dashboard's assumption is still valid for the outreach
+   * dashboard, so the default is unchanged and the CRM asks for everything.
+   */
+  includePhoneless?: boolean;
+}
+
+export async function getDashboardSnapshot(
+  options: DashboardSnapshotOptions = {},
+): Promise<DashboardSnapshot> {
   const generatedAt = nowIso();
   const leads: DashboardSnapshot["leads"] = [];
   const byPlatform: Record<string, number> = {};
@@ -1220,7 +1241,9 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
       }
     }
 
-    if (!hasPhone) continue;
+    /* See DashboardSnapshotOptions.includePhoneless — this one line is why DM
+       leads never appeared in the CRM. */
+    if (!hasPhone && !options.includePhoneless) continue;
 
     leads.push({
       id: lead.id,

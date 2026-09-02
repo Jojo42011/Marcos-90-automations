@@ -28,6 +28,23 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-01d] — **SECURITY/DATA-VISIBILITY: the CRM was hiding every lead without a phone number** (`src/core/db.ts`, `src/server.ts`, `public/crm-brivity.html`, `scripts/verify-phoneless-leads.mjs` NEW).
+
+  Marco opened the CRM and counted 54 leads in a system holding far more. Two filters, stacked, were removing the rest:
+
+  1. **`getDashboardSnapshot()` had `if (!hasPhone) continue;`.** That snapshot began as the feed for the SMS-outreach dashboard, where a contact you cannot text is not actionable — but the CRM builds its **entire** lead list from the same snapshot. A DM lead arrives with a platform, a handle and a real conversation and **no phone**; the number only appears later, if the person gives one. So every DM lead was invisible in the CRM. Not filtered, not greyed, not on page two — absent. The endpoint had been telling the truth the whole time (`totals.leads` counted them, `totals.shownLeads` did not), and nothing read that discrepancy.
+  2. **The CRM then filtered again client-side**, `l.name || l.phone`, dropping handle-only DM leads a second time even once the server started sending them.
+
+  Fixed with `getDashboardSnapshot({ includePhoneless })`, which the CRM now passes; the legacy outreach dashboard's default is deliberately unchanged, since a contact you cannot text genuinely is not actionable there. The client-side filter now accepts a handle or an email as identity.
+
+  **Consequence of the fix, handled:** with phoneless leads finally on the board, the row Call and Text icons were still rendering live on contacts with no number — `actIcon("phone")` and `actIcon("sms")` were never gated, which was invisible while the board only ever held phone-holding leads. Both are now dimmed when there is no number, across all five tables that render them. Per this repo's rule, no button that appears to do something it cannot do.
+
+  **Also:** a failed or unconfigured Brivity connection was completely silent on page load — it surfaced only as a toast if you clicked Refresh — so the CRM simply showed fewer leads, which is indistinguishable from having fewer leads. The Leads view now carries a dismissible banner stating the connection state and what to do about it. **This is the likely reason no Brivity contacts appear in production: the live merge is a display-time fetch, so with no `BRIVITY_API_KEY` set on the server nothing is pulled, and nothing said so.**
+
+  `scripts/verify-phoneless-leads.mjs` (27 checks) pins all of it, including a real-browser pass proving a handle-only lead reaches the screen — the client-side filter lived in the page, and no API test could have caught it.
+
+  **Why nothing caught this:** every lead fixture in this repo gave its leads a phone number. Data that is silently absent looks exactly like data that does not exist.
+
 - [2026-09-01c] — **Brivity's `company` and `job_title` were being dropped; they now survive as labelled notes** (`src/core/brivityPeople.ts`, `scripts/verify-brivity-plan.mjs`).
 
   Auditing all 28 Brivity fields against what the importer actually reads showed two carrying real data that nothing mapped: `company` (148 contacts) and `job_title` (14). The field is messy — Marco used it for "Buyer" and "cold call" as often as for a company — but it also holds the title companies and brokerages that identify a contact ("Nu World Title", "KWCV"), and a migration that silently drops them is not the thorough transfer that was asked for.

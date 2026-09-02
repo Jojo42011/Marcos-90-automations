@@ -2390,7 +2390,12 @@ app.get("/api/dashboard/data", async (req, res) => {
     return;
   }
   try {
-    const data = await getDashboardSnapshot();
+    /* The CRM passes includePhoneless=1. Without it a DM lead — which has a
+       conversation and a username but no phone until the person gives one —
+       is absent from the lead list entirely. */
+    const data = await getDashboardSnapshot({
+      includePhoneless: req.query.includePhoneless === "1" || req.query.includePhoneless === "true",
+    });
     res.status(200).json(data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

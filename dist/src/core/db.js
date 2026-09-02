@@ -1190,11 +1190,7 @@ function normalizeCrmDefaults(lead) {
         sourceRoutingCompletedAt,
     };
 }
-/**
- * Snapshot of all leads + message counts for dashboard UI (read-only).
- * For the DM Agent table, we only SHOW leads that have a phone number on file.
- */
-async function getDashboardSnapshot() {
+async function getDashboardSnapshot(options = {}) {
     const generatedAt = nowIso();
     const leads = [];
     const byPlatform = {};
@@ -1235,7 +1231,9 @@ async function getDashboardSnapshot() {
                 byAdCampaignWithPhone[lead.adCampaign] = (byAdCampaignWithPhone[lead.adCampaign] ?? 0) + 1;
             }
         }
-        if (!hasPhone)
+        /* See DashboardSnapshotOptions.includePhoneless — this one line is why DM
+           leads never appeared in the CRM. */
+        if (!hasPhone && !options.includePhoneless)
             continue;
         leads.push({
             id: lead.id,
