@@ -294,8 +294,18 @@ async function loadPlan(){
     renderPlan(j);
     toast("Plan ready — nothing has been written.");
   } catch (e) {
-    out.innerHTML = '<div class="card"><div class="body"><div class="note bad"><b>Could not build a plan.</b><br>' +
-      esc(e.message) + '</div></div></div>';
+    /* The overwhelmingly common failure is a missing server key, and a bare
+       error string sends someone hunting through this codebase for a bug that
+       is not in it. Say what to do. */
+    var missingKey = /BRIVITY_API_KEY/i.test(e.message || "");
+    out.innerHTML = '<div class="card"><div class="body"><div class="note bad">' +
+      '<b>' + (missingKey ? "Brivity is not connected to this server."
+                          : "Could not build a plan.") + '</b><br>' +
+      esc(e.message) +
+      (missingKey ? '<br><br>Nothing is wrong with the migration itself &mdash; it simply has ' +
+        'nothing to read until the key is set. This is also why no Brivity contacts appear ' +
+        'anywhere in the CRM.' : '') +
+      '</div></div></div>';
   } finally { b.disabled = false; b.innerHTML = old; }
 }
 

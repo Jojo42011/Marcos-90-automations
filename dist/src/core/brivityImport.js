@@ -152,6 +152,21 @@ async function planBrivityImport(opts = {}, deps = {}) {
         preferBrivityName: opts.preferBrivityName !== false,
         includeNonLeads: opts.includeNonLeads === true,
     };
+    /*
+     * "Not connected" and "connected but empty" are different problems with
+     * different fixes, and getBrivityPeople() cannot tell them apart — it returns
+     * [] for an unconfigured server on purpose, so the CRM degrades quietly
+     * rather than erroring on every page load. For a MIGRATION that quiet is
+     * dangerous: reported as "no contacts to import", a missing server key reads
+     * as "Brivity is empty" and would be acted on as though the job were done.
+     * So the key is checked here, before the fetch, and named.
+     */
+    if (!deps.fetchPeople && !(0, brivityPeople_js_1.brivityConfigured)()) {
+        throw new Error("BRIVITY_API_KEY is not set on this server, so nothing can be read from Brivity — " +
+            "neither the live contact list nor a migration plan. This is not an empty Brivity " +
+            "account and not a fault in the migration. Set it as a secret on the Fly app " +
+            "(flyctl secrets set BRIVITY_API_KEY=…) and try again.");
+    }
     const people = deps.fetchPeople ? await deps.fetchPeople() : await (0, brivityPeople_js_1.getBrivityPeople)(false);
     /*
      * getBrivityPeople swallows fetch failures and returns [] (it is built to

@@ -28,6 +28,16 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-01e] — **A missing Brivity key reported itself as "Brivity is empty", which is the one lie a migration must not tell** (`src/core/brivityImport.ts`, `src/core/brivityPeople.ts`, `public/brivity-import.html`, `scripts/verify-brivity-unconfigured.mjs` NEW).
+
+  `getBrivityPeople()` returns `[]` for an unconfigured server **without setting `lastError`** — deliberately, so the CRM degrades quietly instead of erroring on every page load. For a migration that quiet is dangerous: the planner's empty-result guard then produced *"Brivity returned no contacts"*, which reads as **Brivity is empty** rather than **Brivity is not connected**, and would reasonably be acted on as though the transfer were already done.
+
+  `planBrivityImport()` now checks `brivityConfigured()` before fetching and says exactly what is wrong, that it is not an empty account and not a fault in the migration, and the one command that fixes it. The console renders that case with its own heading and connects it to the symptom Marco actually sees: no Brivity contacts anywhere in the CRM.
+
+  **This is very likely the production state.** The CRM's Brivity contacts come from a *display-time* fetch, so with no key on the server nothing is pulled and — until now — nothing said so. It also means the migration could not have been run even by pressing the button. **Order of operations: rotate the key in Brivity (it was shared in chat), set the new one with `flyctl secrets set BRIVITY_API_KEY=…`, then Preview and Apply.**
+
+  `scripts/verify-brivity-unconfigured.mjs` (10 checks) runs a server with no key and asserts the failure is legible at both layers, including that it is never phrased as "nothing to import". Written first, it failed on the then-current code — the improved message it was testing sat in `fetchFromBrivity()`, which an unconfigured server never reaches.
+
 - [2026-09-01d] — **SECURITY/DATA-VISIBILITY: the CRM was hiding every lead without a phone number** (`src/core/db.ts`, `src/server.ts`, `public/crm-brivity.html`, `scripts/verify-phoneless-leads.mjs` NEW).
 
   Marco opened the CRM and counted 54 leads in a system holding far more. Two filters, stacked, were removing the rest:

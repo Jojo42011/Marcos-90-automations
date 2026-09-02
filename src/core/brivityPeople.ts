@@ -217,7 +217,18 @@ async function fetchOnce(key: string): Promise<Response> {
 
 async function fetchFromBrivity(): Promise<BrivityLeadRow[]> {
   const key = apiKey();
-  if (!key) throw new Error("BRIVITY_API_KEY not set");
+  /* Named precisely, because this is the whole chain in one sentence. With no
+     key the CRM's live Brivity merge silently pulls nothing AND the migration
+     cannot even build a plan — so "no Brivity contacts anywhere" and "the
+     import button does not work" are the same cause, and the fix is one
+     command on the server rather than anything in this codebase. */
+  if (!key) {
+    throw new Error(
+      "BRIVITY_API_KEY is not set on this server, so nothing can be read from Brivity — " +
+      "neither the live contact list nor a migration plan. Set it as a secret on the Fly app " +
+      "(flyctl secrets set BRIVITY_API_KEY=…) and try again.",
+    );
+  }
   let res: Response;
   try {
     res = await fetchOnce(key);
