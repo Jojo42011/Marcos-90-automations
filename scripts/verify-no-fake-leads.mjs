@@ -115,6 +115,29 @@ try {
     !/not your data|placeholder/i.test(banner2), banner2.slice(0, 140));
   const tag2 = await p2.locator("#demoTag").innerText();
   ok("and the chip flips to live", /live data/i.test(tag2), tag2);
+
+  /* ---- a SLOW Brivity must not hold the board on fabricated data ---------
+     The real account takes 25-30s to return ~2,900 contacts. That call used to
+     be awaited alongside the lead snapshot, so for that whole window every page
+     load displayed the 54 invented leads. This simulates the slow call and
+     asserts the board is real long before it finishes. */
+  const p3 = await browser.newPage();
+  await p3.route("**/api/brivity/people*", async (route) => {
+    await new Promise((r) => setTimeout(r, 6000));      // stand-in for ~26s
+    await route.fulfill({ status: 200, contentType: "application/json",
+      body: JSON.stringify({ ok: true, configured: true, count: 0, people: [] }) });
+  });
+  const t0 = Date.now();
+  await p3.goto(B + "/crm", { waitUntil: "domcontentloaded" });
+  await p3.waitForFunction(() => typeof LIVE_DATA !== "undefined" && LIVE_DATA === true, null, { timeout: 5500 });
+  const elapsed = Date.now() - t0;
+  ok("the board goes live without waiting for the slow Brivity call",
+    elapsed < 5500, elapsed + "ms");
+  const c3 = await p3.evaluate(() => LEADS.length);
+  ok("and it is showing the real leads, not the 54 placeholders", c3 === 5, String(c3));
+  console.log("  (live in " + elapsed + "ms against a 6s Brivity stub)");
+  await p3.close();
+
   srv2.kill("SIGKILL");
 } finally { await browser.close(); }
 

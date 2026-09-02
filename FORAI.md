@@ -28,6 +28,18 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-02b] — **Brivity migration RUN against production, and the 26-second window that made the CRM show fiction** (`public/crm-brivity.html`, `scripts/verify-no-fake-leads.mjs`).
+
+  **The migration is done.** Applied against the live CRM: **981 contacts created, 98 existing leads filled in, 0 failures.** Fields written on existing leads: 38 names (real names replacing DM handles), 48 intents, 35 Brivity ids, 20 statuses, 14 emails. The lead store went from **1,366 → 2,347**, Brivity-sourced from 517 → 1,498. Re-planning immediately after returns **0 creates / 1,721 already correct**, so the import is idempotent in production, not just in the fixtures.
+
+  Held back, by design and reported in the console: 981 Brivity-unqualified, 75 with no contact information, 67 collaborators/team seats, 14 duplicates within Brivity. Every one of the 2,859 reconciles.
+
+  **The real cause of "we only have 54 leads".** Not a missing key — `BRIVITY_API_KEY` was set correctly the whole time (verified: setting it again produced an identical Fly digest), and Brivity returns 2,859 contacts from production with no error. It just takes **25.7 seconds**. `loadLive()` awaited the lead snapshot and that Brivity pull in a single `Promise.all`, so on every page load the board sat on its 54 fabricated placeholder leads for half a minute. Nothing was broken; the page was displaying fiction while it waited, and a transient failure made that state permanent.
+
+  Split into `loadLive()` → fast snapshot applied immediately → `applyLive()` again when Brivity lands (skipped entirely when Brivity adds nothing, so no wasted second render). Measured: the board goes live in **577ms against a 6s Brivity stub**, where it previously waited for the whole call.
+
+  Two earlier diagnoses in this file were wrong and are corrected here: the key was never missing, and the sparse-bail (`rawLeads.length<3`) was not what Marco hit — 783 rows were being returned even before the phoneless fix. The banner work from [2026-09-02] stands on its own merits and is what makes the loading window honest.
+
 - [2026-09-02] — **The CRM was showing 54 FABRICATED leads and calling it a working board** (`public/crm-brivity.html`, `scripts/verify-no-fake-leads.mjs` NEW).
 
   Marco reported "we only have 54 leads". The number was the tell: `const N=54` — the count of placeholder rows this page generates in a loop at boot, with invented names, invented addresses and invented activity. He was not looking at a subset of his data. He was looking at people who do not exist, in a CRM that touches real calls, real texts and real ad spend.

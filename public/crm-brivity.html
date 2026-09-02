@@ -3897,16 +3897,41 @@ function mapDealTx(d){
     dateListed:fmtMDY(d.openedDate), listPrice:d.salePrice||0, expiration:fmtMDY(d.closeDate),
     closePrice:closed?(d.salePrice||0):0, gci:d.estimatedGCI||0, draft:false};
 }
+/*
+ * TWO SOURCES, VERY DIFFERENT SPEEDS.
+ *
+ * The lead snapshot is local and fast. The live Brivity pull crosses the
+ * network for ~2,900 contacts and MEASURES 25-30 SECONDS against the real
+ * account. These used to be awaited together in a Promise.all, so for that
+ * whole half-minute — on every single page load — the board sat there showing
+ * its 54 fabricated placeholder leads. That is the window Marco looked through
+ * when he reported "we only have 54 leads": nothing was broken, the page was
+ * just displaying fiction while it waited.
+ *
+ * So the snapshot is applied the moment it lands, and Brivity is merged in when
+ * it arrives. The board shows real data in well under a second and gains the
+ * live Brivity rows a few seconds later, instead of showing invented people
+ * until everything is ready.
+ */
 async function loadLive(opts){
   opts=opts||{};
-  // Pull the automation snapshot and the live Brivity import in parallel;
-  // either source alone is enough to switch off the demo data.
   const brvUrl="/api/brivity/people"+(opts.refresh?"?refresh=1":"");
-  const [body,brv]=await Promise.all([
-    fetch(crmApi("/api/dashboard/data?includePhoneless=1")).then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(crmApi(brvUrl)).then(r=>r.ok?r.json():null).catch(()=>null)
-  ]);
-  window.__brivity=(brv&&typeof brv==="object")?{configured:brv.configured,count:brv.count,lastError:brv.lastError,fetchedAt:brv.fetchedAt}:null;
+  const bodyP=fetch(crmApi("/api/dashboard/data?includePhoneless=1")).then(r=>r.ok?r.json():null).catch(()=>null);
+  const brvP=fetch(crmApi(brvUrl)).then(r=>r.ok?r.json():null).catch(()=>null);
+  const body=await bodyP;
+  /* First pass: everything this server already holds — which since the Brivity
+     migration includes the imported Brivity contacts too. */
+  await applyLive(body,null,opts);
+  const brv=await brvP;
+  /* Second pass only if Brivity actually added something. Re-running the whole
+     render for nothing would be wasted work on every load. */
+  if(brv&&brv.ok&&Array.isArray(brv.people)&&brv.people.length) await applyLive(body,brv,opts);
+  else { window.__brivity=(brv&&typeof brv==="object")?{configured:brv.configured,count:brv.count,lastError:brv.lastError,fetchedAt:brv.fetchedAt}:null; paintDataBanner(); }
+}
+
+async function applyLive(body,brv,opts){
+  opts=opts||{};
+  if(brv&&typeof brv==="object") window.__brivity={configured:brv.configured,count:brv.count,lastError:brv.lastError,fetchedAt:brv.fetchedAt};
   /* A DM lead often has NO name and NO phone — just a handle and a real
      conversation. Requiring name-or-phone here dropped those rows a second
      time, client-side, after the server had finally started sending them.
