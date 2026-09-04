@@ -28,6 +28,16 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-04] — **The Completed Tasks list could not be scrolled** (`public/team-tasks.html`, `scripts/verify-completed-tasks-scroll.mjs` NEW).
+
+  Carlos: *"i cant scroll down to see all of the completed tasks."* Exactly right — the list was cut off at the fold with no way to reach anything below it. Measured on a 25-task day: the last card sat **3,537px below the visible area** of its container.
+
+  The Completed tabs render ONE long list into `#bars`, the same container the kanban uses for its side-by-side member columns, and that container is `overflow-x:auto; overflow-y:hidden` — right for the board (each column scrolls internally, the whole thing pans sideways), wrong for a vertical list. `#bars.list` now scrolls vertically and not horizontally. The native scrollbar also had to be re-enabled for it: the kanban suppresses it with `::-webkit-scrollbar{display:none}` because it drives `#barsScroll` as an always-visible horizontal proxy, and `display:none` kills the vertical bar too — so without that the list would have scrolled by wheel with no visible affordance. `#barsScroll` hides itself in list mode (no horizontal overflow → `syncBarsScroll()` drops its `on` class), asserted rather than assumed.
+
+  `scripts/verify-completed-tasks-scroll.mjs` (15 checks) signs in through the device gate as Carlos, seeds 25 tasks completed on one day, and checks the board keeps panning sideways afterwards.
+
+  **A note on how this suite is written.** Its first version asserted `el.scrollTop = 99999` moved and that `scrollIntoViewIfNeeded()` reached the last card — and **both passed against the broken CSS**, because `overflow:hidden` still permits *programmatic* scrolling and blocks only user input. It was testing something Carlos cannot do while ignoring the thing he cannot. It now drives a real `page.mouse.wheel()`, which fails 4 checks on the pre-fix CSS and passes 15/15 after.
+
 - [2026-09-02b] — **Brivity migration RUN against production, and the 26-second window that made the CRM show fiction** (`public/crm-brivity.html`, `scripts/verify-no-fake-leads.mjs`).
 
   **The migration is done.** Applied against the live CRM: **981 contacts created, 98 existing leads filled in, 0 failures.** Fields written on existing leads: 38 names (real names replacing DM handles), 48 intents, 35 Brivity ids, 20 statuses, 14 emails. The lead store went from **1,366 → 2,347**, Brivity-sourced from 517 → 1,498. Re-planning immediately after returns **0 creates / 1,721 already correct**, so the import is idempotent in production, not just in the fixtures.

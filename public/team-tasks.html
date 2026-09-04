@@ -98,6 +98,20 @@ html[data-theme="dark"] *{scrollbar-color:#4a5560 transparent}
    #barsScroll below is always visible and drives the same scrollLeft. */
 #bars{scrollbar-width:none;-ms-overflow-style:none}
 #bars::-webkit-scrollbar{height:0;display:none}
+/* LIST MODE (the Completed tabs) renders ONE long list into this same container
+   instead of the side-by-side member columns, so the board's horizontal-only
+   overflow is exactly wrong for it: the completed list was clipped at the fold
+   with no way to reach the rest of it. Carlos reported it as "I can't scroll
+   down to see all of the completed tasks", which is precisely what it was.
+   The two rules above also have to be undone here — they hide the native
+   scrollbar because the kanban uses #barsScroll as an always-visible horizontal
+   proxy, and `display:none` kills the VERTICAL bar too, so without this the
+   list would scroll by wheel with no visible affordance that it could.
+   #barsScroll hides itself in list mode: overflow-x:hidden makes scrollWidth
+   equal clientWidth, and syncBarsScroll() drops its `on` class when there is
+   nothing to scroll sideways. */
+#bars.list{overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;-ms-overflow-style:auto}
+#bars.list::-webkit-scrollbar{width:10px;height:10px;display:block}
 #barsScroll{flex:0 0 auto;height:12px;margin:0 14px 12px;border-radius:8px;
   background:rgba(127,140,155,.16);position:relative;cursor:pointer;display:none}
 #barsScroll.on{display:block}
