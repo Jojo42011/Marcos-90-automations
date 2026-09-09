@@ -15,6 +15,19 @@ const MOJO_TEXT_2 = (firstName) => `Hey ${firstName}, following up in case you m
     `if you're still exploring, or no worries at all if the timing's not right. Just let me know either way!`;
 const TWO_TEXT_GAP_MS = 4 * 24 * 60 * 60 * 1000;
 const PAUSE_AFTER_TEXT_2_MS = 48 * 60 * 60 * 1000;
+/**
+ * Matches the Brivity source "Mojo" exactly — 445 contacts in the live account.
+ *
+ * IT DELIBERATELY DOES NOT MATCH "Mojo FL" (107 more). That is not an
+ * oversight, and widening it would be a real decision rather than a tidy-up:
+ * this gate turns into outbound SMS, and the copy above is written for the
+ * San Antonio market ("inventory is opening up west of Stone Oak"). Sending
+ * that to a Florida list would be wrong in a way the recipient notices.
+ *
+ * So the two lists stay separate until someone decides what "Mojo FL" should
+ * receive. The CRM's source sidebar shows both counts side by side, so the
+ * split is visible rather than buried here.
+ */
 function isMojoLead(lead) {
     return lead.source?.trim().toLowerCase() === "mojo";
 }

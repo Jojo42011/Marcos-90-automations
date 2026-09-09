@@ -28,6 +28,24 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-09b] — **Brivity's contacts now live in a durable SQLite mirror instead of a 10-minute memory cache** (`src/core/brivityMirrorStore.ts` NEW, `src/core/brivityPeople.ts`, `scripts/verify-brivity-mirror.mjs` NEW, `scripts/verify-brivity-mirror-serving.mjs` NEW).
+
+  Marco: *"Make a database in there as well, so every time we reload, the leads don't go away… make it more sophisticated to be able to hold this information."* The people list was held in an in-memory `Map` with a 10-minute TTL and nowhere else, which cannot meet that: a deploy, a restart or an idle-machine reclaim emptied it, and the next page load then blocked on the full 25-30 second network pull before it could show anything.
+
+  `brivity-mirror.db` on the `/data` volume, following the repo's store pattern (resolve path → lazy singleton → schema init). `getBrivityPeople()` now reads **mirror first, memory second, network last** — anything that returns rows now beats anything that returns them eventually, because the caller is a page render. A stale mirror triggers a refresh that is deliberately **not awaited**.
+
+  Design decisions worth keeping:
+  * **It is a mirror, not the system of record.** Brivity owns these rows; the table is a durable cache and is safe to delete. That is deliberately distinct from an *imported* lead, which is a real editable CRM record — conflating them would let a Brivity edit silently revert something typed here.
+  * **Replace, not upsert.** Brivity returns no timestamps, so a changed row is indistinguishable from an unchanged one, and a deletion there is only knowable as absence from a complete list. Upserting would accumulate contacts Brivity no longer has, forever.
+  * **An empty result is refused.** `getBrivityPeople()` degrades to `[]` on a failed fetch, and writing that would wipe a good mirror because the network blipped.
+  * The full row is stored as JSON alongside the few indexed columns, so `BrivityLeadRow` can grow without a migration and nothing is silently dropped in transit.
+
+  **No transactions table, and that is the finding, not an omission.** Marco asked for "everything else we are able to pull". Measured against the live account, `/api/people` is the *only* endpoint Brivity's integration API serves — `/api/users`, `/api/tags`, `/api/tasks` and the rest return the identical `{"status":"406","error":"Not Acceptable"}` as a route invented at random, which is how we know they are absent rather than broken. A table for them would be a promise the API cannot keep.
+
+  Measured: a cold request answered in **11ms against a 6-second stub** standing in for the real 26-second call, and **30 contacts still served in 7ms after a full server restart**. 18 store checks run across separate node processes (the only honest test of "survives a restart"); 9 more drive the real server against a slow stub.
+
+  Also documented, not changed: `isMojoLead()` matches the source `"Mojo"` (445) and deliberately **not** `"Mojo FL"` (107). That gate turns into outbound SMS whose copy is written for the San Antonio market, so widening it is a decision about what a Florida list should receive, not a tidy-up. Both counts now appear side by side in the source sidebar.
+
 - [2026-09-09] — **Lead source counts in the Leads sidebar; three filters that could never match anything removed** (`public/crm-brivity.html`, `scripts/verify-lead-source-nav.mjs` NEW).
 
   Marco: *"I can't see exactly how many have come from TikTok or Instagram. I know we track that stuff, and it's not displayed there."* Correct — the sidebar had five hardcoded rows and none of them were those. Worse, three were fake filters: `valuations`, `brivity` and `kwkly` were wired to `return false`, so they could never match a lead and sat at 0 permanently while looking functional. A fourth, `idx`, tested `source === "Website IDX"` when Brivity's real value is `"Brivity IDX"` — its 67 leads read as 0 too.

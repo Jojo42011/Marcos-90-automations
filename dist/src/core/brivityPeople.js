@@ -11,11 +11,45 @@
  * Results are cached in memory (default 10 min) — Brivity rate limits are
  * unknown, and the CRM reloads on every page open.
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.brivityConfigured = brivityConfigured;
 exports.personToRow = personToRow;
 exports.getBrivityPeople = getBrivityPeople;
 exports.getBrivityImportStatus = getBrivityImportStatus;
+exports.primeBrivityMirrorStore = primeBrivityMirrorStore;
 const brivityMapping_js_1 = require("./brivityMapping.js");
 const CORE_BASE = (process.env.BRIVITY_CORE_URL || "https://api.brivity.com").replace(/\/$/, "");
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -167,36 +201,136 @@ async function fetchFromBrivity() {
        own order is at least honest about that. */
     return rows;
 }
+/**
+ * Pull from Brivity and write the result to the durable mirror.
+ *
+ * Separated from `getBrivityPeople()` so a refresh can run in the background
+ * without anyone waiting on it — the 25-30s round trip is why the CRM used to
+ * sit empty on a cold load.
+ */
+async function refreshBrivityMirror() {
+    const startedAt = new Date().toISOString();
+    const mirror = await Promise.resolve().then(() => __importStar(require("./brivityMirrorStore.js")));
+    primeBrivityMirrorStore(mirror);
+    const { replaceBrivityMirror, recordBrivitySyncFailure } = mirror;
+    try {
+        const rows = await fetchFromBrivity();
+        cache = { rows, fetchedAt: Date.now() };
+        lastError = null;
+        try {
+            replaceBrivityMirror(rows, startedAt);
+            console.log(`[Brivity] mirrored ${rows.length} people to SQLite`);
+        }
+        catch (err) {
+            /* A failed WRITE must not fail the READ — the rows are good, they just
+               did not persist this time. Say so and carry on serving them. */
+            console.error("[Brivity] mirror write failed:", err.message);
+        }
+        return rows;
+    }
+    catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        console.error("[Brivity] people fetch failed:", lastError);
+        try {
+            recordBrivitySyncFailure(startedAt, lastError);
+        }
+        catch { /* the log is a nicety, never a reason to throw */ }
+        throw err;
+    }
+}
+/**
+ * Brivity's contacts, served from the durable mirror.
+ *
+ * WHAT CHANGED AND WHY. This used to await a 25-30s network fetch behind a
+ * 10-minute in-memory cache, so a cold load — a deploy, a restart, an idle
+ * machine — blocked the whole CRM on Brivity's response time, and nothing at
+ * all survived the process. Now the last known good list comes back from SQLite
+ * immediately and the network refresh happens behind it.
+ *
+ * The ordering matters: mirror first, memory second, network last. Anything
+ * that returns rows NOW beats anything that returns them eventually, because
+ * the caller is a page render.
+ */
 async function getBrivityPeople(forceRefresh = false) {
     if (!brivityConfigured())
         return [];
-    if (!forceRefresh && cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS)
-        return cache.rows;
+    if (!forceRefresh) {
+        if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS)
+            return cache.rows;
+        try {
+            const mirror = await Promise.resolve().then(() => __importStar(require("./brivityMirrorStore.js")));
+            primeBrivityMirrorStore(mirror);
+            const { readBrivityMirror, getBrivityMirrorStatus } = mirror;
+            const mirrored = readBrivityMirror();
+            if (mirrored.length) {
+                cache = { rows: mirrored, fetchedAt: Date.now() };
+                const status = getBrivityMirrorStatus();
+                /* Kick off a refresh but DO NOT await it — that is the entire point. */
+                if (isMirrorStale(status.lastSyncedAt) && !inflight) {
+                    inflight = refreshBrivityMirror()
+                        .catch(() => cache?.rows ?? mirrored)
+                        .finally(() => { inflight = null; });
+                }
+                return mirrored;
+            }
+        }
+        catch (err) {
+            /* A broken mirror file is not a reason to serve nothing — fall through to
+               the network, which is what happened before this store existed. */
+            console.error("[Brivity] mirror read failed:", err.message);
+        }
+    }
+    /* Nothing local to serve (first ever run, or an explicit refresh): this is
+       the one path that still waits on Brivity. */
     if (inflight)
         return inflight;
-    inflight = fetchFromBrivity()
-        .then((rows) => {
-        cache = { rows, fetchedAt: Date.now() };
-        lastError = null;
-        console.log(`[Brivity] imported ${rows.length} people from Core API`);
-        return rows;
-    })
-        .catch((err) => {
-        lastError = err instanceof Error ? err.message : String(err);
-        console.error("[Brivity] people import failed:", lastError);
-        // Serve the stale cache (if any) rather than dropping live data.
-        return cache?.rows ?? [];
-    })
-        .finally(() => {
-        inflight = null;
-    });
+    inflight = refreshBrivityMirror()
+        .catch(() => cache?.rows ?? [])
+        .finally(() => { inflight = null; });
     return inflight;
 }
+/** Refresh in the background once the mirror is older than the cache window. */
+function isMirrorStale(lastSyncedAt) {
+    if (!lastSyncedAt)
+        return true;
+    const t = Date.parse(lastSyncedAt);
+    return !Number.isFinite(t) || Date.now() - t > CACHE_TTL_MS;
+}
 function getBrivityImportStatus() {
+    let mirroredCount = 0;
+    let mirrorSyncedAt = null;
+    let mirrorError = null;
+    try {
+        /* Synchronous require-shaped access: this is called from response paths
+           that are not async, and a status probe must never be the thing that
+           throws. A missing mirror simply reports zero. */
+        const store = getMirrorStoreSync();
+        if (store) {
+            const st = store.getBrivityMirrorStatus();
+            mirroredCount = st.count;
+            mirrorSyncedAt = st.lastSyncedAt;
+            mirrorError = st.lastError;
+        }
+    }
+    catch (err) {
+        mirrorError = err.message;
+    }
     return {
         configured: brivityConfigured(),
         cachedCount: cache?.rows.length ?? 0,
         fetchedAt: cache ? new Date(cache.fetchedAt).toISOString() : null,
         lastError,
+        mirroredCount,
+        mirrorSyncedAt,
+        mirrorError,
     };
+}
+/* The mirror is loaded lazily and cached here so the synchronous status path
+   can reach it without an await. */
+let mirrorStore = null;
+function getMirrorStoreSync() {
+    return mirrorStore;
+}
+function primeBrivityMirrorStore(mod) {
+    mirrorStore = mod;
 }
