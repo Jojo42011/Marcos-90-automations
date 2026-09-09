@@ -20,6 +20,10 @@ const PUBLIC_EXACT = new Set([
     "/webhook/twilio",
     "/sinch/inbound",
     "/api/quo/webhook",
+    /* Zapier posting Mojo Dialer contacts. It carries its own shared secret
+       (MOJO_WEBHOOK_SECRET) and refuses outright when that is unset, so the site
+       lock is not what is protecting it. */
+    "/api/mojo/webhook",
     /* Google's OAuth redirect target — the browser arrives here unauthenticated
        by definition, carrying the code Google issued. */
     "/api/email/gmail-oauth/callback",

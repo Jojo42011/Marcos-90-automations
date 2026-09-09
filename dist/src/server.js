@@ -5376,6 +5376,125 @@ app.post("/api/showings/check-reminders", async (req, res) => {
         res.status(500).json({ error: message });
     }
 });
+/**
+ * Inbound Mojo Dialer contacts, pushed by Zapier.
+ *
+ * Mojo has no public REST API and no bulk read — see src/core/mojoWebhook.ts
+ * for the evidence — so a push endpoint is the only automatic way contacts can
+ * leave the dialer. Marco configures a Zap (trigger: New Contact / Contact
+ * Updated → action: Webhooks by Zapier POST) pointing at this URL with the
+ * shared secret attached.
+ *
+ * Matching mirrors the Brivity importer: phone first, then email, so a contact
+ * already on the board is ENRICHED rather than duplicated. Writes go through
+ * the quiet path — syncing a contact must not text or email anybody.
+ */
+app.post("/api/mojo/webhook", express_1.default.json({ limit: "256kb" }), async (req, res) => {
+    const { mojoSecretConfigured, mojoSecretOk, mapMojoPayload, mojoPayloadIsUsable, mojoLeadPatch } = await Promise.resolve().then(() => __importStar(require("./core/mojoWebhook.js")));
+    if (!mojoSecretConfigured()) {
+        /* Refuse rather than accept anonymous writes. An endpoint that creates
+           leads must never be open just because a secret was not configured. */
+        res.status(503).json({
+            ok: false,
+            error: "MOJO_WEBHOOK_SECRET is not set on this server, so the Mojo webhook is closed. " +
+                "Set it as a secret and put the same value in the Zap.",
+        });
+        return;
+    }
+    const provided = (typeof req.query.token === "string" ? req.query.token : "") ||
+        (typeof req.headers["x-mojo-secret"] === "string" ? req.headers["x-mojo-secret"] : "");
+    if (!mojoSecretOk(provided)) {
+        res.status(401).json({ ok: false, error: "Bad or missing Mojo webhook secret" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    /* Zapier can be configured to send one contact or a list; accept both rather
+       than failing on a shape the operator reasonably chose. */
+    const items = Array.isArray(body)
+        ? body
+        : Array.isArray(body.contacts)
+            ? (body.contacts)
+            : [body];
+    try {
+        const { listAllLeads: allLeads, upsertLeadQuiet } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+        const existing = await allLeads();
+        const phoneKeyOf = (v) => {
+            let d = String(v ?? "").replace(/\D/g, "");
+            if (d.length === 11 && d.startsWith("1"))
+                d = d.slice(1);
+            return d.length === 10 ? d : "";
+        };
+        const byPhone = new Map();
+        const byEmail = new Map();
+        for (const l of existing) {
+            const pk = phoneKeyOf(l.phone);
+            if (pk && !byPhone.has(pk))
+                byPhone.set(pk, l);
+            const ek = String(l.email || "").trim().toLowerCase();
+            if (ek && !byEmail.has(ek))
+                byEmail.set(ek, l);
+        }
+        let created = 0, merged = 0, skipped = 0;
+        const problems = [];
+        for (const raw of items) {
+            const m = mapMojoPayload(raw);
+            if (!mojoPayloadIsUsable(m)) {
+                skipped++;
+                continue;
+            }
+            const pk = phoneKeyOf(m.phone);
+            const ek = (m.email || "").toLowerCase();
+            const hit = (pk && byPhone.get(pk)) || (ek && byEmail.get(ek)) || null;
+            try {
+                if (hit) {
+                    /* Fill gaps only, the same rule the Brivity merge follows: a sync
+                       must never overwrite something a person typed here. */
+                    const patch = mojoLeadPatch(m);
+                    const next = { ...hit };
+                    if (!hit.name || /^unnamed/i.test(hit.name))
+                        next.name = patch.name;
+                    if (!hit.phone && patch.phone)
+                        next.phone = patch.phone;
+                    if (!hit.email && patch.email)
+                        next.email = patch.email;
+                    if (!hit.address && patch.address)
+                        next.address = patch.address;
+                    if (!hit.source)
+                        next.source = patch.source;
+                    if (patch.tags) {
+                        const tags = new Set([...(hit.tags || []), ...patch.tags]);
+                        next.tags = [...tags];
+                    }
+                    upsertLeadQuiet(next);
+                    merged++;
+                }
+                else {
+                    upsertLeadQuiet({
+                        platform: "mojo",
+                        userId: m.externalId || m.phone || m.email || `mojo-${Date.now()}`,
+                        username: null,
+                        name: m.name,
+                        phone: m.phone,
+                        email: m.email,
+                        state: "new",
+                        source: m.source,
+                        address: m.address,
+                        crmNotes: m.notes,
+                        tags: m.tags,
+                    });
+                    created++;
+                }
+            }
+            catch (err) {
+                problems.push({ ref: m.externalId || m.name, error: err.message });
+            }
+        }
+        res.json({ ok: true, received: items.length, created, merged, skipped, problems });
+    }
+    catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
 app.post("/api/mojo-outreach/run", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });

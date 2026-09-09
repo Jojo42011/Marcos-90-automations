@@ -28,6 +28,27 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-09c] — **Mojo Dialer connected the only way Mojo allows: an inbound webhook** (`src/core/mojoWebhook.ts` NEW, `src/server.ts`, `src/core/lockdown.ts`, `scripts/verify-mojo-webhook.mjs` NEW).
+
+  Marco asked to connect Mojo Dialer and get its seller-side leads into the CRM. Two findings first, because they decide the shape of everything else:
+
+  **1. 552 Mojo contacts are already in the CRM.** They came across in the Brivity migration — source `"Mojo"` (445) and `"Mojo FL"` (107). Nothing was missing; they had no row in the sidebar to be seen in, which [2026-09-09] fixed.
+
+  **2. Mojo has no public REST API, and no bulk read at all.** Its integrations page lists pre-established partners only (Boomtown, Real Geeks, Follow Up Boss, Mailchimp, Zillow, Google, Exchange) plus the middleware services Zapier and API Nation — no developer documentation, no API key page, no partner application process. Zapier's Mojo app is public and enumerable: triggers are New Contact, New Contact in Group, Contact Updated, New Activity, New Note, Note Updated, Bad Number and Send Button Clicked; actions all write *into* Mojo. **Nothing can ask Mojo for its lead list.** A "pull all Mojo leads" job cannot be written against what Mojo exposes, so this is a push endpoint — one event at a time, as it happens.
+
+  `POST /api/mojo/webhook` receives them. What it refuses matters more than what it accepts, because it creates leads:
+  * **Closed unless `MOJO_WEBHOOK_SECRET` is set** — it returns 503 and names the variable rather than accepting anonymous writes because a secret was never configured.
+  * The secret is compared in constant time against a SHA-256 digest, by query param or `x-mojo-secret` header (Zapier can attach a static value and nothing more — it cannot compute an HMAC over the body, so a shared secret is the strongest thing actually available).
+  * Allowlisted in `lockdown.ts` alongside the other third-party inbound routes; the site lock is not what protects it.
+
+  Matching mirrors the Brivity importer — phone, then email — so a contact already on the board is **enriched, never duplicated**, and the same gap-fill rule applies: a name, email or source typed here is never overwritten by a sync. Writes go through the quiet path, so syncing texts and emails nobody. Source is always `"Mojo"` so these join the existing count instead of creating a parallel `"Mojo (Zapier)"` bucket that halves it; the specific Mojo list becomes a tag.
+
+  **To turn it on:** set `MOJO_WEBHOOK_SECRET` on the server, then build a Zap — trigger *New Contact* (and/or *Contact Updated*) → action *Webhooks by Zapier: POST* to `https://marco-90-automation.fly.dev/api/mojo/webhook?token=<secret>`.
+
+  Note: leads created here carry source `"Mojo"`, so the existing scheduled `mojoOutreach` sequence will treat them exactly as it treats the 445 already on the board — the endpoint introduces no new sending behaviour, but it does feed an existing one.
+
+  `scripts/verify-mojo-webhook.mjs` (28 checks) covers the refusals first, then enrichment-not-duplication, that human-typed data survives a sync, batches, and that re-sending the same contact does not duplicate it.
+
 - [2026-09-09b] — **Brivity's contacts now live in a durable SQLite mirror instead of a 10-minute memory cache** (`src/core/brivityMirrorStore.ts` NEW, `src/core/brivityPeople.ts`, `scripts/verify-brivity-mirror.mjs` NEW, `scripts/verify-brivity-mirror-serving.mjs` NEW).
 
   Marco: *"Make a database in there as well, so every time we reload, the leads don't go away… make it more sophisticated to be able to hold this information."* The people list was held in an in-memory `Map` with a 10-minute TTL and nowhere else, which cannot meet that: a deploy, a restart or an idle-machine reclaim emptied it, and the next page load then blocked on the full 25-30 second network pull before it could show anything.
