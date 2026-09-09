@@ -282,6 +282,12 @@
   .leads-nav a:hover{background:#fafbfc}
   .leads-nav a.on{background:var(--teal-soft);color:var(--teal);font-weight:600}
   .leads-nav a .c{color:var(--muted);font-size:13px}
+  /* The generated source list. A quiet section label rather than another link,
+     so it reads as a grouping and not as a filter you can click. */
+  .leads-nav .src-head{padding:14px 18px 5px;font-size:10.5px;font-weight:700;letter-spacing:.07em;
+    text-transform:uppercase;color:#9aa6b2}
+  .leads-nav .src-more{font-size:12px;color:var(--teal);cursor:pointer}
+  .leads-nav a .c.zero{opacity:.5}
   .leads-main{min-width:0;display:flex;flex-direction:column}
   .leads-top{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px}
   .leads-top h1{font-weight:400;color:var(--title);font-size:28px;margin:0}
@@ -1277,11 +1283,17 @@
       <div class="leads-nav">
         <div class="h"><b>Leads</b><span class="add">+</span></div>
         <a class="on" data-lb="all">All Leads <span class="c" id="lnAll">0</span></a>
-        <a data-lb="valuations">Valuations <span class="c">0</span></a>
-        <a data-lb="brivity">Brivity Leads <span class="c">0</span></a>
-        <a data-lb="idx">Brivity IDX <span class="c" id="lnIdx">0</span></a>
-        <a data-lb="kwkly">Kwkly <span class="c">0</span></a>
-        <a data-lb="zillow">Zillow <span class="c" id="lnZillow">1</span></a>
+        <!-- Was five hardcoded rows: Valuations, Brivity Leads, Brivity IDX,
+             Kwkly, Zillow. Three of them were wired to `return false` and could
+             never show anything; Brivity IDX matched the string "Website IDX"
+             when the real source is "Brivity IDX", so its 67 leads read as 0.
+             They are now generated from the leads actually on the board, so a
+             row exists only when there is something behind it — and TikTok,
+             Instagram and Mojo finally appear, which is what was being asked
+             for and was never displayed anywhere. -->
+        <div class="src-head">By source</div>
+        <div id="lnSources"></div>
+        <a id="lnSrcMore" class="src-more" style="display:none"></a>
         <a id="leadPonds">Lead Ponds <span class="c">›</span></a>
         <a id="smartFiltersToggle">Smart Filters <span class="c">12 ›</span></a>
         <div id="smartFiltersList" class="sf-list" style="display:none">
@@ -2720,8 +2732,9 @@ function seedDefaultHidden(tkey){
 
 function renderLeads(){
   document.getElementById("lnAll").textContent=LEADS.length.toLocaleString();
-  document.getElementById("lnIdx").textContent=LEADS.filter(l=>l.source==="Website IDX").length;
-  const zEl=document.getElementById("lnZillow"); if(zEl) zEl.textContent=LEADS.filter(l=>/zillow/i.test(l.source||"")).length;
+  /* Both of these counted a single hardcoded source into an element that no
+     longer exists. renderSourceNav() counts every source that has leads. */
+  renderSourceNav();
   /* Archived and trashed contacts drop out of the default view but are NOT
      gone: filter for that status and they come straight back. Nothing here
      deletes a record. */
@@ -10383,13 +10396,70 @@ bindTableClicks("nurtureRows");
 /* ═══════════ Full-CRM clickability sweep ═══════════ */
 let dashMode="recent", convGroupMode="all", snapMode="bs", aiTab="about";
 let leadBucket="all", leadSmartKey=null;
-function leadBucketPred(l){
-  switch(leadBucket){
-    case "idx": return l.source==="Website IDX";
-    case "zillow": return /zillow/i.test(l.source||"");
-    case "valuations": case "brivity": case "kwkly": return false;
-    default: return true;
+/*
+ * SOURCE COUNTS, GENERATED FROM THE LEADS THEMSELVES.
+ *
+ * What this replaces: five hardcoded rows, three of which (`valuations`,
+ * `brivity`, `kwkly`) were `return false` — they could never match anything, so
+ * they sat at 0 forever looking like real filters with nothing in them. `idx`
+ * tested `source === "Website IDX"` while Brivity's actual value is
+ * "Brivity IDX", so its 67 leads also read 0. Meanwhile TikTok (368 in Brivity
+ * plus the DM funnel), Instagram and Mojo (552 across "Mojo" and "Mojo FL")
+ * had no row at all — the numbers Marco actually wanted were the ones missing.
+ *
+ * Generating the list means a row exists exactly when leads exist behind it, so
+ * it cannot go stale as sources come and go, and nothing can sit at zero.
+ *
+ * CASE-FOLDED, because the two ingest paths disagree: the DM pipeline writes
+ * `source: payload.platform` ("tiktok", "instagram") while Brivity sends
+ * "TikTok" and "Instagram". Those are the same source and must be one row. The
+ * folding is only for the KEY — the best-looking spelling is kept for display,
+ * preferring the one that is not all-lowercase, so the row reads "TikTok".
+ * Note this deliberately does NOT merge by prefix: "Mojo" and "Mojo FL" are two
+ * different lists in Brivity and stay two rows.
+ */
+var SRC_SHOW_ALL=false, SRC_TOP=8;
+function sourceKey(l){ return String(l.source||"").trim().toLowerCase(); }
+function sourceCounts(){
+  var by={};
+  (LEADS||[]).forEach(function(l){
+    var k=sourceKey(l); if(!k) return;
+    var raw=String(l.source||"").trim();
+    if(!by[k]) by[k]={key:k,label:raw,n:0};
+    by[k].n++;
+    /* Prefer a spelling with capitals: "TikTok" over "tiktok". */
+    if(raw!==raw.toLowerCase()&&by[k].label===by[k].label.toLowerCase()) by[k].label=raw;
+  });
+  return Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){
+    return b.n-a.n||a.label.localeCompare(b.label);
+  });
+}
+function renderSourceNav(){
+  var wrap=document.getElementById("lnSources"); if(!wrap) return;
+  var rows=sourceCounts();
+  var head=document.querySelector(".leads-nav .src-head");
+  var more=document.getElementById("lnSrcMore");
+  if(!rows.length){
+    /* No sources at all is a real state (an empty board); say nothing rather
+       than showing an empty heading. */
+    wrap.innerHTML=""; if(head)head.style.display="none"; if(more)more.style.display="none"; return;
   }
+  if(head)head.style.display="";
+  var shown=SRC_SHOW_ALL?rows:rows.slice(0,SRC_TOP);
+  wrap.innerHTML=shown.map(function(r){
+    return '<a data-lb="src:'+esc(r.key)+'"'+(leadBucket==="src:"+r.key?' class="on"':'')+'>'+
+      esc(r.label)+' <span class="c">'+r.n.toLocaleString()+'</span></a>';
+  }).join("");
+  if(more){
+    if(rows.length>SRC_TOP){
+      more.style.display="";
+      more.textContent=SRC_SHOW_ALL?"Show fewer":("Show all "+rows.length+" sources");
+    } else more.style.display="none";
+  }
+}
+function leadBucketPred(l){
+  if(leadBucket&&leadBucket.indexOf("src:")===0) return sourceKey(l)===leadBucket.slice(4);
+  return true;
 }
 const SMART_PREDS={
   buyers_email:l=>l.intent==="buyer"&&!!l.email,
@@ -10418,10 +10488,16 @@ document.getElementById("msgTabs").addEventListener("click",e=>{
   if(convGroupMode==="sms"||convGroupMode==="all"){ if(QUO.configured) loadQuoThreads(); }
   renderConvos();
 });
-document.querySelectorAll('#view-leads .leads-nav a[data-lb]').forEach(a=>a.addEventListener("click",()=>{
+/* Delegated, because the source rows are generated on every render — handlers
+   bound once at load would be lost the first time the list repaints. */
+document.querySelector('#view-leads .leads-nav').addEventListener("click",function(e){
+  var a=e.target.closest('a[data-lb]'); if(!a) return;
   document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(x=>x.classList.remove("on"));
   a.classList.add("on"); leadBucket=a.getAttribute("data-lb"); leadSmartKey=null; page=1; renderLeads();
-}));
+});
+document.getElementById("lnSrcMore").addEventListener("click",function(){
+  SRC_SHOW_ALL=!SRC_SHOW_ALL; renderSourceNav();
+});
 document.querySelectorAll('#view-leads .sf-list .sf[data-sf]').forEach(a=>{
   const key=a.getAttribute("data-sf");
   if(SMART_NODATA[key]){

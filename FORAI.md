@@ -28,6 +28,20 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-09] — **Lead source counts in the Leads sidebar; three filters that could never match anything removed** (`public/crm-brivity.html`, `scripts/verify-lead-source-nav.mjs` NEW).
+
+  Marco: *"I can't see exactly how many have come from TikTok or Instagram. I know we track that stuff, and it's not displayed there."* Correct — the sidebar had five hardcoded rows and none of them were those. Worse, three were fake filters: `valuations`, `brivity` and `kwkly` were wired to `return false`, so they could never match a lead and sat at 0 permanently while looking functional. A fourth, `idx`, tested `source === "Website IDX"` when Brivity's real value is `"Brivity IDX"` — its 67 leads read as 0 too.
+
+  The list is now **generated from the leads on the board**, so a row exists exactly when there is something behind it and nothing can sit at zero. Rows sort by count, the top 8 show with a "Show all N sources" expander, and clicking one filters the table.
+
+  **Case-folded, deliberately.** The two ingest paths spell sources differently: the DM pipeline writes `source: payload.platform` (`"tiktok"`, `"instagram"`) while Brivity sends `"TikTok"` and `"Instagram"`. Counting by exact string splits every social source into two half-sized rows, and half a number looks exactly as plausible as the whole one. Folding is on the key only; the display keeps the capitalised spelling. It does **not** merge by prefix — `"Mojo"` (445) and `"Mojo FL"` (107) are two different lists in Brivity and stay two rows.
+
+  Click handling moved to delegation on the nav, since the rows are regenerated on every render and once-bound handlers would be lost on the first repaint.
+
+  Real distribution this exposes, from the live account: Mojo 445, TikTok 368, Call In 325, Cancelled/Expired 244, Mojo FL 107, Instagram 80, Brivity IDX 67 — plus the DM funnel's own Instagram and TikTok leads, which merge into those rows.
+
+  `scripts/verify-lead-source-nav.mjs` (17 checks) seeds the real casing split and asserts TikTok/tiktok become one row of 17 rather than two of 12 and 5, that Mojo and Mojo FL stay apart, that the dead rows are gone rather than merely empty, and that the source counts add up to the All Leads total.
+
 - [2026-09-04] — **The Completed Tasks list could not be scrolled** (`public/team-tasks.html`, `scripts/verify-completed-tasks-scroll.mjs` NEW).
 
   Carlos: *"i cant scroll down to see all of the completed tasks."* Exactly right — the list was cut off at the fold with no way to reach anything below it. Measured on a 25-task day: the last card sat **3,537px below the visible area** of its container.
