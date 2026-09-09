@@ -10461,19 +10461,49 @@ function leadBucketPred(l){
   if(leadBucket&&leadBucket.indexOf("src:")===0) return sourceKey(l)===leadBucket.slice(4);
   return true;
 }
+/*
+ * Each predicate must actually mean what its label says. Several did not, and a
+ * filter that returns the wrong set is worse than one that returns nothing —
+ * you act on the result believing it.
+ *
+ *   mr_no_task   said "Has Market Report" and tested `!(l.reports||0)`, which is
+ *                the exact OPPOSITE: it returned everyone WITHOUT a report.
+ *   no_mr        said "No Market Report - Contacts w/ Email + Address" but only
+ *                tested email and address, so it included the very contacts who
+ *                already had a report.
+ *   buyers_email said "and no Listing Alert" and never looked at `alerts`.
+ *   past_clients said "Past clients" and tested `statusDisp === "unqualified"`,
+ *                which is a dead lead, not a past client. The Brivity migration
+ *                tags real past clients "Past Client" (29 of them), so that is
+ *                what it reads now.
+ *
+ * The 30-day "no task / no outreach" halves of these labels are NOT implemented,
+ * because a lead row carries no per-lead task or outreach history to test — see
+ * SMART_NODATA below for how that is handled rather than faked.
+ */
 const SMART_PREDS={
-  buyers_email:l=>l.intent==="buyer"&&!!l.email,
+  buyers_email:l=>l.intent==="buyer"&&!!l.email&&!(l.alerts||0),
   hot:l=>l.statusDisp==="hot",
   no_plan:l=>!(l.autoPlanEnrollments||[]).length,
-  overdue:l=>l.due&&l.due.label==="Due Today",
   partial:l=>!l.email||!l.phone,
   watch_nurture:l=>l.statusDisp==="watch"||l.statusDisp==="nurture",
-  mr_no_task:l=>!(l.reports||0), no_mr:l=>!!l.email&&!!l.address,
-  past_clients:l=>l.statusDisp==="unqualified",
+  mr_no_task:l=>(l.reports||0)>0,
+  no_mr:l=>!!l.email&&!!l.address&&!(l.reports||0),
+  past_clients:l=>(l.tags||[]).some(t=>/^past client$/i.test(String(t))),
 };
-/* Site-visit filters have no source data (website visit tracking is not wired up).
-   These used to be `l=>true`, which returned every lead while looking like a filter. */
-const SMART_NODATA={visit30:1,visit_week:1,visit_today:1};
+/* Filters with no data behind them. They used to be `l=>true`, which returned
+   every lead while looking like a filter; they are now visibly marked and say
+   why when clicked, rather than answering with a number nobody can trust.
+   `overdue` joins them: a lead row's `due` is synthesised from `crmCallQueue`
+   and only ever reads "Due Today" or "Upcoming" — there is no overdue state in
+   it, so "Overdue Tasks" was matching today's calls and calling them late. */
+const SMART_NODATA={visit30:1,visit_week:1,visit_today:1,overdue:1};
+const SMART_NODATA_WHY={
+  visit30:"Website visit tracking is not connected, so this filter has no data to run on.",
+  visit_week:"Website visit tracking is not connected, so this filter has no data to run on.",
+  visit_today:"Website visit tracking is not connected, so this filter has no data to run on.",
+  overdue:"Per-lead task due dates are not on the lead record yet, so nothing here can be shown as overdue.",
+};
 function leadSmartPred(l){ return !leadSmartKey||!(SMART_PREDS[leadSmartKey])||SMART_PREDS[leadSmartKey](l); }
 document.getElementById("dashTabs").addEventListener("click",e=>{
   const b=e.target.closest("[data-dt]"); if(!b)return;
@@ -10502,11 +10532,11 @@ document.querySelectorAll('#view-leads .sf-list .sf[data-sf]').forEach(a=>{
   const key=a.getAttribute("data-sf");
   if(SMART_NODATA[key]){
     a.classList.add("sf-nodata");
-    a.title="Website visit tracking is not connected yet, so this filter has no data to run on.";
+    a.title=SMART_NODATA_WHY[key]||"This filter has no data to run on yet.";
   }
   a.addEventListener("click",()=>{
     if(SMART_NODATA[key]){
-      crmToast("Site visit tracking isn't connected yet, so this filter has no data to run on.");
+      crmToast(SMART_NODATA_WHY[key]||"This filter has no data to run on yet.");
       return;
     }
     document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(x=>x.classList.remove("on"));

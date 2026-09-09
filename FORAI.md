@@ -28,6 +28,22 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-09d] — **Four Smart Filters returned the wrong set of leads; one had no data at all** (`public/crm-brivity.html`, `scripts/verify-smart-filters.mjs` NEW).
+
+  Continuing the "remove things that aren't performing a clean function" sweep into the Smart Filters, where the problem was worse than a dead row: a filter that returns the **wrong** set is more dangerous than one that returns nothing, because you act on the result believing it.
+
+  * `past_clients` — labelled "Past clients", tested `statusDisp === "unqualified"`, which is a **dead lead**. Very nearly the opposite, and the most valuable segment a realtor has to get wrong. Now reads the `"Past Client"` tag the Brivity migration writes (29 contacts).
+  * `mr_no_task` — labelled "Has Market Report…", tested `!(l.reports||0)`. Exactly **inverted**: it returned everyone *without* a report.
+  * `no_mr` — labelled "No Market Report - Contacts w/ Email + Address", tested only email and address, so it included the very contacts who already had one.
+  * `buyers_email` — labelled "…and no Listing Alert", never looked at `alerts`.
+  * `overdue` — labelled "Overdue Tasks", but a lead row's `due` is synthesised from `crmCallQueue` and only ever reads "Due Today" or "Upcoming". There is no overdue state in it, so the filter was matching **today's** calls and presenting them as late. It joins `SMART_NODATA` and now says so instead of answering.
+
+  `SMART_NODATA_WHY` gives each no-data filter its own reason, so "Overdue Tasks" explains that per-lead task due dates are not on the lead record rather than repeating the website-visit-tracking message that belongs to the other three.
+
+  The "no task / no outreach in 30 days" halves of several labels remain unimplemented — a lead row carries no per-lead task or outreach history to test — and that is stated in the code rather than approximated.
+
+  `scripts/verify-smart-filters.mjs` (11 checks) seeds leads that separate each predicate from its old wrong version, in particular asserting `past_clients` returns the tagged clients and *not* the dead leads it used to.
+
 - [2026-09-09c] — **Mojo Dialer connected the only way Mojo allows: an inbound webhook** (`src/core/mojoWebhook.ts` NEW, `src/server.ts`, `src/core/lockdown.ts`, `scripts/verify-mojo-webhook.mjs` NEW).
 
   Marco asked to connect Mojo Dialer and get its seller-side leads into the CRM. Two findings first, because they decide the shape of everything else:
