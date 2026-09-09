@@ -279,7 +279,7 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
     },
     {
         name: "browser_screenshot",
-        description: "SEE Harvey's tab as a picture. Use when the page is visual rather than textual and reading it isn't enough — a map or chart of comps, a scanned disclosure or PDF, a floor plan, a layout where the number you need is baked into an image, or when a read/extract came back empty and you want to know what is actually on screen before guessing again. Prefer browser_read or browser_extract for ordinary text: this is slower, and it briefly flicks the operator's screen over to Harvey's tab to take the picture.",
+        description: "SEE the page as a picture. If you have no tab of your own open, this automatically looks at THE TAB THE OPERATOR IS ON — so when Marco or Carlos says \"look at my screen\" or \"what do you see here\", just call this. Also use it when the page is visual rather than textual and reading it isn't enough: a map or chart of comps, a scanned disclosure or PDF, a floor plan, a layout where the number you need is baked into an image, or when a read/extract came back empty and you want to know what is actually on screen before guessing again. Prefer browser_read or browser_extract for ordinary text — this is slower, and when it uses a tab of Harvey's own it briefly flicks the operator's screen over to take the picture. browser_status tells you what the operator is currently looking at.",
         input_schema: {
             type: "object",
             properties: { maxWidth: { type: "number", description: "Longest edge in px, 320-1568. Default 1000." } },
@@ -334,7 +334,7 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
     },
     {
         name: "browser_read",
-        description: "Read the visible text of the current page, or of one region. Call this after navigating so you can see what's actually there before clicking or extracting — never guess a page's structure. " +
+        description: "Read the visible text of the current page, or of one region. If you have no tab of your own open, this reads THE TAB THE OPERATOR IS ON, so \"read what's on my screen\" works without any setup. Call this after navigating so you can see what's actually there before clicking or extracting — never guess a page's structure. " +
             "Reads EVERY frame in the tab, including cross-origin ones, and sees inside open shadow roots — embedded frames are labelled in the output. " +
             "Long pages come back in chunks: when the result says it is truncated it also gives nextOffset, so pass that back as `offset` to read on rather than reporting the tail as missing.",
         input_schema: {

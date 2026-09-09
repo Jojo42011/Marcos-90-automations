@@ -1000,9 +1000,22 @@ async function rememberWorkTab(id) {
   await groupWorkTabs(next);
 }
 
-/** Colour-coded group, best-effort. Grouping is a nicety, not a dependency. */
+/**
+ * Colour-coded group, best-effort.
+ *
+ * This guard used to be the reason the "Harvey" group NEVER appeared: the
+ * manifest did not request the `tabGroups` permission, so `chrome.tabGroups`
+ * was undefined and this returned immediately, every time. The group is how
+ * the operator is supposed to drag a tab in for Harvey to read — the README
+ * calls it "the part that makes cross-site work practical" — so the feature
+ * was documented, guarded, and dead. The permission is now requested; the
+ * guard stays for genuinely older Chrome.
+ */
 async function groupWorkTabs(ids) {
-  if (!chrome.tabs.group || !chrome.tabGroups) return;
+  if (!chrome.tabs.group || !chrome.tabGroups) {
+    console.warn("[Harvey] tab grouping unavailable — chrome.tabGroups missing");
+    return;
+  }
   try {
     const groupId = await chrome.tabs.group({ tabIds: ids });
     await chrome.tabGroups.update(groupId, { title: "Harvey", color: "cyan" });
@@ -1243,7 +1256,38 @@ async function execute(cmd, serverUrl) {
       return { ok: true, data: "navigated", url: t.url, title: t.title };
     }
 
-    const tab = await targetTab(serverUrl);
+    let tab = await targetTab(serverUrl);
+
+    /*
+     * SEEING THE OPERATOR'S SCREEN.
+     *
+     * Harvey only ever drives tabs he owns — that is deliberate and stays
+     * (see pollOnce: reporting whatever the human just clicked would make him
+     * act somewhere else entirely). But it also meant that with no tab of his
+     * own he could see NOTHING, and "look at what's on my screen" answered
+     * "no page open to act on yet". That is the complaint this addresses.
+     *
+     * So for READ-ONLY actions only, fall back to the tab the operator is
+     * actually looking at and adopt it. Claude in Chrome works this way — it
+     * "accesses the tab you're on" — and reading a page the human is already
+     * reading is not a surprising thing to do on their behalf.
+     *
+     * Anything that CHANGES a page (click, fill, navigate, scroll) keeps the
+     * old behaviour and refuses. Silently adopting the human's tab and then
+     * clicking inside it is exactly the surprise that would make this feature
+     * dangerous, and the error already tells Harvey how to proceed properly.
+     */
+    const READ_ONLY = new Set(["read", "extract", "structured", "screenshot", "console"]);
+    let adoptedForRead = false;
+    if ((!tab || tab.id == null) && READ_ONLY.has(cmd.action)) {
+      const adopted = await adoptCurrentTab(serverUrl);
+      if (adopted && adopted.ok && adopted.tabId != null) {
+        try { tab = await chrome.tabs.get(adopted.tabId); adoptedForRead = true; } catch (_) {}
+      } else if (adopted && adopted.error) {
+        return { ok: false, error: adopted.error };
+      }
+    }
+
     if (!tab || tab.id == null) {
       return {
         ok: false,
@@ -1273,17 +1317,23 @@ async function execute(cmd, serverUrl) {
       }
       case "fill":
         return await inPage(tab.id, pageFill, { fields: cmd.fields || {} });
-      case "read":
+      case "read": {
         /* Every frame, not just the top one — see readWholeTab. */
-        return await readWholeTab(tab.id, {
+        const r = await readWholeTab(tab.id, {
           selector: cmd.selector, offset: cmd.offset, limit: cmd.limit,
         });
+        if (r && r.ok && adoptedForRead) r.adoptedOperatorTab = true;
+        return r;
+      }
       case "extract":
         return await inPage(tab.id, pageExtract, { schema: cmd.schema || {} });
       case "structured":
         return await inPage(tab.id, pageStructured, {});
-      case "screenshot":
-        return await captureTab(tab, { maxWidth: cmd.maxWidth });
+      case "screenshot": {
+        const shot = await captureTab(tab, { maxWidth: cmd.maxWidth });
+        if (shot && shot.ok && adoptedForRead) shot.adoptedOperatorTab = true;
+        return shot;
+      }
       case "scroll":
         return await inPage(tab.id, pageScroll, { to: cmd.to });
       case "waitFor": {
@@ -1410,6 +1460,18 @@ async function pollOnce() {
     if (tab) tabInfo = { url: tab.url, title: tab.title };
   } catch (_) {}
 
+  /* What the OPERATOR is looking at, reported separately and never as the tab
+     Harvey drives. Without this he cannot answer "what's on my screen?" at all
+     until he has already adopted something — he does not know a screen exists.
+     Kept distinct from `page` precisely so the warning above still holds. */
+  let operatorTab = null;
+  try {
+    const [t] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (t && !isAppTab(t, serverUrl) && !isInternalUrl(t.url)) {
+      operatorTab = { url: t.url, title: t.title };
+    }
+  } catch (_) {}
+
   const { armLock } = await chrome.storage.local.get(["armLock"]);
   const who = await identity();
 
@@ -1421,7 +1483,7 @@ async function pollOnce() {
       headers: { "Content-Type": "application/json" },
       // Ask the server to hold the request until there's work. Dispatch used
       // to wait for the next 2s tick; every step of a multi-step task paid it.
-      body: JSON.stringify({ token, enabled, page: tabInfo, waitMs: LONG_POLL_MS, armLock: armLock === true,
+      body: JSON.stringify({ token, enabled, page: tabInfo, operatorTab, waitMs: LONG_POLL_MS, armLock: armLock === true,
                              deviceId: who.deviceId, deviceName: who.deviceName }),
     });
     if (!res.ok) { await setBadge("err"); return IDLE_POLL_MS; }

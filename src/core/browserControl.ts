@@ -172,6 +172,13 @@ export interface BrowserDevice {
   enabled: boolean;
   armLock: boolean;
   page: { url?: string; title?: string };
+  /**
+   * What the OPERATOR is looking at, which is not the same thing as the tab
+   * Harvey drives and must never be confused with it. Reported separately so
+   * he can answer "what's on my screen?" without the poll silently retargeting
+   * his actions at whatever the human last clicked.
+   */
+  operatorTab?: { url?: string; title?: string } | null;
   firstSeenAt: number;
   /** One-shot directives, per device — arming one browser must never arm the
    *  other, which is exactly what a shared flag would have done. */
@@ -191,7 +198,8 @@ const LEGACY_DEVICE_ID = "__legacy";
 
 function touchDevice(id: string, name: string, enabled: boolean,
                      account: { id: string; name: string },
-                     page?: { url?: string; title?: string }, armLock?: boolean): BrowserDevice {
+                     page?: { url?: string; title?: string }, armLock?: boolean,
+                     operatorTab?: { url?: string; title?: string } | null): BrowserDevice {
   const key = deviceKey(account.id, id);
   let d = devices.get(key);
   if (!d) {
@@ -205,6 +213,7 @@ function touchDevice(id: string, name: string, enabled: boolean,
   d.lastPollAt = Date.now();
   d.enabled = enabled;
   if (page) d.page = page;
+  if (operatorTab !== undefined) d.operatorTab = operatorTab;
   if (typeof armLock === "boolean") d.armLock = armLock;
   // Clear one-shot directives once this device confirms the new state.
   if (d.disarmRequested && !enabled) d.disarmRequested = false;
@@ -372,6 +381,10 @@ export function status(accountId?: string): BrowserStatus {
     devices: all.map((d) => ({
       id: d.id, name: d.name, connected: d.connected, enabled: d.enabled,
       armLock: d.armLock, page: d.page, priority: d.priority, account: d.accountName,
+      /* What the human is looking at. Harvey needs this to know a screen
+         exists at all — without it, "what's on my screen?" has no answer
+         until he has already adopted a tab. */
+      operatorTab: d.operatorTab || null,
     })),
     /** Who an unaddressed command would go to right now. */
     activeDevice: live.filter((d) => d.enabled)[0]?.name || null,
@@ -548,6 +561,9 @@ export interface PollOptions {
   waitMs?: number;
   /** Extension reports whether the human has locked out remote arming. */
   armLock?: boolean;
+  /** The tab the OPERATOR is looking at — reported so Harvey can answer
+   *  "what's on my screen?", never used to retarget his actions. */
+  operatorTab?: { url?: string; title?: string } | null;
   /** Called if the client hangs up, so the waiter can be dropped. */
   onAbort?: (cancel: () => void) => void;
 }
@@ -565,7 +581,8 @@ export function recordPoll(
 
   const deviceId = (opts.deviceId || "").trim() || LEGACY_DEVICE_ID;
   const account = opts.account || { id: "__unscoped", name: "Unknown" };
-  touchDevice(deviceId, (opts.deviceName || "").trim(), enabled, account, page, opts.armLock);
+  touchDevice(deviceId, (opts.deviceName || "").trim(), enabled, account, page, opts.armLock,
+              opts.operatorTab);
 
   // Clear the one-shot directives once the extension confirms the new state,
   // so a poll that crossed the request in flight doesn't drop the instruction.

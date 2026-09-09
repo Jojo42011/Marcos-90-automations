@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Harvey Browser Control",
-  "version": "1.7.0",
-  "description": "Talk to Harvey in a side panel beside any page, and let him read, scroll, click, fill forms and work across several tabs on sites that have no API \u2014 in his own tabs, on your machine, only while you switch it on.",
+  "version": "1.8.0",
+  "description": "Talk to Harvey in a side panel beside any page, and let him see and read the tab you are on, scroll, click, fill forms and work across several tabs on sites that have no API — on your machine, only while you switch it on.",
   "permissions": [
     "activeTab",
     "alarms",
     "scripting",
     "sidePanel",
     "storage",
+    "tabGroups",
     "tabs"
   ],
   "host_permissions": [

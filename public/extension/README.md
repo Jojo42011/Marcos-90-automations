@@ -165,3 +165,54 @@ yours, and sharing it puts someone else's commands on your browser. Anyone
 holding it and the server URL can queue actions for whatever browser is armed
 **on that account**, and can talk to Harvey as that account. They cannot see or
 drive anyone else's browsers.
+
+## Seeing the operator's screen
+
+Harvey drives **his own tabs**, never yours — reporting whatever you just
+clicked would make him act somewhere else entirely. That is deliberate and it
+stays.
+
+The cost of it used to be that with no tab of his own he could see *nothing*,
+and "look at what's on my screen" answered "no page open to act on yet". Two
+things fix that, without giving up the rule:
+
+* **Read-only actions fall back to your tab.** `read`, `extract`, `structured`,
+  `screenshot` and `console` adopt the tab you are looking at when Harvey has
+  none. Anything that CHANGES a page — click, fill, navigate, scroll — still
+  refuses, because silently adopting your tab and then clicking inside it is
+  the surprise that would make this dangerous.
+* **The poll reports your tab separately.** Harvey now knows a screen exists
+  before he has adopted anything, so he can answer "what am I looking at?"
+
+The **"Harvey" tab group** also works again. It never had, in any release: the
+grouping code guarded on `chrome.tabGroups` and the manifest never requested
+the `tabGroups` permission, so the guard returned early every time and the
+group never appeared — which meant the documented way to hand Harvey a tab
+(drag it into his group) silently did nothing.
+
+## Compared with Claude in Chrome
+
+Measured against Anthropic's published capability list for Claude in Chrome,
+so the gaps are known rather than assumed.
+
+| Capability | Harvey |
+|---|---|
+| Read page text | yes (`browser_read`, every frame + shadow roots) |
+| Click, fill forms, navigate | yes |
+| Open / close / switch tabs, multi-tab work | yes |
+| Screenshot the page | yes |
+| See the tab you are on | yes, read-only (above) |
+| Drag a tab into its group | yes (fixed here) |
+| Extract structured data | yes (`browser_extract`, JSON-LD/OpenGraph) |
+| Console output, incl. page errors | yes (`browser_console`) |
+| Report a CAPTCHA rather than solving it | yes — deliberate |
+| Per-host permission gate before changing a page | yes — stricter than Claude's |
+| **Download files and open them** | **no** — needs the `downloads` permission |
+| **Scheduled recurring browser tasks** | **no** |
+| **Record a workflow and replay it** | **no** |
+| **Site-specific knowledge (Gmail, Calendar, GitHub…)** | **no** |
+| **Network-request inspection** | **no** — console errors only |
+
+The four "no"s are real gaps, not oversights: each is a feature in its own
+right rather than a flag to flip, and none of them is what "Harvey can't see my
+screen" was about.

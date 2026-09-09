@@ -28,6 +28,21 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-09e] — **Harvey could not see the operator's screen, and the tab group he was meant to be handed tabs through had never worked** (`public/extension/manifest.json`, `public/extension/background.js`, `src/core/browserControl.ts`, `src/server.ts`, `src/harvey/platformTools.ts`, `scripts/verify-harvey-browser-vision.mjs` NEW).
+
+  Reported as "the chrome harvey still doesn't have the capability to see what's going on in the screen". The screenshot pipeline was in fact complete end to end — `captureTab` → `/api/browser/result` → the tool's `_image` key → a real base64 image block in the agent loop. Nothing there was broken. **Two other things were:**
+
+  1. **Harvey only ever knew about tabs he owned.** `pollOnce` reports the tab Harvey drives and deliberately not the one the human is looking at — correct, and kept: reporting whatever the operator just clicked would make him act somewhere else entirely. But with no tab of his own he could see *nothing*, and "look at my screen" answered "no page open to act on yet".
+  2. **The "Harvey" tab group had never appeared, in any release.** `groupWorkTabs()` guards on `chrome.tabGroups`, and the manifest never requested the `tabGroups` permission, so the guard returned early every single time. The README calls dragging a tab into that group "the part that makes cross-site work practical"; it was documented, guarded, and dead.
+
+  Fixes: the `tabGroups` permission is now requested (manifest 1.8.0); **read-only** actions (`read`, `extract`, `structured`, `screenshot`, `console`) adopt the operator's tab when Harvey has none, matching Claude in Chrome's "accesses the tab you're on"; and the poll reports `operatorTab` **separately from** `page`, surfaced on `browser_status`, so Harvey knows a screen exists before adopting anything.
+
+  **The line held deliberately:** anything that CHANGES a page — click, fill, navigate, scroll — still refuses rather than adopting the human's tab. Silently taking over the tab someone is reading and then clicking inside it is the surprise that would make this feature dangerous, and the suite asserts each of those four is absent from the read-only set.
+
+  `scripts/verify-harvey-browser-vision.mjs` (20 checks) drives the real server with a **simulated extension** — polling, answering commands, returning a real JPEG — because the failure lived in the contract between the two halves and testing either alone would have missed it. A/B against the pre-fix extension: 4 failures, 0 after. Note the split: the live checks exercise the server, the static checks guard the extension (a simulator cannot catch a regression in code it stands in for).
+
+  `public/extension/README.md` now carries a capability comparison against Anthropic's published list for Claude in Chrome. Confirmed present: read, click, fill, navigate, multi-tab, screenshot, structured extraction, console, plus a per-host permission gate Claude does not have and a CAPTCHA report-never-solve rule. **Still absent, and named as gaps rather than implied:** file downloads (needs the `downloads` permission), scheduled recurring browser tasks, workflow record-and-replay, site-specific knowledge for Gmail/Calendar/GitHub, and network-request inspection. Each is a feature in its own right, and none of them is what "can't see my screen" was about.
+
 - [2026-09-09d] — **Four Smart Filters returned the wrong set of leads; one had no data at all** (`public/crm-brivity.html`, `scripts/verify-smart-filters.mjs` NEW).
 
   Continuing the "remove things that aren't performing a clean function" sweep into the Smart Filters, where the problem was worse than a dead row: a filter that returns the **wrong** set is more dangerous than one that returns nothing, because you act on the result believing it.

@@ -14893,8 +14893,14 @@ app.post("/api/browser/poll", express.json({ limit: "64kb" }), async (req, res) 
   // The extension asks the server to hold the request open until there's
   // something to do. Without a waitMs this behaves exactly as before, so an
   // older extension build keeps working against a newer server.
+  /* Distinct from `page`: what the human is looking at, so Harvey can answer
+     "what's on my screen?" without the poll retargeting his actions. */
+  const operatorTab = b.operatorTab && typeof b.operatorTab === "object"
+    ? (b.operatorTab as { url?: string; title?: string })
+    : null;
   const result = await recordBrowserPoll(b.enabled === true, page, {
     account,
+    operatorTab,
     waitMs: Number(b.waitMs) || 0,
     armLock: typeof b.armLock === "boolean" ? b.armLock : undefined,
     deviceId: typeof b.deviceId === "string" ? b.deviceId : undefined,

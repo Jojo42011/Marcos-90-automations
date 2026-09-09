@@ -85,7 +85,7 @@ const deviceKey = (accountId, deviceId) => `${accountId}::${deviceId}`;
 /** Stands in for an extension build that predates device ids, so an operator
  *  who hasn't reinstalled yet keeps working instead of going dark. */
 const LEGACY_DEVICE_ID = "__legacy";
-function touchDevice(id, name, enabled, account, page, armLock) {
+function touchDevice(id, name, enabled, account, page, armLock, operatorTab) {
     const key = deviceKey(account.id, id);
     let d = devices.get(key);
     if (!d) {
@@ -101,6 +101,8 @@ function touchDevice(id, name, enabled, account, page, armLock) {
     d.enabled = enabled;
     if (page)
         d.page = page;
+    if (operatorTab !== undefined)
+        d.operatorTab = operatorTab;
     if (typeof armLock === "boolean")
         d.armLock = armLock;
     // Clear one-shot directives once this device confirms the new state.
@@ -247,6 +249,10 @@ function status(accountId) {
         devices: all.map((d) => ({
             id: d.id, name: d.name, connected: d.connected, enabled: d.enabled,
             armLock: d.armLock, page: d.page, priority: d.priority, account: d.accountName,
+            /* What the human is looking at. Harvey needs this to know a screen
+               exists at all — without it, "what's on my screen?" has no answer
+               until he has already adopted a tab. */
+            operatorTab: d.operatorTab || null,
         })),
         /** Who an unaddressed command would go to right now. */
         activeDevice: live.filter((d) => d.enabled)[0]?.name || null,
@@ -411,7 +417,7 @@ function recordPoll(enabled, page, opts = {}) {
         armLockedByUser = opts.armLock;
     const deviceId = (opts.deviceId || "").trim() || LEGACY_DEVICE_ID;
     const account = opts.account || { id: "__unscoped", name: "Unknown" };
-    touchDevice(deviceId, (opts.deviceName || "").trim(), enabled, account, page, opts.armLock);
+    touchDevice(deviceId, (opts.deviceName || "").trim(), enabled, account, page, opts.armLock, opts.operatorTab);
     // Clear the one-shot directives once the extension confirms the new state,
     // so a poll that crossed the request in flight doesn't drop the instruction.
     if (disarmRequested && !enabled)
