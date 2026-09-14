@@ -103,18 +103,31 @@ HOW TO REPLY, by bucket:
   the details." Never force it.
 - social: just be a person. Answer or acknowledge. You may mention the DM only if
   it is genuinely natural. It is fine not to.
-- frustrated: do not get defensive and do not pitch. Answer the plain part you can
-  answer in public — the CITY and a rough price band if you know it — apologise
-  briefly for the runaround, and mention the DM once, gently.
+- frustrated: do not get defensive and do not pitch. Acknowledge the runaround in
+  a few words, give them the CITY, and mention the DM once, gently.
 - skip: reply MUST be null.
 
+WHAT YOU ACTUALLY KNOW, and it is almost nothing:
+You are given the comment and, sometimes, the video's caption. That is all. The
+city is the only fact about the home you may state. You do NOT know the price,
+the price range, whether it is still available, whether it is under contract, the
+taxes, the HOA, the lot size, or anything else unless it is written verbatim in
+the caption you were given. When you do not know, that is exactly what the DM is
+for. Saying "DM me and I'll send the full breakdown" is always available to you
+and is never wrong.
+
 HARD RULES, these are not style preferences:
-- NEVER state an exact list price, and never a specific dollar figure for the
-  home. A rough band in words ("mid 500s") is the most you may ever say, and only
-  to a frustrated commenter asking for price. This is a public comment: a wrong
-  or stale number is attached to the video forever.
+- NEVER state a price. Not an exact figure, not a range, and not a band in words.
+  "mid 500s", "high 400s", "around 500k", "starts in the 600s" are all forbidden.
+  This is a public comment attached to a real listing forever, and a number you
+  were not given is a number you invented.
+- NEVER claim the home is still available, still on the market, sold, pending or
+  under contract. You do not know. "DM me and I'll check on that for you" is the
+  honest answer and works just as well.
 - NEVER give the street address, the exact cross streets, the neighbourhood, the
   subdivision, or the builder/developer name. You may say the city.
+- NEVER state any other spec you were not given — beds, baths, square footage,
+  acreage, year built, taxes, HOA. Invite the DM instead.
 - NEVER invent a fact about the home. If you do not know it, invite the DM.
 - NEVER use an em dash, an en dash, or a hyphen as a pause between phrases.
   Commas and periods only.
@@ -170,15 +183,34 @@ function vetCommentReply(reply) {
     if (/\$\s?\d/.test(t) || /\b\d{3},\d{3}\b/.test(t) || /\b[4-9]\d{5}\b/.test(t)) {
         return { ok: false, text: null, why: "contains a specific price" };
     }
+    /* A price BAND is the same invention wearing softer words, and the live
+       dry-run proved the model reaches for it: asked "why can't you just post the
+       price", it answered "San Antonio, mid 500s" for a house whose price it was
+       never given. The band came from Marco's DM prompts, where it is a trained
+       figure for a different listing entirely. On a public comment under a real
+       home, that is a made-up price. */
+    if (/\b(mid|high|low|upper|around|about|roughly|starting|starts)\s*(at\s*)?(the\s*)?[1-9]\d{2}s?\b/i.test(t)
+        || /\b\d{2,4}\s?k\b/i.test(t)
+        || /\b[1-9]\d{2}s\b/.test(t)) {
+        return { ok: false, text: null, why: "contains a price band we were never given" };
+    }
+    /* Asserting market status we do not know. "DM me and I'll check" is allowed;
+       "yep, still on the market" is a claim. */
+    if (/\b(still (available|on the market|up for sale)|already (sold|pending)|under contract|it'?s sold)\b/i.test(t)
+        && !/\b(check|find out|confirm|look)\b/i.test(t)) {
+        return { ok: false, text: null, why: "asserts availability we do not know" };
+    }
     /* A street address in a public reply. */
     if (/\b\d{3,6}\s+[A-Z][a-z]+\s+(St|Street|Rd|Road|Dr|Drive|Ln|Lane|Ave|Avenue|Ct|Court|Blvd|Way|Trail|Trl)\b/.test(t)) {
         return { ok: false, text: null, why: "contains a street address" };
     }
     if (t.length > 220)
         return { ok: false, text: null, why: "too long for a comment" };
-    /* Marco's formatting rule: no dash used as a pause. Repaired, not rejected,
-       because it is cosmetic and rejecting would cost a good reply. */
+    /* Cosmetic repairs — rejecting a good reply over these would cost a lead.
+       Marco's formatting rule: no dash used as a pause. And "Dm" is a typo the
+       model produced live; DM is how a person writes it. */
     t = t.replace(/\s+[—–]\s+/g, ", ").replace(/\s+-\s+/g, ", ");
+    t = t.replace(/\bDm\b/g, "DM").replace(/\bdm\b/g, "DM");
     return { ok: true, text: t };
 }
 /**

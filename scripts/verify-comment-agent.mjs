@@ -104,7 +104,6 @@ check("a bare 6-digit price is refused", !vet("Listed at 534149 right now").ok);
 check("a street address is refused", !vet("It's 1234 Rockcress Rd, DM me").ok);
 check("a wall of text is refused", !vet("x".repeat(240)).ok);
 check("no draft is refused", !vet(null).ok);
-check('a price BAND in words is allowed ("mid 500s")', vet("San Antonio, mid 500s. DM me for the full sheet.").ok);
 check(
   "an em dash is repaired, not rejected",
   vet("Got it — DM me and I'll send it").text === "Got it, DM me and I'll send it",
@@ -113,6 +112,22 @@ check(
   "a hyphen used as a pause is repaired",
   vet("Sure thing - DM me").text === "Sure thing, DM me",
 );
+/* These three came out of the live dry-run against production, not imagination:
+   asked "why can't you just post the price", the model answered "San Antonio,
+   mid 500s" for a home whose price it had never been given, asserted a listing
+   was "still on the market", and wrote "Dm". */
+check('an invented price BAND is refused ("mid 500s")', !vet("San Antonio, mid 500s. DM me").ok);
+check('"high 400s" is refused', !vet("Probably high 400s, DM me").ok);
+check('"around 500k" is refused', !vet("Around 500k for this one").ok);
+check('"starts in the 600s" is refused', !vet("Starts in the 600s, DM me").ok);
+check("asserting it is still on the market is refused", !vet("Yep, still on the market. DM me").ok);
+check("asserting it is sold is refused", !vet("That one's under contract already").ok);
+check(
+  "but offering to CHECK availability is allowed",
+  vet("DM me and I'll check if it's still available").ok,
+);
+check("the city alone is still allowed", vet("San Antonio! DM me and I'll send the details.").ok);
+check('"Dm" is normalised to "DM"', vet("Dm me and I'll send it").text === "DM me and I'll send it");
 
 // ───────────────────── DECISION PIPELINE ─────────────────────
 console.log("\nGUARDS — the refusals that protect the account");
