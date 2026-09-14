@@ -29,6 +29,11 @@ data/voice-clone/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+# Seeded from src/data/sopLibrary.ts on boot, so it appears in any checkout where
+# the server has been run locally (which the verification practice here requires).
+# Production keeps its own copy on the Fly volume at /data/knowledge.json; a repo
+# copy is 200KB of derived state that would drift from the source it came from.
+data/knowledge.json
 
 # Vendored OpenShorts engine — separate repo (github.com/mutonby/openshorts)
 services/openshorts/
