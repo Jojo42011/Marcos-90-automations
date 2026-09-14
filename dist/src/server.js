@@ -168,6 +168,8 @@ const index_js_25 = require("./agents/mojoOutreach/index.js");
 const index_js_26 = require("./agents/conversationEscalations/index.js");
 const textingRules_js_1 = require("./core/textingRules.js");
 const marcoLog_js_1 = require("./app/marcoLog.js");
+const conversationUtils_js_1 = require("./app/conversationUtils.js");
+const messageDebounce_js_1 = require("./app/messageDebounce.js");
 const index_js_27 = require("./integrations/openshorts/index.js");
 const clipEditAgent_js_1 = require("./agents/contentManager/clipEditAgent.js");
 const http_proxy_middleware_1 = require("http-proxy-middleware");
@@ -5494,6 +5496,150 @@ app.post("/api/mojo/webhook", express_1.default.json({ limit: "256kb" }), async 
     catch (err) {
         res.status(500).json({ ok: false, error: err.message });
     }
+});
+/**
+ * Zernio — inbound TikTok DMs, replacing ManyChat on that channel.
+ *
+ * SHAPE OF THIS ROUTE, and why it is not like /webhook. ManyChat called us and
+ * SENT whatever we returned in the response body. Zernio does not: it expects a
+ * 2xx within FIVE SECONDS and then we call it back to deliver the reply. Our
+ * pipeline holds a 4-second debounce and then makes two Haiku calls, so
+ * answering inline would miss that budget on most turns and earn a retry — and
+ * a retried inbound is a duplicate DM, the exact failure this system has spent
+ * a lot of code preventing.
+ *
+ * So the order here is: verify signature → dedup → ACK 200 → process after the
+ * response, and send the reply over the API. `void` on that call is deliberate,
+ * not an un-awaited mistake.
+ *
+ * `express.raw` rather than `express.json` because the HMAC is computed over the
+ * RAW bytes. Re-serializing a parsed body is not byte-identical to what was
+ * signed and would fail every legitimate delivery.
+ *
+ * Nothing in the DM pipeline changed for this. The payload is mapped onto the
+ * same `IncomingWebhookPayload` ManyChat produced, including the VA's manual
+ * opener, so the funnel, the intent gate and the pinned layer all behave
+ * exactly as they do on Instagram today.
+ */
+app.post("/api/zernio/webhook", express_1.default.raw({ type: "application/json", limit: "1mb" }), async (req, res) => {
+    const { verifyZernioSignature, zernioWebhookSecretConfigured, parseZernioInboundMessage, toIncomingWebhookPayload, fetchVaOpener, sendZernioReply, } = await Promise.resolve().then(() => __importStar(require("./integrations/zernio/dm.js")));
+    if (!zernioWebhookSecretConfigured()) {
+        /* Refuse rather than accept anonymous writes. This endpoint creates leads
+           and sends real DMs; an unset secret must close it, not open it. */
+        res.status(503).json({
+            ok: false,
+            error: "ZERNIO_WEBHOOK_SECRET is not set on this server, so the Zernio webhook is closed. " +
+                "Set it as a secret and register the same value on the Zernio webhook.",
+        });
+        return;
+    }
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body ?? ""), "utf8");
+    const signature = String(req.headers["x-zernio-signature"] ?? "");
+    if (!verifyZernioSignature(raw, signature)) {
+        (0, marcoLog_js_1.marcoLog)("inbound_rejected", { reason: "zernio_bad_signature" });
+        res.status(401).json({ ok: false, error: "Bad or missing X-Zernio-Signature" });
+        return;
+    }
+    let body = null;
+    try {
+        body = JSON.parse(raw.toString("utf8"));
+    }
+    catch {
+        res.status(400).json({ ok: false, error: "Body is not valid JSON" });
+        return;
+    }
+    const evt = parseZernioInboundMessage(body);
+    if (!evt) {
+        /* Not an actionable inbound: a different event type, our own outgoing
+           echo, or a payload with no sender. All are 200 — Zernio must not retry
+           something we have correctly decided to ignore. */
+        res.status(200).json({ ok: true, ignored: true });
+        return;
+    }
+    if ((0, conversationUtils_js_1.isDuplicateHandle)(evt.eventId)) {
+        (0, marcoLog_js_1.marcoLog)("inbound_rejected", { reason: "zernio_duplicate_event", message_handle: evt.eventId });
+        res.status(200).json({ ok: true, duplicate: true });
+        return;
+    }
+    const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
+    const correlationId = (0, marcoLog_js_1.marcoCorrelationId)(evt.platform, evt.senderId);
+    (0, marcoLog_js_1.marcoLog)("inbound_accepted", {
+        requestId,
+        correlationId,
+        platform: evt.platform,
+        comment_or_dm: "dm",
+        transport: "zernio",
+        message_chars: evt.text.length,
+        message_preview: (0, marcoLog_js_1.previewText)(evt.text),
+        username_set: Boolean(evt.senderUsername),
+        display_name_set: Boolean(evt.senderName),
+    });
+    /* ACK NOW. Everything below this line runs after the response. */
+    res.status(200).json({ ok: true });
+    void (async () => {
+        try {
+            const vaOpener = await fetchVaOpener(evt.conversationId, evt.accountId);
+            const payload = toIncomingWebhookPayload(evt, vaOpener);
+            /* The existing per-user debounce, unchanged: a lead firing off three
+               quick messages becomes ONE pipeline turn, and only the last waiter
+               carries a reply. It was written for ManyChat and never wired up; it
+               does exactly the right thing here. */
+            const result = (0, messageDebounce_js_1.shouldSkipMessageDebounce)(payload)
+                ? await (0, webhook_js_1.handleIncomingPayload)(payload, { requestId, correlationId })
+                : await (0, messageDebounce_js_1.scheduleDebouncedInbound)(payload, { requestId, correlationId }, (p, log) => (0, webhook_js_1.handleIncomingPayload)(p, log));
+            const reply = result.reply?.trim();
+            if (!reply)
+                return;
+            const send = await sendZernioReply({
+                conversationId: evt.conversationId,
+                accountId: evt.accountId,
+                text: reply,
+                /* Keyed on the inbound event, so a retry of the same inbound replays
+                   the original send instead of delivering a second DM. */
+                idempotencyKey: `zernio:${evt.eventId}`,
+            });
+            (0, marcoLog_js_1.marcoLog)("zernio_reply_send", {
+                requestId,
+                correlationId,
+                conversation_id: evt.conversationId,
+                success: send.success,
+                status: send.status,
+                reply_chars: reply.length,
+                reply_preview: (0, marcoLog_js_1.previewText)(reply),
+                error: send.error ?? null,
+            });
+            if (!send.success) {
+                /* Most likely cause by far: TikTok's 48-hour / 10-message reply
+                   window has closed. Named explicitly so it does not read as a bug in
+                   the agent. */
+                console.error(`[zernio] reply NOT delivered to conversation ${evt.conversationId} ` +
+                    `(HTTP ${send.status}): ${send.error ?? "unknown"}`);
+            }
+        }
+        catch (err) {
+            console.error("[zernio] inbound processing failed:", err);
+            (0, marcoLog_js_1.marcoLog)("zernio_inbound_failed", {
+                requestId,
+                correlationId,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
+    })();
+});
+/** Is the Zernio transport actually wired — key valid, account connected? */
+app.get("/api/zernio/status", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { isZernioDmConfigured, zernioWebhookSecretConfigured, zernioAccounts, zernioTikTokAccountId } = await Promise.resolve().then(() => __importStar(require("./integrations/zernio/dm.js")));
+    const accounts = await zernioAccounts();
+    res.json({
+        apiKeyConfigured: isZernioDmConfigured(),
+        webhookSecretConfigured: zernioWebhookSecretConfigured(),
+        tiktokAccountId: zernioTikTokAccountId() || null,
+        accounts,
+    });
 });
 app.post("/api/mojo-outreach/run", async (req, res) => {
     if (!dashboardTokenOk(req)) {

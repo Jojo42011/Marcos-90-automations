@@ -78,8 +78,27 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # Analytics — Zernio social analytics provider (section 5).
 # Unset = Instagram/Facebook/YouTube tabs report "not connected" and show no
 # numbers at all. Nothing is fabricated when this is missing.
+#
+# NOTE: this is NOT the TikTok DM transport below, despite the same vendor. This
+# client points at https://api.zernio.com/v1/analytics/{platform}, which is not
+# Zernio's real API host or path shape — it was written against guessed field
+# names before anyone had a key. Setting this today turns three honest "waiting
+# on the connection" tiles into three red "request failed" tiles, so it stays
+# unset until someone rewrites it against the real spec.
 # ZERNIO_API_KEY=
 # ZERNIO_BASE_URL=https://api.zernio.com
+
+# TikTok DMs — the Zernio inbox transport that replaced ManyChat on that channel.
+# Deliberately a DIFFERENT variable from ZERNIO_API_KEY above (the value is the
+# same Zernio key) so that turning on TikTok DMs cannot silently arm the unrelated
+# analytics client. Unset = /api/zernio/webhook returns 503 and TikTok DMs are dark.
+# ZERNIO_DM_API_KEY=
+# Shared secret for verifying X-Zernio-Signature (HMAC-SHA256 over the raw body).
+# We choose it and register the same value on the Zernio webhook; Zernio never
+# generates one. Unset = the webhook refuses every delivery rather than trusting it.
+# ZERNIO_WEBHOOK_SECRET=
+# Zernio account id for Marco's TikTok (@puga.realtor). Needed on every send.
+# ZERNIO_TIKTOK_ACCOUNT_ID=
 
 # Browser control — pairing token for the Harvey Chrome extension.
 # Unset = browser control is disabled entirely (fails closed).
