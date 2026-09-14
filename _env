@@ -100,6 +100,23 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # Zernio account id for Marco's TikTok (@puga.realtor). Needed on every send.
 # ZERNIO_TIKTOK_ACCOUNT_ID=
 
+# TikTok comment agent — replies publicly to comments to earn a DM, because
+# TikTok has no comment-to-DM and forbids a business opening a thread.
+# THE KILL SWITCH. Set to false to stop every public post immediately; no deploy
+# needed, the next comment is skipped and the reason is recorded.
+# COMMENT_AGENT_ENABLED=true
+# Pacing. These are what keep a 4,400-follower account's reach intact: one video
+# can carry 163 comments, and answering them all in an afternoon is the spam
+# signature TikTok's moderation looks for. Counted against the durable ledger,
+# not memory, so a deploy cannot reset them mid-afternoon.
+# COMMENT_AGENT_MAX_PER_HOUR=12
+# COMMENT_AGENT_MAX_PER_DAY=60
+# COMMENT_AGENT_MIN_SPACING_SEC=25
+# Never answer a comment older than this. Sweeping a backlog is what a bot looks
+# like, and the agent is meant to look like Marco catching up on today's video.
+# COMMENT_AGENT_MAX_COMMENT_AGE_HOURS=48
+# COMMENT_AGENT_DB_PATH=   # defaults to /data/comment-agent.db
+
 # Browser control — pairing token for the Harvey Chrome extension.
 # Unset = browser control is disabled entirely (fails closed).
 # BROWSER_CONTROL_TOKEN=

@@ -5754,7 +5754,11 @@ app.post(
       toIncomingWebhookPayload,
       fetchVaOpener,
       sendZernioReply,
+      zernioTikTokAccountId,
     } = await import("./integrations/zernio/dm.js");
+    const { parseZernioInboundComment } = await import("./integrations/zernio/comments.js");
+    const { handleInboundComment } = await import("./agents/commentAgent/index.js");
+    const { markCommenterDmReceived } = await import("./core/commentAgentStore.js");
 
     if (!zernioWebhookSecretConfigured()) {
       /* Refuse rather than accept anonymous writes. This endpoint creates leads
@@ -5781,6 +5785,35 @@ app.post(
       body = JSON.parse(raw.toString("utf8"));
     } catch {
       res.status(400).json({ ok: false, error: "Body is not valid JSON" });
+      return;
+    }
+
+    /* One endpoint, two event families. `comment.received` is handled first
+       because it is the cheaper check and the two never overlap. */
+    const commentEvt = parseZernioInboundComment(body);
+    if (commentEvt) {
+      if (isDuplicateHandle(commentEvt.eventId)) {
+        res.status(200).json({ ok: true, duplicate: true });
+        return;
+      }
+      /* Ack before the agent runs, same 5-second reason as the DM path: the
+         agent makes a model call and a read-back, which will not fit. */
+      res.status(200).json({ ok: true });
+      void (async () => {
+        try {
+          const accountId = zernioTikTokAccountId() || commentEvt.postId || "";
+          const outcome = await handleInboundComment(commentEvt, accountId);
+          marcoLog("comment_agent_outcome", {
+            comment_id: commentEvt.commentId,
+            post_id: commentEvt.platformPostId,
+            decision: outcome.decision,
+            bucket: outcome.bucket,
+            reason: outcome.reason,
+          });
+        } catch (err) {
+          console.error("[zernio] comment processing failed:", err);
+        }
+      })();
       return;
     }
 
@@ -5818,6 +5851,20 @@ app.post(
 
     void (async () => {
       try {
+        /* Close the comment→DM loop. The commenter's platform id and the DM
+           participantId are the SAME string on TikTok (verified byte-for-byte on
+           a live thread), so this join needs no username matching. It also takes
+           the person off the VA's follow-up list, which is the point: nobody
+           should be chased by hand for a DM they already sent. */
+        const attributed = markCommenterDmReceived(evt.senderId);
+        if (attributed > 0) {
+          marcoLog("comment_to_dm_converted", {
+            requestId,
+            correlationId,
+            comment_rows_marked: attributed,
+          });
+        }
+
         const vaOpener = await fetchVaOpener(evt.conversationId, evt.accountId);
         const payload = toIncomingWebhookPayload(evt, vaOpener);
 
@@ -5889,6 +5936,112 @@ app.get("/api/zernio/status", async (req, res) => {
     webhookSecretConfigured: zernioWebhookSecretConfigured(),
     tiktokAccountId: zernioTikTokAccountId() || null,
     accounts,
+  });
+});
+
+/**
+ * What the comment agent has actually done, and what it is saying.
+ *
+ * Reports the ledger, never an estimate: how many replies really posted, how
+ * many of those commenters went on to DM, and the last 40 decisions with their
+ * reasons so "why did it skip that one" has an answer without host log access.
+ */
+app.get("/api/comment-agent/status", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { getCommentAgentStats, getRecentCommentActions } = await import(
+    "./core/commentAgentStore.js"
+  );
+  const { isCommentAgentEnabled } = await import("./agents/commentAgent/index.js");
+  const stats = getCommentAgentStats();
+  res.json({
+    enabled: isCommentAgentEnabled(),
+    limits: {
+      maxPerHour: Number(process.env.COMMENT_AGENT_MAX_PER_HOUR ?? 12),
+      maxPerDay: Number(process.env.COMMENT_AGENT_MAX_PER_DAY ?? 60),
+      minSpacingSec: Number(process.env.COMMENT_AGENT_MIN_SPACING_SEC ?? 25),
+      maxCommentAgeHours: Number(process.env.COMMENT_AGENT_MAX_COMMENT_AGE_HOURS ?? 48),
+    },
+    stats,
+    recent: getRecentCommentActions(40),
+  });
+});
+
+/**
+ * Classify a comment and show what the agent WOULD reply. Posts nothing.
+ *
+ * This is how the copy gets reviewed without spending a public comment on it:
+ * paste in real comments, read what comes back. It runs the same classifier and
+ * the same vetting gate the live path uses, so a draft rejected here would have
+ * been rejected there — which is the only honest way to review it.
+ */
+app.post("/api/comment-agent/dry-run", express.json({ limit: "32kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const body = (req.body ?? {}) as { comments?: unknown; comment?: unknown; caption?: unknown };
+  const list = Array.isArray(body.comments)
+    ? body.comments
+    : typeof body.comment === "string"
+      ? [body.comment]
+      : [];
+  const texts = list
+    .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+    .slice(0, 25);
+  if (!texts.length) {
+    res.status(400).json({ error: 'Send { "comments": ["...", "..."] } or { "comment": "..." }' });
+    return;
+  }
+  const caption = typeof body.caption === "string" ? body.caption : null;
+  const { classifyAndDraft, vetCommentReply } = await import("./agents/commentAgent/index.js");
+
+  const results = [];
+  for (const comment of texts) {
+    const drafted = await classifyAndDraft({ commentText: comment, authorUsername: null, postCaption: caption });
+    if (!drafted) {
+      results.push({ comment, bucket: null, wouldReply: false, reply: null, note: "classifier unavailable" });
+      continue;
+    }
+    const vetted = vetCommentReply(drafted.reply);
+    results.push({
+      comment,
+      bucket: drafted.bucket,
+      reason: drafted.reason,
+      wouldReply: drafted.bucket !== "skip" && vetted.ok,
+      reply: vetted.text,
+      note: vetted.ok ? null : `draft blocked: ${vetted.why}`,
+    });
+  }
+  res.json({ posted: false, count: results.length, results });
+});
+
+/**
+ * The VA's work queue: people we publicly invited to DM who never did.
+ *
+ * Nothing automated can do this job. TikTok will not let a business open a DM
+ * thread through the API, so reaching these people is a human in the app — which
+ * is exactly why this is a list and not a sender. One row per person, oldest
+ * first, and anyone who has since DMed is gone from it automatically.
+ */
+app.get("/api/comment-agent/follow-ups", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const { getFollowUpQueue } = await import("./core/commentAgentStore.js");
+  const hours = Math.min(720, Math.max(1, Number(req.query.hours) || 24));
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  const rows = getFollowUpQueue(hours, limit);
+  res.json({
+    olderThanHours: hours,
+    count: rows.length,
+    note:
+      "TikTok does not allow a business to open a DM thread, so these must be messaged by hand " +
+      "in the TikTok app. Anyone who has since DMed is already removed from this list.",
+    followUps: rows,
   });
 });
 

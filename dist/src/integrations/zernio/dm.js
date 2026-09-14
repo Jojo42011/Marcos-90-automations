@@ -128,6 +128,21 @@ function str(v) {
     return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 /**
+ * The body of a message, whichever name this side of Zernio's API gives it.
+ *
+ * NOT defensive padding — the two halves genuinely disagree, and the mismatch
+ * cost us the VA opener on the first cut of this file. The `message.received`
+ * WEBHOOK carries the body as `text`; the REST read
+ * (`GET /inbox/conversations/{id}/messages`) carries the identical value as
+ * `message` and has no `text` key at all. Verified against live TikTok threads:
+ * reading only `text` returned null on every historical message, so
+ * `fetchVaOpener` silently never found an opener and the funnel lost both the
+ * seeded thread and the intent-gate bypass that ManyChat used to provide.
+ */
+function messageBodyOf(m) {
+    return str(m.message) ?? str(m.text);
+}
+/**
  * Normalize a `message.received` body, or return null when this is not an
  * inbound message we should act on.
  *
@@ -223,7 +238,7 @@ async function fetchVaOpener(conversationId, accountId) {
                 : []);
         /* The opener is the FIRST outgoing message in the thread — the VA's. */
         const first = list.find((m) => str(m.direction) === "outgoing");
-        return first ? str(first.text) : null;
+        return first ? messageBodyOf(first) : null;
     }
     catch {
         return null;
