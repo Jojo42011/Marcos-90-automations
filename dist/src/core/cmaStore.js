@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DuplicateComparableError = exports.TrayFullError = exports.TRAY_SLOTS = exports.COMP_STATUSES = void 0;
+exports.migrateCmaColumns = migrateCmaColumns;
 exports.initCmaSchema = initCmaSchema;
 exports.getCmaDb = getCmaDb;
 exports.createSession = createSession;
@@ -82,6 +83,102 @@ function resolveCmaDbPath() {
     return path_1.default.join(localDir, "cma.db");
 }
 let db = null;
+/**
+ * Columns this file declares that an OLDER database may not have.
+ *
+ * WHY THIS EXISTS — a real production failure, not a precaution. Publishing a
+ * CMA died with `no such column: suggested_min_list_price`, because every table
+ * below is created with `CREATE TABLE IF NOT EXISTS`: on a database that already
+ * exists that statement is a no-op, so a column added to this file later never
+ * reaches the live table. The schema in source and the schema on the volume had
+ * silently diverged, and the wizard's last step was the first thing to notice.
+ *
+ * ALTER TABLE ADD COLUMN, never a rebuild: `cma.db` holds Marco's real CMA
+ * sessions and their comparables, and dropping a table to change its shape would
+ * take those with it. Every add is guarded by what the table already has, so
+ * this is safe to run on every boot and does nothing on a current database.
+ *
+ * Listed here is every column that CAN be added this way — SQLite refuses to add
+ * a PRIMARY KEY, a UNIQUE, a REFERENCES, or a NOT NULL without a default, and
+ * those are all part of the original shape anyway. Listing a column that is
+ * already present costs nothing, which is the point: this heals drift that has
+ * already happened and drift that has not happened yet.
+ */
+const CMA_MIGRATABLE_COLUMNS = {
+    cma_sessions: [
+        ["lead_id", "TEXT"],
+        ["mls", "TEXT"],
+        ["subject_city", "TEXT"],
+        ["subject_state", "TEXT"],
+        ["subject_postal_code", "TEXT"],
+        ["subject_property_type", "TEXT"],
+        ["subject_beds", "REAL"],
+        ["subject_baths", "REAL"],
+        ["subject_sqft", "INTEGER"],
+        ["subject_lot_size", "REAL"],
+        ["subject_year_built", "INTEGER"],
+        ["criteria", "TEXT NOT NULL DEFAULT '{}'"],
+        ["suggested_min_list_price", "INTEGER"],
+        ["suggested_max_list_price", "INTEGER"],
+        ["estimated_dom_min", "INTEGER"],
+        ["estimated_dom_max", "INTEGER"],
+        ["area_rung", "TEXT"],
+        ["area_label", "TEXT"],
+        ["current_step", "INTEGER NOT NULL DEFAULT 1"],
+        ["status", "TEXT NOT NULL DEFAULT 'draft'"],
+        ["published_at", "TEXT"],
+    ],
+    cma_comparables: [
+        ["source_key", "TEXT"],
+        ["mls_number", "TEXT"],
+        ["city", "TEXT"],
+        ["postal_code", "TEXT"],
+        ["price", "INTEGER"],
+        ["original_list_price", "INTEGER"],
+        ["sold_price", "INTEGER"],
+        ["seller_concessions", "INTEGER"],
+        ["beds", "REAL"],
+        ["baths", "REAL"],
+        ["sqft", "INTEGER"],
+        ["lot_size", "REAL"],
+        ["year_built", "INTEGER"],
+        ["list_date", "TEXT"],
+        ["status_date", "TEXT"],
+        ["estimated_closing_date", "TEXT"],
+        ["days_on_market", "INTEGER"],
+        ["off_market_type", "TEXT"],
+        ["photo_url", "TEXT"],
+        ["notes", "TEXT"],
+        ["is_manual_entry", "INTEGER NOT NULL DEFAULT 0"],
+    ],
+    cma_deliveries: [
+        ["market_drip_scheduled", "INTEGER NOT NULL DEFAULT 0"],
+        ["report_id", "TEXT"],
+        ["lead_id", "TEXT"],
+        ["ok", "INTEGER NOT NULL DEFAULT 0"],
+        ["error", "TEXT"],
+    ],
+};
+/** Names of the columns actually added, so a boot can report what it healed. */
+function migrateCmaColumns(database) {
+    const added = [];
+    for (const [table, columns] of Object.entries(CMA_MIGRATABLE_COLUMNS)) {
+        const info = database.prepare(`PRAGMA table_info(${table})`).all();
+        /* An empty PRAGMA means the table does not exist yet, which happens on a
+           fresh database where CREATE TABLE has just made it correctly. Nothing to
+           migrate, and ALTERing a missing table would throw. */
+        if (!info.length)
+            continue;
+        const have = new Set(info.map((r) => r.name));
+        for (const [col, decl] of columns) {
+            if (have.has(col))
+                continue;
+            database.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${decl}`);
+            added.push(`${table}.${col}`);
+        }
+    }
+    return added;
+}
 function initCmaSchema(database) {
     database.exec(`
     CREATE TABLE IF NOT EXISTS cma_sessions (
@@ -113,8 +210,6 @@ function initCmaSchema(database) {
       updated_at TEXT NOT NULL
     )
   `);
-    database.exec(`CREATE INDEX IF NOT EXISTS idx_cma_sessions_lead ON cma_sessions(lead_id)`);
-    database.exec(`CREATE INDEX IF NOT EXISTS idx_cma_sessions_updated ON cma_sessions(updated_at DESC)`);
     database.exec(`
     CREATE TABLE IF NOT EXISTS cma_comparables (
       id TEXT PRIMARY KEY,
@@ -148,7 +243,6 @@ function initCmaSchema(database) {
       UNIQUE(session_id, listing_status, tray_slot_index)
     )
   `);
-    database.exec(`CREATE INDEX IF NOT EXISTS idx_cma_comps_session ON cma_comparables(session_id, listing_status)`);
     /* Every send, successful or not. A failed send that leaves no row is
        indistinguishable from one nobody tried, and "did the client get it?" is
        the first question asked when a seller says they never saw it. */
@@ -167,6 +261,20 @@ function initCmaSchema(database) {
       sent_at TEXT NOT NULL
     )
   `);
+    /* ── MIGRATE, then index. The order is load-bearing. ──────────────────────
+       Heal any column this file declares that an older database is missing. This
+       must run after every CREATE TABLE above and before every CREATE INDEX below,
+       because the indexes are built ON the columns being healed: on a database old
+       enough to be missing `lead_id` or `source_key`, indexing it first throws
+       `no such column` and the store never opens. A fresh database is already
+       correct, so this is a no-op there. */
+    const healed = migrateCmaColumns(database);
+    if (healed.length) {
+        console.log(`[cma] schema migrated, added ${healed.length} column(s): ${healed.join(", ")}`);
+    }
+    database.exec(`CREATE INDEX IF NOT EXISTS idx_cma_sessions_lead ON cma_sessions(lead_id)`);
+    database.exec(`CREATE INDEX IF NOT EXISTS idx_cma_sessions_updated ON cma_sessions(updated_at DESC)`);
+    database.exec(`CREATE INDEX IF NOT EXISTS idx_cma_comps_session ON cma_comparables(session_id, listing_status)`);
     database.exec(`CREATE INDEX IF NOT EXISTS idx_cma_deliveries_session ON cma_deliveries(session_id, sent_at DESC)`);
     /* Partial unique index rather than a plain UNIQUE: a hand-typed row has no
        source key, and several NULLs in one column would collide under some

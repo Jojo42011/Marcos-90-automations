@@ -27,6 +27,13 @@ export interface BrivityLeadRow {
   brivityUrl: string | null;
   /** lead | collaborator | team — only `lead` is a contact. */
   recordKind: string;
+  /* Brivity's `company` (148 contacts) and `job_title` (14). They are also
+     folded into notes for LEAD rows, where this CRM has nowhere else to put
+     them. Carried as real fields too because for a COLLABORATOR — a lender, a
+     title rep, a co-op agent — the company IS the identifying fact, and the
+     collaborator directory needs it as data rather than as prose. */
+  company: string | null;
+  jobTitle: string | null;
   /** A confirmed postal address, not a guess parsed from a conversation. */
   address: string | null;
   /** Values Brivity sent that no mapping table knows. Reported, never absorbed. */
@@ -164,6 +171,8 @@ export function personToRow(p: BrivityPerson): BrivityLeadRow | null {
     brivityUuid: p.uuid ? String(p.uuid) : null,
     brivityUrl: p.brivity_contact_detail_url ? String(p.brivity_contact_detail_url) : null,
     recordKind: recordKind(p.type),
+    company: (p.company || "").trim() || null,
+    jobTitle: (p.job_title || "").trim() || null,
     platform: "brivity",
     name: name || "Unknown",
     username: null,

@@ -8277,6 +8277,20 @@ function paintAssignedTo(l){
 /** Manage Team — reassign the primary and edit the member rows. */
 function openManageTeamModal(l){
   ensureRoster(function(roster){
+   /* Collaborators load with the modal rather than on demand: the operator
+      opened this to edit who is on the deal, and a second spinner inside an
+      already-open modal reads as broken. A failure degrades to an empty
+      directory with the manual add still working, never to a blocked save. */
+   fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/collaborators"))
+    .then(function(r){ return r.json(); })
+    .catch(function(){ return {collaborators:[],directory:[],roles:[]}; })
+    .then(function(cdata){
+    var collabDir=(cdata&&cdata.directory)||[];
+    var collabRoles=(cdata&&cdata.roles&&cdata.roles.length)?cdata.roles:
+      ["Lender","Title Company","Escrow Officer","Home Inspector","Appraiser",
+       "Insurance Agent","Co-op Agent","Attorney","Contractor","Photographer","Other"];
+    var collabRows=((cdata&&cdata.collaborators)||[]).map(function(c){
+      return {collaboratorId:c.id,roleName:c.roleName||""}; });
     var rolesList=(LDTEAM.roles&&LDTEAM.roles.length)?LDTEAM.roles:[
       "Broker","Buyer's Agent","Listing Agent","Listing Coordinator","Listing Representative",
       "Marketing Manager","Referring Agent","Team Owner","Transaction Coordinator"];
@@ -8307,6 +8321,65 @@ function openManageTeamModal(l){
       });
     }
 
+    function collabLabel(c){
+      var bits=[c.name];
+      if(c.company)bits.push(c.company);
+      else if(c.jobTitle)bits.push(c.jobTitle);
+      return bits.join(" — ");
+    }
+    function collabRowHTML(r,i){
+      return '<div class="mt-row" data-cbrow="'+i+'">'+
+        '<select data-cbwho="'+i+'"><option value="">Select a collaborator</option>'+
+          collabDir.map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===r.collaboratorId?" selected":"")+'>'+
+            esc(collabLabel(c))+'</option>'; }).join("")+
+          '<option value="__new__">＋ New collaborator…</option></select>'+
+        '<select data-cbrole="'+i+'"><option value="">Select a Role</option>'+
+          collabRoles.map(function(x){ return '<option value="'+esc(x)+'"'+(x===r.roleName?" selected":"")+'>'+esc(x)+'</option>'; }).join("")+
+        '</select>'+
+        '<button class="rm" data-cbdel="'+i+'" title="Remove">🗑</button></div>';
+    }
+    function paintCollabRows(){
+      var host=document.getElementById("cbRows"); if(!host)return;
+      host.innerHTML=collabRows.map(collabRowHTML).join("")||
+        '<div class="cr-empty">No collaborators on this contact yet.</div>';
+      host.querySelectorAll("[data-cbwho]").forEach(function(sel){
+        sel.addEventListener("change",function(){
+          var i=+sel.getAttribute("data-cbwho");
+          if(sel.value==="__new__"){ sel.value=collabRows[i].collaboratorId||""; promptNewCollaborator(i); return; }
+          collabRows[i].collaboratorId=sel.value;
+        });
+      });
+      host.querySelectorAll("[data-cbrole]").forEach(function(sel){
+        sel.addEventListener("change",function(){ collabRows[+sel.getAttribute("data-cbrole")].roleName=sel.value; });
+      });
+      host.querySelectorAll("[data-cbdel]").forEach(function(b){
+        b.addEventListener("click",function(){ collabRows.splice(+b.getAttribute("data-cbdel"),1); paintCollabRows(); });
+      });
+    }
+    /* A collaborator who is not in the directory yet is created inline rather
+       than sending the operator to another screen and losing the edit they are
+       in the middle of. The new person lands in the directory, so the next
+       contact picks them from the list instead of retyping. */
+    function promptNewCollaborator(rowIndex){
+      var name=window.prompt("Collaborator name (lender, title rep, co-op agent…)","");
+      if(name===null)return;
+      name=name.trim(); if(!name){ crmToast("A collaborator needs a name"); return; }
+      var company=window.prompt("Company (optional)","")||"";
+      var email=window.prompt("Email (optional)","")||"";
+      var phone=window.prompt("Phone (optional)","")||"";
+      fetch(crmApi("/api/collaborators"),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({name:name,company:company,email:email,phone:phone})})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+        .then(function(res){
+          if(!res.ok||!res.j.collaborator){ crmToast(res.j.error||"Could not add the collaborator"); return; }
+          collabDir.push(res.j.collaborator);
+          collabDir.sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+          collabRows[rowIndex].collaboratorId=res.j.collaborator.id;
+          paintCollabRows(); crmToast("Added "+res.j.collaborator.name);
+        })
+        .catch(function(){ crmToast("Could not reach the server"); });
+    }
+
     oaOverlay("Manage Team",
       '<div class="mt-help">Making another user a team member gives them the ability to view and edit this '+
         'person’s information. Team members do not need a role to gain access. Access can be revoked only for '+
@@ -8316,12 +8389,18 @@ function openManageTeamModal(l){
           roster.map(function(u){ return '<option value="'+esc(u.id)+'"'+(u.id===primaryId?" selected":"")+'>'+
             esc(u.name)+(u.role?" ("+esc(u.role)+")":"")+'</option>'; }).join("")+'</select></div>'+
       '<div class="oa-f"><label>Team Members</label><div id="mtRows"></div>'+
-        '<button class="oa-alt" id="mtAdd" style="padding:7px 14px">+ ADD TEAM MEMBER</button></div>',
+        '<button class="oa-alt" id="mtAdd" style="padding:7px 14px">+ ADD TEAM MEMBER</button></div>'+
+      '<div class="mt-help" style="margin-top:18px">Collaborators are the outside people on the deal, a lender, '+
+        'a title rep, a co-op agent. They are recorded on this contact and are <b>not</b> given access to the CRM.</div>'+
+      '<div class="oa-f"><label>Collaborators</label><div id="cbRows"></div>'+
+        '<button class="oa-alt" id="cbAdd" style="padding:7px 14px">+ ADD COLLABORATOR</button></div>',
       '<div style="flex:1"></div><button class="oa-cancel" onclick="closeOa()">CANCEL</button>'+
       '<button class="oa-go" id="mtSave">SAVE TEAM</button>');
 
     paintRows();
+    paintCollabRows();
     document.getElementById("mtAdd").addEventListener("click",function(){ rows.push({userId:"",roleName:""}); paintRows(); });
+    document.getElementById("cbAdd").addEventListener("click",function(){ collabRows.push({collaboratorId:"",roleName:""}); paintCollabRows(); });
     document.getElementById("mtSave").addEventListener("click",function(){
       var picked=rows.filter(function(r){return r.userId;});
       // Same person twice is a mistake the modal should catch, not the DB.
@@ -8342,15 +8421,32 @@ function openManageTeamModal(l){
                     roleName:r.roleName}; })})})
         .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
         .then(function(res){
-          go.disabled=false; go.textContent="SAVE TEAM";
-          if(!res.ok){ crmToast(res.j.error||"Could not save the team"); return; }
+          if(!res.ok){ go.disabled=false; go.textContent="SAVE TEAM"; crmToast(res.j.error||"Could not save the team"); return null; }
           LDTEAM.primary=res.j.primary; LDTEAM.members=res.j.members||[];
           l.assignedUserId=LDTEAM.primary?LDTEAM.primary.userId:null;
           l.assignedUserName=LDTEAM.primary?LDTEAM.primary.userName:null;
+          /* Collaborators save in the same click. A row with no person picked
+             is dropped rather than refused: an empty row is the operator
+             changing their mind, not an error worth blocking the save on. */
+          return fetch(crmApi("/api/crm/lead/"+encodeURIComponent(l.id)+"/collaborators"),
+            {method:"PUT",headers:{"Content-Type":"application/json"},
+             body:JSON.stringify({collaborators:collabRows.filter(function(r){return r.collaboratorId;})})})
+            .then(function(r2){ return r2.json().then(function(j2){ return {ok:r2.ok,j:j2}; },function(){ return {ok:r2.ok,j:{}}; }); });
+        })
+        .then(function(cres){
+          if(cres===null)return;
+          go.disabled=false; go.textContent="SAVE TEAM";
+          if(cres&&!cres.ok){
+            /* The team DID save. Saying "saved" would hide the half that did
+               not, and saying "failed" would send them to redo work that is
+               already stored. */
+            crmToast("Team saved, but the collaborators did not: "+(cres.j.error||"server error")); return;
+          }
           closeOa(); crmToast("Team saved");
           paintAssignedTo(l); renderLeads(); renderPeople();
         })
         .catch(function(){ go.disabled=false; go.textContent="SAVE TEAM"; crmToast("Could not reach the server"); });
+    });
     });
   });
 }

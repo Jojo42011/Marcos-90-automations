@@ -3957,6 +3957,146 @@ app.put("/api/crm/lead/:id/team", express.json({ limit: "16kb" }), async (req, r
 });
 
 /* ═══════════════════════════════════════════════════════════════════════
+   COLLABORATORS — the outside people on a deal.
+
+   Distinct from the team endpoints above, and deliberately so. A team member
+   is a seat in this app and the Manage Team modal says membership grants the
+   ability to view and edit the contact. A collaborator is a lender, a title
+   rep or a co-op agent: recorded on the deal, never given access.
+
+   Brivity's 125 collaborator records arrive on every pull and the importer
+   drops them on purpose, because a lender imported as a lead lands on the call
+   list. That is why they appeared "not to sync" — they had nowhere to go.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+app.get("/api/collaborators", async (req, res) => {
+  try {
+    const store = await import("./core/collaboratorStore.js");
+    const search = typeof req.query.q === "string" ? req.query.q : "";
+    const rows = store.listCollaborators(search);
+    const counts = store.collaboratorLinkCounts();
+    res.json({
+      ok: true,
+      roles: store.COLLABORATOR_ROLES,
+      collaborators: rows.map((c) => ({ ...c, linkedContacts: counts[c.id] ?? 0 })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.post("/api/collaborators", express.json({ limit: "16kb" }), async (req, res) => {
+  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const name = typeof b.name === "string" ? b.name.trim() : "";
+  if (!name) {
+    res.status(400).json({ error: "A collaborator needs a name" });
+    return;
+  }
+  try {
+    const store = await import("./core/collaboratorStore.js");
+    res.json({
+      ok: true,
+      collaborator: store.addCollaborator({
+        name,
+        company: typeof b.company === "string" ? b.company : null,
+        jobTitle: typeof b.jobTitle === "string" ? b.jobTitle : null,
+        email: typeof b.email === "string" ? b.email : null,
+        phone: typeof b.phone === "string" ? b.phone : null,
+      }),
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/collaborators/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const store = await import("./core/collaboratorStore.js");
+    res.json({ ok: store.deleteCollaborator(String(req.params.id)) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * Pull Brivity's collaborator records into the directory.
+ *
+ * No new network call and no new endpoint on Brivity's side: `getBrivityPeople`
+ * already returns these rows on every pull, tagged `recordKind: "collaborator"`,
+ * and this is simply the first thing to read them.
+ */
+app.post("/api/collaborators/sync-brivity", async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const { brivityConfigured, getBrivityPeople } = await import("./core/brivityPeople.js");
+    if (!brivityConfigured()) {
+      res.status(503).json({
+        error: "BRIVITY_API_KEY is not set, so there is nothing to sync from.",
+      });
+      return;
+    }
+    const people = await getBrivityPeople();
+    const seeds = people
+      .filter((p) => p.recordKind === "collaborator")
+      .map((p) => ({
+        brivityId: p.brivityId,
+        name: p.name,
+        company: p.company,
+        jobTitle: p.jobTitle,
+        email: p.email,
+        phone: p.phone,
+      }));
+    const store = await import("./core/collaboratorStore.js");
+    res.json({ ok: true, ...store.syncBrivityCollaborators(seeds) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.get("/api/crm/lead/:id/collaborators", async (req, res) => {
+  const lead = await contactLeadOr404(req, res);
+  if (!lead) return;
+  try {
+    const store = await import("./core/collaboratorStore.js");
+    res.json({
+      ok: true,
+      roles: store.COLLABORATOR_ROLES,
+      collaborators: store.listCollaboratorsForLead(lead.id),
+      directory: store.listCollaborators(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.put("/api/crm/lead/:id/collaborators", express.json({ limit: "32kb" }), async (req, res) => {
+  const lead = await contactLeadOr404(req, res);
+  if (!lead) return;
+  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const raw = Array.isArray(b.collaborators) ? b.collaborators : [];
+  try {
+    const store = await import("./core/collaboratorStore.js");
+    const entries = raw
+      .map((r) => (r && typeof r === "object" ? (r as Record<string, unknown>) : {}))
+      .filter((r) => typeof r.collaboratorId === "string" && r.collaboratorId.trim())
+      .map((r) => ({
+        collaboratorId: String(r.collaboratorId).trim(),
+        roleName: typeof r.roleName === "string" ? r.roleName : null,
+      }));
+    res.json({ ok: true, collaborators: store.setCollaboratorsForLead(lead.id, entries) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
    WEB ACTIVITY.
 
    Brivity's version reads an IDX website. This system has no site tracking

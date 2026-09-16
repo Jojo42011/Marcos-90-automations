@@ -118,6 +118,8 @@ function personToRow(p) {
         brivityUuid: p.uuid ? String(p.uuid) : null,
         brivityUrl: p.brivity_contact_detail_url ? String(p.brivity_contact_detail_url) : null,
         recordKind: (0, brivityMapping_js_1.recordKind)(p.type),
+        company: (p.company || "").trim() || null,
+        jobTitle: (p.job_title || "").trim() || null,
         platform: "brivity",
         name: name || "Unknown",
         username: null,
