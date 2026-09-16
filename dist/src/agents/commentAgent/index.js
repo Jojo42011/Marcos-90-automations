@@ -20,12 +20,14 @@ exports.handleInboundComment = handleInboundComment;
  * from `getFollowUpQueue`.
  *
  * WHAT THIS IS NOT. It is not a blanket auto-responder. One video in Marco's
- * account has 163 comments; replying "DM me" to all of them in an afternoon is
- * the textbook spam signature, Zernio's own docs note TikTok's API moderation is
- * stricter than the app, and the account whose reach IS the lead flow is the
- * thing that would pay for it. Four independent limits keep that from happening,
- * and they live in `decide()` below rather than in a prompt, because a model
- * cannot be trusted to rate-limit itself.
+ * account has 163 comments; blasting a blunt "DM me" under all of them in an
+ * afternoon is the textbook spam signature, Zernio's own docs note TikTok's API
+ * moderation is stricter than the app, and the account whose reach IS the lead
+ * flow is the thing that would pay for it. Four independent limits keep that
+ * from happening, and they live in `decide()` below rather than in a prompt,
+ * because a model cannot be trusted to rate-limit itself. The invite itself must
+ * also stay warm ("for some reason I can't DM you… mind shooting me a quick
+ * one?") rather than an order.
  *
  * WHY THE CLASSIFIER IS A MODEL AND NOT A KEYWORD LIST. Marco's own comments
  * settle this. Two of the top comments on the acreage listing are "Oak" and
@@ -76,12 +78,12 @@ Your job is to classify the comment and, when it deserves it, write the reply.
 
 ${prompts_js_1.GLOBAL_CONCISE_TEXTING}
 
-BUCKETS — pick exactly one:
+BUCKETS (pick exactly one):
 - "high_intent": they are asking for something a buyer asks for. Price, cost, info,
   location, city, address, availability, beds, baths, HOA, taxes, square footage,
   financing, a tour, "more details", "is it still available". ALSO a bare keyword
   that is obviously the video's call to action (a single word like "Oak", "Info",
-  a place name, or a word repeated by many commenters) — those are the hottest
+  a place name, or a word repeated by many commenters). Those are the hottest
   leads in the thread, never noise.
 - "casual": they like the home or a feature of it but did not ask for anything.
   "That pool is nice", "So much character", "I love this one", a fire emoji.
@@ -95,16 +97,33 @@ BUCKETS — pick exactly one:
   insults, off-topic noise, a comment that is only a tag of another user with no
   remark, anything already clearly answered in the thread, or your own words.
 
+HOW THE DM INVITE MUST SOUND (this is the whole point of the public reply):
+TikTok will not let a business open a DM, so you cannot message them first. That
+is real, and you lean on it warmly. Never order them to DM you. Never sound armed
+or blunt. Soft, light hearted, respectful, so they want to do it.
+
+BAD (never write these shapes):
+- "DM me"
+- "Send me a DM"
+- "I can't DM you, send me a DM"
+- "Shoot me a DM" as a standalone command
+
+GOOD (vary the words every time, keep this warmth):
+- "Hey for some reason I can't send you a DM from my account. Would it be okay if you shot me a quick one?"
+- "For some reason I can't DM you from here. Do you mind shooting me a quick text?"
+- "Hey I can't send you a DM from my side for some reason. Mind if you shoot me one real quick?"
+
 HOW TO REPLY, by bucket:
-- high_intent: acknowledge in a couple of words and ask them to DM you, because
-  that is where the full breakdown goes. Vary the wording every single time.
-- casual: match their energy, be warm and a little funny if it fits, then invite
-  the DM lightly. Example shape: "Nice enough to come see it? DM me and I'll send
-  the details." Never force it.
-- social: just be a person. Answer or acknowledge. You may mention the DM only if
-  it is genuinely natural. It is fine not to.
+- high_intent: acknowledge in a couple of words, then the warm DM invite above,
+  because that is where the full breakdown goes. Vary the wording every time.
+- casual: match their energy, be warm and a little funny if it fits, then the same
+  warm DM invite. Example shape: "Nice enough to look into more? For some reason I
+  can't send you a DM from my account, mind shooting me a quick one?" Never force
+  a hard pitch. Do answer these, do not skip them.
+- social: just be a person. Answer or acknowledge. You may use the warm DM invite
+  only if it is genuinely natural. It is fine not to.
 - frustrated: do not get defensive and do not pitch. Acknowledge the runaround in
-  a few words, give them the CITY, and mention the DM once, gently.
+  a few words, give them the CITY, and use the warm DM invite once, gently.
 - skip: reply MUST be null.
 
 WHAT YOU ACTUALLY KNOW, and it is almost nothing:
@@ -113,8 +132,8 @@ city is the only fact about the home you may state. You do NOT know the price,
 the price range, whether it is still available, whether it is under contract, the
 taxes, the HOA, the lot size, or anything else unless it is written verbatim in
 the caption you were given. When you do not know, that is exactly what the DM is
-for. Saying "DM me and I'll send the full breakdown" is always available to you
-and is never wrong.
+for. The warm invite ("for some reason I can't send a DM from my account, mind
+shooting me a quick one?") is always available to you and is never wrong.
 
 HARD RULES, these are not style preferences:
 - NEVER state a price. Not an exact figure, not a range, and not a band in words.
@@ -122,15 +141,16 @@ HARD RULES, these are not style preferences:
   This is a public comment attached to a real listing forever, and a number you
   were not given is a number you invented.
 - NEVER claim the home is still available, still on the market, sold, pending or
-  under contract. You do not know. "DM me and I'll check on that for you" is the
-  honest answer and works just as well.
+  under contract. You do not know. Offering to check over DM with the warm invite
+  is the honest answer and works just as well.
 - NEVER give the street address, the exact cross streets, the neighbourhood, the
   subdivision, or the builder/developer name. You may say the city.
-- NEVER state any other spec you were not given — beds, baths, square footage,
-  acreage, year built, taxes, HOA. Invite the DM instead.
+- NEVER state any other spec you were not given (beds, baths, square footage,
+  acreage, year built, taxes, HOA). Invite the DM instead.
 - NEVER invent a fact about the home. If you do not know it, invite the DM.
-- NEVER use an em dash, an en dash, or a hyphen as a pause between phrases.
-  Commas and periods only.
+- NEVER use a hyphen, an em dash, or an en dash anywhere in the reply. Not as a
+  pause, not in a compound word, not at all. Commas, periods, and question marks
+  only. Write "do you mind" not clipped dash phrases.
 - NEVER open with "Great question", "Of course", "I'd be happy to", "That's a
   great point", or "Absolutely" as filler.
 - Do not start with an upbeat word when the comment is negative or frustrated.
@@ -194,7 +214,7 @@ function vetCommentReply(reply) {
         || /\b[1-9]\d{2}s\b/.test(t)) {
         return { ok: false, text: null, why: "contains a price band we were never given" };
     }
-    /* Asserting market status we do not know. "DM me and I'll check" is allowed;
+    /* Asserting market status we do not know. Offering to check over DM is allowed;
        "yep, still on the market" is a claim. */
     if (/\b(still (available|on the market|up for sale)|already (sold|pending)|under contract|it'?s sold)\b/i.test(t)
         && !/\b(check|find out|confirm|look)\b/i.test(t)) {
@@ -206,11 +226,19 @@ function vetCommentReply(reply) {
     }
     if (t.length > 220)
         return { ok: false, text: null, why: "too long for a comment" };
-    /* Cosmetic repairs — rejecting a good reply over these would cost a lead.
-       Marco's formatting rule: no dash used as a pause. And "Dm" is a typo the
-       model produced live; DM is how a person writes it. */
-    t = t.replace(/\s+[—–]\s+/g, ", ").replace(/\s+-\s+/g, ", ");
+    /* Marco's formatting rule, enforced not hoped for: no hyphen, em dash, or en
+       dash ever reaches a public comment. Pause dashes become commas; any leftover
+       hyphen (compound words included) becomes a space. Rejecting a good reply
+       over punctuation would cost a lead, so we repair rather than refuse. "Dm"
+       is a typo the model produced live; DM is how a person writes it. */
+    t = t.replace(/\s*[‐‑‒–—―−]\s*/g, ", ");
+    t = t.replace(/\s+-\s+/g, ", ");
+    t = t.replace(/-/g, " ");
+    t = t.replace(/\s+,/g, ",").replace(/,\s*,+/g, ",").replace(/\s+/g, " ").trim();
     t = t.replace(/\bDm\b/g, "DM").replace(/\bdm\b/g, "DM");
+    if (/[‐‑‒–—―−-]/.test(t)) {
+        return { ok: false, text: null, why: "still contains a hyphen or dash after repair" };
+    }
     return { ok: true, text: t };
 }
 /**

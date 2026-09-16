@@ -51,7 +51,7 @@ let posted = [];
 comments.readBackComment = (...a) => readBackImpl(...a);
 comments.postCommentReply = (...a) => { posted.push(a[0]); return postImpl(...a); };
 
-let draftImpl = async () => ({ bucket: "high_intent", reply: "Shoot me a DM and I'll send the full breakdown.", reason: "asked price" });
+let draftImpl = async () => ({ bucket: "high_intent", reply: "Happy to help. For some reason I can't send you a DM from my account, mind shooting me a quick one?", reason: "asked price" });
 const run = (e, acct, extra = {}) => agent.handleInboundComment(e, acct, { classify: (...a) => draftImpl(...a), ...extra });
 
 let n = 0;
@@ -97,7 +97,7 @@ check(
 // ─────────────────────── COPY VETTING ────────────────────────
 console.log("\nCOPY — what must never reach a public comment");
 const vet = agent.vetCommentReply;
-check("a normal reply passes", vet("Shoot me a DM and I'll send the breakdown.").ok);
+check("a warm invite reply passes", vet("Hey for some reason I can't send you a DM from my account. Mind shooting me a quick one?").ok);
 check("a dollar price is refused", !vet("It's $534,149, DM me").ok);
 check("a comma-formatted price is refused", !vet("Around 534,149 for this one").ok);
 check("a bare 6-digit price is refused", !vet("Listed at 534149 right now").ok);
@@ -106,11 +106,20 @@ check("a wall of text is refused", !vet("x".repeat(240)).ok);
 check("no draft is refused", !vet(null).ok);
 check(
   "an em dash is repaired, not rejected",
-  vet("Got it — DM me and I'll send it").text === "Got it, DM me and I'll send it",
+  vet("Got it — mind shooting me a DM").text === "Got it, mind shooting me a DM",
 );
 check(
   "a hyphen used as a pause is repaired",
-  vet("Sure thing - DM me").text === "Sure thing, DM me",
+  vet("Sure thing - mind shooting me a DM").text === "Sure thing, mind shooting me a DM",
+);
+check(
+  "a compound hyphen is stripped so no hyphen posts",
+  vet("Nice enough to look into more? Mind a quick follow up").ok
+    && !/[—–―-]/.test(vet("Nice enough to look into more? Mind a quick follow-up").text),
+);
+check(
+  "em dash and hyphen never survive vetting",
+  !/[—–―-]/.test(vet("Hey — for some reason I can't DM you - mind shooting me one?").text || ""),
 );
 /* These three came out of the live dry-run against production, not imagination:
    asked "why can't you just post the price", the model answered "San Antonio,
@@ -124,9 +133,9 @@ check("asserting it is still on the market is refused", !vet("Yep, still on the 
 check("asserting it is sold is refused", !vet("That one's under contract already").ok);
 check(
   "but offering to CHECK availability is allowed",
-  vet("DM me and I'll check if it's still available").ok,
+  vet("For some reason I can't DM you from my account, mind shooting me one and I'll check if it's still available?").ok,
 );
-check("the city alone is still allowed", vet("San Antonio! DM me and I'll send the details.").ok);
+check("the city alone is still allowed", vet("San Antonio! For some reason I can't send a DM from my account, mind shooting me a quick one?").ok);
 check('"Dm" is normalised to "DM"', vet("Dm me and I'll send it").text === "DM me and I'll send it");
 
 // ───────────────────── DECISION PIPELINE ─────────────────────
@@ -170,7 +179,7 @@ check("an empty comment is skipped", o.decision === "skipped_bucket");
 
 console.log("\nBUCKETS — only three of five earn a reply");
 for (const b of ["skip", "social", "frustrated", "casual"]) {
-  draftImpl = async () => ({ bucket: b, reply: b === "skip" ? null : "Nice one, DM me and I'll send details.", reason: b });
+  draftImpl = async () => ({ bucket: b, reply: b === "skip" ? null : "Nice one. For some reason I can't send you a DM from my account, mind shooting me a quick one?", reason: b });
   o = await run(evt(), ACCT);
   if (b === "skip") check("bucket skip posts nothing", o.decision === "skipped_bucket");
   else check(`bucket ${b} replies`, o.decision === "replied", o.reason);
