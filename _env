@@ -117,6 +117,18 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # COMMENT_AGENT_MAX_COMMENT_AGE_HOURS=48
 # COMMENT_AGENT_DB_PATH=   # defaults to /data/comment-agent.db
 
+# Maps — address autocomplete on contact profiles, and geocoding.
+# Unset = address fields are plain text boxes and the autocomplete endpoint
+# returns nothing. It never guesses an address: a plausible-looking suggestion
+# that reaches a provider-less system would get SAVED onto a real contact, and a
+# wrong address is worse than an empty one.
+# Setting this turns on autocomplete everywhere an address is typed. It does NOT
+# by itself put a map on the CMA or the market report — those need coordinates
+# on the LISTINGS, and geo.lat is null on all ~32k rows of the SABOR mirror, so
+# a map also needs a geocoding backfill with real per-row cost. Separate call.
+# MAPS_API_KEY=
+# (GOOGLE_MAPS_API_KEY is accepted as an alias.)
+
 # Browser control — pairing token for the Harvey Chrome extension.
 # Unset = browser control is disabled entirely (fails closed).
 # BROWSER_CONTROL_TOKEN=

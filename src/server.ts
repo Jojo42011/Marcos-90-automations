@@ -3957,6 +3957,38 @@ app.put("/api/crm/lead/:id/team", express.json({ limit: "16kb" }), async (req, r
 });
 
 /* ═══════════════════════════════════════════════════════════════════════
+   ADDRESS AUTOCOMPLETE.
+
+   Proxied rather than called from the browser so the key stays server-side.
+   Dormant until MAPS_API_KEY is set: `configured:false` and an empty list,
+   never a guessed address. The address box degrades to plain typing, which is
+   exactly what it is today.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+app.get("/api/geo/status", async (_req, res) => {
+  const { isGeoConfigured } = await import("./integrations/geo/index.js");
+  const configured = isGeoConfigured();
+  res.json({
+    configured,
+    note: configured
+      ? "Address autocomplete is on."
+      : "No maps key is configured, so address fields are plain text. Set MAPS_API_KEY to turn on " +
+        "autocomplete. A map on the CMA and market report needs more than this key: the MLS mirror " +
+        "has no coordinates on any of its ~32k rows, so it also needs a geocoding backfill.",
+  });
+});
+
+app.get("/api/geo/autocomplete", async (req, res) => {
+  try {
+    const { autocompleteAddress } = await import("./integrations/geo/index.js");
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    res.json(await autocompleteAddress(q));
+  } catch (err) {
+    res.status(500).json({ ok: false, configured: true, suggestions: [], error: (err as Error).message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
    COLLABORATORS — the outside people on a deal.
 
    Distinct from the team endpoints above, and deliberately so. A team member

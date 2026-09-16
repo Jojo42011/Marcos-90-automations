@@ -6593,8 +6593,9 @@ function openAddressModal(l,cur){
     return '<div class="oa-cols">'+
       '<div>'+
         '<div class="oa-f"><label>Address Type</label><select id="adKind">'+kindOptions(ADDRESS_KINDS,(cur&&cur.kind)||"home")+'</select></div>'+
-        '<div class="oa-f"><label>Street Address <span class="oa-req">required</span></label>'+
-          '<input type="text" id="adStreet" value="'+esc(cur?cur.street:"")+'" placeholder="1234 Main Street"></div>'+
+        '<div class="oa-f ta-wrap"><label>Street Address <span class="oa-req">required</span></label>'+
+          '<input type="text" id="adStreet" autocomplete="off" value="'+esc(cur?cur.street:"")+'" placeholder="1234 Main Street">'+
+          '<div id="adSuggest" class="ta-list" style="display:none"></div></div>'+
         '<div class="oa-f"><label>Apt / Suite <span class="oa-hint">optional</span></label>'+
           '<input type="text" id="adApt" value="'+esc(cur?cur.apt:"")+'" placeholder="Apt 12B"></div>'+
         '<div class="oa-f"><label>City</label><input type="text" id="adCity" value="'+esc(cur?cur.city:"")+'" placeholder="Fort Worth"></div>'+
@@ -6613,7 +6614,80 @@ function openAddressModal(l,cur){
       '</div></div>';
   }
   var regionCode=(cur&&cur.region)||"";
+  /*
+   * ADDRESS SUGGESTIONS as the operator types.
+   *
+   * Server-proxied, so the maps key is never in page source. DORMANT by
+   * default: with no key configured the endpoint reports configured:false, the
+   * list never opens, and this stays the plain text box it is today. It never
+   * invents a suggestion — a guessed address that someone saves is worse than
+   * no suggestion at all.
+   *
+   * Picking one fills City, State and ZIP too, which is the actual time saved;
+   * typing the street was never the slow part. Everything stays editable after,
+   * because a provider's idea of an address is not always the one the client
+   * uses.
+   */
+  function wireAddressSuggest(){
+    var input=document.getElementById("adStreet");
+    var list=document.getElementById("adSuggest");
+    if(!input||!list) return;
+    var timer=null, lastQ="", open=false;
+    function close(){ list.style.display="none"; list.innerHTML=""; open=false; }
+    function apply(sug){
+      /* structuredFormat splits "123 Oak" from "San Antonio, TX, USA"; when the
+         provider does not split it, the street line takes the whole string and
+         nothing downstream is filled in with a guess. */
+      input.value=sug.mainText||sug.description||input.value;
+      var tail=(sug.secondaryText||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
+      if(tail.length){
+        var city=tail[0];
+        var cityEl=document.getElementById("adCity");
+        if(cityEl&&city) cityEl.value=city;
+        /* "TX" or "TX 78258" depending on the provider's formatting. */
+        var st=(tail[1]||"").match(/\b([A-Z]{2})\b/);
+        var zip=(sug.description||"").match(/\b(\d{5})(?:-\d{4})?\b/);
+        var regionEl=document.getElementById("adRegion");
+        if(regionEl&&st){ regionEl.value=st[1]; regionCode=st[1]; }
+        var postalEl=document.getElementById("adPostal");
+        if(postalEl&&zip) postalEl.value=zip[1];
+      }
+      close();
+    }
+    function paint(rows){
+      if(!rows.length){ close(); return; }
+      list.innerHTML=rows.slice(0,6).map(function(r,i){
+        return '<button type="button" data-sg="'+i+'">'+esc(r.description)+'</button>';
+      }).join("");
+      list.style.display=""; open=true;
+      list.querySelectorAll("[data-sg]").forEach(function(b){
+        b.addEventListener("mousedown",function(ev){ ev.preventDefault(); apply(rows[+b.getAttribute("data-sg")]); });
+      });
+    }
+    input.addEventListener("input",function(){
+      var q=input.value.trim();
+      if(timer)clearTimeout(timer);
+      if(q.length<3||q===lastQ){ if(q.length<3)close(); return; }
+      /* Debounced because this bills per request and the operator is typing. */
+      timer=setTimeout(function(){
+        lastQ=q;
+        fetch(crmApi("/api/geo/autocomplete?q="+encodeURIComponent(q)))
+          .then(function(r){ return r.json(); })
+          .then(function(d){
+            /* Unconfigured or failed: stay silent. An error banner under a
+               field someone is mid-way through typing is noise, and the field
+               works perfectly well without this. */
+            if(!d||!d.configured||!d.ok||!Array.isArray(d.suggestions)){ close(); return; }
+            paint(d.suggestions);
+          })
+          .catch(function(){ close(); });
+      },250);
+    });
+    input.addEventListener("blur",function(){ setTimeout(close,120); });
+    input.addEventListener("keydown",function(e){ if(e.key==="Escape"&&open){ e.stopPropagation(); close(); } });
+  }
   function wire(){
+    wireAddressSuggest();
     var sel=document.getElementById("adCountry");
     var input=document.getElementById("adRegion");
     var ta=attachTypeahead(input,localeFor(country).regions.map(function(r){return {id:r[0],label:r[1],sub:r[0]};}),
@@ -9829,7 +9903,7 @@ function openReportWizard(l,existing){
             'sales to be worth sending.</div></div>'+
           /* No map provider is configured, so the polygon tool and the live
              status markers cannot be drawn. Said plainly, in place. */
-          '<div class="oa-unav" style="margin-top:0">No map provider is configured for this system, so the draw-a-polygon '+
+          '<div class="oa-unav" style="margin-top:0">No map provider is configured (set MAPS_API_KEY) so the draw-a-polygon '+
             'tool and the map’s status markers are not available. The search area is the address above plus the radius, '+
             'which is what the report generator actually uses.</div>'+
         '</div><div>'+
