@@ -1230,6 +1230,12 @@
       <div class="card card-pad">
         <div class="tabs" id="dashTabs"><button class="on" data-dt="recent">RECENT ACTIVITY</button><button data-dt="plans">AUTO PLANS</button><span style="flex:1"></span><button class="chip" id="feedFilterBtn" style="background:#eaf7f7;color:var(--teal-strong)">Filtered</button></div>
         <div id="feed"></div>
+        <!-- Only on the AUTO PLANS tab. The plan builder lives behind a gear in
+             the icon rail, which is not where anyone looks for it from here. -->
+        <div id="apPlansFoot" style="display:none;padding:10px 2px 0">
+          <button class="pill-btn ghost" id="apGoSettings">MANAGE AUTO PLANS</button>
+          <span style="font-size:12px;color:#8a939c;margin-left:10px">Build your own plans, steps, triggers and pause rules.</span>
+        </div>
         <button class="load-more" id="loadMore">LOAD MORE…</button>
       </div>
       <div class="card card-pad">
@@ -1291,6 +1297,8 @@
              row exists only when there is something behind it — and TikTok,
              Instagram and Mojo finally appear, which is what was being asked
              for and was never displayed anywhere. -->
+        <div class="src-head" id="lnOrgHead" style="display:none">By origin</div>
+        <div id="lnOrigins"></div>
         <div class="src-head">By source</div>
         <div id="lnSources"></div>
         <a id="lnSrcMore" class="src-more" style="display:none"></a>
@@ -1818,19 +1826,57 @@ function openFeedFilterMenu(anchor){
 }
 document.getElementById("feedFilterBtn").addEventListener("click",function(e){ e.stopPropagation(); openFeedFilterMenu(e.currentTarget); });
 function renderFeed(){
-  // AUTO PLANS tab - enrolled leads + their plan, instead of the activity feed.
+  /*
+   * AUTO PLANS tab — the real enrollments on the board.
+   *
+   * WHAT THIS REPLACES, because it is the answer to "I want to create my own
+   * Auto Plans rather than being limited to preset options". Nothing was
+   * limiting him: the plan editor at Settings · Auto Plans builds a plan with
+   * any name, any number of task/email/text steps, its own day offsets, pause
+   * rules and completion status. What this tab did was rotate four HARDCODED
+   * plan names over whoever happened to be enrolled —
+   *   ["New Lead Follow-Up","Past Client Nurture","Open House Follow-Up",…]
+   * — with a made-up step number (1+i%5) out of a made-up 8, always "RUNNING".
+   * Four invented names on the dashboard read exactly like the four plans you
+   * are allowed to have. The enrollment carries its real planName, real
+   * currentStepIndex and real status, so that is what it says now.
+   *
+   * A lead can be on more than one plan, so each enrollment gets its own line
+   * rather than the lead getting one line and the first plan winning.
+   */
   if(dashMode==="plans"){
-    const PLANS=["New Lead Follow-Up","Past Client Nurture","Open House Follow-Up","Sphere Quarterly Touch"];
-    const enrolled=dashLeads().filter(l=>(l.autoPlanEnrollments||[]).length).slice(0,shown);
-    document.getElementById("feed").innerHTML=enrolled.length?enrolled.map((l,i)=>
-      '<div class="feed-item"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20v-8M12 12c0-3 2-5 5-5M12 12c0-3-2-5-5-5"/><path d="M5 20h14"/></svg></div><div class="feed-body">'+
-      '<div class="feed-top"><div class="feed-name"><b class="ldlink" data-lid="'+esc(l.id)+'" style="cursor:pointer">'+esc(l.name)+'</b> is enrolled in an Auto Plan;</div><div class="feed-time">'+relTime(l.lastActivity)+'</div></div>'+
-      '<div class="feed-meta"><b>Plan:</b> '+PLANS[i%PLANS.length]+' &nbsp;·&nbsp; <b>Step:</b> '+(1+i%5)+' of 8 &nbsp;·&nbsp; <span style="color:var(--teal);font-weight:600">RUNNING</span></div>'+
-      '</div></div>').join("")
-      :'<div class="empty" style="padding:26px 4px">No auto-plan enrollments yet.</div>';
+    const APSTATUS={active:["RUNNING","var(--teal)"],paused:["PAUSED","#b4762a"],completed:["COMPLETED","#8a939c"]};
+    const rows=[];
+    dashLeads().forEach(function(l){
+      (l.autoPlanEnrollments||[]).forEach(function(e){ rows.push({l:l,e:e}); });
+    });
+    const enrolled=rows.slice(0,shown);
+    document.getElementById("feed").innerHTML=enrolled.length?enrolled.map(function(r){
+      var e=r.e, l=r.l;
+      var st=APSTATUS[e.status]||APSTATUS.active;
+      /* An enrollment with no stored name is a real state (an older row, or a
+         plan since deleted). Say that, rather than borrowing a name. */
+      var planName=e.planName?esc(e.planName):'<span style="color:#8a939c">Unnamed plan</span>';
+      var step=(typeof e.currentStepIndex==="number")?("Step "+(e.currentStepIndex+1)):"Step unknown";
+      var done=(e.completedSteps&&e.completedSteps.length)?(" &nbsp;·&nbsp; "+e.completedSteps.length+" step(s) done"):"";
+      return '<div class="feed-item"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20v-8M12 12c0-3 2-5 5-5M12 12c0-3-2-5-5-5"/><path d="M5 20h14"/></svg></div><div class="feed-body">'+
+        '<div class="feed-top"><div class="feed-name"><b class="ldlink" data-lid="'+esc(l.id)+'" style="cursor:pointer">'+esc(l.name)+'</b> is enrolled in an Auto Plan;</div><div class="feed-time">'+relTime(e.enrolledAt||l.lastActivity)+'</div></div>'+
+        '<div class="feed-meta"><b>Plan:</b> '+planName+' &nbsp;·&nbsp; <b>'+step+'</b>'+done+
+          ' &nbsp;·&nbsp; <span style="color:'+st[1]+';font-weight:600">'+st[0]+'</span></div>'+
+        '</div></div>';
+    }).join("")
+      :'<div class="empty" style="padding:26px 4px">No auto-plan enrollments yet. '+
+       'Build a plan in <a class="lk" id="apGoSettingsEmpty" style="cursor:pointer">Settings · Auto Plans</a>.</div>';
+    /* The editor lives behind a gear in the icon rail, which is not where
+       anyone looks for it from here. */
+    var pf=document.getElementById("apPlansFoot");
+    if(pf) pf.style.display="";
     document.getElementById("loadMore").style.display="none";
+    var goEmpty=document.getElementById("apGoSettingsEmpty");
+    if(goEmpty) goEmpty.onclick=function(){ var g=document.querySelector('.rail .r[data-view="plansettings"]'); if(g)g.click(); };
     return;
   }
+  var pfHide=document.getElementById("apPlansFoot"); if(pfHide) pfHide.style.display="none";
   const visible=dashLeads().filter(l=>!FEED_FILTER_HIDDEN[feedTypeOf(l)]);
   const sorted=[...visible].sort((a,b)=>new Date(b.lastActivity)-new Date(a.lastActivity)).slice(0,shown);
   document.getElementById("feed").innerHTML=sorted.length?sorted.map(l=>{
@@ -2735,6 +2781,7 @@ function renderLeads(){
   /* Both of these counted a single hardcoded source into an element that no
      longer exists. renderSourceNav() counts every source that has leads. */
   renderSourceNav();
+  renderOriginNav();
   /* Archived and trashed contacts drop out of the default view but are NOT
      gone: filter for that status and they come straight back. Nothing here
      deletes a record. */
@@ -2811,7 +2858,7 @@ for(let i=0;i<40;i++){
     due:{label:i%4===0?"Due Today":"Upcoming",date:i%4===0?"07-20-2026":"08-0"+(1+i%9)+"-2026"},
     // Same fields mapPeopleLive carries, so smart filters behave the same on demo data.
     statusDisp:["hot","nurture","watch","new"][i%4], alerts:(i%3===0)?0:1, reports:(i%5===0)?0:2,
-    autoPlanEnrollments:(i%3===0)?[]:["New Lead Follow-Up"], activity:[]});
+    autoPlanEnrollments:(i%3===0)?[]:[{planId:"demo_nlf",planName:"New Lead Follow-Up",enrolledAt:new Date().toISOString(),currentStepIndex:i%4,completedSteps:[],status:"active"}], activity:[]});
 }
 let pBucket="all",pPage=1,pSmartKey=null;
 
@@ -3860,6 +3907,10 @@ function mapLeadRow(l){
     crmStatus:l.crmStatus, statusDisp:STATUS_MAP[l.crmStatus]||"nurture",
     stage:l.crmStage, stageLabel:STAGE_MAP[l.crmStage]||"NEW LEAD",
     phone:l.phone||"", email:l.email||null, source:l.source||"", platform:l.platform||"",
+    /* Which SYSTEM the record came from, as distinct from which source NAME it
+       carries. Set on every lead the Brivity importer created; null on a lead
+       this system made itself. */
+    brivityId:l.brivityId||null,
     address:loc, addressSaved:l.address||"", criteria:c, beds:c.beds!=null?c.beds:null, baths:c.baths!=null?c.baths:null, sqft:c.sqft!=null?c.sqft:null,
     lastLabel:lastLabelFor(l), lastActivity:l.lastActivity||l.lastMessageAt||l.updatedAt||l.createdAt,
     createdAt:l.createdAt, due:{label:(l.crmCallQueue==="urgent")?"Due Today":"Upcoming", date:""},
@@ -10530,6 +10581,48 @@ function sourceCounts(){
     return b.n-a.n||a.label.localeCompare(b.label);
   });
 }
+/*
+ * ORIGIN — which SYSTEM a lead came from, which is a different question from
+ * which source NAME it carries, and Marco asked for both.
+ *
+ * "By source" answers "where did this person find us" and deliberately folds
+ * case, so Brivity's "TikTok" and the DM pipeline's "tiktok" are ONE row: they
+ * are the same source and splitting them would halve every social number.
+ *
+ * "By origin" answers a question that folding makes unanswerable — which
+ * system holds the record. A lead the Brivity importer created carries
+ * Brivity's own id; one this system made for itself does not. So the two
+ * groups sit side by side rather than one replacing the other, and neither
+ * distorts the other's counts.
+ */
+function originKey(l){
+  if(l.brivityId) return "brivity";
+  var p=String(l.platform||"").toLowerCase();
+  if(p.indexOf("insta")>=0||p.indexOf("tik")>=0) return "social";
+  return "other";
+}
+var ORIGIN_LABELS={brivity:"Brivity",social:"Instagram / TikTok",other:"Entered here"};
+function originCounts(){
+  var by={};
+  (LEADS||[]).forEach(function(l){ var k=originKey(l); by[k]=(by[k]||0)+1; });
+  /* Fixed order, and a row only when there is something behind it — the same
+     rule the source list follows, so nothing can sit at zero looking real. */
+  return ["brivity","social","other"].filter(function(k){return by[k];})
+    .map(function(k){ return {key:k,label:ORIGIN_LABELS[k],n:by[k]}; });
+}
+function renderOriginNav(){
+  var wrap=document.getElementById("lnOrigins"); if(!wrap) return;
+  var head=document.getElementById("lnOrgHead");
+  var rows=originCounts();
+  /* One origin is not a division worth drawing: on a board that is all Brivity
+     or all DM leads the group says nothing and is hidden entirely. */
+  if(rows.length<2){ wrap.innerHTML=""; if(head)head.style.display="none"; return; }
+  if(head)head.style.display="";
+  wrap.innerHTML=rows.map(function(r){
+    return '<a data-lb="org:'+esc(r.key)+'"'+(leadBucket==="org:"+r.key?' class="on"':'')+'>'+
+      esc(r.label)+' <span class="c">'+r.n.toLocaleString()+'</span></a>';
+  }).join("");
+}
 function renderSourceNav(){
   var wrap=document.getElementById("lnSources"); if(!wrap) return;
   var rows=sourceCounts();
@@ -10555,6 +10648,7 @@ function renderSourceNav(){
 }
 function leadBucketPred(l){
   if(leadBucket&&leadBucket.indexOf("src:")===0) return sourceKey(l)===leadBucket.slice(4);
+  if(leadBucket&&leadBucket.indexOf("org:")===0) return originKey(l)===leadBucket.slice(4);
   return true;
 }
 /*
@@ -11398,6 +11492,11 @@ if(typeof paintSortArrows==="function")paintSortArrows();
   document.getElementById("apAddTrigger").onclick=function(){ if(!AP.plans.filter(function(p){return (p.planType||"people")==="people"&&!p.archived;}).length){ alert("Build a People plan first — a trigger only decides who gets dropped into an already-built plan."); return; } openTriggerEditor(null); };
   document.getElementById("apAddPlan").onclick=function(){ openPlanEditor(null); };
   document.querySelector('.rail .r[data-view="plansettings"]').addEventListener("click",load);
+  /* Same destination as the gear, reached from where the plans are listed. */
+  var apGo=document.getElementById("apGoSettings");
+  if(apGo) apGo.addEventListener("click",function(){
+    var g=document.querySelector('.rail .r[data-view="plansettings"]'); if(g)g.click();
+  });
   window.apReloadPlans=load;
 })();
 
