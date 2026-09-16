@@ -1,5 +1,11 @@
 /**
  * Harvey perception — fresh business snapshot each request.
+ *
+ * SPEED NOTE (2026-09-16): chatting used to call getConversation for every
+ * lead on the board. Aggregates never needed message counts — only the capped
+ * list slices do. So we summarize lite for the whole board and only open
+ * conversations for a shortlist (recent + opening-state + sparse no-touch
+ * candidates), capped at MAX_CONV_SUMMARIES.
  */
 
 import { getDashboardSnapshot, listAllLeads, getConversation } from "../core/db.js";
@@ -14,6 +20,8 @@ import {
 import type { HarveyContext, HarveyLeadSummary, HarveyMetricsPanel } from "./types.js";
 
 const MS_24H = 24 * 60 * 60 * 1000;
+/** Hard cap on conversation reads per perception pass. */
+const MAX_CONV_SUMMARIES = 60;
 
 function hoursSince(iso: string | null | undefined): number {
   if (!iso) return 9999;
@@ -33,16 +41,7 @@ function leadDisplayName(lead: Lead): string | null {
   return lead.name || lead.username || null;
 }
 
-async function summarizeLead(lead: Lead): Promise<HarveyLeadSummary> {
-  const conv = await getConversation(lead.id);
-  let userMessageCount = 0;
-  let assistantMessageCount = 0;
-  let lastMessageAt: string | null = null;
-  for (const m of conv.messages) {
-    if (m.role === "user") userMessageCount++;
-    else assistantMessageCount++;
-    if (m.at && (!lastMessageAt || m.at > lastMessageAt)) lastMessageAt = m.at;
-  }
+function summarizeLeadLite(lead: Lead): HarveyLeadSummary {
   const updatedAt = lead.updatedAt || lead.createdAt;
   return {
     id: lead.id,
@@ -58,12 +57,26 @@ async function summarizeLead(lead: Lead): Promise<HarveyLeadSummary> {
     crmCallQueue: lead.crmCallQueue,
     adCampaign: lead.adCampaign,
     hasPhone: Boolean(lead.phone?.trim()),
-    userMessageCount,
-    assistantMessageCount,
-    lastMessageAt,
+    userMessageCount: 0,
+    assistantMessageCount: 0,
+    lastMessageAt: null,
     updatedAt,
     hoursSinceUpdate: hoursSince(updatedAt),
   };
+}
+
+async function summarizeLeadWithConv(lead: Lead): Promise<HarveyLeadSummary> {
+  const base = summarizeLeadLite(lead);
+  const conv = await getConversation(lead.id);
+  let userMessageCount = 0;
+  let assistantMessageCount = 0;
+  let lastMessageAt: string | null = null;
+  for (const m of conv.messages) {
+    if (m.role === "user") userMessageCount++;
+    else assistantMessageCount++;
+    if (m.at && (!lastMessageAt || m.at > lastMessageAt)) lastMessageAt = m.at;
+  }
+  return { ...base, userMessageCount, assistantMessageCount, lastMessageAt };
 }
 
 export type PerceptionDeps = {
@@ -73,7 +86,42 @@ export type PerceptionDeps = {
 
 export async function buildHarveyContext(deps: PerceptionDeps): Promise<HarveyContext> {
   const [snapshot, allLeadsRaw] = await Promise.all([getDashboardSnapshot(), listAllLeads()]);
-  const allSummaries = await Promise.all(allLeadsRaw.map((l) => summarizeLead(l)));
+  const byId = new Map(allLeadsRaw.map((l) => [l.id, l]));
+  const lite = allLeadsRaw.map(summarizeLeadLite);
+
+  /* Shortlist who actually needs a conversation read for the returned lists. */
+  const openingStates = new Set([
+    "opening_asked_first_time",
+    "opening_offered_details",
+    "new",
+  ]);
+  const recentIds = [...lite]
+    .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))
+    .slice(0, 20)
+    .map((s) => s.id);
+  const openingIds = lite
+    .filter((s) => openingStates.has(s.funnelState) && s.crmStatus !== "dead")
+    .sort((a, b) => a.hoursSinceUpdate - b.hoursSinceUpdate)
+    .map((s) => s.id);
+  const noTouchIds = lite
+    .filter((s) => s.crmStatus !== "dead" && s.crmStatus !== "not_contacted")
+    .sort((a, b) => b.hoursSinceUpdate - a.hoursSinceUpdate)
+    .map((s) => s.id);
+
+  const needConv: string[] = [];
+  const seen = new Set<string>();
+  for (const id of [...recentIds, ...openingIds, ...noTouchIds]) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    needConv.push(id);
+    if (needConv.length >= MAX_CONV_SUMMARIES) break;
+  }
+
+  const convSummaries = await Promise.all(
+    needConv.map((id) => summarizeLeadWithConv(byId.get(id)!)),
+  );
+  const richById = new Map(convSummaries.map((s) => [s.id, s]));
+  const allSummaries = lite.map((s) => richById.get(s.id) || s);
 
   let adsRaw: AdsUpstreamSummary | null = null;
   const adsLinked = Boolean(deps.adDashboardBaseUrl.trim());
@@ -130,25 +178,25 @@ export async function buildHarveyContext(deps: PerceptionDeps): Promise<HarveyCo
   const noInteractionLeads = allSummaries.filter((s) => {
     if (s.crmStatus === "dead") return false;
     if (s.crmStatus === "not_contacted") return true;
+    /* Without a conversation read we cannot claim msgCount===0 honestly —
+       only include sparse rows we actually summarized. */
+    if (!richById.has(s.id)) return s.hoursSinceUpdate >= 336;
     const msgCount = s.userMessageCount + s.assistantMessageCount;
     if (msgCount === 0) return true;
     return s.hoursSinceUpdate >= 336;
   });
 
   const stalledOpeningLeads = allSummaries.filter((s) => {
-    const openingStates = [
-      "opening_asked_first_time",
-      "opening_offered_details",
-      "new",
-    ];
-    if (!openingStates.includes(s.funnelState)) return false;
+    if (!openingStates.has(s.funnelState)) return false;
+    if (!richById.has(s.id)) return false;
     if (s.userMessageCount === 0) return false;
     return s.hoursSinceUpdate >= 48 && s.assistantMessageCount > 0;
   });
 
   const recentLeads = [...allSummaries]
     .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))
-    .slice(0, 20);
+    .slice(0, 20)
+    .map((s) => richById.get(s.id) || s);
 
   return {
     generatedAt: snapshot.generatedAt,

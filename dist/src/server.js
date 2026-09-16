@@ -5669,6 +5669,114 @@ app.post("/api/mojo/webhook", express_1.default.json({ limit: "256kb" }), async 
     }
 });
 /**
+ * Inbound website lead form — same quiet create/enrich path as Mojo.
+ * Closed unless WEBSITE_WEBHOOK_SECRET is set; allowlisted in lockdown.ts.
+ */
+app.post("/api/website/lead", express_1.default.json({ limit: "256kb" }), async (req, res) => {
+    const { websiteSecretConfigured, websiteSecretOk, mapWebsitePayload, websitePayloadIsUsable, websiteLeadPatch, } = await Promise.resolve().then(() => __importStar(require("./core/websiteWebhook.js")));
+    if (!websiteSecretConfigured()) {
+        res.status(503).json({
+            ok: false,
+            error: "WEBSITE_WEBHOOK_SECRET is not set on this server, so the website lead webhook is closed. " +
+                "Set it as a secret and put the same value on the form post.",
+        });
+        return;
+    }
+    const provided = (typeof req.query.token === "string" ? req.query.token : "") ||
+        (typeof req.headers["x-website-secret"] === "string"
+            ? req.headers["x-website-secret"]
+            : "");
+    if (!websiteSecretOk(provided)) {
+        res.status(401).json({ ok: false, error: "Bad or missing website webhook secret" });
+        return;
+    }
+    const body = (req.body && typeof req.body === "object" ? req.body : {});
+    const items = Array.isArray(body)
+        ? body
+        : Array.isArray(body.leads)
+            ? (body.leads)
+            : [body];
+    try {
+        const { listAllLeads: allLeads, upsertLeadQuiet } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+        const existing = await allLeads();
+        const phoneKeyOf = (v) => {
+            let d = String(v ?? "").replace(/\D/g, "");
+            if (d.length === 11 && d.startsWith("1"))
+                d = d.slice(1);
+            return d.length === 10 ? d : "";
+        };
+        const byPhone = new Map();
+        const byEmail = new Map();
+        for (const l of existing) {
+            const pk = phoneKeyOf(l.phone);
+            if (pk && !byPhone.has(pk))
+                byPhone.set(pk, l);
+            const ek = String(l.email || "").trim().toLowerCase();
+            if (ek && !byEmail.has(ek))
+                byEmail.set(ek, l);
+        }
+        let created = 0, merged = 0, skipped = 0;
+        const problems = [];
+        for (const raw of items) {
+            const m = mapWebsitePayload(raw);
+            if (!websitePayloadIsUsable(m)) {
+                skipped++;
+                continue;
+            }
+            const pk = phoneKeyOf(m.phone);
+            const ek = (m.email || "").toLowerCase();
+            const hit = (pk && byPhone.get(pk)) || (ek && byEmail.get(ek)) || null;
+            try {
+                if (hit) {
+                    const patch = websiteLeadPatch(m);
+                    const next = { ...hit };
+                    if (!hit.name || /^unnamed/i.test(hit.name))
+                        next.name = patch.name;
+                    if (!hit.phone && patch.phone)
+                        next.phone = patch.phone;
+                    if (!hit.email && patch.email)
+                        next.email = patch.email;
+                    if (!hit.address && patch.address)
+                        next.address = patch.address;
+                    if (!hit.source)
+                        next.source = patch.source;
+                    if (patch.tags) {
+                        const tags = new Set([...(hit.tags || []), ...patch.tags]);
+                        next.tags = [...tags];
+                    }
+                    if (patch.crmNotes && !hit.crmNotes)
+                        next.crmNotes = patch.crmNotes;
+                    upsertLeadQuiet(next);
+                    merged++;
+                }
+                else {
+                    upsertLeadQuiet({
+                        platform: "website",
+                        userId: m.externalId || m.phone || m.email || `web-${Date.now()}`,
+                        username: null,
+                        name: m.name,
+                        phone: m.phone,
+                        email: m.email,
+                        state: "new",
+                        source: m.source,
+                        address: m.address,
+                        crmNotes: m.notes,
+                        tags: m.tags,
+                    });
+                    created++;
+                }
+            }
+            catch (err) {
+                problems.push({ ref: m.externalId || m.name, error: err.message });
+            }
+        }
+        res.json({ ok: true, received: items.length, created, merged, skipped, problems });
+    }
+    catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+/**
  * Zernio — inbound TikTok DMs, replacing ManyChat on that channel.
  *
  * SHAPE OF THIS ROUTE, and why it is not like /webhook. ManyChat called us and

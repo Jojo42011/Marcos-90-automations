@@ -24,6 +24,9 @@ const PUBLIC_EXACT = new Set([
        (MOJO_WEBHOOK_SECRET) and refuses outright when that is unset, so the site
        lock is not what is protecting it. */
     "/api/mojo/webhook",
+    /* Public website lead form. Same pattern as Mojo: WEBSITE_WEBHOOK_SECRET
+       required, constant-time compare, refuses when unset. */
+    "/api/website/lead",
     /* Zernio delivering TikTok DMs — the transport that replaced ManyChat on that
        channel. Every delivery is HMAC-SHA256 signed over the raw body with
        ZERNIO_WEBHOOK_SECRET, and the route refuses outright when that is unset,

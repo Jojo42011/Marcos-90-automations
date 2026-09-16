@@ -100,6 +100,10 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # Zernio account id for Marco's TikTok (@puga.realtor). Needed on every send.
 # ZERNIO_TIKTOK_ACCOUNT_ID=
 
+# Public website lead form → CRM. Same pattern as Mojo: refuse when unset,
+# constant-time secret compare, quiet create/enrich, source "Website".
+# WEBSITE_WEBHOOK_SECRET=
+
 # TikTok comment agent — replies publicly to comments to earn a DM, because
 # TikTok has no comment-to-DM and forbids a business opening a thread.
 # THE KILL SWITCH. Set to false to stop every public post immediately; no deploy

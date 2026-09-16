@@ -9,9 +9,10 @@
      THIS RUNS ON LIVE CLIENT DATA. The demo dataset further down is only the
      pre-load default and the fallback when an API call fails — on load, Leads,
      People, Messages, Transactions, Dashboard and Calendar swap to real records
-     (see the LIVE DATA section). Opps and Email are still demo, because no live
-     source exists for them yet. Treat anything you change here as touching real
-     clients, real phone numbers and real deals.
+     (see the LIVE DATA section). Email campaigns stay demo (no live campaign
+     source yet). Opportunities are tags on profiles, not a fabricated rail.
+     Treat anything you change here as touching real clients, real phone numbers
+     and real deals.
      ============================================================================ -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -814,10 +815,44 @@
   .doc .dn{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--teal-strong);
     font-weight:600;cursor:pointer}
   .doc .dm{flex:1 0 100%;font-size:10.5px;color:#98a2ad;line-height:1.4}
+  .doc-fold{margin:10px 0 4px;font-size:11px;font-weight:700;letter-spacing:.04em;color:#6b7480;text-transform:uppercase}
+  .doc-fold.empty-fold{color:#98a2ad;font-weight:600}
   .doc-drop{border:2px dashed var(--line);border-radius:6px;padding:26px 14px;text-align:center;color:#8b95a0;
     font-size:13px;cursor:pointer;background:#fafbfc}
   .doc-drop.hot{border-color:var(--teal);background:var(--teal-soft);color:var(--teal-strong)}
   .doc-drop b{display:block;color:#4a5560;font-size:13.5px;margin-bottom:4px}
+
+  /* TX / FL market + opportunity-type tags on profiles and rows */
+  .mkt-pill{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:18px;padding:0 7px;
+    border-radius:4px;font-size:10px;font-weight:800;letter-spacing:.06em;line-height:1;vertical-align:middle}
+  .mkt-pill.tx{background:#e8f1fb;color:#2f6fad;border:1px solid #b7d0ea}
+  .mkt-pill.fl{background:#fff0e8;color:#c45a2a;border:1px solid #efc4a8}
+  .mkt-pill.row{margin-left:6px;position:relative;top:-1px}
+  .opp-tags{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:10px}
+  .opp-tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;letter-spacing:.02em;
+    padding:3px 8px;border-radius:4px;background:#eef6f6;color:var(--teal-strong);border:1px solid #c5e0e0}
+  .opp-tag .x{cursor:pointer;opacity:.7;font-weight:700}
+  .opp-tag .x:hover{opacity:1}
+  .people-subtabs{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 12px;margin:0 0 4px;border-bottom:1px solid var(--line-2)}
+  .people-subtabs button{border:1px solid var(--line);background:#fff;color:#5b6570;border-radius:6px;padding:6px 12px;
+    font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+  .people-subtabs button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+  .fu-row{display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid var(--line-2);cursor:pointer}
+  .fu-row:hover{background:#f7fafa}
+  .fu-row .fu-name{font-weight:700;color:#3a444e;font-size:14px}
+  .fu-row .fu-phone{color:#5b6570;font-size:13px;min-width:120px}
+  .fu-row .fu-why{color:#7a8590;font-size:12.5px;flex:1}
+  .fu-row .fu-due{font-size:11px;font-weight:700;color:var(--st-new)}
+  .sf-create{display:block;margin:8px 10px 4px;padding:7px 10px;border:1px dashed var(--teal);border-radius:6px;
+    background:#fff;color:var(--teal-strong);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;width:calc(100% - 20px)}
+  .sf-create:hover{background:var(--teal-soft)}
+  .crm-modal-scrim{position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:var(--z-modal);display:flex;align-items:flex-start;justify-content:center;padding:60px 16px}
+  .crm-modal{background:#fff;border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 16px 40px rgba(0,0,0,.18)}
+  .crm-modal h3{margin:0 0 8px;font-size:18px;font-weight:600;color:#4a5560}
+  .crm-modal p{margin:0 0 14px;font-size:13px;color:#6b7480;line-height:1.5}
+  .crm-modal label{display:block;font-size:11px;font-weight:700;color:#7a8590;margin:10px 0 4px;letter-spacing:.04em;text-transform:uppercase}
+  .crm-modal input,.crm-modal select{width:100%;height:34px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font-size:13px;font-family:inherit}
+  .crm-modal .modal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
 
   /* ── type-picker modal (transaction type / document type) ── */
   .tp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -1201,9 +1236,11 @@
 <nav class="rail" id="rail">
   <button class="r on" data-view="dashboard" title="Dashboard"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-3"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
   <button class="r" data-view="messages" title="Messages"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H8l-4 4z"/></svg></button>
-  <button class="r" data-view="leads" title="Leads"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg></button>
+  <button class="r" data-view="followup" title="Follow-Up"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v2a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h2a2 2 0 0 1 2 1.72c.12.9.33 1.77.62 2.6a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.48-1.19a2 2 0 0 1 2.11-.45c.83.29 1.7.5 2.6.62A2 2 0 0 1 22 16.92z"/></svg></button>
+  <!-- Leads live under People (default section). One visible rail button.
+       Hidden data-view="leads" keeps deep-links and older verify suites working. -->
   <button class="r" data-view="people" title="People"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.2 2.7-5.5 6-5.5S15 16.8 15 20"/><path d="M16 5.5a3 3 0 0 1 0 5.6M22 20c0-2.6-1.7-4.6-4-5.2"/></svg></button>
-  <button class="r" data-view="opps" title="Opportunities"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="2.6"/></svg></button>
+  <button class="r" data-view="leads" title="Leads" style="display:none" aria-hidden="true" tabindex="-1"></button>
   <button class="r" data-view="mls" title="MLS · Live SABOR listings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/></svg></button>
   <button class="r" data-view="tracker" title="Buyers &amp; Sellers Tracker"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h6v14H3z"/><path d="M15 5h6v9h-6z"/><path d="M9 9h6"/></svg></button>
   <button class="r" data-view="tx" title="Transactions"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
@@ -1280,14 +1317,22 @@
     </div>
   </section>
 
-  <!-- LEADS -->
+  <!-- LEADS (shown as the People → Leads section; rail button is People) -->
   <section class="view" id="view-leads">
     <!-- A broken Brivity connection used to be invisible here: the CRM simply
          showed fewer leads, which looks exactly like having fewer leads. -->
     <div id="brvBanner" style="display:none"></div>
     <div class="leads-wrap">
       <div class="leads-nav">
-        <div class="h"><b>Leads</b><span class="add">+</span></div>
+        <div class="h"><b>People</b><span class="add">+</span></div>
+        <div class="people-subtabs" id="peopleSubtabsLeads">
+          <button type="button" data-psec="all">All People</button>
+          <button type="button" class="on" data-psec="leads">Leads</button>
+          <button type="button" data-psec="client">Clients</button>
+          <button type="button" data-psec="collaborator">Collaborators</button>
+          <button type="button" data-psec="team">Team</button>
+          <button type="button" data-psec="archived">Archived</button>
+        </div>
         <a class="on" data-lb="all">All Leads <span class="c" id="lnAll">0</span></a>
         <!-- Was five hardcoded rows: Valuations, Brivity Leads, Brivity IDX,
              Kwkly, Zillow. Three of them were wired to `return false` and could
@@ -1299,24 +1344,22 @@
              for and was never displayed anywhere. -->
         <div class="src-head" id="lnOrgHead" style="display:none">By origin</div>
         <div id="lnOrigins"></div>
-        <div class="src-head">By source</div>
+        <div class="src-head">By source <span style="font-weight:400;color:#98a2ad">(5+)</span></div>
         <div id="lnSources"></div>
         <a id="lnSrcMore" class="src-more" style="display:none"></a>
         <a id="leadPonds">Lead Ponds <span class="c">›</span></a>
-        <a id="smartFiltersToggle">Smart Filters <span class="c">12 ›</span></a>
+        <a id="smartFiltersToggle">Smart Filters <span class="c" id="sfCount">8 ›</span></a>
         <div id="smartFiltersList" class="sf-list" style="display:none">
+          <button type="button" class="sf-create" id="sfCreateBtn">+ Create Smart Filter</button>
           <a class="sf" data-sf="buyers_email">Buyers with email and no Listing Alert</a>
           <a class="sf" data-sf="mr_no_task">Has Market Report, no task, no outreach 30 days</a>
           <a class="sf" data-sf="hot">Hot leads (buy/sell in 3 months)</a>
-          <a class="sf" data-sf="visit30">Last 30 days: site visit, no task/contact</a>
           <a class="sf" data-sf="no_plan">No Auto Plan</a>
           <a class="sf" data-sf="no_mr">No Market Report - Contacts w/ Email + Address</a>
-          <a class="sf" data-sf="overdue">Overdue Tasks</a>
           <a class="sf" data-sf="partial">Partial Leads</a>
           <a class="sf" data-sf="past_clients">Past clients, no task/outreach 30 days</a>
-          <a class="sf" data-sf="visit_week">This week: site visit, no task/contact</a>
-          <a class="sf" data-sf="visit_today">Today: site visit, no task/contact</a>
           <a class="sf" data-sf="watch_nurture">Watch/Nurture, no task/contact 30 days</a>
+          <div id="sfCustomList"></div>
         </div>
       </div>
       <div class="leads-main">
@@ -1360,12 +1403,20 @@
     <div class="leads-wrap">
       <div class="leads-nav">
         <div class="h"><b>People</b><span class="add">+</span></div>
+        <div class="people-subtabs" id="peopleSubtabsPeople">
+          <button type="button" class="on" data-psec="all">All People</button>
+          <button type="button" data-psec="leads">Leads</button>
+          <button type="button" data-psec="client">Clients</button>
+          <button type="button" data-psec="collaborator">Collaborators</button>
+          <button type="button" data-psec="team">Team</button>
+          <button type="button" data-psec="archived">Archived</button>
+        </div>
         <a class="on" data-bucket="all">All People <span class="c" id="pnAll">0</span></a>
         <a data-bucket="client">Clients <span class="c" id="pnClient">0</span></a>
         <a data-bucket="collaborator">Collaborators <span class="c" id="pnCollab">0</span></a>
         <a data-bucket="team">Team <span class="c" id="pnTeam">0</span></a>
         <a data-bucket="archived">Archived <span class="c" id="pnArch">0</span></a>
-        <a id="pSmartToggle">Smart Filters <span class="c" id="pSmartCount">12 ›</span></a>
+        <a id="pSmartToggle">Smart Filters <span class="c" id="pSmartCount">8 ›</span></a>
         <div id="pSmartList" class="sf-list" style="display:none">
           <div class="sf-search"><input type="text" id="pSmartSearch" placeholder="Search filters"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa4ae" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg></div>
           <div id="pSmartItems"></div>
@@ -1394,23 +1445,15 @@
     </div>
   </section>
 
-  <!-- OPPORTUNITIES -->
-  <section class="view" id="view-opps"><div class="pad">
-    <div class="page-head"><h1>Opportunities <small id="oCount"></small></h1><button class="pill-btn">+ ADD TO PIPELINE</button></div>
-    <div class="tabs" id="oppTabs" style="margin-bottom:16px">
-      <button class="on" data-otype="all">ALL</button>
-      <button data-otype="Expired">EXPIRED</button>
-      <button data-otype="FSBO">FSBO</button>
-      <button data-otype="Pre-Foreclosure">PRE-FORECLOSURE</button>
-      <span style="flex:1"></span><span class="chip">UPDATED DAILY</span>
-    </div>
-    <div class="card"><div class="tbl-scroll">
-      <table class="leads" style="min-width:1000px">
-        <thead><tr><th><input type="checkbox" class="cb"></th><th>Property</th><th>Type</th><th>Est. Value</th><th>Days on Market</th><th>Owner</th><th>Phone</th><th>Contact</th><th>Status</th></tr></thead>
-        <tbody id="oppRows"></tbody>
-      </table>
-    </div></div>
+  <!-- FOLLOW-UP: who to call today (Due Today / crmCallQueue urgent) -->
+  <section class="view" id="view-followup"><div class="pad">
+    <div class="page-head"><h1>Follow-Up <small id="fuCount"></small></h1></div>
+    <div class="card" id="fuList"><div class="empty" style="padding:28px">Loading…</div></div>
   </div></section>
+
+  <!-- Opportunities rail removed: opportunity types are tags on contact profiles
+       (Expired, FSBO, Pre-Foreclosure, Off-Market, Withdrawn, Canceled). The
+       fabricated OPPS list is gone — there was never a live pipeline behind it. -->
 
   <!-- TRANSACTIONS -->
   <!-- Tracker moved in from the shell's own tab. Embedded rather than
@@ -1450,7 +1493,10 @@
         <a data-txb="withdrawn">Withdrawn <span class="c" id="txWd">0</span></a>
         <a data-txb="canceled">Canceled <span class="c" id="txCan">0</span></a>
         <a data-txb="archived">Archived <span class="c">1</span></a>
-        <a>Smart Filters <span class="c">›</span></a>
+        <div class="src-head" style="margin-top:14px">Market</div>
+        <a class="on" data-txm="all">All markets</a>
+        <a data-txm="TX">Texas <span class="c" id="txMktTx">0</span></a>
+        <a data-txm="FL">Florida <span class="c" id="txMktFl">0</span></a>
       </div>
       <div class="leads-main">
         <div class="leads-top">
@@ -1563,6 +1609,10 @@
         <a data-fb="commissions">Commissions</a>
         <a data-fb="monthly">Monthly GCI</a>
         <a data-fb="goals">Goals</a>
+        <div class="src-head" style="margin-top:14px">Market</div>
+        <a class="on" data-finm="all">All markets</a>
+        <a data-finm="TX">Texas</a>
+        <a data-finm="FL">Florida</a>
       </div>
       <div class="leads-main"><div style="padding:22px 26px 60px" id="finBody"></div></div>
     </div>
@@ -2800,7 +2850,7 @@ function renderLeads(){
     const reg=l.createdAt?new Date(l.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"-";
     return '<tr>'+
       '<td class="fx fx1"><input type="checkbox" class="cb"></td>'+
-      '<td class="fx fx2"><span class="lead-name ldlink" data-lid="'+esc(l.id)+'">'+esc(l.name)+'</span></td>'+
+      '<td class="fx fx2"><span class="lead-name ldlink" data-lid="'+esc(l.id)+'">'+esc(l.name)+'</span>'+marketPill(l,"row")+'</td>'+
       '<td><span class="intent '+(l.intent==="buyer"?"b":"s")+'">'+(l.intent==="buyer"?"B":"S")+'</span></td>'+
       '<td><span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
       '<td><span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></td>'+
@@ -2876,24 +2926,23 @@ const PEOPLE_SMART_FILTERS=[
    pred:p=>(p.reports>0)&&pNoTask(p)&&pNoOutreach(p,30)},
   {key:"hot",label:"Hot leads (expect buy or sell in 3 months)",
    pred:p=>p.statusDisp==="hot"},
-  {key:"visit30",label:"LAST 30 DAYS: site visit, no task/no contact by agent",nodata:true},
   {key:"no_plan",label:"No Auto Plan",
    pred:p=>!(p.autoPlanEnrollments||[]).length},
   {key:"no_mr",label:"No Market Report - Contacts with Email and Address",
    pred:p=>!(p.reports>0)&&!!p.email&&!!p.address},
-  {key:"overdue",label:"Overdue Tasks",
-   pred:p=>!!(p.due&&p.due.label==="Due Today")},
   {key:"partial",label:"Partial Leads",
    pred:p=>!p.email||!p.phone},
   {key:"past_clients",label:"Past clients, no task no outreach for 30 days",
    pred:p=>p.status==="past_client"&&pNoTask(p)&&pNoOutreach(p,30)},
-  {key:"visit_week",label:"THIS WEEK: site visit, no task/no contact by agent",nodata:true},
-  {key:"visit_today",label:"TODAY: site visit, no task/no contact by agent",nodata:true},
   {key:"watch_nurture",label:"Watch/Nurture, no task, no contact for 30 days",
    pred:p=>(p.statusDisp==="watch"||p.statusDisp==="nurture")&&pNoTask(p)&&pNoOutreach(p,30)},
 ];
 function pSmartPred(p){
   if(!pSmartKey) return true;
+  if(String(pSmartKey).indexOf("custom:")===0){
+    var cf=customSmartFilters().find(function(x){return x.key===pSmartKey;});
+    return cf?customSmartMatch(p,cf):true;
+  }
   const f=PEOPLE_SMART_FILTERS.find(x=>x.key===pSmartKey);
   return (f&&f.pred)?f.pred(p):true;
 }
@@ -2902,17 +2951,11 @@ function renderPeopleSmartList(){
   const q=(document.getElementById("pSmartSearch")||{value:""}).value.trim().toLowerCase();
   const shown=PEOPLE_SMART_FILTERS.filter(f=>!q||f.label.toLowerCase().includes(q));
   box.innerHTML=shown.length
-    ? shown.map(f=>'<a class="sf'+(f.nodata?" sf-nodata":"")+(pSmartKey===f.key?" on":"")+'" data-psf="'+f.key+'"'+
-        (f.nodata?' title="Website visit tracking is not connected yet, so this filter has no data to run on."':'')+
-        '>'+esc(f.label)+'</a>').join("")
+    ? shown.map(f=>'<a class="sf'+(pSmartKey===f.key?" on":"")+'" data-psf="'+f.key+'">'+esc(f.label)+'</a>').join("")
     : '<div class="sf-empty">No filters match "'+esc(q)+'"</div>';
 }
 function applyPeopleSmartFilter(key){
   const f=PEOPLE_SMART_FILTERS.find(x=>x.key===key); if(!f)return;
-  if(f.nodata){
-    crmToast("Site visit tracking isn't connected yet, so this filter has no data to run on.");
-    return;   // leave the table alone rather than pretend it filtered
-  }
   pSmartKey=(pSmartKey===key)?null:key;   // clicking the active filter clears it
   pBucket="all"; pPage=1;
   document.querySelectorAll('#view-people .leads-nav a[data-bucket]').forEach(x=>x.classList.toggle("on",pSmartKey?false:x.getAttribute("data-bucket")==="all"));
@@ -2974,7 +3017,7 @@ function renderPeople(){
   const rows=list.slice((pPage-1)*PER,pPage*PER);
   document.getElementById("peopleRows").innerHTML=rows.map(p=>{
     return '<tr><td><input type="checkbox" class="cb"></td>'+
-      '<td><span class="lead-name ldlink" data-lid="'+esc(p.id)+'">'+esc(p.name)+'</span></td>'+
+      '<td><span class="lead-name ldlink" data-lid="'+esc(p.id)+'">'+esc(p.name)+'</span>'+marketPill(p,"row")+'</td>'+
       '<td style="text-align:center">'+eyeIcon(p.showInLeads)+'</td>'+
       '<td><span class="intent '+(p.intent==="buyer"?"b":"s")+'">'+(p.intent==="buyer"?"B":"S")+'</span></td>'+
       '<td>'+personStatusPill(p.status).replace('class="status"','class="status editable" data-lid="'+esc(p.id)+'" data-kind="status"')+'</td>'+
@@ -2994,6 +3037,8 @@ function renderPeople(){
 document.querySelectorAll('.leads-nav a[data-bucket]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('.leads-nav a[data-bucket]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
   pBucket=a.getAttribute("data-bucket");pPage=1;
+  peopleSection=pBucket;
+  syncPeopleSubtabs();
   pSmartKey=null; renderPeopleSmartList();   // picking a bucket clears any smart filter
   renderPeople();
 }));
@@ -3002,63 +3047,51 @@ document.querySelectorAll('.leads-nav a[data-bucket]').forEach(a=>a.addEventList
 (function(){var t=document.getElementById("smartFiltersToggle"),l=document.getElementById("smartFiltersList");
   if(t&&l)t.addEventListener("click",function(){l.style.display=l.style.display==="none"?"block":"none";});})();
 
-/* ===== Opportunities ===== */
-const OPP_TYPE={Expired:{c:"var(--st-new)"},FSBO:{c:"#4a90d9"},"Pre-Foreclosure":{c:"var(--st-nurture)"}};
-const OPP_OWNERS=["Gary Whitfield","Deloris Pruitt","Sam Okafor","Rhonda Beltran","Curtis Yang","Meredith Cole","Ismael Farah","Bonnie Trask","Wade Ferris","Kim Alvarado","Nate Dorsey","Priya Menon","Ray Colton","Estela Nunez","Hank Boone","Lucia Reyna"];
-const OPPS=[];
-const OTYPES=["Expired","FSBO","Pre-Foreclosure"];
-for(let i=0;i<16;i++){
-  OPPS.push({id:"O"+i, property:STREETS[(i*4)%STREETS.length]+", "+CITIES[(i*5)%CITIES.length],
-    type:OTYPES[i%3], value:280000+((i*17300)%320000), dom:5+((i*11)%120),
-    owner:OPP_OWNERS[i%OPP_OWNERS.length], phone:"(210) 555-0"+(300+i),
-    status:["New","Contacted","Working"][i%3]});
+/* ===== Opportunities (tags on profiles — no fabricated pipeline rail) =====
+   The old OPPS list was invented owners and values with no API behind it.
+   Opportunity types are real CRM tags on the contact instead. */
+const OPP_TYPE_TAGS=["Expired","FSBO","Pre-Foreclosure","Off-Market","Withdrawn","Canceled"];
+function isOppTypeTag(t){ return OPP_TYPE_TAGS.some(function(x){return x.toLowerCase()===String(t||"").toLowerCase();}); }
+function oppTagsOf(l){ return (l.tags||[]).filter(isOppTypeTag); }
+function oppTagsHTML(l){
+  var tags=oppTagsOf(l);
+  if(!tags.length) return "";
+  return '<div class="opp-tags">'+tags.map(function(t){
+    return '<span class="opp-tag">'+esc(t)+' <span class="x" data-opptagrm="'+esc(t)+'" title="Remove">×</span></span>';
+  }).join("")+'</div>';
 }
-let oType="all";
-function money(n){return "$"+n.toLocaleString();}
-function renderOpps(){
-  const list=oType==="all"?OPPS:OPPS.filter(o=>o.type===oType);
-  document.getElementById("oCount").textContent="("+list.length+")";
-  document.getElementById("oppRows").innerHTML=list.map(o=>{
-    const tm=OPP_TYPE[o.type];
-    const stC=o.status==="New"?"var(--teal)":o.status==="Contacted"?"var(--st-nurture)":"var(--st-watch)";
-    return '<tr><td><input type="checkbox" class="cb"></td>'+
-      '<td><span class="lead-name">'+esc(o.property)+'</span></td>'+
-      '<td><span class="status" style="background:'+tm.c+'">'+o.type+'</span></td>'+
-      '<td style="color:#5b6570;font-weight:600">'+money(o.value)+'</td>'+
-      '<td style="color:#6b7480">'+o.dom+' days</td>'+
-      '<td style="color:#5b6570">'+esc(o.owner)+'</td>'+
-      '<td style="color:#6b7480">'+esc(o.phone)+'</td>'+
-      '<td><div class="aicons">'+actIcon("phone",!o.phone)+actIcon("sms",!o.phone)+actIcon("other")+'</div></td>'+
-      '<td><span class="status" style="background:'+stC+'">'+o.status+'</span></td></tr>';
-  }).join("");
-}
-document.querySelectorAll('#oppTabs button[data-otype]').forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll('#oppTabs button[data-otype]').forEach(x=>x.classList.remove("on"));b.classList.add("on");
-  oType=b.getAttribute("data-otype");renderOpps();
-}));
 
-/* ===== Transactions ===== */
+/* ===== Market (TX / FL) =====
+   FL when address/city/state/source/tags say Florida; otherwise TX for this
+   business (San Antonio / Mojo / empty default). */
+function leadMarket(row){
+  var blob=[row.address,row.city,row.state,row.source].map(function(x){return String(x||"");}).join(" ");
+  var tags=(row.tags||[]).map(function(t){return String(t);}).join(" ");
+  var hay=(blob+" "+tags).toLowerCase();
+  if(/\bfl\b|florida|miami|mojo\s*fl/.test(hay)) return "FL";
+  if((row.tags||[]).some(function(t){return /^(fl|florida|fl lead)$/i.test(String(t).trim());})) return "FL";
+  return "TX";
+}
+function marketPill(row,cls){
+  var m=leadMarket(row);
+  return '<span class="mkt-pill '+(m==="FL"?"fl":"tx")+(cls?" "+cls:"")+'" title="'+(m==="FL"?"Florida":"Texas")+' market">'+m+'</span>';
+}
+function txMarket(t){
+  return leadMarket({address:t.address,city:t.city,state:t.state,source:t.source,tags:t.tags||[]});
+}
+
+/* ===== Transactions =====
+   Start empty. Brivity has no transaction API — rows only appear after a CSV
+   import or a hand-entered deal. Fabricated GCI was removed. */
 const TX_STATUS={active:{l:"ACTIVE",c:"var(--teal)"},pending:{l:"PENDING",c:"var(--st-nurture)"},closed:{l:"CLOSED",c:"#3fae86"},withdrawn:{l:"WITHDRAWN",c:"#3a444e"},canceled:{l:"CANCELED",c:"#3a444e"},draft:{l:"DRAFT",c:"#aab2ba"},coming_soon:{l:"COMING SOON",c:"#4a90d9"},expired:{l:"EXPIRED",c:"var(--st-new)"},pipeline:{l:"PIPELINE",c:"#7c8b98"},archived:{l:"ARCHIVED",c:"#aab2ba"}};
-const TX_DIST=[].concat(Array(19).fill("closed"),Array(4).fill("active"),Array(2).fill("pending"),["withdrawn"],Array(4).fill("canceled"),["draft","draft"],["pipeline"]);
 const AGENTS_TX=["Marco Puga","Wesley","Kendrick","Carlos"];
 let TX=[];
-for(let i=0;i<TX_DIST.length;i++){
-  const status=TX_DIST[i];
-  const listP=290000+((i*23700)%420000);
-  const closed=status==="closed";
-  const closeP=closed?(listP-((i*3100)%40000)):0;
-  TX.push({id:"T"+i, address:STREETS[i%STREETS.length], city:CITIES[i%CITIES.length], type:(i%3===0?"buyer":"seller"),
-    status, mls:(i%4===0?"":(1900000+i*937).toString()), agent:AGENTS_TX[i%AGENTS_TX.length],
-    dateListed:["11-21-2025","10-28-2025","12-04-2025","01-13-2026","04-23-2026","03-09-2026"][i%6],
-    listPrice:listP, expiration:closed?"":["02-21-2026","07-23-2026","02-02-2026"][i%3],
-    closePrice:closeP, gci:closed?Math.round(closeP*0.03):0, draft:status==="draft",
-    closeDate:closed?["08-24-2026","07-30-2026","06-18-2026"][i%3]:"", dom:(closed||status==="active"?String(18+((i*7)%120)):""),
-    dateCanceled:status==="canceled"?"05-12-2026":"", mutualAccept:closed?["06-20-2026","05-28-2026"][i%2]:"",
-    lastUpdated:["07-10-2026","07-06-2026","06-29-2026","07-14-2026"][i%4],
-    source:["TikTok","Inbound","Mojo","Cancelled / Expired"][i%4], statusChangedAt:["07-01-2026","06-15-2026","05-22-2026"][i%3]});
-}
 let txBucket="all";
+let txMarketFilter="all";
+let finMarketFilter="all";
 function txFor(b){return b==="all"?TX:b==="draft"?TX.filter(t=>t.draft):TX.filter(t=>t.status===b);}
+function txMarketPred(t){ return txMarketFilter==="all"||txMarket(t)===txMarketFilter; }
+function finTxList(){ return TX.filter(function(t){ return finMarketFilter==="all"||txMarket(t)===finMarketFilter; }); }
 function usd(n){return n?("$"+n.toLocaleString()):"$0";}
 function renderTx(){
   const byS=s=>TX.filter(t=>t.status===s).length;
@@ -3071,12 +3104,29 @@ function renderTx(){
   document.getElementById("txClosed").textContent=byS("closed");
   document.getElementById("txWd").textContent=byS("withdrawn");
   document.getElementById("txCan").textContent=byS("canceled");
-  let list=txFor(txBucket).filter(hitRow);
+  var txEl=document.getElementById("txMktTx"), flEl=document.getElementById("txMktFl");
+  if(txEl)txEl.textContent=TX.filter(function(t){return txMarket(t)==="TX";}).length;
+  if(flEl)flEl.textContent=TX.filter(function(t){return txMarket(t)==="FL";}).length;
+  let list=txFor(txBucket).filter(txMarketPred).filter(hitRow);
   list=(window.txApplySortFilter?window.txApplySortFilter(list):sortRows(list,"tx"));
-  document.getElementById("txRows").innerHTML=list.map(txRowHTML).join("");
-  bindTxRows();
+  var body=document.getElementById("txRows");
+  if(!TX.length){
+    body.innerHTML='<tr><td colspan="19"><div class="empty" style="padding:36px 16px">No transactions imported yet. Brivity does not expose a transaction API — use Import CSV after an export, or + ADD TRANSACTION for a hand entry. Nothing here is fabricated GCI.</div></td></tr>';
+  } else if(!list.length){
+    body.innerHTML='<tr><td colspan="19"><div class="empty" style="padding:28px 16px">No transactions match this filter.</div></td></tr>';
+  } else {
+    body.innerHTML=list.map(txRowHTML).join("");
+    bindTxRows();
+  }
   const chip=document.getElementById("txChipBar");
-  if(txBucket==="all"){chip.style.display="none";}else{chip.style.display="block";document.getElementById("txChipLabel").textContent=(TX_STATUS[txBucket]||{l:txBucket}).l;}
+  if(txBucket==="all"&&txMarketFilter==="all"){chip.style.display="none";}
+  else{
+    chip.style.display="block";
+    var bits=[];
+    if(txBucket!=="all")bits.push((TX_STATUS[txBucket]||{l:txBucket}).l);
+    if(txMarketFilter!=="all")bits.push(txMarketFilter==="FL"?"Florida":"Texas");
+    document.getElementById("txChipLabel").textContent=bits.join(" · ");
+  }
   paintTxAsOf();
 }
 /* Brivity has no transaction API, so this data is only ever as fresh as the
@@ -3085,7 +3135,7 @@ function renderTx(){
 function paintTxAsOf(){
   var el=document.getElementById("txAsOf"); if(!el)return;
   var s=TX_IMPORT_STATUS;
-  if(!TX.length){ el.textContent=""; return; }
+  if(!TX.length){ el.textContent="· no import yet — board is empty on purpose"; return; }
   if(!s||!s.lastImport){ el.textContent="· entered by hand — no import has run"; return; }
   var d=new Date(s.lastImport.importedAt);
   el.textContent="· imported "+(isNaN(d)?s.lastImport.importedAt:d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}))+
@@ -3114,7 +3164,7 @@ function txRowHTML(t){
   const editing=txEditId===t.id;
   const nameCell = editing
     ? '<td><input class="txin" data-txf="address" value="'+esc(t.address||"")+'" style="width:100%;min-width:120px;height:30px;border:1px solid var(--teal);border-radius:6px;padding:0 8px;font-size:12.5px"></td>'
-    : '<td><div class="lead-name">'+esc(t.address)+'</div><div class="addr" style="max-width:none">'+esc(t.city)+'</div></td>';
+    : '<td><div class="lead-name">'+esc(t.address)+' '+marketPill({address:t.address,city:t.city,source:t.source},"row")+'</div><div class="addr" style="max-width:none">'+esc(t.city)+'</div></td>';
   const statusCell = '<td><span class="status txpick" data-txid="'+esc(t.id)+'" style="background:'+sm.c+';cursor:pointer">'+sm.l+' ▾</span></td>';
   const editCol = editing
     ? '<td style="white-space:nowrap"><button class="txbtn" data-txsave="'+esc(t.id)+'" title="Save" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--teal);background:var(--teal);color:#fff;margin-right:4px">✓</button><button class="txbtn" data-txcancel="'+esc(t.id)+'" title="Cancel" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#8b95a0">✕</button></td>'
@@ -3224,7 +3274,17 @@ document.querySelectorAll('.leads-nav a[data-txb]').forEach(a=>a.addEventListene
   document.querySelectorAll('.leads-nav a[data-txb]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
   txBucket=a.getAttribute("data-txb");txEditId=null;renderTx();
 }));
-document.getElementById("txClear").addEventListener("click",()=>{txBucket="all";document.querySelectorAll('.leads-nav a[data-txb]').forEach(x=>x.classList.remove("on"));document.querySelector('.leads-nav a[data-txb="all"]').classList.add("on");renderTx();});
+document.querySelectorAll('#view-tx .leads-nav a[data-txm]').forEach(a=>a.addEventListener("click",()=>{
+  document.querySelectorAll('#view-tx .leads-nav a[data-txm]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
+  txMarketFilter=a.getAttribute("data-txm")||"all";renderTx();
+}));
+document.getElementById("txClear").addEventListener("click",()=>{
+  txBucket="all"; txMarketFilter="all";
+  document.querySelectorAll('.leads-nav a[data-txb]').forEach(x=>x.classList.remove("on"));
+  document.querySelector('.leads-nav a[data-txb="all"]').classList.add("on");
+  document.querySelectorAll('#view-tx .leads-nav a[data-txm]').forEach(x=>x.classList.toggle("on",x.getAttribute("data-txm")==="all"));
+  renderTx();
+});
 document.getElementById("txChipX").addEventListener("click",()=>document.getElementById("txClear").click());
 
 /* ===== Transactions CSV import =====
@@ -3396,6 +3456,7 @@ async function loadTransactions(){
   TX_IMPORT_STATUS=r[1]||null;
   var list=(r[0]&&Array.isArray(r[0].transactions))?r[0].transactions:[];
   if(list.length) TX=list.map(mapApiTx);
+  else TX=[];
   return TX;
 }
 
@@ -3454,7 +3515,7 @@ function activityTable(pairs){
 function repSelect(opts){return '<select class="select rep-sel">'+opts.map(o=>'<option>'+o+'</option>').join("")+'</select>';}
 // Brivity "Closings Breakdown" - closed deals split by type, computed from TX.
 function closingsBreakdownHTML(){
-  const closed=TX.filter(t=>t.status==="closed");
+  const closed=finTxList().filter(t=>t.status==="closed");
   const total=closed.length||1;
   const rows=[["Seller","seller"],["Buyer","buyer"],["Landlord","landlord"],["Tenant","tenant"],["Referral","referral"]];
   let tVol=0,tGci=0,tCnt=0;
@@ -3801,23 +3862,55 @@ document.querySelectorAll('.em-nav a[data-em]').forEach(a=>a.addEventListener("c
   renderEmail(a.getAttribute("data-em"));
 }));
 
-/* view switching */
+/* view switching — People rail opens Leads by default (merged People tab) */
+var peopleSection="leads";
+function syncPeopleSubtabs(){
+  document.querySelectorAll("[data-psec]").forEach(function(b){
+    b.classList.toggle("on", b.getAttribute("data-psec")===peopleSection);
+  });
+}
+function openPeopleSection(sec){
+  peopleSection=sec||"leads";
+  syncPeopleSubtabs();
+  document.querySelectorAll(".rail .r").forEach(function(x){x.classList.remove("on");});
+  document.querySelectorAll('.rail .r[data-view="people"]').forEach(function(x){x.classList.add("on");});
+  document.querySelectorAll(".view").forEach(function(s){s.classList.remove("on");});
+  if(peopleSection==="leads"){
+    document.getElementById("view-leads").classList.add("on");
+    renderLeads();
+  } else {
+    document.getElementById("view-people").classList.add("on");
+    pBucket=peopleSection==="all"?"all":peopleSection;
+    document.querySelectorAll('#view-people .leads-nav a[data-bucket]').forEach(function(x){
+      x.classList.toggle("on", x.getAttribute("data-bucket")===pBucket);
+    });
+    pPage=1; renderPeople();
+  }
+}
 document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("click",()=>{
   const v=b.getAttribute("data-view");
+  if(v==="people"){ openPeopleSection(peopleSection==="leads"||!peopleSection?"leads":peopleSection); return; }
+  if(v==="leads"){ openPeopleSection("leads"); return; } // legacy deep-links
   document.querySelectorAll(".rail .r").forEach(x=>x.classList.remove("on"));
   document.querySelectorAll('.rail .r[data-view="'+v+'"]').forEach(x=>x.classList.add("on"));
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("on"));
-  document.getElementById("view-"+v).classList.add("on");
-  if(v==="email") renderEmail(currentEmail); // refresh the Gmail-connected badge, which may have resolved while off-screen
+  var viewEl=document.getElementById("view-"+v);
+  if(viewEl) viewEl.classList.add("on");
+  if(v==="email") renderEmail(currentEmail);
   if(v==="tracker"){
     const f=document.getElementById("trackerFrame");
-    if(f && !f.getAttribute("src")) f.setAttribute("src","/tracker");   // lazy: first open only
+    if(f && !f.getAttribute("src")) f.setAttribute("src","/tracker");
   }
   if(v==="mls"){
     const f=document.getElementById("mlsFrame");
-    if(f && !f.getAttribute("src")) f.setAttribute("src", crmApi("/listings"));  // lazy: first open only
+    if(f && !f.getAttribute("src")) f.setAttribute("src", crmApi("/listings"));
   }
+  if(v==="followup") renderFollowUp();
 }));
+document.addEventListener("click",function(e){
+  var btn=e.target.closest("[data-psec]"); if(!btn)return;
+  openPeopleSection(btn.getAttribute("data-psec"));
+});
 
 /**
  * Open the MLS tab already filtered to what a lead told us they want.
@@ -3858,7 +3951,10 @@ window.addEventListener("message", function(e){
 (function(){
   try{
     const v=new URLSearchParams(location.search).get("view");
-    if(v){ const b=document.querySelector('.rail .r[data-view="'+v+'"]'); if(b) b.click(); }
+    if(!v) return;
+    if(v==="leads"||v==="people"){ openPeopleSection(v==="people"?"all":"leads"); return; }
+    if(v==="opps"){ openPeopleSection("leads"); crmToast("Opportunities are tags on contact profiles now"); return; }
+    const b=document.querySelector('.rail .r[data-view="'+v+'"]'); if(b) b.click();
   }catch(_){}
 })();
 
@@ -3880,8 +3976,9 @@ document.getElementById("taRefreshBtn").addEventListener("click",function(e){
 /* ===== LIVE DATA ===== */
 /* The views default to the demo dataset above; on load we pull the real CRM
    snapshot (/api/dashboard/data) and, when it has data, swap Leads, People,
-   Messages, Transactions, Dashboard and Calendar over to live records. Opps and
-   Email stay demo (no live source yet). Falls back to demo on any failure. */
+   Messages, Transactions, Dashboard and Calendar over to live records. Email
+   stays demo (no live campaign source yet). Opportunities are tags on profiles,
+   not a fabricated list. Falls back to demo on any failure. */
 function crmToken(){ try { return new URLSearchParams(location.search).get("token") || localStorage.getItem("dashboardToken") || ""; } catch(_){ return ""; } }
 function crmApi(path){ const t=crmToken(); return path + (t ? (path.includes("?")?"&":"?")+"token="+encodeURIComponent(t) : ""); }
 const STATUS_MAP={new:"new",hot:"hot",nurture:"nurture",watch:"watch",dead:"unqualified",unresponsive:"unqualified",not_contacted:"new",contacted:"nurture"};
@@ -5679,8 +5776,7 @@ function openLead(id, tab){ const l=LEADS.find(x=>x.id===id); if(!l)return; curr
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-lead").classList.add("on"); window.scrollTo(0,0);
   renderLead();
   loadContactRecord(id,function(){ if(currentLeadId===id)crRepaint(); }); }
-function backToLeads(){ document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-leads").classList.add("on");
-  document.querySelectorAll(".rail .r").forEach(x=>x.classList.remove("on")); document.querySelectorAll('.rail .r[data-view="leads"]').forEach(x=>x.classList.add("on")); }
+function backToLeads(){ openPeopleSection("leads"); }
 function stepLead(dir){ const list=sortRows(LEADS.filter(hitRow),"leads"); const i=list.findIndex(x=>x.id===currentLeadId); const n=list[i+dir]; if(n) openLead(n.id); }
 /**
  * The contact record.
@@ -5705,7 +5801,10 @@ function renderLead(){
           '<div class="ld-editbtn"><button id="ldEdit">'+(ldEditing?"✓ SAVE":"✎ EDIT")+'</button><button id="ldEditAlt">'+(ldEditing?"✕":"▾")+'</button></div>'+
           '<button class="ld-nav l" id="ldPrev" title="Previous contact">‹</button><button class="ld-nav r" id="ldNext" title="Next contact">›</button>'+
           '<div class="ld-av'+avClass(l.name)+'">'+esc(initials(l.name))+'</div>'+
-          (ldEditing?'<input id="ldNameIn" class="ld-edit-in" value="'+esc(l.name||"")+'" style="text-align:center;font-size:15px;font-weight:700;margin-top:2px">':'<div class="ld-name">'+esc(l.name)+'</div>')+
+          (ldEditing?'<input id="ldNameIn" class="ld-edit-in" value="'+esc(l.name||"")+'" style="text-align:center;font-size:15px;font-weight:700;margin-top:2px">':'<div class="ld-name">'+esc(l.name)+' '+marketPill(l)+'</div>')+
+          (l.address?'<div class="ld-sub" style="margin-top:6px">'+esc(l.address)+'</div>':'')+
+          oppTagsHTML(l)+
+          '<div style="margin-top:10px"><button type="button" class="mini-pill" id="ldOppTagBtn">+ Opportunity type</button></div>'+
           '<div class="ld-sub">SOURCE: <b>'+esc(l.source||"-")+'</b></div>'+
           '<div class="ld-sub" style="margin-top:4px">Registered '+esc(fmtReg(l.createdAt))+'</div>'+
           '<div style="margin-top:16px">'+
@@ -5738,6 +5837,29 @@ function renderLead(){
   document.getElementById("ldBack").addEventListener("click",backToLeads);
   document.getElementById("ldPrev").addEventListener("click",()=>stepLead(-1));
   document.getElementById("ldNext").addEventListener("click",()=>stepLead(1));
+  var oppBtn=document.getElementById("ldOppTagBtn");
+  if(oppBtn)oppBtn.addEventListener("click",function(e){
+    e.stopPropagation();
+    openActionMenu(e.currentTarget, OPP_TYPE_TAGS.map(function(tag){
+      var has=(l.tags||[]).some(function(t){return String(t).toLowerCase()===tag.toLowerCase();});
+      return {label:(has?"✓ ":"")+tag, fn:function(){
+        if(has){
+          l.tags=(l.tags||[]).filter(function(t){return String(t).toLowerCase()!==tag.toLowerCase();});
+          ldPatch(l,{tags:l.tags},"Removed "+tag).then(function(){ renderLead(); renderLeads(); });
+        } else {
+          crAddTag(l, tag);
+        }
+      }};
+    }));
+  });
+  document.querySelectorAll("#leadDetail [data-opptagrm]").forEach(function(x){
+    x.addEventListener("click",function(e){
+      e.stopPropagation();
+      var tg=x.getAttribute("data-opptagrm");
+      l.tags=(l.tags||[]).filter(function(t){return String(t)!==tg;});
+      ldPatch(l,{tags:l.tags},"Removed "+tg).then(function(){ renderLead(); renderLeads(); });
+    });
+  });
   document.querySelectorAll("#ldTabs button[data-t]").forEach(b=>b.addEventListener("click",()=>{ldTab=b.getAttribute("data-t");document.querySelectorAll("#ldTabs button").forEach(x=>x.classList.toggle("on",x.getAttribute("data-t")===ldTab));renderLeadTab();}));
   document.getElementById("ldEdit").addEventListener("click",function(){
     if(!ldEditing){ ldEditing=true; renderLead(); return; }
@@ -6269,18 +6391,53 @@ function docTypeLabel(id){
   return "Other";
 }
 function documentsBodyHTML(r){
-  if(!r.documents.length)return '<div class="cr-empty">No documents uploaded for this contact.</div>';
-  return r.documents.map(function(d){
-    var meta=[docTypeLabel(d.docType),crBytes(d.bytes)];
-    if(d.signedDate)meta.push("signed "+d.signedDate);
-    if(d.expirationDate)meta.push("expires "+d.expirationDate);
-    /* Name and the remove control share the first line; the metadata takes
-       the second. Putting the × after the full-width metadata would strand it
-       alone on a third line. */
-    return '<div class="doc">'+
-      '<span class="dn" data-cr="docOpen" data-id="'+esc(d.id)+'" title="'+esc(d.fileName)+'">'+esc(d.fileName)+'</span>'+
-      '<span class="cx-x" data-cr="docDel" data-id="'+esc(d.id)+'" title="Remove">×</span>'+
-      '<span class="dm">'+esc(meta.join(" · "))+'</span></div>';
+  var l=LEADS.find(function(x){return x.id===currentLeadId;})||{};
+  var folders={};
+  function ensure(key,label){ if(!folders[key]) folders[key]={label:label,docs:[]}; }
+  ensure("general","General");
+  /* Empty folder per linked house / transaction so the operator sees where
+     docs will land even before anything is uploaded. */
+  crTxFor(l).forEach(function(t){
+    ensure("tx:"+t.id, t.address||("Transaction "+t.id));
+  });
+  (r.documents||[]).forEach(function(d){
+    var key="general", label="General";
+    if(d.transactionId){
+      key="tx:"+d.transactionId;
+      var tx=(typeof TX!=="undefined"?TX:[]).find(function(t){return t.id===d.transactionId;});
+      label=(tx&&tx.address)||("Transaction "+d.transactionId);
+    } else if(d.address){
+      key="addr:"+String(d.address).toLowerCase();
+      label=d.address;
+    }
+    ensure(key,label);
+    folders[key].docs.push(d);
+  });
+  var keys=Object.keys(folders);
+  /* Prefer General last when other folders exist. */
+  keys.sort(function(a,b){
+    if(a==="general")return 1; if(b==="general")return -1;
+    return folders[a].label.localeCompare(folders[b].label);
+  });
+  if(!(r.documents||[]).length && keys.every(function(k){return !folders[k].docs.length;})){
+    var emptyFolders=keys.filter(function(k){return k!=="general";});
+    if(!emptyFolders.length) return '<div class="cr-empty">No documents uploaded for this contact.</div>';
+    return emptyFolders.map(function(k){
+      return '<div class="doc-fold empty-fold">'+esc(folders[k].label)+'</div><div class="cr-empty" style="padding:6px 0 12px">No documents in this folder yet.</div>';
+    }).join("")+'<div class="doc-fold">General</div><div class="cr-empty" style="padding:6px 0">No ungrouped documents.</div>';
+  }
+  return keys.map(function(k){
+    var f=folders[k];
+    var docsHtml=f.docs.length?f.docs.map(function(d){
+      var meta=[docTypeLabel(d.docType),crBytes(d.bytes)];
+      if(d.signedDate)meta.push("signed "+d.signedDate);
+      if(d.expirationDate)meta.push("expires "+d.expirationDate);
+      return '<div class="doc">'+
+        '<span class="dn" data-cr="docOpen" data-id="'+esc(d.id)+'" title="'+esc(d.fileName)+'">'+esc(d.fileName)+'</span>'+
+        '<span class="cx-x" data-cr="docDel" data-id="'+esc(d.id)+'" title="Remove">×</span>'+
+        '<span class="dm">'+esc(meta.join(" · "))+'</span></div>';
+    }).join(""):'<div class="cr-empty" style="padding:6px 0 10px">No documents in this folder yet.</div>';
+    return '<div class="doc-fold'+(f.docs.length?"":" empty-fold")+'">'+esc(f.label)+'</div>'+docsHtml;
   }).join("");
 }
 
@@ -10438,7 +10595,7 @@ function renderNurture(){
 let finBucket="overview";
 function finMonthly(){
   const m={};
-  TX.filter(t=>t.status==="closed").forEach(t=>{
+  finTxList().filter(t=>t.status==="closed").forEach(t=>{
     const mo=(t.closeDate||t.dateListed||"").slice(0,2)||"-";
     (m[mo]=m[mo]||{units:0,vol:0,gci:0}); m[mo].units++; m[mo].vol+=t.closePrice||0; m[mo].gci+=t.gci||0;
   });
@@ -10458,16 +10615,19 @@ function fCell(val,txid,f,money){
 }
 function renderFinance(){
   const el=document.getElementById("finBody"); if(!el)return;
-  const closed=TX.filter(t=>t.status==="closed"), pend=TX.filter(t=>t.status==="pending"), act=TX.filter(t=>t.status==="active");
+  const pool=finTxList();
+  const closed=pool.filter(t=>t.status==="closed"), pend=pool.filter(t=>t.status==="pending"), act=pool.filter(t=>t.status==="active");
   const sum=(a,f)=>a.reduce((s,x)=>s+(f(x)||0),0);
   const gciY=sum(closed,t=>t.gci), gciP=sum(pend,t=>t.gci)+sum(act,t=>t.gci), vol=sum(closed,t=>t.closePrice);
+  var mktNote=finMarketFilter==="all"?"":(' <span style="font-size:13px;color:var(--muted)">· '+(finMarketFilter==="FL"?"Florida":"Texas")+'</span>');
   if(finBucket==="overview"){
-    el.innerHTML='<div class="rep-head"><h1>Finance Overview <span style="font-size:15px;color:var(--muted)">2026 ▾</span></h1><button class="pill-btn ghost">SETTINGS</button></div>'+
+    el.innerHTML='<div class="rep-head"><h1>Finance Overview'+mktNote+' <span style="font-size:15px;color:var(--muted)">2026 ▾</span></h1><button class="pill-btn ghost">SETTINGS</button></div>'+
+      (pool.length?"":'<div class="empty" style="padding:18px 8px;margin-bottom:14px">No transactions imported yet — GCI here stays at zero until an import or a hand-entered closing.</div>')+
       kpiRow([["YTD Closed GCI",repMoney(gciY)],["Pending / Est. GCI",repMoney(gciP)],["Closed Volume",repMoney(vol)],["Closed Units",closed.length],["Avg. Commission",repMoney(closed.length?gciY/closed.length:0)],["Company Dollar",repMoney(gciY*0.15)]])+
       '<div class="sec-title">Closings Breakdown</div>'+closingsBreakdownHTML()+
       '<div class="sec-title">Latest Commissions</div>'+finCommTable(closed.slice(0,6));
   } else if(finBucket==="commissions"){
-    el.innerHTML='<div class="rep-head"><h1>Commissions <small>('+closed.length+')</small></h1><div style="display:flex;gap:8px"><button class="pill-btn" id="addCommBtn">+ Add Commission</button><button class="pill-btn ghost" id="expCommBtn">EXPORT</button></div></div>'+finCommTable(closed);
+    el.innerHTML='<div class="rep-head"><h1>Commissions <small>('+closed.length+')</small>'+mktNote+'</h1><div style="display:flex;gap:8px"><button class="pill-btn" id="addCommBtn">+ Add Commission</button><button class="pill-btn ghost" id="expCommBtn">EXPORT</button></div></div>'+finCommTable(closed);
   } else if(finBucket==="monthly"){
     const rows=finMonthly().map(function(r){var o=FIN_MONTHLY[r.mo]||{};return {mo:r.mo,units:o.units!=null?o.units:r.units,vol:o.vol!=null?o.vol:r.vol,gci:o.gci!=null?o.gci:r.gci};});
     el.innerHTML='<div class="rep-head"><h1>Monthly GCI</h1><button class="pill-btn ghost">This Year ▾</button></div>'+
@@ -10612,6 +10772,10 @@ document.querySelectorAll('#view-finance .leads-nav a[data-fb]').forEach(a=>a.ad
   document.querySelectorAll('#view-finance .leads-nav a[data-fb]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
   finBucket=a.getAttribute("data-fb");renderFinance();
 }));
+document.querySelectorAll('#view-finance .leads-nav a[data-finm]').forEach(a=>a.addEventListener("click",()=>{
+  document.querySelectorAll('#view-finance .leads-nav a[data-finm]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
+  finMarketFilter=a.getAttribute("data-finm")||"all";renderFinance();
+}));
 bindTableClicks("nurtureRows");
 
 /* ═══════════ Full-CRM clickability sweep ═══════════ */
@@ -10639,7 +10803,7 @@ let leadBucket="all", leadSmartKey=null;
  * Note this deliberately does NOT merge by prefix: "Mojo" and "Mojo FL" are two
  * different lists in Brivity and stay two rows.
  */
-var SRC_SHOW_ALL=false, SRC_TOP=8;
+var SRC_SHOW_ALL=false, SRC_MIN_COUNT=5;
 function sourceKey(l){ return String(l.source||"").trim().toLowerCase(); }
 function sourceCounts(){
   var by={};
@@ -10700,7 +10864,7 @@ function renderOriginNav(){
 function renderSourceNav(){
   var wrap=document.getElementById("lnSources"); if(!wrap) return;
   var rows=sourceCounts();
-  var head=document.querySelector(".leads-nav .src-head");
+  var head=document.querySelector("#view-leads .leads-nav .src-head");
   var more=document.getElementById("lnSrcMore");
   if(!rows.length){
     /* No sources at all is a real state (an empty board); say nothing rather
@@ -10708,15 +10872,19 @@ function renderSourceNav(){
     wrap.innerHTML=""; if(head)head.style.display="none"; if(more)more.style.display="none"; return;
   }
   if(head)head.style.display="";
-  var shown=SRC_SHOW_ALL?rows:rows.slice(0,SRC_TOP);
+  var primary=rows.filter(function(r){return r.n>=SRC_MIN_COUNT;});
+  var rest=rows.filter(function(r){return r.n<SRC_MIN_COUNT;});
+  var shown=SRC_SHOW_ALL?rows:primary;
   wrap.innerHTML=shown.map(function(r){
     return '<a data-lb="src:'+esc(r.key)+'"'+(leadBucket==="src:"+r.key?' class="on"':'')+'>'+
       esc(r.label)+' <span class="c">'+r.n.toLocaleString()+'</span></a>';
   }).join("");
   if(more){
-    if(rows.length>SRC_TOP){
+    if(rest.length){
       more.style.display="";
-      more.textContent=SRC_SHOW_ALL?"Show fewer":("Show all "+rows.length+" sources");
+      more.textContent=SRC_SHOW_ALL
+        ? "Show fewer (5+ only)"
+        : ("Show all "+rows.length+" sources ("+rest.length+" under 5)");
     } else more.style.display="none";
   }
 }
@@ -10742,8 +10910,9 @@ function leadBucketPred(l){
  *                what it reads now.
  *
  * The 30-day "no task / no outreach" halves of these labels are NOT implemented,
- * because a lead row carries no per-lead task or outreach history to test — see
- * SMART_NODATA below for how that is handled rather than faked.
+ * because a lead row carries no per-lead task or outreach history to test.
+ * Visit-tracking and overdue filters were deleted from the UI entirely — they
+ * had no honest data behind them.
  */
 const SMART_PREDS={
   buyers_email:l=>l.intent==="buyer"&&!!l.email&&!(l.alerts||0),
@@ -10755,20 +10924,82 @@ const SMART_PREDS={
   no_mr:l=>!!l.email&&!!l.address&&!(l.reports||0),
   past_clients:l=>(l.tags||[]).some(t=>/^past client$/i.test(String(t))),
 };
-/* Filters with no data behind them. They used to be `l=>true`, which returned
-   every lead while looking like a filter; they are now visibly marked and say
-   why when clicked, rather than answering with a number nobody can trust.
-   `overdue` joins them: a lead row's `due` is synthesised from `crmCallQueue`
-   and only ever reads "Due Today" or "Upcoming" — there is no overdue state in
-   it, so "Overdue Tasks" was matching today's calls and calling them late. */
-const SMART_NODATA={visit30:1,visit_week:1,visit_today:1,overdue:1};
-const SMART_NODATA_WHY={
-  visit30:"Website visit tracking is not connected, so this filter has no data to run on.",
-  visit_week:"Website visit tracking is not connected, so this filter has no data to run on.",
-  visit_today:"Website visit tracking is not connected, so this filter has no data to run on.",
-  overdue:"Per-lead task due dates are not on the lead record yet, so nothing here can be shown as overdue.",
-};
-function leadSmartPred(l){ return !leadSmartKey||!(SMART_PREDS[leadSmartKey])||SMART_PREDS[leadSmartKey](l); }
+/* Custom smart filters: named "status/intent/tag contains X", localStorage only.
+   Honest and low-risk — they never pretend to have server-side visit tracking. */
+var CUSTOM_SF_KEY="marcoCrmCustomSmartFilters";
+function customSmartFilters(){
+  try{ return JSON.parse(localStorage.getItem(CUSTOM_SF_KEY)||"[]")||[]; }catch(_){ return []; }
+}
+function saveCustomSmartFilters(list){
+  try{ localStorage.setItem(CUSTOM_SF_KEY, JSON.stringify(list||[])); }catch(_){}
+}
+function customSmartMatch(row,f){
+  if(!f||!f.field||!f.contains) return true;
+  var needle=String(f.contains).toLowerCase();
+  if(f.field==="status") return String(row.statusDisp||row.status||row.crmStatus||"").toLowerCase().indexOf(needle)>=0;
+  if(f.field==="intent") return String(row.intent||"").toLowerCase().indexOf(needle)>=0;
+  if(f.field==="tag") return (row.tags||[]).some(function(t){return String(t).toLowerCase().indexOf(needle)>=0;});
+  return true;
+}
+function renderCustomSmartList(){
+  var box=document.getElementById("sfCustomList"); if(!box)return;
+  var list=customSmartFilters();
+  box.innerHTML=list.map(function(f){
+    return '<a class="sf'+(leadSmartKey===f.key?" on":"")+'" data-sf="'+esc(f.key)+'">'+esc(f.label)+'</a>';
+  }).join("");
+  box.querySelectorAll("a[data-sf]").forEach(function(a){
+    a.addEventListener("click",function(){
+      var key=a.getAttribute("data-sf");
+      document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(function(x){x.classList.remove("on");});
+      a.classList.add("on"); leadSmartKey=key; leadBucket="all"; page=1; renderLeads();
+      crmToast("Smart filter applied: "+a.textContent.trim());
+    });
+  });
+  updateSmartFilterCount();
+}
+function updateSmartFilterCount(){
+  var n=Object.keys(SMART_PREDS).length+customSmartFilters().length;
+  var el=document.getElementById("sfCount"); if(el)el.textContent=n+" ›";
+  var pel=document.getElementById("pSmartCount"); if(pel)pel.textContent=PEOPLE_SMART_FILTERS.length+" ›";
+}
+function openCreateSmartFilterModal(){
+  var existing=document.getElementById("sfCreateScrim"); if(existing)existing.remove();
+  var scrim=document.createElement("div");
+  scrim.className="crm-modal-scrim"; scrim.id="sfCreateScrim";
+  scrim.innerHTML='<div class="crm-modal" role="dialog" aria-label="Create Smart Filter">'+
+    '<h3>Create Smart Filter</h3>'+
+    '<p>Saves a named filter in this browser only (status / intent / tag contains…). Server-side custom filters are not built yet — Carlos can still list keepers for a later pass.</p>'+
+    '<label>Name</label><input id="sfNewName" placeholder="e.g. FL Expired sellers" maxlength="60">'+
+    '<label>Field</label><select id="sfNewField"><option value="tag">Tag contains</option><option value="status">Status contains</option><option value="intent">Intent contains</option></select>'+
+    '<label>Contains</label><input id="sfNewContains" placeholder="e.g. Expired or FL" maxlength="40">'+
+    '<div class="modal-foot"><button type="button" class="btn-plain" id="sfNewCancel">CANCEL</button><button type="button" class="pill-btn" id="sfNewSave">SAVE FILTER</button></div>'+
+    '</div>';
+  document.body.appendChild(scrim);
+  function close(){ scrim.remove(); }
+  scrim.addEventListener("click",function(e){ if(e.target===scrim)close(); });
+  document.getElementById("sfNewCancel").onclick=close;
+  document.getElementById("sfNewSave").onclick=function(){
+    var name=(document.getElementById("sfNewName").value||"").trim();
+    var field=document.getElementById("sfNewField").value;
+    var contains=(document.getElementById("sfNewContains").value||"").trim();
+    if(!name||!contains){ crmToast("Name and contains are required"); return; }
+    var list=customSmartFilters();
+    var key="custom:"+Date.now();
+    list.push({key:key,label:name,field:field,contains:contains});
+    saveCustomSmartFilters(list);
+    close(); renderCustomSmartList();
+    crmToast("Saved filter “"+name+"” on this browser");
+  };
+  setTimeout(function(){ var n=document.getElementById("sfNewName"); if(n)n.focus(); },50);
+}
+function leadSmartPred(l){
+  if(!leadSmartKey) return true;
+  if(String(leadSmartKey).indexOf("custom:")===0){
+    var cf=customSmartFilters().find(function(x){return x.key===leadSmartKey;});
+    return cf?customSmartMatch(l,cf):true;
+  }
+  return !(SMART_PREDS[leadSmartKey])||SMART_PREDS[leadSmartKey](l);
+}
 document.getElementById("dashTabs").addEventListener("click",e=>{
   const b=e.target.closest("[data-dt]"); if(!b)return;
   document.querySelectorAll("#dashTabs [data-dt]").forEach(x=>x.classList.toggle("on",x===b));
@@ -10794,20 +11025,43 @@ document.getElementById("lnSrcMore").addEventListener("click",function(){
 });
 document.querySelectorAll('#view-leads .sf-list .sf[data-sf]').forEach(a=>{
   const key=a.getAttribute("data-sf");
-  if(SMART_NODATA[key]){
-    a.classList.add("sf-nodata");
-    a.title=SMART_NODATA_WHY[key]||"This filter has no data to run on yet.";
-  }
   a.addEventListener("click",()=>{
-    if(SMART_NODATA[key]){
-      crmToast(SMART_NODATA_WHY[key]||"This filter has no data to run on yet.");
-      return;
-    }
     document.querySelectorAll('#view-leads .leads-nav a[data-lb], #view-leads .leads-nav .sf').forEach(x=>x.classList.remove("on"));
     a.classList.add("on"); leadSmartKey=key; leadBucket="all"; page=1; renderLeads();
     crmToast("Smart filter applied: "+a.textContent.trim());
   });
 });
+(function(){
+  var btn=document.getElementById("sfCreateBtn");
+  if(btn)btn.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); openCreateSmartFilterModal(); });
+  renderCustomSmartList();
+})();
+function renderFollowUp(){
+  var el=document.getElementById("fuList"); if(!el)return;
+  var list=(LEADS||[]).filter(function(l){
+    return (l.due&&l.due.label==="Due Today")||l.crmCallQueue==="urgent";
+  });
+  var count=document.getElementById("fuCount");
+  if(count)count.textContent="("+list.length+")";
+  if(!list.length){
+    el.innerHTML='<div class="empty" style="padding:28px">Nobody is due today. Leads show here when due is “Due Today” or the call queue is urgent.</div>';
+    return;
+  }
+  el.innerHTML=list.map(function(l){
+    var why=(l.due&&l.due.label==="Due Today")?"Due today":"Urgent call queue";
+    var due=(l.due&&l.due.date)?l.due.date:"";
+    return '<div class="fu-row" data-fulid="'+esc(l.id)+'">'+
+      '<div><div class="fu-name">'+esc(l.name)+' '+marketPill(l,"row")+'</div>'+
+      (l.address?'<div class="addr" style="margin-top:2px">'+esc(l.address)+'</div>':'')+'</div>'+
+      '<div class="fu-phone">'+(l.phone?esc(l.phone):'<span style="color:#c2cad1">No phone</span>')+'</div>'+
+      '<div class="fu-why">'+esc(why)+(l.source?" · "+esc(l.source):"")+'</div>'+
+      (due?'<div class="fu-due">'+esc(due)+'</div>':'')+
+    '</div>';
+  }).join("");
+  el.querySelectorAll("[data-fulid]").forEach(function(row){
+    row.addEventListener("click",function(){ openLead(row.getAttribute("data-fulid")); });
+  });
+}
 const lpEl=document.getElementById("leadPonds");
 if(lpEl)lpEl.addEventListener("click",()=>crmToast("Lead Ponds arrive with live team routing"));
 // Reporting snapshot tabs + goal circles + AI tabs (delegation - content re-renders)
@@ -10999,7 +11253,7 @@ document.getElementById("actSave").addEventListener("click",()=>{
   renderTracking(); crmToast("Activity logged");
 });
 
-renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderOpps();renderTx();renderReport("business");renderCal();renderEmail("campaigns");renderNurture();renderFinance();
+renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderFollowUp();renderTx();renderReport("business");renderCal();renderEmail("campaigns");renderNurture();renderFinance();updateSmartFilterCount();
 refreshEmailConn();
 wireToolbarDropdowns();
 loadTablePrefs();      // per-user Columns + Sort By, saved server-side

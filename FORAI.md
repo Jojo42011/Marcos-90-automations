@@ -1,6 +1,6 @@
 # FORAI — Marcos-90-automations (marco-90-automation)
 
-Last updated: 2026-08-25 by Claude Code
+Last updated: 2026-09-16 by Cursor agent
 
 FORAI = "For AI." This is the living architectural summary of this repo — the source of truth agents read before working here, and the source the AETHON Chronicler pulls nightly to keep the master architecture docs current. Keep it short: current state, recent changes, known gaps. Not a commit log.
 
@@ -27,6 +27,24 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 - **Auth (built, not enforced)** — session cookie `mp_sid` + scrypt passwords + `sessions`/`login_history`/`audit_log` in `auth.db`, gated behind the `SITE_LOGIN_ENABLED` env kill switch. Legacy API auth is `DASHBOARD_TOKEN`. See Known gaps.
 
 ## Recent changes (most recent first)
+
+- [2026-09-16c] — **CRM Command Center "doable now": honesty pass, no new vendor APIs** (`public/crm-brivity.html`, `src/core/websiteWebhook.ts` NEW, `src/core/lockdown.ts`, `src/server.ts`, `src/harvey/perception.ts`, `scripts/verify-crm-command-center.mjs` NEW, `_env`).
+
+  **Removed fabrications.** The Opportunities rail (`data-view="opps"`) and its invented OPPS list are gone — opportunity types (Expired, FSBO, Pre-Foreclosure, Off-Market, Withdrawn, Canceled) are real CRM tags on the contact profile, added via the existing tag path. The Transactions seed loop (`TX_DIST`) is gone; `TX` starts `[]` and only fills from `/api/transactions` or import. Empty state says no import yet, not fake GCI. Finance overview says the same when the board is empty.
+
+  **People merge.** One rail button: People. Top subtabs: All People / Leads / Clients / Collaborators / Team / Archived. Leads is the default section and keeps the live leads table + source nav. Follow-Up sits next to Messages and lists Due Today / `crmCallQueue==="urgent"` only.
+
+  **TX/FL.** `leadMarket()` → visible `TX`/`FL` pills on profile header and table rows. FL from Florida/FL address, `/mojo\s*fl/i` source, or FL/Florida tags; else TX (San Antonio business default). Same filter on Transactions and Finance views.
+
+  **Sources & smart filters.** Sidebar shows sources with count ≥ 5 by default, with a Show-all expander for the rest. Nodata filters (visit30/week/today, overdue) deleted from the UI. Keepers remain. **Create Smart Filter** saves a named status/intent/tag-contains rule in `localStorage` — browser-only, honest about that.
+
+  **Documents.** Profile documents accordion groups by transaction/address folder; empty folders appear for linked houses; ungrouped → General.
+
+  **Website inbound (security).** `POST /api/website/lead` mirrors Mojo: refuses when `WEBSITE_WEBHOOK_SECRET` is unset, constant-time compare, quiet create/enrich, source `"Website"`, allowlisted in `lockdown.ts`.
+
+  **Harvey.** Perception no longer `getConversation`s every lead — lite summaries for aggregates, conversation reads capped (`MAX_CONV_SUMMARIES=60`) for chat-context lists only.
+
+  Honesty limits unchanged: Brivity still has no transaction API and no history/Message Center sync; custom smart filters are localStorage only; website form needs the secret set before it accepts posts.
 
 - [2026-09-16b] — **Comment agent invite tone: warm ask, never a blunt "DM me"; hyphens and em dashes never post** (`src/agents/commentAgent/index.ts`, `scripts/verify-comment-agent.mjs`).
 
