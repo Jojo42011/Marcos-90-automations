@@ -576,7 +576,17 @@ try {
   ok("it is public/harvey.html and not some other screen", /id="modelPill"/.test(html) && /harvey-chat\.js/.test(html));
   const shell = await (await fetch(`http://127.0.0.1:${PORT2}/shell?token=${TOKEN}`)).text();
   ok("the shell offers it as a tab", /key: "harvey-chat"/.test(shell) && /src: "\/harvey"/.test(shell));
-  ok("the tab sits right after Chat with Harvey", shell.indexOf('key: "chat"') < shell.indexOf('key: "harvey-chat"') && shell.indexOf('key: "harvey-chat"') < shell.indexOf('key: "crm"'));
+  ok(
+    "the tab sits in the Harvey group, above CRM",
+    shell.indexOf('key: "harvey"') < shell.indexOf('key: "harvey-chat"') &&
+      shell.indexOf('key: "harvey-chat"') < shell.indexOf('key: "crm"'),
+  );
+  /* The old clean-chat surface is gone rather than left beside this one: two
+     chat pages would disagree about which model ran and what it cost, because
+     only one of them reports either. */
+  ok("the retired hull-chat tab is gone from the shell", !/key: "chat"/.test(shell) && !/hull-chat/.test(shell));
+  ok("and its page is deleted", !existsSync(path.join(process.cwd(), "public/hull-chat.html")));
+  ok("so the old route 404s", (await fetch(`http://127.0.0.1:${PORT2}/hull-chat?token=${TOKEN}`)).status === 404);
   unlocked.child.kill("SIGTERM");
   unlocked = null;
 

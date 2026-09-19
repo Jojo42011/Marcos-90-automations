@@ -603,11 +603,11 @@ app.get("/voice-clone", requireAuthPage, (_req, res) => {
 app.get("/how-to", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "how-to.html"));
 });
-// Clean single-column chat UI (Harvey by default, ?agent=arlo for Arlo).
-// Self-contained page — talks to /api/jarvis/chat.
-app.get("/hull-chat", requireAuthPage, (_req, res) => {
-    res.sendFile(path_1.default.join(publicDir, "hull-chat.html"));
-});
+/* `/hull-chat` was the clean single-column chat and is gone as of 2026-09-19.
+   `/harvey` replaces it on the same idea and does more: a model picker, streamed
+   tool activity, approval cards, measured spend and the scheduled-task list.
+   Keeping both would have meant two chat surfaces disagreeing about which model
+   ran and what it cost, since only one of them reports either. */
 // Harvey's own chat surface: the model picker, streamed tool activity,
 // approvals, measured spend and the scheduled-task list, over /api/harvey/*.
 app.get("/harvey", requireAuthPage, (_req, res) => {
@@ -7136,8 +7136,8 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
         return;
     }
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
-    // The dedicated Harvey chat (hull-chat) sends full:true so Harvey always runs
-    // the smartest path with every business/memory tool available.
+    // The dedicated Harvey chat sends full:true so Harvey always runs the
+    // smartest path with every business/memory tool available.
     const fullMode = req.body?.full === true || req.body?.full === "true";
     try {
         const result = await (0, index_js_22.runHarveyChat)({
