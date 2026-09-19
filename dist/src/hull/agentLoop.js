@@ -1,21 +1,19 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.serializeToolResult = serializeToolResult;
 exports.toolResultContent = toolResultContent;
 exports.runAgentLoop = runAgentLoop;
 exports.extractSentences = extractSentences;
-const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const founderPrompt_js_1 = require("./founderPrompt.js");
 const index_js_1 = require("../harvey/index.js");
 const modelRouting_js_1 = require("./modelRouting.js");
+const approval_js_1 = require("./approval.js");
+const index_js_2 = require("./providers/index.js");
 const conversation_js_1 = require("./conversation.js");
 const standingOrders_js_1 = require("./standingOrders.js");
 const retrieval_js_1 = require("./memory/retrieval.js");
 const tools_js_1 = require("./tools.js");
-const index_js_2 = require("../integrations/gmail/index.js");
+const index_js_3 = require("../integrations/gmail/index.js");
 const curiosity_js_1 = require("./curiosity.js");
 /**
  * Tool-round budget.
@@ -118,15 +116,16 @@ function finalizeSpeech(text, opts, hadToolOnly) {
     return speech;
 }
 async function runAgentLoop(opts) {
-    const key = process.env.ANTHROPIC_API_KEY?.trim();
-    if (!key) {
+    /* Either key is enough now. OpenRouter reaches every model with one
+       credential; direct Anthropic remains a complete path on its own. */
+    const keys = (0, index_js_2.providerStatus)();
+    if (!keys.primary) {
         return {
-            speech: "Anthropic API key not configured.",
+            speech: "No model provider is configured. Set OPENROUTER_API_KEY (one key, every model) or ANTHROPIC_API_KEY on the server.",
             toolRounds: 0,
             model: "none",
         };
     }
-    const client = new sdk_1.default({ apiKey: key });
     const timedHistory = opts.timedHistory ?? [];
     /* A pure pleasantry attaches no tools and runs on the fast model — the
        operational prompt half is dead weight on exactly the turns that need to
@@ -145,9 +144,12 @@ async function runAgentLoop(opts) {
         !opts.voiceMode &&
         /\b(lead|client|deal|listing|marco|tiktok|mojo|brivity|canyon|price|funnel)\b/i.test(opts.message);
     if (!opts.voiceMode && confidence < 0.15 && count < 3 && businessSpecific) {
-        const clar = await client.messages.create({
-            model: (0, modelRouting_js_1.getHaikuModel)(),
-            max_tokens: 200,
+        /* A one-line clarification is the cheapest thing Harvey ever does, so it
+           runs on the `classify` slot rather than whatever the chat is set to. */
+        const clar = await (0, index_js_2.complete)({
+            job: "classify",
+            sessionId: opts.sessionId,
+            maxTokens: 200,
             messages: [
                 {
                     role: "user",
@@ -155,32 +157,37 @@ async function runAgentLoop(opts) {
                 },
             ],
         });
-        const q = extractAssistantText(clar.content);
-        return { speech: q, toolRounds: 0, model: (0, modelRouting_js_1.getHaikuModel)(), clarification: true };
+        return {
+            speech: clar.text,
+            toolRounds: 0,
+            model: clar.resolved.model,
+            modelUsed: clar.modelUsed,
+            costUsd: clar.usage.costUsd,
+            promptTokens: clar.usage.promptTokens,
+            completionTokens: clar.usage.completionTokens,
+            clarification: true,
+        };
     }
     /* Tool gating is decided BEFORE the prompt is built, because the prompt's
        operational half only attaches when tools do (CORE/OPERATIONAL split). */
-    const model = socialTurn
-        ? (0, modelRouting_js_1.getHaikuModel)()
-        : opts.fullMode
-            ? (0, modelRouting_js_1.getAethonModel)()
-            : opts.fastMode
-                ? (0, modelRouting_js_1.getHaikuModel)()
-                : opts.voiceMode
-                    ? (0, modelRouting_js_1.getHaikuModel)()
-                    : (0, modelRouting_js_1.needsSonnet)(opts.message)
-                        ? (0, modelRouting_js_1.getAethonModel)()
-                        : (0, modelRouting_js_1.getHaikuModel)();
+    /* The DEEP/FAST decision is unchanged — same triggers, same precedence. What
+       changed is only who runs it: `job` names a routing slot the operator can
+       repoint at any model, while `model` stays the legacy id so tool gating and
+       the existing logs read exactly as before. */
+    const wantsDeep = !socialTurn &&
+        (Boolean(opts.fullMode) || (!opts.fastMode && !opts.voiceMode && (0, modelRouting_js_1.needsSonnet)(opts.message)));
+    const job = opts.job ?? (wantsDeep ? "chat_deep" : "chat_fast");
+    const model = wantsDeep ? (0, modelRouting_js_1.getAethonModel)() : (0, modelRouting_js_1.getHaikuModel)();
     const messages = [...(opts.history || []), { role: "user", content: opts.message }];
     const hullTools = (0, tools_js_1.getHullToolDefinitions)({ whatsappSend: opts.ownerMode });
-    const sonnetTools = !opts.fastMode && model === (0, modelRouting_js_1.getAethonModel)();
+    const sonnetTools = !opts.fastMode && wantsDeep;
     const ownerWhatsAppTools = opts.fastMode && opts.ownerMode;
     const voiceTools = Boolean(opts.voiceMode) && !opts.fastMode;
-    const emailIntent = (0, index_js_2.isGmailConfigured)() &&
+    const emailIntent = (0, index_js_3.isGmailConfigured)() &&
         /\b(send|email|e-mail|mail)\b/i.test(opts.message) &&
         /\b(email|e-mail|mail|inbox|gmail|me|marco)\b/i.test(opts.message);
     const nurtureIntent = /\b(nurture|scoring|score|hot lead|warm lead|cold lead|lead nurture|re-score|rescore)\b/i.test(opts.message);
-    const gmailTools = (0, index_js_2.isGmailConfigured)() &&
+    const gmailTools = (0, index_js_3.isGmailConfigured)() &&
         (sonnetTools || ownerWhatsAppTools || voiceTools || emailIntent || opts.ownerMode);
     const nurtureTools = sonnetTools || ownerWhatsAppTools || voiceTools || nurtureIntent || opts.ownerMode;
     const toolsEnabled = !socialTurn &&
@@ -197,7 +204,7 @@ async function runAgentLoop(opts) {
     if (opts.voiceMode) {
         system +=
             "\n\nVOICE MODE: Spoken replies only. Lead with the number or answer. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
-        if (toolsEnabled && (0, index_js_2.isGmailConfigured)()) {
+        if (toolsEnabled && (0, index_js_3.isGmailConfigured)()) {
             system +=
                 "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send first. Use to=\"marco\" for his inbox. NEVER confirm sent unless gmail_send returned ok:true with messageId.";
         }
@@ -229,6 +236,15 @@ async function runAgentLoop(opts) {
     let hadToolOnly = false;
     /* How many times each identical call has been made this turn. */
     const callCounts = new Map();
+    /* Calls held by the gate. The turn still finishes; these did not run. */
+    const heldApprovals = [];
+    /* Spend accumulates across every step, because one turn can be sixteen calls
+       and the per-call number is not what anybody wants to know. */
+    let costUsd = 0;
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let lastPlan;
+    let lastModelUsed = model;
     const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : MAX_AGENT_STEPS;
     /**
      * Run one tool call, refusing an identical repeat.
@@ -249,11 +265,31 @@ async function runAgentLoop(opts) {
                 detail: `You have already called ${name} with these exact arguments ${seen - 1} times this turn. The answer will not change. Use what you already have, and if it is genuinely empty say so plainly rather than searching again.`,
             };
         }
+        /* THE GATE. Anything that reaches a real person, spends money or cannot be
+           undone stops here and waits for a human, and the model is told plainly
+           that it did not run. This is in front of the executor rather than in the
+           prompt because a model that misreads the instruction sends the email
+           anyway, and there is no undo on a sent email.
+    
+           A scheduled run passes `approvalMode: "on"` so an unattended task cannot
+           inherit a relaxed environment setting. */
+        const gated = opts.approvalMode === "on" ? true : (0, approval_js_1.needsApproval)(name, input);
+        if (gated) {
+            const approval = (0, approval_js_1.requestApproval)({ tool: name, args: input, sessionId: opts.sessionId ?? null });
+            heldApprovals.push(approval);
+            opts.onEvent?.({ type: "approval", approval });
+            return { held_for_approval: true, detail: (0, approval_js_1.heldToolResultText)(approval) };
+        }
+        opts.onEvent?.({ type: "tool", name, status: "running" });
         try {
-            return await (0, tools_js_1.executeHullTool)(name, input);
+            const result = await (0, tools_js_1.executeHullTool)(name, input);
+            opts.onEvent?.({ type: "tool", name, status: "done" });
+            return result;
         }
         catch (err) {
-            return { error: err instanceof Error ? err.message : String(err) };
+            const detail = err instanceof Error ? err.message : String(err);
+            opts.onEvent?.({ type: "tool", name, status: "error", detail });
+            return { error: detail };
         }
     };
     for (let step = 0; step < stepBudget; step++) {
@@ -266,73 +302,100 @@ async function runAgentLoop(opts) {
             ? system +
                 "\n\nFINAL ROUND: no more tool calls are available this turn. Answer Marco now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
             : system;
-        if (opts.onToken) {
-            const stream = client.messages.stream({
-                model,
-                max_tokens: maxTokens,
+        let out;
+        try {
+            out = await (0, index_js_2.complete)({
+                job,
+                modelOverride: opts.modelOverride,
                 system: stepSystem,
                 messages,
                 tools: stepTools,
+                maxTokens,
+                sessionId: opts.sessionId,
+                onToken: opts.onToken,
+                /* The ceiling is for the WHOLE turn, so each step is offered only what
+                   is left of it. Sixteen steps each allowed the full budget would be
+                   sixteen times the number the operator set. */
+                maxCostUsd: opts.maxCostUsd !== undefined ? Math.max(0, opts.maxCostUsd - costUsd) : undefined,
             });
-            let full = "";
-            const finalMsg = await new Promise((resolve, reject) => {
-                stream.on("text", (t) => {
-                    full += t;
-                    opts.onToken?.(t);
-                });
-                stream
-                    .finalMessage()
-                    .then(resolve)
-                    .catch(reject);
-            });
-            if (finalMsg.stop_reason !== "tool_use") {
-                const text = full.trim() || extractAssistantText(finalMsg.content);
-                return { speech: finalizeSpeech(text, opts, hadToolOnly), toolRounds, model };
-            }
-            const toolUseBlocks = finalMsg.content.filter((b) => b.type === "tool_use");
-            hadToolOnly = toolUseBlocks.length > 0 && !full.trim();
-            const toolResults = await Promise.all(toolUseBlocks.map(async (tu) => {
-                const input = tu.input && typeof tu.input === "object" && !Array.isArray(tu.input)
-                    ? tu.input
-                    : {};
-                return {
-                    type: "tool_result",
-                    tool_use_id: tu.id,
-                    content: toolResultContent(await runTool(tu.name, input)),
-                };
-            }));
-            messages.push({ role: "assistant", content: finalMsg.content });
-            messages.push({ role: "user", content: toolResults });
-            toolRounds++;
-            continue;
         }
-        const response = await client.messages.create({
-            model,
-            max_tokens: maxTokens,
-            system: stepSystem,
-            messages,
-            tools: stepTools,
-        });
-        if (response.stop_reason !== "tool_use") {
+        catch (err) {
+            /* Two failures worth telling apart. The cap is a decision this system
+               made and can be raised; everything else is an outage. Both end the turn
+               with a sentence rather than an exception reaching the transport. */
+            if (err instanceof index_js_2.BudgetRefusedError) {
+                const reason = err.verdict.reason || "The AI spend cap has been reached.";
+                return {
+                    speech: toolRounds > 0
+                        ? `I had to stop partway: ${reason}`
+                        : reason,
+                    toolRounds,
+                    model,
+                    modelUsed: lastModelUsed,
+                    costUsd,
+                    promptTokens,
+                    completionTokens,
+                    contextPlan: lastPlan,
+                    approvals: heldApprovals,
+                    budgetRefused: reason,
+                };
+            }
+            const detail = err instanceof index_js_2.ModelLayerError ? err.summary : err instanceof Error ? err.message : String(err);
+            console.error("[agentLoop] model call failed:", detail);
             return {
-                speech: finalizeSpeech(extractAssistantText(response.content), opts, hadToolOnly),
+                speech: `I could not reach a model just now. ${detail}`,
                 toolRounds,
                 model,
+                modelUsed: lastModelUsed,
+                costUsd,
+                promptTokens,
+                completionTokens,
+                contextPlan: lastPlan,
+                approvals: heldApprovals,
+                modelError: detail,
             };
         }
-        const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
-        hadToolOnly = true;
-        const toolResults = await Promise.all(toolUseBlocks.map(async (tu) => {
-            const input = tu.input && typeof tu.input === "object" && !Array.isArray(tu.input)
-                ? tu.input
-                : {};
+        costUsd += out.usage.costUsd;
+        promptTokens += out.usage.promptTokens;
+        completionTokens += out.usage.completionTokens;
+        lastPlan = out.contextPlan;
+        lastModelUsed = out.modelUsed;
+        opts.onEvent?.({
+            type: "usage",
+            model: out.modelUsed,
+            promptTokens: out.usage.promptTokens,
+            completionTokens: out.usage.completionTokens,
+            costUsd: out.usage.costUsd,
+        });
+        if (!out.toolUses.length) {
             return {
-                type: "tool_result",
-                tool_use_id: tu.id,
-                content: toolResultContent(await runTool(tu.name, input)),
+                speech: finalizeSpeech(out.text, opts, hadToolOnly),
+                toolRounds,
+                model,
+                modelUsed: out.modelUsed,
+                costUsd,
+                promptTokens,
+                completionTokens,
+                contextPlan: out.contextPlan,
+                approvals: heldApprovals,
             };
-        }));
-        messages.push({ role: "assistant", content: response.content });
+        }
+        hadToolOnly = !out.text.trim();
+        const toolResults = await Promise.all(out.toolUses.map(async (tu) => ({
+            type: "tool_result",
+            tool_use_id: tu.id,
+            content: toolResultContent(await runTool(tu.name, tu.input || {})),
+        })));
+        /* Rebuild the assistant turn in Anthropic's block shape. The tool loop
+           requires the tool_use blocks to be echoed back verbatim alongside their
+           results, whichever provider actually produced them. */
+        const assistantContent = [];
+        if (out.text.trim())
+            assistantContent.push({ type: "text", text: out.text });
+        for (const tu of out.toolUses) {
+            assistantContent.push({ type: "tool_use", id: tu.id, name: tu.name, input: tu.input });
+        }
+        messages.push({ role: "assistant", content: assistantContent });
         messages.push({ role: "user", content: toolResults });
         toolRounds++;
     }
@@ -344,6 +407,12 @@ async function runAgentLoop(opts) {
         speech: "I ran out of room to keep digging on that one. Ask me for the specific piece you need and I'll go straight at it.",
         toolRounds,
         model,
+        modelUsed: lastModelUsed,
+        costUsd,
+        promptTokens,
+        completionTokens,
+        contextPlan: lastPlan,
+        approvals: heldApprovals,
     };
 }
 function extractSentences(buffer) {

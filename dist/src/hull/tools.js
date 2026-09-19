@@ -48,6 +48,7 @@ const nodes_js_1 = require("./memory/nodes.js");
 const whatsappSend_js_1 = require("./whatsappSend.js");
 const index_js_1 = require("../integrations/gmail/index.js");
 const index_js_2 = require("../integrations/openshorts/index.js");
+const scheduleTools_js_1 = require("./scheduleTools.js");
 const personaTraits_js_1 = require("./personaTraits.js");
 const standingOrders_js_1 = require("./standingOrders.js");
 const TUNE_PERSONALITY_TOOL = {
@@ -192,6 +193,7 @@ function getHullToolDefinitions(opts) {
     const tools = [
         ...tools_js_1.HARVEY_TOOL_DEFINITIONS,
         ...MEMORY_TOOLS,
+        ...scheduleTools_js_1.SCHEDULE_TOOL_DEFINITIONS,
         ANALYZE_REEL_TOOL,
         TUNE_PERSONALITY_TOOL,
         CHANGE_AGENT_LOGIC_TOOL,
@@ -215,6 +217,10 @@ function getHullToolDefinitions(opts) {
     return tools;
 }
 async function executeHullTool(name, input) {
+    /* Scheduling is checked first because these names are unambiguous and the
+       dispatch below is a long if-chain; there is no reason to walk it. */
+    if (scheduleTools_js_1.SCHEDULE_TOOL_NAMES.has(name))
+        return (0, scheduleTools_js_1.executeScheduleTool)(name, input);
     if (name === "tune_personality") {
         if (input.reset === true) {
             return { ok: true, traits: (0, personaTraits_js_1.resetPersonaTraits)(), note: "Personality restored to defaults." };
