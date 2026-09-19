@@ -1109,6 +1109,12 @@ app.get("/hull-chat", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "hull-chat.html"));
 });
 
+// Harvey's own chat surface: the model picker, streamed tool activity,
+// approvals, measured spend and the scheduled-task list, over /api/harvey/*.
+app.get("/harvey", requireAuthPage, (_req, res) => {
+  res.sendFile(path.join(publicDir, "harvey.html"));
+});
+
 // Brivity-style CRM front end (staged rebuild: dashboard → messages → leads).
 app.get("/crm", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "crm-brivity.html"));
@@ -2607,6 +2613,652 @@ app.get("/api/harvey/workspace", async (req, res) => {
     res.json({ ok: true, files: await ws.listFiles(String(req.query.prefix || "")) });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+/* ===================== Harvey model layer =====================
+   The HTTP surface described by docs/harvey-model-layer.md and already built
+   against by public/harvey.html: one chat endpoint (streamed or not), the model
+   catalog with its per-job routing, measured spend and the caps that stop it,
+   the approval queue, and scheduled tasks.
+
+   NO KEY CROSSES THIS BOUNDARY. The page is told which models are reachable and
+   what they cost; the credential that reaches them stays a server secret and is
+   never read, logged or returned here. `providerStatus()` answers in booleans
+   for exactly that reason.
+
+   Every module is pulled in with a dynamic import, like the rest of this file:
+   they open SQLite files and drag in the agent loop, and a boot that never
+   serves one of these routes should not pay for any of it. */
+
+/** Spend as the pill and the usage page read it, against the live caps. */
+async function harveyBudgetBlock(): Promise<{
+  spentTodayUsd: number;
+  spentMonthUsd: number;
+  dailyCapUsd: number;
+  monthlyCapUsd: number;
+  state: "ok" | "near" | "over";
+}> {
+  const { getCaps, spentToday, spentThisMonth } = await import("./core/aiUsageStore.js");
+  const caps = getCaps();
+  const spentTodayUsd = spentToday();
+  const spentMonthUsd = spentThisMonth();
+  const ratio = Math.max(
+    caps.dailyCapUsd > 0 ? spentTodayUsd / caps.dailyCapUsd : 0,
+    caps.monthlyCapUsd > 0 ? spentMonthUsd / caps.monthlyCapUsd : 0,
+  );
+  return {
+    spentTodayUsd,
+    spentMonthUsd,
+    dailyCapUsd: caps.dailyCapUsd,
+    monthlyCapUsd: caps.monthlyCapUsd,
+    /* 80% is where the layer itself starts degrading cheap jobs to the cheapest
+       model, so it is the honest place for the UI to turn amber. */
+    state: ratio >= 1 ? "over" : ratio >= 0.8 ? "near" : "ok",
+  };
+}
+
+/** A tool result is for a card, not a dump — big ones are cut, never hidden. */
+function harveyToolResultForUi(result: unknown): unknown {
+  const LIMIT = 4000;
+  if (result === null || result === undefined) return null;
+  if (typeof result === "string") {
+    return result.length > LIMIT ? `${result.slice(0, LIMIT)}\n\n[TRUNCATED: ${result.length} chars total]` : result;
+  }
+  try {
+    const json = JSON.stringify(result);
+    if (json.length <= LIMIT) return result;
+    return { truncated: true, chars: json.length, preview: `${json.slice(0, LIMIT)}…` };
+  } catch {
+    return String(result).slice(0, LIMIT);
+  }
+}
+
+/**
+ * Harvey's chat, the surface public/harvey.html talks to.
+ *
+ * Streamed or not, the turn is the same: the full agent loop with every tool,
+ * the operator's model pick when they made one, and the session history the
+ * legacy `/api/jarvis/chat` path keeps — so switching pages does not lose the
+ * conversation.
+ */
+app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const message = typeof body.message === "string" ? body.message.trim() : "";
+  if (!message) { res.status(400).json({ error: "Missing message" }); return; }
+
+  const picked = typeof body.model === "string" ? body.model.trim() : "";
+  /* "auto" is the picker saying "you choose", which is the absence of a pick. */
+  const modelOverride = picked && picked !== "auto" ? picked : undefined;
+  const wantsStream = body.stream === true || body.stream === "true";
+  const conversationId =
+    typeof body.conversationId === "string" && body.conversationId.trim() ? body.conversationId.trim() : null;
+
+  const memory = await import("./harvey/memory.js");
+  const { runAgentLoop } = await import("./hull/agentLoop.js");
+  const { BudgetRefusedError } = await import("./hull/providers/index.js");
+
+  const sessionId = memory.getOrCreateSessionId(
+    typeof body.sessionId === "string" ? body.sessionId : undefined,
+  );
+  const history = memory.getSessionHistory(sessionId);
+
+  const loopOptions = {
+    message,
+    history: memory.historyToAnthropicMessages(history),
+    timedHistory: history.map((t) => ({ role: t.role, content: t.content, at: t.at })),
+    sessionId,
+    /* This page IS Harvey, so it always runs the full path: every tool, the
+       deep chat slot, and the operator's pick when the picker was used. */
+    fullMode: true,
+    job: "chat_deep" as const,
+    modelOverride,
+  };
+
+  /** Remember the turn the same way runHarveyChat does, so history is shared. */
+  const rememberTurn = (speech: string): void => {
+    memory.appendSessionTurn(sessionId, "user", message);
+    memory.appendSessionTurn(sessionId, "assistant", speech);
+    void import("./hull/memory/extraction.js").then((m) =>
+      m.runPostConversationExtraction(sessionId, [
+        ...history.map((t) => ({ role: t.role, text: t.content })),
+        { role: "user", text: message },
+        { role: "assistant", text: speech },
+      ]),
+    );
+  };
+
+  if (wantsStream) {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    let clientGone = false;
+    const send = (event: string, data: unknown): void => {
+      if (clientGone || res.writableEnded) return;
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+    /* A comment frame every 15s. A tool round can be a minute of silence, and
+       an idle proxy will close a connection it thinks has died. */
+    const keepAlive = setInterval(() => {
+      if (!clientGone && !res.writableEnded) res.write(": keep-alive\n\n");
+    }, 15_000);
+    if (typeof keepAlive.unref === "function") keepAlive.unref();
+    req.on("close", () => {
+      clientGone = true;
+      clearInterval(keepAlive);
+    });
+
+    try {
+      const result = await runAgentLoop({
+        ...loopOptions,
+        onToken: (t) => send("token", { text: t }),
+        onEvent: (event) => {
+          if (event.type === "tool") {
+            send("tool", { name: event.name, status: event.status, detail: event.detail });
+          } else if (event.type === "approval") {
+            const a = event.approval;
+            send("approval", { id: a.id, tool: a.tool, summary: a.summary, risk: a.risk });
+          } else if (event.type === "usage") {
+            send("usage", {
+              model: event.model,
+              promptTokens: event.promptTokens,
+              completionTokens: event.completionTokens,
+              costUsd: event.costUsd,
+            });
+          }
+        },
+      });
+      rememberTurn(result.speech);
+      /* One last usage frame carrying the WHOLE turn plus how context was
+         planned. A tool chain is many steps and the per-step numbers above are
+         not what "what did this answer cost" means. */
+      send("usage", {
+        model: result.modelUsed || result.model,
+        promptTokens: result.promptTokens ?? 0,
+        completionTokens: result.completionTokens ?? 0,
+        costUsd: result.costUsd ?? 0,
+        contextPlan: result.contextPlan ?? null,
+      });
+      send("done", { sessionId, conversationId, text: result.speech });
+    } catch (err) {
+      /* The cap is a decision this system made, not an outage, and it is said
+         in a sentence rather than thrown at the page as a stack. */
+      const messageOut =
+        err instanceof BudgetRefusedError
+          ? err.verdict.reason || "Harvey's spend cap has been reached, so that request was not made."
+          : `Harvey could not finish that: ${err instanceof Error ? err.message : String(err)}`;
+      console.error("[harvey/chat] stream failed:", err instanceof Error ? err.message : String(err));
+      send("error", { message: messageOut });
+    } finally {
+      clearInterval(keepAlive);
+      if (!res.writableEnded) res.end();
+    }
+    return;
+  }
+
+  try {
+    const result = await runAgentLoop(loopOptions);
+    rememberTurn(result.speech);
+    res.json({
+      text: result.speech,
+      sessionId,
+      conversationId,
+      usage: {
+        model: result.modelUsed || result.model,
+        promptTokens: result.promptTokens ?? 0,
+        completionTokens: result.completionTokens ?? 0,
+        costUsd: result.costUsd ?? 0,
+      },
+      contextPlan: result.contextPlan ?? null,
+      approvals: result.approvals ?? [],
+    });
+  } catch (err) {
+    if (err instanceof BudgetRefusedError) {
+      /* 200, because nothing is broken: the answer is "no, and here is why". */
+      const reason = err.verdict.reason || "Harvey's spend cap has been reached, so that request was not made.";
+      res.json({
+        text: reason,
+        sessionId,
+        conversationId,
+        usage: { model: null, promptTokens: 0, completionTokens: 0, costUsd: 0 },
+        contextPlan: null,
+        approvals: [],
+        budgetRefused: reason,
+      });
+      return;
+    }
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/chat] failed:", detail);
+    res.status(500).json({ error: `Harvey could not finish that: ${detail}` });
+  }
+});
+
+/** The picker's catalog, the routing table behind it, and what has been spent. */
+app.get("/api/harvey/models", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { listModelsForUi } = await import("./hull/providers/index.js");
+    const { models, routing, provider } = listModelsForUi();
+    res.json({ models, routing, provider, budget: await harveyBudgetBlock() });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/models] failed:", detail);
+    res.status(500).json({ error: `Could not read the model catalog: ${detail}` });
+  }
+});
+
+/** Point one job at one model. Stored, so it survives a restart. */
+app.post("/api/harvey/models/route", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const job = typeof body.job === "string" ? body.job.trim() : "";
+  const model = typeof body.model === "string" ? body.model.trim() : "";
+  try {
+    const { MODEL_JOBS, describeModel, routingTable } = await import("./hull/providers/index.js");
+    if (!MODEL_JOBS.includes(job as (typeof MODEL_JOBS)[number])) {
+      res.status(400).json({ error: `Unknown job "${job}". Jobs are: ${MODEL_JOBS.join(", ")}.` });
+      return;
+    }
+    /* Refused rather than stored: an override pointing at a model that is not
+       in the catalog silently degrades to a fallback on every single turn, and
+       the routing table would then disagree with what the operator picked. */
+    const info = describeModel(model);
+    if (!info) {
+      res.status(400).json({ error: `Unknown model "${model}". Pick one from GET /api/harvey/models.` });
+      return;
+    }
+    const { setModelOverride } = await import("./core/aiUsageStore.js");
+    setModelOverride(job, info.id);
+    res.json({ ok: true, routing: routingTable() });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/models] route failed:", detail);
+    res.status(500).json({ error: `Could not set that route: ${detail}` });
+  }
+});
+
+/** Drop a stored override and go back to the built-in routing for that job. */
+app.delete("/api/harvey/models/route/:job", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const job = String(req.params.job || "").trim();
+  try {
+    const { MODEL_JOBS, routingTable } = await import("./hull/providers/index.js");
+    if (!MODEL_JOBS.includes(job as (typeof MODEL_JOBS)[number])) {
+      res.status(400).json({ error: `Unknown job "${job}". Jobs are: ${MODEL_JOBS.join(", ")}.` });
+      return;
+    }
+    const { clearModelOverride } = await import("./core/aiUsageStore.js");
+    clearModelOverride(job);
+    res.json({ ok: true, routing: routingTable() });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/models] route reset failed:", detail);
+    res.status(500).json({ error: `Could not reset that route: ${detail}` });
+  }
+});
+
+/** What Harvey has actually spent — measured, never estimated from a price list. */
+app.get("/api/harvey/usage", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { usageSummary, recentErrors, getCaps, breakerStates } = await import("./core/aiUsageStore.js");
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    res.json({
+      ...usageSummary(days),
+      recentErrors: recentErrors(20),
+      caps: getCaps(),
+      /* A parked model is why a reply came back from something other than the
+         model the operator picked, so it belongs next to the errors. */
+      breakers: breakerStates(),
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/usage] failed:", detail);
+    res.status(500).json({ error: `Could not read the usage ledger: ${detail}` });
+  }
+});
+
+/** Move the caps. Enforced before the next call is made, which is the only
+    point at which spend can still be prevented. */
+app.post("/api/harvey/usage/caps", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const patch: { dailyCapUsd?: number; monthlyCapUsd?: number } = {};
+  for (const field of ["dailyCapUsd", "monthlyCapUsd"] as const) {
+    if (body[field] === undefined || body[field] === null || body[field] === "") continue;
+    const n = Number(body[field]);
+    /* A cap of zero or less is not a cap, it is an outage nobody asked for. */
+    if (!Number.isFinite(n) || n <= 0) {
+      res.status(400).json({ error: `${field} has to be a positive number of dollars.` });
+      return;
+    }
+    patch[field] = n;
+  }
+  if (!Object.keys(patch).length) {
+    res.status(400).json({ error: "Send dailyCapUsd, monthlyCapUsd, or both." });
+    return;
+  }
+  try {
+    const { setCaps } = await import("./core/aiUsageStore.js");
+    res.json({ ok: true, caps: setCaps(patch) });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/usage] caps failed:", detail);
+    res.status(500).json({ error: `Could not save those caps: ${detail}` });
+  }
+});
+
+/** Everything Harvey is holding, waiting on a human. */
+app.get("/api/harvey/approvals", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { listPendingApprovals } = await import("./hull/approval.js");
+    const sessionId = typeof req.query.sessionId === "string" ? req.query.sessionId.trim() : "";
+    res.json({
+      pending: listPendingApprovals(sessionId || undefined).map((a) => ({
+        id: a.id,
+        tool: a.tool,
+        summary: a.summary,
+        risk: a.risk,
+        reason: a.reason,
+        args: a.args,
+        createdAt: a.createdAt,
+        expiresAt: a.expiresAt,
+      })),
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/approvals] failed:", detail);
+    res.status(500).json({ error: `Could not read the approval queue: ${detail}` });
+  }
+});
+
+/**
+ * Approve a held tool call — and RUN it.
+ *
+ * The click is the whole point: the call was stopped in front of the executor,
+ * so nothing happens until this route executes it. A decided or expired
+ * approval is refused with 409 and never executed, which is what "fails closed"
+ * means here — an approval nobody answered for half an hour must not fire
+ * against state that has since moved.
+ */
+app.post("/api/harvey/approvals/:id/approve", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const id = String(req.params.id || "").trim();
+  try {
+    const { getApproval, decideApproval } = await import("./hull/approval.js");
+    const existing = getApproval(id);
+    if (!existing) {
+      res.status(404).json({ error: "That approval is not in the queue — it may have expired and been dropped." });
+      return;
+    }
+    if (existing.status !== "pending") {
+      res.status(409).json({
+        error:
+          existing.status === "expired"
+            ? "That approval expired before it was answered, so it was not run. Ask Harvey to propose it again."
+            : `That approval was already ${existing.status}.`,
+        status: existing.status,
+      });
+      return;
+    }
+    const actor = await currentSessionUser(req);
+    const approved = decideApproval(id, "approved", { by: actor?.name || null });
+    if (!approved) {
+      res.status(409).json({ error: "That approval expired as it was being answered, so it was not run." });
+      return;
+    }
+    const { recordAudit } = await import("./core/authStore.js");
+    recordAudit({
+      userId: actor?.id,
+      userName: actor?.name,
+      action: "harvey.approval.approve",
+      detail: `${approved.tool} — ${approved.summary}`,
+      req,
+    });
+    const { executeHullTool } = await import("./hull/tools.js");
+    try {
+      const result = await executeHullTool(approved.tool, approved.args);
+      res.json({ ok: true, result: harveyToolResultForUi(result) });
+    } catch (err) {
+      /* The approval stands — it WAS approved — but the action did not happen,
+         and saying "ok" here would be the exact lie this gate exists to stop. */
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error(`[harvey/approvals] ${approved.tool} failed after approval:`, detail);
+      res.status(502).json({ ok: false, error: `Approved, but ${approved.tool} failed: ${detail}` });
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/approvals] approve failed:", detail);
+    res.status(500).json({ error: `Could not approve that: ${detail}` });
+  }
+});
+
+/** Deny a held call. Nothing runs, and the reason is kept for Harvey to read. */
+app.post("/api/harvey/approvals/:id/deny", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const id = String(req.params.id || "").trim();
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  try {
+    const { getApproval, decideApproval } = await import("./hull/approval.js");
+    const existing = getApproval(id);
+    if (!existing) {
+      res.status(404).json({ error: "That approval is not in the queue — it may have expired and been dropped." });
+      return;
+    }
+    if (existing.status !== "pending") {
+      res.status(409).json({
+        error:
+          existing.status === "expired"
+            ? "That approval already expired, so it never ran."
+            : `That approval was already ${existing.status}.`,
+        status: existing.status,
+      });
+      return;
+    }
+    const actor = await currentSessionUser(req);
+    const denied = decideApproval(id, "denied", { by: actor?.name || null, reason });
+    if (!denied) {
+      res.status(409).json({ error: "That approval expired as it was being answered." });
+      return;
+    }
+    const { recordAudit } = await import("./core/authStore.js");
+    recordAudit({
+      userId: actor?.id,
+      userName: actor?.name,
+      action: "harvey.approval.deny",
+      detail: `${denied.tool} — ${denied.summary}${reason ? ` (${reason})` : ""}`,
+      req,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/approvals] deny failed:", detail);
+    res.status(500).json({ error: `Could not deny that: ${detail}` });
+  }
+});
+
+/** Everything on a clock, with the schedule in plain English beside its cron. */
+app.get("/api/harvey/tasks", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const { listTasks } = await import("./core/harveyTaskStore.js");
+    const { cronEnabled } = await import("./hull/taskScheduler.js");
+    /* `cronEnabled` is reported because a list of tasks with next-run times is
+       a lie when the ticker is switched off. */
+    res.json({ tasks: listTasks(), cronEnabled: cronEnabled() });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/tasks] list failed:", detail);
+    res.status(500).json({ error: `Could not read the scheduled tasks: ${detail}` });
+  }
+});
+
+/**
+ * What a sentence would turn into, before anything is saved.
+ *
+ * Registered above `/api/harvey/tasks/:id` so the literal path wins — Express
+ * matches in declaration order and `preview` would otherwise be read as an id.
+ */
+app.get("/api/harvey/tasks/preview", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const when = typeof req.query.when === "string" ? req.query.when.trim() : "";
+  if (!when) { res.status(400).json({ ok: false, error: "Pass ?when= the schedule to read back." }); return; }
+  try {
+    const { previewSchedule } = await import("./hull/scheduleTools.js");
+    const { DEFAULT_TIMEZONE } = await import("./hull/cron.js");
+    const timezone = typeof req.query.timezone === "string" && req.query.timezone.trim()
+      ? req.query.timezone.trim()
+      : DEFAULT_TIMEZONE;
+    res.json(previewSchedule(when, timezone));
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/tasks] preview failed:", detail);
+    res.status(500).json({ ok: false, error: `Could not read that schedule: ${detail}` });
+  }
+});
+
+/**
+ * Put a job on the schedule.
+ *
+ * A schedule that could not be understood is a QUESTION, never a guess: this
+ * fires forever, so reading "morning" as 9am and being wrong repeats daily
+ * until somebody notices. Both the cron and the plain-English paths go through
+ * the same validator, so the cost floor applies either way.
+ */
+app.post("/api/harvey/tasks", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+  const raw = typeof body.cron === "string" && body.cron.trim()
+    ? body.cron.trim()
+    : typeof body.when === "string" ? body.when.trim() : "";
+  if (!title || !prompt) { res.status(400).json({ error: "title and prompt are both required." }); return; }
+  if (!raw) { res.status(400).json({ error: "Say when it should run — a cron expression or plain English." }); return; }
+  try {
+    const { previewSchedule } = await import("./hull/scheduleTools.js");
+    const { DEFAULT_TIMEZONE } = await import("./hull/cron.js");
+    const timezone = typeof body.timezone === "string" && body.timezone.trim() ? body.timezone.trim() : DEFAULT_TIMEZONE;
+    const preview = previewSchedule(raw, timezone);
+    if (!preview.ok || !preview.cron) {
+      res.status(400).json({ error: preview.error || "That is not a schedule I can run.", examples: preview.examples });
+      return;
+    }
+    const { createTask } = await import("./core/harveyTaskStore.js");
+    const actor = await currentSessionUser(req);
+    const deliver = ["chat", "sms", "email", "none"].includes(String(body.deliver))
+      ? (String(body.deliver) as import("./core/harveyTaskStore.js").TaskDelivery)
+      : "chat";
+    const task = createTask({
+      title,
+      prompt,
+      cron: preview.cron,
+      timezone,
+      deliver,
+      sessionId: typeof body.sessionId === "string" ? body.sessionId.trim() || null : null,
+      createdBy: actor?.name || null,
+    });
+    res.status(201).json({ ok: true, task });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/tasks] create failed:", detail);
+    res.status(500).json({ error: `Could not save that task: ${detail}` });
+  }
+});
+
+/** Pause, resume, reword or reschedule one task. */
+app.patch("/api/harvey/tasks/:id", express.json({ limit: "64kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const id = String(req.params.id || "").trim();
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  try {
+    const { getTask, updateTask } = await import("./core/harveyTaskStore.js");
+    const existing = getTask(id);
+    if (!existing) { res.status(404).json({ error: "No such scheduled task." }); return; }
+
+    const patch: import("./core/harveyTaskStore.js").UpdateTaskInput = {};
+    if (typeof body.enabled === "boolean") patch.enabled = body.enabled;
+    if (typeof body.title === "string" && body.title.trim()) patch.title = body.title.trim();
+    if (typeof body.prompt === "string" && body.prompt.trim()) patch.prompt = body.prompt.trim();
+    if (["chat", "sms", "email", "none"].includes(String(body.deliver))) {
+      patch.deliver = String(body.deliver) as import("./core/harveyTaskStore.js").TaskDelivery;
+    }
+    if (typeof body.timezone === "string" && body.timezone.trim()) patch.timezone = body.timezone.trim();
+
+    const raw = typeof body.cron === "string" && body.cron.trim()
+      ? body.cron.trim()
+      : typeof body.when === "string" ? body.when.trim() : "";
+    if (raw) {
+      const { previewSchedule } = await import("./hull/scheduleTools.js");
+      const preview = previewSchedule(raw, patch.timezone || existing.timezone);
+      if (!preview.ok || !preview.cron) {
+        res.status(400).json({ error: preview.error || "That is not a schedule I can run.", examples: preview.examples });
+        return;
+      }
+      patch.cron = preview.cron;
+    }
+
+    const task = updateTask(id, patch);
+    if (!task) { res.status(404).json({ error: "No such scheduled task." }); return; }
+    res.json({ ok: true, task });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/tasks] update failed:", detail);
+    res.status(500).json({ error: `Could not update that task: ${detail}` });
+  }
+});
+
+app.delete("/api/harvey/tasks/:id", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const id = String(req.params.id || "").trim();
+  try {
+    const { deleteTask } = await import("./core/harveyTaskStore.js");
+    if (!deleteTask(id)) { res.status(404).json({ error: "No such scheduled task." }); return; }
+    res.json({ ok: true });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/tasks] delete failed:", detail);
+    res.status(500).json({ error: `Could not delete that task: ${detail}` });
+  }
+});
+
+/** Run one now. Same code path as the ticker, so testing a schedule means
+    something — including the approval gate, which stays armed. */
+app.post("/api/harvey/tasks/:id/run", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const id = String(req.params.id || "").trim();
+  try {
+    const { getTask } = await import("./core/harveyTaskStore.js");
+    if (!getTask(id)) { res.status(404).json({ error: "No such scheduled task." }); return; }
+    const { runTaskNow } = await import("./hull/taskScheduler.js");
+    const result = await runTaskNow(id, "manual");
+    res.json({ ok: result.ok, runId: result.runId, output: result.output, error: result.error, costUsd: result.costUsd });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/tasks] run failed:", detail);
+    res.status(500).json({ error: `That run could not be started: ${detail}` });
+  }
+});
+
+/** Run history: what happened, what it cost, and why it stopped. */
+app.get("/api/harvey/tasks/:id/runs", async (req, res) => {
+  if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const id = String(req.params.id || "").trim();
+  try {
+    const { getTask, listRuns } = await import("./core/harveyTaskStore.js");
+    const task = getTask(id);
+    if (!task) { res.status(404).json({ error: "No such scheduled task." }); return; }
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 200);
+    res.json({ runs: listRuns(id, limit) });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[harvey/tasks] runs failed:", detail);
+    res.status(500).json({ error: `Could not read that run history: ${detail}` });
   }
 });
 
@@ -18499,6 +19151,19 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   } catch (err) {
     console.error("[push] init failed:", err);
   }
+  /* Harvey's scheduled tasks. The ticker owns no state — it asks
+     /data/harvey-tasks.db what is due — so starting it here is enough, and a
+     store that cannot be opened must not take the whole server down with it. */
+  void (async () => {
+    try {
+      const { startTaskScheduler } = await import("./hull/taskScheduler.js");
+      /* It logs its own line: how many tasks it scheduled, or that the kill
+         switch is on. */
+      startTaskScheduler();
+    } catch (err) {
+      console.error("[HarveyCron] scheduler failed to start — nothing is running on a clock:", err);
+    }
+  })();
   try {
     // Scheduled texts/emails. The queue lives on the /data volume, so
     // anything still pending across a deploy is picked up on the next tick.
