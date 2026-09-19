@@ -144,6 +144,15 @@ export interface AgentLoopResult {
   approvals?: PendingApproval[];
   /** Set when the spend cap stopped the turn, so the caller can say so exactly. */
   budgetRefused?: string;
+  /**
+   * Set when no model could be reached.
+   *
+   * A live chat shows the sentence and moves on, but an unattended caller has to
+   * know this was a FAILURE: without it, a scheduled task whose provider is down
+   * records a successful run whose deliverable is an apology, and the task list
+   * reads healthy while the report never arrives.
+   */
+  modelError?: string;
 }
 
 /** Live progress for a streaming caller. Text still arrives via `onToken`. */
@@ -468,6 +477,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         completionTokens,
         contextPlan: lastPlan,
         approvals: heldApprovals,
+        modelError: detail,
       };
     }
 

@@ -77,12 +77,16 @@ export async function runTaskNow(
        ledger is the row the provider actually billed. */
     const costUsd = sessionCostUsd(sessionId);
 
-    /* A run stopped by the spend cap is a FAILURE, not a quiet success with an
-       apology in the output — otherwise a task silently degrades to sending
-       "I had to stop partway" every morning and looks healthy in the list. */
-    if (result.budgetRefused) {
-      finishRun(run.id, task.id, { ok: false, costUsd, error: result.budgetRefused });
-      return { ok: false, runId: run.id, error: result.budgetRefused, costUsd };
+    /* A run stopped by the spend cap or a provider outage is a FAILURE, not a
+       quiet success with an apology in the output. The agent loop deliberately
+       answers with a sentence rather than throwing — right for a live chat,
+       wrong here, because a task that records "ok" every morning while
+       delivering "I could not reach a model" looks healthy in the list and
+       never trips the pause. */
+    const failure = result.budgetRefused || result.modelError;
+    if (failure) {
+      finishRun(run.id, task.id, { ok: false, costUsd, error: failure });
+      return { ok: false, runId: run.id, error: failure, costUsd };
     }
 
     const held = result.approvals?.length
