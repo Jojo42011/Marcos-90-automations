@@ -90,6 +90,16 @@
     if (n == null) return "—";
     return "$" + n.toFixed(places == null ? 2 : places);
   }
+  /** Sub-dollar amounts need the extra places; larger ones read as noise. */
+  function costText(v) {
+    var n = firstNum(v);
+    if (n == null) return "—";
+    return "$" + n.toFixed(n >= 1 ? 2 : 4);
+  }
+  function count(v) {
+    var n = num(v);
+    return n == null ? "—" : n.toLocaleString();
+  }
   function dateText(v) {
     if (!v) return "—";
     var d = new Date(v);
@@ -761,7 +771,7 @@
         var cost = num(firstNum(u.costUsd, u.cost));
         if (cost != null) bits.push("$" + cost.toFixed(4));
         var pt = num(u.promptTokens), ct = num(u.completionTokens);
-        if (pt != null || ct != null) bits.push((pt || 0) + " in / " + (ct || 0) + " out tok");
+        if (pt != null || ct != null) bits.push(count(pt || 0) + " in / " + count(ct || 0) + " out tokens");
         if (!bits.length) return;
         metaWrap.textContent = bits.join(" · ");
         if (u.contextPlan) {
@@ -1215,14 +1225,14 @@
     html += '<div class="panel"><h2>By model</h2>' + simpleTable(
       ["Model", "Calls", "Tokens", "Cost"],
       (d.byModel || []).map(function (row) {
-        return [shortModel(row.model), num(row.calls), num(row.tokens), money(firstNum(row.costUsd, row.cost), 4)];
+        return [shortModel(row.model), count(row.calls), count(row.tokens), costText(firstNum(row.costUsd, row.cost))];
       }),
       "No model usage recorded yet."
     ) + "</div>";
 
     html += '<div class="panel"><h2>By job</h2>' + simpleTable(
       ["Job", "Calls", "Cost"],
-      (d.byJob || []).map(function (row) { return [row.job, num(row.calls), money(firstNum(row.costUsd, row.cost), 4)]; }),
+      (d.byJob || []).map(function (row) { return [row.job, count(row.calls), costText(firstNum(row.costUsd, row.cost))]; }),
       "No job usage recorded yet."
     ) + "</div>";
 

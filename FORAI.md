@@ -28,6 +28,14 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- [2026-09-19] — **Harvey chat surface, built ahead of its backend** (`public/harvey.html` NEW, `public/harvey-chat.js` NEW, `scripts/verify-harvey-ui.mjs` NEW).
+
+  A ChatGPT-shaped operator surface for Harvey, written against the HTTP contract in `docs/harvey-model-layer.md`: streaming `POST /api/harvey/chat` (SSE `token`/`tool`/`approval`/`usage`/`done`/`error`), a model picker in the composer backed by `GET /api/harvey/models`, conversations, `GET /api/harvey/usage` with caps and a CSS bar chart, `GET /api/harvey/tasks` for scheduled work, and Approve/Deny cards posting to `/api/harvey/approvals/:id/*`. Plain HTML/CSS/JS, no build step, no dependencies. Separate from `jarvis.html`, which keeps the HUD.
+
+  **None of those endpoints exist yet** — this page ships first on purpose. Every call treats 404 as "not wired up" and names the missing endpoint on screen; chat falls back to `POST /api/jarvis/chat` (`full:true` → `speech`) and says so in a banner, with the model pill disabled because it cannot work on that path. No placeholder conversations, spend or tasks anywhere; `scripts/verify-harvey-ui.mjs` fails the check if any appear.
+
+  **Still needed from the server side:** a `GET /harvey` route (`res.sendFile(public/harvey.html)`, behind `requireAuthPage` like its neighbours) and a `shell.html` tab entry. Until then the page is only reachable at `/harvey.html` through `express.static`.
+
 - [2026-09-16c] — **CRM Command Center "doable now": honesty pass, no new vendor APIs** (`public/crm-brivity.html`, `src/core/websiteWebhook.ts` NEW, `src/core/lockdown.ts`, `src/server.ts`, `src/harvey/perception.ts`, `scripts/verify-crm-command-center.mjs` NEW, `_env`).
 
   **Removed fabrications.** The Opportunities rail (`data-view="opps"`) and its invented OPPS list are gone — opportunity types (Expired, FSBO, Pre-Foreclosure, Off-Market, Withdrawn, Canceled) are real CRM tags on the contact profile, added via the existing tag path. The Transactions seed loop (`TX_DIST`) is gone; `TX` starts `[]` and only fills from `/api/transactions` or import. Empty state says no import yet, not fake GCI. Finance overview says the same when the board is empty.
