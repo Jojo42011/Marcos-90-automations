@@ -141,3 +141,54 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # Comma-separated, case-insensitive, matched as a substring of the device name
 # set in the extension popup. Default "marco" — it is his system.
 # BROWSER_DEVICE_PRIORITY=marco,wesley
+
+# ── Harvey model layer ────────────────────────────────────────────────────────
+# ONE KEY, EVERY MODEL. OpenRouter is OpenAI-compatible and fronts OpenAI,
+# Anthropic, Google and ~400 other models behind a single key, which is the
+# entire reason it is the primary: the alternative is a separate key, client and
+# billing relationship per vendor. It also returns the real cost of every request
+# in the response body, so Harvey's spend is MEASURED rather than estimated from
+# a price table that drifts.
+#
+# Unset = Harvey falls back to the direct Anthropic client and the model picker
+# offers only the Anthropic models ANTHROPIC_API_KEY can reach. Nothing breaks;
+# the picker is just short.
+# OPENROUTER_API_KEY=
+# Optional attribution headers shown on OpenRouter's dashboard.
+# OPENROUTER_APP_URL=https://marco-90-automation.fly.dev
+# OPENROUTER_APP_TITLE=Marco Command Center
+
+# Per-job model overrides. The UI writes these to the database instead, so these
+# are only for pinning a model at the environment level.
+# Jobs: CHAT_FAST, CHAT_DEEP, AGENT, SUMMARIZE, EXTRACT, CLASSIFY, VISION, SCHEDULE
+# HARVEY_MODEL_CHAT_DEEP=anthropic/claude-sonnet-4.6
+# HARVEY_MODEL_CHAT_FAST=google/gemini-3.8-flash
+
+# SPEND CAPS. Checked BEFORE the network call, because an un-made request is the
+# only one guaranteed to be free. Over the cap, Harvey refuses and says so; near
+# it, cheap jobs degrade to the cheapest model rather than failing.
+# HARVEY_DAILY_CAP_USD=10
+# HARVEY_MONTHLY_CAP_USD=150
+# HARVEY_MAX_COST_PER_CALL_USD=0.50
+
+# CONTEXT REGULATION (context rot). A model's advertised context window is not
+# the budget: quality degrades well before the limit and every token is billed.
+# So the input budget is a fraction of the window with a hard ceiling, and
+# history is trimmed and tool output compacted before the request is built.
+# HARVEY_PRE_ROT_RATIO=0.5
+# HARVEY_CONTEXT_CEILING_TOKENS=60000
+
+# APPROVAL GATE. On by default. Anything that reaches a real person, spends
+# money or cannot be undone stops and waits for an Approve/Deny click — enforced
+# in front of the executor, not in the prompt.
+# HARVEY_APPROVAL_REQUIRED=true
+# Strict also holds medium-risk calls (browser clicks, file writes, paid jobs).
+# HARVEY_APPROVAL_STRICT=false
+
+# SCHEDULED TASKS. Harvey can put his own work on a cron from chat.
+# HARVEY_CRON_ENABLED=true
+# Floor on how often a schedule may fire. Each run is a paid agent turn, so
+# "* * * * *" is 1,440 of them a day and is refused at parse time.
+# HARVEY_CRON_MIN_INTERVAL_MINUTES=15
+# HARVEY_TASKS_DB_PATH=    # defaults to /data/harvey-tasks.db
+# AI_USAGE_DB_PATH=        # defaults to /data/ai-usage.db
