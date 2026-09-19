@@ -11,6 +11,7 @@ import { upsertNode, findSimilarNode } from "./memory/nodes.js";
 import { resolveWhatsAppTarget, sendWhatsAppViaGateway } from "./whatsappSend.js";
 import { isGmailConfigured, sendEmail } from "../integrations/gmail/index.js";
 import { analyzeReelViaOpenShorts } from "../integrations/openshorts/index.js";
+import { SCHEDULE_TOOL_DEFINITIONS, SCHEDULE_TOOL_NAMES, executeScheduleTool } from "./scheduleTools.js";
 import {
   clampTraits,
   getPersonaTraits,
@@ -180,6 +181,7 @@ export function getHullToolDefinitions(opts?: { whatsappSend?: boolean }): Tool[
   const tools = [
     ...HARVEY_TOOL_DEFINITIONS,
     ...MEMORY_TOOLS,
+    ...SCHEDULE_TOOL_DEFINITIONS,
     ANALYZE_REEL_TOOL,
     TUNE_PERSONALITY_TOOL,
     CHANGE_AGENT_LOGIC_TOOL,
@@ -199,6 +201,10 @@ export function getHullToolDefinitions(opts?: { whatsappSend?: boolean }): Tool[
 }
 
 export async function executeHullTool(name: string, input: Record<string, unknown>): Promise<unknown> {
+  /* Scheduling is checked first because these names are unambiguous and the
+     dispatch below is a long if-chain; there is no reason to walk it. */
+  if (SCHEDULE_TOOL_NAMES.has(name)) return executeScheduleTool(name, input);
+
   if (name === "tune_personality") {
     if (input.reset === true) {
       return { ok: true, traits: resetPersonaTraits(), note: "Personality restored to defaults." };

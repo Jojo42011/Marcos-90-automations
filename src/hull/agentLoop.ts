@@ -4,6 +4,21 @@ import { buildFounderSystemPrompt } from "./founderPrompt.js";
 import { HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT } from "../harvey/index.js";
 import { getAethonModel, getHaikuModel, getMaxTokens, isSocialTurn, needsSonnet } from "./modelRouting.js";
 import {
+  heldToolResultText,
+  needsApproval,
+  requestApproval,
+  type PendingApproval,
+} from "./approval.js";
+import {
+  BudgetRefusedError,
+  complete,
+  ModelLayerError,
+  providerStatus,
+  type CompletionOutcome,
+  type ContextPlan,
+  type ModelJob,
+} from "./providers/index.js";
+import {
   buildConversationState,
   buildRetrievalQuery,
   getConversationSummary,
@@ -117,7 +132,25 @@ export interface AgentLoopResult {
   toolRounds: number;
   model: string;
   clarification?: boolean;
+  /** The model that actually ran, which may be a fallback rather than the ask. */
+  modelUsed?: string;
+  /** Total spend for this turn, summed across every step. */
+  costUsd?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  /** How context was budgeted on the final step, for the "why did it forget" question. */
+  contextPlan?: ContextPlan;
+  /** Tool calls held for approval. The turn completed; these did NOT run. */
+  approvals?: PendingApproval[];
+  /** Set when the spend cap stopped the turn, so the caller can say so exactly. */
+  budgetRefused?: string;
 }
+
+/** Live progress for a streaming caller. Text still arrives via `onToken`. */
+export type AgentLoopEvent =
+  | { type: "tool"; name: string; status: "running" | "done" | "error"; detail?: string }
+  | { type: "approval"; approval: PendingApproval }
+  | { type: "usage"; model: string; promptTokens: number; completionTokens: number; costUsd: number };
 
 export interface AgentLoopOptions {
   message: string;
@@ -139,6 +172,23 @@ export interface AgentLoopOptions {
    *  full knowledge of the system (leads, finance, DMs, content, memory…). */
   fullMode?: boolean;
   onToken?: (token: string) => void;
+  /** Tool activity, held approvals and per-step spend, for a streaming caller. */
+  onEvent?: (event: AgentLoopEvent) => void;
+  /**
+   * Which routing slot pays for this turn. Defaults are derived from the mode
+   * flags above, so existing callers keep their old model behaviour.
+   */
+  job?: ModelJob;
+  /** Operator's explicit pick from the model picker. Beats routing. */
+  modelOverride?: string;
+  /**
+   * Force the approval gate on regardless of environment configuration. Used by
+   * scheduled runs: nobody is watching a 3am cron, so it may draft an email but
+   * must not send one.
+   */
+  approvalMode?: "on" | "default";
+  /** Refuse rather than spend more than this on the whole turn. */
+  maxCostUsd?: number;
 }
 
 function stripMarkdownForSpeech(text: string): string {
@@ -162,16 +212,18 @@ function finalizeSpeech(text: string, opts: AgentLoopOptions, hadToolOnly: boole
 }
 
 export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopResult> {
-  const key = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!key) {
+  /* Either key is enough now. OpenRouter reaches every model with one
+     credential; direct Anthropic remains a complete path on its own. */
+  const keys = providerStatus();
+  if (!keys.primary) {
     return {
-      speech: "Anthropic API key not configured.",
+      speech:
+        "No model provider is configured. Set OPENROUTER_API_KEY (one key, every model) or ANTHROPIC_API_KEY on the server.",
       toolRounds: 0,
       model: "none",
     };
   }
 
-  const client = new Anthropic({ apiKey: key });
   const timedHistory = opts.timedHistory ?? [];
   /* A pure pleasantry attaches no tools and runs on the fast model — the
      operational prompt half is dead weight on exactly the turns that need to
@@ -193,9 +245,12 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     /\b(lead|client|deal|listing|marco|tiktok|mojo|brivity|canyon|price|funnel)\b/i.test(opts.message);
 
   if (!opts.voiceMode && confidence < 0.15 && count < 3 && businessSpecific) {
-    const clar = await client.messages.create({
-      model: getHaikuModel(),
-      max_tokens: 200,
+    /* A one-line clarification is the cheapest thing Harvey ever does, so it
+       runs on the `classify` slot rather than whatever the chat is set to. */
+    const clar = await complete({
+      job: "classify",
+      sessionId: opts.sessionId,
+      maxTokens: 200,
       messages: [
         {
           role: "user",
@@ -203,26 +258,32 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         },
       ],
     });
-    const q = extractAssistantText(clar.content);
-    return { speech: q, toolRounds: 0, model: getHaikuModel(), clarification: true };
+    return {
+      speech: clar.text,
+      toolRounds: 0,
+      model: clar.resolved.model,
+      modelUsed: clar.modelUsed,
+      costUsd: clar.usage.costUsd,
+      promptTokens: clar.usage.promptTokens,
+      completionTokens: clar.usage.completionTokens,
+      clarification: true,
+    };
   }
 
   /* Tool gating is decided BEFORE the prompt is built, because the prompt's
      operational half only attaches when tools do (CORE/OPERATIONAL split). */
-  const model = socialTurn
-    ? getHaikuModel()
-    : opts.fullMode
-    ? getAethonModel()
-    : opts.fastMode
-    ? getHaikuModel()
-    : opts.voiceMode
-      ? getHaikuModel()
-      : needsSonnet(opts.message)
-        ? getAethonModel()
-        : getHaikuModel();
+  /* The DEEP/FAST decision is unchanged — same triggers, same precedence. What
+     changed is only who runs it: `job` names a routing slot the operator can
+     repoint at any model, while `model` stays the legacy id so tool gating and
+     the existing logs read exactly as before. */
+  const wantsDeep =
+    !socialTurn &&
+    (Boolean(opts.fullMode) || (!opts.fastMode && !opts.voiceMode && needsSonnet(opts.message)));
+  const job: ModelJob = opts.job ?? (wantsDeep ? "chat_deep" : "chat_fast");
+  const model = wantsDeep ? getAethonModel() : getHaikuModel();
   const messages: MessageParam[] = [...(opts.history || []), { role: "user", content: opts.message }];
   const hullTools = getHullToolDefinitions({ whatsappSend: opts.ownerMode });
-  const sonnetTools = !opts.fastMode && model === getAethonModel();
+  const sonnetTools = !opts.fastMode && wantsDeep;
   const ownerWhatsAppTools = opts.fastMode && opts.ownerMode;
   const voiceTools = Boolean(opts.voiceMode) && !opts.fastMode;
   const emailIntent =
@@ -285,6 +346,15 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   let hadToolOnly = false;
   /* How many times each identical call has been made this turn. */
   const callCounts = new Map<string, number>();
+  /* Calls held by the gate. The turn still finishes; these did not run. */
+  const heldApprovals: PendingApproval[] = [];
+  /* Spend accumulates across every step, because one turn can be sixteen calls
+     and the per-call number is not what anybody wants to know. */
+  let costUsd = 0;
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let lastPlan: ContextPlan | undefined;
+  let lastModelUsed = model;
 
   const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : MAX_AGENT_STEPS;
 
@@ -307,10 +377,32 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         detail: `You have already called ${name} with these exact arguments ${seen - 1} times this turn. The answer will not change. Use what you already have, and if it is genuinely empty say so plainly rather than searching again.`,
       };
     }
+
+    /* THE GATE. Anything that reaches a real person, spends money or cannot be
+       undone stops here and waits for a human, and the model is told plainly
+       that it did not run. This is in front of the executor rather than in the
+       prompt because a model that misreads the instruction sends the email
+       anyway, and there is no undo on a sent email.
+
+       A scheduled run passes `approvalMode: "on"` so an unattended task cannot
+       inherit a relaxed environment setting. */
+    const gated = opts.approvalMode === "on" ? true : needsApproval(name, input);
+    if (gated) {
+      const approval = requestApproval({ tool: name, args: input, sessionId: opts.sessionId ?? null });
+      heldApprovals.push(approval);
+      opts.onEvent?.({ type: "approval", approval });
+      return { held_for_approval: true, detail: heldToolResultText(approval) };
+    }
+
+    opts.onEvent?.({ type: "tool", name, status: "running" });
     try {
-      return await executeHullTool(name, input);
+      const result = await executeHullTool(name, input);
+      opts.onEvent?.({ type: "tool", name, status: "done" });
+      return result;
     } catch (err) {
-      return { error: err instanceof Error ? err.message : String(err) };
+      const detail = err instanceof Error ? err.message : String(err);
+      opts.onEvent?.({ type: "tool", name, status: "error", detail });
+      return { error: detail };
     }
   };
 
@@ -325,85 +417,107 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         "\n\nFINAL ROUND: no more tool calls are available this turn. Answer Marco now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
       : system;
 
-    if (opts.onToken) {
-      const stream = client.messages.stream({
-        model,
-        max_tokens: maxTokens,
+    let out: CompletionOutcome;
+    try {
+      out = await complete({
+        job,
+        modelOverride: opts.modelOverride,
         system: stepSystem,
         messages,
         tools: stepTools,
+        maxTokens,
+        sessionId: opts.sessionId,
+        onToken: opts.onToken,
+        /* The ceiling is for the WHOLE turn, so each step is offered only what
+           is left of it. Sixteen steps each allowed the full budget would be
+           sixteen times the number the operator set. */
+        maxCostUsd:
+          opts.maxCostUsd !== undefined ? Math.max(0, opts.maxCostUsd - costUsd) : undefined,
       });
-
-      let full = "";
-      const finalMsg = await new Promise<Anthropic.Messages.Message>((resolve, reject) => {
-        stream.on("text", (t) => {
-          full += t;
-          opts.onToken?.(t);
-        });
-        stream
-          .finalMessage()
-          .then(resolve)
-          .catch(reject);
-      });
-
-      if (finalMsg.stop_reason !== "tool_use") {
-        const text = full.trim() || extractAssistantText(finalMsg.content);
-        return { speech: finalizeSpeech(text, opts, hadToolOnly), toolRounds, model };
+    } catch (err) {
+      /* Two failures worth telling apart. The cap is a decision this system
+         made and can be raised; everything else is an outage. Both end the turn
+         with a sentence rather than an exception reaching the transport. */
+      if (err instanceof BudgetRefusedError) {
+        const reason = err.verdict.reason || "The AI spend cap has been reached.";
+        return {
+          speech:
+            toolRounds > 0
+              ? `I had to stop partway: ${reason}`
+              : reason,
+          toolRounds,
+          model,
+          modelUsed: lastModelUsed,
+          costUsd,
+          promptTokens,
+          completionTokens,
+          contextPlan: lastPlan,
+          approvals: heldApprovals,
+          budgetRefused: reason,
+        };
       }
-
-      const toolUseBlocks = finalMsg.content.filter((b) => b.type === "tool_use");
-      hadToolOnly = toolUseBlocks.length > 0 && !full.trim();
-      const toolResults = await Promise.all(
-        toolUseBlocks.map(async (tu) => {
-          const input =
-            tu.input && typeof tu.input === "object" && !Array.isArray(tu.input)
-              ? (tu.input as Record<string, unknown>)
-              : {};
-          return {
-            type: "tool_result" as const,
-            tool_use_id: tu.id,
-            content: toolResultContent(await runTool(tu.name, input)),
-          };
-        }),
-      );
-      messages.push({ role: "assistant", content: finalMsg.content });
-      messages.push({ role: "user", content: toolResults });
-      toolRounds++;
-      continue;
-    }
-
-    const response = await client.messages.create({
-      model,
-      max_tokens: maxTokens,
-      system: stepSystem,
-      messages,
-      tools: stepTools,
-    });
-
-    if (response.stop_reason !== "tool_use") {
+      const detail = err instanceof ModelLayerError ? err.summary : err instanceof Error ? err.message : String(err);
+      console.error("[agentLoop] model call failed:", detail);
       return {
-        speech: finalizeSpeech(extractAssistantText(response.content), opts, hadToolOnly),
+        speech: `I could not reach a model just now. ${detail}`,
         toolRounds,
         model,
+        modelUsed: lastModelUsed,
+        costUsd,
+        promptTokens,
+        completionTokens,
+        contextPlan: lastPlan,
+        approvals: heldApprovals,
       };
     }
 
-    const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
-    hadToolOnly = true;
+    costUsd += out.usage.costUsd;
+    promptTokens += out.usage.promptTokens;
+    completionTokens += out.usage.completionTokens;
+    lastPlan = out.contextPlan;
+    lastModelUsed = out.modelUsed;
+    opts.onEvent?.({
+      type: "usage",
+      model: out.modelUsed,
+      promptTokens: out.usage.promptTokens,
+      completionTokens: out.usage.completionTokens,
+      costUsd: out.usage.costUsd,
+    });
+
+    if (!out.toolUses.length) {
+      return {
+        speech: finalizeSpeech(out.text, opts, hadToolOnly),
+        toolRounds,
+        model,
+        modelUsed: out.modelUsed,
+        costUsd,
+        promptTokens,
+        completionTokens,
+        contextPlan: out.contextPlan,
+        approvals: heldApprovals,
+      };
+    }
+
+    hadToolOnly = !out.text.trim();
+
     const toolResults = await Promise.all(
-      toolUseBlocks.map(async (tu) => {
-        const input =
-          tu.input && typeof tu.input === "object" && !Array.isArray(tu.input)
-            ? (tu.input as Record<string, unknown>)
-            : {};
-        return {
-          type: "tool_result" as const,
-          tool_use_id: tu.id,
-          content: toolResultContent(await runTool(tu.name, input)),
-        };
-      }),
+      out.toolUses.map(async (tu) => ({
+        type: "tool_result" as const,
+        tool_use_id: tu.id,
+        content: toolResultContent(await runTool(tu.name, tu.input || {})),
+      })),
     );
-    messages.push({ role: "assistant", content: response.content });
+
+    /* Rebuild the assistant turn in Anthropic's block shape. The tool loop
+       requires the tool_use blocks to be echoed back verbatim alongside their
+       results, whichever provider actually produced them. */
+    const assistantContent: Anthropic.Messages.ContentBlockParam[] = [];
+    if (out.text.trim()) assistantContent.push({ type: "text", text: out.text });
+    for (const tu of out.toolUses) {
+      assistantContent.push({ type: "tool_use", id: tu.id, name: tu.name, input: tu.input });
+    }
+
+    messages.push({ role: "assistant", content: assistantContent });
     messages.push({ role: "user", content: toolResults });
     toolRounds++;
   }
@@ -416,6 +530,12 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     speech: "I ran out of room to keep digging on that one. Ask me for the specific piece you need and I'll go straight at it.",
     toolRounds,
     model,
+    modelUsed: lastModelUsed,
+    costUsd,
+    promptTokens,
+    completionTokens,
+    contextPlan: lastPlan,
+    approvals: heldApprovals,
   };
 }
 

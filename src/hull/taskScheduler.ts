@@ -65,18 +65,31 @@ export async function runTaskNow(
       message: taskPrompt(task),
       sessionId,
       fullMode: true,
+      job: "agent",
       /* Scheduled work is unattended, so the gate stays on regardless of how a
          live chat happens to be configured. */
       approvalMode: "on",
       maxCostUsd: task.maxCostUsd,
-      job: "agent",
-    } as never);
+    });
 
-    const output = typeof (result as { speech?: string })?.speech === "string"
-      ? (result as { speech: string }).speech
-      : String((result as { text?: string })?.text || "");
-
+    /* Cost is read back from the usage ledger by session rather than trusted
+       from the return value: a turn that died partway still spent money, and the
+       ledger is the row the provider actually billed. */
     const costUsd = sessionCostUsd(sessionId);
+
+    /* A run stopped by the spend cap is a FAILURE, not a quiet success with an
+       apology in the output — otherwise a task silently degrades to sending
+       "I had to stop partway" every morning and looks healthy in the list. */
+    if (result.budgetRefused) {
+      finishRun(run.id, task.id, { ok: false, costUsd, error: result.budgetRefused });
+      return { ok: false, runId: run.id, error: result.budgetRefused, costUsd };
+    }
+
+    const held = result.approvals?.length
+      ? `\n\n(${result.approvals.length} action${result.approvals.length === 1 ? "" : "s"} waiting on your approval.)`
+      : "";
+    const output = `${result.speech}${held}`;
+
     const { paused } = finishRun(run.id, task.id, { ok: true, costUsd, output });
     if (paused) console.warn(`[HarveyCron] task ${task.id} paused after repeated failures`);
     return { ok: true, runId: run.id, output, costUsd };
