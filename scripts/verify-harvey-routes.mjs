@@ -32,7 +32,8 @@
  * Expects a built dist/ (npm run build).
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
+import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -70,9 +71,107 @@ function baseEnv(port, extra = {}) {
     HARVEY_CRON_ENABLED: "false",
     ...extra,
   };
-  delete env.OPENROUTER_API_KEY;
+  if (!extra.OPENROUTER_API_KEY) delete env.OPENROUTER_API_KEY;
   delete env.ANTHROPIC_API_KEY;
+  /* Memory retrieval reaches OpenAI for embeddings when this is set. It falls
+     back to keyword scoring without it, which is what this suite wants: no
+     outbound call of any kind. */
+  delete env.OPENAI_API_KEY;
+  /* Belt and braces around the approval test, which approves a real tool call:
+     with these blank, `gmail_send` and the SMS path cannot reach anybody even
+     if a stray credential is sitting in the environment. */
+  for (const k of [
+    "GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN",
+    "GMAIL_SMTP_USER", "GMAIL_SMTP_APP_PASSWORD", "TWILIO_AUTH_TOKEN", "QUO_API_KEY",
+  ]) env[k] = "";
   return env;
+}
+
+/**
+ * A local stand-in for OpenRouter.
+ *
+ * The approval gate can only be exercised end-to-end if a model actually asks
+ * for a tool, so one is faked here rather than skipped: round one returns a
+ * `delete_file` call, round two (once a tool result is in the messages) returns
+ * a sentence. Speaks the same OpenAI-shaped wire format, streamed or not, so
+ * what is under test is the real provider client.
+ *
+ * It listens on loopback and its "key" is a local string. No request leaves
+ * this machine and nothing here is a credential.
+ */
+function startStubProvider(port, state) {
+  const server = http.createServer((req, res) => {
+    let raw = "";
+    req.on("data", (c) => (raw += c));
+    req.on("end", () => {
+      let body = {};
+      try {
+        body = JSON.parse(raw || "{}");
+      } catch {
+        /* handled below as a round-one request */
+      }
+      const messages = Array.isArray(body.messages) ? body.messages : [];
+      state.requests++;
+      const answered = messages.some((m) => m.role === "tool");
+      const lastUser = [...messages].reverse().find((m) => m.role === "user");
+      const target = /spared/.test(JSON.stringify(lastUser?.content || "")) ? "spared.txt" : "doomed.txt";
+      const usage = { prompt_tokens: 1200, completion_tokens: 40, cost: 0.0021 };
+
+      if (!body.stream) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            model: "stub/model",
+            choices: [
+              answered
+                ? { index: 0, message: { role: "assistant", content: "Done — it is waiting on you." }, finish_reason: "stop" }
+                : {
+                    index: 0,
+                    message: {
+                      role: "assistant",
+                      content: "",
+                      tool_calls: [
+                        { id: "call_1", type: "function", function: { name: "delete_file", arguments: JSON.stringify({ path: target }) } },
+                      ],
+                    },
+                    finish_reason: "tool_calls",
+                  },
+            ],
+            usage,
+          }),
+        );
+        return;
+      }
+
+      res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
+      const frame = (o) => res.write(`data: ${JSON.stringify(o)}\n\n`);
+      frame({ model: "stub/model", choices: [{ index: 0, delta: { role: "assistant" } }] });
+      if (answered) {
+        for (const piece of ["That file is ", "waiting on your approval."]) {
+          frame({ choices: [{ index: 0, delta: { content: piece } }] });
+        }
+        frame({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] });
+      } else {
+        frame({
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  { index: 0, id: "call_1", type: "function", function: { name: "delete_file", arguments: JSON.stringify({ path: target }) } },
+                ],
+              },
+            },
+          ],
+        });
+        frame({ choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] });
+      }
+      frame({ model: "stub/model", usage, choices: [] });
+      res.write("data: [DONE]\n\n");
+      res.end();
+    });
+  });
+  return new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve(server)));
 }
 
 async function boot(port, extra) {
@@ -116,6 +215,8 @@ const anon = (p) => `${BASE}${p}`;
 
 let locked = null;
 let unlocked = null;
+let stubbed = null;
+let stub = null;
 try {
   console.log("\nBOOT — the real server, no provider key");
   locked = await boot(PORT);
@@ -476,12 +577,136 @@ try {
   const shell = await (await fetch(`http://127.0.0.1:${PORT2}/shell?token=${TOKEN}`)).text();
   ok("the shell offers it as a tab", /key: "harvey-chat"/.test(shell) && /src: "\/harvey"/.test(shell));
   ok("the tab sits right after Chat with Harvey", shell.indexOf('key: "chat"') < shell.indexOf('key: "harvey-chat"') && shell.indexOf('key: "harvey-chat"') < shell.indexOf('key: "crm"'));
+  unlocked.child.kill("SIGTERM");
+  unlocked = null;
+
+  /* ── 9. a real turn, with a model that asks to delete a file ──────── */
+  console.log("\nTOOLS & APPROVALS — a held call, and the click that runs it");
+  const workspace = path.join(tmp, "workspace");
+  mkdirSync(workspace, { recursive: true });
+  const doomed = path.join(workspace, "doomed.txt");
+  const spared = path.join(workspace, "spared.txt");
+  writeFileSync(doomed, "this file is the proof that approving executes");
+  writeFileSync(spared, "this file is the proof that denying does not");
+
+  const STUB_PORT = PORT + 2;
+  const PORT3 = PORT + 3;
+  const stubState = { requests: 0 };
+  stub = await startStubProvider(STUB_PORT, stubState);
+  stubbed = await boot(PORT3, {
+    /* Local loopback, not a credential: the "provider" is the stub above. */
+    OPENROUTER_API_KEY: "stub-local-loopback-only",
+    OPENROUTER_BASE_URL: `http://127.0.0.1:${STUB_PORT}/v1`,
+    HARVEY_WORKSPACE_PATH: workspace,
+  });
+  const chat = (payload, headers = {}) =>
+    fetch(`http://127.0.0.1:${PORT3}/api/harvey/chat?token=${TOKEN}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(payload),
+    });
+  const api3 = (p) => `http://127.0.0.1:${PORT3}${p}${p.includes("?") ? "&" : "?"}token=${TOKEN}`;
+
+  res = await chat(
+    { message: "tidy the workspace up for me", sessionId: "verify-session-3", stream: true },
+    { Accept: "text/event-stream" },
+  );
+  const stream = await res.text();
+  const frames = [...stream.matchAll(/^event: (\w+)\ndata: (.*)$/gm)].map((m) => ({ name: m[1], data: JSON.parse(m[2]) }));
+  const named = (n) => frames.filter((f) => f.name === n);
+  ok("a turn that calls a tool still streams as an event stream", /text\/event-stream/.test(String(res.headers.get("content-type"))));
+  ok("the model's answer arrives as token events", named("token").length > 0 && named("token").some((f) => typeof f.data.text === "string"));
+  ok("spend arrives as usage events", named("usage").length > 0 && named("usage").some((f) => f.data.costUsd > 0));
+  ok("the last usage frame carries the whole turn and its context plan", (() => {
+    const last = named("usage").pop();
+    return last && typeof last.data.costUsd === "number" && last.data.contextPlan !== undefined;
+  })());
+  ok("the turn ends with done", frames[frames.length - 1]?.name === "done");
+
+  const approvalFrame = named("approval")[0];
+  ok("a tool that deletes something is held for approval, streamed as an approval event", !!approvalFrame, JSON.stringify(frames.map((f) => f.name)));
+  ok("the card gets an id, the tool, a human summary and a risk level",
+    !!approvalFrame?.data?.id && approvalFrame?.data?.tool === "delete_file" &&
+      /doomed\.txt/.test(approvalFrame?.data?.summary || "") && approvalFrame?.data?.risk === "high",
+    JSON.stringify(approvalFrame?.data));
+  ok("and the file is STILL THERE — the gate stopped the call, it did not run it", existsSync(doomed));
+
+  res = await fetch(api3("/api/harvey/approvals"));
+  body = await json(res);
+  const pending = (body?.pending || []).find((a) => a.id === approvalFrame.data.id);
+  ok("it is waiting in GET /api/harvey/approvals", !!pending, JSON.stringify(body?.pending));
+  ok("with the arguments it would run with", pending?.args?.path === "doomed.txt", JSON.stringify(pending?.args));
+  ok("and the reason it was held", /cannot be undone/i.test(pending?.reason || ""), pending?.reason);
+
+  res = await fetch(api3(`/api/harvey/approvals/${approvalFrame.data.id}/approve`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  body = await json(res);
+  ok("approving answers ok with the tool's own result", res.ok && body?.ok === true, `HTTP ${res.status} ${JSON.stringify(body)}`);
+  ok("the result is what the tool returned, not a fabricated acknowledgement", body?.result?.deleted === "doomed.txt", JSON.stringify(body?.result));
+  ok("and the file is GONE — approving actually executed the held call", !existsSync(doomed));
+
+  res = await fetch(api3(`/api/harvey/approvals/${approvalFrame.data.id}/approve`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  body = await json(res);
+  ok("the same approval cannot be run twice — 409, no replay", res.status === 409, `HTTP ${res.status}`);
+  ok("and it says it was already approved", /already approved/i.test(body?.error || ""), body?.error);
+
+  res = await chat({ message: "get rid of the spared note", sessionId: "verify-session-4", stream: true }, { Accept: "text/event-stream" });
+  const denyStream = await res.text();
+  const denyId = (() => {
+    const m = /^event: approval\ndata: (.*)$/m.exec(denyStream);
+    return m ? JSON.parse(m[1]).id : null;
+  })();
+  ok("a second turn is held the same way", !!denyId);
+  res = await fetch(api3(`/api/harvey/approvals/${denyId}/deny`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "I still want that file" }),
+  });
+  body = await json(res);
+  ok("denying answers ok", res.ok && body?.ok === true, `HTTP ${res.status}`);
+  ok("and the file survives — a denial runs nothing", existsSync(spared));
+  res = await fetch(api3("/api/harvey/approvals"));
+  body = await json(res);
+  ok("a decided approval leaves the pending list", !(body?.pending || []).some((a) => a.id === denyId));
+  res = await fetch(api3(`/api/harvey/approvals/${denyId}/approve`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  ok("and it cannot be approved after the fact", res.status === 409, `HTTP ${res.status}`);
+
+  res = await chat({ message: "one more pass on the spared note", sessionId: "verify-session-5" });
+  body = await json(res);
+  ok("the non-stream shape answers with the model's text", res.ok && typeof body?.text === "string" && body.text.length > 0, `HTTP ${res.status}`);
+  ok("it reports the model that actually ran and what the turn cost", body?.usage?.model === "stub/model" && body?.usage?.costUsd > 0, JSON.stringify(body?.usage));
+  ok("it carries the context plan the page shows on hover", !!body?.contextPlan && typeof body.contextPlan.budgetTokens === "number", JSON.stringify(body?.contextPlan));
+  ok("and the approvals it held, so a non-streaming client still sees the card", (body?.approvals || [])[0]?.tool === "delete_file");
+
+  res = await fetch(api3("/api/harvey/usage?days=1"));
+  body = await json(res);
+  ok("every one of those calls landed in the spend ledger", body?.today?.calls > 0 && body?.today?.costUsd > 0, JSON.stringify(body?.today));
+  ok("attributed to the model that actually ran", (body?.byModel || []).some((m) => m.model === "stub/model"), JSON.stringify(body?.byModel));
+  ok("and to the job the chat route asked for", (body?.byJob || []).some((j) => j.job === "chat_deep"), JSON.stringify(body?.byJob));
+  res = await fetch(api3("/api/harvey/models"));
+  body = await json(res);
+  ok("the budget block now shows today's measured spend", body?.budget?.spentTodayUsd > 0, JSON.stringify(body?.budget));
+  ok("with a key configured, the provider reports itself as primary", body?.provider?.primary === "openrouter" && body?.provider?.openrouter === true);
+  ok("and still returns no key material", !/stub-local-loopback-only/.test(JSON.stringify(body)));
 } catch (err) {
   failures.push(`suite crashed: ${err instanceof Error ? err.message : String(err)}`);
   console.error(err);
 } finally {
   locked?.child.kill("SIGKILL");
   unlocked?.child.kill("SIGKILL");
+  stubbed?.child.kill("SIGKILL");
+  stub?.close();
   rmSync(tmp, { recursive: true, force: true });
 }
 
