@@ -138,6 +138,16 @@ export interface AgentLoopResult {
   costUsd?: number;
   promptTokens?: number;
   completionTokens?: number;
+  /**
+   * Input tokens served from the provider's prompt cache.
+   *
+   * Reported separately because the provider counts them separately: on a cache
+   * hit `promptTokens` is only the UNCACHED remainder, so without this a 16k
+   * token preamble read from cache looks like a 900 token request and the Usage
+   * page understates what Harvey actually sends. It is also the only way to see
+   * whether caching is working at all.
+   */
+  cachedTokens?: number;
   /** How context was budgeted on the final step, for the "why did it forget" question. */
   contextPlan?: ContextPlan;
   /** Tool calls held for approval. The turn completed; these did NOT run. */
@@ -159,7 +169,15 @@ export interface AgentLoopResult {
 export type AgentLoopEvent =
   | { type: "tool"; name: string; status: "running" | "done" | "error"; detail?: string }
   | { type: "approval"; approval: PendingApproval }
-  | { type: "usage"; model: string; promptTokens: number; completionTokens: number; costUsd: number };
+  | {
+      type: "usage";
+      model: string;
+      promptTokens: number;
+      completionTokens: number;
+      /** Input served from the prompt cache; `promptTokens` is the remainder. */
+      cachedTokens: number;
+      costUsd: number;
+    };
 
 export interface AgentLoopOptions {
   message: string;
@@ -363,6 +381,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   let costUsd = 0;
   let promptTokens = 0;
   let completionTokens = 0;
+  let cachedTokens = 0;
   let lastPlan: ContextPlan | undefined;
   let lastModelUsed = model;
 
@@ -476,6 +495,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         costUsd,
         promptTokens,
         completionTokens,
+        cachedTokens,
         contextPlan: lastPlan,
         approvals: heldApprovals,
         modelError: detail,
@@ -485,6 +505,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     costUsd += out.usage.costUsd;
     promptTokens += out.usage.promptTokens;
     completionTokens += out.usage.completionTokens;
+    cachedTokens += out.usage.cachedTokens || 0;
     lastPlan = out.contextPlan;
     lastModelUsed = out.modelUsed;
     opts.onEvent?.({
@@ -492,6 +513,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
       model: out.modelUsed,
       promptTokens: out.usage.promptTokens,
       completionTokens: out.usage.completionTokens,
+      cachedTokens: out.usage.cachedTokens || 0,
       costUsd: out.usage.costUsd,
     });
 
@@ -504,6 +526,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         costUsd,
         promptTokens,
         completionTokens,
+        cachedTokens,
         contextPlan: out.contextPlan,
         approvals: heldApprovals,
       };
@@ -545,6 +568,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     costUsd,
     promptTokens,
     completionTokens,
+    cachedTokens,
     contextPlan: lastPlan,
     approvals: heldApprovals,
   };

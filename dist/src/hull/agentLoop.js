@@ -244,6 +244,7 @@ async function runAgentLoop(opts) {
     let costUsd = 0;
     let promptTokens = 0;
     let completionTokens = 0;
+    let cachedTokens = 0;
     let lastPlan;
     let lastModelUsed = model;
     const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : MAX_AGENT_STEPS;
@@ -351,6 +352,7 @@ async function runAgentLoop(opts) {
                 costUsd,
                 promptTokens,
                 completionTokens,
+                cachedTokens,
                 contextPlan: lastPlan,
                 approvals: heldApprovals,
                 modelError: detail,
@@ -359,6 +361,7 @@ async function runAgentLoop(opts) {
         costUsd += out.usage.costUsd;
         promptTokens += out.usage.promptTokens;
         completionTokens += out.usage.completionTokens;
+        cachedTokens += out.usage.cachedTokens || 0;
         lastPlan = out.contextPlan;
         lastModelUsed = out.modelUsed;
         opts.onEvent?.({
@@ -366,6 +369,7 @@ async function runAgentLoop(opts) {
             model: out.modelUsed,
             promptTokens: out.usage.promptTokens,
             completionTokens: out.usage.completionTokens,
+            cachedTokens: out.usage.cachedTokens || 0,
             costUsd: out.usage.costUsd,
         });
         if (!out.toolUses.length) {
@@ -377,6 +381,7 @@ async function runAgentLoop(opts) {
                 costUsd,
                 promptTokens,
                 completionTokens,
+                cachedTokens,
                 contextPlan: out.contextPlan,
                 approvals: heldApprovals,
             };
@@ -412,6 +417,7 @@ async function runAgentLoop(opts) {
         costUsd,
         promptTokens,
         completionTokens,
+        cachedTokens,
         contextPlan: lastPlan,
         approvals: heldApprovals,
     };

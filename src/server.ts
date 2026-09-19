@@ -2766,6 +2766,7 @@ app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) 
               model: event.model,
               promptTokens: event.promptTokens,
               completionTokens: event.completionTokens,
+              cachedTokens: event.cachedTokens,
               costUsd: event.costUsd,
             });
           }
@@ -2779,6 +2780,7 @@ app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) 
         model: result.modelUsed || result.model,
         promptTokens: result.promptTokens ?? 0,
         completionTokens: result.completionTokens ?? 0,
+        cachedTokens: result.cachedTokens ?? 0,
         costUsd: result.costUsd ?? 0,
         contextPlan: result.contextPlan ?? null,
       });
@@ -2810,6 +2812,10 @@ app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) 
         model: result.modelUsed || result.model,
         promptTokens: result.promptTokens ?? 0,
         completionTokens: result.completionTokens ?? 0,
+        /* Cache reads are counted apart from `promptTokens`, which on a hit is
+           only the uncached remainder. Reporting one without the other makes a
+           16k preamble look like a 900 token request. */
+        cachedTokens: result.cachedTokens ?? 0,
         costUsd: result.costUsd ?? 0,
       },
       contextPlan: result.contextPlan ?? null,
@@ -2823,7 +2829,7 @@ app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) 
         text: reason,
         sessionId,
         conversationId,
-        usage: { model: null, promptTokens: 0, completionTokens: 0, costUsd: 0 },
+        usage: { model: null, promptTokens: 0, completionTokens: 0, cachedTokens: 0, costUsd: 0 },
         contextPlan: null,
         approvals: [],
         budgetRefused: reason,
