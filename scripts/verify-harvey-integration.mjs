@@ -320,6 +320,17 @@ for (let i = 0; i < 2; i++) {
 check("three consecutive failures pause the task", lastPaused === true);
 check("the paused task stops being scheduled", taskStore.getTask(created.id).nextRunAt === null);
 
+/* And the third way a run can produce nothing: no key at all. Same trap — an
+   apology recorded as a success would read healthy in the task list forever. */
+const savedKey = process.env.ANTHROPIC_API_KEY;
+delete process.env.ANTHROPIC_API_KEY;
+taskStore.updateTask(created.id, { enabled: true });
+reset([]);
+const keylessRun = await scheduler.runTaskNow(created.id, "manual");
+check("a run with no provider key is recorded as failed", keylessRun.ok === false, JSON.stringify(keylessRun));
+check("and names the missing key", /OPENROUTER_API_KEY/.test(keylessRun.error || ""), keylessRun.error);
+process.env.ANTHROPIC_API_KEY = savedKey;
+
 /* The cap is the same story: a skipped run is a failure, with the cap named. */
 reset([{ throw: new providers.BudgetRefusedError({
   allowed: false, reason: "Daily cap reached.", spentTodayUsd: 11, spentMonthUsd: 20,

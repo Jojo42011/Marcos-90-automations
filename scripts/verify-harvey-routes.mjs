@@ -478,9 +478,13 @@ try {
   const lastRun = (body?.runs || [])[0];
   ok("the run is in the history, finished", !!lastRun && !!lastRun.finishedAt, JSON.stringify(lastRun));
   ok("it is recorded as a manual run, not a schedule firing", lastRun?.trigger === "manual");
+  /* A run that produced nothing must be recorded as a FAILURE, not as a success
+     whose deliverable is an apology — otherwise a task on a keyless server reads
+     healthy in this list forever and never trips the auto-pause. */
+  ok("and the record is a failure, not a success carrying an apology", lastRun?.ok === false, JSON.stringify(lastRun));
   ok(
-    "and the record is honest that no model could be reached",
-    lastRun?.ok === false || /No model provider is configured/.test(String(lastRun?.output || "")),
+    "with the missing key named as the reason",
+    /OPENROUTER_API_KEY|ANTHROPIC_API_KEY|No model provider/.test(String(lastRun?.error || "")),
     JSON.stringify(lastRun),
   );
 

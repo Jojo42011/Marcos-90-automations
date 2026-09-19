@@ -225,12 +225,13 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
      credential; direct Anthropic remains a complete path on its own. */
   const keys = providerStatus();
   if (!keys.primary) {
-    return {
-      speech:
-        "No model provider is configured. Set OPENROUTER_API_KEY (one key, every model) or ANTHROPIC_API_KEY on the server.",
-      toolRounds: 0,
-      model: "none",
-    };
+    const detail =
+      "No model provider is configured. Set OPENROUTER_API_KEY (one key, every model) or ANTHROPIC_API_KEY on the server.";
+    /* `modelError` matters as much as the sentence. Without it an unattended
+       caller records a SUCCESSFUL run whose deliverable is this apology, so a
+       scheduled task on a keyless server reads healthy in the list and never
+       trips the pause — the same trap as the outage path below. */
+    return { speech: detail, toolRounds: 0, model: "none", modelError: detail };
   }
 
   const timedHistory = opts.timedHistory ?? [];
