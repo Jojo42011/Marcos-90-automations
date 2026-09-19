@@ -15,6 +15,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 import { getModelInfo, toAnthropicId } from "./catalog.js";
 import { ModelLayerError } from "./internal.js";
+import { withCachedHistory, withCachedSystem, withCachedTools } from "./promptCache.js";
 import type { ProviderRequest, ProviderResponse } from "./internal.js";
 import type { ToolUse } from "./translate.js";
 
@@ -87,13 +88,18 @@ export async function callAnthropic(req: ProviderRequest): Promise<ProviderRespo
   const timeout = req.timeoutMs && req.timeoutMs > 0 ? req.timeoutMs : 120_000;
   const anthropic = client(timeout);
 
+  /* Cache the two blocks that are byte-identical on every turn — the tool
+     schemas (~14k tokens of them) and the system prompt. Without this a
+     three-word answer pays for 16k tokens of preamble every time. */
   const params: Record<string, unknown> = {
     model,
     max_tokens: req.maxTokens,
-    messages: req.messages,
+    messages: withCachedHistory(req.messages as unknown[], slug),
   };
-  if (req.system) params.system = req.system;
-  if (Array.isArray(req.tools) && req.tools.length) params.tools = req.tools;
+  const system = withCachedSystem(req.system, slug);
+  if (system) params.system = system;
+  const tools = withCachedTools(req.tools as unknown[] | undefined, slug);
+  if (Array.isArray(tools) && tools.length) params.tools = tools;
   if (typeof req.temperature === "number") params.temperature = req.temperature;
 
   try {

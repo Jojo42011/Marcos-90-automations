@@ -50,6 +50,7 @@ const MOD = {
   routing: dist("hull/providers/routing.js"),
   budget: dist("hull/providers/budget.js"),
   index: dist("hull/providers/index.js"),
+  promptCache: dist("hull/providers/promptCache.js"),
   store: dist("core/aiUsageStore.js"),
 };
 
@@ -569,6 +570,123 @@ ok("a broken refresh returns false instead of throwing", refresh.broke === false
 ok("and the static catalog is untouched by the failure", refresh.stillThere.inputPerM === 0.1 && refresh.stillThere.contextTokens === 1000000, JSON.stringify(refresh.stillThere));
 ok("a live refresh merges real pricing and context", refresh.worked === true && refresh.merged.inputPerM === 0.2 && refresh.merged.outputPerM === 0.8 && refresh.merged.contextTokens === 2000000, JSON.stringify(refresh.merged));
 ok("the refresh does not turn the picker into 400 rows", refresh.count === 9, String(refresh.count));
+
+/* ══════════════════════ prompt caching ══════════════════════
+   Measured on the live server before this existed: "reply with exactly: model
+   layer online" cost 21,012 input tokens and 6.3 cents, because ~14k tokens of
+   tool schemas and ~2.3k of system prompt are resent verbatim on every turn. At
+   that rate a $10 day is ~160 messages. Caching the two blocks that never change
+   is what makes it affordable, and it costs nothing in capability — unlike
+   sending fewer tools, which trades money for the occasional wrong refusal. */
+console.log("\nPROMPT CACHING — the repetition is the bill");
+
+const bigSystem = "You are Harvey. ".repeat(700);              // ~11k chars
+const manyTools = Array.from({ length: 40 }, (_, i) => ({
+  name: `tool_${i}`,
+  description: "A tool with a long description. ".repeat(12),
+  input_schema: { type: "object", properties: { q: { type: "string" } } },
+}));
+
+const cached = run(`
+  ${FETCH_STUB}
+  const OR = await import(${JSON.stringify(MOD.openrouter)});
+  const calls = installFetch(() => json({
+    id: "gen-1", model: "anthropic/claude-sonnet-4.6",
+    choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+    usage: { prompt_tokens: 100, completion_tokens: 2, cost: 0.0001 },
+  }));
+  const anthropicCall = await OR.callOpenRouter({
+    model: "anthropic/claude-sonnet-4.6",
+    system: ${JSON.stringify(bigSystem)},
+    messages: [{ role: "user", content: "hi" }],
+    tools: ${JSON.stringify(manyTools)},
+    maxTokens: 256,
+  });
+  const anthropicBody = calls[0].body;
+  const geminiCall = await OR.callOpenRouter({
+    model: "google/gemini-3.8-flash",
+    system: ${JSON.stringify(bigSystem)},
+    messages: [{ role: "user", content: "hi" }],
+    tools: ${JSON.stringify(manyTools)},
+    maxTokens: 256,
+  });
+  const geminiBody = calls[1].body;
+  const shortCall = await OR.callOpenRouter({
+    model: "anthropic/claude-sonnet-4.6",
+    system: "be brief",
+    messages: [{ role: "user", content: "hi" }],
+    tools: [{ name: "one", input_schema: { type: "object", properties: {} } }],
+    maxTokens: 256,
+  });
+  console.log(JSON.stringify({ anthropicBody, geminiBody, shortBody: calls[2].body, ok: !!anthropicCall.text && !!geminiCall.text && !!shortCall.text }));
+`, { OPENROUTER_API_KEY: FAKE_KEY });
+
+const aTools = cached.anthropicBody.tools || [];
+const aSystem = (cached.anthropicBody.messages || [])[0];
+ok("the request still succeeds with breakpoints attached", cached.ok === true);
+ok(
+  "the LAST tool carries the cache breakpoint, so all of them are cached at once",
+  aTools[aTools.length - 1]?.cache_control?.type === "ephemeral",
+  JSON.stringify(aTools[aTools.length - 1]?.cache_control),
+);
+ok(
+  "and only the last one does — breakpoints are limited, one covers the prefix",
+  aTools.filter((t) => t.cache_control).length === 1,
+  String(aTools.filter((t) => t.cache_control).length),
+);
+ok(
+  "the system prompt becomes content parts so it can carry a breakpoint",
+  Array.isArray(aSystem?.content) && aSystem.content[0]?.cache_control?.type === "ephemeral",
+  JSON.stringify(aSystem?.content?.[0]?.cache_control),
+);
+ok("the system text survives the conversion intact", aSystem?.content?.[0]?.text === bigSystem);
+
+/* Breakpoints are an Anthropic feature. OpenAI caches long prefixes on its own
+   and Gemini does implicit caching, so sending markers there is at best ignored
+   and at worst a 400 — the exact kind of avoidable outage this guards against. */
+const gTools = cached.geminiBody.tools || [];
+ok("a Gemini request gets NO tool breakpoint", !gTools.some((t) => t.cache_control));
+ok(
+  "and its system prompt stays a plain string",
+  typeof (cached.geminiBody.messages || [])[0]?.content === "string",
+);
+
+/* Below Anthropic's minimum cacheable length a breakpoint is pure overhead. */
+const sTools = cached.shortBody.tools || [];
+ok("a small tool set gets no breakpoint", !sTools.some((t) => t.cache_control));
+ok(
+  "a short system prompt stays a plain string",
+  typeof (cached.shortBody.messages || [])[0]?.content === "string",
+);
+
+/* The tool definitions are module-level constants shared by every request. A
+   marker written into them in place would leak into the direct Anthropic path
+   and every other caller, so the helpers must copy. */
+const purity = run(`
+  const PC = await import(${JSON.stringify(MOD.promptCache)});
+  const tools = ${JSON.stringify(manyTools)};
+  const before = JSON.stringify(tools);
+  const out = PC.withCachedTools(tools, "anthropic/claude-sonnet-4.6");
+  console.log(JSON.stringify({
+    inputUnchanged: JSON.stringify(tools) === before,
+    outputMarked: !!out[out.length - 1].cache_control,
+    notSameArray: out !== tools,
+    disabled: !!PC.withCachedTools(tools, "anthropic/claude-sonnet-4.6")[0].cache_control,
+  }));
+`, { HARVEY_PROMPT_CACHE: "true" });
+ok("marking tools never mutates the shared definitions", purity.inputUnchanged === true);
+ok("it returns a new array", purity.notSameArray === true);
+ok("and the copy is marked", purity.outputMarked === true);
+ok("the first tool is never marked (only the last)", purity.disabled === false);
+
+const offSwitch = run(`
+  const PC = await import(${JSON.stringify(MOD.promptCache)});
+  const tools = ${JSON.stringify(manyTools)};
+  console.log(JSON.stringify({
+    marked: !!PC.withCachedTools(tools, "anthropic/claude-sonnet-4.6")[tools.length - 1].cache_control,
+  }));
+`, { HARVEY_PROMPT_CACHE: "false" });
+ok("HARVEY_PROMPT_CACHE=false turns caching off entirely", offSwitch.marked === false);
 
 /* ══════════════════════ result ══════════════════════ */
 

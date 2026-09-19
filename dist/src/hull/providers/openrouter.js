@@ -27,6 +27,7 @@ exports.callOpenRouter = callOpenRouter;
  */
 const catalog_js_1 = require("./catalog.js");
 const internal_js_1 = require("./internal.js");
+const promptCache_js_1 = require("./promptCache.js");
 const translate_js_1 = require("./translate.js");
 const DEFAULT_BASE = "https://openrouter.ai/api/v1";
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -81,7 +82,7 @@ function buildBody(req, stream) {
     const models = [req.model, ...(req.fallbacks || [])].filter((m, i, arr) => m && arr.indexOf(m) === i);
     const body = {
         model: req.model,
-        messages: (0, translate_js_1.toOpenAiMessages)(req.messages, req.system),
+        messages: (0, promptCache_js_1.withCachedOpenAiSystem)((0, translate_js_1.toOpenAiMessages)(req.messages, req.system), req.model),
         max_tokens: req.maxTokens,
         stream,
         /* Ask for usage accounting explicitly: without it OpenRouter returns token
@@ -92,7 +93,11 @@ function buildBody(req, stream) {
         body.models = models;
     if (typeof req.temperature === "number")
         body.temperature = req.temperature;
-    const tools = (0, translate_js_1.toOpenAiTools)(req.tools);
+    /* Cache the tool block. OpenRouter forwards Anthropic's breakpoints, and the
+       schemas are ~14k tokens that do not change between turns — the single
+       biggest line item in a Harvey conversation. Non-Anthropic models get the
+       tools untouched, since they cache prefixes implicitly. */
+    const tools = (0, promptCache_js_1.withCachedOpenAiTools)((0, translate_js_1.toOpenAiTools)(req.tools), req.model);
     if (tools)
         body.tools = tools;
     if (stream)

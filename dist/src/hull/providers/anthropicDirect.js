@@ -21,6 +21,7 @@ exports.callAnthropic = callAnthropic;
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const catalog_js_1 = require("./catalog.js");
 const internal_js_1 = require("./internal.js");
+const promptCache_js_1 = require("./promptCache.js");
 function anthropicConfigured() {
     return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 }
@@ -79,15 +80,20 @@ async function callAnthropic(req) {
     const model = (0, catalog_js_1.toAnthropicId)(slug);
     const timeout = req.timeoutMs && req.timeoutMs > 0 ? req.timeoutMs : 120_000;
     const anthropic = client(timeout);
+    /* Cache the two blocks that are byte-identical on every turn — the tool
+       schemas (~14k tokens of them) and the system prompt. Without this a
+       three-word answer pays for 16k tokens of preamble every time. */
     const params = {
         model,
         max_tokens: req.maxTokens,
-        messages: req.messages,
+        messages: (0, promptCache_js_1.withCachedHistory)(req.messages, slug),
     };
-    if (req.system)
-        params.system = req.system;
-    if (Array.isArray(req.tools) && req.tools.length)
-        params.tools = req.tools;
+    const system = (0, promptCache_js_1.withCachedSystem)(req.system, slug);
+    if (system)
+        params.system = system;
+    const tools = (0, promptCache_js_1.withCachedTools)(req.tools, slug);
+    if (Array.isArray(tools) && tools.length)
+        params.tools = tools;
     if (typeof req.temperature === "number")
         params.temperature = req.temperature;
     try {
