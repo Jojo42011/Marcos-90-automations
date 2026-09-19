@@ -11,6 +11,7 @@ exports.businessMonth = businessMonth;
 exports.recordUsage = recordUsage;
 exports.spentToday = spentToday;
 exports.spentThisMonth = spentThisMonth;
+exports.sessionCostUsd = sessionCostUsd;
 exports.usageSummary = usageSummary;
 exports.recentErrors = recentErrors;
 exports.getCaps = getCaps;
@@ -225,7 +226,7 @@ function recordUsage(rec) {
                 job: String(rec.job),
                 provider: String(rec.provider),
                 model: String(rec.model),
-                modelUsed: rec.model ? String(rec.modelUsed || rec.model) : null,
+                modelUsed: String(rec.modelUsed || rec.model || ""),
                 prompt,
                 completion,
                 cached: Math.max(0, Math.round(Number(rec.cachedTokens) || 0)),
@@ -268,6 +269,26 @@ function spentThisMonth(at = new Date()) {
         .prepare(`SELECT COALESCE(SUM(cost_usd), 0) c FROM ai_daily WHERE day LIKE ?`)
         .get(`${businessMonth(at)}%`);
     return Number(row?.c ?? 0);
+}
+/**
+ * What one session has cost so far.
+ *
+ * A scheduled task is a session: the cron runner needs a per-run figure to
+ * enforce its own ceiling and to write into the run history, and summing the
+ * request rows is the only number that includes the tool loop's extra turns.
+ */
+function sessionCostUsd(sessionId) {
+    if (!sessionId)
+        return 0;
+    try {
+        const row = getAiUsageDb()
+            .prepare(`SELECT COALESCE(SUM(cost_usd), 0) c FROM ai_requests WHERE session_id = ?`)
+            .get(String(sessionId));
+        return Number(row?.c ?? 0);
+    }
+    catch {
+        return 0;
+    }
 }
 function usageSummary(days = 30) {
     const database = getAiUsageDb();

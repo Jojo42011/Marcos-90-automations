@@ -192,7 +192,9 @@ function perMillion(raw) {
     const n = Number(raw);
     if (!Number.isFinite(n) || n < 0)
         return null;
-    return n * 1_000_000;
+    /* Rounded to six decimals: the multiply lands on values like
+       0.19999999999999998, which is noise in a price a human reads. */
+    return Math.round(n * 1_000_000 * 1e6) / 1e6;
 }
 /**
  * Pull pricing and context windows from OpenRouter and overlay them on the

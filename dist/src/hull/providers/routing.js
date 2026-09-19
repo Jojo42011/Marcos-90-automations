@@ -1,0 +1,205 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MODEL_JOBS = exports.needsSonnet = exports.isSocialTurn = void 0;
+exports.providerFor = providerFor;
+exports.classifyChatTurn = classifyChatTurn;
+exports.resolveModel = resolveModel;
+exports.routingTable = routingTable;
+/**
+ * Which model runs which job.
+ *
+ * THE BIAS IS CHEAP. Harvey's traffic is overwhelmingly small work —
+ * classification, memory extraction, folding a conversation, "thanks man" —
+ * and the old code ran a mid-tier model for most of it because the model id was
+ * a constant rather than a decision. Every job whose output is short and
+ * structured defaults to the cheapest catalog entry that can still call a tool;
+ * mid tier is reserved for chat with tools and long agent runs; premium is
+ * never a default and only appears when an operator picks it by name.
+ *
+ * RESOLUTION ORDER — explicit → stored → env → built-in, then fallbacks:
+ *   1. `modelOverride` on the request, i.e. the operator's pick in the picker.
+ *   2. The stored per-job override in `ai_settings` (survives restarts).
+ *   3. `HARVEY_MODEL_<JOB>`, the deploy-time knob.
+ *   4. The built-in default below.
+ * A primary whose provider has no key is never returned. Falling back to
+ * something reachable and saying so beats returning a model id that cannot
+ * possibly answer.
+ *
+ * The keyword heuristics stay in `modelRouting.ts` and are re-exported here.
+ * They are the same judgement ("does this turn need tools?"), and two copies
+ * would drift the first time someone adds a trigger word.
+ */
+const aiUsageStore_js_1 = require("../../core/aiUsageStore.js");
+const modelRouting_js_1 = require("../modelRouting.js");
+Object.defineProperty(exports, "isSocialTurn", { enumerable: true, get: function () { return modelRouting_js_1.isSocialTurn; } });
+Object.defineProperty(exports, "needsSonnet", { enumerable: true, get: function () { return modelRouting_js_1.needsSonnet; } });
+const catalog_js_1 = require("./catalog.js");
+exports.MODEL_JOBS = [
+    "chat_fast",
+    "chat_deep",
+    "agent",
+    "summarize",
+    "extract",
+    "classify",
+    "vision",
+    "schedule",
+];
+const JOB_SHAPES = {
+    /* No tools at all: a pleasantry that costs a tool round trip is a bug. */
+    chat_fast: { tier: "cheap", needsTools: false, needsVision: false },
+    chat_deep: { tier: "mid", needsTools: true, needsVision: false },
+    agent: { tier: "mid", needsTools: true, needsVision: false },
+    summarize: { tier: "cheap", needsTools: false, needsVision: false },
+    /* Extraction and scheduling emit JSON that another function parses; a
+       cheap model with tool support is exactly the right size for that. */
+    extract: { tier: "cheap", needsTools: true, needsVision: false },
+    classify: { tier: "cheap", needsTools: false, needsVision: false },
+    vision: { tier: "cheap", needsTools: true, needsVision: true },
+    schedule: { tier: "cheap", needsTools: true, needsVision: false },
+};
+/**
+ * Built-in defaults, as slugs. Deliberately spelled out rather than computed,
+ * so "what does Harvey run by default" is answerable by reading one table —
+ * but validated against the catalog at resolve time, so a typo or a retired
+ * model degrades to the cheapest qualifying entry instead of 404ing a turn.
+ */
+const DEFAULT_MODELS = {
+    chat_fast: "google/gemini-3.8-flash",
+    chat_deep: "anthropic/claude-sonnet-4.6",
+    agent: "anthropic/claude-sonnet-4.6",
+    summarize: "google/gemini-3.8-flash",
+    extract: "google/gemini-3.8-flash",
+    classify: "google/gemini-3.8-flash",
+    vision: "google/gemini-3.8-flash",
+    schedule: "google/gemini-3.8-flash",
+};
+const ENV_KEY = {
+    chat_fast: "HARVEY_MODEL_CHAT_FAST",
+    chat_deep: "HARVEY_MODEL_CHAT_DEEP",
+    agent: "HARVEY_MODEL_AGENT",
+    summarize: "HARVEY_MODEL_SUMMARIZE",
+    extract: "HARVEY_MODEL_EXTRACT",
+    classify: "HARVEY_MODEL_CLASSIFY",
+    vision: "HARVEY_MODEL_VISION",
+    schedule: "HARVEY_MODEL_SCHEDULE",
+};
+function providerFor(model) {
+    const { openrouter, anthropic } = (0, catalog_js_1.configuredProviders)();
+    if (openrouter)
+        return "openrouter";
+    if (anthropic && (0, catalog_js_1.toSlug)(model).startsWith("anthropic/"))
+        return "anthropic";
+    return null;
+}
+/** The chat job a turn should run as, using the existing keyword heuristics. */
+function classifyChatTurn(message, opts = {}) {
+    if (opts.hasImage)
+        return "vision";
+    if ((0, modelRouting_js_1.isSocialTurn)(message))
+        return "chat_fast";
+    return (0, modelRouting_js_1.needsSonnet)(message) ? "chat_deep" : "chat_fast";
+}
+function storedOverride(job) {
+    try {
+        return (0, aiUsageStore_js_1.getModelOverride)(job);
+    }
+    catch {
+        /* The store lives on a volume that may not be writable in every context
+           (a script, a cold boot). Routing must still answer. */
+        return null;
+    }
+}
+function envOverride(job) {
+    const raw = process.env[ENV_KEY[job]]?.trim();
+    return raw || null;
+}
+/** The cheapest reachable model that satisfies the job's shape. */
+function fallbackFor(job, exclude) {
+    const shape = JOB_SHAPES[job];
+    const pick = (0, catalog_js_1.cheapestModel)({
+        needsTools: shape.needsTools,
+        needsVision: shape.needsVision,
+        maxTier: shape.tier,
+        exclude,
+    }) ||
+        /* Nothing in the preferred tier is reachable — widen rather than fail.
+           An answer from a pricier model beats no answer. */
+        (0, catalog_js_1.cheapestModel)({ needsTools: shape.needsTools, needsVision: shape.needsVision, exclude });
+    return pick?.id ?? null;
+}
+/**
+ * Resolve one job to a model, a provider and a fallback chain.
+ *
+ * `source` records which rung of the ladder the answer came from, so the UI can
+ * say "you picked this" rather than implying Harvey chose it.
+ */
+function resolveModel(job, opts = {}) {
+    const shape = JOB_SHAPES[job] || JOB_SHAPES.chat_deep;
+    const exclude = (opts.exclude || []).map(catalog_js_1.toSlug);
+    let source = "default";
+    let candidate = null;
+    if (opts.forceCheap) {
+        candidate = fallbackFor(job, exclude);
+        source = "fallback";
+    }
+    else if (opts.modelOverride?.trim()) {
+        candidate = (0, catalog_js_1.toSlug)(opts.modelOverride.trim());
+        source = "explicit";
+    }
+    else if (storedOverride(job)) {
+        candidate = (0, catalog_js_1.toSlug)(storedOverride(job));
+        source = "override";
+    }
+    else if (envOverride(job)) {
+        candidate = (0, catalog_js_1.toSlug)(envOverride(job));
+        source = "override";
+    }
+    else {
+        candidate = (0, catalog_js_1.toSlug)(DEFAULT_MODELS[job] || DEFAULT_MODELS.chat_deep);
+        source = "default";
+    }
+    /* Three ways a candidate is unusable: it is excluded, it is not in the
+       catalog at all, or no configured key can reach it. All three degrade to
+       the cheapest qualifying model and are reported as `fallback`, because the
+       operator's pick is no longer what is running. */
+    const unusable = !candidate ||
+        exclude.includes(candidate) ||
+        !(0, catalog_js_1.getModelInfo)(candidate) ||
+        !(0, catalog_js_1.modelIsReachable)(candidate);
+    if (unusable) {
+        const alt = fallbackFor(job, exclude);
+        if (alt) {
+            candidate = alt;
+            source = "fallback";
+        }
+    }
+    const model = candidate || DEFAULT_MODELS[job];
+    const provider = providerFor(model);
+    /* The fallback chain: cheapest-first among everything else that fits the
+       job, capped at two so a bad request cannot walk the whole catalog. */
+    const fallbacks = [];
+    const taken = [...exclude, model];
+    for (let i = 0; i < 2; i++) {
+        const next = fallbackFor(job, taken);
+        if (!next || taken.includes(next))
+            break;
+        fallbacks.push(next);
+        taken.push(next);
+    }
+    return {
+        job,
+        provider: provider ?? "anthropic",
+        model,
+        fallbacks,
+        source,
+    };
+}
+/** Every job's current resolution, for the routing table in the models UI. */
+function routingTable() {
+    const out = {};
+    for (const job of exports.MODEL_JOBS) {
+        const r = resolveModel(job);
+        out[job] = { model: r.model, fallbacks: r.fallbacks, source: r.source, provider: r.provider };
+    }
+    return out;
+}
