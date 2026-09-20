@@ -248,6 +248,99 @@ if (!existsSync(DOC_PATH)) {
     missing.length === 0, missing.join(", "));
 }
 
+/* ── 11. voice mode ───────────────────────────────────────────────────────
+   Harvey used to have two sidebar tabs: this chat, and the voice-first orb at
+   /operator. The orb tab is gone, so the composer button is now the ONLY way
+   into voice from the app — which is why these checks care that it reaches the
+   real screen. A button that opens nothing, or toasts "coming soon", would read
+   as "Harvey cannot talk any more" and would be a straight regression. */
+console.log("\nVOICE MODE");
+const iVoice = html.indexOf('id="voiceBtn"');
+const iMic = html.indexOf('id="micBtn"');
+ok("the composer has a voice-mode button", iVoice > 0);
+ok("it sits with the other composer controls, between the pill and send",
+  iModelPill < iVoice && iVoice < iSend, `pill@${iModelPill} voice@${iVoice} send@${iSend}`);
+ok("it is a separate control from dictation, not a renamed mic", iMic > 0 && iMic !== iVoice);
+ok("it wears the same class as the other round composer buttons",
+  /<button[^>]*class="cbtn"[^>]*id="voiceBtn"/.test(html) || /<button[^>]*id="voiceBtn"[^>]*class="cbtn"/.test(html),
+  "a bespoke style here drifts from the mic and + buttons beside it");
+ok("it says what it is to a screen reader and on hover",
+  /id="voiceBtn"[^>]*aria-label="Voice mode"/.test(html) && /id="voiceBtn"[^>]*title="Voice mode/.test(html));
+ok("it opens the existing /operator voice screen — not a second speech pipeline",
+  /apiUrl\("\/operator"\)/.test(js),
+  "the STT/TTS pipeline lives on that page; this must reuse it");
+ok("no new speech recognition/synthesis is started for voice mode",
+  !/webkitSpeechGrammar|SpeechSynthesisUtterance|new MediaRecorder/.test(js));
+ok("it is not a stub", !/coming soon|not yet available|todo/i.test(both));
+ok("the screen is embedded in an overlay on this page",
+  /id="voiceOverlay"/.test(html) && /id="voiceFrame"/.test(html) && /<div id="voiceOverlay"[^>]*hidden/.test(html));
+ok("the iframe is handed the microphone, or the orb hears nothing",
+  /id="voiceFrame"[^>]*allow="microphone[^"]*"/.test(html));
+ok("the overlay announces itself as a dialog", /role="dialog"[\s\S]{0,80}aria-label="Voice mode"/.test(html));
+ok("it has a visible close button", /id="voiceClose"/.test(html) && /aria-label="Close voice mode"/.test(html));
+ok("Esc closes it", /voiceModeIsOpen\(\)\) \{ closeVoiceMode\(\)/.test(js));
+ok("Esc still works once focus is inside the iframe (it is same-origin)",
+  /contentDocument\.addEventListener\("keydown"/.test(js));
+ok("closing empties the iframe, which is what releases the mic",
+  /frame\.src = "about:blank"/.test(js));
+ok("closing hands focus back to the composer", /closeVoiceMode[\s\S]{0,700}\$\("input"\)\.focus\(\)/.test(js));
+ok("dictation is stopped before voice mode takes the microphone",
+  /stopDictation\(\)/.test(js) && /openVoiceMode/.test(js));
+ok("a spoken navigation command from inside the overlay is passed up to the shell",
+  /"app-navigate"/.test(js) && /window\.parent\.postMessage/.test(js),
+  "otherwise \u201copen the CRM\u201d lands on this page and looks ignored");
+ok("only the voice iframe's own messages are relayed",
+  /e\.source !== frame\.contentWindow/.test(js), "any page could otherwise drive the shell");
+ok("the overlay is themed from the same variables as the rest of the page",
+  /\.overlay-panel\{[^}]*var\(--bg\)/.test(html.replace(/\s*\{/g, "{")) &&
+  /\.overlay-bar\{[^}]*var\(--line\)/.test(html.replace(/\s*\{/g, "{")));
+
+/* ── 12. the sidebar, and what is still reachable without it ──────────────
+   Three tabs were collapsed into one: the orb tab and Harvey Jobs came out, and
+   this chat became the home tab. Removing a tab must never mean removing the
+   page — /operator is exactly what the voice button opens, and /jobs is still
+   the only place a running job's steps can be read. */
+console.log("\nSHELL SIDEBAR");
+if (!existsSync(SHELL_PATH) || !existsSync(SERVER_PATH)) {
+  ok("public/shell.html and src/server.ts are present", false);
+} else {
+  const shellSrc = readFileSync(SHELL_PATH, "utf8");
+  const serverSrc = readFileSync(SERVER_PATH, "utf8");
+  /* Only the live TABS array counts. Comments in it explain the tabs that were
+     removed (and keep one commented out), and asserting over those would fail
+     on the explanation rather than on the config. */
+  const tabsBlock = (() => {
+    const i = shellSrc.indexOf("var TABS = [");
+    const j = shellSrc.indexOf("\n];", i);
+    return i < 0 || j < i ? "" : shellSrc.slice(i, j).replace(/\/\*[\s\S]*?\*\//g, "");
+  })();
+  const entries = tabsBlock.split(/key: "/).slice(1).map((s) => 'key: "' + s);
+  const entryFor = (key) => entries.find((e) => e.startsWith('key: "' + key + '"')) || "";
+  ok("the TABS array was found", entries.length > 0);
+  ok("there is no Harvey Jobs tab", !/key: "jobs"/.test(tabsBlock) && !/src: "\/jobs"/.test(tabsBlock));
+  ok("no tab embeds /operator any more", !/src: "\/operator"/.test(tabsBlock));
+  ok("exactly one tab is labelled Harvey",
+    (tabsBlock.match(/label: "Harvey"/g) || []).length === 1,
+    "two tabs called Harvey is what this change removed");
+  ok("that tab is the chat surface at /harvey",
+    /label: "Harvey"/.test(entryFor("harvey-chat")) && /src: "\/harvey"/.test(entryFor("harvey-chat")));
+  ok("home: true is on it, so the app still opens on Harvey",
+    /home: true/.test(entryFor("harvey-chat")) && (tabsBlock.match(/home: true/g) || []).length === 1);
+  ok("it is the first tab in the sidebar", entries[0].startsWith('key: "harvey-chat"'));
+  ok("it still sits above CRM", entries.findIndex((e) => e.startsWith('key: "crm"')) > 0);
+  ok("the section separators follow the renamed key",
+    /"harvey-chat": null/.test(shellSrc) && !/^\s*harvey:\s*null/m.test(shellSrc));
+  ok('the retired "harvey" key still resolves, so voice nav is not silently dead',
+    /TAB_ALIASES = \{ harvey: "harvey-chat" \}/.test(shellSrc) && /TAB_ALIASES\[key\]/.test(shellSrc),
+    "every page posts app-navigate tab:harvey to get back here");
+  ok("/operator is still served by src/server.ts",
+    /app\.get\("\/operator"/.test(serverSrc) && existsSync(join(root, "public/operator.html")),
+    "the voice button opens it — removing the route would break voice entirely");
+  ok("/jobs is still served by src/server.ts",
+    /app\.get\("\/jobs"/.test(serverSrc) && existsSync(join(root, "public/jobs.html")),
+    "the tab was removed, not the page");
+}
+
 console.log(`\n${pass}/${pass + fail.length} checks passed`);
 if (fail.length) {
   console.log("\nFailures:");
