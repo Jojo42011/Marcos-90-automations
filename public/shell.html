@@ -179,19 +179,17 @@
   - icon:  inline SVG string (optional)
   ================================================================ */
 var TABS = [
- {
-   key: "harvey",
-   label: "Harvey",
-   sub: "AI Assistant",
-   src: "/operator",
-   home: true,
-   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>'
- },
+ /* The voice-first orb screen used to be the home tab here. It is now reached
+    from inside Harvey's chat — the Voice mode button in the composer opens
+    /operator in an overlay — so there is one Harvey in the sidebar instead of
+    two that disagree about which one is "Harvey". The page and its route are
+    untouched: /operator still serves the orb standalone. */
  {
    key: "harvey-chat",
-   label: "Harvey Chat",
-   sub: "Chat · models · spend",
+   label: "Harvey",
+   sub: "Chat · voice · models",
    src: "/harvey",
+   home: true,
    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h8M8 13.5h5"/></svg>'
  },
  {
@@ -205,13 +203,9 @@ var TABS = [
     tied to the lead looking at it — opening it on its own loses that. The
     /listings page still exists and is what the CRM tab embeds; it is just not
     reachable as a top-level destination. */
- {
-   key: "jobs",
-   label: "Harvey Jobs",
-   sub: "Delegated work",
-   src: "/jobs",
-   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.9 4.9l2.9 2.9"/><path d="M16.2 16.2l2.9 2.9"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.9 19.1l2.9-2.9"/><path d="M16.2 7.8l2.9-2.9"/></svg>'
- },
+ /* Harvey Jobs was a sidebar tab of its own until Harvey grew a Scheduled view
+    of the same work; two lists of delegated work is one too many. /jobs still
+    serves public/jobs.html standalone. */
  /* Tracker moved INTO the CRM (rail icon between Opportunities and
     Transactions) — it is the same book of people, and two separate top-level
     entries had the team hunting for a contact in whichever one they opened
@@ -278,12 +272,19 @@ var TABS = [
 /* Section separators - a label is rendered before the tab whose key is listed
    here (null = no separator before that item). Configured, not core logic. */
 var SECTIONS = {
- harvey:    null,
- crm:       'Operations',
- content:   'Growth',
- tasks:     null,
- knowledge: 'Help'
+ "harvey-chat": null,
+ crm:           'Operations',
+ content:       'Growth',
+ tasks:         null,
+ knowledge:     'Help'
 };
+
+
+/* Keys that used to be tabs and are still said out loud. Harvey's voice
+   navigation ("take me back to Harvey") and every page's "back to Harvey"
+   button post tab:"harvey", which was the orb tab's key; it now resolves to the
+   chat tab rather than silently doing nothing. */
+var TAB_ALIASES = { harvey: "harvey-chat" };
 
 
 /* Message type the shell listens for (from an embedded page / assistant). */
@@ -349,6 +350,7 @@ function initShell(){
 
 
  function activate(key, programmatic){
+   if(TAB_ALIASES[key]) key = TAB_ALIASES[key];
    if(!byKey[key]) return;
    var f = document.getElementById("frame-"+key);
    if(f && !f.src) f.src = f.getAttribute("data-src");  // lazy-load on first visit
@@ -376,8 +378,9 @@ function initShell(){
     An embedded page (e.g. your assistant iframe) tells the shell to
     switch tabs by posting a message to the parent window:
         window.parent.postMessage({ type: "app-navigate", tab: "view2" }, "*");
-    The home tab stays loaded in the background, so if it's a voice
-    assistant it keeps talking/listening while another tab is shown. */
+    The home tab stays loaded in the background, so Harvey's voice mode keeps
+    talking/listening while another tab is shown. Keys in TAB_ALIASES are
+    accepted here too, so "harvey" still lands somewhere real. */
  window.addEventListener("message", function(e){
    var d = e.data || {};
    if(d.type===NAV_MESSAGE_TYPE && d.tab){ activate(String(d.tab).toLowerCase(), true); }
@@ -385,7 +388,7 @@ function initShell(){
 
 
  /* Optional deep link: ?tab=view2 */
- var q = new URLSearchParams(location.search).get("tab"); if(q && byKey[q]) activate(q);
+ var q = new URLSearchParams(location.search).get("tab"); if(q && (byKey[q] || TAB_ALIASES[q])) activate(q);
 
 
  /* Expose a tiny API in case you want to drive it from this window too. */

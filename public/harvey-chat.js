@@ -320,13 +320,21 @@
 
   /* ── models ─────────────────────────────────────────────────────────── */
 
-  var FAMILY_ORDER = ["Anthropic", "OpenAI", "Google", "Other"];
+  /* Frontier labs first, then the open-weight and value labs the catalog spans
+     (Alibaba's Qwen, DeepSeek, Zhipu's GLM, MiniMax), then everything else. */
+  var FAMILY_ORDER = ["Anthropic", "OpenAI", "Google", "xAI", "Meta", "Qwen", "DeepSeek", "Zhipu", "MiniMax", "Other"];
 
   function familyOf(m, id) {
     var raw = String(m.family || m.provider || m.vendor || (String(id).indexOf("/") > 0 ? String(id).split("/")[0] : "")).toLowerCase();
     if (/anthropic|claude/.test(raw)) return "Anthropic";
     if (/openai|gpt|^o[0-9]/.test(raw)) return "OpenAI";
     if (/google|gemini/.test(raw)) return "Google";
+    if (/^x-?ai$|xai|grok/.test(raw)) return "xAI";
+    if (/^meta$|llama|muse/.test(raw)) return "Meta";
+    if (/qwen|alibaba/.test(raw)) return "Qwen";
+    if (/deepseek/.test(raw)) return "DeepSeek";
+    if (/zhipu|^z-ai$|glm/.test(raw)) return "Zhipu";
+    if (/minimax/.test(raw)) return "MiniMax";
     if (!raw) {
       var lid = String(id).toLowerCase();
       if (lid.indexOf("claude") >= 0) return "Anthropic";
@@ -344,9 +352,12 @@
     var id = m.id || m.model || m.slug || m.name || "";
     var perM = m.pricePerMillion || m.pricePerM || {};
     var pricing = m.pricing || {};
-    var inPerM = firstNum(m.inputPricePerMTokens, m.inputPerMTokens, m.promptPricePerM, m.inputPricePerM,
+    /* `inputPerM` / `outputPerM` are what the server actually sends (pinned in
+       src/hull/providers/types.ts). They are FIRST because reading them last is
+       how every model in the picker came to say "no price reported". */
+    var inPerM = firstNum(m.inputPerM, m.inputPricePerMTokens, m.inputPerMTokens, m.promptPricePerM, m.inputPricePerM,
       perM.in, perM.input, pricing.inputPerMTokens, pricing.inPerM);
-    var outPerM = firstNum(m.outputPricePerMTokens, m.outputPerMTokens, m.completionPricePerM, m.outputPricePerM,
+    var outPerM = firstNum(m.outputPerM, m.outputPricePerMTokens, m.outputPerMTokens, m.completionPricePerM, m.outputPricePerM,
       perM.out, perM.output, pricing.outputPerMTokens, pricing.outPerM);
     /* OpenRouter-style pricing is per single token ("0.000003"), so scale it
        into the per-million figures the picker shows. */
@@ -360,7 +371,7 @@
       inPerM: inPerM,
       outPerM: outPerM,
       context: firstNum(m.contextTokens, m.contextWindow, m.context, m.maxInputTokens),
-      vision: !!(m.vision || (m.capabilities && m.capabilities.vision)),
+      vision: !!(m.supportsVision || m.vision || (m.capabilities && m.capabilities.vision)),
       note: m.note || m.description || ""
     };
   }
@@ -373,8 +384,12 @@
   function priceText(m) {
     if (m.inPerM == null && m.outPerM == null) return "";
     var bits = [];
-    if (m.inPerM != null) bits.push("$" + m.inPerM.toFixed(2) + " in");
-    if (m.outPerM != null) bits.push("$" + m.outPerM.toFixed(2) + " out");
+    /* Sub-dollar models differ from each other by cents, and that difference is
+       the whole reason someone picks one, so two fixed decimals is not enough
+       resolution to tell them apart. Formatted from server data either way. */
+    var fmt = function (n) { return n < 1 ? ("$" + n.toFixed(2).replace(/0$/, "")) : ("$" + n.toFixed(2)); };
+    if (m.inPerM != null) bits.push(fmt(m.inPerM) + " in");
+    if (m.outPerM != null) bits.push(fmt(m.outPerM) + " out");
     return bits.join(" · ") + " / 1M";
   }
 
@@ -1407,6 +1422,9 @@
 
   /* ── dictation (real, when the browser has it) ──────────────────────── */
 
+  /** Set by wireMic so voice mode can take the microphone back cleanly. */
+  var stopDictation = function () {};
+
   function wireMic() {
     var btn = $("micBtn");
     var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1440,6 +1458,82 @@
       base = $("input").value.trim();
       try { rec.start(); live = true; btn.classList.add("rec"); btn.title = "Stop dictating"; }
       catch (_) { toast("Dictation could not start."); }
+    });
+
+    stopDictation = function () { if (live) { try { rec.stop(); } catch (_) {} } };
+  }
+
+  /* ── voice mode ─────────────────────────────────────────────────────────
+     Talking to Harvey out loud is the orb screen at /operator, opened over this
+     page in an iframe. That screen already owns the whole spoken pipeline — mic
+     capture, STT, Harvey's brain, streaming TTS — and a second implementation
+     here would be two things competing for one microphone. So this is a door
+     onto the working one, not a copy of it.
+
+     The iframe carries no src until it is opened and is navigated to
+     about:blank on close: that is what actually releases the microphone and
+     cuts off a reply that is still being spoken. Closing also hands focus back
+     to the composer. */
+
+  var voiceReturnFocus = null;
+
+  function voiceModeIsOpen() {
+    var overlay = $("voiceOverlay");
+    return !!overlay && !overlay.hidden;
+  }
+
+  function openVoiceMode() {
+    var overlay = $("voiceOverlay"), frame = $("voiceFrame");
+    if (!overlay || !frame || voiceModeIsOpen()) return;
+    stopDictation();
+    closePop();
+    voiceReturnFocus = document.activeElement;
+    frame.src = apiUrl("/operator");
+    overlay.hidden = false;
+    $("voiceClose").focus();
+  }
+
+  function closeVoiceMode() {
+    var overlay = $("voiceOverlay"), frame = $("voiceFrame");
+    if (!voiceModeIsOpen()) return;
+    overlay.hidden = true;
+    frame.src = "about:blank";
+    frame.removeAttribute("src");
+    var back = voiceReturnFocus;
+    voiceReturnFocus = null;
+    if (state.view !== "chat") showView("chat");
+    if (back && back !== document.body && typeof back.focus === "function") back.focus();
+    else $("input").focus();
+  }
+
+  function wireVoiceMode() {
+    var btn = $("voiceBtn"), overlay = $("voiceOverlay"), frame = $("voiceFrame");
+    if (!btn || !overlay || !frame) return;
+    btn.addEventListener("click", openVoiceMode);
+    $("voiceFullPage").href = apiUrl("/operator");
+    overlay.addEventListener("click", function (e) {
+      if (e.target.closest("[data-voice-close]")) closeVoiceMode();
+    });
+
+    /* /operator is same-origin, so Esc can be honoured while focus is inside it
+       — without this, Esc stops working the moment the orb is clicked. */
+    frame.addEventListener("load", function () {
+      try {
+        frame.contentDocument.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") closeVoiceMode();
+        });
+      } catch (_) { /* nothing to do: the close button is always visible */ }
+    });
+
+    /* Voice can navigate the app ("open the CRM"), and from in here the orb's
+       postMessage lands on this page instead of the shell. Pass it along and
+       step out of the way, or the spoken command appears to be ignored. */
+    window.addEventListener("message", function (e) {
+      var d = e.data || {};
+      if (!d || d.type !== "app-navigate" || !d.tab) return;
+      if (frame.contentWindow && e.source !== frame.contentWindow) return;
+      closeVoiceMode();
+      if (window.parent !== window) window.parent.postMessage({ type: "app-navigate", tab: String(d.tab) }, "*");
     });
   }
 

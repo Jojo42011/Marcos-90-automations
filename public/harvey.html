@@ -339,6 +339,22 @@ table.data select:focus{border-color:var(--line-2)}
 .inline-form{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap}
 .inline-form .field{margin-bottom:0;flex:1;min-width:130px}
 
+/* ── Voice mode overlay ──────────────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:26px}
+.overlay[hidden]{display:none}
+.overlay-scrim{position:absolute;inset:0;background:rgba(0,0,0,.62)}
+.overlay-panel{position:relative;display:flex;flex-direction:column;width:min(980px,100%);height:min(720px,100%);
+  background:var(--bg);border:1px solid var(--line-2);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.overlay-bar{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 16px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.overlay-bar .grow{flex:1}
+.overlay-title{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--ink-hi)}
+.overlay-title .orb{width:16px;height:16px;border-radius:50%;flex:0 0 auto;
+  background:radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--accent) 92%, #fff), color-mix(in srgb, var(--accent) 14%, transparent) 72%)}
+.overlay-link{font-size:12.5px;color:var(--muted);text-decoration:none;padding:5px 9px;border-radius:8px;transition:background var(--dur),color var(--dur)}
+.overlay-link:hover{background:var(--hover);color:var(--ink)}
+.overlay-panel iframe{flex:1;min-height:0;width:100%;border:none;background:#0a0a0a}
+@media(max-width:860px){.overlay{padding:0}.overlay-panel{border-radius:0;border:none;height:100%}}
+
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 #toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,16px);z-index:90;
   background:var(--elev);border:1px solid var(--line-2);border-radius:11px;box-shadow:var(--shadow);
@@ -460,6 +476,12 @@ table.data select:focus{border-color:var(--line-2)}
               <button type="button" class="cbtn" id="micBtn" aria-label="Dictate a message" title="Dictate a message">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
               </button>
+              <!-- Voice mode is the orb screen at /operator, opened over this page.
+                   Mic-with-waveform, so it is not mistaken for the dictate button
+                   beside it: that one types, this one talks back. -->
+              <button type="button" class="cbtn" id="voiceBtn" aria-label="Voice mode" title="Voice mode — talk to Harvey out loud">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="10" y="2.5" width="4" height="8" rx="2"/><path d="M7.5 9.5a4.5 4.5 0 0 0 9 0"/><path d="M12 14v2.2"/><path d="M4 18v3M8 16.5v6M16 16.5v6M20 18v3"/></svg>
+              </button>
               <button type="submit" class="send" id="sendBtn" disabled aria-label="Send message">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
               </button>
@@ -538,6 +560,27 @@ table.data select:focus{border-color:var(--line-2)}
       </div>
     </section>
   </main>
+</div>
+
+<!-- ── Voice mode ─────────────────────────────────────────────────────────────
+     The orb screen at /operator, opened over this page. That screen already owns
+     the whole spoken pipeline (mic → STT → Harvey → streaming TTS), so this is a
+     door onto the working one rather than a second one built here. The iframe has
+     no src until it is opened and is emptied on close, which is also how the mic
+     and any reply mid-sentence are stopped. -->
+<div id="voiceOverlay" class="overlay" hidden>
+  <div class="overlay-scrim" data-voice-close></div>
+  <div class="overlay-panel" role="dialog" aria-modal="true" aria-label="Voice mode">
+    <header class="overlay-bar">
+      <span class="overlay-title"><span class="orb" aria-hidden="true"></span>Voice mode</span>
+      <span class="grow"></span>
+      <a class="overlay-link" id="voiceFullPage" href="/operator" target="_blank" rel="noopener">Open as a full page</a>
+      <button type="button" class="icon-btn" id="voiceClose" data-voice-close aria-label="Close voice mode" title="Close voice mode (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <iframe id="voiceFrame" title="Harvey voice mode" allow="microphone; autoplay" loading="lazy"></iframe>
+  </div>
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>

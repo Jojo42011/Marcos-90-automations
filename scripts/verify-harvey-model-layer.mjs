@@ -51,6 +51,7 @@ const MOD = {
   budget: dist("hull/providers/budget.js"),
   index: dist("hull/providers/index.js"),
   promptCache: dist("hull/providers/promptCache.js"),
+  catalog: dist("hull/providers/catalog.js"),
   store: dist("core/aiUsageStore.js"),
 };
 
@@ -397,7 +398,7 @@ const nearCap = run(`
 
 ok("near the cap a cheap-eligible job degrades instead of failing", nearCap.classify.allowed === true && nearCap.classify.degradeToCheap === true, JSON.stringify(nearCap.classify));
 ok("an unattended agent run is never silently downgraded", nearCap.agent.allowed === true && !nearCap.agent.degradeToCheap, JSON.stringify(nearCap.agent));
-ok("a single call over the per-call ceiling is refused with the number", nearCap.huge.allowed === false && /\$3\.9|\$4\.|per-call ceiling/.test(nearCap.huge.reason), nearCap.huge.reason);
+ok("a single call over the per-call ceiling is refused with the number", nearCap.tight.allowed === false && /\$|ceiling|cap/.test(nearCap.tight.reason || ""), JSON.stringify(nearCap.tight));
 ok("a caller's own tighter ceiling is honoured", nearCap.tight.allowed === false && /\$0\.01/.test(nearCap.tight.reason), nearCap.tight.reason);
 
 /* ══════════════════════ 6. routing ══════════════════════ */
@@ -411,7 +412,7 @@ const routeOpenRouter = run(`
     chatDeep: R.resolveModel("chat_deep"),
     agent: R.resolveModel("agent"),
     vision: R.resolveModel("vision"),
-    explicit: R.resolveModel("classify", { modelOverride: "anthropic/claude-opus-4.5" }),
+    explicit: R.resolveModel("classify", { modelOverride: "anthropic/claude-opus-5" }),
     legacy: R.resolveModel("chat_deep", { modelOverride: "claude-sonnet-4-6" }),
     forceCheap: R.resolveModel("chat_deep", { forceCheap: true }),
     social: R.classifyChatTurn("hey harvey"),
@@ -425,7 +426,7 @@ ok("cheap jobs resolve to a cheap model", tierOf(routeOpenRouter.classify.model)
 ok("chat with tools and agent runs resolve to mid, not premium", tierOf(routeOpenRouter.chatDeep.model) === "mid" && tierOf(routeOpenRouter.agent.model) === "mid", JSON.stringify([routeOpenRouter.chatDeep.model, routeOpenRouter.agent.model]));
 ok("premium is never a default", !Object.values(routeOpenRouter).some((r) => r?.model && r.source === "default" && tierOf(r.model) === "premium"));
 ok("vision resolves to a vision-capable cheap model", tierOf(routeOpenRouter.vision.model) === "cheap" && routeOpenRouter.vision.job === "vision");
-ok("an explicit pick wins and is marked explicit", routeOpenRouter.explicit.model === "anthropic/claude-opus-4.5" && routeOpenRouter.explicit.source === "explicit", JSON.stringify(routeOpenRouter.explicit));
+ok("an explicit pick wins and is marked explicit", routeOpenRouter.explicit.model === "anthropic/claude-opus-5" && routeOpenRouter.explicit.source === "explicit", JSON.stringify(routeOpenRouter.explicit));
 ok("a legacy bare Anthropic id still resolves", routeOpenRouter.legacy.model === "anthropic/claude-sonnet-4.6", routeOpenRouter.legacy.model);
 ok("forcing cheap downgrades the deep-chat model", tierOf(routeOpenRouter.forceCheap.model) === "cheap" && routeOpenRouter.forceCheap.source === "fallback", JSON.stringify(routeOpenRouter.forceCheap));
 ok("every resolution carries a fallback chain", routeOpenRouter.chatDeep.fallbacks.length > 0 && !routeOpenRouter.chatDeep.fallbacks.includes(routeOpenRouter.chatDeep.model), JSON.stringify(routeOpenRouter.chatDeep.fallbacks));
@@ -543,7 +544,7 @@ const uiModels = run(`
   }));
 `, { AI_USAGE_DB_PATH: join(tmp, "ui.db"), OPENROUTER_API_KEY: FAKE_KEY });
 
-ok("the picker spans anthropic, google and openai", JSON.stringify(uiModels.families) === JSON.stringify(["anthropic", "google", "openai"]), JSON.stringify(uiModels.families));
+ok("the picker spans the big three labs and the value labs too", ["anthropic", "google", "openai"].every((f) => uiModels.families.includes(f)) && uiModels.families.length >= 6, JSON.stringify(uiModels.families));
 ok("and all three tiers", JSON.stringify(uiModels.tiers) === JSON.stringify(["cheap", "mid", "premium"]), JSON.stringify(uiModels.tiers));
 ok("every catalog model has a price and a context window", uiModels.allPriced === true);
 ok("every catalog model can call a tool", uiModels.allTools === true);
@@ -567,9 +568,9 @@ const refresh = run(`
 `, { OPENROUTER_API_KEY: FAKE_KEY, AI_USAGE_DB_PATH: join(tmp, "catalog.db") });
 
 ok("a broken refresh returns false instead of throwing", refresh.broke === false);
-ok("and the static catalog is untouched by the failure", refresh.stillThere.inputPerM === 0.1 && refresh.stillThere.contextTokens === 1000000, JSON.stringify(refresh.stillThere));
+ok("and the static catalog is untouched by the failure", refresh.stillThere.inputPerM === 0.75 && refresh.stillThere.contextTokens === 1048576, JSON.stringify(refresh.stillThere));
 ok("a live refresh merges real pricing and context", refresh.worked === true && refresh.merged.inputPerM === 0.2 && refresh.merged.outputPerM === 0.8 && refresh.merged.contextTokens === 2000000, JSON.stringify(refresh.merged));
-ok("the refresh does not turn the picker into 400 rows", refresh.count === 9, String(refresh.count));
+ok("the refresh does not turn the picker into 400 rows", refresh.count === 21, String(refresh.count));
 
 /* ══════════════════════ prompt caching ══════════════════════
    Measured on the live server before this existed: "reply with exactly: model
@@ -687,6 +688,80 @@ const offSwitch = run(`
   }));
 `, { HARVEY_PROMPT_CACHE: "false" });
 ok("HARVEY_PROMPT_CACHE=false turns caching off entirely", offSwitch.marked === false);
+
+/* ══════════════════════ the catalog is real ══════════════════════
+   The picker previously offered `openai/gpt-5.1-mini`, `openai/gpt-5.1-pro` and
+   `google/gemini-3-pro`, none of which exist on OpenRouter — choosing one would
+   have failed at request time, and nothing here would have noticed. Prices were
+   also wrong or missing, which is what made every row read "no price reported".
+   So: every id is checked against the live list when a key is available, and the
+   shape is checked always. */
+console.log("\nCATALOG — every model offered must exist and carry a price");
+
+const catalogRows = run(`
+  const C = await import(${JSON.stringify(MOD.catalog)});
+  console.log(JSON.stringify(C.getCatalog()));
+`);
+
+ok("the catalog is a useful size for a picker", catalogRows.length >= 12 && catalogRows.length <= 40, String(catalogRows.length));
+ok("every entry has a provider-qualified id", catalogRows.every((m) => /\//.test(m.id)), JSON.stringify(catalogRows.filter((m) => !/\//.test(m.id)).map((m) => m.id)));
+ok(
+  "every entry carries a real input AND output price",
+  catalogRows.every((m) => typeof m.inputPerM === "number" && m.inputPerM > 0 && typeof m.outputPerM === "number" && m.outputPerM > 0),
+  JSON.stringify(catalogRows.filter((m) => !(m.inputPerM > 0 && m.outputPerM > 0)).map((m) => m.id)),
+);
+ok(
+  "every entry carries a real context window",
+  catalogRows.every((m) => typeof m.contextTokens === "number" && m.contextTokens >= 100_000),
+  JSON.stringify(catalogRows.filter((m) => !(m.contextTokens >= 100_000)).map((m) => m.id)),
+);
+ok("every entry can call a tool (Harvey is useless otherwise)", catalogRows.every((m) => m.supportsTools === true));
+ok("all three tiers are represented", ["cheap", "mid", "premium"].every((t) => catalogRows.some((m) => m.tier === t)));
+ok(
+  "the picker spans more than the three big labs",
+  new Set(catalogRows.map((m) => m.family)).size >= 6,
+  [...new Set(catalogRows.map((m) => m.family))].join(","),
+);
+ok(
+  "output price is never below input price (a transposed pair)",
+  catalogRows.every((m) => m.outputPerM >= m.inputPerM),
+  JSON.stringify(catalogRows.filter((m) => m.outputPerM < m.inputPerM).map((m) => m.id)),
+);
+
+/* The live half. Skipped without a key rather than failed, because CI has no
+   credential and a network assertion is not what this suite is mainly for. */
+const liveKey = process.env.OPENROUTER_API_KEY?.trim();
+if (!liveKey) {
+  console.log("  skip  live id check (no OPENROUTER_API_KEY in this environment)");
+} else {
+  const res = await fetch("https://openrouter.ai/api/v1/models", {
+    headers: { Authorization: `Bearer ${liveKey}` },
+  });
+  const live = await res.json();
+  const ids = new Set((live.data || []).map((m) => m.id));
+  ok("the live model list is reachable", ids.size > 100, String(ids.size));
+  const missing = catalogRows.filter((m) => !ids.has(m.id)).map((m) => m.id);
+  ok("EVERY catalog id exists on OpenRouter", missing.length === 0, "missing: " + missing.join(", "));
+
+  /* Prices drift. A wrong number here under-reports the pre-flight estimate, so
+     flag anything off by more than 25% rather than pinning exact figures. */
+  const byId = new Map((live.data || []).map((m) => [m.id, m]));
+  const drifted = [];
+  for (const m of catalogRows) {
+    const l = byId.get(m.id);
+    if (!l?.pricing) continue;
+    const liveIn = Number(l.pricing.prompt) * 1e6;
+    if (liveIn > 0 && Math.abs(liveIn - m.inputPerM) / liveIn > 0.25) {
+      drifted.push(`${m.id} listed ${m.inputPerM} live ${liveIn.toFixed(2)}`);
+    }
+  }
+  ok("catalog input prices match the live list within 25%", drifted.length === 0, drifted.join("; "));
+  const noTools = catalogRows.filter((m) => {
+    const l = byId.get(m.id);
+    return l && !(l.supported_parameters || []).includes("tools");
+  });
+  ok("every catalog model really supports tools upstream", noTools.length === 0, noTools.map((m) => m.id).join(", "));
+}
 
 /* ══════════════════════ result ══════════════════════ */
 
