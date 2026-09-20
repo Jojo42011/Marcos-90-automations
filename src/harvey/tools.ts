@@ -42,20 +42,6 @@ import { runWarmLeadWeeklyTouch } from "../agents/leadNurture/warmLeadFlow.js";
 import { runColdLeadMonthlyTouch } from "../agents/leadNurture/coldLeadFlow.js";
 import { handleWebsiteVisit } from "../agents/reEngagement/index.js";
 import {
-  getDailyReport,
-  getWeeklyReport,
-} from "../agents/contentManager/analytics.js";
-import {
-  listContentVideos,
-  listPendingComplianceQueue,
-  ensureDailyTargets,
-  getDailyStrategy,
-  getLatestBriefing,
-  getPerformanceModel,
-  todayDateCst,
-} from "../core/contentDb.js";
-import { contentManagerBrain } from "../agents/contentManager/brain/index.js";
-import {
   handleListingStatusUpdate,
   type ListingStatusValue,
 } from "../agents/listingStatusAutomation/index.js";
@@ -607,53 +593,6 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
         email_id: { type: "string", description: "Local email id from email marketing log" },
       },
       required: ["email_id"],
-    },
-  },
-  {
-    name: "get_content_summary",
-    description:
-      "Content Manager daily and weekly performance — videos published vs 7/day target, phone numbers captured vs 22/day, top/bottom videos, below-benchmark flags. Use when Marco asks how content is doing, if he's on track, or phone numbers today.",
-    input_schema: { type: "object", properties: {}, required: [] },
-  },
-  {
-    name: "get_content_pipeline",
-    description:
-      "Content Manager video queue — pending review, approved, scheduled, published, or rejected clips with captions, hooks, pillars, compliance flags.",
-    input_schema: {
-      type: "object",
-      properties: {
-        status: {
-          type: "string",
-          enum: ["pending_review", "approved", "scheduled", "published", "rejected"],
-          description: "Filter by video status",
-        },
-        limit: { type: "number", description: "Max videos to return, default 20" },
-      },
-      required: [],
-    },
-  },
-  {
-    name: "get_content_compliance_queue",
-    description:
-      "Content awaiting compliance review before publish — caption, hook, platform, flagged reasons. Check proactively during daily game plan discussions.",
-    input_schema: { type: "object", properties: {}, required: [] },
-  },
-  {
-    name: "get_content_manager_status",
-    description:
-      "Latest Content Manager briefing, today's strategy, and daily targets. Use for quick content status checks.",
-    input_schema: { type: "object", properties: {}, required: [] },
-  },
-  {
-    name: "ask_content_manager",
-    description:
-      "Ask the Content Manager Brain a content-strategy question. Use for analysis, recommendations, what to film, hooks, hashtags, performance.",
-    input_schema: {
-      type: "object",
-      properties: {
-        question: { type: "string", description: "Content question for the specialist" },
-      },
-      required: ["question"],
     },
   },
   // Tracker, Task Command, team and settings — see platformTools.ts.
@@ -1663,77 +1602,6 @@ export async function executeHarveyTool(
       if (!lead) return { error: "Lead not found", leadId };
       const source = normalized.source === "mls_feed" ? "mls_feed" : "manual";
       return handleListingStatusUpdate(leadId, address, status, source);
-    }
-    case "get_content_summary": {
-      const daily = getDailyReport();
-      const weekly = getWeeklyReport();
-      return {
-        today: daily,
-        weekly,
-        summary: {
-          videosPublished: daily.targets.videosPublished,
-          videosTarget: daily.targets.videosTarget,
-          phoneNumbersCaptured: daily.targets.phoneNumbersCaptured,
-          phoneNumbersTarget: daily.targets.phoneNumbersTarget,
-          commentsManaged: daily.targets.commentsManaged,
-          dmsTriaged: daily.targets.dmsTriaged,
-          topVideos: daily.topVideos,
-          bottomVideos: daily.bottomVideos,
-          weeklyVideosPublished: weekly.totalVideosPublished,
-          weeklyVideoTarget: weekly.weeklyVideoTarget,
-          weeklyPhonesCaptured: weekly.totalPhoneNumbersCaptured,
-          weeklyPhoneTarget: weekly.weeklyPhoneTarget,
-          belowBenchmarkFlags: weekly.consistentlyBelowBenchmark,
-        },
-      };
-    }
-    case "get_content_pipeline": {
-      const status = normalized.status as
-        | "pending_review"
-        | "approved"
-        | "scheduled"
-        | "published"
-        | "rejected"
-        | undefined;
-      const limit = Number(normalized.limit) || 20;
-      const videos = listContentVideos(status ? { status, limit } : { limit });
-      return {
-        count: videos.length,
-        videos: videos.map((v) => ({
-          id: v.id,
-          title: v.title,
-          caption: v.caption,
-          hook: v.hook,
-          pillar: v.pillar,
-          platform_target: v.platformTarget,
-          status: v.status,
-          compliance_flagged: v.complianceFlagged,
-          scheduled_for: v.scheduledFor,
-          published_at: v.publishedAt,
-        })),
-      };
-    }
-    case "get_content_compliance_queue": {
-      const pending = listPendingComplianceQueue();
-      return {
-        count: pending.length,
-        pending,
-      };
-    }
-    case "get_content_manager_status": {
-      const today = todayDateCst();
-      return {
-        latestBriefing: getLatestBriefing(),
-        todayStrategy: getDailyStrategy(today),
-        dailyTargets: ensureDailyTargets(today),
-        performanceModel: getPerformanceModel(),
-      };
-    }
-    case "ask_content_manager": {
-      const question = String(normalized.question ?? "").trim();
-      if (!question) return { error: "question required" };
-      const answer = await contentManagerBrain.chat(question);
-      return { answer };
     }
     default:
       return { error: `Unknown tool: ${name}` };

@@ -44,29 +44,26 @@ exports.executeDueTransactionPlanSteps = executeDueTransactionPlanSteps;
 require("dotenv/config");
 const http_1 = __importDefault(require("http"));
 const child_process_1 = require("child_process");
-const axios_1 = __importDefault(require("axios"));
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
-const os_1 = __importDefault(require("os"));
 const multer_1 = __importDefault(require("multer"));
 const webhook_js_1 = require("./app/webhook.js");
 const socialRefresh_js_1 = require("./app/socialRefresh.js");
-const index_js_1 = require("./agents/socialMedia/index.js");
 const jobs_js_1 = require("./app/jobs.js");
 const socialStore_js_1 = require("./core/socialStore.js");
-const index_js_2 = require("./integrations/apify/index.js");
+const index_js_1 = require("./integrations/apify/index.js");
 const claude_content_js_1 = require("./integrations/claude-content.js");
-const index_js_3 = require("./agents/morningScan/index.js");
-const index_js_4 = require("./agents/commentReply/index.js");
-const index_js_5 = require("./agents/videoFeedback/index.js");
+const index_js_2 = require("./agents/morningScan/index.js");
+const index_js_3 = require("./agents/commentReply/index.js");
+const index_js_4 = require("./agents/videoFeedback/index.js");
 const transitions_js_1 = require("./agents/videoFeedback/transitions.js");
-const index_js_6 = require("./agents/eveningPull/index.js");
-const index_js_7 = require("./agents/reporting/index.js");
-const index_js_8 = require("./agents/contentSuggestions/index.js");
-const index_js_9 = require("./agents/escalations/index.js");
-const index_js_10 = require("./agents/harveyContentDigest/index.js");
+const index_js_5 = require("./agents/eveningPull/index.js");
+const index_js_6 = require("./agents/reporting/index.js");
+const index_js_7 = require("./agents/contentSuggestions/index.js");
+const index_js_8 = require("./agents/escalations/index.js");
+const index_js_9 = require("./agents/harveyContentDigest/index.js");
 const db_js_1 = require("./core/db.js");
 const crmNotificationStore_js_1 = require("./core/crmNotificationStore.js");
 const pushStore_js_1 = require("./core/pushStore.js");
@@ -85,24 +82,9 @@ const taskAssignmentEmail_js_1 = require("./core/taskAssignmentEmail.js");
 const brivityPeople_js_1 = require("./core/brivityPeople.js");
 const zipWriter_js_1 = require("./core/zipWriter.js");
 const socialAnalytics_js_1 = require("./core/socialAnalytics.js");
-const index_js_11 = require("./agents/reEngagement/index.js");
-const index_js_12 = require("./agents/listingStatusAutomation/index.js");
-const index_js_13 = require("./agents/contentManager/index.js");
-const index_js_14 = require("./agents/contentManager/brain/index.js");
-const uploadPostPublish_js_1 = require("./agents/contentManager/uploadPostPublish.js");
-const googleDrivePull_js_1 = require("./agents/contentManager/googleDrivePull.js");
-const metaPublish_js_1 = require("./agents/contentManager/metaPublish.js");
-const batchProcessor_js_1 = require("./agents/contentManager/batchProcessor.js");
-const styleExamples_js_1 = require("./agents/contentManager/styleExamples.js");
+const index_js_10 = require("./agents/reEngagement/index.js");
+const index_js_11 = require("./agents/listingStatusAutomation/index.js");
 const diskCleanup_js_1 = require("./core/diskCleanup.js");
-const competitorIntel_js_1 = require("./agents/contentManager/competitorIntel.js");
-const stats_js_1 = require("./agents/contentManager/brain/stats.js");
-const tools_js_1 = require("./agents/contentManager/brain/tools.js");
-const contentDb_js_1 = require("./core/contentDb.js");
-const youtubeIntel_js_1 = require("./agents/contentManager/youtubeIntel.js");
-const competitiveAnalysis_js_1 = require("./agents/contentManager/competitiveAnalysis.js");
-const calendar_js_1 = require("./agents/contentManager/calendar.js");
-const stats_js_2 = require("./agents/contentManager/brain/stats.js");
 const autoPlans_js_1 = require("./core/autoPlans.js");
 const autoPlanTriggers_js_1 = require("./core/autoPlanTriggers.js");
 const tagTemplates_js_1 = require("./core/tagTemplates.js");
@@ -128,12 +110,12 @@ const deals_js_1 = require("./core/deals.js");
 const transactionsStore_js_1 = require("./core/transactionsStore.js");
 const transactionImport_js_1 = require("./core/transactionImport.js");
 const transactionSheetSync_js_1 = require("./core/transactionSheetSync.js");
-const index_js_15 = require("./agents/transactionImportReminder/index.js");
+const index_js_12 = require("./agents/transactionImportReminder/index.js");
 const documentFill_js_1 = require("./core/documentFill.js");
-const index_js_16 = require("./agents/transactionDeadlines/index.js");
+const index_js_13 = require("./agents/transactionDeadlines/index.js");
 const inspectionFlow_js_1 = require("./agents/transactionFlows/inspectionFlow.js");
 const postCloseFlow_js_1 = require("./agents/transactionFlows/postCloseFlow.js");
-const index_js_17 = require("./agents/leadScoring/index.js");
+const index_js_14 = require("./agents/leadScoring/index.js");
 const warmLeadFlow_js_1 = require("./agents/leadNurture/warmLeadFlow.js");
 const coldLeadFlow_js_1 = require("./agents/leadNurture/coldLeadFlow.js");
 const sourceRouting_js_1 = require("./agents/leadNurture/sourceRouting.js");
@@ -142,39 +124,37 @@ const dailyDigest_js_1 = require("./agents/reporting/dailyDigest.js");
 const weeklyKPI_js_1 = require("./agents/reporting/weeklyKPI.js");
 const reportingStore_js_1 = require("./core/reportingStore.js");
 const financeStore_js_1 = require("./core/financeStore.js");
-const index_js_18 = require("./agents/finance/index.js");
+const index_js_15 = require("./agents/finance/index.js");
 const state_js_1 = require("./core/state.js");
 const dialSession_js_1 = require("./core/dialSession.js");
 const callAssistant_js_1 = require("./core/callAssistant.js");
 const forewarn_js_1 = require("./integrations/forewarn.js");
 const db_js_2 = require("./core/db.js");
 const criteriaExtract_js_1 = require("./core/criteriaExtract.js");
-const index_js_19 = require("./integrations/sinch/index.js");
-const index_js_20 = require("./integrations/twilio/index.js");
+const index_js_16 = require("./integrations/sinch/index.js");
+const index_js_17 = require("./integrations/twilio/index.js");
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
-const index_js_21 = require("./integrations/llm/index.js");
+const index_js_18 = require("./integrations/llm/index.js");
 const adsUpstream_js_1 = require("./harvey/adsUpstream.js");
 const crypto_1 = require("crypto");
-const index_js_22 = require("./harvey/index.js");
-const index_js_23 = require("./hull/index.js");
+const index_js_19 = require("./harvey/index.js");
+const index_js_20 = require("./hull/index.js");
 const deepgramProxy_js_1 = require("./hull/voice/deepgramProxy.js");
 const tts_js_1 = require("./hull/voice/tts.js");
 const elevenlabsProxy_js_1 = require("./hull/voice/elevenlabsProxy.js");
 const ws_1 = require("ws");
 const smsStore_js_1 = require("./core/smsStore.js");
 const inboundReplyHelper_js_1 = require("./app/inboundReplyHelper.js");
-const index_js_24 = require("./agents/showingReminders/index.js");
-const index_js_25 = require("./agents/mojoOutreach/index.js");
-const index_js_26 = require("./agents/conversationEscalations/index.js");
+const index_js_21 = require("./agents/showingReminders/index.js");
+const index_js_22 = require("./agents/mojoOutreach/index.js");
+const index_js_23 = require("./agents/conversationEscalations/index.js");
 const textingRules_js_1 = require("./core/textingRules.js");
 const marcoLog_js_1 = require("./app/marcoLog.js");
 const conversationUtils_js_1 = require("./app/conversationUtils.js");
 const messageDebounce_js_1 = require("./app/messageDebounce.js");
-const index_js_27 = require("./integrations/openshorts/index.js");
-const clipEditAgent_js_1 = require("./agents/contentManager/clipEditAgent.js");
 const http_proxy_middleware_1 = require("http-proxy-middleware");
-const index_js_28 = require("./integrations/voxcpm/index.js");
-const index_js_29 = require("./integrations/elevenlabsVoice/index.js");
+const index_js_24 = require("./integrations/voxcpm/index.js");
+const index_js_25 = require("./integrations/elevenlabsVoice/index.js");
 const safetyLock_js_1 = require("./agents/voiceClone/safetyLock.js");
 const voiceCloneStore_js_1 = require("./core/voiceCloneStore.js");
 const lockdown_js_1 = require("./core/lockdown.js");
@@ -407,28 +387,27 @@ function harveyVoiceName() {
     }
 }
 app.get("/health", async (_req, res) => {
-    const apiKeyConfigured = (0, index_js_21.isAnthropicApiKeyConfigured)();
-    const openShortsHealth = await (0, index_js_27.checkOpenShortsHealth)().catch(() => ({ running: false }));
+    const apiKeyConfigured = (0, index_js_18.isAnthropicApiKeyConfigured)();
     const disk = getDiskInfo();
     res.status(200).json({
         ok: true,
         disk,
         anthropic: {
             api_key_configured: apiKeyConfigured,
-            model: (0, index_js_21.getAnthropicModel)(),
+            model: (0, index_js_18.getAnthropicModel)(),
             hint: apiKeyConfigured
                 ? "Haiku runs for preflight, opening, and pipeline when those paths call the API (billing and valid JSON still required)."
                 : "Set ANTHROPIC_API_KEY on the host. Without it, DMs use hardcoded fallbacks only.",
         },
         twilio: {
-            configured: (0, index_js_20.isTwilioConfigured)(),
-            hint: (0, index_js_20.isTwilioConfigured)()
+            configured: (0, index_js_17.isTwilioConfigured)(),
+            hint: (0, index_js_17.isTwilioConfigured)()
                 ? "Outbound SMS available; inbound webhook should point to POST /webhook/twilio"
                 : "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER for SMS handoff from CRM.",
         },
         harvey: {
-            model: (0, index_js_22.getHarveyModel)(),
-            api_key_configured: (0, index_js_21.isAnthropicApiKeyConfigured)(),
+            model: (0, index_js_19.getHarveyModel)(),
+            api_key_configured: (0, index_js_18.isAnthropicApiKeyConfigured)(),
             hull: "aethon-intelligence",
             voice: {
                 /* HEARING. This used to read the Deepgram key only, and so reported
@@ -459,18 +438,13 @@ app.get("/health", async (_req, res) => {
                 speech: (0, tts_js_1.ttsHealthReport)(),
             },
         },
-        openshorts: {
-            running: openShortsHealth.running,
-            model: "model" in openShortsHealth ? openShortsHealth.model || "gemini-2.5-flash" : "gemini-2.5-flash",
-            active_jobs: "activeJobs" in openShortsHealth ? openShortsHealth.activeJobs || 0 : 0,
-        },
     });
 });
 // (The in-house TikTok OAuth token-grab routes were removed — publishing now
 // goes through Upload-Post, which handles OAuth for all platforms externally.)
 /** OpenClaw — OpenAI-compatible brain endpoint (WhatsApp / messaging gateway). */
 app.post("/v1/chat/completions", express_1.default.json({ limit: "256kb" }), async (req, res) => {
-    if (!(0, index_js_21.isAnthropicApiKeyConfigured)()) {
+    if (!(0, index_js_18.isAnthropicApiKeyConfigured)()) {
         res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
         return;
     }
@@ -574,14 +548,6 @@ app.get("/tasks", (_req, res) => {
 });
 app.get("/tasks-classic", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "tasks.html"));
-});
-app.get("/social", requireAuthPage, (_req, res) => {
-    res.sendFile(path_1.default.join(publicDir, "social.html"));
-});
-// Content Planner — the editorial calendar (plan/backlog/assignment), as
-// distinct from the Content Manager's production calendar of filmed clips.
-app.get("/content-planner", requireAuthPage, (_req, res) => {
-    res.sendFile(path_1.default.join(publicDir, "content-planner.html"));
 });
 app.get("/email-marketing", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "email-marketing.html"));
@@ -3071,7 +3037,7 @@ app.get("/api/social/video-scores", (req, res) => {
         // breakdown scoring (that was the "real views, 0 bars" bug). scoreVideos
         // derives its own max from this set — no external benchmark needed.
         if (videos.length) {
-            const rescored = (0, index_js_2.scoreVideos)(videos);
+            const rescored = (0, index_js_1.scoreVideos)(videos);
             const byId = new Map(rescored.videos.map((r) => [r.id, r]));
             videos = videos.map((v) => {
                 const r = byId.get(v.id);
@@ -3154,7 +3120,7 @@ app.post("/api/social/video-improvements/:postId", async (req, res) => {
             ? videos.reduce((s, v) => s + (v.views || 0), 0) / videos.length
             : 0;
         const topViews = videos.reduce((m, v) => Math.max(m, v.views || 0), 0);
-        const improvements = await (0, index_js_5.generateVideoImprovements)({
+        const improvements = await (0, index_js_4.generateVideoImprovements)({
             description: video.caption || "",
             views: video.views || 0,
             likes: video.likes || 0,
@@ -3199,7 +3165,7 @@ app.post("/api/social/video-improvements/generate-all", async (req, res) => {
                 sharesScore: 0,
                 tier: video.tier ?? "cold",
             };
-            const improvements = await (0, index_js_5.generateVideoImprovements)({
+            const improvements = await (0, index_js_4.generateVideoImprovements)({
                 description: video.caption || "",
                 views: video.views || 0,
                 likes: video.likes || 0,
@@ -3261,7 +3227,7 @@ app.get("/api/evening-pull/latest", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    res.json({ result: (0, index_js_7.getLatestReportingSnapshot)("evening") });
+    res.json({ result: (0, index_js_6.getLatestReportingSnapshot)("evening") });
 });
 app.post("/api/evening-pull/run", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -3269,7 +3235,7 @@ app.post("/api/evening-pull/run", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_6.runEveningPull)();
+        const result = await (0, index_js_5.runEveningPull)();
         res.json({ result });
     }
     catch (err) {
@@ -3284,14 +3250,14 @@ app.get("/api/reporting/recent", (req, res) => {
     }
     const limitRaw = req.query.limit;
     const limit = typeof limitRaw === "string" && /^\d+$/.test(limitRaw) ? parseInt(limitRaw, 10) : 14;
-    res.json({ snapshots: (0, index_js_7.getRecentReportingSnapshots)(limit) });
+    res.json({ snapshots: (0, index_js_6.getRecentReportingSnapshots)(limit) });
 });
 app.get("/api/content-suggestions/latest", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    res.json({ result: (0, index_js_8.getLatestContentSuggestions)() });
+    res.json({ result: (0, index_js_7.getLatestContentSuggestions)() });
 });
 app.post("/api/content-suggestions/generate", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -3299,7 +3265,7 @@ app.post("/api/content-suggestions/generate", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_8.generateWeeklyContentSuggestions)();
+        const result = await (0, index_js_7.generateWeeklyContentSuggestions)();
         res.json({ result });
     }
     catch (err) {
@@ -3330,7 +3296,7 @@ app.get("/api/agent/status", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const digest = (0, index_js_10.getLatestContentDigest)();
+    const digest = (0, index_js_9.getLatestContentDigest)();
     const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
     let lastRunAt = null;
     let nextRunAt = null;
@@ -3359,7 +3325,7 @@ app.get("/api/escalations/recent", (req, res) => {
     }
     const limitRaw = req.query.limit;
     const limit = typeof limitRaw === "string" && /^\d+$/.test(limitRaw) ? parseInt(limitRaw, 10) : 20;
-    res.json({ escalations: (0, index_js_9.getRecentEscalations)(limit) });
+    res.json({ escalations: (0, index_js_8.getRecentEscalations)(limit) });
 });
 app.post("/api/escalations/check-now", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -3367,7 +3333,7 @@ app.post("/api/escalations/check-now", async (req, res) => {
         return;
     }
     try {
-        await (0, index_js_9.runAllEscalationChecks)();
+        await (0, index_js_8.runAllEscalationChecks)();
         res.json({ success: true });
     }
     catch (err) {
@@ -3380,7 +3346,7 @@ app.get("/api/morning-scan/latest", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const result = (0, index_js_3.getLatestMorningScan)();
+    const result = (0, index_js_2.getLatestMorningScan)();
     res.json({ result });
 });
 app.post("/api/morning-scan/run", async (req, res) => {
@@ -3389,7 +3355,7 @@ app.post("/api/morning-scan/run", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_3.runMorningScan)();
+        const result = await (0, index_js_2.runMorningScan)();
         res.json({ result });
     }
     catch (err) {
@@ -3435,7 +3401,7 @@ app.post("/api/comment-replies/generate", express_1.default.json(), async (req, 
         return;
     }
     try {
-        const reply = await (0, index_js_4.generateCommentReply)(commentText, authorUsername, postId);
+        const reply = await (0, index_js_3.generateCommentReply)(commentText, authorUsername, postId);
         res.json({ reply });
     }
     catch (err) {
@@ -6244,7 +6210,7 @@ app.get("/api/showings/upcoming", async (req, res) => {
         return;
     }
     try {
-        const upcoming = await (0, index_js_24.getUpcomingShowings)();
+        const upcoming = await (0, index_js_21.getUpcomingShowings)();
         res.json({ upcoming });
     }
     catch (err) {
@@ -6258,7 +6224,7 @@ app.post("/api/showings/check-reminders", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_24.checkAndSendShowingReminders)();
+        const result = await (0, index_js_21.checkAndSendShowingReminders)();
         res.json(result);
     }
     catch (err) {
@@ -6787,7 +6753,7 @@ app.post("/api/mojo-outreach/run", async (req, res) => {
         return;
     }
     try {
-        const result = await (0, index_js_25.runMojoOutreachSequence)();
+        const result = await (0, index_js_22.runMojoOutreachSequence)();
         res.json(result);
     }
     catch (err) {
@@ -7122,7 +7088,7 @@ app.get("/api/jarvis/ops", async (req, res) => {
         return;
     }
     try {
-        const ops = await (0, index_js_22.runHarveyOps)(harveyDeps());
+        const ops = await (0, index_js_19.runHarveyOps)(harveyDeps());
         res.status(200).json(ops);
     }
     catch (err) {
@@ -7146,7 +7112,7 @@ app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
     // smartest path with every business/memory tool available.
     const fullMode = req.body?.full === true || req.body?.full === "true";
     try {
-        const result = await (0, index_js_22.runHarveyChat)({
+        const result = await (0, index_js_19.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -7168,48 +7134,6 @@ function pruneReelChatJobs() {
             reelChatJobs.delete(id);
     }
 }
-app.post("/api/jarvis/analyze-reel", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const url = typeof req.body?.url === "string" ? req.body.url.trim() : "";
-    const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
-    if (!/^https?:\/\//i.test(url)) {
-        res.status(400).json({ error: "A full reel/short URL (http…) is required." });
-        return;
-    }
-    pruneReelChatJobs();
-    const jobId = (0, crypto_1.randomUUID)();
-    reelChatJobs.set(jobId, { status: "downloading", createdAt: Date.now() });
-    // Kick off the (already self-polling) sidecar analysis in the background and
-    // stash the result; the client polls GET below rather than holding a socket.
-    void (0, index_js_27.analyzeReelViaOpenShorts)(url, note)
-        .then((result) => {
-        const job = reelChatJobs.get(jobId);
-        if (!job)
-            return;
-        if (result.status === "complete") {
-            job.status = "complete";
-            job.analysis = result.analysis || "";
-            job.spoken = result.spoken || "";
-            job.metadata = result.metadata || {};
-        }
-        else {
-            job.status = "failed";
-            job.error = result.error || "Reel analysis failed.";
-            job.metadata = result.metadata || {};
-        }
-    })
-        .catch((err) => {
-        const job = reelChatJobs.get(jobId);
-        if (job) {
-            job.status = "failed";
-            job.error = err instanceof Error ? err.message : String(err);
-        }
-    });
-    res.json({ jobId, status: "started" });
-});
 app.get("/api/jarvis/analyze-reel/:jobId", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
@@ -7257,7 +7181,7 @@ app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }),
         let accumulated = "";
         let firstChunkSent = false;
         try {
-            const result = await (0, index_js_22.runHarveyChat)({
+            const result = await (0, index_js_19.runHarveyChat)({
                 message,
                 sessionId,
                 deps: harveyDeps(),
@@ -7292,7 +7216,7 @@ app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }),
         return;
     }
     try {
-        const result = await (0, index_js_22.runHarveyChat)({
+        const result = await (0, index_js_19.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -7312,8 +7236,8 @@ app.get("/api/jarvis/activation", async (req, res) => {
         return;
     }
     try {
-        const packet = await (0, index_js_23.buildMemoryPacketForQuery)("morning activation brief");
-        const text = await (0, index_js_23.handleActivation)(packet);
+        const packet = await (0, index_js_20.buildMemoryPacketForQuery)("morning activation brief");
+        const text = await (0, index_js_20.handleActivation)(packet);
         res.status(200).json({ text });
     }
     catch (err) {
@@ -7349,7 +7273,7 @@ app.post("/api/jarvis/execute-tool", express_1.default.json({ limit: "64kb" }), 
     }
     console.log("[Harvey Voice Tool] Executing:", toolName, "input:", JSON.stringify(toolInput));
     try {
-        const result = await (0, index_js_22.runHarveyTool)(toolName, toolInput);
+        const result = await (0, index_js_19.runHarveyTool)(toolName, toolInput);
         console.log("[Harvey Voice Tool] Result for", toolName, ":", JSON.stringify(result).substring(0, 200));
         res.status(200).json({ success: true, result });
     }
@@ -7473,7 +7397,7 @@ app.post("/api/jarvis/market-intel", express_1.default.json({ limit: "64kb" }), 
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_22.getHarveyModel)(),
+            model: (0, index_js_19.getHarveyModel)(),
             max_tokens: 1500,
             tools: [{
                     type: "web_search_20250305",
@@ -7547,7 +7471,7 @@ app.post("/api/jarvis/world-intel", express_1.default.json({ limit: "64kb" }), a
         const anthropic = new sdk_1.default({ apiKey });
         const lastUpdated = new Date().toISOString();
         const response = await anthropic.messages.create({
-            model: (0, index_js_22.getHarveyModel)(),
+            model: (0, index_js_19.getHarveyModel)(),
             max_tokens: 2000,
             tools: [{
                     type: "web_search_20250305",
@@ -7659,7 +7583,7 @@ async function runClaudeResearchJson(prompt) {
         throw new Error("ANTHROPIC_API_KEY not configured");
     const anthropic = new sdk_1.default({ apiKey });
     const response = await anthropic.messages.create({
-        model: (0, index_js_22.getHarveyModel)(),
+        model: (0, index_js_19.getHarveyModel)(),
         max_tokens: 2500,
         tools: [{
                 type: "web_search_20250305",
@@ -7932,7 +7856,7 @@ app.get("/api/jarvis/memory", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const db = (0, index_js_23.getHullDb)();
+    const db = (0, index_js_20.getHullDb)();
     res.json({
         facts: db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC LIMIT 50").all(),
         nodes: db.prepare("SELECT * FROM nodes ORDER BY created_at DESC LIMIT 50").all(),
@@ -7948,7 +7872,7 @@ app.get("/api/memory/all", (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const db = (0, index_js_23.getHullDb)();
+    const db = (0, index_js_20.getHullDb)();
     const facts = db.prepare("SELECT * FROM facts WHERE superseded_by IS NULL ORDER BY strength DESC").all();
     const nodes = db.prepare("SELECT * FROM nodes").all();
     const edges = db
@@ -7973,7 +7897,7 @@ app.get("/api/memory/all", (req, res) => {
 app.get("/api/memory/graph", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_23.getHullDb)();
+    const db = (0, index_js_20.getHullDb)();
     res.json({
         nodes: db.prepare("SELECT * FROM nodes").all(),
         edges: db.prepare("SELECT * FROM edges").all(),
@@ -7982,19 +7906,19 @@ app.get("/api/memory/graph", (req, res) => {
 app.get("/api/memory/episodes", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_23.getHullDb)();
+    const db = (0, index_js_20.getHullDb)();
     res.json(db.prepare("SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 20").all());
 });
 app.get("/api/memory/rules", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_23.getHullDb)();
+    const db = (0, index_js_20.getHullDb)();
     res.json(db.prepare("SELECT * FROM rules ORDER BY confidence DESC").all());
 });
 app.get("/api/memory/identity", (req, res) => {
     if (!dashboardTokenOk(req))
         return res.status(401).json({ error: "Unauthorized" });
-    const db = (0, index_js_23.getHullDb)();
+    const db = (0, index_js_20.getHullDb)();
     const profile = db.prepare("SELECT dimension, confidence FROM identity_dimensions ORDER BY dimension").all();
     const recentQuestions = db
         .prepare("SELECT dimension, question, asked_at, answered FROM identity_questions ORDER BY asked_at DESC LIMIT 10")
@@ -8628,11 +8552,11 @@ app.post("/api/memory/extract-voice", express_1.default.json({ limit: "512kb" })
         return res.status(401).json({ error: "Unauthorized" });
     const transcript = Array.isArray(req.body?.transcript) ? req.body.transcript : [];
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId : "voice";
-    await (0, index_js_23.runPostConversationExtraction)(sessionId, transcript.map((t) => ({
+    await (0, index_js_20.runPostConversationExtraction)(sessionId, transcript.map((t) => ({
         role: String(t.role || "user"),
         text: String(t.text || ""),
     })));
-    (0, index_js_23.broadcastHullEvent)({ type: "memory_updated" });
+    (0, index_js_20.broadcastHullEvent)({ type: "memory_updated" });
     res.json({ ok: true });
 });
 /** Harvey memory search — hybrid retrieval. */
@@ -8660,12 +8584,12 @@ app.post("/api/jarvis/memory/add", express_1.default.json(), async (req, res) =>
         res.status(400).json({ error: "Missing fact" });
         return;
     }
-    const db = (0, index_js_23.getHullDb)();
+    const db = (0, index_js_20.getHullDb)();
     const id = (0, crypto_1.randomUUID)();
     const now = new Date().toISOString();
     db.prepare(`INSERT INTO facts (id, content, category, keywords, strength, access_count, last_accessed, created_at)
      VALUES (?, ?, ?, ?, ?, 0, ?, ?)`).run(id, content, category, keywords, strength, now, now);
-    (0, index_js_23.broadcastHullEvent)({ type: "memory_updated" });
+    (0, index_js_20.broadcastHullEvent)({ type: "memory_updated" });
     res.status(201).json({ id, content, category, keywords, strength });
 });
 /** Delete memory row by id across hull tables. */
@@ -8679,7 +8603,7 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
         res.status(400).json({ error: "Missing id" });
         return;
     }
-    const db = (0, index_js_23.getHullDb)();
+    const db = (0, index_js_20.getHullDb)();
     const tables = ["facts", "nodes", "edges", "rules", "episodes", "syntheses", "identity_questions"];
     let deleted = false;
     for (const table of tables) {
@@ -8691,7 +8615,7 @@ app.delete("/api/jarvis/memory/:id", (req, res) => {
         res.status(404).json({ error: "Memory not found" });
         return;
     }
-    (0, index_js_23.broadcastHullEvent)({ type: "memory_updated" });
+    (0, index_js_20.broadcastHullEvent)({ type: "memory_updated" });
     res.status(200).json({ ok: true, id });
 });
 /** Gemini TTS — Aethon mouth (director's notes + Charon). */
@@ -8714,7 +8638,7 @@ app.post("/api/jarvis/voice", express_1.default.json({ limit: "256kb" }), async 
     }
     ttsInFlight++;
     try {
-        const audio = await (0, index_js_23.generateTTS)(text);
+        const audio = await (0, index_js_20.generateTTS)(text);
         if (!audio) {
             /* "TTS failed" told the browser nothing and the browser told the operator
                nothing, which is how Harvey stayed silent for a day without anyone
@@ -8934,7 +8858,7 @@ app.post("/api/jarvis/gemini-tts", express_1.default.json({ limit: "256kb" }), a
         return;
     }
     try {
-        const audio = await (0, index_js_23.generateTTS)(text);
+        const audio = await (0, index_js_20.generateTTS)(text);
         if (!audio) {
             /* "TTS failed" told the browser nothing and the browser told the operator
                nothing, which is how Harvey stayed silent for a day without anyone
@@ -9352,7 +9276,7 @@ app.get("/api/dm/conversation/:leadId", async (req, res) => {
 });
 app.post("/sinch/inbound", express_1.default.json(), async (req, res) => {
     try {
-        const payload = (0, index_js_19.receiveInbound)(req.body);
+        const payload = (0, index_js_16.receiveInbound)(req.body);
         if (!payload) {
             res.status(400).json({ error: "Invalid or unparseable Sinch inbound payload" });
             return;
@@ -9376,7 +9300,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const signature = req.get("x-twilio-signature") ?? "";
         const protocol = req.get("x-forwarded-proto") || req.protocol;
         const url = `${protocol}://${req.get("host")}${req.originalUrl}`;
-        if (signature && !(0, index_js_20.validateTwilioSignature)(signature, url, req.body)) {
+        if (signature && !(0, index_js_17.validateTwilioSignature)(signature, url, req.body)) {
             console.warn("[Twilio Webhook] Invalid signature — rejecting");
             res.status(403).send("Invalid signature");
             return;
@@ -9385,7 +9309,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const from = typeof req.body?.From === "string" ? req.body.From.trim() : "";
         const message = typeof req.body?.Body === "string" ? req.body.Body.trim() : "";
         console.log("[Twilio Webhook] Inbound from", from, "- body:", message.substring(0, 100));
-        if (messageSid && ((0, smsStore_js_1.isMessageHandleSeen)(messageSid) || !(0, index_js_20.claimTwilioInboundSid)(messageSid))) {
+        if (messageSid && ((0, smsStore_js_1.isMessageHandleSeen)(messageSid) || !(0, index_js_17.claimTwilioInboundSid)(messageSid))) {
             console.log("[Twilio Webhook] Duplicate message, ignoring:", messageSid);
             res.status(200).send("");
             return;
@@ -9397,8 +9321,8 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const inspectionConfirmation = (0, inspectionFlow_js_1.checkInspectionConfirmation)(from, message);
         if (inspectionConfirmation.handled && inspectionConfirmation.replyMessage?.trim()) {
             const replyText = inspectionConfirmation.replyMessage.trim();
-            if ((0, index_js_20.isTwilioConfigured)()) {
-                const send = await (0, index_js_20.sendTwilioMessage)({ to: from, content: replyText });
+            if ((0, index_js_17.isTwilioConfigured)()) {
+                const send = await (0, index_js_17.sendTwilioMessage)({ to: from, content: replyText });
                 if (!send.success) {
                     console.error("[Twilio] inspection confirmation reply failed:", send.error);
                 }
@@ -9430,14 +9354,14 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         if (firstName) {
             console.log("[InboundSMS] Lead", lead.id, "first name available for greeting:", firstName);
         }
-        const confirmationResult = await (0, index_js_24.checkShowingConfirmation)(lead, message);
+        const confirmationResult = await (0, index_js_21.checkShowingConfirmation)(lead, message);
         if (confirmationResult.handled && confirmationResult.replyMessage.trim()) {
             const replyText = confirmationResult.replyMessage.trim();
             if (message) {
                 await (0, db_js_1.appendMessage)(lead.id, "user", message);
             }
-            if ((0, index_js_20.isTwilioConfigured)() && lead.phone) {
-                const send = await (0, index_js_20.sendTwilioMessage)({ to: lead.phone, content: replyText });
+            if ((0, index_js_17.isTwilioConfigured)() && lead.phone) {
+                const send = await (0, index_js_17.sendTwilioMessage)({ to: lead.phone, content: replyText });
                 if (!send.success) {
                     console.error("[Twilio] showing confirmation reply failed:", send.error);
                 }
@@ -9464,9 +9388,9 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
             res.status(200).send("");
             return;
         }
-        await (0, index_js_24.checkPostShowingFeedback)(lead, message);
+        await (0, index_js_21.checkPostShowingFeedback)(lead, message);
         let activeLead = (await (0, db_js_1.getLeadById)(lead.id)) ?? lead;
-        if ((0, index_js_25.isMojoLead)(activeLead) &&
+        if ((0, index_js_22.isMojoLead)(activeLead) &&
             activeLead.mojoOutreach &&
             (activeLead.mojoOutreach.status === "active" || activeLead.mojoOutreach.status === "paused")) {
             await (0, db_js_1.updateLeadCrmFields)({
@@ -9475,7 +9399,7 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
             });
             activeLead = (await (0, db_js_1.getLeadById)(activeLead.id)) ?? activeLead;
         }
-        const escalation = (0, index_js_26.detectConversationEscalation)(message);
+        const escalation = (0, index_js_23.detectConversationEscalation)(message);
         if (escalation.triggered && escalation.type) {
             await (0, db_js_1.updateLeadCrmFields)({
                 leadId: activeLead.id,
@@ -9483,13 +9407,13 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
                 automationPausedReason: escalation.type,
                 automationPausedAt: new Date().toISOString(),
             });
-            await (0, index_js_26.notifyMarcoOfConversationEscalation)(activeLead, escalation.type, message);
+            await (0, index_js_23.notifyMarcoOfConversationEscalation)(activeLead, escalation.type, message);
             if (escalation.type === "angry_client" &&
                 escalation.holdMessage &&
-                (0, index_js_20.isTwilioConfigured)() &&
+                (0, index_js_17.isTwilioConfigured)() &&
                 activeLead.phone) {
                 const holdText = escalation.holdMessage;
-                const send = await (0, index_js_20.sendTwilioMessage)({ to: activeLead.phone, content: holdText });
+                const send = await (0, index_js_17.sendTwilioMessage)({ to: activeLead.phone, content: holdText });
                 if (!send.success) {
                     console.error("[ConvEscalation] empathy hold send failed:", send.error);
                 }
@@ -9530,9 +9454,9 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
         const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
         const correlationId = (0, marcoLog_js_1.marcoCorrelationId)(payload.platform, payload.userId);
         const result = await (0, webhook_js_1.handleIncomingPayload)(payload, { requestId, correlationId });
-        if (result.reply?.trim() && (0, index_js_20.isTwilioConfigured)()) {
+        if (result.reply?.trim() && (0, index_js_17.isTwilioConfigured)()) {
             const replyText = result.reply.trim();
-            const send = await (0, index_js_20.sendTwilioMessage)({ to: activeLead.phone, content: replyText });
+            const send = await (0, index_js_17.sendTwilioMessage)({ to: activeLead.phone, content: replyText });
             if (!send.success) {
                 console.error("[Twilio] outbound after pipeline failed:", send.error);
             }
@@ -9569,7 +9493,7 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    if (!(0, index_js_20.isTwilioConfigured)()) {
+    if (!(0, index_js_17.isTwilioConfigured)()) {
         res.status(503).json({
             error: "Twilio not configured",
             hint: "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER on the server",
@@ -9600,11 +9524,11 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
                 res.status(400).json({ error: "Lead has no phone number" });
                 return;
             }
-            to = (0, index_js_20.normalizeToUsE164)(lead.phone);
+            to = (0, index_js_17.normalizeToUsE164)(lead.phone);
             threadLeadId = lead.id;
         }
         else {
-            to = (0, index_js_20.normalizeToUsE164)(toRaw);
+            to = (0, index_js_17.normalizeToUsE164)(toRaw);
             const digits = to.replace(/\D/g, "");
             if (digits.length < 10) {
                 res.status(400).json({ error: "Invalid phone number" });
@@ -9614,7 +9538,7 @@ app.post("/api/sms/send", express_1.default.json(), async (req, res) => {
             if (matched)
                 threadLeadId = matched.id;
         }
-        const send = await (0, index_js_20.sendTwilioMessage)({ to, content });
+        const send = await (0, index_js_17.sendTwilioMessage)({ to, content });
         if (!send.success) {
             res.status(502).json({ error: send.error });
             return;
@@ -9646,10 +9570,10 @@ async function sendLeadText(leadId, content, threadType = "general") {
     const lead = await (0, db_js_1.getLeadById)(leadId);
     if (!lead?.phone?.trim())
         return { ok: false, error: "Lead has no phone number" };
-    if (!(0, index_js_20.isTwilioConfigured)())
+    if (!(0, index_js_17.isTwilioConfigured)())
         return { ok: false, error: "Twilio not configured" };
-    const to = (0, index_js_20.normalizeToUsE164)(lead.phone);
-    const send = await (0, index_js_20.sendTwilioMessage)({ to, content });
+    const to = (0, index_js_17.normalizeToUsE164)(lead.phone);
+    const send = await (0, index_js_17.sendTwilioMessage)({ to, content });
     if (!send.success)
         return { ok: false, error: send.error };
     await (0, db_js_1.appendMessage)(leadId, "assistant", content);
@@ -9743,7 +9667,7 @@ app.post("/api/leads/:id/website-visit", express_1.default.json(), async (req, r
         return;
     }
     try {
-        const result = await (0, index_js_11.handleWebsiteVisit)(leadId);
+        const result = await (0, index_js_10.handleWebsiteVisit)(leadId);
         res.status(200).json(result);
     }
     catch (err) {
@@ -9767,7 +9691,7 @@ app.post("/api/activity/website-visit", express_1.default.json(), async (req, re
         return;
     }
     try {
-        const result = await (0, index_js_11.handleWebsiteVisit)(lead.id);
+        const result = await (0, index_js_10.handleWebsiteVisit)(lead.id);
         res.status(200).json({ ...result, leadId: lead.id });
     }
     catch (err) {
@@ -9796,7 +9720,7 @@ app.post("/api/leads/:id/listing-status", express_1.default.json(), async (req, 
         return;
     }
     try {
-        const result = await (0, index_js_12.handleListingStatusUpdate)(leadId, address, status, source);
+        const result = await (0, index_js_11.handleListingStatusUpdate)(leadId, address, status, source);
         res.status(200).json(result);
     }
     catch (err) {
@@ -9820,298 +9744,6 @@ app.post("/api/crm/notifications/:id/read", (req, res) => {
     }
     (0, crmNotificationStore_js_1.markNotificationRead)(String(req.params.id || ""));
     res.json({ success: true });
-});
-/** Content Manager — ingest, repurpose, compliance, publish, analytics. */
-app.post("/api/content/ingest", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const type = req.body?.type;
-    if (!["video", "listing_url", "market_stat", "calendar"].includes(type)) {
-        res.status(400).json({ error: "type must be video, listing_url, market_stat, or calendar" });
-        return;
-    }
-    try {
-        const session = await (0, index_js_13.ingestContent)({
-            type,
-            path: typeof req.body?.path === "string" ? req.body.path : undefined,
-            url: typeof req.body?.url === "string" ? req.body.url : undefined,
-            meta: req.body?.meta && typeof req.body.meta === "object" ? req.body.meta : undefined,
-        });
-        res.json(session);
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.post("/api/content/repurpose/:sessionId", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    try {
-        const clips = await (0, index_js_13.repurposeSession)(String(req.params.sessionId || ""));
-        res.json({ clips });
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.post("/api/content/compliance/:videoId", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    try {
-        const result = await (0, index_js_13.runComplianceCheck)(String(req.params.videoId || ""));
-        res.json(result);
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.post("/api/content/publish/:videoId", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    // Accept a platforms[] array (one call → many platforms via Upload-Post).
-    // Back-compat: a single `platform` string is wrapped into the array.
-    const body = (req.body && typeof req.body === "object" ? req.body : {});
-    let platforms = [];
-    if (Array.isArray(body.platforms)) {
-        platforms = body.platforms.map((p) => String(p).trim().toLowerCase()).filter(Boolean);
-    }
-    else if (typeof body.platform === "string" && body.platform.trim()) {
-        platforms = [body.platform.trim().toLowerCase()];
-    }
-    if (!platforms.length) {
-        res.status(400).json({ error: "platforms required (array of tiktok/instagram/facebook)" });
-        return;
-    }
-    const scheduledFor = typeof body.scheduled_for === "string" ? body.scheduled_for.trim() : null;
-    try {
-        const outcome = await (0, index_js_13.publishVideo)(String(req.params.videoId || ""), platforms, { scheduledFor });
-        const anySuccess = outcome.results.some((r) => r.state === "success");
-        const anyPending = outcome.results.some((r) => r.state === "pending");
-        const allFailed = outcome.results.length > 0 && outcome.results.every((r) => r.state === "failed");
-        // Only a genuine all-platform failure is an error. "pending" (accepted, not
-        // yet confirmed) is a normal 200 — the clip shows "Submitted".
-        if (allFailed) {
-            res.status(502).json({
-                error: outcome.results.map((r) => `${r.platform}: ${r.error || "failed"}`).join("; "),
-                results: outcome.results,
-            });
-            return;
-        }
-        // Honest per-platform results — never a blanket "published".
-        res.json({ ok: anySuccess, pending: anyPending, results: outcome.results });
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-// Whether publishing is connected right now. Upload-Post handles TikTok,
-// Instagram and Facebook through ONE API key, so this is a single real check
-// (a live listUsers() call) mirrored across the three platform flags the UI
-// reads. Until UPLOAD_POST_API_KEY is set and valid, all three are "Not
-// connected" — no faked state.
-app.get("/api/content/publish/capabilities", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const connected = await (0, uploadPostPublish_js_1.uploadPostConnected)();
-    res.json({
-        provider: "upload-post",
-        connected,
-        tiktok: { connected },
-        instagram: { connected },
-        facebook: { connected },
-    });
-});
-// Publicly fetchable clip stream for Meta (Instagram/Facebook cURL the video
-// by URL). Authorized by a short-lived HMAC signature in the query, NOT the
-// dashboard token — so the master token is never exposed to Meta.
-app.get("/api/content/public-clip/:videoId", (req, res) => {
-    const videoId = String(req.params.videoId || "");
-    const exp = String(req.query.exp || "");
-    const sig = String(req.query.sig || "");
-    if (!(0, metaPublish_js_1.verifySignedClip)(videoId, exp, sig)) {
-        res.status(403).json({ error: "Invalid or expired clip signature" });
-        return;
-    }
-    const video = (0, contentDb_js_1.getContentVideo)(videoId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const filePath = resolveClipFileForVideo(video);
-    if (!filePath) {
-        res.status(404).json({ error: "Video file not found on disk" });
-        return;
-    }
-    try {
-        streamClipVideoFile(req, res, filePath);
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-// Remove a clip from the publish queue — it will NOT be posted. Mirrors the
-// Review Queue reject flow: a status change (to "rejected", which drops it from
-// the queue) plus reclaiming the clip file, not a hard DB delete.
-app.post("/api/content/publishing-queue/:videoId/remove", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    try {
-        const videoId = String(req.params.videoId || "");
-        const video = (0, contentDb_js_1.getContentVideo)(videoId);
-        if (!video) {
-            res.status(404).json({ error: `Video not found: ${videoId}` });
-            return;
-        }
-        (0, contentDb_js_1.updateContentVideo)(videoId, { status: "rejected" });
-        // Late reject (pulled from the publish queue) — still a rejection signal.
-        try {
-            (0, contentDb_js_1.recordClipDecision)(videoId, "rejected");
-        }
-        catch (err) {
-            console.warn("[publishing-queue-remove] could not record clip decision:", err);
-        }
-        const clipPath = resolveClipFileForVideo(video);
-        if (clipPath)
-            (0, diskCleanup_js_1.deleteClipFile)(clipPath);
-        res.json({ ok: true, videoId, removed: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.post("/api/content/triage-dm", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const platform = typeof req.body?.platform === "string" ? req.body.platform.trim() : "";
-    const userId = typeof req.body?.userId === "string" ? req.body.userId.trim() : "";
-    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
-    if (!platform || !userId || !message) {
-        res.status(400).json({ error: "platform, userId, and message required" });
-        return;
-    }
-    try {
-        const result = await (0, index_js_13.triageDm)({
-            platform,
-            userId,
-            message,
-            username: typeof req.body?.username === "string" ? req.body.username : undefined,
-        });
-        res.json(result);
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.get("/api/content/queue", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const status = typeof req.query.status === "string" ? req.query.status.trim() : "";
-    const batchId = typeof req.query.batch_id === "string" ? req.query.batch_id.trim() : "";
-    const limit = Number(req.query.limit) || 200;
-    const validStatuses = new Set([
-        "processing",
-        "pending_review",
-        "approved",
-        "scheduled",
-        "published",
-        "rejected",
-    ]);
-    const videos = (0, contentDb_js_1.listContentVideosWithEnhancements)({
-        status: validStatuses.has(status)
-            ? status
-            : undefined,
-        batchSessionId: batchId || undefined,
-        limit,
-    });
-    res.json({ videos });
-});
-app.get("/api/content/stats", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json((0, contentDb_js_1.getContentManagerStats)());
-});
-app.get("/api/content/lead-captures", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const capturedFrom = req.query.captured_from === "dm" || req.query.captured_from === "comment"
-        ? req.query.captured_from
-        : undefined;
-    const limit = Number(req.query.limit) || 100;
-    res.json({ captures: (0, contentDb_js_1.listLeadCaptures)({ capturedFrom, limit }) });
-});
-app.post("/api/content/comments/log", (_req, res) => {
-    if (!dashboardTokenOk(_req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    (0, index_js_13.trackCommentManaged)();
-    res.json({ ok: true });
-});
-app.post("/api/content/compliance/:videoId/decision", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const decision = req.body?.decision;
-    if (decision !== "approved" && decision !== "rejected") {
-        res.status(400).json({ error: "decision must be approved or rejected" });
-        return;
-    }
-    try {
-        const videoId = String(req.params.videoId || "");
-        const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
-        const result = (0, index_js_13.applyComplianceDecision)(videoId, decision, reason);
-        // A rejected clip has no further use — reclaim its file immediately.
-        if (decision === "rejected") {
-            // Record BEFORE deleting the file so the decision row captures the
-            // clip's traits (hook type, scores) for the Brain's feedback loop.
-            try {
-                (0, contentDb_js_1.recordClipDecision)(videoId, "rejected");
-            }
-            catch (err) {
-                console.warn("[compliance-decision] could not record clip decision:", err);
-            }
-            const video = (0, contentDb_js_1.getContentVideo)(videoId);
-            const clipPath = video ? resolveClipFileForVideo(video) : null;
-            if (clipPath)
-                (0, diskCleanup_js_1.deleteClipFile)(clipPath);
-        }
-        res.json(result);
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.get("/api/content/analytics", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json({
-        rows: (0, contentDb_js_1.getAnalyticsDataset)(),
-        pillarSummary: (0, contentDb_js_1.getPillarPerformanceSummary)(),
-        weekly: (0, index_js_13.getWeeklyReport)(),
-    });
 });
 function resolveContentVideoUploadDir() {
     const base = fs_1.default.existsSync("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
@@ -10155,30 +9787,6 @@ function resolveClipVideoFilePath(storedPath) {
     for (const candidate of candidates) {
         if (fs_1.default.existsSync(candidate))
             return candidate;
-    }
-    return null;
-}
-function gatherClipPathCandidates(video) {
-    const candidates = [];
-    if (video.filePath)
-        candidates.push(video.filePath);
-    if (video.sourceSessionId) {
-        const session = (0, contentDb_js_1.getContentSession)(video.sourceSessionId);
-        const meta = session?.rawInputMeta;
-        if (meta && typeof meta.clipPath === "string" && meta.clipPath) {
-            candidates.push(meta.clipPath);
-        }
-        if (meta && typeof meta.clipUrl === "string" && meta.clipUrl) {
-            candidates.push((0, index_js_27.mapClipUrlForFrontend)(meta.clipUrl));
-        }
-    }
-    return [...new Set(candidates.filter(Boolean))].filter((p) => !p.startsWith("mock://"));
-}
-function resolveClipFileForVideo(video) {
-    for (const candidate of gatherClipPathCandidates(video)) {
-        const resolved = resolveClipVideoFilePath(candidate);
-        if (resolved)
-            return resolved;
     }
     return null;
 }
@@ -10394,63 +10002,6 @@ const scriptTextUpload = (0, multer_1.default)({
         cb(null, allowed.includes(path_1.default.extname(file.originalname).toLowerCase()));
     },
 });
-// Extract plain text from an uploaded script (.txt directly, .pdf via pdf-parse,
-// .docx/.doc placeholder). The temp file is always removed — only text survives.
-app.post("/api/content/extract-text", scriptTextUpload.single("file"), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const file = req.file;
-    if (!file) {
-        res.status(400).json({ error: "No file uploaded (field name: file; allowed: txt, pdf, docx, doc)." });
-        return;
-    }
-    try {
-        const ext = path_1.default.extname(file.originalname).toLowerCase();
-        let text = "";
-        if (ext === ".txt") {
-            text = fs_1.default.readFileSync(file.path, "utf8");
-        }
-        else if (ext === ".pdf") {
-            try {
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
-                const pdfParse = require("pdf-parse");
-                const data = await pdfParse(fs_1.default.readFileSync(file.path));
-                text = data.text || "";
-            }
-            catch (pdfErr) {
-                console.warn(`[extract-text] pdf-parse failed for ${file.originalname}:`, pdfErr);
-                text = `[PDF: ${file.originalname} — text could not be extracted]`;
-            }
-        }
-        else {
-            text = `[File: ${file.originalname} — only .txt and .pdf text extraction is supported; paste key lines into the context box instead]`;
-        }
-        res.json({ text: text.slice(0, 10000), truncated: text.length > 10000 });
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-    finally {
-        try {
-            fs_1.default.unlinkSync(file.path);
-        }
-        catch { /* best-effort temp cleanup */ }
-    }
-});
-app.post("/api/content/clip/:clipId/audio", clipAudioUpload.single("audio"), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    if (!req.file) {
-        res.status(400).json({ error: "No audio file uploaded (field name: audio; allowed: mp3, m4a, aac, wav, ogg)." });
-        return;
-    }
-    // Return the server path — the client sends it back with the /edit call.
-    res.json({ ok: true, audioReplacePath: req.file.path, fileName: req.file.originalname });
-});
 // FreeCut round-trip: Marco edits a clip in the FreeCut browser editor (external,
 // client-side), exports it to disk, and re-uploads it here. The uploaded file
 // REPLACES this clip's video so the existing publish flow uses the edited version.
@@ -10469,642 +10020,6 @@ const clipVideoReplaceUpload = (0, multer_1.default)({
         const allowed = [".mp4", ".mov", ".webm", ".mkv", ".m4v"];
         cb(null, allowed.includes(path_1.default.extname(file.originalname).toLowerCase()));
     },
-});
-app.post("/api/content/clip/:clipId/replace-upload", requireDiskSpaceForUpload(), clipVideoReplaceUpload.single("video"), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    if (!req.file) {
-        res.status(400).json({ error: "No video uploaded (field name: video; allowed: mp4, mov, webm, mkv, m4v)." });
-        return;
-    }
-    // Confirm the upload is a readable video (ffprobe returns a real duration)
-    // before repointing the clip at it.
-    const dur = probeClipDurationSeconds(req.file.path);
-    if (!dur || dur <= 0) {
-        try {
-            fs_1.default.unlinkSync(req.file.path);
-        }
-        catch { /* ignore */ }
-        res.status(422).json({ error: "Uploaded file could not be read as a video (corrupt or unsupported)." });
-        return;
-    }
-    const oldPath = resolveClipFileForVideo(video);
-    (0, contentDb_js_1.updateContentVideoFilePath)(clipId, req.file.path);
-    if (oldPath && path_1.default.resolve(oldPath) !== path_1.default.resolve(req.file.path)) {
-        saveClipVersionKeepingOne(clipId, oldPath); // keep the pre-FreeCut version for revert
-    }
-    console.log(`[freecut] Clip ${clipId} replaced with uploaded edit (${req.file.originalname})`);
-    res.json({ ok: true, videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}` });
-});
-app.post("/api/content/upload", requireDiskSpaceForUpload(), trackUploadProgress(), contentVideoUpload.single("video"), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    if (!req.file) {
-        res.status(400).json({ error: "No video file uploaded (field name: video)" });
-        return;
-    }
-    const pillar = typeof req.body?.pillar === "string" ? req.body.pillar.trim() : "";
-    if (!["education", "listings", "brand"].includes(pillar)) {
-        res.status(400).json({ error: "pillar required: education, listings, or brand" });
-        return;
-    }
-    const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
-    const savedPath = req.file.path;
-    try {
-        const session = await (0, index_js_13.ingestContent)({
-            type: "video",
-            path: savedPath,
-            meta: { pillar, notes, originalName: req.file.originalname },
-        });
-        const clips = await (0, index_js_13.repurposeSession)(session.id);
-        res.json({ session, clips, savedPath });
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.post("/api/content/batch-upload", requireDiskSpaceForUpload(), trackUploadProgress(), batchVideoUpload.array("videos", 20), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const files = req.files;
-    if (!files?.length) {
-        res.status(400).json({ error: "At least one video file required (field name: videos)" });
-        return;
-    }
-    // Phase 5d — precise per-batch estimate now that real file sizes are known.
-    const estimatedClipSpaceMB = estimateBatchClipSpaceMB(files);
-    const neededMB = estimatedClipSpaceMB + UPLOAD_PROCESSING_HEADROOM_MB;
-    const freeMBNow = await (0, diskCleanup_js_1.getFreeDiskMB)();
-    if (Number.isFinite(freeMBNow) && freeMBNow < neededMB) {
-        for (const f of files) {
-            try {
-                fs_1.default.unlinkSync(f.path);
-            }
-            catch {
-                /* best-effort — safety sweep will catch it if this fails */
-            }
-        }
-        console.warn(`[batch-processor] Per-batch space estimate failed: ~${Math.round(neededMB)}MB needed ` +
-            `(${Math.round(estimatedClipSpaceMB)}MB estimated clips + ${UPLOAD_PROCESSING_HEADROOM_MB}MB processing), ` +
-            `${freeMBNow}MB available. Batch rejected, uploaded files removed.`);
-        res.status(507).json({
-            error: `Not enough disk space for this batch — estimated ${Math.round(neededMB)}MB needed, ${freeMBNow}MB available. ` +
-                `Review and publish pending clips to free space, or upload fewer/smaller files.`,
-        });
-        return;
-    }
-    const pillar = typeof req.body?.pillar === "string" ? req.body.pillar.trim() : "";
-    if (!["education", "listings", "brand", "mixed"].includes(pillar)) {
-        res.status(400).json({ error: "pillar required: education, listings, brand, or mixed" });
-        return;
-    }
-    const sessionName = typeof req.body?.session_name === "string" ? req.body.session_name.trim() : "";
-    const filmedBy = typeof req.body?.filmed_by === "string" && req.body.filmed_by.trim()
-        ? req.body.filmed_by.trim()
-        : "marco";
-    const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
-    // Human direction for the clipping AI ("the good stuff starts at 3:10") and
-    // optional script text — both flow into the sidecar's viral-moment prompt.
-    const userContext = typeof req.body?.user_context === "string" ? req.body.user_context.trim().slice(0, 4000) : "";
-    const scriptText = typeof req.body?.script_text === "string" ? req.body.script_text.trim().slice(0, 12000) : "";
-    // Per-batch enhancement toggles ("1"/"0" form fields). Absent fields mean
-    // "use server defaults" — only explicitly sent values are recorded.
-    const flag = (name) => {
-        const v = req.body?.[name];
-        if (v === "1" || v === "true")
-            return true;
-        if (v === "0" || v === "false")
-            return false;
-        return undefined;
-    };
-    const enhanceOptions = {
-        captions: flag("enhance_captions"),
-        autoZoom: flag("enhance_auto_zoom"),
-        broll: flag("enhance_broll"),
-    };
-    const hasEnhanceOptions = Object.values(enhanceOptions).some((v) => v !== undefined);
-    const batch = (0, contentDb_js_1.createBatchSession)({
-        sessionName: sessionName || null,
-        pillar,
-        filmedBy,
-        status: "uploading",
-        sourceFileCount: files.length,
-        notes: notes || null,
-        userContext: userContext || undefined,
-        scriptText: scriptText || undefined,
-        enhanceOptions: hasEnhanceOptions ? enhanceOptions : undefined,
-    });
-    for (const file of files) {
-        (0, contentDb_js_1.createBatchSourceFile)({
-            batchSessionId: batch.id,
-            originalFilename: file.originalname,
-            fileSizeBytes: file.size,
-            filePath: file.path,
-        });
-    }
-    (0, contentDb_js_1.updateBatchSession)(batch.id, { status: "analyzing_trends" });
-    setImmediate(() => {
-        (0, batchProcessor_js_1.processBatch)(batch.id).catch((err) => {
-            console.error(`[batch-upload] processBatch failed for ${batch.id}:`, err);
-            (0, contentDb_js_1.updateBatchSession)(batch.id, { status: "failed" });
-        });
-    });
-    res.json({
-        ok: true,
-        batchSessionId: batch.id,
-        fileCount: files.length,
-        status: "processing",
-        message: `${files.length} video(s) queued for processing`,
-    });
-});
-// ── Style examples — "teach the clipper" upload zones (Upload & Clip panel).
-// Each upload is transcribed + analyzed for style (no cutting/reframing) and
-// the resulting brief automatically rides into every future batch job — see
-// getStyleGuideText() / submitToOpenShorts's style_guide field.
-app.post("/api/content/style-examples/upload", requireDiskSpaceForUpload(), styleExampleUpload.single("video"), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const file = req.file;
-    if (!file) {
-        res.status(400).json({ error: "A video file is required (field name: video)" });
-        return;
-    }
-    const kind = req.body?.kind === "raw" ? "raw" : "clip";
-    const example = (0, contentDb_js_1.createStyleExample)({
-        kind,
-        originalFilename: file.originalname,
-        filePath: file.path,
-    });
-    setImmediate(() => {
-        (0, styleExamples_js_1.processStyleExample)(example.id).catch((err) => {
-            console.error(`[style-examples] processStyleExample failed for ${example.id}:`, err);
-        });
-    });
-    res.json({ ok: true, example });
-});
-app.get("/api/content/style-examples", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const kindParam = typeof req.query.kind === "string" ? req.query.kind : "";
-    const kind = kindParam === "raw" || kindParam === "clip" ? kindParam : undefined;
-    res.json({ examples: (0, contentDb_js_1.listStyleExamples)(kind) });
-});
-app.delete("/api/content/style-examples/:id", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const ok = (0, contentDb_js_1.deleteStyleExample)(String(req.params.id || ""));
-    if (!ok) {
-        res.status(404).json({ error: "Style example not found" });
-        return;
-    }
-    res.json({ ok: true });
-});
-app.get("/api/content/batch/:batchId/status", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const batchId = String(req.params.batchId || "");
-    const batch = (0, contentDb_js_1.getBatchSession)(batchId);
-    if (!batch) {
-        res.status(404).json({ error: "Batch not found" });
-        return;
-    }
-    const sourceFiles = (0, contentDb_js_1.listBatchSourceFiles)(batchId);
-    const clipsReady = (0, contentDb_js_1.countVideosByBatchAndStatus)(batchId, "pending_review");
-    let trendBrief = null;
-    if (batch.trendBriefId) {
-        const trends = (0, contentDb_js_1.getCompetitorTrendsById)(batch.trendBriefId);
-        trendBrief = trends?.trendBrief ?? null;
-    }
-    const progressMap = {
-        uploading: 5,
-        analyzing_trends: 15,
-        processing_opus: 30,
-        transcribing: 40,
-        analyzing: 55,
-        reframing: 70,
-        enhancing: 85,
-        complete: 100,
-        failed: 0,
-    };
-    const stageLabelMap = {
-        uploading: "Uploading files...",
-        analyzing_trends: "Analyzing competitor trends...",
-        processing_opus: "Sending to OpenShorts...",
-        transcribing: "Transcribing audio...",
-        analyzing: "Gemini AI finding viral moments...",
-        reframing: "Reframing to vertical 9:16...",
-        enhancing: "Generating hooks and captions...",
-        complete: "Complete",
-        failed: "Processing failed",
-    };
-    const files = sourceFiles.map((f) => ({
-        id: f.id,
-        filename: f.originalFilename,
-        fileSize: f.fileSizeBytes,
-        opusStatus: f.opusStatus,
-        clipsGenerated: f.clipsGeneratedCount,
-        errorMessage: f.errorMessage,
-        uploadedAt: f.uploadedAt,
-        completedAt: f.opusCompletedAt,
-    }));
-    const progressPct = progressMap[batch.status] ?? 10;
-    const failedFiles = sourceFiles.filter((f) => f.opusStatus === "failed");
-    const errorMessages = failedFiles.map((f) => ({
-        filename: f.originalFilename,
-        error: f.errorMessage,
-    }));
-    res.json({
-        ok: true,
-        batchSessionId: batch.id,
-        sessionName: batch.sessionName,
-        status: batch.status,
-        stageLabel: stageLabelMap[batch.status] || "Processing...",
-        progressPct,
-        sourceFileCount: batch.sourceFileCount,
-        clipsGenerated: batch.clipsGenerated,
-        clipsReady,
-        trendBriefId: batch.trendBriefId,
-        createdAt: batch.createdAt,
-        completedAt: batch.completedAt,
-        trendBrief,
-        batch,
-        sourceFiles,
-        files,
-        errorMessages,
-        failedFileCount: failedFiles.length,
-    });
-});
-app.get("/api/content/batch/:batchId/clips", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const batchId = String(req.params.batchId || "");
-    const clips = (0, contentDb_js_1.listContentVideosWithEnhancements)({ batchSessionId: batchId, limit: 200 });
-    res.json({ clips });
-});
-app.get("/api/content/batches", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const days = Number(req.query.days) || 7;
-    res.json({ batches: (0, contentDb_js_1.listBatchSessions)(days) });
-});
-app.delete("/api/content/batch/:batchId", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const batchId = String(req.params.batchId || "");
-    try {
-        const result = (0, contentDb_js_1.deleteBatchSession)(batchId);
-        if (!result.deleted) {
-            res.status(404).json({ error: "Batch not found" });
-            return;
-        }
-        res.json({ ok: true, ...result });
-    }
-    catch (err) {
-        console.error(`[batch-delete] Failed to delete batch ${batchId}:`, err);
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.get("/api/content/competitor-trends/latest", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const trends = (0, contentDb_js_1.getLatestCompetitorTrends)();
-    res.json({ trends });
-});
-app.post("/api/content/competitor-trends/refresh", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    try {
-        const trends = await (0, competitorIntel_js_1.runCompetitorScrape)();
-        res.json({ trends });
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.get("/api/content/clip/:clipId/meta", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const storedPath = video.filePath || "";
-    const isMock = !storedPath || storedPath.startsWith("mock://");
-    const resolvedPath = resolveClipFileForVideo(video);
-    const fileExists = Boolean(resolvedPath);
-    const session = video.sourceSessionId ? (0, contentDb_js_1.getContentSession)(video.sourceSessionId) : null;
-    const thumbMeta = session?.rawInputMeta?.thumbnailUrl;
-    const thumbnailUrl = typeof thumbMeta === "string" && thumbMeta && !thumbMeta.startsWith("mock://")
-        ? thumbMeta
-        : null;
-    res.json({
-        clipId,
-        hasVideo: fileExists,
-        isMock,
-        clipPath: fileExists ? resolvedPath : null,
-        videoUrl: fileExists ? `/api/content/clip/${clipId}/video` : null,
-        thumbnailUrl,
-        hasPreviousVersion: Boolean((0, contentDb_js_1.getLatestClipVersion)(clipId)),
-    });
-});
-app.get("/api/content/clip/:clipId/video", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const candidatePaths = gatherClipPathCandidates(video);
-    const filePath = resolveClipFileForVideo(video);
-    if (!filePath) {
-        console.log(`[clip-video] No video file found for clip ${clipId}. Candidates tried:`, candidatePaths);
-        res.status(404).json({
-            error: "Video file not found on disk",
-            hint: "This may be a mock clip or the file was not saved correctly",
-            candidatePaths,
-        });
-        return;
-    }
-    try {
-        streamClipVideoFile(req, res, filePath);
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error("[clip-video] Error serving clip:", message);
-        res.status(500).json({ error: message });
-    }
-});
-// Retain the pre-edit clip as the (single) prior version so an edit is
-// revertible. Keep-1: discard any older version first, then record this one.
-function saveClipVersionKeepingOne(videoId, oldClipPath) {
-    try {
-        const prior = (0, contentDb_js_1.getLatestClipVersion)(videoId);
-        if (prior) {
-            (0, diskCleanup_js_1.deleteClipFile)(prior.filePath);
-            (0, contentDb_js_1.deleteClipVersion)(prior.id);
-        }
-        (0, contentDb_js_1.recordClipVersion)(videoId, oldClipPath);
-    }
-    catch (err) {
-        // Versioning must never block an edit — fall back to reclaiming the old file.
-        console.error(`[clip-version] Could not retain version for ${videoId}: ${err.message}`);
-        (0, diskCleanup_js_1.deleteClipFile)(oldClipPath);
-    }
-}
-// Trim an already-generated clip to a new [start, end] range (seconds, relative
-// to the clip's own duration) and re-render via the sidecar. Non-destructive:
-// the original clip is only replaced after a confirmed-good render, and any
-// failure leaves it fully intact and playable.
-app.post("/api/content/clip/:clipId/trim", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const body = req.body;
-    const start = Number(body?.start);
-    const end = Number(body?.end);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
-        res.status(400).json({ error: "Invalid range: provide numeric start/end in seconds with 0 <= start < end." });
-        return;
-    }
-    if (end - start < 3) {
-        res.status(400).json({ error: "Trimmed length must be at least 3 seconds." });
-        return;
-    }
-    const storedPath = video.filePath || "";
-    if (!storedPath || storedPath.startsWith("mock://")) {
-        res.status(400).json({ error: "This clip has no real video file to trim (mock clip or not yet rendered)." });
-        return;
-    }
-    const currentPath = resolveClipFileForVideo(video);
-    if (!currentPath) {
-        res.status(410).json({ error: "Clip file is no longer available on disk — it may have been cleaned up." });
-        return;
-    }
-    // Light Node-side disk guard; the sidecar runs the authoritative pre-check.
-    const freeMB = await (0, diskCleanup_js_1.getFreeDiskMB)();
-    if (Number.isFinite(freeMB) && freeMB < 300) {
-        res.status(507).json({ error: `Insufficient disk space to render a trim (${freeMB}MB free).` });
-        return;
-    }
-    try {
-        const result = await (0, index_js_27.trimClipViaOpenShorts)({ clipPath: currentPath, start, end });
-        if (!result.newClipPath)
-            throw new Error("Trim did not return a new file path");
-        // Repoint the clip only after a confirmed-good render, then clean up the old
-        // file via the existing safe cleanup pattern. Reaching here means the render
-        // succeeded; any earlier failure left the original clip + DB untouched.
-        (0, contentDb_js_1.updateContentVideoFilePath)(clipId, result.newClipPath);
-        if (path_1.default.resolve(result.newClipPath) !== path_1.default.resolve(currentPath)) {
-            saveClipVersionKeepingOne(clipId, currentPath);
-        }
-        res.json({
-            ok: true,
-            newDuration: result.newDuration,
-            videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}`,
-        });
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`[clip-trim] Clip ${clipId} trim failed: ${message}`);
-        res.status(502).json({ error: message }); // original clip untouched
-    }
-});
-// Structural edit of an already-generated clip: trim ends, remove middle
-// sections, mute/remove audio. Non-destructive (original replaced only after a
-// confirmed render); mirrors the /trim endpoint's safety pattern.
-app.post("/api/content/clip/:clipId/edit", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const body = req.body;
-    const audio = body?.audio === "mute" || body?.audio === "remove" || body?.audio === "replace" ? body.audio : "keep";
-    let audioReplacePath;
-    if (audio === "replace") {
-        audioReplacePath = typeof body?.audioReplacePath === "string" ? body.audioReplacePath : "";
-        if (!audioReplacePath) {
-            res.status(400).json({ error: "audio=replace requires an uploaded audioReplacePath (upload the track first)." });
-            return;
-        }
-    }
-    // Edited caption lines (start/end on the clip's original timeline + text).
-    // Presence of this array switches the sidecar to render from the persisted
-    // uncaptioned base and re-burn the re-synced text.
-    let captions;
-    if (Array.isArray(body?.captions)) {
-        captions = [];
-        for (const c of body.captions) {
-            const line = c;
-            const s = Number(line?.start);
-            const e = Number(line?.end);
-            const text = typeof line?.text === "string" ? line.text : "";
-            if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) {
-                res.status(400).json({ error: "Each caption line needs numeric start < end and text." });
-                return;
-            }
-            captions.push({ start: s, end: e, text });
-        }
-    }
-    let trim = null;
-    if (body?.trim && typeof body.trim === "object") {
-        const t = body.trim;
-        const s = Number(t.start);
-        const e = Number(t.end);
-        if (!Number.isFinite(s) || !Number.isFinite(e) || s < 0 || e <= s) {
-            res.status(400).json({ error: "Invalid trim range: need 0 <= start < end (seconds)." });
-            return;
-        }
-        trim = { start: s, end: e };
-    }
-    const cuts = [];
-    if (Array.isArray(body?.cuts)) {
-        for (const c of body.cuts) {
-            if (!Array.isArray(c) || c.length < 2) {
-                res.status(400).json({ error: "Each cut must be [start, end]." });
-                return;
-            }
-            const cs = Number(c[0]);
-            const ce = Number(c[1]);
-            if (!Number.isFinite(cs) || !Number.isFinite(ce) || ce <= cs) {
-                res.status(400).json({ error: "Each cut must have numeric start < end." });
-                return;
-            }
-            cuts.push([cs, ce]);
-        }
-    }
-    // ── Phase 2 visual/structural skills (all optional) ──────────────────────
-    const COLOR_MODES = ["auto", "warm", "cool", "punch", "flat"];
-    const EFFECT_TYPES = ["zoom_in", "zoom_out", "punch_in"];
-    let color;
-    if (typeof body?.color === "string") {
-        const c = body.color.toLowerCase();
-        if (!COLOR_MODES.includes(c)) {
-            res.status(400).json({ error: `color must be one of ${COLOR_MODES.join(", ")}.` });
-            return;
-        }
-        color = c;
-    }
-    const effects = [];
-    if (Array.isArray(body?.effects)) {
-        for (const e of body.effects) {
-            const eff = e;
-            const type = String(eff?.type || "");
-            const s = Number(eff?.start);
-            const en = Number(eff?.end);
-            if (!EFFECT_TYPES.includes(type) || !Number.isFinite(s) || !Number.isFinite(en) || en <= s) {
-                res.status(400).json({ error: `Each effect needs type in [${EFFECT_TYPES.join(", ")}] and numeric start < end.` });
-                return;
-            }
-            const amount = Number(eff?.amount);
-            effects.push({ type: type, start: s, end: en, ...(Number.isFinite(amount) ? { amount } : {}) });
-        }
-    }
-    // autoTighten: true, or { maxGap?, noiseDb? }
-    let autoTighten;
-    if (body?.autoTighten === true) {
-        autoTighten = true;
-    }
-    else if (body?.autoTighten && typeof body.autoTighten === "object") {
-        const o = body.autoTighten;
-        autoTighten = {
-            ...(Number.isFinite(Number(o.maxGap)) ? { maxGap: Number(o.maxGap) } : {}),
-            ...(Number.isFinite(Number(o.noiseDb)) ? { noiseDb: Number(o.noiseDb) } : {}),
-        };
-    }
-    const snapToScenes = body?.snapToScenes === true ? true : undefined;
-    const hasVisualOrTighten = Boolean(color || effects.length || autoTighten || snapToScenes);
-    if (!trim && cuts.length === 0 && audio === "keep" && !captions && !hasVisualOrTighten) {
-        res.status(400).json({ error: "No edits specified." });
-        return;
-    }
-    const storedPath = video.filePath || "";
-    if (!storedPath || storedPath.startsWith("mock://")) {
-        res.status(400).json({ error: "This clip has no real video file to edit (mock clip or not yet rendered)." });
-        return;
-    }
-    const currentPath = resolveClipFileForVideo(video);
-    if (!currentPath) {
-        res.status(410).json({ error: "Clip file is no longer available on disk — it may have been cleaned up." });
-        return;
-    }
-    const freeMB = await (0, diskCleanup_js_1.getFreeDiskMB)();
-    if (Number.isFinite(freeMB) && freeMB < 300) {
-        res.status(507).json({ error: `Insufficient disk space to render an edit (${freeMB}MB free).` });
-        return;
-    }
-    try {
-        const result = await (0, index_js_27.editClipViaOpenShorts)({
-            clipPath: currentPath,
-            editSpec: { trim, cuts, audio, audioReplacePath, captions, color, effects, autoTighten, snapToScenes },
-        });
-        if (!result.newClipPath)
-            throw new Error("Edit did not return a new file path");
-        (0, contentDb_js_1.updateContentVideoFilePath)(clipId, result.newClipPath);
-        if (path_1.default.resolve(result.newClipPath) !== path_1.default.resolve(currentPath)) {
-            saveClipVersionKeepingOne(clipId, currentPath);
-        }
-        res.json({
-            ok: true,
-            newDuration: result.newDuration,
-            videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}`,
-        });
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`[clip-edit] Clip ${clipId} edit failed: ${message}`);
-        res.status(502).json({ error: message }); // original clip untouched
-    }
 });
 /* ── AI Edit: natural-language clip edits ─────────────────────────────────
    Parses an instruction like "remove the first 8 seconds" into a structural
@@ -11206,127 +10121,6 @@ Interpret it as ONE structural edit and answer with JSON only (no markdown):
         return null;
     }
 }
-app.post("/api/content/clip/:clipId/ai-edit", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const instruction = typeof req.body?.instruction === "string"
-        ? String(req.body.instruction).trim()
-        : "";
-    if (!instruction) {
-        res.status(400).json({ error: "instruction is required" });
-        return;
-    }
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const storedPath = video.filePath || "";
-    if (!storedPath || storedPath.startsWith("mock://")) {
-        res.status(400).json({
-            error: "This clip has no real video file to edit (mock clip or not yet rendered).",
-            hint: "AI editing needs a processed clip file — run a real batch through OpenShorts first.",
-        });
-        return;
-    }
-    const currentPath = resolveClipFileForVideo(video);
-    if (!currentPath) {
-        res.status(410).json({ error: "Clip file is no longer available on disk — it may have been cleaned up." });
-        return;
-    }
-    const duration = probeClipDurationSeconds(currentPath);
-    if (!duration || duration <= 0) {
-        res.status(422).json({ error: "Could not read the clip's duration — the file may be corrupt." });
-        return;
-    }
-    const freeMB = await (0, diskCleanup_js_1.getFreeDiskMB)();
-    if (Number.isFinite(freeMB) && freeMB < 300) {
-        res.status(507).json({ error: `Insufficient disk space to render an edit (${freeMB}MB free).` });
-        return;
-    }
-    // 1) Regex fast-paths (no LLM); 2) Claude for everything else.
-    let editSpec = null;
-    let description = instruction;
-    const fast = parseAiEditInstruction(instruction, duration);
-    if (fast) {
-        editSpec = { trim: { start: fast.start, end: fast.end } };
-        description = fast.description;
-    }
-    else {
-        const parsed = await parseAiEditWithClaude(instruction, duration);
-        if (parsed) {
-            editSpec =
-                parsed.action === "cut_middle"
-                    ? { cuts: [[parsed.start, parsed.end]] }
-                    : { trim: { start: parsed.start, end: parsed.end } };
-            description = parsed.description;
-        }
-    }
-    if (!editSpec) {
-        res.status(422).json({
-            error: "Couldn't turn that instruction into a concrete cut. Try phrasing it with times, e.g. " +
-                `"remove the first 8 seconds", "keep only the first 45 seconds", or "cut the section from 0:30 to 0:40".`,
-        });
-        return;
-    }
-    // Validate against the clip's real bounds; refuse no-ops and sub-3s results.
-    const clamp = (v) => Math.min(Math.max(v, 0), duration);
-    if (editSpec.trim) {
-        editSpec.trim.start = clamp(editSpec.trim.start);
-        editSpec.trim.end = clamp(editSpec.trim.end);
-        if (editSpec.trim.end - editSpec.trim.start < 3) {
-            res.status(400).json({ error: "That edit would leave less than 3 seconds of video." });
-            return;
-        }
-        if (editSpec.trim.start === 0 && Math.abs(editSpec.trim.end - duration) < 0.05) {
-            res.status(422).json({ error: "That instruction doesn't change the clip (it keeps the full length)." });
-            return;
-        }
-    }
-    if (editSpec.cuts) {
-        editSpec.cuts = editSpec.cuts.map(([a, b]) => [clamp(a), clamp(b)]);
-        const removed = editSpec.cuts.reduce((sum, [a, b]) => sum + Math.max(0, b - a), 0);
-        if (removed < 0.2) {
-            res.status(422).json({ error: "That instruction doesn't remove anything from the clip." });
-            return;
-        }
-        if (duration - removed < 3) {
-            res.status(400).json({ error: "That edit would leave less than 3 seconds of video." });
-            return;
-        }
-    }
-    try {
-        const result = await (0, index_js_27.editClipViaOpenShorts)({ clipPath: currentPath, editSpec });
-        if (!result.newClipPath)
-            throw new Error("Edit did not return a new file path");
-        (0, contentDb_js_1.updateContentVideoFilePath)(clipId, result.newClipPath);
-        if (path_1.default.resolve(result.newClipPath) !== path_1.default.resolve(currentPath)) {
-            saveClipVersionKeepingOne(clipId, currentPath);
-        }
-        (0, contentDb_js_1.appendContentVideoEditHistory)(clipId, {
-            instruction,
-            description,
-            appliedAt: new Date().toISOString(),
-            durationBefore: duration,
-            durationAfter: result.newDuration || null,
-        });
-        console.log(`[ai-edit] Clip ${clipId}: ${description} (${duration.toFixed(1)}s → ${result.newDuration}s)`);
-        res.json({
-            ok: true,
-            description,
-            new_duration_seconds: result.newDuration,
-            videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}`,
-        });
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`[ai-edit] Clip ${clipId} edit failed: ${message}`);
-        res.status(502).json({ error: message, hint: "The original clip is untouched. Check that the OpenShorts sidecar is running." });
-    }
-});
 /* ── Export a clip as a CapCut draft project ──────────────────────────────
    Assembles the clip + its caption lines into a CapCut draft via the local
    CapCutAPI sidecar (port 9001) and streams back a ZIP. The user extracts it
@@ -11346,189 +10140,6 @@ function linesToSrt(lines) {
         .map((ln, i) => `${i + 1}\n${ts(ln.start)} --> ${ts(ln.end)}\n${ln.text}\n`)
         .join("\n");
 }
-app.post("/api/content/clip/:clipId/export-capcut", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const storedPath = video.filePath || "";
-    if (!storedPath || storedPath.startsWith("mock://")) {
-        res.status(400).json({ error: "This clip has no real video file to export (mock clip or not yet rendered)." });
-        return;
-    }
-    const clipPath = resolveClipFileForVideo(video);
-    if (!clipPath) {
-        res.status(410).json({ error: "Clip file is no longer available on disk." });
-        return;
-    }
-    const draftFolder = typeof req.body?.draft_folder === "string"
-        ? String(req.body.draft_folder).trim()
-        : "";
-    const CAPCUT_BASE = process.env.CAPCUTAPI_URL || "http://127.0.0.1:9001";
-    const CAPCUT_DIR = process.env.CAPCUTAPI_DIR || "/app/services/capcutapi";
-    // The CapCut service downloads the clip over HTTP from this same app.
-    const selfPort = process.env.PORT || "3000";
-    const tokenQs = process.env.DASHBOARD_TOKEN ? `?token=${encodeURIComponent(process.env.DASHBOARD_TOKEN)}` : "";
-    const videoUrl = `http://127.0.0.1:${selfPort}/api/content/clip/${clipId}/video${tokenQs}`;
-    // Caption lines (same sibling convention as the caption editor).
-    const dir = path_1.default.dirname(clipPath);
-    let stem = path_1.default.basename(clipPath).replace(/\.[^.]+$/, "");
-    stem = stem.replace(/_(edit|trim)_[0-9a-f]+$/, "").replace(/_(captioned|vertical)$/, "");
-    const linesPath = path_1.default.join(dir, `${stem}_base.lines.json`);
-    let captionLines = [];
-    try {
-        if (fs_1.default.existsSync(linesPath)) {
-            const parsed = JSON.parse(fs_1.default.readFileSync(linesPath, "utf8"));
-            if (Array.isArray(parsed))
-                captionLines = parsed;
-        }
-    }
-    catch {
-        /* captions optional — export the video alone */
-    }
-    const call = async (endpoint, body, timeout = 60000) => {
-        const r = await axios_1.default.post(`${CAPCUT_BASE}/${endpoint}`, body, { timeout });
-        if (!r.data?.success)
-            throw new Error(r.data?.error || `${endpoint} failed`);
-        return r.data.output;
-    };
-    let draftId = "";
-    try {
-        const created = await call("create_draft", { width: 1080, height: 1920 });
-        draftId = String(created?.draft_id || "");
-        if (!draftId)
-            throw new Error("create_draft returned no draft_id");
-        await call("add_video", { video_url: videoUrl, draft_id: draftId, width: 1080, height: 1920 }, 120000);
-        if (captionLines.length) {
-            // Upstream bug: /add_subtitle crashes when `font` is omitted — always send one.
-            await call("add_subtitle", {
-                srt: linesToSrt(captionLines),
-                draft_id: draftId,
-                font: "HarmonyOS_Sans_SC_Bold",
-                bold: true,
-                font_size: 8,
-                font_color: "#FFFFFF",
-                border_width: 20,
-                border_color: "#000000",
-                transform_y: -0.7,
-            }, 60000);
-        }
-        // Synchronous: returns after assets are downloaded into the draft folder.
-        await call("save_draft", draftFolder ? { draft_id: draftId, draft_folder: draftFolder } : { draft_id: draftId }, 300000);
-        const draftDir = path_1.default.join(CAPCUT_DIR, draftId);
-        if (!fs_1.default.existsSync(path_1.default.join(draftDir, "draft_info.json"))) {
-            throw new Error("Draft folder was not materialized (check the capcutapi service log)");
-        }
-        const zipBase = path_1.default.join(os_1.default.tmpdir(), `${draftId}`);
-        (0, child_process_1.execFileSync)("python3", [
-            "-c",
-            "import shutil, sys; shutil.make_archive(sys.argv[1], 'zip', sys.argv[2], sys.argv[3])",
-            zipBase,
-            CAPCUT_DIR,
-            draftId,
-        ], { timeout: 120000 });
-        const zipPath = `${zipBase}.zip`;
-        res.download(zipPath, `capcut-draft-${clipId.slice(0, 8)}.zip`, () => {
-            // Cleanup both the zip and the draft folder after the response finishes.
-            try {
-                fs_1.default.unlinkSync(zipPath);
-            }
-            catch { /* best-effort */ }
-            try {
-                fs_1.default.rmSync(path_1.default.join(CAPCUT_DIR, draftId), { recursive: true, force: true });
-            }
-            catch { /* best-effort */ }
-        });
-    }
-    catch (err) {
-        if (draftId) {
-            try {
-                fs_1.default.rmSync(path_1.default.join(CAPCUT_DIR, draftId), { recursive: true, force: true });
-            }
-            catch { /* best-effort */ }
-        }
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`[capcut-export] Clip ${clipId} export failed: ${message}`);
-        res.status(502).json({
-            error: message,
-            hint: "The CapCut export service may be offline or the clip file unreadable. The clip itself is untouched.",
-        });
-    }
-});
-// Current line-level captions for the editor to display + edit. Reads the
-// persisted _base.lines.json sibling; editable only for clips generated with
-// caption-editing support (i.e. that have a persisted base).
-app.get("/api/content/clip/:clipId/captions", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const clipPath = resolveClipFileForVideo(video);
-    if (!clipPath) {
-        res.json({ editable: false, captions: [], reason: "Clip file is not available on disk." });
-        return;
-    }
-    const dir = path_1.default.dirname(clipPath);
-    let stem = path_1.default.basename(clipPath).replace(/\.[^.]+$/, "");
-    stem = stem.replace(/_(edit|trim)_[0-9a-f]+$/, "").replace(/_(captioned|vertical)$/, "");
-    const linesPath = path_1.default.join(dir, `${stem}_base.lines.json`);
-    try {
-        if (fs_1.default.existsSync(linesPath)) {
-            const parsed = JSON.parse(fs_1.default.readFileSync(linesPath, "utf8"));
-            res.json({ editable: true, captions: Array.isArray(parsed) ? parsed : [] });
-            return;
-        }
-    }
-    catch (err) {
-        console.warn(`[clip-captions] Could not read ${linesPath}: ${err.message}`);
-    }
-    res.json({ editable: false, captions: [], reason: "This clip was generated before caption-editing support." });
-});
-// Revert a clip to its retained prior version (revert-once). Repoints filePath
-// to the previous file and discards the unwanted current render.
-app.post("/api/content/clip/:clipId/revert", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const prior = (0, contentDb_js_1.getLatestClipVersion)(clipId);
-    if (!prior) {
-        res.status(400).json({ error: "No previous version to revert to." });
-        return;
-    }
-    const priorAbs = resolveClipVideoFilePath(prior.filePath) || prior.filePath;
-    if (!fs_1.default.existsSync(priorAbs)) {
-        (0, contentDb_js_1.deleteClipVersion)(prior.id); // stale pointer — clean it up
-        res.status(410).json({ error: "The previous version file is no longer available on disk." });
-        return;
-    }
-    const currentPath = resolveClipFileForVideo(video);
-    (0, contentDb_js_1.updateContentVideoFilePath)(clipId, prior.filePath);
-    (0, contentDb_js_1.deleteClipVersion)(prior.id);
-    // Discard the reverted-away render (only if it's a different file).
-    if (currentPath && path_1.default.resolve(currentPath) !== path_1.default.resolve(priorAbs)) {
-        (0, diskCleanup_js_1.deleteClipFile)(currentPath);
-    }
-    res.json({ ok: true, videoUrl: `/api/content/clip/${clipId}/video?v=${Date.now()}` });
-});
 // Read the real playback duration of a clip file straight from the container
 // via ffprobe. Duration is NOT stored in content_videos, so ffprobe (the same
 // tool the render pipeline relies on) is the honest source. Returns null on any
@@ -11545,132 +10156,6 @@ function probeClipDurationSeconds(filePath) {
         return null;
     }
 }
-// Build the per-clip context the chat agent reasons over (copy fields + caption
-// lines with timings, for locating moments like "around 0:14").
-function buildClipEditContext(video) {
-    let captions = [];
-    let captionsEditable = false;
-    const clipPath = resolveClipFileForVideo(video);
-    if (clipPath) {
-        const dir = path_1.default.dirname(clipPath);
-        let stem = path_1.default.basename(clipPath).replace(/\.[^.]+$/, "");
-        stem = stem.replace(/_(edit|trim)_[0-9a-f]+$/, "").replace(/_(captioned|vertical)$/, "");
-        const linesPath = path_1.default.join(dir, `${stem}_base.lines.json`);
-        try {
-            if (fs_1.default.existsSync(linesPath)) {
-                const parsed = JSON.parse(fs_1.default.readFileSync(linesPath, "utf8"));
-                if (Array.isArray(parsed)) {
-                    captions = parsed;
-                    captionsEditable = true;
-                }
-            }
-        }
-        catch {
-            /* ignore — non-editable captions */
-        }
-    }
-    return {
-        clipId: video.id,
-        hook: video.hook || "",
-        caption: video.caption || "",
-        hashtags: video.hashtags || [],
-        score: video.trendAlignmentScore || 0,
-        durationSeconds: clipPath ? probeClipDurationSeconds(clipPath) : null,
-        hasPreviousVersion: Boolean((0, contentDb_js_1.getLatestClipVersion)(video.id)),
-        captions,
-        captionsEditable,
-    };
-}
-// Conversational clip editing — one turn. Returns the agent reply, plus a
-// structured proposal to confirm (video edits) or the applied copy change.
-app.post("/api/content/clip/:clipId/edit-chat", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
-    if (!message) {
-        res.status(400).json({ error: "message is required" });
-        return;
-    }
-    try {
-        const history = (0, contentDb_js_1.listClipChatMessages)(clipId, 20);
-        const result = await (0, clipEditAgent_js_1.runClipEditChat)({ message, history, context: buildClipEditContext(video) });
-        (0, contentDb_js_1.insertClipChatMessage)(clipId, "user", message);
-        (0, contentDb_js_1.insertClipChatMessage)(clipId, "assistant", result.reply);
-        res.json({
-            reply: result.reply,
-            proposal: result.proposal, // { summary, spec } | null — UI confirms before /edit
-            copyUpdated: result.copyUpdated, // { field, value } | null — already applied
-        });
-    }
-    catch (err) {
-        const message2 = err instanceof Error ? err.message : String(err);
-        console.error(`[clip-edit-chat] ${clipId}: ${message2}`);
-        res.status(502).json({ error: message2 });
-    }
-});
-app.get("/api/content/clip/:clipId/edit-chat", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    res.json({ messages: (0, contentDb_js_1.listClipChatMessages)(clipId, 40) });
-});
-app.patch("/api/content/clip/:clipId/metadata", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const clipId = String(req.params.clipId || "");
-    const video = (0, contentDb_js_1.getContentVideo)(clipId);
-    if (!video) {
-        res.status(404).json({ error: "Clip not found" });
-        return;
-    }
-    const enhancement = (0, contentDb_js_1.getClipEnhancementByVideoId)(clipId);
-    const body = req.body;
-    const videoPatch = {};
-    if (typeof body.hook === "string")
-        videoPatch.hook = body.hook;
-    if (typeof body.caption === "string")
-        videoPatch.caption = body.caption;
-    if (typeof body.title === "string")
-        videoPatch.title = body.title;
-    if (Array.isArray(body.hashtags)) {
-        videoPatch.hashtags = body.hashtags.map(String);
-    }
-    if (Array.isArray(body.platform_targets)) {
-        videoPatch.platformTargets = body.platform_targets.map(String);
-        const first = body.platform_targets[0];
-        if (typeof first === "string") {
-            videoPatch.platformTarget = first;
-        }
-    }
-    (0, contentDb_js_1.updateContentVideo)(clipId, videoPatch);
-    if (enhancement) {
-        (0, contentDb_js_1.updateClipEnhancement)(enhancement.id, {
-            hookPrimary: typeof body.hook === "string" ? body.hook : undefined,
-            captionFinal: typeof body.caption === "string" ? body.caption : undefined,
-            titleFinal: typeof body.title === "string" ? body.title : undefined,
-            hashtagsFinal: Array.isArray(body.hashtags) ? body.hashtags.map(String) : undefined,
-            platformTargets: Array.isArray(body.platform_targets)
-                ? body.platform_targets.map(String)
-                : undefined,
-            editedBy: "human",
-        });
-    }
-    const updated = (0, contentDb_js_1.getContentVideo)(clipId);
-    const updatedEnhancement = (0, contentDb_js_1.getClipEnhancementByVideoId)(clipId);
-    res.json({ video: updated, enhancement: updatedEnhancement });
-});
 function getNextOptimalPostTimeCst() {
     const now = new Date();
     const target = new Date(now);
@@ -11679,783 +10164,6 @@ function getNextOptimalPostTimeCst() {
         target.setDate(target.getDate() + 1);
     return target.toISOString();
 }
-app.get("/api/content/publishing-queue", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const limit = Number(req.query.limit) || 50;
-    const clips = (0, contentDb_js_1.listPublishingQueue)(limit);
-    res.json({ clips });
-});
-app.post("/api/content/clip/:clipId/send-to-publisher", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    try {
-        const clipId = String(req.params.clipId || "");
-        const video = (0, contentDb_js_1.getContentVideo)(clipId);
-        if (!video) {
-            res.status(404).json({ error: "Clip not found" });
-            return;
-        }
-        if (video.status !== "pending_review" && video.status !== "approved") {
-            res.status(400).json({ error: "Clip must be pending_review or approved" });
-            return;
-        }
-        const body = req.body;
-        const overrideCompliance = Boolean(body.override_compliance);
-        if (video.complianceFlagged && !overrideCompliance) {
-            res.status(400).json({
-                error: "Clip has compliance flags. Review before sending.",
-                flags: video.complianceNotes,
-            });
-            return;
-        }
-        const enhancement = (0, contentDb_js_1.getClipEnhancementByVideoId)(clipId);
-        const scheduledFor = typeof body.scheduled_for === "string" && body.scheduled_for.trim()
-            ? body.scheduled_for.trim()
-            : enhancement?.optimalPostTimeTiktok ?? getNextOptimalPostTimeCst();
-        const platforms = Array.isArray(body.platforms)
-            ? body.platforms.map(String)
-            : enhancement?.platformTargets?.length
-                ? enhancement.platformTargets
-                : [video.platformTarget];
-        const now = new Date().toISOString();
-        (0, contentDb_js_1.updateContentVideo)(clipId, {
-            status: "approved",
-            approvedAt: now,
-            scheduledFor,
-            platformTargets: platforms,
-        });
-        // Feed the human approval signal back to the Brain (what KIND of clip
-        // Marco keeps) — best-effort, never blocks the publish action.
-        try {
-            (0, contentDb_js_1.recordClipDecision)(clipId, "approved");
-        }
-        catch (err) {
-            console.warn("[send-to-publisher] could not record clip decision:", err);
-        }
-        const publishEntries = [];
-        for (const platform of platforms) {
-            (0, contentDb_js_1.insertPublishLog)({
-                videoId: clipId,
-                platform,
-                platformPostId: null,
-                publishedAt: scheduledFor,
-                publishStatus: "scheduled",
-                errorMessage: null,
-            });
-            publishEntries.push({ platform, scheduledFor });
-        }
-        const scheduleDate = scheduledFor.slice(0, 10);
-        (0, contentDb_js_1.ensureDailyTargets)(scheduleDate);
-        (0, contentDb_js_1.incrementDailyTarget)(scheduleDate, "videos_published", 1);
-        res.json({
-            ok: true,
-            clipId,
-            status: "approved",
-            scheduledFor,
-            platforms,
-            publishEntries,
-        });
-    }
-    catch (err) {
-        console.error("[send-to-publisher] Error:", err);
-        res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
-    }
-});
-app.get("/api/content/competitor-profiles", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json({ profiles: (0, contentDb_js_1.listAllCompetitorProfiles)() });
-});
-app.post("/api/content/competitor-profiles", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tiktokHandle = typeof req.body?.tiktok_handle === "string" ? req.body.tiktok_handle.trim() : "";
-    const displayName = typeof req.body?.display_name === "string" ? req.body.display_name.trim() : "";
-    const profileType = typeof req.body?.profile_type === "string" ? req.body.profile_type.trim() : "";
-    if (!tiktokHandle || !displayName || !profileType) {
-        res.status(400).json({ error: "tiktok_handle, display_name, and profile_type required" });
-        return;
-    }
-    const profile = (0, contentDb_js_1.insertCompetitorProfile)({ tiktokHandle, displayName, profileType });
-    res.json({ profile });
-});
-app.patch("/api/content/competitor-profiles/:id", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const id = String(req.params.id || "");
-    const active = req.body?.active;
-    const profile = (0, contentDb_js_1.updateCompetitorProfile)(id, {
-        active: active === 0 || active === false ? false : active === 1 || active === true ? true : undefined,
-    });
-    if (!profile) {
-        res.status(404).json({ error: "Profile not found" });
-        return;
-    }
-    res.json({ profile });
-});
-app.get("/api/content/youtube-analysis/latest", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const a = (0, contentDb_js_1.getLatestYoutubeAnalysis)();
-    if (!a) {
-        res.json({
-            analysis: null,
-            message: "No YouTube analysis yet. It runs automatically on Sunday nights or you can trigger it manually.",
-        });
-        return;
-    }
-    res.json({
-        analysis: {
-            id: a.id,
-            analyzed_at: a.analyzedAt,
-            videos_analyzed: a.videosAnalyzed,
-            channels_analyzed: a.channelsAnalyzed,
-            top_hook_structures: a.topHookStructures,
-            top_opening_phrases: a.topOpeningPhrases,
-            top_topics: a.topTopics,
-            top_data_points: a.topDataPoints,
-            top_cta_patterns: a.topCtaPatterns,
-            content_gaps: a.contentGaps,
-            full_analysis_markdown: a.keyInsights,
-            trend_signals: a.topRecommendedVideoIdea,
-            week_start: a.weekStart,
-        },
-    });
-});
-app.post("/api/content/youtube-analysis/run", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    void (0, youtubeIntel_js_1.runYouTubeCompetitorAnalysis)(index_js_14.contentManagerBrain).catch((err) => {
-        console.error("[youtube-intel] manual run failed:", err);
-    });
-    res.json({
-        ok: true,
-        message: "YouTube transcript analysis started. Check back in 2-3 minutes.",
-    });
-});
-// Live progress for the YouTube analysis run (polled by the UI progress bar).
-app.get("/api/content/youtube-intel/progress", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json((0, youtubeIntel_js_1.getYouTubeIntelProgress)());
-});
-app.get("/api/content/youtube-profiles", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json({ profiles: (0, contentDb_js_1.listAllYoutubeProfiles)() });
-});
-app.post("/api/content/youtube-profiles", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const youtubeChannelUrl = typeof req.body?.youtube_channel_url === "string" ? req.body.youtube_channel_url.trim() : "";
-    const channelName = typeof req.body?.channel_name === "string" ? req.body.channel_name.trim() : "";
-    const profileType = typeof req.body?.profile_type === "string" ? req.body.profile_type.trim() : "competitor";
-    if (!youtubeChannelUrl) {
-        res.status(400).json({ error: "youtube_channel_url required" });
-        return;
-    }
-    const profile = (0, contentDb_js_1.insertYoutubeProfile)({
-        youtubeChannelUrl,
-        channelName: channelName || undefined,
-        profileType,
-    });
-    res.json({ profile });
-});
-app.patch("/api/content/youtube-profiles/:id", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const id = String(req.params.id || "");
-    const active = req.body?.active;
-    const profile = (0, contentDb_js_1.updateYoutubeProfile)(id, {
-        active: active === 0 || active === false ? false : active === 1 || active === true ? true : undefined,
-    });
-    if (!profile) {
-        res.status(404).json({ error: "Profile not found" });
-        return;
-    }
-    res.json({ profile });
-});
-app.get("/api/content/youtube-transcripts", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const channelName = typeof req.query.channel_name === "string" ? req.query.channel_name : undefined;
-    const limit = req.query.limit ? Number(req.query.limit) : 20;
-    res.json({ transcripts: (0, contentDb_js_1.listYoutubeTranscripts)({ channelName, limit }) });
-});
-app.get("/api/content/youtube-transcripts/:videoId", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const transcript = (0, contentDb_js_1.getYoutubeTranscript)(String(req.params.videoId || ""));
-    if (!transcript) {
-        res.status(404).json({ error: "Transcript not found" });
-        return;
-    }
-    res.json({ transcript });
-});
-app.get("/api/content/compliance-queue", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json({ pending: (0, contentDb_js_1.listPendingComplianceQueue)() });
-});
-app.get("/api/content/report/daily", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const date = typeof req.query.date === "string" ? req.query.date : undefined;
-    res.json((0, index_js_13.getDailyReport)(date));
-});
-app.get("/api/content/report/weekly", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json((0, index_js_13.getWeeklyReport)());
-});
-app.post("/api/content/sync", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    try {
-        const summary = await (0, index_js_13.runPerformanceSync)();
-        res.json(summary);
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-// Real autonomous-agent (content-brain cycles) status for the Overview page —
-// reads the persisted run state, computes the next scheduled cycle, and never
-// 500s (falls back to a sane payload).
-app.get("/api/content/agent-status", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    try {
-        const CYCLE_HOURS = [6, 12, 18, 22]; // America/Chicago cycle times
-        const now = new Date();
-        const parts = new Intl.DateTimeFormat("en-US", {
-            timeZone: "America/Chicago",
-            hour: "numeric",
-            minute: "numeric",
-            second: "numeric",
-            hour12: false,
-        }).formatToParts(now);
-        const gp = (t) => Number(parts.find((p) => p.type === t)?.value ?? 0);
-        let h = gp("hour");
-        if (h === 24)
-            h = 0;
-        const curMin = h * 60 + gp("minute");
-        const curSec = gp("second");
-        const cycleMins = CYCLE_HOURS.map((x) => x * 60);
-        const nextMin = cycleMins.find((m) => m > curMin);
-        const deltaMin = nextMin == null ? 1440 - curMin + cycleMins[0] : nextMin - curMin;
-        const msUntilNext = Math.max(0, deltaMin * 60000 - curSec * 1000);
-        const nextRunAt = new Date(now.getTime() + msUntilNext).toISOString();
-        const last = (0, contentDb_js_1.getLatestAgentRun)();
-        let health = "amber";
-        if (last) {
-            if (last.status === "failure") {
-                health = "red";
-            }
-            else {
-                const ageMs = now.getTime() - new Date(last.ranAt).getTime();
-                health = ageMs <= 26 * 3600 * 1000 ? "green" : "amber";
-            }
-        }
-        res.json({
-            lastRunAt: last?.ranAt ?? null,
-            lastRunStatus: last?.status ?? null,
-            lastRunCycle: last?.cycle ?? null,
-            summary: last?.summary ?? null,
-            nextRunAt,
-            msUntilNext,
-            health,
-            scheduleHours: CYCLE_HOURS,
-        });
-    }
-    catch (err) {
-        res.json({
-            lastRunAt: null,
-            lastRunStatus: null,
-            summary: null,
-            nextRunAt: null,
-            msUntilNext: null,
-            health: "amber",
-            error: err instanceof Error ? err.message : String(err),
-        });
-    }
-});
-app.get("/api/content-brain/status", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const today = (0, contentDb_js_1.todayDateCst)();
-    res.json({
-        latestBriefing: (0, contentDb_js_1.getLatestBriefing)(),
-        todayStrategy: (0, contentDb_js_1.getDailyStrategy)(today),
-        dailyTargets: (0, contentDb_js_1.ensureDailyTargets)(today),
-        performanceModel: (0, contentDb_js_1.getPerformanceModel)(),
-    });
-});
-app.get("/api/content-brain/strategy", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const strategy = (0, contentDb_js_1.getDailyStrategy)((0, contentDb_js_1.todayDateCst)());
-    if (!strategy) {
-        res.status(404).json({ error: "Morning cycle has not run yet today." });
-        return;
-    }
-    res.json(strategy);
-});
-app.get("/api/content-brain/learning", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const days = Number(req.query.days) || 7;
-    res.json({ entries: (0, contentDb_js_1.listLearningLogs)({ limit: days * 4, days }) });
-});
-app.get("/api/content-brain/performance-model", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const model = (0, contentDb_js_1.getPerformanceModel)();
-    if (!model) {
-        res.json({ model: null, message: "Performance model not yet built — evening cycle will populate." });
-        return;
-    }
-    res.json(model);
-});
-app.get("/api/content-brain/briefings", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const type = typeof req.query.type === "string" ? req.query.type : undefined;
-    const limit = Number(req.query.limit) || 10;
-    res.json({ briefings: (0, contentDb_js_1.listBriefings)({ briefingType: type, limit }) });
-});
-app.get("/api/content-brain/benchmark-trajectory", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json((0, tools_js_1.computeBenchmarkTrajectory)());
-});
-app.post("/api/content-brain/ask", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const question = typeof req.body?.question === "string" ? req.body.question.trim() : "";
-    if (!question) {
-        res.status(400).json({ error: "question required" });
-        return;
-    }
-    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
-    try {
-        const { response, sessionId: sid } = await index_js_14.contentManagerBrain.chatWithSession(question, sessionId);
-        res.json({ response, sessionId: sid, answer: response, timestamp: new Date().toISOString() });
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.get("/api/content-brain/sessions", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json({ sessions: (0, contentDb_js_1.listActiveChatSessions)(10) });
-});
-app.get("/api/content-brain/sessions/:sessionId/messages", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const sessionId = String(req.params.sessionId || "");
-    res.json({ messages: (0, contentDb_js_1.listChatMessages)(sessionId) });
-});
-app.post("/api/content-brain/sessions/new", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json({ sessionId: (0, index_js_14.getOrCreateSession)() });
-});
-// Clear a general Content Manager chat session (deletes its persisted history)
-// and hand back a fresh session id. Only affects cm_chat_* — the per-clip edit
-// chat (cm_clip_chat) is a separate feature and is untouched.
-app.post("/api/content-brain/sessions/:sessionId/clear", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const sessionId = String(req.params.sessionId || "");
-    if (sessionId)
-        (0, contentDb_js_1.deleteChatSession)(sessionId);
-    res.json({ ok: true, sessionId: (0, index_js_14.getOrCreateSession)() });
-});
-app.get("/api/content-brain/self-evaluation", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json({ evaluations: (0, contentDb_js_1.listSelfEvaluations)(4) });
-});
-app.get("/api/content-brain/accuracy", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const rows = (0, contentDb_js_1.listStrategyAccuracy)(14).map((r) => ({
-        strategy_date: r.strategyDate,
-        confidence_score_given: r.confidenceScoreGiven,
-        outcome_score: r.outcomeScore,
-        overall_grade: r.overallGrade,
-        pillar_prediction_correct: r.pillarPredictionCorrect,
-        hooks_hit_rate: r.hooksHitRate,
-    }));
-    res.json({ accuracy: rows });
-});
-app.get("/api/content-brain/experiments", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json({ experiments: (0, contentDb_js_1.listExperiments)(50) });
-});
-app.get("/api/content-brain/combination-patterns", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const pillar = typeof req.query.pillar === "string" ? req.query.pillar : undefined;
-    const minSamples = Number(req.query.min_samples) || 2;
-    const limit = Number(req.query.limit) || 20;
-    res.json({
-        patterns: (0, contentDb_js_1.listCombinationPatterns)({ pillar, minSamples, limit, order: "desc" }),
-    });
-});
-app.get("/api/content-brain/momentum", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const model = (0, contentDb_js_1.getPerformanceModel)();
-    const seasonal = (0, contentDb_js_1.getSeasonalWeek)((0, stats_js_1.getCurrentWeekNumber)());
-    res.json({
-        current_streak_type: model.currentStreakType,
-        hot_streak_count: model.hotStreakCount,
-        cold_streak_count: model.coldStreakCount,
-        streak_started_at: model.streakStartedAt,
-        decay_weighted_avg_views: model.decayWeightedAvgViews,
-        season_multiplier: model.seasonMultiplier,
-        season_label: seasonal?.seasonLabel ?? null,
-        self_grade_last_week: model.selfGradeLastWeek,
-    });
-});
-app.post("/api/content-brain/run-cycle", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const cycle = req.body?.cycle;
-    const valid = new Set(["morning", "midday", "evening", "night", "monday_recording_plan"]);
-    if (!valid.has(cycle)) {
-        res.status(400).json({ error: "cycle must be morning|midday|evening|night|monday_recording_plan" });
-        return;
-    }
-    try {
-        if (cycle === "morning")
-            await index_js_14.contentManagerBrain.runMorningCycle();
-        else if (cycle === "midday")
-            await index_js_14.contentManagerBrain.runMiddayCycle();
-        else if (cycle === "evening")
-            await index_js_14.contentManagerBrain.runEveningCycle();
-        else if (cycle === "monday_recording_plan") {
-            const tasks = await (0, calendar_js_1.generateWeeklyRecordingPlan)((0, stats_js_2.getWeekStart)(), index_js_14.contentManagerBrain);
-            res.json({ ok: true, log: `[cm-brain] Recording plan: ${tasks.length} tasks created`, tasks });
-            return;
-        }
-        else
-            await index_js_14.contentManagerBrain.runNightCycle();
-        res.json({ ok: true, log: `[cm-brain] ${cycle} cycle completed manually` });
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.get("/api/content-brain/cut-list", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json({ items: (0, contentDb_js_1.listCutList)(true) });
-});
-app.get("/api/content-brain/hook-library", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const minUses = Number(req.query.min_uses) || 3;
-    const limit = Number(req.query.limit) || 20;
-    res.json({ hooks: (0, contentDb_js_1.listHookLibrary)({ minUses, limit, order: "desc" }) });
-});
-app.get("/api/content/competitive-analysis/latest", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const analysis = (0, competitiveAnalysis_js_1.getLatestCompetitiveAnalysis)();
-    if (!analysis) {
-        res.json({
-            analysis: null,
-            recommendations: [],
-            message: "No analysis yet. Run refresh to generate.",
-        });
-        return;
-    }
-    res.json({
-        analysis,
-        recommendations: (0, contentDb_js_1.getActiveStrategyRecommendations)(),
-    });
-});
-app.post("/api/content/competitive-analysis/run", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    (0, competitiveAnalysis_js_1.runFullCompetitiveAnalysis)(index_js_14.contentManagerBrain)
-        .then((analysis) => {
-        console.log("[competitive-analysis] Async run complete", analysis.id);
-    })
-        .catch((err) => {
-        console.error("[competitive-analysis] Async run failed:", err);
-    });
-    res.json({ ok: true, message: "Analysis running. Check back in 60 seconds." });
-});
-app.get("/api/content/strategy-recommendations", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const status = typeof req.query.status === "string" ? req.query.status : undefined;
-    const limit = Number(req.query.limit) || 10;
-    const recommendations = status
-        ? (0, contentDb_js_1.listStrategyRecommendations)({ status, limit })
-        : (0, contentDb_js_1.getActiveStrategyRecommendations)().slice(0, limit);
-    res.json({ recommendations });
-});
-app.patch("/api/content/strategy-recommendations/:id", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const id = String(req.params.id || "");
-    const body = req.body;
-    const updated = (0, contentDb_js_1.updateStrategyRecommendation)(id, {
-        status: body.status ? String(body.status) : undefined,
-        dismissedReason: body.dismissed_reason ? String(body.dismissed_reason) : undefined,
-    });
-    if (!updated) {
-        res.status(404).json({ error: "Recommendation not found" });
-        return;
-    }
-    res.json({ recommendation: updated });
-});
-app.post("/api/content/strategy-recommendations/:id/create-recording-task", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const id = String(req.params.id || "");
-    const rec = (0, contentDb_js_1.getStrategyRecommendationById)(id);
-    if (!rec) {
-        res.status(404).json({ error: "Recommendation not found" });
-        return;
-    }
-    try {
-        const task = await (0, competitiveAnalysis_js_1.generateRecordingTask)(rec, index_js_14.contentManagerBrain);
-        res.json({ task });
-    }
-    catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-});
-app.get("/api/content/recording-tasks", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const status = typeof req.query.status === "string" ? req.query.status : "pending";
-    const days = Number(req.query.days) || 30;
-    const today = (0, contentDb_js_1.todayDateCst)();
-    const end = new Date(`${today}T12:00:00`);
-    end.setDate(end.getDate() + days);
-    const endStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(end);
-    const tasks = (0, contentDb_js_1.listRecordingTasks)({
-        status,
-        dueAfter: today,
-        dueBefore: endStr,
-        limit: 100,
-    });
-    res.json({ tasks });
-});
-// Generate (or regenerate) a fresh recording plan for a single day. Hitting
-// this again replaces the prior daily plan with a genuinely different one.
-app.post("/api/content/recording-tasks/generate-day", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const body = (req.body ?? {});
-    const dateStr = typeof body.date === "string" && body.date ? body.date : (0, contentDb_js_1.todayDateCst)();
-    try {
-        const tasks = await (0, calendar_js_1.generateDailyRecordingPlan)(dateStr, index_js_14.contentManagerBrain);
-        res.json({ tasks, date: dateStr });
-    }
-    catch (err) {
-        console.error("[content] daily recording plan failed", err);
-        res.status(500).json({ error: "Failed to generate daily plan" });
-    }
-});
-app.post("/api/content/recording-tasks", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const body = req.body;
-    const hooks = Array.isArray(body.suggested_hooks) ? body.suggested_hooks.map(String) : [];
-    const task = (0, contentDb_js_1.insertRecordingTask)({
-        dueDate: String(body.due_date || (0, contentDb_js_1.todayDateCst)()),
-        pillar: body.pillar ? String(body.pillar) : null,
-        hookType: null,
-        topic: String(body.topic || ""),
-        suggestedHooks: hooks,
-        suggestedDurationMin: 35,
-        suggestedDurationMax: 55,
-        filmingNotes: body.filming_notes ? String(body.filming_notes) : null,
-        reason: body.reason ? String(body.reason) : null,
-        source: "manual",
-        priority: body.priority ? String(body.priority) : "normal",
-        strategyRecommendationId: null,
-    });
-    res.json({ task });
-});
-app.patch("/api/content/recording-tasks/:id", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const id = String(req.params.id || "");
-    const body = req.body;
-    const status = body.status ? String(body.status) : undefined;
-    if (status === "filmed" || status === "uploaded") {
-        (0, calendar_js_1.markRecordingTaskFiled)(id, body.upload_batch_session_id ? String(body.upload_batch_session_id) : undefined);
-        res.json({ ok: true });
-        return;
-    }
-    const updated = (0, contentDb_js_1.updateRecordingTask)(id, { status });
-    if (!updated) {
-        res.status(404).json({ error: "Task not found" });
-        return;
-    }
-    res.json({ task: updated });
-});
-// Google Drive auto-pull status for the Upload & Clip page indicator.
-app.get("/api/content/drive/status", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json((0, googleDrivePull_js_1.getDriveStatus)());
-});
-// Manual "poll now" trigger (used for the setup test — the scheduler still runs
-// every 30 min on its own). Fire-and-forget so the request returns immediately.
-app.post("/api/content/drive/poll", express_1.default.json(), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    if (!(0, googleDrivePull_js_1.driveConfigured)()) {
-        res.status(400).json({ error: "Google Drive not connected — set the GOOGLE_DRIVE_CREDENTIALS secret." });
-        return;
-    }
-    // Manual "poll now" forces a single pull (bypasses the once-a-day throttle) so
-    // setup/testing doesn't have to wait for the daily slot. Still only ONE file
-    // (the oldest unprocessed), never re-processing anything already done.
-    void (0, googleDrivePull_js_1.pollGoogleDrive)({ force: true }).catch((err) => console.error("[drive-pull] manual poll failed:", err));
-    res.json({ ok: true, message: "Pulling the oldest unprocessed video now — it'll appear in the Review Queue shortly." });
-});
-app.get("/api/content/calendar/day/:date", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const date = String(req.params.date || "");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        res.status(400).json({ error: "Date must be YYYY-MM-DD" });
-        return;
-    }
-    res.json((0, calendar_js_1.getCalendarDayData)(date));
-});
-app.get("/api/content/calendar/month/:year/:month", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const year = Number(req.params.year);
-    const month = Number(req.params.month);
-    if (!year || !month || month < 1 || month > 12) {
-        res.status(400).json({ error: "Invalid year or month" });
-        return;
-    }
-    res.json((0, calendar_js_1.getCalendarMonthData)(year, month));
-});
-app.get("/api/content/sprint-progress", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    res.json((0, calendar_js_1.getSprintProgress)());
-});
 /**
  * Per-lead engagement metrics for the CRM lead table's Sort By and Columns.
  *
@@ -12758,359 +10466,10 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
    already exist. These routes own INTENT: planned items, the unscheduled
    backlog, who owns each one, and what timezone the times mean.
    ═══════════════════════════════════════════════════════════════════════ */
-/** Roster + palette + platform list + settings: everything the page boots from. */
-app.get("/api/planner/bootstrap", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    const settings = planner.getSettings();
-    res.json({
-        settings,
-        team: tax.listMembers(),
-        hiddenMembers: tax.hiddenMembers(),
-        categories: tax.listCategories(),
-        platforms: tax.listPlatforms(),
-        palette: tax.paletteWithText(),
-        backlogStatuses: planner.BACKLOG_STATUSES.map((s) => ({ id: s, label: planner.BACKLOG_STATUS_LABELS[s] })),
-        counts: planner.plannerCounts(),
-        /**
-         * Reference clocks only. These never touch a card's date: the Philippines
-         * clock is fixed because that is the half of the team it exists for, and
-         * the US one is swappable purely so whoever is looking sees their own.
-         */
-        clocks: {
-            phtTz: "Asia/Manila",
-            usTz: settings.usClockTz,
-            usOptions: ["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles"],
-        },
-    });
-});
-/** The three editable vocabularies, on their own so the drawer can refresh alone. */
-app.get("/api/planner/taxonomy", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    res.json({
-        categories: tax.listCategories(),
-        platforms: tax.listPlatforms(),
-        team: tax.listMembers(),
-        hiddenMembers: tax.hiddenMembers(),
-        palette: tax.paletteWithText(),
-    });
-});
-app.get("/api/planner/items", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const from = String(req.query.from || "");
-    const to = String(req.query.to || "");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
-        res.status(400).json({ error: "from and to must be YYYY-MM-DD" });
-        return;
-    }
-    res.json({
-        from,
-        to,
-        settings: planner.getSettings(),
-        items: planner.scheduledBetween(from, to),
-        counts: planner.plannerCounts(),
-    });
-});
-app.get("/api/planner/backlog", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const items = planner.backlogItems();
-    const columns = planner.BACKLOG_STATUSES.map((status) => ({
-        id: status,
-        label: planner.BACKLOG_STATUS_LABELS[status],
-        items: items.filter((i) => i.backlogStatus === status),
-    }));
-    res.json({ count: items.length, items, columns });
-});
-app.post("/api/planner/items", express_1.default.json({ limit: "256kb" }), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const body = (req.body || {});
-    const title = String(body.title || "").trim();
-    if (!title) {
-        res.status(400).json({ error: "A title is required" });
-        return;
-    }
-    const cat = await resolvePlannerCategory(body.categoryId);
-    const { item } = planner.createItem({
-        title,
-        hook: typeof body.hook === "string" ? body.hook : "",
-        caption: typeof body.caption === "string" ? body.caption : "",
-        script: typeof body.script === "string" ? body.script : "",
-        color: cat ? cat.colorHex : typeof body.color === "string" ? body.color : undefined,
-        categoryId: cat ? cat.id : null,
-        platforms: Array.isArray(body.platforms) ? body.platforms : [],
-        assignedUsers: Array.isArray(body.assignedUsers) ? body.assignedUsers : [],
-        assetDriveUrl: typeof body.assetDriveUrl === "string" ? body.assetDriveUrl : null,
-        date: typeof body.date === "string" ? body.date : null,
-        time: typeof body.time === "string" ? body.time : null,
-        authoredTz: typeof body.authoredTz === "string" ? body.authoredTz : undefined,
-        backlogStatus: typeof body.backlogStatus === "string" ? body.backlogStatus : undefined,
-        notes: typeof body.notes === "string" ? body.notes : "",
-        createdBy: typeof body.actor === "string" ? body.actor : null,
-    });
-    await notifyPlannerAssignees(item.assignedUsers.map((a) => a.userId), item.title, item.id, typeof body.actor === "string" ? body.actor : "");
-    res.json({ ok: true, item: planner.viewItem(item) });
-});
-app.patch("/api/planner/items/:id", express_1.default.json({ limit: "256kb" }), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const before = planner.getItem(String(req.params.id));
-    if (!before) {
-        res.status(404).json({ error: "No such item" });
-        return;
-    }
-    const body = (req.body || {});
-    // A category carries its colour: setting one must repaint the card, or the
-    // grid and the taxonomy drawer disagree about what colour that category is.
-    const cat = body.categoryId === undefined ? null : await resolvePlannerCategory(body.categoryId);
-    const result = planner.updateItem(String(req.params.id), {
-        title: typeof body.title === "string" ? body.title : undefined,
-        hook: typeof body.hook === "string" ? body.hook : undefined,
-        caption: typeof body.caption === "string" ? body.caption : undefined,
-        script: typeof body.script === "string" ? body.script : undefined,
-        color: cat ? cat.colorHex : typeof body.color === "string" ? body.color : undefined,
-        categoryId: body.categoryId === undefined ? undefined : cat ? cat.id : null,
-        platforms: Array.isArray(body.platforms) ? body.platforms : undefined,
-        assignedUsers: Array.isArray(body.assignedUsers)
-            ? body.assignedUsers
-            : undefined,
-        assetDriveUrl: body.assetDriveUrl === undefined ? undefined : body.assetDriveUrl,
-        isCompleted: typeof body.isCompleted === "boolean" ? body.isCompleted : undefined,
-        backlogStatus: typeof body.backlogStatus === "string" ? body.backlogStatus : undefined,
-        sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
-        notes: typeof body.notes === "string" ? body.notes : undefined,
-        date: body.date === undefined ? undefined : body.date,
-        time: typeof body.time === "string" ? body.time : undefined,
-        authoredTz: typeof body.authoredTz === "string" ? body.authoredTz : undefined,
-        actor: typeof body.actor === "string" ? body.actor : undefined,
-    });
-    if (!result) {
-        res.status(404).json({ error: "No such item" });
-        return;
-    }
-    const priorIds = before.assignedUsers.map((a) => a.userId);
-    const newlyAssigned = result.item.assignedUsers.map((a) => a.userId).filter((u) => !priorIds.includes(u));
-    await notifyPlannerAssignees(newlyAssigned, result.item.title, result.item.id, typeof body.actor === "string" ? body.actor : "");
-    res.json({ ok: true, item: planner.viewItem(result.item) });
-});
-/**
- * Delete a content item, and say plainly what happens to its tasks.
- *
- * `tasks=keep` (the default) leaves them on the Task Command board, unlinked —
- * work somebody may already have started does not evaporate because the post it
- * came from was cancelled. `tasks=delete` removes them too. The caller must
- * choose; nothing is guessed.
- */
-app.delete("/api/planner/items/:id", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const id = String(req.params.id);
-    const mode = String(req.query.tasks || "keep") === "delete" ? "delete" : "keep";
-    const linked = (0, db_js_1.getCommandTasks)().filter((t) => t.contentSlotId === id);
-    let tasksDeleted = 0;
-    let tasksKept = 0;
-    for (const t of linked) {
-        if (mode === "delete") {
-            if ((0, db_js_1.deleteCommandTask)(t.id))
-                tasksDeleted++;
-        }
-        else {
-            // Unlink rather than leave a dangling reference to a card that is gone.
-            (0, db_js_1.updateCommandTask)(t.id, { contentSlotId: undefined });
-            tasksKept++;
-        }
-    }
-    const ok = planner.deleteItem(id, String(req.query.actor || "system"));
-    res.status(ok ? 200 : 404).json(ok ? { ok: true, tasksDeleted, tasksKept } : { error: "No such item" });
-});
-/* ── Notebook: long-form notes living in the scratchpad ── */
-app.get("/api/planner/notes", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const notes = await Promise.resolve().then(() => __importStar(require("./core/plannerNotes.js")));
-    res.json({ notes: notes.listNotes() });
-});
-app.post("/api/planner/notes", express_1.default.json({ limit: "2mb" }), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const notes = await Promise.resolve().then(() => __importStar(require("./core/plannerNotes.js")));
-    const body = (req.body || {});
-    const note = notes.createNote({
-        title: typeof body.title === "string" ? body.title : undefined,
-        contentHtml: typeof body.contentHtml === "string" ? body.contentHtml : undefined,
-    });
-    res.json({ ok: true, note, notes: notes.listNotes() });
-});
-app.patch("/api/planner/notes/:id", express_1.default.json({ limit: "2mb" }), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const notes = await Promise.resolve().then(() => __importStar(require("./core/plannerNotes.js")));
-    const body = (req.body || {});
-    const note = notes.updateNote(String(req.params.id), {
-        title: typeof body.title === "string" ? body.title : undefined,
-        contentHtml: typeof body.contentHtml === "string" ? body.contentHtml : undefined,
-        isPinned: typeof body.isPinned === "boolean" ? body.isPinned : undefined,
-    });
-    if (!note) {
-        res.status(404).json({ error: "No such note" });
-        return;
-    }
-    res.json({ ok: true, note });
-});
-app.delete("/api/planner/notes/:id", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const notes = await Promise.resolve().then(() => __importStar(require("./core/plannerNotes.js")));
-    const ok = notes.deleteNote(String(req.params.id));
-    res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: "No such note" });
-});
-/**
- * What a drop WOULD do. The Domino preview overlay calls this on hover so the
- * operator sees the ripple before committing to it — nothing is written.
- */
-app.post("/api/planner/reschedule/preview", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const body = (req.body || {});
-    const plan = planner.planReschedule({
-        itemId: String(body.itemId || ""),
-        toDate: String(body.toDate || ""),
-        time: typeof body.time === "string" ? body.time : null,
-        mode: body.mode === "DIRECT" ? "DIRECT" : body.mode === "DOMINO" ? "DOMINO" : undefined,
-    });
-    if (!plan) {
-        res.status(404).json({ error: "No such item" });
-        return;
-    }
-    res.json({ ok: true, plan });
-});
-app.post("/api/planner/reschedule", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const body = (req.body || {});
-    const toDate = String(body.toDate || "");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
-        res.status(400).json({ error: "toDate must be YYYY-MM-DD" });
-        return;
-    }
-    const plan = planner.planReschedule({
-        itemId: String(body.itemId || ""),
-        toDate,
-        time: typeof body.time === "string" ? body.time : null,
-        mode: body.mode === "DIRECT" ? "DIRECT" : body.mode === "DOMINO" ? "DOMINO" : undefined,
-    });
-    if (!plan) {
-        res.status(404).json({ error: "No such item" });
-        return;
-    }
-    const updated = planner.applyReschedule(plan, String(body.actor || "system"));
-    res.json({ ok: true, plan, updated, counts: planner.plannerCounts() });
-});
-/** Reverse drag: a scheduled card goes back to the scratchpad, keeping its content. */
-app.post("/api/planner/items/:id/unschedule", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const body = (req.body || {});
-    const result = planner.updateItem(String(req.params.id), {
-        date: null,
-        backlogStatus: typeof body.backlogStatus === "string" ? body.backlogStatus : undefined,
-        actor: typeof body.actor === "string" ? body.actor : undefined,
-    });
-    if (!result) {
-        res.status(404).json({ error: "No such item" });
-        return;
-    }
-    res.json({ ok: true, item: planner.viewItem(result.item) });
-});
-app.get("/api/planner/settings", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    res.json(planner.getSettings());
-});
-app.put("/api/planner/settings", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    const { isValidTimeZone } = await Promise.resolve().then(() => __importStar(require("./core/zonedTime.js")));
-    const body = (req.body || {});
-    for (const key of ["authoringTz", "usClockTz"]) {
-        const v = body[key];
-        if (v !== undefined && (typeof v !== "string" || !isValidTimeZone(v))) {
-            res.status(400).json({ error: `${key} must be a valid IANA timezone (e.g. America/Chicago)` });
-            return;
-        }
-    }
-    if (body.weekStart !== undefined && body.weekStart !== "SUNDAY" && body.weekStart !== "MONDAY") {
-        res.status(400).json({ error: "weekStart must be SUNDAY or MONDAY" });
-        return;
-    }
-    const settings = planner.saveSettings({
-        authoringTz: typeof body.authoringTz === "string" ? body.authoringTz : undefined,
-        usClockTz: typeof body.usClockTz === "string" ? body.usClockTz : undefined,
-        weekStart: body.weekStart === "SUNDAY" || body.weekStart === "MONDAY" ? body.weekStart : undefined,
-        dragMode: body.dragMode === "DOMINO" || body.dragMode === "DIRECT" ? body.dragMode : undefined,
-    });
-    res.json({ ok: true, settings });
-});
 /* ── master taxonomy: categories, platforms, team members ──────────────────
    Every delete here goes through the same contract: content that references
    the thing being removed must be told where to go, or the request is refused
    with the count so the UI can ask. Nothing is orphaned quietly. */
-/** Categories and platforms are looked up by id; a bad id is a 400, not a guess. */
-async function resolvePlannerCategory(raw) {
-    if (typeof raw !== "string" || !raw.trim())
-        return null;
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    const cat = tax.getCategory(raw.trim());
-    return cat ? { id: cat.id, colorHex: cat.colorHex } : null;
-}
 /** Turn a TaxonomyError into its own status; anything else is a real 500. */
 function sendTaxonomyError(res, err) {
     const e = err;
@@ -13120,279 +10479,6 @@ function sendTaxonomyError(res, err) {
     }
     console.error("[planner taxonomy]", err);
     res.status(500).json({ error: (e && e.message) || "Taxonomy update failed" });
-}
-app.post("/api/planner/categories", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    const body = (req.body || {});
-    try {
-        const category = tax.createCategory({
-            name: String(body.name || ""),
-            colorHex: String(body.colorHex || tax.PALETTE_20[0].hex),
-        });
-        res.json({ ok: true, category, categories: tax.listCategories() });
-    }
-    catch (err) {
-        sendTaxonomyError(res, err);
-    }
-});
-app.patch("/api/planner/categories/:id", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    const body = (req.body || {});
-    try {
-        const category = tax.updateCategory(String(req.params.id), {
-            name: typeof body.name === "string" ? body.name : undefined,
-            colorHex: typeof body.colorHex === "string" ? body.colorHex : undefined,
-            sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
-        });
-        if (!category) {
-            res.status(404).json({ error: "No such category" });
-            return;
-        }
-        // Recolouring a category repaints every card carrying it, in one write.
-        if (typeof body.colorHex === "string") {
-            const { getPlannerDb } = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-            getPlannerDb()
-                .prepare(`UPDATE planner_items SET color=?, updated_at=? WHERE category_id=?`)
-                .run(category.colorHex, new Date().toISOString(), category.id);
-        }
-        res.json({ ok: true, category, categories: tax.listCategories() });
-    }
-    catch (err) {
-        sendTaxonomyError(res, err);
-    }
-});
-app.delete("/api/planner/categories/:id", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    try {
-        const out = tax.deleteCategory(String(req.params.id), req.query.reassignTo ? String(req.query.reassignTo) : null);
-        if (!out.deleted) {
-            res.status(404).json({ error: "No such category" });
-            return;
-        }
-        res.json({ ok: true, ...out, categories: tax.listCategories() });
-    }
-    catch (err) {
-        sendTaxonomyError(res, err);
-    }
-});
-app.post("/api/planner/platforms", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    const body = (req.body || {});
-    try {
-        const platform = tax.createPlatform({
-            name: String(body.name || ""),
-            iconKey: typeof body.iconKey === "string" ? body.iconKey : undefined,
-            activeStatus: typeof body.activeStatus === "boolean" ? body.activeStatus : undefined,
-        });
-        res.json({ ok: true, platform, platforms: tax.listPlatforms() });
-    }
-    catch (err) {
-        sendTaxonomyError(res, err);
-    }
-});
-app.patch("/api/planner/platforms/:id", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    const body = (req.body || {});
-    try {
-        const platform = tax.updatePlatform(String(req.params.id), {
-            name: typeof body.name === "string" ? body.name : undefined,
-            iconKey: typeof body.iconKey === "string" ? body.iconKey : undefined,
-            activeStatus: typeof body.activeStatus === "boolean" ? body.activeStatus : undefined,
-            sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : undefined,
-        });
-        if (!platform) {
-            res.status(404).json({ error: "No such platform" });
-            return;
-        }
-        res.json({ ok: true, platform, platforms: tax.listPlatforms() });
-    }
-    catch (err) {
-        sendTaxonomyError(res, err);
-    }
-});
-app.delete("/api/planner/platforms/:id", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    try {
-        const out = tax.deletePlatform(String(req.params.id), req.query.reassignTo ? String(req.query.reassignTo) : null);
-        if (!out.deleted) {
-            res.status(404).json({ error: "No such platform" });
-            return;
-        }
-        res.json({ ok: true, ...out, platforms: tax.listPlatforms() });
-    }
-    catch (err) {
-        sendTaxonomyError(res, err);
-    }
-});
-app.post("/api/planner/members", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    const body = (req.body || {});
-    try {
-        const member = tax.createMember({
-            fullName: String(body.fullName || ""),
-            role: typeof body.role === "string" ? body.role : undefined,
-            avatarInitials: typeof body.avatarInitials === "string" ? body.avatarInitials : undefined,
-            badgeColor: typeof body.badgeColor === "string" ? body.badgeColor : undefined,
-        });
-        res.json({ ok: true, member, team: tax.listMembers() });
-    }
-    catch (err) {
-        sendTaxonomyError(res, err);
-    }
-});
-app.patch("/api/planner/members/:id", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    const body = (req.body || {});
-    try {
-        if (body.restore === true) {
-            tax.restoreMember(String(req.params.id));
-            res.json({ ok: true, team: tax.listMembers(), hiddenMembers: tax.hiddenMembers() });
-            return;
-        }
-        const member = tax.updateMember(String(req.params.id), {
-            fullName: typeof body.fullName === "string" ? body.fullName : undefined,
-            role: typeof body.role === "string" ? body.role : undefined,
-            avatarInitials: typeof body.avatarInitials === "string" ? body.avatarInitials : undefined,
-            badgeColor: typeof body.badgeColor === "string" ? body.badgeColor : undefined,
-            active: typeof body.active === "boolean" ? body.active : undefined,
-        });
-        if (!member) {
-            res.status(404).json({ error: "No such team member" });
-            return;
-        }
-        res.json({ ok: true, member, team: tax.listMembers() });
-    }
-    catch (err) {
-        sendTaxonomyError(res, err);
-    }
-});
-/**
- * Remove a member from the planner. `mergeInto` is the deduplication path:
- * their content is reassigned first, then the record goes. A member derived
- * from the roster or the CRM is HIDDEN here, never deleted there — removing a
- * duplicate off a content calendar must not sign anybody out of the app.
- */
-app.delete("/api/planner/members/:id", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const tax = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-    try {
-        const out = tax.deleteMember(String(req.params.id), req.query.mergeInto ? String(req.query.mergeInto) : null);
-        if (!out.deleted) {
-            res.status(404).json({ error: "No such team member" });
-            return;
-        }
-        res.json({ ok: true, ...out, team: tax.listMembers(), hiddenMembers: tax.hiddenMembers() });
-    }
-    catch (err) {
-        sendTaxonomyError(res, err);
-    }
-});
-app.get("/api/planner/activity", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const planner = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-    res.json({ activity: planner.listActivity(Number(req.query.limit) || 50) });
-});
-/**
- * AI hook assist. Real call to the same Anthropic model the rest of the app
- * uses — and when no key is configured it says exactly that instead of
- * returning a canned line dressed up as a suggestion.
- */
-app.post("/api/planner/hook-assist", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
-        return;
-    }
-    const { complete, isAnthropicApiKeyConfigured } = await Promise.resolve().then(() => __importStar(require("./integrations/llm/index.js")));
-    if (!isAnthropicApiKeyConfigured()) {
-        res.status(503).json({
-            error: "Hook assist needs the ANTHROPIC_API_KEY secret — it is not set, so there is nothing to ask.",
-        });
-        return;
-    }
-    const body = (req.body || {});
-    const title = String(body.title || "").trim();
-    const platforms = Array.isArray(body.platforms) ? body.platforms.join(", ") : "";
-    try {
-        const text = await complete(`Write 3 short scroll-stopping opening hooks for a real-estate social post.\n` +
-            `Topic: ${title || "(no title yet)"}\nPlatforms: ${platforms || "(unspecified)"}\n` +
-            `Caption so far: ${String(body.caption || "").slice(0, 400)}\n` +
-            `Return them as three plain lines, no numbering, no preamble, under 15 words each.`, "You write hooks for Marco Puga, a San Antonio real-estate agent. Direct, specific, no hype words.");
-        const hooks = String(text || "")
-            .split("\n")
-            .map((l) => l.replace(/^[-*\d.\s]+/, "").trim())
-            .filter(Boolean)
-            .slice(0, 3);
-        res.json({ ok: true, hooks });
-    }
-    catch (err) {
-        res.status(502).json({ error: `Hook assist failed: ${err?.message || err}` });
-    }
-});
-/**
- * An assignment raises a real notification on the Task Command board — the
- * same feed assignments from the task board land in — so "notify on assign"
- * means the person actually sees it, not just a row in a log table.
- */
-async function notifyPlannerAssignees(userIds, title, itemId, actor) {
-    if (!userIds.length)
-        return;
-    try {
-        const { addNotification } = await Promise.resolve().then(() => __importStar(require("./core/teamStore.js")));
-        // The taxonomy name, not the roster one: a member renamed or merged in the
-        // planner must be named here the way the calendar names them.
-        const { memberName } = await Promise.resolve().then(() => __importStar(require("./core/plannerTaxonomy.js")));
-        for (const userId of userIds) {
-            addNotification({
-                user: userId,
-                type: "assignment",
-                title: "Assigned a content item",
-                body: `${actor ? memberName(actor) + " assigned" : "You were assigned"} "${title}" on the content calendar.`,
-                taskId: itemId,
-                from: actor || undefined,
-            });
-        }
-    }
-    catch (err) {
-        console.warn("[planner] assignment notification failed:", err);
-    }
 }
 /** Legacy listing status change — maps active/off_market to new intake (uses propertyInquired as address). */
 app.post("/api/activity/listing-status-change", express_1.default.json(), async (req, res) => {
@@ -13420,7 +10506,7 @@ app.post("/api/activity/listing-status-change", express_1.default.json(), async 
         "Unknown address";
     try {
         const mapped = statusRaw === "off_market" ? "off_market" : "active";
-        const result = await (0, index_js_12.handleListingStatusUpdate)(leadId, address, mapped, "manual");
+        const result = await (0, index_js_11.handleListingStatusUpdate)(leadId, address, mapped, "manual");
         res.status(200).json({ success: true, ...result });
     }
     catch (err) {
@@ -15793,7 +12879,7 @@ app.post("/api/browser/chat", express_1.default.json({ limit: "256kb" }), async 
        the device so the same person's laptop and desktop stay separate. */
     const sessionId = `ext-${account.id}-${deviceId}`.slice(0, 128);
     try {
-        const result = await (0, browserControl_js_1.withAccount)(account.id, () => (0, index_js_22.runHarveyChat)({
+        const result = await (0, browserControl_js_1.withAccount)(account.id, () => (0, index_js_19.runHarveyChat)({
             message,
             sessionId,
             deps: harveyDeps(),
@@ -16606,7 +13692,7 @@ app.post("/api/transactions/import-reminder/run", (req, res) => {
         return;
     }
     try {
-        res.json({ ok: true, ...(0, index_js_15.checkTransactionImportReminder)() });
+        res.json({ ok: true, ...(0, index_js_12.checkTransactionImportReminder)() });
     }
     catch (err) {
         res.status(500).json({ ok: false, error: err.message });
@@ -16666,7 +13752,7 @@ app.patch("/api/transactions/:id", express_1.default.json(), (req, res) => {
         return;
     }
     if (body.status === "closed" || tx.status === "closed") {
-        void (0, index_js_18.tryRecordCommissionForClosedDeal)(tx);
+        void (0, index_js_15.tryRecordCommissionForClosedDeal)(tx);
     }
     res.json({ transaction: tx });
 });
@@ -16728,7 +13814,7 @@ app.post("/api/transactions/import-csv", express_1.default.text({ type: ["text/c
            is how a reminder trains people to ignore it. */
         let reminder;
         try {
-            reminder = (0, index_js_15.checkTransactionImportReminder)().action;
+            reminder = (0, index_js_12.checkTransactionImportReminder)().action;
         }
         catch (err) {
             console.error("[txImportReminder] post-import check failed:", err.message);
@@ -16833,7 +13919,7 @@ app.post("/api/transactions/:id/inspection/schedule", express_1.default.json(), 
         if (!contact.phone?.trim())
             continue;
         const message = `Inspection scheduled for ${tx.address} on ${scheduledTimeStr}. Reply YES to confirm.`;
-        const result = await (0, index_js_20.sendTwilioMessage)(contact.phone, message);
+        const result = await (0, index_js_17.sendTwilioMessage)(contact.phone, message);
         if (result.success)
             notified++;
     }
@@ -16931,7 +14017,7 @@ app.post("/api/transactions/:id/final-week/walkthrough", express_1.default.json(
         timeZone: "America/Chicago",
     });
     if (tx.parties.buyerPhone) {
-        await (0, index_js_20.sendTwilioMessage)(tx.parties.buyerPhone, `Final walkthrough for ${tx.address} scheduled for ${timeStr}. Reply YES to confirm.`);
+        await (0, index_js_17.sendTwilioMessage)(tx.parties.buyerPhone, `Final walkthrough for ${tx.address} scheduled for ${timeStr}. Reply YES to confirm.`);
     }
     res.json({ transaction: (0, transactionsStore_js_1.getTransaction)(id) });
 });
@@ -17076,7 +14162,7 @@ app.post("/api/deadlines/check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_16.checkTransactionDeadlines)();
+    const result = await (0, index_js_13.checkTransactionDeadlines)();
     res.json(result);
 });
 app.post("/api/deadlines/daily-check-now", async (req, res) => {
@@ -17084,7 +14170,7 @@ app.post("/api/deadlines/daily-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_16.runDailyTransactionWorkflowChecks)();
+    const result = await (0, index_js_13.runDailyTransactionWorkflowChecks)();
     res.json(result);
 });
 app.post("/api/deadlines/close-day-check-now", async (req, res) => {
@@ -17108,7 +14194,7 @@ app.post("/api/deadlines/missed-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_16.checkMissedSameDayDeadlines)();
+    const result = await (0, index_js_13.checkMissedSameDayDeadlines)();
     res.json(result);
 });
 /* ===================== Lead scoring & nurture ===================== */
@@ -17117,7 +14203,7 @@ app.post("/api/lead-scoring/score-all", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_17.scoreAllLeads)();
+    const result = await (0, index_js_14.scoreAllLeads)();
     res.json(result);
 });
 app.post("/api/lead-scoring/score/:leadId", async (req, res) => {
@@ -17130,7 +14216,7 @@ app.post("/api/lead-scoring/score/:leadId", async (req, res) => {
         res.status(404).json({ error: "Lead not found" });
         return;
     }
-    const result = (0, index_js_17.scoreAndRecordLead)(lead);
+    const result = (0, index_js_14.scoreAndRecordLead)(lead);
     res.json(result);
 });
 app.get("/api/lead-scoring/:leadId", (req, res) => {
@@ -17161,7 +14247,7 @@ app.post("/api/lead-scoring/rescore-cold-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_17.scoreColdLeads)();
+    const result = await (0, index_js_14.scoreColdLeads)();
     res.json(result);
 });
 app.post("/api/lead-nurture/warm-touch-now", async (req, res) => {
@@ -17302,7 +14388,7 @@ app.get("/api/lead-nurture/tier-detail/:tier", async (req, res) => {
             /* From the model, never restated. A second copy of the weights is a
                copy that drifts, and this one already had: it still described the
                pre-2026-08 factors months after they stopped being scored. */
-            factorMax: index_js_17.WEIGHTS,
+            factorMax: index_js_14.WEIGHTS,
             tier: s.tier,
             name: leadDisplayNameSafe(lead),
             phone: lead?.phone || null,
@@ -17524,7 +14610,7 @@ app.get("/api/finance/pace-status", (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json((0, index_js_18.getCurrentPaceStatus)());
+    res.json((0, index_js_15.getCurrentPaceStatus)());
 });
 app.get("/api/voice-clone/health", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -17533,9 +14619,9 @@ app.get("/api/voice-clone/health", async (req, res) => {
     }
     // ElevenLabs is the primary engine on this CPU-only box; VoxCPM only runs if
     // someone stands up a GPU sidecar. Report whichever is active.
-    const elevenConfigured = (0, index_js_29.isElevenLabsConfigured)();
-    const eleven = elevenConfigured ? await (0, index_js_29.checkElevenLabsHealth)() : null;
-    const voxcpm = await (0, index_js_28.checkVoxCpmHealth)();
+    const elevenConfigured = (0, index_js_25.isElevenLabsConfigured)();
+    const eleven = elevenConfigured ? await (0, index_js_25.checkElevenLabsHealth)() : null;
+    const voxcpm = await (0, index_js_24.checkVoxCpmHealth)();
     const engine = elevenConfigured ? "elevenlabs" : process.env.VOXCPM_API_URL?.trim() ? "voxcpm" : "none";
     res.json({
         engine,
@@ -17727,8 +14813,8 @@ app.post("/api/voice-clone/reference-clips/upload", referenceAudioUpload.single(
     // Create the ElevenLabs clone now (best-effort). If it fails (e.g. plan
     // doesn't allow cloning), the clip still exists and generation will retry.
     let cloneError;
-    if ((0, index_js_29.isElevenLabsConfigured)() && clip.id) {
-        const clone = await (0, index_js_29.createInstantVoiceClone)({
+    if ((0, index_js_25.isElevenLabsConfigured)() && clip.id) {
+        const clone = await (0, index_js_25.createInstantVoiceClone)({
             name: `Marco Puga (${clip.id.slice(0, 8)})`,
             filePaths: [file.path],
             description: "Marco Puga Realty — cloned voiceover voice",
@@ -17741,7 +14827,7 @@ app.post("/api/voice-clone/reference-clips/upload", referenceAudioUpload.single(
             cloneError = clone.error;
         }
     }
-    else if (!(0, index_js_29.isElevenLabsConfigured)()) {
+    else if (!(0, index_js_25.isElevenLabsConfigured)()) {
         cloneError = "ELEVENLABS_API_KEY not set — clip saved; set the key to enable cloning";
     }
     res.json({ clip, voiceReady: !!clip.elevenVoiceId, cloneError });
@@ -17759,8 +14845,8 @@ app.post("/api/voice-clone/reference-clips/:id/set-primary", async (req, res) =>
     if (clip?.elevenVoiceId) {
         voiceReady = true;
     }
-    else if (clip?.localAudioPath && (0, index_js_29.isElevenLabsConfigured)()) {
-        const clone = await (0, index_js_29.createInstantVoiceClone)({
+    else if (clip?.localAudioPath && (0, index_js_25.isElevenLabsConfigured)()) {
+        const clone = await (0, index_js_25.createInstantVoiceClone)({
             name: `Marco Puga (${req.params.id.slice(0, 8)})`,
             filePaths: [clip.localAudioPath],
             description: "Marco Puga Realty — cloned voiceover voice",
@@ -17788,7 +14874,7 @@ app.post("/api/finance/sync", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const commissions = await (0, index_js_18.syncCommissionsFromClosedTransactions)();
+    const commissions = await (0, index_js_15.syncCommissionsFromClosedTransactions)();
     const projection = (0, financeStore_js_1.generatePipelineProjection)();
     res.json({
         commissions,
@@ -17823,21 +14909,21 @@ app.get("/api/finance/weekly-summary-preview", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json(await (0, index_js_18.buildWeeklyFinanceSummaryData)());
+    res.json(await (0, index_js_15.buildWeeklyFinanceSummaryData)());
 });
 app.get("/api/finance/monthly-report-preview", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    res.json(await (0, index_js_18.buildMonthlyCloseReportData)());
+    res.json(await (0, index_js_15.buildMonthlyCloseReportData)());
 });
 app.post("/api/finance/weekly-summary-now", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_18.runWeeklyFinanceSummary)();
+    const result = await (0, index_js_15.runWeeklyFinanceSummary)();
     res.json(result);
 });
 app.post("/api/finance/monthly-report-now", async (req, res) => {
@@ -17845,7 +14931,7 @@ app.post("/api/finance/monthly-report-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_18.runMonthlyCloseReport)();
+    const result = await (0, index_js_15.runMonthlyCloseReport)();
     res.json(result);
 });
 app.post("/api/finance/pace-check-now", async (req, res) => {
@@ -17853,7 +14939,7 @@ app.post("/api/finance/pace-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_18.runPaceCheck)();
+    const result = await (0, index_js_15.runPaceCheck)();
     res.json(result);
 });
 app.post("/api/finance/expense-spike-check-now", async (req, res) => {
@@ -17861,7 +14947,7 @@ app.post("/api/finance/expense-spike-check-now", async (req, res) => {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
         return;
     }
-    const result = await (0, index_js_18.runExpenseSpikeCheck)();
+    const result = await (0, index_js_15.runExpenseSpikeCheck)();
     res.json(result);
 });
 app.post("/api/transactions/:id/documents", express_1.default.json(), (req, res) => {
@@ -18280,17 +15366,6 @@ app.post("/api/leads/:id/documents/:docId/sign", async (req, res) => {
     await (0, db_js_1.updateLeadCrmFields)({ leadId, documents });
     res.status(200).json({ document: documents.find((d) => d.id === docId) });
 });
-// Self-hosted OpenReel clip editor, served same-origin under /editor.
-// It uses SharedArrayBuffer (ffmpeg-mt / WebCodecs threading), which requires
-// cross-origin isolation, so every /editor response needs COOP + COEP. These
-// headers are scoped to /editor only so the rest of the dashboard (CRM iframe,
-// external thumbnails, etc.) is unaffected. Runs before express.static below.
-app.use("/editor", (_req, res, next) => {
-    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-    res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    next();
-});
 // SPA entry: /editor and /editor/ serve the editor's index.html (the app uses
 // hash routing, so deep links like /editor/#/editor?clip=... resolve client-side).
 app.get(["/editor", "/editor/"], (_req, res) => {
@@ -18336,7 +15411,7 @@ httpServer.requestTimeout = 30 * 60 * 1000;
 httpServer.headersTimeout = 2 * 60 * 1000;
 const hullWss = new ws_1.WebSocketServer({ noServer: true });
 hullWss.on("connection", (ws) => {
-    (0, index_js_23.registerHullWs)(ws);
+    (0, index_js_20.registerHullWs)(ws);
 });
 httpServer.on("upgrade", (request, socket, head) => {
     // Harvey STT: ElevenLabs Scribe v2 realtime is the primary engine; Deepgram
@@ -18390,22 +15465,6 @@ setInterval(() => {
     })
         .catch((err) => console.error("[autoPlans] scheduled run failed:", err));
 }, AUTO_PLAN_INTERVAL_MS);
-async function ensureSocialDataExists() {
-    try {
-        if (!(0, socialStore_js_1.socialDataAvailable)()) {
-            console.log("[Social] No data found on startup — running initial agent pull");
-            await (0, index_js_1.runSocialMediaAgent)();
-        }
-        else {
-            const summary = (0, socialStore_js_1.getSocialSummaryForHarvey)();
-            const pulledAt = summary.pulledAt ?? summary.fetchedAt;
-            console.log("[Social] Social data exists — last pull:", pulledAt);
-        }
-    }
-    catch (err) {
-        console.error("[Social] Startup check failed:", err);
-    }
-}
 httpServer.on("error", (err) => {
     console.error("[Server] HTTP listen error:", err);
     process.exit(1);
@@ -18474,14 +15533,13 @@ httpServer.listen(PORT, "0.0.0.0", () => {
         console.error("[Harvey] CRM bridge catalogue failed — crm_api will report an empty index:", err);
     }
     try {
-        (0, contentDb_js_1.getContentDb)();
         (0, jobs_js_1.scheduleContentJobs)();
     }
     catch (err) {
-        console.error("[Server] content DB / jobs init failed:", err);
+        console.error("[Server] scheduled agents init failed:", err);
     }
     try {
-        (0, index_js_23.initHull)();
+        (0, index_js_20.initHull)();
     }
     catch (err) {
         console.error("[hull] init failed:", err);
@@ -18518,7 +15576,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
         // Raises (and clears) the monthly "import the Brivity transaction export"
         // task. Brivity has no transaction API, so nothing else keeps that data
         // from going quietly stale.
-        (0, index_js_15.scheduleTransactionImportReminder)();
+        (0, index_js_12.scheduleTransactionImportReminder)();
         void (async () => {
             const { scheduleQuoSync } = await Promise.resolve().then(() => __importStar(require("./core/quoSync.js")));
             const { isQuoConfigured, ensureMessageWebhook } = await Promise.resolve().then(() => __importStar(require("./integrations/quo/index.js")));
@@ -18554,20 +15612,6 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     catch (err) {
         console.error("[team] init failed:", err);
     }
-    // Planner activity lines name people, not ids. The roster lives in one file
-    // and the store must not import it directly (it would drag the CRM user
-    // table into every planner query), so the resolver is injected at boot.
-    void (async () => {
-        try {
-            const { setNameResolver, getPlannerDb } = await Promise.resolve().then(() => __importStar(require("./core/contentPlanner.js")));
-            const { plannerMemberName } = await Promise.resolve().then(() => __importStar(require("./core/plannerTeam.js")));
-            setNameResolver(plannerMemberName);
-            getPlannerDb();
-        }
-        catch (err) {
-            console.error("[planner] init failed:", err);
-        }
-    })();
     // A job left 'running' when the process died is not running — nothing resumes
     // it. Mark those interrupted so the UI shows the truth, not a phantom job.
     void (async () => {
@@ -18600,8 +15644,8 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     else {
         console.log("[Harvey] GEMINI_API_KEY configured — Gemini TTS ready");
     }
-    if ((0, index_js_21.isAnthropicApiKeyConfigured)()) {
-        console.log(`[Anthropic] API key present — model ${(0, index_js_21.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
+    if ((0, index_js_18.isAnthropicApiKeyConfigured)()) {
+        console.log(`[Anthropic] API key present — model ${(0, index_js_18.getAnthropicModel)()} (set ANTHROPIC_MODEL to override).`);
     }
     else {
         console.warn("[Anthropic] ANTHROPIC_API_KEY missing — preflight/opening/pipeline skip Haiku and use template fallbacks only.");
@@ -18632,7 +15676,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Chat demo: GET http://localhost:${PORT}/chat`);
     console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
     console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
-    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_22.getHarveyModel)()})`);
+    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_19.getHarveyModel)()})`);
     console.log(`Harvey voice STT: WS   http://localhost:${PORT}/api/jarvis/elevenlabs/listen (fallback: /api/jarvis/deepgram/listen)`);
     console.log(`Harvey voice TTS: POST http://localhost:${PORT}/api/jarvis/voice`);
     console.log(`Neural Map: GET http://localhost:${PORT}/memory`);
@@ -18648,5 +15692,4 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     if (AD_DASHBOARD_BASE_URL) {
         console.log(`  → upstream: ${AD_DASHBOARD_BASE_URL}/api/latest`);
     }
-    void ensureSocialDataExists();
 });

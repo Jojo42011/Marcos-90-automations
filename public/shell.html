@@ -212,24 +212,10 @@ var TABS = [
     first. /tracker still serves standalone; the CRM iframes it. */
  /* DM Agent moved INTO Analytics as its own tab. /chat still serves
     standalone; the Analytics page iframes it. */
- {
-   key: "content",
-   label: "Content Manager",
-   sub: "TikTok · Scores · Brain",
-   src: "/social",
-   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 10l4.553-2.069A1 1 0 0121 8.845v6.31a1 1 0 01-1.447.894L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>'
- },
- {
-   /* The editorial calendar. It sits beside the Content Manager rather than
-      inside it on purpose: the Content Manager is about clips that exist, and
-      this is about posts that are only planned. The Content Manager's own
-      Calendar tab was removed when this arrived - one calendar, one place. */
-   key: "calendar",
-   label: "Content Calendar",
-   sub: "Plan · scripts · assignees",
-   src: "/content-planner",
-   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'
- },
+ /* Content Manager and Content Calendar were removed on 2026-09-20 at the
+    operator's request: that whole area is being reworked from scratch, and a
+    half-working clip pipeline in the sidebar is worse than an empty slot. The
+    agents, stores, pages and routes went with them — this is not a hidden tab. */
  {
    key: "analytics",
    label: "Analytics",
@@ -274,7 +260,10 @@ var TABS = [
 var SECTIONS = {
  "harvey-chat": null,
  crm:           'Operations',
- content:       'Growth',
+ /* The 'Growth' header hung off the Content Manager tab. With that gone the
+    header moves to Analytics, which is the first Growth item left — otherwise
+    the group silently loses its label. */
+ analytics:     'Growth',
  tasks:         null,
  knowledge:     'Help'
 };

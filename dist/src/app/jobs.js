@@ -34,10 +34,7 @@ const buyerDrip_js_1 = require("../agents/emailMarketing/buyerDrip.js");
 const sellerDrip_js_1 = require("../agents/emailMarketing/sellerDrip.js");
 const pastClientQuarterly_js_1 = require("../agents/emailMarketing/pastClientQuarterly.js");
 const noReplyFollowup_js_1 = require("../agents/emailMarketing/noReplyFollowup.js");
-const index_js_18 = require("../agents/contentManager/index.js");
-const index_js_19 = require("../agents/contentManager/brain/index.js");
 const generator_js_1 = require("../agents/voiceClone/generator.js");
-const googleDrivePull_js_1 = require("../agents/contentManager/googleDrivePull.js");
 function msUntilNextUtcHour(hour) {
     const now = new Date();
     const next = new Date(now);
@@ -85,10 +82,7 @@ function scheduleContentJobs() {
     (0, sellerDrip_js_1.scheduleSellerDripProcessor)();
     (0, pastClientQuarterly_js_1.schedulePastClientQuarterly)();
     (0, noReplyFollowup_js_1.scheduleNoReplyFollowupCheck)();
-    (0, index_js_18.scheduleContentManagerDaily7pmCST)();
-    (0, index_js_19.scheduleContentBrainCycles)();
     (0, generator_js_1.scheduleVoiceoverProcessor)();
-    (0, googleDrivePull_js_1.scheduleGoogleDrivePoller)();
     scheduleDiskCleanup();
 }
 async function runDailyJobs() {

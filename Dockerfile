@@ -48,87 +48,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# ── OpenShorts engine clone + Python deps (cached unless requirements change) ─
-# Source-independent, so these stay cached across every source-only deploy.
-WORKDIR /app/services/openshorts
-
-RUN if [ ! -f "app.py" ]; then \
-    git clone https://github.com/mutonby/openshorts.git temp_clone && \
-    mv temp_clone/* temp_clone/.[!.]* . 2>/dev/null || true && \
-    rm -rf temp_clone ; \
-fi
-
-# IMAGE-SIZE CRITICAL: Fly machines refuse images over 8GB uncompressed
-# ("Not enough space to unpack image" → silent revert to the old image; this
-# took production down on 2026-07-11). The default torch wheels bundle
-# multi-GB NVIDIA CUDA libraries this CPU-only box can never use — install
-# the CPU-only builds FIRST so requirements.txt sees torch/torchvision
-# already satisfied (PEP 440: 2.11.0+cpu satisfies ==2.11.0).
-# --extra-index-url (not --index-url): the +cpu wheels live only on the
-# PyTorch index, while their dependencies (typing-extensions etc.) must come
-# from PyPI — the PyTorch index's copies fail pip's name-normalization check.
-RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    torch==2.11.0+cpu torchvision==0.26.0+cpu \
-    --extra-index-url https://download.pytorch.org/whl/cpu
-
-# OpenShorts main.py imports cv2 before scenedetect; install headless OpenCV first.
-RUN python3 -m pip install --no-cache-dir --break-system-packages opencv-python-headless \
-    && python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt \
-    && rm -rf /root/.cache /app/services/openshorts/.git
-
-# Marco-specific Python deps not guaranteed by the upstream OpenShorts clone
-# (YouTube competitor transcript intelligence). Installed explicitly by an
-# absolute path so it never collides with the clone's own requirements.txt.
-COPY services/openshorts/requirements-marco.txt /tmp/requirements-marco.txt
-RUN python3 -m pip install --no-cache-dir --break-system-packages -r /tmp/requirements-marco.txt
-
-# Fail the image build if core clipping imports are broken (avoids "online" sidecar with no engine).
-RUN python3 -c "import main; print('OpenShorts main import OK:', main.__file__)"
-RUN python3 -c "from youtube_transcript_api import YouTubeTranscriptApi; print('youtube-transcript-api import OK')"
-
-# ── CapCut draft-export service (ashreo/CapCutAPI, pinned commit) ──────────
-# Generates CapCut DRAFT projects (clip + captions) the user opens in the
-# CapCut desktop app; it renders nothing itself. Clone + deps are source-
-# independent, so they cache too.
-WORKDIR /app/services
-RUN git clone https://github.com/ashreo/CapCutAPI.git capcutapi \
-    && cd capcutapi \
-    && git checkout 369fa2d45e3cce0e633c5f43004464c0db268c11
-WORKDIR /app/services/capcutapi
-# Explicit dep list on purpose: upstream requirements.txt pulls oss2 (native
-# builds, cloud-upload only) which the oss.py override below removes the need for.
-RUN python3 -m pip install --no-cache-dir --break-system-packages flask requests imageio psutil
-
-# ════════════════════════════════════════════════════════════════════════════
-# APP SOURCE — everything below changes often and is intentionally LAST so a
-# source-only deploy reuses every cached layer above. Nothing heavy here.
-# ════════════════════════════════════════════════════════════════════════════
-WORKDIR /app
-COPY tsconfig.json ./
-COPY config ./config
-COPY src ./src
-RUN npm run build && npm prune --omit=dev && npm cache clean --force && rm -rf /root/.npm
-COPY public ./public
-COPY scripts ./scripts
-COPY supervisord.conf ./supervisord.conf
-
-# Marco source overrides — the whole services tree over the clones. COPY merges:
-# the cloned OpenShorts/CapCut engine files stay, marco *.py modules and the
-# capcutapi-marco assets are added on top. This is the single catch-all that
-# guarantees every marco module (reel_analysis, gaze, emoji_fx, …) is present.
-COPY services ./services
-
-# Apply the CapCut overrides + text_segment shim onto the cloned engine.
-COPY services/capcutapi-marco/config.json /app/services/capcutapi/config.json
-COPY services/capcutapi-marco/oss.py /app/services/capcutapi/oss.py
-COPY services/capcutapi-marco/text_segment_shim.py /tmp/text_segment_shim.py
-RUN printf '\n\n' >> /app/services/capcutapi/pyJianYingDraft/text_segment.py \
-    && cat /tmp/text_segment_shim.py >> /app/services/capcutapi/pyJianYingDraft/text_segment.py \
-    && rm /tmp/text_segment_shim.py
-
-# Fail the image build if the sidecar services can't import after overrides.
-RUN cd /app/services/openshorts && python3 -c "import main; print('OpenShorts engine OK')"
-RUN cd /app/services/capcutapi && python3 -c "import capcut_server; print('CapCutAPI import OK')"
+# The OpenShorts video engine, its Python/torch dependency layer and the
+# CapCutAPI draft service were removed with the Content Manager on 2026-09-20.
+# They were the bulk of this image and of its build time; whatever replaces the
+# content pipeline can add back only what it actually needs.
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 

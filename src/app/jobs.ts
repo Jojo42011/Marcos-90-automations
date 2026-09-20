@@ -33,10 +33,7 @@ import { scheduleBuyerDripProcessor } from "../agents/emailMarketing/buyerDrip.j
 import { scheduleSellerDripProcessor } from "../agents/emailMarketing/sellerDrip.js";
 import { schedulePastClientQuarterly } from "../agents/emailMarketing/pastClientQuarterly.js";
 import { scheduleNoReplyFollowupCheck } from "../agents/emailMarketing/noReplyFollowup.js";
-import { scheduleContentManagerDaily7pmCST } from "../agents/contentManager/index.js";
-import { scheduleContentBrainCycles } from "../agents/contentManager/brain/index.js";
 import { scheduleVoiceoverProcessor } from "../agents/voiceClone/generator.js";
-import { scheduleGoogleDrivePoller } from "../agents/contentManager/googleDrivePull.js";
 
 function msUntilNextUtcHour(hour: number): number {
   const now = new Date();
@@ -91,10 +88,7 @@ export function scheduleContentJobs(): void {
   scheduleSellerDripProcessor();
   schedulePastClientQuarterly();
   scheduleNoReplyFollowupCheck();
-  scheduleContentManagerDaily7pmCST();
-  scheduleContentBrainCycles();
   scheduleVoiceoverProcessor();
-  scheduleGoogleDrivePoller();
   scheduleDiskCleanup();
 }
 

@@ -29,7 +29,6 @@ exports.runSafetyDiskCleanup = runSafetyDiskCleanup;
 const fs_1 = __importDefault(require("fs"));
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
-const contentDb_js_1 = require("./contentDb.js");
 function dataBase() {
     return fs_1.default.existsSync("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
 }
@@ -181,107 +180,26 @@ const KEEP_CLIP_STATUSES = new Set(["processing", "pending_review", "approved", 
  * Pure/read-only — used by both the scheduled safety job and the one-time
  * script (dry-run). `now` is injectable for testing.
  */
-function computeCleanupCandidates(now = Date.now()) {
-    const UPLOAD_GRACE_MS = 24 * 60 * 60 * 1000; // 24h
-    const CLIP_GRACE_MS = 60 * 60 * 1000; // 1h
-    const candidates = [];
-    let sourceRefs = [];
-    let videoRefs = [];
-    try {
-        sourceRefs = (0, contentDb_js_1.listAllBatchSourceFileRefs)();
-    }
-    catch (err) {
-        console.error(`[disk-cleanup] Could not read source-file state: ${err.message}`);
-    }
-    try {
-        videoRefs = (0, contentDb_js_1.listAllContentVideoFileRefs)();
-    }
-    catch (err) {
-        console.error(`[disk-cleanup] Could not read clip state: ${err.message}`);
-    }
-    // Protected uploads: absolute paths of source files with a non-terminal job.
-    const protectedUploads = new Set(sourceRefs
-        .filter((s) => !TERMINAL_UPLOAD_STATUSES.has(s.opusStatus))
-        .map((s) => path_1.default.resolve(s.filePath)));
-    // Protected clips: basenames of clip files for videos still needing them.
-    // Also protect each clip's editable siblings — the uncaptioned base (_base.mp4)
-    // and caption file (_base.ass) the clip editor re-renders from — while the clip
-    // is in a KEEP state, so a mid-review edit isn't broken by the daily sweep.
-    const protectedClipNames = new Set();
-    for (const v of videoRefs) {
-        if (!v.filePath || !KEEP_CLIP_STATUSES.has(v.status))
-            continue;
-        const base = path_1.default.basename(String(v.filePath).replace(/\\/g, "/"));
-        protectedClipNames.add(base);
-        const stem = base.replace(/_captioned\.mp4$/i, "").replace(/_vertical\.mp4$/i, "").replace(/\.mp4$/i, "");
-        protectedClipNames.add(`${stem}_base.mp4`);
-        protectedClipNames.add(`${stem}_base.ass`);
-        protectedClipNames.add(`${stem}_base.lines.json`);
-    }
-    // Also protect retained prior-version clip files (revert targets) while their
-    // clip is still in a KEEP state — reclaimed once the clip is published/rejected.
-    const keepVideoIds = new Set(videoRefs.filter((v) => KEEP_CLIP_STATUSES.has(v.status)).map((v) => v.id));
-    try {
-        for (const ref of (0, contentDb_js_1.listClipVersionFileRefs)()) {
-            if (keepVideoIds.has(ref.videoId) && ref.filePath) {
-                protectedClipNames.add(path_1.default.basename(String(ref.filePath).replace(/\\/g, "/")));
-            }
-        }
-    }
-    catch (err) {
-        console.error(`[disk-cleanup] Could not read clip-version refs: ${err.message}`);
-    }
-    // Uploads sweep
-    const uv = uploadsVideosDir();
-    if (fs_1.default.existsSync(uv)) {
-        for (const name of safeReaddir(uv)) {
-            const abs = path_1.default.join(uv, name);
-            const st = safeStat(abs);
-            if (!st || !st.isFile())
-                continue;
-            if (protectedUploads.has(path_1.default.resolve(abs)))
-                continue; // job still active
-            const ageMs = now - st.mtimeMs;
-            if (ageMs < UPLOAD_GRACE_MS)
-                continue;
-            candidates.push({
-                path: abs,
-                bytes: st.size,
-                ageHours: Math.round(ageMs / 3_600_000),
-                reason: "source: job terminal/orphan, >24h",
-            });
-        }
-    }
-    // Clips sweep — /data/clips/{jobId}/{file}
-    const cr = clipsRoot();
-    if (fs_1.default.existsSync(cr)) {
-        for (const jobDir of safeReaddir(cr)) {
-            const dirAbs = path_1.default.join(cr, jobDir);
-            const dirSt = safeStat(dirAbs);
-            if (!dirSt || !dirSt.isDirectory())
-                continue;
-            for (const name of safeReaddir(dirAbs)) {
-                const abs = path_1.default.join(dirAbs, name);
-                const st = safeStat(abs);
-                if (!st || !st.isFile())
-                    continue;
-                if (looksLikeDatabase(name))
-                    continue; // never DBs
-                if (protectedClipNames.has(name))
-                    continue; // in review / awaiting post
-                const ageMs = now - st.mtimeMs;
-                if (ageMs < CLIP_GRACE_MS)
-                    continue;
-                candidates.push({
-                    path: abs,
-                    bytes: st.size,
-                    ageHours: Math.round(ageMs / 3_600_000),
-                    reason: "clip: published/rejected/orphan, >1h",
-                });
-            }
-        }
-    }
-    return candidates;
+function computeCleanupCandidates(_now = Date.now()) {
+    /* DELIBERATELY EMPTY as of 2026-09-20, and that is the safe direction.
+     *
+     * This function decided which uploads and clips could be deleted by asking
+     * `content.db` which ones a job still needed. The content pipeline and that
+     * database were removed, so the question can no longer be answered — and the
+     * failure mode of guessing is not a stale file, it is deleting a video that
+     * was still wanted.
+     *
+     * With no protection list, every sweep below would have classified the ENTIRE
+     * contents of /data/uploads and /data/clips as reclaimable on the next run.
+     * So the sweeps are gone rather than left running against an empty protection
+     * set. Leftover files from the old pipeline are left alone; whatever replaces
+     * the Content Manager can bring its own retention rules and its own notion of
+     * which files are still in use.
+     *
+     * Everything else here still works: free-space reporting, the low-space
+     * warning, and `deleteClipFile` for a caller that names a specific file.
+     */
+    return [];
 }
 function safeReaddir(dir) {
     try {
@@ -350,16 +268,12 @@ async function runSafetyDiskCleanup() {
     // reclaims space once clips are actioned, so a review queue that's
     // backing up (nobody publishing/rejecting) will still slowly starve the
     // volume even with cleanup running correctly. Surface that early.
+    /* The pending-review clip count used to be named here, because an unactioned
+       review queue was the thing that silently ate the volume. The clip pipeline
+       is gone, so the warning is the free-space number alone rather than a count
+       read from a database that no longer exists. */
     if (Number.isFinite(freeMB) && freeMB < LOW_DISK_WARNING_THRESHOLD_MB) {
-        let pendingReviewCount = 0;
-        try {
-            pendingReviewCount = (0, contentDb_js_1.listAllContentVideoFileRefs)().filter((v) => v.status === "pending_review").length;
-        }
-        catch (err) {
-            console.error(`[disk-cleanup] Could not count pending-review clips: ${err.message}`);
-        }
-        console.warn(`[DISK WARNING] /data only ${(freeMB / 1024).toFixed(1)}GB free — review queue has ${pendingReviewCount} clips pending publish. ` +
-            `Consider publishing or rejecting clips to free space.`);
+        console.warn(`[DISK WARNING] /data only ${(freeMB / 1024).toFixed(1)}GB free.`);
     }
     return { deleted, freedBytes: freed };
 }

@@ -10,7 +10,6 @@ import { embedText, float32ToBlob } from "./memory/embeddings.js";
 import { upsertNode, findSimilarNode } from "./memory/nodes.js";
 import { resolveWhatsAppTarget, sendWhatsAppViaGateway } from "./whatsappSend.js";
 import { isGmailConfigured, sendEmail } from "../integrations/gmail/index.js";
-import { analyzeReelViaOpenShorts } from "../integrations/openshorts/index.js";
 import { SCHEDULE_TOOL_DEFINITIONS, SCHEDULE_TOOL_NAMES, executeScheduleTool } from "./scheduleTools.js";
 import {
   clampTraits,
@@ -160,29 +159,12 @@ const READ_PAGE_TOOL: Tool = {
   },
 };
 
-const ANALYZE_REEL_TOOL: Tool = {
-  name: "analyze_reel",
-  description:
-    "Follow an Instagram, TikTok, or YouTube-Short/Reel link that Marco pasted into chat, watch the actual video, and return a short-form-strategist breakdown (what it is, the hook, structure/pacing, why it works, and takeaways Marco can steal for his real-estate content). ALWAYS call this whenever Marco's message contains a reel/short/video URL — do not guess at the content from the URL alone. Downloads + transcribes + reads keyframes server-side; may take up to a minute.",
-  input_schema: {
-    type: "object",
-    properties: {
-      url: { type: "string", description: "The full https reel/short/video URL to analyze" },
-      note: {
-        type: "string",
-        description: "Optional: what Marco said alongside the link (e.g. 'is this a good hook?') so the analysis can focus on it",
-      },
-    },
-    required: ["url"],
-  },
-};
 
 export function getHullToolDefinitions(opts?: { whatsappSend?: boolean }): Tool[] {
   const tools = [
     ...HARVEY_TOOL_DEFINITIONS,
     ...MEMORY_TOOLS,
     ...SCHEDULE_TOOL_DEFINITIONS,
-    ANALYZE_REEL_TOOL,
     TUNE_PERSONALITY_TOOL,
     CHANGE_AGENT_LOGIC_TOOL,
   ];
@@ -325,37 +307,6 @@ export async function executeHullTool(name: string, input: Record<string, unknow
     };
   }
 
-  if (name === "analyze_reel") {
-    const url = String(input.url || "").trim();
-    const note = String(input.note || "").trim();
-    if (!/^https?:\/\//i.test(url)) {
-      return { error: "Provide the full reel/short URL (starting with http)." };
-    }
-    console.log(`[reel] tool analyze_reel url=${url.slice(0, 80)}`);
-    try {
-      const result = await analyzeReelViaOpenShorts(url, note);
-      if (result.status === "failed") {
-        return { error: result.error || "Reel analysis failed." };
-      }
-      const meta = result.metadata || {};
-      return {
-        ok: true,
-        analysis: result.analysis,
-        transcript: result.transcript,
-        platform: meta.platform,
-        title: meta.title,
-        uploader: meta.uploader,
-        views: meta.view_count,
-        likes: meta.like_count,
-        duration: meta.duration,
-        source_url: meta.webpage_url || url,
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[reel] tool failed: ${message}`);
-      return { error: `Reel analysis failed: ${message}` };
-    }
-  }
 
   if (name === "whatsapp_send") {
     const to = String(input.to || "").trim();
