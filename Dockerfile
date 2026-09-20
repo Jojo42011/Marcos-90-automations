@@ -53,13 +53,34 @@ RUN npm ci
 # They were the bulk of this image and of its build time; whatever replaces the
 # content pipeline can add back only what it actually needs.
 
+# ════════════════════════════════════════════════════════════════════════════
+# APP SOURCE — everything below changes often and is intentionally LAST so a
+# source-only deploy reuses every cached layer above. Nothing heavy here.
+# ════════════════════════════════════════════════════════════════════════════
+WORKDIR /app
+COPY tsconfig.json ./
+COPY config ./config
+COPY src ./src
+RUN npm run build && npm prune --omit=dev && npm cache clean --force && rm -rf /root/.npm
+COPY public ./public
+COPY scripts ./scripts
+COPY supervisord.conf ./supervisord.conf
+
+# Fail the BUILD if the server did not compile.
+#
+# This guard exists because removing the content pipeline accidentally deleted
+# the `COPY src` / `npm run build` block along with the sidecar layers, and the
+# image still built perfectly — it just contained no application. The first
+# symptom was supervisord crash-looping on `Cannot find module
+# /app/dist/src/server.js` in production, which is far too late to find out.
+RUN test -f /app/dist/src/server.js || (echo "BUILD FAILED: dist/src/server.js missing" && exit 1)
+
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-RUN mkdir -p /data/uploads/videos /data/clips /data/uploads
+RUN mkdir -p /data/uploads /data/clips
 
 WORKDIR /app
 
 EXPOSE 3000
-EXPOSE 8000
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

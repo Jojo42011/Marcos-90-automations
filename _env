@@ -21,13 +21,7 @@ ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 # GEMINI_API_KEY below is Harvey-only now (voice TTS + Gemini Live) — the
 # Content Manager and OpenShorts sidecar no longer use Gemini for anything.
 GEMINI_API_KEY=YOUR_GEMINI_KEY
-OPENSHORTS_URL=http://localhost:8000
-OPENSHORTS_PORT=8000
-# Optional clip enhancements (all default on except B-roll, which needs a key)
-# OPENSHORTS_AUTO_ZOOM=true
-# OPENSHORTS_AUTO_ZOOM_AMOUNT=0.05
-# PEXELS_API_KEY=          # free key from pexels.com/api — enables B-roll overlay
-# OPENSHORTS_BROLL=true
+
 # VoxCPM2 GPU microservice (RunPod / Modal / local GPU — NOT Fly.io)
 VOXCPM_API_URL=
 GEMINI_LIVE_MODEL=models/gemini-2.0-flash-live-001
