@@ -15366,11 +15366,6 @@ app.post("/api/leads/:id/documents/:docId/sign", async (req, res) => {
     await (0, db_js_1.updateLeadCrmFields)({ leadId, documents });
     res.status(200).json({ document: documents.find((d) => d.id === docId) });
 });
-// SPA entry: /editor and /editor/ serve the editor's index.html (the app uses
-// hash routing, so deep links like /editor/#/editor?clip=... resolve client-side).
-app.get(["/editor", "/editor/"], (_req, res) => {
-    res.sendFile(path_1.default.join(publicDir, "editor", "index.html"));
-});
 /** Serve other public assets (CRM modules, etc.) after explicit routes. */
 app.use(express_1.default.static(publicDir, { index: false }));
 app.use((err, _req, res, next) => {
