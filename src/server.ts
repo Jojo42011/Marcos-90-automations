@@ -2639,6 +2639,7 @@ app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) 
         cachedTokens: result.cachedTokens ?? 0,
         costUsd: result.costUsd ?? 0,
         contextPlan: result.contextPlan ?? null,
+        substituted: result.substituted ?? null,
       });
       send("done", { sessionId, conversationId, text: result.speech });
     } catch (err) {
@@ -2674,6 +2675,8 @@ app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) 
         cachedTokens: result.cachedTokens ?? 0,
         costUsd: result.costUsd ?? 0,
       },
+      /* Say when the model that answered is not the model that was picked. */
+      substituted: result.substituted ?? null,
       contextPlan: result.contextPlan ?? null,
       approvals: result.approvals ?? [],
     });

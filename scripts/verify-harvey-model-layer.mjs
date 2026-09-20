@@ -689,6 +689,100 @@ const offSwitch = run(`
 `, { HARVEY_PROMPT_CACHE: "false" });
 ok("HARVEY_PROMPT_CACHE=false turns caching off entirely", offSwitch.marked === false);
 
+/* ══════════════════════ an explicit pick is not negotiable ══════════════════
+   Found in production: the picker read GPT-5.1 and every answer came back on
+   Mercury 2.5. Not a UI bug and not our routing — OpenRouter caps prompt tokens
+   per request on a free-tier balance, Harvey's 14k-token tool preamble exceeded
+   that cap for every mid-tier model, and the `models` fallback chain we sent was
+   read as permission to run the cheapest entry instead. The call succeeded, so
+   nothing logged an error; the only trace was a different name in the footer. */
+console.log("\nEXPLICIT PICK — honoured, or reported, never swapped");
+
+const pick = run(`
+  ${FETCH_STUB}
+  const P = await import(${JSON.stringify(MOD.index)});
+  const calls = installFetch(() => json({
+    id: "gen-1", model: "anthropic/claude-sonnet-4.6",
+    choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+    usage: { prompt_tokens: 10, completion_tokens: 2, cost: 0.0001 },
+  }));
+  const explicit = await P.complete({
+    job: "chat_deep", modelOverride: "anthropic/claude-sonnet-4.6",
+    messages: [{ role: "user", content: "hi" }], maxTokens: 32,
+  });
+  const explicitBody = calls[0].body;
+  const auto = await P.complete({
+    job: "chat_deep", messages: [{ role: "user", content: "hi" }], maxTokens: 32,
+  });
+  console.log(JSON.stringify({
+    explicitSentChain: Array.isArray(explicitBody.models),
+    explicitSource: explicit.resolved.source,
+    autoSentChain: Array.isArray(calls[1].body.models) && calls[1].body.models.length > 1,
+    autoSource: auto.resolved.source,
+  }));
+`, { OPENROUTER_API_KEY: FAKE_KEY, AI_USAGE_DB_PATH: join(tmp, "pick.db") });
+
+ok("an explicit pick is resolved as explicit", pick.explicitSource === "explicit", pick.explicitSource);
+ok(
+  "and sends NO fallback chain, so the provider cannot substitute",
+  pick.explicitSentChain === false,
+  JSON.stringify(pick),
+);
+ok("while Harvey's own choice still gets a chain to fail over with", pick.autoSentChain === true, JSON.stringify(pick));
+ok("and is reported as a default, not as the operator's pick", pick.autoSource === "default", pick.autoSource);
+
+/* A provider that answers with a different model than we asked for must be
+   reported, because the call SUCCEEDS and nothing else would notice. */
+const swapped = run(`
+  ${FETCH_STUB}
+  const P = await import(${JSON.stringify(MOD.index)});
+  installFetch(() => json({
+    id: "gen-2", model: "inception/mercury-2.5",
+    choices: [{ message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+    usage: { prompt_tokens: 10, completion_tokens: 2, cost: 0.0001 },
+  }));
+  const out = await P.complete({
+    job: "chat_deep", modelOverride: "anthropic/claude-sonnet-4.6",
+    messages: [{ role: "user", content: "hi" }], maxTokens: 32,
+  });
+  console.log(JSON.stringify({ substituted: out.substituted, modelUsed: out.modelUsed }));
+`, { OPENROUTER_API_KEY: FAKE_KEY, AI_USAGE_DB_PATH: join(tmp, "swap.db") });
+
+ok("a substituted model is reported, not swallowed", !!swapped.substituted, JSON.stringify(swapped));
+ok(
+  "and names both what was asked and what ran",
+  swapped.substituted?.asked === "anthropic/claude-sonnet-4.6" && swapped.substituted?.ran === "inception/mercury-2.5",
+  JSON.stringify(swapped.substituted),
+);
+
+/* The 402 that started all of this must reach the operator intact, since it is
+   the message that says what to do about it. */
+const tokenCapRefusal = run(`
+  ${FETCH_STUB}
+  const P = await import(${JSON.stringify(MOD.index)});
+  installFetch(() => ({
+    ok: false, status: 402,
+    text: async () => JSON.stringify({ error: { message: "Prompt tokens limit exceeded: 13663 > 11211", code: 402 } }),
+    json: async () => ({ error: { message: "Prompt tokens limit exceeded: 13663 > 11211", code: 402 } }),
+    headers: { get: () => "application/json" },
+  }));
+  let err = null;
+  try {
+    await P.complete({
+      job: "chat_deep", modelOverride: "anthropic/claude-sonnet-4.6",
+      messages: [{ role: "user", content: "hi" }], maxTokens: 32,
+    });
+  } catch (e) { err = { name: e.name, summary: e.summary || e.message, status: e.status }; }
+  console.log(JSON.stringify({ err }));
+`, { OPENROUTER_API_KEY: FAKE_KEY, AI_USAGE_DB_PATH: join(tmp, "refuse.db") });
+
+ok("an explicit pick that cannot run THROWS instead of running something cheaper", !!tokenCapRefusal.err, JSON.stringify(tokenCapRefusal));
+ok(
+  "and the provider's own reason survives to the operator",
+  /Prompt tokens limit exceeded/.test(tokenCapRefusal.err?.summary || ""),
+  tokenCapRefusal.err?.summary,
+);
+
 /* ══════════════════════ the catalog is real ══════════════════════
    The picker previously offered `openai/gpt-5.1-mini`, `openai/gpt-5.1-pro` and
    `google/gemini-3-pro`, none of which exist on OpenRouter — choosing one would

@@ -155,6 +155,15 @@ export interface AgentLoopResult {
   /** Set when the spend cap stopped the turn, so the caller can say so exactly. */
   budgetRefused?: string;
   /**
+   * Set when the provider ran a different model than the one that was picked.
+   *
+   * Surfaced because the failure it describes is otherwise invisible: the call
+   * succeeds, the answer is fine, and the only trace is a different name in the
+   * usage line. That is how a picker set to GPT-5.1 spent an afternoon answering
+   * on the cheapest model in the catalog.
+   */
+  substituted?: { asked: string; ran: string };
+  /**
    * Set when no model could be reached.
    *
    * A live chat shows the sentence and moves on, but an unattended caller has to
@@ -384,6 +393,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   let cachedTokens = 0;
   let lastPlan: ContextPlan | undefined;
   let lastModelUsed = model;
+  let substituted: { asked: string; ran: string } | undefined;
 
   const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : MAX_AGENT_STEPS;
 
@@ -508,6 +518,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     cachedTokens += out.usage.cachedTokens || 0;
     lastPlan = out.contextPlan;
     lastModelUsed = out.modelUsed;
+    if (out.substituted) substituted = out.substituted;
     opts.onEvent?.({
       type: "usage",
       model: out.modelUsed,
@@ -529,6 +540,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         cachedTokens,
         contextPlan: out.contextPlan,
         approvals: heldApprovals,
+        substituted,
       };
     }
 

@@ -247,6 +247,7 @@ async function runAgentLoop(opts) {
     let cachedTokens = 0;
     let lastPlan;
     let lastModelUsed = model;
+    let substituted;
     const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : MAX_AGENT_STEPS;
     /**
      * Run one tool call, refusing an identical repeat.
@@ -364,6 +365,8 @@ async function runAgentLoop(opts) {
         cachedTokens += out.usage.cachedTokens || 0;
         lastPlan = out.contextPlan;
         lastModelUsed = out.modelUsed;
+        if (out.substituted)
+            substituted = out.substituted;
         opts.onEvent?.({
             type: "usage",
             model: out.modelUsed,
@@ -384,6 +387,7 @@ async function runAgentLoop(opts) {
                 cachedTokens,
                 contextPlan: out.contextPlan,
                 approvals: heldApprovals,
+                substituted,
             };
         }
         hadToolOnly = !out.text.trim();

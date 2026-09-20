@@ -192,13 +192,24 @@ async function complete(req) {
             lastError = new internal_js_1.ModelLayerError("no_key", `No API key configured that can reach ${model}. Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY.`, { model });
             continue;
         }
+        /* AN EXPLICIT PICK IS HONOURED OR IT FAILS. It is never quietly swapped.
+         *
+         * Handing OpenRouter a `models` chain lets it fail over server-side, which
+         * is one round trip instead of two and is right when Harvey chose the model.
+         * It is wrong when the OPERATOR chose it: OpenRouter then treats the chain
+         * as permission to run something else, and the only signal is a different
+         * name in the usage footer. That is how a picker set to GPT-5.1 spent an
+         * afternoon answering on Mercury — a free-tier key caps prompt tokens per
+         * request, the 14k tool preamble exceeded it for every mid-tier model, and
+         * the cheapest entry in the chain was the only one allowed.
+         *
+         * So an explicit pick sends no chain. If it cannot run, the real error
+         * surfaces (including the 402 that says to add credits) instead of a silent
+         * downgrade nobody asked for. */
+        const explicitPick = resolved.source === "explicit";
         const providerRequest = {
             model,
-            /* Hand the REMAINING candidates to OpenRouter as its own model chain: it
-               fails over server-side on context-length errors and rate limits, which
-               is one round trip instead of two. Our loop still exists for the case
-               OpenRouter itself is unreachable. */
-            fallbacks: candidates.slice(i + 1),
+            fallbacks: explicitPick ? [] : candidates.slice(i + 1),
             system: req.system,
             messages: planned.messages,
             tools: req.tools,
@@ -215,15 +226,17 @@ async function complete(req) {
                 const usage = usageRow({ provider, model, job, sessionId: req.sessionId, latencyMs }, res);
                 (0, aiUsageStore_js_1.recordUsage)(usage);
                 safeVoid(() => (0, aiUsageStore_js_1.noteSuccess)(model));
+                const ran = res.modelUsed || model;
                 return {
                     text: res.text,
                     toolUses: res.toolUses,
                     stopReason: res.stopReason,
                     usage,
-                    modelUsed: res.modelUsed || model,
+                    modelUsed: ran,
                     contextPlan: planned.plan,
                     budget: verdict,
                     resolved,
+                    substituted: ran !== model ? { asked: model, ran } : undefined,
                 };
             }
             catch (err) {
@@ -235,6 +248,14 @@ async function complete(req) {
                         model,
                     });
                 lastError = wrapped;
+                /* Same rule for our own loop: an explicit pick that fails is reported,
+                   not replaced. Trying the next candidate here would reintroduce the
+                   silent downgrade one layer down. */
+                if (resolved.source === "explicit") {
+                    (0, aiUsageStore_js_1.recordUsage)(usageRow({ provider, model, job, sessionId: req.sessionId, latencyMs }, { costUsd: 0, costEstimated: true }, wrapped.summary));
+                    safeVoid(() => (0, aiUsageStore_js_1.noteFailure)(model, wrapped.summary));
+                    throw wrapped;
+                }
                 (0, aiUsageStore_js_1.recordUsage)(usageRow({ provider, model, job, sessionId: req.sessionId, latencyMs }, { costUsd: 0, costEstimated: true }, wrapped.summary));
                 safeVoid(() => (0, aiUsageStore_js_1.noteFailure)(model, wrapped.summary));
                 console.error(`[models] ${provider} ${model} failed: ${wrapped.summary}`);

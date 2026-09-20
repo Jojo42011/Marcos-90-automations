@@ -604,7 +604,7 @@
       var ui = addAssistantMessage();
       ui.setText(m.content || "");
       ui.finish();
-      if (m.model || num(m.costUsd) != null) ui.setUsage({ model: m.model, costUsd: m.costUsd });
+      if (m.model || num(m.costUsd) != null) ui.setUsage({ model: m.model, costUsd: m.costUsd, substituted: m.substituted });
     });
     scrollToBottom(true);
   }
@@ -787,6 +787,12 @@
         if (cost != null) bits.push("$" + cost.toFixed(4));
         var pt = num(u.promptTokens), ct = num(u.completionTokens);
         if (pt != null || ct != null) bits.push(count(pt || 0) + " in / " + count(ct || 0) + " out tokens");
+        /* The provider ran something other than the pick. Say so on the line
+           itself: the whole reason this is a bug worth reporting is that the
+           only clue was a different name here, with nothing calling it out. */
+        if (u.substituted && u.substituted.asked && u.substituted.ran) {
+          bits.push("\u26a0 asked for " + shortModel(u.substituted.asked));
+        }
         if (!bits.length) return;
         metaWrap.textContent = bits.join(" · ");
         if (u.contextPlan) {
@@ -794,6 +800,11 @@
           metaWrap.title = "Context plan — budget " + (cp.budgetTokens || cp.budget || "?") +
             " tokens, estimate " + (cp.estimateTokens || cp.estimate || "?") +
             (cp.dropped ? ", dropped: " + cp.dropped : "");
+        }
+        if (u.substituted && u.substituted.asked) {
+          metaWrap.title = shortModel(u.substituted.asked) + " could not run this request, so " +
+            shortModel(u.substituted.ran) + " answered instead. The usual cause is the OpenRouter key's " +
+            "per-request token limit on a free-tier balance: add credits and the picked model runs.";
         }
         metaWrap.hidden = false;
       },
