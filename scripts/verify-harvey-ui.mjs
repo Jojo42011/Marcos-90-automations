@@ -30,6 +30,8 @@ const root = process.cwd();
 const HTML_PATH = join(root, "public/harvey.html");
 const JS_PATH = join(root, "public/harvey-chat.js");
 const DOC_PATH = join(root, "docs/harvey-model-layer.md");
+const SHELL_PATH = join(root, "public/shell.html");
+const SERVER_PATH = join(root, "src/server.ts");
 
 let pass = 0;
 const fail = [];

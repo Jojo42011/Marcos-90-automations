@@ -12,6 +12,7 @@ let inBlockComment = false;
 let inTemplate = false;
 let start = null;
 const stmts = [];
+let prevSignificant = '';
 
 for (let i = 0; i < lines.length; i++) {
   const line = lines[i];
@@ -20,6 +21,20 @@ for (let i = 0; i < lines.length; i++) {
   while (j < line.length) {
     const c = line[j];
     const n = line[j + 1];
+    if (!inBlockComment && !inTemplate && c === '/' && n !== '/' && n !== '*' && /[=(,:[!&|?{};+]|^$/.test(prevSignificant)) {
+      // regex literal: skip to the unescaped closing slash on this line
+      let k = j + 1;
+      let inClass = false;
+      let closed = false;
+      while (k < line.length) {
+        if (line[k] === '\\') { k += 2; continue; }
+        if (line[k] === '[') inClass = true;
+        else if (line[k] === ']') inClass = false;
+        else if (line[k] === '/' && !inClass) { closed = true; k++; break; }
+        k++;
+      }
+      if (closed) { j = k; prevSignificant = '/'; continue; }
+    }
     if (inBlockComment) {
       if (c === '*' && n === '/') { inBlockComment = false; j += 2; continue; }
       j++; continue;
@@ -39,6 +54,7 @@ for (let i = 0; i < lines.length; i++) {
     }
     if (c === '{' || c === '(' || c === '[') depth++;
     else if (c === '}' || c === ')' || c === ']') depth--;
+    if (!/\s/.test(c)) prevSignificant = c;
     j++;
   }
   if (depth === 0 && !inBlockComment && !inTemplate && start !== null) {

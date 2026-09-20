@@ -1638,6 +1638,7 @@
     paintModelPill();
     showEmptyState();
     wireMic();
+    wireVoiceMode();
     paintIdentity();
 
     /* sidebar */
@@ -1795,7 +1796,10 @@
     /* keyboard */
     document.addEventListener("keydown", function (e) {
       var mod = e.metaKey || e.ctrlKey;
-      if (e.key === "Escape") { closePop(); closeSidebarOverlay(); return; }
+      if (e.key === "Escape") {
+        if (voiceModeIsOpen()) { closeVoiceMode(); return; }
+        closePop(); closeSidebarOverlay(); return;
+      }
       if (mod && e.shiftKey && (e.key === "O" || e.key === "o")) { e.preventDefault(); newChat(); return; }
       if (mod && !e.shiftKey && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
