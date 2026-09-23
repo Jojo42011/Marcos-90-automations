@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { planContext } from '../dist/src/hull/providers/contextBudget.js';
+process.env.HARVEY_CONTEXT_CEILING_TOKENS='8000';
+const request={role:'user',content:'Read example.com and tell me its heading.'};
+const call={role:'assistant',content:[{type:'tool_use',id:'current-call',name:'computer',input:{url:'https://example.com'}}]};
+const result={role:'user',content:[{type:'tool_result',tool_use_id:'current-call',content:'Example Domain '+ 'x'.repeat(36000)}]};
+const planned=planContext({job:'agent',model:'inception/mercury-2.5',system:'Keep the current request.',tools:[],messages:[{role:'user',content:'old '.repeat(12000)},{role:'assistant',content:'Old answer'},request,call,result]});
+assert(planned.plan.droppedTurns===2);
+assert(JSON.stringify(planned.messages).includes(request.content));
+assert(planned.messages.some(m=>m.role==='assistant'&&JSON.stringify(m).includes('current-call')));
+assert(planned.messages.at(-1)===result);
+console.log('Context trimming preserves the active request and tool chain.');

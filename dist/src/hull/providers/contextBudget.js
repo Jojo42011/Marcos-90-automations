@@ -237,15 +237,21 @@ function planContext(input) {
         });
     }
     if (measure(working) > budgetTokens && working.length > 1) {
-        /* Step 2 — drop from the front. The last message is the question and is
-           never a candidate, however large it is. */
+        /* Preserve the latest real user request and its entire active tool chain. */
+        let protectedStart = working.length - 1;
+        for (let i = working.length - 1; i >= 0; i--) {
+            if (working[i].role === "user" && !isToolResultOnly(working[i])) {
+                protectedStart = i;
+                break;
+            }
+        }
         let start = 0;
-        while (start < working.length - 1 && measure(working.slice(start)) > budgetTokens) {
+        while (start < protectedStart && measure(working.slice(start)) > budgetTokens) {
             start++;
             droppedTurns++;
             /* Dropping an assistant turn that called tools would leave its results
                behind as orphans the API rejects; take them with it. */
-            while (start < working.length - 1 && isToolResultOnly(working[start])) {
+            while (start < protectedStart && isToolResultOnly(working[start])) {
                 start++;
                 droppedTurns++;
             }
