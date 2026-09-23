@@ -35,7 +35,7 @@ try {
   assert.match((await run(chat,'Reply with exactly: HARVEY_TEST_OK')).speech,/HARVEY_TEST_OK/);
   await run(chat,'Remember this test code: cedar-42. Reply briefly.');
   assert.match((await run(chat,'What test code did I just give you?')).speech,/cedar-42/i);
-  process.env.AETHON_MAX_TOKENS='1536';
+  process.env.AETHON_MAX_TOKENS='4096';
   const work=S.createChat(owner,{projectId:project.id,mode:'work'});
   await run(work,'Use schedule_agent to create a daily schedule at 9 am America/Chicago named Smoke test. Its task is: Reply with HARVEY_SCHEDULE_OK. Do not use any other tools.');
   const schedules=S.list('schedule',owner);assert.equal(schedules.length,1,'Schedule not created');
