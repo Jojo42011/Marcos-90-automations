@@ -1649,7 +1649,7 @@
     /* first load */
     loadModels().then(function () { return loadConversations(); }).then(function () {
       var saved; try { saved = new URLSearchParams(location.search).get("chat") || sessionStorage.getItem("harvey_active_chat"); } catch (_) {}
-      if (saved && state.conversations.some(function(c){return c.id === saved;})) openConversation(saved);
+      if (new URLSearchParams(location.search).get("plugins") !== "1" && saved && state.conversations.some(function(c){return c.id === saved;})) openConversation(saved);
       loadPendingApprovals();
     });
     $("input").focus();

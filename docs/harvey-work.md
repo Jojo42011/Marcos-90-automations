@@ -1,6 +1,8 @@
 # Harvey projects, plugins, browser and scheduled agents
 
-Implemented locally on 2026-09-23. Nothing in this change deploys, enables a live worker, or connects a real account.
+Deployed on Fly. Hosted browser has passed real navigation and model-driven reading tests. Recurring worker activation and real account workflows still require acceptance testing.
+
+Managed plugins now use Composio: configure COMPOSIO_API_KEY on the server, then connect supported apps from Plugins. Composio handles OAuth credentials and refresh; the legacy provider-client setup below is optional for direct connectors. Connections are scoped by signed-in user and selected project. Real provider sign-in/consent is still required.
 
 ## User flow
 

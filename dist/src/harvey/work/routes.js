@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createWorkRouter = createWorkRouter;
 exports.handleWorkChat = handleWorkChat;
+const composio_js_1 = require("./composio.js");
 const multer_1 = __importDefault(require("multer"));
 const crypto_1 = require("crypto");
 const files_js_1 = require("./files.js");
@@ -76,6 +77,9 @@ function createWorkRouter(authorize, owner) {
         await (0, browser_js_1.closeBrowser)(o, id);
         res.json({ ok: true });
     });
+    route("get", "/work/managed", async (q, res, o) => res.json(await (0, composio_js_1.managedCatalog)(o, q.query.projectId ? String(q.query.projectId) : null, String(q.query.search || ""), q.query.cursor ? String(q.query.cursor) : undefined)));
+    route("post", "/work/managed/connect", async (q, res, o) => res.json(await (0, composio_js_1.connectManaged)(o, q.body.projectId || null, String(q.body.service))));
+    route("post", "/work/managed/disconnect", async (q, res, o) => res.json(await (0, composio_js_1.disconnectManaged)(o, q.body.projectId || null, String(q.body.service))));
     route("get", "/work/plugins", (_q, res, o) => res.json({ catalog: (0, connectors_js_1.catalog)(), connections: (0, connectors_js_1.connections)(o).map(connectors_js_1.publicConnection) }));
     route("post", "/work/plugins/oauth", (q, res, o) => { const result = (0, connectors_js_1.startOAuth)(o, q.body.service, q.body.projectId || null, q.body.allowWrites === true); res.cookie("harvey_oauth_state", result.state, { httpOnly: true, sameSite: "lax", secure: q.secure, maxAge: 600000, path: "/api/harvey/work/oauth" }); res.json({ url: result.url }); });
     route("post", "/work/plugins/mcp", async (q, res, o) => res.status(201).json(await (0, connectors_js_1.addMcp)(o, q.body)));

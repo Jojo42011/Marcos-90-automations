@@ -24,6 +24,8 @@ try {
   chmodSync(dir,0o755);
   const B=await import('../dist/src/harvey/work/browser.js');
   try { const page=await B.browserCall('deployment-smoke','browser-check','browser_navigate',{url:'https://example.com'});assert(JSON.stringify(page).includes('Example Domain'),'Browser page not read');console.log('SMOKE_BROWSER_PASS'); } finally {await B.closeBrowsers();}
+  const managed=await import('../dist/src/harvey/work/composio.js');
+  if(managed.composioReady()) {const items=await managed.managedCatalog('deployment-smoke',null);assert(items.items.some(x=>x.slug==='gmail'));const link=await managed.connectManaged('deployment-smoke',null,'gmail');assert.equal(new URL(link.url).hostname,'connect.composio.dev');const result=await managed.executeManaged('deployment-smoke',null,'COMPOSIO_SEARCH_TOOLS',{queries:[{use_case:'read gmail inbox'}]});assert(result);console.log('SMOKE_COMPOSIO_PASS '+JSON.stringify({catalog:items.items.length,logos:items.items.filter(x=>x.logo).length,connectLink:true,toolDiscovery:true}));}
   const S=await import('../dist/src/harvey/work/store.js');
   const R=await import('../dist/src/harvey/work/runtime.js');
   const owner='deployment-smoke';const project=S.createProject(owner,{name:'Smoke test',instructions:'Use only tools explicitly requested. Do not access business data.',timezone:'America/Chicago'});

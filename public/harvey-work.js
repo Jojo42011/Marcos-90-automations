@@ -35,13 +35,23 @@
       var saved = await api(edit ? "/projects/" + p.id : "/projects", edit ? "PATCH" : "POST", data); h.state.projectId = saved.id; await loadProjects(); h.newChat(); h.refresh();
     });
   }
+  function pluginIcon(service) {
+    var url=service.logo||'';try{if(new URL(url).hostname!=='logos.composio.dev')url='';}catch(_){url='';}
+    return '<div class="plugin-logo">'+(url?'<img src="'+esc(url)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span>'+esc(service.name[0])+'</span>')+'</div>';
+  }
+  function pluginCards(items, connected) {
+    return items.map(function(s){var active=!!(s.connection&&s.connection.isActive);return '<article class="plugin-card">'+pluginIcon(s)+'<div class="plugin-card-copy"><h3>'+esc(s.name)+'</h3><p>'+(active?'Connected':s.isNoAuth?'No sign-in needed':'Connect your account')+'</p></div><div class="plugin-card-actions">'+(connected?'<span class="connected-badge">Connected</span>'+button('Disconnect','managed-disconnect',s.slug):button(active?'Add account':s.isNoAuth?'Use in Work':'Connect',s.isNoAuth?'managed-use':'managed-connect',s.slug))+'</div></article>';}).join('');
+  }
   async function pluginsView() {
-    var data = await api("/work/plugins"); services = data.catalog; connections = data.connections;
-    $("workTitle").textContent = "Plugins"; $("workSubtitle").textContent = "Connect your services once. Use them in chats and recurring agents.";
-    $("workBody").innerHTML = '<div class="work-toolbar">' + button("Add custom connector", "custom") + '</div>' +
-      (!status.vault ? '<div class="panel">Connection storage needs setup. Configure Harvey’s vault key before adding accounts.</div>' : '') +
-      '<h2>Connected</h2><div class="work-grid">' + (connections.length ? connections.map(function(c){return '<article class="panel"><h3>' + esc(c.name) + '</h3><p class="work-hint">' + esc(c.projectId ? (projects.find(function(p){return p.id === c.projectId;})||{}).name || "Project" : "All projects") + ' · ' + (c.allowWrites ? "Actions enabled" : "Read only") + '</p><div class="work-toolbar">' + button(c.allowWrites ? "Set read only" : "Enable actions", "permissions", c.id) + button("Disconnect", "disconnect", c.id) + '</div></article>';}).join("") : '<p class="work-hint">No services connected yet. Choose one below or add a custom connector.</p>') + '</div>' +
-      '<h2>Add a service</h2><div class="work-grid">' + services.map(function(s){return '<article class="panel"><div class="service-icon">' + esc(s.name[0]) + '</div><h3>' + esc(s.name) + '</h3><p class="work-hint">' + (s.ready ? "Ready to connect" : "App setup required") + '</p>' + button(s.ready ? "Connect" : "View setup", "connect", s.id) + '</article>';}).join("") + '</div>';
+    var query='?projectId='+encodeURIComponent(h.state.projectId||'');
+    var results=await Promise.all([api('/work/managed'+query),api('/work/plugins')]),managed=results[0],legacy=results[1];connections=legacy.connections;services=legacy.catalog;
+    $('workTitle').textContent='Plugins';$('workSubtitle').textContent='Your favorite apps, ready to work with Harvey.';
+    $('workBody').innerHTML='<div class="plugin-intro"><span>'+esc(h.state.projectId?(projects.find(function(p){return p.id===h.state.projectId;})||{}).name||'This project':'Personal workspace')+'</span>'+button('Custom connector','custom')+'</div>'+
+      (!managed.enabled?'<div class="panel">Managed connections are not configured yet.</div>':'')+
+      '<section class="plugin-section"><h2>Connected <span class="plugin-count">'+(managed.connected||[]).length+'</span></h2><div class="plugin-cards">'+((managed.connected||[]).length?pluginCards(managed.connected,true):'<div class="plugin-empty">Connect an app below. Harvey will ask you to sign in and approve access.</div>')+'</div></section>'+
+      '<section class="plugin-section"><div class="plugin-catalog-head"><h2>Explore apps</h2><input id="pluginSearch" type="search" placeholder="Search apps…" aria-label="Search apps"></div><div id="managedGrid" class="plugin-cards">'+pluginCards(managed.items||[],false)+'</div><p id="pluginSearchStatus" class="work-hint" role="status"></p></section>'+
+      (connections.length?'<details class="plugin-advanced"><summary>Custom and existing connections</summary>'+connections.map(function(c){return '<article class="panel"><h3>'+esc(c.name)+'</h3><p class="work-hint">'+(c.allowWrites?'Actions enabled':'Read only')+'</p>'+button(c.allowWrites?'Set read only':'Enable actions','permissions',c.id)+button('Disconnect','disconnect',c.id)+'</article>';}).join('')+'</details>':'');
+    var timer,sequence=0;$('pluginSearch').oninput=function(){var value=this.value,seq=++sequence;clearTimeout(timer);timer=setTimeout(async function(){try{$('pluginSearchStatus').textContent='Searching…';var data=await api('/work/managed'+query+'&search='+encodeURIComponent(value));if(seq!==sequence||!$('managedGrid'))return;$('managedGrid').innerHTML=pluginCards(data.items||[],false);$('pluginSearchStatus').textContent=data.items.length?'':'No apps found. Try another name or add a custom connector.';}catch(e){if(seq===sequence&&$('pluginSearchStatus'))$('pluginSearchStatus').textContent=e.message;}},300);};
   }
   async function schedulesView() {
     var data = await api("/work/schedules"), chats = h.state.conversations;
@@ -83,6 +93,9 @@
     modal("Upload a file", '<label class="work-field">File (up to 250 MB)<input type="file" name="file" required></label><p class="work-hint">Harvey can use this file in the current Work chat. Video trimming and browser uploads are supported.</p>', async function(d){var form=new FormData();form.append("file",d.file);var saved=await api("/work/files/"+chat,"POST",form);h.toast("Uploaded "+saved.file);});
   }
   async function act(action,id) {
+    if(action==='managed-use'){h.newChat();h.state.mode='work';syncControls();h.showView('chat');$('input').value='Help me use '+id;$('input').dispatchEvent(new Event('input'));return;}
+    if(action==='managed-connect'){try{sessionStorage.setItem('harvey_plugin_project',h.state.projectId||'');}catch(_){}var link=await api('/work/managed/connect','POST',{projectId:h.state.projectId,service:id});if(!link.url)throw new Error('The service did not return a sign-in link');window.location.assign(link.url);return;}
+    if(action==='managed-disconnect'){if(!confirm('Disconnect this account from this workspace?'))return;await api('/work/managed/disconnect','POST',{projectId:h.state.projectId,service:id});return pluginsView();}
     if(action==="upload")return uploadFile();
     if(action==="custom")return modal("Add custom MCP connector",field("Name","name")+field("HTTPS MCP URL","endpoint","","url")+'<label class="work-field">Bearer token (optional)<input name="token" type="password" autocomplete="new-password"></label>'+scope()+actionsCheckbox(),async function(d){d.projectId=h.state.projectId;await api("/work/plugins/mcp","POST",d);await pluginsView();});
     if(action==="connect") {var s=services.find(function(s){return s.id===id;});if(!s.ready)return modal(s.name+" setup",'<p>Configure '+esc(s.setup)+' on the server, along with HARVEY_PUBLIC_URL and HARVEY_VAULT_KEY. Register the OAuth callback ending in <code>/api/harvey/work/oauth/callback</code>.</p><p>Once configured, this service gets a Connect button.</p>',async function(){});return modal("Connect "+s.name,scope()+actionsCheckbox()+'<p>You’ll continue to the service to choose your account and approve access.</p>',async function(d){var result=await api("/work/plugins/oauth","POST",{service:id,projectId:h.state.projectId,allowWrites:d.allowWrites});window.location.assign(result.url);});}
@@ -108,7 +121,7 @@
       $('projectList').onclick=function(e){var b=e.target.closest('[data-project]');if(b){$('projectSelect').value=b.dataset.project;$('projectSelect').dispatchEvent(new Event('change'));}};
       document.querySelectorAll('[data-starter]').forEach(function(b){b.onclick=function(){$('input').value=b.dataset.starter;$('input').dispatchEvent(new Event('input'));$('input').focus();};});
       $('handoffWork').onclick=async function(){if(h.state.busy)return;try{var target=await api('/conversations/'+h.state.conversationId+'/handoff','POST',{});await h.refresh();await h.openChat(target.id);}catch(e){notice(e);}};
-      loadProjects().catch(notice);
+      if(new URLSearchParams(location.search).get('plugins')==='1'){try{h.state.projectId=(new URLSearchParams(location.search).has('project')?new URLSearchParams(location.search).get('project'):sessionStorage.getItem('harvey_plugin_project'))||null;}catch(_){}show('plugins');}else loadProjects().catch(notice);
     },
     sync: function(){if(!h)return;syncControls();$("projectSelect").value=h.state.projectId||"";$("modeSelect").value=h.state.mode||"chat";$("projectEdit").hidden=!h.state.projectId;},
     refresh: function(){return loadProjects().catch(notice);}
