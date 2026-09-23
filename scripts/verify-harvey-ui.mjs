@@ -112,14 +112,6 @@ ok("falls back to the non-stream JSON shape when the reply is not SSE",
   /text\/event-stream/.test(js) && /applyNonStream/.test(js));
 ok("the non-stream path reads text, usage, contextPlan and approvals",
   /data\.usage/.test(js) && /contextPlan/.test(js) && /data\.approvals/.test(js));
-ok("a 404 on /api/harvey/chat drops to the legacy endpoint",
-  /res\.status === 404/.test(js) && /legacyChat/.test(js));
-ok("the legacy call is the real one: /api/jarvis/chat with full:true → speech",
-  /\/api\/jarvis\/chat/.test(js) && /full:\s*true/.test(js) && /data\.speech/.test(js));
-ok("running on the legacy path is admitted on screen, not hidden",
-  /Backend not wired yet/.test(js) && /legacy chat endpoint/.test(js));
-ok("the model pill is disabled while on the legacy path (it cannot work there)",
-  /legacyMode[\s\S]{0,200}pill\.disabled = true/.test(js));
 ok("tokens render incrementally behind a typing caret",
   /class="caret"/.test(js) && /requestAnimationFrame/.test(js));
 
@@ -157,18 +149,8 @@ ok("per-model and per-job tables exist", /byModel/.test(js) && /byJob/.test(js))
 ok("recent errors are listed", /recentErrors/.test(js));
 ok("a missing cap says so instead of inventing one", /no cap reported/.test(js));
 
-/* ── 5. scheduled tasks ───────────────────────────────────────────────── */
-console.log("\nSCHEDULED TASKS");
-ok("lists GET /api/harvey/tasks", /api\("\/api\/harvey\/tasks"\)/.test(js));
-ok("creates with POST /api/harvey/tasks", /"\/api\/harvey\/tasks", \{ method: "POST"/.test(js));
-ok("enable/disable is a PATCH", /method: "PATCH"/.test(js) && /enabled: !on/.test(js));
-ok("Run now posts to /:id/run", /\/run"\), \{ method: "POST" \}/.test(js) || /\+ "\/run"/.test(js));
-ok("delete is a DELETE on the task", /\/api\/harvey\/tasks\/"[\s\S]{0,120}method: "DELETE"/.test(js));
-ok("the create form takes plain English OR cron", /looksLikeCron/.test(js) && /payload\.cron = when/.test(js) && /payload\.when = when/.test(js));
-ok("the page says you can just tell Harvey in chat instead",
-  /tell him in chat/i.test(html) || /tell Harvey in chat/i.test(html));
-ok("a cron string is always shown raw next to any plain-English reading",
-  /meta\.push\(t\.cron\)/.test(js));
+ok("no legacy fallback remains", !/legacyChat|legacyMode/.test(js));
+ok("no scheduled view or API remains", !/view-scheduled|\/api\/harvey\/tasks/.test(both));
 
 /* ── 6. conversations ─────────────────────────────────────────────────── */
 console.log("\nCONVERSATIONS");
@@ -195,15 +177,12 @@ ok("the conversation list starts from the server or localStorage, never a litera
 ok("tasks/usage/models state all start empty",
   /models: \[\],/.test(js) && /conversations: \[\],/.test(js));
 for (const phrase of [
-  "No scheduled tasks yet",
   "No usage recorded yet",
   "No conversations yet",
   "No errors recorded"
 ]) ok(`honest empty state: "${phrase}"`, both.includes(phrase));
 ok("a 404 on a subsystem names the endpoint that is missing",
   /returned 404/.test(js), "an operator should be told which endpoint is absent");
-ok("the schedule form disables itself when there is nowhere to save",
-  /setTaskFormEnabled\(false/.test(js) && /nowhere to save/.test(js));
 ok("dictation is disabled with a reason when the browser lacks it",
   /btn\.disabled = true;\s*\n\s*btn\.title = "Dictation needs/.test(js));
 ok("an approval with no id cannot be answered and says why",
@@ -336,9 +315,6 @@ if (!existsSync(SHELL_PATH) || !existsSync(SERVER_PATH)) {
   ok("/operator is still served by src/server.ts",
     /app\.get\("\/operator"/.test(serverSrc) && existsSync(join(root, "public/operator.html")),
     "the voice button opens it — removing the route would break voice entirely");
-  ok("/jobs is still served by src/server.ts",
-    /app\.get\("\/jobs"/.test(serverSrc) && existsSync(join(root, "public/jobs.html")),
-    "the tab was removed, not the page");
 }
 
 console.log(`\n${pass}/${pass + fail.length} checks passed`);

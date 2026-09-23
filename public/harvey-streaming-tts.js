@@ -1,6 +1,4 @@
-/* Harvey streaming TTS — shared copy of the module defined inline in jarvis.html,
-   extracted verbatim so the new /operator screen can reuse Harvey's exact voice.
-   Only external dependency is apiUrl(), provided here self-contained. */
+/* Shared streaming speech for Harvey voice mode, including pause/resume on interruptions. */
 (function(){
   var token = new URLSearchParams(window.location.search).get("token") || "";
   function apiUrl(path){ var u = new URL(path, window.location.origin); if(token) u.searchParams.set("token", token); return u.toString(); }
@@ -23,9 +21,9 @@
           .trim();
       }
 
-      /** ~1–2s of speech — keeps first Gemini TTS call fast (~2s vs 7s+). */
+      /** ~1-2s of speech - keeps first Gemini TTS call fast (~2s vs 7s+). */
       const FIRST_CHUNK_MAX = 85;
-      /** ~2–4s per subsequent chunk — gapless chain, smaller API payloads. */
+      /** ~2-4s per subsequent chunk - gapless chain, smaller API payloads. */
       const CHUNK_MAX = 130;
 
       function splitToMaxLen(segment, maxLen) {
@@ -165,6 +163,34 @@
         finishSpeak(null, false);
       }
 
+      /* Park the unplayed audio instead of destroying it. Returns false when
+         there is nothing playing to park. */
+      function pause() {
+        const s = speakSession;
+        if (!s || s.aborted || s.paused) return false;
+        s.paused = true;
+        if (ttsCurrentSource) {
+          try {
+            ttsCurrentSource.stop(0);
+          } catch (_) {}
+          ttsCurrentSource = null;
+        }
+        console.log("[TTS Stream] Parked (possible barge-in)");
+        return true;
+      }
+
+      function resume() {
+        const s = speakSession;
+        if (!s || s.aborted || !s.paused) return false;
+        s.paused = false;
+        console.log("[TTS Stream] Resumed parked audio (false interruption)");
+        return true;
+      }
+
+      function isPaused() {
+        return !!(speakSession && speakSession.paused && !speakSession.aborted);
+      }
+
       async function generateTtsForSentence(text) {
         const startTime = Date.now();
         prefetchInFlight++;
@@ -196,7 +222,7 @@
             "[TTS Stream] Generated in",
             elapsed + "ms for:",
             text.substring(0, 40),
-            "—",
+            "-",
             rate,
             "Hz,",
             buf.byteLength,
@@ -229,7 +255,7 @@
           console.log(
             "[TTS Stream] Sentence",
             chunkNum + "/" + total,
-            "— playing",
+            "- playing",
             audioBuffer.duration.toFixed(2) + "s:",
             text.substring(0, 50),
           );
@@ -255,6 +281,15 @@
           if (s.aborted || !ttsIsPlaying) {
             s.aborted = true;
             break;
+          }
+
+          /* Parked by a possible barge-in (false-interruption resume, ported
+             from livekit/agents): hold position instead of destroying the
+             queue. If it wasn't a real interruption we replay the interrupted
+             chunk and carry on; a genuine new turn calls stop() instead. */
+          if (s.paused) {
+            await new Promise((r) => setTimeout(r, 100));
+            continue;
           }
 
           if (i >= s.chunks.length) {
@@ -294,6 +329,13 @@
 
           await playAudioBuffer(audioBuffer, s.chunks[i], i + 1, s.chunks.length);
 
+          if (s.paused) {
+            // Interrupted mid-chunk: keep this chunk's buffer and DON'T advance,
+            // so a resume replays the interrupted sentence from its start.
+            currentPromise = Promise.resolve(audioBuffer);
+            continue;
+          }
+
           currentPromise = nextPromise || Promise.resolve(null);
           i++;
 
@@ -309,7 +351,7 @@
         const endCb = wasAborted ? null : s.options?.onEnd;
         speakSession = null;
         if (!wasAborted) {
-          console.log("[Harvey] TTS queue empty — all audio done, re-enabling mic");
+          console.log("[Harvey] TTS queue empty - all audio done, re-enabling mic");
         }
         finishSpeak(endCb, !wasAborted);
       }
@@ -327,7 +369,7 @@
         console.log(
           "[TTS Stream] Splitting into",
           chunks.length,
-          "chunks — firing parallel pre-generation for first 1",
+          "chunks - firing parallel pre-generation for first 1",
         );
 
         ttsIsPlaying = true;
@@ -337,6 +379,7 @@
           index: 0,
           options: options || {},
           aborted: false,
+          paused: false,
           streamingOpen: Boolean(options?.streamingOpen),
         };
 
@@ -409,6 +452,9 @@
       return {
         speak,
         stop,
+        pause,
+        resume,
+        isPaused,
         isActive,
         unlock,
         splitIntoSentences,

@@ -44,7 +44,7 @@
   async function api(path, opts) {
     var o = Object.assign({ credentials: "same-origin" }, opts || {});
     o.headers = authHeaders(o.headers);
-    if (o.body && typeof o.body !== "string") {
+    if (o.body && typeof o.body !== "string" && !(o.body instanceof FormData)) {
       o.headers["Content-Type"] = "application/json";
       o.body = JSON.stringify(o.body);
     }
@@ -224,6 +224,8 @@
   var state = {
     sessionId: "",
     conversationId: null,
+    projectId: null,
+    mode: "chat",
     selectedModel: "auto",
     models: [],           // normalized ModelInfo[], only ever from the server
     routing: null,
@@ -231,9 +233,7 @@
     budget: null,
     modelsWired: null,    // null = unknown, false = endpoint 404s
     convsWired: null,
-    tasksWired: null,
     usageWired: null,
-    legacyMode: false,    // true once /api/harvey/chat has answered 404
     busy: false,
     abort: null,
     conversations: [],
@@ -259,15 +259,6 @@
     b.className = "banner bad";
     b.innerHTML = 'Your session has expired. <b>Sign in again</b> to keep talking to Harvey — ' +
       '<a href="/who?next=%2Fharvey" target="_top">go to sign-in</a>.';
-    b.hidden = false;
-  }
-
-  function showLegacyBanner() {
-    var b = $("legacyBanner");
-    b.className = "banner";
-    b.innerHTML = '<b>Backend not wired yet</b> — running on the legacy chat endpoint ' +
-      '(<code>/api/jarvis/chat</code>). Replies still work; model choice, streamed tool activity, ' +
-      'approvals and per-message cost do not exist on that path.';
     b.hidden = false;
   }
 
@@ -401,13 +392,8 @@
     }
     $("modelPillLabel").textContent = label;
     var pill = $("modelPill");
-    if (state.legacyMode) {
-      pill.disabled = true;
-      pill.title = "The legacy chat endpoint does not take a model — this picker starts working when /api/harvey/chat exists.";
-    } else {
-      pill.disabled = false;
-      pill.title = "Model for the next message";
-    }
+    pill.disabled = false;
+    pill.title = "Model for the next message";
   }
 
   function selectModel(id) {
@@ -554,6 +540,7 @@
     var wrap = $("convList");
     var q = state.convFilter.trim().toLowerCase();
     var list = state.conversations.filter(function (c) {
+      if (state.projectId && c.projectId !== state.projectId) return false;
       return !q || String(c.title || "").toLowerCase().indexOf(q) >= 0;
     });
     if (!list.length) {
@@ -593,6 +580,11 @@
     if (r.status === 404) { toast("That conversation is gone."); loadConversations(); return; }
     if (!r.ok || !r.data) { toast(r.error || "Could not open that conversation."); return; }
     state.conversationId = id;
+    try { sessionStorage.setItem("harvey_active_chat", id); } catch (_) {}
+    state.sessionId = r.data.sessionId;
+    state.projectId = r.data.projectId || null;
+    state.mode = r.data.mode || "chat";
+    if (window.HarveyWork) window.HarveyWork.sync();
     renderConversation(r.data.messages || []);
     paintConversations();
   }
@@ -658,7 +650,7 @@
 
   var SUGGESTIONS = [
     "What needs my attention today?",
-    "Schedule a daily 7am pipeline report",
+    "Summarize my pipeline",
     "Which leads went quiet?",
     "What did you spend on me this week?"
   ];
@@ -669,7 +661,7 @@
     el.className = "empty";
     el.innerHTML = '<div class="orb-lg" aria-hidden="true"></div>' +
       "<h1>" + esc(greeting()) + "</h1>" +
-      "<p>Ask a question, hand off a job, or tell me when to run something.</p>" +
+      "<p>Ask about your business, review a conversation, or work through a task.</p>" +
       '<div class="chips">' + SUGGESTIONS.map(function (s) {
         return '<button type="button" class="chip">' + esc(s) + "</button>";
       }).join("") + "</div>";
@@ -918,8 +910,7 @@
     state.abort = new AbortController();
 
     try {
-      if (state.legacyMode) await legacyChat(text, ui);
-      else await harveyChat(text, ui);
+      await harveyChat(text, ui);
     } catch (e) {
       if (e && e.name === "AbortError") ui.note("Stopped.");
       else ui.error(e && e.message ? e.message : "Something went wrong.");
@@ -940,12 +931,24 @@
       loadConversations();
     }
     loadPendingApprovals();
+    if(window.HarveyWork) window.HarveyWork.refresh();
     if (state.modelsWired) loadModels();
   }
 
+  async function ensureWorkChat() {
+    if (state.conversationId) return state.conversationId;
+    var r = await api("/api/harvey/conversations", {method:"POST",body:{projectId:state.projectId,mode:state.mode}});
+    if (!r.ok) throw new Error(r.error || "Could not create this chat");
+    state.conversationId = r.data.id; state.sessionId = r.data.sessionId;
+    try { sessionStorage.setItem("harvey_active_chat", state.conversationId); } catch (_) {}
+    return state.conversationId;
+  }
+
   async function harveyChat(text, ui) {
+    await ensureWorkChat();
     var body = {
       message: text,
+      workspace: true,
       sessionId: state.sessionId,
       stream: true
     };
@@ -966,14 +969,7 @@
       throw new Error("Could not reach the server.");
     }
 
-    if (res.status === 404) {
-      /* The model layer isn't deployed yet. Fall back to the endpoint that is
-         actually there, and say so instead of pretending. */
-      state.legacyMode = true;
-      showLegacyBanner();
-      paintModelPill();
-      return legacyChat(text, ui);
-    }
+    if (res.status === 404) throw new Error("Harvey chat is unavailable on this server.");
     if (res.status === 401) { showAuthBanner(); throw new Error("Not signed in — sign in again to keep talking to Harvey."); }
     if (!res.ok) {
       var errText = await res.text().catch(function () { return ""; });
@@ -1037,7 +1033,12 @@
       case "usage":
         ui.setUsage(d);
         break;
+      case "conversation":
+        if(d.conversationId) state.conversationId=d.conversationId;
+        if(d.sessionId) state.sessionId=d.sessionId;
+        break;
       case "done":
+        if (d.usage) ui.setUsage(d.usage);
         if (d.sessionId) state.sessionId = d.sessionId;
         if (d.conversationId) state.conversationId = d.conversationId;
         if (d.text && !ui.text) ui.setText(d.text);
@@ -1062,31 +1063,10 @@
     if (data.usage) ui.setUsage(Object.assign({}, data.usage, { contextPlan: data.contextPlan }));
   }
 
-  /** The endpoint that exists today. No models, no cost, no approval events. */
-  async function legacyChat(text, ui) {
-    var res;
-    try {
-      res = await fetch(apiUrl("/api/jarvis/chat"), {
-        method: "POST",
-        credentials: "same-origin",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ message: text, sessionId: state.sessionId, full: true }),
-        signal: state.abort ? state.abort.signal : undefined
-      });
-    } catch (e) {
-      if (e && e.name === "AbortError") throw e;
-      throw new Error("Could not reach the server.");
-    }
-    if (res.status === 401) { showAuthBanner(); throw new Error("Not signed in — sign in again to keep talking to Harvey."); }
-    var data = await res.json().catch(function () { return null; });
-    if (!res.ok || !data) throw new Error((data && data.error) || ("The legacy chat endpoint failed (" + res.status + ")."));
-    ui.setText(data.speech || data.reply || data.text || data.message || "");
-    ui.note("legacy endpoint · no model or cost reported");
-  }
-
   function newChat() {
     if (state.abort) { try { state.abort.abort(); } catch (_) {} }
     state.conversationId = null;
+    try { sessionStorage.removeItem("harvey_active_chat"); } catch (_) {}
     state.sessionId = "s_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
     try { sessionStorage.setItem("harvey_session_id", state.sessionId); } catch (_) {}
     showView("chat");
@@ -1097,11 +1077,11 @@
 
   /* ── views ──────────────────────────────────────────────────────────── */
 
-  var VIEW_TITLES = { chat: "Harvey", scheduled: "Scheduled", usage: "Usage", models: "Explore models" };
+  var VIEW_TITLES = { chat: "Harvey", usage: "Usage", models: "Explore models" };
 
   function showView(view) {
     state.view = view;
-    ["chat", "scheduled", "usage", "models"].forEach(function (v) {
+    ["chat", "usage", "models", "work"].forEach(function (v) {
       $("view-" + v).hidden = v !== view;
     });
     $("viewTitle").textContent = VIEW_TITLES[view] || "Harvey";
@@ -1109,110 +1089,8 @@
       b.classList.toggle("active", b.getAttribute("data-view") === view);
     });
     if (window.innerWidth <= 860) closeSidebarOverlay();
-    if (view === "scheduled") loadTasks();
     if (view === "usage") loadUsage();
     if (view === "models") renderModelsView();
-  }
-
-  /* ── scheduled tasks ────────────────────────────────────────────────── */
-
-  var DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-  /** Best-effort plain English for the common shapes; the raw cron is always
-      shown next to it, so a wrong guess can never hide the real schedule. */
-  function cronText(cron) {
-    if (!cron) return "";
-    var p = String(cron).trim().split(/\s+/);
-    if (p.length < 5) return "";
-    var m = p[0], h = p[1], dom = p[2], mon = p[3], dow = p[4];
-    if (!/^\d+$/.test(m) || !/^\d+$/.test(h)) return "";
-    var time = new Date(2000, 0, 1, parseInt(h, 10), parseInt(m, 10))
-      .toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-    if (dom === "*" && mon === "*" && dow === "*") return "every day at " + time;
-    if (dom === "*" && mon === "*" && dow === "1-5") return "every weekday at " + time;
-    if (dom === "*" && mon === "*" && /^\d$/.test(dow)) return "every " + DOW[parseInt(dow, 10) % 7] + " at " + time;
-    if (mon === "*" && dow === "*" && /^\d+$/.test(dom)) return "day " + dom + " of every month at " + time;
-    return "";
-  }
-
-  function looksLikeCron(s) {
-    var p = String(s || "").trim().split(/\s+/);
-    if (p.length !== 5) return false;
-    return p.every(function (f) { return /^[\d*\/,\-]+$/.test(f); });
-  }
-
-  async function loadTasks() {
-    var sub = $("tasksSub");
-    var list = $("taskList");
-    var r = await api("/api/harvey/tasks");
-    if (r.status === 404) {
-      state.tasksWired = false;
-      sub.textContent = "";
-      list.innerHTML = '<div class="empty-note">Scheduled tasks are not wired up on the server yet — <code>GET /api/harvey/tasks</code> returned 404. Nothing is running on a clock.</div>';
-      setTaskFormEnabled(false, "The server has no /api/harvey/tasks endpoint yet, so this form has nowhere to save to.");
-      $("navTaskCount").textContent = "";
-      return;
-    }
-    if (!r.ok || !r.data) {
-      sub.textContent = "";
-      list.innerHTML = '<div class="empty-note">' + esc(r.error || "Could not load tasks.") + "</div>";
-      return;
-    }
-    state.tasksWired = true;
-    setTaskFormEnabled(true, "");
-    var tasks = r.data.tasks || [];
-    $("navTaskCount").textContent = tasks.length ? String(tasks.length) : "";
-    sub.textContent = tasks.length === 1 ? "1 task" : tasks.length + " tasks";
-    if (!tasks.length) {
-      list.innerHTML = '<div class="empty-note">No scheduled tasks yet.</div>';
-      return;
-    }
-    list.innerHTML = tasks.map(taskRowHtml).join("");
-  }
-
-  function taskRowHtml(t) {
-    var enabled = t.enabled !== false;
-    var human = cronText(t.cron);
-    var meta = [];
-    if (human) meta.push(human);
-    if (t.cron) meta.push(t.cron);
-    if (t.timezone) meta.push(t.timezone);
-    var next = t.nextRunAt ? "next " + dateText(t.nextRunAt) : "no next run reported";
-    var last = t.lastRunAt
-      ? "last " + dateText(t.lastRunAt) + (t.lastStatus ? " · " + t.lastStatus : "")
-      : "never run";
-    var statusTag = t.lastStatus
-      ? '<span class="tag ' + (/ok|success|done/i.test(t.lastStatus) ? "ok" : /fail|error/i.test(t.lastStatus) ? "bad" : "") + '">' + esc(t.lastStatus) + "</span>"
-      : "";
-    return '<div class="task-row" data-task="' + esc(t.id) + '">' +
-      '<div class="task-main">' +
-      '<div class="t">' + esc(t.title || "Untitled task") + (enabled ? "" : ' <span class="tag off">paused</span>') + "</div>" +
-      '<div class="m">' + esc(meta.join(" · ")) + "</div>" +
-      '<div class="m">' + esc(next) + " · " + esc(last) + "</div>" +
-      (t.prompt ? '<div class="p">' + esc(t.prompt) + "</div>" : "") +
-      "</div>" +
-      '<div class="task-acts">' + statusTag +
-      '<button type="button" class="switch" role="switch" aria-checked="' + (enabled ? "true" : "false") +
-      '" data-toggle="' + esc(t.id) + '" aria-label="' + (enabled ? "Pause" : "Enable") + ' this task"></button>' +
-      '<button type="button" class="btn sm" data-run="' + esc(t.id) + '">Run now</button>' +
-      '<button type="button" class="btn sm danger" data-deltask="' + esc(t.id) + '">Delete</button>' +
-      "</div></div>";
-  }
-
-  function setTaskFormEnabled(on, why) {
-    ["tfTitle", "tfPrompt", "tfWhen", "taskFormSave"].forEach(function (id) {
-      var el = $(id);
-      el.disabled = !on;
-      el.title = on ? "" : why;
-    });
-    $("taskFormMsg").textContent = on ? "" : why;
-  }
-
-  async function taskPatch(id, patch) {
-    var r = await api("/api/harvey/tasks/" + encodeURIComponent(id), { method: "PATCH", body: patch });
-    if (!r.ok) { toast(r.error || "Could not update that task."); return false; }
-    loadTasks();
-    return true;
   }
 
   /* ── usage ──────────────────────────────────────────────────────────── */
@@ -1343,12 +1221,12 @@
   var JOB_NOTES = {
     chat_fast: "pleasantries, one-liners, no tools",
     chat_deep: "normal operator chat with tools",
-    agent: "background jobs and cron tasks",
+    agent: "agent model (reserved for future workflows)",
     summarize: "conversation folding",
     extract: "memory extraction",
     classify: "short routing decisions",
     vision: "anything with an image",
-    schedule: "sentence → cron"
+    schedule: "scheduling model (reserved for future workflows)"
   };
 
   async function renderModelsView() {
@@ -1555,9 +1433,7 @@
       '<button type="button" class="pop-item" role="menuitem" data-plus="file">' +
       '<span class="pi-main"><span class="pi-label">Add a text file</span>' +
       '<span class="pi-sub">its contents are pasted into this message</span></span></button>' +
-      '<button type="button" class="pop-item" role="menuitem" data-plus="schedule">' +
-      '<span class="pi-main"><span class="pi-label">Schedule this instead</span>' +
-      '<span class="pi-sub">opens Scheduled with this text as the prompt</span></span></button>';
+      '<button type="button" class="pop-item" role="menuitem" data-plus="upload">Upload a file or video</button>';
   }
 
   function pickTextFile() {
@@ -1602,9 +1478,7 @@
       '<button type="button" class="pop-item" data-set="usage"><span class="pi-main"><span class="pi-label">Usage &amp; spend caps</span></span></button>' +
       '<button type="button" class="pop-item" data-set="models"><span class="pi-main"><span class="pi-label">Models &amp; routing</span></span></button>' +
       '<div class="pop-sep"></div>' +
-      '<div class="pop-note">' + (state.legacyMode
-        ? "Chat is running on the legacy endpoint — the model layer is not deployed."
-        : state.modelsWired === false
+      '<div class="pop-note">' + (state.modelsWired === false
           ? "The model layer endpoints are not on this server yet."
           : "Model layer: " + esc((state.provider && state.provider.primary) || "no provider key")) + "</div>";
     togglePop(settingsPop, anchor, "left");
@@ -1720,9 +1594,7 @@
       if (!item) return;
       closePop();
       if (item.getAttribute("data-plus") === "file") { pickTextFile(); return; }
-      var text = $("input").value.trim();
-      showView("scheduled");
-      if (text) { $("tfPrompt").value = text; $("tfTitle").focus(); }
+      if (item.getAttribute("data-plus") === "upload" && window.HarveyWork) { window.HarveyWork.upload(); return; }
     });
 
     document.addEventListener("click", function (e) {
@@ -1733,55 +1605,6 @@
       if (what === "theme") setTheme(currentTheme() === "dark" ? "light" : "dark");
       if (what === "usage") showView("usage");
       if (what === "models") showView("models");
-    });
-
-    /* scheduled view */
-    $("taskList").addEventListener("click", async function (e) {
-      var tog = e.target.closest("[data-toggle]");
-      if (tog) {
-        var on = tog.getAttribute("aria-checked") === "true";
-        tog.setAttribute("aria-checked", on ? "false" : "true");
-        var okd = await taskPatch(tog.getAttribute("data-toggle"), { enabled: !on });
-        if (!okd) tog.setAttribute("aria-checked", on ? "true" : "false");
-        return;
-      }
-      var run = e.target.closest("[data-run]");
-      if (run) {
-        run.disabled = true;
-        run.textContent = "Running…";
-        var rr = await api("/api/harvey/tasks/" + encodeURIComponent(run.getAttribute("data-run")) + "/run", { method: "POST" });
-        run.disabled = false;
-        run.textContent = "Run now";
-        toast(rr.ok ? "Started. The result lands on the task when it finishes." : (rr.error || "Could not start that run."));
-        if (rr.ok) setTimeout(loadTasks, 1500);
-        return;
-      }
-      var del = e.target.closest("[data-deltask]");
-      if (del) {
-        if (!window.confirm("Delete this scheduled task?")) return;
-        var dr = await api("/api/harvey/tasks/" + encodeURIComponent(del.getAttribute("data-deltask")), { method: "DELETE" });
-        if (!dr.ok) { toast(dr.error || "Could not delete that task."); return; }
-        loadTasks();
-      }
-    });
-
-    $("taskForm").addEventListener("submit", async function (e) {
-      e.preventDefault();
-      var title = $("tfTitle").value.trim();
-      var prompt = $("tfPrompt").value.trim();
-      var when = $("tfWhen").value.trim();
-      if (!title || !prompt || !when) return;
-      var payload = { title: title, prompt: prompt };
-      if (looksLikeCron(when)) payload.cron = when; else payload.when = when;
-      $("taskFormSave").disabled = true;
-      var r = await api("/api/harvey/tasks", { method: "POST", body: payload });
-      $("taskFormSave").disabled = false;
-      if (r.status === 404) { toast("The tasks endpoint is not wired up yet."); return; }
-      if (!r.ok) { $("taskFormMsg").textContent = r.error || "Could not create that task."; return; }
-      $("taskFormMsg").textContent = "";
-      $("tfTitle").value = ""; $("tfPrompt").value = ""; $("tfWhen").value = "";
-      loadTasks();
-      toast("Task created.");
     });
 
     /* models view: routing overrides */
@@ -1821,8 +1644,14 @@
       if (mod && e.key === "\\") { e.preventDefault(); toggleSidebar(); }
     });
 
+    if(window.HarveyWork) window.HarveyWork.init({api:api,apiUrl:apiUrl,state:state,toast:toast,showView:showView,newChat:newChat,refresh:loadConversations,openChat:openConversation,ensureChat:ensureWorkChat});
+
     /* first load */
-    loadModels().then(function () { loadConversations(); loadPendingApprovals(); });
+    loadModels().then(function () { return loadConversations(); }).then(function () {
+      var saved; try { saved = sessionStorage.getItem("harvey_active_chat"); } catch (_) {}
+      if (saved && state.conversations.some(function(c){return c.id === saved;})) openConversation(saved);
+      loadPendingApprovals();
+    });
     $("input").focus();
   }
 

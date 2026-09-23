@@ -4,7 +4,7 @@
  *
  * Scoped intentionally to content manager: Harvey (src/harvey/*) and the DM
  * agent (src/app/pipeline.ts, webhook.ts) each already construct their own
- * Anthropic client independently (see src/harvey/communication.ts,
+ * Anthropic client independently (see src/hull/memory/extraction.ts,
  * src/integrations/llm/index.ts) — that's the established pattern in this
  * codebase (a thin per-subsystem client, not one shared cross-cutting
  * module), so this file follows the same shape rather than reaching into

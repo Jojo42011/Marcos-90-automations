@@ -38,6 +38,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeDueAutoPlanSteps = executeDueAutoPlanSteps;
 exports.executeDueTransactionPlanSteps = executeDueTransactionPlanSteps;
+const routes_js_1 = require("./harvey/work/routes.js");
+const runtime_js_1 = require("./harvey/work/runtime.js");
 /**
  * HTTP server: GET / lead dashboard, POST /webhook & /simulate → pipeline (CORS on simulate/webhook).
  */
@@ -133,7 +135,6 @@ const db_js_2 = require("./core/db.js");
 const criteriaExtract_js_1 = require("./core/criteriaExtract.js");
 const index_js_16 = require("./integrations/sinch/index.js");
 const index_js_17 = require("./integrations/twilio/index.js");
-const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const index_js_18 = require("./integrations/llm/index.js");
 const adsUpstream_js_1 = require("./harvey/adsUpstream.js");
 const crypto_1 = require("crypto");
@@ -507,9 +508,6 @@ app.get("/dashboard", requireAuthPage, (req, res) => {
 app.get("/chat", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "chat.html"));
 });
-app.get("/jarvis", requireAuthPage, (_req, res) => {
-    res.sendFile(path_1.default.join(publicDir, "jarvis.html"));
-});
 // New blue particle-orb Harvey screen (reuses Harvey's existing voice pipeline).
 app.get("/operator", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "operator.html"));
@@ -531,9 +529,6 @@ app.get("/cma", requireAuthPage, (_req, res) => {
 /** One listing, in full — where a click in the MLS tab lands. */
 app.get("/listing", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "listing.html"));
-});
-app.get("/jobs", requireAuthPage, (_req, res) => {
-    res.sendFile(path_1.default.join(publicDir, "jobs.html"));
 });
 // Buyers & Sellers Tracker — the two-pipeline board over /api/tracker/*.
 app.get("/tracker", requireAuthPage, (_req, res) => {
@@ -2073,64 +2068,6 @@ app.post("/api/brivity/import/apply", express_1.default.json({ limit: "16kb" }),
         res.status(502).json({ ok: false, error: err.message });
     }
 });
-/* ===================== Harvey jobs + workspace =====================
-   A job runs the agent loop to completion detached from this request, so work
-   that needs dozens of tool calls and minutes of wall time can be delegated. */
-app.post("/api/harvey/jobs", express_1.default.json({ limit: "64kb" }), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const body = (req.body && typeof req.body === "object" ? req.body : {});
-    const prompt = typeof body.task === "string" ? body.task.trim() : "";
-    if (!prompt) {
-        res.status(400).json({ ok: false, error: "task is required" });
-        return;
-    }
-    try {
-        const { startJob, isAnthropicConfigured } = await Promise.resolve().then(() => __importStar(require("./hull/jobRunner.js")));
-        if (!isAnthropicConfigured()) {
-            res.status(503).json({ ok: false, error: "ANTHROPIC_API_KEY is not set." });
-            return;
-        }
-        const job = startJob(prompt, typeof body.createdBy === "string" ? body.createdBy : "marco");
-        res.status(202).json({ ok: true, job });
-    }
-    catch (err) {
-        res.status(500).json({ ok: false, error: err.message });
-    }
-});
-app.get("/api/harvey/jobs", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const { listJobs, jobCounts } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
-    res.json({ ok: true, counts: jobCounts(), jobs: listJobs(limit) });
-});
-app.get("/api/harvey/jobs/:id", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const { getJob } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
-    const job = getJob(String(req.params.id));
-    if (!job) {
-        res.status(404).json({ ok: false, error: "No such job" });
-        return;
-    }
-    res.json({ ok: true, job });
-});
-app.post("/api/harvey/jobs/:id/cancel", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const { requestCancel, getJob } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
-    const ok = requestCancel(String(req.params.id));
-    res.json({ ok, job: getJob(String(req.params.id)) });
-});
 /**
  * Serve a workspace file as an actual download rather than JSON.
  *
@@ -2147,29 +2084,9 @@ const WORKSPACE_MIME = {
     ".sql": "application/sql", ".ics": "text/calendar",
 };
 /**
- * Whether Harvey can run code here, and precisely what that does and does not
- * protect. Stated rather than implied — "hardened" and "sandboxed" are not the
- * same claim and the difference is the whole point of Phase B.
- */
-/** Remove a finished job. Running jobs must be cancelled first — see deleteJob. */
-app.delete("/api/harvey/jobs/:id", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const { deleteJob } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
-    const r = deleteJob(String(req.params.id || ""));
-    if (!r.deleted) {
-        res.status(400).json({ ok: false, error: r.reason });
-        return;
-    }
-    res.json({ ok: true, deleted: true });
-});
-/**
  * Delete a workspace file.
  *
- * Separate from job deletion on purpose: a job record and the file it produced
- * are different things, and removing one should never silently remove the other.
+ * Existing workspace files remain available after retiring background jobs.
  */
 app.delete("/api/harvey/workspace", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -2298,16 +2215,19 @@ function harveyToolResultForUi(result) {
  * Harvey's chat, the surface public/harvey.html talks to.
  *
  * Streamed or not, the turn is the same: the full agent loop with every tool,
- * the operator's model pick when they made one, and the session history the
- * legacy `/api/jarvis/chat` path keeps — so switching pages does not lose the
- * conversation.
+ * the operator's model pick, and session history shared with voice.
  */
+app.use("/api/harvey", (0, routes_js_1.createWorkRouter)(dashboardTokenOk, req => String(sessionUserSync(req)?.id || "operator")));
 app.post("/api/harvey/chat", express_1.default.json({ limit: "256kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
     const body = (req.body && typeof req.body === "object" ? req.body : {});
+    if (body.workspace === true) {
+        await (0, routes_js_1.handleWorkChat)(req, res, String(sessionUserSync(req)?.id || "operator"));
+        return;
+    }
     const message = typeof body.message === "string" ? body.message.trim() : "";
     if (!message) {
         res.status(400).json({ error: "Missing message" });
@@ -2732,232 +2652,6 @@ app.post("/api/harvey/approvals/:id/deny", express_1.default.json({ limit: "8kb"
         const detail = err instanceof Error ? err.message : String(err);
         console.error("[harvey/approvals] deny failed:", detail);
         res.status(500).json({ error: `Could not deny that: ${detail}` });
-    }
-});
-/** Everything on a clock, with the schedule in plain English beside its cron. */
-app.get("/api/harvey/tasks", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    try {
-        const { listTasks } = await Promise.resolve().then(() => __importStar(require("./core/harveyTaskStore.js")));
-        const { cronEnabled } = await Promise.resolve().then(() => __importStar(require("./hull/taskScheduler.js")));
-        /* `cronEnabled` is reported because a list of tasks with next-run times is
-           a lie when the ticker is switched off. */
-        res.json({ tasks: listTasks(), cronEnabled: cronEnabled() });
-    }
-    catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        console.error("[harvey/tasks] list failed:", detail);
-        res.status(500).json({ error: `Could not read the scheduled tasks: ${detail}` });
-    }
-});
-/**
- * What a sentence would turn into, before anything is saved.
- *
- * Registered above `/api/harvey/tasks/:id` so the literal path wins — Express
- * matches in declaration order and `preview` would otherwise be read as an id.
- */
-app.get("/api/harvey/tasks/preview", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const when = typeof req.query.when === "string" ? req.query.when.trim() : "";
-    if (!when) {
-        res.status(400).json({ ok: false, error: "Pass ?when= the schedule to read back." });
-        return;
-    }
-    try {
-        const { previewSchedule } = await Promise.resolve().then(() => __importStar(require("./hull/scheduleTools.js")));
-        const { DEFAULT_TIMEZONE } = await Promise.resolve().then(() => __importStar(require("./hull/cron.js")));
-        const timezone = typeof req.query.timezone === "string" && req.query.timezone.trim()
-            ? req.query.timezone.trim()
-            : DEFAULT_TIMEZONE;
-        res.json(previewSchedule(when, timezone));
-    }
-    catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        console.error("[harvey/tasks] preview failed:", detail);
-        res.status(500).json({ ok: false, error: `Could not read that schedule: ${detail}` });
-    }
-});
-/**
- * Put a job on the schedule.
- *
- * A schedule that could not be understood is a QUESTION, never a guess: this
- * fires forever, so reading "morning" as 9am and being wrong repeats daily
- * until somebody notices. Both the cron and the plain-English paths go through
- * the same validator, so the cost floor applies either way.
- */
-app.post("/api/harvey/tasks", express_1.default.json({ limit: "64kb" }), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const body = (req.body && typeof req.body === "object" ? req.body : {});
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
-    const raw = typeof body.cron === "string" && body.cron.trim()
-        ? body.cron.trim()
-        : typeof body.when === "string" ? body.when.trim() : "";
-    if (!title || !prompt) {
-        res.status(400).json({ error: "title and prompt are both required." });
-        return;
-    }
-    if (!raw) {
-        res.status(400).json({ error: "Say when it should run — a cron expression or plain English." });
-        return;
-    }
-    try {
-        const { previewSchedule } = await Promise.resolve().then(() => __importStar(require("./hull/scheduleTools.js")));
-        const { DEFAULT_TIMEZONE } = await Promise.resolve().then(() => __importStar(require("./hull/cron.js")));
-        const timezone = typeof body.timezone === "string" && body.timezone.trim() ? body.timezone.trim() : DEFAULT_TIMEZONE;
-        const preview = previewSchedule(raw, timezone);
-        if (!preview.ok || !preview.cron) {
-            res.status(400).json({ error: preview.error || "That is not a schedule I can run.", examples: preview.examples });
-            return;
-        }
-        const { createTask } = await Promise.resolve().then(() => __importStar(require("./core/harveyTaskStore.js")));
-        const actor = await currentSessionUser(req);
-        const deliver = ["chat", "sms", "email", "none"].includes(String(body.deliver))
-            ? String(body.deliver)
-            : "chat";
-        const task = createTask({
-            title,
-            prompt,
-            cron: preview.cron,
-            timezone,
-            deliver,
-            sessionId: typeof body.sessionId === "string" ? body.sessionId.trim() || null : null,
-            createdBy: actor?.name || null,
-        });
-        res.status(201).json({ ok: true, task });
-    }
-    catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        console.error("[harvey/tasks] create failed:", detail);
-        res.status(500).json({ error: `Could not save that task: ${detail}` });
-    }
-});
-/** Pause, resume, reword or reschedule one task. */
-app.patch("/api/harvey/tasks/:id", express_1.default.json({ limit: "64kb" }), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const id = String(req.params.id || "").trim();
-    const body = (req.body && typeof req.body === "object" ? req.body : {});
-    try {
-        const { getTask, updateTask } = await Promise.resolve().then(() => __importStar(require("./core/harveyTaskStore.js")));
-        const existing = getTask(id);
-        if (!existing) {
-            res.status(404).json({ error: "No such scheduled task." });
-            return;
-        }
-        const patch = {};
-        if (typeof body.enabled === "boolean")
-            patch.enabled = body.enabled;
-        if (typeof body.title === "string" && body.title.trim())
-            patch.title = body.title.trim();
-        if (typeof body.prompt === "string" && body.prompt.trim())
-            patch.prompt = body.prompt.trim();
-        if (["chat", "sms", "email", "none"].includes(String(body.deliver))) {
-            patch.deliver = String(body.deliver);
-        }
-        if (typeof body.timezone === "string" && body.timezone.trim())
-            patch.timezone = body.timezone.trim();
-        const raw = typeof body.cron === "string" && body.cron.trim()
-            ? body.cron.trim()
-            : typeof body.when === "string" ? body.when.trim() : "";
-        if (raw) {
-            const { previewSchedule } = await Promise.resolve().then(() => __importStar(require("./hull/scheduleTools.js")));
-            const preview = previewSchedule(raw, patch.timezone || existing.timezone);
-            if (!preview.ok || !preview.cron) {
-                res.status(400).json({ error: preview.error || "That is not a schedule I can run.", examples: preview.examples });
-                return;
-            }
-            patch.cron = preview.cron;
-        }
-        const task = updateTask(id, patch);
-        if (!task) {
-            res.status(404).json({ error: "No such scheduled task." });
-            return;
-        }
-        res.json({ ok: true, task });
-    }
-    catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        console.error("[harvey/tasks] update failed:", detail);
-        res.status(500).json({ error: `Could not update that task: ${detail}` });
-    }
-});
-app.delete("/api/harvey/tasks/:id", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const id = String(req.params.id || "").trim();
-    try {
-        const { deleteTask } = await Promise.resolve().then(() => __importStar(require("./core/harveyTaskStore.js")));
-        if (!deleteTask(id)) {
-            res.status(404).json({ error: "No such scheduled task." });
-            return;
-        }
-        res.json({ ok: true });
-    }
-    catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        console.error("[harvey/tasks] delete failed:", detail);
-        res.status(500).json({ error: `Could not delete that task: ${detail}` });
-    }
-});
-/** Run one now. Same code path as the ticker, so testing a schedule means
-    something — including the approval gate, which stays armed. */
-app.post("/api/harvey/tasks/:id/run", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const id = String(req.params.id || "").trim();
-    try {
-        const { getTask } = await Promise.resolve().then(() => __importStar(require("./core/harveyTaskStore.js")));
-        if (!getTask(id)) {
-            res.status(404).json({ error: "No such scheduled task." });
-            return;
-        }
-        const { runTaskNow } = await Promise.resolve().then(() => __importStar(require("./hull/taskScheduler.js")));
-        const result = await runTaskNow(id, "manual");
-        res.json({ ok: result.ok, runId: result.runId, output: result.output, error: result.error, costUsd: result.costUsd });
-    }
-    catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        console.error("[harvey/tasks] run failed:", detail);
-        res.status(500).json({ error: `That run could not be started: ${detail}` });
-    }
-});
-/** Run history: what happened, what it cost, and why it stopped. */
-app.get("/api/harvey/tasks/:id/runs", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const id = String(req.params.id || "").trim();
-    try {
-        const { getTask, listRuns } = await Promise.resolve().then(() => __importStar(require("./core/harveyTaskStore.js")));
-        const task = getTask(id);
-        if (!task) {
-            res.status(404).json({ error: "No such scheduled task." });
-            return;
-        }
-        const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 200);
-        res.json({ runs: listRuns(id, limit) });
-    }
-    catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        console.error("[harvey/tasks] runs failed:", detail);
-        res.status(500).json({ error: `Could not read that run history: ${detail}` });
     }
 });
 app.get("/api/brivity/status", (req, res) => {
@@ -6905,12 +6599,6 @@ app.post("/api/crm/lead", express_1.default.json(), async (req, res) => {
         res.status(500).json({ error: message });
     }
 });
-function harveyDeps() {
-    return {
-        adDashboardBaseUrl: AD_DASHBOARD_BASE_URL,
-        adDashboardApiKey: AD_DASHBOARD_API_KEY,
-    };
-}
 app.get("/api/ads/summary", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
@@ -7084,71 +6772,6 @@ app.get("/api/ads/boost-candidates", async (req, res) => {
 app.get("/ads", requireAuthPage, (_req, res) => {
     res.sendFile(path_1.default.join(publicDir, "ads.html"));
 });
-/** Harvey ops snapshot (perception + judgment, no LLM). */
-app.get("/api/jarvis/ops", async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
-        return;
-    }
-    try {
-        const ops = await (0, index_js_19.runHarveyOps)(harveyDeps());
-        res.status(200).json(ops);
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error("[jarvis/ops]", message);
-        res.status(500).json({ error: message });
-    }
-});
-app.post("/api/jarvis/chat", express_1.default.json(), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
-        return;
-    }
-    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
-    if (!message) {
-        res.status(400).json({ error: "Missing message" });
-        return;
-    }
-    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : undefined;
-    // The dedicated Harvey chat sends full:true so Harvey always runs the
-    // smartest path with every business/memory tool available.
-    const fullMode = req.body?.full === true || req.body?.full === "true";
-    try {
-        const result = await (0, index_js_19.runHarveyChat)({
-            message,
-            sessionId,
-            deps: harveyDeps(),
-            fullMode,
-        });
-        res.status(200).json(result);
-    }
-    catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[jarvis/chat]", msg);
-        res.status(500).json({ error: msg });
-    }
-});
-const reelChatJobs = new Map();
-function pruneReelChatJobs() {
-    const cutoff = Date.now() - 30 * 60_000; // keep 30 min
-    for (const [id, job] of reelChatJobs) {
-        if (job.createdAt < cutoff)
-            reelChatJobs.delete(id);
-    }
-}
-app.get("/api/jarvis/analyze-reel/:jobId", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const job = reelChatJobs.get(String(req.params.jobId || ""));
-    if (!job) {
-        res.status(404).json({ error: "Job not found or expired" });
-        return;
-    }
-    res.json(job);
-});
 /** Aethon voice command — Claude brain (not Gemini Live). */
 function findFirstSentenceBoundary(text) {
     /* Never split on an abbreviation ("Mr.", "approx.", "e.g.") — a false
@@ -7187,7 +6810,6 @@ app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }),
             const result = await (0, index_js_19.runHarveyChat)({
                 message,
                 sessionId,
-                deps: harveyDeps(),
                 voiceMode: true,
                 onToken: (t) => {
                     accumulated += t;
@@ -7222,7 +6844,6 @@ app.post("/api/jarvis/voice/command", express_1.default.json({ limit: "64kb" }),
         const result = await (0, index_js_19.runHarveyChat)({
             message,
             sessionId,
-            deps: harveyDeps(),
             voiceMode: true,
         });
         res.status(200).json({ speech: result.speech, sessionId: result.sessionId });
@@ -7248,420 +6869,6 @@ app.get("/api/jarvis/activation", async (req, res) => {
         res.status(500).json({ error: msg });
     }
 });
-/** Gemini Live removed — Aethon hull uses Deepgram Flux + Claude + Gemini TTS. */
-app.post("/api/jarvis/gemini-live/token", express_1.default.json({ limit: "64kb" }), (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    res.status(410).json({
-        error: "Gemini Live removed",
-        hint: "Use Aethon voice pipeline: Deepgram Flux STT + Claude + Gemini TTS via /jarvis",
-    });
-});
-/** Execute Harvey / hull tools (legacy voice tool relay). */
-app.post("/api/jarvis/execute-tool", express_1.default.json({ limit: "64kb" }), async (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
-        return;
-    }
-    const body = req.body && typeof req.body === "object" ? req.body : {};
-    const toolName = String(body.toolName ?? "").trim();
-    const toolInput = body.toolInput && typeof body.toolInput === "object" && !Array.isArray(body.toolInput)
-        ? body.toolInput
-        : {};
-    if (!toolName) {
-        res.status(400).json({ error: "toolName required" });
-        return;
-    }
-    console.log("[Harvey Voice Tool] Executing:", toolName, "input:", JSON.stringify(toolInput));
-    try {
-        const result = await (0, index_js_19.runHarveyTool)(toolName, toolInput);
-        console.log("[Harvey Voice Tool] Result for", toolName, ":", JSON.stringify(result).substring(0, 200));
-        res.status(200).json({ success: true, result });
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error("[Harvey Voice Tool] Error:", message);
-        res.status(500).json({ error: message });
-    }
-});
-/** War Room — static campaign metrics for Harvey UI strip. */
-app.get("/api/jarvis/metrics", (req, res) => {
-    const authorized = dashboardTokenOk(req);
-    console.log("[Metrics] Request received");
-    console.log("[Metrics] Auth header:", !!req.headers.authorization);
-    console.log("[Metrics] Token query:", !!req.query.token);
-    console.log("[Metrics] Authorized:", authorized);
-    if (!authorized) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
-        return;
-    }
-    res.json({
-        goal: {
-            target: 20000000,
-            banked: 5956520,
-            gap: 14043480,
-            percentComplete: 29.8,
-            deadline: "Nov 30, 2026",
-            avgDealPrice: 425466,
-            dealsCount: 14,
-        },
-        dailyTargets: { videos: 7, calls: 725 },
-        tiktok: {
-            days: 174,
-            videos: 124,
-            views: 738682,
-            comments: 4076,
-            shares: 8322,
-            closings: 3,
-            avgViewsPerVideo: 5957,
-            avgWatchSeconds: 28.7,
-            platformAvgWatch: 17.5,
-            viewsPerClosing: 246227,
-            dmsPerClosing: 272,
-            phonesPerClosing: 136,
-            consultsPerClosing: 7,
-            videosPerWeekCurrent: 5,
-            weeksPerClosingCurrent: 8,
-            videosPerWeekForMonthly: 10.3,
-        },
-        mojo: {
-            calls: 26938,
-            contacts: 846,
-            consults: 37,
-            apptsHeld: 25,
-            agreements: 8,
-            closings: 4,
-            callsPerClosing: 6734,
-            contactsPerClosing: 212,
-            callsPerContact: 32,
-            efficiencyVsTiktok: "36x more efficient per touch",
-        },
-        insights: [
-            { priority: "critical", text: "Need 725 calls/day + 7 videos/day to hit $20M by Nov 30" },
-            { priority: "high", text: "At current pace (5 videos/week): 1 closing every 8 weeks" },
-            { priority: "high", text: "Need 10.3 videos/week for 1 closing/month from TikTok" },
-            { priority: "medium", text: "Cold calling is 36x more efficient per touch than TikTok" },
-            { priority: "medium", text: "Watch time 28.7s is above platform average — hooks are working" },
-            { priority: "medium", text: "DM to phone capture rate is the biggest TikTok leverage point" },
-        ],
-    });
-});
-/** Harvey daily game plan — static targets + motivation. */
-app.get("/api/jarvis/daily-plan", (req, res) => {
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
-        return;
-    }
-    const now = new Date();
-    const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
-    const dateStr = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    const daysRemaining = Math.ceil((new Date("2026-11-30").getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    res.json({
-        date: dateStr,
-        dayOfWeek,
-        targets: {
-            videos: 7,
-            calls: 725,
-            description: "Non-negotiable daily minimums for $20M by Nov 30",
-        },
-        goalStatus: {
-            banked: 5956520,
-            gap: 14043480,
-            percentComplete: 29.8,
-            deadline: "Nov 30, 2026",
-            daysRemaining,
-        },
-        needleMovers: [
-            "7 videos posted today = TikTok engine stays alive",
-            "725 calls = 22 contacts at current rate = 0.1 closings in pipeline",
-            "Every video above 7 compounds — 10.3/week hits monthly closing pace",
-            "Every 6,734 calls = 1 seller closing = $425K avg deal",
-        ],
-        motivation: `${dayOfWeek}. $14M gap. ${daysRemaining} days left. The only thing that moves the needle today is reps — videos and calls. Everything else is noise.`,
-    });
-});
-/** Harvey market intel — Claude + web search. */
-app.post("/api/jarvis/market-intel", express_1.default.json({ limit: "64kb" }), async (req, res) => {
-    console.log("[MarketIntel] Route hit — method:", req.method, "auth:", dashboardTokenOk(req));
-    if (!dashboardTokenOk(req)) {
-        console.log("[MarketIntel] Auth failed");
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-    if (!apiKey) {
-        res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
-        return;
-    }
-    try {
-        console.log("[MarketIntel] Fetching market data...");
-        const anthropic = new sdk_1.default({ apiKey });
-        const lastUpdated = new Date().toISOString();
-        const response = await anthropic.messages.create({
-            model: (0, index_js_19.getHarveyModel)(),
-            max_tokens: 1500,
-            tools: [{
-                    type: "web_search_20250305",
-                    name: "web_search",
-                }],
-            messages: [{
-                    role: "user",
-                    content: `Search for and return current real estate market data as of today. Find:
-1. Current 30-year fixed mortgage rate (exact percentage)
-2. Current Fed funds rate and any recent Fed decisions
-3. Current US inflation rate (CPI)
-4. National housing market: inventory levels, median home price, pending sales trends
-5. San Antonio Texas housing market specifically if available
-6. Any major economic news affecting real estate this week
-
-Return the data in this exact JSON format with no markdown:
-{
-  "mortgageRate": "X.XX%",
-  "mortgageRateChange": "+/- X.XX% from last week",
-  "fedRate": "X.XX%",
-  "fedNote": "brief note on recent Fed action",
-  "inflation": "X.X%",
-  "inflationNote": "brief context",
-  "nationalInventory": "description",
-  "medianHomePrice": "$XXX,XXX",
-  "marketTrend": "buyer/seller/neutral market description",
-  "sanAntonioNote": "SA specific note or national if SA not found",
-  "weeklyInsight": "2-3 sentence insight connecting these numbers to real estate opportunity",
-  "lastUpdated": "${lastUpdated}"
-}`,
-                }],
-        });
-        const fullText = response.content
-            .filter((b) => b.type === "text")
-            .map((b) => b.text)
-            .join("");
-        let marketData;
-        try {
-            const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-            marketData = jsonMatch
-                ? JSON.parse(jsonMatch[0])
-                : { error: "Could not parse market data", raw: fullText.substring(0, 500) };
-        }
-        catch {
-            marketData = { error: "Parse failed", raw: fullText.substring(0, 500) };
-        }
-        console.log("[MarketIntel] Data fetched successfully");
-        res.json({ success: true, data: marketData, fetchedAt: new Date().toISOString() });
-    }
-    catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[MarketIntel] Error:", msg);
-        res.status(500).json({ error: msg });
-    }
-});
-/** Harvey world intel — Claude + web search (business-relevant events). */
-app.post("/api/jarvis/world-intel", express_1.default.json({ limit: "64kb" }), async (req, res) => {
-    console.log("[WorldIntel] Route hit — method:", req.method, "auth:", dashboardTokenOk(req));
-    if (!dashboardTokenOk(req)) {
-        console.log("[WorldIntel] Auth failed");
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-    if (!apiKey) {
-        res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
-        return;
-    }
-    try {
-        console.log("[WorldIntel] Fetching world events via web search...");
-        const anthropic = new sdk_1.default({ apiKey });
-        const lastUpdated = new Date().toISOString();
-        const response = await anthropic.messages.create({
-            model: (0, index_js_19.getHarveyModel)(),
-            max_tokens: 2000,
-            tools: [{
-                    type: "web_search_20250305",
-                    name: "web_search",
-                }],
-            messages: [{
-                    role: "user",
-                    content: `Search for major world and political events from the last 7 days that could impact business, the economy, or real estate.
-
-EXCLUDE: entertainment, celebrity, sports, lifestyle news.
-INCLUDE: policy changes, legislation affecting housing or mortgages, Federal Reserve actions, inflation data, geopolitical events affecting markets, housing policy, interest rate news, major economic decisions, election results affecting economic policy.
-
-Return ONLY this JSON with no markdown:
-{
-  "events": [
-    {
-      "headline": "short headline",
-      "category": "policy|legislation|economic|geopolitical|housing|fed",
-      "summary": "2-3 sentence summary of what happened",
-      "impact": "high|medium|low",
-      "realEstateRelevance": "how this specifically affects real estate or Marco's business, or null if not relevant"
-    }
-  ],
-  "economicSummary": "2-3 sentence overall economic picture this week",
-  "realEstateImpact": "2-3 sentence summary of how current events specifically affect real estate agents and buyers in Texas",
-  "lastUpdated": "${lastUpdated}"
-}
-
-Include 4-6 events maximum. Only include events with real business relevance.`,
-                }],
-        });
-        const fullText = response.content
-            .filter((b) => b.type === "text")
-            .map((b) => b.text)
-            .join("");
-        console.log("[WorldIntel] Raw response length:", fullText.length);
-        let worldData;
-        try {
-            const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-            worldData = jsonMatch
-                ? JSON.parse(jsonMatch[0])
-                : {
-                    events: [],
-                    economicSummary: "Data unavailable",
-                    realEstateImpact: "Data unavailable",
-                    error: "Could not parse response",
-                };
-        }
-        catch (parseErr) {
-            const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-            console.error("[WorldIntel] JSON parse failed:", msg);
-            worldData = {
-                events: [],
-                economicSummary: "Parse error",
-                realEstateImpact: "Parse error",
-                raw: fullText.substring(0, 200),
-            };
-        }
-        const events = worldData.events;
-        console.log("[WorldIntel] Success — events count:", Array.isArray(events) ? events.length : 0);
-        res.json({ success: true, data: worldData, fetchedAt: new Date().toISOString() });
-    }
-    catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[WorldIntel] Error:", msg);
-        res.status(500).json({ error: msg });
-    }
-});
-const MOJO_TIKTOK_RESEARCH_QUERY = `Research these two topics for a real estate agent automation system:
-
-1. MOJO DIALER API:
-- Does Mojo Dialer have a public API or webhook system?
-- Can call stats (calls made, contacts reached, talk time) be exported automatically?
-- Is there a Zapier integration or any automation options?
-- What would be needed to pull daily call stats into a custom dashboard?
-
-2. TIKTOK ANALYTICS API:
-- Does TikTok have a business/creator API that exposes video analytics?
-- Can views, watch time, comments, shares be pulled automatically per video?
-- What are the API access requirements (business account, approval process)?
-- Is there a way to get daily performance data automatically?
-
-Return findings as JSON:
-{
-  "mojo": {
-    "hasApi": true,
-    "apiDetails": "description of what's available",
-    "exportOptions": ["list of export mechanisms"],
-    "automationOptions": ["zapier", "webhook", etc],
-    "integrationComplexity": "simple|moderate|complex",
-    "recommendation": "what to build",
-    "limitations": "what's not possible"
-  },
-  "tiktok": {
-    "hasApi": true,
-    "apiDetails": "description",
-    "analyticsAccess": "what data is accessible",
-    "accessRequirements": "what's needed to get access",
-    "integrationComplexity": "simple|moderate|complex",
-    "recommendation": "what to build",
-    "limitations": "what's not possible"
-  },
-  "summary": "2-3 sentence executive summary of what's buildable",
-  "nextSteps": ["ordered list of recommended next steps"]
-}`;
-async function runClaudeResearchJson(prompt) {
-    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-    if (!apiKey)
-        throw new Error("ANTHROPIC_API_KEY not configured");
-    const anthropic = new sdk_1.default({ apiKey });
-    const response = await anthropic.messages.create({
-        model: (0, index_js_19.getHarveyModel)(),
-        max_tokens: 2500,
-        tools: [{
-                type: "web_search_20250305",
-                name: "web_search",
-            }],
-        messages: [{ role: "user", content: prompt }],
-    });
-    const fullText = response.content
-        .filter((b) => b.type === "text")
-        .map((b) => b.text)
-        .join("");
-    const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-        return { error: "Could not parse research response", raw: fullText.substring(0, 500) };
-    }
-    return JSON.parse(jsonMatch[0]);
-}
-/** Harvey research report — Claude + web search on arbitrary topic. */
-app.post("/api/jarvis/research-report", express_1.default.json({ limit: "64kb" }), async (req, res) => {
-    console.log("[Research] Route hit — method:", req.method, "auth:", dashboardTokenOk(req));
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const body = (req.body && typeof req.body === "object" ? req.body : {});
-    const topic = typeof body.topic === "string" ? body.topic.trim() : "";
-    if (!topic) {
-        res.status(400).json({ error: "Missing topic" });
-        return;
-    }
-    try {
-        console.log("[Research] Fetching report for:", topic.substring(0, 80));
-        const prompt = `Research the following topic thoroughly for a real estate agent building automation tools. Use current web sources.
-
-TOPIC: ${topic}
-
-Return findings as JSON with no markdown:
-{
-  "topic": "${topic.replace(/"/g, "'")}",
-  "summary": "2-4 sentence executive summary",
-  "findings": ["bullet finding 1", "bullet finding 2"],
-  "recommendation": "what to build or do next",
-  "limitations": "what is not possible or risky",
-  "sources": ["brief source description"]
-}`;
-        const data = await runClaudeResearchJson(prompt);
-        console.log("[Research] Success — topic:", topic.substring(0, 40));
-        res.json({ success: true, data, fetchedAt: new Date().toISOString() });
-    }
-    catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[Research] Error:", msg);
-        res.status(500).json({ error: msg });
-    }
-});
-/** One-time Mojo + TikTok API integration research. */
-app.get("/api/jarvis/mojo-tiktok-research", async (req, res) => {
-    console.log("[Research] Mojo+TikTok route hit — auth:", dashboardTokenOk(req));
-    if (!dashboardTokenOk(req)) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    try {
-        console.log("[Research] Fetching Mojo + TikTok API research...");
-        const data = await runClaudeResearchJson(MOJO_TIKTOK_RESEARCH_QUERY);
-        console.log("[Research] Mojo+TikTok success");
-        res.json({ success: true, data, fetchedAt: new Date().toISOString() });
-    }
-    catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[Research] Mojo+TikTok error:", msg);
-        res.status(500).json({ error: msg });
-    }
-});
-/** Marco operational tasks — separate from lead follow-up tasks. */
 app.get("/api/marco-tasks", (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN or pass ?token=" });
@@ -12885,7 +12092,6 @@ app.post("/api/browser/chat", express_1.default.json({ limit: "256kb" }), async 
         const result = await (0, browserControl_js_1.withAccount)(account.id, () => (0, index_js_19.runHarveyChat)({
             message,
             sessionId,
-            deps: harveyDeps(),
             fullMode: true,
         }));
         res.json({
@@ -15504,6 +14710,7 @@ httpServer.on("error", (err) => {
     }
 }
 httpServer.listen(PORT, "0.0.0.0", () => {
+    (0, runtime_js_1.startWorker)();
     console.log(`[Server] Listening on 0.0.0.0:${PORT}`);
     /* Publish the real routing table to Harvey's CRM bridge. Read from Express
        itself rather than hand-listed, so the catalogue Harvey is shown cannot
@@ -15548,20 +14755,6 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     catch (err) {
         console.error("[push] init failed:", err);
     }
-    /* Harvey's scheduled tasks. The ticker owns no state — it asks
-       /data/harvey-tasks.db what is due — so starting it here is enough, and a
-       store that cannot be opened must not take the whole server down with it. */
-    void (async () => {
-        try {
-            const { startTaskScheduler } = await Promise.resolve().then(() => __importStar(require("./hull/taskScheduler.js")));
-            /* It logs its own line: how many tasks it scheduled, or that the kill
-               switch is on. */
-            startTaskScheduler();
-        }
-        catch (err) {
-            console.error("[HarveyCron] scheduler failed to start — nothing is running on a clock:", err);
-        }
-    })();
     try {
         // Scheduled texts/emails. The queue lives on the /data volume, so
         // anything still pending across a deploy is picked up on the next tick.
@@ -15610,20 +14803,6 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     catch (err) {
         console.error("[team] init failed:", err);
     }
-    // A job left 'running' when the process died is not running — nothing resumes
-    // it. Mark those interrupted so the UI shows the truth, not a phantom job.
-    void (async () => {
-        try {
-            const { reconcileOrphanedJobs, initJobSchema } = await Promise.resolve().then(() => __importStar(require("./core/jobStore.js")));
-            initJobSchema();
-            const n = reconcileOrphanedJobs();
-            if (n)
-                console.log(`[HarveyJobs] marked ${n} interrupted job(s) from the previous run`);
-        }
-        catch (err) {
-            console.error("[HarveyJobs] init failed:", err);
-        }
-    })();
     if (!process.env.ELEVENLABS_API_KEY?.trim()) {
         console.warn("[Harvey] ELEVENLABS_API_KEY not set — Scribe v2 Realtime STT will not work");
     }
@@ -15672,14 +14851,10 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Reporting:  GET http://localhost:${PORT}/reporting`);
     console.log(`Finance:    GET http://localhost:${PORT}/finance`);
     console.log(`Chat demo: GET http://localhost:${PORT}/chat`);
-    console.log(`Harvey:  GET  http://localhost:${PORT}/jarvis`);
-    console.log(`Harvey ops: GET http://localhost:${PORT}/api/jarvis/ops`);
-    console.log(`Harvey chat: POST http://localhost:${PORT}/api/jarvis/chat (model ${(0, index_js_19.getHarveyModel)()})`);
+    console.log(`Harvey:  GET  http://localhost:${PORT}/harvey`);
     console.log(`Harvey voice STT: WS   http://localhost:${PORT}/api/jarvis/elevenlabs/listen (fallback: /api/jarvis/deepgram/listen)`);
     console.log(`Harvey voice TTS: POST http://localhost:${PORT}/api/jarvis/voice`);
     console.log(`Neural Map: GET http://localhost:${PORT}/memory`);
-    console.log(`Harvey market intel: POST http://localhost:${PORT}/api/jarvis/market-intel`);
-    console.log(`Harvey world intel: POST http://localhost:${PORT}/api/jarvis/world-intel`);
     console.log(`Simulate: POST http://localhost:${PORT}/simulate`);
     console.log(`Webhook: POST http://localhost:${PORT}/webhook`);
     console.log(`Reset:   POST http://localhost:${PORT}/reset`);

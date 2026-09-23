@@ -1,3 +1,5 @@
+> Historical scope: the old Harvey background-job runner and recurring scheduler were removed on 2026-09-23. This document records earlier plans, not the current execution architecture. See harvey-model-layer.md.
+
 # Scope: Harvey as a recurring research coworker
 
 The vision: give Harvey a standing brief — *"track mortgage-rate moves and new

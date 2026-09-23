@@ -4,7 +4,6 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.fetchAdsSummaryFromUpstream = fetchAdsSummaryFromUpstream;
-exports.adsTotalsToHarveySnapshot = adsTotalsToHarveySnapshot;
 async function fetchAdsSummaryFromUpstream(baseUrl, apiKey) {
     if (!baseUrl.trim()) {
         throw new Error("AD_DASHBOARD_BASE_URL is not set");
@@ -36,46 +35,5 @@ async function fetchAdsSummaryFromUpstream(baseUrl, apiKey) {
         totals,
         campaigns: campaigns.slice(0, 80),
         adsets: adsets.slice(0, 120),
-    };
-}
-function adsTotalsToHarveySnapshot(raw, configured) {
-    if (!raw || !configured) {
-        return {
-            configured: false,
-            generatedAt: null,
-            datePreset: null,
-            spend: null,
-            impressions: null,
-            clicks: null,
-            adLeads: null,
-            ctr: null,
-            cpl: null,
-            campaignCount: 0,
-            adsetCount: 0,
-        };
-    }
-    const t = raw.totals;
-    const num = (k) => {
-        const v = t[k];
-        if (typeof v === "number" && Number.isFinite(v))
-            return v;
-        if (typeof v === "string" && v.trim() !== "") {
-            const n = Number(v);
-            return Number.isFinite(n) ? n : null;
-        }
-        return null;
-    };
-    return {
-        configured: true,
-        generatedAt: raw.generatedAt,
-        datePreset: raw.datePreset,
-        spend: num("spend"),
-        impressions: num("impressions"),
-        clicks: num("clicks"),
-        adLeads: num("leads"),
-        ctr: num("ctr"),
-        cpl: num("cpl"),
-        campaignCount: raw.campaigns.length,
-        adsetCount: raw.adsets.length,
     };
 }

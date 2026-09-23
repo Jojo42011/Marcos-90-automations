@@ -203,9 +203,7 @@ var TABS = [
     tied to the lead looking at it — opening it on its own loses that. The
     /listings page still exists and is what the CRM tab embeds; it is just not
     reachable as a top-level destination. */
- /* Harvey Jobs was a sidebar tab of its own until Harvey grew a Scheduled view
-    of the same work; two lists of delegated work is one too many. /jobs still
-    serves public/jobs.html standalone. */
+
  /* Tracker moved INTO the CRM (rail icon between Opportunities and
     Transactions) — it is the same book of people, and two separate top-level
     entries had the team hunting for a contact in whichever one they opened
@@ -533,7 +531,7 @@ document.getElementById("logoutBtn").addEventListener("click", function(){
 
 /* ── Marco 90 addition: respect the existing dark/light theme preference ──
    The sub-agent pages persist their theme under 'marco_crm_theme' (values
-   'light'/'dark') - see dashboard.html/jarvis.html. The shell chrome mirrors
+   'light'/'dark') - see dashboard.html/harvey.html. The shell chrome mirrors
    it (falling back to the generic 'theme' key). Defaults to dark; re-applies
    when a tab flips it (storage event). */
 /* The shell chrome is now permanently Brivity-themed (white + teal) - the

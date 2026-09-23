@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildFounderSystemPrompt } from "./founderPrompt.js";
-import { HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT } from "../harvey/index.js";
 import { getAethonModel, getHaikuModel, getMaxTokens, isSocialTurn, needsSonnet } from "./modelRouting.js";
 import {
   heldToolResultText,
@@ -189,6 +188,9 @@ export type AgentLoopEvent =
     };
 
 export interface AgentLoopOptions {
+  signal?: AbortSignal;
+  /** Owner-scoped work surface. Its executor enforces connection grants. */
+  workRuntime?: { tools: Anthropic.Messages.Tool[]; context: string; execute: (name: string, input: Record<string, unknown>) => Promise<unknown> };
   message: string;
   history?: MessageParam[];
   /** Timestamped turns for the continuity layer (conversation state, deictic
@@ -270,9 +272,9 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   /* "What about him?" carries zero retrievable keywords — short or deictic
      messages blend the prior user turns in so retrieval can see the referent. */
   const retrievalQuery = buildRetrievalQuery(opts.message, timedHistory);
-  const facts = await searchFacts(retrievalQuery, factLimit);
-  const memoryPacket = getMemoryPacket(retrievalQuery, facts);
-  const { confidence, count } = opts.fastMode
+  const facts = opts.workRuntime ? [] : await searchFacts(retrievalQuery, factLimit);
+  const memoryPacket = opts.workRuntime ? "" : getMemoryPacket(retrievalQuery, facts);
+  const { confidence, count } = opts.fastMode || opts.workRuntime
     ? { confidence: 1, count: facts.length }
     : await getRetrievalConfidence(opts.message);
 
@@ -347,7 +349,6 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     conversationSummary: opts.sessionId ? getConversationSummary(opts.sessionId) : "",
     standingOrders: standingOrderRules(),
   });
-  if (toolsEnabled) system += `\n\n${HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT}`;
   if (opts.voiceMode) {
     system +=
       "\n\nVOICE MODE: Spoken replies only. Lead with the number or answer. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
@@ -374,7 +375,8 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     system +=
       "\n\nLEAD NURTURE: For scoring, hot/warm/cold tiers, or nurture routing questions, call get_lead_nurture_overview or get_lead_nurture_tier before answering. Use get_lead_score_detail for one lead. Use lead_nurture_score_all / lead_nurture_rescore_cold only when Marco explicitly asks to refresh scores.";
   }
-  const activeTools = toolsEnabled ? hullTools : undefined;
+  if (opts.workRuntime) system = opts.workRuntime.context;
+  const activeTools = opts.workRuntime ? opts.workRuntime.tools : toolsEnabled ? hullTools : undefined;
   /* Voice turns are 1-3 sentences; a large reserve both wastes budget and
      removes the hard backstop on rambling (playbook §7.5). */
   const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 320 : getMaxTokens();
@@ -406,6 +408,13 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
    * search or a browser read is seconds) for information already in context.
    */
   const runTool = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
+    opts.signal?.throwIfAborted();
+    if (opts.workRuntime) {
+      if (!opts.workRuntime.tools.some(t => t.name === name)) return { error: "Tool is not available in this mode" };
+      opts.onEvent?.({ type: "tool", name, status: "running" });
+      try { const result = await opts.workRuntime.execute(name, input); opts.onEvent?.({ type: "tool", name, status: "done" }); return result; }
+      catch (error) { const detail = error instanceof Error ? error.message : String(error); opts.onEvent?.({ type: "tool", name, status: "error", detail }); return { error: detail }; }
+    }
     const sig = signature(name, input);
     const seen = (callCounts.get(sig) || 0) + 1;
     callCounts.set(sig, seen);
@@ -446,6 +455,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   };
 
   for (let step = 0; step < stepBudget; step++) {
+    opts.signal?.throwIfAborted();
     /* The final round runs with tools WITHHELD. The budget then ends in an
        answer assembled from everything gathered, instead of the dead-end
        "hit the tool loop limit" that discarded the whole turn's work. */

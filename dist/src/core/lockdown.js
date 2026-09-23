@@ -35,6 +35,7 @@ const PUBLIC_EXACT = new Set([
     /* Google's OAuth redirect target — the browser arrives here unauthenticated
        by definition, carrying the code Google issued. */
     "/api/email/gmail-oauth/callback",
+    "/api/harvey/work/oauth/callback",
 ]);
 /**
  * Prefixes that never require a session. Kept to the smallest possible set,

@@ -47,6 +47,9 @@ RUN mkdir -p /usr/share/fonts/truetype/archivo-black && \
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npx playwright install --with-deps chromium && chmod -R a+rX /ms-playwright
+# The browser worker drops to uid 1001; the existing app keeps its volume owner.
 
 # The OpenShorts video engine, its Python/torch dependency layer and the
 # CapCutAPI draft service were removed with the Content Manager on 2026-09-20.

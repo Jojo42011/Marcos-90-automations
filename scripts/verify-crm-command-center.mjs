@@ -16,7 +16,6 @@ const html = readFileSync(join(root, "public/crm-brivity.html"), "utf8");
 const lockdown = readFileSync(join(root, "src/core/lockdown.ts"), "utf8");
 const websiteWh = readFileSync(join(root, "src/core/websiteWebhook.ts"), "utf8");
 const server = readFileSync(join(root, "src/server.ts"), "utf8");
-const perception = readFileSync(join(root, "src/harvey/perception.ts"), "utf8");
 
 let pass = 0;
 const fail = [];
@@ -92,8 +91,6 @@ ok("server mounts POST /api/website/lead", /app\.post\(\s*"\/api\/website\/lead"
 ok("lockdown allowlists /api/website/lead", /"\/api\/website\/lead"/.test(lockdown));
 
 // 10. Harvey speed win
-ok("Harvey caps conversation summaries", /MAX_CONV_SUMMARIES/.test(perception));
-ok("Harvey has lite summarize path", /summarizeLeadLite/.test(perception));
 
 console.log("\n" + pass + " passed, " + fail.length + " failed");
 if (fail.length) {

@@ -58,7 +58,7 @@ const MOD = {
 /** Run a snippet in a fresh process with a controlled environment. */
 function run(script, env = {}) {
   try {
-    const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+    const out = execFileSync(process.execPath, ["--input-type=module"], {
       env: {
         ...process.env,
         /* Every child starts from a known routing world; individual checks
@@ -76,7 +76,8 @@ function run(script, env = {}) {
         ...env,
       },
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
+      input: script,
+      stdio: ["pipe", "pipe", "pipe"],
     });
     return JSON.parse(out.trim().split("\n").pop());
   } catch (err) {

@@ -1,4 +1,5 @@
 node_modules/
+data/harvey-work/
 
 # Secrets — never commit real env files
 .env

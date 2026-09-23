@@ -3922,7 +3922,7 @@
           <p class="module-desc">Pipeline board, lead stages, and live numbers - phone-captured leads, synced with your DM automation.</p>
           <div class="module-arrow">Open workspace →</div>
         </button>
-        <a href="/jarvis" class="module-card" id="open-jarvis" data-hub-search="harvey jarvis ai assistant voice operator" aria-label="Open Harvey assistant" style="text-decoration:none;color:inherit;">
+        <a href="/harvey" class="module-card" id="open-jarvis" data-hub-search="harvey jarvis ai assistant voice operator" aria-label="Open Harvey assistant" style="text-decoration:none;color:inherit;">
           <div class="module-card-top">
             <span class="module-title">Harvey</span>
             <span class="module-badge" style="background:rgba(34,211,238,0.18);border-color:rgba(34,211,238,0.45);color:#22d3ee;text-shadow:0 0 8px rgba(34,211,238,0.4);">AI</span>
@@ -4032,7 +4032,7 @@
             <div class="crm-notif-panel" id="crm-notifications-panel"></div>
           </div>
           <button type="button" class="crm-light-btn" id="crm-refresh">Refresh</button>
-          <a href="/jarvis" class="crm-light-btn" id="crm-harvey-link">Harvey</a>
+          <a href="/harvey" class="crm-light-btn" id="crm-harvey-link">Harvey</a>
         </div>
         <main class="crm-page">
           <div class="crm-title-row">
@@ -5020,15 +5020,15 @@
         }
       }
     }
-    // Pass token to Harvey (/jarvis) and Task Center links if present
+    // Pass token to Harvey (/harvey) and Task Center links if present
     (function () {
       const jarvisLink = document.getElementById("open-jarvis");
       if (token && jarvisLink) {
-        jarvisLink.href = "/jarvis?token=" + encodeURIComponent(token);
+        jarvisLink.href = "/harvey?token=" + encodeURIComponent(token);
       }
       const harveyCrm = document.getElementById("crm-harvey-link");
       if (token && harveyCrm) {
-        harveyCrm.href = "/jarvis?token=" + encodeURIComponent(token);
+        harveyCrm.href = "/harvey?token=" + encodeURIComponent(token);
       }
       const tasksLink = document.getElementById("open-tasks");
       if (token && tasksLink) {
@@ -10016,7 +10016,7 @@
       "Reading the Overview dashboard":
         "The Overview tab shows your buyer and seller pipelines, lead sources, volume and GCI tracking toward the $20M goal, and a today and overdue table. The pipeline counts update in real time from your lead data. The $20M tracker uses estimated values until MLS is connected.",
       "Talking to Harvey":
-        "Harvey is your AI operator. Open him by clicking the Harvey button at the top right of the dashboard or go to /jarvis directly. You can type or use voice. Harvey knows your full lead pipeline, funnel stats, hot leads, and ad performance. Ask him things like: who are my hottest leads right now, what should I focus on today, or how is the Canyon Lake ad performing.",
+        "Harvey is your AI operator. Open him by clicking the Harvey button at the top right of the dashboard or go to /harvey directly. You can type or use voice. Harvey knows your full lead pipeline, funnel stats, hot leads, and ad performance. Ask him things like: who are my hottest leads right now, what should I focus on today, or how is the Canyon Lake ad performing.",
       "Re-engagement automations":
         "When a lead who has been inactive for 30+ days visits your website, the system automatically sends them a text and creates a notification in your CRM. The notification says the lead returned to your page and suggests reaching out. This is triggered by calling the website visit endpoint from your site or landing page.",
       "Listing status triggers":
@@ -11957,7 +11957,7 @@
   (function () {
     if (window.parent === window) return; // standalone - leave links untouched
     var ROUTE_TO_TAB = {
-      "/jarvis": "harvey", "/dashboard": "crm", "/social": "content",
+      "/harvey": "harvey", "/dashboard": "crm", "/social": "content",
       "/lead-nurture": "leads", "/reporting": "reporting", "/finance": "finance",
       "/email-marketing": "email", "/voice-clone": "voice", "/tasks": "tasks"
     };

@@ -23,8 +23,6 @@ import { createRequire } from "node:module";
 
 const tmp = mkdtempSync(path.join(tmpdir(), "harvey-int-"));
 process.env.AI_USAGE_DB_PATH = path.join(tmp, "usage.db");
-process.env.HARVEY_TASKS_DB_PATH = path.join(tmp, "tasks.db");
-process.env.HARVEY_CRON_MIN_INTERVAL_MINUTES = "15";
 process.env.HARVEY_DAILY_CAP_USD = "10";
 process.env.HARVEY_MONTHLY_CAP_USD = "150";
 /* A key must LOOK present or the loop refuses before it reaches the stub. No
@@ -38,7 +36,6 @@ const providers = require_("../dist/src/hull/providers/index.js");
 const hullTools = require_("../dist/src/hull/tools.js");
 const approvalMod = require_("../dist/src/hull/approval.js");
 const usage = require_("../dist/src/core/aiUsageStore.js");
-const taskStore = require_("../dist/src/core/harveyTaskStore.js");
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -93,7 +90,6 @@ hullTools.executeHullTool = async (name, input) => {
 /* agentLoop is required AFTER the stubs so its module-level imports resolve to
    the same live objects we just patched. */
 const { runAgentLoop } = require_("../dist/src/hull/agentLoop.js");
-const scheduler = require_("../dist/src/hull/taskScheduler.js");
 
 function reset(newScript) {
   script = newScript;
@@ -253,96 +249,9 @@ check("an unknown session costs nothing", usage.sessionCostUsd("s-nope") === 0);
 const summary = usage.usageSummary(30);
 check("the usage summary answers", !!summary && typeof summary === "object");
 
-/* ── a scheduled task end to end ─────────────────────────────────────────── */
-console.log("\nSCHEDULED TASK — sentence to cron to a recorded run");
-
-const { executeScheduleTool } = require_("../dist/src/hull/scheduleTools.js");
-const created = await executeScheduleTool("schedule_task", {
-  title: "Morning pipeline report",
-  prompt: "Summarise what needs a call today.",
-  schedule: "every weekday at 7am",
-}, { sessionId: "s-chat", createdBy: "marco" });
-check("Harvey can schedule from a sentence", created.created === true);
-check("it stored a real cron", created.cron === "0 7 * * 1-5", created.cron);
-check("and reads the schedule back in English", /Weekdays/.test(created.schedule));
-check("it warns that sends still need approval", /approval/i.test(created.note || ""));
-
-const vague = await executeScheduleTool("schedule_task", {
-  title: "x", prompt: "y", schedule: "whenever you feel like it",
-});
-check("a vague cadence is refused rather than guessed", !!vague.error);
-check("and the refusal offers examples", Array.isArray(vague.examples) && vague.examples.length > 0);
-
-const tooFast = await executeScheduleTool("schedule_task", {
-  title: "z", prompt: "y", schedule: "every 2 minutes",
-});
-check("a schedule below the cost floor is refused", !!tooFast.error);
-
-const dup = await executeScheduleTool("schedule_task", {
-  title: "Morning pipeline report", prompt: "again", schedule: "every weekday at 7am",
-});
-check("an identical duplicate is refused with the existing id", !!dup.existingTaskId);
-
-reset([{ text: "3 calls to make: Rudy, Marisol, Dana.", costUsd: 0.01 }]);
-const runOut = await scheduler.runTaskNow(created.id, "manual");
-check("running the task succeeds", runOut.ok === true, runOut.error || "");
-check("its output is the deliverable", /3 calls to make/.test(runOut.output), runOut.output);
-const runs = taskStore.listRuns(created.id);
-check("the run is recorded", runs.length === 1);
-check("recorded as ok", runs[0].ok === true);
-check("with its trigger", runs[0].trigger === "manual");
-
-/* The scheduled prompt has to tell the model nobody is watching, or it asks a
-   follow-up question into an empty room. */
-const schedPrompt = completeCalls[0].messages.map((m) => JSON.stringify(m)).join(" ");
-check("the run is told it is unattended", /Nobody is at the keyboard/.test(schedPrompt));
-check("and that its reply is the deliverable", /IS the deliverable/i.test(schedPrompt));
-
-/* A provider outage during an unattended run must be recorded as a FAILURE.
-   The agent loop answers with a sentence rather than throwing, which is right
-   for a live chat and wrong here: recorded as "ok", a task would deliver
-   "I could not reach a model" every morning and still look healthy. */
-console.log("\nUNATTENDED FAILURE — a down provider is not a successful run");
-
-reset([{ throw: new providers.ModelLayerError("network", "upstream down") }]);
-const failedRun = await scheduler.runTaskNow(created.id, "schedule");
-check("a model outage makes the run fail", failedRun.ok === false, JSON.stringify(failedRun));
-check("and the error is recorded, not the apology", /upstream down/.test(failedRun.error || ""));
-check("the task's last status is error", taskStore.getTask(created.id).lastStatus === "error");
-
-/* Two more, and the task pauses itself instead of retrying at full price. */
-let lastPaused = false;
-for (let i = 0; i < 2; i++) {
-  script = [{ throw: new providers.ModelLayerError("network", "upstream down") }];
-  await scheduler.runTaskNow(created.id, "schedule");
-  lastPaused = taskStore.getTask(created.id).enabled === false;
-}
-check("three consecutive failures pause the task", lastPaused === true);
-check("the paused task stops being scheduled", taskStore.getTask(created.id).nextRunAt === null);
-
-/* And the third way a run can produce nothing: no key at all. Same trap — an
-   apology recorded as a success would read healthy in the task list forever. */
-const savedKey = process.env.ANTHROPIC_API_KEY;
-delete process.env.ANTHROPIC_API_KEY;
-taskStore.updateTask(created.id, { enabled: true });
-reset([]);
-const keylessRun = await scheduler.runTaskNow(created.id, "manual");
-check("a run with no provider key is recorded as failed", keylessRun.ok === false, JSON.stringify(keylessRun));
-check("and names the missing key", /OPENROUTER_API_KEY/.test(keylessRun.error || ""), keylessRun.error);
-process.env.ANTHROPIC_API_KEY = savedKey;
-
-/* The cap is the same story: a skipped run is a failure, with the cap named. */
-reset([{ throw: new providers.BudgetRefusedError({
-  allowed: false, reason: "Daily cap reached.", spentTodayUsd: 11, spentMonthUsd: 20,
-  dailyCapUsd: 10, monthlyCapUsd: 150,
-}) }]);
-taskStore.updateTask(created.id, { enabled: true });
-const cappedRun = await scheduler.runTaskNow(created.id, "manual");
-check("a capped run is recorded as failed", cappedRun.ok === false);
-check("with the cap as the reason", /cap/i.test(cappedRun.error || ""));
-
 providers.complete = realComplete;
 hullTools.executeHullTool = realExecute;
+usage.getAiUsageDb().close();
 rmSync(tmp, { recursive: true, force: true });
 
 const total = pass + fail;

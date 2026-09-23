@@ -88,7 +88,7 @@
 </head>
 <body>
   <header>
-    <a href="/jarvis" onclick="goToCommandCenter(); return false;">← BACK TO CORE</a>
+    <a href="/harvey" onclick="goToCommandCenter(); return false;">← BACK TO CORE</a>
     <span>AETHON // NEURAL MAP</span>
     <span id="hdr-stats"></span>
   </header>
@@ -243,7 +243,7 @@
      navigate normally when opened standalone. */
   function goToCommandCenter(){
     if (window.parent !== window) { window.parent.postMessage({ type: 'app-navigate', tab: 'harvey' }, '*'); }
-    else { window.location.href = '/jarvis'; }
+    else { window.location.href = '/harvey'; }
   }
   window.goToCommandCenter = goToCommandCenter;
   </script>

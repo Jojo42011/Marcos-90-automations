@@ -56,8 +56,6 @@ const HIGH_RISK: Record<string, string> = {
  * strict mode is on.
  */
 const MEDIUM_RISK: Record<string, string> = {
-  start_background_job: "Starts an autonomous run that spends tokens.",
-  analyze_reel: "Runs a paid analysis job.",
   lead_nurture_score_all: "Rescores every lead in the database.",
   lead_nurture_rescore_cold: "Rescores a whole segment of leads.",
   browser_click: "Clicks inside a real web page, which can submit something.",

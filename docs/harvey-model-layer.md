@@ -1,7 +1,13 @@
+> Current project chats, plugins, persistent browsers and the new scheduled-agent worker are documented in [Harvey Work](harvey-work.md). The retired task endpoints below remain removed.
+
 # Harvey model layer — architecture and HTTP contract
 
 Status: implemented 2026-09-19. This is the contract the backend, the tools and the
 chat UI are all built against. If you change a shape here, change it in all three.
+
+## Current scope (2026-09-23)
+
+`/harvey` is the only Harvey chat interface. Dictation and the voice overlay remain. The old Jarvis page, detached background jobs, and recurring Harvey tasks (UI, API, tools, stores and ticker) have been retired. Stored runtime data is not deleted. Projects, chat agents and server-hosted browser workflows are future work, not current capabilities. The `/api/jarvis/voice*` transport is retained for the existing voice overlay.
 
 ## Why
 
@@ -54,7 +60,7 @@ Model choice is per **job**, not per call site.
 |---|---|---|
 | `chat_fast` | pleasantries, one-liners, no tools | cheapest |
 | `chat_deep` | normal operator chat with tools | mid |
-| `agent` | background jobs and cron tasks | mid |
+| `agent` | reserved for future agent workflows | mid |
 | `summarize` | conversation folding / compaction | cheapest |
 | `extract` | memory extraction to JSON | cheapest |
 | `classify` | short routing decisions | cheapest |
@@ -105,21 +111,7 @@ Tool calls are classified before execution. Anything that **leaves the building
 or cannot be undone** — outbound email/SMS/WhatsApp, public posting, deletes,
 mass operations, spend — becomes a **pending approval** instead of running.
 
-The chat surfaces it as a card with Approve / Deny. Cron tasks run with the gate
-**on**, so a schedule cannot quietly text 1,300 people at 3am.
-
-## Scheduled tasks from chat
-
-Harvey can put its own work on a cron. The operator says it in a sentence; the
-`schedule_task` tool stores a real schedule; a ticker runs it.
-
-- Store: `/data/harvey-tasks.db` (tasks + run history).
-- Schedule: standard 5-field cron, or plain English parsed into one.
-- Timezone: America/Chicago by default, since that is the business.
-- Each run: its own budget ceiling, the approval gate on, output recorded and
-  optionally delivered to chat.
-- Failures are recorded and a task that keeps failing is paused rather than
-  retried forever.
+The chat surfaces it as a card with Approve / Deny. The retired scheduler no longer executes tasks.
 
 ## HTTP contract
 
@@ -185,17 +177,6 @@ POST /api/harvey/approvals/:id/approve     → { ok, result }
 POST /api/harvey/approvals/:id/deny        { reason? } → { ok }
 ```
 
-### Scheduled tasks
-
-```
-GET    /api/harvey/tasks                   → { tasks: [{ id, title, prompt, cron, timezone, nextRunAt, lastRunAt, lastStatus, enabled, deliver }] }
-POST   /api/harvey/tasks                   { title, prompt, cron | when, timezone?, deliver? } → { ok, task }
-PATCH  /api/harvey/tasks/:id               { enabled?, cron?, prompt?, title?, deliver? } → { ok, task }
-DELETE /api/harvey/tasks/:id               → { ok }
-POST   /api/harvey/tasks/:id/run           → { ok, runId }
-GET    /api/harvey/tasks/:id/runs          → { runs: [{ id, startedAt, finishedAt, ok, costUsd, output, error }] }
-```
-
 ## Environment
 
 | Variable | Purpose |
@@ -210,5 +191,4 @@ GET    /api/harvey/tasks/:id/runs          → { runs: [{ id, startedAt, finishe
 | `HARVEY_PRE_ROT_RATIO` | fraction of the context window we allow (default 0.5) |
 | `HARVEY_CONTEXT_CEILING_TOKENS` | hard input ceiling (default 60000) |
 | `HARVEY_APPROVAL_REQUIRED` | `false` disables the approval gate (default on) |
-| `HARVEY_CRON_ENABLED` | `false` stops the scheduled-task ticker |
-| `AI_USAGE_DB_PATH`, `HARVEY_TASKS_DB_PATH` | store paths (default `/data`) |
+| `AI_USAGE_DB_PATH` | store paths (default `/data`) |

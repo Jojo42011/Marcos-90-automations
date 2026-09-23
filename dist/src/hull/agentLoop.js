@@ -5,15 +5,14 @@ exports.toolResultContent = toolResultContent;
 exports.runAgentLoop = runAgentLoop;
 exports.extractSentences = extractSentences;
 const founderPrompt_js_1 = require("./founderPrompt.js");
-const index_js_1 = require("../harvey/index.js");
 const modelRouting_js_1 = require("./modelRouting.js");
 const approval_js_1 = require("./approval.js");
-const index_js_2 = require("./providers/index.js");
+const index_js_1 = require("./providers/index.js");
 const conversation_js_1 = require("./conversation.js");
 const standingOrders_js_1 = require("./standingOrders.js");
 const retrieval_js_1 = require("./memory/retrieval.js");
 const tools_js_1 = require("./tools.js");
-const index_js_3 = require("../integrations/gmail/index.js");
+const index_js_2 = require("../integrations/gmail/index.js");
 const curiosity_js_1 = require("./curiosity.js");
 /**
  * Tool-round budget.
@@ -118,7 +117,7 @@ function finalizeSpeech(text, opts, hadToolOnly) {
 async function runAgentLoop(opts) {
     /* Either key is enough now. OpenRouter reaches every model with one
        credential; direct Anthropic remains a complete path on its own. */
-    const keys = (0, index_js_2.providerStatus)();
+    const keys = (0, index_js_1.providerStatus)();
     if (!keys.primary) {
         const detail = "No model provider is configured. Set OPENROUTER_API_KEY (one key, every model) or ANTHROPIC_API_KEY on the server.";
         /* `modelError` matters as much as the sentence. Without it an unattended
@@ -136,9 +135,9 @@ async function runAgentLoop(opts) {
     /* "What about him?" carries zero retrievable keywords — short or deictic
        messages blend the prior user turns in so retrieval can see the referent. */
     const retrievalQuery = (0, conversation_js_1.buildRetrievalQuery)(opts.message, timedHistory);
-    const facts = await (0, retrieval_js_1.searchFacts)(retrievalQuery, factLimit);
-    const memoryPacket = (0, retrieval_js_1.getMemoryPacket)(retrievalQuery, facts);
-    const { confidence, count } = opts.fastMode
+    const facts = opts.workRuntime ? [] : await (0, retrieval_js_1.searchFacts)(retrievalQuery, factLimit);
+    const memoryPacket = opts.workRuntime ? "" : (0, retrieval_js_1.getMemoryPacket)(retrievalQuery, facts);
+    const { confidence, count } = opts.fastMode || opts.workRuntime
         ? { confidence: 1, count: facts.length }
         : await (0, retrieval_js_1.getRetrievalConfidence)(opts.message);
     const businessSpecific = !opts.fastMode &&
@@ -147,7 +146,7 @@ async function runAgentLoop(opts) {
     if (!opts.voiceMode && confidence < 0.15 && count < 3 && businessSpecific) {
         /* A one-line clarification is the cheapest thing Harvey ever does, so it
            runs on the `classify` slot rather than whatever the chat is set to. */
-        const clar = await (0, index_js_2.complete)({
+        const clar = await (0, index_js_1.complete)({
             job: "classify",
             sessionId: opts.sessionId,
             maxTokens: 200,
@@ -184,11 +183,11 @@ async function runAgentLoop(opts) {
     const sonnetTools = !opts.fastMode && wantsDeep;
     const ownerWhatsAppTools = opts.fastMode && opts.ownerMode;
     const voiceTools = Boolean(opts.voiceMode) && !opts.fastMode;
-    const emailIntent = (0, index_js_3.isGmailConfigured)() &&
+    const emailIntent = (0, index_js_2.isGmailConfigured)() &&
         /\b(send|email|e-mail|mail)\b/i.test(opts.message) &&
         /\b(email|e-mail|mail|inbox|gmail|me|marco)\b/i.test(opts.message);
     const nurtureIntent = /\b(nurture|scoring|score|hot lead|warm lead|cold lead|lead nurture|re-score|rescore)\b/i.test(opts.message);
-    const gmailTools = (0, index_js_3.isGmailConfigured)() &&
+    const gmailTools = (0, index_js_2.isGmailConfigured)() &&
         (sonnetTools || ownerWhatsAppTools || voiceTools || emailIntent || opts.ownerMode);
     const nurtureTools = sonnetTools || ownerWhatsAppTools || voiceTools || nurtureIntent || opts.ownerMode;
     const toolsEnabled = !socialTurn &&
@@ -200,12 +199,10 @@ async function runAgentLoop(opts) {
         conversationSummary: opts.sessionId ? (0, conversation_js_1.getConversationSummary)(opts.sessionId) : "",
         standingOrders: (0, standingOrders_js_1.standingOrderRules)(),
     });
-    if (toolsEnabled)
-        system += `\n\n${index_js_1.HARVEY_CONTENT_MANAGER_SYSTEM_PROMPT}`;
     if (opts.voiceMode) {
         system +=
             "\n\nVOICE MODE: Spoken replies only. Lead with the number or answer. For lead counts, TikTok stats, tasks, or pipeline questions, call the matching tool first instead of guessing. If the utterance is incomplete, ask one short clarifying question.";
-        if (toolsEnabled && (0, index_js_3.isGmailConfigured)()) {
+        if (toolsEnabled && (0, index_js_2.isGmailConfigured)()) {
             system +=
                 "\n\nEMAIL: When Marco asks you to send an email, you MUST call gmail_send first. Use to=\"marco\" for his inbox. NEVER confirm sent unless gmail_send returned ok:true with messageId.";
         }
@@ -229,7 +226,9 @@ async function runAgentLoop(opts) {
         system +=
             "\n\nLEAD NURTURE: For scoring, hot/warm/cold tiers, or nurture routing questions, call get_lead_nurture_overview or get_lead_nurture_tier before answering. Use get_lead_score_detail for one lead. Use lead_nurture_score_all / lead_nurture_rescore_cold only when Marco explicitly asks to refresh scores.";
     }
-    const activeTools = toolsEnabled ? hullTools : undefined;
+    if (opts.workRuntime)
+        system = opts.workRuntime.context;
+    const activeTools = opts.workRuntime ? opts.workRuntime.tools : toolsEnabled ? hullTools : undefined;
     /* Voice turns are 1-3 sentences; a large reserve both wastes budget and
        removes the hard backstop on rambling (playbook §7.5). */
     const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 320 : (0, modelRouting_js_1.getMaxTokens)();
@@ -258,6 +257,22 @@ async function runAgentLoop(opts) {
      * search or a browser read is seconds) for information already in context.
      */
     const runTool = async (name, input) => {
+        opts.signal?.throwIfAborted();
+        if (opts.workRuntime) {
+            if (!opts.workRuntime.tools.some(t => t.name === name))
+                return { error: "Tool is not available in this mode" };
+            opts.onEvent?.({ type: "tool", name, status: "running" });
+            try {
+                const result = await opts.workRuntime.execute(name, input);
+                opts.onEvent?.({ type: "tool", name, status: "done" });
+                return result;
+            }
+            catch (error) {
+                const detail = error instanceof Error ? error.message : String(error);
+                opts.onEvent?.({ type: "tool", name, status: "error", detail });
+                return { error: detail };
+            }
+        }
         const sig = signature(name, input);
         const seen = (callCounts.get(sig) || 0) + 1;
         callCounts.set(sig, seen);
@@ -296,6 +311,7 @@ async function runAgentLoop(opts) {
         }
     };
     for (let step = 0; step < stepBudget; step++) {
+        opts.signal?.throwIfAborted();
         /* The final round runs with tools WITHHELD. The budget then ends in an
            answer assembled from everything gathered, instead of the dead-end
            "hit the tool loop limit" that discarded the whole turn's work. */
@@ -307,7 +323,7 @@ async function runAgentLoop(opts) {
             : system;
         let out;
         try {
-            out = await (0, index_js_2.complete)({
+            out = await (0, index_js_1.complete)({
                 job,
                 modelOverride: opts.modelOverride,
                 system: stepSystem,
@@ -326,7 +342,7 @@ async function runAgentLoop(opts) {
             /* Two failures worth telling apart. The cap is a decision this system
                made and can be raised; everything else is an outage. Both end the turn
                with a sentence rather than an exception reaching the transport. */
-            if (err instanceof index_js_2.BudgetRefusedError) {
+            if (err instanceof index_js_1.BudgetRefusedError) {
                 const reason = err.verdict.reason || "The AI spend cap has been reached.";
                 return {
                     speech: toolRounds > 0
@@ -343,7 +359,7 @@ async function runAgentLoop(opts) {
                     budgetRefused: reason,
                 };
             }
-            const detail = err instanceof index_js_2.ModelLayerError ? err.summary : err instanceof Error ? err.message : String(err);
+            const detail = err instanceof index_js_1.ModelLayerError ? err.summary : err instanceof Error ? err.message : String(err);
             console.error("[agentLoop] model call failed:", detail);
             return {
                 speech: `I could not reach a model just now. ${detail}`,

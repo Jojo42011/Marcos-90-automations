@@ -286,7 +286,7 @@ a{color:var(--accent)}
 .pop-note{font-size:12px;color:var(--faint);padding:10px 12px;line-height:1.5}
 .pop-sep{height:1px;background:var(--line);margin:6px 4px}
 
-/* ── Panels (Scheduled / Usage / Models) ─────────────────────────────────── */
+/* ── Panels (Usage / Models) ─────────────────────────────────── */
 .panel{border:1px solid var(--line);border-radius:14px;background:var(--elev);padding:16px 18px;margin-bottom:16px}
 .panel h2{font-size:15.5px;font-weight:650;margin-bottom:3px}
 .panel .sub{font-size:12.5px;color:var(--muted);margin-bottom:14px}
@@ -314,21 +314,10 @@ table.data td{padding:8px 10px 8px 0;border-top:1px solid var(--line);vertical-a
 table.data td.num,table.data th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);padding-right:0}
 table.data select{max-width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:6px 9px;font-size:13px;outline:none}
 table.data select:focus{border-color:var(--line-2)}
-.task-row{display:flex;align-items:flex-start;gap:12px;padding:13px 0;border-top:1px solid var(--line)}
-.task-row:first-child{border-top:none}
-.task-main{flex:1;min-width:0}
-.task-main .t{font-size:14px;font-weight:600}
-.task-main .m{font-size:12.5px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
-.task-main .p{font-size:12.5px;color:var(--faint);margin-top:5px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.task-acts{display:flex;align-items:center;gap:6px;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end}
 .tag{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:2px 8px;border:1px solid var(--line);color:var(--muted)}
 .tag.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 38%,transparent)}
 .tag.bad{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 38%,transparent)}
 .tag.off{color:var(--faint)}
-.switch{position:relative;width:38px;height:21px;border-radius:999px;background:var(--elev-2);border:1px solid var(--line);flex:0 0 auto;transition:background var(--dur)}
-.switch::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--muted);transition:transform var(--dur),background var(--dur)}
-.switch[aria-checked="true"]{background:color-mix(in srgb,var(--accent) 28%,transparent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
-.switch[aria-checked="true"]::after{transform:translateX(17px);background:var(--accent)}
 .field{margin-bottom:11px}
 .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
 .field input,.field textarea,.field select{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;
@@ -380,6 +369,7 @@ table.data select:focus{border-color:var(--line-2)}
   .caret{animation:none;opacity:.9}
 }
 </style>
+<link rel="stylesheet" href="/harvey-work.css">
 </head>
 <body>
 <div id="app">
@@ -406,11 +396,6 @@ table.data select:focus{border-color:var(--line-2)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         New chat
       </button>
-      <button class="nav-item" data-view="scheduled">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-        Scheduled
-        <span class="count" id="navTaskCount"></span>
-      </button>
       <button class="nav-item" data-view="usage">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-5M13 16V8M18 16v-3"/></svg>
         Usage
@@ -420,7 +405,11 @@ table.data select:focus{border-color:var(--line-2)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>
         Explore models
       </button>
+      <button class="nav-item" data-work-view="plugins">Plugins</button>
+      <button class="nav-item" data-work-view="schedules">Scheduled agents</button>
+      <button class="nav-item" data-work-view="browser">Browser</button>
     </nav>
+    <div class="work-projects"><div class="work-heading"><span class="side-label">Projects</span><button id="newProject" class="work-button" type="button">+ New</button></div><select id="projectSelect" aria-label="Current project"><option value="">All chats</option></select><button id="projectEdit" type="button" class="work-button" hidden>Project settings</button></div>
 
     <div class="side-recent">
       <div class="side-label">Recent</div>
@@ -461,10 +450,10 @@ table.data select:focus{border-color:var(--line-2)}
       </div>
       <div class="composer-wrap">
         <div class="banner" id="authBanner" hidden></div>
-        <div class="banner" id="legacyBanner" hidden></div>
+        <div class="work-mode"><label for="modeSelect">Mode</label><select id="modeSelect"><option value="chat">Chat</option><option value="work">Work</option></select><span>Chat to think. Work to act.</span></div>
         <form class="composer" id="composer" autocomplete="off">
           <div class="composer-box">
-            <button type="button" class="cbtn" id="plusBtn" aria-label="Add context or schedule this" aria-haspopup="menu" aria-expanded="false" title="Add context">
+            <button type="button" class="cbtn" id="plusBtn" aria-label="Add context" aria-haspopup="menu" aria-expanded="false" title="Add context">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             </button>
             <textarea id="input" rows="1" placeholder="Message Harvey…" aria-label="Message Harvey"></textarea>
@@ -488,50 +477,10 @@ table.data select:focus{border-color:var(--line-2)}
             </div>
           </div>
         </form>
-        <div class="composer-foot">Harvey can make mistakes. Anything that leaves the building waits for your approval.</div>
+        <div class="composer-foot">Harvey can make mistakes. Connected tools use the access you enable. Review important results.</div>
       </div>
       <div class="popover" id="modelMenu" hidden role="listbox" aria-label="Models"></div>
       <div class="popover" id="plusMenu" hidden role="menu" aria-label="Add to this message"></div>
-    </section>
-
-    <!-- Scheduled -->
-    <section class="view" id="view-scheduled" hidden aria-label="Scheduled tasks">
-      <div class="scroll">
-        <div class="col wide">
-          <div class="view-head">
-            <h1>Scheduled</h1>
-            <p>Work Harvey runs on a clock. You can also just tell him in chat — &ldquo;every weekday at 7am, send me the pipeline report&rdquo; — and he will put it here himself.</p>
-          </div>
-          <div class="panel">
-            <h2>Tasks</h2>
-            <div class="sub" id="tasksSub">Loading…</div>
-            <div id="taskList"></div>
-          </div>
-          <div class="panel">
-            <h2>New task</h2>
-            <div class="sub">Schedule accepts plain English or a 5-field cron expression.</div>
-            <form id="taskForm">
-              <div class="field">
-                <label for="tfTitle">Title</label>
-                <input id="tfTitle" required placeholder="Morning pipeline report" />
-              </div>
-              <div class="field">
-                <label for="tfPrompt">What Harvey should do</label>
-                <textarea id="tfPrompt" rows="3" required placeholder="Summarize every lead that went quiet in the last 7 days and what I should do about each."></textarea>
-              </div>
-              <div class="field">
-                <label for="tfWhen">Schedule</label>
-                <input id="tfWhen" required placeholder="every weekday at 7am — or  0 7 * * 1-5" />
-                <div class="hint">Plain English is sent as <code>when</code>; anything that looks like cron is sent as <code>cron</code>. The server decides what it can parse.</div>
-              </div>
-              <div class="row-end">
-                <span class="empty-note" id="taskFormMsg" style="padding:0"></span>
-                <button type="submit" class="btn primary" id="taskFormSave">Create task</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
     </section>
 
     <!-- Usage -->
@@ -559,6 +508,7 @@ table.data select:focus{border-color:var(--line-2)}
         </div>
       </div>
     </section>
+    <section class="view" id="view-work" hidden><div class="scroll"><div class="col"><div class="page-head"><h1 id="workTitle">Plugins</h1><p id="workSubtitle"></p></div><div id="workBody"></div></div></div></section>
   </main>
 </div>
 
@@ -585,6 +535,8 @@ table.data select:focus{border-color:var(--line-2)}
 
 <div id="toast" role="status" aria-live="polite"></div>
 
+<dialog id="workDialog"></dialog>
+<script src="/harvey-work.js"></script>
 <script src="/harvey-chat.js"></script>
 </body>
 </html>

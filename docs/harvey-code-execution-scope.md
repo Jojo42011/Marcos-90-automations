@@ -1,3 +1,5 @@
+> Historical scope: the old Harvey background-job runner and recurring scheduler were removed on 2026-09-23. This document records earlier plans, not the current execution architecture. See harvey-model-layer.md.
+
 # Scope: code execution for Harvey
 
 > **Status, 2026-07-29:** Phase **A is built and deployed with `HARVEY_EXEC_MODE=off`**

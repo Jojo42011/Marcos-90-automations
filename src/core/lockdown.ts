@@ -70,6 +70,7 @@ const PUBLIC_EXACT = new Set<string>([
   /* Google's OAuth redirect target — the browser arrives here unauthenticated
      by definition, carrying the code Google issued. */
   "/api/email/gmail-oauth/callback",
+  "/api/harvey/work/oauth/callback",
 ]);
 
 /**

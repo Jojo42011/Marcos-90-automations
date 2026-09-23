@@ -176,13 +176,18 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # money or cannot be undone stops and waits for an Approve/Deny click — enforced
 # in front of the executor, not in the prompt.
 # HARVEY_APPROVAL_REQUIRED=true
-# Strict also holds medium-risk calls (browser clicks, file writes, paid jobs).
+# Strict also holds medium-risk calls (browser clicks, file writes).
 # HARVEY_APPROVAL_STRICT=false
 
-# SCHEDULED TASKS. Harvey can put his own work on a cron from chat.
-# HARVEY_CRON_ENABLED=true
-# Floor on how often a schedule may fire. Each run is a paid agent turn, so
-# "* * * * *" is 1,440 of them a day and is refused at parse time.
-# HARVEY_CRON_MIN_INTERVAL_MINUTES=15
-# HARVEY_TASKS_DB_PATH=    # defaults to /data/harvey-tasks.db
 # AI_USAGE_DB_PATH=        # defaults to /data/ai-usage.db
+
+# Harvey Work: configure before enabling on a durable single-worker host.
+# HARVEY_WORK_DIR=/data/harvey-work
+# HARVEY_PUBLIC_URL=https://your-app.example
+# HARVEY_VAULT_KEY=<64 hex characters; stable deployment secret>
+# HARVEY_BROWSER_ENABLED=false
+# HARVEY_WORKER_ENABLED=false
+# HARVEY_BROWSER_MAX_SESSIONS=3
+# OAuth families: GOOGLE, MICROSOFT, GITHUB, SLACK, NOTION
+# HARVEY_GOOGLE_CLIENT_ID=
+# HARVEY_GOOGLE_CLIENT_SECRET=

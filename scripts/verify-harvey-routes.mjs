@@ -234,13 +234,6 @@ try {
     ["GET", "/api/harvey/approvals"],
     ["POST", "/api/harvey/approvals/nope/approve"],
     ["POST", "/api/harvey/approvals/nope/deny"],
-    ["GET", "/api/harvey/tasks"],
-    ["GET", "/api/harvey/tasks/preview?when=every%20day%20at%207am"],
-    ["POST", "/api/harvey/tasks"],
-    ["PATCH", "/api/harvey/tasks/nope"],
-    ["DELETE", "/api/harvey/tasks/nope"],
-    ["POST", "/api/harvey/tasks/nope/run"],
-    ["GET", "/api/harvey/tasks/nope/runs"],
   ];
   for (const [method, route] of guarded) {
     const res = await fetch(anon(route), {
@@ -375,132 +368,11 @@ try {
   body = await json(res);
   ok("a refused cap did not overwrite the good one", body?.caps?.dailyCapUsd === 4.25);
 
-  /* ── 5. scheduled tasks ───────────────────────────────────────────── */
-  console.log("\nTASKS — a sentence becomes a cron, or it is refused");
-  res = await fetch(auth("/api/harvey/tasks"));
-  body = await json(res);
-  ok("GET /api/harvey/tasks answers with a list", res.ok && Array.isArray(body?.tasks), `HTTP ${res.status}`);
-
-  res = await fetch(auth("/api/harvey/tasks/preview?when=every%20weekday%20at%207am"));
-  body = await json(res);
-  ok("GET /tasks/preview reads a sentence back before anything is saved", res.ok && body?.ok === true, `HTTP ${res.status}`);
-  ok("with the cron it would store", body?.cron === "0 7 * * 1-5", body?.cron);
-  ok("a label an operator can confirm", /Weekdays/.test(body?.label || ""), body?.label);
-  ok("and the next time it would fire", !!body?.nextRun && new Date(body.nextRun).getTime() > Date.now());
-
-  res = await fetch(auth("/api/harvey/tasks"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title: "Morning pipeline report",
-      prompt: "Summarise new leads and what needs a call today.",
-      when: "every weekday at 7am",
-    }),
-  });
-  body = await json(res);
-  const task = body?.task;
-  ok("POST /tasks accepts plain English", res.status === 201 && !!task?.id, `HTTP ${res.status}`);
-  ok("and stores a real cron for it", task?.cron === "0 7 * * 1-5", task?.cron);
-  ok("with a human label beside it", /Weekdays/.test(task?.scheduleLabel || ""), task?.scheduleLabel);
-  ok("it computes a next run", !!task?.nextRunAt && new Date(task.nextRunAt).getTime() > Date.now());
-  ok("it defaults to the business timezone", task?.timezone === "America/Chicago", task?.timezone);
-  ok("and starts enabled, delivering to chat", task?.enabled === true && task?.deliver === "chat");
-
-  res = await fetch(auth("/api/harvey/tasks"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "Vague", prompt: "do the thing", when: "sometime when you get a chance" }),
-  });
-  body = await json(res);
-  ok("a schedule nobody could read is refused with 400", res.status === 400, `HTTP ${res.status}`);
-  ok("the refusal quotes what was asked and why it is a question, not a guess", /sometime when you get a chance/.test(body?.error || ""), body?.error);
-  ok("and it comes with examples the operator can copy", Array.isArray(body?.examples) && body.examples.length > 0, JSON.stringify(body?.examples));
-
-  res = await fetch(auth("/api/harvey/tasks"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "Every minute", prompt: "burn money", cron: "* * * * *" }),
-  });
-  body = await json(res);
-  ok("`* * * * *` is refused by the cost floor", res.status === 400, `HTTP ${res.status}`);
-  ok("and the refusal names the floor rather than just saying no", /floor is 15/.test(body?.error || ""), body?.error);
-
-  res = await fetch(auth("/api/harvey/tasks"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "", prompt: "", when: "every day at 6pm" }),
-  });
-  ok("a task with no title or prompt is a 400, not a 500", res.status === 400, `HTTP ${res.status}`);
-
-  res = await fetch(auth(`/api/harvey/tasks/${task.id}`), {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ enabled: false }),
-  });
-  body = await json(res);
-  ok("PATCH pauses a task", res.ok && body?.task?.enabled === false, `HTTP ${res.status}`);
-  ok("and a paused task has no next run, so it cannot fire while paused", body?.task?.nextRunAt === null);
-
-  res = await fetch(auth(`/api/harvey/tasks/${task.id}`), {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ enabled: true, when: "every day at 6pm" }),
-  });
-  body = await json(res);
-  ok("PATCH resumes it and takes a new schedule in plain English", res.ok && body?.task?.enabled === true && body?.task?.cron === "0 18 * * *", body?.task?.cron);
-  ok("and recomputes the next run", new Date(body?.task?.nextRunAt).getTime() > Date.now());
-
-  res = await fetch(auth(`/api/harvey/tasks/${task.id}`), {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cron: "*/5 * * * *" }),
-  });
-  ok("a reschedule below the floor is refused too", res.status === 400, `HTTP ${res.status}`);
-
-  res = await fetch(auth("/api/harvey/tasks/does-not-exist"), {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ enabled: false }),
-  });
-  ok("patching a task that does not exist is a 404", res.status === 404, `HTTP ${res.status}`);
-
-  res = await fetch(auth(`/api/harvey/tasks/${task.id}/runs`));
-  body = await json(res);
-  ok("GET /tasks/:id/runs answers before anything has run", res.ok && Array.isArray(body?.runs) && body.runs.length === 0, `HTTP ${res.status}`);
-
-  res = await fetch(auth(`/api/harvey/tasks/${task.id}/run`), { method: "POST" });
-  body = await json(res);
-  ok("POST /tasks/:id/run answers rather than crashing with no key", res.ok, `HTTP ${res.status}`);
-  ok("and hands back the run id it recorded", !!body?.runId, JSON.stringify(body));
-
-  res = await fetch(auth(`/api/harvey/tasks/${task.id}/runs`));
-  body = await json(res);
-  const lastRun = (body?.runs || [])[0];
-  ok("the run is in the history, finished", !!lastRun && !!lastRun.finishedAt, JSON.stringify(lastRun));
-  ok("it is recorded as a manual run, not a schedule firing", lastRun?.trigger === "manual");
-  /* A run that produced nothing must be recorded as a FAILURE, not as a success
-     whose deliverable is an apology — otherwise a task on a keyless server reads
-     healthy in this list forever and never trips the auto-pause. */
-  ok("and the record is a failure, not a success carrying an apology", lastRun?.ok === false, JSON.stringify(lastRun));
-  ok(
-    "with the missing key named as the reason",
-    /OPENROUTER_API_KEY|ANTHROPIC_API_KEY|No model provider/.test(String(lastRun?.error || "")),
-    JSON.stringify(lastRun),
-  );
-
-  res = await fetch(auth("/api/harvey/tasks/does-not-exist/run"), { method: "POST" });
-  ok("running a task that does not exist is a 404, never a 500", res.status === 404, `HTTP ${res.status}`);
-  res = await fetch(auth("/api/harvey/tasks/does-not-exist/runs"));
-  ok("and so is asking for its history", res.status === 404, `HTTP ${res.status}`);
-
-  res = await fetch(auth(`/api/harvey/tasks/${task.id}`), { method: "DELETE" });
-  body = await json(res);
-  ok("DELETE removes the task", res.ok && body?.ok === true, `HTTP ${res.status}`);
-  res = await fetch(auth("/api/harvey/tasks"));
-  body = await json(res);
-  ok("and it is gone from the list", !(body?.tasks || []).some((t) => t.id === task.id));
-  res = await fetch(auth(`/api/harvey/tasks/${task.id}`), { method: "DELETE" });
-  ok("deleting it twice is a 404, not a 500", res.status === 404, `HTTP ${res.status}`);
+  // Retired entry points must not expose a second Harvey or start old work.
+  for (const retired of ["/jarvis", "/jarvis.html", "/jobs", "/jobs.html", "/api/harvey/tasks", "/api/harvey/jobs", "/api/jarvis/chat", "/api/jarvis/execute-tool"]) {
+    const gone = await fetch(auth(retired), { method: retired.endsWith("/chat") || retired.endsWith("/execute-tool") ? "POST" : "GET" });
+    ok(retired + " is retired", gone.status === 404, String(gone.status));
+  }
 
   /* ── 6. approvals ─────────────────────────────────────────────────── */
   console.log("\nAPPROVALS — nothing fires without a click, and never twice");
@@ -717,11 +589,13 @@ try {
   failures.push(`suite crashed: ${err instanceof Error ? err.message : String(err)}`);
   console.error(err);
 } finally {
-  locked?.child.kill("SIGKILL");
-  unlocked?.child.kill("SIGKILL");
-  stubbed?.child.kill("SIGKILL");
+  await Promise.all([locked, unlocked, stubbed].filter(Boolean).map(({ child }) => new Promise((resolve) => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolve();
+    child.once("exit", resolve);
+    child.kill("SIGKILL");
+  })));
   stub?.close();
-  rmSync(tmp, { recursive: true, force: true });
+  rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
 
 const total = pass + failures.length;

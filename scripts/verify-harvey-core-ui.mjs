@@ -25,15 +25,12 @@ const ok = (n, c, d) => { if (c) { pass++; console.log("  ok " + n); } else { fa
 // ---- static checks ---------------------------------------------------------
 ok("harvey-core.js ships in public/", existsSync("public/harvey-core.js"));
 ok("vendored three.min.js is gone", !existsSync("public/vendor/three.min.js"));
-for (const f of ["public/jarvis.html", "public/operator.html"]) {
+for (const f of ["public/operator.html"]) {
   const src = readFileSync(f, "utf8");
   ok(`${f} loads harvey-core.js`, /src="\/harvey-core\.js"/.test(src));
   ok(`${f} no longer references three.min.js`, !/three\.min\.js"/.test(src));
 }
 {
-  const j = readFileSync("public/jarvis.html", "utf8");
-  ok("jarvis: old inline plasma renderer removed", !/buildParticles|makeSprite\(/.test(j));
-  ok("jarvis: old SVG tick ring removed", !/<g id="jTickGroup"/.test(j));
   const core = readFileSync("public/harvey-core.js", "utf8");
   /* Assert on real USAGE, not the word: the module's own doc comment explains
      why shadowBlur is banned, and a bare substring match flagged that. */
@@ -67,7 +64,7 @@ try {
 
   const br = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {});
 
-  for (const [name, path, canvasId] of [["jarvis", "/jarvis", "harvey-mic-btn"], ["operator", "/operator", "operator-core"]]) {
+  for (const [name, path, canvasId] of [["operator", "/operator", "operator-core"]]) {
     const page = await br.newPage({ viewport: { width: 1440, height: 900 } });
     const errs = [];
     page.on("pageerror", (e) => errs.push(e.message));
@@ -137,13 +134,13 @@ try {
 
   // The loop must park when the tab is hidden — this runs behind live voice.
   const page = await br.newPage({ viewport: { width: 900, height: 700 } });
-  await page.goto(B + "/jarvis", { waitUntil: "domcontentloaded" });
+  await page.goto(B + "/operator", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
   const parked = await page.evaluate(async () => {
     Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
     document.dispatchEvent(new Event("visibilitychange"));
     await new Promise((r) => setTimeout(r, 250));
-    const c = document.getElementById("harvey-mic-btn");
+    const c = document.getElementById("operator-core");
     const g = c.getContext("2d");
     const before = g.getImageData(0, 0, 8, 8).data.join(",");
     await new Promise((r) => setTimeout(r, 350));

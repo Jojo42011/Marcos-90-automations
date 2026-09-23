@@ -192,7 +192,7 @@ check("routing: agentLoop wires social turns to no-tools + fast model", () => {
   const src = read("src/hull/agentLoop.ts");
   assert(/socialTurn\s*=\s*isSocialTurn\(opts\.message\)/.test(src));
   assert(/!socialTurn\s*&&/.test(src), "toolsEnabled must be gated on !socialTurn");
-  assert(/socialTurn\s*\?\s*getHaikuModel\(\)/.test(src), "social turns must route to Haiku");
+  assert(/!socialTurn/.test(src) && /wantsDeep \? "chat_deep" : "chat_fast"/.test(src), "social turns must route to the fast model slot");
   assert(/hasTools:\s*toolsEnabled/.test(src), "operational prompt half must follow tool gating");
   assert(/buildRetrievalQuery\(opts\.message,\s*timedHistory\)/.test(src));
   assert(/opts\.voiceMode\s*\?\s*320\s*:/.test(src), "voice output reserve should be 320");
@@ -256,7 +256,7 @@ check("orders: prompt tells Harvey a 'stop doing X' is an instruction", () => {
 
 /* ── 7. Client turn-taking (§5) — source pins on the no-build-step files ─── */
 const voiceJs = read("public/aethon-voice.js");
-const jarvis = read("public/jarvis.html");
+const jarvis = read("public/harvey-streaming-tts.js");
 
 check("client: LiveKit-derived constants present with sane values", () => {
   assert(/BARGE_IN_GRACE_MS = 1000/.test(voiceJs));

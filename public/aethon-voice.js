@@ -205,7 +205,7 @@
     const routes = {
       crm: "/dashboard", content: "/social", email: "/email-marketing",
       finance: "/finance", reporting: "/reporting", leads: "/lead-nurture",
-      voice: "/voice-clone", tasks: "/tasks", harvey: "/jarvis",
+      voice: "/voice-clone", tasks: "/tasks", harvey: "/harvey",
     };
     if (routes[tab]) window.location.href = routes[tab];
   }
@@ -583,7 +583,6 @@
           if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(fullSpeech);
           // Harvey can hand long work to a background job by voice too — follow
           // it, or the operator is left with no idea whether it finished.
-          if (window.HarveyJobWatch) window.HarveyJobWatch.watchReply(fullSpeech);
           if (firstChunkStarted) {
             noteSpokenText(fullSpeech);
             window.HarveyStreamingTts.appendRemainingText(fullSpeech, {
@@ -607,7 +606,6 @@
           if (typeof addMsg === "function") addMsg("user", text);
           if (typeof addMsg === "function") addMsg("ai", speech);
           if (typeof window.detectMetricsTrigger === "function") window.detectMetricsTrigger(speech);
-          if (window.HarveyJobWatch) window.HarveyJobWatch.watchReply(speech);
           await speakText(speech);
         }
       }

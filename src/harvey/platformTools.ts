@@ -1644,9 +1644,7 @@ export async function executePlatformTool(
   }
 }
 
-/* ===================== Workspace files + background jobs =====================
-   Harvey could read everything and produce nothing durable, and could not run
-   anything longer than 8 tool rounds inside one HTTP request. These close both. */
+/* Durable workspace files used by the interactive agent. */
 
 export const WORKSPACE_TOOL_DEFINITIONS: Tool[] = [
   {
@@ -1704,39 +1702,6 @@ export const WORKSPACE_TOOL_DEFINITIONS: Tool[] = [
       type: "object",
       properties: { path: { type: "string" } },
       required: ["path"],
-    },
-  },
-  {
-    name: "start_background_job",
-    description:
-      "Hand a long task to a background worker that runs to completion on its own — many tool calls, minutes of work, no further prompting. Use when the task is too big to finish in this reply (e.g. 'go through every hot seller and draft a follow-up'). Returns a job id immediately; check it with get_job. Do NOT use for quick questions you can answer directly.",
-    input_schema: {
-      type: "object",
-      properties: {
-        task: {
-          type: "string",
-          description: "Complete, self-contained instructions. The worker cannot ask questions.",
-        },
-      },
-      required: ["task"],
-    },
-  },
-  {
-    name: "get_job",
-    description: "Status, steps taken and result of a background job.",
-    input_schema: {
-      type: "object",
-      properties: { id: { type: "string" } },
-      required: ["id"],
-    },
-  },
-  {
-    name: "list_jobs",
-    description: "Recent background jobs and their status.",
-    input_schema: {
-      type: "object",
-      properties: { limit: { type: "number", description: "Default 10." } },
-      required: [],
     },
   },
 ];
@@ -1812,7 +1777,6 @@ export async function executeWorkspaceTool(
   input: Record<string, unknown>,
 ): Promise<unknown> {
   const ws = await import("../core/workspace.js");
-  const jobs = await import("../core/jobStore.js");
   try {
     switch (name) {
       case "list_files": {
@@ -1841,44 +1805,6 @@ export async function executeWorkspaceTool(
         const gone = await ws.deleteFile(str(input.path));
         return gone ? { ok: true, deleted: str(input.path) } : { error: "No such file." };
       }
-      case "start_background_job": {
-        const task = str(input.task);
-        if (!task) return { error: "task is required." };
-        const { startJob } = await import("../hull/jobRunner.js");
-        const job = startJob(task, "harvey");
-        return {
-          ok: true,
-          id: job.id,
-          status: job.status,
-          note: "Running in the background. Check it with get_job.",
-        };
-      }
-      case "get_job": {
-        const j = jobs.getJob(str(input.id));
-        if (!j) return { error: "No job with that id." };
-        return {
-          id: j.id,
-          status: j.status,
-          prompt: j.prompt,
-          toolCalls: j.toolCalls,
-          steps: j.steps.length,
-          result: j.result,
-          error: j.error,
-          startedAt: j.startedAt,
-          finishedAt: j.finishedAt,
-          recentSteps: j.steps.slice(-8).map((s) => ({ n: s.n, kind: s.kind, tool: s.tool ?? null })),
-        };
-      }
-      case "list_jobs":
-        return {
-          jobs: jobs.listJobs(Math.min(50, Math.max(1, num(input.limit, 10)))).map((j) => ({
-            id: j.id,
-            status: j.status,
-            prompt: j.prompt.slice(0, 120),
-            toolCalls: j.toolCalls,
-            createdAt: j.createdAt,
-          })),
-        };
       default:
         return { error: `Unknown workspace tool: ${name}` };
     }
