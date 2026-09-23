@@ -16,6 +16,8 @@ swap_size_mb = 1024
   destination = "/data"
 
 [env]
+  HARVEY_BROWSER_ENABLED = "true"
+  HARVEY_PUBLIC_URL = "https://marco-90-automation.fly.dev"
   PORT = "3000"
   # Public URL of the Meta ads Flask dashboard (must match your Fly app name).
   AD_DASHBOARD_BASE_URL = "https://marco-agents.fly.dev"

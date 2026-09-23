@@ -43,6 +43,14 @@ export function createChat(owner: string, input: any): Chat {
   const projectId = input.projectId || null; if (projectId) get("project", owner, projectId);
   return put("chat", owner, { id: randomUUID(), sessionId: randomUUID(), projectId, title: text(input.title || "New chat", "Chat title", 120), mode: input.mode === "work" ? "work" : "chat", updatedAt: new Date().toISOString() });
 }
+export function handoffChat(owner: string, sourceId: string, brief: string): Chat {
+  const source = get<Chat>("chat", owner, sourceId);
+  const chat = createChat(owner, { projectId: source.projectId, mode: "work", title: "Work: " + source.title.slice(0,100) });
+  const context = messages(owner, sourceId).slice(-12).map(m => `${m.role}: ${m.content}`).join("\n\n").slice(-16000);
+  append(owner, chat.id, { role: "user", at: new Date().toISOString(), content: `Planning handoff from ${source.title}. Treat the following as background, not authorization to execute.\n\n${context}\n\nTask brief: ${text(brief,"Task brief",8000)}\n\nFirst prepare a plan and identify required connections. Wait for my next message before executing or scheduling.` });
+  append(owner, chat.id, { role: "assistant", at: new Date().toISOString(), content: "Your task brief is ready. Send ‘Plan this task’ to check the steps and required connections. No actions or schedules have started." });
+  return chat;
+}
 export function messages(owner: string, chat: string): Message[] { get("chat", owner, chat); return (workDb().prepare("SELECT body FROM (SELECT seq,body FROM messages WHERE owner=? AND chat=? ORDER BY seq DESC LIMIT 200) ORDER BY seq").all(owner, chat) as any[]).map(r => JSON.parse(r.body)); }
 export function append(owner: string, chatId: string, message: Message) {
   const chat = get<Chat>("chat", owner, chatId);

@@ -2,7 +2,7 @@ import multer from "multer";
 import { randomUUID } from "crypto";
 import { filesDir, files, filePath } from "./files.js";
 import express, { Request, Response } from "express";
-import { append, Chat, Connection, createChat, createProject, createSchedule, get, list, messages, Project, put, remove, Run, Schedule, text, timezone, vaultReady, workDb } from "./store.js";
+import { append, handoffChat, Chat, Connection, createChat, createProject, createSchedule, get, list, messages, Project, put, remove, Run, Schedule, text, timezone, vaultReady, workDb } from "./store.js";
 import { addMcp, catalog, connections, finishOAuth, publicConnection, startOAuth } from "./connectors.js";
 import { browserCall, browserEnabled, closeBrowser, logins, saveLogin } from "./browser.js";
 import { runChat, runScheduled, updateSchedule } from "./runtime.js";
@@ -31,7 +31,8 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
   route("post", "/conversations", (q,res,o) => res.status(201).json(createChat(o,q.body)));
   route("get", "/conversations/:id", (q,res,o) => res.json({ ...get<Chat>("chat",o,String(q.params.id)), messages: messages(o,String(q.params.id)) }));
   route("post", "/conversations/:id/title", (q,res,o) => { const c = get<Chat>("chat",o,String(q.params.id)); res.json(put("chat",o,{...c,title:text(q.body.title,"Title",120)})); });
-  route("patch", "/conversations/:id", (q,res,o) => { const c = get<Chat>("chat",o,String(q.params.id)); if (q.body.projectId) get("project",o,q.body.projectId); res.json(put("chat",o,{...c,projectId:q.body.projectId === undefined ? c.projectId : q.body.projectId || null,mode:q.body.mode === undefined ? c.mode : q.body.mode === "work" ? "work" : "chat"})); });
+  route("post", "/conversations/:id/handoff", (q,res,o) => res.status(201).json(handoffChat(o,String(q.params.id),q.body.brief || "Prepare a plan from this conversation.")));
+  route("patch", "/conversations/:id", (q,res,o) => { const c = get<Chat>("chat",o,String(q.params.id)); if(q.body.mode !== undefined && q.body.mode !== c.mode && (messages(o,c.id).length || workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,c.id))) throw new Error("Mode is fixed after the first message. Create a new chat or hand off to Work."); if (q.body.projectId) get("project",o,q.body.projectId); res.json(put("chat",o,{...c,projectId:q.body.projectId === undefined ? c.projectId : q.body.projectId || null,mode:q.body.mode === undefined ? c.mode : q.body.mode === "work" ? "work" : "chat"})); });
   route("delete", "/conversations/:id", async (q,res,o) => {
     const id = String(q.params.id); get("chat",o,id);
     if (workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,id)) throw new Error("Wait for this chat's running task to finish");

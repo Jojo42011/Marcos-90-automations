@@ -23,3 +23,7 @@ html[data-theme="light"]{--bg:#fff;--bg-side:#f7f7f7;--elev:#f4f4f4;--elev-2:#e9
 @media(max-width:600px){#topbar{padding:10px;height:60px}#topbar .title,#providerPill{display:none}.work-mode{width:174px;top:10px}.empty h1{font-size:25px}.composer-wrap{padding-left:16px;padding-right:16px}#view-chat:has(.empty){padding-bottom:12vh}.composer-box{border-radius:22px}.model-pill{max-width:160px}.composer-actions{gap:0}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 .work-mode{align-items:stretch}#projectList{max-height:28vh;overflow-y:auto}.work-mode button:focus-visible{outline-offset:4px}
+
+#main:has(#thread .msg) .work-mode{display:none}#handoffWork{display:none}#main:has(#thread .msg) #handoffWork{display:inline-flex}#main:has(#view-chat[hidden]) #handoffWork{display:none}
+
+.work-starters{display:flex;justify-content:center;gap:8px;margin:14px auto 0;flex-wrap:wrap}.work-starters[hidden],#view-chat:has(.msg) .work-starters{display:none}.work-starters button{font-size:12px;color:var(--muted);padding:6px 10px;border-radius:16px;border:1px solid var(--line)}.work-starters button:hover{background:var(--hover);color:var(--ink)}

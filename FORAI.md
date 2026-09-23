@@ -6,6 +6,8 @@ FORAI = "For AI." This is the living architectural summary of this repo — the 
 
 **Convention (non-negotiable, same as the green-build rule):** whenever you finish meaningful architectural work here — a new subsystem, endpoint, table, integration, or a change to how something works — add a dated line to `## Recent changes
 
+- 2026-09-23: Enabled hosted browser on Fly with post-deploy navigation validation. Conversation mode is fixed after the first message; Chat offers only an explicit handoff tool creating a separate Work planning draft. Added Plan in Work action and briefing/monitoring/file-summary starters. External provider sign-ins still require OAuth application configuration.
+
 - 2026-09-23: Model spending gate now refuses zero, negative, or non-finite remaining per-run budgets before a provider call; zero no longer disables the run cap. Regression covered by the model-layer checks.` (most recent first) and refresh Architecture / Known gaps if they changed. Not every commit — anything that changes what someone reading the architecture needs to know. Flag anything security/breaking explicitly (the words "security", "unauthenticated", "breaking change" route it to the Security register and ping Telegram).
 
 ## What this system is

@@ -1,5 +1,5 @@
 // Explicit opt-in deployment smoke test. Never logs keys or reads business data.
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -21,9 +21,12 @@ try {
   const models = catalog.availableModels().filter(m=>m.supportsTools && live.has(m.id) && m.inputPerM>0 && m.inputPerM<=0.5 && m.outputPerM<=1.5).sort((a,b)=>(a.inputPerM+a.outputPerM)-(b.inputPerM+b.outputPerM));
   const model=models[0]; assert(model, 'No verified cheap tool model available');
   console.log('SMOKE_MODEL '+JSON.stringify({id:model.id,inputPerM:model.inputPerM,outputPerM:model.outputPerM,context:model.contextTokens,outputLimit:512,testBudgetUsd:0.05}));
+  chmodSync(dir,0o755);
+  const B=await import('../dist/src/harvey/work/browser.js');
+  try { const page=await B.browserCall('deployment-smoke','browser-check','browser_navigate',{url:'https://example.com'});assert(JSON.stringify(page).includes('Example Domain'),'Browser page not read');console.log('SMOKE_BROWSER_PASS'); } finally {await B.closeBrowsers();}
   const S=await import('../dist/src/harvey/work/store.js');
   const R=await import('../dist/src/harvey/work/runtime.js');
-  const owner='deployment-smoke';const project=S.createProject(owner,{name:'Smoke test',instructions:'Use only project and schedule tools when requested. Do not access business data.',timezone:'America/Chicago'});
+  const owner='deployment-smoke';const project=S.createProject(owner,{name:'Smoke test',instructions:'Use only tools explicitly requested. Do not access business data.',timezone:'America/Chicago'});
   const chat=S.createChat(owner,{projectId:project.id,mode:'chat'});
   let total=0;
   const run=async(c,p)=>{const result=await R.runChat(owner,c,p,{modelOverride:model.id,maxCostUsd:0.01,onEvent:e=>{if(e.type==='tool')console.log('SMOKE_TOOL '+JSON.stringify(e));}});total+=result.costUsd||0;console.log('SMOKE_RESULT '+JSON.stringify({mode:c.mode,text:result.speech,model:result.modelUsed,promptTokens:result.promptTokens,completionTokens:result.completionTokens,costUsd:result.costUsd,contextPlan:result.contextPlan,toolRounds:result.toolRounds}));assert(!result.modelError&&!result.budgetRefused&&!result.toolFailed,'Model or tool failure');assert.equal(result.modelUsed,model.id,'Unexpected model substitution');assert(result.promptTokens>0&&result.completionTokens>0,'Missing token accounting');assert(total<0.05,'Test budget reached');return result;};
@@ -36,5 +39,7 @@ try {
   const schedules=S.list('schedule',owner);assert.equal(schedules.length,1,'Schedule not created');
   const scheduled=await R.runScheduled(owner,schedules[0].id,true,new Date(),async(o,c,p,opts,id)=>{const r=await R.runChat(o,c,p,{...opts,modelOverride:model.id,maxCostUsd:0.01},id);total+=r.costUsd||0;assert(!r.modelError&&!r.budgetRefused&&!r.toolFailed,'Scheduled model or tool failure');console.log('SMOKE_SCHEDULE_USAGE '+JSON.stringify({model:r.modelUsed,promptTokens:r.promptTokens,completionTokens:r.completionTokens,costUsd:r.costUsd}));return r;});
   assert.equal(scheduled.status,'completed');assert.match(scheduled.result,/HARVEY_SCHEDULE_OK/);
+  try { assert.match((await run(work,'Use computer with action call, tool browser_navigate and arguments url https://example.com. Read the page and tell me its heading. Do not use business tools.')).speech,/Example Domain/i); } finally {await B.closeBrowsers();}
+  console.log('SMOKE_SETUP '+JSON.stringify({vault:S.vaultReady(),workerInApp:process.env.HARVEY_WORKER_ENABLED==='true',oauth:(await import('../dist/src/harvey/work/connectors.js')).catalog().map(c=>({id:c.id,ready:c.ready}))}));
   console.log('SMOKE_PASS '+JSON.stringify({chat:true,memory:true,workTools:true,scheduleExecution:true,totalCostUsd:total,browserEnabledInApp:process.env.HARVEY_BROWSER_ENABLED==='true',externalAccounts:'not tested'}));
 } catch(e) { console.error('SMOKE_FAIL '+e.message);process.exitCode=1; } finally {clearTimeout(timeout);}

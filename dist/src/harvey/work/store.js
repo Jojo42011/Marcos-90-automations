@@ -13,6 +13,7 @@ exports.text = text;
 exports.timezone = timezone;
 exports.createProject = createProject;
 exports.createChat = createChat;
+exports.handoffChat = handoffChat;
 exports.messages = messages;
 exports.append = append;
 exports.nextRun = nextRun;
@@ -70,6 +71,14 @@ function createChat(owner, input) {
     if (projectId)
         get("project", owner, projectId);
     return put("chat", owner, { id: (0, crypto_1.randomUUID)(), sessionId: (0, crypto_1.randomUUID)(), projectId, title: text(input.title || "New chat", "Chat title", 120), mode: input.mode === "work" ? "work" : "chat", updatedAt: new Date().toISOString() });
+}
+function handoffChat(owner, sourceId, brief) {
+    const source = get("chat", owner, sourceId);
+    const chat = createChat(owner, { projectId: source.projectId, mode: "work", title: "Work: " + source.title.slice(0, 100) });
+    const context = messages(owner, sourceId).slice(-12).map(m => `${m.role}: ${m.content}`).join("\n\n").slice(-16000);
+    append(owner, chat.id, { role: "user", at: new Date().toISOString(), content: `Planning handoff from ${source.title}. Treat the following as background, not authorization to execute.\n\n${context}\n\nTask brief: ${text(brief, "Task brief", 8000)}\n\nFirst prepare a plan and identify required connections. Wait for my next message before executing or scheduling.` });
+    append(owner, chat.id, { role: "assistant", at: new Date().toISOString(), content: "Your task brief is ready. Send ‘Plan this task’ to check the steps and required connections. No actions or schedules have started." });
+    return chat;
 }
 function messages(owner, chat) { get("chat", owner, chat); return workDb().prepare("SELECT body FROM (SELECT seq,body FROM messages WHERE owner=? AND chat=? ORDER BY seq DESC LIMIT 200) ORDER BY seq").all(owner, chat).map(r => JSON.parse(r.body)); }
 function append(owner, chatId, message) {

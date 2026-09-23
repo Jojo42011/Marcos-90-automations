@@ -58,7 +58,9 @@ function createWorkRouter(authorize, owner) {
     route("post", "/conversations", (q, res, o) => res.status(201).json((0, store_js_1.createChat)(o, q.body)));
     route("get", "/conversations/:id", (q, res, o) => res.json({ ...(0, store_js_1.get)("chat", o, String(q.params.id)), messages: (0, store_js_1.messages)(o, String(q.params.id)) }));
     route("post", "/conversations/:id/title", (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.id)); res.json((0, store_js_1.put)("chat", o, { ...c, title: (0, store_js_1.text)(q.body.title, "Title", 120) })); });
-    route("patch", "/conversations/:id", (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.id)); if (q.body.projectId)
+    route("post", "/conversations/:id/handoff", (q, res, o) => res.status(201).json((0, store_js_1.handoffChat)(o, String(q.params.id), q.body.brief || "Prepare a plan from this conversation.")));
+    route("patch", "/conversations/:id", (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.id)); if (q.body.mode !== undefined && q.body.mode !== c.mode && ((0, store_js_1.messages)(o, c.id).length || (0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, c.id)))
+        throw new Error("Mode is fixed after the first message. Create a new chat or hand off to Work."); if (q.body.projectId)
         (0, store_js_1.get)("project", o, q.body.projectId); res.json((0, store_js_1.put)("chat", o, { ...c, projectId: q.body.projectId === undefined ? c.projectId : q.body.projectId || null, mode: q.body.mode === undefined ? c.mode : q.body.mode === "work" ? "work" : "chat" })); });
     route("delete", "/conversations/:id", async (q, res, o) => {
         const id = String(q.params.id);

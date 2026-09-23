@@ -23,6 +23,7 @@
     $("projectEdit").hidden = !h.state.projectId;
   }
   function syncControls() {
+    $("workStarters").hidden=h.state.mode!=="work";
     document.querySelectorAll('[data-mode]').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.mode===(h.state.mode||'chat')));});
     var heading=document.querySelector('.empty h1');if(heading)heading.textContent=h.state.mode==='work'?'What should we work on?':'What’s on your mind?';
     $('input').placeholder=h.state.mode==='work'?'Give Harvey a task…':'Message Harvey…';
@@ -100,11 +101,13 @@
   window.HarveyWork = {
     upload: function(){return uploadFile().catch(notice);},
     init: function(hooks){h=hooks;$("newProject").onclick=function(){projectForm(false);};$("projectEdit").onclick=function(){projectForm(true);};$("projectSelect").onchange=function(){h.state.projectId=this.value||null;h.newChat();$("projectEdit").hidden=!h.state.projectId;h.refresh();syncControls();};
-      $("modeSelect").onchange=async function(){var old=h.state.mode;h.state.mode=this.value;syncControls();try{if(h.state.conversationId)await api("/conversations/"+h.state.conversationId,"PATCH",{mode:h.state.mode});}catch(e){h.state.mode=old;this.value=old;syncControls();notice(e);}};
+      $("modeSelect").onchange=async function(){if(document.querySelector("#thread .msg")){this.value=h.state.mode;return;}var old=h.state.mode;h.state.mode=this.value;syncControls();try{if(h.state.conversationId)await api("/conversations/"+h.state.conversationId,"PATCH",{mode:h.state.mode});}catch(e){h.state.mode=old;this.value=old;syncControls();notice(e);}};
       document.querySelectorAll("[data-work-view]").forEach(function(b){b.onclick=function(){show(b.dataset.workView);};});
       $("workBody").onclick=async function(e){var b=e.target.closest("[data-work-action]");if(!b)return;b.disabled=true;try{await act(b.dataset.workAction,b.dataset.id);}catch(err){notice(err);}finally{b.disabled=false;}};
       document.querySelectorAll('[data-mode]').forEach(function(b){b.onclick=function(){$('modeSelect').value=b.dataset.mode;$('modeSelect').dispatchEvent(new Event('change'));};});
       $('projectList').onclick=function(e){var b=e.target.closest('[data-project]');if(b){$('projectSelect').value=b.dataset.project;$('projectSelect').dispatchEvent(new Event('change'));}};
+      document.querySelectorAll('[data-starter]').forEach(function(b){b.onclick=function(){$('input').value=b.dataset.starter;$('input').dispatchEvent(new Event('input'));$('input').focus();};});
+      $('handoffWork').onclick=async function(){if(h.state.busy)return;try{var target=await api('/conversations/'+h.state.conversationId+'/handoff','POST',{});await h.refresh();await h.openChat(target.id);}catch(e){notice(e);}};
       loadProjects().catch(notice);
     },
     sync: function(){if(!h)return;syncControls();$("projectSelect").value=h.state.projectId||"";$("modeSelect").value=h.state.mode||"chat";$("projectEdit").hidden=!h.state.projectId;},
