@@ -19,8 +19,14 @@
   async function loadProjects() {
     projects = (await api("/projects")).projects;
     $("projectSelect").innerHTML = '<option value="">All chats</option>' + projects.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("");
-    $("projectSelect").value = h.state.projectId || "";
+    $("projectSelect").value = h.state.projectId || ""; syncControls();
     $("projectEdit").hidden = !h.state.projectId;
+  }
+  function syncControls() {
+    document.querySelectorAll('[data-mode]').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.mode===(h.state.mode||'chat')));});
+    var heading=document.querySelector('.empty h1');if(heading)heading.textContent=h.state.mode==='work'?'What should we work on?':'What’s on your mind?';
+    $('input').placeholder=h.state.mode==='work'?'Give Harvey a task…':'Message Harvey…';
+    $('projectList').innerHTML=[{id:'',name:'All chats'}].concat(projects).map(function(p){return '<button type="button" class="project-row'+((h.state.projectId||'')===p.id?' selected':'')+'" data-project="'+esc(p.id)+'" aria-current="'+(((h.state.projectId||'')===p.id)?'true':'false')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3V7Z"/></svg><span>'+esc(p.name)+'</span></button>';}).join('');
   }
   function projectForm(edit) {
     var p = projects.find(function (p) { return p.id === h.state.projectId; }) || {};
@@ -93,13 +99,15 @@
   }
   window.HarveyWork = {
     upload: function(){return uploadFile().catch(notice);},
-    init: function(hooks){h=hooks;$("newProject").onclick=function(){projectForm(false);};$("projectEdit").onclick=function(){projectForm(true);};$("projectSelect").onchange=function(){h.state.projectId=this.value||null;h.newChat();$("projectEdit").hidden=!h.state.projectId;h.refresh();};
-      $("modeSelect").onchange=async function(){var old=h.state.mode;h.state.mode=this.value;try{if(h.state.conversationId)await api("/conversations/"+h.state.conversationId,"PATCH",{mode:h.state.mode});}catch(e){h.state.mode=old;this.value=old;notice(e);}};
+    init: function(hooks){h=hooks;$("newProject").onclick=function(){projectForm(false);};$("projectEdit").onclick=function(){projectForm(true);};$("projectSelect").onchange=function(){h.state.projectId=this.value||null;h.newChat();$("projectEdit").hidden=!h.state.projectId;h.refresh();syncControls();};
+      $("modeSelect").onchange=async function(){var old=h.state.mode;h.state.mode=this.value;syncControls();try{if(h.state.conversationId)await api("/conversations/"+h.state.conversationId,"PATCH",{mode:h.state.mode});}catch(e){h.state.mode=old;this.value=old;syncControls();notice(e);}};
       document.querySelectorAll("[data-work-view]").forEach(function(b){b.onclick=function(){show(b.dataset.workView);};});
       $("workBody").onclick=async function(e){var b=e.target.closest("[data-work-action]");if(!b)return;b.disabled=true;try{await act(b.dataset.workAction,b.dataset.id);}catch(err){notice(err);}finally{b.disabled=false;}};
+      document.querySelectorAll('[data-mode]').forEach(function(b){b.onclick=function(){$('modeSelect').value=b.dataset.mode;$('modeSelect').dispatchEvent(new Event('change'));};});
+      $('projectList').onclick=function(e){var b=e.target.closest('[data-project]');if(b){$('projectSelect').value=b.dataset.project;$('projectSelect').dispatchEvent(new Event('change'));}};
       loadProjects().catch(notice);
     },
-    sync: function(){if(!h)return;$("projectSelect").value=h.state.projectId||"";$("modeSelect").value=h.state.mode||"chat";$("projectEdit").hidden=!h.state.projectId;},
+    sync: function(){if(!h)return;syncControls();$("projectSelect").value=h.state.projectId||"";$("modeSelect").value=h.state.mode||"chat";$("projectEdit").hidden=!h.state.projectId;},
     refresh: function(){return loadProjects().catch(notice);}
   };
 })();

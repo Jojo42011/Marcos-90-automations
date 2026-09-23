@@ -659,9 +659,9 @@
     clearThread();
     var el = document.createElement("div");
     el.className = "empty";
-    el.innerHTML = '<div class="orb-lg" aria-hidden="true"></div>' +
+    el.innerHTML =
       "<h1>" + esc(greeting()) + "</h1>" +
-      "<p>Ask about your business, review a conversation, or work through a task.</p>" +
+
       '<div class="chips">' + SUGGESTIONS.map(function (s) {
         return '<button type="button" class="chip">' + esc(s) + "</button>";
       }).join("") + "</div>";
@@ -673,7 +673,7 @@
 
   function greeting() {
     var name = displayName();
-    return name ? "Where should we start, " + name + "?" : "Where should we start?";
+    return state.mode === "work" ? "What should we work on?" : "What’s on your mind?";
   }
 
   function displayName() {

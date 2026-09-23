@@ -377,7 +377,7 @@ table.data select:focus{border-color:var(--line-2)}
   <!-- ── Sidebar ───────────────────────────────────────────────────────── -->
   <aside id="sidebar" aria-label="Harvey navigation">
     <div class="side-top">
-      <span class="brand"><span class="orb" aria-hidden="true"></span>Harvey</span>
+      <span class="brand">Harvey</span>
       <span class="grow"></span>
       <button class="icon-btn" id="searchToggle" aria-label="Search conversations" title="Search conversations">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.2-3.2"/></svg>
@@ -405,11 +405,11 @@ table.data select:focus{border-color:var(--line-2)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>
         Explore models
       </button>
-      <button class="nav-item" data-work-view="plugins">Plugins</button>
-      <button class="nav-item" data-work-view="schedules">Scheduled agents</button>
-      <button class="nav-item" data-work-view="browser">Browser</button>
+      <button class="nav-item" data-work-view="plugins"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v4m6-4v4M7 7h10v5a5 5 0 0 1-10 0V7zm5 10v4"/></svg>Plugins</button>
+      <button class="nav-item" data-work-view="schedules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Scheduled</button>
+      <button class="nav-item" data-work-view="browser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M7 6.5h.01m3 0h.01"/></svg>Browser</button>
     </nav>
-    <div class="work-projects"><div class="work-heading"><span class="side-label">Projects</span><button id="newProject" class="work-button" type="button">+ New</button></div><select id="projectSelect" aria-label="Current project"><option value="">All chats</option></select><button id="projectEdit" type="button" class="work-button" hidden>Project settings</button></div>
+    <div class="work-projects"><div class="work-heading"><span class="side-label">Projects</span><button id="newProject" class="work-button" type="button" aria-label="New project" title="New project">+</button></div><div id="projectList" aria-label="Projects"></div><select hidden id="projectSelect" aria-label="Current project"><option value="">All chats</option></select><button id="projectEdit" type="button" class="work-button" hidden>Project settings</button></div>
 
     <div class="side-recent">
       <div class="side-label">Recent</div>
@@ -435,7 +435,7 @@ table.data select:focus{border-color:var(--line-2)}
       <button class="icon-btn" id="sidebarToggle" aria-label="Show or hide the sidebar" title="Show or hide the sidebar (Ctrl/⌘ + \)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
       </button>
-      <span class="title" id="viewTitle">Harvey</span>
+      <span class="title" id="viewTitle">Harvey</span><div class="work-mode" role="group" aria-label="Conversation mode"><button type="button" data-mode="chat" aria-pressed="true">Chat</button><button type="button" data-mode="work" aria-pressed="false">Work</button><select id="modeSelect" hidden aria-label="Conversation mode"><option value="chat">Chat</option><option value="work">Work</option></select></div>
       <span class="grow"></span>
       <span class="pill-status" id="providerPill" hidden></span>
       <button class="icon-btn" id="themeBtn" aria-label="Switch between dark and light theme" title="Switch theme">
@@ -450,7 +450,6 @@ table.data select:focus{border-color:var(--line-2)}
       </div>
       <div class="composer-wrap">
         <div class="banner" id="authBanner" hidden></div>
-        <div class="work-mode"><label for="modeSelect">Mode</label><select id="modeSelect"><option value="chat">Chat</option><option value="work">Work</option></select><span>Chat to think. Work to act.</span></div>
         <form class="composer" id="composer" autocomplete="off">
           <div class="composer-box">
             <button type="button" class="cbtn" id="plusBtn" aria-label="Add context" aria-haspopup="menu" aria-expanded="false" title="Add context">
@@ -477,7 +476,7 @@ table.data select:focus{border-color:var(--line-2)}
             </div>
           </div>
         </form>
-        <div class="composer-foot">Harvey can make mistakes. Connected tools use the access you enable. Review important results.</div>
+        <div class="composer-foot">Harvey can make mistakes. Check important information.</div>
       </div>
       <div class="popover" id="modelMenu" hidden role="listbox" aria-label="Models"></div>
       <div class="popover" id="plusMenu" hidden role="menu" aria-label="Add to this message"></div>
@@ -522,7 +521,7 @@ table.data select:focus{border-color:var(--line-2)}
   <div class="overlay-scrim" data-voice-close></div>
   <div class="overlay-panel" role="dialog" aria-modal="true" aria-label="Voice mode">
     <header class="overlay-bar">
-      <span class="overlay-title"><span class="orb" aria-hidden="true"></span>Voice mode</span>
+      <span class="overlay-title">Voice mode</span>
       <span class="grow"></span>
       <a class="overlay-link" id="voiceFullPage" href="/operator" target="_blank" rel="noopener">Open as a full page</a>
       <button type="button" class="icon-btn" id="voiceClose" data-voice-close aria-label="Close voice mode" title="Close voice mode (Esc)">
