@@ -4,7 +4,9 @@ Last updated: 2026-09-23 by Codex
 
 FORAI = "For AI." This is the living architectural summary of this repo — the source of truth agents read before working here, and the source the AETHON Chronicler pulls nightly to keep the master architecture docs current. Keep it short: current state, recent changes, known gaps. Not a commit log.
 
-**Convention (non-negotiable, same as the green-build rule):** whenever you finish meaningful architectural work here — a new subsystem, endpoint, table, integration, or a change to how something works — add a dated line to `## Recent changes` (most recent first) and refresh Architecture / Known gaps if they changed. Not every commit — anything that changes what someone reading the architecture needs to know. Flag anything security/breaking explicitly (the words "security", "unauthenticated", "breaking change" route it to the Security register and ping Telegram).
+**Convention (non-negotiable, same as the green-build rule):** whenever you finish meaningful architectural work here — a new subsystem, endpoint, table, integration, or a change to how something works — add a dated line to `## Recent changes
+
+- 2026-09-23: Model spending gate now refuses zero, negative, or non-finite remaining per-run budgets before a provider call; zero no longer disables the run cap. Regression covered by the model-layer checks.` (most recent first) and refresh Architecture / Known gaps if they changed. Not every commit — anything that changes what someone reading the architecture needs to know. Flag anything security/breaking explicitly (the words "security", "unauthenticated", "breaking change" route it to the Security register and ping Telegram).
 
 ## What this system is
 

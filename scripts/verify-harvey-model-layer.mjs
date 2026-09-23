@@ -392,6 +392,7 @@ const nearCap = run(`
   console.log(JSON.stringify({
     classify: B.checkBudget({ job: "classify", model: "google/gemini-3.8-flash", estimatedInputTokens: 2000, maxTokens: 256 }),
     agent: B.checkBudget({ job: "agent", model: "google/gemini-3.8-flash", estimatedInputTokens: 2000, maxTokens: 256 }),
+    exhausted: B.checkBudget({ job: "agent", model: "google/gemini-3.8-flash", estimatedInputTokens: 2000, maxTokens: 256, maxCostUsd: 0 }),
     huge: B.checkBudget({ job: "chat_deep", model: "openai/gpt-5.1-pro", estimatedInputTokens: 200000, maxTokens: 8000 }),
     tight: B.checkBudget({ job: "chat_deep", model: "anthropic/claude-sonnet-4.6", estimatedInputTokens: 30000, maxTokens: 4000, maxCostUsd: 0.01 }),
   }));
@@ -399,6 +400,7 @@ const nearCap = run(`
 
 ok("near the cap a cheap-eligible job degrades instead of failing", nearCap.classify.allowed === true && nearCap.classify.degradeToCheap === true, JSON.stringify(nearCap.classify));
 ok("an unattended agent run is never silently downgraded", nearCap.agent.allowed === true && !nearCap.agent.degradeToCheap, JSON.stringify(nearCap.agent));
+ok("zero remaining run budget refuses before another paid call", nearCap.exhausted.allowed === false && /exhausted/.test(nearCap.exhausted.reason), JSON.stringify(nearCap.exhausted));
 ok("a single call over the per-call ceiling is refused with the number", nearCap.tight.allowed === false && /\$|ceiling|cap/.test(nearCap.tight.reason || ""), JSON.stringify(nearCap.tight));
 ok("a caller's own tighter ceiling is honoured", nearCap.tight.allowed === false && /\$0\.01/.test(nearCap.tight.reason), nearCap.tight.reason);
 

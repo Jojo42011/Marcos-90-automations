@@ -67,6 +67,9 @@ export function checkBudget(input: CheckBudgetInput): BudgetVerdict {
   };
 
   const maxTokens = Math.max(0, Math.round(input.maxTokens ?? 1024));
+  if (input.maxCostUsd !== undefined && (!Number.isFinite(input.maxCostUsd) || input.maxCostUsd <= 0)) {
+    return { ...base, allowed: false, reason: "This run's remaining AI budget is exhausted. No further model calls were made." };
+  }
   const estimate = estimateCostUsd(input.model, Math.max(0, input.estimatedInputTokens || 0), maxTokens);
   const perCallCeiling = Math.min(
     caps.maxCostPerCallUsd,

@@ -53,6 +53,9 @@ function checkBudget(input) {
         monthlyCapUsd: caps.monthlyCapUsd,
     };
     const maxTokens = Math.max(0, Math.round(input.maxTokens ?? 1024));
+    if (input.maxCostUsd !== undefined && (!Number.isFinite(input.maxCostUsd) || input.maxCostUsd <= 0)) {
+        return { ...base, allowed: false, reason: "This run's remaining AI budget is exhausted. No further model calls were made." };
+    }
     const estimate = (0, catalog_js_1.estimateCostUsd)(input.model, Math.max(0, input.estimatedInputTokens || 0), maxTokens);
     const perCallCeiling = Math.min(caps.maxCostPerCallUsd, input.maxCostUsd && input.maxCostUsd > 0 ? input.maxCostUsd : Number.POSITIVE_INFINITY);
     if (caps.monthlyCapUsd > 0 && spentMonthUsd >= caps.monthlyCapUsd) {
