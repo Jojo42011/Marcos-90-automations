@@ -50,6 +50,13 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      - name: Opt-in connected email read test
+        if: contains(github.event.head_commit.message, '[harvey-mail-smoke]')
+        timeout-minutes: 4
+        run: flyctl ssh console -a marco-90-automation -C 'node /app/scripts/smoke-harvey-email.mjs'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       # Post-deploy truth check: list every machine and the image it actually
       # runs. Exists because a deploy once reported success while production
       # kept serving an old image (stale machine) — this makes that visible.

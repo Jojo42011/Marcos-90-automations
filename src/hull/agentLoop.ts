@@ -175,6 +175,7 @@ export interface AgentLoopResult {
 
 /** Live progress for a streaming caller. Text still arrives via `onToken`. */
 export type AgentLoopEvent =
+  | { type: "schedule"; schedule: import("../harvey/work/store.js").Schedule }
   | { type: "tool"; name: string; status: "running" | "done" | "error"; detail?: string }
   | { type: "approval"; approval: PendingApproval }
   | {

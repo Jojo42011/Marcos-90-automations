@@ -34,6 +34,8 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- 2026-09-24: Chat and Work now share connected-app and browser tools; live Composio status is injected per turn and included in plugin discovery. Managed connections are owner-wide across chats/projects (existing project sessions remain usable; custom connectors retain scopes). Model scope selection is validated against the owner. Both modes can explicitly schedule tasks, with saved-task SSE events opening a right-side panel. Fly enables the worker; cron uses IANA America/Chicago including DST. Scheduled calls default to the cheap Mercury model. Added isolated opt-in connected mailbox read verification without logging email content.
+
 - 2026-09-23: Plugin sign-in now navigates the top-level browser from the embedded Harvey shell, avoiding provider iframe restrictions. Managed Composio and legacy OAuth both use this path; browser checks cover embedded and standalone sign-in plus return to Plugins.
 
 - [2026-09-23] — **Harvey Work foundation:** added owner-scoped persistent projects and chats, Chat/Work modes, multi-service OAuth plugin catalog, custom remote MCP connectors, encrypted saved credentials, Playwright MCP browser workers with per-chat persistent profiles, file uploads, FFmpeg trim/transcode, and a new project-aware scheduled-agent worker. The new worker is opt-in and does not restore the retired legacy scheduler. Runs report results in their chat; interrupted runs require review. See `docs/harvey-work.md` for setup, operating limits and verification. Requires full dependency/Chromium image build. No live accounts connected and no deployment performed.

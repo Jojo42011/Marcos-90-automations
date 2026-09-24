@@ -106,8 +106,6 @@ function nextRun(cron, tz, from = new Date()) {
 }
 function createSchedule(owner, input) {
     const chat = get("chat", owner, text(input.chatId, "Chat"));
-    if (chat.mode !== "work")
-        throw new Error("Switch this chat to Work before scheduling an agent");
     const cron = text(input.cron, "Schedule", 100), tz = timezone(input.timezone);
     const maxCostUsd = Number(input.maxCostUsd ?? 1);
     if (!Number.isFinite(maxCostUsd) || maxCostUsd < 0.01 || maxCostUsd > 25)

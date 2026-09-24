@@ -24,28 +24,54 @@ export async function composioSession(owner: string, project: string | null) {
   }).catch(e=>{sessions.delete(key);throw e;}));
   return sessions.get(key)!;
 }
+// Existing project connections remain usable; new sign-ins belong to the owner.
+function scopes(owner:string) {
+  const projects=new Set(list<any>("project",owner).map(p=>p.id));
+  return [null,...new Set(list<any>("composio_session",owner).map(s=>s.projectId).filter(p=>p&&projects.has(p)))];
+}
+export async function managedConnections(owner:string) {
+  if(!composioReady())return [];
+  const all:any[]=[];
+  for(const project of scopes(owner)) {
+    const session=await composioSession(owner,project);let cursor:string|undefined;
+    do {const page=await session.toolkits({isConnected:true,limit:50,...(cursor?{cursor}:{})});
+      all.push(...page.items.filter((t:any)=>t.connection?.isActive).map((t:any)=>({...t,scope:composioUser(owner,project)})));
+      cursor=page.nextCursor||page.cursor; // SDK returns nextCursor; tolerate older cursor response.
+      if(!page.items.length)break;
+    }while(cursor);
+  }
+  return all;
+}
 export async function managedCatalog(owner:string,project:string|null,search="",cursor?:string) {
+  if(project)get("project",owner,project);
   if(!composioReady())return {enabled:false,items:[],connected:[]};
-  return guarded(async()=>{const s=await composioSession(owner,project);
-    const [catalog,connected]=await Promise.all([s.toolkits(search?{search:search.slice(0,100),limit:30,cursor}:{toolkits:FEATURED,limit:30}),s.toolkits({isConnected:true,limit:50})]);
-    return {enabled:true,items:catalog.items,cursor:catalog.cursor,connected:connected.items};
+  return guarded(async()=>{const session=await composioSession(owner,null);
+    const [catalog,connected]=await Promise.all([session.toolkits(search?{search:search.slice(0,100),limit:30,cursor}:{toolkits:FEATURED,limit:30}),managedConnections(owner)]);
+    return {enabled:true,items:catalog.items,cursor:catalog.cursor,connected};
   });
 }
 export async function connectManaged(owner:string,project:string|null,slug:string) {
   if(!/^[a-z0-9_-]{1,80}$/.test(slug))throw new Error("Invalid service");
-  return guarded(async()=>{const s=await composioSession(owner,project);const connection=await s.authorize(slug,{callbackUrl:new URL("/harvey?plugins=1&project="+encodeURIComponent(project||""),process.env.HARVEY_PUBLIC_URL||"http://localhost:3000").href});return {url:connection.redirectUrl};});
+  return guarded(async()=>{if(project)get("project",owner,project);const s=await composioSession(owner,null);const connection=await s.authorize(slug,{callbackUrl:new URL("/harvey?plugins=1&project="+encodeURIComponent(project||""),process.env.HARVEY_PUBLIC_URL||"http://localhost:3000").href});return {url:connection.redirectUrl};});
 }
-export async function disconnectManaged(owner:string,project:string|null,slug:string) {
-  return guarded(async()=>{const s=await composioSession(owner,project);const found=(await s.toolkits({toolkits:[slug],limit:1})).items[0];const id=found?.connection?.connectedAccount?.id;if(!id)throw new Error("No connected account found");await (await client()).connectedAccounts.delete(id);return {ok:true};});
+export async function disconnectManaged(owner:string,project:string|null,slug:string,scope?:string) {
+  if(project)get("project",owner,project);
+  return guarded(async()=>{const matches=(await managedConnections(owner)).filter(t=>t.slug===slug&&(!scope||t.scope===scope));
+    if(!matches.length)throw new Error("No connected account found");
+    for(const found of matches)await (await client()).connectedAccounts.delete(found.connection.connectedAccount.id);
+    sessions.clear();return {ok:true};});
 }
 export async function managedTools(owner:string,project:string|null) {
+  if(project)get("project",owner,project);
   if(!composioReady())return [];
-  return guarded(async()=>{const s=await composioSession(owner,project);return (await s.tools()).filter((t:any)=>META.has(t.function?.name)).map((t:any)=>({name:t.function.name,description:t.function.description,input_schema:t.function.parameters}));});
+  return guarded(async()=>{const session=await composioSession(owner,null);return (await session.tools()).filter((t:any)=>META.has(t.function?.name)).map((t:any)=>({name:t.function.name,description:t.function.description,input_schema:{...t.function.parameters,properties:{...t.function.parameters.properties,harvey_connection_scope:{type:"string",description:"Use the scope from the connected apps list for this service. Omit for new sign-ins.",enum:scopes(owner).map(p=>composioUser(owner,p))}}}}));});
 }
 export async function executeManaged(owner:string,project:string|null,name:string,input:any) {
+  if(project)get("project",owner,project);
   if(!META.has(name))throw new Error("Unsupported managed tool");
-  // The session is selected by server identity, never by model-supplied identity.
-  const args={...input};delete args.session_id;delete args.user_id;
-  return guarded(async()=>{const s=await composioSession(owner,project);const r=await s.execute(name,args);if(r.error)throw new Error(typeof r.error==="string"?r.error:JSON.stringify(r.error));return r.data;});
+  const args={...input};const scope=args.harvey_connection_scope;delete args.harvey_connection_scope;delete args.session_id;delete args.user_id;
+  const allowed=scopes(owner);let selected:string|null=null;
+  if(scope){const index=allowed.findIndex(p=>composioUser(owner,p)===scope);if(index<0)throw new Error("Unknown connection scope");selected=allowed[index];}
+  else if(name!=="COMPOSIO_MANAGE_CONNECTIONS"){const connected=await managedConnections(owner);if(connected.length)selected=allowed.find(p=>composioUser(owner,p)===connected[0].scope)||null;}
+  return guarded(async()=>{const session=await composioSession(owner,selected);const result=await session.execute(name,args);if(result.error)throw new Error(typeof result.error==="string"?result.error:JSON.stringify(result.error));return result.data;});
 }
-

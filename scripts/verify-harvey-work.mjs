@@ -28,7 +28,7 @@ ok('mixed intervals are checked beyond the first pair',()=>assert.throws(()=>s.n
 ok('invalid schedules rejected',()=>{assert.throws(()=>s.nextRun('* * * * *','America/Chicago'));assert.throws(()=>s.nextRun('0 9 * * *','invalid'));assert.throws(()=>s.nextRun('0 0 9 * * *','UTC'));});
 const schedule=s.createSchedule('alice',{chatId:chat.id,title:'Daily review',prompt:'Review connected data',cron:'0 9 * * *',timezone:'America/Chicago'});
 const conversation=s.createChat('alice',{mode:'chat'});
-ok('Chat mode cannot schedule agents',()=>assert.throws(()=>s.createSchedule('alice',{...schedule,chatId:conversation.id}),/Work/));
+ok('Chat mode can create an explicitly requested schedule',()=>{const task=s.createSchedule('alice',{...schedule,chatId:conversation.id});assert.equal(task.chatId,conversation.id);s.remove('schedule','alice',task.id);});
 const lock=s.lockChat('alice',chat.id);ok('overlapping chat run refused',()=>assert.throws(()=>s.lockChat('alice',chat.id),/progress/));s.unlockChat('alice',chat.id,lock);
 let release;const paused=new Promise(resolve=>release=resolve);let executions=0;
 const fake=async()=>{executions++;await paused;return {speech:'done'};};
@@ -70,13 +70,25 @@ await assert.rejects(()=>plugins.finishOAuth(oauth.state,'local-code',oauth.stat
 global.fetch=realFetch;
 // Exercise the actual provider adapter and tool loop against a local model fixture.
 let calls=[];
-const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',()=>{const body=JSON.parse(raw);calls.push(body);const done=body.messages.some(m=>m.role==='tool'),canSchedule=(body.tools||[]).some(t=>t.function.name==='schedule_agent');const message=done||!canSchedule?{role:'assistant',content:'Local model fixture complete.'}:{role:'assistant',content:'',tool_calls:[{id:'schedule-call',type:'function',function:{name:'schedule_agent',arguments:JSON.stringify({action:'create',title:'Morning delivery',prompt:'Check email deliverability and summarize here',cron:'0 9 * * 1-5',timezone:'America/Chicago'})}}]};const result={model:'fixture/model',choices:[{index:0,message,finish_reason:message.tool_calls?'tool_calls':'stop'}],usage:{prompt_tokens:100,completion_tokens:20,cost:0.001}};if(body.stream){res.setHeader('Content-Type','text/event-stream');res.end('data: '+JSON.stringify({model:result.model,choices:[{index:0,delta:message,finish_reason:'stop'}],usage:result.usage})+'\n\ndata: [DONE]\n\n');}else{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(result));}});});
+const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',()=>{const body=JSON.parse(raw);calls.push(body);const done=body.messages.some(m=>m.role==='tool'),canSchedule=(body.tools||[]).some(t=>t.function.name==='schedule_agent')&&/every|weekday/.test(JSON.stringify(body.messages.at(-1)));const message=done||!canSchedule?{role:'assistant',content:'Local model fixture complete.'}:{role:'assistant',content:'',tool_calls:[{id:'schedule-call',type:'function',function:{name:'schedule_agent',arguments:JSON.stringify({action:'create',title:'Morning delivery',prompt:'Check email deliverability and summarize here',cron:'0 9 * * 1-5',timezone:'America/Chicago'})}}]};const result={model:'fixture/model',choices:[{index:0,message,finish_reason:message.tool_calls?'tool_calls':'stop'}],usage:{prompt_tokens:100,completion_tokens:20,cost:0.001}};if(body.stream){res.setHeader('Content-Type','text/event-stream');res.end('data: '+JSON.stringify({model:result.model,choices:[{index:0,delta:message,finish_reason:'stop'}],usage:result.usage})+'\n\ndata: [DONE]\n\n');}else{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(result));}});});
 await new Promise(resolve=>model.listen(0,'127.0.0.1',resolve));process.env.OPENROUTER_API_KEY='local-fixture';process.env.OPENROUTER_BASE_URL='http://127.0.0.1:'+model.address().port;process.env.HARVEY_DAILY_BUDGET_USD='100';process.env.HARVEY_MONTHLY_BUDGET_USD='100';
 const nativeFetch=global.fetch;global.fetch=(url,opts)=>String(url).includes('openrouter.ai/api/v1/models')?Promise.resolve(new Response(JSON.stringify({data:[]}),{headers:{'Content-Type':'application/json'}})):nativeFetch(url,opts);
 const result=await r.runChat('alice',chat,'Check deliverability every weekday at 9 am Chicago time');
 ok('natural-language agent turn creates persistent schedule through tools',()=>{assert(!result.modelError,result.modelError);assert(s.list('schedule','alice').some(t=>t.title==='Morning delivery'));assert(calls.length>=2);});
 calls=[];await r.runChat('alice',conversation,'Just discuss email deliverability');
-ok('Chat mode exposes only an explicit planning handoff',()=>assert(calls.every(c=>(c.tools||[]).every(t=>t.function.name==='handoff_to_work'))));
+ok('Chat mode exposes plugins, browser and schedules without changing mode',()=>{for(const name of ['plugins','plugin_request','computer','schedule_agent','handoff_to_work'])assert(calls[0].tools.some(t=>t.function.name===name));assert.equal(s.get('chat','alice',conversation.id).mode,'chat');});
+const managed=require(path.join(root,'harvey/work/composio.js'));
+await assert.rejects(()=>managed.executeManaged('bob',null,'COMPOSIO_SEARCH_TOOLS',{harvey_connection_scope:managed.composioUser('alice',null)}),/Unknown connection scope/);passed++;
+const originalConnections=managed.managedConnections,originalTools=managed.managedTools;let connected=true;
+managed.managedConnections=async()=>connected?[{slug:'gmail',name:'Gmail',scope:'fixture-scope'}]:[];
+managed.managedTools=async()=>[{name:'COMPOSIO_SEARCH_TOOLS',description:'Fixture discovery',input_schema:{type:'object',properties:{}}}];
+calls=[];await r.runChat('alice',conversation,'Which plugins are connected?');
+ok('Existing Chat sees live managed connection and tool schemas',()=>{assert(JSON.stringify(calls[0].messages[0]).includes('fixture-scope'));assert(calls[0].tools.some(t=>t.function.name==='COMPOSIO_SEARCH_TOOLS'));});
+connected=false;calls=[];const fresh=s.createChat('alice',{mode:'chat'});await r.runChat('alice',fresh,'Which plugins are connected?');
+ok('New chat reflects disconnect instead of stale connection state',()=>assert(!JSON.stringify(calls[0].messages[0]).includes('fixture-scope')));
+managed.managedConnections=originalConnections;managed.managedTools=originalTools;
+const events=[];await r.runChat('alice',conversation,'Check email every weekday at 9 am',{onEvent:e=>events.push(e)});
+ok('Chat scheduling emits saved task event in Central Time',()=>{const event=events.find(e=>e.type==='schedule');assert(event);assert.equal(event.schedule.timezone,'America/Chicago');assert.equal(event.schedule.cron,'0 9 * * 1-5');s.remove('schedule','alice',event.schedule.id);});
 ok('assistant results persist',()=>assert(s.messages('alice',chat.id).some(m=>m.role==='assistant')));
 s.put('schedule','alice',{...s.get('schedule','alice',schedule.id),enabled:true,nextRunAt:'2020-01-01T00:00:00.000Z'});
 const beforeRuns=s.list('run','alice').length;await r.tick(new Date());const afterRuns=s.list('run','alice').length;await r.tick(new Date());

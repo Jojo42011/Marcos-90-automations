@@ -64,3 +64,8 @@ The composer can upload a file or video (250 MB limit) to the current chat. `wor
 ## Verification
 
 `npm run build` compiles the server. `node scripts/verify-harvey-work.mjs` checks owner isolation, durable history, vault encryption, schedule validation and DST, overlap protection, restart behavior, connection permissions, OAuth state/PKCE, actual OpenRouter-shaped fixture tool execution and HTTP routes. The test uses temporary data and a local model fixture. Local browser UI verification also covered project creation, scheduling through a Work chat, manual runs with saved results, and actual Chromium navigation. Closing and reopening the browser restored the fixture site's persistent session cookie. Existing Harvey/CRM verification scripts remain regression checks. Live OAuth provider accounts, production Fly execution and real site-specific workflows must be tested after configuration.
+
+
+Connected Composio apps are shared across the signed-in user’s chats and projects. Chat and Work both expose discovery, read/write actions and the hosted browser; authorization still comes from the user’s request and provider scopes. Connection status refreshes each turn. Disconnecting removes provider authorization; it does not erase messages already read into chat history.
+
+The Fly background worker is enabled. Tasks created in either mode use IANA time zones (America/Chicago defaults), survive restarts, and open a right-side task panel showing the saved schedule and next run. The worker checks due tasks every 30 seconds; execution starts on or shortly after the scheduled minute, not with a real-time exact-second guarantee.

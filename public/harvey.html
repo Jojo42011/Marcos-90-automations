@@ -437,7 +437,7 @@ table.data select:focus{border-color:var(--line-2)}
       </button>
       <span class="title" id="viewTitle">Harvey</span><div class="work-mode" role="group" aria-label="Conversation mode"><button type="button" data-mode="chat" aria-pressed="true">Chat</button><button type="button" data-mode="work" aria-pressed="false">Work</button><select id="modeSelect" hidden aria-label="Conversation mode"><option value="chat">Chat</option><option value="work">Work</option></select></div>
       <button type="button" id="handoffWork" class="work-button">Plan in Work</button><span class="grow"></span>
-      <span class="pill-status" id="providerPill" hidden></span>
+      <button type="button" id="taskPanelOpen" class="work-button" aria-controls="taskPanel" aria-expanded="false">Tasks</button><span class="pill-status" id="providerPill" hidden></span>
       <button class="icon-btn" id="themeBtn" aria-label="Switch between dark and light theme" title="Switch theme">
         <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>
@@ -534,6 +534,7 @@ table.data select:focus{border-color:var(--line-2)}
 
 <div id="toast" role="status" aria-live="polite"></div>
 
+<aside id="taskPanel" aria-label="Scheduled tasks" hidden><header><h2>Tasks</h2><button type="button" id="taskPanelClose" class="icon-btn" aria-label="Close tasks">×</button></header><div id="taskPanelBody" aria-live="polite"></div></aside>
 <dialog id="workDialog"></dialog>
 <script src="/harvey-work.js"></script>
 <script src="/harvey-chat.js"></script>

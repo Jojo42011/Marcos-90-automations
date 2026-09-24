@@ -1025,7 +1025,11 @@
         ui.append(d.text != null ? d.text : (d.delta || ""));
         break;
       case "tool":
+        if(window.HarveyWork)HarveyWork.taskProgress(d);
         ui.tool(d);
+        break;
+      case "schedule":
+        if(window.HarveyWork)HarveyWork.scheduleEvent(d);
         break;
       case "approval":
         ui.approval(d);
@@ -1058,6 +1062,7 @@
   function applyNonStream(data, ui) {
     if (data.sessionId) state.sessionId = data.sessionId;
     if (data.conversationId) state.conversationId = data.conversationId;
+    (data.schedules || []).forEach(function(s){if(window.HarveyWork)HarveyWork.scheduleEvent({schedule:s});});
     (data.approvals || []).forEach(function (a) { ui.approval(a); });
     ui.setText(data.text || data.speech || data.reply || "");
     if (data.usage) ui.setUsage(Object.assign({}, data.usage, { contextPlan: data.contextPlan }));

@@ -65,7 +65,7 @@ export function nextRun(cron: string, tz: string, from = new Date()): string {
   return first.toISOString();
 }
 export function createSchedule(owner: string, input: any): Schedule {
-  const chat = get<Chat>("chat", owner, text(input.chatId, "Chat")); if (chat.mode !== "work") throw new Error("Switch this chat to Work before scheduling an agent");
+  const chat = get<Chat>("chat", owner, text(input.chatId, "Chat"));
   const cron = text(input.cron, "Schedule", 100), tz = timezone(input.timezone);
   const maxCostUsd = Number(input.maxCostUsd ?? 1); if (!Number.isFinite(maxCostUsd) || maxCostUsd < 0.01 || maxCostUsd > 25) throw new Error("Run budget must be between $0.01 and $25");
   return put("schedule", owner, { id: randomUUID(), chatId: chat.id, title: text(input.title, "Task name", 120), prompt: text(input.prompt, "Instructions", 20000), cron, timezone: tz, enabled: true, nextRunAt: nextRun(cron, tz), maxCostUsd });

@@ -40,13 +40,13 @@
     return '<div class="plugin-logo">'+(url?'<img src="'+esc(url)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span>'+esc(service.name[0])+'</span>')+'</div>';
   }
   function pluginCards(items, connected) {
-    return items.map(function(s){var active=!!(s.connection&&s.connection.isActive);return '<article class="plugin-card">'+pluginIcon(s)+'<div class="plugin-card-copy"><h3>'+esc(s.name)+'</h3><p>'+(active?'Connected':s.isNoAuth?'No sign-in needed':'Connect your account')+'</p></div><div class="plugin-card-actions">'+(connected?'<span class="connected-badge">Connected</span>'+button('Disconnect','managed-disconnect',s.slug):button(active?'Add account':s.isNoAuth?'Use in Work':'Connect',s.isNoAuth?'managed-use':'managed-connect',s.slug))+'</div></article>';}).join('');
+    return items.map(function(s){var active=!!(s.connection&&s.connection.isActive);return '<article class="plugin-card">'+pluginIcon(s)+'<div class="plugin-card-copy"><h3>'+esc(s.name)+'</h3><p>'+(active?'Connected':s.isNoAuth?'No sign-in needed':'Connect your account')+'</p></div><div class="plugin-card-actions">'+(connected?'<span class="connected-badge">Connected</span>'+button('Disconnect','managed-disconnect',s.slug+'|'+s.scope):button(active?'Add account':s.isNoAuth?'Use in Work':'Connect',s.isNoAuth?'managed-use':'managed-connect',s.slug))+'</div></article>';}).join('');
   }
   async function pluginsView() {
     var query='?projectId='+encodeURIComponent(h.state.projectId||'');
     var results=await Promise.all([api('/work/managed'+query),api('/work/plugins')]),managed=results[0],legacy=results[1];connections=legacy.connections;services=legacy.catalog;
     $('workTitle').textContent='Plugins';$('workSubtitle').textContent='Your favorite apps, ready to work with Harvey.';
-    $('workBody').innerHTML='<div class="plugin-intro"><span>'+esc(h.state.projectId?(projects.find(function(p){return p.id===h.state.projectId;})||{}).name||'This project':'Personal workspace')+'</span>'+button('Custom connector','custom')+'</div>'+
+    $('workBody').innerHTML='<div class="plugin-intro"><span>'+esc('Connected apps are available across your chats')+'</span>'+button('Custom connector','custom')+'</div>'+
       (!managed.enabled?'<div class="panel">Managed connections are not configured yet.</div>':'')+
       '<section class="plugin-section"><h2>Connected <span class="plugin-count">'+(managed.connected||[]).length+'</span></h2><div class="plugin-cards">'+((managed.connected||[]).length?pluginCards(managed.connected,true):'<div class="plugin-empty">Connect an app below. Harvey will ask you to sign in and approve access.</div>')+'</div></section>'+
       '<section class="plugin-section"><div class="plugin-catalog-head"><h2>Explore apps</h2><input id="pluginSearch" type="search" placeholder="Search apps…" aria-label="Search apps"></div><div id="managedGrid" class="plugin-cards">'+pluginCards(managed.items||[],false)+'</div><p id="pluginSearchStatus" class="work-hint" role="status"></p></section>'+
@@ -58,7 +58,7 @@
     var tasks = data.schedules.filter(function(s){var c=chats.find(function(c){return c.id===s.chatId;});return !h.state.projectId || c && c.projectId===h.state.projectId;});
     $("workTitle").textContent = "Scheduled agents"; $("workSubtitle").textContent = "Give a chat a job and a time. Results return to that chat.";
     $("workBody").innerHTML = '<div class="work-toolbar">' + button("Schedule this chat", "schedule") + '</div>' + (!status.worker ? '<div class="panel">The background worker is off. Saved schedules will run automatically once the worker is enabled. Run now works while testing.</div>' : '') +
-      (tasks.length ? tasks.map(function(s){var runs=data.runs.filter(function(r){return r.scheduleId===s.id;}).slice(0,5);return '<article class="panel"><div class="work-heading"><h3>' + esc(s.title) + '</h3><span>' + (s.enabled ? "Active" : "Paused") + '</span></div><p>' + esc(s.prompt) + '</p><p class="work-hint">' + esc(scheduleLabel(s.cron)) + ' · ' + esc(s.timezone) + '<br>Next: ' + esc(new Date(s.nextRunAt).toLocaleString(undefined,{timeZone:s.timezone})) + ' · Budget $' + esc(s.maxCostUsd) + '/run</p><div class="work-toolbar">' + button("Open chat","open",s.chatId) + button("Run now","run",s.id) + button(s.enabled?"Pause":"Resume",s.enabled?"pause":"resume",s.id) + button("Edit","edit-schedule",s.id) + button("Remove","remove-schedule",s.id) + '</div>' + runs.map(function(r){return '<details class="work-run"><summary>' + esc(r.status.replace(/_/g," ")) + ' · ' + esc(new Date(r.startedAt).toLocaleString()) + '</summary><pre>' + esc(r.result || "Working…") + '</pre></details>';}).join("") + '</article>';}).join("") : '<div class="panel"><h3>Your first recurring agent</h3><p>Open a chat, switch to Work, and say what to do and when.</p><p class="work-hint">“Review new files in the connected drive every weekday at 9 am and summarize them here.”</p></div>');
+      (tasks.length ? tasks.map(function(s){var runs=data.runs.filter(function(r){return r.scheduleId===s.id;}).slice(0,5);return '<article class="panel"><div class="work-heading"><h3>' + esc(s.title) + '</h3><span>' + (s.enabled ? "Active" : "Paused") + '</span></div><p>' + esc(s.prompt) + '</p><p class="work-hint">' + esc(scheduleLabel(s.cron)) + ' · ' + esc(s.timezone) + '<br>Next: ' + esc(new Date(s.nextRunAt).toLocaleString(undefined,{timeZone:s.timezone})) + ' · Budget $' + esc(s.maxCostUsd) + '/run</p><div class="work-toolbar">' + button("Open chat","open",s.chatId) + button("Run now","run",s.id) + button(s.enabled?"Pause":"Resume",s.enabled?"pause":"resume",s.id) + button("Edit","edit-schedule",s.id) + button("Remove","remove-schedule",s.id) + '</div>' + runs.map(function(r){return '<details class="work-run"><summary>' + esc(r.status.replace(/_/g," ")) + ' · ' + esc(new Date(r.startedAt).toLocaleString()) + '</summary><pre>' + esc(r.result || "Working…") + '</pre></details>';}).join("") + '</article>';}).join("") : '<div class="panel"><h3>Your first recurring agent</h3><p>Open a chat and say what to do and when.</p><p class="work-hint">“Review new files in the connected drive every weekday at 9 am and summarize them here.”</p></div>');
   }
   function scheduleParts(cron) {
     var match=String(cron||'0 9 * * *').match(/^(\d+) (\d+) \* \* (\*|1-5|[0-6])$/);
@@ -67,7 +67,6 @@
   }
   function scheduleLabel(cron) {var p=scheduleParts(cron);return p.cadence==='advanced'?'Custom schedule: '+cron:(p.cadence==='daily'?'Every day':p.cadence==='weekdays'?'Every weekday':'Every '+['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][Number(p.weekday)])+' at '+p.time;}
   async function scheduleForm(existing) {
-    if (!existing && h.state.mode !== 'work') { h.toast('Switch this chat to Work before scheduling it.'); h.showView('chat'); return; }
     var chatId = existing ? existing.chatId : await h.ensureChat(), p = projects.find(function(p){return p.id===h.state.projectId;}) || {}, timing=scheduleParts(existing&&existing.cron);
     var controls='<label class="work-field">Repeat<select name="cadence"><option value="daily">Every day</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="advanced">Custom schedule</option></select></label>'+
       '<label class="work-field" id="scheduleTimeLabel">Time<input type="time" name="time" value="'+timing.time+'" required></label>'+
@@ -75,7 +74,7 @@
       '<label class="work-field" id="scheduleCronLabel">Custom cron expression<input name="cron" value="'+esc(existing?existing.cron:'0 9 * * *')+'"></label>';
     modal(existing ? 'Edit scheduled agent' : 'Schedule this agent', field('Task name','title',existing && existing.title) + area('What should Harvey do?','prompt',existing && existing.prompt) + controls + field('Timezone','timezone',existing ? existing.timezone : p.timezone || 'America/Chicago') + field('Maximum model cost per run ($)','maxCostUsd',existing ? existing.maxCostUsd : '1','number'),async function(d){
       if(d.cadence!=='advanced'){var parts=d.time.split(':');d.cron=Number(parts[1])+' '+Number(parts[0])+' * * '+(d.cadence==='daily'?'*':d.cadence==='weekdays'?'1-5':d.weekday);}
-      d.chatId=chatId;d.maxCostUsd=Number(d.maxCostUsd);await api(existing?'/work/schedules/'+existing.id:'/work/schedules',existing?'PATCH':'POST',d);await show('schedules');
+      d.chatId=chatId;d.maxCostUsd=Number(d.maxCostUsd);await api(existing?'/work/schedules/'+existing.id:'/work/schedules',existing?'PATCH':'POST',d);await refreshTasks(false);await show('schedules');
     });
     var form=$('workForm'),cost=form.elements.maxCostUsd;cost.min='0.01';cost.max='25';cost.step='0.01';form.elements.cadence.value=timing.cadence;form.elements.weekday.value=timing.cadence==='weekly'?timing.weekday:'1';
     function toggle(){var c=form.elements.cadence.value;$('scheduleTimeLabel').hidden=c==='advanced';form.elements.time.required=c!=='advanced';$('scheduleDayLabel').hidden=c!=='weekly';$('scheduleCronLabel').hidden=c!=='advanced';form.elements.cron.required=c==='advanced';}
@@ -95,7 +94,7 @@
   async function act(action,id) {
     if(action==='managed-use'){h.newChat();h.state.mode='work';syncControls();h.showView('chat');$('input').value='Help me use '+id;$('input').dispatchEvent(new Event('input'));return;}
     if(action==='managed-connect'){try{sessionStorage.setItem('harvey_plugin_project',h.state.projectId||'');}catch(_){}var link=await api('/work/managed/connect','POST',{projectId:h.state.projectId,service:id});if(!link.url)throw new Error('The service did not return a sign-in link');window.top.location.assign(link.url);return;}
-    if(action==='managed-disconnect'){if(!confirm('Disconnect this account from this workspace?'))return;await api('/work/managed/disconnect','POST',{projectId:h.state.projectId,service:id});return pluginsView();}
+    if(action==='managed-disconnect'){if(!confirm('Disconnect this account from this workspace?'))return;await api('/work/managed/disconnect','POST',{projectId:h.state.projectId,service:id.split('|')[0],scope:id.split('|')[1]});return pluginsView();}
     if(action==="upload")return uploadFile();
     if(action==="custom")return modal("Add custom MCP connector",field("Name","name")+field("HTTPS MCP URL","endpoint","","url")+'<label class="work-field">Bearer token (optional)<input name="token" type="password" autocomplete="new-password"></label>'+scope()+actionsCheckbox(),async function(d){d.projectId=h.state.projectId;await api("/work/plugins/mcp","POST",d);await pluginsView();});
     if(action==="connect") {var s=services.find(function(s){return s.id===id;});if(!s.ready)return modal(s.name+" setup",'<p>Configure '+esc(s.setup)+' on the server, along with HARVEY_PUBLIC_URL and HARVEY_VAULT_KEY. Register the OAuth callback ending in <code>/api/harvey/work/oauth/callback</code>.</p><p>Once configured, this service gets a Connect button.</p>',async function(){});return modal("Connect "+s.name,scope()+actionsCheckbox()+'<p>You’ll continue to the service to choose your account and approve access.</p>',async function(d){var result=await api("/work/plugins/oauth","POST",{service:id,projectId:h.state.projectId,allowWrites:d.allowWrites});window.top.location.assign(result.url);});}
@@ -111,9 +110,27 @@
     if(action==="remove-login"){if(!confirm("Remove this saved password? Existing browser sessions stay signed in."))return;await api("/work/logins/"+id,"DELETE");return browserView();}
     if(action==="snapshot"||action==="close-browser"){var chat=await h.ensureChat();var result=await api("/work/browser/"+chat+(action==="snapshot"?"/snapshot":"/close"),"POST",{});$("browserSnapshot").textContent=action==="snapshot"?(result.content||[]).filter(function(c){return c.type==="text";}).map(function(c){return c.text;}).join("\n"):"Browser closed. Saved sessions are retained.";}
   }
+  var taskChat=null;
+  function toggleTasks(open){$('taskPanel').hidden=!open;document.body.classList.toggle('task-panel-open',open);$('taskPanelOpen').setAttribute('aria-expanded',String(open));}
+  async function refreshTasks(open){
+    if(open)toggleTasks(true);
+    var chatId=h.state.conversationId;
+    if(!chatId){$('taskPanelBody').innerHTML='<p class="work-hint">Ask Harvey to do something on a schedule.</p>';return;}
+    var data=await api('/work/schedules');if(chatId!==h.state.conversationId)return;
+    var tasks=data.schedules.filter(function(s){return s.chatId===chatId;});
+    $('taskPanelBody').innerHTML=tasks.length?tasks.map(function(s){var run=data.runs.find(function(r){return r.scheduleId===s.id;});return '<article class="panel"><h3>'+esc(s.title)+'</h3><p>'+esc(s.prompt)+'</p><p class="work-hint">'+esc(scheduleLabel(s.cron))+' · '+esc(s.timezone)+'<br>'+(s.enabled?'Next: '+esc(new Date(s.nextRunAt).toLocaleString(undefined,{timeZone:s.timezone})):'Paused')+'</p><div class="work-toolbar">'+button(s.enabled?'Pause':'Resume',s.enabled?'pause':'resume',s.id)+button('Edit','edit-schedule',s.id)+'</div>'+(run?'<p class="work-hint">Last run: '+esc(run.status.replace(/_/g,' '))+'</p>':'')+'</article>';}).join(''):'<p class="work-hint">No tasks in this chat yet. Try “Check my emails every day at 9 am Central.”</p>';
+  }
   window.HarveyWork = {
+    scheduleEvent:function(event){if(event.schedule)refreshTasks(true).catch(notice);},
+    taskProgress:function(event){if(event.name==='schedule_agent'&&event.status==='running'){toggleTasks(true);$('taskPanelBody').textContent='Saving your task…';}else if(event.name==='schedule_agent'&&event.status==='error'){$('taskPanelBody').textContent='The task could not be saved. Check Harvey’s reply.';}},
     upload: function(){return uploadFile().catch(notice);},
-    init: function(hooks){h=hooks;$("newProject").onclick=function(){projectForm(false);};$("projectEdit").onclick=function(){projectForm(true);};$("projectSelect").onchange=function(){h.state.projectId=this.value||null;h.newChat();$("projectEdit").hidden=!h.state.projectId;h.refresh();syncControls();};
+    init: function(hooks){h=hooks;
+      $('taskPanelOpen').onclick=function(){refreshTasks(true).catch(notice);};$('taskPanelClose').onclick=function(){toggleTasks(false);};
+      $('taskPanelBody').onclick=async function(e){var b=e.target.closest('[data-work-action]');if(!b)return;b.disabled=true;try{if(b.dataset.workAction==='edit-schedule')await act(b.dataset.workAction,b.dataset.id);else{await api('/work/schedules/'+b.dataset.id,'PATCH',{enabled:b.dataset.workAction==='resume'});await refreshTasks(false);}}catch(err){notice(err);}finally{b.disabled=false;}};
+      document.addEventListener('keydown',function(e){if(e.key==='Escape')toggleTasks(false);});
+      setInterval(function(){if(!document.hidden&&!$('taskPanel').hidden)refreshTasks(false).catch(notice);},15000);
+      window.addEventListener('focus',function(){if(h.state.view==='work'&&activeView==='plugins')pluginsView().catch(notice);if(!$('taskPanel').hidden)refreshTasks(false).catch(notice);});
+      $("newProject").onclick=function(){projectForm(false);};$("projectEdit").onclick=function(){projectForm(true);};$("projectSelect").onchange=function(){h.state.projectId=this.value||null;h.newChat();$("projectEdit").hidden=!h.state.projectId;h.refresh();syncControls();};
       $("modeSelect").onchange=async function(){if(document.querySelector("#thread .msg")){this.value=h.state.mode;return;}var old=h.state.mode;h.state.mode=this.value;syncControls();try{if(h.state.conversationId)await api("/conversations/"+h.state.conversationId,"PATCH",{mode:h.state.mode});}catch(e){h.state.mode=old;this.value=old;syncControls();notice(e);}};
       document.querySelectorAll("[data-work-view]").forEach(function(b){b.onclick=function(){show(b.dataset.workView);};});
       $("workBody").onclick=async function(e){var b=e.target.closest("[data-work-action]");if(!b)return;b.disabled=true;try{await act(b.dataset.workAction,b.dataset.id);}catch(err){notice(err);}finally{b.disabled=false;}};
@@ -123,7 +140,7 @@
       $('handoffWork').onclick=async function(){if(h.state.busy)return;try{var target=await api('/conversations/'+h.state.conversationId+'/handoff','POST',{});await h.refresh();await h.openChat(target.id);}catch(e){notice(e);}};
       if(new URLSearchParams(location.search).get('plugins')==='1'){try{h.state.projectId=(new URLSearchParams(location.search).has('project')?new URLSearchParams(location.search).get('project'):sessionStorage.getItem('harvey_plugin_project'))||null;}catch(_){}show('plugins');}else loadProjects().catch(notice);
     },
-    sync: function(){if(!h)return;syncControls();$("projectSelect").value=h.state.projectId||"";$("modeSelect").value=h.state.mode||"chat";$("projectEdit").hidden=!h.state.projectId;},
+    sync: function(){if(!h)return;if(taskChat!==h.state.conversationId){taskChat=h.state.conversationId;toggleTasks(false);}syncControls();$("projectSelect").value=h.state.projectId||"";$("modeSelect").value=h.state.mode||"chat";$("projectEdit").hidden=!h.state.projectId;},
     refresh: function(){return loadProjects().catch(notice);}
   };
 })();

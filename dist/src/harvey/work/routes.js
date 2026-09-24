@@ -79,7 +79,7 @@ function createWorkRouter(authorize, owner) {
     });
     route("get", "/work/managed", async (q, res, o) => res.json(await (0, composio_js_1.managedCatalog)(o, q.query.projectId ? String(q.query.projectId) : null, String(q.query.search || ""), q.query.cursor ? String(q.query.cursor) : undefined)));
     route("post", "/work/managed/connect", async (q, res, o) => res.json(await (0, composio_js_1.connectManaged)(o, q.body.projectId || null, String(q.body.service))));
-    route("post", "/work/managed/disconnect", async (q, res, o) => res.json(await (0, composio_js_1.disconnectManaged)(o, q.body.projectId || null, String(q.body.service))));
+    route("post", "/work/managed/disconnect", async (q, res, o) => res.json(await (0, composio_js_1.disconnectManaged)(o, q.body.projectId || null, String(q.body.service), q.body.scope ? String(q.body.scope) : undefined)));
     route("get", "/work/plugins", (_q, res, o) => res.json({ catalog: (0, connectors_js_1.catalog)(), connections: (0, connectors_js_1.connections)(o).map(connectors_js_1.publicConnection) }));
     route("post", "/work/plugins/oauth", (q, res, o) => { const result = (0, connectors_js_1.startOAuth)(o, q.body.service, q.body.projectId || null, q.body.allowWrites === true); res.cookie("harvey_oauth_state", result.state, { httpOnly: true, sameSite: "lax", secure: q.secure, maxAge: 600000, path: "/api/harvey/work/oauth" }); res.json({ url: result.url }); });
     route("post", "/work/plugins/mcp", async (q, res, o) => res.status(201).json(await (0, connectors_js_1.addMcp)(o, q.body)));
@@ -123,10 +123,12 @@ async function handleWorkChat(req, res, owner) {
             res.write(": heartbeat\n\n"); }, 15000) : null;
         try {
             const approvals = [];
+            const schedules = [];
             const result = await (0, runtime_js_1.runChat)(owner, chat, message, { signal: controller.signal, modelOverride: req.body.model && req.body.model !== "auto" ? String(req.body.model) : undefined, onToken: stream ? t => send("token", { text: t }) : undefined, onEvent: e => { if (e.type === "approval")
-                    approvals.push(e.approval); if (stream)
+                    approvals.push(e.approval); if (e.type === "schedule")
+                    schedules.push(e.schedule); if (stream)
                     send(e.type, e.type === "approval" ? e.approval : e); } });
-            const data = { text: result.speech, conversationId: chat.id, sessionId: chat.sessionId, usage: { model: result.modelUsed || result.model, costUsd: result.costUsd || 0, promptTokens: result.promptTokens || 0, completionTokens: result.completionTokens || 0, cachedTokens: result.cachedTokens || 0 }, approvals, needsAttention: result.toolFailed || !!result.modelError || !!result.budgetRefused };
+            const data = { text: result.speech, conversationId: chat.id, sessionId: chat.sessionId, usage: { model: result.modelUsed || result.model, costUsd: result.costUsd || 0, promptTokens: result.promptTokens || 0, completionTokens: result.completionTokens || 0, cachedTokens: result.cachedTokens || 0 }, approvals, schedules, needsAttention: result.toolFailed || !!result.modelError || !!result.budgetRefused };
             if (stream) {
                 send("done", data);
                 res.end();
