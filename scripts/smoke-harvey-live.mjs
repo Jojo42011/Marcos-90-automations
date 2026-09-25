@@ -7,7 +7,7 @@ const dir = mkdtempSync(join(tmpdir(), 'harvey-smoke-'));
 Object.assign(process.env, {
   HARVEY_WORK_DIR: join(dir, 'work'), AI_USAGE_DB_PATH: join(dir, 'usage.db'),
   HARVEY_DAILY_CAP_USD: '0.05', HARVEY_MONTHLY_CAP_USD: '0.05',
-  HARVEY_MAX_COST_PER_CALL_USD: '0.01', AETHON_MAX_TOKENS: '512',
+  HARVEY_MAX_COST_PER_CALL_USD: '0.01', AETHON_MAX_TOKENS: '2048',
   HARVEY_CONTEXT_CEILING_TOKENS: '8000', HARVEY_WORKER_ENABLED: 'false',
 });
 const timeout = setTimeout(() => { console.error('Smoke test timed out'); process.exit(1); }, 150000);
@@ -20,7 +20,7 @@ try {
   const live = new Map((await response.json()).data.map(m=>[m.id,m]));
   const models = catalog.availableModels().filter(m=>m.supportsTools && live.has(m.id) && m.inputPerM>0 && m.inputPerM<=0.5 && m.outputPerM<=1.5).sort((a,b)=>(a.inputPerM+a.outputPerM)-(b.inputPerM+b.outputPerM));
   const model=models[0]; assert(model, 'No verified cheap tool model available');
-  console.log('SMOKE_MODEL '+JSON.stringify({id:model.id,inputPerM:model.inputPerM,outputPerM:model.outputPerM,context:model.contextTokens,outputLimit:512,testBudgetUsd:0.05}));
+  console.log('SMOKE_MODEL '+JSON.stringify({id:model.id,inputPerM:model.inputPerM,outputPerM:model.outputPerM,context:model.contextTokens,outputLimit:2048,testBudgetUsd:0.05}));
   chmodSync(dir,0o755);
   const B=await import('../dist/src/harvey/work/browser.js');
   try { const page=await B.browserCall('deployment-smoke','browser-check','browser_navigate',{url:'https://example.com'});assert(JSON.stringify(page).includes('Example Domain'),'Browser page not read');console.log('SMOKE_BROWSER_PASS'); } finally {await B.closeBrowsers();}
