@@ -106,7 +106,7 @@ function nextRun(cron, tz, from = new Date()) {
 }
 function createSchedule(owner, input) {
     const chat = get("chat", owner, text(input.chatId, "Chat"));
-    const cron = text(input.cron, "Schedule", 100), tz = timezone(input.timezone);
+    const cron = text(input.cron, "Schedule", 100), tz = timezone(input.timezone || "America/Chicago");
     const maxCostUsd = Number(input.maxCostUsd ?? 1);
     if (!Number.isFinite(maxCostUsd) || maxCostUsd < 0.01 || maxCostUsd > 25)
         throw new Error("Run budget must be between $0.01 and $25");

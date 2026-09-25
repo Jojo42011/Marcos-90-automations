@@ -16,6 +16,7 @@ swap_size_mb = 1024
   destination = "/data"
 
 [env]
+  TZ = "America/Chicago"
   HARVEY_BROWSER_ENABLED = "true"
   HARVEY_WORKER_ENABLED = "true"
   HARVEY_SCHEDULE_MODEL = "inception/mercury-2.5"

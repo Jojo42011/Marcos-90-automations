@@ -165,9 +165,10 @@ async function fillSavedLogin(owner, chat, projectId, input) {
         throw new Error("Navigate to the saved login's exact origin before using it");
     const credentials = (0, store_js_1.unseal)(login.secret);
     // One fill call minimizes the gap between verifying the destination and typing.
+    const targetKey = s.tools.find(t => t.name === "browser_fill_form")?.inputSchema?.properties?.fields?.items?.properties?.target ? "target" : "ref";
     const filled = await s.client.callTool({ name: "browser_fill_form", arguments: { fields: [
-                { name: "Username", type: "textbox", ref: (0, store_js_1.text)(input.usernameRef, "Username field reference", 100), value: credentials.username },
-                { name: "Password", type: "textbox", ref: (0, store_js_1.text)(input.passwordRef, "Password field reference", 100), value: credentials.password },
+                { name: "Username", type: "textbox", [targetKey]: (0, store_js_1.text)(input.usernameRef, "Username field reference", 100), value: credentials.username },
+                { name: "Password", type: "textbox", [targetKey]: (0, store_js_1.text)(input.passwordRef, "Password field reference", 100), value: credentials.password },
             ] } });
     if (filled.isError)
         throw new Error("The saved login could not be filled. Inspect fresh field references and try again.");

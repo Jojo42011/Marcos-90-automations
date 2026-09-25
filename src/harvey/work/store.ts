@@ -6,7 +6,7 @@ import { CronExpressionParser } from "cron-parser";
 
 export type Mode = "chat" | "work";
 export interface Project { id: string; name: string; instructions: string; timezone: string }
-export interface Chat { id: string; projectId: string | null; title: string; mode: Mode; sessionId: string; updatedAt: string }
+export interface Chat { allowChatCredentials?: boolean; id: string; projectId: string | null; title: string; mode: Mode; sessionId: string; updatedAt: string }
 export interface Message { role: "user" | "assistant"; content: string; at: string; runId?: string }
 export interface Schedule { id: string; chatId: string; title: string; prompt: string; cron: string; timezone: string; enabled: boolean; nextRunAt: string; maxCostUsd: number }
 export interface Run { id: string; scheduleId: string; chatId: string; status: "running" | "completed" | "failed" | "needs_attention"; startedAt: string; finishedAt?: string; result?: string }
@@ -66,7 +66,7 @@ export function nextRun(cron: string, tz: string, from = new Date()): string {
 }
 export function createSchedule(owner: string, input: any): Schedule {
   const chat = get<Chat>("chat", owner, text(input.chatId, "Chat"));
-  const cron = text(input.cron, "Schedule", 100), tz = timezone(input.timezone);
+  const cron = text(input.cron, "Schedule", 100), tz = timezone(input.timezone || "America/Chicago");
   const maxCostUsd = Number(input.maxCostUsd ?? 1); if (!Number.isFinite(maxCostUsd) || maxCostUsd < 0.01 || maxCostUsd > 25) throw new Error("Run budget must be between $0.01 and $25");
   return put("schedule", owner, { id: randomUUID(), chatId: chat.id, title: text(input.title, "Task name", 120), prompt: text(input.prompt, "Instructions", 20000), cron, timezone: tz, enabled: true, nextRunAt: nextRun(cron, tz), maxCostUsd });
 }
