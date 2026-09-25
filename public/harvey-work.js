@@ -1,7 +1,7 @@
 /* Project, plugin and recurring-agent controls for the existing Harvey chat. */
 (function () {
   "use strict";
-  var h, projects = [], services = [], connections = [], status = {}, activeView = "plugins";
+  var h, projects = [], services = [], connections = [], status = {}, activeView = "plugins", pluginViewVersion = 0;
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   async function api(path, method, body) { var r = await h.api("/api/harvey" + path, { method: method || "GET", body: body }); if (!r.ok) throw new Error(r.error || r.data && r.data.error || "Request failed"); return r.data; }
@@ -43,15 +43,41 @@
     return items.map(function(s){var active=!!(s.connection&&s.connection.isActive);return '<article class="plugin-card">'+pluginIcon(s)+'<div class="plugin-card-copy"><h3>'+esc(s.name)+'</h3><p>'+(active?'Connected':s.isNoAuth?'No sign-in needed':'Connect your account')+'</p></div><div class="plugin-card-actions">'+(connected?'<span class="connected-badge">Connected</span>'+button('Disconnect','managed-disconnect',s.slug+'|'+s.scope):button(active?'Add account':s.isNoAuth?'Use in Work':'Connect',s.isNoAuth?'managed-use':'managed-connect',s.slug))+'</div></article>';}).join('');
   }
   async function pluginsView() {
-    var query='?projectId='+encodeURIComponent(h.state.projectId||'');
-    var results=await Promise.all([api('/work/managed'+query),api('/work/plugins')]),managed=results[0],legacy=results[1];connections=legacy.connections;services=legacy.catalog;
+    var version=++pluginViewVersion, project=h.state.projectId||'', query='?projectId='+encodeURIComponent(project);
+    function current(){return version===pluginViewVersion&&activeView==='plugins'&&h.state.view==='work'&&(h.state.projectId||'')===project;}
+    var results=await Promise.all([api('/work/managed'+query),api('/work/plugins')]),managed=results[0],legacy=results[1];if(!current())return;connections=legacy.connections;services=legacy.catalog;
     $('workTitle').textContent='Plugins';$('workSubtitle').textContent='Your favorite apps, ready to work with Harvey.';
-    $('workBody').innerHTML='<div class="plugin-intro"><span>'+esc('Connected apps are available across your chats')+'</span>'+button('Custom connector','custom')+'</div>'+
+    $('workBody').innerHTML='<div class="plugin-intro"><span>'+esc('Connected apps are available to Harvey across your chats and scheduled agents')+'</span>'+button('Custom connector','custom')+'</div>'+
       (!managed.enabled?'<div class="panel">Managed connections are not configured yet.</div>':'')+
       '<section class="plugin-section"><h2>Connected <span class="plugin-count">'+(managed.connected||[]).length+'</span></h2><div class="plugin-cards">'+((managed.connected||[]).length?pluginCards(managed.connected,true):'<div class="plugin-empty">Connect an app below. Harvey will ask you to sign in and approve access.</div>')+'</div></section>'+
-      '<section class="plugin-section"><div class="plugin-catalog-head"><h2>Explore apps</h2><input id="pluginSearch" type="search" placeholder="Search apps…" aria-label="Search apps"></div><div id="managedGrid" class="plugin-cards">'+pluginCards(managed.items||[],false)+'</div><p id="pluginSearchStatus" class="work-hint" role="status"></p></section>'+
+      '<section class="plugin-section"><div class="plugin-catalog-head"><h2>Explore all apps</h2><input id="pluginSearch" type="search" placeholder="Search all Composio apps…" maxlength="100" aria-label="Search apps"></div><div id="managedGrid" class="plugin-cards">'+pluginCards(managed.items||[],false)+'</div><p id="pluginSearchStatus" class="work-hint" role="status"></p><button type="button" id="pluginLoadMore" class="work-button" hidden>Load more apps</button></section>'+
       (connections.length?'<details class="plugin-advanced"><summary>Custom and existing connections</summary>'+connections.map(function(c){return '<article class="panel"><h3>'+esc(c.name)+'</h3><p class="work-hint">'+(c.allowWrites?'Actions enabled':'Read only')+'</p>'+button(c.allowWrites?'Set read only':'Enable actions','permissions',c.id)+button('Disconnect','disconnect',c.id)+'</article>';}).join('')+'</details>':'');
-    var timer,sequence=0;$('pluginSearch').oninput=function(){var value=this.value,seq=++sequence;clearTimeout(timer);timer=setTimeout(async function(){try{$('pluginSearchStatus').textContent='Searching…';var data=await api('/work/managed'+query+'&search='+encodeURIComponent(value));if(seq!==sequence||!$('managedGrid'))return;$('managedGrid').innerHTML=pluginCards(data.items||[],false);$('pluginSearchStatus').textContent=data.items.length?'':'No apps found. Try another name or add a custom connector.';}catch(e){if(seq===sequence&&$('pluginSearchStatus'))$('pluginSearchStatus').textContent=e.message;}},300);};
+    var timer,sequence=0,items=managed.items||[],cursor=managed.cursor||null,search='',loading=false;
+    var grid=$('managedGrid'),message=$('pluginSearchStatus'),more=$('pluginLoadMore');
+    function render(){
+      grid.innerHTML=pluginCards(items,false);
+      message.textContent=items.length?items.length+' apps shown'+(cursor?' · Load more or search by name.':'.'):'No apps found. Try another name or add a custom connector.';
+      more.hidden=!cursor;more.disabled=loading;
+    }
+    async function load(append,seq){
+      if(!current()||seq!==sequence)return;
+      loading=true;more.disabled=true;message.textContent=append?'Loading more apps…':'Searching…';
+      try{
+        var data=await api('/work/managed'+query+'&search='+encodeURIComponent(search)+(append&&cursor?'&cursor='+encodeURIComponent(cursor):''));
+        if(!current()||seq!==sequence)return;
+        var seen=new Set(append?items.map(function(item){return item.slug;}):[]);
+        var incoming=(data.items||[]).filter(function(item){if(seen.has(item.slug))return false;seen.add(item.slug);return true;});
+        items=append?items.concat(incoming):incoming;cursor=data.cursor||null;render();
+      }catch(e){if(current()&&seq===sequence)message.textContent=e.message;}
+      finally{if(current()&&seq===sequence){loading=false;more.disabled=false;}}
+    }
+    render();
+    more.onclick=function(){if(!loading&&cursor)load(true,sequence);};
+    $('pluginSearch').oninput=function(){
+      search=this.value.trim();var seq=++sequence;clearTimeout(timer);
+      cursor=null;items=[];grid.innerHTML='';more.hidden=true;loading=false;message.textContent='Searching…';
+      timer=setTimeout(function(){load(false,seq);},300);
+    };
   }
   async function schedulesView() {
     var data = await api("/work/schedules"), chats = h.state.conversations;
@@ -86,7 +112,7 @@
       '<h2>Saved logins</h2>' + (data.logins.length ? data.logins.map(function(l){return '<article class="panel"><h3>' + esc(l.name) + '</h3><p class="work-hint">' + esc(l.url) + '</p>' + button("Remove saved login","remove-login",l.id) + '</article>';}).join("") : '<p class="work-hint">Add a login here when a site has no API connection. Passwords are stored separately from chat messages.</p>');
     if(h.state.conversationId){var local=await api("/work/files/"+h.state.conversationId);$("workBody").insertAdjacentHTML("beforeend",'<h2>Chat files</h2>'+local.files.map(function(f){return '<p><a href="'+esc(h.apiUrl("/api/harvey/work/files/"+h.state.conversationId+"/"+encodeURIComponent(f.name)))+'">'+esc(f.name)+'</a> · '+Math.ceil(f.size/1024)+' KB</p>';}).join(""));}
   }
-  async function show(view) { activeView=view;h.showView("work");$("workBody").textContent="Loading…";try{status=await api("/work/status");await loadProjects();if(view==="plugins")await pluginsView();else if(view==="schedules")await schedulesView();else await browserView();}catch(e){$("workBody").textContent=e.message;} }
+  async function show(view) { ++pluginViewVersion;activeView=view;h.showView("work");$("workBody").textContent="Loading…";try{status=await api("/work/status");await loadProjects();if(view==="plugins")await pluginsView();else if(view==="schedules")await schedulesView();else await browserView();}catch(e){$("workBody").textContent=e.message;} }
   async function uploadFile() {
     var chat = await h.ensureChat();
     modal("Upload a file", '<label class="work-field">File (up to 250 MB)<input type="file" name="file" required></label><p class="work-hint">Harvey can use this file in the current Work chat. Video trimming and browser uploads are supported.</p>', async function(d){var form=new FormData();form.append("file",d.file);var saved=await api("/work/files/"+chat,"POST",form);h.toast("Uploaded "+saved.file);});

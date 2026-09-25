@@ -15,7 +15,6 @@ const SDK = new Function("return import('@composio/core')");
 let clientPromise;
 const sessions = new Map();
 const META = new Set(["COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_MANAGE_CONNECTIONS", "COMPOSIO_MULTI_EXECUTE_TOOL", "COMPOSIO_WAIT_FOR_CONNECTIONS"]);
-const FEATURED = ["gmail", "googledrive", "googlecalendar", "googlesheets", "outlook", "onedrive", "slack", "notion", "github", "linear", "dropbox", "box", "hubspot", "salesforce", "airtable", "trello", "asana", "discord", "youtube", "microsoft_teams"];
 function composioReady() { return !!process.env.COMPOSIO_API_KEY?.trim(); }
 function composioUser(owner, project) { return "harvey_" + (0, crypto_1.createHash)("sha256").update(JSON.stringify([owner, project])).digest("hex"); }
 async function client() {
@@ -74,8 +73,8 @@ async function managedCatalog(owner, project, search = "", cursor) {
         return { enabled: false, items: [], connected: [] };
     return guarded(async () => {
         const session = await composioSession(owner, null);
-        const [catalog, connected] = await Promise.all([session.toolkits(search ? { search: search.slice(0, 100), limit: 30, cursor } : { toolkits: FEATURED, limit: 30 }), managedConnections(owner)]);
-        return { enabled: true, items: catalog.items, cursor: catalog.cursor, connected };
+        const [catalog, connected] = await Promise.all([session.toolkits({ limit: 50, ...(search.trim() ? { search: search.trim().slice(0, 100) } : {}), ...(cursor ? { cursor } : {}) }), managedConnections(owner)]);
+        return { enabled: true, items: catalog.items, cursor: catalog.nextCursor || catalog.cursor || null, connected };
     });
 }
 async function connectManaged(owner, project, slug) {
@@ -122,10 +121,13 @@ async function executeManaged(owner, project, name, input) {
             throw new Error("Unknown connection scope");
         selected = allowed[index];
     }
-    else if (name !== "COMPOSIO_MANAGE_CONNECTIONS") {
-        const connected = await managedConnections(owner);
-        if (connected.length)
-            selected = allowed.find(p => composioUser(owner, p) === connected[0].scope) || null;
+    else if (name !== "COMPOSIO_MANAGE_CONNECTIONS" && name !== "COMPOSIO_WAIT_FOR_CONNECTIONS") {
+        const connectedScopes = [...new Set((await managedConnections(owner)).map(c => c.scope))];
+        // Never silently route a tool to an arbitrary project's account.
+        if (connectedScopes.length > 1)
+            throw new Error("Multiple connection scopes are active. Set harvey_connection_scope from the connected apps list for discovery and execution.");
+        if (connectedScopes.length === 1)
+            selected = allowed.find(p => composioUser(owner, p) === connectedScopes[0]) || null;
     }
     return guarded(async () => { const session = await composioSession(owner, selected); const result = await session.execute(name, args); if (result.error)
         throw new Error(typeof result.error === "string" ? result.error : JSON.stringify(result.error)); return result.data; });

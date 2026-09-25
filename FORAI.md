@@ -34,6 +34,8 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- 2026-09-25: Plugins browses the full live Composio catalog with paginated search and load-more instead of a 20-app allowlist. New connections remain owner-wide and are refreshed for every Chat/Work/scheduled turn; ambiguous legacy connection scopes require explicit selection rather than routing to an arbitrary account. No-auth apps can be used without sign-in. Provider-granted permissions still apply. Catalog and connection regression checks cover pagination, sign-in persistence, isolation, and stale UI requests.
+
 - 2026-09-24: Monte Carlo / Monte Carlo off commands persist per-chat consent for direct credential use by the existing hosted browser tools. Only direct interactive messages change consent; scheduled prompts cannot. Credentials supplied in chat follow normal chat storage/model processing; the option does not disable site MFA, service permissions, or business approvals. Central Time is explicit in the system clock and defaults for schedule creation; Fly TZ is America/Chicago.
 
 - 2026-09-24: Chat and Work now share connected-app and browser tools; live Composio status is injected per turn and included in plugin discovery. Managed connections are owner-wide across chats/projects (existing project sessions remain usable; custom connectors retain scopes). Model scope selection is validated against the owner. Both modes can explicitly schedule tasks, with saved-task SSE events opening a right-side panel. Fly enables the worker; cron uses IANA America/Chicago including DST. Scheduled calls default to the cheap Mercury model. Added isolated opt-in connected mailbox read verification without logging email content.

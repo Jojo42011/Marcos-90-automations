@@ -84,6 +84,10 @@ managed.managedConnections=async()=>connected?[{slug:'gmail',name:'Gmail',scope:
 managed.managedTools=async()=>[{name:'COMPOSIO_SEARCH_TOOLS',description:'Fixture discovery',input_schema:{type:'object',properties:{}}}];
 calls=[];await r.runChat('alice',conversation,'Which plugins are connected?');
 ok('Existing Chat sees live managed connection and tool schemas',()=>{assert(JSON.stringify(calls[0].messages[0]).includes('fixture-scope'));assert(calls[0].tools.some(t=>t.function.name==='COMPOSIO_SEARCH_TOOLS'));});
+calls=[];await r.runChat('alice',chat,'Use my connected app for this scheduled task',{},'managed-scheduled-fixture');
+ok('Scheduled Work turn sees newly connected apps and managed tools',()=>{assert(JSON.stringify(calls[0].messages[0]).includes('fixture-scope'));assert(calls[0].tools.some(t=>t.function.name==='COMPOSIO_SEARCH_TOOLS'));});
+connected=false;calls=[];await r.runChat('alice',conversation,'Refresh connected apps');
+ok('Existing chat also observes disconnect on its next turn',()=>assert(!JSON.stringify(calls[0].messages[0]).includes('fixture-scope')));
 connected=false;calls=[];const fresh=s.createChat('alice',{mode:'chat'});await r.runChat('alice',fresh,'Which plugins are connected?');
 ok('New chat reflects disconnect instead of stale connection state',()=>assert(!JSON.stringify(calls[0].messages[0]).includes('fixture-scope')));
 managed.managedConnections=originalConnections;managed.managedTools=originalTools;
