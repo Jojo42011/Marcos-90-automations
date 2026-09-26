@@ -34,6 +34,8 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- 2026-09-25: Security: operator-requested temporary dashboard testing password rotation. The existing admin credential is reset once using marker `2026-09-25-dashboard-testing`, with no forced password change for this testing rotation. It supersedes the older bootstrap hash, revokes existing sessions, and leaves other account passwords unchanged. Normal session authentication remains enforced; subsequent restarts preserve an operator-changed password. After testing, replace the temporary credential through the account password-change page. Future rotations should use a deployment secret and a fresh marker.
+
 - 2026-09-25: Plugins browses the full live Composio catalog with paginated search and load-more instead of a 20-app allowlist. New connections remain owner-wide and are refreshed for every Chat/Work/scheduled turn; ambiguous legacy connection scopes require explicit selection rather than routing to an arbitrary account. No-auth apps can be used without sign-in. Provider-granted permissions still apply. Catalog and connection regression checks cover pagination, sign-in persistence, isolation, and stale UI requests.
 
 - 2026-09-24: Monte Carlo / Monte Carlo off commands persist per-chat consent for direct credential use by the existing hosted browser tools. Only direct interactive messages change consent; scheduled prompts cannot. Credentials supplied in chat follow normal chat storage/model processing; the option does not disable site MFA, service permissions, or business approvals. Central Time is explicit in the system clock and defaults for schedule creation; Fly TZ is America/Chicago.
