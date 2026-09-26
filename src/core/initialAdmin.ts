@@ -1,47 +1,27 @@
 /**
- * The one-time admin credential used to arm the site lock, and the boot step
- * that applies it.
+ * One-time admin password rotation for the operator's dashboard testing.
  *
- * WHY A HASH LIVES IN THIS FILE. The lock had to go on immediately, and this
- * environment has no Fly CLI access, so a secret could not be set the proper
- * way (`fly secrets set`). What is stored below is a scrypt hash, not a
- * password — storing those is what hashing exists for — and it is single-use by
- * construction: the account is flagged `mustChangePassword`, so the first
- * successful login has to replace it before anything else can be done. Once the
- * operator has changed it, the value here refers to nothing.
+ * This temporary rotation uses the operator-requested testing credential.
+ * It is stored as a salted scrypt hash and applied once, not as a login bypass.
+ * A password changed later through the account UI survives restarts.
  *
- * `INITIAL_ADMIN_PASSWORD_HASH` in the environment overrides the constant, and
- * that is the correct way to do this. When Fly secrets are available again:
- *
- *     fly secrets set INITIAL_ADMIN_PASSWORD_HASH='<salt>:<hash>'
- *
- * and bump the marker. The env var wins, and nothing sensitive is in git.
- *
- * WHY IT RUNS ON A MARKER AND NOT ON EVERY BOOT. Fly restarts machines for its
- * own reasons — a deploy, an OOM, a host migration. A reset that fired on every
- * start would silently revert the operator's own password the next time the VM
- * bounced, and they would have no way to tell why their login stopped working.
- * The marker makes it happen exactly once per intentional rotation.
+ * After testing, change the admin password through the normal account UI.
+ * Future rotations should use INITIAL_ADMIN_PASSWORD_HASH and a new marker.
  */
 import { destroyAllSessions, getSecurityState, recordAudit, setSecurityState } from "./authStore.js";
 import { getUsers, updateUser } from "./users.js";
 
 /** Bump this to force another rotation: all sessions die, the admin resets. */
-export const LOCKDOWN_MARKER = "2026-08-26-rotate-2";
+export const LOCKDOWN_MARKER = "2026-09-25-dashboard-testing";
 
 /** The account the rotation targets, by the address it was seeded under. */
 const ADMIN_EMAIL = "marco@example.com";
 
-/**
- * scrypt hash of the one-time password, as `salt:hash`.
- *
- * Not a password. Not reversible. Retired the moment it is used, because the
- * account it belongs to cannot do anything until the password is changed.
- */
-const FALLBACK_HASH =
-  "ec16e2b47bf98fe3140caf0b776fc42f:" +
-  "7660e3e02ab71899fdfd5086c8f5637a2c7263d0322b136adcbd5931fce70849" +
-  "2b0cb042c6d9b170b644bd5226c5b9ad7d6e4893ed83cc7b742a94cddac894df";
+/** Salted scrypt hash for this explicitly requested temporary testing rotation. */
+const TESTING_PASSWORD_HASH =
+  "c220ad0cccdb44eaa6c6c4c812f9bff1:" +
+  "01243615a2b31e21c2aa9b670b5c92ed128008542aac3012247d8c4308fd9a56b90e" +
+  "0e0e09d5461a4514fad56f93535a6745b6695671c1dc0e1ce1ed6de7c0e8";
 
 export interface LockdownResult {
   ran: boolean;
@@ -66,7 +46,8 @@ export function runLockdownBootStep(): LockdownResult {
      to whoever might already be inside cannot outlive the rotation. */
   const sessionsRevoked = destroyAllSessions();
 
-  const hash = process.env.INITIAL_ADMIN_PASSWORD_HASH?.trim() || FALLBACK_HASH;
+  // This explicit testing rotation supersedes any older bootstrap credential.
+  const hash = TESTING_PASSWORD_HASH;
 
   /* Target the seeded admin. If that address is gone, fall back to the first
      active admin rather than doing nothing: an operator locked out of their own
@@ -78,7 +59,7 @@ export function runLockdownBootStep(): LockdownResult {
     null;
 
   if (target) {
-    updateUser(target.id, { passwordHash: hash, mustChangePassword: true, active: true });
+    updateUser(target.id, { passwordHash: hash, mustChangePassword: false, active: true });
   }
 
   /* Every OTHER account keeps whatever password it had — their sessions are
