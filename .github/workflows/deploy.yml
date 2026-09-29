@@ -11,6 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify model-independent credential consent
+        run: node scripts/verify-harvey-credential-consent.mjs
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       # Buildx enables the cross-run layer cache below. Without it every deploy
