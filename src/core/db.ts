@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -96,9 +97,9 @@ export function normalizeCrmStatus(raw: unknown): CrmStatus {
 function resolveDbPath(): string {
   const explicit = process.env.DB_JSON_PATH?.trim();
   if (explicit) return explicit;
-  const flyDefault = "/data/db.json";
+  const flyDefault = dataPath("db.json");
   if (existsSync(flyDefault)) return flyDefault;
-  return join(process.cwd(), "data", "local-dashboard-db.json");
+  return dataPath("local-dashboard-db.json");
 }
 
 const DB_PATH = resolveDbPath();
@@ -333,6 +334,7 @@ export function buildCommandTasksSummary(tasks?: CommandTask[]): CommandTasksSum
 }
 
 export function seedCommandTasksIfEmpty(): CommandTask[] {
+  if (process.env.TENANT_OWNER_ID) return commandTasksStore;
   if (commandTasksStore.length > 0) return commandTasksStore;
 
   const seeds: Omit<CommandTask, "id" | "createdAt" | "updatedAt" | "status">[] = [

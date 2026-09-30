@@ -737,7 +737,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
       properties: {
         column: { type: "string", enum: TASK_COLUMNS },
         status: { type: "string", enum: TASK_STATUSES },
-        assignedTo: { type: "string", description: "marco, wesley, kendrick or carlos." },
+        assignedTo: { type: "string", description: "marco, wesley or carlos." },
         includeDone: { type: "boolean", description: "Default false." },
         limit: { type: "number", description: "Default 40, max 200." },
       },
@@ -757,7 +757,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
           description: "Short and plain. What needs doing. No em dash, no emoji.",
         },
         column: { type: "string", enum: TASK_COLUMNS, description: "Default 'today'." },
-        assignedTo: { type: "string", description: "marco, wesley, kendrick or carlos." },
+        assignedTo: { type: "string", description: "marco, wesley or carlos." },
         description: {
           type: "string",
           description:

@@ -10,6 +10,7 @@ exports.readBrivityMirror = readBrivityMirror;
 exports.getBrivityMirrorStatus = getBrivityMirrorStatus;
 exports.brivityMirrorSourceCounts = brivityMirrorSourceCounts;
 exports.closeBrivityMirrorDb = closeBrivityMirrorDb;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * A durable local mirror of Brivity's contact list.
  *
@@ -56,7 +57,7 @@ const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 function resolveBase() {
-    const base = (0, fs_1.existsSync)("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
+    const base = (0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(base, { recursive: true });
     return base;
 }

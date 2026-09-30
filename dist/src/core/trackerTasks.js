@@ -24,7 +24,7 @@ const trackerStore_js_1 = require("./trackerStore.js");
 exports.TRACKER_TAG = "tracker";
 const RECORD_TAG_PREFIX = "tracker:";
 /** Team ids the Task Manager knows about; anything else falls back to the default. */
-const TEAM_IDS = new Set(["marco", "wesley", "kendrick", "carlos"]);
+const TEAM_IDS = new Set(["marco", "wesley", "carlos"]);
 function assigneeFor(record) {
     const a = String(record.assignedTo || "").trim().toLowerCase();
     return TEAM_IDS.has(a) ? a : "carlos";

@@ -12,6 +12,7 @@ exports.createTask = createTask;
 exports.updateTask = updateTask;
 exports.deleteTask = deleteTask;
 exports.filterTasks = filterTasks;
+const tenantData_js_1 = require("./tenantData.js");
 const fs_1 = require("fs");
 const path_1 = require("path");
 const types_js_1 = require("./types.js");
@@ -19,8 +20,8 @@ function resolveTasksPath() {
     const explicit = process.env.TASKS_JSON_PATH?.trim();
     if (explicit)
         return explicit;
-    const flyDb = "/data/db.json";
-    const localDb = (0, path_1.join)(process.cwd(), "data", "local-dashboard-db.json");
+    const flyDb = (0, tenantData_js_1.dataPath)("db.json");
+    const localDb = (0, tenantData_js_1.dataPath)("local-dashboard-db.json");
     const dbPath = process.env.DB_JSON_PATH?.trim() || ((0, fs_1.existsSync)(flyDb) ? flyDb : localDb);
     return (0, path_1.join)((0, path_1.dirname)(dbPath), "tasks.json");
 }

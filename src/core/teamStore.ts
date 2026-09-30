@@ -1,9 +1,10 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Team collaboration store for the Task Command Center — direct chat,
  * notifications (assignments / due-soon / messages), and lightweight presence.
  * File-backed (same pattern as pushStore): /data/team.json on Fly, ./data
  * locally. Identity model matches the task board: device-picked member ids
- * (marco/wesley/kendrick/carlos).
+ * (marco/wesley/carlos).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -46,8 +47,8 @@ interface PersistedTeam {
 function resolvePath(): string {
   const explicit = process.env.TEAM_JSON_PATH?.trim();
   if (explicit) return explicit;
-  if (existsSync("/data")) return "/data/team.json";
-  return join(process.cwd(), "data", "team.json");
+  if (existsSync(dataPath(""))) return dataPath("team.json");
+  return dataPath("team.json");
 }
 
 const PATH = resolvePath();
@@ -93,7 +94,7 @@ export function touchPresence(user: string): void {
 }
 export function getPresence(): Record<string, { lastSeen: string | null; online: boolean }> {
   const out: Record<string, { lastSeen: string | null; online: boolean }> = {};
-  for (const m of ["marco", "wesley", "kendrick", "carlos"]) {
+  for (const m of ["marco", "wesley", "carlos"]) {
     const t = presence.get(m);
     out[m] = { lastSeen: t ? new Date(t).toISOString() : null, online: !!t && Date.now() - t < 70000 };
   }

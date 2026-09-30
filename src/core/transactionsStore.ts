@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import { randomUUID } from "crypto";
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "fs";
@@ -8,8 +9,8 @@ import type { DealActivityLogEntry, SigningDocument } from "./types.js";
 function resolveTransactionsDbPath(): string {
   const env = process.env.TRANSACTIONS_DB_PATH?.trim();
   if (env) return env;
-  if (existsSync("/data")) return "/data/transactions.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("transactions.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "transactions.db");
 }
@@ -465,23 +466,23 @@ export interface DocumentTemplate {
 }
 
 export function resolveTemplatesDir(): string {
-  if (existsSync("/data")) {
-    const dir = "/data/templates";
+  if (existsSync(dataPath(""))) {
+    const dir = dataPath("templates");
     mkdirSync(dir, { recursive: true });
     return dir;
   }
-  const localDir = path.join(process.cwd(), "data", "templates");
+  const localDir = dataPath("templates");
   mkdirSync(localDir, { recursive: true });
   return localDir;
 }
 
 export function resolveGeneratedDocsDir(): string {
-  if (existsSync("/data")) {
-    const dir = "/data/generated-docs";
+  if (existsSync(dataPath(""))) {
+    const dir = dataPath("generated-docs");
     mkdirSync(dir, { recursive: true });
     return dir;
   }
-  const localDir = path.join(process.cwd(), "data", "generated-docs");
+  const localDir = dataPath("generated-docs");
   mkdirSync(localDir, { recursive: true });
   return localDir;
 }

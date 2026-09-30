@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "fs";
 import path from "path";
@@ -7,8 +8,8 @@ import { listAllLeads } from "./db.js";
 function resolveFinanceDbPath(): string {
   const env = process.env.FINANCE_DB_PATH?.trim();
   if (env) return env;
-  if (existsSync("/data")) return "/data/finance.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("finance.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "finance.db");
 }

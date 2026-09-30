@@ -1,10 +1,11 @@
+import { dataPath } from "../../core/tenantData.js";
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "fs";
 import path from "path";
 
 function resolveMemoryDbPath(): string {
-  if (existsSync("/data")) return "/data/harvey-memory.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("harvey-memory.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "harvey-memory.db");
 }

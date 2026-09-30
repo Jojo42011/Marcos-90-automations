@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * A durable local mirror of Brivity's contact list.
  *
@@ -48,7 +49,7 @@ import Database from "better-sqlite3";
 import type { BrivityLeadRow } from "./brivityPeople.js";
 
 function resolveBase(): string {
-  const base = existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const base = existsSync(dataPath("")) ? dataPath("") : dataPath();
   mkdirSync(base, { recursive: true });
   return base;
 }

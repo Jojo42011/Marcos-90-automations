@@ -20,6 +20,7 @@ exports.generatePipelineProjection = generatePipelineProjection;
 exports.logFinanceAlert = logFinanceAlert;
 exports.getFinanceAlerts = getFinanceAlerts;
 exports.acknowledgeFinanceAlert = acknowledgeFinanceAlert;
+const tenantData_js_1 = require("./tenantData.js");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
@@ -29,9 +30,9 @@ function resolveFinanceDbPath() {
     const env = process.env.FINANCE_DB_PATH?.trim();
     if (env)
         return env;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/finance.db";
-    const localDir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("finance.db");
+    const localDir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return path_1.default.join(localDir, "finance.db");
 }

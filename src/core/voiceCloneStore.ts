@@ -1,18 +1,19 @@
+import { dataPath } from "./tenantData.js";
 import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 
 function resolveVoiceCloneDbPath(): string {
-  const base = fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const base = fs.existsSync(dataPath("")) ? dataPath("") : dataPath();
   fs.mkdirSync(base, { recursive: true });
   return path.join(base, "voice-clone.db");
 }
 
 export function resolveVoiceCloneDataRoot(): string {
-  const root = fs.existsSync("/data")
-    ? "/data/voice-clone"
-    : path.join(process.cwd(), "data", "voice-clone");
+  const root = fs.existsSync(dataPath(""))
+    ? dataPath("voice-clone")
+    : dataPath("voice-clone");
   for (const sub of ["reference", "generated", "exports"]) {
     fs.mkdirSync(path.join(root, sub), { recursive: true });
   }

@@ -2,7 +2,7 @@
  * Assertions for the collapsed DM opener (Aug 2026).
  *
  * The opener used to be a three-beat ladder: first-time-buyer question, wait;
- * breakdown offer, wait; number ask, wait. Kendrick's TikTok threads on Wesley's
+ * breakdown offer, wait; number ask, wait. the former assistant's TikTok threads on Wesley's
  * account do all three in ONE message, and the observed gaps between DM turns are
  * DAYS, so each extra beat is a real chance to lose the lead.
  *

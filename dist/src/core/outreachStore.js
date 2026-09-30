@@ -32,6 +32,7 @@ exports.listAlertTemplates = listAlertTemplates;
 exports.getAlertTemplate = getAlertTemplate;
 exports.saveAlertTemplate = saveAlertTemplate;
 exports.deleteAlertTemplate = deleteAlertTemplate;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Listing Alerts and Market Reports — the two client-facing MLS subscriptions.
  *
@@ -66,9 +67,9 @@ function resolveDbPath() {
         (0, fs_1.mkdirSync)(path_1.default.dirname(env), { recursive: true });
         return env;
     }
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/outreach.db";
-    const dir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("outreach.db");
+    const dir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(dir, { recursive: true });
     return path_1.default.join(dir, "outreach.db");
 }

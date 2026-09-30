@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Luxury content shortlist — the rolling list of $1M+ homes worth filming.
  *
@@ -23,8 +24,8 @@ import { existsSync, mkdirSync } from "fs";
 import path from "path";
 
 function resolveDbPath(): string {
-  if (existsSync("/data")) return "/data/luxury-content.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("luxury-content.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "luxury-content.db");
 }

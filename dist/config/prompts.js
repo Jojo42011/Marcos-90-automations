@@ -514,7 +514,7 @@ Output ONLY valid JSON (no markdown fences):
     /**
      * TikTok opening flow: one beat — breakdown offer + number ask in the same message.
      * Collapsed Aug 2026 from the old three-turn ladder (first-time question, then
-     * breakdown permission, then number ask) to match Kendrick's observed TikTok threads.
+     * breakdown permission, then number ask) to match the former assistant's observed TikTok threads.
      * Separate from Instagram flow by design.
      */
     marcoTikTokOpeningUnified: `

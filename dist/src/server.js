@@ -38,6 +38,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeDueAutoPlanSteps = executeDueAutoPlanSteps;
 exports.executeDueTransactionPlanSteps = executeDueTransactionPlanSteps;
+const tenantData_js_1 = require("./core/tenantData.js");
+const tenantData_js_2 = require("./core/tenantData.js");
+const tenantGateway_js_1 = require("./core/tenantGateway.js");
 const routes_js_1 = require("./harvey/work/routes.js");
 const runtime_js_1 = require("./harvey/work/runtime.js");
 /**
@@ -162,7 +165,9 @@ const lockdown_js_1 = require("./core/lockdown.js");
 const authStore_js_1 = require("./core/authStore.js");
 const users_js_2 = require("./core/users.js");
 const app = (0, express_1.default)();
-const PORT = parseInt(process.env.PORT || "3000", 10);
+if ((0, tenantData_js_2.tenantOwner)())
+    process.on("disconnect", () => process.exit(0));
+let PORT = parseInt(process.env.PORT || "3000", 10);
 /* Behind Fly's proxy every request arrives over plain HTTP on the internal
    network, so `req.protocol` reads "http" and the session cookie would never
    get its Secure flag. Trusting the proxy's X-Forwarded-Proto fixes that and
@@ -179,6 +184,7 @@ app.use((0, lockdown_js_1.makeLockdown)({
     machineTokenOk: (req) => machineTokenOk(req),
     internalCall: (req) => (0, internalCall_js_1.isInternalCall)(req),
 }));
+app.use((0, tenantGateway_js_1.accountMiddleware)(sessionUserSync, internalCall_js_1.isInternalCall));
 /**
  * The signed-in user, resolved synchronously.
  *
@@ -197,7 +203,7 @@ function sessionUserSync(req) {
         if (!session)
             return null;
         const user = (0, users_js_2.getUserById)(session.userId);
-        if (!user || user.active === false)
+        if (!user || user.active === false || ((0, tenantData_js_2.tenantOwner)() && user.id !== (0, tenantData_js_2.tenantOwner)()))
             return null;
         return user;
     }
@@ -688,7 +694,7 @@ async function currentSessionUser(req) {
         return null;
     const { getUserById } = await Promise.resolve().then(() => __importStar(require("./core/users.js")));
     const user = getUserById(session.userId);
-    if (!user || user.active === false)
+    if (!user || user.active === false || ((0, tenantData_js_2.tenantOwner)() && user.id !== (0, tenantData_js_2.tenantOwner)()))
         return null;
     return user;
 }
@@ -697,6 +703,8 @@ async function currentSessionUser(req) {
 // it on later with `fly secrets set SITE_LOGIN_ENABLED=1` — no code changes,
 // no redeploy of this logic needed.
 function siteLoginEnabled() {
+    if (process.env.ACCOUNT_ISOLATION === "true")
+        return true;
     /* Locked by default as of 2026-08-22. It used to be the reverse — the login
        system was fully built but only enforced when SITE_LOGIN_ENABLED was "1",
        and it never was, so the whole app was reachable by anyone with the URL.
@@ -765,7 +773,7 @@ app.get("/change-password", (_req, res) => {
 // The login page itself must never be gated (that would be an infinite redirect loop).
 app.get("/login", (req, res) => {
     void currentSessionUser(req).then((user) => {
-        if (user) {
+        if (user && req.query.switch !== "1") {
             res.redirect("/shell");
             return;
         }
@@ -799,6 +807,7 @@ app.post("/api/auth/login", express_1.default.json(), async (req, res) => {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         path: "/",
     });
+    res.cookie("mp_account", user.name.trim().split(/\s+/)[0].toLowerCase(), { sameSite: "lax", secure: req.secure, path: "/" });
     res.json({ ok: true });
 });
 app.post("/api/auth/logout", async (req, res) => {
@@ -808,6 +817,8 @@ app.post("/api/auth/logout", async (req, res) => {
         destroySession(token);
     }
     res.clearCookie(SESSION_COOKIE, { path: "/" });
+    res.clearCookie("mp_account", { path: "/" });
+    res.clearCookie("mp_account_id", { path: "/" });
     res.json({ ok: true });
 });
 app.get("/api/auth/me", async (req, res) => {
@@ -862,6 +873,22 @@ app.post("/api/auth/team", express_1.default.json(), requireAuthAdminApi, async 
     const { passwordHash, ...safe } = created;
     void passwordHash;
     res.status(201).json({ ok: true, user: safe, tempPassword });
+});
+app.get("/api/auth/team", requireAuthAdminApi, (_req, res) => {
+    res.json({ users: (0, users_js_1.getUsers)().map(({ passwordHash, ...safe }) => safe) });
+});
+app.patch("/api/auth/team/:id", express_1.default.json(), requireAuthAdminApi, async (req, res) => {
+    if (typeof req.body?.active !== "boolean") {
+        res.status(400).json({ error: "active must be a boolean" });
+        return;
+    }
+    const { updateUser } = await Promise.resolve().then(() => __importStar(require("./core/users.js")));
+    const user = updateUser(String(req.params.id), { active: req.body.active });
+    if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+    }
+    res.json({ ok: true });
 });
 app.post("/api/auth/team/:id/reset-password", requireAuthAdminApi, async (req, res) => {
     const id = String(req.params.id || "").trim();
@@ -8956,13 +8983,13 @@ app.post("/api/crm/notifications/:id/read", (req, res) => {
     res.json({ success: true });
 });
 function resolveContentVideoUploadDir() {
-    const base = fs_1.default.existsSync("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
+    const base = fs_1.default.existsSync((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     const dir = path_1.default.join(base, "uploads", "videos");
     fs_1.default.mkdirSync(dir, { recursive: true });
     return dir;
 }
 function resolveContentClipsDir() {
-    const base = fs_1.default.existsSync("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
+    const base = fs_1.default.existsSync((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     const dir = path_1.default.join(base, "clips");
     fs_1.default.mkdirSync(dir, { recursive: true });
     return dir;
@@ -8985,7 +9012,7 @@ function resolveClipVideoFilePath(storedPath) {
     }
     if (fs_1.default.existsSync(storedPath))
         return storedPath;
-    const dataBase = fs_1.default.existsSync("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
+    const dataBase = fs_1.default.existsSync((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     const stripped = normalized
         .replace(/^\/data\//, "")
         .replace(/^data\//, "")
@@ -14618,6 +14645,13 @@ hullWss.on("connection", (ws) => {
     (0, index_js_20.registerHullWs)(ws);
 });
 httpServer.on("upgrade", (request, socket, head) => {
+    const accountUser = sessionUserSync(request);
+    if ((0, tenantGateway_js_1.accountUpgrade)(request, socket, head, accountUser))
+        return;
+    if ((0, tenantData_js_2.tenantOwner)() && accountUser?.id !== (0, tenantData_js_2.tenantOwner)()) {
+        socket.destroy();
+        return;
+    }
     // Harvey STT: ElevenLabs Scribe v2 realtime is the primary engine; Deepgram
     // Flux is kept as a fallback path (still functional if hit directly).
     if ((0, elevenlabsProxy_js_1.handleElevenLabsUpgrade)(request, socket, head, dashboardTokenOkIncoming))
@@ -14641,7 +14675,7 @@ httpServer.on("upgrade", (request, socket, head) => {
 /* Scheduled transactions sheet sync — every 6 hours (configurable), plus one
    run shortly after boot so a restart never leaves the numbers a day stale.
    No-ops harmlessly when TRANSACTIONS_SHEET_URL is unset. */
-if ((0, transactionSheetSync_js_1.isSheetSyncConfigured)()) {
+if (!(0, tenantData_js_2.isTenantGateway)() && (0, transactionSheetSync_js_1.isSheetSyncConfigured)()) {
     const sheetSyncEveryMs = Math.max(30 * 60_000, (parseInt(process.env.TRANSACTIONS_SHEET_SYNC_HOURS || "6", 10) || 6) * 60 * 60_000);
     setTimeout(() => {
         void (0, transactionSheetSync_js_1.runSheetSync)().catch((err) => console.warn("[sheetSync] boot run failed:", err));
@@ -14655,6 +14689,8 @@ if ((0, transactionSheetSync_js_1.isSheetSyncConfigured)()) {
    link; an hourly sweep keeps offsets honest at day granularity. */
 const AUTO_PLAN_INTERVAL_MS = 60 * 60 * 1000;
 setInterval(() => {
+    if ((0, tenantData_js_2.isTenantGateway)())
+        return;
     executeDueAutoPlanSteps()
         .then((r) => {
         if (r.stepsExecuted > 0) {
@@ -14676,7 +14712,7 @@ httpServer.on("error", (err) => {
 /* Arm the site lock before the listener opens: everyone signed out, admin
    credential rotated. Once per marker, not once per boot — see
    src/core/initialAdmin.ts for why that distinction matters. */
-{
+if (!(0, tenantData_js_2.tenantOwner)()) {
     const lock = require("./core/initialAdmin.js");
     try {
         const r = lock.runLockdownBootStep();
@@ -14693,10 +14729,10 @@ httpServer.on("error", (err) => {
         console.error("[security] Lockdown boot step FAILED — check auth.db:", err.message);
     }
 }
-/* Seed the team's SOPs into the Knowledge Center. Once per library version —
+/* Seed the team's SOPs into the Knowledge Center. Once per library version -
    after that the Knowledge Center owns them and edits there are never
    overwritten. See src/core/sopImport.ts. */
-{
+if (process.env.ACCOUNT_ISOLATION !== "true") {
     const sops = require("./core/sopImport.js");
     try {
         const r = sops.runSopImportStep();
@@ -14709,7 +14745,15 @@ httpServer.on("error", (err) => {
         console.error("[knowledge] SOP import FAILED — the Knowledge Center will be missing the SOPs:", err.message);
     }
 }
-httpServer.listen(PORT, "0.0.0.0", () => {
+httpServer.listen(PORT, (0, tenantData_js_2.tenantOwner)() ? "127.0.0.1" : "0.0.0.0", () => {
+    PORT = httpServer.address().port;
+    if ((0, tenantData_js_2.isTenantGateway)()) {
+        require("./core/accountBootstrap.js").bootstrapAccounts();
+        (0, tenantGateway_js_1.startTenantWorkers)();
+        console.log(`[accounts] Sign-in gateway listening on ${PORT}`);
+        return;
+    }
+    process.send?.({ type: "tenant-ready", port: PORT });
     (0, runtime_js_1.startWorker)();
     console.log(`[Server] Listening on 0.0.0.0:${PORT}`);
     /* Publish the real routing table to Harvey's CRM bridge. Read from Express
@@ -14767,7 +14811,8 @@ httpServer.listen(PORT, "0.0.0.0", () => {
         // Raises (and clears) the monthly "import the Brivity transaction export"
         // task. Brivity has no transaction API, so nothing else keeps that data
         // from going quietly stale.
-        (0, index_js_12.scheduleTransactionImportReminder)();
+        if (!(0, tenantData_js_2.tenantOwner)())
+            (0, index_js_12.scheduleTransactionImportReminder)();
         void (async () => {
             const { scheduleQuoSync } = await Promise.resolve().then(() => __importStar(require("./core/quoSync.js")));
             const { isQuoConfigured, ensureMessageWebhook } = await Promise.resolve().then(() => __importStar(require("./integrations/quo/index.js")));

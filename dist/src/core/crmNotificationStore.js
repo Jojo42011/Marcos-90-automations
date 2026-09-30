@@ -9,12 +9,13 @@ exports.getUnreadNotifications = getUnreadNotifications;
 exports.getAllNotifications = getAllNotifications;
 exports.markNotificationRead = markNotificationRead;
 exports.countUnreadNotifications = countUnreadNotifications;
+const tenantData_js_1 = require("./tenantData.js");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const crypto_1 = require("crypto");
 function resolveCrmAutomationDbPath() {
-    const base = fs_1.default.existsSync("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
+    const base = fs_1.default.existsSync((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     fs_1.default.mkdirSync(base, { recursive: true });
     return path_1.default.join(base, "crm-automation.db");
 }

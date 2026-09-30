@@ -47,6 +47,7 @@ exports.listAgreements = listAgreements;
 exports.getAgreement = getAgreement;
 exports.addAgreement = addAgreement;
 exports.deleteAgreement = deleteAgreement;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * The contact record's own data: emails, phones, addresses, social links,
  * notes and documents for one CRM contact.
@@ -91,7 +92,7 @@ exports.SOCIAL_PLATFORMS = [
 ];
 /* ────────────────────────── database ────────────────────────── */
 function resolveBase() {
-    const base = (0, fs_1.existsSync)("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
+    const base = (0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(base, { recursive: true });
     return base;
 }

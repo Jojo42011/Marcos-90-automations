@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import { existsSync, mkdirSync, promises as fs } from "fs";
 import { dirname, join, normalize, relative, resolve, sep } from "path";
 
@@ -18,9 +19,9 @@ import { dirname, join, normalize, relative, resolve, sep } from "path";
 function resolveWorkspaceRoot(): string {
   const explicit = process.env.HARVEY_WORKSPACE_PATH?.trim();
   if (explicit) return resolve(explicit);
-  const flyDir = "/data";
+  const flyDir = dataPath("");
   if (existsSync(flyDir)) return join(flyDir, "workspace");
-  return join(process.cwd(), "data", "workspace");
+  return dataPath("workspace");
 }
 
 export const WORKSPACE_ROOT = resolveWorkspaceRoot();

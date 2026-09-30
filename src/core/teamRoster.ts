@@ -17,6 +17,7 @@
  * Gmail accounts that may change.
  */
 import { getMarcoEmail } from "../integrations/gmail/index.js";
+import { getUsers } from "./users.js";
 
 export interface TeamMember {
   id: string;
@@ -38,13 +39,15 @@ export type PublicTeamMember = Omit<TeamMember, "email">;
 const ROSTER: TeamMember[] = [
   { id: "marco", name: "Marco", role: "Lead Agent", color: "#7C3AED", email: "" },
   { id: "wesley", name: "Wesley", role: "Agent", color: "#0E7490", email: "wesleyodulin@gmail.com" },
-  { id: "kendrick", name: "Kendrick", role: "Assistant", color: "#DB2777", email: "kendrick.acas4work.1@gmail.com" },
   { id: "carlos", name: "Carlos", role: "Assistant", color: "#A16207", email: "jamescarter.pugarealestate@gmail.com" },
 ];
 
 const norm = (s: unknown) => String(s || "").toLowerCase().trim();
 
 export function listTeamMembers(): PublicTeamMember[] {
+  if (process.env.TENANT_OWNER_ID) {
+    return getUsers().map(u => ({ id: u.name.trim().split(/\s+/)[0].toLowerCase(), name: u.name, role: u.role, color: u.avatarColor }));
+  }
   return ROSTER.map(({ id, name, role, color }) => ({ id, name, role, color }));
 }
 

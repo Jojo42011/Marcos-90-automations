@@ -9,12 +9,13 @@ exports.createMarcoTask = createMarcoTask;
 exports.updateMarcoTask = updateMarcoTask;
 exports.deleteMarcoTask = deleteMarcoTask;
 exports.getMarcoTaskById = getMarcoTaskById;
+const tenantData_js_1 = require("./tenantData.js");
 const crypto_1 = require("crypto");
 const fs_1 = require("fs");
 const path_1 = require("path");
 const types_js_1 = require("./types.js");
 function resolveMarcoTasksPath() {
-    const base = (0, fs_1.existsSync)("/data") ? "/data" : (0, path_1.join)(process.cwd(), "data");
+    const base = (0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     return (0, path_1.join)(base, "marco-tasks.json");
 }
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
@@ -101,6 +102,8 @@ function buildMarcoTasksSummary(tasks) {
     };
 }
 function seedMarcoTasksIfEmpty() {
+    if (process.env.TENANT_OWNER_ID)
+        return getMarcoTasks();
     let tasks = getMarcoTasks();
     if (tasks.length > 0)
         return tasks;

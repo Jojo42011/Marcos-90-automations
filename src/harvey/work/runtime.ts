@@ -141,6 +141,9 @@ export async function runChat(owner: string, chat: Chat, message: string, option
   } finally { unlockChat(owner, chat.id, token); }
 }
 export async function runScheduled(owner: string, id: string, manual = false, now = new Date(), executor = runChat) {
+  if (process.env.TENANT_OWNER_ID) {
+    if (owner !== process.env.TENANT_OWNER_ID || !(await import("../../core/users.js")).getUserById(owner)?.active) throw new Error("Account is inactive or does not own this worker");
+  }
   // Atomic claim advances the due time before external side effects. No automatic retries.
   const claimed = workDb().transaction(() => {
     const task = get<Schedule>("schedule", owner, id);
@@ -164,7 +167,8 @@ export async function tick(now = new Date()) { if (ticking) return; ticking = tr
 export function startWorker() {
   // One application process owns this SQLite volume. Interrupted work is visible,
   // never blindly replayed because a send/upload may already have happened.
-  workDb().prepare("DELETE FROM locks").run();
+  if (process.env.TENANT_OWNER_ID) workDb().prepare("DELETE FROM locks WHERE owner=?").run(process.env.TENANT_OWNER_ID);
+  else workDb().prepare("DELETE FROM locks").run();
   for (const owner of owners("run")) for (const run of list<Run>("run", owner)) if (run.status === "running") put("run", owner, { ...run, status: "needs_attention", finishedAt: new Date().toISOString(), result: "Server restarted during this run. Review external changes before running it again." });
   if (process.env.HARVEY_WORKER_ENABLED !== "true") return;
   const timer = setInterval(() => void tick().catch(e => console.error("[harvey/work]", e.message)), 30000); timer.unref();

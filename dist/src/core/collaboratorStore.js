@@ -14,6 +14,7 @@ exports.syncBrivityCollaborators = syncBrivityCollaborators;
 exports.listCollaboratorsForLead = listCollaboratorsForLead;
 exports.setCollaboratorsForLead = setCollaboratorsForLead;
 exports.collaboratorLinkCounts = collaboratorLinkCounts;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Collaborators — the outside people on a deal, and which contacts they are on.
  *
@@ -46,9 +47,9 @@ function resolveCollaboratorDbPath() {
     const env = process.env.COLLABORATOR_DB_PATH?.trim();
     if (env)
         return env;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/collaborators.db";
-    const localDir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("collaborators.db");
+    const localDir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return path_1.default.join(localDir, "collaborators.db");
 }

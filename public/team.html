@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="/account-session.js"></script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Team &amp; Activity · Marco Puga</title>
@@ -105,7 +106,7 @@ function api(path,opts){ return fetch(path, Object.assign({credentials:"same-ori
 function loadAll(){
   return Promise.all([
     api("/api/auth/me").then(function(r){return r.ok?r.json():null;}),
-    api("/api/users").then(function(r){return r.ok?r.json():{users:[]};}),
+    api("/api/auth/team").then(function(r){return r.ok?r.json():{users:[]};}),
     api("/api/auth/login-history").then(function(r){return r.ok?r.json():{rows:[]};}),
     api("/api/auth/audit-log").then(function(r){return r.ok?r.json():{rows:[]};}),
   ]).then(function(res){
@@ -247,7 +248,7 @@ function bind(){
   document.querySelectorAll("[data-toggle]").forEach(function(b){
     b.onclick=function(){
       var id=b.getAttribute("data-toggle"); var u=USERS.find(function(x){return x.id===id;}); if(!u)return;
-      api("/api/users/"+encodeURIComponent(id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:!u.active})})
+      api("/api/auth/team/"+encodeURIComponent(id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:!u.active})})
         .then(function(r){return r.json();})
         .then(function(){ toast(u.active?"Deactivated "+u.name:"Reactivated "+u.name); loadAll(); })
         .catch(function(){toast("Update failed");});

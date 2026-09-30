@@ -45,6 +45,8 @@
 
   /** Who this device says you are. May be set but not signed in this session. */
   function currentUser() {
+    var account = readCookie("mp_account");
+    if (account) return account;
     try { return localStorage.getItem(USER_KEY) || ""; } catch (_) { return ""; }
   }
 
@@ -54,6 +56,7 @@
    * not count, and neither does a session cookie left over from someone else.
    */
   function isSignedIn() {
+    if (readCookie("mp_account")) return true;
     var me = currentUser();
     return !!me && readCookie(SESSION_COOKIE) === me;
   }
@@ -66,6 +69,7 @@
   /** Returns false if the browser blocks storage (private mode), so the
    *  caller can say so rather than bouncing through a login that can't stick. */
   function signIn(id) {
+    if (readCookie("mp_account")) return id === readCookie("mp_account");
     var prev = currentUser();
     try { localStorage.setItem(USER_KEY, id); } catch (_) { return false; }
 
@@ -87,13 +91,14 @@
   }
 
   function signOut() {
+    fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).finally(function(){ location.href = "/login"; });
     try { localStorage.removeItem(USER_KEY); } catch (_) {}
     document.cookie = SESSION_COOKIE + "=; path=/; max-age=0; samesite=lax";
   }
 
   function signInUrl(next) {
     var target = next || (location.pathname + location.search);
-    return "/who?next=" + encodeURIComponent(target);
+    return "/login?switch=1&next=" + encodeURIComponent(target);
   }
 
   /**

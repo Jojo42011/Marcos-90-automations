@@ -1,10 +1,11 @@
+import { dataPath } from "./tenantData.js";
 import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 
 function resolveCrmAutomationDbPath(): string {
-  const base = fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const base = fs.existsSync(dataPath("")) ? dataPath("") : dataPath();
   fs.mkdirSync(base, { recursive: true });
   return path.join(base, "crm-automation.db");
 }

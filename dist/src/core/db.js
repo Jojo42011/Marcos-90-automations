@@ -71,6 +71,7 @@ exports.appendLeadActivity = appendLeadActivity;
 exports.normalizeRelationships = normalizeRelationships;
 exports.normalizeIsoDay = normalizeIsoDay;
 exports.updateLeadCrmFields = updateLeadCrmFields;
+const tenantData_js_1 = require("./tenantData.js");
 const crypto_1 = require("crypto");
 const fs_1 = require("fs");
 const path_1 = require("path");
@@ -143,10 +144,10 @@ function resolveDbPath() {
     const explicit = process.env.DB_JSON_PATH?.trim();
     if (explicit)
         return explicit;
-    const flyDefault = "/data/db.json";
+    const flyDefault = (0, tenantData_js_1.dataPath)("db.json");
     if ((0, fs_1.existsSync)(flyDefault))
         return flyDefault;
-    return (0, path_1.join)(process.cwd(), "data", "local-dashboard-db.json");
+    return (0, tenantData_js_1.dataPath)("local-dashboard-db.json");
 }
 const DB_PATH = resolveDbPath();
 const leadsById = new Map();
@@ -359,6 +360,8 @@ function buildCommandTasksSummary(tasks) {
     };
 }
 function seedCommandTasksIfEmpty() {
+    if (process.env.TENANT_OWNER_ID)
+        return commandTasksStore;
     if (commandTasksStore.length > 0)
         return commandTasksStore;
     const seeds = [

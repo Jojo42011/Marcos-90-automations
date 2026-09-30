@@ -6,7 +6,7 @@ import { scheduleMorningBriefing } from "./briefing.js";
 import { broadcastHullEvent } from "./ws.js";
 
 export function initHull(): void {
-  bootstrapHullMemory();
+  if (!process.env.TENANT_OWNER_ID) bootstrapHullMemory();
   void backfillEmbeddings(100);
   scheduleDailyDecay();
   scheduleWeeklySynthesis();

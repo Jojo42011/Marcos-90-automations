@@ -17,6 +17,7 @@ exports.updateTrackerRecord = updateTrackerRecord;
 exports.deleteTrackerRecord = deleteTrackerRecord;
 exports.setTrackerStage = setTrackerStage;
 exports.trackerCounts = trackerCounts;
+const tenantData_js_1 = require("./tenantData.js");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = require("path");
@@ -34,10 +35,10 @@ function resolveTrackerDbPath() {
     const explicit = process.env.TRACKER_DB_PATH?.trim();
     if (explicit)
         return explicit;
-    const flyDir = "/data";
+    const flyDir = (0, tenantData_js_1.dataPath)("");
     if ((0, fs_1.existsSync)(flyDir))
         return (0, path_1.join)(flyDir, "tracker.db");
-    return (0, path_1.join)(process.cwd(), "data", "tracker.db");
+    return (0, tenantData_js_1.dataPath)("tracker.db");
 }
 const TRACKER_DB_PATH = resolveTrackerDbPath();
 let db = null;

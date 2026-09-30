@@ -66,7 +66,6 @@ const SONNET_TRIGGERS = [
     "time zone",
     "timezone",
     "wesley",
-    "kendrick",
     "carlos",
 ];
 function needsSonnet(message) {

@@ -19,7 +19,7 @@ export const TRACKER_TAG = "tracker";
 const RECORD_TAG_PREFIX = "tracker:";
 
 /** Team ids the Task Manager knows about; anything else falls back to the default. */
-const TEAM_IDS = new Set(["marco", "wesley", "kendrick", "carlos"]);
+const TEAM_IDS = new Set(["marco", "wesley", "carlos"]);
 
 function assigneeFor(record: TrackerRecord): string {
   const a = String(record.assignedTo || "").trim().toLowerCase();

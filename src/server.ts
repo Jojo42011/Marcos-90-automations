@@ -1,3 +1,6 @@
+import { dataPath } from "./core/tenantData.js";
+import { isTenantGateway, tenantOwner } from "./core/tenantData.js";
+import { accountMiddleware, accountUpgrade, startTenantWorkers } from "./core/tenantGateway.js";
 import { createWorkRouter, handleWorkChat } from "./harvey/work/routes.js";
 import { startWorker } from "./harvey/work/runtime.js";
 /**
@@ -500,7 +503,8 @@ import { getSession as authGetSession } from "./core/authStore.js";
 import { getUserById as authGetUserById } from "./core/users.js";
 
 const app = express();
-const PORT = parseInt(process.env.PORT || "3000", 10);
+if (tenantOwner()) process.on("disconnect", () => process.exit(0));
+let PORT = parseInt(process.env.PORT || "3000", 10);
 
 /* Behind Fly's proxy every request arrives over plain HTTP on the internal
    network, so `req.protocol` reads "http" and the session cookie would never
@@ -521,6 +525,7 @@ app.use(
     internalCall: (req) => isInternalCall(req as express.Request),
   }),
 );
+app.use(accountMiddleware(sessionUserSync, isInternalCall));
 
 /**
  * The signed-in user, resolved synchronously.
@@ -538,7 +543,7 @@ function sessionUserSync(req: express.Request): import("./core/types.js").CRMUse
     const session = authGetSession(token);
     if (!session) return null;
     const user = authGetUserById(session.userId);
-    if (!user || user.active === false) return null;
+    if (!user || user.active === false || (tenantOwner() && user.id !== tenantOwner())) return null;
     return user;
   } catch {
     /* A broken auth database must fail CLOSED. Returning null sends the caller
@@ -1077,7 +1082,7 @@ async function currentSessionUser(req: express.Request): Promise<import("./core/
   if (!session) return null;
   const { getUserById } = await import("./core/users.js");
   const user = getUserById(session.userId);
-  if (!user || user.active === false) return null;
+  if (!user || user.active === false || (tenantOwner() && user.id !== tenantOwner())) return null;
   return user;
 }
 
@@ -1086,6 +1091,7 @@ async function currentSessionUser(req: express.Request): Promise<import("./core/
 // it on later with `fly secrets set SITE_LOGIN_ENABLED=1` — no code changes,
 // no redeploy of this logic needed.
 function siteLoginEnabled(): boolean {
+  if (process.env.ACCOUNT_ISOLATION === "true") return true;
   /* Locked by default as of 2026-08-22. It used to be the reverse — the login
      system was fully built but only enforced when SITE_LOGIN_ENABLED was "1",
      and it never was, so the whole app was reachable by anyone with the URL.
@@ -1159,7 +1165,7 @@ app.get("/change-password", (_req, res) => {
 // The login page itself must never be gated (that would be an infinite redirect loop).
 app.get("/login", (req, res) => {
   void currentSessionUser(req).then((user) => {
-    if (user) {
+    if (user && req.query.switch !== "1") {
       res.redirect("/shell");
       return;
     }
@@ -1194,6 +1200,7 @@ app.post("/api/auth/login", express.json(), async (req, res) => {
     maxAge: 30 * 24 * 60 * 60 * 1000,
     path: "/",
   });
+  res.cookie("mp_account", user!.name.trim().split(/\s+/)[0].toLowerCase(), { sameSite: "lax", secure: req.secure, path: "/" });
   res.json({ ok: true });
 });
 
@@ -1204,6 +1211,8 @@ app.post("/api/auth/logout", async (req, res) => {
     destroySession(token);
   }
   res.clearCookie(SESSION_COOKIE, { path: "/" });
+  res.clearCookie("mp_account", { path: "/" });
+  res.clearCookie("mp_account_id", { path: "/" });
   res.json({ ok: true });
 });
 
@@ -1262,6 +1271,17 @@ app.post("/api/auth/team", express.json(), requireAuthAdminApi, async (req, res)
   const { passwordHash, ...safe } = created;
   void passwordHash;
   res.status(201).json({ ok: true, user: safe, tempPassword });
+});
+
+app.get("/api/auth/team", requireAuthAdminApi, (_req, res) => {
+  res.json({ users: getUsers().map(({ passwordHash, ...safe }) => safe) });
+});
+app.patch("/api/auth/team/:id", express.json(), requireAuthAdminApi, async (req, res) => {
+  if (typeof req.body?.active !== "boolean") { res.status(400).json({ error: "active must be a boolean" }); return; }
+  const { updateUser } = await import("./core/users.js");
+  const user = updateUser(String(req.params.id), { active: req.body.active });
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  res.json({ ok: true });
 });
 
 app.post("/api/auth/team/:id/reset-password", requireAuthAdminApi, async (req, res) => {
@@ -9206,14 +9226,14 @@ app.post("/api/crm/notifications/:id/read", (req, res) => {
 });
 
 function resolveContentVideoUploadDir(): string {
-  const base = fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const base = fs.existsSync(dataPath("")) ? dataPath("") : dataPath();
   const dir = path.join(base, "uploads", "videos");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 
 function resolveContentClipsDir(): string {
-  const base = fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const base = fs.existsSync(dataPath("")) ? dataPath("") : dataPath();
   const dir = path.join(base, "clips");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -9238,7 +9258,7 @@ function resolveClipVideoFilePath(storedPath: string): string | null {
 
   if (fs.existsSync(storedPath)) return storedPath;
 
-  const dataBase = fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const dataBase = fs.existsSync(dataPath("")) ? dataPath("") : dataPath();
   const stripped = normalized
     .replace(/^\/data\//, "")
     .replace(/^data\//, "")
@@ -15062,6 +15082,9 @@ hullWss.on("connection", (ws) => {
 });
 
 httpServer.on("upgrade", (request, socket, head) => {
+  const accountUser = sessionUserSync(request as express.Request);
+  if (accountUpgrade(request, socket, head, accountUser)) return;
+  if (tenantOwner() && accountUser?.id !== tenantOwner()) { socket.destroy(); return; }
   // Harvey STT: ElevenLabs Scribe v2 realtime is the primary engine; Deepgram
   // Flux is kept as a fallback path (still functional if hit directly).
   if (handleElevenLabsUpgrade(request, socket, head, dashboardTokenOkIncoming)) return;
@@ -15086,7 +15109,7 @@ httpServer.on("upgrade", (request, socket, head) => {
 /* Scheduled transactions sheet sync — every 6 hours (configurable), plus one
    run shortly after boot so a restart never leaves the numbers a day stale.
    No-ops harmlessly when TRANSACTIONS_SHEET_URL is unset. */
-if (isSheetSyncConfigured()) {
+if (!isTenantGateway() && isSheetSyncConfigured()) {
   const sheetSyncEveryMs = Math.max(
     30 * 60_000,
     (parseInt(process.env.TRANSACTIONS_SHEET_SYNC_HOURS || "6", 10) || 6) * 60 * 60_000,
@@ -15104,6 +15127,7 @@ if (isSheetSyncConfigured()) {
    link; an hourly sweep keeps offsets honest at day granularity. */
 const AUTO_PLAN_INTERVAL_MS = 60 * 60 * 1000;
 setInterval(() => {
+  if (isTenantGateway()) return;
   executeDueAutoPlanSteps()
     .then((r) => {
       if (r.stepsExecuted > 0) {
@@ -15128,8 +15152,7 @@ httpServer.on("error", (err) => {
 /* Arm the site lock before the listener opens: everyone signed out, admin
    credential rotated. Once per marker, not once per boot — see
    src/core/initialAdmin.ts for why that distinction matters. */
-{
-   
+if (!tenantOwner()) {
   const lock = require("./core/initialAdmin.js") as typeof import("./core/initialAdmin.js");
   try {
     const r = lock.runLockdownBootStep();
@@ -15148,10 +15171,10 @@ httpServer.on("error", (err) => {
   }
 }
 
-/* Seed the team's SOPs into the Knowledge Center. Once per library version —
+/* Seed the team's SOPs into the Knowledge Center. Once per library version -
    after that the Knowledge Center owns them and edits there are never
    overwritten. See src/core/sopImport.ts. */
-{
+if (process.env.ACCOUNT_ISOLATION !== "true") {
   const sops = require("./core/sopImport.js") as typeof import("./core/sopImport.js");
   try {
     const r = sops.runSopImportStep();
@@ -15166,7 +15189,13 @@ httpServer.on("error", (err) => {
   }
 }
 
-httpServer.listen(PORT, "0.0.0.0", () => {
+httpServer.listen(PORT, tenantOwner() ? "127.0.0.1" : "0.0.0.0", () => {
+  PORT = (httpServer.address() as import("net").AddressInfo).port;
+  if (isTenantGateway()) {
+    require("./core/accountBootstrap.js").bootstrapAccounts();
+    startTenantWorkers(); console.log(`[accounts] Sign-in gateway listening on ${PORT}`); return;
+  }
+  process.send?.({ type: "tenant-ready", port: PORT });
   startWorker();
   console.log(`[Server] Listening on 0.0.0.0:${PORT}`);
   /* Publish the real routing table to Harvey's CRM bridge. Read from Express
@@ -15217,7 +15246,7 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     // Raises (and clears) the monthly "import the Brivity transaction export"
     // task. Brivity has no transaction API, so nothing else keeps that data
     // from going quietly stale.
-    scheduleTransactionImportReminder();
+    if (!tenantOwner()) scheduleTransactionImportReminder();
     void (async () => {
       const { scheduleQuoSync } = await import("./core/quoSync.js");
       const { isQuoConfigured, ensureMessageWebhook } = await import("./integrations/quo/index.js");

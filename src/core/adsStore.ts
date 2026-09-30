@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "fs";
 import path from "path";
@@ -5,8 +6,8 @@ import path from "path";
 function resolveAdsDbPath(): string {
   const env = process.env.ADS_DB_PATH?.trim();
   if (env) return env;
-  if (existsSync("/data")) return "/data/ads.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("ads.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "ads.db");
 }

@@ -10,6 +10,7 @@ exports.markSent = markSent;
 exports.markAttemptFailed = markAttemptFailed;
 exports.rescheduleMessage = rescheduleMessage;
 exports.scheduledCounts = scheduledCounts;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Scheduled sending — queue a text or an email to go out later.
  *
@@ -36,9 +37,9 @@ function resolvePath() {
     const explicit = process.env.SCHEDULED_MESSAGES_PATH?.trim();
     if (explicit)
         return explicit;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/scheduled-messages.json";
-    return (0, path_1.join)(process.cwd(), "data", "scheduled-messages.json");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("scheduled-messages.json");
+    return (0, tenantData_js_1.dataPath)("scheduled-messages.json");
 }
 const PATH = resolvePath();
 const MAX_KEPT = 5000;

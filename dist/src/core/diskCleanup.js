@@ -13,6 +13,7 @@ exports.resolveClipDiskPath = resolveClipDiskPath;
 exports.deleteClipByStoredPath = deleteClipByStoredPath;
 exports.computeCleanupCandidates = computeCleanupCandidates;
 exports.runSafetyDiskCleanup = runSafetyDiskCleanup;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Disk cleanup for the OpenShorts pipeline volume (/data).
  *
@@ -30,7 +31,7 @@ const fs_1 = __importDefault(require("fs"));
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
 function dataBase() {
-    return fs_1.default.existsSync("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
+    return fs_1.default.existsSync((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
 }
 function uploadsRoot() {
     return path_1.default.join(dataBase(), "uploads");

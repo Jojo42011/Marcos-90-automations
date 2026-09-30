@@ -1,3 +1,4 @@
+import { dataPath } from "../../core/tenantData.js";
 import path from "path";
 import fs from "fs";
 import {
@@ -16,9 +17,9 @@ import {
 } from "../../integrations/elevenlabsVoice/index.js";
 import { checkScriptSafety, requiresApproval } from "./safetyLock.js";
 
-const DATA_ROOT = fs.existsSync("/data")
-  ? "/data/voice-clone"
-  : path.join(process.cwd(), "data", "voice-clone");
+const DATA_ROOT = fs.existsSync(dataPath(""))
+  ? dataPath("voice-clone")
+  : dataPath("voice-clone");
 const GENERATED_DIR = path.join(DATA_ROOT, "generated");
 const EXPORTS_DIR = path.join(DATA_ROOT, "exports");
 fs.mkdirSync(GENERATED_DIR, { recursive: true });

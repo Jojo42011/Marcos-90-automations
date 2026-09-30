@@ -11,6 +11,7 @@ exports.listQuoThreads = listQuoThreads;
 exports.getQuoThread = getQuoThread;
 exports.quoMessageCount = quoMessageCount;
 exports.quoThreadCount = quoThreadCount;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Local mirror of Quo's SMS, so the CRM can render threads without hitting
  * the API on every page view.
@@ -37,9 +38,9 @@ function resolveDbPath() {
         (0, fs_1.mkdirSync)(path_1.default.dirname(env), { recursive: true });
         return env;
     }
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/quo.db";
-    const localDir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("quo.db");
+    const localDir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return path_1.default.join(localDir, "quo.db");
 }

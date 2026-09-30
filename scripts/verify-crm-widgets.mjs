@@ -77,7 +77,7 @@ try {
 
   let r = await put("/api/crm/lead/lead_1/team", {
     primary: { userId: "wesley" },
-    members: [{ userId: "carlos", roleName: "Transaction Coordinator" }, { userId: "kendrick", roleName: "" }],
+    members: [{ userId: "carlos", roleName: "Transaction Coordinator" }, { userId: "wesley", roleName: "" }],
   });
   ok("saving the team succeeds", r.ok);
   let saved = await J(r);
@@ -85,7 +85,7 @@ try {
   let snap = await J(await fetch(B + "/api/dashboard/data"));
   ok("and the lead row agrees", snap.leads.find((l) => l.id === "lead_1").assignedUserId === "wesley");
   ok("the roster's own name wins over whatever was posted", saved.primary.userName === "Wesley", saved.primary.userName);
-  ok("members saved with and without a role", saved.members.length === 2 && saved.members.find((m) => m.userId === "carlos").roleName === "Transaction Coordinator" && saved.members.find((m) => m.userId === "kendrick").roleName === "", JSON.stringify(saved.members));
+  ok("members saved with and without a role", saved.members.length === 2 && saved.members.find((m) => m.userId === "carlos").roleName === "Transaction Coordinator" && saved.members.find((m) => m.userId === "wesley").roleName === "", JSON.stringify(saved.members));
 
   saved = await J(await put("/api/crm/lead/lead_1/team", { members: [{ userId: "carlos", roleName: "Broker" }, { userId: "carlos", roleName: "Listing Agent" }] }));
   ok("the same person twice collapses to one row", saved.members.length === 1, JSON.stringify(saved.members));
@@ -311,7 +311,7 @@ try {
   await page.selectOption('#mtRows [data-mtuser="0"]', "carlos");
   await page.selectOption('#mtRows [data-mtrole="0"]', "Buyer's Agent");
   await page.click("#mtAdd");
-  await page.selectOption('#mtRows [data-mtuser="1"]', "kendrick");
+  await page.selectOption('#mtRows [data-mtuser="1"]', "wesley");
   await page.click('#mtRows [data-mtdel="1"]');
   await page.waitForTimeout(200);
   ok("the trash icon removes a row before saving", (await page.$$("#mtRows .mt-row")).length === 1);
