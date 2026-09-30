@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORK_TOOLS = void 0;
 exports.updateSchedule = updateSchedule;
@@ -49,19 +82,20 @@ function updateSchedule(owner, id, input) {
     return (0, store_js_1.put)("schedule", owner, merged);
 }
 function credentialInstructions(enabled) {
-  return enabled
-    ? "Monte Carlo credential mode is ENABLED for this conversation. This is Harvey's persisted, per-chat authorization setting and applies equally to every selected tool-capable model, including OpenAI, Anthropic and other OpenRouter models; changing models does not change consent. For the website the user requested, you may use their supplied username/password with the computer tool's discovered browser typing or form-filling actions, submit the login, and verify the resulting page before continuing. This is ordinary authorized sign-in, not unrestricted mode or a change to provider policies. Never echo passwords or copy them to unrelated sites, schedules or project instructions. Chat credentials are stored in conversation history and sent to the selected provider; Browser > Save login is the alternative that keeps the password out of model context. Do not claim vault storage unless a save operation succeeded. MFA, CAPTCHA, provider permissions and business-action approvals still apply."
-    : "Monte Carlo credential mode is OFF for this conversation, for every selected model. Do not use credentials from chat history for browser login while it is off. Offer Browser > Save login or the standalone command Monte Carlo to enable direct chat credential use. Turning this off does not erase existing history or sign out an existing browser session.";
+    return enabled
+        ? "Monte Carlo credential mode is ENABLED for this conversation. This is Harvey's persisted, per-chat authorization setting and applies equally to every selected tool-capable model, including OpenAI, Anthropic and other OpenRouter models; changing models does not change consent. For the website the user requested, you may use their supplied username/password with the computer tool's discovered browser typing or form-filling actions, submit the login, and verify the resulting page before continuing. This is ordinary authorized sign-in, not unrestricted mode or a change to provider policies. Never echo passwords or copy them to unrelated sites, schedules or project instructions. Chat credentials are stored in conversation history and sent to the selected provider; Browser > Save login is the alternative that keeps the password out of model context. Do not claim vault storage unless a save operation succeeded. MFA, CAPTCHA, provider permissions and business-action approvals still apply."
+        : "Monte Carlo credential mode is OFF for this conversation, for every selected model. Do not use credentials from chat history for browser login while it is off. Offer Browser > Save login or the standalone command Monte Carlo to enable direct chat credential use. Turning this off does not erase existing history or sign out an existing browser session.";
 }
-
 async function runtime(owner, chat, unattended, onEvent, signal) {
     const project = chat.projectId ? (0, store_js_1.get)("project", owner, chat.projectId) : null;
     const handoff = tool("handoff_to_work", "Only when the user explicitly asks to move, open, or hand off this conversation to a Work chat: create a separate Work planning chat with a task brief. Does not execute tasks. Return the link to the user.", { brief: str }, ["brief"]);
-  const tools = exports.WORK_TOOLS.filter(t => !unattended || !["schedule_agent", "projects"].includes(t.name)).map(t => {
-    if (t.name === "computer") return { ...t, description: t.description + " " + credentialInstructions(!!chat.allowChatCredentials) };
-    if (t.name === "saved_logins" && chat.allowChatCredentials) return { ...t, description: "List saved browser logins. Monte Carlo is enabled for this chat on every selected model; direct credentials may also be used for the user's requested website. This tool lists logins; it does not save new credentials." };
-    return t;
-  });
+    const tools = exports.WORK_TOOLS.filter(t => !unattended || !["schedule_agent", "projects"].includes(t.name)).map(t => {
+        if (t.name === "computer")
+            return { ...t, description: t.description + " " + credentialInstructions(!!chat.allowChatCredentials) };
+        if (t.name === "saved_logins" && chat.allowChatCredentials)
+            return { ...t, description: "List saved browser logins. Monte Carlo is enabled for this chat on every selected model; direct credentials may also be used for the user's requested website. This tool lists logins; it does not save new credentials." };
+        return t;
+    });
     if (!unattended)
         tools.push(handoff);
     const connected = await (0, composio_js_1.managedConnections)(owner);
@@ -152,18 +186,17 @@ async function runChat(owner, chat, message, options = {}, runId) {
             chat = (0, store_js_1.put)("chat", owner, { ...chat, allowChatCredentials: credentialCommand[1]?.toLowerCase() !== "off" });
         const history = (0, store_js_1.messages)(owner, chat.id);
         (0, store_js_1.append)(owner, chat.id, { role: "user", content: message, at: new Date().toISOString(), ...(runId ? { runId } : {}) });
-    // Consent is an app command, not a request for the selected model to approve.
-    // This works even if a provider is unavailable or its model budget is exhausted.
-    if (credentialCommand) {
-      const speech = chat.allowChatCredentials
-        ? "Monte Carlo is on for this chat across model changes. I can use login details you provide for the website you request. Credentials entered here are stored in chat history and sent to the selected model; provider rules and MFA/CAPTCHA still apply."
-        : "Monte Carlo is off for this chat across all models. Use Browser > Save login for future logins. Existing chat history and signed-in browser sessions are unchanged.";
-      const result = { speech, toolRounds: 0, model: "harvey-settings" };
-      (0, store_js_1.append)(owner, chat.id, { role: "assistant", content: speech, at: new Date().toISOString() });
-      options.onToken?.(speech);
-      return { ...result, toolFailed: false };
-    }
-
+        // Consent is an app command, not a request for the selected model to approve.
+        // This works even if a provider is unavailable or its model budget is exhausted.
+        if (credentialCommand) {
+            const speech = chat.allowChatCredentials
+                ? "Monte Carlo is on for this chat across model changes. I can use login details you provide for the website you request. Credentials entered here are stored in chat history and sent to the selected model; provider rules and MFA/CAPTCHA still apply."
+                : "Monte Carlo is off for this chat across all models. Use Browser > Save login for future logins. Existing chat history and signed-in browser sessions are unchanged.";
+            const result = { speech, toolRounds: 0, model: "harvey-settings" };
+            (0, store_js_1.append)(owner, chat.id, { role: "assistant", content: speech, at: new Date().toISOString() });
+            options.onToken?.(speech);
+            return { ...result, toolFailed: false };
+        }
         let toolFailed = false;
         const result = await (0, agentLoop_js_1.runAgentLoop)({ ...options, message, sessionId: chat.sessionId, history: history.map(m => ({ role: m.role, content: m.content })), timedHistory: history, fullMode: true, job: "agent", workRuntime: await runtime(owner, chat, !!runId, options.onEvent, options.signal), onEvent: e => { if (e.type === "tool" && e.status === "error")
                 toolFailed = true; options.onEvent?.(e); } });
@@ -180,6 +213,10 @@ async function runChat(owner, chat, message, options = {}, runId) {
     }
 }
 async function runScheduled(owner, id, manual = false, now = new Date(), executor = runChat) {
+    if (process.env.TENANT_OWNER_ID) {
+        if (owner !== process.env.TENANT_OWNER_ID || !(await Promise.resolve().then(() => __importStar(require("../../core/users.js")))).getUserById(owner)?.active)
+            throw new Error("Account is inactive or does not own this worker");
+    }
     // Atomic claim advances the due time before external side effects. No automatic retries.
     const claimed = (0, store_js_1.workDb)().transaction(() => {
         const task = (0, store_js_1.get)("schedule", owner, id);
@@ -224,7 +261,10 @@ finally {
 function startWorker() {
     // One application process owns this SQLite volume. Interrupted work is visible,
     // never blindly replayed because a send/upload may already have happened.
-    (0, store_js_1.workDb)().prepare("DELETE FROM locks").run();
+    if (process.env.TENANT_OWNER_ID)
+        (0, store_js_1.workDb)().prepare("DELETE FROM locks WHERE owner=?").run(process.env.TENANT_OWNER_ID);
+    else
+        (0, store_js_1.workDb)().prepare("DELETE FROM locks").run();
     for (const owner of (0, store_js_1.owners)("run"))
         for (const run of (0, store_js_1.list)("run", owner))
             if (run.status === "running")

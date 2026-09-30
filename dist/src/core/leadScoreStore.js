@@ -12,6 +12,7 @@ exports.getLatestScoresForAllLeads = getLatestScoresForAllLeads;
 exports.getLeadsByTier = getLeadsByTier;
 exports.getLastRescoreRunAt = getLastRescoreRunAt;
 exports.recordRescoreRun = recordRescoreRun;
+const tenantData_js_1 = require("./tenantData.js");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
@@ -19,9 +20,9 @@ function resolveLeadScoreDbPath() {
     const env = process.env.LEAD_SCORE_DB_PATH?.trim();
     if (env)
         return env;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/leadscores.db";
-    const localDir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("leadscores.db");
+    const localDir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return path_1.default.join(localDir, "leadscores.db");
 }

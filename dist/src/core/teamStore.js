@@ -10,12 +10,13 @@ exports.getChat = getChat;
 exports.markChatRead = markChatRead;
 exports.chatUnreadCounts = chatUnreadCounts;
 exports.initTeamStore = initTeamStore;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Team collaboration store for the Task Command Center — direct chat,
  * notifications (assignments / due-soon / messages), and lightweight presence.
  * File-backed (same pattern as pushStore): /data/team.json on Fly, ./data
  * locally. Identity model matches the task board: device-picked member ids
- * (marco/wesley/kendrick/carlos).
+ * (marco/wesley/carlos).
  */
 const fs_1 = require("fs");
 const path_1 = require("path");
@@ -25,9 +26,9 @@ function resolvePath() {
     const explicit = process.env.TEAM_JSON_PATH?.trim();
     if (explicit)
         return explicit;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/team.json";
-    return (0, path_1.join)(process.cwd(), "data", "team.json");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("team.json");
+    return (0, tenantData_js_1.dataPath)("team.json");
 }
 const PATH = resolvePath();
 const MAX_CHATS = 5000;
@@ -73,7 +74,7 @@ function touchPresence(user) {
 }
 function getPresence() {
     const out = {};
-    for (const m of ["marco", "wesley", "kendrick", "carlos"]) {
+    for (const m of ["marco", "wesley", "carlos"]) {
         const t = presence.get(m);
         out[m] = { lastSeen: t ? new Date(t).toISOString() : null, online: !!t && Date.now() - t < 70000 };
     }

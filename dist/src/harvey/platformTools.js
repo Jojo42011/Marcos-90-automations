@@ -678,7 +678,7 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
             properties: {
                 column: { type: "string", enum: TASK_COLUMNS },
                 status: { type: "string", enum: TASK_STATUSES },
-                assignedTo: { type: "string", description: "marco, wesley, kendrick or carlos." },
+                assignedTo: { type: "string", description: "marco, wesley or carlos." },
                 includeDone: { type: "boolean", description: "Default false." },
                 limit: { type: "number", description: "Default 40, max 200." },
             },
@@ -697,7 +697,7 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
                     description: "Short and plain. What needs doing. No em dash, no emoji.",
                 },
                 column: { type: "string", enum: TASK_COLUMNS, description: "Default 'today'." },
-                assignedTo: { type: "string", description: "marco, wesley, kendrick or carlos." },
+                assignedTo: { type: "string", description: "marco, wesley or carlos." },
                 description: {
                     type: "string",
                     description: "Only what someone needs in order to act: names, numbers, the reason, the next step. Ordinary sentences or a plain list. No em dashes, no emoji, no ALL-CAPS emphasis, no closing summary.",

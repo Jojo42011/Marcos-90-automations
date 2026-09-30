@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Scheduled sending — queue a text or an email to go out later.
  *
@@ -55,8 +56,8 @@ interface Persisted {
 function resolvePath(): string {
   const explicit = process.env.SCHEDULED_MESSAGES_PATH?.trim();
   if (explicit) return explicit;
-  if (existsSync("/data")) return "/data/scheduled-messages.json";
-  return join(process.cwd(), "data", "scheduled-messages.json");
+  if (existsSync(dataPath(""))) return dataPath("scheduled-messages.json");
+  return dataPath("scheduled-messages.json");
 }
 
 const PATH = resolvePath();

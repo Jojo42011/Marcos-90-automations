@@ -8,11 +8,12 @@ exports.deleteNote = deleteNote;
 exports.getNoteById = getNoteById;
 exports.searchNotes = searchNotes;
 exports.filterNotes = filterNotes;
+const tenantData_js_1 = require("./tenantData.js");
 const crypto_1 = require("crypto");
 const fs_1 = require("fs");
 const path_1 = require("path");
 function resolveNotesPath() {
-    const base = (0, fs_1.existsSync)("/data") ? "/data" : (0, path_1.join)(process.cwd(), "data");
+    const base = (0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     return (0, path_1.join)(base, "harvey-notes.json");
 }
 const CATEGORIES = new Set([

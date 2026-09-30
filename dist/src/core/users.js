@@ -7,6 +7,7 @@ exports.getUserByEmail = getUserByEmail;
 exports.createUser = createUser;
 exports.updateUser = updateUser;
 exports.deleteUser = deleteUser;
+const tenantData_js_1 = require("./tenantData.js");
 const fs_1 = require("fs");
 const path_1 = require("path");
 const types_js_1 = require("./types.js");
@@ -14,8 +15,8 @@ function resolveUsersPath() {
     const explicit = process.env.USERS_JSON_PATH?.trim();
     if (explicit)
         return explicit;
-    const flyDb = "/data/db.json";
-    const localDb = (0, path_1.join)(process.cwd(), "data", "local-dashboard-db.json");
+    const flyDb = (0, tenantData_js_1.dataPath)("db.json");
+    const localDb = (0, tenantData_js_1.dataPath)("local-dashboard-db.json");
     const dbPath = process.env.DB_JSON_PATH?.trim() || ((0, fs_1.existsSync)(flyDb) ? flyDb : localDb);
     return (0, path_1.join)((0, path_1.dirname)(dbPath), "users.json");
 }
@@ -95,6 +96,8 @@ function normalizeUser(raw) {
 function getUsers() {
     try {
         if (!(0, fs_1.existsSync)(USERS_PATH)) {
+            if (process.env.TENANT_OWNER_ID)
+                return [];
             const seeded = buildDefaultUsers();
             try {
                 writeUsersFile(seeded);
@@ -118,7 +121,7 @@ function getUsers() {
             if (u)
                 out.push(u);
         }
-        return out;
+        return process.env.TENANT_OWNER_ID ? out.filter(u => u.id === process.env.TENANT_OWNER_ID) : out;
     }
     catch (err) {
         console.error("[users] getUsers failed:", err);
@@ -126,6 +129,8 @@ function getUsers() {
     }
 }
 function saveUsers(users) {
+    if (process.env.TENANT_OWNER_ID)
+        throw new Error("Account records are managed by the sign-in service");
     try {
         writeUsersFile(users);
     }

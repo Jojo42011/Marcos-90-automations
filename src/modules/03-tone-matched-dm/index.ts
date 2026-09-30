@@ -80,7 +80,7 @@ function nextOpeningState(
      question, wait; offer the breakdown, wait; ask for the number, wait.
      Three round trips before a phone number ever landed.
 
-     Kendrick's TikTok threads on Wesley's account (the screenshots this was
+     the former assistant's TikTok threads on Wesley's account (the screenshots this was
      modelled on) get there in ONE: value plus options plus the number ask in
      the first message. That matters because the observed gaps between DM
      turns are DAYS, not minutes, so every extra beat is a real chance to

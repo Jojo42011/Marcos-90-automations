@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Every model call Harvey makes, what it cost, and the dials that stop it.
  *
@@ -35,7 +36,7 @@ const BREAKER_THRESHOLD = 3;
 const BREAKER_PAUSE_MS = 5 * 60 * 1000;
 
 function resolveBase(): string {
-  const base = existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const base = existsSync(dataPath("")) ? dataPath("") : dataPath();
   mkdirSync(base, { recursive: true });
   return base;
 }

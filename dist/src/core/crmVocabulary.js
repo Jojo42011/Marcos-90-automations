@@ -8,6 +8,7 @@ exports.listVocabulary = listVocabulary;
 exports.addVocabulary = addVocabulary;
 exports.removeVocabulary = removeVocabulary;
 exports.vocabularyStats = vocabularyStats;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * The managed Source and Tag lists — one vocabulary for Filter Leads, the Add
  * Agreement form, and anything else that has to ask "where did this contact
@@ -129,7 +130,7 @@ const SEED_TAGS = [
 ];
 /* ---- the store for anything added after the migration --------------------- */
 const DB_PATH = process.env.CRM_VOCAB_DB_PATH ||
-    node_path_1.default.join(process.env.DATA_DIR || "/data", "crm-vocabulary.db");
+    node_path_1.default.join(process.env.DATA_DIR || (0, tenantData_js_1.dataPath)(""), "crm-vocabulary.db");
 let db = null;
 function getDb() {
     if (db)

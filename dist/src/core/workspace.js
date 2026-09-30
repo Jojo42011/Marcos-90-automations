@@ -7,6 +7,7 @@ exports.readFile = readFile;
 exports.writeFile = writeFile;
 exports.editFile = editFile;
 exports.deleteFile = deleteFile;
+const tenantData_js_1 = require("./tenantData.js");
 const fs_1 = require("fs");
 const path_1 = require("path");
 /**
@@ -26,10 +27,10 @@ function resolveWorkspaceRoot() {
     const explicit = process.env.HARVEY_WORKSPACE_PATH?.trim();
     if (explicit)
         return (0, path_1.resolve)(explicit);
-    const flyDir = "/data";
+    const flyDir = (0, tenantData_js_1.dataPath)("");
     if ((0, fs_1.existsSync)(flyDir))
         return (0, path_1.join)(flyDir, "workspace");
-    return (0, path_1.join)(process.cwd(), "data", "workspace");
+    return (0, tenantData_js_1.dataPath)("workspace");
 }
 exports.WORKSPACE_ROOT = resolveWorkspaceRoot();
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB per file

@@ -8,6 +8,7 @@ exports.addSubscription = addSubscription;
 exports.removeSubscription = removeSubscription;
 exports.runReminderTick = runReminderTick;
 exports.initPush = initPush;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Web Push for the Task Command Center — always-on reminders that reach a
  * phone even when the app is fully closed.
@@ -27,19 +28,18 @@ const db_js_1 = require("./db.js");
 // Paired visibility — mirror of the board's TASK_GROUPS. A subscriber logged in
 // as P is notified for tasks assigned to anyone in GROUPS[P].
 const GROUPS = {
-    marco: ["marco", "carlos"],
-    carlos: ["marco", "carlos"],
-    wesley: ["wesley", "kendrick"],
-    kendrick: ["wesley", "kendrick"],
+    marco: ["marco"],
+    carlos: ["carlos"],
+    wesley: ["wesley"],
 };
 function resolvePushPath() {
     const explicit = process.env.PUSH_JSON_PATH?.trim();
     if (explicit)
         return explicit;
-    const flyDefault = "/data/push.json";
-    if ((0, fs_1.existsSync)("/data"))
+    const flyDefault = (0, tenantData_js_1.dataPath)("push.json");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
         return flyDefault;
-    return (0, path_1.join)(process.cwd(), "data", "push.json");
+    return (0, tenantData_js_1.dataPath)("push.json");
 }
 const PUSH_PATH = resolvePushPath();
 let state = { subscriptions: [], sent: [] };

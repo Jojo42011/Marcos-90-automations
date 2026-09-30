@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -6,7 +7,7 @@ import type { MarcoTask, MarcoTaskPriority, MarcoTasksSummary, MarcoTaskStatus }
 import { MARCO_TASK_STATUSES } from "./types.js";
 
 function resolveMarcoTasksPath(): string {
-  const base = existsSync("/data") ? "/data" : join(process.cwd(), "data");
+  const base = existsSync(dataPath("")) ? dataPath("") : dataPath();
   return join(base, "marco-tasks.json");
 }
 
@@ -95,6 +96,7 @@ export function buildMarcoTasksSummary(tasks: MarcoTask[]): MarcoTasksSummary {
 }
 
 export function seedMarcoTasksIfEmpty(): MarcoTask[] {
+  if (process.env.TENANT_OWNER_ID) return getMarcoTasks();
   let tasks = getMarcoTasks();
   if (tasks.length > 0) return tasks;
 

@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
@@ -26,9 +27,9 @@ import { BUYER_STAGES, SELLER_STAGES, TRACKER_STATUSES } from "./types.js";
 function resolveTrackerDbPath(): string {
   const explicit = process.env.TRACKER_DB_PATH?.trim();
   if (explicit) return explicit;
-  const flyDir = "/data";
+  const flyDir = dataPath("");
   if (existsSync(flyDir)) return join(flyDir, "tracker.db");
-  return join(process.cwd(), "data", "tracker.db");
+  return dataPath("tracker.db");
 }
 
 const TRACKER_DB_PATH = resolveTrackerDbPath();

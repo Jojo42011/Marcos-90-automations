@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * The managed Source and Tag lists — one vocabulary for Filter Leads, the Add
  * Agreement form, and anything else that has to ask "where did this contact
@@ -131,7 +132,7 @@ const SEED_TAGS: Array<[string, number]> = [
 /* ---- the store for anything added after the migration --------------------- */
 
 const DB_PATH = process.env.CRM_VOCAB_DB_PATH ||
-  path.join(process.env.DATA_DIR || "/data", "crm-vocabulary.db");
+  path.join(process.env.DATA_DIR || dataPath(""), "crm-vocabulary.db");
 
 let db: Database.Database | null = null;
 

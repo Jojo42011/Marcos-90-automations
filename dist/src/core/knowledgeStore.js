@@ -8,6 +8,7 @@ exports.updateDoc = updateDoc;
 exports.deleteDoc = deleteDoc;
 exports.searchDocs = searchDocs;
 exports.knowledgeStats = knowledgeStats;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * 3.4 — Knowledge Center: SOPs and internal documentation.
  *
@@ -34,9 +35,9 @@ function resolvePath() {
     const explicit = process.env.KNOWLEDGE_JSON_PATH?.trim();
     if (explicit)
         return explicit;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/knowledge.json";
-    return (0, path_1.join)(process.cwd(), "data", "knowledge.json");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("knowledge.json");
+    return (0, tenantData_js_1.dataPath)("knowledge.json");
 }
 const PATH = resolvePath();
 let state = { docs: [] };

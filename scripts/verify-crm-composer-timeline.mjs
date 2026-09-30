@@ -164,7 +164,7 @@ try {
   const mention = page.locator("#ldTabBody .ta-list button").first();
   await mention.waitFor({ timeout: 5000 });
   await page.waitForTimeout(250);
-  ok("@mention typeahead opens on the composer", /Kendrick/.test(await mention.textContent()));
+  ok("@mention typeahead opens on the composer", /Wesley/.test(await mention.textContent()));
   await mention.dispatchEvent("mousedown");
   await page.waitForTimeout(250);
   await page.click("#qaSave");

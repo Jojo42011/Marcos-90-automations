@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Local mirror of Quo's SMS, so the CRM can render threads without hitting
  * the API on every page view.
@@ -50,8 +51,8 @@ function resolveDbPath(): string {
     mkdirSync(path.dirname(env), { recursive: true });
     return env;
   }
-  if (existsSync("/data")) return "/data/quo.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("quo.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "quo.db");
 }

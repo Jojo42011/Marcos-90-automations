@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Collaborators — the outside people on a deal, and which contacts they are on.
  *
@@ -31,8 +32,8 @@ import Database from "better-sqlite3";
 function resolveCollaboratorDbPath(): string {
   const env = process.env.COLLABORATOR_DB_PATH?.trim();
   if (env) return env;
-  if (existsSync("/data")) return "/data/collaborators.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("collaborators.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "collaborators.db");
 }

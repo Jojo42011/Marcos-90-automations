@@ -40,6 +40,7 @@ exports.mapOldDealStatusToTransaction = mapOldDealStatusToTransaction;
 exports.migrateSigningDocuments = migrateSigningDocuments;
 exports.migrateFromDealsJson = migrateFromDealsJson;
 exports.countTransactions = countTransactions;
+const tenantData_js_1 = require("./tenantData.js");
 const crypto_1 = require("crypto");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
@@ -48,9 +49,9 @@ function resolveTransactionsDbPath() {
     const env = process.env.TRANSACTIONS_DB_PATH?.trim();
     if (env)
         return env;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/transactions.db";
-    const localDir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("transactions.db");
+    const localDir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return path_1.default.join(localDir, "transactions.db");
 }
@@ -266,22 +267,22 @@ function getTransactionsDb() {
     return db;
 }
 function resolveTemplatesDir() {
-    if ((0, fs_1.existsSync)("/data")) {
-        const dir = "/data/templates";
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)(""))) {
+        const dir = (0, tenantData_js_1.dataPath)("templates");
         (0, fs_1.mkdirSync)(dir, { recursive: true });
         return dir;
     }
-    const localDir = path_1.default.join(process.cwd(), "data", "templates");
+    const localDir = (0, tenantData_js_1.dataPath)("templates");
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return localDir;
 }
 function resolveGeneratedDocsDir() {
-    if ((0, fs_1.existsSync)("/data")) {
-        const dir = "/data/generated-docs";
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)(""))) {
+        const dir = (0, tenantData_js_1.dataPath)("generated-docs");
         (0, fs_1.mkdirSync)(dir, { recursive: true });
         return dir;
     }
-    const localDir = path_1.default.join(process.cwd(), "data", "generated-docs");
+    const localDir = (0, tenantData_js_1.dataPath)("generated-docs");
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return localDir;
 }

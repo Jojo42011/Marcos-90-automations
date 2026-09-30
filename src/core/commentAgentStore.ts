@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Ledger for the TikTok comment agent.
  *
@@ -32,8 +33,8 @@ import path from "path";
 function resolveCommentAgentDbPath(): string {
   const env = process.env.COMMENT_AGENT_DB_PATH?.trim();
   if (env) return env;
-  if (existsSync("/data")) return "/data/comment-agent.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("comment-agent.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "comment-agent.db");
 }

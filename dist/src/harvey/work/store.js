@@ -25,6 +25,7 @@ exports.vaultReady = vaultReady;
 exports.seal = seal;
 exports.unseal = unseal;
 exports.closeStore = closeStore;
+const tenantData_js_1 = require("../../core/tenantData.js");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const crypto_1 = require("crypto");
 const fs_1 = require("fs");
@@ -32,7 +33,7 @@ const path_1 = require("path");
 const cron_parser_1 = require("cron-parser");
 let db;
 function workDir() {
-    const dir = process.env.HARVEY_WORK_DIR || (process.platform !== "win32" && (0, fs_1.existsSync)("/data") ? "/data/harvey-work" : (0, path_1.join)(process.cwd(), "data", "harvey-work"));
+    const dir = process.env.HARVEY_WORK_DIR || (process.platform !== "win32" && (0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("harvey-work") : (0, tenantData_js_1.dataPath)("harvey-work"));
     (0, fs_1.mkdirSync)(dir, { recursive: true });
     return dir;
 }
@@ -123,7 +124,7 @@ function lockChat(owner, chat) {
     return token;
 }
 function unlockChat(owner, chat, token) { workDb().prepare("DELETE FROM locks WHERE owner=? AND chat=? AND token=?").run(owner, chat, token); }
-function owners(kind) { return workDb().prepare("SELECT DISTINCT owner FROM records WHERE kind=?").all(kind).map(r => r.owner); }
+function owners(kind) { return workDb().prepare("SELECT DISTINCT owner FROM records WHERE kind=?").all(kind).map(r => r.owner).filter(owner => !process.env.TENANT_OWNER_ID || owner === process.env.TENANT_OWNER_ID); }
 function vaultReady() { return /^[0-9a-f]{64}$/i.test(process.env.HARVEY_VAULT_KEY || ""); }
 function key() { if (!vaultReady())
     throw new Error("Set HARVEY_VAULT_KEY to a stable 64-character hex key before saving logins or connecting services"); return Buffer.from(process.env.HARVEY_VAULT_KEY, "hex"); }

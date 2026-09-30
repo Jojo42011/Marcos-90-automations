@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Client property shortlists — the homes picked for (or by) a specific lead.
  *
@@ -20,8 +21,8 @@ import path from "path";
 import { getListing, type Listing } from "./listingsStore.js";
 
 function resolveDbPath(): string {
-  if (existsSync("/data")) return "/data/favorites.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("favorites.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "favorites.db");
 }

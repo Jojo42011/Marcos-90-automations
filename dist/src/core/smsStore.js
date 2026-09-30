@@ -11,6 +11,7 @@ exports.markRepliedAt = markRepliedAt;
 exports.getInboundMessageCount = getInboundMessageCount;
 exports.getThreadForLead = getThreadForLead;
 exports.getLastInboundMessage = getLastInboundMessage;
+const tenantData_js_1 = require("./tenantData.js");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
@@ -18,9 +19,9 @@ function resolveSmsDbPath() {
     const env = process.env.SMS_DB_PATH?.trim();
     if (env)
         return env;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/sms.db";
-    const localDir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("sms.db");
+    const localDir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return path_1.default.join(localDir, "sms.db");
 }

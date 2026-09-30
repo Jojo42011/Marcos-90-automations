@@ -19,11 +19,9 @@ exports.LOCKDOWN_MARKER = "2026-09-25-dashboard-testing";
 /** The account the rotation targets, by the address it was seeded under. */
 const ADMIN_EMAIL = "marco@example.com";
 /** Salted scrypt hash for this explicitly requested temporary testing rotation. */
-const TESTING_PASSWORD_HASH =
-  "c220ad0cccdb44eaa6c6c4c812f9bff1:" +
-  "01243615a2b31e21c2aa9b670b5c92ed128008542aac3012247d8c4308fd9a56b90e" +
-  "0e0e09d5461a4514fad56f93535a6745b6695671c1dc0e1ce1ed6de7c0e8";
-
+const TESTING_PASSWORD_HASH = "c220ad0cccdb44eaa6c6c4c812f9bff1:" +
+    "01243615a2b31e21c2aa9b670b5c92ed128008542aac3012247d8c4308fd9a56b90e" +
+    "0e0e09d5461a4514fad56f93535a6745b6695671c1dc0e1ce1ed6de7c0e8";
 /**
  * Arm the lock: sign everyone out, and put a known credential on the admin.
  *

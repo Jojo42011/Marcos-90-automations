@@ -1,3 +1,4 @@
+import { dataPath } from "../../core/tenantData.js";
 /**
  * Harvey's speaking voice: which voice, and how it delivers.
  *
@@ -110,8 +111,8 @@ export interface VoiceProfile {
 function resolvePath(): string {
   const env = process.env.VOICE_PROFILE_PATH?.trim();
   if (env) return env;
-  const flyDb = "/data/db.json";
-  const localDb = join(process.cwd(), "data", "local-dashboard-db.json");
+  const flyDb = dataPath("db.json");
+  const localDb = dataPath("local-dashboard-db.json");
   const base = process.env.DB_JSON_PATH?.trim() || (existsSync(flyDb) ? flyDb : localDb);
   return join(dirname(base), "voice-profile.json");
 }

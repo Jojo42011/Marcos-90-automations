@@ -1,0 +1,20 @@
+name: Account isolation
+on:
+  pull_request:
+  push:
+    branches: [master]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: node scripts/verify-account-isolation.mjs
+      - run: node scripts/verify-account-ui.mjs
+      - run: node scripts/verify-harvey-credential-consent.mjs
+      - run: node scripts/verify-harvey-work.mjs

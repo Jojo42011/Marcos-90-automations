@@ -20,19 +20,20 @@ exports.setReferenceClipVoiceId = setReferenceClipVoiceId;
 exports.logSafetyBlock = logSafetyBlock;
 exports.getSafetyLogEntries = getSafetyLogEntries;
 exports.countPendingApprovalRequests = countPendingApprovalRequests;
+const tenantData_js_1 = require("./tenantData.js");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const crypto_1 = require("crypto");
 function resolveVoiceCloneDbPath() {
-    const base = fs_1.default.existsSync("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
+    const base = fs_1.default.existsSync((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     fs_1.default.mkdirSync(base, { recursive: true });
     return path_1.default.join(base, "voice-clone.db");
 }
 function resolveVoiceCloneDataRoot() {
-    const root = fs_1.default.existsSync("/data")
-        ? "/data/voice-clone"
-        : path_1.default.join(process.cwd(), "data", "voice-clone");
+    const root = fs_1.default.existsSync((0, tenantData_js_1.dataPath)(""))
+        ? (0, tenantData_js_1.dataPath)("voice-clone")
+        : (0, tenantData_js_1.dataPath)("voice-clone");
     for (const sub of ["reference", "generated", "exports"]) {
         fs_1.default.mkdirSync(path_1.default.join(root, sub), { recursive: true });
     }

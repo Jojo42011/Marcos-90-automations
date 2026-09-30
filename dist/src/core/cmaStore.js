@@ -20,6 +20,7 @@ exports.updateComparable = updateComparable;
 exports.removeComparable = removeComparable;
 exports.recordDelivery = recordDelivery;
 exports.listDeliveries = listDeliveries;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * CMA sessions and the comparables selected into them.
  *
@@ -76,9 +77,9 @@ function resolveCmaDbPath() {
     const env = process.env.CMA_DB_PATH?.trim();
     if (env)
         return env;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/cma.db";
-    const localDir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("cma.db");
+    const localDir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return path_1.default.join(localDir, "cma.db");
 }

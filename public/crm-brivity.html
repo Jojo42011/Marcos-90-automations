@@ -15,6 +15,7 @@
      and real deals.
      ============================================================================ -->
 <meta charset="utf-8" />
+<script src="/account-session.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CRM · Marco Puga Realty</title>
 <style>
@@ -1656,7 +1657,7 @@
         <option>Canceled/Expired Calls</option><option>For Sale By Owner Calls</option><option>Non-CRM Contacts</option>
       </select></div>
     <div><div class="na-label">For User</div>
-      <select class="select na-in" id="actUser"><option>Marco Puga</option><option>Wesley</option><option>Kendrick</option><option>Carlos</option></select></div>
+      <select class="select na-in" id="actUser"><option>Marco Puga</option><option>Wesley</option><option>Carlos</option></select></div>
     <div><div class="na-label">Date <i>*</i></div><input type="date" class="na-in" id="actDate"></div>
     <div><div class="na-label"># <i>*</i></div><input type="number" class="na-in" id="actCount" value="1" min="1"></div>
   </div>
@@ -1707,10 +1708,10 @@
 <div class="dd-menu" id="ddMenu"></div>
 <div class="crm-toast" id="crmToast"></div>
 
-<div class="demo-tag" id="demoTag">Sample data — not your leads</div>
+<div class="demo-tag" id="demoTag">Loading your CRM…</div>
 
 <script>
-/* ========================= MOCK DATA ========================= */
+/* ========================= DATA AND DISPLAY HELPERS ========================= */
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function ago(min){return new Date(Date.now()-min*60000).toISOString();}
 function relTime(iso){
@@ -1740,72 +1741,11 @@ const STAGES=["new_lead","attempted_contact","spoke_with","appointment_set","att
 const STAGE_LABEL={new_lead:"NEW LEAD",attempted_contact:"ATTEMPTED CONTACT",spoke_with:"SPOKE WITH",appointment_set:"APPOINTMENT SET",met_with:"MET WITH"};
 const STATUS_META={new:{l:"NEW",c:"var(--st-new)"},hot:{l:"HOT",c:"var(--st-hot)"},nurture:{l:"NURTURE",c:"var(--st-nurture)"},unqualified:{l:"UNQUALIFIED",c:"var(--st-unq)"},watch:{l:"WATCH",c:"var(--st-watch)"},archived:{l:"ARCHIVE",c:"#8a939c"},trashed:{l:"TRASH",c:"#b4707a"}};
 const LASTLAB=["Texted","Call Logged","Emailed","Text Received","Appointment"];
-const N=54;
 let LEADS=[];
-/* The 54 rows generated below are FABRICATED — invented names, invented
-   activity — and exist so the shell can be designed and tested without a
-   server. They are not Marco's leads and must never be mistaken for them.
-   LIVE_DATA flips to true only once loadLive() has actually replaced them;
-   until then the board says so, loudly, at the top of the Leads view. The
-   corner chip used to read "swaps to live clients on finalize", which reads as
-   a pending launch step rather than "your real data did not load" — and that
-   is precisely how a board of invented people went unquestioned. */
+/* An empty account stays empty, including before its first successful fetch. */
 var LIVE_DATA=false, DEMO_REASON="";
-for(let i=0;i<N;i++){
-  const name=FIRST[i%FIRST.length]+" "+LAST[(i*7)%LAST.length];
-  const hasAddr=i%3!==1;
-  const st=STATUSES[i%STATUSES.length];
-  const stage=STAGES[(i*3)%STAGES.length];
-  const intent=(i%2===0)?"seller":"buyer";
-  const lastMin=[21,60,120,19*60,20*60,8,18*60,21*60,3*24*60,2*24*60][i%10];
-  const dueToday=i%3===0;
-  const beds=2+(i%4), baths=(2+ (i%3)*0.5), sqft=1800+((i*137)%1600);
-  const acts=[];
-  for(let k=0;k<(i%4);k++)acts.push({type:["call","text","email"][k%3]});
-  LEADS.push({
-    id:"L"+i, name, intent,
-    crmStatus:st, statusDisp:st, stage, stageLabel:STAGE_LABEL[stage],
-    phone:"(210) 555-0"+(100+i), email:(i%4===2)?null:name.toLowerCase().replace(/\s/g,".")+"@gmail.com",
-    source:SOURCES[i%SOURCES.length],
-    address: hasAddr? STREETS[i%STREETS.length]+", "+CITIES[i%CITIES.length] : "",
-    criteria: hasAddr? {location:STREETS[i%STREETS.length]+", "+CITIES[i%CITIES.length], beds, baths, sqft}:{},
-    beds:hasAddr?beds:null, baths:hasAddr?baths:null, sqft:hasAddr?sqft:null,
-    lastLabel:LASTLAB[i%LASTLAB.length], lastActivity:ago(lastMin),
-    createdAt:ago(lastMin+ (i%9)*1440),
-    due:{label:dueToday?"Due Today":"Upcoming", date:(dueToday?"07-20-2026":["07-21-2026","07-27-2026","07-31-2026","08-05-2026"][i%4])},
-    activity:acts, alerts:(i%3===0)?2:0, reports:(i%4===0)?1:0,
-    autoPlanEnrollments:(i%2===0)?[{}]:[], crmCallQueue:dueToday?"urgent":"routine",
-    propertyInquired: (i%5===0 && hasAddr)? STREETS[i%STREETS.length]:null,
-  });
-}
-
 /* conversations */
-let CONVOS=[
-  {names:["Marco Puga","Raymond Hamelin"], at:ago(21), msgs:[
-    {me:false,t:"Hi Marco, are we still on for the walkthrough this weekend?",at:ago(80)},
-    {me:true,t:"Hi Raymond, thank you for speaking with me earlier. Yes - Saturday at 10am works great. I'll send the address shortly.",at:ago(21)}]},
-  {names:["Marco Puga","Michael Angelo Santacruz"], at:ago(60), msgs:[
-    {me:true,t:"Congrats again on closing! It was a pleasure helping you find the home.",at:ago(120)},
-    {me:false,t:"Thank you again god bless to you as well. We love the house!",at:ago(60)}]},
-  {names:["Lewis Taylor","Marco Puga"], at:ago(62), msgs:[
-    {me:true,t:"Hey Mr. Taylor, just giving you an update - two new listings hit the market in your price range this morning.",at:ago(62)}]},
-  {names:["Carlos Soria","Jacob Garcia","Marco Puga"], at:ago(64), msgs:[
-    {me:true,t:"Sending over the disclosure docs now, let me know if anything looks off.",at:ago(90)},
-    {me:false,t:"Okay thank you",at:ago(64)}]},
-  {names:["Anzae Alexander","Marco Puga","Natalya Alexander"], at:ago(66), msgs:[
-    {me:true,t:"Good morning guys! Just a heads up the inspection is scheduled for Tuesday.",at:ago(70)},
-    {me:false,t:"👍 to “Good morning guys! Just a...”",at:ago(66)}]},
-  {names:["Ginger Mashburn","Marco Puga"], at:ago(15*60), msgs:[
-    {me:false,t:"Did you see that house on Blanco go pending already?",at:ago(15*60+30)},
-    {me:true,t:"Hey Ginger! I saw that too. Honestly they're moving fast right now - let's get you in to see the next one quick.",at:ago(15*60)}]},
-  {names:["Marco Puga","Michial Cebe"], at:ago(15*60), msgs:[
-    {me:false,t:"Appreciate you sending the comps over.",at:ago(16*60)},
-    {me:true,t:"Thank you, Michial. I appreciate it - happy to help anytime.",at:ago(15*60)}]},
-  {names:["Joshua Rangel","Marco Puga","Pa Rangel"], at:ago(17*60), msgs:[
-    {me:false,t:"We are on our way home now",at:ago(17*60)}]},
-  {names:["Jonathan Torres","Marco Puga"], at:ago(17*60), msgs:[
-    {me:false,t:"Looking now Ty",at:ago(17*60)}]},
-];
+let CONVOS=[];
 
 /* ========================= RENDER ========================= */
 function actIcon(kind,mut){const paths={
@@ -2895,21 +2835,6 @@ const P_CATS=["client","client","collaborator","team","archived","client","colla
 const P_STATUS={past_client:{l:"PAST CLIENT",c:"var(--st-unq)"},client:{l:"CLIENT",c:"var(--teal)"},collaborator:{l:"COLLABORATOR",c:"var(--st-watch)"},team:{l:"TEAM",c:"#4a90d9"},archived:{l:"ARCHIVED",c:"#aab2ba"},
   new:{l:"NEW",c:"var(--st-new)"},hot:{l:"HOT",c:"var(--st-hot)"},nurture:{l:"NURTURE",c:"var(--st-nurture)"},watch:{l:"WATCH",c:"var(--st-watch)"},unqualified:{l:"UNQUALIFIED",c:"var(--st-unq)"}};
 let PEOPLE=[];
-for(let i=0;i<40;i++){
-  const name=FIRST[(i*5+3)%FIRST.length]+" "+LAST[(i*3+2)%LAST.length];
-  const cat=P_CATS[i%P_CATS.length];
-  const status = cat==="client" ? (i%3===0?"past_client":i%3===1?"active_client":"prospective_client") : cat;
-  const hasAddr=i%4!==2;
-  PEOPLE.push({id:"P"+i,name,cat,status,showInLeads:i%3!==0,
-    intent:(i%2===0)?"buyer":"seller", stageLabel:(cat==="client"?"MET WITH":"No Stage"),
-    email:(i%5===2)?null:name.toLowerCase().replace(/\s/g,".")+"@gmail.com", phone:"(210) 555-0"+(200+i),
-    address:hasAddr? STREETS[(i*2)%STREETS.length]+", "+CITIES[(i*3)%CITIES.length]:"",
-    lastLabel:LASTLAB[i%LASTLAB.length], lastActivity: (i%6===0)? null : ago(60*(1+i)),
-    due:{label:i%4===0?"Due Today":"Upcoming",date:i%4===0?"07-20-2026":"08-0"+(1+i%9)+"-2026"},
-    // Same fields mapPeopleLive carries, so smart filters behave the same on demo data.
-    statusDisp:["hot","nurture","watch","new"][i%4], alerts:(i%3===0)?0:1, reports:(i%5===0)?0:2,
-    autoPlanEnrollments:(i%3===0)?[]:[{planId:"demo_nlf",planName:"New Lead Follow-Up",enrolledAt:new Date().toISOString(),currentStepIndex:i%4,completedSteps:[],status:"active"}], activity:[]});
-}
 let pBucket="all",pPage=1,pSmartKey=null;
 
 /* ===== People smart filters =====
@@ -3084,7 +3009,7 @@ function txMarket(t){
    Start empty. Brivity has no transaction API — rows only appear after a CSV
    import or a hand-entered deal. Fabricated GCI was removed. */
 const TX_STATUS={active:{l:"ACTIVE",c:"var(--teal)"},pending:{l:"PENDING",c:"var(--st-nurture)"},closed:{l:"CLOSED",c:"#3fae86"},withdrawn:{l:"WITHDRAWN",c:"#3a444e"},canceled:{l:"CANCELED",c:"#3a444e"},draft:{l:"DRAFT",c:"#aab2ba"},coming_soon:{l:"COMING SOON",c:"#4a90d9"},expired:{l:"EXPIRED",c:"var(--st-new)"},pipeline:{l:"PIPELINE",c:"#7c8b98"},archived:{l:"ARCHIVED",c:"#aab2ba"}};
-const AGENTS_TX=["Marco Puga","Wesley","Kendrick","Carlos"];
+const AGENTS_TX=["Marco Puga","Wesley","Carlos"];
 let TX=[];
 let txBucket="all";
 let txMarketFilter="all";
@@ -3571,7 +3496,7 @@ function leadSourceHTML(){
   const rows=Object.keys(bySrc).sort().map(s=>[s,bySrc[s]]);
   const tot=cols.map((_,i)=>rows.reduce((a,r)=>a+r[1][i],0));
   return '<div class="rep-head"><h1>Lead Source</h1></div>'+
-    '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:13px"><span>Track the number of leads and status pipeline of all your leads.</span><span style="flex:1"></span>Filter by user '+repSelect(["All Active Users","Marco Puga","Wesley","Kendrick","Carlos"])+repSelect(["Last 7 days","This Month","This Year"])+'</div>'+
+    '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:13px"><span>Track the number of leads and status pipeline of all your leads.</span><span style="flex:1"></span>Filter by user '+repSelect(["All Active Users","Marco Puga","Wesley","Carlos"])+repSelect(["Last 7 days","This Month","This Year"])+'</div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:900px"><thead><tr><th>Source</th>'+cols.map(c=>'<th>'+c+'</th>').join("")+'</tr></thead><tbody>'+
     (rows.length?rows.map(r=>'<tr><td><span class="addlink">'+esc(r[0])+'</span></td>'+r[1].map(v=>'<td style="color:#6b7480">'+v+'</td>').join("")+'</tr>').join(""):'<tr><td colspan="11" class="empty">No leads yet.</td></tr>')+
     '</tbody><tfoot><tr class="tot-row"><td>Totals</td>'+tot.map(v=>'<td>'+v+'</td>').join("")+'</tr></tfoot></table></div></div>';
@@ -3579,7 +3504,7 @@ function leadSourceHTML(){
 const REPORTS={
   business:businessHTML,
   sales_funnel:()=>'<div class="rep-head"><h1>Sales Funnel Dashboard</h1>'+repSelect(["This Year","This Month","Last 7 days"])+'</div><div class="card card-pad">'+funnelHTML(funnelCounts().steps)+'</div>',
-  agent_dash:()=>{const s=dealStats(),f=funnelCounts();return '<div class="rep-head"><h1>Agent Dashboard</h1>'+repSelect(["Marco Puga","Wesley","Kendrick","Carlos"])+'</div>'+kpiRow([["New Leads",repNum(LEADS.filter(l=>l.crmStatus==="new").length)],["Contacts",repNum(f.contacted)],["Appts Set",repNum(f.apptSet)],["Under Contract",repNum(s.pending.length)],["Closed YTD",repNum(s.closed.length)],["GCI YTD",repMoney0(s.sum(s.closed,t=>t.gci))]]);},
+  agent_dash:()=>{const s=dealStats(),f=funnelCounts();return '<div class="rep-head"><h1>Agent Dashboard</h1>'+repSelect(["Marco Puga","Wesley","Carlos"])+'</div>'+kpiRow([["New Leads",repNum(LEADS.filter(l=>l.crmStatus==="new").length)],["Contacts",repNum(f.contacted)],["Appts Set",repNum(f.apptSet)],["Under Contract",repNum(s.pending.length)],["Closed YTD",repNum(s.closed.length)],["GCI YTD",repMoney0(s.sum(s.closed,t=>t.gci))]]);},
   leaderboards:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Activity Leaderboard</h1>'+repSelect(["This Month","This Week","This Year"])+'</div>'+activityTable([["Calls",a.calls],["Texts",a.texts],["Emails",a.emails],["Appts Set",a.appts],["Contacts",a.contacts]]);},
   open_house:()=>'<div class="rep-head"><h1>Open House Dashboard</h1>'+repSelect(["This Year","This Month"])+'</div>'+kpiRow([["Open Houses","0"],["Attendees","0"],["Leads","0"],["Avg. Leads","0.00"],["Follow-ups","0"],["Converted","0"]]),
   agent_activity:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Agent Activity</h1>'+repSelect(["Last 7 days","Last 30 days","This Year"])+'</div>'+activityTable([["Dials",a.calls],["Contacts",a.contacts],["Conversations",a.convos],["Appts Set",a.appts],["Emails",a.emails],["Texts",a.texts]]);},
@@ -3672,22 +3597,9 @@ document.querySelectorAll("#calScrim .fchip").forEach(c=>c.addEventListener("cli
 document.getElementById("calClearFilters").addEventListener("click",e=>{e.preventDefault();document.querySelectorAll("#calScrim .fchip").forEach(c=>c.classList.remove("on"));});
 
 /* ===== Email ===== */
-let CAMPAIGNS=[
-  {name:"July Market Update",aud:"All Leads",status:"Sent",sent:1240,opens:"38%",clicks:"6.2%",date:"07-12-2026"},
-  {name:"New Listing - 616 Valley Garden",aud:"Buyers · Active",status:"Sent",sent:410,opens:"44%",clicks:"9.1%",date:"07-08-2026"},
-  {name:"Just Sold - Cantura Mills",aud:"Past Clients",status:"Sent",sent:320,opens:"52%",clicks:"7.7%",date:"06-29-2026"},
-  {name:"Summer Buyer Guide",aud:"Nurture",status:"Scheduled",sent:0,opens:"-",clicks:"-",date:"07-24-2026"},
-  {name:"Price Improvement - Fort Concho",aud:"Watchers",status:"Draft",sent:0,opens:"-",clicks:"-",date:"-"},
-];
-let DRIPS=[
-  {name:"New Buyer Lead - 30 Day",enrolled:214,active:63,emails:8,status:"Running"},
-  {name:"Seller Valuation Follow-up",enrolled:88,active:22,emails:6,status:"Running"},
-  {name:"Past Client - Yearly Touch",enrolled:340,active:340,emails:12,status:"Running"},
-  {name:"Cold Lead Re-engage",enrolled:512,active:120,emails:5,status:"Paused"},
-];
-let NEWSLETTERS=[
-  {name:"Monthly Market Update",aud:"All Leads",status:"Scheduled",sent:0,opens:"-",date:"08-01-2026"},
-];
+let CAMPAIGNS=[];
+let DRIPS=[];
+let NEWSLETTERS=[];
 let EMAIL_TEMPLATES=["New Listing Announcement","Just Sold","Open House Invite","Price Improvement","Market Update","Buyer Welcome","Seller Welcome","Closing Congrats","Holiday Greeting"];
 // Merge any user-created items saved from a prior session.
 (function(){try{
@@ -4116,20 +4028,8 @@ async function applyLive(body,brv,opts){
   const txReal = (await loadTransactions()).length;
   if(txReal){ txBucket="all"; renderTx(); renderReport(currentReport); renderFinance(); }
 
-  if(rawLeads.length<3){
-    /* Not "too sparse" in the abstract — this is the branch that leaves 54
-       invented people on screen, so it has to explain itself. */
-    DEMO_REASON = (!body && !brv)
-      ? "the server could not be reached"
-      : (brv && brv.ok===false && brv.error)
-        ? ("Brivity returned an error (" + String(brv.error).slice(0,120) + ") and only " +
-           rawLeads.length + " lead(s) came from this server")
-        : ((rawLeads.length === 0
-              ? "no live leads were returned by this server"
-              : "only " + rawLeads.length + " live lead(s) were returned by this server") +
-           (brvPeople.length ? "" : " and no Brivity contacts came back"));
-    paintDataBanner();
-    return;
+  if(!body && !brv){
+    DEMO_REASON="the CRM request failed"; paintDataBanner(); return;
   }
 
   LEADS=rawLeads.map(mapLeadRow);
@@ -4144,7 +4044,7 @@ async function applyLive(body,brv,opts){
   const convos=deriveConvosLive(rawLeads)
     // Quo owns the phone line, so its thread wins over a snapshot copy.
     .filter(c=>!(c.channel==="sms"&&c.phone&&quoKeys[phoneKeyOf(c.phone)]));
-  if(convos.length) CONVOS=convos.concat(quoConvos)
+  CONVOS=convos.concat(quoConvos)
     .sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")));
   // Load the send-later queue too, so the SCHEDULED tab shows its pending
   // count without having to open it first.
@@ -4152,7 +4052,7 @@ async function applyLive(body,brv,opts){
   /* deals.json is the legacy store. It is only consulted when the real one
      (/api/transactions, loaded above) is empty, so an old deal isn't silently
      dropped off the board. */
-  const deals=(body.deals||[]).filter(d=>d&&d.propertyAddress);
+  const deals=((body&&body.deals)||[]).filter(d=>d&&d.propertyAddress);
   if(!txReal && deals.length) TX=deals.map(mapDealTx);
   const txCount=txReal||deals.length;
   const evs=calEventsFromTx();
@@ -4686,7 +4586,7 @@ function buildAdvPanel(){
   }
   var stages=Object.keys(STAGE_ORDER);
   var statuses=[{v:"new",l:"New"},{v:"hot",l:"Hot"},{v:"nurture",l:"Nurture"},{v:"watch",l:"Watch"},{v:"unqualified",l:"Unqualified"},{v:"archived",l:"Archive"},{v:"trashed",l:"Trash"}];
-  var roster=ADV_SRC.roster.length?ADV_SRC.roster:[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"},{id:"kendrick",name:"Kendrick"}];
+  var roster=ADV_SRC.roster.length?ADV_SRC.roster:[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"}];
   var tagOpts=advDistinctTags(), planOpts=ADV_SRC.plans, srcOpts=advDistinctSources();
   var html="";
   var collabOpts=roster.map(function(u){return {v:u.id,l:u.name};});
@@ -5168,14 +5068,9 @@ function paintDataBanner(){
      the entire failure mode here was a person believing fabricated rows were
      their business. Every other notice can wait behind it. */
   if(!LIVE_DATA){
-    if(tag) tag.textContent="Sample data — not your leads";
+    if(tag) tag.textContent=DEMO_REASON?"CRM unavailable":"Loading your CRM…";
     el.style.display="block";
-    el.innerHTML='<div style="margin:10px 14px 0;padding:12px 16px;border-radius:9px;font-size:13px;line-height:1.6;'+
-      'background:#fdf0f1;border:1px solid rgba(192,97,106,.45);color:#7d3b42">'+
-      '<b>These are sample leads, not your data.</b> The '+LEADS.length+' contacts below are placeholders '+
-      'generated by this page for layout, and none of them are real. Your live data did not load'+
-      (DEMO_REASON?(' because '+esc(DEMO_REASON)):'')+'. '+
-      'Nothing here should be called, texted or acted on.</div>';
+    el.textContent=DEMO_REASON?"Could not load your CRM. Please refresh to try again.":"Loading your CRM…";
     return;
   }
   if(tag) tag.textContent="Live data · "+LEADS.length+" leads";
@@ -5929,7 +5824,7 @@ var LD_ROSTER=null;
 /* The roster endpoint returns {members:[…]} — it always has. This read `d.roster`,
    so every caller silently fell through to the hard-coded four below, which
    carry the wrong display names and none of the real roles or colours. */
-var LD_ROSTER_FALLBACK=[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"},{id:"kendrick",name:"Kendrick"}];
+var LD_ROSTER_FALLBACK=[{id:"marco",name:"Marco Puga"},{id:"carlos",name:"Carlos"},{id:"wesley",name:"Wesley"}];
 function ensureRoster(cb){
   if(LD_ROSTER){cb(LD_ROSTER);return;}
   fetch(crmApi("/api/team/roster")).then(function(r){return r.ok?r.json():null;}).then(function(d){
@@ -11133,7 +11028,7 @@ document.addEventListener("click",e=>{
   else { crmToast(t||"OK"); }
 });
 /* ===== Team, user filter, date ranges, Brivity dropdowns, activity logging ===== */
-const TEAM=["Marco Puga","Wesley","Kendrick","Carlos"];
+const TEAM=["Marco Puga","Wesley","Carlos"];
 let USER_FILTER=[];           // empty = All Active Users
 let CUSTOM_FROM="",CUSTOM_TO="";
 function dashLeads(){ return USER_FILTER.length? LEADS.filter(l=>USER_FILTER.includes(l.assignedTo||"Marco Puga")) : LEADS; }

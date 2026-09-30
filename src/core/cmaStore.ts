@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * CMA sessions and the comparables selected into them.
  *
@@ -138,8 +139,8 @@ export interface CmaComparable {
 function resolveCmaDbPath(): string {
   const env = process.env.CMA_DB_PATH?.trim();
   if (env) return env;
-  if (existsSync("/data")) return "/data/cma.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("cma.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "cma.db");
 }

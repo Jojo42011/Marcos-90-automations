@@ -1,3 +1,4 @@
+import { dataPath } from "../../core/tenantData.js";
 import Database from "better-sqlite3";
 import { randomUUID, createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import { existsSync, mkdirSync } from "fs";
@@ -13,7 +14,7 @@ export interface Run { id: string; scheduleId: string; chatId: string; status: "
 export interface Connection { id: string; service: string; name: string; kind: "oauth" | "mcp"; endpoint?: string; projectId: string | null; allowWrites: boolean; secret: string; updatedAt: string }
 let db: Database.Database;
 export function workDir() {
-  const dir = process.env.HARVEY_WORK_DIR || (process.platform !== "win32" && existsSync("/data") ? "/data/harvey-work" : join(process.cwd(), "data", "harvey-work"));
+  const dir = process.env.HARVEY_WORK_DIR || (process.platform !== "win32" && existsSync(dataPath("")) ? dataPath("harvey-work") : dataPath("harvey-work"));
   mkdirSync(dir, { recursive: true }); return dir;
 }
 export function workDb() {
@@ -74,7 +75,7 @@ export function lockChat(owner: string, chat: string): string {
   const token = randomUUID(); try { workDb().prepare("INSERT INTO locks VALUES (?,?,?)").run(owner, chat, token); } catch { throw new Error("This chat already has a run in progress. Try again when it finishes."); } return token;
 }
 export function unlockChat(owner: string, chat: string, token: string) { workDb().prepare("DELETE FROM locks WHERE owner=? AND chat=? AND token=?").run(owner, chat, token); }
-export function owners(kind: string): string[] { return (workDb().prepare("SELECT DISTINCT owner FROM records WHERE kind=?").all(kind) as any[]).map(r => r.owner); }
+export function owners(kind: string): string[] { return (workDb().prepare("SELECT DISTINCT owner FROM records WHERE kind=?").all(kind) as any[]).map(r => r.owner).filter(owner => !process.env.TENANT_OWNER_ID || owner === process.env.TENANT_OWNER_ID); }
 export function vaultReady() { return /^[0-9a-f]{64}$/i.test(process.env.HARVEY_VAULT_KEY || ""); }
 function key() { if (!vaultReady()) throw new Error("Set HARVEY_VAULT_KEY to a stable 64-character hex key before saving logins or connecting services"); return Buffer.from(process.env.HARVEY_VAULT_KEY!, "hex"); }
 export function seal(value: unknown): string { const iv = randomBytes(12), c = createCipheriv("aes-256-gcm", key(), iv); const ciphertext = Buffer.concat([c.update(JSON.stringify(value)), c.final()]); return Buffer.concat([iv, c.getAuthTag(), ciphertext]).toString("base64"); }

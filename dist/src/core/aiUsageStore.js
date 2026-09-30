@@ -24,6 +24,7 @@ exports.noteFailure = noteFailure;
 exports.noteSuccess = noteSuccess;
 exports.isModelPaused = isModelPaused;
 exports.breakerStates = breakerStates;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Every model call Harvey makes, what it cost, and the dials that stop it.
  *
@@ -55,7 +56,7 @@ const BUSINESS_TZ = "America/Chicago";
 const BREAKER_THRESHOLD = 3;
 const BREAKER_PAUSE_MS = 5 * 60 * 1000;
 function resolveBase() {
-    const base = (0, fs_1.existsSync)("/data") ? "/data" : path_1.default.join(process.cwd(), "data");
+    const base = (0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")) ? (0, tenantData_js_1.dataPath)("") : (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(base, { recursive: true });
     return base;
 }

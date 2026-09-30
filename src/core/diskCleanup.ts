@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Disk cleanup for the OpenShorts pipeline volume (/data).
  *
@@ -16,7 +17,7 @@ import fsp from "fs/promises";
 import path from "path";
 
 function dataBase(): string {
-  return fs.existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  return fs.existsSync(dataPath("")) ? dataPath("") : dataPath();
 }
 export function uploadsRoot(): string {
   return path.join(dataBase(), "uploads");

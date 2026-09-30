@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { dirname, join } from "path";
 
@@ -12,8 +13,8 @@ import type {
 const MAX_HISTORY = 50;
 
 function resolveDataDir(): string {
-  const flyDb = "/data/db.json";
-  const localDb = join(process.cwd(), "data", "local-dashboard-db.json");
+  const flyDb = dataPath("db.json");
+  const localDb = dataPath("local-dashboard-db.json");
   const dbPath = process.env.DB_JSON_PATH?.trim() || (existsSync(flyDb) ? flyDb : localDb);
   return dirname(dbPath);
 }

@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 
@@ -7,8 +8,8 @@ import { ROLE_PERMISSIONS } from "./types.js";
 function resolveUsersPath(): string {
   const explicit = process.env.USERS_JSON_PATH?.trim();
   if (explicit) return explicit;
-  const flyDb = "/data/db.json";
-  const localDb = join(process.cwd(), "data", "local-dashboard-db.json");
+  const flyDb = dataPath("db.json");
+  const localDb = dataPath("local-dashboard-db.json");
   const dbPath = process.env.DB_JSON_PATH?.trim() || (existsSync(flyDb) ? flyDb : localDb);
   return join(dirname(dbPath), "users.json");
 }
@@ -95,6 +96,7 @@ function normalizeUser(raw: Record<string, unknown>): CRMUser | null {
 export function getUsers(): CRMUser[] {
   try {
     if (!existsSync(USERS_PATH)) {
+      if (process.env.TENANT_OWNER_ID) return [];
       const seeded = buildDefaultUsers();
       try {
         writeUsersFile(seeded);
@@ -113,7 +115,7 @@ export function getUsers(): CRMUser[] {
       const u = normalizeUser(item as Record<string, unknown>);
       if (u) out.push(u);
     }
-    return out;
+    return process.env.TENANT_OWNER_ID ? out.filter(u => u.id === process.env.TENANT_OWNER_ID) : out;
   } catch (err) {
     console.error("[users] getUsers failed:", err);
     return [];
@@ -121,6 +123,7 @@ export function getUsers(): CRMUser[] {
 }
 
 export function saveUsers(users: CRMUser[]): void {
+  if (process.env.TENANT_OWNER_ID) throw new Error("Account records are managed by the sign-in service");
   try {
     writeUsersFile(users);
   } catch (err) {

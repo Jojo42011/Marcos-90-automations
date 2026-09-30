@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -5,7 +6,7 @@ import { dirname, join } from "path";
 import type { HarveyNote, HarveyNoteCategory } from "./types.js";
 
 function resolveNotesPath(): string {
-  const base = existsSync("/data") ? "/data" : join(process.cwd(), "data");
+  const base = existsSync(dataPath("")) ? dataPath("") : dataPath();
   return join(base, "harvey-notes.json");
 }
 

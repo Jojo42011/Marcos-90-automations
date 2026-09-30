@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "fs";
 import path from "path";
@@ -14,8 +15,8 @@ const SCHEMA_VERSION = 4;
 function resolveSocialDbPath(): string {
   const env = process.env.SOCIAL_DB_PATH?.trim();
   if (env) return env;
-  if (existsSync("/data")) return "/data/social.db";
-  const localDir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("social.db");
+  const localDir = dataPath();
   mkdirSync(localDir, { recursive: true });
   return path.join(localDir, "social.db");
 }

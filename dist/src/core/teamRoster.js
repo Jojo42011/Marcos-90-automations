@@ -23,14 +23,17 @@ exports.resolveTeamEmail = resolveTeamEmail;
  * Gmail accounts that may change.
  */
 const index_js_1 = require("../integrations/gmail/index.js");
+const users_js_1 = require("./users.js");
 const ROSTER = [
     { id: "marco", name: "Marco", role: "Lead Agent", color: "#7C3AED", email: "" },
     { id: "wesley", name: "Wesley", role: "Agent", color: "#0E7490", email: "wesleyodulin@gmail.com" },
-    { id: "kendrick", name: "Kendrick", role: "Assistant", color: "#DB2777", email: "kendrick.acas4work.1@gmail.com" },
     { id: "carlos", name: "Carlos", role: "Assistant", color: "#A16207", email: "jamescarter.pugarealestate@gmail.com" },
 ];
 const norm = (s) => String(s || "").toLowerCase().trim();
 function listTeamMembers() {
+    if (process.env.TENANT_OWNER_ID) {
+        return (0, users_js_1.getUsers)().map(u => ({ id: u.name.trim().split(/\s+/)[0].toLowerCase(), name: u.name, role: u.role, color: u.avatarColor }));
+    }
     return ROSTER.map(({ id, name, role, color }) => ({ id, name, role, color }));
 }
 function getTeamMember(id) {

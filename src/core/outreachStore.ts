@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Listing Alerts and Market Reports — the two client-facing MLS subscriptions.
  *
@@ -107,8 +108,8 @@ export interface OutreachSend {
 function resolveDbPath(): string {
   const env = process.env.OUTREACH_DB_PATH?.trim();
   if (env) { mkdirSync(path.dirname(env), { recursive: true }); return env; }
-  if (existsSync("/data")) return "/data/outreach.db";
-  const dir = path.join(process.cwd(), "data");
+  if (existsSync(dataPath(""))) return dataPath("outreach.db");
+  const dir = dataPath();
   mkdirSync(dir, { recursive: true });
   return path.join(dir, "outreach.db");
 }

@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * Auto Plan Triggers — the automatic-enrollment layer over the Auto Plans
  * library, modelled on Brivity's "People Auto Plan Triggers" table: each row
@@ -23,8 +24,8 @@ import type { AutoPlan, AutoPlanTrigger, Lead } from "./types.js";
 function resolveTriggersPath(): string {
   const explicit = process.env.AUTO_PLAN_TRIGGERS_JSON_PATH?.trim();
   if (explicit) return explicit;
-  const flyDb = "/data/db.json";
-  const localDb = join(process.cwd(), "data", "local-dashboard-db.json");
+  const flyDb = dataPath("db.json");
+  const localDb = dataPath("local-dashboard-db.json");
   const dbPath = process.env.DB_JSON_PATH?.trim() || (existsSync(flyDb) ? flyDb : localDb);
   return join(dirname(dbPath), "auto-plan-triggers.json");
 }

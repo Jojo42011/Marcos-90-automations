@@ -1,4 +1,15 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getFavoritesDb = getFavoritesDb;
+exports.addFavorite = addFavorite;
+exports.removeFavorite = removeFavorite;
+exports.countFavorites = countFavorites;
+exports.listFavorites = listFavorites;
+exports.favoriteSummaryByLead = favoriteSummaryByLead;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Client property shortlists — the homes picked for (or by) a specific lead.
  *
@@ -14,24 +25,14 @@
  * left the feed comes back flagged `gone` rather than silently dropped:
  * "the home you shortlisted sold" is information, not noise.
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFavoritesDb = getFavoritesDb;
-exports.addFavorite = addFavorite;
-exports.removeFavorite = removeFavorite;
-exports.countFavorites = countFavorites;
-exports.listFavorites = listFavorites;
-exports.favoriteSummaryByLead = favoriteSummaryByLead;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const listingsStore_js_1 = require("./listingsStore.js");
 function resolveDbPath() {
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/favorites.db";
-    const localDir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("favorites.db");
+    const localDir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return path_1.default.join(localDir, "favorites.db");
 }

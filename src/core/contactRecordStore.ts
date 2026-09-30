@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * The contact record's own data: emails, phones, addresses, social links,
  * notes and documents for one CRM contact.
@@ -137,7 +138,7 @@ export interface ContactRecord {
 /* ────────────────────────── database ────────────────────────── */
 
 function resolveBase(): string {
-  const base = existsSync("/data") ? "/data" : path.join(process.cwd(), "data");
+  const base = existsSync(dataPath("")) ? dataPath("") : dataPath();
   mkdirSync(base, { recursive: true });
   return base;
 }

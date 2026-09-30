@@ -5,15 +5,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processNextVoiceoverJob = processNextVoiceoverJob;
 exports.scheduleVoiceoverProcessor = scheduleVoiceoverProcessor;
+const tenantData_js_1 = require("../../core/tenantData.js");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const voiceCloneStore_js_1 = require("../../core/voiceCloneStore.js");
 const index_js_1 = require("../../integrations/voxcpm/index.js");
 const index_js_2 = require("../../integrations/elevenlabsVoice/index.js");
 const safetyLock_js_1 = require("./safetyLock.js");
-const DATA_ROOT = fs_1.default.existsSync("/data")
-    ? "/data/voice-clone"
-    : path_1.default.join(process.cwd(), "data", "voice-clone");
+const DATA_ROOT = fs_1.default.existsSync((0, tenantData_js_1.dataPath)(""))
+    ? (0, tenantData_js_1.dataPath)("voice-clone")
+    : (0, tenantData_js_1.dataPath)("voice-clone");
 const GENERATED_DIR = path_1.default.join(DATA_ROOT, "generated");
 const EXPORTS_DIR = path_1.default.join(DATA_ROOT, "exports");
 fs_1.default.mkdirSync(GENERATED_DIR, { recursive: true });

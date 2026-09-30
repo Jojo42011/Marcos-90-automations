@@ -9,7 +9,8 @@ const synthesis_js_1 = require("./memory/synthesis.js");
 const briefing_js_1 = require("./briefing.js");
 const ws_js_1 = require("./ws.js");
 function initHull() {
-    (0, bootstrap_js_1.bootstrapHullMemory)();
+    if (!process.env.TENANT_OWNER_ID)
+        (0, bootstrap_js_1.bootstrapHullMemory)();
     void (0, embeddings_js_1.backfillEmbeddings)(100);
     (0, decay_js_1.scheduleDailyDecay)();
     (0, synthesis_js_1.scheduleWeeklySynthesis)();

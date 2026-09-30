@@ -14,6 +14,7 @@ exports.markCommenterDmReceived = markCommenterDmReceived;
 exports.getFollowUpQueue = getFollowUpQueue;
 exports.getCommentAgentStats = getCommentAgentStats;
 exports.getRecentCommentActions = getRecentCommentActions;
+const tenantData_js_1 = require("./tenantData.js");
 /**
  * Ledger for the TikTok comment agent.
  *
@@ -48,9 +49,9 @@ function resolveCommentAgentDbPath() {
     const env = process.env.COMMENT_AGENT_DB_PATH?.trim();
     if (env)
         return env;
-    if ((0, fs_1.existsSync)("/data"))
-        return "/data/comment-agent.db";
-    const localDir = path_1.default.join(process.cwd(), "data");
+    if ((0, fs_1.existsSync)((0, tenantData_js_1.dataPath)("")))
+        return (0, tenantData_js_1.dataPath)("comment-agent.db");
+    const localDir = (0, tenantData_js_1.dataPath)();
     (0, fs_1.mkdirSync)(localDir, { recursive: true });
     return path_1.default.join(localDir, "comment-agent.db");
 }

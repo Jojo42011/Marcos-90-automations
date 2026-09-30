@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 
@@ -39,8 +40,8 @@ const DEFAULT_TIME_ZONE = "America/Chicago";
 function resolveSettingsPath(): string {
   const explicit = process.env.COMMAND_SETTINGS_JSON_PATH?.trim();
   if (explicit) return explicit;
-  const flyDb = "/data/db.json";
-  const localDb = join(process.cwd(), "data", "local-dashboard-db.json");
+  const flyDb = dataPath("db.json");
+  const localDb = dataPath("local-dashboard-db.json");
   const dbPath = process.env.DB_JSON_PATH?.trim() || (existsSync(flyDb) ? flyDb : localDb);
   return join(dirname(dbPath), "command-settings.json");
 }

@@ -7,6 +7,7 @@ exports.setVoiceProfile = setVoiceProfile;
 exports.voiceExistsOnAccount = voiceExistsOnAccount;
 exports.fallbackVoiceIds = fallbackVoiceIds;
 exports.clearVoiceProfileCache = clearVoiceProfileCache;
+const tenantData_js_1 = require("../../core/tenantData.js");
 /**
  * Harvey's speaking voice: which voice, and how it delivers.
  *
@@ -77,8 +78,8 @@ function resolvePath() {
     const env = process.env.VOICE_PROFILE_PATH?.trim();
     if (env)
         return env;
-    const flyDb = "/data/db.json";
-    const localDb = (0, path_1.join)(process.cwd(), "data", "local-dashboard-db.json");
+    const flyDb = (0, tenantData_js_1.dataPath)("db.json");
+    const localDb = (0, tenantData_js_1.dataPath)("local-dashboard-db.json");
     const base = process.env.DB_JSON_PATH?.trim() || ((0, fs_1.existsSync)(flyDb) ? flyDb : localDb);
     return (0, path_1.join)((0, path_1.dirname)(base), "voice-profile.json");
 }

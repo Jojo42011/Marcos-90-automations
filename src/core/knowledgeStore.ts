@@ -1,3 +1,4 @@
+import { dataPath } from "./tenantData.js";
 /**
  * 3.4 — Knowledge Center: SOPs and internal documentation.
  *
@@ -43,8 +44,8 @@ interface Persisted {
 function resolvePath(): string {
   const explicit = process.env.KNOWLEDGE_JSON_PATH?.trim();
   if (explicit) return explicit;
-  if (existsSync("/data")) return "/data/knowledge.json";
-  return join(process.cwd(), "data", "knowledge.json");
+  if (existsSync(dataPath(""))) return dataPath("knowledge.json");
+  return dataPath("knowledge.json");
 }
 
 const PATH = resolvePath();
