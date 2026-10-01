@@ -33,9 +33,18 @@ work.append('marco',preserved.id,{role:'user',content:'Preserved private message
 const probe = net.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');
 const port = probe.address().port;await new Promise(resolve=>probe.close(resolve));
 const env = Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFILE|LOCALAPPDATA|TEMP|TMP)$/.test(k)));
+// Exercise the real DM pipeline while intercepting every outbound provider call.
+const transport=join(root,'fixture-transport.cjs'), sends=join(root,'fixture-sends.jsonl');
+writeFileSync(transport, `const fs=require('node:fs');const original=global.fetch;
+global.fetch=async(input,init={})=>{const url=new URL(typeof input==='string'?input:input.url||String(input));
+if(['localhost','127.0.0.1'].includes(url.hostname))return original(input,init);
+if(url.hostname==='zernio.com'&&url.pathname==='/api/v1/inbox/conversations/fixture-marco/messages'){
+ if(init.method==='POST'){fs.appendFileSync(${JSON.stringify(sends)},JSON.stringify({body:JSON.parse(init.body),headers:init.headers})+'\\n');return Response.json({message:{id:'fixture-sent'}});}
+ return Response.json({messages:[{direction:'outgoing',text:'Hey, thanks for your comment! Are you buying your first home?'}]});
+}throw new Error('Unexpected external request blocked by fixture: '+url.hostname);};`);
 let server, logs='';
 function start(){
- server=spawn(process.execPath,['dist/src/server.js'],{env:{...env,TENANT_DATA_ROOT:root,PORT:String(port),ACCOUNT_ISOLATION:'true',SITE_LOGIN_ENABLED:'1',ZERNIO_WEBHOOK_SECRET:'fixture-hook-secret',COMMENT_AGENT_ENABLED:'false',HARVEY_WORKER_ENABLED:'false',DOTENV_CONFIG_PATH:join(root,'.missing-env')},windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
+ server=spawn(process.execPath,['--require',transport,'dist/src/server.js'],{env:{...env,TENANT_DATA_ROOT:root,PORT:String(port),ACCOUNT_ISOLATION:'true',SITE_LOGIN_ENABLED:'1',ZERNIO_DM_API_KEY:'fixture-only',ZERNIO_WEBHOOK_SECRET:'fixture-hook-secret',COMMENT_AGENT_ENABLED:'false',HARVEY_WORKER_ENABLED:'false',DOTENV_CONFIG_PATH:join(root,'.missing-env')},windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
  server.on('exit',(code,signal)=>{logs+='\nServer exit '+code+' '+signal;});
  server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
 }
@@ -125,6 +134,18 @@ try {
  for(const user of users){const dashboard=await request('/api/dashboard/data?includePhoneless=1',cookies[user.id]);assert.equal(dashboard.data.leads[0].name,user.name+' private');}
  check('each CRM persists separately across a complete server restart',()=>assert.ok(true));
  check('legacy shared CRM file is preserved byte-for-byte',()=>assert.equal(readFileSync(join(root,'local-dashboard-db.json'),'utf8'),legacy));
+ const dmHook={id:'fixture-marco-event',event:'message.received',account:{accountId:'marco-social',platform:'tiktok'},message:{id:'fixture-inbound',conversationId:'fixture-marco',platform:'tiktok',direction:'incoming',text:'Yes, this is my first home',sender:{id:'fixture-marco-lead',username:'fixture_lead'}},conversation:{id:'fixture-marco',participantId:'fixture-marco-lead'}};
+ const dmHeaders={'x-zernio-signature':createHmac('sha256','fixture-hook-secret').update(JSON.stringify(dmHook)).digest('hex')};
+ const ackStart=Date.now();assert.equal((await request('/api/zernio/webhook','','POST',dmHook,dmHeaders)).status,200);assert(Date.now()-ackStart<5000);
+ let sent=[];for(let i=0;i<200;i++){try{sent=readFileSync(sends,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);if(sent.length)break;}catch{}await new Promise(r=>setTimeout(r,100));}
+ assert.equal(sent.length,1,'DM pipeline must actually send a reply');assert.equal(sent[0].body.accountId,'marco-social');assert(sent[0].body.message.trim());assert.equal(sent[0].headers['Idempotency-Key'],'zernio:fixture-marco-event');
+ assert.equal((await request('/api/zernio/webhook','','POST',dmHook,dmHeaders)).data.duplicate,true);
+ const dmThreads=(await request('/api/dm/conversations',cookies.marco)).data.conversations;
+ const dmThread=dmThreads.find(c=>c.userId==='fixture-marco-lead');assert(dmThread);assert(dmThread.agentMessages>=1);assert.equal(dmThread.userMessages,1);
+ await stop();start();await ready();
+ assert((await request('/api/dm/conversations',cookies.marco)).data.conversations.some(c=>c.id===dmThread.id&&c.agentMessages>=1));
+ assert.equal(readFileSync(sends,'utf8').trim().split('\n').length,1);
+ check('Marco DM completes signed intake, fast ACK, real pipeline, correct-account send, duplicate protection and persistent history without dashboard login',()=>assert.ok(true));
  if(process.env.TASK_UI_BROWSER==='true') {
    const {chromium}=await import('playwright');
    const browser=await chromium.launch({headless:true,...(process.env.HARVEY_BROWSER_EXECUTABLE?{executablePath:process.env.HARVEY_BROWSER_EXECUTABLE}:{})});
