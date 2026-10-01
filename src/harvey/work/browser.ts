@@ -1,12 +1,12 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createHash, randomUUID } from "crypto";
-import { mkdirSync, chownSync } from "fs";
+import { mkdirSync, chownSync, existsSync, renameSync, chmodSync } from "fs";
 import { dirname, join, resolve, sep } from "path";
 import { Connection, get, list, put, seal, unseal, workDir, text } from "./store.js";
 
 const ALLOWED = new Set(["browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click", "browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover", "browser_drag", "browser_tabs", "browser_wait_for", "browser_handle_dialog", "browser_file_upload", "browser_take_screenshot", "browser_close"]);
-type Session = { client: Client; tools: any[]; lastUsed: number };
+type Session = { client: Client; tools: any[]; lastUsed: number; statePath: string };
 const sessions = new Map<string, Promise<Session>>();
 export function browserEnabled() { return process.env.HARVEY_BROWSER_ENABLED === "true"; }
 export function browserDirectory(owner: string, chat: string) { const key = createHash("sha256").update(owner + ":" + chat).digest("hex"); const dir = join(workDir(), "browsers", key); mkdirSync(dir, { recursive: true }); return dir; }
@@ -20,36 +20,46 @@ async function session(owner: string, chat: string): Promise<Session> {
       // Root containers launch the browser child as an unprivileged user.
       const unprivileged = process.platform !== "win32" && process.getuid?.() === 0;
       if (unprivileged) { chownSync(dir, 1001, 1001); chownSync(files, 1001, 1001); }
-      const config = { browser: { browserName: "chromium", userDataDir: join(dir, "profile"), launchOptions: { headless: true, ...(process.env.HARVEY_BROWSER_EXECUTABLE ? { executablePath: process.env.HARVEY_BROWSER_EXECUTABLE } : {}) } }, outputDir: files, saveSession: false, imageResponses: "omit" };
+      const config = { capabilities: ["storage"], browser: { browserName: "chromium", userDataDir: join(dir, "profile"), launchOptions: { headless: true, ...(process.env.HARVEY_BROWSER_EXECUTABLE ? { executablePath: process.env.HARVEY_BROWSER_EXECUTABLE } : {}) } }, outputDir: files, saveSession: false, imageResponses: "omit" };
       // A fixed worker entrypoint avoids shell commands and a separate LLM.
       const { writeFileSync } = await import("fs"); const configPath = join(dir, "config.json"); writeFileSync(configPath, JSON.stringify(config));
       const client = new Client({ name: "harvey-browser", version: "1.0.0" });
       const env: Record<string,string> = {};
       for (const name of ["PATH", "HOME", "USERPROFILE", "LOCALAPPDATA", "SystemRoot", "TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"]) if (process.env[name]) env[name] = process.env[name]!;
       env.HOME = dir;
-      const transport = new StdioClientTransport({ command: process.execPath, args: [join(__dirname, "browserWorker.js"), "--config", configPath], cwd: files, env, stderr: "pipe" });
+      const transport = new StdioClientTransport({ command: process.execPath, args: [join(__dirname, "browserWorker.js"), "--config", configPath], cwd: dir, env, stderr: "pipe" });
       let startupError = "";
       transport.stderr?.on("data", b => { startupError = (startupError + String(b)).slice(-2000); });
-      try { await client.connect(transport, { timeout: 15000 }); const tools = (await client.listTools({}, { timeout: 15000 })).tools.filter(t => ALLOWED.has(t.name)); return { client, tools, lastUsed: Date.now() }; }
+      try { await client.connect(transport, { timeout: 15000 }); const tools = (await client.listTools({}, { timeout: 15000 })).tools.filter(t => ALLOWED.has(t.name)); const statePath = join(dir, "auth-state.json");
+        if (existsSync(statePath)) { const restored=await client.callTool({name:"browser_set_storage_state",arguments:{filename:statePath}},undefined,{timeout:60000}); if(restored.isError) throw new Error("Saved browser session could not be restored; retained state was left intact"); }
+        return { client, tools, statePath, lastUsed: Date.now() }; }
       catch (e) { await client.close().catch(() => {}); throw new Error(`Browser startup failed: ${(e as Error).message}${startupError ? ". " + startupError : ""}`); }
     })().catch(e => { sessions.delete(key); throw e; });
     sessions.set(key, promise);
   }
   const s = await sessions.get(key)!; s.lastUsed = Date.now(); return s;
 }
-export async function closeBrowser(owner: string, chat: string) { const key = owner + ":" + chat, promise = sessions.get(key); if (promise) { sessions.delete(key); const s = await promise.catch(() => null); await s?.client.close().catch(() => {}); } }
-export async function closeBrowsers() { const keys = [...sessions.keys()]; for (const key of keys) { const s = await sessions.get(key)?.catch(() => null); await s?.client.close().catch(() => {}); sessions.delete(key); } }
-const idle = setInterval(() => { for (const [key, value] of sessions) void value.then(async s => { if (Date.now() - s.lastUsed > 10 * 60_000) { sessions.delete(key); await s.client.close(); } }).catch(() => {}); }, 60000); idle.unref();
+async function checkpoint(s: Session) {
+  const pending=s.statePath+".pending";
+  const result=await s.client.callTool({name:"browser_storage_state",arguments:{filename:pending}},undefined,{timeout:60000});
+  if(result.isError) throw new Error("Browser session could not be saved. The previous saved session is intact.");
+  chmodSync(pending,0o600); renameSync(pending,s.statePath);
+}
+async function closeSession(s: Session) { try { await checkpoint(s); } finally { await s.client.close(); } }
+export async function closeBrowser(owner: string, chat: string) { const key = owner + ":" + chat, promise = sessions.get(key); if (promise) { sessions.delete(key); const s = await promise.catch(() => null); if(s) await closeSession(s); } }
+export async function closeBrowsers() { const keys = [...sessions.keys()]; for (const key of keys) { const s = await sessions.get(key)?.catch(() => null); if(s) await closeSession(s); sessions.delete(key); } }
+const idle = setInterval(() => { for (const [key, value] of sessions) void value.then(async s => { if (Date.now() - s.lastUsed > 10 * 60_000) { sessions.delete(key); await closeSession(s); } }).catch(() => {}); }, 60000); idle.unref();
 export async function browserTools(owner: string, chat: string) { return (await session(owner, chat)).tools; }
 export async function browserCall(owner: string, chat: string, name: string, args: any) {
   if (!ALLOWED.has(name)) throw new Error("Unsupported browser action");
   if (name === "browser_navigate") { const url = new URL(text(args.url, "URL", 4000)); if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Use an HTTP(S) URL without embedded credentials"); }
   const filesDir = join(browserDirectory(owner, chat), "files");
   if (name === "browser_file_upload") { for (const file of args.paths || []) { if (!resolve(file).startsWith(resolve(filesDir) + sep)) throw new Error("Upload files must belong to this chat's browser workspace"); } }
-  if (name === "browser_take_screenshot") args = { ...args, filename: undefined };
+  if (name === "browser_take_screenshot" || name === "browser_snapshot") args = { ...args, filename: undefined };
+  if (name === "browser_close") { await closeBrowser(owner,chat); return {content:[{type:"text",text:"Browser closed; session state retained."}]}; }
   const s = await session(owner, chat); const result = await s.client.callTool({ name, arguments: args || {} }, undefined, { timeout: 60000 }); s.lastUsed = Date.now();
   if (result.isError) throw new Error(JSON.stringify(result.content).slice(0, 2000));
-  if (name === "browser_close") await closeBrowser(owner, chat); return result;
+  await checkpoint(s); return result;
 }
 export function saveLogin(owner: string, input: any) {
   if (input.projectId) get("project", owner, input.projectId);

@@ -1,3 +1,4 @@
+import { canViewWorkspace } from "./core/workspaceAccess.js";
 import { dataPath } from "./core/tenantData.js";
 import { isTenantGateway, tenantOwner } from "./core/tenantData.js";
 import { accountMiddleware, accountUpgrade, startTenantWorkers } from "./core/tenantGateway.js";
@@ -500,7 +501,7 @@ import {
 
 import { makeLockdown } from "./core/lockdown.js";
 import { getSession as authGetSession } from "./core/authStore.js";
-import { getUserById as authGetUserById } from "./core/users.js";
+import { getAccountUserById as authGetUserById } from "./core/users.js";
 
 const app = express();
 if (tenantOwner()) process.on("disconnect", () => process.exit(0));
@@ -543,7 +544,7 @@ function sessionUserSync(req: express.Request): import("./core/types.js").CRMUse
     const session = authGetSession(token);
     if (!session) return null;
     const user = authGetUserById(session.userId);
-    if (!user || user.active === false || (tenantOwner() && user.id !== tenantOwner())) return null;
+    if (!user || user.active === false || (tenantOwner() && !canViewWorkspace(user, tenantOwner()))) return null;
     return user;
   } catch {
     /* A broken auth database must fail CLOSED. Returning null sends the caller
@@ -1080,9 +1081,9 @@ async function currentSessionUser(req: express.Request): Promise<import("./core/
   const { getSession } = await import("./core/authStore.js");
   const session = getSession(token);
   if (!session) return null;
-  const { getUserById } = await import("./core/users.js");
+  const { getAccountUserById: getUserById } = await import("./core/users.js");
   const user = getUserById(session.userId);
-  if (!user || user.active === false || (tenantOwner() && user.id !== tenantOwner())) return null;
+  if (!user || user.active === false || (tenantOwner() && !canViewWorkspace(user, tenantOwner()))) return null;
   return user;
 }
 
@@ -2492,7 +2493,7 @@ function harveyToolResultForUi(result: unknown): unknown {
  * Streamed or not, the turn is the same: the full agent loop with every tool,
  * the operator's model pick, and session history shared with voice.
  */
-app.use("/api/harvey", createWorkRouter(dashboardTokenOk, req => String(sessionUserSync(req)?.id || "operator")));
+app.use("/api/harvey", createWorkRouter(dashboardTokenOk, req => String(tenantOwner() || sessionUserSync(req)?.id || "operator")));
 
 app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -7087,7 +7088,7 @@ app.post("/api/marco-tasks", express.json({ limit: "64kb" }), (req, res) => {
     dueDate: typeof body.dueDate === "string" ? body.dueDate.slice(0, 10) : undefined,
     priority,
     status,
-    createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
+    createdBy: process.env.TENANT_MEMBER || (typeof body.createdBy === "string" ? body.createdBy : "carlos"),
   });
   res.status(201).json({ task });
 });
@@ -11726,6 +11727,7 @@ function spawnNextRecurrence(done: CommandTask): CommandTask | null {
 
 app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  if (body.assignedTo !== undefined && (typeof body.assignedTo !== "string" || !["marco","wesley","carlos"].includes(body.assignedTo.trim().toLowerCase()))) { res.status(400).json({error:"Choose Marco, Wesley or Carlos as the assignee"}); return; }
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const column = typeof body.column === "string" ? body.column : "";
   if (!title || !column) {
@@ -11750,14 +11752,14 @@ app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
     color,
     recurring: body.recurring === true,
     recurringInterval: parseRecurringInterval(body.recurringInterval),
-    assignedTo: typeof body.assignedTo === "string" ? body.assignedTo : "carlos",
+    assignedTo: typeof body.assignedTo === "string" ? body.assignedTo.trim().toLowerCase() : (process.env.TENANT_MEMBER || "carlos"),
     dueDate: typeof body.dueDate === "string" ? body.dueDate.slice(0, 10) : undefined,
     dueTime: parseDueTime(body.dueTime),
     reminderMinutes: parseReminderMinutes(body.reminderMinutes),
     tags: Array.isArray(body.tags)
       ? body.tags.filter((t): t is string => typeof t === "string")
       : undefined,
-    createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
+    createdBy: process.env.TENANT_MEMBER || (typeof body.createdBy === "string" ? body.createdBy : "carlos"),
     sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : undefined,
     // Raised from a Content Planner slot. Everything else about the task is
     // identical to one typed on the board — same store, same notification,
@@ -11787,6 +11789,7 @@ app.post("/api/tasks", express.json({ limit: "1mb" }), (req, res) => {
 app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
   const id = String(req.params.id || "").trim();
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Partial<CommandTask>;
+  if (body.assignedTo !== undefined && (typeof body.assignedTo !== "string" || !["marco","wesley","carlos"].includes(body.assignedTo.trim().toLowerCase()))) { res.status(400).json({error:"Choose Marco, Wesley or Carlos as the assignee"}); return; }
   const updates: Partial<CommandTask> = {};
   if (typeof body.title === "string") updates.title = body.title.trim();
   if (typeof body.description === "string") updates.description = body.description;
@@ -11802,7 +11805,7 @@ app.patch("/api/tasks/:id", express.json({ limit: "1mb" }), (req, res) => {
   if (recurringInterval) {
     updates.recurringInterval = recurringInterval;
   }
-  if (typeof body.assignedTo === "string") updates.assignedTo = body.assignedTo;
+  if (typeof body.assignedTo === "string") updates.assignedTo = body.assignedTo.trim().toLowerCase();
   if (typeof body.dueDate === "string") updates.dueDate = body.dueDate.slice(0, 10);
   if ("dueTime" in body) updates.dueTime = parseDueTime(body.dueTime);
   if ("reminderMinutes" in body) updates.reminderMinutes = parseReminderMinutes(body.reminderMinutes);

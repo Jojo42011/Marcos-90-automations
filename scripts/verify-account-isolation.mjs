@@ -17,8 +17,10 @@ const users = ['Marco', 'Wesley', 'Carlos'].map(name => ({ id: name.toLowerCase(
   email: name.toLowerCase()+'@example.com', role: name === 'Marco' ? 'admin' : 'agent', active: true,
   passwordHash: auth.hashPassword('fixture-only-password'), createdAt: new Date().toISOString() }));
 writeFileSync(join(root, 'users.json'), JSON.stringify(users));
-const legacy = JSON.stringify({ idCounter: 2, leadsById: { old: {id:'old',name:'Legacy private contact'} }, leadKeyToId:{}, conversationsByLeadId:{}, commandTasks:[] });
+const legacy = JSON.stringify({ idCounter: 2, leadsById: { old: {id:'old',name:'Legacy private contact'} }, leadKeyToId:{}, conversationsByLeadId:{}, commandTasks:users.map(u=>({id:"retained-"+u.id,title:u.name+" retained task",assignedTo:u.id,createdBy:u.id,column:"today",status:u.id==="wesley"?"done":"pending",checklist:[{id:"step",text:"Preserve this",done:true}],createdAt:"2026-09-01T00:00:00Z",updatedAt:"2026-09-01T00:00:00Z"})) });
 writeFileSync(join(root, 'local-dashboard-db.json'), legacy);
+writeFileSync(join(root,'marco-tasks.json'),JSON.stringify([{id:'legacy-personal',title:'Retained personal task',priority:'high',status:'pending',createdAt:'2026-09-01T00:00:00Z',updatedAt:'2026-09-01T00:00:00Z'}]));
+
 const work = require('../dist/src/harvey/work/store.js');
 const { tenantEnvironment } = require('../dist/src/core/tenantGateway.js');
 const isolatedEnv = tenantEnvironment('marco', { ...process.env, BRIVITY_API_KEY:'must-not-copy', GMAIL_REFRESH_TOKEN:'must-not-copy', DB_JSON_PATH:join(root,'private-legacy.json'), HARVEY_PUBLIC_URL:'https://example.invalid' });
@@ -46,6 +48,16 @@ function check(name,fn){fn();console.log('ok',name);checks++;}
 try {
  start();await ready();
  for(const user of users){const r=await request('/api/auth/login','','POST',{email:user.email,password:'fixture-only-password'});assert.equal(r.status,200,JSON.stringify(r.data));cookies[user.id]=r.cookie;}
+ for(const user of users){const tasks=(await request('/api/tasks',cookies[user.id])).data.tasks;assert(tasks.some(t=>t.id==='retained-'+user.id));assert.equal(tasks.length,user.id==='carlos'?3:1);}
+ assert((await request('/api/marco-tasks',cookies.marco)).data.tasks.some(t=>t.id==='legacy-personal'));
+ assert(!(await request('/api/marco-tasks',cookies.wesley)).data.tasks.some(t=>t.id==='legacy-personal'));
+ const wesleyTask=(await request('/api/tasks',cookies.wesley)).data.tasks[0];assert.equal(wesleyTask.status,'done');assert.equal(wesleyTask.checklist[0].done,true);
+ const assigned=await request('/api/tasks',cookies.marco,'POST',{title:'Marco assigns Wesley',column:'today',assignedTo:'wesley',createdBy:'carlos'});assert.equal(assigned.status,200);assert.equal(assigned.data.task.createdBy,'marco');
+ assert((await request('/api/tasks',cookies.wesley)).data.tasks.some(t=>t.id===assigned.data.task.id));
+ assert.equal((await request('/api/tasks/retained-wesley',cookies.marco,'PATCH',{title:'Unauthorized edit'})).status,404);
+ const parallel=await Promise.all(users.map(u=>request('/api/tasks',cookies[u.id],'POST',{title:u.name+' simultaneous',column:'today',assignedTo:u.id})));assert(parallel.every(r=>r.status===200));
+ assert.equal((await request('/api/tasks',cookies.carlos)).data.tasks.length,7);
+ check('retained tasks restored with status/checklists, cross-account assignment, spoof resistance and concurrent writes',()=>assert.ok(true));
  check('existing account passwords survive provisioning',()=>assert.equal(Object.keys(cookies).length,3));
  check('business credentials and legacy database overrides are not inherited',()=>assert.ok(isolatedEnv.TENANT_DATA_ROOT.includes('accounts')));
  for(const user of users){
@@ -82,7 +94,22 @@ try {
  assert.equal((await request('/api/auth/team',cookies.carlos,'POST',{name:'Other',email:'other@example.com'})).status,403);
  assert.equal((await request('/api/users',cookies.carlos,'POST',{name:'Other',email:'other@example.com'})).status,403);
  check('non-admin accounts cannot create accounts or mutate the shared user registry',()=>assert.ok(true));
+ const workspaceList=await request('/api/account/workspaces',cookies.carlos);assert.equal(workspaceList.data.workspaces.length,3);
+ assert.equal((await request('/api/account/workspace?id=marco',cookies.wesley,'POST')).status,403);
+ const selection=await request('/api/account/workspace?id=marco',cookies.carlos,'POST');assert.equal(selection.status,200);
+ const delegated=cookies.carlos+'; '+selection.cookie;
+ assert.equal((await request('/api/dashboard/data?includePhoneless=1',delegated)).data.leads[0].name,'Marco private');
+ assert.equal((await request('/api/harvey/conversations/'+preserved.id,delegated)).data.messages[0].content,'Preserved private message');
+ assert.equal((await request('/api/harvey/work/schedules',delegated)).data.schedules[0].id,schedules.marco);
+ assert.equal((await request('/api/harvey/work/status',delegated)).status,200);
+ assert.equal((await request('/api/harvey/conversations',delegated,'POST',{title:'Forbidden'})).status,403);
+ assert.equal((await request('/api/harvey/work/schedules/'+schedules.marco+'/run',delegated,'POST',{})).status,403);
+ check('Carlos can view Marco CRM, chats and agents; other users and delegated writes are blocked',()=>assert.ok(true));
+ assert.equal((await request('/api/tasks/retained-carlos',cookies.carlos,'DELETE')).status,200);
  await stop();start();await ready();
+ const after=(await request('/api/tasks',cookies.carlos)).data.tasks;assert.equal(after.length,6);assert(after.some(t=>t.id===assigned.data.task.id));assert(!after.some(t=>t.id==='retained-carlos'));
+ for(const user of users){assert((await request('/api/harvey/conversations/'+chats[user.id],cookies[user.id])).data.id);assert.equal((await request('/api/harvey/work/schedules',cookies[user.id])).data.schedules[0].id,schedules[user.id]);}
+ check('tasks, chats and agents survive process restart; restoration is idempotent and respects explicit deletion',()=>assert.ok(true));
  for(const user of users){const dashboard=await request('/api/dashboard/data?includePhoneless=1',cookies[user.id]);assert.equal(dashboard.data.leads[0].name,user.name+' private');}
  check('each CRM persists separately across a complete server restart',()=>assert.ok(true));
  check('legacy shared CRM file is preserved byte-for-byte',()=>assert.equal(readFileSync(join(root,'local-dashboard-db.json'),'utf8'),legacy));

@@ -191,7 +191,7 @@ function dueSoonTick() {
     const now = Date.now();
     const FIFTEEN = 15 * 60 * 1000;
     let changed = false;
-    for (const t of (0, db_js_1.getCommandTasks)()) {
+    for (const t of (0, db_js_1.getAssignedCommandTasks)()) {
         if (!t || t.status === "done" || t.status === "on_hold")
             continue;
         const due = taskDueEpoch(t);

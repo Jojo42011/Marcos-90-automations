@@ -194,7 +194,7 @@ async function runReminderTick(now = Date.now()) {
     if (!state.subscriptions.length)
         return;
     const WINDOW = 95 * 1000; // tolerate the tick interval + jitter
-    const tasks = (0, db_js_1.getCommandTasks)();
+    const tasks = (0, db_js_1.getAssignedCommandTasks)();
     for (const t of tasks) {
         if (!t || t.status === "done" || t.status === "on_hold")
             continue;

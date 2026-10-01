@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUsers = getUsers;
+exports.getAccountUserById = getAccountUserById;
 exports.saveUsers = saveUsers;
 exports.getUserById = getUserById;
 exports.getUserByEmail = getUserByEmail;
@@ -93,7 +94,7 @@ function normalizeUser(raw) {
         mustChangePassword: raw.mustChangePassword === true,
     };
 }
-function getUsers() {
+function readUsers(allAccounts = false) {
     try {
         if (!(0, fs_1.existsSync)(USERS_PATH)) {
             if (process.env.TENANT_OWNER_ID)
@@ -121,13 +122,16 @@ function getUsers() {
             if (u)
                 out.push(u);
         }
-        return process.env.TENANT_OWNER_ID ? out.filter(u => u.id === process.env.TENANT_OWNER_ID) : out;
+        return process.env.TENANT_OWNER_ID && !allAccounts ? out.filter(u => u.id === process.env.TENANT_OWNER_ID) : out;
     }
     catch (err) {
         console.error("[users] getUsers failed:", err);
         return [];
     }
 }
+function getUsers() { return readUsers(); }
+/** Identity lookup only; never use this to expose a business roster. */
+function getAccountUserById(id) { return readUsers(true).find(u => u.id === id) || null; }
 function saveUsers(users) {
     if (process.env.TENANT_OWNER_ID)
         throw new Error("Account records are managed by the sign-in service");

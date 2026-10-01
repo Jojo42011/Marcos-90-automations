@@ -19,7 +19,7 @@ export function workDir() {
 }
 export function workDb() {
   if (!db) {
-    db = new Database(join(workDir(), "work.db")); db.pragma("journal_mode = WAL"); db.pragma("busy_timeout = 5000");
+    db = new Database(join(workDir(), "work.db")); db.pragma("journal_mode = WAL"); db.pragma("synchronous = FULL"); db.pragma("busy_timeout = 5000");
     db.exec(`CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, owner TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(kind,owner,id));
       CREATE TABLE IF NOT EXISTS messages(seq INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL, chat TEXT NOT NULL, body TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS messages_chat ON messages(owner,chat,seq);

@@ -7,6 +7,8 @@ exports.tenantEnvironment = tenantEnvironment;
 exports.startTenantWorkers = startTenantWorkers;
 exports.accountMiddleware = accountMiddleware;
 exports.accountUpgrade = accountUpgrade;
+const workspaceAccess_js_1 = require("./workspaceAccess.js");
+const sharedTasks_js_1 = require("./sharedTasks.js");
 const node_child_process_1 = require("node:child_process");
 const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
@@ -27,6 +29,8 @@ function tenantEnvironment(owner, parent = process.env) {
         if (SHARED_ENV.test(key))
             env[key] = value;
     // Identity is shared; business stores and in-memory state are not.
+    env.SHARED_TASK_DB_PATH = parent.SHARED_TASK_DB_PATH || (0, tenantData_js_1.dataPath)("shared-tasks.db");
+    env.TENANT_MEMBER = (0, users_js_1.getUsers)().find(u => u.id === owner)?.name.trim().split(/\s+/)[0].toLowerCase() || owner;
     env.AUTH_DB_PATH = parent.AUTH_DB_PATH || (0, tenantData_js_1.dataPath)("auth.db");
     env.USERS_JSON_PATH = parent.USERS_JSON_PATH || (0, node_path_1.join)((0, node_path_1.dirname)(parent.DB_JSON_PATH || (0, tenantData_js_1.dataPath)("db.json")), "users.json");
     // Work already has enforced owner keys. Keeping it preserves existing chats/connections.
@@ -59,6 +63,7 @@ function ensureWorker(owner) {
 function startTenantWorkers() {
     if (!(0, tenantData_js_1.isTenantGateway)())
         return;
+    (0, sharedTasks_js_1.recoverSharedTasks)();
     const refresh = () => {
         const active = new Set((0, users_js_1.getUsers)().filter(u => u.active).map(u => u.id));
         for (const [id, worker] of workers)
@@ -90,8 +95,12 @@ function accountMiddleware(sessionUser, internal) {
         const user = sessionUser(req);
         if ((0, tenantData_js_1.tenantOwner)()) {
             // The child listens only on loopback, but still validates identity on every request.
-            if (!internal(req) && user?.id !== (0, tenantData_js_1.tenantOwner)()) {
+            if (!internal(req) && !(0, workspaceAccess_js_1.canViewWorkspace)(user, (0, tenantData_js_1.tenantOwner)())) {
                 res.status(403).json({ error: "Account mismatch" });
+                return;
+            }
+            if (user && user.id !== (0, tenantData_js_1.tenantOwner)() && !(0, workspaceAccess_js_1.workspaceReadAllowed)(req.method, req.path)) {
+                res.status(403).json({ error: "This workspace is read-only. Return to your workspace to create or assign tasks." });
                 return;
             }
             if (req.path.startsWith("/api/auth/") || (req.path.startsWith("/api/users") && req.method !== "GET")) {
@@ -106,12 +115,33 @@ function accountMiddleware(sessionUser, internal) {
         }
         if (identityPath(req.path))
             return next();
+        if (user && req.path === "/api/account/workspaces" && req.method === "GET") {
+            res.json({ workspaces: (0, users_js_1.getUsers)().filter(u => (0, workspaceAccess_js_1.canViewWorkspace)(user, u.id)).map(u => ({ id: u.id, name: u.name, readOnly: u.id !== user.id })) });
+            return;
+        }
+        if (user && req.path === "/api/account/workspace" && req.method === "POST") {
+            const target = String(req.query.id || user.id);
+            if (!(0, workspaceAccess_js_1.canViewWorkspace)(user, target)) {
+                res.status(403).json({ error: "Workspace unavailable" });
+                return;
+            }
+            res.cookie("mp_workspace", target, { httpOnly: true, sameSite: "strict", secure: req.secure, path: "/" });
+            res.json({ ok: true });
+            return;
+        }
         if (!user) {
             res.status(401).json({ error: "Sign in to an individual account. Shared tokens and unscoped integrations are unavailable." });
             return;
         }
         try {
-            const port = await ensureWorker(user.id);
+            const selected = (req.headers.cookie || "").split(";").map(s => s.trim()).find(s => s.startsWith("mp_workspace="))?.slice(13);
+            const owner = selected && (0, workspaceAccess_js_1.canViewWorkspace)(user, selected) ? selected : user.id;
+            if (owner !== user.id && !(0, workspaceAccess_js_1.workspaceReadAllowed)(req.method, req.path)) {
+                res.status(403).json({ error: "This workspace is read-only. Return to your workspace to make changes." });
+                return;
+            }
+            res.cookie("mp_workspace_id", owner, { sameSite: "lax", secure: req.secure, path: "/" });
+            const port = await ensureWorker(owner);
             const upstream = node_http_1.default.request({ host: "127.0.0.1", port, path: req.originalUrl, method: req.method,
                 headers: { ...req.headers, "x-forwarded-proto": req.protocol } }, incoming => {
                 res.writeHead(incoming.statusCode || 502, { ...incoming.headers, "cache-control": "no-store" });

@@ -45,9 +45,6 @@ const ROSTER: TeamMember[] = [
 const norm = (s: unknown) => String(s || "").toLowerCase().trim();
 
 export function listTeamMembers(): PublicTeamMember[] {
-  if (process.env.TENANT_OWNER_ID) {
-    return getUsers().map(u => ({ id: u.name.trim().split(/\s+/)[0].toLowerCase(), name: u.name, role: u.role, color: u.avatarColor }));
-  }
   return ROSTER.map(({ id, name, role, color }) => ({ id, name, role, color }));
 }
 

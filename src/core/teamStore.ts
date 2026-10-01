@@ -9,7 +9,7 @@ import { dataPath } from "./tenantData.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { randomUUID } from "crypto";
-import { getCommandTasks } from "./db.js";
+import { getAssignedCommandTasks } from "./db.js";
 
 export interface TeamChatMessage {
   id: string;
@@ -210,7 +210,7 @@ function dueSoonTick(): void {
   const now = Date.now();
   const FIFTEEN = 15 * 60 * 1000;
   let changed = false;
-  for (const t of getCommandTasks()) {
+  for (const t of getAssignedCommandTasks()) {
     if (!t || t.status === "done" || t.status === "on_hold") continue;
     const due = taskDueEpoch(t);
     if (due == null) continue;

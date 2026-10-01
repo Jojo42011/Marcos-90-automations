@@ -1,3 +1,5 @@
+import { canViewWorkspace, workspaceReadAllowed } from "./workspaceAccess.js";
+import { recoverSharedTasks } from "./sharedTasks.js";
 import { fork, ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -19,6 +21,8 @@ export function tenantEnvironment(owner: string, parent = process.env): NodeJS.P
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(parent)) if (SHARED_ENV.test(key)) env[key] = value;
   // Identity is shared; business stores and in-memory state are not.
+  env.SHARED_TASK_DB_PATH = parent.SHARED_TASK_DB_PATH || dataPath("shared-tasks.db");
+  env.TENANT_MEMBER = getUsers().find(u => u.id === owner)?.name.trim().split(/\s+/)[0].toLowerCase() || owner;
   env.AUTH_DB_PATH = parent.AUTH_DB_PATH || dataPath("auth.db");
   env.USERS_JSON_PATH = parent.USERS_JSON_PATH || join(dirname(parent.DB_JSON_PATH || dataPath("db.json")), "users.json");
   // Work already has enforced owner keys. Keeping it preserves existing chats/connections.
@@ -48,6 +52,7 @@ function ensureWorker(owner: string): Promise<number> {
 
 export function startTenantWorkers(): void {
   if (!isTenantGateway()) return;
+  recoverSharedTasks();
   const refresh = () => {
     const active = new Set(getUsers().filter(u => u.active).map(u => u.id));
     for (const [id, worker] of workers) if (!active.has(id)) worker.child.kill();
@@ -72,7 +77,8 @@ export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null,
     const user = sessionUser(req);
     if (tenantOwner()) {
       // The child listens only on loopback, but still validates identity on every request.
-      if (!internal(req) && user?.id !== tenantOwner()) { res.status(403).json({ error: "Account mismatch" }); return; }
+      if (!internal(req) && !canViewWorkspace(user, tenantOwner())) { res.status(403).json({ error: "Account mismatch" }); return; }
+      if (user && user.id !== tenantOwner() && !workspaceReadAllowed(req.method, req.path)) { res.status(403).json({error:"This workspace is read-only. Return to your workspace to create or assign tasks."}); return; }
       if (req.path.startsWith("/api/auth/") || (req.path.startsWith("/api/users") && req.method !== "GET")) {
         res.status(403).json({ error: "Account administration requires the sign-in service" }); return;
       }
@@ -83,9 +89,21 @@ export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null,
       res.cookie("mp_account_id", user.id, { sameSite: "lax", secure: req.secure, path: "/" });
     }
     if (identityPath(req.path)) return next();
+    if (user && req.path === "/api/account/workspaces" && req.method === "GET") {
+      res.json({workspaces:getUsers().filter(u => canViewWorkspace(user,u.id)).map(u => ({id:u.id,name:u.name,readOnly:u.id!==user.id}))}); return;
+    }
+    if (user && req.path === "/api/account/workspace" && req.method === "POST") {
+      const target=String(req.query.id || user.id);
+      if (!canViewWorkspace(user,target)) {res.status(403).json({error:"Workspace unavailable"});return;}
+      res.cookie("mp_workspace",target,{httpOnly:true,sameSite:"strict",secure:req.secure,path:"/"}); res.json({ok:true}); return;
+    }
     if (!user) { res.status(401).json({ error: "Sign in to an individual account. Shared tokens and unscoped integrations are unavailable." }); return; }
     try {
-      const port = await ensureWorker(user.id);
+      const selected=(req.headers.cookie || "").split(";").map(s=>s.trim()).find(s=>s.startsWith("mp_workspace="))?.slice(13);
+      const owner=selected && canViewWorkspace(user,selected) ? selected : user.id;
+      if (owner !== user.id && !workspaceReadAllowed(req.method,req.path)) {res.status(403).json({error:"This workspace is read-only. Return to your workspace to make changes."});return;}
+      res.cookie("mp_workspace_id",owner,{sameSite:"lax",secure:req.secure,path:"/"});
+      const port = await ensureWorker(owner);
       const upstream = http.request({ host: "127.0.0.1", port, path: req.originalUrl, method: req.method,
         headers: { ...req.headers, "x-forwarded-proto": req.protocol } }, incoming => {
         res.writeHead(incoming.statusCode || 502, { ...incoming.headers, "cache-control": "no-store" }); incoming.pipe(res);

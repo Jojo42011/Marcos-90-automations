@@ -68,7 +68,7 @@ async function session(owner, chat) {
                 (0, fs_1.chownSync)(dir, 1001, 1001);
                 (0, fs_1.chownSync)(files, 1001, 1001);
             }
-            const config = { browser: { browserName: "chromium", userDataDir: (0, path_1.join)(dir, "profile"), launchOptions: { headless: true, ...(process.env.HARVEY_BROWSER_EXECUTABLE ? { executablePath: process.env.HARVEY_BROWSER_EXECUTABLE } : {}) } }, outputDir: files, saveSession: false, imageResponses: "omit" };
+            const config = { capabilities: ["storage"], browser: { browserName: "chromium", userDataDir: (0, path_1.join)(dir, "profile"), launchOptions: { headless: true, ...(process.env.HARVEY_BROWSER_EXECUTABLE ? { executablePath: process.env.HARVEY_BROWSER_EXECUTABLE } : {}) } }, outputDir: files, saveSession: false, imageResponses: "omit" };
             // A fixed worker entrypoint avoids shell commands and a separate LLM.
             const { writeFileSync } = await Promise.resolve().then(() => __importStar(require("fs")));
             const configPath = (0, path_1.join)(dir, "config.json");
@@ -79,13 +79,19 @@ async function session(owner, chat) {
                 if (process.env[name])
                     env[name] = process.env[name];
             env.HOME = dir;
-            const transport = new stdio_js_1.StdioClientTransport({ command: process.execPath, args: [(0, path_1.join)(__dirname, "browserWorker.js"), "--config", configPath], cwd: files, env, stderr: "pipe" });
+            const transport = new stdio_js_1.StdioClientTransport({ command: process.execPath, args: [(0, path_1.join)(__dirname, "browserWorker.js"), "--config", configPath], cwd: dir, env, stderr: "pipe" });
             let startupError = "";
             transport.stderr?.on("data", b => { startupError = (startupError + String(b)).slice(-2000); });
             try {
                 await client.connect(transport, { timeout: 15000 });
                 const tools = (await client.listTools({}, { timeout: 15000 })).tools.filter(t => ALLOWED.has(t.name));
-                return { client, tools, lastUsed: Date.now() };
+                const statePath = (0, path_1.join)(dir, "auth-state.json");
+                if ((0, fs_1.existsSync)(statePath)) {
+                    const restored = await client.callTool({ name: "browser_set_storage_state", arguments: { filename: statePath } }, undefined, { timeout: 60000 });
+                    if (restored.isError)
+                        throw new Error("Saved browser session could not be restored; retained state was left intact");
+                }
+                return { client, tools, statePath, lastUsed: Date.now() };
             }
             catch (e) {
                 await client.close().catch(() => { });
@@ -98,20 +104,36 @@ async function session(owner, chat) {
     s.lastUsed = Date.now();
     return s;
 }
+async function checkpoint(s) {
+    const pending = s.statePath + ".pending";
+    const result = await s.client.callTool({ name: "browser_storage_state", arguments: { filename: pending } }, undefined, { timeout: 60000 });
+    if (result.isError)
+        throw new Error("Browser session could not be saved. The previous saved session is intact.");
+    (0, fs_1.chmodSync)(pending, 0o600);
+    (0, fs_1.renameSync)(pending, s.statePath);
+}
+async function closeSession(s) { try {
+    await checkpoint(s);
+}
+finally {
+    await s.client.close();
+} }
 async function closeBrowser(owner, chat) { const key = owner + ":" + chat, promise = sessions.get(key); if (promise) {
     sessions.delete(key);
     const s = await promise.catch(() => null);
-    await s?.client.close().catch(() => { });
+    if (s)
+        await closeSession(s);
 } }
 async function closeBrowsers() { const keys = [...sessions.keys()]; for (const key of keys) {
     const s = await sessions.get(key)?.catch(() => null);
-    await s?.client.close().catch(() => { });
+    if (s)
+        await closeSession(s);
     sessions.delete(key);
 } }
 const idle = setInterval(() => { for (const [key, value] of sessions)
     void value.then(async (s) => { if (Date.now() - s.lastUsed > 10 * 60_000) {
         sessions.delete(key);
-        await s.client.close();
+        await closeSession(s);
     } }).catch(() => { }); }, 60000);
 idle.unref();
 async function browserTools(owner, chat) { return (await session(owner, chat)).tools; }
@@ -130,15 +152,18 @@ async function browserCall(owner, chat, name, args) {
                 throw new Error("Upload files must belong to this chat's browser workspace");
         }
     }
-    if (name === "browser_take_screenshot")
+    if (name === "browser_take_screenshot" || name === "browser_snapshot")
         args = { ...args, filename: undefined };
+    if (name === "browser_close") {
+        await closeBrowser(owner, chat);
+        return { content: [{ type: "text", text: "Browser closed; session state retained." }] };
+    }
     const s = await session(owner, chat);
     const result = await s.client.callTool({ name, arguments: args || {} }, undefined, { timeout: 60000 });
     s.lastUsed = Date.now();
     if (result.isError)
         throw new Error(JSON.stringify(result.content).slice(0, 2000));
-    if (name === "browser_close")
-        await closeBrowser(owner, chat);
+    await checkpoint(s);
     return result;
 }
 function saveLogin(owner, input) {

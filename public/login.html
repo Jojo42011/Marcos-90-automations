@@ -96,7 +96,7 @@
         if(res.ok && res.d && res.d.ok){
           var params=new URLSearchParams(location.search);
           var next=params.get("next");
-          localStorage.clear(); sessionStorage.clear();
+          // Account drafts are archived and restored by account-session.js.
           location.href = (next && next.startsWith("/") && !next.startsWith("//")) ? next : "/shell";
         } else {
           showErr((res.d && res.d.error) || "Invalid email or password.");

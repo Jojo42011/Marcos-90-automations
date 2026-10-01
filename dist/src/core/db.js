@@ -39,6 +39,7 @@ exports.normalizeCrmTags = normalizeCrmTags;
 exports.normalizeCrmStatus = normalizeCrmStatus;
 exports.resetMemoryStore = resetMemoryStore;
 exports.getCommandTasks = getCommandTasks;
+exports.getAssignedCommandTasks = getAssignedCommandTasks;
 exports.saveCommandTasks = saveCommandTasks;
 exports.buildCommandTasksSummary = buildCommandTasksSummary;
 exports.seedCommandTasksIfEmpty = seedCommandTasksIfEmpty;
@@ -71,6 +72,7 @@ exports.appendLeadActivity = appendLeadActivity;
 exports.normalizeRelationships = normalizeRelationships;
 exports.normalizeIsoDay = normalizeIsoDay;
 exports.updateLeadCrmFields = updateLeadCrmFields;
+const sharedTasks_js_1 = require("./sharedTasks.js");
 const tenantData_js_1 = require("./tenantData.js");
 const crypto_1 = require("crypto");
 const fs_1 = require("fs");
@@ -344,14 +346,29 @@ function resetMemoryStore() {
     persistToFile();
 }
 function getCommandTasks() {
-    return [...commandTasksStore];
+    return (0, sharedTasks_js_1.sharedTasksEnabled)() ? (0, sharedTasks_js_1.sharedTaskList)() : [...commandTasksStore];
 }
-function saveCommandTasks(tasks) {
+/** Background reminders run only in the assignee's process, not every viewer's. */
+function getAssignedCommandTasks() {
+    const tasks = getCommandTasks();
+    return process.env.TENANT_OWNER_ID ? tasks.filter(t => String(t.assignedTo || "").trim().toLowerCase() === process.env.TENANT_MEMBER) : tasks;
+}
+function saveCommandTasks(tasks, previous) {
+    if ((0, sharedTasks_js_1.sharedTasksEnabled)()) {
+        if (!previous)
+            throw new Error("Shared bulk task updates require the original snapshot");
+        for (const task of tasks) {
+            const old = previous.find(t => t.id === task.id);
+            if (old && old.status !== task.status)
+                (0, sharedTasks_js_1.sharedTaskUpdate)(task.id, { status: task.status, previousStatus: task.previousStatus }, old);
+        }
+        return;
+    }
     commandTasksStore = tasks;
     persistToFile();
 }
 function buildCommandTasksSummary(tasks) {
-    const list = tasks ?? commandTasksStore;
+    const list = tasks ?? getCommandTasks();
     const active = list.filter((t) => t.status !== "done");
     return {
         urgent: active.filter((t) => t.column === "urgent").length,
@@ -360,8 +377,8 @@ function buildCommandTasksSummary(tasks) {
     };
 }
 function seedCommandTasksIfEmpty() {
-    if (process.env.TENANT_OWNER_ID)
-        return commandTasksStore;
+    if ((0, sharedTasks_js_1.sharedTasksEnabled)())
+        return getCommandTasks();
     if (commandTasksStore.length > 0)
         return commandTasksStore;
     const seeds = [
@@ -388,11 +405,15 @@ function createCommandTask(data) {
         createdAt: nowIso(),
         updatedAt: nowIso(),
     };
+    if ((0, sharedTasks_js_1.sharedTasksEnabled)())
+        return (0, sharedTasks_js_1.sharedTaskCreate)(task);
     commandTasksStore.push(task);
     persistToFile();
     return task;
 }
 function updateCommandTask(id, updates) {
+    if ((0, sharedTasks_js_1.sharedTasksEnabled)())
+        return (0, sharedTasks_js_1.sharedTaskUpdate)(id, updates);
     const idx = commandTasksStore.findIndex((t) => t.id === id);
     if (idx === -1)
         return null;
@@ -408,6 +429,8 @@ function updateCommandTask(id, updates) {
     return commandTasksStore[idx];
 }
 function deleteCommandTask(id) {
+    if ((0, sharedTasks_js_1.sharedTasksEnabled)())
+        return (0, sharedTasks_js_1.sharedTaskDelete)(id);
     const filtered = commandTasksStore.filter((t) => t.id !== id);
     if (filtered.length === commandTasksStore.length)
         return false;
