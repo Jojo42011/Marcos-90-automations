@@ -39,6 +39,10 @@ function visible(task) {
     const actor = (0, exports.taskActor)();
     return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo) === actor || member(task.createdBy) === actor;
 }
+function editable(task) {
+    const actor = (0, exports.taskActor)();
+    return !process.env.TENANT_OWNER_ID || member(task.assignedTo) === actor || member(task.createdBy) === actor;
+}
 function sharedTaskList() {
     return db().prepare("SELECT body FROM tasks WHERE deleted=0").all().map(r => JSON.parse(r.body)).filter(visible);
 }
@@ -58,7 +62,7 @@ function sharedTaskUpdate(id, updates, expected) {
         if (!row)
             return null;
         const old = JSON.parse(row.body);
-        if (!visible(old))
+        if (!editable(old))
             return null;
         // Deadline workers may only change the status of the snapshot they evaluated.
         if (expected && (old.status !== expected.status || old.dueDate !== expected.dueDate || old.updatedAt !== expected.updatedAt))
@@ -77,7 +81,7 @@ function sharedTaskDelete(id) {
         if (!row)
             return false;
         const task = JSON.parse(row.body);
-        if (!visible(task))
+        if (!editable(task))
             return false;
         db().prepare("UPDATE tasks SET deleted=1 WHERE id=?").run(id);
         history(task, "delete");

@@ -26,6 +26,10 @@ function visible(task: CommandTask) {
   const actor = taskActor();
   return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo) === actor || member(task.createdBy) === actor;
 }
+function editable(task: CommandTask) {
+  const actor=taskActor();
+  return !process.env.TENANT_OWNER_ID || member(task.assignedTo)===actor || member(task.createdBy)===actor;
+}
 export function sharedTaskList(): CommandTask[] {
   return (db().prepare("SELECT body FROM tasks WHERE deleted=0").all() as {body:string}[]).map(r => JSON.parse(r.body)).filter(visible);
 }
@@ -41,7 +45,7 @@ export function sharedTaskUpdate(id: string, updates: Partial<CommandTask>, expe
   return db().transaction(() => {
     const row = db().prepare("SELECT body FROM tasks WHERE id=? AND deleted=0").get(id) as {body:string} | undefined;
     if (!row) return null;
-    const old: CommandTask = JSON.parse(row.body); if (!visible(old)) return null;
+    const old: CommandTask = JSON.parse(row.body); if (!editable(old)) return null;
     // Deadline workers may only change the status of the snapshot they evaluated.
     if (expected && (old.status !== expected.status || old.dueDate !== expected.dueDate || old.updatedAt !== expected.updatedAt)) return null;
     const next = {...old,...updates,id:old.id,createdBy:old.createdBy,createdAt:old.createdAt,updatedAt:new Date().toISOString()};
@@ -52,7 +56,7 @@ export function sharedTaskUpdate(id: string, updates: Partial<CommandTask>, expe
 export function sharedTaskDelete(id: string): boolean {
   return db().transaction(() => {
     const row = db().prepare("SELECT body FROM tasks WHERE id=? AND deleted=0").get(id) as {body:string} | undefined;
-    if (!row) return false; const task = JSON.parse(row.body); if (!visible(task)) return false;
+    if (!row) return false; const task = JSON.parse(row.body); if (!editable(task)) return false;
     db().prepare("UPDATE tasks SET deleted=1 WHERE id=?").run(id); history(task,"delete"); return true;
   })();
 }
