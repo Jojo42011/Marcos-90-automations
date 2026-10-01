@@ -71,7 +71,7 @@ export function isSharedInbound(method: string, path: string): boolean {
     || method === "OPTIONS" && path === "/webhook";
 }
 export function isSharedAutomationConsole(path: string): boolean {
-  return /^\/api\/(?:dm\/(?:inbound-report|conversations|stats|conversation\/[^/]+)|comment-agent\/(?:status|dry-run|follow-ups)|zernio\/status)$/.test(path);
+  return /^\/api\/(?:dm\/(?:inbound-report|conversations|stats|conversation\/[^/]+)|comment-agent\/(?:status|dry-run|follow-ups)|zernio\/status|llm\/health)$/.test(path);
 }
 
 const identityPath = (p: string) => /^\/api\/auth\/(?:login|logout|me|change-password|login-history|audit-log|team(?:\/[^/]+(?:\/reset-password)?)?)$/.test(p)
