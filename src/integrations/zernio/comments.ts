@@ -62,6 +62,8 @@ async function zernioFetch(
 /** A `comment.received` event, reduced to what this agent acts on. */
 export interface ZernioInboundComment {
   eventId: string;
+  /** Social account from the signed delivery, independent of dashboard identity. */
+  accountId?: string | null;
   commentId: string;
   /** TikTok video id. */
   platformPostId: string;
@@ -90,6 +92,7 @@ export function parseZernioInboundComment(body: unknown): ZernioInboundComment |
   if (b.event !== "comment.received") return null;
 
   const c = (b.comment ?? {}) as Record<string, unknown>;
+  const account = (b.account ?? {}) as Record<string, unknown>;
   const author = (c.author ?? {}) as Record<string, unknown>;
 
   const commentId = str(c.id);
@@ -99,6 +102,7 @@ export function parseZernioInboundComment(body: unknown): ZernioInboundComment |
 
   return {
     eventId: str(b.id) ?? `${commentId}:${randomUUID()}`,
+    accountId: str(account.accountId) ?? str(account.id),
     commentId,
     platformPostId,
     postId: str(c.postId),

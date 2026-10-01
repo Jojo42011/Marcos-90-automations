@@ -14,6 +14,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - run: node scripts/verify-comment-agent.mjs
       - run: node scripts/verify-task-owner-recovery.mjs
       - run: node scripts/verify-account-isolation.mjs
       - run: node scripts/verify-account-ui.mjs

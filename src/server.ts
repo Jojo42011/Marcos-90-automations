@@ -526,7 +526,7 @@ app.use(
     internalCall: (req) => isInternalCall(req as express.Request),
   }),
 );
-app.use(accountMiddleware(sessionUserSync, isInternalCall));
+app.use(accountMiddleware(sessionUserSync, isInternalCall, machineTokenOk));
 
 /**
  * The signed-in user, resolved synchronously.
@@ -6373,7 +6373,8 @@ app.post(
       res.status(200).json({ ok: true });
       void (async () => {
         try {
-          const accountId = zernioTikTokAccountId() || commentEvt.postId || "";
+          const accountId = commentEvt.accountId || zernioTikTokAccountId();
+          if (!accountId) throw new Error("Comment delivery has no connected social account ID");
           const outcome = await handleInboundComment(commentEvt, accountId);
           marcoLog("comment_agent_outcome", {
             comment_id: commentEvt.commentId,

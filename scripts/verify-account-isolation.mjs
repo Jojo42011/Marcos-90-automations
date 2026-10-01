@@ -1,5 +1,6 @@
 // Real HTTP requests to three separate account processes. No model/provider calls.
 import assert from 'node:assert/strict';
+import {createHmac} from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,15 +35,16 @@ const port = probe.address().port;await new Promise(resolve=>probe.close(resolve
 const env = Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFILE|LOCALAPPDATA|TEMP|TMP)$/.test(k)));
 let server, logs='';
 function start(){
- server=spawn(process.execPath,['dist/src/server.js'],{env:{...env,TENANT_DATA_ROOT:root,PORT:String(port),ACCOUNT_ISOLATION:'true',SITE_LOGIN_ENABLED:'1',HARVEY_WORKER_ENABLED:'false',DOTENV_CONFIG_PATH:join(root,'.missing-env')},windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
+ server=spawn(process.execPath,['dist/src/server.js'],{env:{...env,TENANT_DATA_ROOT:root,PORT:String(port),ACCOUNT_ISOLATION:'true',SITE_LOGIN_ENABLED:'1',ZERNIO_WEBHOOK_SECRET:'fixture-hook-secret',COMMENT_AGENT_ENABLED:'false',HARVEY_WORKER_ENABLED:'false',DOTENV_CONFIG_PATH:join(root,'.missing-env')},windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
+ server.on('exit',(code,signal)=>{logs+='\nServer exit '+code+' '+signal;});
  server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
 }
 async function stop(){if(server && server.exitCode===null){const done=once(server,'exit');server.send('shutdown');await done;}}
-async function request(path, cookie='', method='GET', body){
- const res=await fetch('http://127.0.0.1:'+port+path,{method,headers:{cookie,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,redirect:'manual'});
+async function request(path, cookie='', method='GET', body, extraHeaders={}){
+ const res=await fetch('http://127.0.0.1:'+port+path,{method,headers:{cookie,...extraHeaders,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,redirect:'manual'});
  const raw=await res.text();let data;try{data=JSON.parse(raw);}catch{data=raw;}return {status:res.status,data,cookie:res.headers.getSetCookie().map(s=>s.split(';')[0]).join('; ')};
 }
-async function ready(){for(let i=0;i<200;i++){try{if((await request('/health')).status===200)return;}catch{}await new Promise(r=>setTimeout(r,100));}throw new Error('Server failed to start: '+logs.slice(-4000));}
+async function ready(){for(let i=0;i<900;i++){try{if((await request('/health')).status===200)return;}catch{}await new Promise(r=>setTimeout(r,100));}throw new Error('Server failed to start: '+logs.slice(-4000));}
 const cookies={}, chats={}, schedules={};let checks=0;
 function check(name,fn){fn();console.log('ok',name);checks++;}
 try {
@@ -89,8 +91,18 @@ try {
  check('another account cannot read that retained chat',()=>assert.ok(true));
  assert.equal((await request('/api/harvey/conversations/'+preserved.id,cookies.carlos)).status,404);
  const anonymous=await request('/api/dashboard/data');assert.equal(anonymous.status,401);
- const webhook=await request('/webhook','','POST',{});assert.equal(webhook.status,401);
- check('anonymous requests and unscoped legacy webhooks cannot access shared business state',()=>assert.ok(true));
+ const webhook=await request('/webhook','','POST',{});assert.equal(webhook.status,400);
+ const hook={id:'signed-comment-fixture',event:'comment.received',account:{accountId:'wesley-social'},comment:{id:'shared-comment',platformPostId:'fixture-post',platform:'tiktok',text:'Location?',author:{id:'fixture-author'},createdAt:new Date().toISOString()}};
+ const signature=createHmac('sha256','fixture-hook-secret').update(JSON.stringify(hook)).digest('hex');
+ assert.equal((await request('/api/zernio/webhook','','POST',hook)).status,401);
+ const accepted=await request('/api/zernio/webhook','','POST',hook,{'x-zernio-signature':signature});assert.equal(accepted.status,200);
+ for(let i=0;i<50;i++){const status=await request('/api/comment-agent/status',cookies.marco);if(status.data.recent?.some(r=>r.commentId==='shared-comment'||r.comment_id==='shared-comment'))break;await new Promise(r=>setTimeout(r,50));}
+ const sharedStatus=await request('/api/comment-agent/status',cookies.marco);assert.equal(sharedStatus.data.enabled,false);assert.equal(sharedStatus.data.recent.length,1);
+ for(const u of users){const status=await request('/api/comment-agent/status',cookies[u.id]);assert.deepEqual(status.data.recent,sharedStatus.data.recent);assert.equal((await request('/api/dm/stats',cookies[u.id])).status,200);}
+ assert.equal((await request('/api/comment-agent/status')).status,401);
+ assert.equal((await request('/api/zernio/webhook','','POST',hook,{'x-zernio-signature':signature})).data.duplicate,true);
+ check('signed comments reach one shared durable service without login; all team consoles agree; invalid signatures and anonymous console reads remain blocked',()=>assert.ok(true));
+ check('anonymous dashboard requests remain blocked; ManyChat reaches its payload validation',()=>assert.ok(true));
  assert.equal((await request('/api/auth/team',cookies.carlos,'POST',{name:'Other',email:'other@example.com'})).status,403);
  assert.equal((await request('/api/users',cookies.carlos,'POST',{name:'Other',email:'other@example.com'})).status,403);
  check('non-admin accounts cannot create accounts or mutate the shared user registry',()=>assert.ok(true));

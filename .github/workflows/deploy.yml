@@ -52,6 +52,13 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      - name: Opt-in shared comment and DM audit
+        if: contains(github.event.head_commit.message, '[automation-audit]')
+        timeout-minutes: 3
+        run: flyctl ssh console -a marco-90-automation -C 'node /app/scripts/audit-shared-automation.mjs'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Opt-in low-cost Harvey smoke test
         if: contains(github.event.head_commit.message, '[harvey-smoke]')
         timeout-minutes: 4

@@ -95,6 +95,7 @@ check(
 );
 
 // ─────────────────────── COPY VETTING ────────────────────────
+for(const accountId of ['marco-social','wesley-social'])check('signed social account parsed: '+accountId, comments.parseZernioInboundComment({...wire(),account:{accountId}})?.accountId===accountId);
 console.log("\nCOPY — what must never reach a public comment");
 const vet = agent.vetCommentReply;
 check("a warm invite reply passes", vet("Hey for some reason I can't send you a DM from my account. Mind shooting me a quick one?").ok);
@@ -239,6 +240,7 @@ const s = store.getCommentAgentStats();
 check("every decision is recorded with a reason", s.totalSeen > 0 && Object.keys(s.byDecision).length >= 4);
 check("recent actions are readable for review", store.getRecentCommentActions(5).length > 0);
 
+store.getCommentAgentDb().close();
 rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${pass}/${pass + fail} checks passed`);
 if (fail) {

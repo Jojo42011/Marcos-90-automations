@@ -66,11 +66,19 @@ export function startTenantWorkers(): void {
   process.on("message", message => { if (message === "shutdown") shutdown(); });
 }
 
+export function isSharedInbound(method: string, path: string): boolean {
+  return method === "POST" && ["/api/zernio/webhook","/webhook"].includes(path)
+    || method === "OPTIONS" && path === "/webhook";
+}
+export function isSharedAutomationConsole(path: string): boolean {
+  return /^\/api\/(?:dm\/(?:inbound-report|conversations|stats|conversation\/[^/]+)|comment-agent\/(?:status|dry-run|follow-ups)|zernio\/status)$/.test(path);
+}
+
 const identityPath = (p: string) => /^\/api\/auth\/(?:login|logout|me|change-password|login-history|audit-log|team(?:\/[^/]+(?:\/reset-password)?)?)$/.test(p)
   || ["/login", "/login.html", "/change-password", "/change-password.html", "/health", "/favicon.ico"].includes(p)
   || p.startsWith("/login-assets/") || p.startsWith("/assets/");
 
-export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null, internal: (req: Request) => boolean) {
+export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null, internal: (req: Request) => boolean, machine: (req: Request) => boolean = () => false) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (process.env.ACCOUNT_ISOLATION !== "true") return next();
     res.setHeader("Cache-Control", "no-store");
@@ -87,6 +95,14 @@ export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null,
     if (user) {
       res.cookie("mp_account", user.name.trim().split(/\s+/)[0].toLowerCase(), { sameSite: "lax", secure: req.secure, path: "/" });
       res.cookie("mp_account_id", user.id, { sameSite: "lax", secure: req.secure, path: "/" });
+    }
+    // Inbound automation is a shared application service, never a dashboard
+    // tenant. Zernio verifies its raw-body signature in the route; ManyChat's
+    // existing public webhook contract stays unchanged.
+    if (isSharedInbound(req.method, req.path)) return next();
+    if (isSharedAutomationConsole(req.path)) {
+      if (user && ["marco","wesley","carlos"].includes(user.name.trim().split(/\s+/)[0].toLowerCase()) || machine(req) || internal(req)) return next();
+      res.status(401).json({error:"Sign in to view the shared automation console"}); return;
     }
     if (identityPath(req.path)) return next();
     if (user && req.path === "/api/account/workspaces" && req.method === "GET") {
