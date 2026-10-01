@@ -113,5 +113,34 @@ try {
  for(const user of users){const dashboard=await request('/api/dashboard/data?includePhoneless=1',cookies[user.id]);assert.equal(dashboard.data.leads[0].name,user.name+' private');}
  check('each CRM persists separately across a complete server restart',()=>assert.ok(true));
  check('legacy shared CRM file is preserved byte-for-byte',()=>assert.equal(readFileSync(join(root,'local-dashboard-db.json'),'utf8'),legacy));
+ if(process.env.TASK_UI_BROWSER==='true') {
+   const {chromium}=await import('playwright');
+   const browser=await chromium.launch({headless:true,...(process.env.HARVEY_BROWSER_EXECUTABLE?{executablePath:process.env.HARVEY_BROWSER_EXECUTABLE}:{})});
+   try {
+     const context=await browser.newContext({viewport:{width:1500,height:1000}});
+     const base='http://127.0.0.1:'+port;
+     await context.addCookies(delegated.split('; ').map(s=>{const i=s.indexOf('=');return {name:s.slice(0,i),value:s.slice(i+1),url:base};}));
+     const recurring=await request('/api/tasks',delegated,'POST',{title:'Visible Wesley recurring',assignedTo:'wesley',column:'today',recurring:true,recurringInterval:'weekly'});
+     assert.equal(recurring.status,200);assert.equal(recurring.data.task.createdBy,'carlos');
+     const future=await request('/api/tasks',delegated,'POST',{title:'Visible future task',assignedTo:'carlos',column:'this_month',dueDate:'2030-01-15'});assert.equal(future.status,200);
+     await context.route('**/*',route=>route.request().url().startsWith(base+'/')?route.continue():route.abort());
+     const page=await context.newPage(), errors=[];page.on('pageerror',e=>errors.push(e.message));
+     await page.goto(base+'/team-tasks');
+     await page.locator('#bars').getByText('Visible Wesley recurring',{exact:true}).waitFor();
+     await page.locator('#bars').getByText('Visible future task',{exact:true}).waitFor();
+     await page.locator('#allTaskDates').uncheck();await page.locator('#bars').getByText('Visible future task',{exact:true}).waitFor({state:'hidden'});await page.locator('#allTaskDates').check();
+     await page.locator('#meChip').click();await page.locator('[data-page="wesley"]').click();
+     await page.locator('#quickTitle').fill('Created through the actual task page');await page.locator('#openAdd').click();await page.locator('#tWho').selectOption('wesley');
+     const saved=page.waitForResponse(r=>r.url().endsWith('/api/tasks')&&r.request().method()==='POST');await page.locator('#tmSave').click();assert.equal((await saved).status(),200);
+     await page.locator('#taskScrim.on').waitFor({state:'hidden'});
+     assert((await request('/api/tasks',cookies.wesley)).data.tasks.some(t=>t.title==='Created through the actual task page'));
+     await page.locator('[data-tab="done"]').click();await page.locator('#bars').getByText('Wesley retained task',{exact:true}).waitFor();
+     await page.locator('[data-tab="active"]').click();await page.locator('#openAdd').click();await page.locator('#tTitle').fill('Keep failed task draft');
+     await page.route('**/api/tasks',route=>route.request().method()==='POST'?route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:'Fixture save rejected'})}):route.continue());
+     await page.locator('#tmSave').click();await page.getByText('Fixture save rejected',{exact:true}).waitFor();assert.equal(await page.locator('#tTitle').inputValue(),'Keep failed task draft');assert(await page.locator('#taskScrim.on').isVisible());
+     assert.deepEqual(errors,[]);
+     check('real task page shows other-member recurring, future and completed tasks; creates assignments while another workspace is selected; rejected saves retain drafts',()=>assert.ok(true));
+   } finally {await browser.close();}
+ }
  console.log(checks+' account isolation checks passed; no external services were contacted.');
 } catch(error){console.error(logs.slice(-5000));throw error;} finally {await stop();work.closeStore();}

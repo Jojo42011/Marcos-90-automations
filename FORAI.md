@@ -34,6 +34,12 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+### 2026-09-30 — Repair Task Command visibility and creation
+
+The shared `/api/tasks` service always routes using the authenticated actor, independent of the selected read-only CRM/chat workspace. This keeps Carlos's combined task list complete and permits assignment while browsing another workspace; CRM/chat writes remain blocked. Task Command now defaults to an explicit All dates view, includes every visible member's recurring tasks, and shows all completed types by default. Member pages support task creation. Failed save/update/delete requests do not insert undefined tasks or remove records from the page; failed saves retain the draft and show the server error.
+
+A real browser regression exercises the reported path: Carlos selects Marco's workspace, sees Wesley's recurring tasks and future/completed records, opens Wesley's member page, creates an assignment, verifies it in Wesley's account, and retains a draft after a simulated rejected save. Temporary fixtures and original recovery files remain intact.
+
 ### 2026-09-30 — Recover retained tasks and preserve workspace sessions
 
 Production recovery confirmed 1,828 retained command tasks and accounted for 1,833 source records. Retired or unassigned legacy command tasks are reassigned to Carlos once (without resetting completion, timestamps, or checklist progress); retired display labels are replaced in live task text. Source files and history remain intact.
