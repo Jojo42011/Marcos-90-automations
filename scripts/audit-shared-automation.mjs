@@ -49,7 +49,8 @@ for(const row of rows){
   const lead=leads.find(l=>l.platform===evt.platform&&l.userId===evt.senderId);
   const stored=lead?(await db.getConversation(lead.id)).messages:[];
   const confirmed=messages.filter(m=>m.direction==='outgoing'&&stored.some(s=>s.role==='assistant'&&s.text===(m.text||m.message)));
-  threads.push({inboundAt:row.createdAt,providerMessages:messages.length,storedMessages:stored.length,confirmedAgentReplies:confirmed.length,latestConfirmedReplyAt:confirmed[0]?.sentAt||confirmed[0]?.createdAt||null});
+  const interested=evt.text.trim()?await llm.classifyNewLeadBuyingIntent(evt.text,{platform:evt.platform,channel:'dm'}):false;
+  threads.push({inboundAt:row.createdAt,messageKeys:Object.keys(row.requestPayload?.message||{}),parsedTextChars:evt.text.length,alternateTextChars:typeof row.requestPayload?.message?.message==='string'?row.requestPayload.message.message.length:0,buyingIntent:interested,providerMessages:messages.length,storedMessages:stored.length,confirmedAgentReplies:confirmed.length,latestConfirmedReplyAt:confirmed[0]?.sentAt||confirmed[0]?.createdAt||null});
 }
 console.log(JSON.stringify({marcoDmAudit:'passed',account:'puga.realtor',model:modelCheck.model,modelAvailable:true,recentInboundDeliveries:rows.map(r=>({at:r.createdAt,status:r.status,httpStatus:r.statusCode})),threads,note:'Read-only delivery inspection; no customer messages sent'}));
 console.log(JSON.stringify({sharedAutomationAudit:'passed',signedWebhook:accepted.status,unsignedWebhook:rejected.status,manychatValidation:manychat.status,commentAgentEnabled:true,classifierCredentialConfigured:true,liveClassifierPassed:true,accounts:accounts.accounts.map(a=>({platform:a.platform,username:a.username,active:a.active})),commentHistory:ledger.getCommentAgentStats()}));
