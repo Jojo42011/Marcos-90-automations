@@ -26,11 +26,10 @@ assert.equal(context.LEADS.length,0);
 console.log('CRM starts empty, accepts zero/one live contacts, and removes deleted contacts without demo fallback.');
 
 const storage=new Map([['accountCacheOwner','previous'],['marcoEmailAdd','private-draft']]);
-const handlers={};
-vm.runInNewContext(readFileSync('public/account-session.js','utf8'),{
- document:{cookie:'mp_account_id=carlos; mp_account=carlos'},
- localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),clear:()=>storage.clear()},
- sessionStorage:{clear:()=>{}},window:{addEventListener:(e,f)=>handlers[e]=f},location:{reload:()=>{handlers.reloaded=true;}}});
-assert.equal(storage.has('marcoEmailAdd'),false);assert.equal(storage.get('marcoTaskUser'),'carlos');
-handlers.storage({key:'accountCacheOwner',newValue:'wesley'});assert.equal(handlers.reloaded,true);
-console.log('Account switches clear stale display data and reload other account tabs.');
+function adapter(map){return {get length(){return map.size;},key:i=>[...map.keys()][i],getItem:k=>map.get(k),setItem:(k,v)=>map.set(k,v),removeItem:k=>map.delete(k)}}
+const handlers={}, session=new Map();
+function run(owner){vm.runInNewContext(readFileSync('public/account-session.js','utf8'),{document:{cookie:'mp_account_id='+owner+'; mp_account='+owner},localStorage:adapter(storage),sessionStorage:adapter(session),window:{addEventListener:(e,f)=>handlers[e]=f},location:{reload:()=>{handlers.reloaded=true;}}});}
+run('carlos');assert.equal(storage.has('marcoEmailAdd'),false);assert.equal(JSON.parse(storage.get('accountArchive:previous')).marcoEmailAdd,'private-draft');assert.equal(storage.get('marcoTaskUser'),'carlos');
+storage.set('newDraft','Keep my work');run('wesley');assert.equal(storage.has('newDraft'),false);run('carlos');assert.equal(storage.get('newDraft'),'Keep my work');
+handlers.storage({key:'accountCacheOwner',newValue:'wesley:wesley'});assert.equal(handlers.reloaded,true);
+console.log('Account switches isolate display data, retain drafts and restore them on return.');

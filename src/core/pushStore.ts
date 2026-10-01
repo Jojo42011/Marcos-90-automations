@@ -14,7 +14,7 @@ import { dataPath } from "./tenantData.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import webpush from "web-push";
-import { getCommandTasks } from "./db.js";
+import { getAssignedCommandTasks } from "./db.js";
 import type { CommandTask } from "./types.js";
 
 interface PushKeys {
@@ -217,7 +217,7 @@ function markSent(key: string): void {
 export async function runReminderTick(now = Date.now()): Promise<void> {
   if (!state.subscriptions.length) return;
   const WINDOW = 95 * 1000; // tolerate the tick interval + jitter
-  const tasks = getCommandTasks();
+  const tasks = getAssignedCommandTasks();
 
   for (const t of tasks) {
     if (!t || t.status === "done" || t.status === "on_hold") continue;

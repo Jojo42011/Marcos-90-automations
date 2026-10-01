@@ -1,3 +1,4 @@
+import { sharedTasksEnabled, sharedTaskList, sharedTaskCreate, sharedTaskUpdate, sharedTaskDelete } from "./sharedTasks.js";
 import { dataPath } from "./tenantData.js";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -315,16 +316,27 @@ export function resetMemoryStore(): void {
 }
 
 export function getCommandTasks(): CommandTask[] {
-  return [...commandTasksStore];
+  return sharedTasksEnabled() ? sharedTaskList() : [...commandTasksStore];
 }
 
-export function saveCommandTasks(tasks: CommandTask[]): void {
+/** Background reminders run only in the assignee's process, not every viewer's. */
+export function getAssignedCommandTasks(): CommandTask[] {
+  const tasks=getCommandTasks();
+  return process.env.TENANT_OWNER_ID ? tasks.filter(t => String(t.assignedTo || "").trim().toLowerCase() === process.env.TENANT_MEMBER) : tasks;
+}
+
+export function saveCommandTasks(tasks: CommandTask[], previous?: CommandTask[]): void {
+  if (sharedTasksEnabled()) {
+    if (!previous) throw new Error("Shared bulk task updates require the original snapshot");
+    for (const task of tasks) { const old = previous.find(t => t.id === task.id); if (old && old.status !== task.status) sharedTaskUpdate(task.id, {status:task.status,previousStatus:task.previousStatus}, old); }
+    return;
+  }
   commandTasksStore = tasks;
   persistToFile();
 }
 
 export function buildCommandTasksSummary(tasks?: CommandTask[]): CommandTasksSummary {
-  const list = tasks ?? commandTasksStore;
+  const list = tasks ?? getCommandTasks();
   const active = list.filter((t) => t.status !== "done");
   return {
     urgent: active.filter((t) => t.column === "urgent").length,
@@ -334,7 +346,7 @@ export function buildCommandTasksSummary(tasks?: CommandTask[]): CommandTasksSum
 }
 
 export function seedCommandTasksIfEmpty(): CommandTask[] {
-  if (process.env.TENANT_OWNER_ID) return commandTasksStore;
+  if (sharedTasksEnabled()) return getCommandTasks();
   if (commandTasksStore.length > 0) return commandTasksStore;
 
   const seeds: Omit<CommandTask, "id" | "createdAt" | "updatedAt" | "status">[] = [
@@ -365,12 +377,14 @@ export function createCommandTask(
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
+  if (sharedTasksEnabled()) return sharedTaskCreate(task);
   commandTasksStore.push(task);
   persistToFile();
   return task;
 }
 
 export function updateCommandTask(id: string, updates: Partial<CommandTask>): CommandTask | null {
+  if (sharedTasksEnabled()) return sharedTaskUpdate(id, updates);
   const idx = commandTasksStore.findIndex((t) => t.id === id);
   if (idx === -1) return null;
   commandTasksStore[idx] = {
@@ -386,6 +400,7 @@ export function updateCommandTask(id: string, updates: Partial<CommandTask>): Co
 }
 
 export function deleteCommandTask(id: string): boolean {
+  if (sharedTasksEnabled()) return sharedTaskDelete(id);
   const filtered = commandTasksStore.filter((t) => t.id !== id);
   if (filtered.length === commandTasksStore.length) return false;
   commandTasksStore = filtered;

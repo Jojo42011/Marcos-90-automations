@@ -1,4 +1,4 @@
-import { getCommandTasks, saveCommandTasks } from "./db.js";
+import { getAssignedCommandTasks, saveCommandTasks } from "./db.js";
 import { getMarcoTasks, saveMarcoTasks } from "./marcoTasks.js";
 import { getTasks, saveTasks } from "./tasks.js";
 import type { CommandTask, MarcoTask, Task } from "./types.js";
@@ -168,8 +168,9 @@ export function runTaskDeadlineAutomation(): { moves: number } {
   const nowMs = Date.now();
   let totalMoves = 0;
 
-  const cmd = applyCommandUpdates(getCommandTasks(), nowMs);
-  if (cmd.moves > 0) saveCommandTasks(cmd.tasks);
+  const commandSnapshot = getAssignedCommandTasks();
+  const cmd = applyCommandUpdates(commandSnapshot, nowMs);
+  if (cmd.moves > 0) saveCommandTasks(cmd.tasks, commandSnapshot);
   totalMoves += cmd.moves;
 
   const crm = applyCrmUpdates(getTasks(), nowMs);

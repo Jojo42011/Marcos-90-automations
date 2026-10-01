@@ -123,9 +123,10 @@ function applyMarcoUpdates(tasks, nowMs) {
 function runTaskDeadlineAutomation() {
     const nowMs = Date.now();
     let totalMoves = 0;
-    const cmd = applyCommandUpdates((0, db_js_1.getCommandTasks)(), nowMs);
+    const commandSnapshot = (0, db_js_1.getAssignedCommandTasks)();
+    const cmd = applyCommandUpdates(commandSnapshot, nowMs);
     if (cmd.moves > 0)
-        (0, db_js_1.saveCommandTasks)(cmd.tasks);
+        (0, db_js_1.saveCommandTasks)(cmd.tasks, commandSnapshot);
     totalMoves += cmd.moves;
     const crm = applyCrmUpdates((0, tasks_js_1.getTasks)(), nowMs);
     if (crm.moves > 0)

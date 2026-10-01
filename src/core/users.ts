@@ -93,7 +93,7 @@ function normalizeUser(raw: Record<string, unknown>): CRMUser | null {
   };
 }
 
-export function getUsers(): CRMUser[] {
+function readUsers(allAccounts = false): CRMUser[] {
   try {
     if (!existsSync(USERS_PATH)) {
       if (process.env.TENANT_OWNER_ID) return [];
@@ -115,12 +115,16 @@ export function getUsers(): CRMUser[] {
       const u = normalizeUser(item as Record<string, unknown>);
       if (u) out.push(u);
     }
-    return process.env.TENANT_OWNER_ID ? out.filter(u => u.id === process.env.TENANT_OWNER_ID) : out;
+    return process.env.TENANT_OWNER_ID && !allAccounts ? out.filter(u => u.id === process.env.TENANT_OWNER_ID) : out;
   } catch (err) {
     console.error("[users] getUsers failed:", err);
     return [];
   }
 }
+
+export function getUsers(): CRMUser[] { return readUsers(); }
+/** Identity lookup only; never use this to expose a business roster. */
+export function getAccountUserById(id: string): CRMUser | null { return readUsers(true).find(u => u.id === id) || null; }
 
 export function saveUsers(users: CRMUser[]): void {
   if (process.env.TENANT_OWNER_ID) throw new Error("Account records are managed by the sign-in service");

@@ -38,6 +38,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeDueAutoPlanSteps = executeDueAutoPlanSteps;
 exports.executeDueTransactionPlanSteps = executeDueTransactionPlanSteps;
+const workspaceAccess_js_1 = require("./core/workspaceAccess.js");
 const tenantData_js_1 = require("./core/tenantData.js");
 const tenantData_js_2 = require("./core/tenantData.js");
 const tenantGateway_js_1 = require("./core/tenantGateway.js");
@@ -202,8 +203,8 @@ function sessionUserSync(req) {
         const session = (0, authStore_js_1.getSession)(token);
         if (!session)
             return null;
-        const user = (0, users_js_2.getUserById)(session.userId);
-        if (!user || user.active === false || ((0, tenantData_js_2.tenantOwner)() && user.id !== (0, tenantData_js_2.tenantOwner)()))
+        const user = (0, users_js_2.getAccountUserById)(session.userId);
+        if (!user || user.active === false || ((0, tenantData_js_2.tenantOwner)() && !(0, workspaceAccess_js_1.canViewWorkspace)(user, (0, tenantData_js_2.tenantOwner)())))
             return null;
         return user;
     }
@@ -692,9 +693,9 @@ async function currentSessionUser(req) {
     const session = getSession(token);
     if (!session)
         return null;
-    const { getUserById } = await Promise.resolve().then(() => __importStar(require("./core/users.js")));
+    const { getAccountUserById: getUserById } = await Promise.resolve().then(() => __importStar(require("./core/users.js")));
     const user = getUserById(session.userId);
-    if (!user || user.active === false || ((0, tenantData_js_2.tenantOwner)() && user.id !== (0, tenantData_js_2.tenantOwner)()))
+    if (!user || user.active === false || ((0, tenantData_js_2.tenantOwner)() && !(0, workspaceAccess_js_1.canViewWorkspace)(user, (0, tenantData_js_2.tenantOwner)())))
         return null;
     return user;
 }
@@ -2244,7 +2245,7 @@ function harveyToolResultForUi(result) {
  * Streamed or not, the turn is the same: the full agent loop with every tool,
  * the operator's model pick, and session history shared with voice.
  */
-app.use("/api/harvey", (0, routes_js_1.createWorkRouter)(dashboardTokenOk, req => String(sessionUserSync(req)?.id || "operator")));
+app.use("/api/harvey", (0, routes_js_1.createWorkRouter)(dashboardTokenOk, req => String((0, tenantData_js_2.tenantOwner)() || sessionUserSync(req)?.id || "operator")));
 app.post("/api/harvey/chat", express_1.default.json({ limit: "256kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
@@ -6928,7 +6929,7 @@ app.post("/api/marco-tasks", express_1.default.json({ limit: "64kb" }), (req, re
         dueDate: typeof body.dueDate === "string" ? body.dueDate.slice(0, 10) : undefined,
         priority,
         status,
-        createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
+        createdBy: process.env.TENANT_MEMBER || (typeof body.createdBy === "string" ? body.createdBy : "carlos"),
     });
     res.status(201).json({ task });
 });
@@ -11475,6 +11476,10 @@ function spawnNextRecurrence(done) {
 }
 app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
     const body = (req.body && typeof req.body === "object" ? req.body : {});
+    if (body.assignedTo !== undefined && (typeof body.assignedTo !== "string" || !["marco", "wesley", "carlos"].includes(body.assignedTo.trim().toLowerCase()))) {
+        res.status(400).json({ error: "Choose Marco, Wesley or Carlos as the assignee" });
+        return;
+    }
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const column = typeof body.column === "string" ? body.column : "";
     if (!title || !column) {
@@ -11499,14 +11504,14 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
         color,
         recurring: body.recurring === true,
         recurringInterval: parseRecurringInterval(body.recurringInterval),
-        assignedTo: typeof body.assignedTo === "string" ? body.assignedTo : "carlos",
+        assignedTo: typeof body.assignedTo === "string" ? body.assignedTo.trim().toLowerCase() : (process.env.TENANT_MEMBER || "carlos"),
         dueDate: typeof body.dueDate === "string" ? body.dueDate.slice(0, 10) : undefined,
         dueTime: parseDueTime(body.dueTime),
         reminderMinutes: parseReminderMinutes(body.reminderMinutes),
         tags: Array.isArray(body.tags)
             ? body.tags.filter((t) => typeof t === "string")
             : undefined,
-        createdBy: typeof body.createdBy === "string" ? body.createdBy : "carlos",
+        createdBy: process.env.TENANT_MEMBER || (typeof body.createdBy === "string" ? body.createdBy : "carlos"),
         sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : undefined,
         // Raised from a Content Planner slot. Everything else about the task is
         // identical to one typed on the board — same store, same notification,
@@ -11538,6 +11543,10 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
 app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res) => {
     const id = String(req.params.id || "").trim();
     const body = (req.body && typeof req.body === "object" ? req.body : {});
+    if (body.assignedTo !== undefined && (typeof body.assignedTo !== "string" || !["marco", "wesley", "carlos"].includes(body.assignedTo.trim().toLowerCase()))) {
+        res.status(400).json({ error: "Choose Marco, Wesley or Carlos as the assignee" });
+        return;
+    }
     const updates = {};
     if (typeof body.title === "string")
         updates.title = body.title.trim();
@@ -11560,7 +11569,7 @@ app.patch("/api/tasks/:id", express_1.default.json({ limit: "1mb" }), (req, res)
         updates.recurringInterval = recurringInterval;
     }
     if (typeof body.assignedTo === "string")
-        updates.assignedTo = body.assignedTo;
+        updates.assignedTo = body.assignedTo.trim().toLowerCase();
     if (typeof body.dueDate === "string")
         updates.dueDate = body.dueDate.slice(0, 10);
     if ("dueTime" in body)
