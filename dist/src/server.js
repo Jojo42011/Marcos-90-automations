@@ -185,7 +185,7 @@ app.use((0, lockdown_js_1.makeLockdown)({
     machineTokenOk: (req) => machineTokenOk(req),
     internalCall: (req) => (0, internalCall_js_1.isInternalCall)(req),
 }));
-app.use((0, tenantGateway_js_1.accountMiddleware)(sessionUserSync, internalCall_js_1.isInternalCall));
+app.use((0, tenantGateway_js_1.accountMiddleware)(sessionUserSync, internalCall_js_1.isInternalCall, machineTokenOk));
 /**
  * The signed-in user, resolved synchronously.
  *
@@ -6251,7 +6251,9 @@ app.post("/api/zernio/webhook", express_1.default.raw({ type: "application/json"
         res.status(200).json({ ok: true });
         void (async () => {
             try {
-                const accountId = zernioTikTokAccountId() || commentEvt.postId || "";
+                const accountId = commentEvt.accountId || zernioTikTokAccountId();
+                if (!accountId)
+                    throw new Error("Comment delivery has no connected social account ID");
                 const outcome = await handleInboundComment(commentEvt, accountId);
                 (0, marcoLog_js_1.marcoLog)("comment_agent_outcome", {
                     comment_id: commentEvt.commentId,

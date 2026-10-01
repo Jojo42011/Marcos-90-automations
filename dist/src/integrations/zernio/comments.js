@@ -71,6 +71,7 @@ function parseZernioInboundComment(body) {
     if (b.event !== "comment.received")
         return null;
     const c = (b.comment ?? {});
+    const account = (b.account ?? {});
     const author = (c.author ?? {});
     const commentId = str(c.id);
     const platformPostId = str(c.platformPostId);
@@ -79,6 +80,7 @@ function parseZernioInboundComment(body) {
         return null;
     return {
         eventId: str(b.id) ?? `${commentId}:${(0, crypto_1.randomUUID)()}`,
+        accountId: str(account.accountId) ?? str(account.id),
         commentId,
         platformPostId,
         postId: str(c.postId),

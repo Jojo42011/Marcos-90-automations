@@ -34,6 +34,12 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+### 2026-10-01 — Restore shared inbound comment and DM service
+
+Isolation previously rejected provider webhooks at the tenant gateway and routed automation consoles to empty personal stores without integration credentials. The parent process now owns exactly POST `/api/zernio/webhook`, POST/OPTIONS `/webhook`, and authenticated DM/comment/Zernio-status console routes. Inbound processing uses the retained global volume stores and credentials independently of dashboard sign-ins; personal CRM, chats and Work agents remain isolated. The existing Zernio raw-body signature check still rejects unsigned deliveries; the pre-existing public ManyChat contract remains unchanged. Other webhook families remain outside this repair.
+
+Signed comment deliveries now carry their social account ID into read-back and reply operations, with the configured legacy account as fallback. No background workers are duplicated or historical comments blindly replayed. HTTP tests cover anonymous signed delivery, bad signatures, duplicate intake, shared team consoles, and continued CRM isolation. Deployment runs a no-send signed probe and read-only connected-account/ledger audit.
+
 ### 2026-09-30 — Repair Task Command visibility and creation
 
 The shared `/api/tasks` service always routes using the authenticated actor, independent of the selected read-only CRM/chat workspace. This keeps Carlos's combined task list complete and permits assignment while browsing another workspace; CRM/chat writes remain blocked. Task Command now defaults to an explicit All dates view, includes every visible member's recurring tasks, and shows all completed types by default. Member pages support task creation. Failed save/update/delete requests do not insert undefined tasks or remove records from the page; failed saves retain the draft and show the server error.

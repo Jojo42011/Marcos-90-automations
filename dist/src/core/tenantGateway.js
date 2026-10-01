@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.tenantEnvironment = tenantEnvironment;
 exports.startTenantWorkers = startTenantWorkers;
+exports.isSharedInbound = isSharedInbound;
+exports.isSharedAutomationConsole = isSharedAutomationConsole;
 exports.accountMiddleware = accountMiddleware;
 exports.accountUpgrade = accountUpgrade;
 const workspaceAccess_js_1 = require("./workspaceAccess.js");
@@ -84,10 +86,17 @@ function startTenantWorkers() {
     process.on("message", message => { if (message === "shutdown")
         shutdown(); });
 }
+function isSharedInbound(method, path) {
+    return method === "POST" && ["/api/zernio/webhook", "/webhook"].includes(path)
+        || method === "OPTIONS" && path === "/webhook";
+}
+function isSharedAutomationConsole(path) {
+    return /^\/api\/(?:dm\/(?:inbound-report|conversations|stats|conversation\/[^/]+)|comment-agent\/(?:status|dry-run|follow-ups)|zernio\/status)$/.test(path);
+}
 const identityPath = (p) => /^\/api\/auth\/(?:login|logout|me|change-password|login-history|audit-log|team(?:\/[^/]+(?:\/reset-password)?)?)$/.test(p)
     || ["/login", "/login.html", "/change-password", "/change-password.html", "/health", "/favicon.ico"].includes(p)
     || p.startsWith("/login-assets/") || p.startsWith("/assets/");
-function accountMiddleware(sessionUser, internal) {
+function accountMiddleware(sessionUser, internal, machine = () => false) {
     return async (req, res, next) => {
         if (process.env.ACCOUNT_ISOLATION !== "true")
             return next();
@@ -112,6 +121,17 @@ function accountMiddleware(sessionUser, internal) {
         if (user) {
             res.cookie("mp_account", user.name.trim().split(/\s+/)[0].toLowerCase(), { sameSite: "lax", secure: req.secure, path: "/" });
             res.cookie("mp_account_id", user.id, { sameSite: "lax", secure: req.secure, path: "/" });
+        }
+        // Inbound automation is a shared application service, never a dashboard
+        // tenant. Zernio verifies its raw-body signature in the route; ManyChat's
+        // existing public webhook contract stays unchanged.
+        if (isSharedInbound(req.method, req.path))
+            return next();
+        if (isSharedAutomationConsole(req.path)) {
+            if (user && ["marco", "wesley", "carlos"].includes(user.name.trim().split(/\s+/)[0].toLowerCase()) || machine(req) || internal(req))
+                return next();
+            res.status(401).json({ error: "Sign in to view the shared automation console" });
+            return;
         }
         if (identityPath(req.path))
             return next();
