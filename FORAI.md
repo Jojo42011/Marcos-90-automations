@@ -36,6 +36,8 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ### 2026-09-30 — Recover retained tasks and preserve workspace sessions
 
+Production recovery confirmed 1,828 retained command tasks and accounted for 1,833 source records. Retired or unassigned legacy command tasks are reassigned to Carlos once (without resetting completion, timestamps, or checklist progress); retired display labels are replaced in live task text. Source files and history remain intact.
+
 Task Command now uses `/data/shared-tasks.db` with WAL, full synchronization, transactional row updates, revision history and soft deletion. Gateway startup imports retained root and account command tasks exactly once; source JSON stays untouched. Original statuses and checklists survive recovery. Older personal/CRM task files are restored into their assignee account once. Task views include the assignee and creator; Carlos sees the combined task list. Task creator comes from the authenticated account, and deadline updates compare their original snapshot before writing.
 
 Carlos can select read-only Marco/Wesley workspaces through a server-authorized selector. Identity and business ownership remain separate; delegated writes, agent runs and websocket access are blocked. Browser drafts are archived per actor/workspace instead of destroyed on login. Work chats/agents retain their existing owner keys and volume location. Browser profiles additionally checkpoint session cookies and local storage outside downloadable files after each successful action and restore on startup. This preserves browser state, not third-party authentication lifetimes; Harvey must inspect live sign-in status.
