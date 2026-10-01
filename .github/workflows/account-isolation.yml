@@ -21,3 +21,4 @@ jobs:
       - run: node scripts/verify-harvey-work.mjs
       - run: npx playwright install --with-deps chromium
       - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-browser-persistence.mjs
+      - run: TASK_UI_BROWSER=true HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-account-isolation.mjs

@@ -34,7 +34,7 @@
       if(!data||data.workspaces.length<2)return;
       var label=document.createElement('label');label.style.cssText='position:fixed;bottom:12px;right:12px;z-index:99999;background:#172033;color:white;padding:10px;border-radius:10px;font:13px system-ui;box-shadow:0 2px 10px #0005';
       label.textContent='Workspace: ';var select=document.createElement('select');select.setAttribute('aria-label','View workspace');
-      data.workspaces.forEach(function(w){var option=document.createElement('option');option.value=w.id;option.textContent=w.name+(w.readOnly?' (view only)':' (yours)');option.selected=w.id===owner;select.appendChild(option);});
+      data.workspaces.forEach(function(w){var option=document.createElement('option');option.value=w.id;option.textContent=w.name+(w.readOnly?' (CRM/chats: view only)':' (yours)');option.selected=w.id===owner;select.appendChild(option);});
       select.onchange=async function(){select.disabled=true;try{var r=await fetch('/api/account/workspace?id='+encodeURIComponent(select.value),{method:'POST'});if(!r.ok)throw new Error('Workspace unavailable');location.reload();}catch(e){select.disabled=false;alert(e.message);}};
       label.appendChild(select);document.body.appendChild(label);
     }).catch(function(){});

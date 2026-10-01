@@ -592,12 +592,14 @@ html{scroll-behavior:smooth}
       <button data-tab="done">Completed Tasks</button>
     </div>
     <div class="subtabs" id="doneSubs" style="display:none">
-      <button class="on" data-sub="today">Today’s</button>
+      <button class="on" data-sub="all">All completed</button>
+      <button data-sub="today">One-time</button>
       <button data-sub="recurring">Recurring</button>
     </div>
     <div id="filterRow">
       <span style="font-size:11.5px;color:var(--muted);font-weight:700">TEAM MEMBER:</span>
       <div id="memberChips"></div>
+      <label><input type="checkbox" id="allTaskDates" checked> All dates</label>
       <button id="clearFilter">✕ Clear Filter</button>
     </div>
     <div id="viewingNote" class="viewing-note" style="display:none"></div>
@@ -846,7 +848,7 @@ var TASKS=[];
 var selDate=tzToday();
 var calY,calM;             // compact calendar month
 var bigY,bigM;             // expanded month
-var mainTab="active", doneSub="today";
+var mainTab="active", doneSub="all", allTaskDates=true;
 var memberFilter="all";    // "all"=every bar (wireframe default), ""=just mine, or a member id
 var viewingPage="";        // member id whose dedicated page we're viewing (read-only)
 var noteTab="all", NOTES=[], UNREAD_CHAT={}, PRESENCE={};
@@ -1327,6 +1329,7 @@ document.getElementById("switchUserBtn").onclick=function(){closeTeamPop();openG
 document.addEventListener("keydown",function(e){ if(e.key==="Escape")closeTeamPop(); });
 
 /* ================= data ================= */
+document.getElementById("allTaskDates").onchange=function(){allTaskDates=this.checked;renderAll();};
 function loadTasks(){return api("/api/tasks").then(function(d){TASKS=d.tasks||[];renderAll();});}
 function sortTasks(a){
   return a.slice().sort(function(x,y){
@@ -1425,22 +1428,23 @@ function colHTML(opts){ // {key,title,tint,list,empty,addWho,addRec,member}
 function renderBars(){
   var who=whoseBar();
   var el=document.getElementById("bars");
-  var dateLbl=longDate(selDate);
+  var dateLbl=allTaskDates?"All dates":longDate(selDate);
   document.getElementById("dateHeadDate").textContent=dateLbl;
   document.getElementById("doneSubs").style.display=mainTab==="done"?"flex":"none";
   var note=document.getElementById("viewingNote");
   if(readOnlyView()){var vm=member(viewingPage);
     note.style.display="flex";
-    note.innerHTML='👁 Viewing <b style="color:'+vm.color+'">'+esc(vm.name)+'&rsquo;s</b>&nbsp;task page - read-only (you can edit only tasks you assigned). '+
+    note.innerHTML='👁 Viewing <b style="color:'+vm.color+'">'+esc(vm.name)+'&rsquo;s</b>&nbsp;task page. You can add tasks here and edit tasks you created or received. '+
       '<button id="exitPage" style="margin-left:auto;border:none;background:none;color:var(--brand2);font-weight:800;cursor:pointer">EXIT</button>';
     document.getElementById("exitPage").onclick=function(){viewingPage="";renderAll();};
   } else note.style.display="none";
-  document.getElementById("addbar").style.display=(readOnlyView()||mainTab==="done")?"none":"flex";
+  document.getElementById("addbar").style.display=mainTab==="done"?"none":"flex";
 
   var act=TASKS.filter(function(t){return t.status!=="done";});
   var viewingToday=(selDate===tzToday());
   function todaysOf(u){
     var mine=act.filter(function(t){return (t.assignedTo||"").toLowerCase()===u&&!t.recurring;});
+    if(allTaskDates)return sortTasks(mine);
     var onDay=sortTasks(mine.filter(function(t){return taskDate(t)===selDate;}));
     if(!viewingToday)return onDay;
     // Only today absorbs the backlog; past days keep showing what they held.
@@ -1455,9 +1459,9 @@ function renderBars(){
   if(mainTab==="done"){
     el.classList.add("list");
     var scope=(who==="all")?TASKS:TASKS.filter(function(t){return visibleFor(t,who);});
-    var doneT=scope.filter(function(t){return t.status==="done"&&String(t.completedAt||t.updatedAt||"").slice(0,10)===selDate;});
-    var dlist=sortTasks(doneT.filter(function(t){return doneSub==="today"?!t.recurring:!!t.recurring;}));
-    el.innerHTML='<div style="padding:2px"><div class="bar-h"><h3>'+(doneSub==="today"?"Completed":"Completed Recurring")+' - '+esc(dateLbl)+'</h3><span class="cnt">'+dlist.length+'</span></div>'+
+    var doneT=scope.filter(function(t){return t.status==="done"&&(allTaskDates||String(t.completedAt||t.updatedAt||"").slice(0,10)===selDate);});
+    var dlist=sortTasks(doneT.filter(function(t){return doneSub==="all"|| (doneSub==="today"?!t.recurring:!!t.recurring);}));
+    el.innerHTML='<div style="padding:2px"><div class="bar-h"><h3>'+(doneSub==="recurring"?"Completed Recurring":"Completed")+' - '+esc(dateLbl)+'</h3><span class="cnt">'+dlist.length+'</span></div>'+
       (dlist.length?dlist.map(taskCard).join(""):'<div class="empty">Nothing completed this day yet.</div>')+'</div>';
     bindCards(el);
     if(window.syncBarsScroll)requestAnimationFrame(window.syncBarsScroll);
@@ -1468,17 +1472,18 @@ function renderBars(){
   if(readOnlyView()){
     var vp=viewingPage;var vpm=member(vp);
     cols.push(colHTML({key:"today",title:vpm.name+"’s Tasks - "+dateLbl,tint:vpm.color,member:vp,list:todaysOf(vp),empty:"No tasks this day.",canAdd:true,addWho:vp}));
-    cols.push(colHTML({key:"recurring",title:vpm.name+"’s Recurring",tint:vpm.color,member:vp,list:recsOf(vp),empty:"No recurring tasks.",canAdd:false}));
+    cols.push(colHTML({key:"recurring",title:vpm.name+"’s Recurring",tint:vpm.color,member:vp,list:recsOf(vp),empty:"No recurring tasks.",canAdd:true,addWho:vp,addRec:true}));
   } else if(who==="all"){
-    cols.push(colHTML({key:"today",title:"Today’s Tasks - "+((member(ME)||{}).name||"Me"),member:ME,tint:(member(ME)||{}).color,list:todaysOf(ME),empty:"No tasks for this day.",canAdd:true,addWho:ME}));
+    cols.push(colHTML({key:"today",title:(allTaskDates?"Tasks - ":"Today’s Tasks - ")+((member(ME)||{}).name||"Me"),member:ME,tint:(member(ME)||{}).color,list:todaysOf(ME),empty:"No tasks for this day.",canAdd:true,addWho:ME}));
     cols.push(colHTML({key:"recurring",title:"Recurring Tasks",list:recsOf(ME),empty:"No recurring tasks.",canAdd:true,addWho:ME,addRec:true}));
     TEAM.forEach(function(m){ if(m.id===ME)return;
       cols.push(colHTML({key:"today",title:m.name+"’s Tasks",tint:m.color,member:m.id,list:todaysOf(m.id),empty:"Nothing for this day.",canAdd:true,addWho:m.id}));
+      cols.push(colHTML({key:"recurring",title:m.name+"'s Recurring",tint:m.color,member:m.id,list:recsOf(m.id),empty:"No recurring tasks.",canAdd:true,addWho:m.id,addRec:true}));
     });
   } else {
     var u=(who===""?ME:who); var um=member(u)||{name:"My",color:"var(--teal)"};
-    cols.push(colHTML({key:"today",title:(u===ME?"Today’s Tasks":um.name+"’s Tasks")+" - "+dateLbl,tint:um.color,member:u,list:todaysOf(u),empty:"No tasks for this day.",canAdd:true,addWho:u}));
-    cols.push(colHTML({key:"recurring",title:(u===ME?"Recurring Tasks":um.name+"’s Recurring"),tint:um.color,member:u,list:recsOf(u),empty:"No recurring tasks.",canAdd:u===ME,addWho:u,addRec:true}));
+    cols.push(colHTML({key:"today",title:(u===ME?(allTaskDates?"Tasks":"Today’s Tasks"):um.name+"’s Tasks")+" - "+dateLbl,tint:um.color,member:u,list:todaysOf(u),empty:"No tasks for this day.",canAdd:true,addWho:u}));
+    cols.push(colHTML({key:"recurring",title:(u===ME?"Recurring Tasks":um.name+"’s Recurring"),tint:um.color,member:u,list:recsOf(u),empty:"No recurring tasks.",canAdd:true,addWho:u,addRec:true}));
   }
   el.innerHTML=cols.join("");
   el.querySelectorAll(".col-add").forEach(function(b){
@@ -1592,19 +1597,20 @@ function setStatus(id,st){
   var t=TASKS.find(function(x){return x.id===id;}); if(!t)return;
   var card=document.querySelector('.task[data-id="'+id+'"]');
   fetch("/api/tasks/"+encodeURIComponent(id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:st})})
-    .then(function(r){return r.json();})
+    .then(async function(r){var d=await r.json();if(!r.ok||!d.task)throw new Error(d.error||"Task could not be updated");return d;})
     .then(function(d){
       var idx=TASKS.findIndex(function(x){return x.id===id;}); if(idx>=0)TASKS[idx]=d.task;
       if(st==="done"&&card){card.style.opacity="0";card.style.transform="translateX(16px)";
         setTimeout(function(){renderAll();toast("✓ Task completed");},260);}
       else renderAll();
-    }).catch(function(){toast("Save failed");});
+    }).catch(function(error){toast(error.message||"Save failed");});
 }
 function delTask(id){
   if(!confirm("Delete this task?"))return;
-  fetch("/api/tasks/"+encodeURIComponent(id),{method:"DELETE"}).then(function(){
+  fetch("/api/tasks/"+encodeURIComponent(id),{method:"DELETE"}).then(async function(r){
+    if(!r.ok){var d=await r.json();throw new Error(d.error||"Task could not be deleted");}
     TASKS=TASKS.filter(function(t){return t.id!==id;});renderAll();toast("Task deleted");
-  }).catch(function(){toast("Delete failed");});
+  }).catch(function(error){toast(error.message||"Delete failed");});
 }
 
 /* ================= tabs & filters ================= */
@@ -1643,7 +1649,7 @@ function fillMY(sel,y,m){
     opts.push('<option value="'+yy+"-"+mm+'"'+((yy===y&&mm===m)?" selected":"")+'>'+MONTHS[mm]+" "+yy+"</option>");
   sel.innerHTML=opts.join("");
 }
-function selectDate(ds){selDate=ds;var d=parseLocal(ds);calY=d.getFullYear();calM=d.getMonth();bigY=calY;bigM=calM;
+function selectDate(ds){allTaskDates=false;document.getElementById("allTaskDates").checked=false;selDate=ds;var d=parseLocal(ds);calY=d.getFullYear();calM=d.getMonth();bigY=calY;bigM=calM;
   renderAll();}
 
 /* monthly grid (frosted tab) */
@@ -1917,7 +1923,7 @@ function openTaskModal(t,presetTitle,opts){
   document.getElementById("tDate").value=t?(taskDate(t)):selDate;
   document.getElementById("tTime").value=t?(t.dueTime||""):"";
   var who=document.getElementById("tWho");
-  var preWho=(t?t.assignedTo:(opts.who||ME))||ME;
+  var preWho=(t?t.assignedTo:(opts.who||viewingPage||ME))||ME;
   who.innerHTML=TEAM.map(function(m){return '<option value="'+m.id+'"'+(preWho===m.id?" selected":"")+'>'+m.name+' - '+m.role+'</option>';}).join("");
   selUrgent=t?t.column==="urgent":false;
   selStatus=t?((t.status==="due_soon"||t.status==="overdue")?(t.previousStatus||"pending"):t.status):"pending";
@@ -1960,18 +1966,19 @@ document.getElementById("tmSave").onclick=function(){
     status:selStatus,
     color:"blue"
   };
+  document.getElementById("tmSave").disabled=true;
   var req;
   if(editId){req=fetch("/api/tasks/"+encodeURIComponent(editId),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});}
   else{payload.createdBy=ME;payload.reminderMinutes=[10,5];
     req=fetch("/api/tasks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});}
-  req.then(function(r){return r.json();}).then(function(d){
+  req.then(async function(r){var d=await r.json();if(!r.ok||!d.task)throw new Error(d.error||"Task could not be saved");return d;}).then(function(d){
     if(editId){var i=TASKS.findIndex(function(x){return x.id===editId;});if(i>=0)TASKS[i]=d.task;}
     else TASKS.push(d.task);
     document.getElementById("taskScrim").classList.remove("on");
     if(!editId&&payload.assignedTo!==ME){toast("Task assigned to "+((member(payload.assignedTo)||{}).name||payload.assignedTo)+" - they've been notified");}
     else toast(editId?"Task updated":"Task added");
     renderAll();
-  }).catch(function(){toast("Save failed");});
+  }).catch(function(error){toast(error.message||"Save failed");}).finally(function(){document.getElementById("tmSave").disabled=false;});
 };
 document.getElementById("openAdd").onclick=function(){openTaskModal(null,document.getElementById("quickTitle").value.trim());document.getElementById("quickTitle").value="";};
 document.getElementById("quickTitle").addEventListener("keydown",function(e){if(e.key==="Enter"&&this.value.trim()){openTaskModal(null,this.value.trim());this.value="";}});

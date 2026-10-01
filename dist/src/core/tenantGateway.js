@@ -135,12 +135,16 @@ function accountMiddleware(sessionUser, internal) {
         }
         try {
             const selected = (req.headers.cookie || "").split(";").map(s => s.trim()).find(s => s.startsWith("mp_workspace="))?.slice(13);
-            const owner = selected && (0, workspaceAccess_js_1.canViewWorkspace)(user, selected) ? selected : user.id;
+            // Task Command is a shared service. Always use the signed-in actor for
+            // task reads and writes, even while viewing another account's CRM.
+            const sharedTasks = /^\/api\/tasks(?:\/|$)/.test(req.path);
+            const workspace = selected && (0, workspaceAccess_js_1.canViewWorkspace)(user, selected) ? selected : user.id;
+            const owner = sharedTasks ? user.id : workspace;
             if (owner !== user.id && !(0, workspaceAccess_js_1.workspaceReadAllowed)(req.method, req.path)) {
                 res.status(403).json({ error: "This workspace is read-only. Return to your workspace to make changes." });
                 return;
             }
-            res.cookie("mp_workspace_id", owner, { sameSite: "lax", secure: req.secure, path: "/" });
+            res.cookie("mp_workspace_id", workspace, { sameSite: "lax", secure: req.secure, path: "/" });
             const port = await ensureWorker(owner);
             const upstream = node_http_1.default.request({ host: "127.0.0.1", port, path: req.originalUrl, method: req.method,
                 headers: { ...req.headers, "x-forwarded-proto": req.protocol } }, incoming => {
