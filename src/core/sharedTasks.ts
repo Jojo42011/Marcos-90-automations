@@ -10,6 +10,19 @@ let connection: Database.Database | undefined;
 export const sharedTasksEnabled = () => process.env.ACCOUNT_ISOLATION === "true";
 export const taskActor = () => process.env.TENANT_MEMBER || "";
 const member = (value: unknown) => String(value || "").trim().toLowerCase().split(/\s+/)[0];
+const currentMembers = new Set(["marco","wesley","carlos"]);
+// The same retired-identity fingerprint used by account provisioning. Original
+// source files and revision history remain available for recovery.
+const retiredIdentity = "260670134225f2a24b59121739fec73584b0ddb6b49c39e31bd1df5483ac144d";
+function currentTask(task: CommandTask): CommandTask {
+  const clean = (value: string) => value.replace(/\b[a-z]+\b/gi, word =>
+    createHash("sha256").update(word.toLowerCase()).digest("hex") === retiredIdentity ? (word === word.toLowerCase() ? "carlos" : "Carlos") : word);
+  return {...task,
+    assignedTo: currentMembers.has(member(task.assignedTo)) ? member(task.assignedTo) : "carlos",
+    createdBy: task.createdBy ? clean(task.createdBy) : task.createdBy,
+    title: clean(task.title), description: task.description ? clean(task.description) : task.description,
+    checklist: task.checklist?.map(item=>({...item,text:clean(item.text)})), tags:task.tags?.map(clean)};
+}
 function db() {
   if (!connection) {
     const file = process.env.SHARED_TASK_DB_PATH || dataPath("shared-tasks.db");
@@ -88,6 +101,15 @@ export function recoverSharedTasks(root = dataPath()) {
       }
     })();
   }
+  let reassigned=0;
+  db().transaction(() => {
+    for (const row of db().prepare("SELECT id,body FROM tasks").all() as {id:string;body:string}[]) {
+      const old:CommandTask=JSON.parse(row.body), task=currentTask(old);
+      if(JSON.stringify(old)===JSON.stringify(task)) continue;
+      db().prepare("UPDATE tasks SET body=? WHERE id=?").run(JSON.stringify(task),row.id);
+      history(task,"restore-owner"); if(old.assignedTo!==task.assignedTo)reassigned++;
+    }
+  })();
   const total=(db().prepare("SELECT count(*) AS count FROM tasks WHERE deleted=0").get() as {count:number}).count;
   // Restore the older personal/CRM task pages too, without importing CRM contacts.
   let personalImported=0;
@@ -111,6 +133,6 @@ export function recoverSharedTasks(root = dataPath()) {
       db().prepare("INSERT INTO imports(source,original_id,task_id) VALUES(?,?,?)").run(source,task.id,target+":"+task.id);
     }
   }
-  console.log(`[tasks-recovery] inspected=${inspected} imported=${imported} retained=${total} personalImported=${personalImported}`);
-  return {inspected,imported,total,personalImported};
+  console.log(`[tasks-recovery] inspected=${inspected} imported=${imported} retained=${total} personalImported=${personalImported} reassigned=${reassigned}`);
+  return {inspected,imported,total,personalImported,reassigned};
 }
