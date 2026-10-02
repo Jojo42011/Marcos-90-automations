@@ -587,6 +587,11 @@
     if (window.HarveyWork) window.HarveyWork.sync();
     renderConversation(r.data.messages || []);
     paintConversations();
+    var pending = await api("/api/harvey/work/chats/" + encodeURIComponent(id) + "/job");
+    if(pending.ok && pending.data.job){
+      var progress=addAssistantMessage();setBusy(true);state.cancelJobRequested=false;state.abort=new AbortController();
+      try{await watchJob(pending.data.job,progress);}catch(e){progress.error(e.message);}finally{state.abort=null;setBusy(false);progress.finish();}
+    }
   }
 
   function renderConversation(messages) {
@@ -790,9 +795,10 @@
         if (u.contextPlan) {
           var cp = u.contextPlan;
           metaWrap.title = "Context plan — budget " + (cp.budgetTokens || cp.budget || "?") +
-            " tokens, estimate " + (cp.estimateTokens || cp.estimate || "?") +
-            (cp.dropped ? ", dropped: " + cp.dropped : "");
+            " tokens, estimate " + (cp.estimatedTokens || cp.estimateTokens || cp.estimate || "?") +
+            (cp.droppedTurns ? ", earlier messages omitted: " + cp.droppedTurns : "");
         }
+        if(u.memoryContext)metaWrap.title += " · Recent history used: "+u.memoryContext.historyMessagesUsed+" messages; older messages remain saved and searchable.";
         if (u.substituted && u.substituted.asked) {
           metaWrap.title = shortModel(u.substituted.asked) + " could not run this request, so " +
             shortModel(u.substituted.ran) + " answered instead. The usual cause is the OpenRouter key's " +
@@ -907,6 +913,7 @@
     setBusy(true);
 
     var ui = addAssistantMessage();
+    state.cancelJobRequested=false;
     state.abort = new AbortController();
 
     try {
@@ -949,6 +956,8 @@
     var body = {
       message: text,
       workspace: true,
+      background: true,
+      requestId: crypto.randomUUID(),
       sessionId: state.sessionId,
       stream: true
     };
@@ -986,6 +995,7 @@
       var data = null;
       try { data = JSON.parse(raw); } catch (_) {}
       if (!data) throw new Error("Harvey sent a reply this page could not read.");
+      if(data.job){await watchJob(data.job,ui);return;}
       applyNonStream(data, ui);
       return;
     }
@@ -1004,6 +1014,27 @@
       }
     }
     if (buf.trim()) handleSseBlock(buf, ui);
+  }
+
+  async function watchJob(job,ui) {
+    state.activeJobId=job.id;
+    var cursor=0, signal=state.abort&&state.abort.signal;
+    try{
+      while(true){
+        (job.events||[]).forEach(function(e){if(e.seq>cursor){handleSseBlock('event: tool\ndata: '+JSON.stringify(e),ui);cursor=e.seq;}});
+        if(['queued','running','cancelling'].indexOf(job.status)<0){applyNonStream(job.result||{text:job.status==='cancelled'?'Cancelled before starting.':'Task needs attention.'},ui);return;}
+        if(signal&&signal.aborted){
+          if(!state.cancelJobRequested){ui.note('Task continues in the background. Reopen this chat to view it.');return;}
+          var cancelled=await api('/api/harvey/work/jobs/'+encodeURIComponent(job.id)+'/cancel',{method:'POST',body:{}});
+          if(!cancelled.ok)throw new Error('Could not confirm cancellation. Reopen this chat to inspect the running task.');
+          ui.note('Stop requested. An action already in progress may finish; reopen this chat to inspect the outcome.');return;
+        }
+        await new Promise(function(resolve){setTimeout(resolve,1000);});
+        var r=await api('/api/harvey/work/jobs/'+encodeURIComponent(job.id));
+        if(!r.ok)throw new Error('Connection interrupted. Your task remains saved; reopen this chat to check its progress.');
+        job=r.data;
+      }
+    }finally{state.activeJobId=null;}
   }
 
   function handleSseBlock(block, ui) {
@@ -1025,8 +1056,8 @@
         ui.append(d.text != null ? d.text : (d.delta || ""));
         break;
       case "tool":
-        if(window.HarveyWork)HarveyWork.taskProgress(d);
         ui.tool(d);
+        if(window.HarveyWork)HarveyWork.taskProgress(d);
         break;
       case "schedule":
         if(window.HarveyWork)HarveyWork.scheduleEvent(d);
@@ -1065,7 +1096,7 @@
     (data.schedules || []).forEach(function(s){if(window.HarveyWork)HarveyWork.scheduleEvent({schedule:s});});
     (data.approvals || []).forEach(function (a) { ui.approval(a); });
     ui.setText(data.text || data.speech || data.reply || "");
-    if (data.usage) ui.setUsage(Object.assign({}, data.usage, { contextPlan: data.contextPlan }));
+    if (data.usage) ui.setUsage(Object.assign({}, data.usage, { contextPlan: data.contextPlan, memoryContext:data.memoryContext }));
   }
 
   function newChat() {
@@ -1578,7 +1609,7 @@
     });
     $("composer").addEventListener("submit", function (e) {
       e.preventDefault();
-      if (state.busy) { if (state.abort) { try { state.abort.abort(); } catch (_) {} } return; }
+      if (state.busy) { state.cancelJobRequested=true;if (state.abort) { try { state.abort.abort(); } catch (_) {} } return; }
       send(input.value);
     });
 

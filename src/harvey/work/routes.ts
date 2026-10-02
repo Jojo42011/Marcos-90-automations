@@ -1,3 +1,5 @@
+import { historySearch, learningContext, workflows } from "./learning.js";
+import { teamStatus } from "./coordination.js";
 import { managedCatalog, connectManaged, disconnectManaged } from "./composio.js";
 import multer from "multer";
 import { randomUUID } from "crypto";
@@ -7,6 +9,7 @@ import { append, handoffChat, Chat, Connection, createChat, createProject, creat
 import { addMcp, catalog, connections, finishOAuth, publicConnection, startOAuth } from "./connectors.js";
 import { browserCall, browserEnabled, closeBrowser, logins, saveLogin } from "./browser.js";
 import { runChat, runScheduled, updateSchedule } from "./runtime.js";
+import { enqueueJob, cancelJob, chatJob, publicJob, WorkJob } from "./jobs.js";
 
 type Owner = (req: Request) => string;
 const error = (res: Response, e: any) => res.status(e.message === "Not found" ? 404 : 400).json({ error: e.message || "Request failed" });
@@ -20,6 +23,20 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
     } catch (e) { res.status(400).type("text/plain").send((e as Error).message); }
   });
   r.use((req,res,next) => { if (!authorize(req)) { res.status(401).json({ error: "Unauthorized" }); return; } next(); });
+  r.get("/work/jobs/:id", (req,res)=>{try{const o=owner(req),job=get<WorkJob>("job",o,String(req.params.id));get("chat",o,job.chatId);res.json(publicJob(job));}catch(e){error(res,e);}});
+  r.post("/work/jobs/:id/cancel", (req,res)=>{try{res.json(cancelJob(owner(req),String(req.params.id)));}catch(e){error(res,e);}});
+  r.get("/work/chats/:id/job", (req,res)=>{try{const job=chatJob(owner(req),String(req.params.id));res.json({job:job?publicJob(job):null});}catch(e){error(res,e);}});
+  r.get("/work/chats/:id/verification", (req,res) => {
+    try { const o=owner(req),id=String(req.params.id);get<Chat>("chat",o,id);
+      const active=!!workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,id);
+      const rows=list<any>("verification",o).filter(v=>v.chatId===id).slice(0,20).map((v,i)=>({...v,status:v.status==="working"&&(!active||i>0)?"needs_verification":v.status}));
+      res.json({checkpoints:rows,note:"Receipts record tool outcomes, not independent proof of factual accuracy. Interrupted work must be inspected before retrying."});
+    }catch(e){error(res,e);}
+  });
+  r.get("/work/chats/:id/memory",(req,res)=>{try{const o=owner(req),c=get<Chat>("chat",o,String(req.params.id));res.json(learningContext(o,c,String(req.query.query||"")));}catch(e){error(res,e);}});
+  r.get("/work/chats/:id/history-search",(req,res)=>{try{res.json(historySearch(owner(req),String(req.params.id),req.query));}catch(e){error(res,e);}});
+  r.get("/work/chats/:id/workflows",(req,res)=>{try{res.json({workflows:workflows(owner(req),String(req.params.id))});}catch(e){error(res,e);}});
+  r.get("/work/chats/:id/team",(req,res)=>{try{res.json(teamStatus(owner(req),String(req.params.id)));}catch(e){error(res,e);}});
   const route = (method: "get" | "post" | "patch" | "delete", path: string, fn: (req: Request, res: Response, o: string) => any) => r[method](path, async (req,res) => { try { await fn(req,res,owner(req)); } catch(e) { error(res,e); } });
   r.post("/work/files/:chat", (req,res,next) => { try {get("chat",owner(req),String(req.params.chat));next();}catch(e){error(res,e);} }, multer({storage:multer.diskStorage({destination:(req,_file,cb)=>cb(null,filesDir(owner(req),String(req.params.chat))),filename:(_req,file,cb)=>cb(null,randomUUID()+"-"+file.originalname.replace(/[^a-zA-Z0-9._-]/g,"-").slice(-120))}),limits:{fileSize:250*1024*1024,files:1}}).single("file"), (req,res)=>res.status(201).json({file:req.file?.filename}));
   route("get", "/work/files/:chat", (q,res,o) => {get("chat",o,String(q.params.chat));res.json({files:files(o,String(q.params.chat))});});
@@ -33,9 +50,10 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
   route("get", "/conversations/:id", (q,res,o) => res.json({ ...get<Chat>("chat",o,String(q.params.id)), messages: messages(o,String(q.params.id)) }));
   route("post", "/conversations/:id/title", (q,res,o) => { const c = get<Chat>("chat",o,String(q.params.id)); res.json(put("chat",o,{...c,title:text(q.body.title,"Title",120)})); });
   route("post", "/conversations/:id/handoff", (q,res,o) => res.status(201).json(handoffChat(o,String(q.params.id),q.body.brief || "Prepare a plan from this conversation.")));
-  route("patch", "/conversations/:id", (q,res,o) => { const c = get<Chat>("chat",o,String(q.params.id)); if(q.body.mode !== undefined && q.body.mode !== c.mode && (messages(o,c.id).length || workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,c.id))) throw new Error("Mode is fixed after the first message. Create a new chat or hand off to Work."); if (q.body.projectId) get("project",o,q.body.projectId); res.json(put("chat",o,{...c,projectId:q.body.projectId === undefined ? c.projectId : q.body.projectId || null,mode:q.body.mode === undefined ? c.mode : q.body.mode === "work" ? "work" : "chat"})); });
+  route("patch", "/conversations/:id", (q,res,o) => { const c = get<Chat>("chat",o,String(q.params.id)); if((q.body.mode !== undefined || q.body.projectId !== undefined) && (chatJob(o,c.id) || workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,c.id))) throw new Error("Wait for this chat's task before changing its context"); if(q.body.mode !== undefined && q.body.mode !== c.mode && (messages(o,c.id).length || workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,c.id))) throw new Error("Mode is fixed after the first message. Create a new chat or hand off to Work."); if (q.body.projectId) get("project",o,q.body.projectId); res.json(put("chat",o,{...c,projectId:q.body.projectId === undefined ? c.projectId : q.body.projectId || null,mode:q.body.mode === undefined ? c.mode : q.body.mode === "work" ? "work" : "chat"})); });
   route("delete", "/conversations/:id", async (q,res,o) => {
     const id = String(q.params.id); get("chat",o,id);
+    if(chatJob(o,id))throw new Error("Cancel or finish this chat's task before deleting it");
     if (workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,id)) throw new Error("Wait for this chat's running task to finish");
     for (const s of list<Schedule>("schedule",o).filter(s=>s.chatId===id)) remove("schedule",o,s.id);
     for (const run of list<Run>("run",o).filter(s=>s.chatId===id)) remove("run",o,run.id);
@@ -68,7 +86,9 @@ export async function handleWorkChat(req: Request,res: Response,owner: string) {
   res.on("close",()=>{if(!res.writableEnded)controller.abort();});
   try {
     const message = text(req.body.message,"Message",50000);
+    if(req.body.background===true&&!req.body.conversationId)throw new Error("Create a conversation before submitting a background task");
     const chat = req.body.conversationId ? get<Chat>("chat",owner,String(req.body.conversationId)) : createChat(owner,req.body);
+    if(req.body.background===true){res.status(202).json({job:enqueueJob(owner,chat.id,req.body),conversationId:chat.id,sessionId:chat.sessionId});return;}
     const stream = req.body.stream === true;
     if(stream) {res.setHeader("Content-Type","text/event-stream");res.setHeader("Cache-Control","no-cache");res.flushHeaders();streaming=true;}
     const send=(event:string,data:unknown)=>{if(!res.writableEnded&&!res.destroyed)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);};
@@ -77,7 +97,7 @@ export async function handleWorkChat(req: Request,res: Response,owner: string) {
     try {
       const approvals: unknown[] = []; const schedules: unknown[] = [];
       const result=await runChat(owner,chat,message,{signal:controller.signal,modelOverride:req.body.model&&req.body.model!=="auto"?String(req.body.model):undefined,onToken:stream?t=>send("token",{text:t}):undefined,onEvent:e=>{if(e.type === "approval")approvals.push(e.approval);if(e.type === "schedule")schedules.push(e.schedule);if(stream)send(e.type,e.type === "approval" ? e.approval : e);}});
-      const data={text:result.speech,conversationId:chat.id,sessionId:chat.sessionId,usage:{model:result.modelUsed||result.model,costUsd:result.costUsd||0,promptTokens:result.promptTokens||0,completionTokens:result.completionTokens||0,cachedTokens:result.cachedTokens||0},approvals,schedules,needsAttention:result.toolFailed||!!result.modelError||!!result.budgetRefused};
+      const data={text:result.speech,conversationId:chat.id,sessionId:chat.sessionId,verification:result.verification,contextPlan:result.contextPlan,memoryContext:(result as any).memoryContext,usage:{model:result.modelUsed||result.model,costUsd:result.costUsd||0,promptTokens:result.promptTokens||0,completionTokens:result.completionTokens||0,cachedTokens:result.cachedTokens||0},approvals,schedules,needsAttention:result.toolFailed||!!result.modelError||!!result.budgetRefused||("needsVerification" in result && result.needsVerification)};
       if(stream){send("done",data);res.end();}else res.json(data);
     } finally { if(heartbeat)clearInterval(heartbeat); }
   } catch(e) { if(res.destroyed)return;if(streaming){res.write(`event: error\ndata: ${JSON.stringify({message:(e as Error).message})}\n\n`);res.end();}else error(res,e); }

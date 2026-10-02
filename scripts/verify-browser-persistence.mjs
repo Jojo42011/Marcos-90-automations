@@ -14,6 +14,13 @@ if(process.argv[2]) {
     await browserCall('marco','agent-chat','browser_navigate',{url:base+(phase==='save'?'/login':'/private')});
     const result=await browserCall('marco','agent-chat','browser_snapshot',{});
     assert.match(JSON.stringify(result.content),/Signed in as fixture Marco/);
+    const snapshot=result.content.filter(c=>c.type==='text').map(c=>c.text).join('\n');
+    const ref=snapshot.match(/button "Verify control" \[ref=([^\]]+)\]/)?.[1];
+    assert(ref,'Fixture control must have a current reference');
+    await assert.rejects(()=>browserCall('marco','agent-chat','browser_click',{target:'missing999',ref:'missing999',element:'Missing control'}),/target changed/);
+    await browserCall('marco','agent-chat','browser_click',{target:ref,ref,element:'Verify control'});
+    const clicked=await browserCall('marco','agent-chat','browser_snapshot',{});
+    assert.match(JSON.stringify(clicked.content),/Control verified/);
     const path=join(browserDirectory('marco','agent-chat'),'auth-state.json');
     assert(existsSync(path)); assert(JSON.parse(readFileSync(path,'utf8')).cookies.some(c=>c.name==='fixture_session'&&c.expires===-1));
     await closeBrowsers();
@@ -28,8 +35,8 @@ if(process.argv[2]) {
   const root=mkdtempSync(join(tmpdir(),'browser-persistence-'));
   const server=http.createServer((req,res)=>{
     res.setHeader('Content-Type','text/html');
-    if(req.url==='/login'){res.setHeader('Set-Cookie','fixture_session=valid; HttpOnly; SameSite=Lax; Path=/');res.end('<h1>Signed in as fixture Marco</h1>');}
-    else res.end(req.headers.cookie?.includes('fixture_session=valid')?'<h1>Signed in as fixture Marco</h1>':'<h1>Please sign in</h1>');
+    if(req.url==='/login'){res.setHeader('Set-Cookie','fixture_session=valid; HttpOnly; SameSite=Lax; Path=/');res.end('<h1>Signed in as fixture Marco</h1><button onclick="this.textContent=&quot;Control verified&quot;">Verify control</button>');}
+    else res.end(req.headers.cookie?.includes('fixture_session=valid')?'<h1>Signed in as fixture Marco</h1><button onclick="this.textContent=&quot;Control verified&quot;">Verify control</button>':'<h1>Please sign in</h1>');
   });server.listen(0,'127.0.0.1');await once(server,'listening');
   try {
     for(const phase of ['save','restore']){

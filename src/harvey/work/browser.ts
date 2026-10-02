@@ -50,6 +50,12 @@ export async function closeBrowser(owner: string, chat: string) { const key = ow
 export async function closeBrowsers() { const keys = [...sessions.keys()]; for (const key of keys) { const s = await sessions.get(key)?.catch(() => null); if(s) await closeSession(s); sessions.delete(key); } }
 const idle = setInterval(() => { for (const [key, value] of sessions) void value.then(async s => { if (Date.now() - s.lastUsed > 10 * 60_000) { sessions.delete(key); await closeSession(s); } }).catch(() => {}); }, 60000); idle.unref();
 export async function browserTools(owner: string, chat: string) { return (await session(owner, chat)).tools; }
+export function validateActionReferences(snapshot:string,args:any) {
+  const refs=[args?.ref,args?.target,args?.startRef,args?.endRef,...(Array.isArray(args?.fields)?args.fields.flatMap((f:any)=>[f.ref,f.target]):[])].filter(v=>typeof v==="string"&&v);
+  for(const ref of refs){
+    if(!/^[\w-]+$/.test(ref)||!snapshot.includes(`[ref=${ref}]`))throw new Error("Browser target changed or is no longer visible. Inspect a fresh snapshot before trying a different action.");
+  }
+}
 export async function browserCall(owner: string, chat: string, name: string, args: any) {
   if (!ALLOWED.has(name)) throw new Error("Unsupported browser action");
   if (name === "browser_navigate") { const url = new URL(text(args.url, "URL", 4000)); if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Use an HTTP(S) URL without embedded credentials"); }
@@ -57,7 +63,13 @@ export async function browserCall(owner: string, chat: string, name: string, arg
   if (name === "browser_file_upload") { for (const file of args.paths || []) { if (!resolve(file).startsWith(resolve(filesDir) + sep)) throw new Error("Upload files must belong to this chat's browser workspace"); } }
   if (name === "browser_take_screenshot" || name === "browser_snapshot") args = { ...args, filename: undefined };
   if (name === "browser_close") { await closeBrowser(owner,chat); return {content:[{type:"text",text:"Browser closed; session state retained."}]}; }
-  const s = await session(owner, chat); const result = await s.client.callTool({ name, arguments: args || {} }, undefined, { timeout: 60000 }); s.lastUsed = Date.now();
+  const s = await session(owner, chat);
+  if(["browser_click","browser_type","browser_fill_form","browser_select_option","browser_hover","browser_drag"].includes(name)){
+    const fresh:any=await s.client.callTool({name:"browser_snapshot",arguments:{}},undefined,{timeout:60000});
+    if(fresh.isError)throw new Error("Cannot verify the current browser page before acting");
+    validateActionReferences((fresh.content||[]).filter((c:any)=>c.type==="text").map((c:any)=>c.text).join("\n"),args);
+  }
+  const result = await s.client.callTool({ name, arguments: args || {} }, undefined, { timeout: 60000 }); s.lastUsed = Date.now();
   if (result.isError) throw new Error(JSON.stringify(result.content).slice(0, 2000));
   await checkpoint(s); return result;
 }

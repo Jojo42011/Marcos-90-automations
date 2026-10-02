@@ -13,9 +13,10 @@
  */
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 const PORT = Number(process.env.PORT || 3405);
 const B = `http://localhost:${PORT}`;
@@ -43,7 +44,8 @@ writeFileSync(join(tmp, "db.json"), JSON.stringify({ idCounter: 1, leadsById: {}
 const srv = spawn(process.execPath, [join(process.cwd(), "dist/src/server.js")], {
   cwd: process.cwd(),
   env: {
-    ...process.env, PORT: String(PORT),
+    ...Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFILE|LOCALAPPDATA|TEMP|TMP)$/.test(k))), PORT: String(PORT),
+    TENANT_DATA_ROOT:tmp,HARVEY_WORK_DIR:join(tmp,'work'),DOTENV_CONFIG_PATH:join(tmp,'.missing-env'),HARVEY_WORKER_ENABLED:'false',
     /* The site lock defaults to ON as of 2026-08-22. These suites exercise the
        app, not the door, so it is switched off explicitly here rather than
        every fixture growing a login step. scripts/verify-site-lock.mjs is the
@@ -152,7 +154,8 @@ try {
 
   await br.close();
 } finally {
-  srv.kill();
+  if(srv.exitCode===null){const stopped=once(srv,'exit');srv.kill();await stopped;}
+  if(!resolve(tmp).startsWith(resolve(tmpdir())+sep)||!resolve(tmp).split(sep).at(-1).startsWith('core-ui-'))throw new Error('Unsafe fixture cleanup path');
   rmSync(tmp, { recursive: true, force: true });
 }
 
