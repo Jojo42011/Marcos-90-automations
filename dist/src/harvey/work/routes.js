@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createWorkRouter = createWorkRouter;
 exports.handleWorkChat = handleWorkChat;
+const learning_js_1 = require("./learning.js");
+const coordination_js_1 = require("./coordination.js");
 const composio_js_1 = require("./composio.js");
 const multer_1 = __importDefault(require("multer"));
 const crypto_1 = require("crypto");
@@ -14,6 +16,7 @@ const store_js_1 = require("./store.js");
 const connectors_js_1 = require("./connectors.js");
 const browser_js_1 = require("./browser.js");
 const runtime_js_1 = require("./runtime.js");
+const jobs_js_1 = require("./jobs.js");
 const error = (res, e) => res.status(e.message === "Not found" ? 404 : 400).json({ error: e.message || "Request failed" });
 function createWorkRouter(authorize, owner) {
     const r = express_1.default.Router();
@@ -36,6 +39,64 @@ function createWorkRouter(authorize, owner) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     } next(); });
+    r.get("/work/jobs/:id", (req, res) => { try {
+        const o = owner(req), job = (0, store_js_1.get)("job", o, String(req.params.id));
+        (0, store_js_1.get)("chat", o, job.chatId);
+        res.json((0, jobs_js_1.publicJob)(job));
+    }
+    catch (e) {
+        error(res, e);
+    } });
+    r.post("/work/jobs/:id/cancel", (req, res) => { try {
+        res.json((0, jobs_js_1.cancelJob)(owner(req), String(req.params.id)));
+    }
+    catch (e) {
+        error(res, e);
+    } });
+    r.get("/work/chats/:id/job", (req, res) => { try {
+        const job = (0, jobs_js_1.chatJob)(owner(req), String(req.params.id));
+        res.json({ job: job ? (0, jobs_js_1.publicJob)(job) : null });
+    }
+    catch (e) {
+        error(res, e);
+    } });
+    r.get("/work/chats/:id/verification", (req, res) => {
+        try {
+            const o = owner(req), id = String(req.params.id);
+            (0, store_js_1.get)("chat", o, id);
+            const active = !!(0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, id);
+            const rows = (0, store_js_1.list)("verification", o).filter(v => v.chatId === id).slice(0, 20).map((v, i) => ({ ...v, status: v.status === "working" && (!active || i > 0) ? "needs_verification" : v.status }));
+            res.json({ checkpoints: rows, note: "Receipts record tool outcomes, not independent proof of factual accuracy. Interrupted work must be inspected before retrying." });
+        }
+        catch (e) {
+            error(res, e);
+        }
+    });
+    r.get("/work/chats/:id/memory", (req, res) => { try {
+        const o = owner(req), c = (0, store_js_1.get)("chat", o, String(req.params.id));
+        res.json((0, learning_js_1.learningContext)(o, c, String(req.query.query || "")));
+    }
+    catch (e) {
+        error(res, e);
+    } });
+    r.get("/work/chats/:id/history-search", (req, res) => { try {
+        res.json((0, learning_js_1.historySearch)(owner(req), String(req.params.id), req.query));
+    }
+    catch (e) {
+        error(res, e);
+    } });
+    r.get("/work/chats/:id/workflows", (req, res) => { try {
+        res.json({ workflows: (0, learning_js_1.workflows)(owner(req), String(req.params.id)) });
+    }
+    catch (e) {
+        error(res, e);
+    } });
+    r.get("/work/chats/:id/team", (req, res) => { try {
+        res.json((0, coordination_js_1.teamStatus)(owner(req), String(req.params.id)));
+    }
+    catch (e) {
+        error(res, e);
+    } });
     const route = (method, path, fn) => r[method](path, async (req, res) => { try {
         await fn(req, res, owner(req));
     }
@@ -60,12 +121,15 @@ function createWorkRouter(authorize, owner) {
     route("get", "/conversations/:id", (q, res, o) => res.json({ ...(0, store_js_1.get)("chat", o, String(q.params.id)), messages: (0, store_js_1.messages)(o, String(q.params.id)) }));
     route("post", "/conversations/:id/title", (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.id)); res.json((0, store_js_1.put)("chat", o, { ...c, title: (0, store_js_1.text)(q.body.title, "Title", 120) })); });
     route("post", "/conversations/:id/handoff", (q, res, o) => res.status(201).json((0, store_js_1.handoffChat)(o, String(q.params.id), q.body.brief || "Prepare a plan from this conversation.")));
-    route("patch", "/conversations/:id", (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.id)); if (q.body.mode !== undefined && q.body.mode !== c.mode && ((0, store_js_1.messages)(o, c.id).length || (0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, c.id)))
+    route("patch", "/conversations/:id", (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.id)); if ((q.body.mode !== undefined || q.body.projectId !== undefined) && ((0, jobs_js_1.chatJob)(o, c.id) || (0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, c.id)))
+        throw new Error("Wait for this chat's task before changing its context"); if (q.body.mode !== undefined && q.body.mode !== c.mode && ((0, store_js_1.messages)(o, c.id).length || (0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, c.id)))
         throw new Error("Mode is fixed after the first message. Create a new chat or hand off to Work."); if (q.body.projectId)
         (0, store_js_1.get)("project", o, q.body.projectId); res.json((0, store_js_1.put)("chat", o, { ...c, projectId: q.body.projectId === undefined ? c.projectId : q.body.projectId || null, mode: q.body.mode === undefined ? c.mode : q.body.mode === "work" ? "work" : "chat" })); });
     route("delete", "/conversations/:id", async (q, res, o) => {
         const id = String(q.params.id);
         (0, store_js_1.get)("chat", o, id);
+        if ((0, jobs_js_1.chatJob)(o, id))
+            throw new Error("Cancel or finish this chat's task before deleting it");
         if ((0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, id))
             throw new Error("Wait for this chat's running task to finish");
         for (const s of (0, store_js_1.list)("schedule", o).filter(s => s.chatId === id))
@@ -107,7 +171,13 @@ async function handleWorkChat(req, res, owner) {
         controller.abort(); });
     try {
         const message = (0, store_js_1.text)(req.body.message, "Message", 50000);
+        if (req.body.background === true && !req.body.conversationId)
+            throw new Error("Create a conversation before submitting a background task");
         const chat = req.body.conversationId ? (0, store_js_1.get)("chat", owner, String(req.body.conversationId)) : (0, store_js_1.createChat)(owner, req.body);
+        if (req.body.background === true) {
+            res.status(202).json({ job: (0, jobs_js_1.enqueueJob)(owner, chat.id, req.body), conversationId: chat.id, sessionId: chat.sessionId });
+            return;
+        }
         const stream = req.body.stream === true;
         if (stream) {
             res.setHeader("Content-Type", "text/event-stream");
@@ -128,7 +198,7 @@ async function handleWorkChat(req, res, owner) {
                     approvals.push(e.approval); if (e.type === "schedule")
                     schedules.push(e.schedule); if (stream)
                     send(e.type, e.type === "approval" ? e.approval : e); } });
-            const data = { text: result.speech, conversationId: chat.id, sessionId: chat.sessionId, usage: { model: result.modelUsed || result.model, costUsd: result.costUsd || 0, promptTokens: result.promptTokens || 0, completionTokens: result.completionTokens || 0, cachedTokens: result.cachedTokens || 0 }, approvals, schedules, needsAttention: result.toolFailed || !!result.modelError || !!result.budgetRefused };
+            const data = { text: result.speech, conversationId: chat.id, sessionId: chat.sessionId, verification: result.verification, contextPlan: result.contextPlan, memoryContext: result.memoryContext, usage: { model: result.modelUsed || result.model, costUsd: result.costUsd || 0, promptTokens: result.promptTokens || 0, completionTokens: result.completionTokens || 0, cachedTokens: result.cachedTokens || 0 }, approvals, schedules, needsAttention: result.toolFailed || !!result.modelError || !!result.budgetRefused || ("needsVerification" in result && result.needsVerification) };
             if (stream) {
                 send("done", data);
                 res.end();

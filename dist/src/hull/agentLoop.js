@@ -4,6 +4,7 @@ exports.serializeToolResult = serializeToolResult;
 exports.toolResultContent = toolResultContent;
 exports.runAgentLoop = runAgentLoop;
 exports.extractSentences = extractSentences;
+const reliability_js_1 = require("../harvey/reliability.js");
 const founderPrompt_js_1 = require("./founderPrompt.js");
 const modelRouting_js_1 = require("./modelRouting.js");
 const approval_js_1 = require("./approval.js");
@@ -47,13 +48,7 @@ const MAX_IDENTICAL_CALLS = 2;
 const MAX_TOOL_CHARS = 12000;
 /** Identity of a tool call, for spotting a model going in circles. */
 function signature(name, input) {
-    try {
-        // Key order varies between rounds; sort so the same call always matches.
-        return `${name}:${JSON.stringify(input, Object.keys(input).sort())}`;
-    }
-    catch {
-        return `${name}:[unserializable]`;
-    }
+    return (0, reliability_js_1.stableCallKey)(name, input);
 }
 function takeImage(result) {
     if (!result || typeof result !== "object" || Array.isArray(result))
@@ -228,7 +223,9 @@ async function runAgentLoop(opts) {
     }
     if (opts.workRuntime)
         system = opts.workRuntime.context;
-    const activeTools = opts.workRuntime ? opts.workRuntime.tools : toolsEnabled ? hullTools : undefined;
+    system += "\n\n" + reliability_js_1.RELIABILITY_RULES;
+    const verification = new reliability_js_1.TurnVerification();
+    const activeTools = opts.workRuntime ? [...opts.workRuntime.tools, reliability_js_1.VERIFICATION_TOOL, reliability_js_1.SOURCE_CHECK_TOOL] : toolsEnabled ? hullTools : undefined;
     /* Voice turns are 1-3 sentences; a large reserve both wastes budget and
        removes the hard backstop on rambling (playbook §7.5). */
     const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 320 : (0, modelRouting_js_1.getMaxTokens)();
@@ -236,6 +233,7 @@ async function runAgentLoop(opts) {
     let hadToolOnly = false;
     /* How many times each identical call has been made this turn. */
     const callCounts = new Map();
+    let observationRevision = 0;
     /* Calls held by the gate. The turn still finishes; these did not run. */
     const heldApprovals = [];
     /* Spend accumulates across every step, because one turn can be sixteen calls
@@ -256,8 +254,20 @@ async function runAgentLoop(opts) {
      * breaks the circle. Re-executing would also re-pay the latency (an MLS
      * search or a browser read is seconds) for information already in context.
      */
-    const runTool = async (name, input) => {
+    const executeTool = async (name, input) => {
         opts.signal?.throwIfAborted();
+        const read = (0, reliability_js_1.isObservation)(name, input) || (0, reliability_js_1.isDiscovery)(name, input);
+        const sig = signature(name, input) + (opts.workRuntime && read ? `:${observationRevision}` : "");
+        const seen = (callCounts.get(sig) || 0) + 1;
+        callCounts.set(sig, seen);
+        const limit = opts.workRuntime && !read ? 1 : MAX_IDENTICAL_CALLS;
+        if (seen > limit) {
+            console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
+            return {
+                error: "REPEATED CALL REFUSED",
+                detail: `You have already called ${name} with these exact arguments ${seen - 1} times this turn. Do not repeat a possible action: it may already have taken effect. Inspect current state, use the evidence already returned, change approach, or report the specific blocker.`,
+            };
+        }
         if (opts.workRuntime) {
             if (!opts.workRuntime.tools.some(t => t.name === name))
                 return { error: "Tool is not available in this mode" };
@@ -272,16 +282,6 @@ async function runAgentLoop(opts) {
                 opts.onEvent?.({ type: "tool", name, status: "error", detail });
                 return { error: detail };
             }
-        }
-        const sig = signature(name, input);
-        const seen = (callCounts.get(sig) || 0) + 1;
-        callCounts.set(sig, seen);
-        if (seen > MAX_IDENTICAL_CALLS) {
-            console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
-            return {
-                error: "REPEATED CALL REFUSED",
-                detail: `You have already called ${name} with these exact arguments ${seen - 1} times this turn. The answer will not change. Use what you already have, and if it is genuinely empty say so plainly rather than searching again.`,
-            };
         }
         /* THE GATE. Anything that reaches a real person, spends money or cannot be
            undone stops here and waits for a human, and the model is told plainly
@@ -310,6 +310,35 @@ async function runAgentLoop(opts) {
             return { error: detail };
         }
     };
+    const runTool = async (name, input) => {
+        if (opts.workRuntime && name === "verify_source_values") {
+            try {
+                return verification.verifyValues(input);
+            }
+            catch (e) {
+                return { error: e.message };
+            }
+        }
+        if (opts.workRuntime && name === "report_verification") {
+            try {
+                return verification.review(input);
+            }
+            catch (e) {
+                return { error: e.message };
+            }
+        }
+        const result = await executeTool(name, input);
+        if (!opts.workRuntime)
+            return result;
+        const receipt = verification.record(name, input, result);
+        if (!receipt.observation)
+            observationRevision++;
+        opts.onEvidence?.(receipt);
+        if (result && typeof result === "object" && !Array.isArray(result)) {
+            return { _harveyEvidence: receipt, ...Object.fromEntries(Object.entries(result).filter(([k]) => k !== "_harveyEvidence")) };
+        }
+        return { _harveyEvidence: receipt, data: result ?? null };
+    };
     for (let step = 0; step < stepBudget; step++) {
         opts.signal?.throwIfAborted();
         /* The final round runs with tools WITHHELD. The budget then ends in an
@@ -331,7 +360,7 @@ async function runAgentLoop(opts) {
                 tools: stepTools,
                 maxTokens,
                 sessionId: opts.sessionId,
-                onToken: opts.onToken,
+                onToken: opts.workRuntime ? undefined : opts.onToken,
                 /* The ceiling is for the WHOLE turn, so each step is offered only what
                    is left of it. Sixteen steps each allowed the full budget would be
                    sixteen times the number the operator set. */
@@ -394,6 +423,7 @@ async function runAgentLoop(opts) {
         if (!out.toolUses.length) {
             return {
                 speech: finalizeSpeech(out.text, opts, hadToolOnly),
+                ...(opts.workRuntime ? { verification: verification.result() } : {}),
                 toolRounds,
                 model,
                 modelUsed: out.modelUsed,

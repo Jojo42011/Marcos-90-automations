@@ -38,6 +38,7 @@ exports.browserDirectory = browserDirectory;
 exports.closeBrowser = closeBrowser;
 exports.closeBrowsers = closeBrowsers;
 exports.browserTools = browserTools;
+exports.validateActionReferences = validateActionReferences;
 exports.browserCall = browserCall;
 exports.saveLogin = saveLogin;
 exports.logins = logins;
@@ -137,6 +138,13 @@ const idle = setInterval(() => { for (const [key, value] of sessions)
     } }).catch(() => { }); }, 60000);
 idle.unref();
 async function browserTools(owner, chat) { return (await session(owner, chat)).tools; }
+function validateActionReferences(snapshot, args) {
+    const refs = [args?.ref, args?.target, args?.startRef, args?.endRef, ...(Array.isArray(args?.fields) ? args.fields.flatMap((f) => [f.ref, f.target]) : [])].filter(v => typeof v === "string" && v);
+    for (const ref of refs) {
+        if (!/^[\w-]+$/.test(ref) || !snapshot.includes(`[ref=${ref}]`))
+            throw new Error("Browser target changed or is no longer visible. Inspect a fresh snapshot before trying a different action.");
+    }
+}
 async function browserCall(owner, chat, name, args) {
     if (!ALLOWED.has(name))
         throw new Error("Unsupported browser action");
@@ -159,6 +167,12 @@ async function browserCall(owner, chat, name, args) {
         return { content: [{ type: "text", text: "Browser closed; session state retained." }] };
     }
     const s = await session(owner, chat);
+    if (["browser_click", "browser_type", "browser_fill_form", "browser_select_option", "browser_hover", "browser_drag"].includes(name)) {
+        const fresh = await s.client.callTool({ name: "browser_snapshot", arguments: {} }, undefined, { timeout: 60000 });
+        if (fresh.isError)
+            throw new Error("Cannot verify the current browser page before acting");
+        validateActionReferences((fresh.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n"), args);
+    }
     const result = await s.client.callTool({ name, arguments: args || {} }, undefined, { timeout: 60000 });
     s.lastUsed = Date.now();
     if (result.isError)

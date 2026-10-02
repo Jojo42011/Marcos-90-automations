@@ -47,6 +47,7 @@ function newChat(owner, mode="chat") {
   chats.set(owner+":"+chat.id,chat); return {...chat};
 }
 const store = {
+  list: () => [],
   get: (_kind,owner,id) => {const c=chats.get(owner+":"+id);if(!c)throw new Error("Not found");return {...c};},
   put: (_kind,owner,c) => {chats.set(owner+":"+c.id,{...c});return {...c};},
   messages: (owner,id) => [...(history.get(owner+":"+id)||[])],
@@ -55,6 +56,8 @@ const store = {
   unlockChat: (_owner,_id,k) => locks.delete(k)
 };
 const runtime = load("harvey/work/runtime.js", {
+  "./learning.js":{learningContext:()=>({}),boundedHistory:history=>({messages:history,diagnostics:{}})},
+  "./coordination.js":{},
   "./composio.js":{managedConnections:async()=>[],managedTools:async()=>[],composioReady:()=>false},
   "./files.js":{}, crypto:{randomUUID}, "./store.js":store,
   "./browser.js":{browserEnabled:()=>true,browserCall:async(...args)=>{browserCalls.push(args);return {filled:true};}},

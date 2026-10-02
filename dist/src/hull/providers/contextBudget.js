@@ -179,7 +179,7 @@ function compactToolResult(block) {
         tool_use_id: String(tr.tool_use_id ?? ""),
         /* The pointer keeps the shape of the answer (size, opening line) so the
            model can tell whether re-running the tool is worth a round trip. */
-        content: `[earlier tool result compacted to save context — ${raw.length} chars. Opening: ${firstLine(raw) || "(empty)"}. Re-run the tool if you need the detail.]`,
+        content: `[earlier tool result compacted to save context — ${raw.length} chars. Opening: ${firstLine(raw) || "(empty)"}. Retrieve saved evidence or inspect current state if you need detail. Never repeat a write or send to recover its output. Only repeat a confirmed read-only tool.]`,
     };
 }
 function toolResultCount(messages) {
