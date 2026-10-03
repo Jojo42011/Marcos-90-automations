@@ -59,6 +59,13 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      - name: Verify restored Marco CRM and visible lead counts
+        if: contains(github.event.head_commit.message, '[crm-recovery]')
+        timeout-minutes: 3
+        run: flyctl ssh console -a marco-90-automation -C 'node /app/scripts/audit-crm-restored.mjs'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Opt-in sanitized DM processing evidence
         if: contains(github.event.head_commit.message, '[automation-audit]')
         run: flyctl logs -a marco-90-automation --no-tail --json | node scripts/summarize-marco-logs.mjs
