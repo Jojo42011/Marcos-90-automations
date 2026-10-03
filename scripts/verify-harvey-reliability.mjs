@@ -114,9 +114,12 @@ try{
  ok('delegated runs cannot enable login consent, schedule, or spawn additional agents',()=>{assert(!store.get('chat','alice',delegated.id).allowChatCredentials);const names=calls.at(-1).tools.map(t=>t.function.name);assert(!names.includes('agent_team'));assert(!names.includes('schedule_agent'));assert.equal(store.messages('alice',delegated.id)[0].origin,'delegated');});
  const consent=await chat('chat');let before=calls.length;
  const on=await api('/chat','POST',{conversationId:consent.id,message:'Monte Carlo',model:'openai/fixture'});
- ok('chat-password consent still enables without a model round trip',()=>{assert(on.data.text.includes('Monte Carlo is on'));assert.equal(calls.length,before);assert.equal(store.get('chat','alice',consent.id).allowChatCredentials,true);});
+ ok('chat-password consent still enables without a model round trip',()=>{assert(on.data.text.includes('Credential access is unlocked'));assert.equal(calls.length,before);assert.equal(store.get('chat','alice',consent.id).allowChatCredentials,true);});
  await api('/chat','POST',{conversationId:consent.id,message:'Discuss login',model:'anthropic/fixture'});
  ok('model switch preserves chat credential consent',()=>assert(JSON.stringify(calls.at(-1).messages[0]).includes('credential mode is ENABLED')));
+ const explanation=await api('/chat','POST',{conversationId:c.id,message:'Why did you ask for verification? Are two tabs a problem?',model:'openai/fixture'});
+ ok('ordinary Work conversation is not replaced by a verification warning',()=>{assert.equal(explanation.data.text,'A conversational fixture answer.');assert(!explanation.data.needsAttention);});
+ assert(!JSON.stringify(calls.at(-1)).match(/monte\s+carlo/i));
  const lie=await api('/chat','POST',{conversationId:c.id,message:'UNSUPPORTED_FIXTURE',model:'openai/fixture'});
  ok('unsupported completion claim is replaced with needs-verification',()=>{assert.equal(lie.data.needsAttention,true);assert(!lie.data.text.includes('verified every listing'));});
  const repeat=await chat();await api('/chat','POST',{conversationId:repeat.id,message:'REPEAT_FIXTURE',model:'openai/fixture'});
