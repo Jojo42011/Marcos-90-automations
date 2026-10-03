@@ -294,7 +294,7 @@ async function runChat(owner, chat, message, options = {}, runId) {
             onEvent: e => { if (e.type === "tool" && e.status === "error")
                 toolFailed = true; options.onEvent?.(e); } });
         result.speech = hidePassphrase(result.speech);
-        const unsupportedActionClaim = /\b(?:I(?:'ve| have)?|successfully)\s+(?:sent|saved|created|updated|deleted|scheduled|connected|verified|checked|retrieved|completed)\b/i.test(result.speech) && result.toolRounds === 0;
+        const unsupportedActionClaim = /\b(?:I(?:'ve| have)?|successfully)\s+(?:sent|saved|created|updated|deleted|scheduled|connected|verified|checked|retrieved|completed|logged\s+in|signed\s+in|filled)\b/i.test(result.speech) && result.toolRounds === 0;
         const needsReview = !!runId || !!options.workDelegated || (result.verification?.receipts.length || 0) > 0 || unsupportedActionClaim || !!result.modelError || !!result.budgetRefused;
         checkpoint.status = result.modelError || result.budgetRefused ? "blocked" : result.verification?.status || "needs_verification";
         checkpoint.updatedAt = new Date().toISOString();

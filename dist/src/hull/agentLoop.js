@@ -100,7 +100,7 @@ function stripMarkdownForSpeech(text) {
         .trim();
 }
 function finalizeSpeech(text, opts, hadToolOnly) {
-    let speech = opts.fastMode
+    let speech = opts.fastMode || opts.workRuntime
         ? text
         : opts.voiceMode
             ? text

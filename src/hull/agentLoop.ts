@@ -240,7 +240,7 @@ function stripMarkdownForSpeech(text: string): string {
 }
 
 function finalizeSpeech(text: string, opts: AgentLoopOptions, hadToolOnly: boolean): string {
-  let speech = opts.fastMode
+  let speech = opts.fastMode || opts.workRuntime
     ? text
     : opts.voiceMode
       ? text

@@ -22,6 +22,6 @@ try{
  const unlock=await R.runChat(owner,chat,'monte carlo');assert(!/monte\s+carlo/i.test(unlock.speech));
  const login=await run(`Log in to my test site http://127.0.0.1:${server.address().port}/ using username fixture-user and password fixture-only-42. Use your browser and check the signed-in page. Do not use business tools.`);
  const snap=await B.browserCall(owner,chat.id,'browser_snapshot',{});assert(JSON.stringify(snap).includes('Signed in as fixture-user'),'Browser did not reach signed-in state');assert.equal(login.verification?.status,'completed','Agent did not verify its completed login');
- await B.closeBrowsers();const resumed=await B.browserCall(owner,chat.id,'browser_navigate',{url:`http://127.0.0.1:${server.address().port}/`});assert(JSON.stringify(resumed).includes('Signed in as fixture-user'),'Saved login state did not survive browser restart');
+ await B.closeBrowsers();await B.browserCall(owner,chat.id,'browser_navigate',{url:`http://127.0.0.1:${server.address().port}/`});const resumed=await B.browserCall(owner,chat.id,'browser_snapshot',{});assert(JSON.stringify(resumed).includes('Signed in as fixture-user'),'Saved login state did not survive browser restart');
  console.log(JSON.stringify({recoverySmoke:'passed',conversation:true,realModelBrowserLogin:true,persistentSession:true,verification:true,costUsd:cost,externalCustomerAccountsTested:false}));
 }finally{clearTimeout(timer);await B.closeBrowsers();await new Promise(r=>server.close(r));S.closeStore();}
