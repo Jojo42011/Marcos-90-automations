@@ -1,5 +1,6 @@
 import { canViewWorkspace, workspaceReadAllowed } from "./workspaceAccess.js";
 import { recoverSharedTasks } from "./sharedTasks.js";
+import { recoverMarcoCrm } from "./crmRecovery.js";
 import { fork, ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -16,6 +17,8 @@ const SHARED_ENV = /^(PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFI
 export function tenantEnvironment(owner: string, parent = process.env): NodeJS.ProcessEnv {
   const root = join(dataPath(), "accounts", createHash("sha256").update(owner).digest("hex"));
   mkdirSync(root, { recursive: true });
+  const marco = getUsers().filter(u => /^marco(?:\s|$)/i.test(u.name.trim()));
+  if (marco.length === 1 && marco[0].id === owner) recoverMarcoCrm(dataPath(), root, parent.DB_JSON_PATH);
   const emptyEnv = join(root, ".empty-env");
   writeFileSync(emptyEnv, "");
   const env: NodeJS.ProcessEnv = {};

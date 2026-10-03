@@ -81,6 +81,7 @@ const enabled=await runtime.runChat("alice",chat,"Monte Carlo",{modelOverride:"o
 ok("consent succeeds without a provider and streams its acknowledgement",()=>{
   assert.equal(loopCalls,0);assert.equal(enabled.model,"harvey-settings");assert.equal(streamed,enabled.speech);
   assert.equal(store.get("chat","alice",chat.id).allowChatCredentials,true);
+  assert(!/monte\s+carlo/i.test(enabled.speech));
 });
 failProvider=false;
 for (const model of ["openai/fixture","anthropic/fixture","google/fixture","inception/fixture"]) {
@@ -112,6 +113,7 @@ ok("off is deterministic on every model",()=>{
 });
 requests=[];await runtime.runChat("alice",chat,"Continue login",{modelOverride:"openai/fixture"});
 ok("new model receives OFF despite prior enabled history",()=>assert(JSON.stringify(requests[0].messages[0]).includes("credential mode is OFF")));
+ok("locked instructions ask for the passphrase without disclosing it",()=>{const prompt=JSON.stringify(requests[0].messages[0]);assert(prompt.includes("What is the secret passphrase?"));assert(!/monte\s+carlo/i.test(prompt));});
 await runtime.runChat("alice",chat,"Monte Carlo",{},"scheduled-fixture");
 ok("scheduled prompts cannot change consent",()=>assert.equal(store.get("chat","alice",chat.id).allowChatCredentials,false));
 await assert.rejects(()=>runtime.runChat("bob",chat,"Monte Carlo"),/Not found/);

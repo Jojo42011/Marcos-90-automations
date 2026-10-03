@@ -94,7 +94,7 @@ managed.managedConnections=originalConnections;managed.managedTools=originalTool
 const events=[];await r.runChat('alice',conversation,'Check email every weekday at 9 am',{onEvent:e=>events.push(e)});
 ok('Chat scheduling emits saved task event in Central Time',()=>{const event=events.find(e=>e.type==='schedule');assert(event);assert.equal(event.schedule.timezone,'America/Chicago');assert.equal(event.schedule.cron,'0 9 * * 1-5');s.remove('schedule','alice',event.schedule.id);});
 calls=[];const consent=await r.runChat('alice',conversation,'Monte Carlo');
-ok('Direct command enables per-chat consent without a model call',()=>{assert.equal(s.get('chat','alice',conversation.id).allowChatCredentials,true);assert.equal(calls.length,0);assert.equal(consent.model,'harvey-settings');assert(consent.speech.includes('Monte Carlo is on'));});
+ok('Direct command enables per-chat consent without a model call',()=>{assert.equal(s.get('chat','alice',conversation.id).allowChatCredentials,true);assert.equal(calls.length,0);assert.equal(consent.model,'harvey-settings');assert(consent.speech.includes('Credential access is unlocked'));});
 s.closeStore();calls=[];await r.runChat('alice',conversation,'Continue the login I requested');
 ok('Credential consent survives reload and stale chat objects',()=>assert(JSON.stringify(calls[0].messages[0]).includes('credential mode is ENABLED')));
 assert(!s.get('chat','alice',fresh.id).allowChatCredentials);passed++;

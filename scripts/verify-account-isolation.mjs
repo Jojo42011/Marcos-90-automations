@@ -73,12 +73,12 @@ try {
  check('business credentials and legacy database overrides are not inherited',()=>assert.ok(isolatedEnv.TENANT_DATA_ROOT.includes('accounts')));
  for(const user of users){
    const c=cookies[user.id];const dashboard=await request('/api/dashboard/data?includePhoneless=1',c);
-   assert.equal(dashboard.status,200,JSON.stringify(dashboard.data));assert.deepEqual(dashboard.data.leads,[]);
+   assert.equal(dashboard.status,200,JSON.stringify(dashboard.data));assert.deepEqual(dashboard.data.leads.map(l=>l.id),user.id==='marco'?['old']:[]);
    const created=await request('/api/crm/lead',c,'POST',{firstName:user.name+' private',phone:'2025550142'});assert.equal(created.status,201,JSON.stringify(created.data));
    const chat=await request('/api/harvey/conversations',c,'POST',{title:user.name+' private chat',mode:'work'});assert.equal(chat.status,201,JSON.stringify(chat.data));chats[user.id]=chat.data.id;
    const schedule=await request('/api/harvey/work/schedules',c,'POST',{chatId:chat.data.id,title:user.name+' agent',prompt:'Return a short greeting',cron:'0 9 * * *',timezone:'America/Chicago',maxCostUsd:0.01});assert.equal(schedule.status,201,JSON.stringify(schedule.data));schedules[user.id]=schedule.data.id;
  }
- check('all three CRMs start empty and accept the same phone independently',()=>assert.equal(Object.keys(chats).length,3));
+ check('Marco inherits retained CRM; other CRMs start empty and accept the same phone independently',()=>assert.equal(Object.keys(chats).length,3));
  check('starting account workers does not clear another owner’s chat lock',()=>assert.ok(work.workDb().prepare('SELECT 1 FROM locks WHERE owner=?').get('unrelated-owner')));
  const roster=await request('/api/users',cookies.carlos);assert.deepEqual(roster.data.users.map(u=>u.id),['carlos']);
  const adminRoster=await request('/api/auth/team',cookies.marco);assert.equal(adminRoster.data.users.length,3);assert.ok(adminRoster.data.users.every(u=>!u.passwordHash));
@@ -86,7 +86,7 @@ try {
  check('CRM roster is personal; account administration remains admin-only',()=>assert.ok(true));
  for(const user of users){
    const c=cookies[user.id], dashboard=await request('/api/dashboard/data?includePhoneless=1',c);
-   assert.equal(dashboard.data.leads.length,1);assert.equal(dashboard.data.leads[0].name,user.name+' private');
+   assert.equal(dashboard.data.leads.length,user.id==='marco'?2:1);assert.equal(dashboard.data.leads[0].name,user.name+' private');
    const tasks=await request('/api/harvey/work/schedules',c);assert.equal(tasks.data.schedules.length,1);assert.equal(tasks.data.schedules[0].id,schedules[user.id]);
    const other=users.find(u=>u.id!==user.id);
    assert.equal((await request('/api/harvey/conversations/'+chats[other.id],c)).status,404);

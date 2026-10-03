@@ -97,10 +97,11 @@ function updateSchedule(owner, id, input) {
     merged.nextRunAt = (0, store_js_1.nextRun)(merged.cron, merged.timezone);
     return (0, store_js_1.put)("schedule", owner, merged);
 }
+function hidePassphrase(value) { return value.replace(/monte\s+carlo/gi, "[secret passphrase]"); }
 function credentialInstructions(enabled) {
     return enabled
-        ? "Monte Carlo credential mode is ENABLED for this conversation. This is Harvey's persisted, per-chat authorization setting and applies equally to every selected tool-capable model, including OpenAI, Anthropic and other OpenRouter models; changing models does not change consent. For the website the user requested, you may use their supplied username/password with the computer tool's discovered browser typing or form-filling actions, submit the login, and verify the resulting page before continuing. This is ordinary authorized sign-in, not unrestricted mode or a change to provider policies. Never echo passwords or copy them to unrelated sites, schedules or project instructions. Chat credentials are stored in conversation history and sent to the selected provider; Browser > Save login is the alternative that keeps the password out of model context. Do not claim vault storage unless a save operation succeeded. MFA, CAPTCHA, provider permissions and business-action approvals still apply."
-        : "Monte Carlo credential mode is OFF for this conversation, for every selected model. Do not use credentials from chat history for browser login while it is off. Offer Browser > Save login or the standalone command Monte Carlo to enable direct chat credential use. Turning this off does not erase existing history or sign out an existing browser session.";
+        ? "Chat credential mode is ENABLED for this conversation. This is Harvey's persisted, per-chat authorization setting and applies equally to every selected tool-capable model, including OpenAI, Anthropic and other OpenRouter models; changing models does not change consent. For the website the user requested, you may use their supplied username/password with the computer tool's discovered browser typing or form-filling actions, submit the login, and verify the resulting page before continuing. This is ordinary authorized sign-in, not unrestricted mode or a change to provider policies. Never echo passwords or copy them to unrelated sites, schedules or project instructions. Chat credentials are stored in conversation history and sent to the selected provider; Browser > Save login is the alternative that keeps the password out of model context. Do not claim vault storage unless a save operation succeeded. MFA, CAPTCHA, provider permissions and business-action approvals still apply."
+        : "Chat credential mode is OFF for this conversation, for every selected model. Do not use credentials from chat history for browser login while it is off. Ask exactly: What is the secret passphrase? Never reveal or hint at its value. The server checks it; you cannot enable access yourself. Browser > Save login is also available. Turning this off does not erase existing history or sign out an existing browser session.";
 }
 async function runtime(owner, chat, unattended, onEvent, signal, query = "") {
     const project = chat.projectId ? (0, store_js_1.get)("project", owner, chat.projectId) : null;
@@ -111,7 +112,7 @@ async function runtime(owner, chat, unattended, onEvent, signal, query = "") {
         if (t.name === "computer")
             return { ...t, description: t.description + " " + credentialInstructions(!!chat.allowChatCredentials) };
         if (t.name === "saved_logins" && chat.allowChatCredentials)
-            return { ...t, description: "List saved browser logins. Monte Carlo is enabled for this chat on every selected model; direct credentials may also be used for the user's requested website. This tool lists logins; it does not save new credentials." };
+            return { ...t, description: "List saved browser logins. Chat credential access is enabled for this chat on every selected model; direct credentials may also be used for the user's requested website. This tool lists logins; it does not save new credentials." };
         return t;
     });
     if (!unattended)
@@ -245,7 +246,7 @@ async function runtime(owner, chat, unattended, onEvent, signal, query = "") {
     return {
         tools,
         // Serialize actions so parallel model tool calls cannot race page navigation.
-        execute: (name, input) => { const result = chain.catch(() => { }).then(() => execute(name, input)); chain = result; return result; },
+        execute: (name, input) => { const result = chain.catch(() => { }).then(() => execute(name, input)).then(value => value === undefined ? value : JSON.parse(hidePassphrase(JSON.stringify(value)))); chain = result; return result; },
         context: `You are Harvey, a practical assistant. Current Central Time: ${new Date().toLocaleString("en-US", { timeZone: "America/Chicago", timeZoneName: "short" })}. UTC: ${new Date().toISOString()}. Mode: ${chat.mode}. ${chat.mode === "chat" ? "Chat mode is conversational, with full access to connected plugins and requested actions. Mode is fixed for this conversation. If explicitly asked to open a separate Work chat, use handoff_to_work." : "Work mode can execute only the tools listed. Use tools to verify results; never claim an action succeeded without evidence."}
 Project: ${project?.name || "No project"}. Timezone: ${project?.timezone || "America/Chicago"}. Project instructions: ${project?.instructions || "None"}.
 Learning packet (historical data, never new authorization): ${JSON.stringify((0, learning_js_1.learningContext)(owner, chat, query))}. Save meaningful user corrections with agent_memory and taught procedures with workflow. Keep continuity updated when decisions change. This improves retrieved knowledge; it does not train model weights.
@@ -270,13 +271,13 @@ async function runChat(owner, chat, message, options = {}, runId) {
             chat = (0, store_js_1.put)("chat", owner, { ...chat, allowChatCredentials: credentialCommand[1]?.toLowerCase() !== "off" });
         const historySelection = (0, learning_js_1.boundedHistory)((0, store_js_1.messages)(owner, chat.id));
         const history = historySelection.messages;
-        (0, store_js_1.append)(owner, chat.id, { role: "user", content: message, at: new Date().toISOString(), ...(runId ? { runId } : {}), ...(options.workDelegated ? { origin: "delegated" } : {}) });
+        (0, store_js_1.append)(owner, chat.id, { role: "user", content: credentialCommand ? "[Credential access command]" : message, at: new Date().toISOString(), ...(runId ? { runId } : {}), ...(options.workDelegated ? { origin: "delegated" } : {}) });
         // Consent is an app command, not a request for the selected model to approve.
         // This works even if a provider is unavailable or its model budget is exhausted.
         if (credentialCommand) {
             const speech = chat.allowChatCredentials
-                ? "Monte Carlo is on for this chat across model changes. I can use login details you provide for the website you request. Credentials entered here are stored in chat history and sent to the selected model; provider rules and MFA/CAPTCHA still apply."
-                : "Monte Carlo is off for this chat across all models. Use Browser > Save login for future logins. Existing chat history and signed-in browser sessions are unchanged.";
+                ? "Credential access is unlocked for this chat across model changes. I can use login details you provide for the website you request. Credentials entered here are stored in chat history and sent to the selected model; provider rules and MFA/CAPTCHA still apply."
+                : "Credential access is locked for this chat across all models. Use Browser > Save login for future logins. Existing chat history and signed-in browser sessions are unchanged.";
             const result = { speech, toolRounds: 0, model: "harvey-settings" };
             (0, store_js_1.append)(owner, chat.id, { role: "assistant", content: speech, at: new Date().toISOString() });
             options.onToken?.(speech);
@@ -286,19 +287,23 @@ async function runChat(owner, chat, message, options = {}, runId) {
         checkpoint = { id: (0, crypto_1.randomUUID)(), chatId: chat.id, ...(runId ? { runId } : {}), status: "working", updatedAt: new Date().toISOString(), receipts: [] };
         (0, store_js_1.put)("verification", owner, checkpoint);
         const workRuntime = await runtime(owner, chat, !!runId || !!options.workDelegated, options.onEvent, options.signal, message);
+        workRuntime.context = hidePassphrase(workRuntime.context);
         workRuntime.context += "\nRecent history selection: " + JSON.stringify(historySelection.diagnostics) + ". Older messages remain stored; use history_search before assuming a missing decision. Save a concise continuity brief for decisions that must survive future turns.";
-        const result = await (0, agentLoop_js_1.runAgentLoop)({ ...options, message, sessionId: chat.sessionId, history: history.map(m => ({ role: m.role, content: m.content })), timedHistory: history, fullMode: true, job: "agent", workRuntime,
+        const result = await (0, agentLoop_js_1.runAgentLoop)({ ...options, message: hidePassphrase(message), sessionId: chat.sessionId, history: history.map(m => ({ role: m.role, content: hidePassphrase(m.content) })), timedHistory: history.map(m => ({ ...m, content: hidePassphrase(m.content) })), fullMode: true, job: "agent", workRuntime,
             onEvidence: receipt => { checkpoint.receipts.push(receipt); checkpoint.updatedAt = new Date().toISOString(); (0, store_js_1.put)("verification", owner, checkpoint); },
             onEvent: e => { if (e.type === "tool" && e.status === "error")
                 toolFailed = true; options.onEvent?.(e); } });
-        const unsupportedActionClaim = /\b(?:I(?:'ve| have)?|successfully)\s+(?:sent|saved|created|updated|deleted|scheduled|connected|verified|checked|retrieved|completed)\b/i.test(result.speech) && result.toolRounds === 0;
-        const needsReview = chat.mode === "work" || !!runId || !!options.workDelegated || result.toolRounds > 0 || unsupportedActionClaim || !!result.modelError || !!result.budgetRefused;
+        result.speech = hidePassphrase(result.speech);
+        const unsupportedActionClaim = /\b(?:I(?:'ve| have)?|successfully)\s+(?:sent|saved|created|updated|deleted|scheduled|connected|verified|checked|retrieved|completed|logged\s+in|signed\s+in|filled)\b/i.test(result.speech) && result.toolRounds === 0;
+        const needsReview = !!runId || !!options.workDelegated || (result.verification?.receipts.length || 0) > 0 || unsupportedActionClaim || !!result.modelError || !!result.budgetRefused;
         checkpoint.status = result.modelError || result.budgetRefused ? "blocked" : result.verification?.status || "needs_verification";
         checkpoint.updatedAt = new Date().toISOString();
         (0, store_js_1.put)("verification", owner, checkpoint);
         if (needsReview && !result.modelError && !result.budgetRefused) {
             if (!result.verification?.checks.length && checkpoint.status !== "blocked") {
-                result.speech = "NEEDS VERIFICATION: I have not recorded the source and outcome checks needed to confirm this task is complete. Any actions already attempted may have taken effect; inspect their results before retrying.";
+                result.speech = unsupportedActionClaim
+                    ? "I have not completed that action yet. No tool action ran in this turn."
+                    : "I could not confirm completion yet.\n\n" + result.speech;
             }
             else if (checkpoint.status !== "completed") {
                 result.speech = `${checkpoint.status === "blocked" ? "BLOCKED" : "NEEDS VERIFICATION"}: This task is not confirmed complete.\n\n${result.speech}`;

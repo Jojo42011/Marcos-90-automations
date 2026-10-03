@@ -100,7 +100,7 @@ function stripMarkdownForSpeech(text) {
         .trim();
 }
 function finalizeSpeech(text, opts, hadToolOnly) {
-    let speech = opts.fastMode
+    let speech = opts.fastMode || opts.workRuntime
         ? text
         : opts.voiceMode
             ? text
@@ -230,6 +230,7 @@ async function runAgentLoop(opts) {
        removes the hard backstop on rambling (playbook §7.5). */
     const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 320 : (0, modelRouting_js_1.getMaxTokens)();
     let toolRounds = 0;
+    let completionRepairs = 0;
     let hadToolOnly = false;
     /* How many times each identical call has been made this turn. */
     const callCounts = new Map();
@@ -421,6 +422,19 @@ async function runAgentLoop(opts) {
             costUsd: out.usage.costUsd,
         });
         if (!out.toolUses.length) {
+            // A missing review is our bookkeeping problem, never a request for the
+            // user to re-authorize a login. Give the agent a bounded chance to act or
+            // inspect its results before returning; ordinary conversation needs none.
+            const evidence = verification.result();
+            const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(opts.message) || /https?:\/\/\S+/i.test(opts.message);
+            if (opts.workRuntime && !lastRound && completionRepairs < 2 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
+                completionRepairs++;
+                messages.push({ role: "assistant", content: out.text || "I need to continue the requested work." });
+                messages.push({ role: "user", content: evidence.receipts.length
+                        ? "Internal execution reminder: inspect the tool results already returned. Perform any missing read-back yourself, then call report_verification with the outcome. Do not repeat writes or ask the user to supply verification. If blocked, report the specific blocker and explain it plainly."
+                        : "Internal execution reminder: the user requested an action. Use the available tools now, beginning with discovery if needed, and inspect the result. Do not claim completion without execution. If credentials are locked, ask for the secret passphrase without revealing it; if setup, MFA or another real blocker prevents execution, explain that specific blocker. No tool receipt is required for an explanation or clarification." });
+                continue;
+            }
             return {
                 speech: finalizeSpeech(out.text, opts, hadToolOnly),
                 ...(opts.workRuntime ? { verification: verification.result() } : {}),

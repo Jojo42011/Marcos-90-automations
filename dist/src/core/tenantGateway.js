@@ -11,6 +11,7 @@ exports.accountMiddleware = accountMiddleware;
 exports.accountUpgrade = accountUpgrade;
 const workspaceAccess_js_1 = require("./workspaceAccess.js");
 const sharedTasks_js_1 = require("./sharedTasks.js");
+const crmRecovery_js_1 = require("./crmRecovery.js");
 const node_child_process_1 = require("node:child_process");
 const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
@@ -24,6 +25,9 @@ const SHARED_ENV = /^(PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFI
 function tenantEnvironment(owner, parent = process.env) {
     const root = (0, node_path_1.join)((0, tenantData_js_1.dataPath)(), "accounts", (0, node_crypto_1.createHash)("sha256").update(owner).digest("hex"));
     (0, node_fs_1.mkdirSync)(root, { recursive: true });
+    const marco = (0, users_js_1.getUsers)().filter(u => /^marco(?:\s|$)/i.test(u.name.trim()));
+    if (marco.length === 1 && marco[0].id === owner)
+        (0, crmRecovery_js_1.recoverMarcoCrm)((0, tenantData_js_1.dataPath)(), root, parent.DB_JSON_PATH);
     const emptyEnv = (0, node_path_1.join)(root, ".empty-env");
     (0, node_fs_1.writeFileSync)(emptyEnv, "");
     const env = {};
