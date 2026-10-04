@@ -844,6 +844,12 @@ function recurLabel(t){if(!t.recurring)return"";var iv=t.recurringInterval||"wee
 
 /* ================= state ================= */
 var ME=localStorage.getItem(USER_KEY)||"";
+var AUTH_ACTOR_ID="", AUTH_READY=false;
+// Browser storage is a display preference, never proof of the signed-in actor.
+var identityReady=api("/api/auth/me").then(function(d){
+  AUTH_ACTOR_ID=d.user.id;ME=d.user.name.trim().split(/\s+/)[0].toLowerCase();AUTH_READY=true;
+  localStorage.setItem(USER_KEY,ME);paintMe();
+}).catch(function(){toast("Sign in to your account before creating a task.");});
 var TASKS=[];
 var selDate=tzToday();
 var calY,calM;             // compact calendar month
@@ -1948,6 +1954,7 @@ function colForDate(ds){
   if(diff<=0)return"today";if(diff===1)return"tomorrow";if(diff<=7)return"this_week";return"this_month";
 }
 document.getElementById("tmSave").onclick=function(){
+  if(!AUTH_READY){toast("Your account is still being checked. Please sign in or try again shortly.");return;}
   var title=document.getElementById("tTitle").value.replace(/\s*\n+\s*/g," ").trim();
   var date=document.getElementById("tDate").value;
   if(!title||!date){toast("Description and date are required");return;}
@@ -1969,7 +1976,7 @@ document.getElementById("tmSave").onclick=function(){
   document.getElementById("tmSave").disabled=true;
   var req;
   if(editId){req=fetch("/api/tasks/"+encodeURIComponent(editId),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});}
-  else{payload.createdBy=ME;payload.reminderMinutes=[10,5];
+  else{payload.createdBy=ME;payload.expectedActorId=AUTH_ACTOR_ID;payload.reminderMinutes=[10,5];
     req=fetch("/api/tasks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});}
   req.then(async function(r){var d=await r.json();if(!r.ok||!d.task)throw new Error(d.error||"Task could not be saved");return d;}).then(function(d){
     if(editId){var i=TASKS.findIndex(function(x){return x.id===editId;});if(i>=0)TASKS[i]=d.task;}
