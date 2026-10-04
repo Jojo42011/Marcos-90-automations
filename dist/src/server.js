@@ -11477,6 +11477,13 @@ function spawnNextRecurrence(done) {
     }
 }
 app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
+    const actor = sessionUserSync(req);
+    const actorMember = actor?.name.trim().split(/\s+/)[0].toLowerCase();
+    if (actor && ((req.body?.expectedActorId && req.body.expectedActorId !== actor.id)
+        || (req.body?.createdBy && req.body.createdBy !== actorMember))) {
+        res.status(409).json({ error: "Your signed-in account changed or does not match this task page. Refresh or sign in to the intended account before saving. Your draft has not been submitted." });
+        return;
+    }
     const body = (req.body && typeof req.body === "object" ? req.body : {});
     if (body.assignedTo !== undefined && (typeof body.assignedTo !== "string" || !["marco", "wesley", "carlos"].includes(body.assignedTo.trim().toLowerCase()))) {
         res.status(400).json({ error: "Choose Marco, Wesley or Carlos as the assignee" });
@@ -11513,7 +11520,7 @@ app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
         tags: Array.isArray(body.tags)
             ? body.tags.filter((t) => typeof t === "string")
             : undefined,
-        createdBy: process.env.TENANT_MEMBER || (typeof body.createdBy === "string" ? body.createdBy : "carlos"),
+        createdBy: actorMember || process.env.TENANT_MEMBER || (typeof body.createdBy === "string" ? body.createdBy : "carlos"),
         sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : undefined,
         // Raised from a Content Planner slot. Everything else about the task is
         // identical to one typed on the board — same store, same notification,
