@@ -1,12 +1,13 @@
+import Database from "better-sqlite3";
 import { dataPath } from "./tenantData.js";
 /**
  * Team collaboration store for the Task Command Center — direct chat,
  * notifications (assignments / due-soon / messages), and lightweight presence.
  * File-backed (same pattern as pushStore): /data/team.json on Fly, ./data
- * locally. Identity model matches the task board: device-picked member ids
+ * locally. Identity comes from the authenticated account: member ids
  * (marco/wesley/carlos).
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { randomUUID } from "crypto";
 import { getAssignedCommandTasks } from "./db.js";
@@ -59,7 +60,50 @@ let state: PersistedTeam = { chats: [], notifications: [], dueNotified: [] };
 const presence = new Map<string, number>(); // member id -> last-seen epoch ms
 let loaded = false;
 
+// One transactional store for team collaboration across account workers.
+// Import existing files additively; never rewrite or remove the source files.
+let shared: Database.Database | undefined;
+function sharedDb(): Database.Database | undefined {
+  if(process.env.ACCOUNT_ISOLATION !== "true")return undefined;
+  if(shared)return shared;
+  const root=dirname(process.env.SHARED_TASK_DB_PATH || dataPath("shared-tasks.db"));
+  mkdirSync(root,{recursive:true});
+  const db=new Database(join(root,"shared-team.db"));
+  try {
+  db.pragma("journal_mode = WAL");db.pragma("busy_timeout = 10000");db.pragma("synchronous = FULL");
+  db.exec("CREATE TABLE IF NOT EXISTS team_state(id INTEGER PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS team_imports(source TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS team_presence(member TEXT PRIMARY KEY, seen INTEGER NOT NULL);");
+  db.transaction(()=>{
+    const row=db.prepare("SELECT body FROM team_state WHERE id=1").get() as {body:string}|undefined;
+    const merged:PersistedTeam=row?JSON.parse(row.body):{chats:[],notifications:[],dueNotified:[]};
+    const sources=[process.env.TEAM_JSON_PATH,join(root,"team.json")].filter((x):x is string=>!!x);
+    const accounts=join(root,"accounts");
+    if(existsSync(accounts))for(const entry of readdirSync(accounts,{withFileTypes:true}))if(entry.isDirectory())sources.push(join(accounts,entry.name,"team.json"));
+    for(const source of sources){
+      if(!existsSync(source)||db.prepare("SELECT 1 FROM team_imports WHERE source=?").get(source))continue;
+      // Invalid files fail visibly instead of replacing retained records with emptiness.
+      const raw=readFileSync(source,"utf8"), old=JSON.parse(raw) as Partial<PersistedTeam>;
+      for(const key of ["chats","notifications"] as const){
+        const ids=new Set(merged[key].map(x=>x.id));
+        for(const item of old[key]||[])if(!ids.has(item.id)){(merged[key] as any[]).push(item);ids.add(item.id);}
+      }
+      merged.dueNotified=[...new Set([...merged.dueNotified,...(old.dueNotified||[])])];
+      db.prepare("INSERT INTO team_imports(source,body) VALUES(?,?)").run(source,raw);
+    }
+    merged.chats.sort((a,b)=>a.at.localeCompare(b.at));merged.notifications.sort((a,b)=>a.at.localeCompare(b.at));
+    db.prepare("INSERT OR REPLACE INTO team_state(id,body) VALUES(1,?)").run(JSON.stringify(merged));
+  }).immediate();
+  shared=db;
+  } catch(error){db.close();throw error;}
+  return shared;
+}
+function transaction<T>(fn:()=>T):T {
+  const db=sharedDb()!;
+  return db.transaction(()=>{loaded=false;return fn();}).immediate();
+}
+
 function persist(): void {
+  const db=sharedDb();
+  if(db){db.prepare("UPDATE team_state SET body=? WHERE id=1").run(JSON.stringify(state));return;}
   try {
     mkdirSync(dirname(PATH), { recursive: true });
     writeFileSync(PATH, JSON.stringify(state), "utf8");
@@ -69,6 +113,11 @@ function persist(): void {
 }
 
 function load(): void {
+  const db=sharedDb();
+  if(db){
+    if(loaded && db.inTransaction)return;
+    state=JSON.parse((db.prepare("SELECT body FROM team_state WHERE id=1").get() as {body:string}).body);loaded=true;return;
+  }
   if (loaded) return;
   loaded = true;
   try {
@@ -90,12 +139,17 @@ const norm = (s: unknown) => String(s || "").toLowerCase().trim();
 /* ── Presence ── */
 export function touchPresence(user: string): void {
   const u = norm(user);
-  if (u) presence.set(u, Date.now());
+  if(u){
+    const db=sharedDb();
+    if(db)db.prepare("INSERT OR REPLACE INTO team_presence(member,seen) VALUES(?,?)").run(u,Date.now());
+    else presence.set(u,Date.now());
+  }
 }
 export function getPresence(): Record<string, { lastSeen: string | null; online: boolean }> {
   const out: Record<string, { lastSeen: string | null; online: boolean }> = {};
   for (const m of ["marco", "wesley", "carlos"]) {
-    const t = presence.get(m);
+    const db=sharedDb();
+    const t = db ? (db.prepare("SELECT seen FROM team_presence WHERE member=?").get(m) as {seen:number}|undefined)?.seen : presence.get(m);
     out[m] = { lastSeen: t ? new Date(t).toISOString() : null, online: !!t && Date.now() - t < 70000 };
   }
   return out;
@@ -105,10 +159,11 @@ export function getPresence(): Record<string, { lastSeen: string | null; online:
 export function addNotification(
   n: Omit<TeamNotification, "id" | "at">,
 ): TeamNotification {
+  const db=sharedDb();if(db && !db.inTransaction)return transaction(()=>addNotification(n));
   load();
   const entry: TeamNotification = { ...n, user: norm(n.user), id: randomUUID(), at: nowIso() };
   state.notifications.push(entry);
-  if (state.notifications.length > MAX_NOTIFICATIONS) {
+  if (!sharedDb() && state.notifications.length > MAX_NOTIFICATIONS) {
     state.notifications = state.notifications.slice(-MAX_NOTIFICATIONS);
   }
   persist();
@@ -122,6 +177,7 @@ export function getNotifications(user: string, limit = 100): TeamNotification[] 
 }
 
 export function markNotificationsRead(user: string, ids?: string[]): number {
+  const db=sharedDb();if(db && !db.inTransaction)return transaction(()=>markNotificationsRead(user,ids));
   load();
   const u = norm(user);
   const idSet = ids && ids.length ? new Set(ids) : null;
@@ -138,6 +194,7 @@ export function markNotificationsRead(user: string, ids?: string[]): number {
 
 /* ── Chat ── */
 export function addChatMessage(from: string, to: string, text: string): TeamChatMessage {
+  const db=sharedDb();if(db && !db.inTransaction)return transaction(()=>addChatMessage(from,to,text));
   load();
   const msg: TeamChatMessage = {
     id: randomUUID(),
@@ -147,7 +204,7 @@ export function addChatMessage(from: string, to: string, text: string): TeamChat
     at: nowIso(),
   };
   state.chats.push(msg);
-  if (state.chats.length > MAX_CHATS) state.chats = state.chats.slice(-MAX_CHATS);
+  if (!sharedDb() && state.chats.length > MAX_CHATS) state.chats = state.chats.slice(-MAX_CHATS);
   persist();
   addNotification({
     user: msg.to,
@@ -170,6 +227,7 @@ export function getChat(me: string, withUser: string, limit = 200): TeamChatMess
 
 /** Mark everything the peer sent me as read; returns count. */
 export function markChatRead(me: string, withUser: string): number {
+  const db=sharedDb();if(db && !db.inTransaction)return transaction(()=>markChatRead(me,withUser));
   load();
   const a = norm(me), b = norm(withUser);
   let n = 0;
@@ -206,6 +264,7 @@ function taskDueEpoch(t: { dueDate?: string; dueTime?: string }): number | null 
 }
 
 function dueSoonTick(): void {
+  const db=sharedDb();if(db && !db.inTransaction)return transaction(()=>dueSoonTick());
   load();
   const now = Date.now();
   const FIFTEEN = 15 * 60 * 1000;
@@ -233,7 +292,7 @@ function dueSoonTick(): void {
     }
   }
   if (changed) {
-    state.dueNotified = state.dueNotified.slice(-1000);
+    if(!sharedDb())state.dueNotified = state.dueNotified.slice(-1000);
     persist();
   }
 }
