@@ -20,3 +20,23 @@ console.log(JSON.stringify({recoveryAudit:'passed',sourceRecords,restored,active
 db.close();
 const workPath=join(process.env.HARVEY_WORK_DIR || join(root,'harvey-work'),'work.db');
 if(existsSync(workPath)){const work=new Database(workPath,{readonly:true});assert.equal(work.pragma('quick_check',{simple:true}),'ok');console.log(JSON.stringify({workIntegrity:'ok',chats:work.prepare("SELECT count(*) AS count FROM records WHERE kind='chat'").get().count,agents:work.prepare("SELECT count(*) AS count FROM records WHERE kind='schedule'").get().count,messages:work.prepare('SELECT count(*) AS count FROM messages').get().count}));work.close();}
+
+// The shared collaboration import preserves original files and every retained ID.
+const teamPath=join(root,'shared-team.db');
+assert(existsSync(teamPath),'Shared team store is not initialized');
+const team=new Database(teamPath,{readonly:true});
+assert.equal(team.pragma('quick_check',{simple:true}),'ok');
+const current=JSON.parse(team.prepare('SELECT body FROM team_state WHERE id=1').get().body);
+const receipts=team.prepare('SELECT source,body FROM team_imports').all();
+let retainedMessages=0,retainedNotifications=0;
+for(const receipt of receipts){
+  assert.equal(readFileSync(receipt.source,'utf8'),receipt.body,'A retained team source changed');
+  const old=JSON.parse(receipt.body);
+  for(const key of ['chats','notifications']){
+    const ids=new Set(current[key].map(x=>x.id));
+    for(const item of old[key]||[])assert(ids.has(item.id),'A retained team record is missing');
+  }
+  retainedMessages+=(old.chats||[]).length;retainedNotifications+=(old.notifications||[]).length;
+}
+console.log(JSON.stringify({teamIntegrity:'ok',preservedFiles:receipts.length,retainedMessages,retainedNotifications,messages:current.chats.length,notifications:current.notifications.length}));
+team.close();

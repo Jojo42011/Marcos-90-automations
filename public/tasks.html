@@ -1571,6 +1571,7 @@
     }
 
     async function submitQuickTask() {
+      await taskIdentityReady; if(!taskActor)return;
       const parsed = parseTaskInput(quickInput.value);
       if (!parsed) return;
 
@@ -1593,7 +1594,8 @@
             color: "blue",
             status: "pending",
             assignedTo: activePerson(),
-            createdBy: activePerson(),
+            createdBy: creator(),
+            expectedActorId: taskActor.id,
             dueDate: impliedDue,
           }),
         });
@@ -1675,7 +1677,7 @@
           }
 
           if (task.recurring) {
-            await createRecurringTask(task);
+            await loadTasks(); // The server already creates the next recurrence.
           }
 
           setTimeout(() => {
@@ -1748,55 +1750,6 @@
       }
     }
 
-    async function createRecurringTask(completedTask) {
-      const INTERVAL_DAYS = {
-        daily: 1,
-        every_3_days: 3,
-        every_5_days: 5,
-        weekly: 7,
-        monthly: 30,
-      };
-      const days = INTERVAL_DAYS[completedTask.recurringInterval] || 7;
-      const nextDue = new Date();
-      nextDue.setDate(nextDue.getDate() + days);
-
-      try {
-        const { task: newTask } = await apiFetch("/api/tasks", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: completedTask.title,
-            description: completedTask.description,
-            column: completedTask.column,
-            color: completedTask.color,
-            recurring: true,
-            recurringInterval: completedTask.recurringInterval,
-            assignedTo: completedTask.assignedTo,
-            createdBy: "system",
-            dueDate: nextDue.toISOString().split("T")[0],
-            tags: completedTask.tags || [],
-          }),
-        });
-
-        tasks.push(newTask);
-        const colBody = document.getElementById("col-body-" + newTask.column);
-        if (colBody) {
-          const empty = colBody.querySelector(".col-empty-state");
-          if (empty) empty.remove();
-          const tempDiv = document.createElement("div");
-          tempDiv.innerHTML = buildTaskCard(newTask).trim();
-          const newCard = tempDiv.firstElementChild;
-          colBody.insertBefore(newCard, colBody.firstChild);
-          applyFilter();
-        }
-
-        showToast("↻ Recurring task rescheduled - due " + formatDate(nextDue.toISOString()), "success");
-      } catch (err) {
-        console.error("[Tasks] Recurring create failed:", err);
-        showToast("Failed to reschedule recurring task", "error");
-      }
-    }
-
     function openEditModal(id) {
       const task = tasks.find(t => t.id === id);
       if (task) openModal(task);
@@ -1853,6 +1806,7 @@
     }
 
     async function saveModal() {
+      await taskIdentityReady; if(!taskActor)return;
       const title = document.getElementById("m-title").value.trim();
       if (!title) return;
       const isRecurring = document.getElementById("modal-recurring")?.checked || false;
@@ -1881,7 +1835,8 @@
       }
       if (!editId) {
         payload.status = "pending";
-        payload.createdBy = activePerson();
+        payload.createdBy = creator();
+        payload.expectedActorId = taskActor.id;
       }
 
       try {
@@ -1968,7 +1923,10 @@
       carlos: ["carlos"],
       wesley:   ["wesley"],
     };
-    var TASK_USER_KEY = "marcoTaskUser";
+    var TASK_USER_KEY = "classicTaskView";
+    var taskActor = null;
+    var taskIdentityReady = apiFetch("/api/auth/me").then(function(d){taskActor=d.user;}).catch(function(){showToast("Sign in before creating tasks", "error");});
+    function creator(){if(!taskActor)throw new Error("Sign in before creating tasks");return taskActor.name.trim().split(/\s+/)[0].toLowerCase();}
 
     function getStoredTaskUser() {
       try { return localStorage.getItem(TASK_USER_KEY) || ""; } catch (_) { return ""; }
@@ -1976,10 +1934,10 @@
     function currentView() {
       return document.getElementById("filter-assigned").value || "everyone";
     }
-    // Who new tasks belong to. In the team ("everyone") view, default to Marco.
+    // The filter selects an assignee, never the task creator.
     function activePerson() {
       const v = currentView();
-      return v === "everyone" ? "marco" : v;
+      return v === "everyone" ? (taskActor ? creator() : "") : v;
     }
     function updateTaskUserUi() {
       const v = currentView();
@@ -1998,7 +1956,7 @@
       applyFiltersToCards();
       // Keep push targeting aligned with who's logged in on this device.
       if (typeof subscribeToPush === "function" && notifySupported() && Notification.permission === "granted") {
-        subscribeToPush(v);
+        if(taskActor)return subscribeToPush(creator());
       }
     }
     function buildUserGate() {
@@ -2014,7 +1972,7 @@
       const ev = document.getElementById("user-gate-everyone");
       if (ev) ev.addEventListener("click", () => { closeUserGate(); setTaskUser("everyone"); });
     }
-    function openUserGate() { document.getElementById("user-gate").classList.add("open"); }
+    function openUserGate() { window.top.location.href="/login?switch=1&next="+encodeURIComponent(window.top.location.pathname+window.top.location.search); }
     function closeUserGate() { document.getElementById("user-gate").classList.remove("open"); }
 
     document.getElementById("switch-user").addEventListener("click", openUserGate);
@@ -2174,7 +2132,7 @@
         if (perm === "granted") {
           try { localStorage.setItem(NOTIFY_PERM_KEY, "1"); } catch (_) {}
           // Register for always-on push so reminders fire even when closed.
-          const pushed = await subscribeToPush(currentView());
+          const pushed = await taskIdentityReady.then(function(){if(taskActor)return subscribeToPush(creator());});
           showToast(
             pushed
               ? "🔔 Always-on reminders on - even when the app is closed"
@@ -2315,7 +2273,7 @@
     // Already granted on a prior visit? Make sure the server still has an
     // up-to-date push subscription for this device + current person.
     if (pushSupported() && Notification.permission === "granted") {
-      subscribeToPush(currentView());
+      taskIdentityReady.then(function(){if(taskActor)return subscribeToPush(creator());});
     }
 
     buildColorSwatches();
@@ -2330,7 +2288,7 @@
     updateTaskUserUi();
     // First visit on this device: ask who's on so they land in their own center.
     // Independent of task loading so it always shows.
-    if (!storedTaskUser) openUserGate();
+    // Views are filters; only real sign-in changes the account.
 
     loadTasks()
       .then(() => {

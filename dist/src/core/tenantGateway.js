@@ -161,7 +161,7 @@ function accountMiddleware(sessionUser, internal, machine = () => false) {
             const selected = (req.headers.cookie || "").split(";").map(s => s.trim()).find(s => s.startsWith("mp_workspace="))?.slice(13);
             // Task Command is a shared service. Always use the signed-in actor for
             // task reads and writes, even while viewing another account's CRM.
-            const sharedTasks = /^\/api\/tasks(?:\/|$)/.test(req.path);
+            const sharedTasks = /^\/api\/(?:tasks(?:\/|$)|team(?:\/|$)|settings\/(?:command|layout)$)/.test(req.path);
             const workspace = selected && (0, workspaceAccess_js_1.canViewWorkspace)(user, selected) ? selected : user.id;
             const owner = sharedTasks ? user.id : workspace;
             if (owner !== user.id && !(0, workspaceAccess_js_1.workspaceReadAllowed)(req.method, req.path)) {

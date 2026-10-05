@@ -18,6 +18,8 @@ const users = ['Marco', 'Wesley', 'Carlos'].map(name => ({ id: name.toLowerCase(
   email: name.toLowerCase()+'@example.com', role: name === 'Marco' ? 'admin' : 'agent', active: true,
   passwordHash: auth.hashPassword('fixture-only-password'), createdAt: new Date().toISOString() }));
 writeFileSync(join(root, 'users.json'), JSON.stringify(users));
+const retainedTeam=JSON.stringify({chats:[{id:'retained-message',from:'wesley',to:'carlos',text:'Keep this message',at:'2026-09-01T00:00:00Z'}],notifications:[],dueNotified:[]});
+writeFileSync(join(root,'team.json'),retainedTeam);
 const legacy = JSON.stringify({ idCounter: 2, leadsById: { old: {id:'old',name:'Legacy private contact'} }, leadKeyToId:{}, conversationsByLeadId:{}, commandTasks:users.map(u=>({id:"retained-"+u.id,title:u.name+" retained task",assignedTo:u.id,createdBy:u.id,column:"today",status:u.id==="wesley"?"done":"pending",checklist:[{id:"step",text:"Preserve this",done:true}],createdAt:"2026-09-01T00:00:00Z",updatedAt:"2026-09-01T00:00:00Z"})) });
 writeFileSync(join(root, 'local-dashboard-db.json'), legacy);
 writeFileSync(join(root,'marco-tasks.json'),JSON.stringify([{id:'legacy-personal',title:'Retained personal task',priority:'high',status:'pending',createdAt:'2026-09-01T00:00:00Z',updatedAt:'2026-09-01T00:00:00Z'}]));
@@ -27,6 +29,8 @@ const { tenantEnvironment } = require('../dist/src/core/tenantGateway.js');
 const isolatedEnv = tenantEnvironment('marco', { ...process.env, BRIVITY_API_KEY:'must-not-copy', GMAIL_REFRESH_TOKEN:'must-not-copy', DB_JSON_PATH:join(root,'private-legacy.json'), HARVEY_PUBLIC_URL:'https://example.invalid' });
 assert.equal(isolatedEnv.BRIVITY_API_KEY,undefined);assert.equal(isolatedEnv.GMAIL_REFRESH_TOKEN,undefined);assert.equal(isolatedEnv.DB_JSON_PATH,undefined);
 assert.equal(isolatedEnv.HARVEY_PUBLIC_URL,'https://example.invalid');
+const retainedAccountTeam=JSON.stringify({chats:[{id:'retained-account-message',from:'marco',to:'carlos',text:'Keep account message',at:'2026-09-02T00:00:00Z'}],notifications:[],dueNotified:[]});
+writeFileSync(join(isolatedEnv.TENANT_DATA_ROOT,'team.json'),retainedAccountTeam);
 work.lockChat('unrelated-owner','unrelated-chat');
 const preserved = work.createChat('marco', {title:'Existing private chat'});
 work.append('marco',preserved.id,{role:'user',content:'Preserved private message',at:new Date().toISOString()});
@@ -75,6 +79,18 @@ try {
  assert.equal(JSON.stringify((await request('/api/tasks',cookies.carlos)).data.tasks),beforeMismatch);
  check('stale account pages cannot silently create misattributed tasks or modify existing data',()=>assert.ok(true));
  check('retained tasks restored with status/checklists, cross-account assignment, spoof resistance and concurrent writes',()=>assert.ok(true));
+
+ const notices=await request('/api/team/notifications?user=wesley',cookies.wesley);
+ assert(notices.data.notifications.some(n=>n.taskId===assigned.data.task.id));
+ const deliveries=await Promise.all(users.map(u=>request('/api/team/chat',cookies[u.id],'POST',{from:'forged',to:users.find(v=>v.id!==u.id).id,text:u.id+' cross-account message'})));
+ for(let i=0;i<users.length;i++){
+   assert.equal(deliveries[i].status,200);assert.equal(deliveries[i].data.message.from,users[i].id);
+   const recipient=deliveries[i].data.message.to;
+   const read=await request('/api/team/chat?me=forged&with='+users[i].id,cookies[recipient]);
+   assert(read.data.messages.some(m=>m.id===deliveries[i].data.message.id));
+ }
+ assert((await request('/api/team/chat?me=carlos&with=wesley',cookies.carlos)).data.messages.some(m=>m.id==='retained-message'));
+ check('assignment notifications and concurrent team messages reach the correct account, with authentic senders and retained history',()=>assert.ok(true));
  check('existing account passwords survive provisioning',()=>assert.equal(Object.keys(cookies).length,3));
  check('business credentials and legacy database overrides are not inherited',()=>assert.ok(isolatedEnv.TENANT_DATA_ROOT.includes('accounts')));
  for(const user of users){
@@ -125,6 +141,11 @@ try {
  assert.equal((await request('/api/account/workspace?id=marco',cookies.wesley,'POST')).status,403);
  const selection=await request('/api/account/workspace?id=marco',cookies.carlos,'POST');assert.equal(selection.status,200);
  const delegated=cookies.carlos+'; '+selection.cookie;
+ assert.equal((await request('/api/settings/command',delegated,'PUT',{timeZone:'America/Chicago',updatedBy:'carlos'})).status,200);
+ assert((await request('/api/team/notifications?user=marco',delegated)).data.notifications.every(n=>n.user==='carlos'));
+ assert.equal((await request('/api/team/chat/read',delegated,'POST',{me:'marco',with:'wesley'})).status,200);
+ assert((await request('/api/team/chat?me=carlos&with=wesley',delegated)).data.messages.find(m=>m.id==='retained-message').readAt);
+ check('Carlos can use personal Task Center settings, notifications and chat while viewing Marco workspace',()=>assert.ok(true));
  assert.equal((await request('/api/dashboard/data?includePhoneless=1',delegated)).data.leads[0].name,'Marco private');
  assert.equal((await request('/api/harvey/conversations/'+preserved.id,delegated)).data.messages[0].content,'Preserved private message');
  assert.equal((await request('/api/harvey/work/schedules',delegated)).data.schedules[0].id,schedules.marco);
@@ -138,6 +159,12 @@ try {
  for(const user of users){assert((await request('/api/harvey/conversations/'+chats[user.id],cookies[user.id])).data.id);assert.equal((await request('/api/harvey/work/schedules',cookies[user.id])).data.schedules[0].id,schedules[user.id]);}
  check('tasks, chats and agents survive process restart; restoration is idempotent and respects explicit deletion',()=>assert.ok(true));
  for(const user of users){const dashboard=await request('/api/dashboard/data?includePhoneless=1',cookies[user.id]);assert.equal(dashboard.data.leads[0].name,user.name+' private');}
+ assert.equal(readFileSync(join(root,'team.json'),'utf8'),retainedTeam);
+ assert.equal(readFileSync(join(isolatedEnv.TENANT_DATA_ROOT,'team.json'),'utf8'),retainedAccountTeam);
+ assert((await request('/api/team/chat?me=carlos&with=marco',cookies.carlos)).data.messages.some(m=>m.id==='retained-account-message'));
+ assert((await request('/api/team/chat?me=carlos&with=wesley',cookies.carlos)).data.messages.some(m=>m.id==='retained-message'));
+ for(let i=0;i<users.length;i++)assert((await request('/api/team/chat?me=ignored&with='+users[i].id,cookies[deliveries[i].data.message.to])).data.messages.some(m=>m.id===deliveries[i].data.message.id));
+ check('shared collaboration persists across restart and leaves original files byte-for-byte intact',()=>assert.ok(true));
  check('each CRM persists separately across a complete server restart',()=>assert.ok(true));
  check('legacy shared CRM file is preserved byte-for-byte',()=>assert.equal(readFileSync(join(root,'local-dashboard-db.json'),'utf8'),legacy));
  const dmHook={id:'fixture-marco-event',event:'message.received',account:{accountId:'marco-social',platform:'tiktok'},message:{id:'fixture-inbound',conversationId:'fixture-marco',platform:'tiktok',direction:'incoming',text:'Yes, this is my first home',sender:{id:'fixture-marco-lead',username:'fixture_lead'}},conversation:{id:'fixture-marco',participantId:'fixture-marco-lead'}};
@@ -177,6 +204,36 @@ try {
      await page.locator('[data-tab="active"]').click();await page.locator('#openAdd').click();await page.locator('#tTitle').fill('Keep failed task draft');
      await page.route('**/api/tasks',route=>route.request().method()==='POST'?route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:'Fixture save rejected'})}):route.continue());
      await page.locator('#tmSave').click();await page.getByText('Fixture save rejected',{exact:true}).waitFor();assert.equal(await page.locator('#tTitle').inputValue(),'Keep failed task draft');assert(await page.locator('#taskScrim.on').isVisible());
+
+     await page.unroute('**/api/tasks');
+     // Exercise the actual account-switch control, not just pre-created cookies.
+     const signins=await browser.newContext({viewport:{width:1500,height:1000}});
+     await signins.route('**/*',route=>route.request().url().startsWith(base+'/')?route.continue():route.abort());
+     const accountPage=await signins.newPage();accountPage.on('pageerror',e=>errors.push(e.message));
+     await accountPage.goto(base+'/login?switch=1&next=%2Fteam-tasks');
+     for(const user of users){
+       await accountPage.locator('#email').fill(user.email);await accountPage.locator('#password').fill('fixture-only-password');
+       await accountPage.locator('#submitBtn').click();await accountPage.waitForURL(base+'/team-tasks');
+       await accountPage.waitForFunction(name=>document.querySelector('#meName')?.textContent===name,user.name);
+       await accountPage.locator('#quickTitle').fill(user.name+' UI assignment');await accountPage.locator('#openAdd').click();
+       const recipient=users.find(u=>u.id!==user.id).id;await accountPage.locator('#tWho').selectOption(recipient);
+       const response=accountPage.waitForResponse(r=>r.url().endsWith('/api/tasks')&&r.request().method()==='POST');
+       await accountPage.locator('#tmSave').click();const created=await response;assert.equal(created.status(),200);assert.equal((await created.json()).task.createdBy,user.id);
+       await accountPage.locator('#taskScrim.on').waitFor({state:'hidden'});
+
+       await accountPage.goto(base+'/tasks-classic');
+       await accountPage.locator('#filter-assigned').selectOption(recipient);
+       await accountPage.evaluate(async title=>{await taskIdentityReady;quickInput.value=title;await submitQuickTask();},user.name+' classic assignment');
+       const classic=(await request('/api/tasks',cookies[user.id])).data.tasks.find(t=>t.title===user.name+' classic assignment');
+       assert(classic);assert.equal(classic.createdBy,user.id);assert.equal(classic.assignedTo,recipient);
+       await accountPage.goto(base+'/shell');await accountPage.locator('[data-key="tasks"]').click();
+       const frame=accountPage.frameLocator('#frame-tasks');
+       await frame.locator('#meChip').click();await frame.locator('#switchUserBtn').click();
+       await accountPage.waitForURL(/\/login\?switch=1/);
+       await accountPage.goto(base+'/login?switch=1&next=%2Fteam-tasks');
+     }
+     await signins.close();
+     check('real sign-in and Switch user flow creates correctly attributed assignments for Marco, Wesley and Carlos in the same browser',()=>assert.ok(true));
      assert.deepEqual(errors,[]);
      check('real task page shows other-member recurring, future and completed tasks; creates assignments while another workspace is selected; rejected saves retain drafts',()=>assert.ok(true));
    } finally {await browser.close();}

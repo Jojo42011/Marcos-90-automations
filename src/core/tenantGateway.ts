@@ -121,7 +121,7 @@ export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null,
       const selected=(req.headers.cookie || "").split(";").map(s=>s.trim()).find(s=>s.startsWith("mp_workspace="))?.slice(13);
       // Task Command is a shared service. Always use the signed-in actor for
       // task reads and writes, even while viewing another account's CRM.
-      const sharedTasks = /^\/api\/tasks(?:\/|$)/.test(req.path);
+      const sharedTasks = /^\/api\/(?:tasks(?:\/|$)|team(?:\/|$)|settings\/(?:command|layout)$)/.test(req.path);
       const workspace=selected && canViewWorkspace(user,selected) ? selected : user.id;
       const owner=sharedTasks ? user.id : workspace;
       if (owner !== user.id && !workspaceReadAllowed(req.method,req.path)) {res.status(403).json({error:"This workspace is read-only. Return to your workspace to make changes."});return;}

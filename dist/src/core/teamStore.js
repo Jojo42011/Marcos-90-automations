@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.touchPresence = touchPresence;
 exports.getPresence = getPresence;
@@ -10,12 +13,13 @@ exports.getChat = getChat;
 exports.markChatRead = markChatRead;
 exports.chatUnreadCounts = chatUnreadCounts;
 exports.initTeamStore = initTeamStore;
+const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const tenantData_js_1 = require("./tenantData.js");
 /**
  * Team collaboration store for the Task Command Center — direct chat,
  * notifications (assignments / due-soon / messages), and lightweight presence.
  * File-backed (same pattern as pushStore): /data/team.json on Fly, ./data
- * locally. Identity model matches the task board: device-picked member ids
+ * locally. Identity comes from the authenticated account: member ids
  * (marco/wesley/carlos).
  */
 const fs_1 = require("fs");
@@ -36,7 +40,69 @@ const MAX_NOTIFICATIONS = 2000;
 let state = { chats: [], notifications: [], dueNotified: [] };
 const presence = new Map(); // member id -> last-seen epoch ms
 let loaded = false;
+// One transactional store for team collaboration across account workers.
+// Import existing files additively; never rewrite or remove the source files.
+let shared;
+function sharedDb() {
+    if (process.env.ACCOUNT_ISOLATION !== "true")
+        return undefined;
+    if (shared)
+        return shared;
+    const root = (0, path_1.dirname)(process.env.SHARED_TASK_DB_PATH || (0, tenantData_js_1.dataPath)("shared-tasks.db"));
+    (0, fs_1.mkdirSync)(root, { recursive: true });
+    const db = new better_sqlite3_1.default((0, path_1.join)(root, "shared-team.db"));
+    try {
+        db.pragma("journal_mode = WAL");
+        db.pragma("busy_timeout = 10000");
+        db.pragma("synchronous = FULL");
+        db.exec("CREATE TABLE IF NOT EXISTS team_state(id INTEGER PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS team_imports(source TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS team_presence(member TEXT PRIMARY KEY, seen INTEGER NOT NULL);");
+        db.transaction(() => {
+            const row = db.prepare("SELECT body FROM team_state WHERE id=1").get();
+            const merged = row ? JSON.parse(row.body) : { chats: [], notifications: [], dueNotified: [] };
+            const sources = [process.env.TEAM_JSON_PATH, (0, path_1.join)(root, "team.json")].filter((x) => !!x);
+            const accounts = (0, path_1.join)(root, "accounts");
+            if ((0, fs_1.existsSync)(accounts))
+                for (const entry of (0, fs_1.readdirSync)(accounts, { withFileTypes: true }))
+                    if (entry.isDirectory())
+                        sources.push((0, path_1.join)(accounts, entry.name, "team.json"));
+            for (const source of sources) {
+                if (!(0, fs_1.existsSync)(source) || db.prepare("SELECT 1 FROM team_imports WHERE source=?").get(source))
+                    continue;
+                // Invalid files fail visibly instead of replacing retained records with emptiness.
+                const raw = (0, fs_1.readFileSync)(source, "utf8"), old = JSON.parse(raw);
+                for (const key of ["chats", "notifications"]) {
+                    const ids = new Set(merged[key].map(x => x.id));
+                    for (const item of old[key] || [])
+                        if (!ids.has(item.id)) {
+                            merged[key].push(item);
+                            ids.add(item.id);
+                        }
+                }
+                merged.dueNotified = [...new Set([...merged.dueNotified, ...(old.dueNotified || [])])];
+                db.prepare("INSERT INTO team_imports(source,body) VALUES(?,?)").run(source, raw);
+            }
+            merged.chats.sort((a, b) => a.at.localeCompare(b.at));
+            merged.notifications.sort((a, b) => a.at.localeCompare(b.at));
+            db.prepare("INSERT OR REPLACE INTO team_state(id,body) VALUES(1,?)").run(JSON.stringify(merged));
+        }).immediate();
+        shared = db;
+    }
+    catch (error) {
+        db.close();
+        throw error;
+    }
+    return shared;
+}
+function transaction(fn) {
+    const db = sharedDb();
+    return db.transaction(() => { loaded = false; return fn(); }).immediate();
+}
 function persist() {
+    const db = sharedDb();
+    if (db) {
+        db.prepare("UPDATE team_state SET body=? WHERE id=1").run(JSON.stringify(state));
+        return;
+    }
     try {
         (0, fs_1.mkdirSync)((0, path_1.dirname)(PATH), { recursive: true });
         (0, fs_1.writeFileSync)(PATH, JSON.stringify(state), "utf8");
@@ -46,6 +112,14 @@ function persist() {
     }
 }
 function load() {
+    const db = sharedDb();
+    if (db) {
+        if (loaded && db.inTransaction)
+            return;
+        state = JSON.parse(db.prepare("SELECT body FROM team_state WHERE id=1").get().body);
+        loaded = true;
+        return;
+    }
     if (loaded)
         return;
     loaded = true;
@@ -69,23 +143,32 @@ const norm = (s) => String(s || "").toLowerCase().trim();
 /* ── Presence ── */
 function touchPresence(user) {
     const u = norm(user);
-    if (u)
-        presence.set(u, Date.now());
+    if (u) {
+        const db = sharedDb();
+        if (db)
+            db.prepare("INSERT OR REPLACE INTO team_presence(member,seen) VALUES(?,?)").run(u, Date.now());
+        else
+            presence.set(u, Date.now());
+    }
 }
 function getPresence() {
     const out = {};
     for (const m of ["marco", "wesley", "carlos"]) {
-        const t = presence.get(m);
+        const db = sharedDb();
+        const t = db ? db.prepare("SELECT seen FROM team_presence WHERE member=?").get(m)?.seen : presence.get(m);
         out[m] = { lastSeen: t ? new Date(t).toISOString() : null, online: !!t && Date.now() - t < 70000 };
     }
     return out;
 }
 /* ── Notifications ── */
 function addNotification(n) {
+    const db = sharedDb();
+    if (db && !db.inTransaction)
+        return transaction(() => addNotification(n));
     load();
     const entry = { ...n, user: norm(n.user), id: (0, crypto_1.randomUUID)(), at: nowIso() };
     state.notifications.push(entry);
-    if (state.notifications.length > MAX_NOTIFICATIONS) {
+    if (!sharedDb() && state.notifications.length > MAX_NOTIFICATIONS) {
         state.notifications = state.notifications.slice(-MAX_NOTIFICATIONS);
     }
     persist();
@@ -97,6 +180,9 @@ function getNotifications(user, limit = 100) {
     return state.notifications.filter((n) => n.user === u).slice(-limit).reverse();
 }
 function markNotificationsRead(user, ids) {
+    const db = sharedDb();
+    if (db && !db.inTransaction)
+        return transaction(() => markNotificationsRead(user, ids));
     load();
     const u = norm(user);
     const idSet = ids && ids.length ? new Set(ids) : null;
@@ -115,6 +201,9 @@ function markNotificationsRead(user, ids) {
 }
 /* ── Chat ── */
 function addChatMessage(from, to, text) {
+    const db = sharedDb();
+    if (db && !db.inTransaction)
+        return transaction(() => addChatMessage(from, to, text));
     load();
     const msg = {
         id: (0, crypto_1.randomUUID)(),
@@ -124,7 +213,7 @@ function addChatMessage(from, to, text) {
         at: nowIso(),
     };
     state.chats.push(msg);
-    if (state.chats.length > MAX_CHATS)
+    if (!sharedDb() && state.chats.length > MAX_CHATS)
         state.chats = state.chats.slice(-MAX_CHATS);
     persist();
     addNotification({
@@ -146,6 +235,9 @@ function getChat(me, withUser, limit = 200) {
 }
 /** Mark everything the peer sent me as read; returns count. */
 function markChatRead(me, withUser) {
+    const db = sharedDb();
+    if (db && !db.inTransaction)
+        return transaction(() => markChatRead(me, withUser));
     load();
     const a = norm(me), b = norm(withUser);
     let n = 0;
@@ -187,6 +279,9 @@ function taskDueEpoch(t) {
     return isNaN(d.getTime()) ? null : d.getTime();
 }
 function dueSoonTick() {
+    const db = sharedDb();
+    if (db && !db.inTransaction)
+        return transaction(() => dueSoonTick());
     load();
     const now = Date.now();
     const FIFTEEN = 15 * 60 * 1000;
@@ -218,7 +313,8 @@ function dueSoonTick() {
         }
     }
     if (changed) {
-        state.dueNotified = state.dueNotified.slice(-1000);
+        if (!sharedDb())
+            state.dueNotified = state.dueNotified.slice(-1000);
         persist();
     }
 }

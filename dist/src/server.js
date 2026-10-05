@@ -12480,7 +12480,7 @@ app.get("/api/team/roster", (_req, res) => {
     res.json({ members: (0, teamRoster_js_1.listTeamMembers)() });
 });
 app.get("/api/team/notifications", (req, res) => {
-    const user = String(req.query.user || "").toLowerCase();
+    const user = sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || String(req.query.user || "").toLowerCase();
     if (!user) {
         res.status(400).json({ error: "user required" });
         return;
@@ -12494,10 +12494,10 @@ app.post("/api/team/notifications/read", express_1.default.json({ limit: "64kb" 
         res.status(400).json({ error: "user required" });
         return;
     }
-    res.json({ marked: (0, teamStore_js_1.markNotificationsRead)(body.user, body.ids) });
+    res.json({ marked: (0, teamStore_js_1.markNotificationsRead)(sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || body.user, body.ids) });
 });
 app.get("/api/team/chat", (req, res) => {
-    const me = String(req.query.me || "").toLowerCase();
+    const me = sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || String(req.query.me || "").toLowerCase();
     const withUser = String(req.query.with || "").toLowerCase();
     if (!me || !withUser) {
         res.status(400).json({ error: "me and with required" });
@@ -12512,8 +12512,9 @@ app.post("/api/team/chat", express_1.default.json({ limit: "64kb" }), (req, res)
         res.status(400).json({ error: "from, to, text required" });
         return;
     }
-    (0, teamStore_js_1.touchPresence)(body.from);
-    res.json({ message: (0, teamStore_js_1.addChatMessage)(body.from, body.to, String(body.text).trim()) });
+    const from = sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || body.from;
+    (0, teamStore_js_1.touchPresence)(from);
+    res.json({ message: (0, teamStore_js_1.addChatMessage)(from, body.to, String(body.text).trim()) });
 });
 app.post("/api/team/chat/read", express_1.default.json({ limit: "64kb" }), (req, res) => {
     const body = (req.body || {});
@@ -12521,7 +12522,7 @@ app.post("/api/team/chat/read", express_1.default.json({ limit: "64kb" }), (req,
         res.status(400).json({ error: "me and with required" });
         return;
     }
-    res.json({ marked: (0, teamStore_js_1.markChatRead)(body.me, body.with) });
+    res.json({ marked: (0, teamStore_js_1.markChatRead)(sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || body.me, body.with) });
 });
 app.get("/api/team/presence", (_req, res) => {
     res.json({ presence: (0, teamStore_js_1.getPresence)() });
