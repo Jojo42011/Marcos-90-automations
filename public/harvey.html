@@ -371,6 +371,7 @@ table.data select:focus{border-color:var(--line-2)}
 }
 </style>
 <link rel="stylesheet" href="/harvey-work.css">
+<link rel="stylesheet" href="/harvey-computer.css">
 </head>
 <body>
 <div id="app">
@@ -438,6 +439,7 @@ table.data select:focus{border-color:var(--line-2)}
       </button>
       <span class="title" id="viewTitle">Harvey</span><div class="work-mode" role="group" aria-label="Conversation mode"><button type="button" data-mode="chat" aria-pressed="true">Chat</button><button type="button" data-mode="work" aria-pressed="false">Work</button><select id="modeSelect" hidden aria-label="Conversation mode"><option value="chat">Chat</option><option value="work">Work</option></select></div>
       <button type="button" id="handoffWork" class="work-button">Plan in Work</button><span class="grow"></span>
+      <button type="button" id="computerPanelOpen" class="work-button" aria-controls="computerPanel" aria-expanded="false">Computer</button>
       <button type="button" id="taskPanelOpen" class="work-button" aria-controls="taskPanel" aria-expanded="false">Tasks</button><span class="pill-status" id="providerPill" hidden></span>
       <button class="icon-btn" id="themeBtn" aria-label="Switch between dark and light theme" title="Switch theme">
         <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
@@ -536,7 +538,14 @@ table.data select:focus{border-color:var(--line-2)}
 <div id="toast" role="status" aria-live="polite"></div>
 
 <aside id="taskPanel" aria-label="Scheduled tasks" hidden><header><h2>Tasks</h2><button type="button" id="taskPanelClose" class="icon-btn" aria-label="Close tasks">×</button></header><div id="taskPanelBody" aria-live="polite"></div></aside>
+<aside id="computerPanel" aria-label="This chat’s computer" hidden>
+  <header><div><h2>Computer</h2><p class="computer-eyebrow">This chat’s hosted browser</p></div><button type="button" id="computerPanelClose" class="icon-btn" aria-label="Close computer panel">×</button></header>
+  <div class="computer-card"><div class="computer-card-top"><span class="computer-dot" aria-hidden="true"></span><span id="computerStatus" role="status">Ready when you are</span></div><img id="computerImage" alt="Current page in this chat’s browser" hidden><div id="computerEmpty">Ask Harvey to open a website in this chat.</div><div id="computerPage">No page open</div></div>
+  <div class="computer-tools"><button type="button" id="computerRefresh" class="work-button">Refresh preview</button><button type="button" id="computerExpand" class="work-button" aria-pressed="false">Expand</button></div>
+  <p id="computerActivity"></p><p id="computerCaptured"></p><p class="computer-footnote">Read-only preview · updates every few seconds while open. The capture time shows when this image was taken.</p>
+</aside>
 <dialog id="workDialog"></dialog>
+<script src="/harvey-computer.js"></script>
 <script src="/harvey-work.js"></script>
 <script src="/harvey-chat.js"></script>
 </body>

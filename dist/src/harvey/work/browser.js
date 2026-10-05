@@ -38,6 +38,7 @@ exports.browserDirectory = browserDirectory;
 exports.closeBrowser = closeBrowser;
 exports.closeBrowsers = closeBrowsers;
 exports.browserTools = browserTools;
+exports.browserPreview = browserPreview;
 exports.validateActionReferences = validateActionReferences;
 exports.browserCall = browserCall;
 exports.saveLogin = saveLogin;
@@ -113,7 +114,7 @@ async function checkpoint(s) {
     (0, fs_1.chmodSync)(pending, 0o600);
     (0, fs_1.renameSync)(pending, s.statePath);
 }
-async function closeSession(s) { try {
+async function closeSession(s) { s.closing = true; await s.preview; try {
     await checkpoint(s);
 }
 finally {
@@ -138,6 +139,87 @@ const idle = setInterval(() => { for (const [key, value] of sessions)
     } }).catch(() => { }); }, 60000);
 idle.unref();
 async function browserTools(owner, chat) { return (await session(owner, chat)).tools; }
+// Observation never opens a browser, refreshes its idle lifetime, or changes login state.
+async function browserPreview(owner, chat) {
+    if (!browserEnabled())
+        return { state: "disabled" };
+    const pending = sessions.get(owner + ":" + chat);
+    if (!pending)
+        return { state: "closed" };
+    const s = await pending;
+    if (s.closing)
+        return { state: "closed" };
+    if (!s.busy && !s.preview && (!s.frame || Date.now() - Date.parse(s.frame.capturedAt) > 3000)) {
+        s.preview = (async () => {
+            const filename = (0, path_1.join)((0, path_1.dirname)(s.statePath), "computer-preview-" + (0, crypto_1.randomUUID)() + ".jpeg");
+            try {
+                const snap = await s.client.callTool({ name: "browser_snapshot", arguments: {} }, undefined, { timeout: 10000 });
+                if (snap.isError)
+                    throw new Error("Preview unavailable");
+                const text = (snap.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+                const shot = await s.client.callTool({ name: "browser_take_screenshot", arguments: { type: "jpeg", filename } }, undefined, { timeout: 10000 });
+                if (shot.isError)
+                    throw new Error("Preview unavailable");
+                const bytes = (0, fs_1.readFileSync)(filename);
+                if (bytes.length > 4 * 1024 * 1024)
+                    throw new Error("Preview too large");
+                let url = text.match(/- Page URL: ([^\n]+)/)?.[1] || "";
+                try {
+                    const u = new URL(url);
+                    u.username = "";
+                    u.password = "";
+                    u.search = "";
+                    u.hash = "";
+                    url = u.toString();
+                }
+                catch {
+                    url = "";
+                }
+                s.frame = { image: "data:image/jpeg;base64," + bytes.toString("base64"), capturedAt: new Date().toISOString(), url, title: text.match(/- Page Title: ([^\n]+)/)?.[1] || "Browser" };
+            }
+            finally {
+                if ((0, fs_1.existsSync)(filename))
+                    (0, fs_1.unlinkSync)(filename);
+            }
+        })();
+        try {
+            await s.preview;
+        }
+        catch {
+            return { state: "unavailable", action: s.action };
+        }
+        finally {
+            s.preview = undefined;
+        }
+    }
+    else if (s.preview) {
+        try {
+            await s.preview;
+        }
+        catch {
+            return { state: "unavailable", action: s.action };
+        }
+    }
+    if (s.closing || sessions.get(owner + ":" + chat) !== pending)
+        return { state: "closed" };
+    return { state: s.busy ? "working" : s.failed ? "needs_attention" : "ready", action: s.action, frame: s.frame };
+}
+async function observedAction(s, name, fn) {
+    s.busy = (s.busy || 0) + 1;
+    s.action = name;
+    s.failed = false;
+    try {
+        await s.preview?.catch(() => { });
+        return await fn();
+    }
+    catch (e) {
+        s.failed = true;
+        throw e;
+    }
+    finally {
+        s.busy--;
+    }
+}
 function validateActionReferences(snapshot, args) {
     const refs = [args?.ref, args?.target, args?.startRef, args?.endRef, ...(Array.isArray(args?.fields) ? args.fields.flatMap((f) => [f.ref, f.target]) : [])].filter(v => typeof v === "string" && v);
     for (const ref of refs) {
@@ -167,18 +249,20 @@ async function browserCall(owner, chat, name, args) {
         return { content: [{ type: "text", text: "Browser closed; session state retained." }] };
     }
     const s = await session(owner, chat);
-    if (["browser_click", "browser_type", "browser_fill_form", "browser_select_option", "browser_hover", "browser_drag"].includes(name)) {
-        const fresh = await s.client.callTool({ name: "browser_snapshot", arguments: {} }, undefined, { timeout: 60000 });
-        if (fresh.isError)
-            throw new Error("Cannot verify the current browser page before acting");
-        validateActionReferences((fresh.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n"), args);
-    }
-    const result = await s.client.callTool({ name, arguments: args || {} }, undefined, { timeout: 60000 });
-    s.lastUsed = Date.now();
-    if (result.isError)
-        throw new Error(JSON.stringify(result.content).slice(0, 2000));
-    await checkpoint(s);
-    return result;
+    return observedAction(s, name, async () => {
+        if (["browser_click", "browser_type", "browser_fill_form", "browser_select_option", "browser_hover", "browser_drag"].includes(name)) {
+            const fresh = await s.client.callTool({ name: "browser_snapshot", arguments: {} }, undefined, { timeout: 60000 });
+            if (fresh.isError)
+                throw new Error("Cannot verify the current browser page before acting");
+            validateActionReferences((fresh.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n"), args);
+        }
+        const result = await s.client.callTool({ name, arguments: args || {} }, undefined, { timeout: 60000 });
+        s.lastUsed = Date.now();
+        if (result.isError)
+            throw new Error(JSON.stringify(result.content).slice(0, 2000));
+        await checkpoint(s);
+        return result;
+    });
 }
 function saveLogin(owner, input) {
     if (input.projectId)
@@ -197,19 +281,21 @@ async function fillSavedLogin(owner, chat, projectId, input) {
         throw new Error("Login belongs to another project");
     // Check the current page's URL from the browser itself, never the model's claim.
     const s = await session(owner, chat);
-    const snap = await s.client.callTool({ name: "browser_snapshot", arguments: {} });
-    const snapshot = (snap.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
-    const pageUrl = snapshot.match(/- Page URL: (https?:\/\/[^\s]+)/)?.[1];
-    if (!pageUrl || new URL(pageUrl).origin !== new URL(login.url).origin)
-        throw new Error("Navigate to the saved login's exact origin before using it");
-    const credentials = (0, store_js_1.unseal)(login.secret);
-    // One fill call minimizes the gap between verifying the destination and typing.
-    const targetKey = s.tools.find(t => t.name === "browser_fill_form")?.inputSchema?.properties?.fields?.items?.properties?.target ? "target" : "ref";
-    const filled = await s.client.callTool({ name: "browser_fill_form", arguments: { fields: [
-                { name: "Username", type: "textbox", [targetKey]: (0, store_js_1.text)(input.usernameRef, "Username field reference", 100), value: credentials.username },
-                { name: "Password", type: "textbox", [targetKey]: (0, store_js_1.text)(input.passwordRef, "Password field reference", 100), value: credentials.password },
-            ] } });
-    if (filled.isError)
-        throw new Error("The saved login could not be filled. Inspect fresh field references and try again.");
-    return { filled: true, note: "Saved login filled. Inspect the page, then submit if requested. MFA or CAPTCHA may need the user's help." };
+    return observedAction(s, "browser_fill_form", async () => {
+        const snap = await s.client.callTool({ name: "browser_snapshot", arguments: {} });
+        const snapshot = (snap.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+        const pageUrl = snapshot.match(/- Page URL: (https?:\/\/[^\s]+)/)?.[1];
+        if (!pageUrl || new URL(pageUrl).origin !== new URL(login.url).origin)
+            throw new Error("Navigate to the saved login's exact origin before using it");
+        const credentials = (0, store_js_1.unseal)(login.secret);
+        // One fill call minimizes the gap between verifying the destination and typing.
+        const targetKey = s.tools.find(t => t.name === "browser_fill_form")?.inputSchema?.properties?.fields?.items?.properties?.target ? "target" : "ref";
+        const filled = await s.client.callTool({ name: "browser_fill_form", arguments: { fields: [
+                    { name: "Username", type: "textbox", [targetKey]: (0, store_js_1.text)(input.usernameRef, "Username field reference", 100), value: credentials.username },
+                    { name: "Password", type: "textbox", [targetKey]: (0, store_js_1.text)(input.passwordRef, "Password field reference", 100), value: credentials.password },
+                ] } });
+        if (filled.isError)
+            throw new Error("The saved login could not be filled. Inspect fresh field references and try again.");
+        return { filled: true, note: "Saved login filled. Inspect the page, then submit if requested. MFA or CAPTCHA may need the user's help." };
+    });
 }

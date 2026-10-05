@@ -150,6 +150,9 @@ try {
  assert.equal((await request('/api/harvey/conversations/'+preserved.id,delegated)).data.messages[0].content,'Preserved private message');
  assert.equal((await request('/api/harvey/work/schedules',delegated)).data.schedules[0].id,schedules.marco);
  assert.equal((await request('/api/harvey/work/status',delegated)).status,200);
+ assert.equal((await request('/api/harvey/work/browser/'+preserved.id+'/preview',delegated)).status,200);
+ assert.equal((await request('/api/harvey/work/browser/'+preserved.id+'/preview',cookies.wesley)).status,404);
+ assert.equal((await request('/api/harvey/work/browser/'+preserved.id+'/snapshot',delegated,'POST',{})).status,403);
  assert.equal((await request('/api/harvey/conversations',delegated,'POST',{title:'Forbidden'})).status,403);
  assert.equal((await request('/api/harvey/work/schedules/'+schedules.marco+'/run',delegated,'POST',{})).status,403);
  check('Carlos can view Marco CRM, chats and agents; other users and delegated writes are blocked',()=>assert.ok(true));

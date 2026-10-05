@@ -12,5 +12,5 @@ export function canViewWorkspace(actor: CRMUser | null, owner: string): boolean 
 export function workspaceReadAllowed(method: string, path: string): boolean {
   if (method !== "GET" && method !== "HEAD") return false;
   if (!path.startsWith("/api/")) return !/oauth|callback/i.test(path);
-  return /^\/api\/(settings\/(command|layout)|dashboard\/data|tasks(?:\/[^/]+)?|marco-tasks|crm-tasks|users|team\/roster|harvey\/(models|conversations(?:\/[^/]+)?|projects(?:\/[^/]+)?|work\/(status|logins|plugins|schedules|files\/[^/]+(?:\/[^/]+)?)))$/.test(path);
+  return /^\/api\/(settings\/(command|layout)|dashboard\/data|tasks(?:\/[^/]+)?|marco-tasks|crm-tasks|users|team\/roster|harvey\/(models|conversations(?:\/[^/]+)?|projects(?:\/[^/]+)?|work\/(status|logins|plugins|schedules|browser\/[^/]+\/preview|files\/[^/]+(?:\/[^/]+)?)))$/.test(path);
 }

@@ -21,5 +21,5 @@ function workspaceReadAllowed(method, path) {
         return false;
     if (!path.startsWith("/api/"))
         return !/oauth|callback/i.test(path);
-    return /^\/api\/(settings\/(command|layout)|dashboard\/data|tasks(?:\/[^/]+)?|marco-tasks|crm-tasks|users|team\/roster|harvey\/(models|conversations(?:\/[^/]+)?|projects(?:\/[^/]+)?|work\/(status|logins|plugins|schedules|files\/[^/]+(?:\/[^/]+)?)))$/.test(path);
+    return /^\/api\/(settings\/(command|layout)|dashboard\/data|tasks(?:\/[^/]+)?|marco-tasks|crm-tasks|users|team\/roster|harvey\/(models|conversations(?:\/[^/]+)?|projects(?:\/[^/]+)?|work\/(status|logins|plugins|schedules|browser\/[^/]+\/preview|files\/[^/]+(?:\/[^/]+)?)))$/.test(path);
 }
