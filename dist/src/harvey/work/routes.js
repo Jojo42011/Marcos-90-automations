@@ -154,6 +154,13 @@ function createWorkRouter(authorize, owner) {
     route("post", "/work/logins", (q, res, o) => { const { secret, ...login } = (0, browser_js_1.saveLogin)(o, q.body); res.status(201).json(login); });
     route("delete", "/work/logins/:id", (q, res, o) => { (0, store_js_1.remove)("login", o, String(q.params.id)); res.json({ ok: true }); });
     route("post", "/work/browser/:chat/snapshot", async (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.chat)); res.json(await (0, browser_js_1.browserCall)(o, c.id, "browser_snapshot", {})); });
+    route("get", "/work/browser/:chat/preview", async (q, res, o) => {
+        res.setHeader("Cache-Control", "no-store");
+        const c = (0, store_js_1.get)("chat", o, String(q.params.chat));
+        const job = (0, jobs_js_1.chatJob)(o, c.id);
+        const running = !!(0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, c.id);
+        res.json({ chatId: c.id, ...await (0, browser_js_1.browserPreview)(o, c.id), phase: job?.status || (running ? "running" : "idle") });
+    });
     route("post", "/work/browser/:chat/close", async (q, res, o) => { (0, store_js_1.get)("chat", o, String(q.params.chat)); await (0, browser_js_1.closeBrowser)(o, String(q.params.chat)); res.json({ ok: true }); });
     route("get", "/work/schedules", (_q, res, o) => res.json({ schedules: (0, store_js_1.list)("schedule", o), runs: (0, store_js_1.list)("run", o).slice(0, 100) }));
     route("post", "/work/schedules", (q, res, o) => res.status(201).json((0, store_js_1.createSchedule)(o, q.body)));

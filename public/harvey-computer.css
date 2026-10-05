@@ -1,0 +1,19 @@
+:root{--computer-width:360px}
+#computerPanel{position:fixed;right:0;top:0;bottom:0;width:var(--computer-width);z-index:34;background:var(--bg-side);border-left:1px solid var(--line);padding:22px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:20px}
+#computerPanel[hidden],#computerPanel [hidden]{display:none}
+#computerPanel header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#computerPanel h2{font-size:16px;font-weight:550;margin:0}#computerPanel .computer-eyebrow{font-size:11px;color:var(--muted);margin:4px 0 0}
+.computer-card{border:1px solid var(--line-2);border-radius:14px;background:var(--bg);overflow:hidden}
+.computer-card-top{display:flex;align-items:center;gap:8px;padding:12px;font-size:12px;border-bottom:1px solid var(--line)}
+.computer-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+#computerImage{display:block;width:100%;height:auto;max-height:65vh;object-fit:contain;background:#fff}
+#computerEmpty{padding:50px 22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.7}
+#computerPage{padding:10px 12px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.computer-tools{display:flex;justify-content:space-between;gap:8px}.computer-tools button{background:transparent}
+#computerActivity{font-size:13px;line-height:1.7;overflow-wrap:anywhere;margin:0}
+#computerCaptured,.computer-footnote{font-size:11px;color:var(--muted);line-height:1.6;margin:0}.computer-footnote{margin-top:auto}
+body.computer-panel-open #main{margin-right:var(--computer-width)}
+body.computer-expanded{--computer-width:min(56vw,850px)}
+body.computer-panel-open #topbar .work-mode{position:static;transform:none;flex-shrink:0;width:150px;margin-left:8px}
+@media(max-width:1150px){body.computer-panel-open #sidebar{display:none}body.computer-panel-open #topbar .title{display:none}}
+@media(max-width:700px){#computerPanel{z-index:60;width:min(100vw,430px);box-shadow:-20px 0 60px #0005}body.computer-panel-open #main{margin-right:0}body.computer-panel-open #sidebar{display:flex}#computerExpand{display:none}}

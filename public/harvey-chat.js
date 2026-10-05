@@ -571,7 +571,7 @@
     if (state.convsWired === false) {
       var conv = readLocalConvs().filter(function (c) { return c.id === id; })[0];
       if (!conv) { toast("That conversation is no longer in this browser."); return; }
-      state.conversationId = id;
+      state.conversationId = id; if(window.HarveyComputer)window.HarveyComputer.sync();
       renderConversation(conv.messages || []);
       paintConversations();
       return;
@@ -579,7 +579,7 @@
     var r = await api("/api/harvey/conversations/" + encodeURIComponent(id));
     if (r.status === 404) { toast("That conversation is gone."); loadConversations(); return; }
     if (!r.ok || !r.data) { toast(r.error || "Could not open that conversation."); return; }
-    state.conversationId = id;
+    state.conversationId = id; if(window.HarveyComputer)window.HarveyComputer.sync();
     try { sessionStorage.setItem("harvey_active_chat", id); } catch (_) {}
     state.sessionId = r.data.sessionId;
     state.projectId = r.data.projectId || null;
@@ -929,7 +929,7 @@
     }
 
     if (state.convsWired === false) {
-      if (!state.conversationId) state.conversationId = "local_" + Date.now().toString(36);
+      if (!state.conversationId) state.conversationId = "local_" + Date.now().toString(36); if(window.HarveyComputer)window.HarveyComputer.sync();
       localConvAppend(state.conversationId, { role: "user", content: text, at: new Date().toISOString() });
       localConvAppend(state.conversationId, { role: "assistant", content: ui.text, at: new Date().toISOString() });
       state.conversations = readLocalConvs();
@@ -946,7 +946,7 @@
     if (state.conversationId) return state.conversationId;
     var r = await api("/api/harvey/conversations", {method:"POST",body:{projectId:state.projectId,mode:state.mode}});
     if (!r.ok) throw new Error(r.error || "Could not create this chat");
-    state.conversationId = r.data.id; state.sessionId = r.data.sessionId;
+    state.conversationId = r.data.id; if(window.HarveyComputer)window.HarveyComputer.sync(); state.sessionId = r.data.sessionId;
     try { sessionStorage.setItem("harvey_active_chat", state.conversationId); } catch (_) {}
     return state.conversationId;
   }
@@ -1069,13 +1069,13 @@
         ui.setUsage(d);
         break;
       case "conversation":
-        if(d.conversationId) state.conversationId=d.conversationId;
+        if(d.conversationId) state.conversationId=d.conversationId; if(window.HarveyComputer)window.HarveyComputer.sync();
         if(d.sessionId) state.sessionId=d.sessionId;
         break;
       case "done":
         if (d.usage) ui.setUsage(d.usage);
         if (d.sessionId) state.sessionId = d.sessionId;
-        if (d.conversationId) state.conversationId = d.conversationId;
+        if (d.conversationId) state.conversationId = d.conversationId; if(window.HarveyComputer)window.HarveyComputer.sync();
         if (d.text && !ui.text) ui.setText(d.text);
         try { sessionStorage.setItem("harvey_session_id", state.sessionId); } catch (_) {}
         break;
@@ -1092,7 +1092,7 @@
 
   function applyNonStream(data, ui) {
     if (data.sessionId) state.sessionId = data.sessionId;
-    if (data.conversationId) state.conversationId = data.conversationId;
+    if (data.conversationId) state.conversationId = data.conversationId; if(window.HarveyComputer)window.HarveyComputer.sync();
     (data.schedules || []).forEach(function(s){if(window.HarveyWork)HarveyWork.scheduleEvent({schedule:s});});
     (data.approvals || []).forEach(function (a) { ui.approval(a); });
     ui.setText(data.text || data.speech || data.reply || "");
@@ -1101,7 +1101,7 @@
 
   function newChat() {
     if (state.abort) { try { state.abort.abort(); } catch (_) {} }
-    state.conversationId = null;
+    state.conversationId = null; if(window.HarveyComputer)window.HarveyComputer.sync();
     try { sessionStorage.removeItem("harvey_active_chat"); } catch (_) {}
     state.sessionId = "s_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
     try { sessionStorage.setItem("harvey_session_id", state.sessionId); } catch (_) {}
@@ -1117,6 +1117,7 @@
 
   function showView(view) {
     state.view = view;
+    if(window.HarveyComputer)window.HarveyComputer.sync();
     ["chat", "usage", "models", "work"].forEach(function (v) {
       $("view-" + v).hidden = v !== view;
     });
@@ -1680,6 +1681,7 @@
       if (mod && e.key === "\\") { e.preventDefault(); toggleSidebar(); }
     });
 
+    if(window.HarveyComputer) window.HarveyComputer.init({state:state,apiUrl:apiUrl});
     if(window.HarveyWork) window.HarveyWork.init({api:api,apiUrl:apiUrl,state:state,toast:toast,showView:showView,newChat:newChat,refresh:loadConversations,openChat:openConversation,ensureChat:ensureWorkChat});
 
     /* first load */

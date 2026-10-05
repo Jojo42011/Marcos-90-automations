@@ -7,7 +7,7 @@ import { filesDir, files, filePath } from "./files.js";
 import express, { Request, Response } from "express";
 import { append, handoffChat, Chat, Connection, createChat, createProject, createSchedule, get, list, messages, Project, put, remove, Run, Schedule, text, timezone, vaultReady, workDb } from "./store.js";
 import { addMcp, catalog, connections, finishOAuth, publicConnection, startOAuth } from "./connectors.js";
-import { browserCall, browserEnabled, closeBrowser, logins, saveLogin } from "./browser.js";
+import { browserCall, browserEnabled, browserPreview, closeBrowser, logins, saveLogin } from "./browser.js";
 import { runChat, runScheduled, updateSchedule } from "./runtime.js";
 import { enqueueJob, cancelJob, chatJob, publicJob, WorkJob } from "./jobs.js";
 
@@ -71,6 +71,13 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
   route("post", "/work/logins", (q,res,o) => { const {secret,...login}=saveLogin(o,q.body); res.status(201).json(login); });
   route("delete", "/work/logins/:id", (q,res,o) => {remove("login",o,String(q.params.id)); res.json({ok:true});});
   route("post", "/work/browser/:chat/snapshot", async (q,res,o) => { const c=get<Chat>("chat",o,String(q.params.chat)); res.json(await browserCall(o,c.id,"browser_snapshot",{})); });
+  route("get", "/work/browser/:chat/preview", async (q,res,o) => {
+    res.setHeader("Cache-Control","no-store");
+    const c=get<Chat>("chat",o,String(q.params.chat));
+    const job=chatJob(o,c.id);
+    const running=!!workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,c.id);
+    res.json({chatId:c.id,...await browserPreview(o,c.id),phase:job?.status || (running?"running":"idle")});
+  });
   route("post", "/work/browser/:chat/close", async (q,res,o) => {get("chat",o,String(q.params.chat)); await closeBrowser(o,String(q.params.chat));res.json({ok:true});});
   route("get", "/work/schedules", (_q,res,o) => res.json({schedules:list<Schedule>("schedule",o),runs:list<Run>("run",o).slice(0,100)}));
   route("post", "/work/schedules", (q,res,o) => res.status(201).json(createSchedule(o,q.body)));
