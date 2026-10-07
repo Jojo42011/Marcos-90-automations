@@ -124,7 +124,7 @@ function createWorkRouter(authorize, owner) {
     route("patch", "/conversations/:id", (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.id)); if ((q.body.mode !== undefined || q.body.projectId !== undefined) && ((0, jobs_js_1.chatJob)(o, c.id) || (0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, c.id)))
         throw new Error("Wait for this chat's task before changing its context"); if (q.body.mode !== undefined && q.body.mode !== c.mode && ((0, store_js_1.messages)(o, c.id).length || (0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, c.id)))
         throw new Error("Mode is fixed after the first message. Create a new chat or hand off to Work."); if (q.body.projectId)
-        (0, store_js_1.get)("project", o, q.body.projectId); res.json((0, store_js_1.put)("chat", o, { ...c, projectId: q.body.projectId === undefined ? c.projectId : q.body.projectId || null, mode: q.body.mode === undefined ? c.mode : q.body.mode === "work" ? "work" : "chat" })); });
+        (0, store_js_1.get)("project", o, q.body.projectId); res.json((0, store_js_1.put)("chat", o, { ...c, model: q.body.model === undefined ? c.model || "auto" : (0, store_js_1.text)(q.body.model, "Model", 150), projectId: q.body.projectId === undefined ? c.projectId : q.body.projectId || null, mode: q.body.mode === undefined ? c.mode : q.body.mode === "work" ? "work" : "chat" })); });
     route("delete", "/conversations/:id", async (q, res, o) => {
         const id = String(q.params.id);
         (0, store_js_1.get)("chat", o, id);
@@ -201,7 +201,7 @@ async function handleWorkChat(req, res, owner) {
         try {
             const approvals = [];
             const schedules = [];
-            const result = await (0, runtime_js_1.runChat)(owner, chat, message, { signal: controller.signal, modelOverride: req.body.model && req.body.model !== "auto" ? String(req.body.model) : undefined, onToken: stream ? t => send("token", { text: t }) : undefined, onEvent: e => { if (e.type === "approval")
+            const result = await (0, runtime_js_1.runChat)(owner, chat, message, { signal: controller.signal, modelOverride: req.body.model === undefined ? undefined : String(req.body.model), onToken: stream ? t => send("token", { text: t }) : undefined, onEvent: e => { if (e.type === "approval")
                     approvals.push(e.approval); if (e.type === "schedule")
                     schedules.push(e.schedule); if (stream)
                     send(e.type, e.type === "approval" ? e.approval : e); } });

@@ -217,7 +217,7 @@
 
   /* ── state ──────────────────────────────────────────────────────────── */
 
-  var MODEL_KEY = "harvey_model";
+
   var THEME_KEY = "marco_crm_theme";
   var LOCAL_CONVS_KEY = "harvey_local_conversations";
 
@@ -247,7 +247,7 @@
       state.sessionId = "s_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
       sessionStorage.setItem("harvey_session_id", state.sessionId);
     }
-    state.selectedModel = localStorage.getItem(MODEL_KEY) || "auto";
+    state.selectedModel = "auto";
   } catch (_) {
     state.sessionId = "s_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
   }
@@ -396,10 +396,24 @@
     pill.title = "Model for the next message";
   }
 
+  var viewEpoch=0, currentRun=null, modelSaves={};
+  function rememberChat(id){
+    try{if(id)sessionStorage.setItem("harvey_active_chat",id);else sessionStorage.removeItem("harvey_active_chat");var url=new URL(location.href);if(id)url.searchParams.set("chat",id);else url.searchParams.delete("chat");history.replaceState(null,"",url);}catch(_){}
+  }
+  function current(run){return run.epoch===viewEpoch;}
+  function detachView(){
+    viewEpoch++;currentRun=null;state.loadingConversation=false;state.abort=null;state.activeJobId=null;setBusy(false);
+  }
   function selectModel(id) {
-    state.selectedModel = id;
-    try { localStorage.setItem(MODEL_KEY, id); } catch (_) {}
-    paintModelPill();
+    if(state.loadingConversation)return;
+    state.selectedModel=id;paintModelPill();
+    var chat=state.conversationId;
+    if(chat){
+      modelSaves[chat]=(modelSaves[chat]||Promise.resolve()).then(async function(){
+        var r=await api('/api/harvey/conversations/'+encodeURIComponent(chat),{method:'PATCH',body:{model:id}});
+        if(!r.ok)throw new Error(r.error||'Could not save this chat’s model');
+      }).catch(function(e){toast(e.message);});
+    }
   }
 
   function buildModelMenu() {
@@ -566,7 +580,7 @@
   }
 
   async function openConversation(id) {
-    if (state.busy) { toast("Harvey is still answering — wait for that to finish."); return; }
+    detachView();var opening=viewEpoch;
     showView("chat");
     if (state.convsWired === false) {
       var conv = readLocalConvs().filter(function (c) { return c.id === id; })[0];
@@ -576,21 +590,28 @@
       paintConversations();
       return;
     }
+    state.loadingConversation=true;$("sendBtn").disabled=true;
+    if(modelSaves[id])await modelSaves[id];
+    if(opening!==viewEpoch)return;
     var r = await api("/api/harvey/conversations/" + encodeURIComponent(id));
+    if(opening!==viewEpoch)return;
+    state.loadingConversation=false;setBusy(false);
     if (r.status === 404) { toast("That conversation is gone."); loadConversations(); return; }
     if (!r.ok || !r.data) { toast(r.error || "Could not open that conversation."); return; }
     state.conversationId = id; if(window.HarveyComputer)window.HarveyComputer.sync();
-    try { sessionStorage.setItem("harvey_active_chat", id); } catch (_) {}
+    rememberChat(id);
     state.sessionId = r.data.sessionId;
     state.projectId = r.data.projectId || null;
     state.mode = r.data.mode || "chat";
+    state.selectedModel=r.data.model||"auto";paintModelPill();
     if (window.HarveyWork) window.HarveyWork.sync();
     renderConversation(r.data.messages || []);
     paintConversations();
     var pending = await api("/api/harvey/work/chats/" + encodeURIComponent(id) + "/job");
+    if(opening!==viewEpoch)return;
     if(pending.ok && pending.data.job){
-      var progress=addAssistantMessage();setBusy(true);state.cancelJobRequested=false;state.abort=new AbortController();
-      try{await watchJob(pending.data.job,progress);}catch(e){progress.error(e.message);}finally{state.abort=null;setBusy(false);progress.finish();}
+      var progress=addAssistantMessage(), run={epoch:viewEpoch,chatId:id,abort:new AbortController(),cancel:false};currentRun=run;setBusy(true);state.abort=run.abort;
+      try{await watchJob(pending.data.job,progress,run);}catch(e){if(current(run))progress.error(e.message);}finally{if(current(run)){state.abort=null;currentRun=null;setBusy(false);progress.finish();}}
     }
   }
 
@@ -902,7 +923,7 @@
 
   async function send(text) {
     text = String(text || "").trim();
-    if (!text || state.busy) return;
+    if (!text || state.busy || state.loadingConversation) return;
     showView("chat");
     var emptyEl = thread.querySelector(".empty");
     if (emptyEl) emptyEl.remove();
@@ -913,21 +934,20 @@
     setBusy(true);
 
     var ui = addAssistantMessage();
-    state.cancelJobRequested=false;
-    state.abort = new AbortController();
+    var run={epoch:viewEpoch,chatId:state.conversationId,mode:state.mode,projectId:state.projectId,model:state.selectedModel,abort:new AbortController(),cancel:false};
+    currentRun=run;state.abort=run.abort;
 
     try {
-      await harveyChat(text, ui);
+      await harveyChat(text, ui, run);
     } catch (e) {
+      if(!current(run))return;
       if (e && e.name === "AbortError") ui.note("Stopped.");
       else ui.error(e && e.message ? e.message : "Something went wrong.");
     } finally {
-      state.abort = null;
-      setBusy(false);
-      ui.finish();
-      $("input").focus();
+      if(current(run)){state.abort = null;currentRun=null;setBusy(false);ui.finish();$("input").focus();}
     }
 
+    if(!current(run))return;
     if (state.convsWired === false) {
       if (!state.conversationId) state.conversationId = "local_" + Date.now().toString(36); if(window.HarveyComputer)window.HarveyComputer.sync();
       localConvAppend(state.conversationId, { role: "user", content: text, at: new Date().toISOString() });
@@ -942,28 +962,23 @@
     if (state.modelsWired) loadModels();
   }
 
-  async function ensureWorkChat() {
-    if (state.conversationId) return state.conversationId;
-    var r = await api("/api/harvey/conversations", {method:"POST",body:{projectId:state.projectId,mode:state.mode}});
-    if (!r.ok) throw new Error(r.error || "Could not create this chat");
-    state.conversationId = r.data.id; if(window.HarveyComputer)window.HarveyComputer.sync(); state.sessionId = r.data.sessionId;
-    try { sessionStorage.setItem("harvey_active_chat", state.conversationId); } catch (_) {}
-    return state.conversationId;
+  async function ensureWorkChat(run) {
+    var context=run||{epoch:viewEpoch,chatId:state.conversationId,projectId:state.projectId,mode:state.mode,model:state.selectedModel};
+    if(context.chatId)return context.chatId;
+    var r=await api('/api/harvey/conversations',{method:'POST',body:{projectId:context.projectId,mode:context.mode,model:context.model}});
+    if(!r.ok)throw new Error(r.error||'Could not create this chat');
+    context.chatId=r.data.id;
+    if(current(context)){
+      state.conversationId=r.data.id;state.sessionId=r.data.sessionId;
+      if(window.HarveyComputer)window.HarveyComputer.sync();
+      rememberChat(state.conversationId);
+    }
+    return r.data.id;
   }
 
-  async function harveyChat(text, ui) {
-    await ensureWorkChat();
-    var body = {
-      message: text,
-      workspace: true,
-      background: true,
-      requestId: crypto.randomUUID(),
-      sessionId: state.sessionId,
-      stream: true
-    };
-    if (state.conversationId) body.conversationId = state.conversationId;
-    if (state.selectedModel && state.selectedModel !== "auto") body.model = state.selectedModel;
-
+  async function harveyChat(text, ui, run) {
+    await ensureWorkChat(run);
+    var body={message:text,workspace:true,background:true,requestId:crypto.randomUUID(),conversationId:run.chatId,model:run.model,stream:true};
     var res;
     try {
       res = await fetch(apiUrl("/api/harvey/chat"), {
@@ -971,7 +986,7 @@
         credentials: "same-origin",
         headers: authHeaders({ "Content-Type": "application/json", Accept: "text/event-stream" }),
         body: JSON.stringify(body),
-        signal: state.abort ? state.abort.signal : undefined
+        signal: run.abort.signal
       });
     } catch (e) {
       if (e && e.name === "AbortError") throw e;
@@ -995,7 +1010,8 @@
       var data = null;
       try { data = JSON.parse(raw); } catch (_) {}
       if (!data) throw new Error("Harvey sent a reply this page could not read.");
-      if(data.job){await watchJob(data.job,ui);return;}
+      if(data.job){loadConversations();await watchJob(data.job,ui,run);return;}
+      if(!current(run))return;
       applyNonStream(data, ui);
       return;
     }
@@ -1009,22 +1025,24 @@
       buf += dec.decode(chunk.value, { stream: true }).replace(/\r\n/g, "\n");
       var idx;
       while ((idx = buf.indexOf("\n\n")) >= 0) {
-        handleSseBlock(buf.slice(0, idx), ui);
+        if(current(run))handleSseBlock(buf.slice(0, idx), ui);
         buf = buf.slice(idx + 2);
       }
     }
-    if (buf.trim()) handleSseBlock(buf, ui);
+    if (buf.trim()&&current(run)) handleSseBlock(buf, ui);
   }
 
-  async function watchJob(job,ui) {
+  async function watchJob(job,ui,run) {
+    if(!current(run))return;
     state.activeJobId=job.id;
-    var cursor=0, signal=state.abort&&state.abort.signal;
+    var cursor=0, signal=run.abort.signal;
     try{
       while(true){
+        if(!current(run))return;
         (job.events||[]).forEach(function(e){if(e.seq>cursor){handleSseBlock('event: tool\ndata: '+JSON.stringify(e),ui);cursor=e.seq;}});
         if(['queued','running','cancelling'].indexOf(job.status)<0){applyNonStream(job.result||{text:job.status==='cancelled'?'Cancelled before starting.':'Task needs attention.'},ui);return;}
         if(signal&&signal.aborted){
-          if(!state.cancelJobRequested){ui.note('Task continues in the background. Reopen this chat to view it.');return;}
+          if(!run.cancel){ui.note('Task continues in the background. Reopen this chat to view it.');return;}
           var cancelled=await api('/api/harvey/work/jobs/'+encodeURIComponent(job.id)+'/cancel',{method:'POST',body:{}});
           if(!cancelled.ok)throw new Error('Could not confirm cancellation. Reopen this chat to inspect the running task.');
           ui.note('Stop requested. An action already in progress may finish; reopen this chat to inspect the outcome.');return;
@@ -1034,7 +1052,7 @@
         if(!r.ok)throw new Error('Connection interrupted. Your task remains saved; reopen this chat to check its progress.');
         job=r.data;
       }
-    }finally{state.activeJobId=null;}
+    }finally{if(current(run))state.activeJobId=null;}
   }
 
   function handleSseBlock(block, ui) {
@@ -1100,9 +1118,9 @@
   }
 
   function newChat() {
-    if (state.abort) { try { state.abort.abort(); } catch (_) {} }
+    detachView();state.selectedModel="auto";paintModelPill();
     state.conversationId = null; if(window.HarveyComputer)window.HarveyComputer.sync();
-    try { sessionStorage.removeItem("harvey_active_chat"); } catch (_) {}
+    rememberChat(null);
     state.sessionId = "s_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
     try { sessionStorage.setItem("harvey_session_id", state.sessionId); } catch (_) {}
     showView("chat");
@@ -1610,7 +1628,7 @@
     });
     $("composer").addEventListener("submit", function (e) {
       e.preventDefault();
-      if (state.busy) { state.cancelJobRequested=true;if (state.abort) { try { state.abort.abort(); } catch (_) {} } return; }
+      if (state.busy) { if(currentRun)currentRun.cancel=true;if (state.abort) { try { state.abort.abort(); } catch (_) {} } return; }
       send(input.value);
     });
 

@@ -33,7 +33,7 @@ ok('nested connector failures cannot serve as evidence',()=>assert.equal(failed.
 const large=new rel.TurnVerification();large.record('workspace_files',{}, {text:'x'.repeat(13000)});
 ok('truncated results cannot support complete claims',()=>assert.throws(()=>large.review(review),/smaller/));
 
-const calls=[];let releaseSlow,slowStarted;
+const calls=[];let releaseSlow,slowStarted,transientCalls=0;
 const slowReady=new Promise(r=>slowStarted=r),slowHold=new Promise(r=>releaseSlow=r);
 const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',async()=>{
  const b=JSON.parse(raw);calls.push(b);
@@ -42,6 +42,12 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
  let response={role:'assistant',content:'A conversational fixture answer.'};
  const tc=(name,args)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+n,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
  if(user.includes('SLOW_FIXTURE')){slowStarted();await slowHold;response={role:'assistant',content:'Slow fixture completed.'};}
+ else if(user.includes('TRANSIENT_FIXTURE')){if(++transientCalls===1){res.statusCode=504;res.end(JSON.stringify({error:{message:'Upstream idle timeout exceeded'}}));return;}response={role:'assistant',content:'Transient provider recovered.'};}
+ else if(user.includes('RECOVERY_FIXTURE')){
+  const steps=[['schedule_agent',{action:'create',title:'Recovered task',prompt:'Fixture',cron:'* * * * *',timezone:'UTC'}],['schedule_agent',{action:'create',title:'Recovered task',prompt:'Fixture',cron:'0 9 * * *',timezone:'UTC'}],['schedule_agent',{action:'list'}],['report_verification',{status:'completed',evidenceIds:['e3'],checks:['Read back the corrected schedule'],limitations:[]}]];
+  response=n<steps.length?tc(...steps[n]):{role:'assistant',content:'The corrected schedule is saved.'};
+ }
+ else if(user.includes('DETACHED_FIXTURE')){await new Promise(r=>setTimeout(r,1000));response={role:'assistant',content:'Detached fixture completed.'};}
  else if(user.includes('TEACH_FIXTURE')){
   const output=i=>JSON.parse(toolMessages[i].content);
   const seq=n?output(0).messages[0].seq:0;
@@ -81,6 +87,7 @@ process.env.OPENROUTER_API_KEY='local-fixture';process.env.OPENROUTER_BASE_URL='
 const express=require('express'),routes=require(join(root,'harvey/work/routes.js')),jobs=require(join(root,'harvey/work/jobs.js')),runtime=require(join(root,'harvey/work/runtime.js'));
 const app=express();app.use(express.json());app.use(express.static(resolve('public')));
 const owner=req=>String(req.headers['x-test-owner']||'alice'),authorized=req=>req.headers.authorization==='Bearer fixture';
+app.get('/api/harvey/models',(_req,res)=>res.json({models:[{id:'openai/fixture',name:'Fixture One'},{id:'openai/fixture-two',name:'Fixture Two'}]}));
 app.use('/api/harvey',routes.createWorkRouter(authorized,owner));
 app.post('/api/harvey/chat',(req,res)=>{if(!authorized(req))return res.sendStatus(401);return routes.handleWorkChat(req,res,owner(req));});
 const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port+'/api/harvey';
@@ -124,7 +131,7 @@ try{
  ok('unsupported completion claim is replaced with needs-verification',()=>{assert.equal(lie.data.needsAttention,true);assert(!lie.data.text.includes('verified every listing'));});
  const repeat=await chat();await api('/chat','POST',{conversationId:repeat.id,message:'REPEAT_FIXTURE',model:'openai/fixture'});
  ok('repeated create executes once',()=>assert.equal(store.list('schedule','alice').filter(s=>s.title==='One only').length,1));
- const slow=await chat('chat');const queued=await api('/chat','POST',{conversationId:slow.id,background:true,requestId:randomUUID(),message:'SLOW_FIXTURE',model:'openai/fixture'});
+ const slow=await chat('chat');await api('/conversations/'+slow.id,'PATCH',{model:'openai/fixture'});const queued=await api('/chat','POST',{conversationId:slow.id,background:true,requestId:randomUUID(),message:'SLOW_FIXTURE',model:'openai/fixture'});
  await slowReady;
  ok('HTTP response ends while job continues independently',()=>assert.equal(store.get('job','alice',queued.data.job.id).status,'running'));
  if(process.env.PW_CHROMIUM){
@@ -135,9 +142,29 @@ try{
    await page.locator('#sendBtn[aria-label="Stop generating"]').waitFor({timeout:10000});
    await page.reload();await page.locator('#sendBtn[aria-label="Stop generating"]').waitFor({timeout:10000});
    assert.equal(store.get('job','alice',queued.data.job.id).status,'running');
+   await page.locator('#newChatIcon').click();
+   await page.locator('#modelPill').click();await page.locator('[data-model="openai/fixture-two"]').click();
+   await page.locator('#input').fill('A separate conversation');await page.locator('#sendBtn').click();
+   await page.getByText('A conversational fixture answer.',{exact:true}).waitFor();
+   const second=store.list('chat','alice').find(x=>x.model==='openai/fixture-two');assert(second);
+   assert.equal(store.get('chat','alice',slow.id).model,'openai/fixture');
+   assert.equal(store.get('job','alice',queued.data.job.id).model,'openai/fixture');
+   assert.equal(store.get('job','alice',queued.data.job.id).status,'running');
+   await page.locator('[data-conv="'+slow.id+'"] .title').click();
+   await page.locator('#sendBtn[aria-label="Stop generating"]').waitFor();assert.equal(await page.locator('#modelPillLabel').textContent(),'Fixture One');
+   checks++;console.log('ok switching chats permits concurrent work and preserves independent saved models');
    await page.locator('#sendBtn').click();await page.getByText('Stop requested.',{exact:false}).waitFor({timeout:10000});
    assert.equal(store.get('job','alice',queued.data.job.id).status,'cancelling');assert.deepEqual(errors,[]);
    checks++;console.log('ok real chat UI reattaches after refresh and explicitly cancels the stored job');
+   await page.locator('#newChatIcon').click();await page.locator('#input').fill('DETACHED_FIXTURE');
+   const accepted=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/api/harvey/chat')&&r.request().method()==='POST');await page.locator('#sendBtn').click();
+   const detached=(await (await accepted).json()).job;
+   await page.locator('[data-conv="'+second.id+'"] .title').click();
+   const done=await terminal(detached.id);assert.equal(done.status,'completed');
+   assert.equal(await page.getByText('Detached fixture completed.',{exact:true}).count(),0);
+   await page.reload();await page.getByText('A conversational fixture answer.',{exact:true}).waitFor();assert.equal(await page.locator('#modelPillLabel').textContent(),'Fixture Two');
+   await page.locator('[data-conv="'+detached.chatId+'"] .title').click();await page.getByText('Detached fixture completed.',{exact:true}).waitFor();
+   checks++;console.log('ok detached job finishes in cloud, never renders in another chat, and its result survives refresh');
    const paused=store.createSchedule('alice',{chatId:slow.id,title:'Failure pause fixture',prompt:'Fixture only',cron:'0 9 * * *',timezone:'America/Chicago'});store.put('schedule','alice',{...paused,enabled:false,pauseReason:'Repeated runs need attention; inspect before resuming.'});
    await page.getByRole('button',{name:'Scheduled',exact:true}).click();await page.getByText('Repeated runs need attention; inspect before resuming.',{exact:true}).waitFor({timeout:10000});checks++;console.log('ok paused schedule explains why it stopped in the real UI');
    store.remove('schedule','alice',paused.id);
@@ -148,6 +175,19 @@ try{
  const cancelled=await api('/work/jobs/'+queued.data.job.id+'/cancel','POST',{});assert.equal(cancelled.data.status,'cancelling');releaseSlow();
  const stopped=await terminal(queued.data.job.id);
  ok('explicit cancellation is separate from connection loss and reports uncertain outcomes',()=>assert.equal(stopped.status,'needs_attention'));
+ const transient=await chat();const recoveredProvider=await api('/chat','POST',{conversationId:transient.id,message:'TRANSIENT_FIXTURE',model:'openai/fixture'});
+ ok('transient model failure retries the same model request without replaying tools',()=>{assert.equal(transientCalls,2);assert.equal(recoveredProvider.data.text,'Transient provider recovered.');});
+ const repair=await chat();const repaired=await api('/chat','POST',{conversationId:repair.id,message:'RECOVERY_FIXTURE',model:'openai/fixture'});
+ ok('a recovered tool failure with verified read-back is successful without robotic status banners',()=>{assert.equal(repaired.data.needsAttention,false,JSON.stringify(repaired.data));assert.equal(repaired.data.text,'The corrected schedule is saved.');});
+ const frozenChat=store.createChat('alice',{model:'openai/fixture'});
+ const frozen=jobs.enqueueJob('alice',frozenChat.id,{message:'Snapshot model',requestId:randomUUID()});store.put('chat','alice',{...frozenChat,model:'openai/fixture-two'});
+ let frozenModel;await jobs.executeJob('alice',frozen.id,async(_o,_c,_m,opts)=>{frozenModel=opts.modelOverride;return {speech:'ok'};});
+ ok('queued job pins its model even if that chat preference subsequently changes',()=>assert.equal(frozenModel,'openai/fixture'));
+ const auto=jobs.enqueueJob('alice',frozenChat.id,{message:'Explicit auto',model:'auto',requestId:randomUUID()});
+ await jobs.executeJob('alice',auto.id,async(_o,_c,_m,opts)=>{assert.equal(opts.modelOverride,'auto');return {speech:'ok'};});
+ const foreign=store.createChat('bob',{});store.put('job','bob',{...frozen,id:'other-owner-job',chatId:foreign.id,status:'running'});
+ process.env.TENANT_OWNER_ID='alice';jobs.recoverJobs();delete process.env.TENANT_OWNER_ID;
+ ok('one account worker restarting does not interrupt another account’s jobs',()=>assert.equal(store.get('job','bob','other-owner-job').status,'running'));
  const preserved=JSON.stringify(store.messages('alice',c.id));
  store.put('job','alice',{...store.get('job','alice',jobId),id:'restart-fixture',status:'running'});jobs.recoverJobs();
  ok('restart never blindly replays uncertain work or deletes prior history',()=>{assert.equal(store.get('job','alice','restart-fixture').status,'needs_attention');assert.equal(JSON.stringify(store.messages('alice',c.id)),preserved);});

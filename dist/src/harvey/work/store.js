@@ -72,7 +72,7 @@ function createChat(owner, input) {
     const projectId = input.projectId || null;
     if (projectId)
         get("project", owner, projectId);
-    return put("chat", owner, { id: (0, crypto_1.randomUUID)(), sessionId: (0, crypto_1.randomUUID)(), projectId, title: text(input.title || "New chat", "Chat title", 120), mode: input.mode === "work" ? "work" : "chat", updatedAt: new Date().toISOString() });
+    return put("chat", owner, { id: (0, crypto_1.randomUUID)(), sessionId: (0, crypto_1.randomUUID)(), projectId, model: text(input.model || "auto", "Model", 150), title: text(input.title || "New chat", "Chat title", 120), mode: input.mode === "work" ? "work" : "chat", updatedAt: new Date().toISOString() });
 }
 function handoffChat(owner, sourceId, brief) {
     const source = get("chat", owner, sourceId);

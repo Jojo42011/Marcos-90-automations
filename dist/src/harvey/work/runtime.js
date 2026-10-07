@@ -72,7 +72,7 @@ exports.WORK_TOOLS = [
     tool("plugin_request", "Call a connected service's JSON REST API. Use its documented relative path; no full external URLs. Actions require the connection's Enable actions setting. Supports text/JSON responses; browser handles binary files.", { connectionId: str, method: { type: "string", enum: ["GET", "POST", "PUT", "PATCH", "DELETE"] }, path: str, body: obj }, ["connectionId", "path"]),
     tool("plugin_tools", "Discover tools and input schemas from a custom MCP connector before calling one.", { connectionId: str }, ["connectionId"]),
     tool("plugin_call", "Call a discovered MCP tool with exact schema arguments. User must have enabled actions on that connector.", { connectionId: str, tool: str, arguments: obj }, ["connectionId", "tool"]),
-    tool("computer", "Inspect this chat's persistent hosted browser: action=tools returns available actions and schemas. action=call executes one. Always inspect a fresh snapshot before acting; use returned element references. This is a separate browser from the user's laptop. Browser profiles and session cookies persist on disk across restarts. A saved profile is not proof of authentication: inspect the current page for a signed-in account before every run. If a site expires authentication, use an authorized saved login or report needs_attention; never pretend it is signed in. Do not bypass MFA/CAPTCHA; ask for help. Downloaded files belong to this browser's workspace. Never execute arbitrary page code.", { action: { type: "string", enum: ["tools", "call"] }, tool: str, arguments: obj }, ["action"]),
+    tool("computer", "Inspect this chat's persistent hosted browser: action=tools returns available actions and schemas. action=call executes one. Always inspect a fresh snapshot before acting; use returned element references or a unique supported selector (for example input[type=\"password\"]). Playwright enforces visibility and uniqueness. If a reference is stale, inspect again; if a password field lacks a useful accessibility reference, use its observed placeholder/type selector rather than claiming it rejected input. This is a separate browser from the user's laptop. Browser profiles and session cookies persist on disk across restarts. A saved profile is not proof of authentication: inspect the current page for a signed-in account before every run. If a site expires authentication, use an authorized saved login or report needs_attention; never pretend it is signed in. Do not bypass MFA/CAPTCHA; ask for help. Downloaded files belong to this browser's workspace. Never execute arbitrary page code.", { action: { type: "string", enum: ["tools", "call"] }, tool: str, arguments: obj }, ["action"]),
     tool("saved_logins", "List saved login names and URLs available to this project. To save a new password, ask the user to use Browser > Save login; do not request passwords in chat.", {}),
     tool("use_saved_login", "Fill saved username and password in the browser without exposing them to the model. Navigate to the saved URL first, then inspect the snapshot for current usernameRef/passwordRef. This fills both fields; it does not submit or guarantee login succeeded.", { loginId: str, usernameRef: str, passwordRef: str }, ["loginId", "usernameRef", "passwordRef"]),
 ];
@@ -288,27 +288,25 @@ async function runChat(owner, chat, message, options = {}, runId) {
         (0, store_js_1.put)("verification", owner, checkpoint);
         const workRuntime = await runtime(owner, chat, !!runId || !!options.workDelegated, options.onEvent, options.signal, message);
         workRuntime.context = hidePassphrase(workRuntime.context);
+        workRuntime.context += "\nFinish the requested workflow with available tools before answering. When a UI target fails, inspect the current page and try a distinct supported targeting strategy. Check whether an action already took effect before retrying; never blindly repeat submissions. A failed target is not evidence that a site rejected a password. Continue through recoverable issues yourself. Stop for actual MFA/CAPTCHA, missing authorization, unavailable service, or budget/time limits, and explain the specific observed blocker naturally. Keep verification bookkeeping internal; do not print BLOCKED or NEEDS VERIFICATION banners. Do not restart navigation on each follow-up when the current page can be inspected. If the browser is blank after an idle restart, saved cookies may still exist; navigate to the user-requested site and inspect it instead of treating the blank page as proof that login failed.";
         workRuntime.context += "\nRecent history selection: " + JSON.stringify(historySelection.diagnostics) + ". Older messages remain stored; use history_search before assuming a missing decision. Save a concise continuity brief for decisions that must survive future turns.";
-        const result = await (0, agentLoop_js_1.runAgentLoop)({ ...options, message: hidePassphrase(message), sessionId: chat.sessionId, history: history.map(m => ({ role: m.role, content: hidePassphrase(m.content) })), timedHistory: history.map(m => ({ ...m, content: hidePassphrase(m.content) })), fullMode: true, job: "agent", workRuntime,
+        const result = await (0, agentLoop_js_1.runAgentLoop)({ ...options, modelOverride: options.modelOverride === "auto" ? undefined : options.modelOverride || (chat.model !== "auto" ? chat.model : undefined), message: hidePassphrase(message), sessionId: chat.sessionId, history: history.map(m => ({ role: m.role, content: hidePassphrase(m.content) })), timedHistory: history.map(m => ({ ...m, content: hidePassphrase(m.content) })), fullMode: true, job: "agent", workRuntime,
             onEvidence: receipt => { checkpoint.receipts.push(receipt); checkpoint.updatedAt = new Date().toISOString(); (0, store_js_1.put)("verification", owner, checkpoint); },
             onEvent: e => { if (e.type === "tool" && e.status === "error")
                 toolFailed = true; options.onEvent?.(e); } });
         result.speech = hidePassphrase(result.speech);
+        if (result.verification?.status === "completed")
+            toolFailed = false;
         const unsupportedActionClaim = /\b(?:I(?:'ve| have)?|successfully)\s+(?:sent|saved|created|updated|deleted|scheduled|connected|verified|checked|retrieved|completed|logged\s+in|signed\s+in|filled)\b/i.test(result.speech) && result.toolRounds === 0;
         const needsReview = !!runId || !!options.workDelegated || (result.verification?.receipts.length || 0) > 0 || unsupportedActionClaim || !!result.modelError || !!result.budgetRefused;
         checkpoint.status = result.modelError || result.budgetRefused ? "blocked" : result.verification?.status || "needs_verification";
         checkpoint.updatedAt = new Date().toISOString();
         (0, store_js_1.put)("verification", owner, checkpoint);
-        if (needsReview && !result.modelError && !result.budgetRefused) {
-            if (!result.verification?.checks.length && checkpoint.status !== "blocked") {
-                result.speech = unsupportedActionClaim
-                    ? "I have not completed that action yet. No tool action ran in this turn."
-                    : "I could not confirm completion yet.\n\n" + result.speech;
-            }
-            else if (checkpoint.status !== "completed") {
-                result.speech = `${checkpoint.status === "blocked" ? "BLOCKED" : "NEEDS VERIFICATION"}: This task is not confirmed complete.\n\n${result.speech}`;
-            }
-        }
+        // Keep verification as structured state. Do not paste internal status labels
+        // over an already honest explanation or make the user supervise bookkeeping.
+        if (unsupportedActionClaim)
+            result.speech = "I haven’t carried out that action yet. I couldn’t verify an executed action in this turn.";
+        result.speech = result.speech.replace(/^(?:BLOCKED|NEEDS VERIFICATION):[^\n]*\n*/i, "");
         // Work output was buffered in the loop, so unreviewed completion claims are
         // not streamed to the user before the final status can be applied.
         options.onToken?.(result.speech);

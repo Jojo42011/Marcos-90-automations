@@ -24,9 +24,9 @@ function chatJob(owner, chatId) {
     return (0, store_js_1.list)("job", owner).find(j => j.chatId === chatId && (0, exports.activeJob)(j));
 }
 function enqueueJob(owner, chatId, input, delegation) {
-    (0, store_js_1.get)("chat", owner, chatId);
+    const chat = (0, store_js_1.get)("chat", owner, chatId);
     const requestId = (0, store_js_1.text)(input.requestId, "Request ID", 100), prompt = (0, store_js_1.text)(input.message, "Message", 50000);
-    const model = input.model && input.model !== "auto" ? (0, store_js_1.text)(input.model, "Model", 150) : undefined;
+    const model = (0, store_js_1.text)(input.model === undefined ? chat.model || "auto" : input.model, "Model", 150);
     const fingerprint = (0, crypto_1.createHash)("sha256").update(JSON.stringify([chatId, prompt, model, delegation || null])).digest("hex");
     const job = (0, store_js_1.workDb)().transaction(() => {
         const existing = (0, store_js_1.list)("job", owner).find(j => j.requestId === requestId);
@@ -113,6 +113,8 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
 function recoverJobs() {
     for (const owner of (0, store_js_1.owners)("job"))
         for (const job of (0, store_js_1.list)("job", owner)) {
+            if (process.env.TENANT_OWNER_ID && process.env.TENANT_OWNER_ID !== owner)
+                continue;
             if (["running", "cancelling"].includes(job.status))
                 (0, store_js_1.put)("job", owner, { ...job, status: "needs_attention", updatedAt: new Date().toISOString(), result: { text: "Server restarted during this task. Inspect completed actions before retrying. The task was not replayed.", needsAttention: true } });
         }
