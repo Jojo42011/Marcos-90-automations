@@ -42,7 +42,7 @@ function tenantEnvironment(owner, parent = process.env) {
     // Work already has enforced owner keys. Keeping it preserves existing chats/connections.
     env.HARVEY_WORK_DIR = parent.HARVEY_WORK_DIR || (0, tenantData_js_1.dataPath)("harvey-work");
     return { ...env, TENANT_OWNER_ID: owner, TENANT_DATA_ROOT: root, ACCOUNT_ISOLATION: "true",
-        SITE_LOGIN_ENABLED: "1", PORT: "0", DOTENV_CONFIG_PATH: emptyEnv, HARVEY_EXEC_MODE: "off", HARVEY_BROWSER_MAX_SESSIONS: "1" };
+        SITE_LOGIN_ENABLED: "1", PORT: "0", DOTENV_CONFIG_PATH: emptyEnv, HARVEY_EXEC_MODE: "off", HARVEY_BROWSER_MAX_SESSIONS: "3" };
 }
 const workers = new Map();
 function ensureWorker(owner) {

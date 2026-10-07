@@ -93,7 +93,7 @@ async function session(owner, chat) {
                     if (restored.isError)
                         throw new Error("Saved browser session could not be restored; retained state was left intact");
                 }
-                return { client, tools, statePath, lastUsed: Date.now() };
+                return { owner, chat, client, tools, statePath, lastUsed: Date.now() };
             }
             catch (e) {
                 await client.close().catch(() => { });
@@ -133,7 +133,7 @@ async function closeBrowsers() { const keys = [...sessions.keys()]; for (const k
     sessions.delete(key);
 } }
 const idle = setInterval(() => { for (const [key, value] of sessions)
-    void value.then(async (s) => { if (Date.now() - s.lastUsed > 10 * 60_000) {
+    void value.then(async (s) => { if (!s.busy && !(0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(s.owner, s.chat) && Date.now() - s.lastUsed > 10 * 60_000) {
         sessions.delete(key);
         await closeSession(s);
     } }).catch(() => { }); }, 60000);
@@ -221,9 +221,21 @@ async function observedAction(s, name, fn) {
     }
 }
 function validateActionReferences(snapshot, args) {
-    const refs = [args?.ref, args?.target, args?.startRef, args?.endRef, ...(Array.isArray(args?.fields) ? args.fields.flatMap((f) => [f.ref, f.target]) : [])].filter(v => typeof v === "string" && v);
-    for (const ref of refs) {
-        if (!/^[\w-]+$/.test(ref) || !snapshot.includes(`[ref=${ref}]`))
+    const fields = Array.isArray(args?.fields) ? args.fields : [];
+    const refs = [args?.ref, args?.startRef, args?.endRef, ...fields.map((f) => f.ref)].filter(Boolean);
+    const targets = [args?.target, args?.startTarget, args?.endTarget, ...fields.map((f) => f.target)].filter(Boolean);
+    for (const ref of refs)
+        if (typeof ref !== "string" || !snapshot.includes(`[ref=${ref}]`))
+            throw new Error("Browser target changed. Inspect a fresh snapshot and use its current reference or a unique selector.");
+    for (const target of targets) {
+        if (typeof target !== "string" || target.length > 2000)
+            throw new Error("Invalid browser target");
+        if (snapshot.includes(`[ref=${target}]`))
+            continue;
+        // New Playwright MCP target schemas accept strict unique selectors too.
+        // Let Playwright resolve visibility and uniqueness; do not mistake a CSS
+        // password-field selector for a stale accessibility reference.
+        if (/^[\w-]+$/.test(target) && !/^(input|textarea|select|button)$/.test(target))
             throw new Error("Browser target changed or is no longer visible. Inspect a fresh snapshot before trying a different action.");
     }
 }

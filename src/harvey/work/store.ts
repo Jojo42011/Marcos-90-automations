@@ -7,7 +7,7 @@ import { CronExpressionParser } from "cron-parser";
 
 export type Mode = "chat" | "work";
 export interface Project { id: string; name: string; instructions: string; timezone: string }
-export interface Chat { allowChatCredentials?: boolean; id: string; projectId: string | null; title: string; mode: Mode; sessionId: string; updatedAt: string }
+export interface Chat { model?: string; allowChatCredentials?: boolean; id: string; projectId: string | null; title: string; mode: Mode; sessionId: string; updatedAt: string }
 export interface Message { role: "user" | "assistant"; content: string; at: string; runId?: string; origin?: "delegated" }
 export interface Schedule { id: string; chatId: string; title: string; prompt: string; cron: string; timezone: string; enabled: boolean; nextRunAt: string; maxCostUsd: number; workflowId?: string; pauseAfterFailures?: number; consecutiveFailures?: number; pauseReason?: string; lastRunStatus?: string; lastRunAt?: string }
 export interface Run { id: string; scheduleId: string; chatId: string; status: "running" | "completed" | "failed" | "needs_attention"; startedAt: string; finishedAt?: string; result?: string }
@@ -42,7 +42,7 @@ export function createProject(owner: string, input: any): Project {
 }
 export function createChat(owner: string, input: any): Chat {
   const projectId = input.projectId || null; if (projectId) get("project", owner, projectId);
-  return put("chat", owner, { id: randomUUID(), sessionId: randomUUID(), projectId, title: text(input.title || "New chat", "Chat title", 120), mode: input.mode === "work" ? "work" : "chat", updatedAt: new Date().toISOString() });
+  return put("chat", owner, { id: randomUUID(), sessionId: randomUUID(), projectId, model: text(input.model || "auto", "Model", 150), title: text(input.title || "New chat", "Chat title", 120), mode: input.mode === "work" ? "work" : "chat", updatedAt: new Date().toISOString() });
 }
 export function handoffChat(owner: string, sourceId: string, brief: string): Chat {
   const source = get<Chat>("chat", owner, sourceId);

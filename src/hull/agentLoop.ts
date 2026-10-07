@@ -401,7 +401,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   let lastModelUsed = model;
   let substituted: { asked: string; ran: string } | undefined;
 
-  const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : MAX_AGENT_STEPS;
+  const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
 
   /**
    * Run one tool call, refusing an identical repeat.
@@ -479,6 +479,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     return { _harveyEvidence: receipt, data: result ?? null };
   };
 
+  let providerRetries=0;
   for (let step = 0; step < stepBudget; step++) {
     opts.signal?.throwIfAborted();
     /* The final round runs with tools WITHHELD. The budget then ends in an
@@ -531,9 +532,12 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         };
       }
       const detail = err instanceof ModelLayerError ? err.summary : err instanceof Error ? err.message : String(err);
+      if(opts.workRuntime && !opts.signal?.aborted && providerRetries<1 && /timeout|\b50[234]\b|temporarily unavailable/i.test(detail)){
+        providerRetries++;step--;await new Promise(resolve=>setTimeout(resolve,1000));continue;
+      }
       console.error("[agentLoop] model call failed:", detail);
       return {
-        speech: `I could not reach a model just now. ${detail}`,
+        speech: "The selected model did not respond. Any completed actions remain saved. You can retry or choose another model for this chat.",
         toolRounds,
         model,
         modelUsed: lastModelUsed,
@@ -569,7 +573,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
       // inspect its results before returning; ordinary conversation needs none.
       const evidence = verification.result();
       const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(opts.message) || /https?:\/\/\S+/i.test(opts.message);
-      if (opts.workRuntime && !lastRound && completionRepairs < 2 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
+      if (opts.workRuntime && !lastRound && completionRepairs < 3 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
         completionRepairs++;
         messages.push({role:"assistant",content:out.text || "I need to continue the requested work."});
         messages.push({role:"user",content:evidence.receipts.length

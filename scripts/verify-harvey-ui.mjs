@@ -93,8 +93,8 @@ ok("the pill opens a popover listing models", /id="modelMenu"/.test(html) && /bu
 ok("the picker offers an Auto option meaning Harvey routes per job",
   /data-model="auto"/.test(js) && /routes each job/i.test(js));
 ok("models are grouped by family", /FAMILY_ORDER\s*=\s*\[\s*"Anthropic",\s*"OpenAI",\s*"Google"/.test(js));
-ok("the choice persists in localStorage",
-  /MODEL_KEY\s*=\s*"harvey_model"/.test(js) && /localStorage\.setItem\(MODEL_KEY/.test(js));
+ok("the model is saved per chat rather than shared browser storage",
+  js.includes("body:{model:id}") && js.includes("state.selectedModel=r.data.model") && !/localStorage\.setItem\(MODEL_KEY/.test(js));
 ok("Enter sends and Shift+Enter makes a newline",
   /e\.key === "Enter" && !e\.shiftKey/.test(js));
 ok("the textarea autogrows", /function autosize/.test(js) && /scrollHeight/.test(js));

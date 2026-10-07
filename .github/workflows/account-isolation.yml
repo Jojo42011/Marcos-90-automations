@@ -21,6 +21,7 @@ jobs:
       - run: node scripts/verify-harvey-credential-consent.mjs
       - run: node scripts/verify-harvey-work.mjs
       - run: npx playwright install --with-deps chromium
+      - run: PW_CHROMIUM=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-harvey-reliability.mjs
       - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-browser-persistence.mjs
       - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-harvey-computer-ui.mjs
       - run: TASK_UI_BROWSER=true HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-account-isolation.mjs

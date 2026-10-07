@@ -3,11 +3,11 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { createHash, randomUUID } from "crypto";
 import { mkdirSync, chownSync, existsSync, renameSync, chmodSync, readFileSync, unlinkSync } from "fs";
 import { dirname, join, resolve, sep } from "path";
-import { Connection, get, list, put, seal, unseal, workDir, text } from "./store.js";
+import { Connection, get, list, put, seal, unseal, workDir, workDb, text } from "./store.js";
 
 const ALLOWED = new Set(["browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click", "browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover", "browser_drag", "browser_tabs", "browser_wait_for", "browser_handle_dialog", "browser_file_upload", "browser_take_screenshot", "browser_close"]);
 type Frame = { image: string; capturedAt: string; url: string; title: string };
-type Session = { client: Client; tools: any[]; lastUsed: number; statePath: string; busy?: number; action?: string; failed?: boolean; frame?: Frame; preview?: Promise<void>; closing?: boolean };
+type Session = { owner:string; chat:string; client: Client; tools: any[]; lastUsed: number; statePath: string; busy?: number; action?: string; failed?: boolean; frame?: Frame; preview?: Promise<void>; closing?: boolean };
 const sessions = new Map<string, Promise<Session>>();
 export function browserEnabled() { return process.env.HARVEY_BROWSER_ENABLED === "true"; }
 export function browserDirectory(owner: string, chat: string) { const key = createHash("sha256").update(owner + ":" + chat).digest("hex"); const dir = join(workDir(), "browsers", key); mkdirSync(dir, { recursive: true }); return dir; }
@@ -33,7 +33,7 @@ async function session(owner: string, chat: string): Promise<Session> {
       transport.stderr?.on("data", b => { startupError = (startupError + String(b)).slice(-2000); });
       try { await client.connect(transport, { timeout: 15000 }); const tools = (await client.listTools({}, { timeout: 15000 })).tools.filter(t => ALLOWED.has(t.name)); const statePath = join(dir, "auth-state.json");
         if (existsSync(statePath)) { const restored=await client.callTool({name:"browser_set_storage_state",arguments:{filename:statePath}},undefined,{timeout:60000}); if(restored.isError) throw new Error("Saved browser session could not be restored; retained state was left intact"); }
-        return { client, tools, statePath, lastUsed: Date.now() }; }
+        return { owner, chat, client, tools, statePath, lastUsed: Date.now() }; }
       catch (e) { await client.close().catch(() => {}); throw new Error(`Browser startup failed: ${(e as Error).message}${startupError ? ". " + startupError : ""}`); }
     })().catch(e => { sessions.delete(key); throw e; });
     sessions.set(key, promise);
@@ -49,7 +49,7 @@ async function checkpoint(s: Session) {
 async function closeSession(s: Session) { s.closing=true; await s.preview; try { await checkpoint(s); } finally { await s.client.close(); } }
 export async function closeBrowser(owner: string, chat: string) { const key = owner + ":" + chat, promise = sessions.get(key); if (promise) { sessions.delete(key); const s = await promise.catch(() => null); if(s) await closeSession(s); } }
 export async function closeBrowsers() { const keys = [...sessions.keys()]; for (const key of keys) { const s = await sessions.get(key)?.catch(() => null); if(s) await closeSession(s); sessions.delete(key); } }
-const idle = setInterval(() => { for (const [key, value] of sessions) void value.then(async s => { if (Date.now() - s.lastUsed > 10 * 60_000) { sessions.delete(key); await closeSession(s); } }).catch(() => {}); }, 60000); idle.unref();
+const idle = setInterval(() => { for (const [key, value] of sessions) void value.then(async s => { if (!s.busy && !workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(s.owner,s.chat) && Date.now() - s.lastUsed > 10 * 60_000) { sessions.delete(key); await closeSession(s); } }).catch(() => {}); }, 60000); idle.unref();
 export async function browserTools(owner: string, chat: string) { return (await session(owner, chat)).tools; }
 // Observation never opens a browser, refreshes its idle lifetime, or changes login state.
 export async function browserPreview(owner: string, chat: string) {
@@ -86,9 +86,17 @@ async function observedAction<T>(s:Session,name:string,fn:()=>Promise<T>):Promis
   finally{s.busy--;}
 }
 export function validateActionReferences(snapshot:string,args:any) {
-  const refs=[args?.ref,args?.target,args?.startRef,args?.endRef,...(Array.isArray(args?.fields)?args.fields.flatMap((f:any)=>[f.ref,f.target]):[])].filter(v=>typeof v==="string"&&v);
-  for(const ref of refs){
-    if(!/^[\w-]+$/.test(ref)||!snapshot.includes(`[ref=${ref}]`))throw new Error("Browser target changed or is no longer visible. Inspect a fresh snapshot before trying a different action.");
+  const fields=Array.isArray(args?.fields)?args.fields:[];
+  const refs=[args?.ref,args?.startRef,args?.endRef,...fields.map((f:any)=>f.ref)].filter(Boolean);
+  const targets=[args?.target,args?.startTarget,args?.endTarget,...fields.map((f:any)=>f.target)].filter(Boolean);
+  for(const ref of refs)if(typeof ref!=="string"||!snapshot.includes(`[ref=${ref}]`))throw new Error("Browser target changed. Inspect a fresh snapshot and use its current reference or a unique selector.");
+  for(const target of targets){
+    if(typeof target!=="string"||target.length>2000)throw new Error("Invalid browser target");
+    if(snapshot.includes(`[ref=${target}]`))continue;
+    // New Playwright MCP target schemas accept strict unique selectors too.
+    // Let Playwright resolve visibility and uniqueness; do not mistake a CSS
+    // password-field selector for a stale accessibility reference.
+    if(/^[\w-]+$/.test(target)&&! /^(input|textarea|select|button)$/.test(target))throw new Error("Browser target changed or is no longer visible. Inspect a fresh snapshot before trying a different action.");
   }
 }
 export async function browserCall(owner: string, chat: string, name: string, args: any) {
