@@ -1,7 +1,10 @@
 /**
  * Run modules in order by lead state. Single entry for webhook-driven flow.
  */
+import { respondsToDmInvitation } from "../integrations/zernio/history.js";
+import { asksForListingFacts, unverifiedListingReply, requestsPhoneNumber } from "./propertyKnowledge.js";
 import * as db from "../core/db.js";
+import { getListing } from "../core/listingsStore.js";
 import type { Conversation, IncomingWebhookPayload, Lead } from "../core/types.js";
 import { FunnelStage } from "../core/state.js";
 import { resolveInboundListingRef } from "./inboundListing.js";
@@ -423,7 +426,7 @@ export async function run(
         reason: "tiktok_marco_previous_outbound",
         message_preview: previewText(payload.message),
       });
-    } else if (isWaveOnlyMessage(payload.message.trim())) {
+    } else if (isWaveOnlyMessage(payload.message.trim()) || respondsToDmInvitation(payload.message)) {
       interested = true;
       noteGate("skipped_wave", true);
       marcoLog("intent_gate", {
@@ -496,6 +499,15 @@ export async function run(
     return { lead, reply: null };
   }
 
+  if (payload.conversationHistory?.length) {
+    await db.mergeConversationHistory(lead.id, payload.conversationHistory);
+  }
+  if (!lead.phone) {
+    const historicalPhone = extractPhoneFromConversation(await db.getConversation(lead.id), 10000);
+    if (historicalPhone) {
+      lead = db.recoverHistoricalPhone(lead, historicalPhone);
+    }
+  }
   lead = await maybeSeedTiktokManualOpener(lead, payload, ctx);
 
   /* ManyChat can tell us WHICH listing the automation fired from. Resolving it
@@ -783,6 +795,20 @@ export async function run(
     }
   }
 
+  if (respondsToDmInvitation(latestLeadText) && !phoneCapturedThisTurn) {
+    const reply = "Hey, thanks for messaging me here! What would you like to know about the property?";
+    await db.appendMessage(lead.id, "assistant", reply);
+    await db.updateLead(lead);
+    return { lead, reply };
+  }
+
+  if (!(lead.mlsListingKey && getListing(lead.mlsListingKey)) && !phoneCapturedThisTurn && asksForListingFacts(latestLeadText)) {
+    const reply = unverifiedListingReply(Boolean(lead.phone));
+    await db.appendMessage(lead.id, "assistant", reply);
+    await db.updateLead(lead);
+    return { lead, reply };
+  }
+
   if (
     !hadPhone &&
     !phoneCapturedThisTurn &&
@@ -1030,6 +1056,7 @@ export async function run(
   const styleInstructions = getCommunicationStyleInstructions(commStyle);
 
   let coachingNote = preflightRaw.coachingNote.trim();
+  if (!lead.mlsListingKey || !getListing(lead.mlsListingKey)) coachingNote += " NO_VERIFIED_LISTING: You do not know this home's city, address, price, availability or specifications. Never infer listing facts from Marco's service area, an old assistant reply, or a user's guess. Say the details need verification.";
   const igDmTurn =
     payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm";
   if (leadLineRepeatForModel && !coachingNote) {
@@ -1048,7 +1075,7 @@ export async function run(
   if (messageAsksBuilderIdentity(latestLeadText)) {
     coachingNote = [
       coachingNote,
-      "BUILDER_GUARD: Lead asked who the builder is. NEVER name or hint the builder or developer. Deflect briefly; steer to a good number for the full breakdown (or west of Stone Oak only if they asked location).",
+      "BUILDER_GUARD: Lead asked who the builder is. NEVER name or hint the builder or developer. Deflect briefly; steer to a good number for the full breakdown (without guessing a location).",
     ]
       .filter(Boolean)
       .join(" ");
@@ -1069,7 +1096,7 @@ export async function run(
   if (detectOutOfStateLead(latestLeadText).detected && threadContainsBreakdownOffer(conversation)) {
     coachingNote = [
       coachingNote,
-      "OUT_OF_STATE_MID_THREAD: The lead just mentioned a non-Texas city or state, but they are already engaged with a specific listing in this thread (breakdown already offered/agreed to). They are NOT asking Marco to find them a home where they live. Do NOT offer to refer them to another agent. In one short sentence, reassure that this home is in Texas, near San Antonio, then continue toward the mobile number ask or answer their actual question.",
+      "OUT_OF_STATE_MID_THREAD: The lead just mentioned a non-Texas city or state, but they are already engaged with a specific listing in this thread (breakdown already offered/agreed to). They are NOT asking Marco to find them a home where they live. Do NOT offer to refer them to another agent. Acknowledge where they live without asserting where the home is. Do not guess the listing city or state. Continue helping with their actual question.",
     ]
       .filter(Boolean)
       .join(" ");
@@ -1301,6 +1328,9 @@ export async function run(
     });
   }
 
+  if (lead.phone && reply && requestsPhoneNumber(reply)) {
+    reply = "I have your number on file. What would you like to know about this one?";
+  }
   if (reply) {
     const freshConv = await db.getConversation(lead.id);
     const trailingAssistants = countTrailingAssistantsAtEnd(freshConv);
@@ -1346,4 +1376,3 @@ export async function run(
 
   return { lead, reply };
 }
-

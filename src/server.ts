@@ -6324,12 +6324,12 @@ app.post(
       zernioWebhookSecretConfigured,
       parseZernioInboundMessage,
       toIncomingWebhookPayload,
-      fetchVaOpener,
+      fetchConversationHistory,
       sendZernioReply,
       zernioTikTokAccountId,
     } = await import("./integrations/zernio/dm.js");
     const { parseZernioInboundComment } = await import("./integrations/zernio/comments.js");
-    const { handleInboundComment } = await import("./agents/commentAgent/index.js");
+    const { enqueueComment, drainCommentQueue } = await import("./agents/commentAgent/index.js");
     const { markCommenterDmReceived } = await import("./core/commentAgentStore.js");
 
     if (!zernioWebhookSecretConfigured()) {
@@ -6364,29 +6364,14 @@ app.post(
        because it is the cheaper check and the two never overlap. */
     const commentEvt = parseZernioInboundComment(body);
     if (commentEvt) {
-      if (isDuplicateHandle(commentEvt.eventId)) {
-        res.status(200).json({ ok: true, duplicate: true });
-        return;
-      }
-      /* Ack before the agent runs, same 5-second reason as the DM path: the
-         agent makes a model call and a read-back, which will not fit. */
+      const accountId = commentEvt.accountId || zernioTikTokAccountId();
+      if (!accountId) { res.status(503).json({ error: "Comment account is not configured" }); return; }
+      enqueueComment(commentEvt, accountId);
       res.status(200).json({ ok: true });
       void (async () => {
-        try {
-          const accountId = commentEvt.accountId || zernioTikTokAccountId();
-          if (!accountId) throw new Error("Comment delivery has no connected social account ID");
-          const outcome = await handleInboundComment(commentEvt, accountId);
-          marcoLog("comment_agent_outcome", {
-            comment_id: commentEvt.commentId,
-            post_id: commentEvt.platformPostId,
-            decision: outcome.decision,
-            bucket: outcome.bucket,
-            reason: outcome.reason,
-          });
-        } catch (err) {
-          console.error("[zernio] comment processing failed:", err);
-        }
-      })();
+        const { getLead } = await import("./core/db.js");
+        await drainCommentQueue(async id => !!(await getLead("tiktok", id)));
+      })().catch(err => console.error("[commentAgent] queue failed", err));
       return;
     }
 
@@ -6438,8 +6423,12 @@ app.post(
           });
         }
 
-        const vaOpener = await fetchVaOpener(evt.conversationId, evt.accountId);
-        const payload = toIncomingWebhookPayload(evt, vaOpener);
+        const history = await fetchConversationHistory({ conversationId: evt.conversationId,
+          accountId: evt.accountId, beforeMessageId: evt.platformMessageId, beforeAt: evt.sentAt });
+        const latestOutbound = [...history.messages].reverse().find(m => m.role === "assistant")?.text;
+        const payload = toIncomingWebhookPayload(evt, latestOutbound ?? null);
+        payload.conversationHistory = history.messages;
+        if (!history.complete) marcoLog("history_incomplete", { requestId, correlationId });
 
         /* The existing per-user debounce, unchanged: a lead firing off three
            quick messages becomes ONE pipeline turn, and only the last waiter
@@ -15366,3 +15355,10 @@ httpServer.listen(PORT, tenantOwner() ? "127.0.0.1" : "0.0.0.0", () => {
     console.log(`  → upstream: ${AD_DASHBOARD_BASE_URL}/api/latest`);
   }
 });
+
+if (!tenantOwner()) {
+  void import("./agents/commentAgent/index.js").then(async ({ startCommentQueueWorker }) => {
+    const { getLead } = await import("./core/db.js");
+    startCommentQueueWorker(async id => !!(await getLead("tiktok", id)));
+  });
+}

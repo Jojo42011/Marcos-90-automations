@@ -55,10 +55,12 @@ exports.findLeadByPhoneDigits = findLeadByPhoneDigits;
 exports.pauseAutoPlansOnInboundText = pauseAutoPlansOnInboundText;
 exports.createLead = createLead;
 exports.upsertLeadQuiet = upsertLeadQuiet;
+exports.recoverHistoricalPhone = recoverHistoricalPhone;
 exports.updateLead = updateLead;
 exports.getConversation = getConversation;
 exports.getInboundDmCount = getInboundDmCount;
 exports.getLastInboundDmAt = getLastInboundDmAt;
+exports.mergeConversationHistory = mergeConversationHistory;
 exports.appendMessage = appendMessage;
 exports.normalizeCrmDeal = normalizeCrmDeal;
 exports.normalizeCrmActivity = normalizeCrmActivity;
@@ -725,6 +727,16 @@ function upsertLeadQuiet(input) {
     persistToFile();
     return created;
 }
+/** Recover contact context without replaying source routing, campaigns or capture automation. */
+function recoverHistoricalPhone(lead, phone) {
+    const existing = leadsById.get(lead.id) ?? lead;
+    if (existing.phone)
+        return existing;
+    const recovered = { ...existing, phone, updatedAt: nowIso() };
+    leadsById.set(lead.id, recovered);
+    persistToFile();
+    return recovered;
+}
 async function updateLead(lead) {
     const existing = leadsById.get(lead.id);
     if (!existing) {
@@ -784,6 +796,22 @@ function getLastInboundDmAt(leadId) {
             return conv.messages[i].at;
     }
     return null;
+}
+async function mergeConversationHistory(leadId, history) {
+    const conversation = conversationsByLeadId.get(leadId) ?? { messages: [] };
+    let changed = false;
+    for (const item of history) {
+        if (conversation.messages.some(m => m.providerMessageId === item.id ||
+            (m.role === item.role && m.text === item.text && Math.abs(Date.parse(m.at) - Date.parse(item.at)) < 120000)))
+            continue;
+        conversation.messages.push({ role: item.role, text: item.text, at: item.at, providerMessageId: item.id });
+        changed = true;
+    }
+    if (changed) {
+        conversation.messages.sort((a, b) => a.at.localeCompare(b.at));
+        conversationsByLeadId.set(leadId, conversation);
+        persistToFile();
+    }
 }
 async function appendMessage(leadId, role, text) {
     const conversation = conversationsByLeadId.get(leadId) ?? { messages: [] };

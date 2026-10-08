@@ -69,6 +69,8 @@ import { createHmac, timingSafeEqual, randomUUID } from "crypto";
 
 import type { IncomingWebhookPayload } from "../../core/types.js";
 
+import { readConversationHistory } from "./history.js";
+
 const ZERNIO_API_BASE = "https://zernio.com/api/v1";
 
 /** Zernio's documented budget for our webhook ack. We stay well inside it. */
@@ -135,6 +137,7 @@ export interface ZernioInboundMessage {
   senderUsername: string | null;
   text: string;
   platformMessageId: string | null;
+  sentAt?: string | null;
 }
 
 function str(v: unknown): string | null {
@@ -199,7 +202,8 @@ export function parseZernioInboundMessage(body: unknown): ZernioInboundMessage |
        dropped so the pipeline still sees a turn; it already treats an empty
        message as "no reply" instead of inventing one. */
     text: str(message.text) ?? "",
-    platformMessageId: str(message.platformMessageId),
+    platformMessageId: str(message.platformMessageId) ?? str(message.id),
+    sentAt: str(message.sentAt) ?? str(message.createdAt),
   };
 }
 
@@ -215,6 +219,7 @@ async function zernioFetch(
       ...(init.headers ?? {}),
     },
     body: init.body,
+    signal: AbortSignal.timeout(12000),
   });
   const text = await res.text();
   let json: unknown = null;
@@ -384,4 +389,9 @@ export async function zernioAccounts(): Promise<{
       error: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+export async function fetchConversationHistory(input: { conversationId: string; accountId: string; beforeMessageId?: string | null; beforeAt?: string | null }) {
+  if (!apiKey()) return { messages: [], complete: false };
+  return readConversationHistory(input, p => zernioFetch(p, { method: "GET" }));
 }

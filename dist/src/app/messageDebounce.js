@@ -18,6 +18,7 @@ function combinePayloads(payloads) {
     return {
         ...last,
         message: combinedMessage,
+        conversationHistory: payloads[0]?.conversationHistory,
         marcoPreviousOutbound: seedOpener ?? last.marcoPreviousOutbound,
     };
 }
@@ -25,6 +26,12 @@ async function flushBatch(key, process) {
     const batch = batches.get(key);
     if (!batch)
         return;
+    if (processing.has(key)) {
+        if (batch.timer)
+            clearTimeout(batch.timer);
+        batch.timer = null;
+        return;
+    }
     batches.delete(key);
     if (batch.timer) {
         clearTimeout(batch.timer);
@@ -38,12 +45,6 @@ async function flushBatch(key, process) {
     const combined = combinePayloads(batch.payloads);
     const waiters = batch.waiters;
     const lastWaiter = waiters[waiters.length - 1];
-    if (processing.has(key)) {
-        for (const w of waiters) {
-            w.resolve({ status: 200, reply: undefined });
-        }
-        return;
-    }
     processing.add(key);
     try {
         const result = await process(combined, batch.log);
@@ -64,6 +65,9 @@ async function flushBatch(key, process) {
     }
     finally {
         processing.delete(key);
+        const next = batches.get(key);
+        if (next && !next.timer)
+            next.timer = setTimeout(() => { void flushBatch(key, process); }, DEBOUNCE_MS);
     }
 }
 /** Skip debounce for comment handshake (empty message) — respond immediately. */

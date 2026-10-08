@@ -55,7 +55,7 @@ export const MARCO_BUSINESS_COLLAB_REPLY =
 
 /** Pre-phone only: lead asks what city the property is in — answer, offer the breakdown, ask in the same message. */
 export const MARCO_CITY_REPLY =
-  "San Antonio, Texas. Would it be helpful if I sent you over the full breakdown of the property you inquired about? What's the best number to send it to?";
+  "I need to verify the location for that specific property so I don't give you the wrong city. What's the best number to send the confirmed details to?";
 
 /** Bucket F: lead clearly confirmed in-state (Texas / San Antonio), pre-phone. */
 export const MARCO_CALL_ASK_INSTATE =
@@ -700,4 +700,3 @@ export function getMarcoTikTokUnifiedPipelineSystem(): string {
   ];
   return sections.join("\n\n");
 }
-

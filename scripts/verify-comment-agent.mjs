@@ -188,8 +188,8 @@ for (const b of ["skip", "social", "frustrated", "casual"]) {
 
 draftImpl = async () => ({ bucket: "high_intent", reply: "It's $534,149, DM me", reason: "price" });
 o = await run(evt(), ACCT);
-check("a model that drafts a PRICE is blocked at the gate, not posted",
-  o.decision === "failed" && /price/.test(o.reason), o.reason);
+check("a model price is replaced with a fact-free invitation",
+  o.decision === "replied" && !/534|\$|Austin|San Antonio/.test(o.replyText ?? ""), o.reason);
 
 const postedBeforeNullDraft = posted.length;
 draftImpl = async () => null;

@@ -46,6 +46,7 @@ async function zernioFetch(path, init) {
             ...(init.headers ?? {}),
         },
         body: init.body,
+        signal: AbortSignal.timeout(12000),
     });
     const text = await res.text();
     let json = null;
@@ -114,39 +115,52 @@ async function readBackComment(platformPostId, commentId, accountId) {
     if (!apiKey())
         return miss;
     try {
-        const qs = new URLSearchParams({ accountId, limit: "100" });
-        const r = await zernioFetch(`/inbox/comments/${encodeURIComponent(platformPostId)}?${qs}`, { method: "GET" });
-        if (!r.ok)
-            return miss;
-        const payload = r.json;
-        const list = (Array.isArray(payload?.comments)
-            ? payload?.comments
-            : Array.isArray(payload?.data)
-                ? payload?.data
-                : []);
-        /* Top-level comments carry up to three inline replies on TikTok, so the
-           comment we want may be nested one level down. */
-        const flat = [];
-        for (const top of list) {
-            flat.push(top);
-            const replies = Array.isArray(top.replies) ? top.replies : [];
-            for (const rep of replies)
-                flat.push(rep);
+        let cursor = "";
+        const seen = new Set();
+        for (let page = 0; page < 10; page++) {
+            const qs = new URLSearchParams({ accountId, limit: "100" });
+            if (cursor)
+                qs.set("cursor", cursor);
+            const r = await zernioFetch(`/inbox/comments/${encodeURIComponent(platformPostId)}?${qs}`, { method: "GET" });
+            if (!r.ok)
+                return miss;
+            const payload = r.json;
+            const list = (Array.isArray(payload?.comments)
+                ? payload?.comments
+                : Array.isArray(payload?.data)
+                    ? payload?.data
+                    : []);
+            /* Top-level comments carry up to three inline replies on TikTok, so the
+               comment we want may be nested one level down. */
+            const flat = [];
+            for (const top of list) {
+                flat.push(top);
+                const replies = Array.isArray(top.replies) ? top.replies : [];
+                for (const rep of replies)
+                    flat.push(rep);
+            }
+            const hit = flat.find((m) => str(m.id) === commentId);
+            if (!hit) {
+                const next = payload?.pagination?.nextCursor;
+                if (!payload?.pagination?.hasMore || !next || seen.has(next))
+                    return miss;
+                seen.add(next);
+                cursor = next;
+                continue;
+            }
+            const from = (hit.from ?? {});
+            return {
+                found: true,
+                isOwner: from.isOwner === true,
+                canReply: hit.canReply !== false,
+                username: str(from.username) ?? str(from.name),
+                /* REST spells the body `message`; the webhook spells it `text`. */
+                text: str(hit.message) ?? str(hit.text),
+                isHidden: hit.isHidden === true,
+                replyCount: typeof hit.replyCount === "number" ? hit.replyCount : 0,
+            };
         }
-        const hit = flat.find((m) => str(m.id) === commentId);
-        if (!hit)
-            return miss;
-        const from = (hit.from ?? {});
-        return {
-            found: true,
-            isOwner: from.isOwner === true,
-            canReply: hit.canReply !== false,
-            username: str(from.username) ?? str(from.name),
-            /* REST spells the body `message`; the webhook spells it `text`. */
-            text: str(hit.message) ?? str(hit.text),
-            isHidden: hit.isHidden === true,
-            replyCount: typeof hit.replyCount === "number" ? hit.replyCount : 0,
-        };
+        return miss;
     }
     catch {
         return miss;

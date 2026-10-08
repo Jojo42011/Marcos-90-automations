@@ -6209,9 +6209,9 @@ app.post("/api/website/lead", express_1.default.json({ limit: "256kb" }), async 
  * exactly as they do on Instagram today.
  */
 app.post("/api/zernio/webhook", express_1.default.raw({ type: "application/json", limit: "1mb" }), async (req, res) => {
-    const { verifyZernioSignature, zernioWebhookSecretConfigured, parseZernioInboundMessage, toIncomingWebhookPayload, fetchVaOpener, sendZernioReply, zernioTikTokAccountId, } = await Promise.resolve().then(() => __importStar(require("./integrations/zernio/dm.js")));
+    const { verifyZernioSignature, zernioWebhookSecretConfigured, parseZernioInboundMessage, toIncomingWebhookPayload, fetchConversationHistory, sendZernioReply, zernioTikTokAccountId, } = await Promise.resolve().then(() => __importStar(require("./integrations/zernio/dm.js")));
     const { parseZernioInboundComment } = await Promise.resolve().then(() => __importStar(require("./integrations/zernio/comments.js")));
-    const { handleInboundComment } = await Promise.resolve().then(() => __importStar(require("./agents/commentAgent/index.js")));
+    const { enqueueComment, drainCommentQueue } = await Promise.resolve().then(() => __importStar(require("./agents/commentAgent/index.js")));
     const { markCommenterDmReceived } = await Promise.resolve().then(() => __importStar(require("./core/commentAgentStore.js")));
     if (!zernioWebhookSecretConfigured()) {
         /* Refuse rather than accept anonymous writes. This endpoint creates leads
@@ -6242,31 +6242,17 @@ app.post("/api/zernio/webhook", express_1.default.raw({ type: "application/json"
        because it is the cheaper check and the two never overlap. */
     const commentEvt = parseZernioInboundComment(body);
     if (commentEvt) {
-        if ((0, conversationUtils_js_1.isDuplicateHandle)(commentEvt.eventId)) {
-            res.status(200).json({ ok: true, duplicate: true });
+        const accountId = commentEvt.accountId || zernioTikTokAccountId();
+        if (!accountId) {
+            res.status(503).json({ error: "Comment account is not configured" });
             return;
         }
-        /* Ack before the agent runs, same 5-second reason as the DM path: the
-           agent makes a model call and a read-back, which will not fit. */
+        enqueueComment(commentEvt, accountId);
         res.status(200).json({ ok: true });
         void (async () => {
-            try {
-                const accountId = commentEvt.accountId || zernioTikTokAccountId();
-                if (!accountId)
-                    throw new Error("Comment delivery has no connected social account ID");
-                const outcome = await handleInboundComment(commentEvt, accountId);
-                (0, marcoLog_js_1.marcoLog)("comment_agent_outcome", {
-                    comment_id: commentEvt.commentId,
-                    post_id: commentEvt.platformPostId,
-                    decision: outcome.decision,
-                    bucket: outcome.bucket,
-                    reason: outcome.reason,
-                });
-            }
-            catch (err) {
-                console.error("[zernio] comment processing failed:", err);
-            }
-        })();
+            const { getLead } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+            await drainCommentQueue(async (id) => !!(await getLead("tiktok", id)));
+        })().catch(err => console.error("[commentAgent] queue failed", err));
         return;
     }
     const evt = parseZernioInboundMessage(body);
@@ -6312,8 +6298,13 @@ app.post("/api/zernio/webhook", express_1.default.raw({ type: "application/json"
                     comment_rows_marked: attributed,
                 });
             }
-            const vaOpener = await fetchVaOpener(evt.conversationId, evt.accountId);
-            const payload = toIncomingWebhookPayload(evt, vaOpener);
+            const history = await fetchConversationHistory({ conversationId: evt.conversationId,
+                accountId: evt.accountId, beforeMessageId: evt.platformMessageId, beforeAt: evt.sentAt });
+            const latestOutbound = [...history.messages].reverse().find(m => m.role === "assistant")?.text;
+            const payload = toIncomingWebhookPayload(evt, latestOutbound ?? null);
+            payload.conversationHistory = history.messages;
+            if (!history.complete)
+                (0, marcoLog_js_1.marcoLog)("history_incomplete", { requestId, correlationId });
             /* The existing per-user debounce, unchanged: a lead firing off three
                quick messages becomes ONE pipeline turn, and only the last waiter
                carries a reply. It was written for ManyChat and never wired up; it
@@ -14930,3 +14921,9 @@ httpServer.listen(PORT, (0, tenantData_js_2.tenantOwner)() ? "127.0.0.1" : "0.0.
         console.log(`  → upstream: ${AD_DASHBOARD_BASE_URL}/api/latest`);
     }
 });
+if (!(0, tenantData_js_2.tenantOwner)()) {
+    void Promise.resolve().then(() => __importStar(require("./agents/commentAgent/index.js"))).then(async ({ startCommentQueueWorker }) => {
+        const { getLead } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
+        startCommentQueueWorker(async (id) => !!(await getLead("tiktok", id)));
+    });
+}

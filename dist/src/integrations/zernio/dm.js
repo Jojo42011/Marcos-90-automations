@@ -10,6 +10,7 @@ exports.fetchVaOpener = fetchVaOpener;
 exports.toIncomingWebhookPayload = toIncomingWebhookPayload;
 exports.sendZernioReply = sendZernioReply;
 exports.zernioAccounts = zernioAccounts;
+exports.fetchConversationHistory = fetchConversationHistory;
 /**
  * Zernio DM transport — TikTok direct messages, replacing ManyChat on that channel.
  *
@@ -78,6 +79,7 @@ exports.zernioAccounts = zernioAccounts;
  * auto-DMing a commenter cannot be done through any API.
  */
 const crypto_1 = require("crypto");
+const history_js_1 = require("./history.js");
 const ZERNIO_API_BASE = "https://zernio.com/api/v1";
 /** Zernio's documented budget for our webhook ack. We stay well inside it. */
 exports.ZERNIO_ACK_BUDGET_MS = 5000;
@@ -184,7 +186,8 @@ function parseZernioInboundMessage(body) {
            dropped so the pipeline still sees a turn; it already treats an empty
            message as "no reply" instead of inventing one. */
         text: str(message.text) ?? "",
-        platformMessageId: str(message.platformMessageId),
+        platformMessageId: str(message.platformMessageId) ?? str(message.id),
+        sentAt: str(message.sentAt) ?? str(message.createdAt),
     };
 }
 async function zernioFetch(path, init) {
@@ -196,6 +199,7 @@ async function zernioFetch(path, init) {
             ...(init.headers ?? {}),
         },
         body: init.body,
+        signal: AbortSignal.timeout(12000),
     });
     const text = await res.text();
     let json = null;
@@ -338,4 +342,9 @@ async function zernioAccounts() {
             error: err instanceof Error ? err.message : String(err),
         };
     }
+}
+async function fetchConversationHistory(input) {
+    if (!apiKey())
+        return { messages: [], complete: false };
+    return (0, history_js_1.readConversationHistory)(input, p => zernioFetch(p, { method: "GET" }));
 }

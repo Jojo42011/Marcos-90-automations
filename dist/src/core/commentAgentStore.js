@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.resetCommentAgentDbForTests = resetCommentAgentDbForTests;
 exports.getCommentAgentDb = getCommentAgentDb;
 exports.hasActedOnComment = hasActedOnComment;
 exports.isOurOwnPostedComment = isOurOwnPostedComment;
@@ -14,6 +15,9 @@ exports.markCommenterDmReceived = markCommenterDmReceived;
 exports.getFollowUpQueue = getFollowUpQueue;
 exports.getCommentAgentStats = getCommentAgentStats;
 exports.getRecentCommentActions = getRecentCommentActions;
+exports.enqueueComment = enqueueComment;
+exports.claimQueuedComment = claimQueuedComment;
+exports.finishQueuedComment = finishQueuedComment;
 const tenantData_js_1 = require("./tenantData.js");
 /**
  * Ledger for the TikTok comment agent.
@@ -57,6 +61,10 @@ function resolveCommentAgentDbPath() {
 }
 let db = null;
 function initCommentAgentSchema(database) {
+    database.exec(`CREATE TABLE IF NOT EXISTS comment_queue (
+    comment_id TEXT PRIMARY KEY, account_id TEXT NOT NULL, event_json TEXT NOT NULL,
+    next_attempt INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending'
+  )`);
     database.exec(`
     CREATE TABLE IF NOT EXISTS comment_actions (
       comment_id         TEXT PRIMARY KEY,
@@ -79,6 +87,12 @@ function initCommentAgentSchema(database) {
     database.exec(`CREATE INDEX IF NOT EXISTS idx_ca_post ON comment_actions(platform_post_id)`);
     database.exec(`CREATE INDEX IF NOT EXISTS idx_ca_decision ON comment_actions(decision, acted_at)`);
     database.exec(`CREATE INDEX IF NOT EXISTS idx_ca_posted ON comment_actions(posted_comment_id)`);
+}
+/** Close the singleton so offline tests can verify persistence across reopen. */
+function resetCommentAgentDbForTests() {
+    if (db?.open)
+        db.close();
+    db = null;
 }
 function getCommentAgentDb() {
     if (!db) {
@@ -108,7 +122,9 @@ function rowToAction(r) {
 /** Have we already made a decision about this exact comment? */
 function hasActedOnComment(commentId) {
     const row = getCommentAgentDb()
-        .prepare(`SELECT 1 FROM comment_actions WHERE comment_id = ? LIMIT 1`)
+        .prepare(`SELECT 1 FROM comment_actions WHERE comment_id = ?
+      AND decision NOT IN ('skipped_rate_limit','skipped_cannot_reply')
+      AND NOT (decision = 'failed' AND reason = 'classification unavailable') LIMIT 1`)
         .get(commentId);
     return Boolean(row);
 }
@@ -234,4 +250,23 @@ function getRecentCommentActions(limit = 40) {
         .prepare(`SELECT * FROM comment_actions ORDER BY acted_at DESC LIMIT ?`)
         .all(limit);
     return rows.map(rowToAction);
+}
+/** Only new webhook events enter this queue; never sweep historical comments. */
+function enqueueComment(event, accountId) {
+    getCommentAgentDb().prepare("INSERT OR IGNORE INTO comment_queue (comment_id,account_id,event_json,next_attempt) VALUES (?,?,?,?)")
+        .run(event.commentId, accountId, JSON.stringify({ ...event, createdAt: event.createdAt || new Date().toISOString() }), Date.now());
+}
+function claimQueuedComment() {
+    const db = getCommentAgentDb();
+    return db.transaction(() => {
+        const row = db.prepare("SELECT * FROM comment_queue WHERE status='pending' AND next_attempt<=? ORDER BY next_attempt LIMIT 1").get(Date.now());
+        if (!row)
+            return null;
+        db.prepare("UPDATE comment_queue SET next_attempt=?, attempts=attempts+1 WHERE comment_id=?").run(Date.now() + 300000, row.comment_id);
+        return { event: JSON.parse(row.event_json), accountId: row.account_id, attempts: row.attempts + 1 };
+    })();
+}
+function finishQueuedComment(id, retry) {
+    getCommentAgentDb().prepare("UPDATE comment_queue SET status=?,next_attempt=? WHERE comment_id=?")
+        .run(retry ? "pending" : "done", Date.now() + 300000, id);
 }
