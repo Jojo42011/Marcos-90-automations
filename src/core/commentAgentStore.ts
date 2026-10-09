@@ -329,9 +329,10 @@ export function getRecentCommentActions(limit = 40): CommentActionRow[] {
 }
 
 /** Only new webhook events enter this queue; never sweep historical comments. */
-export function enqueueComment(event: import("../integrations/zernio/comments.js").ZernioInboundComment, accountId: string): void {
-  getCommentAgentDb().prepare("INSERT OR IGNORE INTO comment_queue (comment_id,account_id,event_json,next_attempt) VALUES (?,?,?,?)")
+export function enqueueComment(event: import("../integrations/zernio/comments.js").ZernioInboundComment, accountId: string): boolean {
+  const result = getCommentAgentDb().prepare("INSERT OR IGNORE INTO comment_queue (comment_id,account_id,event_json,next_attempt) VALUES (?,?,?,?)")
     .run(event.commentId, accountId, JSON.stringify({ ...event, createdAt: event.createdAt || new Date().toISOString() }), Date.now());
+  return result.changes > 0;
 }
 export function claimQueuedComment(): { event: import("../integrations/zernio/comments.js").ZernioInboundComment; accountId: string; attempts: number } | null {
   const db = getCommentAgentDb();

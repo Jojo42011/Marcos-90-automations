@@ -253,8 +253,9 @@ function getRecentCommentActions(limit = 40) {
 }
 /** Only new webhook events enter this queue; never sweep historical comments. */
 function enqueueComment(event, accountId) {
-    getCommentAgentDb().prepare("INSERT OR IGNORE INTO comment_queue (comment_id,account_id,event_json,next_attempt) VALUES (?,?,?,?)")
+    const result = getCommentAgentDb().prepare("INSERT OR IGNORE INTO comment_queue (comment_id,account_id,event_json,next_attempt) VALUES (?,?,?,?)")
         .run(event.commentId, accountId, JSON.stringify({ ...event, createdAt: event.createdAt || new Date().toISOString() }), Date.now());
+    return result.changes > 0;
 }
 function claimQueuedComment() {
     const db = getCommentAgentDb();

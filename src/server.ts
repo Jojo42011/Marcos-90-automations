@@ -6366,8 +6366,8 @@ app.post(
     if (commentEvt) {
       const accountId = commentEvt.accountId || zernioTikTokAccountId();
       if (!accountId) { res.status(503).json({ error: "Comment account is not configured" }); return; }
-      enqueueComment(commentEvt, accountId);
-      res.status(200).json({ ok: true });
+      const queued = enqueueComment(commentEvt, accountId);
+      res.status(200).json({ ok: true, ...(!queued ? { duplicate: true } : {}) });
       void (async () => {
         const { getLead } = await import("./core/db.js");
         await drainCommentQueue(async id => !!(await getLead("tiktok", id)));

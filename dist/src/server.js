@@ -6247,8 +6247,8 @@ app.post("/api/zernio/webhook", express_1.default.raw({ type: "application/json"
             res.status(503).json({ error: "Comment account is not configured" });
             return;
         }
-        enqueueComment(commentEvt, accountId);
-        res.status(200).json({ ok: true });
+        const queued = enqueueComment(commentEvt, accountId);
+        res.status(200).json({ ok: true, ...(!queued ? { duplicate: true } : {}) });
         void (async () => {
             const { getLead } = await Promise.resolve().then(() => __importStar(require("./core/db.js")));
             await drainCommentQueue(async (id) => !!(await getLead("tiktok", id)));
