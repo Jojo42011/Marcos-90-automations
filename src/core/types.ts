@@ -790,6 +790,7 @@ export interface Criteria {
 export type PreApprovalStatus = "approved" | "in_progress" | "cash" | "not_approved";
 
 export interface Message {
+  providerMessageId?: string;
   role: "user" | "assistant";
   text: string;
   at: string;
@@ -1295,6 +1296,7 @@ export interface DashboardSnapshot {
 }
 
 export interface IncomingWebhookPayload {
+  conversationHistory?: import("../integrations/zernio/history.js").HistoryMessage[];
   platform: string;
   userId: string;
   /** IG handle / stable id — stored on Lead.username for lookups and CRM. */

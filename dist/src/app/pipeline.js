@@ -37,7 +37,10 @@ exports.run = run;
 /**
  * Run modules in order by lead state. Single entry for webhook-driven flow.
  */
+const history_js_1 = require("../integrations/zernio/history.js");
+const propertyKnowledge_js_1 = require("./propertyKnowledge.js");
 const db = __importStar(require("../core/db.js"));
+const listingsStore_js_1 = require("../core/listingsStore.js");
 const state_js_1 = require("../core/state.js");
 const inboundListing_js_1 = require("./inboundListing.js");
 const _03_tone_matched_dm_1 = require("../modules/03-tone-matched-dm");
@@ -332,7 +335,7 @@ async function run(payload, log) {
                 message_preview: (0, marcoLog_js_1.previewText)(payload.message),
             });
         }
-        else if ((0, conversationUtils_js_1.isWaveOnlyMessage)(payload.message.trim())) {
+        else if ((0, conversationUtils_js_1.isWaveOnlyMessage)(payload.message.trim()) || (0, history_js_1.respondsToDmInvitation)(payload.message)) {
             interested = true;
             noteGate("skipped_wave", true);
             (0, marcoLog_js_1.marcoLog)("intent_gate", {
@@ -403,6 +406,15 @@ async function run(payload, log) {
             email_captured_this_turn: false,
         });
         return { lead, reply: null };
+    }
+    if (payload.conversationHistory?.length) {
+        await db.mergeConversationHistory(lead.id, payload.conversationHistory);
+    }
+    if (!lead.phone) {
+        const historicalPhone = (0, funnelDeterministic_js_1.extractPhoneFromConversation)(await db.getConversation(lead.id), 10000);
+        if (historicalPhone) {
+            lead = db.recoverHistoricalPhone(lead, historicalPhone);
+        }
     }
     lead = await maybeSeedTiktokManualOpener(lead, payload, ctx);
     /* ManyChat can tell us WHICH listing the automation fired from. Resolving it
@@ -666,6 +678,18 @@ async function run(payload, log) {
             return { lead, reply: notReceivedReply };
         }
     }
+    if ((0, history_js_1.respondsToDmInvitation)(latestLeadText) && !phoneCapturedThisTurn) {
+        const reply = "Hey, thanks for messaging me here! What would you like to know about the property?";
+        await db.appendMessage(lead.id, "assistant", reply);
+        await db.updateLead(lead);
+        return { lead, reply };
+    }
+    if (!(lead.mlsListingKey && (0, listingsStore_js_1.getListing)(lead.mlsListingKey)) && !phoneCapturedThisTurn && (0, propertyKnowledge_js_1.asksForListingFacts)(latestLeadText)) {
+        const reply = (0, propertyKnowledge_js_1.unverifiedListingReply)(Boolean(lead.phone));
+        await db.appendMessage(lead.id, "assistant", reply);
+        await db.updateLead(lead);
+        return { lead, reply };
+    }
     if (!hadPhone &&
         !phoneCapturedThisTurn &&
         (0, conversationUtils_js_1.messageAsksWhatCity)(latestLeadText)) {
@@ -886,6 +910,8 @@ async function run(payload, log) {
     const commStyle = (0, conversationUtils_js_1.detectCommunicationStyle)(conversationHistoryForDup);
     const styleInstructions = (0, conversationUtils_js_1.getCommunicationStyleInstructions)(commStyle);
     let coachingNote = preflightRaw.coachingNote.trim();
+    if (!lead.mlsListingKey || !(0, listingsStore_js_1.getListing)(lead.mlsListingKey))
+        coachingNote += " NO_VERIFIED_LISTING: You do not know this home's city, address, price, availability or specifications. Never infer listing facts from Marco's service area, an old assistant reply, or a user's guess. Say the details need verification.";
     const igDmTurn = payload.platform.toLowerCase().includes("insta") && payload.commentOrDm === "dm";
     if (leadLineRepeatForModel && !coachingNote) {
         coachingNote =
@@ -902,7 +928,7 @@ async function run(payload, log) {
     if ((0, conversationUtils_js_1.messageAsksBuilderIdentity)(latestLeadText)) {
         coachingNote = [
             coachingNote,
-            "BUILDER_GUARD: Lead asked who the builder is. NEVER name or hint the builder or developer. Deflect briefly; steer to a good number for the full breakdown (or west of Stone Oak only if they asked location).",
+            "BUILDER_GUARD: Lead asked who the builder is. NEVER name or hint the builder or developer. Deflect briefly; steer to a good number for the full breakdown (without guessing a location).",
         ]
             .filter(Boolean)
             .join(" ");
@@ -923,7 +949,7 @@ async function run(payload, log) {
     if ((0, conversationUtils_js_1.detectOutOfStateLead)(latestLeadText).detected && (0, conversationUtils_js_1.threadContainsBreakdownOffer)(conversation)) {
         coachingNote = [
             coachingNote,
-            "OUT_OF_STATE_MID_THREAD: The lead just mentioned a non-Texas city or state, but they are already engaged with a specific listing in this thread (breakdown already offered/agreed to). They are NOT asking Marco to find them a home where they live. Do NOT offer to refer them to another agent. In one short sentence, reassure that this home is in Texas, near San Antonio, then continue toward the mobile number ask or answer their actual question.",
+            "OUT_OF_STATE_MID_THREAD: The lead just mentioned a non-Texas city or state, but they are already engaged with a specific listing in this thread (breakdown already offered/agreed to). They are NOT asking Marco to find them a home where they live. Do NOT offer to refer them to another agent. Acknowledge where they live without asserting where the home is. Do not guess the listing city or state. Continue helping with their actual question.",
         ]
             .filter(Boolean)
             .join(" ");
@@ -1128,6 +1154,9 @@ async function run(payload, log) {
             correlationId,
             funnel_state: lead.state,
         });
+    }
+    if (lead.phone && reply && (0, propertyKnowledge_js_1.requestsPhoneNumber)(reply)) {
+        reply = "I have your number on file. What would you like to know about this one?";
     }
     if (reply) {
         const freshConv = await db.getConversation(lead.id);

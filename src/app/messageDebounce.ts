@@ -40,6 +40,7 @@ function combinePayloads(payloads: IncomingWebhookPayload[]): IncomingWebhookPay
   return {
     ...last,
     message: combinedMessage,
+    conversationHistory: payloads[0]?.conversationHistory,
     marcoPreviousOutbound: seedOpener ?? last.marcoPreviousOutbound,
   };
 }
@@ -47,6 +48,11 @@ function combinePayloads(payloads: IncomingWebhookPayload[]): IncomingWebhookPay
 async function flushBatch(key: string, process: ProcessFn): Promise<void> {
   const batch = batches.get(key);
   if (!batch) return;
+  if (processing.has(key)) {
+    if (batch.timer) clearTimeout(batch.timer);
+    batch.timer = null;
+    return;
+  }
   batches.delete(key);
 
   if (batch.timer) {
@@ -63,13 +69,6 @@ async function flushBatch(key: string, process: ProcessFn): Promise<void> {
   const combined = combinePayloads(batch.payloads);
   const waiters = batch.waiters;
   const lastWaiter = waiters[waiters.length - 1];
-
-  if (processing.has(key)) {
-    for (const w of waiters) {
-      w.resolve({ status: 200, reply: undefined });
-    }
-    return;
-  }
 
   processing.add(key);
   try {
@@ -88,6 +87,8 @@ async function flushBatch(key: string, process: ProcessFn): Promise<void> {
     }
   } finally {
     processing.delete(key);
+    const next = batches.get(key);
+    if (next && !next.timer) next.timer = setTimeout(() => { void flushBatch(key, process); }, DEBOUNCE_MS);
   }
 }
 

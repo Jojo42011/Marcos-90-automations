@@ -18,7 +18,19 @@ const conversationUtils_js_1 = require("./conversationUtils.js");
 const marcoLog_js_1 = require("./marcoLog.js");
 const IG_DEBOUNCE_MS = 4000;
 /** Prevent overlapping pipeline runs for the same lead. */
-const processingLeads = new Set();
+const leadLocks = new Map();
+async function acquireLeadLock(key) {
+    const previous = leadLocks.get(key) ?? Promise.resolve();
+    let release;
+    const current = new Promise(resolve => { release = resolve; });
+    leadLocks.set(key, current);
+    await previous;
+    return () => {
+        release();
+        if (leadLocks.get(key) === current)
+            leadLocks.delete(key);
+    };
+}
 function leadProcessingKey(platform, userId) {
     return `${platform}:${userId}`;
 }
@@ -48,8 +60,6 @@ function extractMessageHandle(rawBody) {
 }
 /** Instagram-only burst queue — module level so it persists across requests. */
 const igMessageQueue = {};
-/** Prevent overlapping batch processing for the same sender. */
-const igProcessingSenders = new Set();
 function isInstagramPlatform(platform) {
     return platform.toLowerCase().includes("insta");
 }
@@ -181,23 +191,8 @@ async function flushInstagramDm(senderId) {
         console.log(`[ig] Batching ${waiters.length} webhooks for ${senderId}`);
     }
     console.log(`Processing for ${senderId}: "${combinedInput}"`);
-    if (igProcessingSenders.has(senderId)) {
-        console.log(`[ig] Skipping duplicate batch for ${senderId} — already processing`);
-        for (const w of waiters) {
-            w.resolve({ status: 200, reply: undefined });
-        }
-        return;
-    }
     const leadLockKey = leadProcessingKey(payloadTemplate.platform, payloadTemplate.userId);
-    if (processingLeads.has(leadLockKey)) {
-        console.log(`[webhook] Lead ${leadLockKey} already processing — dropping duplicate IG batch`);
-        for (const w of waiters) {
-            w.resolve({ status: 200, reply: undefined });
-        }
-        return;
-    }
-    igProcessingSenders.add(senderId);
-    processingLeads.add(leadLockKey);
+    const release = await acquireLeadLock(leadLockKey);
     try {
         const payload = {
             ...payloadTemplate,
@@ -239,8 +234,7 @@ async function flushInstagramDm(senderId) {
         }
     }
     finally {
-        igProcessingSenders.delete(senderId);
-        processingLeads.delete(leadLockKey);
+        release();
     }
 }
 /**
@@ -561,11 +555,7 @@ async function handleIncomingPayload(payload, log) {
     const correlationId = log?.correlationId ?? (0, marcoLog_js_1.marcoCorrelationId)(payload.platform, payload.userId);
     const ctx = { requestId, correlationId };
     const lockKey = leadProcessingKey(payload.platform, payload.userId);
-    if (processingLeads.has(lockKey)) {
-        console.log(`[webhook] Lead ${lockKey} already processing — dropping duplicate request`);
-        return { status: 200, reply: undefined };
-    }
-    processingLeads.add(lockKey);
+    const release = await acquireLeadLock(lockKey);
     const start = Date.now();
     try {
         const { reply } = await (0, pipeline_js_1.run)(payload, ctx);
@@ -582,7 +572,7 @@ async function handleIncomingPayload(payload, log) {
         return { status: 200, reply: reply ?? undefined };
     }
     finally {
-        processingLeads.delete(lockKey);
+        release();
     }
 }
 /**

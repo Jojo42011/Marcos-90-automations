@@ -711,6 +711,16 @@ export function upsertLeadQuiet(
   return created;
 }
 
+/** Recover contact context without replaying source routing, campaigns or capture automation. */
+export function recoverHistoricalPhone(lead: Lead, phone: string): Lead {
+  const existing = leadsById.get(lead.id) ?? lead;
+  if (existing.phone) return existing;
+  const recovered = { ...existing, phone, updatedAt: nowIso() };
+  leadsById.set(lead.id, recovered);
+  persistToFile();
+  return recovered;
+}
+
 export async function updateLead(lead: Lead): Promise<Lead | undefined> {
   const existing = leadsById.get(lead.id);
   if (!existing) {
@@ -775,6 +785,22 @@ export function getLastInboundDmAt(leadId: string): string | null {
     if (conv.messages[i].role === "user") return conv.messages[i].at;
   }
   return null;
+}
+
+export async function mergeConversationHistory(leadId: string, history: import("../integrations/zernio/history.js").HistoryMessage[]): Promise<void> {
+  const conversation = conversationsByLeadId.get(leadId) ?? { messages: [] };
+  let changed = false;
+  for (const item of history) {
+    if (conversation.messages.some(m => m.providerMessageId === item.id ||
+      (m.role === item.role && m.text === item.text && Math.abs(Date.parse(m.at) - Date.parse(item.at)) < 120000))) continue;
+    conversation.messages.push({ role: item.role, text: item.text, at: item.at, providerMessageId: item.id });
+    changed = true;
+  }
+  if (changed) {
+    conversation.messages.sort((a, b) => a.at.localeCompare(b.at));
+    conversationsByLeadId.set(leadId, conversation);
+    persistToFile();
+  }
 }
 
 export async function appendMessage(

@@ -44,7 +44,7 @@ global.fetch=async(input,init={})=>{const url=new URL(typeof input==='string'?in
 if(['localhost','127.0.0.1'].includes(url.hostname))return original(input,init);
 if(url.hostname==='zernio.com'&&url.pathname==='/api/v1/inbox/conversations/fixture-marco/messages'){
  if(init.method==='POST'){fs.appendFileSync(${JSON.stringify(sends)},JSON.stringify({body:JSON.parse(init.body),headers:init.headers})+'\\n');return Response.json({message:{id:'fixture-sent'}});}
- return Response.json({messages:[{direction:'outgoing',text:'Hey, thanks for your comment! Are you buying your first home?'}]});
+ return Response.json({messages:[{id:'fixture-opener',direction:'outgoing',message:'Hey, thanks for your comment! Are you buying your first home?',createdAt:'2026-09-01T10:00:00Z'},{id:'fixture-inbound',direction:'incoming',message:'Yes, this is my first home',createdAt:'2026-09-01T10:01:00Z'}],pagination:{hasMore:false}});
 }throw new Error('Unexpected external request blocked by fixture: '+url.hostname);};`);
 let server, logs='';
 function start(){

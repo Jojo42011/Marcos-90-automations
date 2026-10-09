@@ -34,6 +34,14 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+### 2026-10-08 — DM history recovery and safe comment replies
+
+The Zernio DM route reads paginated conversation history (up to 1,000 messages), using REST `message` and legacy `text` bodies. Only timestamped messages before the current inbound event are merged; provider failures or incomplete pages log `history_incomplete` and do not prevent processing the live turn. Historical phone recovery searches user messages, preserves an existing number, and does not replay source routing or contact-capture actions. Explicit replies to a DM invitation bypass the cold property-interest gate. TikTok debounce and direct/Instagram processing serialize overlapping turns instead of dropping them.
+
+Public comment wording is selected from fact-free templates; the model only classifies intent. No model-authored location, price, specifications, or claim that the agent cannot DM reaches a public reply. Known local leads receive wording that continues their conversation. Unlinked property-detail questions receive a verification response, and the hard-coded San Antonio city answer was removed. Existing verified MLS context remains available; transcription was not added.
+
+New signed comment events are stored in `comment_queue` before acknowledgment. One parent-process worker retries pacing/read-back/classification deferrals every five minutes; existing age, daily/hourly, self-reply and author/post limits still apply. Non-pacing transient attempts stop after ten tries. Ambiguous failed POSTs remain terminal for manual review to avoid duplicate public replies. Read-back paginates up to ten comment pages. Historical comments are not swept. Regression coverage includes `scripts/verify-dm-reliability.mjs` for history, phone, overlapping turns and SQLite restart recovery. Live TikTok permissions and delivery must still be checked during rollout.
+
 ### 2026-10-01 — Restore shared inbound comment and DM service
 
 Isolation previously rejected provider webhooks at the tenant gateway and routed automation consoles to empty personal stores without integration credentials. The parent process now owns exactly POST `/api/zernio/webhook`, POST/OPTIONS `/webhook`, and authenticated DM/comment/Zernio-status console routes. Inbound processing uses the retained global volume stores and credentials independently of dashboard sign-ins; personal CRM, chats and Work agents remain isolated. The existing Zernio raw-body signature check still rejects unsigned deliveries; the pre-existing public ManyChat contract remains unchanged. Other webhook families remain outside this repair.

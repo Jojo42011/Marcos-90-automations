@@ -45,7 +45,7 @@ exports.MARCO_NUMBER_NOT_RECEIVED_REPLIES = [
 /** Business pitcher (video editor, loan officer, marketer, collaborator) redirect to assistant email. */
 exports.MARCO_BUSINESS_COLLAB_REPLY = "I would definitely be open to it. For any business ideas or collaboration opportunities, please email my assistant at jamescarterpugarealestate@gmail.com.";
 /** Pre-phone only: lead asks what city the property is in — answer, offer the breakdown, ask in the same message. */
-exports.MARCO_CITY_REPLY = "San Antonio, Texas. Would it be helpful if I sent you over the full breakdown of the property you inquired about? What's the best number to send it to?";
+exports.MARCO_CITY_REPLY = "I need to verify the location for that specific property so I don't give you the wrong city. What's the best number to send the confirmed details to?";
 /** Bucket F: lead clearly confirmed in-state (Texas / San Antonio), pre-phone. */
 exports.MARCO_CALL_ASK_INSTATE = "Would you be open to a quick call sometime this week, just so I can get a better understanding of what you're looking for?";
 /** Bucket F: lead pushed email instead of phone mid-funnel, pre-phone. */
