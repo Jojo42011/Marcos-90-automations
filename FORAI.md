@@ -1,5 +1,7 @@
 # FORAI — Marcos-90-automations (marco-90-automation)
 
+- 2026-10-10 live verification follow-up: hide unrelated empty task bars for Marco/Wesley; Carlos keeps owner filters. Negative action constraints no longer trigger forced tool retries, and verified chat relays carry explicit sender context and can complete acknowledgement-only requests without tool receipts. Baseline confirmed 2,417 Marco leads unchanged and all previously visible task IDs retained.
+
 Last updated: 2026-09-23 by Codex
 
 FORAI = "For AI." This is the living architectural summary of this repo — the source of truth agents read before working here, and the source the AETHON Chronicler pulls nightly to keep the master architecture docs current. Keep it short: current state, recent changes, known gaps. Not a commit log.

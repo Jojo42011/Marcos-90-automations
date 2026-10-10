@@ -864,7 +864,7 @@ var seenPopIds={}; try{ (JSON.parse(localStorage.getItem("tt_seen")||"[]")).forE
 /* ================= theme ================= */
 function applyTheme(t){document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");localStorage.setItem("teamTasksTheme",t);}
 applyTheme(localStorage.getItem("teamTasksTheme")||"light");
-document.getElementById("themeBtn").onclick=function(){applyTheme(document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark");};
+document.getElementById("themeBtn").onclick=function(){if(window.AccountSettings)window.AccountSettings.open();};
 
 /* ================= identity ================= */
 function paintMe(){
@@ -1335,12 +1335,9 @@ function sortTasks(a){
     return new Date(x.createdAt)-new Date(y.createdAt);
   });
 }
-function whoseBar(){ // whose tasks the bars show
-  if(viewingPage) return viewingPage;
-  if(memberFilter && memberFilter!=="all") return memberFilter;
-  if(ME==="carlos")return "all";
-  if(memberFilter==="all") return "all";
-  return ME;
+function whoseBar(){ // Carlos can filter the combined view; owners only see their own bars.
+  if(ME!=="carlos")return ME;
+  return memberFilter || ME;
 }
 function visibleFor(t,who){
   var owner=(t.assignedTo||"").toLowerCase();
@@ -1623,6 +1620,9 @@ document.getElementById("doneSubs").querySelectorAll("button").forEach(function(
 });
 function renderMemberChips(){
   var w=document.getElementById("memberChips");
+  var label=w.parentElement.querySelector("span");
+  if(label)label.style.display=ME==="carlos"?"":"none";
+  if(ME!=="carlos"){w.innerHTML="";document.getElementById("clearFilter").style.display="none";return;}
   var chips='<button class="fchip'+(memberFilter==="all"?' on':'')+'" data-mf="all">All Members</button>'+
     '<button class="fchip'+((!memberFilter)?' on':'')+'" data-mf="">Just Me</button>'+
     TEAM.map(function(m){return '<button class="fchip'+(memberFilter===m.id?' on':'')+'" data-mf="'+m.id+'"><span class="dot" style="background:'+m.color+'"></span>'+m.name+'</button>';}).join("");

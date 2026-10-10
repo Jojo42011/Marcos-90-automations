@@ -127,6 +127,10 @@ try{
  const explanation=await api('/chat','POST',{conversationId:c.id,message:'Why did you ask for verification? Are two tabs a problem?',model:'openai/fixture'});
  ok('ordinary Work conversation is not replaced by a verification warning',()=>{assert.equal(explanation.data.text,'A conversational fixture answer.');assert(!explanation.data.needsAttention);});
  assert(!JSON.stringify(calls.at(-1)).match(/monte\s+carlo/i));
+ const note=await chat();const beforeNote=calls.length;
+ const ack=await runtime.runChat('alice',note,'Reply with a short acknowledgement. Do not call tools, create tasks, or send messages.',{actorId:'alice',workDelegated:true,modelOverride:'openai/fixture'});
+ ok('delegated acknowledgement does not force tools from negated instructions',()=>{assert.equal(calls.length-beforeNote,1);assert.equal(ack.toolRounds,0);assert.equal(ack.needsVerification,false);assert.equal(ack.speech,'A conversational fixture answer.');assert(JSON.stringify(calls.at(-1)).includes('authorized chat relay'));});
+
  const lie=await api('/chat','POST',{conversationId:c.id,message:'UNSUPPORTED_FIXTURE',model:'openai/fixture'});
  ok('unsupported completion claim is replaced with needs-verification',()=>{assert.equal(lie.data.needsAttention,true);assert(!lie.data.text.includes('verified every listing'));});
  const repeat=await chat();await api('/chat','POST',{conversationId:repeat.id,message:'REPEAT_FIXTURE',model:'openai/fixture'});
