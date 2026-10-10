@@ -582,9 +582,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       if (opts.workRuntime && !lastRound && completionRepairs < 3 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
         completionRepairs++;
         messages.push({role:"assistant",content:out.text || "I need to continue the requested work."});
-        messages.push({role:"user",content:evidence.receipts.length
-          ? "Internal execution reminder: inspect the tool results already returned. Perform any missing read-back yourself, then call report_verification with the outcome. Do not repeat writes or ask the user to supply verification. If blocked, report the specific blocker and explain it plainly."
-          : "Internal execution reminder: the user requested an action. Use the available tools now, beginning with discovery if needed, and inspect the result. Do not claim completion without execution. If credentials are locked, ask for the secret passphrase without revealing it; if setup, MFA or another real blocker prevents execution, explain that specific blocker. No tool receipt is required for an explanation or clarification."});
+        // Runtime bookkeeping belongs in system context, never as a fabricated user turn.
+        system += "\n\n" + (evidence.receipts.length
+          ? "Runtime verification reminder: inspect the actual receipts returned this turn. For a read, report_verification may cite its complete observation directly; no extra read-back is required. Retrieve smaller results when truncated (crm_api supports select for top-level fields). For writes, perform the necessary read-back without repeating the write. Then report the verified outcome or explain the observed blocker."
+          : "Runtime execution reminder: the current user requested an action. Use available tools and inspect the result, or explain a specific observed blocker. Never claim an unexecuted action completed. An explanation or clarification requires no tool receipt.");
         continue;
       }
       return {

@@ -76,6 +76,7 @@ export async function proxyAccount(req:Request,res:Response,actor:CRMUser,ensure
     const result=combineValues(results);
     if(req.path==="/api/dashboard/data") {
       result.commandTasksSummary=results[accounts.findIndex(u=>u.id===actor.id)].commandTasksSummary;
+      result.accountSummaries=accounts.map((u,i)=>({ownerId:u.id,name:u.name,totals:results[i].totals}));
       result.users=accounts.map(({passwordHash,...safe})=>safe);
       result.leads.sort((a:any,b:any)=>String(b.updatedAt||"").localeCompare(String(a.updatedAt||"")));
     }

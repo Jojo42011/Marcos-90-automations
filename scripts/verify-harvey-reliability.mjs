@@ -33,6 +33,11 @@ ok('nested connector failures cannot serve as evidence',()=>assert.equal(failed.
 const large=new rel.TurnVerification();large.record('workspace_files',{}, {text:'x'.repeat(13000)});
 ok('truncated results cannot support complete claims',()=>assert.throws(()=>large.review(review),/smaller/));
 
+ok('CRM GET receipts are observations and writes still require read-back',()=>{
+ const v=new rel.TurnVerification();v.record('business_call',{tool:'crm_api',arguments:{method:'GET'}},{ok:true,response:{totals:{leads:2417}}});v.review({...review,checks:['Read complete live totals']});assert.equal(v.result().status,'completed');
+ const w=new rel.TurnVerification();w.record('business_call',{tool:'crm_api',arguments:{method:'PATCH'}},{ok:true});assert.throws(()=>w.review(review),/Read back/);
+});
+
 const calls=[];let releaseSlow,slowStarted,transientCalls=0;
 const slowReady=new Promise(r=>slowStarted=r),slowHold=new Promise(r=>releaseSlow=r);
 const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',async()=>{

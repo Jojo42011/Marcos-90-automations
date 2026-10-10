@@ -48,7 +48,7 @@ if(url.hostname==='zernio.com'&&url.pathname==='/api/v1/inbox/conversations/fixt
 }throw new Error('Unexpected external request blocked by fixture: '+url.hostname);};`);
 const bridgeCheck=join(root,'bridge-check.json');
 writeFileSync(transport,readFileSync(transport,'utf8')+`
-process.on('message',m=>{if(m?.type==='account-bridge' && process.env.TENANT_MEMBER==='carlos')setImmediate(async()=>{try{const result=await require(${JSON.stringify(join(process.cwd(),'dist/src/harvey/platformTools.js'))}).executePlatformTool('crm_api',{method:'GET',path:'/api/dashboard/data?includePhoneless=1'});fs.writeFileSync(${JSON.stringify(bridgeCheck)},JSON.stringify({ok:result.ok,leads:result.response?.totals?.leads,error:result.error,status:result.status}));}catch(e){fs.writeFileSync(${JSON.stringify(bridgeCheck)},JSON.stringify({error:e.message}));}});});`);
+process.on('message',m=>{if(m?.type==='account-bridge' && process.env.TENANT_MEMBER==='carlos')setImmediate(async()=>{try{const result=await require(${JSON.stringify(join(process.cwd(),'dist/src/harvey/platformTools.js'))}).executePlatformTool('crm_api',{method:'GET',path:'/api/dashboard/data?includePhoneless=1',select:['totals','accountSummaries']});fs.writeFileSync(${JSON.stringify(bridgeCheck)},JSON.stringify({ok:result.ok,leads:result.response?.totals?.leads,error:result.error,status:result.status,hasLeads:Array.isArray(result.response?.leads),owners:result.response?.accountSummaries?.length}));}catch(e){fs.writeFileSync(${JSON.stringify(bridgeCheck)},JSON.stringify({error:e.message}));}});});`);
 let server, logs='';
 function start(){
  server=spawn(process.execPath,['--require',transport,'dist/src/server.js'],{env:{...env,TENANT_DATA_ROOT:root,PORT:String(port),ACCOUNT_ISOLATION:'true',SITE_LOGIN_ENABLED:'1',ZERNIO_DM_API_KEY:'fixture-only',ZERNIO_WEBHOOK_SECRET:'fixture-hook-secret',COMMENT_AGENT_ENABLED:'false',HARVEY_WORKER_ENABLED:'false',DOTENV_CONFIG_PATH:join(root,'.missing-env')},windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
@@ -73,7 +73,7 @@ try{
  assert.equal(JSON.parse(readFileSync(join(root,'users.json.before-team-access'),'utf8'))[0].passwordHash,users[0].passwordHash);
  check('three requested logins, case normalization, preserved identity IDs and pre-repair backup');
  let bridge;for(let i=0;i<100;i++){try{bridge=JSON.parse(readFileSync(bridgeCheck,'utf8'));break;}catch{}await new Promise(r=>setTimeout(r,100));}
- assert.equal(bridge?.ok,true,JSON.stringify(bridge));assert(bridge.leads>=1);
+ assert.equal(bridge?.ok,true,JSON.stringify(bridge));assert(bridge.leads>=1);assert.equal(bridge.hasLeads,false);assert.equal(bridge.owners,3);
  check('Carlos’s real worker-to-gateway CRM tool bridge retrieves Marco’s retained contacts');
  for(const user of users){const tasks=(await api(user.id,'/api/tasks')).tasks;assert(tasks.some(t=>t.id==='retained-'+user.id));assert.equal(tasks.length,user.id==='carlos'?3:1);}
  const assigned=(await api('marco','/api/tasks','POST',{title:'Fixture assignment',column:'today',assignedTo:'wesley',createdBy:'marco'})).task;

@@ -465,13 +465,14 @@ exports.PLATFORM_TOOL_DEFINITIONS = [
     },
     {
         name: "crm_api",
-        description: "Call the CRM dashboard's own API — the same endpoints the CRM page itself uses, so anything a person can do on that page, you can do here: listing alerts, market reports, Auto Plan enrolments, tasks and appointments, transactions and agreements, contact addresses and documents, tags and sources, CMA sessions, sending a text from a contact's profile, and reading or filing a Knowledge Center document. Use the purpose-built tools (update_lead, create_task, search_leads, schedule_message) when one fits — they are clearer and validate their input. Use this for everything else. Call crm_api_index first to find the path; never invent one. GET is free; POST/PATCH/PUT/DELETE CHANGE REAL DATA belonging to real clients, so say what you are about to change and get the operator's agreement before you send one. If the response is an error, report it as it is — never describe a change as done because you called the tool.",
+        description: "Call the CRM dashboard's own API — the same endpoints the CRM page itself uses, so anything a person can do on that page, you can do here: listing alerts, market reports, Auto Plan enrolments, tasks and appointments, transactions and agreements, contact addresses and documents, tags and sources, CMA sessions, sending a text from a contact's profile, and reading or filing a Knowledge Center document. Use the purpose-built tools (update_lead, create_task, search_leads, schedule_message) when one fits — they are clearer and validate their input. Use this for everything else. For dashboard counts use select=[\"totals\",\"accountSummaries\"] to retrieve complete compact figures instead of thousands of lead records. Call crm_api_index first to find the path; never invent one. GET is free; POST/PATCH/PUT/DELETE CHANGE REAL DATA belonging to real clients, so say what you are about to change and get the operator's agreement before you send one. If the response is an error, report it as it is — never describe a change as done because you called the tool.",
         input_schema: {
             type: "object",
             properties: {
                 method: { type: "string", enum: ["GET", "POST", "PATCH", "PUT", "DELETE"] },
                 path: { type: "string", description: "Path only, e.g. /api/leads/lead_123/listing-alerts. Not a full URL." },
                 body: { type: "object", description: "JSON body for POST/PATCH/PUT." },
+                select: { type: "array", items: { type: "string" }, maxItems: 20, description: "GET only: return these top-level JSON fields intact, e.g. [totals, accountSummaries] for dashboard counts. Omits other fields without truncating the selected values." },
             },
             required: ["method", "path"],
         },
@@ -1036,6 +1037,8 @@ async function executePlatformTool(name, input) {
             const verdict = (0, crmApiSurface_js_1.checkCrmApiPath)(method, pathname);
             if (!verdict.ok)
                 return { error: verdict.reason };
+            if (input.select !== undefined && (method !== "GET" || !Array.isArray(input.select) || !input.select.length || input.select.length > 20 || input.select.some((key) => typeof key !== "string" || !/^[a-zA-Z][a-zA-Z0-9_]{0,80}$/.test(key))))
+                return { error: "select requires one to twenty top-level field names on a GET request" };
             const base = (0, crmApiSurface_js_1.getInternalBaseUrl)();
             if (!base)
                 return { error: "The CRM bridge has no base URL — the server publishes it when it starts listening. Report it rather than retrying." };
@@ -1073,8 +1076,16 @@ async function executePlatformTool(name, input) {
                     hint: "This did NOT happen. Say what failed and why; do not describe the change as made.",
                 };
             }
+            if (input.select) {
+                if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+                    return { error: "This response has no selectable object fields" };
+                const missing = input.select.filter(key => !Object.hasOwn(parsed, key));
+                if (missing.length)
+                    return { error: "Unknown response fields: " + missing.join(", "), availableFields: Object.keys(parsed) };
+                parsed = Object.fromEntries(input.select.map(key => [key, parsed[key]]));
+            }
             const changed = crmApiSurface_js_1.CRM_API_WRITE_METHODS.includes(method);
-            return { ok: true, status: response.status, path: pathname, changed, response: parsed };
+            return { ok: true, status: response.status, path: pathname, changed, ...(input.select ? { selectedFields: input.select } : {}), response: parsed };
         }
         case "get_lead": {
             const lead = await (0, db_js_2.getLeadById)(str(input.leadId));

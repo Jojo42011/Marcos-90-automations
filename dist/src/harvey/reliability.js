@@ -55,6 +55,10 @@ function isObservation(name, input) {
         return input.action === "call" && /^(browser_snapshot|browser_take_screenshot|browser_tabs)$/.test(input.tool);
     if (name === "plugin_request")
         return String(input.method || "GET").toUpperCase() === "GET";
+    if (name === "business_call" && input.tool === "crm_api")
+        return String(input.arguments?.method || "GET").toUpperCase() === "GET";
+    if (name === "business_call" && input.tool === "crm_api_index")
+        return true;
     if (name === "business_call")
         return /^(get_|list_|search_|find_|read_)/.test(input.tool || "");
     if (name === "history_search")
