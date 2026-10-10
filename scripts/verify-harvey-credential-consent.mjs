@@ -56,6 +56,9 @@ const store = {
   unlockChat: (_owner,_id,k) => locks.delete(k)
 };
 const runtime = load("harvey/work/runtime.js", {
+  "../../core/users.js":{getAccountUserById:()=>null},
+  "./teamTraining.js":{sharedTrainingContext:()=>[]},
+  "./chatRelay.js":{},
   "./learning.js":{learningContext:()=>({}),boundedHistory:history=>({messages:history,diagnostics:{}})},
   "./coordination.js":{},
   "./composio.js":{managedConnections:async()=>[],managedTools:async()=>[],composioReady:()=>false},

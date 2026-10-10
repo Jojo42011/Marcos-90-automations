@@ -52,8 +52,8 @@ function sharedDb() {
     (0, fs_1.mkdirSync)(root, { recursive: true });
     const db = new better_sqlite3_1.default((0, path_1.join)(root, "shared-team.db"));
     try {
-        db.pragma("journal_mode = WAL");
         db.pragma("busy_timeout = 10000");
+        db.pragma("journal_mode = WAL");
         db.pragma("synchronous = FULL");
         db.exec("CREATE TABLE IF NOT EXISTS team_state(id INTEGER PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS team_imports(source TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS team_presence(member TEXT PRIMARY KEY, seen INTEGER NOT NULL);");
         db.transaction(() => {

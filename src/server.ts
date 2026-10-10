@@ -1,3 +1,4 @@
+import { accountBridgeUser } from "./core/accountBridge.js";
 import { canViewWorkspace } from "./core/workspaceAccess.js";
 import { dataPath } from "./core/tenantData.js";
 import { isTenantGateway, tenantOwner } from "./core/tenantData.js";
@@ -540,7 +541,7 @@ app.use(accountMiddleware(sessionUserSync, isInternalCall, machineTokenOk));
 function sessionUserSync(req: express.Request): import("./core/types.js").CRMUser | null {
   try {
     const token = getCookieValue(req, SESSION_COOKIE);
-    if (!token) return null;
+    if (!token) return accountBridgeUser(req);
     const session = authGetSession(token);
     if (!session) return null;
     const user = authGetUserById(session.userId);
@@ -2498,7 +2499,7 @@ app.use("/api/harvey", createWorkRouter(dashboardTokenOk, req => String(tenantOw
 app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  if (body.workspace === true) { await handleWorkChat(req, res, String(sessionUserSync(req)?.id || "operator")); return; }
+  if (body.workspace === true) { await handleWorkChat(req, res, String(tenantOwner() || sessionUserSync(req)?.id || "operator"), String(sessionUserSync(req)?.id || tenantOwner() || "operator")); return; }
   const message = typeof body.message === "string" ? body.message.trim() : "";
   if (!message) { res.status(400).json({ error: "Missing message" }); return; }
 
@@ -12194,7 +12195,7 @@ app.post("/api/knowledge", express.json({ limit: "1mb" }), (req, res) => {
       title, body,
       category: typeof b.category === "string" ? b.category : undefined,
       tags: Array.isArray(b.tags) ? (b.tags as string[]) : [],
-      updatedBy: typeof b.updatedBy === "string" ? b.updatedBy : undefined,
+      updatedBy: sessionUserSync(req)?.name || (typeof b.updatedBy === "string" ? b.updatedBy : undefined),
     }),
   });
 });
@@ -12206,7 +12207,7 @@ app.patch("/api/knowledge/:id", express.json({ limit: "1mb" }), (req, res) => {
     body: typeof b.body === "string" ? b.body : undefined,
     category: typeof b.category === "string" ? b.category : undefined,
     tags: Array.isArray(b.tags) ? (b.tags as string[]) : undefined,
-    updatedBy: typeof b.updatedBy === "string" ? b.updatedBy : undefined,
+    updatedBy: sessionUserSync(req)?.name || (typeof b.updatedBy === "string" ? b.updatedBy : undefined),
   });
   if (!doc) { res.status(404).json({ error: "Not found" }); return; }
   res.json({ doc });
@@ -15192,6 +15193,7 @@ if (process.env.ACCOUNT_ISOLATION !== "true") {
 httpServer.listen(PORT, tenantOwner() ? "127.0.0.1" : "0.0.0.0", () => {
   PORT = (httpServer.address() as import("net").AddressInfo).port;
   if (isTenantGateway()) {
+    setCrmApiCatalogue([], `http://127.0.0.1:${PORT}`);
     require("./core/accountBootstrap.js").bootstrapAccounts();
     startTenantWorkers(); console.log(`[accounts] Sign-in gateway listening on ${PORT}`); return;
   }

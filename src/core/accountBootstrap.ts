@@ -1,19 +1,22 @@
-import { createHash } from "node:crypto";
-import { createUser, getUsers, saveUsers, updateUser } from "./users.js";
+import { createUser, getUsers, backupAccountIdentities, updateUser } from "./users.js";
 import { hashPassword, getSecurityState, setSecurityState } from "./authStore.js";
 import { ROLE_PERMISSIONS } from "./types.js";
 
-/** Provision missing testing accounts once; never reset a person's existing password. */
+/** One-time requested login repair; preserve IDs, business records and other users. */
 export function bootstrapAccounts(): void {
-  const marker = "isolated-accounts-2026-09-30";
+  const marker = "team-access-logins-2026-10-10";
   if (getSecurityState(marker)) return;
-  // Retired roster identity, matched without retaining its display name in the application.
-  const retired = "260670134225f2a24b59121739fec73584b0ddb6b49c39e31bd1df5483ac144d";
-  saveUsers(getUsers().filter(u => createHash("sha256").update(u.name.trim().split(/\s+/)[0].toLowerCase()).digest("hex") !== retired));
+  const users = getUsers();
+  for (const name of ["marco", "wesley", "carlos"]) {
+    const candidates = users.filter(u => u.name.trim().split(/\s+/)[0].toLowerCase() === name);
+    if (candidates.length > 1 || users.some(u => u.email.toLowerCase() === `${name}@example.com` && u.id !== candidates[0]?.id))
+      throw new Error(`Ambiguous ${name} identity; account repair stopped without changes`);
+  }
+  backupAccountIdentities();
   for (const name of ["Marco", "Wesley", "Carlos"]) {
     const existing = getUsers().find(u => u.name.trim().split(/\s+/)[0].toLowerCase() === name.toLowerCase());
     if (existing) {
-      if (!existing.passwordHash && existing.active) updateUser(existing.id, { passwordHash: hashPassword("1234"), mustChangePassword: false });
+      updateUser(existing.id, { email: `${name.toLowerCase()}@example.com`, passwordHash: hashPassword("1234"), mustChangePassword: false, active: true });
       continue;
     }
     const role = name === "Marco" ? "admin" : "agent";

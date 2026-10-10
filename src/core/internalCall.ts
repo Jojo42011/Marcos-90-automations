@@ -22,6 +22,7 @@
  * static secret; this cannot outlive the process that minted it.
  */
 import { randomBytes } from "crypto";
+import { accountBridgeUser } from "./accountBridge.js";
 import type { IncomingMessage } from "http";
 
 export const INTERNAL_CALL_HEADER = "x-internal-call";
@@ -43,6 +44,7 @@ function timingSafeEqualStr(a: string, b: string): boolean {
 
 /** True only for a loopback request carrying this process's own token. */
 export function isInternalCall(req: IncomingMessage | { headers: Record<string, unknown>; socket?: { remoteAddress?: string } }): boolean {
+  if(accountBridgeUser(req))return true;
   const raw = (req.headers as Record<string, unknown>)[INTERNAL_CALL_HEADER];
   const token = typeof raw === "string" ? raw : "";
   if (!token || !timingSafeEqualStr(token, INTERNAL_CALL_TOKEN)) return false;

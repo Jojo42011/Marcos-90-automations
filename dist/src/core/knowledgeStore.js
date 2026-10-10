@@ -9,6 +9,7 @@ exports.deleteDoc = deleteDoc;
 exports.searchDocs = searchDocs;
 exports.knowledgeStats = knowledgeStats;
 const tenantData_js_1 = require("./tenantData.js");
+const sharedKnowledge_js_1 = require("./sharedKnowledge.js");
 /**
  * 3.4 — Knowledge Center: SOPs and internal documentation.
  *
@@ -42,8 +43,14 @@ function resolvePath() {
 const PATH = resolvePath();
 let state = { docs: [] };
 let loaded = false;
+let sharedBefore = [];
 const nowIso = () => new Date().toISOString();
 function persist() {
+    if ((0, sharedKnowledge_js_1.sharedKnowledgeEnabled)()) {
+        (0, sharedKnowledge_js_1.persistSharedDocuments)(sharedBefore, state.docs);
+        sharedBefore = structuredClone(state.docs);
+        return;
+    }
     try {
         (0, fs_1.mkdirSync)((0, path_1.dirname)(PATH), { recursive: true });
         (0, fs_1.writeFileSync)(PATH, JSON.stringify(state), "utf8");
@@ -53,6 +60,15 @@ function persist() {
     }
 }
 function load() {
+    if ((0, sharedKnowledge_js_1.sharedKnowledgeEnabled)()) {
+        state.docs = (0, sharedKnowledge_js_1.sharedDocuments)();
+        sharedBefore = structuredClone(state.docs);
+        // Only the gateway seeds an empty library; account workers never re-seed deleted content.
+        if (!loaded && !process.env.TENANT_OWNER_ID && (0, sharedKnowledge_js_1.claimSharedKnowledgeSeed)() && !state.docs.length)
+            seedBuiltIns();
+        loaded = true;
+        return;
+    }
     if (loaded)
         return;
     loaded = true;
@@ -303,6 +319,8 @@ function listCategories() {
 }
 function getDoc(id) {
     load();
+    if ((0, sharedKnowledge_js_1.sharedKnowledgeEnabled)())
+        id = (0, sharedKnowledge_js_1.sharedDocumentId)(id);
     return state.docs.find((d) => d.id === id);
 }
 function createDoc(input) {
@@ -324,6 +342,8 @@ function createDoc(input) {
 }
 function updateDoc(id, patch) {
     load();
+    if ((0, sharedKnowledge_js_1.sharedKnowledgeEnabled)())
+        id = (0, sharedKnowledge_js_1.sharedDocumentId)(id);
     const doc = state.docs.find((d) => d.id === id);
     if (!doc)
         return undefined;
@@ -345,6 +365,8 @@ function updateDoc(id, patch) {
 }
 function deleteDoc(id) {
     load();
+    if ((0, sharedKnowledge_js_1.sharedKnowledgeEnabled)())
+        id = (0, sharedKnowledge_js_1.sharedDocumentId)(id);
     const before = state.docs.length;
     state.docs = state.docs.filter((d) => d.id !== id);
     if (state.docs.length === before)

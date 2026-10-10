@@ -34,6 +34,9 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- 2026-10-10: Three-account collaboration replaces Carlos's read-only workspace switch. Marco and Wesley retain separate business stores; Carlos gets combined collections with owner-qualified record references and authorized edits. Existing IDs/files are not moved or overwritten. One-time login repair backs up users.json and preserves IDs. Shared SQLite knowledge imports retained documents additively, keeps revisions, deduplicates identical starter docs with aliases, and rejects stale edits. Tasks are assignee-scoped for Marco/Wesley and fully editable by Carlos. MLS credentials/cache are shared explicitly. Account appearance settings persist per signed-in user, with one logout entry; the task Team/layout switch popover is retired. Harvey records the current actor separately from chat owner, shares explicit team training through Knowledge Center, and supports permission-scoped @ chat relays with durable idempotent jobs and no recursive delegation. See docs/team-access.md and scripts/verify-team-access.mjs / verify-team-data.mjs.
+
+
 - 2026-10-09: Unknown-property DMs now use Marco-style future follow-up wording instead of asking for videos/listings or explaining missing verification. Ask for a phone only when absent; preserve phone capture and avoid repeating the same fallback on consecutive detail questions. Removed conflicting screenshot/pretend-vision instructions and added a final model-reply guard for unsupported media requests/claims. This does not add transcription, image understanding, or a new human notification workflow.
 
 ### 2026-10-08 — DM history recovery and safe comment replies

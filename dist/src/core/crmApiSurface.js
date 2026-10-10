@@ -28,6 +28,11 @@ exports.getCrmApiCatalogue = getCrmApiCatalogue;
 exports.getInternalBaseUrl = getInternalBaseUrl;
 /** Path prefixes Harvey may call. Order does not matter; any match allows. */
 exports.CRM_API_ALLOW = [
+    "/api/deals",
+    "/api/finance/",
+    "/api/tracker/",
+    "/api/marco-tasks",
+    "/api/crm-tasks",
     "/api/crm/", // leads, vocabulary, metrics, contact records, notes
     "/api/leads/", // filter, per-lead sub-resources (alerts, addresses)
     "/api/lead/",

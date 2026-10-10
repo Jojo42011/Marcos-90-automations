@@ -1363,7 +1363,7 @@ async function getDashboardSnapshot(options = {}) {
         byAdCampaignWithPhone,
         leads,
         tagTemplates: (0, tagTemplates_js_1.getTagTemplates)(),
-        users: (0, users_js_1.getUsers)(),
+        users: (0, users_js_1.getUsers)().map(({ passwordHash, ...safe }) => safe),
         deals,
         totalGCI,
         tasksSummary,

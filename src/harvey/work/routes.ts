@@ -87,7 +87,7 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
   r.use((e: any, _req: Request, res: Response, _next: express.NextFunction) => { res.status(e.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({error:e.code === "LIMIT_FILE_SIZE" ? "File exceeds the 250 MB limit" : "Upload failed"}); });
   return r;
 }
-export async function handleWorkChat(req: Request,res: Response,owner: string) {
+export async function handleWorkChat(req: Request,res: Response,owner: string, actorId=owner) {
   let streaming = false;
   const controller = new AbortController();
   res.on("close",()=>{if(!res.writableEnded)controller.abort();});
@@ -95,7 +95,7 @@ export async function handleWorkChat(req: Request,res: Response,owner: string) {
     const message = text(req.body.message,"Message",50000);
     if(req.body.background===true&&!req.body.conversationId)throw new Error("Create a conversation before submitting a background task");
     const chat = req.body.conversationId ? get<Chat>("chat",owner,String(req.body.conversationId)) : createChat(owner,req.body);
-    if(req.body.background===true){res.status(202).json({job:enqueueJob(owner,chat.id,req.body),conversationId:chat.id,sessionId:chat.sessionId});return;}
+    if(req.body.background===true){res.status(202).json({job:enqueueJob(owner,chat.id,{...req.body,actorId}),conversationId:chat.id,sessionId:chat.sessionId});return;}
     const stream = req.body.stream === true;
     if(stream) {res.setHeader("Content-Type","text/event-stream");res.setHeader("Cache-Control","no-cache");res.flushHeaders();streaming=true;}
     const send=(event:string,data:unknown)=>{if(!res.writableEnded&&!res.destroyed)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);};
@@ -103,7 +103,7 @@ export async function handleWorkChat(req: Request,res: Response,owner: string) {
     const heartbeat=stream?setInterval(()=>{if(!res.writableEnded&&!res.destroyed)res.write(": heartbeat\n\n");},15000):null;
     try {
       const approvals: unknown[] = []; const schedules: unknown[] = [];
-      const result=await runChat(owner,chat,message,{signal:controller.signal,modelOverride:req.body.model===undefined?undefined:String(req.body.model),onToken:stream?t=>send("token",{text:t}):undefined,onEvent:e=>{if(e.type === "approval")approvals.push(e.approval);if(e.type === "schedule")schedules.push(e.schedule);if(stream)send(e.type,e.type === "approval" ? e.approval : e);}});
+      const result=await runChat(owner,chat,message,{actorId,signal:controller.signal,modelOverride:req.body.model===undefined?undefined:String(req.body.model),onToken:stream?t=>send("token",{text:t}):undefined,onEvent:e=>{if(e.type === "approval")approvals.push(e.approval);if(e.type === "schedule")schedules.push(e.schedule);if(stream)send(e.type,e.type === "approval" ? e.approval : e);}});
       const data={text:result.speech,conversationId:chat.id,sessionId:chat.sessionId,verification:result.verification,contextPlan:result.contextPlan,memoryContext:(result as any).memoryContext,usage:{model:result.modelUsed||result.model,costUsd:result.costUsd||0,promptTokens:result.promptTokens||0,completionTokens:result.completionTokens||0,cachedTokens:result.cachedTokens||0},approvals,schedules,needsAttention:result.toolFailed||!!result.modelError||!!result.budgetRefused||("needsVerification" in result && result.needsVerification)};
       if(stream){send("done",data);res.end();}else res.json(data);
     } finally { if(heartbeat)clearInterval(heartbeat); }

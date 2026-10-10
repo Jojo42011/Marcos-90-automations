@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.backupAccountIdentities = backupAccountIdentities;
 exports.getUsers = getUsers;
 exports.getAccountUserById = getAccountUserById;
 exports.saveUsers = saveUsers;
@@ -57,7 +58,12 @@ function buildDefaultUsers() {
 }
 function writeUsersFile(users) {
     (0, fs_1.mkdirSync)((0, path_1.dirname)(USERS_PATH), { recursive: true });
-    (0, fs_1.writeFileSync)(USERS_PATH, JSON.stringify(users, null, 2), "utf8");
+    (0, fs_1.writeFileSync)(USERS_PATH + ".next", JSON.stringify(users, null, 2), "utf8");
+    (0, fs_1.renameSync)(USERS_PATH + ".next", USERS_PATH);
+}
+function backupAccountIdentities() {
+    if ((0, fs_1.existsSync)(USERS_PATH) && !(0, fs_1.existsSync)(USERS_PATH + ".before-team-access"))
+        (0, fs_1.copyFileSync)(USERS_PATH, USERS_PATH + ".before-team-access", fs_1.constants.COPYFILE_EXCL);
 }
 function normalizeUser(raw) {
     const name = typeof raw.name === "string" ? raw.name.trim() : "";
@@ -135,12 +141,7 @@ function getAccountUserById(id) { return readUsers(true).find(u => u.id === id) 
 function saveUsers(users) {
     if (process.env.TENANT_OWNER_ID)
         throw new Error("Account records are managed by the sign-in service");
-    try {
-        writeUsersFile(users);
-    }
-    catch (err) {
-        console.error("[users] saveUsers failed:", err);
-    }
+    writeUsersFile(users);
 }
 function getUserById(id) {
     return getUsers().find((u) => u.id === id) ?? null;

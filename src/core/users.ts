@@ -1,5 +1,5 @@
 import { dataPath } from "./tenantData.js";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, copyFileSync, constants } from "fs";
 import { dirname, join } from "path";
 
 import type { CRMUser, UserPermissions, UserRole } from "./types.js";
@@ -53,7 +53,13 @@ function buildDefaultUsers(): CRMUser[] {
 
 function writeUsersFile(users: CRMUser[]): void {
   mkdirSync(dirname(USERS_PATH), { recursive: true });
-  writeFileSync(USERS_PATH, JSON.stringify(users, null, 2), "utf8");
+  writeFileSync(USERS_PATH + ".next", JSON.stringify(users, null, 2), "utf8");
+  renameSync(USERS_PATH + ".next", USERS_PATH);
+}
+
+export function backupAccountIdentities(): void {
+  if (existsSync(USERS_PATH) && !existsSync(USERS_PATH + ".before-team-access"))
+    copyFileSync(USERS_PATH, USERS_PATH + ".before-team-access", constants.COPYFILE_EXCL);
 }
 
 function normalizeUser(raw: Record<string, unknown>): CRMUser | null {
@@ -128,11 +134,7 @@ export function getAccountUserById(id: string): CRMUser | null { return readUser
 
 export function saveUsers(users: CRMUser[]): void {
   if (process.env.TENANT_OWNER_ID) throw new Error("Account records are managed by the sign-in service");
-  try {
-    writeUsersFile(users);
-  } catch (err) {
-    console.error("[users] saveUsers failed:", err);
-  }
+  writeUsersFile(users);
 }
 
 export function getUserById(id: string): CRMUser | null {

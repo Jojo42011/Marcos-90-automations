@@ -9,6 +9,13 @@ exports.isSharedInbound = isSharedInbound;
 exports.isSharedAutomationConsole = isSharedAutomationConsole;
 exports.accountMiddleware = accountMiddleware;
 exports.accountUpgrade = accountUpgrade;
+const accountProxy_js_1 = require("./accountProxy.js");
+const accountPreferences_js_1 = require("./accountPreferences.js");
+const accountBridge_js_1 = require("./accountBridge.js");
+const crmApiSurface_js_1 = require("./crmApiSurface.js");
+const chatRelay_js_1 = require("../harvey/work/chatRelay.js");
+const sharedKnowledge_js_1 = require("./sharedKnowledge.js");
+const knowledgeStore_js_1 = require("./knowledgeStore.js");
 const workspaceAccess_js_1 = require("./workspaceAccess.js");
 const sharedTasks_js_1 = require("./sharedTasks.js");
 const crmRecovery_js_1 = require("./crmRecovery.js");
@@ -16,12 +23,11 @@ const node_child_process_1 = require("node:child_process");
 const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
-const node_http_1 = __importDefault(require("node:http"));
 const node_net_1 = __importDefault(require("node:net"));
 const users_js_1 = require("./users.js");
 const tenantData_js_1 = require("./tenantData.js");
-// Explicitly share model infrastructure, never the operator's business credentials.
-const SHARED_ENV = /^(PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFILE|LOCALAPPDATA|TEMP|TMP|LANG|TZ|NODE_ENV|PLAYWRIGHT_BROWSERS_PATH|OPENROUTER_[A-Z_]+|ANTHROPIC_[A-Z_]+|OPENAI_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|ELEVENLABS_API_KEY|DEEPGRAM_API_KEY|COMPOSIO_API_KEY|HARVEY_(MODEL|PUBLIC_URL|SCHEDULE_MODEL|WORKER_ENABLED|BROWSER_ENABLED|BROWSER_EXECUTABLE|VAULT_KEY|PROMPT_CACHE|REQUEST_TIMEOUT_MS)|AETHON_(MODEL|MAX_TOKENS))$/;
+// Share model infrastructure and the requested team MLS feed; other business credentials remain isolated.
+const SHARED_ENV = /^(PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFILE|LOCALAPPDATA|TEMP|TMP|LANG|TZ|NODE_ENV|PLAYWRIGHT_BROWSERS_PATH|OPENROUTER_[A-Z_]+|ANTHROPIC_[A-Z_]+|OPENAI_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|ELEVENLABS_API_KEY|DEEPGRAM_API_KEY|COMPOSIO_API_KEY|SIMPLYRETS_[A-Z_]+|HARVEY_(MODEL|PUBLIC_URL|SCHEDULE_MODEL|WORKER_ENABLED|BROWSER_ENABLED|BROWSER_EXECUTABLE|VAULT_KEY|PROMPT_CACHE|REQUEST_TIMEOUT_MS)|AETHON_(MODEL|MAX_TOKENS))$/;
 function tenantEnvironment(owner, parent = process.env) {
     const root = (0, node_path_1.join)((0, tenantData_js_1.dataPath)(), "accounts", (0, node_crypto_1.createHash)("sha256").update(owner).digest("hex"));
     (0, node_fs_1.mkdirSync)(root, { recursive: true });
@@ -35,6 +41,8 @@ function tenantEnvironment(owner, parent = process.env) {
         if (SHARED_ENV.test(key))
             env[key] = value;
     // Identity is shared; business stores and in-memory state are not.
+    env.SHARED_KNOWLEDGE_DB_PATH = parent.SHARED_KNOWLEDGE_DB_PATH || (0, tenantData_js_1.dataPath)("shared-knowledge.db");
+    env.LISTINGS_DB_PATH = parent.LISTINGS_DB_PATH || (0, tenantData_js_1.dataPath)("listings.db");
     env.SHARED_TASK_DB_PATH = parent.SHARED_TASK_DB_PATH || (0, tenantData_js_1.dataPath)("shared-tasks.db");
     env.TENANT_MEMBER = (0, users_js_1.getUsers)().find(u => u.id === owner)?.name.trim().split(/\s+/)[0].toLowerCase() || owner;
     env.AUTH_DB_PATH = parent.AUTH_DB_PATH || (0, tenantData_js_1.dataPath)("auth.db");
@@ -52,6 +60,7 @@ function ensureWorker(owner) {
     const child = (0, node_child_process_1.fork)((0, node_path_1.resolve)(__dirname, "../server.js"), [], {
         env: tenantEnvironment(owner), stdio: ["ignore", "ignore", "inherit", "ipc"],
     });
+    const bridgeToken = (0, accountBridge_js_1.issueAccountBridge)(owner);
     const ready = new Promise((resolvePort, reject) => {
         const timer = setTimeout(() => { child.kill(); reject(new Error("Account worker timed out")); }, 45000);
         child.once("error", err => { clearTimeout(timer); reject(err); });
@@ -59,7 +68,7 @@ function ensureWorker(owner) {
         child.on("message", (message) => {
             if (message?.type === "tenant-ready" && Number.isInteger(message.port)) {
                 clearTimeout(timer);
-                resolvePort(message.port);
+                child.send({ type: "account-bridge", token: bridgeToken, url: (0, crmApiSurface_js_1.getInternalBaseUrl)() }, () => resolvePort(message.port));
             }
         });
     });
@@ -69,6 +78,9 @@ function ensureWorker(owner) {
 function startTenantWorkers() {
     if (!(0, tenantData_js_1.isTenantGateway)())
         return;
+    process.env.SHARED_KNOWLEDGE_DB_PATH ||= (0, tenantData_js_1.dataPath)("shared-knowledge.db");
+    (0, sharedKnowledge_js_1.importSharedKnowledge)((0, tenantData_js_1.dataPath)());
+    (0, knowledgeStore_js_1.listDocs)();
     (0, sharedTasks_js_1.recoverSharedTasks)();
     const refresh = () => {
         const active = new Set((0, users_js_1.getUsers)().filter(u => u.active).map(u => u.id));
@@ -105,15 +117,11 @@ function accountMiddleware(sessionUser, internal, machine = () => false) {
         if (process.env.ACCOUNT_ISOLATION !== "true")
             return next();
         res.setHeader("Cache-Control", "no-store");
-        const user = sessionUser(req);
+        const user = sessionUser(req) || (0, accountBridge_js_1.accountBridgeUser)(req);
         if ((0, tenantData_js_1.tenantOwner)()) {
             // The child listens only on loopback, but still validates identity on every request.
             if (!internal(req) && !(0, workspaceAccess_js_1.canViewWorkspace)(user, (0, tenantData_js_1.tenantOwner)())) {
                 res.status(403).json({ error: "Account mismatch" });
-                return;
-            }
-            if (user && user.id !== (0, tenantData_js_1.tenantOwner)() && !(0, workspaceAccess_js_1.workspaceReadAllowed)(req.method, req.path)) {
-                res.status(403).json({ error: "This workspace is read-only. Return to your workspace to create or assign tasks." });
                 return;
             }
             if (req.path.startsWith("/api/auth/") || (req.path.startsWith("/api/users") && req.method !== "GET")) {
@@ -139,18 +147,39 @@ function accountMiddleware(sessionUser, internal, machine = () => false) {
         }
         if (identityPath(req.path))
             return next();
-        if (user && req.path === "/api/account/workspaces" && req.method === "GET") {
-            res.json({ workspaces: (0, users_js_1.getUsers)().filter(u => (0, workspaceAccess_js_1.canViewWorkspace)(user, u.id)).map(u => ({ id: u.id, name: u.name, readOnly: u.id !== user.id })) });
+        if (user && req.path === "/api/users" && req.method === "GET") {
+            res.json({ users: (0, users_js_1.getUsers)().filter(u => (0, workspaceAccess_js_1.canViewWorkspace)(user, u.id)).map(({ passwordHash, ...safe }) => safe) });
             return;
         }
-        if (user && req.path === "/api/account/workspace" && req.method === "POST") {
-            const target = String(req.query.id || user.id);
-            if (!(0, workspaceAccess_js_1.canViewWorkspace)(user, target)) {
-                res.status(403).json({ error: "Workspace unavailable" });
-                return;
+        if (user && req.path === "/api/account/chats" && req.method === "GET") {
+            res.json({ chats: (0, chatRelay_js_1.accessibleChats)(user) });
+            return;
+        }
+        if (user && req.path === "/api/account/chat-relay" && req.method === "POST") {
+            try {
+                res.json((0, chatRelay_js_1.relayChats)(user, await (0, accountProxy_js_1.readAccountJson)(req)));
             }
-            res.cookie("mp_workspace", target, { httpOnly: true, sameSite: "strict", secure: req.secure, path: "/" });
-            res.json({ ok: true });
+            catch (e) {
+                res.status(400).json({ error: e.message });
+            }
+            return;
+        }
+        if (user && req.path === "/api/account/preferences") {
+            try {
+                if (req.method === "GET")
+                    res.json({ preferences: (0, accountPreferences_js_1.accountPreferences)(user.id) });
+                else if (req.method === "PUT")
+                    res.json({ preferences: (0, accountPreferences_js_1.saveAccountPreferences)(user.id, await (0, accountProxy_js_1.readAccountJson)(req)) });
+                else
+                    res.status(405).json({ error: "Method not allowed" });
+            }
+            catch (e) {
+                res.status(400).json({ error: e.message });
+            }
+            return;
+        }
+        if (user && req.path === "/api/account/workspaces" && req.method === "GET") {
+            res.json({ workspaces: (0, users_js_1.getUsers)().filter(u => (0, workspaceAccess_js_1.canViewWorkspace)(user, u.id)).map(u => ({ id: u.id, name: u.name, readOnly: false })) });
             return;
         }
         if (!user) {
@@ -158,34 +187,12 @@ function accountMiddleware(sessionUser, internal, machine = () => false) {
             return;
         }
         try {
-            const selected = (req.headers.cookie || "").split(";").map(s => s.trim()).find(s => s.startsWith("mp_workspace="))?.slice(13);
-            // Task Command is a shared service. Always use the signed-in actor for
-            // task reads and writes, even while viewing another account's CRM.
-            const sharedTasks = /^\/api\/(?:tasks(?:\/|$)|team(?:\/|$)|settings\/(?:command|layout)$)/.test(req.path);
-            const workspace = selected && (0, workspaceAccess_js_1.canViewWorkspace)(user, selected) ? selected : user.id;
-            const owner = sharedTasks ? user.id : workspace;
-            if (owner !== user.id && !(0, workspaceAccess_js_1.workspaceReadAllowed)(req.method, req.path)) {
-                res.status(403).json({ error: "This workspace is read-only. Return to your workspace to make changes." });
-                return;
-            }
-            res.cookie("mp_workspace_id", workspace, { sameSite: "lax", secure: req.secure, path: "/" });
-            const port = await ensureWorker(owner);
-            const upstream = node_http_1.default.request({ host: "127.0.0.1", port, path: req.originalUrl, method: req.method,
-                headers: { ...req.headers, "x-forwarded-proto": req.protocol } }, incoming => {
-                res.writeHead(incoming.statusCode || 502, { ...incoming.headers, "cache-control": "no-store" });
-                incoming.pipe(res);
-            });
-            upstream.on("error", () => { if (!res.headersSent)
-                res.status(502).json({ error: "Account worker unavailable; request was not retried" });
-            else
-                res.destroy(); });
-            req.on("aborted", () => upstream.destroy());
-            res.on("close", () => { if (!res.writableEnded)
-                upstream.destroy(); });
-            req.pipe(upstream);
+            res.cookie("mp_workspace_id", user.id, { sameSite: "lax", secure: req.secure, path: "/" });
+            await (0, accountProxy_js_1.proxyAccount)(req, res, user, ensureWorker);
         }
-        catch {
-            res.status(503).json({ error: "Account is starting; try again shortly" });
+        catch (e) {
+            if (!res.headersSent)
+                res.status(Number(e.status) || 400).json({ error: e.message });
         }
     };
 }

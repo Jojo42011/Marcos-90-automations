@@ -27,7 +27,7 @@ function enqueueJob(owner, chatId, input, delegation) {
     const chat = (0, store_js_1.get)("chat", owner, chatId);
     const requestId = (0, store_js_1.text)(input.requestId, "Request ID", 100), prompt = (0, store_js_1.text)(input.message, "Message", 50000);
     const model = (0, store_js_1.text)(input.model === undefined ? chat.model || "auto" : input.model, "Model", 150);
-    const fingerprint = (0, crypto_1.createHash)("sha256").update(JSON.stringify([chatId, prompt, model, delegation || null])).digest("hex");
+    const fingerprint = (0, crypto_1.createHash)("sha256").update(JSON.stringify([chatId, prompt, model, input.actorId || owner, delegation || null])).digest("hex");
     const job = (0, store_js_1.workDb)().transaction(() => {
         const existing = (0, store_js_1.list)("job", owner).find(j => j.requestId === requestId);
         if (existing) {
@@ -38,9 +38,10 @@ function enqueueJob(owner, chatId, input, delegation) {
         if (chatJob(owner, chatId) || (0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(owner, chatId))
             throw new Error("This chat already has a run in progress");
         const now = new Date().toISOString();
-        return (0, store_js_1.put)("job", owner, { id: (0, crypto_1.randomUUID)(), chatId, requestId, fingerprint, prompt, model, ...delegation, status: "queued", createdAt: now, updatedAt: now, events: [] });
-    })();
-    setImmediate(() => void executeJob(owner, job.id).catch(() => { }));
+        return (0, store_js_1.put)("job", owner, { id: (0, crypto_1.randomUUID)(), chatId, requestId, fingerprint, prompt, model, actorId: input.actorId || owner, ...delegation, status: "queued", createdAt: now, updatedAt: now, events: [] });
+    }).immediate();
+    if (process.env.TENANT_OWNER_ID === owner || process.env.ACCOUNT_ISOLATION !== "true")
+        setImmediate(() => void executeJob(owner, job.id).catch(() => { }));
     return publicJob(job);
 }
 function cancelJob(owner, id) {
@@ -65,7 +66,7 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
     if ((0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(owner, job.chatId))
         return;
     job = (0, store_js_1.workDb)().transaction(() => { const current = (0, store_js_1.get)("job", owner, id); if (current.status !== "queued")
-        return null; return (0, store_js_1.put)("job", owner, { ...current, status: "running", updatedAt: new Date().toISOString() }); })();
+        return null; return (0, store_js_1.put)("job", owner, { ...current, status: "running", updatedAt: new Date().toISOString() }); }).immediate();
     if (!job)
         return;
     const controller = new AbortController();
@@ -74,7 +75,7 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
     timer.unref();
     const approvals = [], schedules = [];
     try {
-        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), job.prompt, { modelOverride: job.model, maxCostUsd: job.maxCostUsd, workDelegated: !!job.originChatId, signal: controller.signal, onEvent: e => {
+        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), job.prompt, { actorId: job.actorId || owner, modelOverride: job.model, maxCostUsd: job.maxCostUsd, workDelegated: !!job.originChatId, signal: controller.signal, onEvent: e => {
                 // Persist progress without tool arguments, passwords or raw response data.
                 if (e.type === "approval") {
                     approvals.push(e.approval);
