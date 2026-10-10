@@ -1210,6 +1210,21 @@
   .rd-tbl td{padding:9px 10px;border-bottom:1px solid var(--line-2);color:#46515c;vertical-align:top}
   .rd-tbl td a{color:var(--teal-strong);font-weight:600;cursor:pointer}
   .rd-tbl tr:hover td{background:#fafbfc}
+
+  /* Account appearance: retain contrast in the legacy CRM panels and controls. */
+  :root[data-theme="dark"]{--title:#edf2f7;--label:#b9c4d2;--line-2:#344255;--teal-soft:#233c46}
+  [data-theme="dark"] .topbar,[data-theme="dark"] .rail,[data-theme="dark"] .ta-card,
+  [data-theme="dark"] .msg-wrap,[data-theme="dark"] .sched-pop,[data-theme="dark"] .sug-pop,
+  [data-theme="dark"] .select,[data-theme="dark"] input,[data-theme="dark"] textarea,
+  [data-theme="dark"] .icon-btn,[data-theme="dark"] .feed-pill,[data-theme="dark"] .feed-av,
+  [data-theme="dark"] .load-more,[data-theme="dark"] .link-btn{background-color:var(--card);color:var(--ink)}
+  [data-theme="dark"] .feed-name,[data-theme="dark"] .feed-name b,[data-theme="dark"] .feed-meta,
+  [data-theme="dark"] .feed-meta b,[data-theme="dark"] .me b,[data-theme="dark"] .sr-name,
+  [data-theme="dark"] .sr-body,[data-theme="dark"] .sp-head,[data-theme="dark"] .sg-head,
+  [data-theme="dark"] .sg-body{color:var(--ink)}
+  [data-theme="dark"] .ta-card .n,[data-theme="dark"] .stat .n,[data-theme="dark"] .log-card .n,[data-theme="dark"] .tabs button.on,[data-theme="dark"] .rail .r.on{color:color-mix(in srgb,var(--teal) 50%,white)}
+  [data-theme="dark"] .topbar .brand{background:#fff;border-radius:6px;padding:6px}
+  [data-theme="dark"] .ta-card:hover,[data-theme="dark"] .conv:hover{background:var(--teal-soft)}
 </style>
 
 <header class="topbar">
@@ -1230,7 +1245,7 @@
     <button class="icon-btn" id="crmRefresh" title="Refresh data from Brivity"><svg id="crmRefreshIco" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/></svg></button>
     <button class="icon-btn" id="crmHelp" title="Help &amp; how-to guide"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg></button>
     <button class="feed-pill">Activity Feed <span class="n" id="feedCount">0</span></button>
-    <div class="me"><span class="av has-marco-photo">MP</span><b>Marco</b></div>
+    <button class="me" id="crmAccountSettings" title="Account settings" style="border:0;background:none;cursor:pointer"><span class="av" id="crmAccountAvatar">?</span><b id="crmAccountName">Account</b></button>
   </div>
 </header>
 
@@ -12466,4 +12481,17 @@ setInterval(function(){
   if(document.hidden||!QUO.configured) return;
   loadQuoThreads();
 }, 60000);
+</script>
+
+<script>
+(function(){
+  var button=document.getElementById('crmAccountSettings');
+  if(button)button.onclick=function(){if(window.AccountSettings)window.AccountSettings.open();};
+  fetch('/api/auth/me').then(function(r){return r.json();}).then(function(d){
+    if(!d.user)return;var name=d.user.name||'Account';
+    document.getElementById('crmAccountName').textContent=name.split(/\s+/)[0];
+    var av=document.getElementById('crmAccountAvatar');av.textContent=d.user.avatarInitials||name.slice(0,1);av.style.background=d.user.avatarColor||'#0e7490';av.style.color='#fff';
+    av.classList.toggle('has-marco-photo',/^marco(?:\s|$)/i.test(name));
+  }).catch(function(){});
+})();
 </script>
