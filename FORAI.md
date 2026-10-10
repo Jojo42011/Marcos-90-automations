@@ -34,6 +34,8 @@ It deploys as one Docker image to Fly.io (app `marco-90-automation`, region `dfw
 
 ## Recent changes (most recent first)
 
+- 2026-10-09: Unknown-property DMs now use Marco-style future follow-up wording instead of asking for videos/listings or explaining missing verification. Ask for a phone only when absent; preserve phone capture and avoid repeating the same fallback on consecutive detail questions. Removed conflicting screenshot/pretend-vision instructions and added a final model-reply guard for unsupported media requests/claims. This does not add transcription, image understanding, or a new human notification workflow.
+
 ### 2026-10-08 — DM history recovery and safe comment replies
 
 The Zernio DM route reads paginated conversation history (up to 1,000 messages), using REST `message` and legacy `text` bodies. Only timestamped messages before the current inbound event are merged; provider failures or incomplete pages log `history_incomplete` and do not prevent processing the live turn. Historical phone recovery searches user messages, preserves an existing number, and does not replay source routing or contact-capture actions. Explicit replies to a DM invitation bypass the cold property-interest gate. TikTok debounce and direct/Instagram processing serialize overlapping turns instead of dropping them.
