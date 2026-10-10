@@ -41,11 +41,32 @@ check("phone older than six messages recovered",()=>assert.match(first.lead.phon
 check("invitation reply is acknowledged",()=>assert.match(first.reply,/thanks for messaging/i));
 check("no repeat phone request",()=>assert.doesNotMatch(first.reply??"",/what.*number|send.*number|share.*phone/i));
 const second=await pipeline.run({...payload,message:"Price location?"});
-check("unverified property facts are withheld",()=>{assert.match(second.reply,/verified/);assert.doesNotMatch(second.reply,/Austin|San Antonio|\$[0-9]/);});
-check("known phone is acknowledged",()=>assert.match(second.reply,/number on file/));
+check("unverified property facts are withheld",()=>{assert.match(second.reply,/have someone reach out/);assert.doesNotMatch(second.reply,/Austin|San Antonio|\$[0-9]/);});
+check("known phone is not requested again",()=>assert.doesNotMatch(second.reply,/number|phone|screenshot|video|listing|verified/i));
 const conversation=await db.getConversation(first.lead.id);
 check("history dedupes across turns",()=>assert.equal(conversation.messages.filter(m=>m.providerMessageId).length,12));
 check("history recovery preserves existing phone",()=>assert.equal(db.recoverHistoricalPhone(first.lead,"+15125550127").phone,first.lead.phone));
+
+const knowledge=require("../dist/src/app/propertyKnowledge.js");
+const llm=require("../dist/src/integrations/llm/index.js");
+for(const platform of ["instagram","tiktok"]){
+ const unknown=await pipeline.run({platform,userId:`unknown-${platform}`,commentOrDm:"dm",message:"How much is that house?"});
+ check(`${platform} missing details offers natural follow-up and captures phone`,()=>{assert.match(unknown.reply,/have someone reach out/);assert.match(unknown.reply,/best number/);assert.equal(unknown.lead.state,"phone_requested");assert.doesNotMatch(unknown.reply,/verified|screenshot|send.*video/i);});
+ const captured=await pipeline.run({platform,userId:`unknown-${platform}`,commentOrDm:"dm",message:"210 555 0187"});
+ check(`${platform} handoff still accepts the supplied phone`,()=>{assert.match(captured.lead.phone,/2105550187/);assert(!knowledge.requestsPhoneNumber(captured.reply||""));});
+}
+const realOpening=llm.generateMarcoOpeningReply;
+llm.generateMarcoOpeningReply=async()=>"Could you send me a picture of the house so I can take a look?";
+const guarded=await pipeline.run({platform:"tiktok",userId:"stale-media-model",commentOrDm:"dm",message:"I'm interested in the home from your post"});
+llm.generateMarcoOpeningReply=realOpening;
+check("model media request replaced before persistence",()=>{assert.match(guarded.reply,/have someone reach out/);assert.doesNotMatch(guarded.reply,/picture|look/);});
+const guardedHistory=await db.getConversation(guarded.lead.id);
+check("saved outbound matches safe response",()=>assert.equal(guardedHistory.messages.at(-1).text,guarded.reply));
+for(const unsafe of ["Send me a screenshot", "Could you send photos?", "Send screenshots please", "Could you share the video?", "Please upload a photo", "I can see the image you sent", "I watched that video"]){
+ check(`blocks unsupported media: ${unsafe}`,()=>assert(knowledge.requestsUnsupportedPropertyMedia(unsafe)));
+}
+check("ordinary Marco replies retain their wording",()=>{assert(!knowledge.requestsUnsupportedPropertyMedia("Yeah, of course, is there a good number I can get that over to?"));assert(!knowledge.requestsUnsupportedPropertyMedia("I can send you a quick intro video."));});
+check("consecutive missing-details fallback varies naturally",()=>assert.notEqual(knowledge.unverifiedListingReply(true,knowledge.unverifiedListingReply(true)),knowledge.unverifiedListingReply(true)));
 
 // Hold a direct pipeline turn open; a distinct second turn must queue, not disappear.
 const realRun=pipeline.run;let release,entered=[];

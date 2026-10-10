@@ -2,7 +2,7 @@
  * Run modules in order by lead state. Single entry for webhook-driven flow.
  */
 import { respondsToDmInvitation } from "../integrations/zernio/history.js";
-import { asksForListingFacts, unverifiedListingReply, requestsPhoneNumber } from "./propertyKnowledge.js";
+import { asksForListingFacts, unverifiedListingReply, requestsPhoneNumber, requestsUnsupportedPropertyMedia } from "./propertyKnowledge.js";
 import * as db from "../core/db.js";
 import { getListing } from "../core/listingsStore.js";
 import type { Conversation, IncomingWebhookPayload, Lead } from "../core/types.js";
@@ -803,7 +803,8 @@ export async function run(
   }
 
   if (!(lead.mlsListingKey && getListing(lead.mlsListingKey)) && !phoneCapturedThisTurn && asksForListingFacts(latestLeadText)) {
-    const reply = unverifiedListingReply(Boolean(lead.phone));
+    const reply = unverifiedListingReply(Boolean(lead.phone), [...conversation.messages].reverse().find(m => m.role === "assistant")?.text);
+    if (!lead.phone) lead = { ...lead, state: FunnelStage.PhoneRequested };
     await db.appendMessage(lead.id, "assistant", reply);
     await db.updateLead(lead);
     return { lead, reply };
@@ -1328,6 +1329,10 @@ export async function run(
     });
   }
 
+  if (reply && requestsUnsupportedPropertyMedia(reply)) {
+    reply = unverifiedListingReply(Boolean(lead.phone), [...conversation.messages].reverse().find(m => m.role === "assistant")?.text);
+    if (!lead.phone) lead = { ...lead, state: FunnelStage.PhoneRequested };
+  }
   if (lead.phone && reply && requestsPhoneNumber(reply)) {
     reply = "I have your number on file. What would you like to know about this one?";
   }

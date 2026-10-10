@@ -685,7 +685,9 @@ async function run(payload, log) {
         return { lead, reply };
     }
     if (!(lead.mlsListingKey && (0, listingsStore_js_1.getListing)(lead.mlsListingKey)) && !phoneCapturedThisTurn && (0, propertyKnowledge_js_1.asksForListingFacts)(latestLeadText)) {
-        const reply = (0, propertyKnowledge_js_1.unverifiedListingReply)(Boolean(lead.phone));
+        const reply = (0, propertyKnowledge_js_1.unverifiedListingReply)(Boolean(lead.phone), [...conversation.messages].reverse().find(m => m.role === "assistant")?.text);
+        if (!lead.phone)
+            lead = { ...lead, state: state_js_1.FunnelStage.PhoneRequested };
         await db.appendMessage(lead.id, "assistant", reply);
         await db.updateLead(lead);
         return { lead, reply };
@@ -1154,6 +1156,11 @@ async function run(payload, log) {
             correlationId,
             funnel_state: lead.state,
         });
+    }
+    if (reply && (0, propertyKnowledge_js_1.requestsUnsupportedPropertyMedia)(reply)) {
+        reply = (0, propertyKnowledge_js_1.unverifiedListingReply)(Boolean(lead.phone), [...conversation.messages].reverse().find(m => m.role === "assistant")?.text);
+        if (!lead.phone)
+            lead = { ...lead, state: state_js_1.FunnelStage.PhoneRequested };
     }
     if (lead.phone && reply && (0, propertyKnowledge_js_1.requestsPhoneNumber)(reply)) {
         reply = "I have your number on file. What would you like to know about this one?";

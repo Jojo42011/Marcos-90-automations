@@ -574,7 +574,7 @@ function getDynamicRuleReinforcement(userMessage) {
         !msg.includes("canyon lake") &&
         !msg.includes("new braunfels") &&
         !msg.includes("san antonio")) {
-        rules.push("ACTIVE RULE, AMBIGUOUS PROPERTY REFERENCE: Ask which property or video they are referring to. Use screenshot language from GLOBAL rules if property is unknown. Do NOT assume which property they mean.");
+        rules.push("ACTIVE RULE, AMBIGUOUS PROPERTY REFERENCE: If details are unavailable, naturally say you will have someone reach out with the property details in Marco's voice. Ask for a mobile number only if none is on file. Never request screenshots, photos, videos or links, claim to inspect media, or assume which property they mean.");
     }
     if (rules.length === 0)
         return "";
