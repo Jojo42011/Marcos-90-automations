@@ -1,5 +1,7 @@
 # Account workspaces
 
+Historical implementation notes. The current three-account access, shared knowledge/MLS, and Carlos permissions are documented in [team-access.md](team-access.md); that document supersedes the older roster and workspace behavior below.
+
 Fly enables `ACCOUNT_ISOLATION=true`. Authentication and admin account management remain on the public server. It starts one loopback-only application process per active account and forwards authenticated HTTP, streaming chat, uploads and WebSocket traffic to the matching process. An account cannot select its process with a query parameter, a display-name cookie or an HTTP header. Children recheck the session owner; in-process CRM requests use that child's private internal token and port.
 
 The older stores cache records and SQLite connections in module globals, so request filters alone would not isolate them. Their paths now resolve through `dataPath()`. Account processes use `/data/accounts/<sha256(user-id)>/` for CRM contacts, conversations, tasks, transactions, email, knowledge, memory, documents and other business stores. They start empty instead of copying the legacy database. Existing shared files are retained unchanged. Default sample tasks, imported shared SOPs and seeded personal memory are not copied into accounts.

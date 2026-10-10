@@ -79,7 +79,7 @@ await run("denyWebhook", "crm_api", { method: "POST", path: "/webhook", body: {}
 await run("denyUsersWrite", "crm_api", { method: "POST", path: "/api/users/abc", body: {} });
 await run("denyTraversal", "crm_api", { method: "GET", path: "/api/crm/../auth/team" });
 await run("denySmuggle", "crm_api", { method: "GET", path: "/api/social?x=/api/crm/vocabulary" });
-await run("denyUnknown", "crm_api", { method: "GET", path: "/api/finance/overview" });
+await run("denyUnknown", "crm_api", { method: "GET", path: "/api/voice-clone/health" });
 await run("badMethod", "crm_api", { method: "OPTIONS", path: "/api/knowledge" });
 await run("realFailure", "crm_api", { method: "GET", path: "/api/crm/lead/does_not_exist" });
 await run("writeThrough", "crm_api", { method: "PATCH", path: "/api/crm/lead/lead_2", body: { crmStatus: "nurture" } });
@@ -248,6 +248,7 @@ try {
     ok("and the door is still shut without one", none.status === 401, String(none.status));
   } finally {
     outsideProc.kill("SIGKILL");
+    await new Promise(resolve=>outsideProc.once("exit",resolve));
   }
 } catch (e) {
   fail.push("EXCEPTION " + (e && e.stack ? e.stack : e));

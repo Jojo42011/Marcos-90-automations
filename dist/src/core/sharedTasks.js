@@ -38,8 +38,8 @@ function db() {
         const file = process.env.SHARED_TASK_DB_PATH || (0, tenantData_js_1.dataPath)("shared-tasks.db");
         (0, fs_1.mkdirSync)((0, path_1.dirname)(file), { recursive: true });
         connection = new better_sqlite3_1.default(file);
-        connection.pragma("journal_mode = WAL");
         connection.pragma("busy_timeout = 10000");
+        connection.pragma("journal_mode = WAL");
         connection.pragma("synchronous = FULL");
         connection.exec(`CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY, body TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS imports(source TEXT NOT NULL, original_id TEXT NOT NULL, task_id TEXT NOT NULL, PRIMARY KEY(source, original_id));
@@ -49,11 +49,11 @@ function db() {
 }
 function visible(task) {
     const actor = (0, exports.taskActor)();
-    return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo) === actor || member(task.createdBy) === actor;
+    return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo) === actor;
 }
 function editable(task) {
     const actor = (0, exports.taskActor)();
-    return !process.env.TENANT_OWNER_ID || member(task.assignedTo) === actor || member(task.createdBy) === actor;
+    return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo) === actor;
 }
 function sharedTaskList() {
     return db().prepare("SELECT body FROM tasks WHERE deleted=0").all().map(r => JSON.parse(r.body)).filter(visible);
@@ -65,7 +65,7 @@ function sharedTaskCreate(task) {
     db().transaction(() => {
         db().prepare("INSERT INTO tasks(id,body) VALUES(?,?)").run(task.id, JSON.stringify(task));
         history(task, "create");
-    })();
+    }).immediate();
     return task;
 }
 function sharedTaskUpdate(id, updates, expected) {
@@ -85,7 +85,7 @@ function sharedTaskUpdate(id, updates, expected) {
         db().prepare("UPDATE tasks SET body=? WHERE id=?").run(JSON.stringify(next), id);
         history(next, "update");
         return next;
-    })();
+    }).immediate();
 }
 function sharedTaskDelete(id) {
     return db().transaction(() => {
@@ -98,7 +98,7 @@ function sharedTaskDelete(id) {
         db().prepare("UPDATE tasks SET deleted=1 WHERE id=?").run(id);
         history(task, "delete");
         return true;
-    })();
+    }).immediate();
 }
 /** Read retained sources once per record; never overwrite edits or resurrect explicit deletions. */
 function recoverSharedTasks(root = (0, tenantData_js_1.dataPath)()) {
@@ -135,7 +135,7 @@ function recoverSharedTasks(root = (0, tenantData_js_1.dataPath)()) {
                 }
                 db().prepare("INSERT INTO imports(source,original_id,task_id) VALUES(?,?,?)").run(source, task.id, id);
             }
-        })();
+        }).immediate();
     }
     let reassigned = 0;
     db().transaction(() => {
@@ -148,7 +148,7 @@ function recoverSharedTasks(root = (0, tenantData_js_1.dataPath)()) {
             if (old.assignedTo !== task.assignedTo)
                 reassigned++;
         }
-    })();
+    }).immediate();
     const total = db().prepare("SELECT count(*) AS count FROM tasks WHERE deleted=0").get().count;
     // Restore the older personal/CRM task pages too, without importing CRM contacts.
     let personalImported = 0;

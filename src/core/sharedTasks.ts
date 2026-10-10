@@ -28,7 +28,7 @@ function db() {
     const file = process.env.SHARED_TASK_DB_PATH || dataPath("shared-tasks.db");
     mkdirSync(dirname(file), { recursive: true });
     connection = new Database(file);
-    connection.pragma("journal_mode = WAL"); connection.pragma("busy_timeout = 10000"); connection.pragma("synchronous = FULL");
+    connection.pragma("busy_timeout = 10000"); connection.pragma("journal_mode = WAL"); connection.pragma("synchronous = FULL");
     connection.exec(`CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY, body TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS imports(source TEXT NOT NULL, original_id TEXT NOT NULL, task_id TEXT NOT NULL, PRIMARY KEY(source, original_id));
       CREATE TABLE IF NOT EXISTS history(seq INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL, body TEXT NOT NULL, action TEXT NOT NULL, at TEXT NOT NULL);`);
@@ -37,11 +37,11 @@ function db() {
 }
 function visible(task: CommandTask) {
   const actor = taskActor();
-  return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo) === actor || member(task.createdBy) === actor;
+  return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo) === actor;
 }
 function editable(task: CommandTask) {
   const actor=taskActor();
-  return !process.env.TENANT_OWNER_ID || member(task.assignedTo)===actor || member(task.createdBy)===actor;
+  return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo)===actor;
 }
 export function sharedTaskList(): CommandTask[] {
   return (db().prepare("SELECT body FROM tasks WHERE deleted=0").all() as {body:string}[]).map(r => JSON.parse(r.body)).filter(visible);
@@ -52,7 +52,7 @@ function history(task: CommandTask, action: string) {
 export function sharedTaskCreate(task: CommandTask) {
   db().transaction(() => {
     db().prepare("INSERT INTO tasks(id,body) VALUES(?,?)").run(task.id, JSON.stringify(task)); history(task,"create");
-  })(); return task;
+  }).immediate(); return task;
 }
 export function sharedTaskUpdate(id: string, updates: Partial<CommandTask>, expected?: CommandTask): CommandTask | null {
   return db().transaction(() => {
@@ -64,14 +64,14 @@ export function sharedTaskUpdate(id: string, updates: Partial<CommandTask>, expe
     const next = {...old,...updates,id:old.id,createdBy:old.createdBy,createdAt:old.createdAt,updatedAt:new Date().toISOString()};
     if (next.status === "done" && !next.completedAt) next.completedAt = new Date().toISOString();
     db().prepare("UPDATE tasks SET body=? WHERE id=?").run(JSON.stringify(next),id); history(next,"update"); return next;
-  })();
+  }).immediate();
 }
 export function sharedTaskDelete(id: string): boolean {
   return db().transaction(() => {
     const row = db().prepare("SELECT body FROM tasks WHERE id=? AND deleted=0").get(id) as {body:string} | undefined;
     if (!row) return false; const task = JSON.parse(row.body); if (!editable(task)) return false;
     db().prepare("UPDATE tasks SET deleted=1 WHERE id=?").run(id); history(task,"delete"); return true;
-  })();
+  }).immediate();
 }
 
 /** Read retained sources once per record; never overwrite edits or resurrect explicit deletions. */
@@ -99,7 +99,7 @@ export function recoverSharedTasks(root = dataPath()) {
         }
         db().prepare("INSERT INTO imports(source,original_id,task_id) VALUES(?,?,?)").run(source,task.id,id);
       }
-    })();
+    }).immediate();
   }
   let reassigned=0;
   db().transaction(() => {
@@ -109,7 +109,7 @@ export function recoverSharedTasks(root = dataPath()) {
       db().prepare("UPDATE tasks SET body=? WHERE id=?").run(JSON.stringify(task),row.id);
       history(task,"restore-owner"); if(old.assignedTo!==task.assignedTo)reassigned++;
     }
-  })();
+  }).immediate();
   const total=(db().prepare("SELECT count(*) AS count FROM tasks WHERE deleted=0").get() as {count:number}).count;
   // Restore the older personal/CRM task pages too, without importing CRM contacts.
   let personalImported=0;

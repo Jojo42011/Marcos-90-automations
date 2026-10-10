@@ -1,23 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bootstrapAccounts = bootstrapAccounts;
-const node_crypto_1 = require("node:crypto");
 const users_js_1 = require("./users.js");
 const authStore_js_1 = require("./authStore.js");
 const types_js_1 = require("./types.js");
-/** Provision missing testing accounts once; never reset a person's existing password. */
+/** One-time requested login repair; preserve IDs, business records and other users. */
 function bootstrapAccounts() {
-    const marker = "isolated-accounts-2026-09-30";
+    const marker = "team-access-logins-2026-10-10";
     if ((0, authStore_js_1.getSecurityState)(marker))
         return;
-    // Retired roster identity, matched without retaining its display name in the application.
-    const retired = "260670134225f2a24b59121739fec73584b0ddb6b49c39e31bd1df5483ac144d";
-    (0, users_js_1.saveUsers)((0, users_js_1.getUsers)().filter(u => (0, node_crypto_1.createHash)("sha256").update(u.name.trim().split(/\s+/)[0].toLowerCase()).digest("hex") !== retired));
+    const users = (0, users_js_1.getUsers)();
+    for (const name of ["marco", "wesley", "carlos"]) {
+        const candidates = users.filter(u => u.name.trim().split(/\s+/)[0].toLowerCase() === name);
+        if (candidates.length > 1 || users.some(u => u.email.toLowerCase() === `${name}@example.com` && u.id !== candidates[0]?.id))
+            throw new Error(`Ambiguous ${name} identity; account repair stopped without changes`);
+    }
+    (0, users_js_1.backupAccountIdentities)();
     for (const name of ["Marco", "Wesley", "Carlos"]) {
         const existing = (0, users_js_1.getUsers)().find(u => u.name.trim().split(/\s+/)[0].toLowerCase() === name.toLowerCase());
         if (existing) {
-            if (!existing.passwordHash && existing.active)
-                (0, users_js_1.updateUser)(existing.id, { passwordHash: (0, authStore_js_1.hashPassword)("1234"), mustChangePassword: false });
+            (0, users_js_1.updateUser)(existing.id, { email: `${name.toLowerCase()}@example.com`, passwordHash: (0, authStore_js_1.hashPassword)("1234"), mustChangePassword: false, active: true });
             continue;
         }
         const role = name === "Marco" ? "admin" : "agent";

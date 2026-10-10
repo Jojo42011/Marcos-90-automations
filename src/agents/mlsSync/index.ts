@@ -155,6 +155,7 @@ export function mlsStatus(): Record<string, unknown> {
 }
 
 export function scheduleMlsSync(): void {
+  if(process.env.TENANT_MEMBER && process.env.TENANT_MEMBER !== "marco")return;
   if (!isMlsFeedConfigured()) {
     console.log("[MlsSync] Not scheduled — MLS feed is not configured (SIMPLYRETS_USERNAME / SIMPLYRETS_PASSWORD).");
     return;

@@ -221,6 +221,10 @@ async function runAgentLoop(opts) {
         system +=
             "\n\nLEAD NURTURE: For scoring, hot/warm/cold tiers, or nurture routing questions, call get_lead_nurture_overview or get_lead_nurture_tier before answering. Use get_lead_score_detail for one lead. Use lead_nurture_score_all / lead_nurture_rescore_cold only when Marco explicitly asks to refresh scores.";
     }
+    if (process.env.TENANT_MEMBER)
+        system += `
+
+SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identity overrides historical Marco-specific persona examples. Address this person by their own name. Only use verified data available to this account. ${process.env.TENANT_MEMBER === "carlos" ? "Carlos assists both Marco and Wesley; use crm_api collection endpoints for combined business statistics, never infer totals from personal legacy tools." : "Business records are private to this account; team SOPs and Knowledge Center training are shared."}`;
     if (opts.workRuntime)
         system = opts.workRuntime.context;
     system += "\n\n" + reliability_js_1.RELIABILITY_RULES;

@@ -704,8 +704,8 @@
         <option value="wesley">VIEW: WESLEY</option>
         <option value="carlos">VIEW: CARLOS</option>
       </select>
-      <button type="button" class="add-btn" id="switch-user" title="Switch who you are"
-        style="background:transparent;border:1px solid rgba(0,212,255,0.3);color:#00d4ff;">WHO'S ON</button>
+      <button type="button" class="add-btn" id="switch-user" title="Account settings"
+        style="background:transparent;border:1px solid rgba(0,212,255,0.3);color:#00d4ff;">⚙ Settings</button>
       <button type="button" class="add-btn" id="open-modal">+ ADD TASK</button>
     </div>
   </header>
@@ -1975,7 +1975,7 @@
     function openUserGate() { window.top.location.href="/login?switch=1&next="+encodeURIComponent(window.top.location.pathname+window.top.location.search); }
     function closeUserGate() { document.getElementById("user-gate").classList.remove("open"); }
 
-    document.getElementById("switch-user").addEventListener("click", openUserGate);
+    document.getElementById("switch-user").addEventListener("click", function(){if(window.AccountSettings)window.AccountSettings.open();});
     document.getElementById("filter-assigned").addEventListener("change", function () {
       try { localStorage.setItem(TASK_USER_KEY, this.value); } catch (_) {}
       updateTaskUserUi();

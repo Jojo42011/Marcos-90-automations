@@ -1365,7 +1365,7 @@ export async function getDashboardSnapshot(
     byAdCampaignWithPhone,
     leads,
     tagTemplates: getTagTemplates(),
-    users: getUsers(),
+    users: getUsers().map(({passwordHash, ...safe}) => safe),
     deals,
     totalGCI,
     tasksSummary,

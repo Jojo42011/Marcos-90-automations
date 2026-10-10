@@ -577,7 +577,7 @@ html{scroll-behavior:smooth}
   <div id="bellWrap">
     <button class="tbtn" id="bellBtn">🔔<span id="bellBadge">0</span></button>
   </div>
-  <div class="me-chip" id="meChip" title="Switch user"><span class="av" id="meAv">?</span><b id="meName">-</b></div>
+  <div class="me-chip" id="meChip" title="Account settings"><span class="av" id="meAv">?</span><b id="meName">-</b></div>
 </header>
 
 <div id="wrap">
@@ -646,7 +646,7 @@ html{scroll-behavior:smooth}
 </div></div>
 
 <!-- Team moved off the dashboard: opens from the profile chip. -->
-<div id="teamPop"><div id="teamPanel">
+<div id="teamPop" hidden style="display:none!important" aria-hidden="true"><div id="teamPanel">
   <div class="card-h"><h2>Team</h2><span class="sub">chat · pages · workload</span></div>
   <div id="teamList"></div>
   <div class="tzbox">
@@ -1320,16 +1320,7 @@ function initTzPicker(){
   };
 }
 function closeTeamPop(){var p=document.getElementById("teamPop");if(p)p.classList.remove("on");}
-document.getElementById("meChip").onclick=function(e){
-  e.stopPropagation();
-  var p=document.getElementById("teamPop");
-  if(!p)return;
-  var opening=!p.classList.contains("on");
-  p.classList.toggle("on",opening);
-  if(opening){renderTeam();initTzPicker();initLayoutControls();}
-};
-document.getElementById("teamPop").addEventListener("click",function(e){ if(e.target.id==="teamPop")closeTeamPop(); });
-document.getElementById("switchUserBtn").onclick=function(){closeTeamPop();openGate();};
+document.getElementById("meChip").onclick=function(){if(window.AccountSettings)window.AccountSettings.open();};
 document.addEventListener("keydown",function(e){ if(e.key==="Escape")closeTeamPop(); });
 
 /* ================= data ================= */
@@ -1347,6 +1338,7 @@ function sortTasks(a){
 function whoseBar(){ // whose tasks the bars show
   if(viewingPage) return viewingPage;
   if(memberFilter && memberFilter!=="all") return memberFilter;
+  if(ME==="carlos")return "all";
   if(memberFilter==="all") return "all";
   return ME;
 }
@@ -1355,13 +1347,14 @@ function visibleFor(t,who){
   if(who==="all")return true;
   return owner===who;
 }
-function canEdit(t){ // assigner rights; legacy tasks w/o createdBy fall back to assignee
+function canEdit(t){
+  if(ME==="carlos")return true; // assigner rights; legacy tasks w/o createdBy fall back to assignee
   if(viewingPage && viewingPage!==ME){ return (t.createdBy||"").toLowerCase()===ME; }
   var creator=(t.createdBy||"").toLowerCase();
   if(creator)return creator===ME||(t.assignedTo||"").toLowerCase()===ME;
   return (t.assignedTo||"").toLowerCase()===ME;
 }
-function readOnlyView(){ return viewingPage && viewingPage!==ME; }
+function readOnlyView(){ return ME!=="carlos" && viewingPage && viewingPage!==ME; }
 
 /* ================= render: bars ================= */
 function statusMeta(id){return STATUSES.find(function(s){return s.id===id;})||STATUSES[0];}

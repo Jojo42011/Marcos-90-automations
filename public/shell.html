@@ -145,13 +145,13 @@
      </div>
      <nav id="nav"></nav>
      <div id="side-foot">
-       <span class="dot"></span>
-       <button id="whoBtn" title="Switch user">
+       <span aria-hidden="true">&#9881;</span>
+       <button id="whoBtn" title="Account settings">
          <span id="whoAv"></span>
          <span id="whoLabel" style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Marco Puga &middot; Live</span>
        </button>
        <button id="logoutBtn" title="Sign out" style="display:none;background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
-       <button id="teamOutBtn" title="Sign out" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;display:flex;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+       <button id="teamOutBtn" title="Sign out" hidden style="display:none!important;background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;display:flex;align-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
      </div>
    </aside>
 
@@ -465,7 +465,7 @@ function initShell(){
    if(!window.__authUser) label.textContent = m.name + " · " + m.role;
  }
 
- document.getElementById("whoBtn").onclick = goSignIn;
+ document.getElementById("whoBtn").onclick = function(){ window.AccountSettings && window.AccountSettings.open(); };
  // Sign out ends the session outright, so the next person gets the picker
  // rather than inheriting whoever was here last.
  document.getElementById("teamOutBtn").onclick = function(){
@@ -500,7 +500,7 @@ fetch("/api/auth/me", { credentials: "same-origin" })
     if (user) {
       window.__authUser = user;   // real account wins the footer label
       if (who) who.textContent = user.name + " · " + user.role;
-      var lo = document.getElementById("logoutBtn"); if (lo) lo.style.display = "flex";
+      var lo = document.getElementById("logoutBtn"); if (lo) lo.style.display = "none";
       if (user.role === "admin") {
         TABS.push({
           key: "team", label: "Team & Activity", sub: "Accounts · logins · audit", src: "/team",

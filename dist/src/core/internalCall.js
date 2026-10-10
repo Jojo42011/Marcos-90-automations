@@ -27,6 +27,7 @@ exports.isInternalCall = isInternalCall;
  * static secret; this cannot outlive the process that minted it.
  */
 const crypto_1 = require("crypto");
+const accountBridge_js_1 = require("./accountBridge.js");
 exports.INTERNAL_CALL_HEADER = "x-internal-call";
 /** Minted once, at module load. Never leaves the process. */
 const INTERNAL_CALL_TOKEN = (0, crypto_1.randomBytes)(32).toString("hex");
@@ -44,6 +45,8 @@ function timingSafeEqualStr(a, b) {
 }
 /** True only for a loopback request carrying this process's own token. */
 function isInternalCall(req) {
+    if ((0, accountBridge_js_1.accountBridgeUser)(req))
+        return true;
     const raw = req.headers[exports.INTERNAL_CALL_HEADER];
     const token = typeof raw === "string" ? raw : "";
     if (!token || !timingSafeEqualStr(token, INTERNAL_CALL_TOKEN))

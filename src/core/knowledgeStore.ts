@@ -1,4 +1,5 @@
 import { dataPath } from "./tenantData.js";
+import { sharedKnowledgeEnabled, sharedDocuments, persistSharedDocuments, sharedDocumentId, claimSharedKnowledgeSeed } from "./sharedKnowledge.js";
 /**
  * 3.4 — Knowledge Center: SOPs and internal documentation.
  *
@@ -51,10 +52,16 @@ function resolvePath(): string {
 const PATH = resolvePath();
 let state: Persisted = { docs: [] };
 let loaded = false;
+let sharedBefore: KnowledgeDoc[] = [];
 
 const nowIso = () => new Date().toISOString();
 
 function persist(): void {
+  if (sharedKnowledgeEnabled()) {
+    persistSharedDocuments(sharedBefore, state.docs);
+    sharedBefore = structuredClone(state.docs);
+    return;
+  }
   try {
     mkdirSync(dirname(PATH), { recursive: true });
     writeFileSync(PATH, JSON.stringify(state), "utf8");
@@ -64,6 +71,12 @@ function persist(): void {
 }
 
 function load(): void {
+  if (sharedKnowledgeEnabled()) {
+    state.docs = sharedDocuments(); sharedBefore = structuredClone(state.docs);
+    // Only the gateway seeds an empty library; account workers never re-seed deleted content.
+    if (!loaded && !process.env.TENANT_OWNER_ID && claimSharedKnowledgeSeed() && !state.docs.length) seedBuiltIns();
+    loaded = true; return;
+  }
   if (loaded) return;
   loaded = true;
   try {
@@ -322,6 +335,7 @@ export function listCategories(): { category: string; count: number }[] {
 
 export function getDoc(id: string): KnowledgeDoc | undefined {
   load();
+  if(sharedKnowledgeEnabled())id=sharedDocumentId(id);
   return state.docs.find((d) => d.id === id);
 }
 
@@ -353,6 +367,7 @@ export function createDoc(input: DocInput): KnowledgeDoc {
 
 export function updateDoc(id: string, patch: Partial<DocInput>): KnowledgeDoc | undefined {
   load();
+  if(sharedKnowledgeEnabled())id=sharedDocumentId(id);
   const doc = state.docs.find((d) => d.id === id);
   if (!doc) return undefined;
   if (patch.title !== undefined) doc.title = patch.title.trim();
@@ -369,6 +384,7 @@ export function updateDoc(id: string, patch: Partial<DocInput>): KnowledgeDoc | 
 
 export function deleteDoc(id: string): boolean {
   load();
+  if(sharedKnowledgeEnabled())id=sharedDocumentId(id);
   const before = state.docs.length;
   state.docs = state.docs.filter((d) => d.id !== id);
   if (state.docs.length === before) return false;

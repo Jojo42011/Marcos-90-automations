@@ -3911,7 +3911,7 @@ function mapLeadRow(l){
   // the DM funnel guessed and stay as display-only stand-ins.
   const loc=l.address||c.location||c.address||l.propertyInquired||"";
   return {
-    id:l.id, name:l.name||l.username||"Unknown",
+    id:l.id, accountOwnerId:l.accountOwnerId, accountOwnerName:l.accountOwnerName, name:l.name||l.username||"Unknown",
     intent:(l.crmIntent==="seller")?"seller":"buyer",
     crmStatus:l.crmStatus, statusDisp:STATUS_MAP[l.crmStatus]||"nurture",
     stage:l.crmStage, stageLabel:STAGE_MAP[l.crmStage]||"NEW LEAD",
@@ -10462,7 +10462,7 @@ function renderNurture(){
     const sm=STATUS_META[l.statusDisp]||STATUS_META.nurture;
     return '<tr>'+
       '<td><input type="checkbox" class="cb"></td>'+
-      '<td><span class="lead-name ldlink" data-lid="'+esc(l.id)+'">'+esc(l.name)+'</span></td>'+
+      '<td><span class="lead-name ldlink" data-lid="'+esc(l.id)+'">'+esc(l.name)+'</span>'+(l.accountOwnerName?'<small style="display:block;color:#64748b">'+esc(l.accountOwnerName)+'</small>':'')+'</td>'+
       '<td><span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span></td>'+
       '<td><span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' ▾</span></td>'+
       '<td style="color:#5b6570;font-weight:600">'+(CADENCE[l.statusDisp]||"Weekly")+'</td>'+

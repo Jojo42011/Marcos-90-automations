@@ -171,7 +171,7 @@ function createWorkRouter(authorize, owner) {
     r.use((e, _req, res, _next) => { res.status(e.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: e.code === "LIMIT_FILE_SIZE" ? "File exceeds the 250 MB limit" : "Upload failed" }); });
     return r;
 }
-async function handleWorkChat(req, res, owner) {
+async function handleWorkChat(req, res, owner, actorId = owner) {
     let streaming = false;
     const controller = new AbortController();
     res.on("close", () => { if (!res.writableEnded)
@@ -182,7 +182,7 @@ async function handleWorkChat(req, res, owner) {
             throw new Error("Create a conversation before submitting a background task");
         const chat = req.body.conversationId ? (0, store_js_1.get)("chat", owner, String(req.body.conversationId)) : (0, store_js_1.createChat)(owner, req.body);
         if (req.body.background === true) {
-            res.status(202).json({ job: (0, jobs_js_1.enqueueJob)(owner, chat.id, req.body), conversationId: chat.id, sessionId: chat.sessionId });
+            res.status(202).json({ job: (0, jobs_js_1.enqueueJob)(owner, chat.id, { ...req.body, actorId }), conversationId: chat.id, sessionId: chat.sessionId });
             return;
         }
         const stream = req.body.stream === true;
@@ -201,7 +201,7 @@ async function handleWorkChat(req, res, owner) {
         try {
             const approvals = [];
             const schedules = [];
-            const result = await (0, runtime_js_1.runChat)(owner, chat, message, { signal: controller.signal, modelOverride: req.body.model === undefined ? undefined : String(req.body.model), onToken: stream ? t => send("token", { text: t }) : undefined, onEvent: e => { if (e.type === "approval")
+            const result = await (0, runtime_js_1.runChat)(owner, chat, message, { actorId, signal: controller.signal, modelOverride: req.body.model === undefined ? undefined : String(req.body.model), onToken: stream ? t => send("token", { text: t }) : undefined, onEvent: e => { if (e.type === "approval")
                     approvals.push(e.approval); if (e.type === "schedule")
                     schedules.push(e.schedule); if (stream)
                     send(e.type, e.type === "approval" ? e.approval : e); } });

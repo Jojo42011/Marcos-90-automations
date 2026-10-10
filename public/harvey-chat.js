@@ -44,6 +44,7 @@
   async function api(path, opts) {
     var o = Object.assign({ credentials: "same-origin" }, opts || {});
     o.headers = authHeaders(o.headers);
+    if(state.accountOwnerId && /^\/api\/harvey\/work\/(plugins|managed|logins)(\/|\?|$)/.test(path))o.headers["x-account-owner"]=state.accountOwnerId;
     if (o.body && typeof o.body !== "string" && !(o.body instanceof FormData)) {
       o.headers["Content-Type"] = "application/json";
       o.body = JSON.stringify(o.body);
@@ -567,7 +568,7 @@
       return;
     }
     wrap.innerHTML = list.map(function (c) {
-      var title = c.title || "Untitled";
+      var title = (c.title || "Untitled")+(c.accountOwnerName?" · "+c.accountOwnerName:"");
       var active = c.id === state.conversationId ? " active" : "";
       return '<div class="conv' + active + '" data-conv="' + esc(c.id) + '">' +
         '<button type="button" class="title" title="' + esc(title) + '">' + esc(title) + "</button>" +
@@ -580,6 +581,7 @@
   }
 
   async function openConversation(id) {
+    if(window.ChatMentions?.reset)window.ChatMentions.reset();
     detachView();var opening=viewEpoch;
     showView("chat");
     if (state.convsWired === false) {
@@ -601,6 +603,7 @@
     state.conversationId = id; if(window.HarveyComputer)window.HarveyComputer.sync();
     rememberChat(id);
     state.sessionId = r.data.sessionId;
+    state.accountOwnerId=r.data.accountOwnerId;
     state.projectId = r.data.projectId || null;
     state.mode = r.data.mode || "chat";
     state.selectedModel=r.data.model||"auto";paintModelPill();
@@ -934,7 +937,7 @@
     setBusy(true);
 
     var ui = addAssistantMessage();
-    var run={epoch:viewEpoch,chatId:state.conversationId,mode:state.mode,projectId:state.projectId,model:state.selectedModel,abort:new AbortController(),cancel:false};
+    var run={mentions:window.ChatMentions?.take(text)||[],relayRequestId:crypto.randomUUID(),epoch:viewEpoch,chatId:state.conversationId,mode:state.mode,projectId:state.projectId,model:state.selectedModel,abort:new AbortController(),cancel:false};
     currentRun=run;state.abort=run.abort;
 
     try {
@@ -969,7 +972,7 @@
     if(!r.ok)throw new Error(r.error||'Could not create this chat');
     context.chatId=r.data.id;
     if(current(context)){
-      state.conversationId=r.data.id;state.sessionId=r.data.sessionId;
+      state.conversationId=r.data.id;state.sessionId=r.data.sessionId;state.accountOwnerId=r.data.accountOwnerId;
       if(window.HarveyComputer)window.HarveyComputer.sync();
       rememberChat(state.conversationId);
     }
@@ -978,6 +981,12 @@
 
   async function harveyChat(text, ui, run) {
     await ensureWorkChat(run);
+    if(run.mentions && run.mentions.length){
+      var relay=await api('/api/account/chat-relay',{method:'POST',body:{sourceChatId:run.chatId,targets:run.mentions,message:text,requestId:run.relayRequestId}});
+      if(!relay.ok)throw new Error(relay.error||'Could not send to the selected chats');
+      ui.note('Sent to '+relay.data.deliveries.map(function(d){return d.title+' ('+d.ownerName+')';}).join(', '));
+      text+='\n\n[App receipt: this message was delivered to '+relay.data.deliveries.map(function(d){return d.title;}).join(', ')+'. Do not send it again. Responses will appear in the recipient chats.]';
+    }
     var body={message:text,workspace:true,background:true,requestId:crypto.randomUUID(),conversationId:run.chatId,model:run.model,stream:true};
     var res;
     try {
@@ -1118,8 +1127,9 @@
   }
 
   function newChat() {
+    if(window.ChatMentions?.reset)window.ChatMentions.reset();
     detachView();state.selectedModel="auto";paintModelPill();
-    state.conversationId = null; if(window.HarveyComputer)window.HarveyComputer.sync();
+    state.conversationId = null; state.accountOwnerId=null; if(window.HarveyComputer)window.HarveyComputer.sync();
     rememberChat(null);
     state.sessionId = "s_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
     try { sessionStorage.setItem("harvey_session_id", state.sessionId); } catch (_) {}
@@ -1527,8 +1537,7 @@
     }
     settingsPop.innerHTML =
       '<div class="pop-group">Appearance</div>' +
-      '<button type="button" class="pop-item" data-set="theme"><span class="pi-main"><span class="pi-label">' +
-      (currentTheme() === "dark" ? "Switch to light theme" : "Switch to dark theme") + "</span></span></button>" +
+      '<button type="button" class="pop-item" data-set="account"><span class="pi-main"><span class="pi-label">Account appearance &amp; settings</span></span></button>' +
       '<div class="pop-group">Harvey</div>' +
       '<button type="button" class="pop-item" data-set="usage"><span class="pi-main"><span class="pi-label">Usage &amp; spend caps</span></span></button>' +
       '<button type="button" class="pop-item" data-set="models"><span class="pi-main"><span class="pi-label">Models &amp; routing</span></span></button>' +
@@ -1594,7 +1603,7 @@
     $("themeBtn").addEventListener("click", function () { setTheme(currentTheme() === "dark" ? "light" : "dark"); });
     $("settingsBtn").addEventListener("click", function () { openSettings($("settingsBtn")); });
     $("userChip").addEventListener("click", function () {
-      if (window.TeamSession) window.top.location.href = TeamSession.signInUrl("/shell");
+      if (window.AccountSettings) window.AccountSettings.open();
     });
 
     $("searchToggle").addEventListener("click", function () {
@@ -1619,6 +1628,7 @@
 
     /* composer */
     var input = $("input");
+    if(window.ChatMentions)window.ChatMentions.init(input,function(){return state.conversationId;});
     input.addEventListener("input", function () {
       autosize();
       if (!state.busy) $("sendBtn").disabled = input.value.trim() === "";
@@ -1657,7 +1667,7 @@
       if (!item) return;
       var what = item.getAttribute("data-set");
       closePop();
-      if (what === "theme") setTheme(currentTheme() === "dark" ? "light" : "dark");
+      if (what === "account" && window.AccountSettings) window.AccountSettings.open();
       if (what === "usage") showView("usage");
       if (what === "models") showView("models");
     });

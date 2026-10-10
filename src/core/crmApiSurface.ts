@@ -22,6 +22,11 @@
 
 /** Path prefixes Harvey may call. Order does not matter; any match allows. */
 export const CRM_API_ALLOW: readonly string[] = [
+  "/api/deals",
+  "/api/finance/",
+  "/api/tracker/",
+  "/api/marco-tasks",
+  "/api/crm-tasks",
   "/api/crm/",           // leads, vocabulary, metrics, contact records, notes
   "/api/leads/",         // filter, per-lead sub-resources (alerts, addresses)
   "/api/lead/",
