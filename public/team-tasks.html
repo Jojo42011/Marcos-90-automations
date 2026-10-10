@@ -559,6 +559,11 @@ html{scroll-behavior:smooth}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+/* Keep filtering controls quiet; hierarchy comes from type and spacing. */
+.subtabs button,.fchip{border-color:transparent;background:transparent;font-weight:600}
+.subtabs button.on,.fchip.on{border-color:transparent;background:var(--soft)}
+.tabs button{letter-spacing:.025em;font-weight:600}
+.me-chip,.tbtn{box-shadow:none}
 </style>
 </head>
 <body>
