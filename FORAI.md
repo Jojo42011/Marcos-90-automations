@@ -1,5 +1,7 @@
 # FORAI — Marcos-90-automations (marco-90-automation)
 
+- 2026-10-10 live stats verification: Carlos correctly retrieved combined data, but the large dashboard result exposed old verification classification/truncation problems. Added read-only top-level field selection to crm_api, owner totals in combined dashboards, GET receipt classification, and system-context runtime reminders. No data storage format changes.
+
 - 2026-10-10 live verification follow-up: hide unrelated empty task bars for Marco/Wesley; Carlos keeps owner filters. Negative action constraints no longer trigger forced tool retries, and verified chat relays carry explicit sender context and can complete acknowledgement-only requests without tool receipts. Baseline confirmed 2,417 Marco leads unchanged and all previously visible task IDs retained.
 
 Last updated: 2026-09-23 by Codex

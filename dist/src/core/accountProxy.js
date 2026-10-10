@@ -131,6 +131,7 @@ async function proxyAccount(req, res, actor, ensureWorker) {
         const result = (0, accountFederation_js_1.combineValues)(results);
         if (req.path === "/api/dashboard/data") {
             result.commandTasksSummary = results[accounts.findIndex(u => u.id === actor.id)].commandTasksSummary;
+            result.accountSummaries = accounts.map((u, i) => ({ ownerId: u.id, name: u.name, totals: results[i].totals }));
             result.users = accounts.map(({ passwordHash, ...safe }) => safe);
             result.leads.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
         }
