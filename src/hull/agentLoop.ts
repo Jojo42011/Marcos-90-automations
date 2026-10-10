@@ -493,7 +493,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     const stepTools = lastRound ? undefined : activeTools;
     const stepSystem = lastRound && toolRounds > 0
       ? system +
-        "\n\nFINAL ROUND: no more tool calls are available this turn. Answer Marco now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
+        "\n\nFINAL ROUND: no more tool calls are available this turn. Answer the current user now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
       : system;
 
     let out: CompletionOutcome;
@@ -576,7 +576,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       // user to re-authorize a login. Give the agent a bounded chance to act or
       // inspect its results before returning; ordinary conversation needs none.
       const evidence = verification.result();
-      const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(opts.message) || /https?:\/\/\S+/i.test(opts.message);
+      // Negative instructions are constraints, not evidence that an action was requested.
+      const affirmativeMessage = opts.message.replace(/\b(?:do not|don['’]t|never|without)\b[^.!?\n]*(?:[.!?]|$)/gi, "");
+      const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(affirmativeMessage) || /https?:\/\/\S+/i.test(affirmativeMessage);
       if (opts.workRuntime && !lastRound && completionRepairs < 3 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
         completionRepairs++;
         messages.push({role:"assistant",content:out.text || "I need to continue the requested work."});
