@@ -1,0 +1,37 @@
+/* Account controls are isolated from each workspace's legacy form styles. */
+.account-settings{--settings-bg:#fff;--settings-text:#202b33;--settings-muted:#77838d;--settings-line:#e9edef;--settings-soft:#f5f7f8;position:fixed;inset:12px 12px 12px auto;margin:0;width:440px;max-width:calc(100vw - 24px);height:calc(100dvh - 24px);max-height:none;padding:0;border:1px solid var(--settings-line);border-radius:20px;background:var(--settings-bg);color:var(--settings-text);box-shadow:0 24px 90px #0003;font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:auto}
+[data-theme="dark"] .account-settings{--settings-bg:#191e25;--settings-text:#edf0f3;--settings-muted:#9ba5b1;--settings-line:#2b323b;--settings-soft:#222931}
+.account-settings::backdrop{background:rgba(8,14,21,.38);backdrop-filter:blur(5px)}
+.account-settings *{box-sizing:border-box}
+.account-settings button,.account-settings input,.account-settings select{font:inherit;letter-spacing:normal;text-transform:none}
+.account-settings .settings-header{display:flex;align-items:center;justify-content:space-between;padding:28px 28px 18px}
+.account-settings h2{font-size:22px;font-weight:650;letter-spacing:-.6px;margin:0;color:var(--settings-text)}
+.account-settings .settings-close{border:0;background:transparent;color:var(--settings-muted);width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:23px;line-height:1}
+.account-settings .settings-close:hover{background:var(--settings-soft);color:var(--settings-text)}
+.account-settings .settings-profile{padding:0 28px 24px;color:var(--settings-muted);font-size:12px;overflow-wrap:anywhere}
+.account-settings .settings-section{padding:16px 28px;border-top:1px solid var(--settings-line)}
+.account-settings h3{font-size:10px;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:var(--settings-muted);margin:0 0 12px}
+.account-settings .settings-row{display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:48px;margin:8px 0}
+.account-settings .settings-label{display:block;font-size:13px;font-weight:550;color:var(--settings-text)}
+.account-settings .settings-hint{display:block;font-size:11px;color:var(--settings-muted);margin-top:3px;font-weight:400}
+.account-settings select{appearance:none;background:var(--settings-soft);color:var(--settings-text);border:1px solid var(--settings-line);border-radius:8px;padding:9px 28px 9px 12px;max-width:180px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2384919c' stroke-width='1.5'%3E%3Cpath d='m2 4 4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.account-settings option{background:var(--settings-bg);color:var(--settings-text)}
+.account-settings input[type=color]{appearance:none;width:38px;height:38px;padding:3px;background:transparent;border:1px solid var(--settings-line);border-radius:50%;cursor:pointer}
+.account-settings input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+.account-settings input[type=color]::-webkit-color-swatch{border:0;border-radius:50%}
+.account-settings .settings-range{width:136px;display:flex;align-items:center;gap:12px;color:var(--settings-muted);font-size:12px}
+.account-settings input[type=range]{width:100px;accent-color:var(--accent,#0e7490);cursor:pointer}
+.account-settings input[type=checkbox]{appearance:none;flex-shrink:0;width:36px;height:21px;border:0;border-radius:20px;background:#87929d;position:relative;cursor:pointer;transition:background .15s}
+.account-settings input[type=checkbox]::after{content:'';position:absolute;left:3px;top:3px;width:15px;height:15px;border-radius:50%;background:white;transition:transform .15s}
+.account-settings input[type=checkbox]:checked{background:var(--accent,#0e7490)}
+.account-settings input[type=checkbox]:checked::after{transform:translateX(15px)}
+.account-settings :focus-visible{outline:2px solid var(--accent,#0e7490);outline-offset:4px}
+.account-settings .settings-actions{padding:0 28px 18px}
+.account-settings [role=status]{min-height:24px;margin:0 0 8px;font-size:12px;color:var(--settings-muted)}
+.account-settings .settings-save{width:100%;border:0;border-radius:9px;padding:12px;background:var(--settings-text);color:var(--settings-bg);font-weight:600;cursor:pointer}
+.account-settings button:disabled{opacity:.5;cursor:wait}
+.account-settings .settings-footer{margin:0 28px;padding:16px 0;border-top:1px solid var(--settings-line)}
+.account-settings #account-settings-logout{border:0;background:transparent;color:var(--settings-muted);padding:4px 0;font-size:13px;cursor:pointer}
+.account-settings #account-settings-logout:hover{color:var(--settings-text)}
+.account-settings-trigger{position:fixed;bottom:16px;right:16px;z-index:9999;width:38px;height:38px;border-radius:50%;border:1px solid var(--line,#e0e5e9);background:var(--card,#fff);color:var(--muted,#64748b);font-size:20px;cursor:pointer;box-shadow:0 3px 12px #0001}
+@media(max-width:480px){.account-settings{inset:0;width:100%;max-width:100%;height:100dvh;border-radius:0;border:0}.account-settings .settings-header,.account-settings .settings-section{padding-left:22px;padding-right:22px}}

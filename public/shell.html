@@ -123,7 +123,18 @@
 
 
  @media (max-width:780px){ :root{ --w:210px; } }
-</style>
+/* Quiet navigation: no icon tiles or boxed branding. */
+ #side{box-shadow:none} #side-head{padding:24px 16px 24px 20px;border-bottom:0}
+ #brand .wm b{color:var(--text)} #collapse{border:0;background:transparent}
+ #nav{padding:8px 12px} .nav-sep{padding:24px 14px 10px;font-size:9px;letter-spacing:.16em;opacity:.8}
+ .nav-item{padding:12px 14px;gap:12px;border:0;border-radius:9px;margin-bottom:4px}
+ .nav-item:hover{background:var(--soft);transform:none} .nav-item.active{background:var(--soft);border:0}
+ .nav-item.active::before{display:none} .nav-item .ic,.nav-item.active .ic{width:22px;height:28px;border:0;border-radius:0;background:transparent;color:var(--muted)}
+ .nav-item.active .ic{color:var(--teal-strong,var(--accent))} .nav-item .ic svg{width:20px;height:20px}
+ .nav-item .tx .l{font-size:13px;font-weight:550}.nav-item .tx .s{font-size:10.5px;margin-top:3px;line-height:1.4}
+ #side-foot{padding:18px 20px;letter-spacing:.05em} #whoBtn{width:100%;min-height:28px;text-align:left}
+ #whoAv{width:26px;height:26px} #reopen{background:var(--panel)}
+ </style>
 </head>
 <body>
  <div id="shell">
